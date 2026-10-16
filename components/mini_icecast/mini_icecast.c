@@ -143,8 +143,18 @@ static void ring_put(const uint8_t *d, size_t n) /* lock held */
     }
 }
 
-static bool ring_burst(client_t *c) /* lock held */
+/* The burst-on-connect is the only send made while the broadcast's lock is held, so
+ * its window is the worst case one client can stall every other listener. It is
+ * deliberately short: the rebase threshold is 1 s, and a 1 s window was measured
+ * stalling the broadcast for 1116 ms when a client connected while the network was
+ * busy downloading - which cost every listener a starvation rebase. 250 ms is ample
+ * for 20 KB on a healthy link (that is 80 KB/s) and keeps one slow client's worst
+ * case far below the threshold. */
+#define BURST_SEND_TIMEOUT_MS 250
+
+static bool ring_burst(client_t *c, size_t *sent_bytes) /* lock held */
 {
+    *sent_bytes = 0;
     static uint8_t tmp[CHUNK_BYTES > MI_ENC_MAX_FRAME_BYTES ? CHUNK_BYTES : MI_ENC_MAX_FRAME_BYTES];
     size_t pos = S.ring_tail, left = S.ring_used;
     while (left) {
@@ -154,6 +164,7 @@ static bool ring_burst(client_t *c) /* lock held */
         if (n > sizeof tmp) break; /* corrupt record: stop rather than overrun */
         ring_peek((pos + 2) % S.ring_size, tmp, n);
         if (!client_push(c, tmp, n)) return false; /* goes through ICY splitting too */
+        *sent_bytes += n;
         pos = (pos + 2 + n) % S.ring_size;
         left -= 2 + n;
     }
@@ -212,6 +223,12 @@ mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_ic
     c->title_ver = 0; /* forces the current title into the first metadata block */
     xSemaphoreGive(S.lock);
 
+    /* Bound every send on this socket before the first one: the headers below go out
+     * before the broadcast owns the fd, and an unbounded send there would pin a
+     * connection worker on a client that connects and never reads. */
+    struct timeval to = {.tv_sec = 0, .tv_usec = BURST_SEND_TIMEOUT_MS * 1000};
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &to, sizeof to);
+
     /* Headers first: MP3 needs no container header at all, and the station name
      * goes out in canonical Icecast form - no space after the colon (defect D2). */
     char h[256];
@@ -230,17 +247,23 @@ mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_ic
     }
 
     /* Register + burst under the lock broadcast() uses: the client gets the
-     * history and then the next live frame, with no gap and no duplicate. */
-    struct timeval burst_to = {.tv_sec = 1};
-    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &burst_to, sizeof burst_to);
+     * history and then the next live frame, with no gap and no duplicate. If the
+     * window expires mid-burst the client is still registered and simply starts on
+     * the live stream - ring_burst() walks whole frames, so what it sent is a valid
+     * prefix, and only the client misses its history. A client that has genuinely
+     * gone away is dropped, as before. */
     xSemaphoreTake(S.lock, portMAX_DELAY);
     c->fd = fd;
-    bool ok = ring_burst(c);
-    size_t burst = S.ring_used;
-    if (!ok) c->fd = -1;
+    size_t burst = 0;
+    bool complete = ring_burst(c, &burst);
+    bool fell_behind = !complete && (errno == EAGAIN || errno == EWOULDBLOCK);
+    if (!complete && !fell_behind) c->fd = -1;
     c->reserved = false;
     xSemaphoreGive(S.lock);
-    if (!ok) return MINI_ICECAST_REGISTER_FAILED;
+    if (!complete && !fell_behind) return MINI_ICECAST_REGISTER_FAILED;
+    if (fell_behind)
+        ESP_LOGW(TAG, "client %d took %u B of history and stopped reading; it starts on the live stream",
+                 slot, (unsigned)burst);
 
     struct timeval snd = {.tv_sec = HTTP_CLIENT_STALL_MS / 1000,
                           .tv_usec = (HTTP_CLIENT_STALL_MS % 1000) * 1000};
