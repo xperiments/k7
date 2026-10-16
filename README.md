@@ -179,7 +179,7 @@ I (333) esp_psram: Speed: 80MHz
 I (772) esp_psram: SPI SRAM memory test OK
 I (919) app: chip: esp32s3, 2 core(s), revision 0.2
 I (919) app: flash: 16 MB; psram: 8192 KB (octal mode, CONFIG_SPIRAM_MODE is not auto-detected)
-I (921) app: heap at startup: internal 305571 B free, external 8386148 B free
+I (944) app: heap at startup: internal 277183 B free, external 8386156 B free
 I (1223) icecast: station format: 44100 Hz, 256 kbps CBR, joint stereo, MPEG-1
 I (1576) icecast: encoder: 102408 B of internal RAM taken (the encoder's own state; near zero means it landed in external memory)
 I (1576) icecast: encoder: 1152 samples/frame (26.1 ms), 95880 B of state inside the vendored library, staging buffers in external memory
@@ -443,7 +443,7 @@ chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1*
 | 8 MB PSRAM in octal mode at 80 MHz | `esp_psram: Found 8MB PSRAM device`, `Speed: 80MHz`, `SPI SRAM memory test OK` |
 | Every allocation this project makes takes the external-memory path (P2/P3) | `staging buffers in external memory`, `burst ring: 20098 B (~500 ms of audio) in external memory`, `download buffer: 16384 B in external memory` |
 | The encoder's state is measured, not assumed | `102408 B of internal RAM taken (the encoder's own state)`, and `95880 B of state inside the vendored library` - 16 B less than the host's 95896, because the struct holds three pointers |
-| Free memory in both classes is reported at startup and every minute (P2) | `heap at startup: internal 261087 B free, external 8386156 B free` |
+| Free memory in both classes is reported at startup and every minute (P2) | `heap at startup: internal 277183 B free, external 8386156 B free` |
 | Station format validated and logged (F1-F3) | `station format: 44100 Hz, 256 kbps CBR, joint stereo, MPEG-1` |
 | The wire matches the announcement (T3) | `ffprobe`: `mp3, 44100 Hz, stereo, 256 kb/s`, and the whole capture decodes with zero errors |
 | The card mounts over SPI (R2) | `Name: SL32G`, `Type: SDHC`, `card: 30420 MB total` |
@@ -638,7 +638,9 @@ and placed in IRAM by a linker fragment — no line of shine's source changes. B
 were measured on the board, on the synthetic benchmark, at 44.1 kHz/128 kbps:
 IRAM placement alone is worth 17 % (16.1 ms per frame down to 13.4 ms), and the
 same workload unoptimised (`-Og`) took 33.4 ms, so compiler and placement together
-are worth about 2.5x. That is the difference between 32 kHz and 44.1 kHz being
+are worth about 2.5x. In IRAM that costs 14 351 B of code (22 913 B including
+shine's constant tables and descriptors), taken from the region shared with data —
+which is the trade to keep in mind when planning what else wants IRAM. That is the difference between 32 kHz and 44.1 kHz being
 affordable at all. A separate 8 % came from keeping its 95 KB of state out of
 PSRAM, as described above.
 
@@ -660,6 +662,33 @@ arrangement.
 The GPL-3.0 encoder port sometimes suggested for the ESP32
 (`fknrdcls/mp3_shine_esp32`) is deliberately **not** used anywhere: it would impose
 GPL on the whole project.
+
+## The internal-RAM picture
+
+Worth stating plainly, because it constrains everything added on top of this
+firmware — and `docs/research/radio-player-memory-and-lvgl.md` works through what it
+means for a UI. Measured on the board during playback, with the encoder's state
+deliberately internal:
+
+```
+internal: free 35327 B, largest block 18432 B, allocated 294980 B, min ever free 19664 B
+external: free 8187420 B, largest block 8126464 B, allocated 198456 B
+```
+
+Two of those numbers matter more than the first. **The largest single free internal
+block is 18 432 B**, so any larger single internal allocation fails — `esp_wifi_init()`
+wants roughly 25 KB of contiguous DMA-capable internal RAM for its receive and
+transmit buffers, which is why bringing the encoder up first made Wi-Fi fail and the
+device reboot in a loop. And on ESP-IDF 6.1 the 32 768 B DMA reserve is not walled
+off: `heap_caps_malloc_default()` (`components/heap/heap_caps.c:107-134`) asks internal
+memory first for anything up to `SPIRAM_MALLOC_ALWAYSINTERNAL`, then **silently** falls
+through to PSRAM. So a new subsystem's allocations can quietly eat the margin Wi-Fi
+needs, and nothing reports it.
+
+The measured lever, if more internal RAM is wanted: lowering
+`SPIRAM_MALLOC_ALWAYSINTERNAL` from 131072 to 4096 moves the encoder's 95 KB of state
+to PSRAM and takes internal free from 35 327 B to **154 643 B** (largest block 18 432 →
+77 824 B) for **+7.6 %** of encoder cost — 41.4 % to 44.5 % of one core.
 
 ## Known limitations and deliberate omissions
 

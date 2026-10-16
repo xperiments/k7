@@ -147,3 +147,14 @@ with a listener attached) shows `starvation rebases 0` and `asserts 0`, with the
 at 43.8% - slightly higher than an idle hour, as expected when the card is being read by
 a download and the decoder at once. Internal RAM is the thing to watch: the working
 minimum during a track is about 11 KB, below the 32 KB the heap reserves for DMA.
+
+**Where the internal RAM actually goes, and what the LVGL UI will need.** The census
+that answered this is in `docs/research/radio-player-memory-and-lvgl.md` (with its
+sources), and its two headline numbers are measured on this board: internal free
+35 327 B but **largest single block 18 432 B**, against Wi-Fi's ~25 KB of contiguous
+DMA-capable buffers at bring-up; and moving the encoder's 95 KB of state to PSRAM
+takes internal free to 154 643 B and the largest block to 77 824 B for +7.6 % of
+encoder cost (41.4 % -> 44.5 % of one core). The same census corrected two figures
+that were wrong in the README: the encoder's IRAM code is 14 351 B (22 913 B with its
+tables), not "~35 KB", and the startup internal-free figure quoted in the board table
+was from an older build.
