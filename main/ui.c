@@ -192,7 +192,16 @@ static void ui_task(void *arg)
         ui_cassette_update(&st);
         if ((int)st.elapsed_ms != last_elapsed) last_elapsed = (int)st.elapsed_ms;
 
+        int64_t t0 = esp_timer_get_time();
         lv_timer_handler();
+        /* The first frame draws the whole screen - the cassette image included - and how
+         * long that takes decides whether the interface delays everything else on this
+         * core at boot. The rest are small updates and cost a fraction of this. */
+        static bool first = true;
+        if (first) {
+            first = false;
+            ESP_LOGI(TAG, "first frame rendered in %d ms", (int)((esp_timer_get_time() - t0) / 1000));
+        }
         vTaskDelay(pdMS_TO_TICKS(20)); /* ~50 Hz: enough for the reels, cheap for the encoder */
     }
 }
