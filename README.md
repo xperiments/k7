@@ -304,8 +304,9 @@ measurements corrected (see F4's own note, which assumes otherwise).
 
 ### When the station format is wrong
 
-A format the encoder cannot represent (see the validation above) stops the firmware
-before the network comes up, names the offending value, and then idles:
+A format the encoder cannot represent (see the validation above) is refused before
+anything is allocated or brought up — the check is arithmetic, so it costs nothing
+and cannot disturb Wi-Fi's memory — names the offending value, and then idles:
 
 ```
 E (1057) icecast: station format refused: station rate 44101 Hz is not one the encoder accepts; use one of 44100 48000 ...
@@ -471,7 +472,7 @@ minimum during a track is about 11 KB, which is below the 32 KB the heap reserve
 for DMA-capable allocations, so anything added to the radio task should be measured
 rather than assumed.
 
-**Four faults that only the board could show**, each now fixed and each worth the
+**Five faults that only the board could show**, each now fixed and each worth the
 tier on its own:
 
 1. **Starting the services before lwIP was initialised** made the first `socket()`
@@ -490,7 +491,19 @@ tier on its own:
    capability-allocated stack is never freed, which leaked 10 KB per request and
    degraded the device across repeated test runs (77 passing, then 68, without a
    reboot). The three clean runs above are the check for that.
-4. **The encoder was unoptimised and in the wrong memory.** IDF's project default is
+4. **Bring-up order decided whether Wi-Fi worked at all.** The broadcast allocates
+   the encoder's ~100 KB of internal RAM; `esp_wifi_init()` allocates its
+   DMA-capable receive and transmit buffers from the same pool, in contiguous
+   chunks of roughly 25 KB. Starting the broadcast first left Wi-Fi unable to get
+   them — `wifi:malloc buffer fail`, `Expected to init 16 rx buffer, actual is 14`,
+   then the driver's own cleanup aborted and the device rebooted in a loop (20
+   resets in a 32-second capture). The same binary with the order changed — validate
+   the format first, which is arithmetic and allocates nothing, then the network,
+   then the encoder — runs with zero resets. The margin is that thin: it worked
+   before by a sliver, and a small addition of static RAM was enough to lose it.
+   This is the strongest argument for the LVGL memory plan in
+   `docs/research/radio-player-memory-and-lvgl.md`.
+5. **The encoder was unoptimised and in the wrong memory.** IDF's project default is
    `-Og`, and with `CONFIG_SPIRAM_USE_MALLOC` the encoder's 95 KB of state is a
    >16 KB allocation, so it landed in PSRAM. Together those made it need 33.4 ms per
    frame - 128 % of one core - so the broadcast starved every couple of seconds.

@@ -334,27 +334,25 @@ void app_main(void)
         .bitrate = 256,
     };
 
-    /* The station is validated before the network comes up, so a format that
-     * cannot be served leaves the device inert and diagnosable rather than sitting
-     * on the network with nothing listening. This does not create a socket, so it
-     * does not need lwIP yet. */
-    err = mini_icecast_start(&cfg);
-    if (err != ESP_OK) {
-        /* F1: refuse, name the value, and do not serve. Halting rather than
-         * aborting keeps the diagnosis in the log once - an abort here would
-         * reboot the device and repeat the message forever, hiding everything
-         * else. Reflashing with a valid out_hz is the fix. */
-        ESP_LOGE(TAG, "not serving: %s", esp_err_to_name(err));
+    /* The station format is validated first, before anything is allocated or
+     * brought up: validation is arithmetic, so a format that cannot be served is
+     * refused without touching the network or the heap. F1: refuse, name the value,
+     * and do not serve. Halting rather than aborting keeps the diagnosis in the log
+     * once - an abort here would reboot the device and repeat the message forever,
+     * hiding everything else. Reflashing with a valid out_hz is the fix. */
+    char fmt_err[192] = {0};
+    if (mini_icecast_check_station(&cfg, fmt_err, sizeof fmt_err) != ESP_OK) {
+        ESP_LOGE(TAG, "not serving: %s", fmt_err);
         ESP_LOGE(TAG, "fix out_hz in main.c and reflash; the device is idle until then");
         for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    /* Then the stack (sockets need it), the rest of the services, and finally the
-     * wait for an address. The startup telemetry - the station format, the
-     * encoder's state, which memory each buffer took - and the card state are
-     * therefore in the log whether or not the network ever comes up, which is the
-     * whole point of P2's "diagnosable rather than mysterious". The listening
-     * socket binds to INADDR_ANY and needs no address of its own. */
+    /* Then the network, and only then the services. The order is not cosmetic:
+     * esp_wifi_init() allocates its DMA-capable receive and transmit buffers from
+     * internal RAM, and the encoder's ~100 KB of state competes for the same pool.
+     * Measured, starting the broadcast first leaves Wi-Fi unable to get 16 receive
+     * buffers ("wifi:malloc buffer fail", "Expected to init 16 rx buffer, actual is
+     * 14"), after which its own cleanup aborts and the device reboots in a loop. */
     net_start();
 
     mini_files_cfg_t files = {
@@ -363,6 +361,13 @@ void app_main(void)
         .mount_error = (card == ESP_OK) ? NULL : card_err,
     };
     ESP_ERROR_CHECK(mini_files_start(&files));
+
+    /* Now the encoder may take its internal RAM. */
+    err = mini_icecast_start(&cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "not serving: %s", esp_err_to_name(err));
+        for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 
     http_server_cfg_t http = {.port = HTTP_PORT, .server_name = "sd-stream/1.0", .max_conns = 4};
     ESP_ERROR_CHECK(http_server_start(&http));

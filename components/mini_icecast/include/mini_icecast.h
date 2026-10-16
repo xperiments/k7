@@ -58,10 +58,23 @@ typedef struct {
     void       *pcm_cb_ctx;
 } mini_icecast_cfg_t;
 
+/* Check a configuration without starting anything.
+ *
+ * Validation is arithmetic: it allocates nothing and brings nothing up. That
+ * matters because the encoder's state is about 100 KB of internal RAM, and internal
+ * RAM is also where Wi-Fi gets its DMA-capable buffers - measured, allocating the
+ * first before the second makes esp_wifi_init() fail outright ("wifi:malloc buffer
+ * fail", "Expected to init 16 rx buffer, actual is 14"), after which the driver's
+ * own cleanup aborts and the device reboots in a loop. So an application should
+ * validate with this, bring the network up, and only then start the broadcast.
+ * Returns ESP_OK, or ESP_ERR_INVALID_ARG with `err` filled in. */
+esp_err_t mini_icecast_check_station(const mini_icecast_cfg_t *cfg, char *err, size_t err_size);
+
 /* Validate the station format, allocate the encoder and burst ring, start the
- * radio and telemetry tasks, and register the "/stream" route with http_server.
- * Call http_server_start() afterwards. Returns ESP_ERR_INVALID_ARG, naming the
- * offending value in the log, for a format or client limit that cannot be served. */
+ * broadcast and telemetry tasks, and register the "/stream" route with
+ * http_server. Call http_server_start() afterwards. Returns ESP_ERR_INVALID_ARG,
+ * naming the offending value in the log, for a format or client limit that cannot
+ * be served. Call it after the network is up: see mini_icecast_check_station(). */
 esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg);
 
 void      mini_icecast_skip(void);                              /* jump to next track */

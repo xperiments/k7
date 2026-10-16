@@ -422,6 +422,17 @@ static void telemetry_task(void *arg)
 
 /* ---------------------------------------------------------------- API */
 
+esp_err_t mini_icecast_check_station(const mini_icecast_cfg_t *cfg, char *err, size_t err_size)
+{
+    if (!cfg || !cfg->music_dir) {
+        if (err && err_size) snprintf(err, err_size, "no music directory configured");
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (mi_enc_check_format(cfg->out_hz, cfg->bitrate, err, err_size) < 0)
+        return ESP_ERR_INVALID_ARG;
+    return ESP_OK;
+}
+
 esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
 {
     if (!cfg || !cfg->music_dir) return ESP_ERR_INVALID_ARG;
