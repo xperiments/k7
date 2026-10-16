@@ -42,3 +42,31 @@ what it meant - the duration of history a connecting client receives - and R3's 
 unchanged" holds; what changed is that 88 KB of the budget is no longer needed. That is a deviation
 from §2.4's table, and §12 already flags that budget as arithmetic rather than observation. The
 startup log prints the real size and the path it took, which is what turns it into observation.
+
+**Board run of P2/P3: done.** The startup log on the real device, captured over the
+UART bridge:
+
+```
+I (327) esp_psram: Found 8MB PSRAM device
+I (333) esp_psram: Speed: 80MHz
+I (772) esp_psram: SPI SRAM memory test OK
+I (919) app: chip: esp32s3, 2 core(s), revision 0.2
+I (919) app: flash: 16 MB; psram: 8192 KB (octal mode, CONFIG_SPIRAM_MODE is not auto-detected)
+I (921) app: heap at startup: internal 305571 B free, external 8386148 B free
+I (1326) icecast: encoder: 1152 samples/frame (26.1 ms), 95880 B of state inside the vendored library, staging buffers in external memory
+I (1327) icecast: burst ring: 12098 B (~500 ms of audio) in external memory, sends at most 2 clients
+I (1344) files: download buffer: 16384 B in external memory
+```
+
+So the memory budget is now observation rather than arithmetic, which is what P2 asked
+for. Two corrections to earlier claims:
+
+* The encoder's state is **95 880 B** on the target, not 95 896 B. A 64-bit host measures
+  95 896; the struct holds three pointers, so the 32-bit build is 16 bytes smaller. The
+  earlier ticket note guessed 12 bytes; the measured difference is 16. This is exactly why
+  `mi_enc_state_bytes()` returns `sizeof(shine_global_config)` instead of a constant.
+* The burst ring is 12 098 B, not the ~88 000 B of §2.4's table, because it holds encoded
+  bytes now (see the note on ticket 05). `burst_ms` still means 500 ms of history.
+
+Outstanding: the one-hour soak (T11) - it needs a card, since without one there is no
+audio to encode and the encoder cost is not measurable.

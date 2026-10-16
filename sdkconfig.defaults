@@ -6,6 +6,15 @@
 CONFIG_IDF_TARGET="esp32s3"
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 
+# ---------------------------------------------------------------------- flash
+# The devkit class this targets has 16 MB of flash and 8 MB of PSRAM (N16R8).
+# Set the size explicitly: the default assumption is 2 MB, which leaves the
+# application partition almost full and wastes the rest of the chip.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+# 1.5 MB application partition rather than the 1 MB default: the firmware is
+# about 0.95 MB with the Wi-Fi stack linked in.
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+
 # Fine-grained pacing in the radio task (vTaskDelay at 1 ms resolution).
 CONFIG_FREERTOS_HZ=1000
 

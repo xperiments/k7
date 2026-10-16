@@ -34,3 +34,16 @@ Spec: `docs/specs/sd-stream-server.md` §8 (L1, L2, L4), §7 A1, §2.2, §2.3, �
 - [ ] A clean checkout builds and flashes following only the README. **The host build does (`make -C host check`, from a clean `host/build`); the firmware build has not been run** because there is no ESP-IDF toolchain in this environment, and no board to flash. `main/CMakeLists.txt` names IDF 5.4 component names (`esp_driver_gpio`, `esp_driver_sdmmc`, `esp_flash`, `esp_psram`); if a newer IDF has renamed them again, that one line is the fix, and the README says so.
 
 Note: the project licence was chosen as MIT so the component metadata could carry a licence at all. If you want something else, change `LICENSE` and the four `idf_component.yml` files.
+
+**Board run of the build-and-flash half: done.** `rm -rf build sdkconfig && idf.py
+build && idf.py -p /dev/cu.usbserial-834430 flash` works from a clean checkout with
+ESP-IDF v5.4.4 installed, following only the README. The 972 KB image fits a 1.5 MB
+partition with 37 % free.
+
+Corrections the board forced, both now in the repository: `main/CMakeLists.txt` must
+name `spi_flash`, not `esp_flash` (the latter is not a component in IDF 5.4); and
+`sdkconfig.defaults` must set the flash size and partition table explicitly, because the
+default assumed a 2 MB chip and left the application partition 93 % full.
+
+Outstanding: the "flash a board that has never built this project" part is done here on
+this board; a second machine has not been tried.

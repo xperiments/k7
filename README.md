@@ -70,6 +70,10 @@ These are compiled into the binary. There is no provisioning mechanism: changing
 them means editing the source and reflashing (a deliberate deferral, not an
 oversight).
 
+`sdkconfig.defaults` sets the flash size to 16 MB and the application partition to
+1.5 MB, matching the N16R8 class of module. If your board has a different flash
+size, change `CONFIG_ESPTOOLPY_FLASHSIZE_16MB` there before the first build.
+
 `sdkconfig.defaults` is applied on the first build; `idf.py menuconfig` edits the
 result afterwards. If you change `sdkconfig.defaults`, delete `sdkconfig` (or run
 `idf.py fullclean`) or the change will not take effect.
@@ -149,15 +153,26 @@ CONFIG_SPIRAM_USE_MALLOC=y    # required for heap_caps_malloc(MALLOC_CAP_SPIRAM)
 
 If your module is quad, set `CONFIG_SPIRAM_MODE_QUAD=y` and remove the `_OCT` line.
 The startup log tells you what the firmware actually got, so a wrong setting is
-diagnosable rather than mysterious:
+diagnosable rather than mysterious. This is the real log from the N16R8 board
+this was developed against:
 
 ```
-I (radio) chip: esp32s3, 2 core(s), revision 0.2
-I (radio) flash: 8 MB; psram: 8192 KB (octal mode, CONFIG_SPIRAM_MODE is not auto-detected)
-I (radio) heap at startup: internal 285000 B free, external 8380000 B free
-I (icecast) encoder: 1152 samples/frame (26.1 ms), 95896 B of state inside the vendored library, staging buffers in external memory
-I (icecast) burst ring: 12098 B (~500 ms of audio) in external memory, sends at most 2 clients
+I (327) esp_psram: Found 8MB PSRAM device
+I (333) esp_psram: Speed: 80MHz
+I (772) esp_psram: SPI SRAM memory test OK
+I (919) app: chip: esp32s3, 2 core(s), revision 0.2
+I (919) app: flash: 16 MB; psram: 8192 KB (octal mode, CONFIG_SPIRAM_MODE is not auto-detected)
+I (921) app: heap at startup: internal 305571 B free, external 8386148 B free
+I (1182) icecast: station format: 44100 Hz, 128 kbps CBR, joint stereo, MPEG-1
+I (1326) icecast: encoder: 1152 samples/frame (26.1 ms), 95880 B of state inside the vendored library, staging buffers in external memory
+I (1327) icecast: burst ring: 12098 B (~500 ms of audio) in external memory, sends at most 2 clients
+I (1344) files: download buffer: 16384 B in external memory
+I (1355) http: listening on :8000 (backlog 16, max 4 at once)
 ```
+
+Note the encoder figure: **95 880 B**, not the 95 896 B that a 64-bit host measures.
+The struct holds three pointers, so it is smaller on the 32-bit target - which is
+why the firmware reports `sizeof()` rather than a hard-coded number.
 
 Every large allocation this project makes is external-memory-preferred with an
 internal fallback, and says which path it took. The encoder's own state is
@@ -321,6 +336,54 @@ What the result means:
 
 ---
 
+## Board status
+
+The host tier tells you the code is right; only the board tells you the device is.
+This is where that stands, run on an ESP32-S3 devkit (16 MB flash, 8 MB embedded
+PSRAM, chip revision v0.2, ESP-IDF v5.4.4), flashed over the USB-UART bridge.
+
+**Verified on hardware**
+
+| What | Evidence |
+|---|---|
+| Builds and flashes from a clean checkout | `rm -rf build sdkconfig && idf.py build && idf.py -p PORT flash`: 972 KB app in a 1.5 MB partition, 37 % free |
+| 8 MB PSRAM in octal mode at 80 MHz | `esp_psram: Found 8MB PSRAM device`, `Speed: 80MHz`, `SPI SRAM memory test OK` |
+| Every large allocation takes the external-memory path (P2/P3) | `encoder: ... staging buffers in external memory`, `burst ring: 12098 B ... in external memory`, `download buffer: 16384 B in external memory` |
+| Free memory in both classes is reported at startup (P2) | `heap at startup: internal 305571 B free, external 8386148 B free` |
+| Station format validated and logged (F1-F3) | `station format: 44100 Hz, 128 kbps CBR, joint stereo, MPEG-1` |
+| The encoder's state is measured, not assumed | `95880 B of state inside the vendored library` - 16 B less than on the host, because the struct holds three pointers |
+| The HTTP listener comes up on its own port | `http: listening on :8000 (backlog 16, max 4 at once)` |
+| No card: the device degrades instead of aborting (R8/T10) | `no card mounted: ESP_ERR_TIMEOUT (0x107)` then `the device will still serve on the network` |
+| Card retries are paced, not a tight loop (T10) | `still no card: ...; retrying in 5 s`, one line per attempt |
+| A wrong SSID is diagnosable rather than silent | `Wi-Fi: cannot join "your-ssid" (reason 201), attempt 1; check WIFI_SSID/WIFI_PASS` |
+| The idle-library log is rate-limited, not per loop | one `no playable files` line in 20 s, not one per 2 s loop |
+| No reboots or asserts while idle | 20 s capture, zero `Rebooting`/`assert` lines |
+
+One bug was found only here, and is worth recording as the reason the board tier
+exists: starting the services before the network stack is initialised makes the
+first `socket()` call trip `assert failed: tcpip_send_msg_wait_sem ... (Invalid
+mbox)` and reboot the device. The host shim has no lwIP, so no host test could
+have caught it. `net_start()` (stack, non-blocking) and `wifi_wait_connected()`
+(blocks for an address) are now separate steps, which is what lets the whole
+startup telemetry above appear before, and independently of, an association.
+
+**Not yet verified on hardware** - these need an address to reach the device and a
+card to serve, neither of which was available:
+
+* every HTTP test: T3 (wire format), T4 (accept loop), T5 (ICY metadata), T6
+  (index), T7 (downloads), T8 (path guards), T9 (concurrent downloads)
+* T9b (SDMMC contention), T11 (the one-hour CPU and memory soak), T12 on the board,
+  T13 (FATFS case sensitivity), and the board halves of T2c
+* the card failed to initialise (`sdmmc_init_ocr: send_op_cond (1) returned 0x107`,
+  a timeout - no card responding). Check that a FAT32 card is seated, then check
+  the 1-bit wiring on CLK/CMD/D0 and the pull-ups the specification warns about.
+
+Put real credentials in `main/main.c`, insert a card with the fixture corpus in
+`/sdcard/music`, and the remaining tests in `host/tests/http_tests.sh` run against
+`http://<board-address>:8000/` in place of the host build.
+
+---
+
 ## Architecture
 
 ```
@@ -393,7 +456,6 @@ GPL on the whole project.
   hears the same moment.
 * **`shine`'s audio quality is below LAME's.** Real, acknowledged, and unavoidable
   at this power budget.
-* **The firmware build itself was written against ESP-IDF 5.4 documentation and
-  has not been compiled here** (no ESP-IDF toolchain in this environment). The host
-  build and its tests are what have been executed; see the two-tier acceptance
-  section for what that does and does not prove.
+* **The firmware builds against ESP-IDF v5.4.4 and runs on an ESP32-S3 N16R8
+  devkit**; see the board status section below for exactly what has and has not
+  been exercised on hardware.

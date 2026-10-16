@@ -52,6 +52,14 @@ static bool name_is_safe(const char *name)
 
 static bool name_is_audio(const char *name) { return mi_dec_format_of(name) != MI_FMT_NONE; }
 
+/* Join the music directory and a name into `out`, refusing rather than
+ * truncating: a truncated path would name a different file. */
+static bool path_join(char *out, size_t out_size, const char *dir, const char *name)
+{
+    int n = snprintf(out, out_size, "%s/%s", dir, name);
+    return n > 0 && (size_t)n < out_size;
+}
+
 static const char *content_type_for(const char *name)
 {
     switch (mi_dec_format_of(name)) {
@@ -197,7 +205,7 @@ static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
     DIR *d = opendir(dir);
     if (!d) {
         char why[192];
-        snprintf(why, sizeof why, "%s (%s)", strerror(errno), dir);
+        snprintf(why, sizeof why, "%s", strerror(errno));
         ESP_LOGW(TAG, "GET / -> cannot read %s: %s", dir, strerror(errno));
         send_no_card(fd, dir, why);
         return HTTP_HANDLED;
@@ -222,9 +230,9 @@ static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
     while ((e = readdir(d))) {
         const char *name = e->d_name;
         if (!name_is_safe(name) || !name_is_audio(name)) continue;
+        if (strlen(name) > ML_MAX_NAME) continue; /* longer than the card's LFN limit */
         char path[ML_PATH_MAX];
-        int n = snprintf(path, sizeof path, "%s/%s", dir, name);
-        if (n < 0 || (size_t)n >= sizeof path) continue;
+        if (!path_join(path, sizeof path, dir, name)) continue;
         struct stat st;
         if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) continue;
         w_puts(&w, "<li><a href=\"/music/");
@@ -286,8 +294,7 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
     /* D5: build the path, then re-verify it really is inside the music
      * directory before touching the filesystem. */
     char path[ML_PATH_MAX];
-    int n = snprintf(path, sizeof path, "%s/%s", dir, name);
-    if (n < 0 || (size_t)n >= sizeof path) {
+    if (!path_join(path, sizeof path, dir, name)) {
         http_send_error(fd, 400, "that file name does not fit the path");
         return HTTP_HANDLED;
     }

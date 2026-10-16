@@ -47,3 +47,9 @@ Decision: ADR 0003.
 * The parser accepts an absolute-form request target (`GET http://host:8000/stream`). That is legal
   in HTTP/1.0 and HTTP/1.1 (RFC 7230 §5.3.2) and is what a proxy forwards; without it such a request
   would be a 400. It is eight lines and is commented with the reason.
+
+**Board run (partial).** The listener comes up on the device: `http: listening on :8000
+(backlog 16, max 4 at once)`. T4 on the board - a silent client not delaying the next -
+needs the device to have an address, so it is outstanding with the rest of the HTTP
+tests. The `Server:` header, the 404/405 handling and the descriptor-leak check have only
+been exercised against the host build so far.

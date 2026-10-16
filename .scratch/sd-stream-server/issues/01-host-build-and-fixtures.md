@@ -37,3 +37,25 @@ Spec: `docs/specs/sd-stream-server.md` §10 (H1–H4, H6), §5 D1, §9 T4.
 - [x] The measurement harness is `host/build/bin/mi_bench` (encoder cost per frame) plus the periodic telemetry in `mini_icecast.c` (free heap in both classes); both are host-runnable and are what later tickets reuse.
 
 Evidence: `make -C host check` -> unit tests, layering checks and 88 HTTP assertions, all passing.
+
+**Board run (partial).** `rm -rf build sdkconfig && idf.py build` succeeds from a clean
+checkout against ESP-IDF v5.4.4 (972 KB app, 37 % of a 1.5 MB partition free), and the
+firmware boots on the ESP32-S3 N16R8 devkit and stays up. The startup telemetry runs on
+the device: 8 MB PSRAM in octal mode at 80 MHz with a passing memory test, 305 571 B of
+free internal heap and 8 386 148 B of free external heap, the station format, and which
+memory each large buffer took. The HTTP listener reports `listening on :8000 (backlog 16,
+max 4 at once)`.
+
+Two things the firmware build needed that the host build could not reveal: `esp_flash`
+is not a component in IDF 5.4 (`spi_flash` is), and the flash geometry has to be set
+explicitly - the default assumed 2 MB, which left a 950 KB image in a 1 MB partition.
+Both are fixed in `main/CMakeLists.txt` and `sdkconfig.defaults`.
+
+One bug was found only on the board: with the services started before the network stack
+was up, the first `socket()` call tripped `assert failed: tcpip_send_msg_wait_sem ...
+(Invalid mbox)` and rebooted the device. The host shim has no lwIP, so no host test could
+catch it. `net_start()` and `wifi_wait_connected()` are now separate steps; the whole
+startup telemetry now appears before, and independently of, an association.
+
+Outstanding on this ticket's board tier: the HTTP tests, which need the device on a
+network (see the README's board status section).

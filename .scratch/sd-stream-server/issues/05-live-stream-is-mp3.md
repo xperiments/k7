@@ -57,3 +57,9 @@ boundaries. That is harmless **because the byte stream is continuous**: the conc
 legal MP3 stream, which is verified rather than asserted - the T3 capture spans about eight track
 boundaries in five seconds of fixture loop and `ffmpeg -v error -f null -` reports zero errors over
 all of it.
+
+**Board run (partial).** The station format is validated and logged on the device
+(`station format: 44100 Hz, 128 kbps CBR, joint stereo, MPEG-1`) and the encoder,
+staging buffers and burst ring all take the external-memory path. The stream tests
+themselves (T3 wire format, T5 ICY metadata, T2b's tail on a real file) need
+`/sdcard/music` to exist, so they are outstanding until the card mounts.

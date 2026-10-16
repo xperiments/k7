@@ -61,10 +61,21 @@ static const char *TAG = "app";
 /* ------------------------------------------------------------------ Wi-Fi */
 
 static EventGroupHandle_t wifi_ev;
+static int wifi_attempts;
 
 static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
-    if (base == WIFI_EVENT && (id == WIFI_EVENT_STA_START || id == WIFI_EVENT_STA_DISCONNECTED)) {
+    if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
+        /* Retrying in silence makes a mistyped SSID look like a dead device, and
+         * this device is meant to be diagnosable. First failure, then every tenth,
+         * so the log stays bounded. */
+        wifi_event_sta_disconnected_t *e = data;
+        if (++wifi_attempts == 1 || wifi_attempts % 10 == 0)
+            ESP_LOGW(TAG, "Wi-Fi: cannot join \"%s\" (reason %d), attempt %d; "
+                          "check WIFI_SSID/WIFI_PASS at the top of main.c",
+                     WIFI_SSID, e->reason, wifi_attempts);
         esp_wifi_connect();
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *e = data;
@@ -74,7 +85,14 @@ static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
     }
 }
 
-static void wifi_start(void)
+/* Bring the network stack up and start associating, without waiting for it.
+ *
+ * This has to happen before anything creates a socket: lwIP's mailboxes do not
+ * exist until esp_netif_init() has run, and calling socket() before that trips
+ * "assert failed: tcpip_send_msg_wait_sem ... (Invalid mbox)" and reboots the
+ * device. It does not have to happen before the services are started, which is
+ * why the wait is a separate step. */
+static void net_start(void)
 {
     wifi_ev = xEventGroupCreate();
     ESP_ERROR_CHECK(esp_netif_init());
@@ -92,6 +110,11 @@ static void wifi_start(void)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wc));
     ESP_ERROR_CHECK(esp_wifi_start());
     esp_wifi_set_ps(WIFI_PS_NONE); /* modem sleep adds latency spikes: bad for streaming */
+}
+
+/* Block until the device has an address. */
+static void wifi_wait_connected(void)
+{
     xEventGroupWaitBits(wifi_ev, 1, pdFALSE, pdTRUE, portMAX_DELAY);
 }
 
@@ -214,7 +237,13 @@ void app_main(void)
         ESP_LOGE(TAG, "the device will still serve on the network; the index will say so");
     }
 
-    wifi_start();
+    /* The stack comes up first (sockets need it), then the services, then the
+     * wait for an address. The services' startup telemetry - the station format,
+     * the encoder's state, which memory each buffer took - and the card state are
+     * therefore in the log whether or not the network ever comes up, which is the
+     * whole point of P2's "diagnosable rather than mysterious". The listener binds
+     * to INADDR_ANY and needs no address of its own. */
+    net_start();
 
     mini_icecast_cfg_t cfg = {
         .music_dir = MUSIC_DIR,
@@ -246,6 +275,8 @@ void app_main(void)
     ESP_ERROR_CHECK(http_server_start(&http));
 
     if (card != ESP_OK) xTaskCreate(card_task, "card_retry", CARD_TASK_STACK, NULL, 4, NULL);
+
+    wifi_wait_connected();
 
     /* BOOT button (GPIO0) = next track. */
     gpio_config_t io = {.pin_bit_mask = 1ULL << GPIO_NUM_0, .mode = GPIO_MODE_INPUT, .pull_up_en = 1};
