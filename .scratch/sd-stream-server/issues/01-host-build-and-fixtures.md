@@ -12,7 +12,7 @@ build registers do not exist.
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done (host tier). The board tier of a later ticket has not been run: no ESP32-S3 was attached.
 
 - [ ] Vendor the three missing decoder headers (public domain / MIT-0) so the decode layer compiles, and repair the include-directory registration so the build no longer references directories that do not exist.
 - [ ] The host build target compiles with one command and produces a runnable server.
@@ -26,3 +26,14 @@ build registers do not exist.
 Spec: `docs/specs/sd-stream-server.md` §10 (H1–H4, H6), §5 D1, §9 T4.
 
 ## Comments
+
+- [x] Vendored `dr_mp3.h`, `dr_flac.h`, `dr_wav.h` (public domain / MIT-0) as their own `components/dr_libs` component; the component registrations no longer name directories that do not exist (`include/` now exists, `third_party/` became its own component).
+- [x] `make -C host` builds `host/build/bin/icecast_host` with one command.
+- [x] The host build compiles the same production sources. `make -C host layering` fails the build if a component source is missing from the host Makefile or if a `*_host.c` fork exists. H2 is enforced too: no `CONFIG_IDF_TARGET` anywhere in `components/`.
+- [x] Music directory and port are runtime arguments; default port 18000, no elevation.
+- [x] `GET /stream` streams continuously: `curl -s --max-time 5 .../stream | ffprobe -` reports MPEG audio, 44100 Hz, 128 kb/s, stereo, and `ffmpeg -v error -f null -` reports zero errors over the whole capture.
+- [x] A silent client cannot delay a second one: with a silent socket open, `/` answers in 0.0008 s and `/stream` headers in 0.0004 s (T4 measures it in `host/tests/http_tests.sh`).
+- [x] `make -C host fixtures` regenerates the corpus (ffmpeg, 44100/48000/32000 in all three formats, plus a deliberately non-multiple-of-1152 track and a sub-frame track). Committed so host and board see identical bytes.
+- [x] The measurement harness is `host/build/bin/mi_bench` (encoder cost per frame) plus the periodic telemetry in `mini_icecast.c` (free heap in both classes); both are host-runnable and are what later tickets reuse.
+
+Evidence: `make -C host check` -> unit tests, layering checks and 88 HTTP assertions, all passing.

@@ -1,0 +1,12 @@
+# ESP-IDF build output and configuration
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock
+
+# Host build output
+host/build/
+
+# macOS
+.DS_Store

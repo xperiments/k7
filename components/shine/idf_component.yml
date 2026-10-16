@@ -1,0 +1,7 @@
+version: "1.0.0"
+description: "Vendored toots/shine fixed-point MP3 encoder, unmodified (LGPL-2.0-only)."
+license: "LGPL-2.0-only"
+targets:
+  - esp32s3
+dependencies:
+  idf: ">=5.4"

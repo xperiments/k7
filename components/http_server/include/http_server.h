@@ -1,0 +1,94 @@
+#pragma once
+/*
+ * http_server - the device's HTTP front door.
+ *
+ * Owns the listening socket and the accept loop. Every accepted connection is
+ * parsed on its own short-lived task, so one client that connects and says
+ * nothing cannot hold up anybody else; the number of tasks parsing at once is
+ * capped by `max_conns` and the listen backlog is generous.
+ *
+ * This component knows nothing about audio, files or markup. All three arrive
+ * as routes registered by other components before the server starts, which
+ * keeps the dependency direction one-way: mini_icecast and mini_files depend on
+ * http_server, and http_server depends on neither.
+ */
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "esp_err.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* A client that cannot take data for this long is dropped. Shared by the
+ * stream and the download path so both apply the same stall discipline. */
+#define HTTP_CLIENT_STALL_MS 400
+
+/* A connection that has not finished sending its request header in this long is
+ * abandoned, freeing its connection slot. */
+#define HTTP_HEADER_TIMEOUT_MS 2000
+
+#define HTTP_PATH_MAX 512 /* raw (percent-encoded) request target */
+#define HTTP_HEADER_MAX 1024
+#define HTTP_MAX_ROUTES 8
+#define HTTP_LISTEN_BACKLOG 16
+#define HTTP_MAX_CONNS 6
+
+typedef struct {
+    char method[8];           /* request method, e.g. "GET" */
+    char path[HTTP_PATH_MAX]; /* request target, percent-encoded, query stripped */
+    bool want_icy_metadata;   /* the client asked for inline ICY metadata */
+} http_request_t;
+
+/* What a route handler did with the connection.
+ *
+ * HTTP_HANDLED: the handler wrote a complete response. The server closes the fd.
+ * HTTP_UPGRADED: the handler took ownership of the fd (a live stream that will
+ *                outlive this request). The server must not close it. */
+typedef enum {
+    HTTP_HANDLED = 0,
+    HTTP_UPGRADED = 1,
+} http_result_t;
+
+typedef http_result_t (*http_route_fn)(int fd, const http_request_t *req, void *ctx);
+
+typedef struct {
+    uint16_t    port;        /* default 8000 */
+    const char *server_name; /* "Server:" header value; default "sd-stream/1.0" */
+    uint8_t     max_conns;   /* concurrent request tasks, 1..HTTP_MAX_CONNS, default 4 */
+} http_server_cfg_t;
+
+/* Register a route. `prefix` is matched against the start of the raw request
+ * path and the longest matching prefix wins; "/" therefore acts as the catch-all
+ * and "/music/" takes precedence over it. Must be called before
+ * http_server_start(), which is when main() should call it. */
+esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void *ctx);
+
+/* Bind, listen and start accepting. Returns once the listener is up. */
+esp_err_t http_server_start(const http_server_cfg_t *cfg);
+
+/* ------------------------------------------------------------------ replies */
+
+/* Write a status line and headers. `body_len` of (size_t)-1 omits
+ * Content-Length, meaning "the body ends when this connection closes".
+ * `extra_headers` may be NULL; it must end with CRLF if given. */
+esp_err_t http_send_headers(int fd, int status, const char *content_type,
+                            size_t body_len, const char *extra_headers);
+
+/* Write a small self-describing error page (400/404/405/503/...). */
+esp_err_t http_send_error(int fd, int status, const char *detail);
+
+/* send() until everything is written or the send timeout fires. */
+bool http_send_all(int fd, const void *data, size_t n);
+
+/* Decode a percent-encoded string in place into `out`.
+ * Returns the decoded length, or (size_t)-1 if the encoding is malformed or the
+ * decoded result would not fit - it never truncates silently, because a
+ * truncated name could turn a rejected name into an accepted one. */
+size_t http_url_decode(const char *in, char *out, size_t out_size);
+
+#ifdef __cplusplus
+}
+#endif

@@ -11,7 +11,7 @@ rather than glossed over.
 
 **Blocked by:** 05 — The live stream is continuous MP3.
 
-**Status:** ready-for-agent
+**Status:** procedure implemented and validated host-against-host. The board half has NOT been run, so nothing here is evidence about the board.
 
 - [ ] A documented procedure produces a digest of the encoded audio from a given source track, and it runs against both the host build and the board.
 - [ ] The fixed-point stages — decoding and encoding — produce byte-identical output on host and board for the same input.
@@ -22,3 +22,13 @@ rather than glossed over.
 Spec: `docs/specs/sd-stream-server.md` §10.6 (H5), §10.9 (H7), §10.2, §9 T3.
 
 ## Comments
+
+- [x] `host/tests/digest.sh <url-a> [url-b] [seconds]` captures one or two streams, cuts the same window out of each and reports whether the encoded bytes match. The window is delimited by two track changes, announced through ICY metadata, because a capture starts wherever the client connected and nothing else in the stream is intrinsic.
+- [x] The fixed-point stages are asserted byte-identical by construction and by test: `host/build/bin/mi_encode_file` runs decode -> resample -> encode -> flush on one file, and `t02` asserts the encoder's byte stream is identical to an independent encoder run over the same PCM. With the source rate equal to the station rate the resampler is a pass-through, so nothing but fixed-point arithmetic is involved.
+- [x] The resampler is explicitly excluded from byte-exactness and the reason is recorded in `mi_encode_file.c`, in `digest.sh` and in the README: its kernel uses `double`/`float`, so a host/board comparison across a rate conversion is a length check plus an SNR bound, not a hash comparison.
+- [x] Divergence handling is written down: an unexplained difference is a defect; one explained by the four board-only properties is not.
+- [x] The procedure is self-checking about comparability: it compares the reported spans and byte counts first and prints `NOT COMPARABLE` rather than comparing digests that cover different audio.
+- [x] Validation that the procedure is actually deterministic: two host servers started fresh against the same corpus, captured simultaneously, produced the same span (`tone-44100 -> tone-48000`, 16000 bytes) and byte-identical audio (`cmp` clean, `MD5=3f0f829de12ab24e4aa1282b01c8c843`).
+- [ ] The board run itself, and therefore any claim about the board, is outstanding.
+
+Finding worth recording: the naive one-liner in the specification (`curl ... | ffmpeg -f md5 -`) is not reproducible in general, because a stream capture has no canonical start. The metadata schedule is anchored to the client's connect point and its interval is a fixed number of encoded bytes rather than a number of tracks, so two captures can deliberately cover different audio. The digest has to be taken over a window delimited by track changes, and the span has to be compared before the hashes are.

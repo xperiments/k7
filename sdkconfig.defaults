@@ -1,0 +1,41 @@
+# Defaults for the SD stream server.
+#
+# Copy to sdkconfig (or let the build do it) and adjust. The PSRAM section is a
+# hard prerequisite, not a tuning knob: see the README.
+
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# Fine-grained pacing in the radio task (vTaskDelay at 1 ms resolution).
+CONFIG_FREERTOS_HZ=1000
+
+# ---------------------------------------------------------------------- PSRAM
+# The mode is NOT auto-detected on the S3 (components/esp_psram/esp32s3/Kconfig.spiram
+# has no auto option): the wrong setting corrupts memory at boot rather than
+# failing cleanly. N8R8 / N16R8 class modules are normally octal. If your module
+# is quad, set CONFIG_SPIRAM_MODE_QUAD instead - and set only one of the two.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_SPEED_80M=y
+# Let Wi-Fi and lwIP buffers live in PSRAM, freeing internal DRAM for the
+# encoder's state.
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+
+# ----------------------------------------------------------------------- lwIP
+# MP3 at 128 kbps is 16 KB/s per client, but a burst on connect is sent at once:
+# give each socket room, and count enough sockets for the listener, the
+# connection tasks and every stream client.
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=32768
+CONFIG_LWIP_TCP_WND_DEFAULT=16384
+CONFIG_LWIP_MAX_SOCKETS=16
+
+# ---------------------------------------------------------------------- FATFS
+# Long file names on the card, matching what the index and the download path
+# assume (ML_MAX_NAME / CONFIG_FATFS_MAX_LFN).
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=128
+
+# --------------------------------------------------------------- SD card bus
+# One SDMMC slot, 1-bit, on the pins in main/main.c.
+CONFIG_SDMMC_USE_I2C=n

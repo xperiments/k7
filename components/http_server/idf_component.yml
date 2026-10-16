@@ -1,0 +1,7 @@
+version: "1.0.0"
+description: "Listening socket, per-connection request parsing and routing. Knows nothing about audio, files or markup."
+license: "MIT"
+targets:
+  - esp32s3
+dependencies:
+  idf: ">=5.4"

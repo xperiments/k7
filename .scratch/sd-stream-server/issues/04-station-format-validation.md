@@ -13,7 +13,7 @@ The same startup pass also stops silently second-guessing the documented client 
 
 **Blocked by:** 03 — Vendor the encoder with its licence obligation, and pin its documented behaviour.
 
-**Status:** ready-for-agent
+**Status:** done (host tier). T12's board half has not been run.
 
 - [ ] An unsupported station rate is refused at startup with a diagnostic naming the rate. The server does not reach the point of serving audio.
 - [ ] A rate and bit rate the encoder cannot represent together is refused the same way, naming both values.
@@ -26,3 +26,13 @@ The same startup pass also stops silently second-guessing the documented client 
 Spec: `docs/specs/sd-stream-server.md` §4.3 (F1–F3), §4.1 E1, §5 D3, §9 T12.
 
 ## Comments
+
+- [x] An unsupported station rate is refused at startup, naming it: `station rate 44101 Hz is not one the encoder accepts; use one of ...` and the process exits non-zero before serving anything (checked over HTTP by `host/tests/http_tests.sh`).
+- [x] A pair the encoder cannot represent is refused naming both values: `bit rate 128 kbps is not one the encoder can use at 8000 Hz`.
+- [x] A configuration at the **lowest** MPEG tier starts and logs that tier, and the zero return value is asserted directly by `host/tests/t04_format_validation.c` and by starting a real 8000/64 server on the host and probing its stream (ffprobe reports 8000 Hz).
+- [x] A rate the encoder accepts is never rejected for returning the lowest tier (`shine_check_config(8000,64) >= 0`).
+- [x] The chosen format is logged: `station format: 44100 Hz, 128 kbps CBR, joint stereo, MPEG-1`, plus the encoder's frame size and state size.
+- [x] `max_clients` outside 1..4 is refused with `max_clients 5 is outside the documented 1..4 range`; values inside the range are honoured exactly (`--max-clients 4` logs `sends at most 4 clients`), not coerced to a fixed number.
+- [x] The recommended default (44100/128) is what the firmware uses when nothing is configured: `main/main.c` sets only `music_dir`, `station_name`, `port` and `pcm_cb`, and the startup log confirms 44100/128/MPEG-1.
+
+One extra: the encoder frame is **576** samples at MPEG-2/2.5 rates, not 1152, so the accumulator uses `shine_samples_per_pass()` rather than a constant. A hard-coded 1152 would have produced garbage at 8/11.025/12/16/22.05/24 kHz stations.

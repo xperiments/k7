@@ -1,0 +1,7 @@
+version: "1.0.0"
+description: "Decode mp3/flac/wav, resample to one station format, encode to MP3 and broadcast it to every client over ICY."
+license: "MIT"
+targets:
+  - esp32s3
+dependencies:
+  idf: ">=5.4"

@@ -1,0 +1,3 @@
+idf_component_register(SRCS "mini_files.c"
+                       INCLUDE_DIRS "include"
+                       PRIV_REQUIRES http_server mini_icecast lwip esp_timer)

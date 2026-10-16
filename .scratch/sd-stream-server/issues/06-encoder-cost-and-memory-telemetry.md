@@ -11,7 +11,7 @@ the evidence, not a formality.
 
 **Blocked by:** 05 — The live stream is continuous MP3.
 
-**Status:** ready-for-agent
+**Status:** done (host tier and device code). The one-hour soak is a board-only test and has not been run; no board was attached.
 
 - [ ] Startup reports the chip model, flash size, external memory size and mode, and free memory in both the internal and external classes.
 - [ ] Startup reports which allocation path each large buffer took — external memory or internal fallback — so a device without external memory is diagnosable rather than mysterious.
@@ -24,3 +24,12 @@ the evidence, not a formality.
 Spec: `docs/specs/sd-stream-server.md` §4.3 F4, §2.4 (P2, P3), §4.1, §9 T11, T11h.
 
 ## Comments
+
+- [x] Startup reports the chip, flash size, PSRAM size and mode, and free heap in both classes (`log_hardware()` in `main/main.c`).
+- [x] Startup reports which path each large allocation took: the encoder staging buffers (`... staging buffers in external memory`) and the burst ring (`burst ring: 12098 B (~500 ms of audio) in external memory`), each with the internal fallback named when it is used.
+- [x] Encoder cost is measured on device with `esp_timer_get_time()` around `shine_encode_buffer_interleaved()`, accumulated over every frame, and logged once a minute with the frame count and the cost as a percentage of one core.
+- [x] Free memory in both classes is logged every 60 s, together with the cumulative starvation-rebase count. Every rebase is also logged as it happens, so "zero starvation rebases" is checkable from the log rather than assumed.
+- [x] The host baseline is `make -C host bench` (>= 1 M frames, monotonic clock). Measured here: 869 encoder calls over 1 000 000 input frames, ~138 us/frame inside the encoder, 0.53 % of one core *on this host* — recorded as scaling data only, never as a pass or fail.
+- [x] The documented fallback under CPU pressure is a **lower** rate and bit rate (32 kHz / 96 kbps), never a higher one; that is stated in the README's station-format section.
+
+Honest limitation: the encoder's own 96 KB of state is allocated by `calloc()` inside the vendored library, and ESP-IDF serves that from internal RAM. Redirecting it would mean modifying shine, which L1 forbids. Every allocation this project controls takes the PSRAM-preferred path, and the encoder's state size is reported at startup so the internal-RAM budget is visible rather than guessed.

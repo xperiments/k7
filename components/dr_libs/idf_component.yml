@@ -1,0 +1,7 @@
+version: "1.0.0"
+description: "Vendored dr_mp3 / dr_flac / dr_wav single-file decoders (mackron/dr_libs), unmodified."
+license: "MIT-0 OR Unlicense"
+targets:
+  - esp32s3
+dependencies:
+  idf: ">=5.4"

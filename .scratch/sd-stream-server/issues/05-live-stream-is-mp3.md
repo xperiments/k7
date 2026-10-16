@@ -16,7 +16,7 @@ the end of a track must be encoded rather than silently dropped.
 
 **Blocked by:** 02 — Resampler refuses extreme downsampling instead of overrunning memory; 04 — Station format is validated before anything is served.
 
-**Status:** ready-for-agent
+**Status:** done (host tier). T3 and T5 have not been run on the board.
 
 - [ ] The stream is reported by media tooling as MPEG audio at the configured station rate and bit rate, with no container header. Verified on the host first, then on the board.
 - [ ] No audio container header is emitted anywhere in the stream.
@@ -29,3 +29,14 @@ the end of a track must be encoded rather than silently dropped.
 Spec: `docs/specs/sd-stream-server.md` §4.2 (E2–E5), §4.4 C1, §5 D2, §6.1, §9 T2, T2b, T3, T5.
 
 ## Comments
+
+- [x] `ffprobe` reports MPEG audio at the station format with no container header; the capture starts on a frame sync and decodes with zero errors.
+- [x] No container header is emitted anywhere: `wav_header()` and its call site are gone, and the response is `Content-Type: audio/mpeg`.
+- [x] `host/tests/t02_encoder_pipeline.c` drives 2620 chunks of 1024 frames (2 682 880 frames) through the accumulator and asserts the encoder was only ever handed whole 1152-frame blocks, that every `out()` call carried exactly one complete MP3 frame (header length == buffer length), that emitted + still-pending equals a reference encoder's byte total, and that the bytes are identical to that reference. A second phase uses a deliberately non-multiple-of-1152 frame count (100 000) fed in uneven pieces.
+- [x] ICY metadata: `icy-metaint: 16000` is advertised and the `StreamTitle='...';` block sits at exactly byte 16 000 of the body with zero-filled padding (asserted by offset, not by searching).
+- [x] The interval counts encoded bytes: `client_push()` splits encoded frames, and the test asserts the exact offset.
+- [x] The end of a track loses nothing: `mi_enc_flush()` completes the residual block with silence and encodes it, so the encoder is called exactly `ceil(frames/1152)` times, and the byte stream matches the reference.
+- [x] The `pcm_cb` promise is corrected in `mini_icecast.h` and `main/main.c` (same PCM content, unencoded 1024-frame chunks, up to one encoder frame ahead) with no code change to the callback or its consumer.
+- [x] D2 fixed: `icy-name:` goes out with no space after the colon (asserted), and the test also asserts the non-canonical form is absent.
+
+**Specification refinement, from measurement (E5/T2b).** `shine`'s bit writer emits whole 32-bit words and holds each frame's last few bits in its cache, so at the moment of the flush a track's final frame can be up to 3 bytes short of complete (`shine_flush()` returns 0 bytes and cannot retrieve them). `mi_enc_flush()` therefore emits every frame that *is* complete and leaves the incomplete one buffered; it is emitted, in order, as soon as the next block is encoded — deferred, never dropped. The test asserts exactly that: at the flush, `emitted + pending == reference` and `pending < one frame`; after one more block, the whole track has been emitted and is byte-identical to the reference. A literal "output frames == ceil(frames/1152) at the instant of the flush" is not achievable with this encoder, and asserting it would have meant broadcasting a truncated final frame.

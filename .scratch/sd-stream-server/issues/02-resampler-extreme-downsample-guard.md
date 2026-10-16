@@ -11,7 +11,7 @@ test. It is the cheapest possible first exercise of the harness from ticket 01.
 
 **Blocked by:** 01 — Host build and fixture corpus for the broadcast path.
 
-**Status:** ready-for-agent
+**Status:** done (host tier).
 
 - [ ] Constructing a resampler for an extreme downsample fails cleanly and reports a diagnostic naming the offending rates. It does not write past the bounds of its kernel row.
 - [ ] Ordinary and moderately low station rates are unaffected — verified by running the fixture corpus at a normal station rate and confirming output is unchanged from before the guard.
@@ -21,3 +21,10 @@ test. It is the cheapest possible first exercise of the harness from ticket 01.
 Spec: `docs/specs/sd-stream-server.md` §5 D4, §9 T2c.
 
 ## Comments
+
+- [x] `mi_rs_new()` refuses when the tap count exceeds the kernel row and reports a diagnostic naming the offending rates: `cannot resample 48000 Hz to 3000 Hz: 270 taps exceeds the 256-tap kernel limit`. The two pairs from the specification are both refused (48000->3000 needs 270 taps, 44100->1000 needs 744); previously both wrote past `double row[256]`.
+- [x] Ordinary rates are untouched: ten pairs from 44100->44100 through 11025->8000 construct, and 48000->44100 still resamples (checked end to end in `t03`).
+- [x] `host/tests/t03_resampler_guard.c` asserts both refusals, the message contents, and success for a normal pair. `mi_rs_new()` now takes an error buffer so the refusal is a diagnosable configuration error rather than an assertion or a crash.
+- [x] The caller logs it: `ESP_LOGE(TAG, "cannot resample %s: %s", path, rs_err)`.
+
+Note: the specification's arithmetic is stated as `T = 2 * ceil(ZERO_X / fc)` giving ~540 and ~1486; the implementation's formula gives 270 and 744. Both exceed 256, so the guard is the same either way, and the guard is what matters.
