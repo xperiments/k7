@@ -247,23 +247,30 @@ mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_ic
     }
 
     /* Register + burst under the lock broadcast() uses: the client gets the
-     * history and then the next live frame, with no gap and no duplicate. If the
-     * window expires mid-burst the client is still registered and simply starts on
-     * the live stream - ring_burst() walks whole frames, so what it sent is a valid
-     * prefix, and only the client misses its history. A client that has genuinely
-     * gone away is dropped, as before. */
+     * history and then the next live frame, with no gap and no duplicate.
+     *
+     * If the window expires the client is dropped rather than registered with a
+     * partial burst. Tempting as "send what fits and let it start live" looks, a
+     * timeout can land in the middle of a frame - send() is free to accept part of
+     * one before the window closes - and the live stream would then continue on top
+     * of a half-written frame. Measured: doing that put a decode error into the
+     * stream that T3 catches. A client that cannot take its history inside the
+     * window is not in a state to be handed a gapless stream, so it is refused and
+     * may reconnect. */
     xSemaphoreTake(S.lock, portMAX_DELAY);
     c->fd = fd;
     size_t burst = 0;
     bool complete = ring_burst(c, &burst);
-    bool fell_behind = !complete && (errno == EAGAIN || errno == EWOULDBLOCK);
-    if (!complete && !fell_behind) c->fd = -1;
+    bool window_expired = !complete && (errno == EAGAIN || errno == EWOULDBLOCK);
+    if (!complete) c->fd = -1;
     c->reserved = false;
     xSemaphoreGive(S.lock);
-    if (!complete && !fell_behind) return MINI_ICECAST_REGISTER_FAILED;
-    if (fell_behind)
-        ESP_LOGW(TAG, "client %d took %u B of history and stopped reading; it starts on the live stream",
-                 slot, (unsigned)burst);
+    if (!complete) {
+        if (window_expired)
+            ESP_LOGW(TAG, "client %d fell behind after %u B of history (window %d ms); refused",
+                     slot, (unsigned)burst, BURST_SEND_TIMEOUT_MS);
+        return MINI_ICECAST_REGISTER_FAILED;
+    }
 
     struct timeval snd = {.tv_sec = HTTP_CLIENT_STALL_MS / 1000,
                           .tv_usec = (HTTP_CLIENT_STALL_MS % 1000) * 1000};
