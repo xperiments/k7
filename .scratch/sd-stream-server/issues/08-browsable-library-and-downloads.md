@@ -53,3 +53,14 @@ playable files").
 
 Verified on the device: `GET /` returns 200, 722 bytes, ~20 ms, three times in a row, with
 the device staying up.
+
+**Board run of T13: documented.** A wrong-case request on this card returns `200`:
+
+```
+note  T13 wrong-case request for TONE-44100.FLAC -> 200
+```
+
+FATFS as configured here resolves names case-insensitively, so `/music/TONE-44100.FLAC`
+reaches `tone-44100.flac`. The specification asks for the behaviour to be documented
+rather than asserted, so the suite prints it rather than checking it - and it is board-only
+by construction, because macOS would give the same answer for the wrong reason.

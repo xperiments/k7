@@ -46,8 +46,9 @@ path; downloads are the fidelity path.
 
 ## Build and flash
 
-Requires ESP-IDF **5.4 or newer** (the component metadata asks for `idf: ">=5.4"`)
-for the `esp32s3` target.
+Builds and runs on ESP-IDF **6.1** (the version the board tier below was run on)
+and on **5.4.4**; the component metadata asks for `idf: ">=5.4"`. The `esp32s3`
+target is the only one supported.
 
 ```bash
 # One-time, if you have not sourced an ESP-IDF environment yet:
@@ -179,22 +180,28 @@ I (772) esp_psram: SPI SRAM memory test OK
 I (919) app: chip: esp32s3, 2 core(s), revision 0.2
 I (919) app: flash: 16 MB; psram: 8192 KB (octal mode, CONFIG_SPIRAM_MODE is not auto-detected)
 I (921) app: heap at startup: internal 305571 B free, external 8386148 B free
-I (1182) icecast: station format: 44100 Hz, 128 kbps CBR, joint stereo, MPEG-1
-I (1326) icecast: encoder: 1152 samples/frame (26.1 ms), 95880 B of state inside the vendored library, staging buffers in external memory
-I (1327) icecast: burst ring: 12098 B (~500 ms of audio) in external memory, sends at most 2 clients
-I (1344) files: download buffer: 16384 B in external memory
-I (1355) http: listening on :8000 (backlog 16, max 4 at once)
+I (1223) icecast: station format: 44100 Hz, 256 kbps CBR, joint stereo, MPEG-1
+I (1576) icecast: encoder: 103400 B of internal RAM taken (the encoder's own state; near zero means it landed in external memory)
+I (1576) icecast: encoder: 1152 samples/frame (26.1 ms), 95880 B of state inside the vendored library, staging buffers in external memory
+I (1588) icecast: burst ring: 20098 B (~500 ms of audio) in external memory, sends at most 2 clients
+I (1605) files: download buffer: 16384 B in external memory
+I (1613) http: listening on :8000 (backlog 16, max 4 at once)
 ```
 
 Note the encoder figure: **95 880 B**, not the 95 896 B that a 64-bit host measures.
 The struct holds three pointers, so it is smaller on the 32-bit target - which is
 why the firmware reports `sizeof()` rather than a hard-coded number.
 
-Every large allocation this project makes is external-memory-preferred with an
-internal fallback, and says which path it took. The encoder's own state is
-allocated inside the vendored library (`calloc`), which ESP-IDF serves from
-internal RAM — that is the one allocation this project cannot redirect, and it is
-the number to watch if internal RAM is tight.
+Every allocation this project makes itself is external-memory-preferred with an
+internal fallback, and says which path it took — except one, deliberately. The
+encoder allocates its own 95 KB of state inside the vendored library, and P3 asks
+for that to be external too; this firmware does the opposite and keeps it in
+internal RAM, because that state is the hottest working set in the system (a 40 KB
+lookup table plus the MDCT and subband tables) and putting it in PSRAM cost 8 % of
+the encoder's throughput when it was measured. `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL`
+is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
+95 880 B the encoder needs. The startup log reports the difference it makes:
+`encoder: 103400 B of internal RAM taken`.
 
 ## Using it
 
@@ -223,14 +230,14 @@ cmp track.flac /Volumes/YOURCARD/music/track.flac
 
 ### Station format
 
-Default **44 100 Hz / 128 kbps CBR / joint stereo**, which every player accepts.
-Set it in `main/main.c` on the `mini_icecast_cfg_t`:
+Default **44 100 Hz / 256 kbps CBR / joint stereo**. Set it in `main/main.c` on the
+`mini_icecast_cfg_t`:
 
 ```c
 mini_icecast_cfg_t cfg = {
     .music_dir = MUSIC_DIR,
-    .out_hz = 48000,      /* 44100 48000 32000 22050 24000 16000 11025 12000 8000 */
-    .bitrate = 192,       /* must be one the encoder accepts at that rate */
+    .out_hz = 44100,      /* 44100 48000 32000 22050 24000 16000 11025 12000 8000 */
+    .bitrate = 256,       /* must be one the encoder accepts at that rate */
     .max_clients = 4,     /* 1..4; anything else is refused, not coerced */
     .pcm_cb = on_pcm,
 };
@@ -238,10 +245,78 @@ mini_icecast_cfg_t cfg = {
 
 The format is validated at boot: a rate or a rate/bit-rate pair the encoder cannot
 represent stops the firmware with a message naming the offending value, rather
-than resampling audio into an encoder that cannot take it. 48 kHz / 192 kbps is
-available when fidelity matters more than reach. If the encoder turns out to be too
-expensive on real silicon, the fallback is a **lower** rate and bit rate (32 kHz /
-96 kbps) — never a higher bit rate.
+than resampling audio into an encoder that cannot take it.
+
+#### Why 44.1 kHz / 256 kbps, and what it costs
+
+Both halves were measured on the board, and the measurement is counter-intuitive:
+**the encoder's cost per frame is almost flat against the bit rate and dominated
+by the sample rate.** Cost per frame, ESP32-S3 at 240 MHz with the encoder's state
+in internal RAM and its code in IRAM:
+
+| format | µs/frame | % of one core | | format | µs/frame | % of one core |
+|---|---|---|---|---|---|---|
+| 44100/64 | 12 551 | 48.0 % | | 32000/96 | 13 570 | 37.7 % |
+| 44100/128 | 13 424 | 51.4 % | | 48000/192 | 13 604 | 56.7 % |
+| 44100/192 | 13 718 | 52.5 % | | 22050/64 | 6 175 | 23.6 % |
+| 44100/256 | 13 817 | 52.9 % | | 44100/320 | 13 852 | 53.0 % |
+
+(That is on synthetic full-scale noise, which is close to the hardest input a
+codec can be given; the tonal fixture corpus measures about 40 % at 44.1 kHz.)
+
+So the bit rate is nearly free — 64 to 320 kbps costs 10 % more CPU for five times
+the bits — while the sample rate costs in proportion to frames per second. Quality
+at a fixed sample rate rises with the bit rate, and measurably so: SNR of the
+encoded stream against its source, pink noise at −10 dBFS, delay-compensated:
+
+| bit rate | 96 | 128 | 160 | 192 | 256 | 320 |
+|---|---|---|---|---|---|---|
+| SNR | 2.4 dB | 3.3 dB | 4.7 dB | 7.1 dB | 11.9 dB | 15.5 dB |
+
+Read those as a *signal* measurement, not as perceived quality. Pink noise at
+−10 dBFS with no redundancy is close to the hardest input an encoder can be given,
+so the absolute figures are low by construction; what they establish is that the
+bit rate is still buying real accuracy at 256 kbps, monotonically. Whether the
+result *sounds* better is a listening question, and the honest answer is that the
+measurement ranks the options rather than settling the choice — shine's
+psychoacoustic model, not its bit budget, is the limit at the top of that range.
+
+Hence 44.1 kHz at 256 kbps: the specification's recommended sample rate, with
+three and a half times the bits of the 32 kHz/96 kbps fallback it started from, for
+3 % more CPU than 128 kbps and 32 KB/s per client. 320 kbps is the ceiling and is
+one line away; above 192 kbps the perceptual gain is probably smaller than the SNR
+suggests, because shine's limit is its psychoacoustic model, not its bit budget.
+
+**The cost is headroom, not correctness, and F4's target is not met.** The
+specification's acceptance threshold is "under 35 % of one core", and measured, it
+is not reachable at 44.1 kHz (52.9 %) *nor at the fallback the specification names*,
+32 kHz/96 kbps (37.7 %). Only 22.05 kHz meets it, at 23.6 %. So no format this
+project would want to ship satisfies F4 as written — the figure was proposed rather
+than measured (the specification says so itself), and this firmware prefers the
+quality the user asked for over a target that measurement has shown to be
+unreachable at any usable rate. The functional requirement — that the broadcast
+keeps up — is what the soak establishes, and it holds with zero starvation.
+
+If headroom is ever needed for something else, the options in order are 32 kHz /
+96 kbps, then 22.05 kHz / 64 kbps. Never *up*: a higher bit rate costs slightly
+more CPU, not less, though only slightly — which is the other thing the
+measurements corrected (see F4's own note, which assumes otherwise).
+
+### When the station format is wrong
+
+A format the encoder cannot represent (see the validation above) stops the firmware
+before the network comes up, names the offending value, and then idles:
+
+```
+E (1057) icecast: station format refused: station rate 44101 Hz is not one the encoder accepts; use one of 44100 48000 ...
+E (1071) app: not serving: ESP_ERR_INVALID_ARG
+E (1075) app: fix out_hz in main.c and reflash; the device is idle until then
+```
+
+Halting rather than aborting is deliberate: an abort reboots the device, which
+repeats the message forever and hides everything else in the log. Nothing listens,
+and Wi-Fi is never brought up, so the device is inert and obvious rather than on the
+network with nothing answering.
 
 ### When the card is missing
 
@@ -355,50 +430,70 @@ What the result means:
 ## Board status
 
 The host tier tells you the code is right; only the board tells you the device is.
-This is where that stands, run on an ESP32-S3 devkit (16 MB flash, 8 MB embedded
-PSRAM, chip revision v0.2, ESP-IDF v5.4.4), flashed over the USB-UART bridge.
+This is where that stands, on an ESP32-S3 devkit (16 MB flash, 8 MB embedded PSRAM,
+chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1**
+(and earlier on v5.4.4).
 
 **Verified on hardware**
 
 | What | Evidence |
 |---|---|
-| Builds and flashes from a clean checkout | `rm -rf build sdkconfig && idf.py build && idf.py -p PORT flash`: 972 KB app in a 1.5 MB partition, 37 % free |
+| Builds and flashes from a clean checkout | `rm -rf build sdkconfig && idf.py build && idf.py -p PORT flash`: a 1.04 MB app in a 1.5 MB partition, 32 % free |
 | 8 MB PSRAM in octal mode at 80 MHz | `esp_psram: Found 8MB PSRAM device`, `Speed: 80MHz`, `SPI SRAM memory test OK` |
-| Every large allocation takes the external-memory path (P2/P3) | `encoder: ... staging buffers in external memory`, `burst ring: 12098 B ... in external memory`, `download buffer: 16384 B in external memory` |
-| Free memory in both classes is reported at startup (P2) | `heap at startup: internal 305571 B free, external 8386148 B free` |
-| Station format validated and logged (F1-F3) | `station format: 44100 Hz, 128 kbps CBR, joint stereo, MPEG-1` |
-| The encoder's state is measured, not assumed | `95880 B of state inside the vendored library` - 16 B less than on the host, because the struct holds three pointers |
-| The HTTP listener comes up on its own port | `http: listening on :8000 (backlog 16, max 4 at once)` |
-| The card mounts over SPI (R2) | `Name: SL32G`, `Type: SDHC`, `card: 30420 MB total, 30418 MB free` |
+| Every allocation this project makes takes the external-memory path (P2/P3) | `staging buffers in external memory`, `burst ring: 20098 B (~500 ms of audio) in external memory`, `download buffer: 16384 B in external memory` |
+| The encoder's state is measured, not assumed | `103400 B of internal RAM taken (the encoder's own state)`, and `95880 B of state inside the vendored library` - 16 B less than the host's 95896, because the struct holds three pointers |
+| Free memory in both classes is reported at startup and every minute (P2) | `heap at startup: internal 261087 B free, external 8386156 B free` |
+| Station format validated and logged (F1-F3) | `station format: 44100 Hz, 256 kbps CBR, joint stereo, MPEG-1` |
+| The wire matches the announcement (T3) | `ffprobe`: `mp3, 44100 Hz, stereo, 256 kb/s`, and the whole capture decodes with zero errors |
+| The card mounts over SPI (R2) | `Name: SL32G`, `Type: SDHC`, `card: 30420 MB total` |
 | A mounted but empty card is distinguishable from an absent one | `card on SPI: CS 10, CLK 12, MOSI 11, MISO 13`, then `/sdcard/music does not exist` |
 | No card: the device degrades instead of aborting (R8/T10) | `no card mounted: ESP_ERR_TIMEOUT (0x107)` then `the device will still serve on the network` |
 | Card retries are paced, not a tight loop (T10) | `still no card: ...; retrying in 5 s`, one line per attempt |
-| A wrong SSID is diagnosable rather than silent | `Wi-Fi: cannot join "your-ssid" (reason 201), attempt 1; check main/wifi_credentials.h` |
-| The idle-library log is rate-limited, not per loop | one `no playable files` line in 20 s, not one per 2 s loop |
-| No reboots or asserts while idle | 20 s capture, zero `Rebooting`/`assert` lines |
+| A wrong SSID is diagnosable rather than silent | `Wi-Fi: cannot join ... (reason 201), attempt 1; check main/wifi_credentials.h` |
+| The HTTP surface, end to end (T3-T9) | `BOARD_URL=http://192.168.0.44:8000 sh host/tests/http_tests.sh`: **80 passed, 0 failed**, three runs in a row with no reboot in between |
+| ICY metadata at the advertised interval (T5) | `metadata block at exactly 16000: StreamTitle='...' (2 blocks, 32 bytes)` |
+| Downloads are the card's bytes (T7) | all eleven fixtures `byte-identical`, with `Content-Length` and media type checked |
+| One download at a time (T9/D6) | slow reader keeps its download byte-intact while the second request gets `503` |
+| Download contention does not starve the stream (T9b) | 2-minute soak with repeated downloads: `0 starvation rebases`, memory unchanged, no faults |
+| A refused station format serves nothing (T12) | with `out_hz = 44101`: `station format refused: station rate 44101 Hz is not one the encoder accepts; use one of ...`, then `not serving: ESP_ERR_INVALID_ARG`, and no listener, no Wi-Fi, no reboot |
+| FATFS case sensitivity is documented (T13) | a wrong-case request (`TONE-44100.FLAC`) returns `200` on this card: FATFS resolves names case-insensitively |
+| The encoder's cost and the memory over an hour (T11) | see the soak note below |
 
-One bug was found only here, and is worth recording as the reason the board tier
-exists: starting the services before the network stack is initialised makes the
-first `socket()` call trip `assert failed: tcpip_send_msg_wait_sem ... (Invalid
-mbox)` and reboot the device. The host shim has no lwIP, so no host test could
-have caught it. `net_start()` (stack, non-blocking) and `wifi_wait_connected()`
-(blocks for an address) are now separate steps, which is what lets the whole
-startup telemetry above appear before, and independently of, an association.
+**Four faults that only the board could show**, each now fixed and each worth the
+tier on its own:
 
-**Not yet verified on hardware** - these need an address to reach the device and a
-card to serve, neither of which was available:
+1. **Starting the services before lwIP was initialised** made the first `socket()`
+   call trip `assert failed: tcpip_send_msg_wait_sem ... (Invalid mbox)` and reboot
+   the device. `net_start()` (stack, non-blocking) and `wifi_wait_connected()` are
+   now separate, which is also what lets the whole startup telemetry appear before,
+   and independently of, an association.
+2. **The connection task's stack overflowed on the first request** -
+   `***ERROR*** A stack overflow in task http_conn` - because 6 KB did not cover the
+   index's streaming writer plus the request buffer plus lwIP. It is 10 KB now, with
+   the worst-case headroom reported in the telemetry.
+3. **Internal RAM ran out for the connection stacks**, which showed up as requests
+   answered with nothing at all and `no memory for a connection task` in the log.
+   Task stacks now take the external-memory-preferred path with an internal
+   fallback, and are deleted with `vTaskDeleteWithCaps()` - without which a
+   capability-allocated stack is never freed, which leaked 10 KB per request and
+   degraded the device across repeated test runs (77 passing, then 68, without a
+   reboot). The three clean runs above are the check for that.
+4. **The encoder was unoptimised and in the wrong memory.** IDF's project default is
+   `-Og`, and with `CONFIG_SPIRAM_USE_MALLOC` the encoder's 95 KB of state is a
+   >16 KB allocation, so it landed in PSRAM. Together those made it need 33.4 ms per
+   frame - 128 % of one core - so the broadcast starved every couple of seconds.
+   Building it at `-O3`, keeping its state internal
+   (`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=131072`, which is Kconfig's ceiling) and
+   placing its code in IRAM brings it to 13.8 ms at 44.1 kHz/256 kbps. The host
+   shim has no PSRAM, no IRAM and 64 KB stacks, so none of this was visible there.
 
-* every HTTP test: T3 (wire format), T4 (accept loop), T5 (ICY metadata), T6
-  (index), T7 (downloads), T8 (path guards), T9 (concurrent downloads)
-* T9b (SDMMC contention), T11 (the one-hour CPU and memory soak), T12 on the board,
-  T13 (FATFS case sensitivity), and the board halves of T2c
-### Running the rest of the board tier
+### Reproducing the board tier
 
-Two things are needed, and neither is in the repository:
+Two things are needed first, and neither is in the repository:
 
 ```bash
 cp main/wifi_credentials.h.example main/wifi_credentials.h
-$EDITOR main/wifi_credentials.h                 # SSID and password, gitignored
+$EDITOR main/wifi_credentials.h                 # SSID and password; gitignored
 idf.py -p /dev/cu.usbserial-834430 flash
 
 # and, on the card, a music directory holding the corpus:
@@ -406,23 +501,46 @@ mkdir -p /Volumes/YOURCARD/music
 cp host/fixtures/*.mp3 host/fixtures/*.flac host/fixtures/*.wav /Volumes/YOURCARD/music/
 ```
 
-Then the same assertions that pass on the host run against the device:
+Then the same assertions that pass on the host run against the device. The device's
+own serial log is the second input: the PSRAM, heap and encoder figures only exist
+there, and `SERIAL_LOG` is what lets the script check them.
 
 ```bash
+PY=~/.espressif/python_env/idf6.1_py3.12_env/bin/python     # any python with pyserial
+$PY host/tests/serial_log.py -s 20 -o /tmp/board.log        # boot log, resets the board
+
 BOARD_URL=http://<board-address>:8000 SERIAL_LOG=/tmp/board.log \
-  sh host/tests/http_tests.sh
+  HOST_DIR=host sh host/tests/http_tests.sh                 # T3-T9, 80 assertions
 ```
 
-`SERIAL_LOG` is optional; with it, the startup-telemetry assertions are checked
-against the device's own log (the octal-PSRAM and free-memory lines only exist
-there). `host/tests/serial_log.py` produces one:
+The long-running checks have their own script. It resets the board, captures for
+the whole run, attaches one stream client and (optionally) downloads the largest
+track repeatedly, then reads the device's telemetry and decides for itself:
 
 ```bash
-~/.espressif/python_env/idf5.4_py3.12_env/bin/python host/tests/serial_log.py -s 15 -o /tmp/board.log
+sh host/tests/board_soak.sh http://<board-address>:8000 /dev/cu.usbserial-XXXX 60 stream
+sh host/tests/board_soak.sh http://<board-address>:8000 /dev/cu.usbserial-XXXX 2 downloads   # T9b
+MAX_COST=70 sh host/tests/board_soak.sh ... 60 stream    # when quality, not headroom, is the goal
 ```
 
-T12 on the board is not a command-line check: it means flashing a build with a
-deliberately bad `out_hz` and watching it refuse to serve.
+`MAX_COST` defaults to the specification's 35 %; a configuration chosen for quality
+is held to its own bound explicitly rather than quietly exempted.
+
+Two acceptance tests are not scripts:
+
+* **T12 on the board** — set `out_hz` to a rate the encoder does not accept (44101,
+  say), flash, and watch it refuse to serve: it names the offending rate and stops
+  before the listener comes up.
+* **T13 (FATFS case sensitivity)** — the suite prints the status code it gets for a
+  wrong-case name rather than asserting one, because the specification asks for the
+  behaviour to be documented, whichever way the filesystem resolves it. macOS is
+  case-insensitive, so this one is board-only by construction.
+
+The host/board digest comparison is in `host/tests/digest.sh`:
+
+```bash
+sh host/tests/digest.sh http://127.0.0.1:18001 http://<board-address>:8000 12
+```
 
 ---
 
@@ -449,14 +567,25 @@ The dependency direction is one-way and is checked by `make -C host layering`:
 markup. The binary search for the seam is in
 `docs/adr/0003-extract-http-server-from-mini-icecast.md`.
 
-Every request is parsed on its own short-lived task, capped by a connection limit,
-with a generous listen backlog — so a client that connects and says nothing, or
-reads very slowly, cannot hold up anybody else.
+Requests are parsed on a pool of connection workers, capped by a connection limit,
+with a generous listen backlog — so a client that connects and says nothing, or reads
+very slowly, cannot hold up anybody else.
 
-### Two things worth knowing about the encoder
+The pool is a deliberate departure from the specification's "for each accepted fd it
+starts a short-lived task" (S1). The behaviour S1 asks for is kept; the mechanism is
+not, for two measured reasons. A task per request means a 10 KB stack allocation per
+request from the scarce memory class, which failed under pressure ("no memory for a
+connection task", with the client seeing nothing). And the matching deletion call for
+a capability-allocated stack, on ESP-IDF 6.1, spawns a temporary cleanup task when a
+task deletes itself - and aborts the device if that allocation fails. Neither is
+acceptable once per request, so the workers are created once at startup (failing
+there, loudly, if there is no memory for them) and live forever. There is nothing
+left to leak and nothing left to abort.
 
-Both were measured rather than assumed, and both are why `mi_encode.c` exists as
-its own module:
+### Three things worth knowing about the encoder
+
+All three were measured rather than assumed, and all three are why `mi_encode.c`
+exists as its own module:
 
 1. **`shine`'s output buffers are not frame-aligned.** Its bit writer emits whole
    32-bit words and carries each frame's leftover bits into the next call, so
@@ -469,6 +598,30 @@ its own module:
    block is therefore completed with silence (at most 26 ms) by `mi_enc_flush()`,
    and the encoder's last few bits are carried into the next track rather than
    dropped.
+3. **Its padding bit lies at some formats.** Where the exact slot count is a whole
+   number and shine's double-precision arithmetic lands just below it — measured at
+   32000 Hz / 96 kbps — it writes a padding bit for a slot it never fills: 432
+   bytes emitted with a header claiming 433. No decoder can parse such a stream
+   (`Failed to find two consecutive MPEG audio frames`, per ffmpeg), and a framer
+   that believes the header loses every byte of it. `mi_encode.c` therefore
+   *measures* this once per format, by encoding silence and asking which reading of
+   the padding bit makes the byte stream tile, and clears the bit in the stream
+   when it is wrong. It says so in the log when it does.
+
+The encoder's own hot loop is also built at `-O3` rather than the project default
+and placed in IRAM by a linker fragment — no line of shine's source changes. Both
+were measured on the board, on the synthetic benchmark, at 44.1 kHz/128 kbps:
+IRAM placement alone is worth 17 % (16.1 ms per frame down to 13.4 ms), and the
+same workload unoptimised (`-Og`) took 33.4 ms, so compiler and placement together
+are worth about 2.5x. That is the difference between 32 kHz and 44.1 kHz being
+affordable at all. A separate 8 % came from keeping its 95 KB of state out of
+PSRAM, as described above.
+
+The table in the station-format section is the same benchmark at each format; the
+telemetry line from a running device (which measures the real fixture corpus) reads
+about 10.8 ms per frame, 41.4 % of one core, at 44.1 kHz/256 kbps. Same encoder,
+different content: the synthetic signal is the harder of the two, which is why it
+is the number quoted for headroom.
 
 ## Licensing
 
@@ -497,7 +650,12 @@ GPL on the whole project.
 * **The stream is a broadcast**: it cannot be paused or seeked, and every client
   hears the same moment.
 * **`shine`'s audio quality is below LAME's.** Real, acknowledged, and unavoidable
-  at this power budget.
+  at this power budget. Raising the bit rate buys measurable accuracy, but the
+  psychoacoustic model is the limit, not the bit budget.
+* **The encoder uses about half of one core at the default station format**, which
+  exceeds the specification's 35 % headroom target. Nothing starves - the soak is
+  the evidence - but less is left over than the specification assumed, and the
+  reason is that a 44.1 kHz station costs what it costs.
 * **The firmware builds against ESP-IDF v5.4.4 and runs on an ESP32-S3 N16R8
   devkit**; see the board status section below for exactly what has and has not
   been exercised on hardware.

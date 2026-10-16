@@ -43,3 +43,19 @@ which is the convention every other field in `mini_icecast_cfg_t` follows (`out_
 values - 1, 3, 4 - were silently coerced to 2, and that is gone: the host suite now starts a server
 with `--max-clients 1`, `4` and `0` and checks the log says 1, 4 and 2 respectively, and that `5` is
 refused. The convention is stated in the header next to the field so it cannot be read as coercion.
+
+**Board run of T12: passed, and the failure mode was improved because of it.** With
+`out_hz = 44101` flashed, the device logs
+
+```
+E (1057) icecast: station format refused: station rate 44101 Hz is not one the encoder accepts; use one of 44100 48000 32000 22050 24000 16000 11025 12000 8000
+E (1071) app: not serving: ESP_ERR_INVALID_ARG
+E (1075) app: fix out_hz in main.c and reflash; the device is idle until then
+```
+
+and then nothing: no listener, no Wi-Fi, and no answer on port 8000. The first version of
+this path used `ESP_ERROR_CHECK(err)`, which aborted - so the device rebooted, printed the
+same message, and rebooted again. Loud, but a reboot loop hides everything else in the log
+and thrashes the console. It now halts with the reason, and the station is validated
+*before* the network comes up, so a refused format cannot leave the device sitting on the
+network with nothing listening.

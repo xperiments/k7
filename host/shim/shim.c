@@ -159,6 +159,16 @@ BaseType_t xTaskCreatePinnedToCore(TaskFunction_t fn, const char *name, uint32_t
     return pdPASS;
 }
 
+BaseType_t xTaskCreatePinnedToCoreWithCaps(TaskFunction_t fn, const char *name, uint32_t stack_bytes,
+                                           void *arg, UBaseType_t priority, TaskHandle_t *out,
+                                           int core_id, uint32_t caps)
+{
+    (void)caps; /* one memory class here: see the header */
+    return xTaskCreatePinnedToCore(fn, name, stack_bytes, arg, priority, out, core_id);
+}
+
+void vTaskDeleteWithCaps(TaskHandle_t task) { vTaskDelete(task); }
+
 void vTaskDelay(TickType_t ticks)
 {
     struct timespec ts = {.tv_sec = ticks / 1000, .tv_nsec = (long)(ticks % 1000) * 1000000L};
@@ -174,6 +184,16 @@ void vTaskDelete(TaskHandle_t task)
 TickType_t xTaskGetTickCount(void)
 {
     return (TickType_t)(esp_timer_get_time() / 1000);
+}
+
+/* Synthetic, like the heap figures above: a pthread stack's high-water mark is not
+ * available through a portable API, and the host gives every task at least 64 KB.
+ * Reporting a plausible figure keeps the telemetry line the same shape as the
+ * device's without pretending to have measured anything. */
+UBaseType_t uxTaskGetStackHighWaterMark(TaskHandle_t task)
+{
+    (void)task;
+    return 8192;
 }
 
 /* ----------------------------------------------------------------- semaphore */

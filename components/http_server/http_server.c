@@ -9,8 +9,10 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/idf_additions.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "lwip/sockets.h"
@@ -34,16 +36,17 @@ typedef struct {
     void        *ctx;
 } route_t;
 
-typedef struct {
-    int fd;
-} conn_arg_t;
-
 static struct {
     http_server_cfg_t cfg;
     uint32_t          conn_stack_min; /* bytes of headroom left, worst connection seen */
     route_t           routes[HTTP_MAX_ROUTES];
     int               nroutes;
-    SemaphoreHandle_t slots; /* caps concurrently-parsing connection tasks */
+    /* Connection workers take accepted sockets off this ring. There is one worker
+     * per slot, created once, so no task is created or destroyed per request. */
+    int               queue[HTTP_MAX_CONNS];
+    unsigned          q_head, q_tail;
+    SemaphoreHandle_t jobs;       /* connections waiting for a worker */
+    SemaphoreHandle_t free_slots; /* workers not currently serving */
 } S;
 
 /* ------------------------------------------------------------- text helpers */
@@ -297,18 +300,56 @@ static void serve_connection(int fd)
     if (r->fn(fd, &req, r->ctx) != HTTP_UPGRADED) close(fd);
 }
 
-static void conn_task(void *arg)
+/* Start a long-lived task, with its stack in external memory where possible.
+ *
+ * Two things are deliberate here. The stack is external-preferred because internal
+ * RAM is the scarce resource in this firmware - the encoder's 95 KB of state lives
+ * there on purpose - and an internal-only 10 KB stack failed under pressure
+ * (measured: "no memory for a connection task", with the client seeing nothing at
+ * all). And every task started here is *long-lived*: created once at startup and
+ * never deleted, which is why nothing in this component calls vTaskDelete().
+ *
+ * The reason for that is worth recording. xTaskCreatePinnedToCoreWithCaps()
+ * allocates its stack with heap_caps_malloc(), so it must be deleted with
+ * vTaskDeleteWithCaps() rather than vTaskDelete() - the latter leaks the whole
+ * stack, which for a connection task was 10 KB per request, a leak that only showed
+ * up as a device degrading over repeated use. But the matching call has its own
+ * cost: on ESP-IDF 6.1, deleting a capability-allocated task *from itself* spawns a
+ * temporary cleanup task, and aborts the device if that allocation fails. Neither a
+ * leak nor an abort-on-pressure is acceptable for something that happens once per
+ * HTTP request, so the workers are permanent and there is nothing to delete. */
+static BaseType_t create_task(TaskFunction_t fn, const char *name, uint32_t stack,
+                              void *arg, UBaseType_t prio, int core)
 {
-    conn_arg_t *a = arg;
-    int fd = a->fd;
-    free(a);
-    serve_connection(fd);
-    /* How close this task came to its stack limit. Kept as a running minimum so
-     * the periodic telemetry reports the worst path taken, not the last one. */
-    uint32_t left = (uint32_t)uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t);
-    if (!S.conn_stack_min || left < S.conn_stack_min) S.conn_stack_min = left;
-    xSemaphoreGive(S.slots);
-    vTaskDelete(NULL);
+    uint32_t caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
+    if (heap_caps_get_free_size(MALLOC_CAP_SPIRAM) == 0) {
+        ESP_LOGW(TAG, "no external memory: %s gets an internal stack", name);
+        caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+    }
+    BaseType_t ok = xTaskCreatePinnedToCoreWithCaps(fn, name, stack, arg, prio, NULL, core, caps);
+    if (ok != pdPASS && caps != (MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)) {
+        ESP_LOGW(TAG, "no external memory for the %s task stack; using internal RAM", name);
+        ok = xTaskCreatePinnedToCoreWithCaps(fn, name, stack, arg, prio, NULL, core,
+                                             MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+    return ok;
+}
+
+/* One worker per slot, alive for the life of the process. */
+static void conn_worker(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        if (xSemaphoreTake(S.jobs, portMAX_DELAY) != pdTRUE) continue;
+        int fd = S.queue[S.q_head];
+        S.q_head = (S.q_head + 1) % HTTP_MAX_CONNS;
+        serve_connection(fd);
+        /* How close this worker came to its stack limit, as a running minimum, so
+         * the periodic telemetry reports the worst path taken. */
+        uint32_t left = (uint32_t)uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t);
+        if (!S.conn_stack_min || left < S.conn_stack_min) S.conn_stack_min = left;
+        xSemaphoreGive(S.free_slots);
+    }
 }
 
 uint32_t http_server_conn_stack_headroom_bytes(void) { return S.conn_stack_min; }
@@ -319,7 +360,7 @@ static void accept_task(void *arg)
     int ls = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     if (ls < 0) {
         ESP_LOGE(TAG, "socket(): %s", strerror(errno));
-        vTaskDelete(NULL);
+        vTaskDeleteWithCaps(NULL); /* created with caps, so deleted with caps */
         return;
     }
     int one = 1;
@@ -332,7 +373,7 @@ static void accept_task(void *arg)
     if (bind(ls, (struct sockaddr *)&a, sizeof a) || listen(ls, HTTP_LISTEN_BACKLOG)) {
         ESP_LOGE(TAG, "bind/listen failed on port %u: %s", (unsigned)S.cfg.port, strerror(errno));
         close(ls);
-        vTaskDelete(NULL);
+        vTaskDeleteWithCaps(NULL);
         return;
     }
     ESP_LOGI(TAG, "listening on :%u (backlog %d, max %u at once)",
@@ -344,26 +385,19 @@ static void accept_task(void *arg)
             vTaskDelay(pdMS_TO_TICKS(50)); /* accept() can fail transiently */
             continue;
         }
-        if (xSemaphoreTake(S.slots, 0) != pdTRUE) {
+        /* A free slot is taken before the socket is queued, so the ring cannot
+         * overflow: the number of queued-but-unserved connections is bounded by
+         * the number of workers. */
+        if (xSemaphoreTake(S.free_slots, 0) != pdTRUE) {
             ESP_LOGW(TAG, "connection declined: %u requests already in flight",
                      (unsigned)S.cfg.max_conns);
             http_send_error(fd, 503, "too many concurrent requests");
             close(fd);
             continue;
         }
-        conn_arg_t *ca = malloc(sizeof *ca);
-        if (!ca) {
-            close(fd);
-            xSemaphoreGive(S.slots);
-            continue;
-        }
-        ca->fd = fd;
-        if (xTaskCreatePinnedToCore(conn_task, "http_conn", CONN_TASK_STACK, ca, 5, NULL, 1) != pdPASS) {
-            ESP_LOGE(TAG, "no memory for a connection task");
-            free(ca);
-            close(fd);
-            xSemaphoreGive(S.slots);
-        }
+        S.queue[S.q_tail] = fd;
+        S.q_tail = (S.q_tail + 1) % HTTP_MAX_CONNS;
+        xSemaphoreGive(S.jobs);
     }
 }
 
@@ -381,9 +415,20 @@ esp_err_t http_server_start(const http_server_cfg_t *cfg)
     }
     if (S.nroutes == 0) ESP_LOGW(TAG, "no routes registered: every request will be a 404");
 
-    S.slots = xSemaphoreCreateCounting(S.cfg.max_conns, S.cfg.max_conns);
-    if (!S.slots) return ESP_ERR_NO_MEM;
-    if (xTaskCreatePinnedToCore(accept_task, "http_accept", ACCEPT_TASK_STACK, NULL, 5, NULL, 1) != pdPASS)
+    S.jobs = xSemaphoreCreateCounting(S.cfg.max_conns, 0);
+    S.free_slots = xSemaphoreCreateCounting(S.cfg.max_conns, S.cfg.max_conns);
+    if (!S.jobs || !S.free_slots) return ESP_ERR_NO_MEM;
+
+    /* The workers are created before the listening socket, so a request can never arrive
+     * before there is something to serve it. If the pool cannot be created, this
+     * fails here, at startup, instead of dropping requests later. */
+    for (unsigned i = 0; i < S.cfg.max_conns; i++) {
+        if (create_task(conn_worker, "http_conn", CONN_TASK_STACK, NULL, 5, 1) != pdPASS) {
+            ESP_LOGE(TAG, "no memory for connection worker %u of %u", i + 1, (unsigned)S.cfg.max_conns);
+            return ESP_ERR_NO_MEM;
+        }
+    }
+    if (create_task(accept_task, "http_accept", ACCEPT_TASK_STACK, NULL, 5, 1) != pdPASS)
         return ESP_ERR_NO_MEM;
     return ESP_OK;
 }

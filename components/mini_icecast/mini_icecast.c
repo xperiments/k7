@@ -3,7 +3,7 @@
  *
  * Decodes .mp3 / .flac / .wav at any sample rate, resamples everything to one
  * station format and encodes it to MP3, then broadcasts that to every connected
- * client in real time. Track changes are seamless because the stream format
+ * client in real time. Track changes are seamless because the station format
  * never changes.
  *
  * The listening socket and the request parsing live in http_server; this file is
@@ -37,7 +37,7 @@
 #define TITLE_MAX       120
 #define CHUNK_FRAMES    MINI_ICECAST_CHUNK_FRAMES
 #define CHUNK_BYTES     (CHUNK_FRAMES * 4)
-#define RADIO_TASK_STACK (24 * 1024)     /* the FLAC/MP3 decoder scratch is the big one */
+#define BROADCAST_TASK_STACK (24 * 1024) /* the FLAC/MP3 decoder scratch is the big one */
 #define TELEMETRY_TASK_STACK 4096        /* %f formatting on newlib is stack-hungry */
 #define TELEMETRY_PERIOD_MS 60000
 #define QUIET_PASSES    30 /* log "no playable files" once a minute, not once a loop */
@@ -360,7 +360,7 @@ static bool is_audio(const char *name)
     return mi_dec_format_of(name) != MI_FMT_NONE;
 }
 
-static void radio_task(void *arg)
+static void broadcast_task(void *arg)
 {
     (void)arg;
     S.t0 = esp_timer_get_time();
@@ -503,9 +503,9 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     }
 
     /* Wi-Fi lives on core 0; keep the broadcast on core 1. */
-    if (xTaskCreatePinnedToCore(radio_task, "ice_broadcast", RADIO_TASK_STACK, NULL, 6, NULL, 1) != pdPASS ||
+    if (xTaskCreatePinnedToCore(broadcast_task, "ice_broadcast", BROADCAST_TASK_STACK, NULL, 6, NULL, 1) != pdPASS ||
         xTaskCreatePinnedToCore(telemetry_task, "ice_telem", TELEMETRY_TASK_STACK, NULL, 3, NULL, 1) != pdPASS) {
-        ESP_LOGE(TAG, "no memory for the radio task");
+        ESP_LOGE(TAG, "no memory for the broadcast task");
         return ESP_ERR_NO_MEM;
     }
     ESP_LOGI(TAG, "GET /stream is ready; call http_server_start() to listen on port %u",

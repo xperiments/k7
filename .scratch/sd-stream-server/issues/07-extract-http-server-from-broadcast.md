@@ -79,3 +79,23 @@ returns 200 in ~20 ms, three times in a row, with no reboot.
 
 T4 and the index's diagnostic page are the first board-tier results from this ticket; the
 rest of the HTTP tests still need a library on the card.
+
+**Two more board-only faults, both about resources, both now fixed.**
+
+1. **The connection task's stack overflowed on the first index request.**
+   `***ERROR*** A stack overflow in task http_conn has been detected.` 6 KB did not cover
+   `serve_connection`'s request buffer, the index's own buffers, `http_send_headers` and the
+   index's streaming writer. It is 10 KB now, the writer's buffer is 1 KB rather than 2 KB,
+   and the worst-case headroom is part of the telemetry
+   (`stack headroom: broadcast 1996 B, worst connection 3796 B`).
+2. **Internal RAM ran out for those stacks, and the leak made it worse.** With the encoder's
+   95 KB of state deliberately in internal RAM, allocating a 10 KB task stack intermittently
+   failed: clients saw an empty response and the log said `no memory for a connection task`.
+   Worse, `xTaskCreatePinnedToCoreWithCaps()` - which allocates the stack with
+   `heap_caps_malloc()` - requires the matching `vTaskDeleteWithCaps()`; plain
+   `vTaskDelete()` never frees that stack, so every request leaked 10 KB. The symptom was a
+   device that worked well after a reboot and degraded over repeated test runs (77 assertions
+   passing, then 68). Both are fixed: stacks take the external-preferred path with an
+   internal fallback, and every task created with caps is deleted with caps. The check is
+   three consecutive board suite runs with no reboot in between - 80 passed, 0 failed, three
+   times.

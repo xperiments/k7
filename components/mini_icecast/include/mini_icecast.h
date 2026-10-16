@@ -5,7 +5,7 @@
  *
  * Every track (.mp3 / .flac / .wav, any sample rate, mono or stereo) is decoded
  * to PCM, resampled to ONE station format (stereo, 16-bit, out_hz), encoded to
- * MP3 at one bit rate and broadcast in real time. Because the stream format
+ * MP3 at one bit rate and broadcast in real time. Because the station format
  * never changes, track changes are seamless for every player.
  *
  * This component produces audio and owns the client list, the burst ring and the
@@ -13,7 +13,7 @@
  * it registers a route with http_server, which is what calls back in.
  *
  * Features: pacing, burst-on-connect, ICY metadata (StreamTitle), track change, skip.
- * Bandwidth: bitrate/8 bytes/s per client (16 KB/s at 128 kbps): fine for a LAN.
+ * Bandwidth: bitrate/8 bytes/s per client (32 KB/s at 256 kbps): fine for a LAN.
  */
 #include <stdbool.h>
 #include <stddef.h>
@@ -36,7 +36,10 @@ typedef void (*mini_icecast_pcm_cb_t)(const int16_t *stereo, size_t frames, void
 #define MINI_ICECAST_CHUNK_FRAMES 1024
 #define MINI_ICECAST_MAX_CLIENTS 4  /* the client table size; max_clients must fit in it */
 #define MINI_ICECAST_BITRATE_DEFAULT 128 /* kbps */
-#define MINI_ICECAST_METAINT_DEFAULT 16000 /* encoded bytes; exactly 1.00 s at 128 kbps */
+/* Encoded bytes between metadata blocks. A byte count rather than a time, so
+ * what it means in seconds depends on the station bit rate: 16000 B is 1.00 s at
+ * 128 kbps and 0.50 s at 256 kbps. */
+#define MINI_ICECAST_METAINT_DEFAULT 16000
 
 typedef struct {
     const char *music_dir;     /* e.g. "/sdcard/music": any mix of .mp3 .flac .wav, any sample rate */

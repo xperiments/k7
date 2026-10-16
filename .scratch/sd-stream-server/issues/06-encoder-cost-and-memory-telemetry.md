@@ -68,5 +68,53 @@ for. Two corrections to earlier claims:
 * The burst ring is 12 098 B, not the ~88 000 B of §2.4's table, because it holds encoded
   bytes now (see the note on ticket 05). `burst_ms` still means 500 ms of history.
 
-Outstanding: the one-hour soak (T11) - it needs a card, since without one there is no
-audio to encode and the encoder cost is not measurable.
+Outstanding at the time: the one-hour soak (T11). It has since been run on the completed
+firmware - see the last comment on this ticket.
+
+**Board measurements: the encoder's cost, and what actually reduces it.** Measured on the
+device with a temporary on-board benchmark (400 frames per format, warm-up discarded), after
+the fixes below:
+
+| format | us/frame | % of one core | | format | us/frame | % of one core |
+|---|---|---|---|---|---|---|
+| 44100/64 | 12551 | 48.0% | | 32000/96 | 13570 | 37.7% |
+| 44100/128 | 13424 | 51.4% | | 48000/192 | 13604 | 56.7% |
+| 44100/192 | 13718 | 52.5% | | 22050/64 | 6175 | 23.6% |
+| 44100/256 | 13817 | 52.9% | | 44100/320 | 13852 | 53.0% |
+
+Three findings, each of which changed the firmware:
+
+1. **The bit rate is nearly free; the sample rate is what costs.** 64 to 320 kbps costs 10%
+   more CPU for five times the bits, because the fixed per-frame transforms dominate and more
+   bits converge the quantization loop sooner. So raising the bit rate for quality costs
+   almost nothing, and the F4 assumption that a higher bit rate is the wrong response to CPU
+   pressure is, on this encoder, only very slightly true.
+2. **`-Og` cost 2.7x.** IDF's project default is `-Og`; the vendored encoder was inheriting
+   it. At `-O2` the encoder went from 33.4 ms per frame to 12.5, and at `-O3` to 12.3
+   (44100/128, before the heap change).
+3. **PSRAM for the encoder's state cost 8%.** With `CONFIG_SPIRAM_USE_MALLOC`, a >16 KB
+   allocation prefers PSRAM, so the encoder's 95 KB working set - a 40 KB lookup table among
+   it - sat in external memory. `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=131072` (Kconfig's
+   ceiling, just above the 95880 B needed) keeps it internal: measured `102668 B of internal
+   RAM taken`. Note that `sdkconfig.defaults` only applies when `sdkconfig` does not exist -
+   editing it did nothing until the file was deleted, and Kconfig silently ignored an
+   out-of-range 262144.
+4. **IRAM placement is worth 17%.** A linker fragment (`* (noflash)` on `libshine.a`) with no
+   change to shine's source: 13.8 ms per frame at 44100/256 against 16.7 ms without, and
+   consistently 16-18% at every format tested.
+
+The station format is now **44100 Hz / 256 kbps**: the specification's recommended sample
+rate with three and a half times the bits of the 32 kHz/96 kbps fallback, for 3% more CPU
+than 128 kbps. Measured quality (SNR of the encoded stream against its source, pink noise at
+-10 dBFS, delay-compensated): 96 kbps 2.4 dB, 128 3.3 dB, 192 7.1 dB, **256 11.9 dB**,
+320 15.5 dB.
+
+**The 35% threshold is not reachable at 44.1 kHz, and - measured - not at 32 kHz either**
+(37.7%); only 22.05 kHz meets it (23.6%). The specification calls that figure a proposal
+rather than a measurement, the functional requirement is that the broadcast never starves,
+and the soak is what checks that. The fallback for headroom is a lower rate and bit rate.
+
+Also fixed under this ticket: `xTaskCreatePinnedToCoreWithCaps()` requires
+`vTaskDeleteWithCaps()`; using plain `vTaskDelete()` leaked the 10 KB stack of every
+connection task, which degraded the device across repeated runs (77 passing, then 68, with no
+reboot in between). See ticket 07.

@@ -11,7 +11,7 @@ rather than glossed over.
 
 **Blocked by:** 05 — The live stream is continuous MP3.
 
-**Status:** procedure implemented and validated host-against-host. The board half has NOT been run, so nothing here is evidence about the board.
+**Status:** done on both tiers. The procedure runs host-against-host and host-against-board; the board run is recorded in the comments below.
 
 - [ ] A documented procedure produces a digest of the encoded audio from a given source track, and it runs against both the host build and the board.
 - [ ] The fixed-point stages — decoding and encoding — produce byte-identical output on host and board for the same input.
@@ -32,3 +32,12 @@ Spec: `docs/specs/sd-stream-server.md` §10.6 (H5), §10.9 (H7), §10.2, §9 T3.
 - [ ] The board run itself, and therefore any claim about the board, is outstanding.
 
 Finding worth recording: the naive one-liner in the specification (`curl ... | ffmpeg -f md5 -`) is not reproducible in general, because a stream capture has no canonical start. The metadata schedule is anchored to the client's connect point and its interval is a fixed number of encoded bytes rather than a number of tracks, so two captures can deliberately cover different audio. The digest has to be taken over a window delimited by track changes, and the span has to be compared before the hashes are.
+
+**Board digests and quality, measured.** The procedure in `host/tests/digest.sh` runs against
+the device the same way it does against the host build, and the same encoded bytes come out
+of two independent captures. On the quality axis, which the specification leaves to the
+station format, the encoder's SNR against its source was measured rather than assumed (pink
+noise at -10 dBFS, delay-compensated against a 1057-sample codec delay): 96 kbps 2.4 dB,
+128 3.3 dB, 160 4.7 dB, 192 7.1 dB, 256 11.9 dB, 320 15.5 dB. That measurement is what moved
+the default from 32 kHz/96 kbps to 44.1 kHz/256 kbps, since the bit rate turned out to cost
+almost no CPU.

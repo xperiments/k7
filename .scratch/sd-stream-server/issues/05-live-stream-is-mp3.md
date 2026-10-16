@@ -63,3 +63,32 @@ all of it.
 staging buffers and burst ring all take the external-memory path. The stream tests
 themselves (T3 wire format, T5 ICY metadata, T2b's tail on a real file) need
 `/sdcard/music` to exist, so they are outstanding until the card mounts.
+
+**Board finding: the vendored encoder's padding bit lies at some formats.** This is the
+most consequential fault found on hardware, because it makes the stream *unplayable* rather
+than merely imperfect. Where the exact slot count is a whole number and shine's
+double-precision arithmetic lands just below it - measured at 32000 Hz / 96 kbps, where the
+true count is 432 slots - it sets the header's padding bit for a slot it never writes: 432
+bytes emitted with a header claiming 433.
+
+```
+whole_slots=431 frac=0.999999999999943 slot_lag=-0.999999999999943
+f00 written=432 pad=1   (header claims 433)
+ffmpeg: Failed to find two consecutive MPEG audio frames -> Invalid data
+```
+
+No decoder can parse a stream like that, and `mi_encode`'s framer lost 572 KB of it chasing
+the lie (`encoder re-framing skipped 572896 bytes (expected 0)`), which is why the broadcast
+with no audio left to send starved every few seconds.
+
+Fixed by measuring rather than assuming: `mi_enc_new()` encodes eight frames of silence
+through a throwaway encoder and asks which reading of the padding bit makes the byte stream
+tile into frames, then clears the bit in the stream when the header is wrong, and says so in
+the log. The framer also has a safety net now: if it ever cannot frame the output it passes
+the bytes through unframed rather than dropping them.
+
+`host/tests/t05_stream_formats.c` is the regression test: all nine station rates with valid
+bit rates, asserting that every emitted buffer is one frame *as its own header describes it*
+and that the stream tiles with nothing left over. It fails on 32000/96 without the
+correction, and the first version of the test suite - which only ran 44100/128 - is why the
+fault reached the board at all.

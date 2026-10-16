@@ -106,6 +106,19 @@ const char *mi_enc_mpeg_name(int mpeg_version)
     }
 }
 
+/* The station format, in the vendored encoder's terms. Both the calibration probe
+ * and the encoder itself are built from this, so they cannot disagree about what
+ * the station is. */
+static void station_config(shine_config_t *cfg, uint32_t out_hz, uint32_t bitrate)
+{
+    memset(cfg, 0, sizeof *cfg);
+    cfg->wave.channels = PCM_STEREO;
+    cfg->wave.samplerate = (int)out_hz;
+    shine_set_config_mpeg_defaults(&cfg->mpeg);
+    cfg->mpeg.mode = JOINT_STEREO;
+    cfg->mpeg.bitr = (int)bitrate;
+}
+
 /* Walk `data` as a sequence of frame headers, returning how many bytes that
  * interpretation accounts for. Used by the calibration below. */
 static size_t walk_frames(const uint8_t *data, size_t n, bool force_no_padding)
@@ -138,22 +151,34 @@ static size_t walk_frames(const uint8_t *data, size_t n, bool force_no_padding)
 static bool format_overstates_padding(uint32_t out_hz, uint32_t bitrate)
 {
     shine_config_t cfg;
-    memset(&cfg, 0, sizeof cfg);
-    cfg.wave.channels = PCM_STEREO;
-    cfg.wave.samplerate = (int)out_hz;
-    shine_set_config_mpeg_defaults(&cfg.mpeg);
-    cfg.mpeg.mode = JOINT_STEREO;
-    cfg.mpeg.bitr = (int)bitrate;
+    station_config(&cfg, out_hz, bitrate);
     shine_t probe = shine_initialise(&cfg);
     if (!probe) return false;
 
-    static uint8_t probe_stream[8 * MI_ENC_MAX_FRAME_BYTES];
-    static int16_t silence[MI_ENC_MAX_FRAME_SAMPLES * 2]; /* zeroed: deterministic input */
+    /* Scratch for the probe: eight frames of encoded output plus one frame of
+     * silence to feed it. Taken from the heap - external-preferred with an internal
+     * fallback, the same idiom as every other buffer here (P3) - because it is
+     * needed once, at startup, and should not sit in internal RAM for the life of
+     * the process. */
+    const size_t stream_cap = 8 * MI_ENC_MAX_FRAME_BYTES;
+    uint8_t *probe_stream = heap_caps_malloc(stream_cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    bool external = probe_stream != NULL;
+    if (!probe_stream) probe_stream = malloc(stream_cap);
+    int16_t *silence = calloc(MI_ENC_MAX_FRAME_SAMPLES * 2, sizeof(int16_t));
+    if (!probe_stream || !silence) {
+        free(probe_stream);
+        free(silence);
+        shine_close(probe);
+        return false; /* cannot tell: believe the header and let the framer cope */
+    }
+    ESP_LOGD(TAG, "format probe: %u B of scratch in %s", (unsigned)stream_cap,
+             external ? "external memory" : "internal RAM");
+
     size_t n = 0;
     for (int i = 0; i < 8; i++) {
         int written = 0;
         unsigned char *b = shine_encode_buffer_interleaved(probe, silence, &written);
-        if (b && written > 0 && n + (size_t)written <= sizeof probe_stream) {
+        if (b && written > 0 && n + (size_t)written <= stream_cap) {
             memcpy(probe_stream + n, b, (size_t)written);
             n += (size_t)written;
         }
@@ -162,6 +187,8 @@ static bool format_overstates_padding(uint32_t out_hz, uint32_t bitrate)
 
     size_t as_is = walk_frames(probe_stream, n, false);
     size_t no_pad = walk_frames(probe_stream, n, true);
+    free(probe_stream);
+    free(silence);
     if (n < 4 * 512) return false; /* not enough evidence to decide anything */
     if (no_pad > as_is + 512) return true;
     if (as_is > no_pad + 512) return false;
@@ -189,12 +216,7 @@ mi_enc_t *mi_enc_new(uint32_t out_hz, uint32_t bitrate, char *err, size_t err_si
     e->bitrate = bitrate;
 
     shine_config_t cfg;
-    memset(&cfg, 0, sizeof cfg);
-    cfg.wave.channels = PCM_STEREO;
-    cfg.wave.samplerate = (int)out_hz;
-    shine_set_config_mpeg_defaults(&cfg.mpeg);
-    cfg.mpeg.mode = JOINT_STEREO;
-    cfg.mpeg.bitr = (int)bitrate;
+    station_config(&cfg, out_hz, bitrate);
 
     e->shine = shine_initialise(&cfg);
     if (!e->shine) {

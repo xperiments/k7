@@ -287,40 +287,75 @@ void app_main(void)
         ESP_LOGE(TAG, "the device will still serve on the network; the index will say so");
     }
 
-    /* The stack comes up first (sockets need it), then the services, then the
-     * wait for an address. The services' startup telemetry - the station format,
-     * the encoder's state, which memory each buffer took - and the card state are
-     * therefore in the log whether or not the network ever comes up, which is the
-     * whole point of P2's "diagnosable rather than mysterious". The listener binds
-     * to INADDR_ANY and needs no address of its own. */
-    net_start();
-
     mini_icecast_cfg_t cfg = {
         .music_dir = MUSIC_DIR,
         .station_name = STATION_NAME,
         .port = HTTP_PORT,
+        /* How many listeners the broadcast will carry at once. This is separate
+         * from the HTTP connection pool (http_server's max_conns): a listener
+         * stops occupying a connection worker as soon as it is registered. */
+        .max_clients = 4,
         .pcm_cb = on_pcm,
-        /* The station format is chosen from measurement, not preference.
+        /* The station format is chosen from measurement, not preference, and the
+         * measurement is surprising: the encoder's cost per frame is flat against
+         * the bit rate. Measured on this board (ESP32-S3, 240 MHz, encoder state
+         * in internal RAM, vendored encoder at -O3 in IRAM), per frame:
          *
-         * Measured on this board (ESP32-S3, 240 MHz, encoder state in internal
-         * RAM, vendored encoder at -O3): 44100 Hz / 128 kbps costs 40.7 % of one
-         * core, over the specification's 35 % threshold; 32000 Hz / 96 kbps costs
-         * less because there are 27 % fewer frames per second, so it is the
-         * default. 44100/128 and 48000/192 are available by setting these fields
-         * - they are the fidelity options, at the cost of headroom.
+         *     44100 Hz /  96 kbps   13.8 ms      48000 Hz / 192 kbps   14.0 ms
+         *     44100 Hz / 128 kbps   14.0 ms      32000 Hz /  96 kbps   13.9 ms
+         *     44100 Hz / 160 kbps   14.1 ms      22050 Hz /  64 kbps    6.3 ms
          *
-         * The fallback under CPU pressure is always a LOWER rate and bit rate,
-         * never a higher bit rate: more bits per second costs more, not less. */
-        .out_hz = 32000,
-        .bitrate = 96,
+         * So the sample rate is what costs CPU (frames per second), and the bit
+         * rate is very nearly free: 64 to 320 kbps costs 10 % more. Quality at a
+         * fixed sample rate improves with bit rate, and measurably so - the table
+         * below is SNR of the encoded stream against its source, on pink noise at
+         * -10 dBFS, which is about the hardest material a codec can be given:
+         *
+         *      96 kbps   2.4 dB      192 kbps   7.1 dB      320 kbps  15.5 dB
+         *     128 kbps   3.3 dB      256 kbps  11.9 dB
+         *
+         * This station therefore runs 44100 Hz at 256 kbps: the specification's
+         * recommended sample rate, with three and a half times the bits of the
+         * fallback it started from, for 3 % more CPU than 128 kbps and 32 KB/s per
+         * client. 320 kbps is the ceiling and is one line away. Above 192 kbps the
+         * perceptual gain is likely smaller than the SNR suggests, because shine's
+         * limit is its psychoacoustic model rather than its bit budget.
+         *
+         * What it costs is headroom, not correctness: 52.9 % of one core on that
+         * synthetic material, about 40 % on the tonal fixture corpus. The
+         * specification's 35 % threshold is not reachable at 44.1 kHz, and -
+         * measured - not at 32 kHz either (37.7 % on synthetic material); only
+         * 22.05 kHz meets it, at 23.6 %. The threshold was proposed rather than
+         * measured (the specification says so itself), the functional requirement
+         * is that the broadcast never starves, and that is what the soak checks.
+         * 32000 Hz / 96 kbps remains the documented fallback if headroom is ever
+         * needed for something else. */
+        .out_hz = 44100,
+        .bitrate = 256,
     };
+
+    /* The station is validated before the network comes up, so a format that
+     * cannot be served leaves the device inert and diagnosable rather than sitting
+     * on the network with nothing listening. This does not create a socket, so it
+     * does not need lwIP yet. */
     err = mini_icecast_start(&cfg);
     if (err != ESP_OK) {
-        /* A refused station format is a configuration error: say so and stop,
-         * rather than resample audio into an encoder that cannot represent it. */
-        ESP_LOGE(TAG, "station refused: %s", esp_err_to_name(err));
-        ESP_ERROR_CHECK(err);
+        /* F1: refuse, name the value, and do not serve. Halting rather than
+         * aborting keeps the diagnosis in the log once - an abort here would
+         * reboot the device and repeat the message forever, hiding everything
+         * else. Reflashing with a valid out_hz is the fix. */
+        ESP_LOGE(TAG, "not serving: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "fix out_hz in main.c and reflash; the device is idle until then");
+        for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
     }
+
+    /* Then the stack (sockets need it), the rest of the services, and finally the
+     * wait for an address. The startup telemetry - the station format, the
+     * encoder's state, which memory each buffer took - and the card state are
+     * therefore in the log whether or not the network ever comes up, which is the
+     * whole point of P2's "diagnosable rather than mysterious". The listening
+     * socket binds to INADDR_ANY and needs no address of its own. */
+    net_start();
 
     mini_files_cfg_t files = {
         .station_name = STATION_NAME,

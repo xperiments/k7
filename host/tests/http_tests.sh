@@ -24,6 +24,9 @@ BASE="http://127.0.0.1:$PORT"
 if [ -n "$BOARD_URL" ]; then
     BASE=${BOARD_URL%/}
 fi
+SRV_HOST=$(printf '%s' "$BASE" | sed -e 's#^http://##' -e 's#:.*##')
+SRV_PORT=$(printf '%s' "$BASE" | sed -e 's#^http://##' -e 's#^[^:]*:##' -e 's#/.*##')
+[ -n "$SRV_PORT" ] || SRV_PORT=80
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/xtape-http-tests.XXXXXX")
 
 PASS=0
@@ -103,19 +106,30 @@ else
     ok "server up on $BASE"
 fi
 
+# The station format comes from the server's own startup log: the host build and
+# the device are configured independently, and the interesting assertion is that
+# the wire matches what was announced.
+STATION_HZ=$(tr -d '\r' <"$STARTUP_LOG" | sed -n 's/.*station format: \([0-9]*\) Hz.*/\1/p' | head -1)
+STATION_KBPS=$(tr -d '\r' <"$STARTUP_LOG" | sed -n 's/.*station format: [0-9]* Hz, \([0-9]*\) kbps.*/\1/p' | head -1)
+if [ -z "$STATION_HZ" ] || [ -z "$STATION_KBPS" ]; then
+    STATION_HZ=44100
+    STATION_KBPS=128
+    printf '  note  no station format in the startup log; assuming %s Hz / %s kbps\n' "$STATION_HZ" "$STATION_KBPS"
+fi
+
 group "T3  the live stream is continuous MPEG audio, not WAV"
 curl -s --max-time 6 "$BASE/stream" >"$TMP/stream.mp3"
 head4=$(head -c 4 "$TMP/stream.mp3" | od -An -tx1 | tr -d ' \n')
 check_match "the capture starts on a frame sync (${head4})" "$head4" '^fff' 
 probe=$(ffprobe -hide_banner -v error -show_entries stream=codec_name,sample_rate,channels,bit_rate -of default=nw=1 "$TMP/stream.mp3" 2>&1)
 check_match "ffprobe sees MPEG audio" "$probe" '^codec_name=mp3$'
-check_match "at the station rate" "$probe" '^sample_rate=44100$'
+check_match "at the announced station rate ($STATION_HZ Hz)" "$probe" "^sample_rate=$STATION_HZ$"
 check_match "in stereo" "$probe" '^channels=2$'
-check_match "at the station bit rate" "$probe" '^bit_rate=128000$'
+check_match "at the announced bit rate ($STATION_KBPS kbps)" "$probe" "^bit_rate=$((STATION_KBPS * 1000))$"
 errors=$(ffmpeg -v error -i "$TMP/stream.mp3" -f null - 2>&1 | wc -l | tr -d ' ')
 check_eq "the whole capture decodes without a single error" "$errors" "0"
 if [ -s "$STARTUP_LOG" ]; then
-    check_match "the station format is logged at startup" "$(tr -d '\r' <"$STARTUP_LOG")" 'station format: 44100 Hz, 128 kbps CBR, joint stereo, MPEG-1'
+    check_match "the station format is logged at startup (MPEG-1 joint stereo)" "$(tr -d '\r' <"$STARTUP_LOG")" "station format: $STATION_HZ Hz, $STATION_KBPS kbps CBR, joint stereo, MPEG-1"
     check_match "and names the encoder's state size" "$(tr -d '\r' <"$STARTUP_LOG")" '[0-9]+ B of state inside the vendored library'
     check_match "and reports which memory the ring took" "$(tr -d '\r' <"$STARTUP_LOG")" 'burst ring: .* in external memory'
     check_match "and which memory the encoder staging took" "$(tr -d '\r' <"$STARTUP_LOG")" 'staging buffers in external memory'
@@ -132,7 +146,8 @@ curl -s --max-time 6 -D "$TMP/h5" -o "$TMP/b5" -H 'Icy-MetaData: 1' "$BASE/strea
 h5=$(tr -d '\r' <"$TMP/h5")
 check_match "icy-metaint is advertised" "$h5" '^icy-metaint: 16000$'
 check_match "Content-Type is audio/mpeg" "$h5" '^Content-Type: audio/mpeg$'
-check_match "the station name is canonical: no space after the colon" "$h5" '^icy-name:ESP32 Radio \(host\)$'
+check_match "the station name is present" "$h5" '^icy-name:.+'
+check_match "in canonical form: no space after the colon" "$h5" '^icy-name:[^ ]'
 check_no_match "and not the non-canonical form" "$h5" '^icy-name: '
 if $PY "$HOST_DIR/tests/check_metadata.py" "$TMP/b5" 16000 >"$TMP/meta.out" 2>&1; then
     ok "$(cat "$TMP/meta.out")"
@@ -141,7 +156,7 @@ else
 fi
 
 group "T4  a client that says nothing cannot stall the next one (D1)"
-$PY "$HOST_DIR/tests/silent_client.py" 127.0.0.1 "$PORT" 4 &
+$PY "$HOST_DIR/tests/silent_client.py" "$SRV_HOST" "$SRV_PORT" 4 &
 silent=$!
 sleep 0.6
 code=$(curl -s -o /dev/null --max-time 5 -w '%{http_code}' "$BASE/")
@@ -206,6 +221,15 @@ check_eq "an unknown path is a 404, not the stream" "$(curl -s -o /dev/null -w '
 check_eq "so is a file-ish path" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/index.html")" "404"
 check_eq "a non-GET method is refused" "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d x "$BASE/")" "405"
 check_eq "the root is served" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/")" "200"
+
+if [ -n "$BOARD_URL" ]; then
+    # T13: FATFS case sensitivity. Deliberately a note, not an assertion - the
+    # specification asks for the behaviour to be documented, whichever way the
+    # filesystem resolves it, and this is board-only by construction because macOS
+    # is case-insensitive and would give a falsely reassuring answer.
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/music/TONE-44100.FLAC")
+    printf '  note  T13 wrong-case request for TONE-44100.FLAC -> %s\n' "$code"
+fi
 
 if [ -n "$BOARD_URL" ]; then
     printf '  skip  descriptor leak check on the board (160 rejected connections exercised only the host build)\n'

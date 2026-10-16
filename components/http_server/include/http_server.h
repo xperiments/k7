@@ -66,7 +66,7 @@ typedef struct {
  * http_server_start(), which is when main() should call it. */
 esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void *ctx);
 
-/* Bind, listen and start accepting. Returns once the listener is up. */
+/* Bind, listen and start accepting. Returns once the socket is listening. */
 esp_err_t http_server_start(const http_server_cfg_t *cfg);
 
 /* ------------------------------------------------------------------ replies */

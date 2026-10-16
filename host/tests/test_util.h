@@ -35,6 +35,11 @@ static int test_failures;
 
 /* ------------------------------------------------------------ MP3 frames */
 
+/* Deliberately an independent implementation of the MP3 frame geometry, including
+ * its own copy of the bit rate and sample rate tables. It is the oracle the
+ * production framer is checked against, so it must not be derived from it: if both
+ * shared a table, a wrong table would agree with itself and the test would pass. */
+
 static const uint16_t k_mp3_bitrates[2][16] = {
     {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0},
     {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0},

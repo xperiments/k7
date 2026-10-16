@@ -1,0 +1,4 @@
+[mapping:shine]
+archive: libshine.a
+entries:
+    * (noflash)

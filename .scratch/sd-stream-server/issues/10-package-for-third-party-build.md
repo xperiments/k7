@@ -25,7 +25,7 @@ Spec: `docs/specs/sd-stream-server.md` §8 (L1, L2, L4), §7 A1, §2.2, §2.3, �
 
 ## Comments
 
-- [x] `README.md` covers building and flashing, the card layout (`/sdcard/music`, flat, FAT32, accepted extensions), the pin assignment (CLK 39 / CMD 38 / D0 40), the GPIO0 skip button, and the cost of using the USB-JTAG pins.
+- [x] `README.md` covers building and flashing, the card layout (`/sdcard/music`, flat, FAT32, accepted extensions), the card bus and its pin assignment (as it turned out, SPI: CS 10 / CLK 12 / MOSI 11 / MISO 13), the GPIO0 skip button, and the cost of using the USB-JTAG pins.
 - [x] The README states that the PSRAM mode must be set explicitly to match the fitted chip, that it is not detected automatically, and that the wrong mode corrupts memory at boot — in the "PSRAM is a hard prerequisite" section, with the Kconfig lines quoted.
 - [x] The deployment warning is the first thing after the introduction, as a block quote, not a footnote: live stream plus unauthenticated index, credentials compiled in, not for an untrusted network, never port-forwarded. The access model is also restated in `main/main.c`'s header comment.
 - [x] `LICENSES/LGPL-2.0.txt` (byte-identical to `components/shine/COPYING`) and `THIRD_PARTY_NOTICES` are in the repository; `make -C host layering` asserts both.
@@ -54,3 +54,11 @@ checkout still builds, with `#warning "main/wifi_credentials.h is missing: the d
 not join a network"`. That keeps the compile-time-credential design the specification asks
 for while not putting a real network password in the repository. The README says so in the
 build section.
+
+**Moved to ESP-IDF 6.1.** The firmware builds on 6.1 without a source change, and the whole
+board tier was re-run there: `80 passed, 0 failed`, three runs in a row with no reboot. The
+component names in `main/CMakeLists.txt` were already the 5.3+ names
+(`esp_driver_gpio`, `esp_driver_sdmmc`, `esp_driver_sdspi`, `esp_driver_spi`, `spi_flash`,
+`esp_psram`), which is why nothing needed changing; the component metadata keeps
+`idf: ">=5.4"` because both 5.4.4 and 6.1 build and were tested. The application grew from
+972 KB to 1.04 MB with IDF 6, leaving 32% of the 1.5 MB partition free.
