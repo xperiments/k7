@@ -17,6 +17,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 
 #include "panel_rgb.h"
 
@@ -105,7 +106,43 @@ esp_lcd_panel_handle_t panel_rgb_start(void)
      * high), not one of the I/O expander's pins. */
     gpio_config_t bl = { .pin_bit_mask = 1ULL << 2, .mode = GPIO_MODE_OUTPUT };
     gpio_config(&bl);
+    /* Blinked on purpose. A framebuffer that is filled but never seen looks exactly like
+     * a panel that never came up, and the difference is the backlight: if the screen's
+     * brightness changes here, this pin drives it, and anything still invisible is above
+     * this layer. First-light diagnostic; remove it once the panel is known good. */
     gpio_set_level(2, 1);
+    vTaskDelay(pdMS_TO_TICKS(150));
+    gpio_set_level(2, 0);
+    vTaskDelay(pdMS_TO_TICKS(150));
+    gpio_set_level(2, 1);
+    ESP_LOGW(TAG, "backlight blinked on GPIO %d (on-off-on): if the screen did not change brightness, this is not its pin", 2);
+
+    /* Something visible before anything above this layer is trusted to work.
+     *
+     * The panel scans its own framebuffer, so filling one with a test pattern proves the
+     * whole hardware path - clock, timings, pins, PSRAM framebuffer, backlight - without
+     * LVGL being involved at all. If these bars never appear, nothing further up can be
+     * the reason. If they appear and the interface never does, the fault is above here and
+     * the log will say so. */
+    void *fb0 = NULL;
+    if (esp_lcd_rgb_panel_get_frame_buffer(s_panel, 1, &fb0) == ESP_OK && fb0) {
+        uint16_t *px = fb0;
+        for (int y = 0; y < PANEL_H; y++) {
+            for (int x = 0; x < PANEL_W; x++) {
+                uint16_t c;
+                if (y < 24)                     c = 0xFFFF;                     /* white */
+                else if (y < 96)                c = 0xF800;                     /* red */
+                else if (y < 168)               c = 0x07E0;                     /* green */
+                else if (y < 240)               c = 0x001F;                     /* blue */
+                else                            c = (uint16_t)((x >> 3) & 0x1F) << 11; /* ramp */
+                px[y * PANEL_W + x] = c;
+            }
+        }
+        ESP_LOGW(TAG, "test pattern written to framebuffer 0 at %p: white, red, green, blue, then a ramp",
+                 fb0);
+    } else {
+        ESP_LOGE(TAG, "no framebuffer to write a test pattern into");
+    }
 
     ESP_LOGI(TAG, "panel up: %dx%d, %u framebuffers in PSRAM, pclk %u Hz, backlight on GPIO 2",
              PANEL_W, PANEL_H, 2u, (unsigned)PCLK_HZ);
