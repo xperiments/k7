@@ -34,6 +34,7 @@
 #include "http_server.h"
 #include "mini_files.h"
 #include "mini_icecast.h"
+#include "ui.h"
 #include "nvs_flash.h"
 #include "sdmmc_cmd.h"
 
@@ -372,6 +373,9 @@ void app_main(void)
     http_server_cfg_t http = {.port = HTTP_PORT, .server_name = "sd-stream/1.0", .max_conns = 4};
     ESP_ERROR_CHECK(http_server_start(&http));
 
+    /* The screen comes last, once there is something to show and a status to read. */
+    ui_start();
+
     if (card != ESP_OK) xTaskCreate(card_task, "card_retry", CARD_TASK_STACK, NULL, 4, NULL);
 
     wifi_wait_connected();
@@ -381,16 +385,6 @@ void app_main(void)
     gpio_config(&io);
 
     for (;;) {
-#if CONFIG_APP_UI_FIT_CHECK
-        /* Once, ten seconds in, while the broadcast is running: what an LVGL screen
-         * costs on this board, and whether internal RAM notices. */
-        { static bool checked;
-          if (!checked && xTaskGetTickCount() > pdMS_TO_TICKS(10000)) {
-              checked = true;
-              extern void ui_fit_check(void);
-              ui_fit_check();
-          } }
-#endif
 
         char title[121];
         mini_icecast_now_playing(title, sizeof title);

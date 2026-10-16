@@ -1,15 +1,45 @@
 menu "SD stream server"
 
-config APP_UI_FIT_CHECK
-    bool "Run the UI memory fit check at startup"
-    default y
+choice APP_BOARD
+    prompt "Which board is this firmware for"
+    default APP_BOARD_DEVKIT
     help
-        Creates a throwaway LVGL screen once the services are running, reports what
-        its memory cost and where it came from, then frees it. It exists to prove
-        that the interface's memory is external by construction and that internal
-        RAM is untouched - the margin Wi-Fi needs for its contiguous DMA buffers.
-        When the real interface replaces main/ui_fit.c, this option goes with it.
+        The board decides the display. The development board has none, so the interface
+        is rendered into a framebuffer this firmware owns (and can be dumped over the
+        console to look at). The Sunton 8048S050C has an 800x480 RGB panel whose two
+        framebuffers live in PSRAM and are scanned out by the RGB peripheral.
+
+        Per-board settings that are not a Kconfig choice - PSRAM and flash speed above
+        all - live in a separate defaults file: see sdkconfig.defaults.sunton and the
+        README's board section.
+
+config APP_BOARD_DEVKIT
+    bool "ESP32-S3 development board (no panel)"
+
+config APP_BOARD_SUNTON_8048S050C
+    bool "Sunton 8048S050C (800x480 RGB panel, GT911 touch)"
+
+endchoice
+
+config APP_UI_SERIAL_DUMP
+    bool "Dump the rendered screen over the serial console once at startup"
+    default n
+    help
+        With no panel attached this is how the interface can be looked at: the
+        framebuffer is sent as base64 rows ("UIROW <n> <data>") a few seconds after
+        boot, and tools/decode_screen_dump.py turns a captured log into a PNG. Off by
+        default: it is a diagnostic, and it slows the boot it is enabled on.
 
         See docs/research/radio-player-memory-and-lvgl.md.
+
+config APP_UI_DUMP_STRIDE
+    int "Sample every Nth pixel when dumping the screen"
+    depends on APP_UI_SERIAL_DUMP
+    default 2
+    range 1 8
+    help
+        The console runs at 115200 baud, so a full 800x480 dump takes minutes. Every
+        second pixel in both directions makes it 400x240 and about twenty seconds,
+        which is enough to check a layout and quick enough to iterate on.
 
 endmenu

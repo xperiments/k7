@@ -1,7 +1,16 @@
-idf_component_register(SRCS "main.c" "ui_fit.c"
+# The panel driver only exists on the board that has a panel. This is a build-time
+# choice in the application, not a target check in a component: the components do not
+# know which board they are on (H2).
+set(app_srcs "main.c" "ui.c" "ui_cassette.c")
+if(CONFIG_APP_BOARD_SUNTON_8048S050C)
+    list(APPEND app_srcs "panel_rgb.c")
+endif()
+
+idf_component_register(SRCS ${app_srcs}
                        INCLUDE_DIRS "."
+                       EMBED_FILES "assets/cs_front.bin" "assets/cs_wheel.bin"
                        REQUIRES esp_driver_gpio esp_driver_sdmmc esp_driver_sdspi esp_driver_spi fatfs nvs_flash
-                                esp_wifi esp_netif esp_event spi_flash esp_psram esp_timer
+                                esp_wifi esp_netif esp_event spi_flash esp_psram esp_timer esp_lcd
                                 http_server mini_icecast mini_files)
 
 # main.c reaches the credentials with __has_include(), which does not appear in the

@@ -1,9 +1,13 @@
 # Real Wi-Fi credentials: compiled in, deliberately not tracked
 main/wifi_credentials.h
 
-# ESP-IDF build output and configuration. `build*/` covers the extra build
+# ESP-IDF build output and configuration. `build*/
+sdkconfig.sunton
+sdkconfig.sunton.old` covers the extra build
 # directories used to keep one IDF version's output from overwriting another's.
 build*/
+sdkconfig.sunton
+sdkconfig.sunton.old
 build/
 sdkconfig
 sdkconfig.old

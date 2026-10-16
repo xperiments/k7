@@ -1,0 +1,23 @@
+# Board settings for the Sunton 8048S050C, layered on top of sdkconfig.defaults:
+#
+#     idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.sunton" build
+#
+# Values from boards/sunton-8048s050c.json. Only what the profile states is set here;
+# anything not stated stays at the project default.
+CONFIG_APP_BOARD_SUNTON_8048S050C=y
+
+# profile: psramMode octal, psramSpeedMhz 120, flashMode qio, flashSpeedMhz 120
+CONFIG_SPIRAM_MODE_OCT=y
+
+# The profile says 120 MHz for both the PSRAM and the flash, but IDF 6.1 will not build
+# that on this SoC with a quad (QIO) flash: its MSPI clock rules assert that the flash
+# and PSRAM module clocks agree
+# (components/esp_hw_support/mspi/mspi_timing_tuning/port/esp32s3/mspi_timing_tuning_configs.h:150),
+# and the same Kconfig that offers 120 MHz PSRAM sets the flash string to "80m"
+# (components/esptool_py/Kconfig.projbuild:108). So this build runs the PSRAM at the
+# speed IDF supports with this flash, 80 MHz, and the profile's 120 MHz row stays
+# unverified until there is hardware to try it on - with the note that reaching it would
+# need the flash in OPI mode as well.
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y

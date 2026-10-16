@@ -70,6 +70,11 @@ CONFIG_LV_USE_CUSTOM_MALLOC=y
 CONFIG_LV_USE_ASSERT_MALLOC=y
 CONFIG_LV_USE_CLIB_STRING=y
 CONFIG_LV_COLOR_DEPTH_16=y
+# The screen's three text sizes, and the transform support the turning reels need.
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_18=y
+CONFIG_LV_FONT_MONTSERRAT_22=y
+CONFIG_LV_DRAW_SW_COMPLEX=y
 
 # ----------------------------------------------------------------------- lwIP
 # MP3 at 128 kbps is 16 KB/s per client, but a burst on connect is sent at once:
