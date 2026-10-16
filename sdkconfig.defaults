@@ -56,6 +56,13 @@ CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 # See docs/research/radio-player-memory-and-lvgl.md.
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
 
+# ----------------------------------------------------------------------- FATFS
+# Names in UTF-8 rather than the OEM code page. A real music library has accents in
+# its file names ("Café música.flac"), and with the default ANSI/OEM API encoding FatFS
+# transcodes long names through the configured code page - which cannot represent them -
+# so the index would show mangled names even though the pages are declared UTF-8.
+CONFIG_FATFS_API_ENCODING_UTF_8=y
+
 # ------------------------------------------------------------------------ LVGL
 # The UI's memory comes from PSRAM because this project says so, not because the
 # default allocator happened to fall through to it:

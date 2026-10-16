@@ -701,6 +701,40 @@ The image grew from 1.04 MB to 1.28 MB, so the app partition is 4 MB now
 fetched dependency pinned by `main/idf_component.yml` and `dependencies.lock`; the host
 tier compiles only the server components and never sees it.
 
+## Putting your own music on the card
+
+The server indexes whatever is playable in the card's `music` directory - `.mp3`,
+`.flac` and `.wav`, at any sample rate, mono or stereo - so a real library needs no
+conversion step:
+
+```bash
+# with the card in a reader
+mkdir -p /Volumes/YOURCARD/music
+cp ~/Music/*.mp3 ~/Music/*.flac /Volumes/YOURCARD/music/
+```
+
+Two things about a real library that synthetic fixtures never exercise, both handled:
+
+* **Awkward names work.** Spaces, accents, apostrophes, percent signs and semicolons are
+  percent-encoded in the index's links, HTML-escaped in the link text, and decoded back on
+  download. `host/tests/hostile_names.py` builds a library of exactly those names and
+  checks all three places a name travels - index, download, and the stream's ICY metadata -
+  because an apostrophe or a semicolon in a name is what breaks a metadata block.
+* **Filenames are read as UTF-8** (`CONFIG_FATFS_API_ENCODING_UTF_8`). With the default
+  ANSI/OEM setting FatFS transcodes long names through the OEM code page, which cannot
+  represent `é` or `ú`, so a library with accents in its titles would show mangled names
+  even though the pages are declared UTF-8. The card's own long-name support is
+  unchanged; this only decides the encoding the filesystem hands back.
+
+The board tier's index check runs in `--superset` mode: on the host it still insists the
+index lists *exactly* the fixture corpus, but against the board it requires every fixture
+to be present and accepts the card's own music alongside - while still refusing a
+dot-file, a non-audio extension or a wrong size.
+
+The live stream's title is the file's name without its extension, with apostrophes
+replaced by spaces: ICY metadata blocks are delimited by apostrophes and semicolons, so a
+name containing them cannot be sent verbatim.
+
 ## The internal-RAM picture
 
 Worth stating plainly, because it constrains everything added on top of this

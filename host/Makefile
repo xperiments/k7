@@ -59,6 +59,10 @@ SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/icecast_host.o
 
 TOOLS := $(BIN)/mi_bench $(BIN)/mi_encode_file $(BIN)/mi_frames
+# The harness helpers are Python; override PYTHON where the default python3 is not the
+# one with the packages the tests need.
+PYTHON ?= python3
+
 TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t03_resampler_guard $(BIN)/t04_format_validation \
          $(BIN)/t05_stream_formats $(BIN)/t06_status
@@ -122,6 +126,8 @@ test: $(TESTS)
 
 integration: $(SERVER)
 	@HOST_BIN=$(SERVER) HOST_DIR=$(HERE) sh $(HERE)/tests/http_tests.sh
+	@echo "--- awkward file names (a real library is not called tone-44100.flac)"
+	@$(PYTHON) $(HERE)/tests/hostile_names.py $(SERVER) $(HERE)/fixtures/tone-44100.flac
 
 layering:
 	@ROOT=$(ROOT) sh $(HERE)/tests/layering.sh

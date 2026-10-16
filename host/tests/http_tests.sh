@@ -167,9 +167,12 @@ stream_ttfb=$(curl -s -o /dev/null --max-time 3 -w '%{time_starttransfer}' "$BAS
 check_lt "the stream's headers also arrive at once (${stream_ttfb}s)" "$stream_ttfb" "2.0"
 kill "$silent" 2>/dev/null
 
-group "T6  the index lists exactly the library"
+# On the board the card may hold the owner's own music, so the index is judged as a
+# superset of the fixtures there and exactly on the host.
+if [ -n "$BOARD_URL" ]; then INDEX_MODE=--superset; else INDEX_MODE=; fi
+group "T6  the index lists the library"
 curl -s "$BASE/" >"$TMP/index.html"
-if $PY "$HOST_DIR/tests/check_index.py" "$TMP/index.html" "$FIX" >"$TMP/index.out" 2>&1; then
+if $PY "$HOST_DIR/tests/check_index.py" "$TMP/index.html" "$FIX" $INDEX_MODE >"$TMP/index.out" 2>&1; then
     ok "$(cat "$TMP/index.out")"
 else
     bad "index: $(cat "$TMP/index.out")"
