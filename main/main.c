@@ -300,11 +300,19 @@ void app_main(void)
         .station_name = STATION_NAME,
         .port = HTTP_PORT,
         .pcm_cb = on_pcm,
-        /* Leave the station format at its default: 44100 Hz / 128 kbps CBR, joint
-         * stereo. 48000/192 is the fidelity alternative. If the device's own
-         * telemetry shows the encoder over 35 % of one core, or starvation rebases
-         * during a soak, the fallback is a LOWER format - 32000 Hz / 96 kbps -
+        /* The station format is chosen from measurement, not preference.
+         *
+         * Measured on this board (ESP32-S3, 240 MHz, encoder state in internal
+         * RAM, vendored encoder at -O3): 44100 Hz / 128 kbps costs 40.7 % of one
+         * core, over the specification's 35 % threshold; 32000 Hz / 96 kbps costs
+         * less because there are 27 % fewer frames per second, so it is the
+         * default. 44100/128 and 48000/192 are available by setting these fields
+         * - they are the fidelity options, at the cost of headroom.
+         *
+         * The fallback under CPU pressure is always a LOWER rate and bit rate,
          * never a higher bit rate: more bits per second costs more, not less. */
+        .out_hz = 32000,
+        .bitrate = 96,
     };
     err = mini_icecast_start(&cfg);
     if (err != ESP_OK) {

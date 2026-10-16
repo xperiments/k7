@@ -270,8 +270,11 @@ static void pace(uint32_t frames)
     int64_t now = esp_timer_get_time() - S.t0;
     if (now - played_us > 1000000) { /* we starved (no files, card hiccup): rebase the clock */
         S.rebases++;
-        ESP_LOGW(TAG, "starved for %d ms, rebasing the broadcast clock (#%" PRIu32 ")",
-                 (int)((now - played_us) / 1000), S.rebases);
+        /* A starving device rebases every couple of seconds; the first few matter,
+         * then the running count in the periodic telemetry is enough. */
+        if (S.rebases <= 5 || S.rebases % 25 == 0)
+            ESP_LOGW(TAG, "starved for %d ms, rebasing the broadcast clock (#%" PRIu32 ")",
+                     (int)((now - played_us) / 1000), S.rebases);
         S.t0 += now - played_us;
         now = played_us;
     }
@@ -447,17 +450,27 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     ESP_LOGI(TAG, "station format: %u Hz, %u kbps CBR, joint stereo, %s",
              (unsigned)S.cfg.out_hz, (unsigned)S.cfg.bitrate, mi_enc_mpeg_name(mpeg));
 
+    size_t internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     S.enc = mi_enc_new(S.cfg.out_hz, S.cfg.bitrate, err, sizeof err);
+    size_t internal_after = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!S.enc) {
         ESP_LOGE(TAG, "encoder: %s", err);
         return ESP_ERR_NO_MEM;
     }
+    /* The encoder allocates its own state, so this delta is the only way to see
+     * which memory class it landed in - and it is the difference between an
+     * encoder that keeps up and one that does not. */
+    ESP_LOGI(TAG, "encoder: %u B of internal RAM taken (the encoder's own state; near zero "
+                  "means it landed in external memory)",
+             (unsigned)(internal_before > internal_after ? internal_before - internal_after : 0));
     ESP_LOGI(TAG, "encoder: %u samples/frame (%.1f ms), %u B of state inside the vendored "
                   "library, staging buffers in %s",
              (unsigned)mi_enc_samples_per_frame(S.enc),
              1000.0 * (double)mi_enc_samples_per_frame(S.enc) / (double)S.cfg.out_hz,
              (unsigned)mi_enc_state_bytes(),
              mi_enc_uses_external_memory(S.enc) ? "external memory" : "internal RAM (fallback)");
+    if (mi_enc_corrects_padding(S.enc))
+        ESP_LOGW(TAG, "this station format needs the encoder's padding bit corrected (see the log above)");
 
     /* The ring now holds *encoded* bytes, so it is sized by the station's byte
      * rate; burst_ms still means the same duration of audio. The slack covers a

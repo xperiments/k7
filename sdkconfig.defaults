@@ -34,6 +34,14 @@ CONFIG_SPIRAM_SPEED_80M=y
 # Let Wi-Fi and lwIP buffers live in PSRAM, freeing internal DRAM for the
 # encoder's state.
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+# Allocations up to this size prefer internal RAM. The encoder allocates its own
+# 95 KB of state with calloc(), and that state is its hottest working set (a 40 KB
+# lookup table plus the MDCT and subband tables); with the default 16 KB threshold
+# it lands in PSRAM, where every access can miss the shared cache - measured, that
+# cost 8 ms per encoder frame. This cannot be redirected from our side without
+# modifying the vendored encoder, so the heap policy is what keeps it internal.
+# Kconfig caps this at 131072, which is just above the 95 880 B the encoder needs.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=131072
 
 # ----------------------------------------------------------------------- lwIP
 # MP3 at 128 kbps is 16 KB/s per client, but a burst on connect is sent at once:

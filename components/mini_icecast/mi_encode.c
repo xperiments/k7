@@ -41,6 +41,9 @@ struct mi_enc {
     uint64_t frames_encoded;
     uint64_t encode_us;
     size_t   desync_bytes;
+    /* True when this format's frame headers overstate the frame length by one
+     * slot, calibrated once in mi_enc_new(). */
+    bool     clear_padding;
 };
 
 static void set_err(char *err, size_t n, const char *fmt, ...)
@@ -52,8 +55,13 @@ static void set_err(char *err, size_t n, const char *fmt, ...)
     va_end(ap);
 }
 
-/* Length of the MP3 frame starting at h, or 0 if this is not a frame header. */
-static size_t frame_bytes(const uint8_t *h)
+/* Length of the MP3 frame starting at h, or 0 if this is not a frame header.
+ *
+ * `force_no_padding` ignores the header's padding bit. That is needed because the
+ * vendored encoder writes a padding bit that does not match what it emits at some
+ * formats - see format_overstates_padding() - and a framer that believes the bit
+ * loses the whole stream. */
+static size_t frame_bytes_ex(const uint8_t *h, bool force_no_padding)
 {
     if (h[0] != 0xFF || (h[1] & 0xE0) != 0xE0) return 0;
     unsigned version = (h[1] >> 3) & 3; /* 0 = MPEG-2.5, 2 = MPEG-2, 3 = MPEG-1 */
@@ -61,7 +69,7 @@ static size_t frame_bytes(const uint8_t *h)
     if (version == 1 || layer != 1) return 0; /* reserved version; this encoder only makes Layer III */
     unsigned bri = (h[2] >> 4) & 15;
     unsigned sri = (h[2] >> 2) & 3;
-    unsigned pad = (h[2] >> 1) & 1;
+    unsigned pad = force_no_padding ? 0 : ((h[2] >> 1) & 1);
     if (bri == 0 || bri == 15 || sri == 3) return 0;
     unsigned vrow = (version == 3) ? 0 : 1;
     unsigned srow = (version == 3) ? 0 : (version == 2) ? 1 : 2;
@@ -98,6 +106,68 @@ const char *mi_enc_mpeg_name(int mpeg_version)
     }
 }
 
+/* Walk `data` as a sequence of frame headers, returning how many bytes that
+ * interpretation accounts for. Used by the calibration below. */
+static size_t walk_frames(const uint8_t *data, size_t n, bool force_no_padding)
+{
+    size_t off = 0;
+    while (off + 4 <= n) {
+        size_t len = frame_bytes_ex(data + off, force_no_padding);
+        if (len == 0) break;
+        if (off + len > n) break;
+        off += len;
+    }
+    return off;
+}
+
+/* Does this format's padding bit tell the truth?
+ *
+ * The vendored encoder computes its slot count in double precision. Where the
+ * exact count is a whole number of slots but the arithmetic lands just below it -
+ * measured at 32000 Hz / 96 kbps, where the true count is 432 - it takes one slot
+ * as padding it does not write: it emits 432 bytes per frame with a header that
+ * claims 433. A stream like that cannot be parsed by any decoder ("Failed to find
+ * two consecutive MPEG audio frames", per ffmpeg), and a framer that trusts the
+ * header drops every byte of it.
+ *
+ * So this is measured rather than assumed, once per encoder: encode a few frames
+ * of silence and see which reading of the padding bit makes the resulting byte
+ * stream tile into frames. Whichever accounts for more of the stream is the
+ * truth. Errors are reported rather than hidden - if the two readings are close,
+ * the header is believed and the framer's safety net is left to cope. */
+static bool format_overstates_padding(uint32_t out_hz, uint32_t bitrate)
+{
+    shine_config_t cfg;
+    memset(&cfg, 0, sizeof cfg);
+    cfg.wave.channels = PCM_STEREO;
+    cfg.wave.samplerate = (int)out_hz;
+    shine_set_config_mpeg_defaults(&cfg.mpeg);
+    cfg.mpeg.mode = JOINT_STEREO;
+    cfg.mpeg.bitr = (int)bitrate;
+    shine_t probe = shine_initialise(&cfg);
+    if (!probe) return false;
+
+    static uint8_t probe_stream[8 * MI_ENC_MAX_FRAME_BYTES];
+    static int16_t silence[MI_ENC_MAX_FRAME_SAMPLES * 2]; /* zeroed: deterministic input */
+    size_t n = 0;
+    for (int i = 0; i < 8; i++) {
+        int written = 0;
+        unsigned char *b = shine_encode_buffer_interleaved(probe, silence, &written);
+        if (b && written > 0 && n + (size_t)written <= sizeof probe_stream) {
+            memcpy(probe_stream + n, b, (size_t)written);
+            n += (size_t)written;
+        }
+    }
+    shine_close(probe);
+
+    size_t as_is = walk_frames(probe_stream, n, false);
+    size_t no_pad = walk_frames(probe_stream, n, true);
+    if (n < 4 * 512) return false; /* not enough evidence to decide anything */
+    if (no_pad > as_is + 512) return true;
+    if (as_is > no_pad + 512) return false;
+    return false; /* ambiguous: believe the header */
+}
+
 mi_enc_t *mi_enc_new(uint32_t out_hz, uint32_t bitrate, char *err, size_t err_size)
 {
     int mpeg = mi_enc_check_format(out_hz, bitrate, err, err_size);
@@ -132,6 +202,10 @@ mi_enc_t *mi_enc_new(uint32_t out_hz, uint32_t bitrate, char *err, size_t err_si
         heap_caps_free(e);
         return NULL;
     }
+    e->clear_padding = format_overstates_padding(out_hz, bitrate);
+    if (e->clear_padding)
+        ESP_LOGW(TAG, "this format's frame headers overstate the frame length by one byte "
+                      "(a rounding fault in the vendored encoder); correcting it in the stream");
     e->spf = (size_t)shine_samples_per_pass(e->shine);
     if (e->spf == 0 || e->spf > MI_ENC_MAX_FRAME_SAMPLES) {
         set_err(err, err_size, "the encoder reports an unusable frame size (%u samples)", (unsigned)e->spf);
@@ -152,6 +226,7 @@ void mi_enc_free(mi_enc_t *e)
 size_t mi_enc_samples_per_frame(const mi_enc_t *e) { return e->spf; }
 size_t mi_enc_pending_bytes(const mi_enc_t *e) { return e->pending_n; }
 size_t mi_enc_buffered_frames(const mi_enc_t *e) { return e->acc_n; }
+bool mi_enc_corrects_padding(const mi_enc_t *e) { return e->clear_padding; }
 size_t mi_enc_state_bytes(void) { return sizeof(shine_global_config); }
 bool mi_enc_uses_external_memory(const mi_enc_t *e) { return e->external; }
 uint64_t mi_enc_frames_encoded(const mi_enc_t *e) { return e->frames_encoded; }
@@ -163,13 +238,29 @@ static void drain(mi_enc_t *e, mi_enc_out_t out, void *ctx)
 {
     size_t off = 0;
     while (e->pending_n - off >= 4) {
-        size_t len = frame_bytes(e->pending + off);
-        if (len == 0) { /* cannot happen with our own encoder; resync rather than spin */
+        size_t len = frame_bytes_ex(e->pending + off, e->clear_padding);
+        if (len == 0) { /* not a frame header: resynchronise */
             e->desync_bytes++;
+            if (e->desync_bytes >= MI_ENC_MAX_FRAME_BYTES) {
+                /* Give up on framing rather than throw audio away: hand the rest
+                 * over as-is and say so. This should never happen, and if it does
+                 * the alternative - dropping hundreds of kilobytes - is worse. */
+                ESP_LOGE(TAG, "cannot frame the encoder's output; passing %u B through unframed",
+                         (unsigned)(e->pending_n - off));
+                out(e->pending + off, e->pending_n - off, ctx);
+                off = e->pending_n;
+                e->desync_bytes = 0;
+                break;
+            }
             off++;
             continue;
         }
         if (e->pending_n - off < len) break; /* wait for the rest of this frame */
+        if (e->clear_padding && (e->pending[off + 2] & 0x02)) {
+            /* Say in the header what is actually on the wire: the frame is one
+             * slot shorter than the encoder claimed. */
+            e->pending[off + 2] &= (uint8_t)~0x02;
+        }
         out(e->pending + off, len, ctx);
         off += len;
     }

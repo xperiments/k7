@@ -84,6 +84,11 @@ size_t mi_enc_buffered_frames(const mi_enc_t *e);
  * next block is encoded: deferred, never dropped. */
 size_t mi_enc_pending_bytes(const mi_enc_t *e);
 
+/* True when this format's frame headers overstate the frame length by one byte
+ * and the output is being corrected (a rounding fault in the vendored encoder,
+ * measured at initialisation rather than assumed). */
+bool mi_enc_corrects_padding(const mi_enc_t *e);
+
 /* Telemetry (ticket 06). */
 uint64_t mi_enc_frames_encoded(const mi_enc_t *e); /* blocks handed to the encoder */
 uint64_t mi_enc_encode_us(const mi_enc_t *e);      /* time spent inside the encoder */
