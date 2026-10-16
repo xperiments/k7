@@ -30,7 +30,7 @@ extern "C" {
  * *content* that goes on the wire, but as unencoded 1024-frame chunks, up to one
  * encoder frame (26 ms at 44.1 kHz, 72 ms at 8 kHz) ahead of it. Same task as the
  * pacing loop: keep it fast or copy the data out (e.g. into a ring buffer for an
- * FFT task). It also runs ~lead_ms ahead of what a remote listener hears. */
+ * FFT task). It also runs ~lead_ms ahead of what a remote client hears. */
 typedef void (*mini_icecast_pcm_cb_t)(const int16_t *stereo, size_t frames, void *ctx);
 
 #define MINI_ICECAST_CHUNK_FRAMES 1024
@@ -42,7 +42,10 @@ typedef struct {
     const char *music_dir;     /* e.g. "/sdcard/music": any mix of .mp3 .flac .wav, any sample rate */
     const char *station_name;  /* icy-name, default "ESP32 Radio" */
     uint16_t    port;          /* default 8000; used in the startup log */
-    uint8_t     max_clients;   /* 1..MINI_ICECAST_MAX_CLIENTS, default 2. Outside that: refused */
+    /* 1..MINI_ICECAST_MAX_CLIENTS. Every field here treats 0 as "leave it at the
+     * documented default", so 0 is 2 clients; any other value outside the range
+     * is refused with a diagnostic rather than coerced (defect D3). */
+    uint8_t     max_clients;
     uint32_t    out_hz;        /* station sample rate, default 44100. Must be a rate the encoder accepts */
     uint32_t    bitrate;       /* station bit rate in kbps, default 128. Must be valid with out_hz */
     uint32_t    metaint;       /* bytes of audio between ICY metadata blocks, default 16000 */

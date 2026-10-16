@@ -35,6 +35,11 @@ int main(void)
      * on with the next track. */
     CHECK(err[0] != 0, "a message is produced");
 
+    /* Degenerate rates are refused rather than divided by. */
+    err[0] = 0;
+    CHECK(mi_rs_new(44100, 0, err, sizeof err) == NULL, "a zero output rate is refused");
+    CHECK(err[0] != 0, "and reported: '%s'", err);
+
     /* Ordinary and moderately low station rates still work. */
     struct {
         uint32_t in, out;

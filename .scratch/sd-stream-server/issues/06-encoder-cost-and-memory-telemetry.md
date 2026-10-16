@@ -33,3 +33,12 @@ Spec: `docs/specs/sd-stream-server.md` §4.3 F4, §2.4 (P2, P3), §4.1, §9 T11,
 - [x] The documented fallback under CPU pressure is a **lower** rate and bit rate (32 kHz / 96 kbps), never a higher one; that is stated in the README's station-format section.
 
 Honest limitation: the encoder's own 96 KB of state is allocated by `calloc()` inside the vendored library, and ESP-IDF serves that from internal RAM. Redirecting it would mean modifying shine, which L1 forbids. Every allocation this project controls takes the PSRAM-preferred path, and the encoder's state size is reported at startup so the internal-RAM budget is visible rather than guessed.
+
+**Post-review note: the burst ring is now sized in encoded bytes.** §2.4 budgets "~88 000 B" for the
+ring at `burst_ms = 500`, which is the arithmetic for a *PCM* ring (44100 x 4 bytes/s x 0.5 s). After
+ticket 05 the ring holds encoded MP3, so it is sized from the station's byte rate:
+`bitrate * 1000 / 8 * burst_ms / 1000 + slack` = 12 098 B at 128 kbps. `burst_ms` still means exactly
+what it meant - the duration of history a connecting client receives - and R3's "burst fan-out
+unchanged" holds; what changed is that 88 KB of the budget is no longer needed. That is a deviation
+from §2.4's table, and §12 already flags that budget as arithmetic rather than observation. The
+startup log prints the real size and the path it took, which is what turns it into observation.

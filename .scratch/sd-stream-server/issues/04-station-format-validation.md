@@ -36,3 +36,10 @@ Spec: `docs/specs/sd-stream-server.md` §4.3 (F1–F3), §4.1 E1, §5 D3, §9 T1
 - [x] The recommended default (44100/128) is what the firmware uses when nothing is configured: `main/main.c` sets only `music_dir`, `station_name`, `port` and `pcm_cb`, and the startup log confirms 44100/128/MPEG-1.
 
 One extra: the encoder frame is **576** samples at MPEG-2/2.5 rates, not 1152, so the accumulator uses `shine_samples_per_pass()` rather than a constant. A hard-coded 1152 would have produced garbage at 8/11.025/12/16/22.05/24 kHz stations.
+
+**Post-review note on the client limit.** `0` still means "leave it at the documented default" (2),
+which is the convention every other field in `mini_icecast_cfg_t` follows (`out_hz`, `bitrate`,
+`metaint`, `lead_ms`, `burst_ms` all treat 0 that way). The defect D3 describes was that *in-range*
+values - 1, 3, 4 - were silently coerced to 2, and that is gone: the host suite now starts a server
+with `--max-clients 1`, `4` and `0` and checks the log says 1, 4 and 2 respectively, and that `5` is
+refused. The convention is stated in the header next to the field so it cannot be read as coercion.

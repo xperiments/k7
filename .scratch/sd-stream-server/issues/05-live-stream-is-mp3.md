@@ -40,3 +40,20 @@ Spec: `docs/specs/sd-stream-server.md` §4.2 (E2–E5), §4.4 C1, §5 D2, §6.1,
 - [x] D2 fixed: `icy-name:` goes out with no space after the colon (asserted), and the test also asserts the non-canonical form is absent.
 
 **Specification refinement, from measurement (E5/T2b).** `shine`'s bit writer emits whole 32-bit words and holds each frame's last few bits in its cache, so at the moment of the flush a track's final frame can be up to 3 bytes short of complete (`shine_flush()` returns 0 bytes and cannot retrieve them). `mi_enc_flush()` therefore emits every frame that *is* complete and leaves the incomplete one buffered; it is emitted, in order, as soon as the next block is encoded — deferred, never dropped. The test asserts exactly that: at the flush, `emitted + pending == reference` and `pending < one frame`; after one more block, the whole track has been emitted and is byte-identical to the reference. A literal "output frames == ceil(frames/1152) at the instant of the flush" is not achievable with this encoder, and asserting it would have meant broadcasting a truncated final frame.
+
+**Post-review correction, with the measurement that prompted it.** The first version of the
+end-of-track assertion was too weak to be evidence: `pending < one encoder frame` is satisfied by
+withholding a whole frame, which is not what happens. What actually happens, measured: at a flush the
+buffer can hold up to a full frame's worth of bytes (416 B in a 10-call run), and the number of bytes
+genuinely *missing* from that frame is what shine's bit writer is still holding in its cache - fewer
+than four, because the cache is narrower than 32 bits. `t02` now asserts exactly that against the
+reference stream (`next_len > pending` and `next_len - pending <= 3`), for both the 2 682 880-frame
+case and the deliberately uneven one.
+
+On E5's other intent - keeping the bit reservoir from bleeding across a track boundary - the honest
+position is: this encoder cannot be reset per track without destroying and re-initialising 96 KB of
+state (the specification's own §4.3 rules that out at runtime), so the reservoir does carry across
+boundaries. That is harmless **because the byte stream is continuous**: the concatenation is one
+legal MP3 stream, which is verified rather than asserted - the T3 capture spans about eight track
+boundaries in five seconds of fixture loop and `ffmpeg -v error -f null -` reports zero errors over
+all of it.

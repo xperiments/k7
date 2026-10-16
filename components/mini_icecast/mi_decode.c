@@ -19,10 +19,8 @@
 #define DR_WAV_NO_STDIO
 #include "dr_wav.h"
 
-typedef enum { K_MP3, K_FLAC, K_WAV } kind_t;
-
 struct mi_dec {
-    kind_t   kind;
+    mi_fmt_t kind;
     FILE    *f;
     uint32_t hz;
     int      ch;
@@ -33,6 +31,17 @@ struct mi_dec {
         drwav   wav;
     } u;
 };
+
+mi_fmt_t mi_dec_format_of(const char *name)
+{
+    if (!name) return MI_FMT_NONE;
+    const char *ext = strrchr(name, '.');
+    if (!ext) return MI_FMT_NONE;
+    if (!strcasecmp(ext, ".mp3")) return MI_FMT_MP3;
+    if (!strcasecmp(ext, ".flac")) return MI_FMT_FLAC;
+    if (!strcasecmp(ext, ".wav")) return MI_FMT_WAV;
+    return MI_FMT_NONE;
+}
 
 static size_t cb_read(void *ud, void *out, size_t n) { return fread(out, 1, n, ((mi_dec_t *)ud)->f); }
 
@@ -49,33 +58,35 @@ static drwav_bool32 wav_tell(void *ud, drwav_int64 *c) { *c = ftell(((mi_dec_t *
 
 mi_dec_t *mi_dec_open(const char *path)
 {
-    const char *ext = strrchr(path, '.');
-    if (!ext) return NULL;
+    mi_fmt_t kind = mi_dec_format_of(path);
+    if (kind == MI_FMT_NONE) return NULL;
     mi_dec_t *d = calloc(1, sizeof *d);
     if (!d) return NULL;
+    d->kind = kind;
 
     bool ok = false;
     d->f = fopen(path, "rb");
     if (!d->f) goto out;
     setvbuf(d->f, NULL, _IOFBF, 8192); /* fewer, larger SD reads */
 
-    if (!strcasecmp(ext, ".mp3")) {
-        d->kind = K_MP3;
+    switch (d->kind) {
+    case MI_FMT_MP3:
         if (!drmp3_init(&d->u.mp3, cb_read, mp3_seek, mp3_tell, NULL, d, NULL)) goto out;
         d->hz = d->u.mp3.sampleRate;
         d->ch = d->u.mp3.channels;
-    } else if (!strcasecmp(ext, ".flac")) {
-        d->kind = K_FLAC;
+        break;
+    case MI_FMT_FLAC:
         d->u.flac = drflac_open(cb_read, flac_seek, flac_tell, d, NULL);
         if (!d->u.flac) goto out;
         d->hz = d->u.flac->sampleRate;
         d->ch = d->u.flac->channels;
-    } else if (!strcasecmp(ext, ".wav")) {
-        d->kind = K_WAV;
+        break;
+    case MI_FMT_WAV:
         if (!drwav_init(&d->u.wav, cb_read, wav_seek, wav_tell, d, NULL)) goto out;
         d->hz = d->u.wav.sampleRate;
         d->ch = d->u.wav.channels;
-    } else {
+        break;
+    default:
         goto out;
     }
     ok = d->hz > 0 && d->ch > 0;
@@ -95,9 +106,10 @@ size_t mi_dec_read(mi_dec_t *d, int16_t *out, size_t max_frames)
     if (max_frames > MI_READ_FRAMES) max_frames = MI_READ_FRAMES;
     size_t n = 0;
     switch (d->kind) {
-    case K_MP3:  n = (size_t)drmp3_read_pcm_frames_s16(&d->u.mp3, max_frames, d->tmp); break;
-    case K_FLAC: n = (size_t)drflac_read_pcm_frames_s16(d->u.flac, max_frames, d->tmp); break;
-    case K_WAV:  n = (size_t)drwav_read_pcm_frames_s16(&d->u.wav, max_frames, d->tmp); break;
+    case MI_FMT_MP3:  n = (size_t)drmp3_read_pcm_frames_s16(&d->u.mp3, max_frames, d->tmp); break;
+    case MI_FMT_FLAC: n = (size_t)drflac_read_pcm_frames_s16(d->u.flac, max_frames, d->tmp); break;
+    case MI_FMT_WAV:  n = (size_t)drwav_read_pcm_frames_s16(&d->u.wav, max_frames, d->tmp); break;
+    default: break; /* MI_FMT_NONE never reaches here: mi_dec_open() rejects it */
     }
     for (size_t i = 0; i < n; i++) {
         out[2 * i] = d->tmp[i * d->ch];
@@ -111,9 +123,10 @@ void mi_dec_close(mi_dec_t *d)
     if (!d) return;
     if (d->f) {
         switch (d->kind) {
-        case K_MP3:  if (d->hz) drmp3_uninit(&d->u.mp3); break;
-        case K_FLAC: if (d->u.flac) drflac_close(d->u.flac); break;
-        case K_WAV:  if (d->hz) drwav_uninit(&d->u.wav); break;
+        case MI_FMT_MP3:  if (d->hz) drmp3_uninit(&d->u.mp3); break;
+        case MI_FMT_FLAC: if (d->u.flac) drflac_close(d->u.flac); break;
+        case MI_FMT_WAV:  if (d->hz) drwav_uninit(&d->u.wav); break;
+        default: break;
         }
         fclose(d->f);
     }

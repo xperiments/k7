@@ -56,7 +56,7 @@
 #define CARD_RETRY_MS 5000
 #define CARD_TASK_STACK 4096
 
-static const char *TAG = "radio";
+static const char *TAG = "app";
 
 /* ------------------------------------------------------------------ Wi-Fi */
 
@@ -101,7 +101,7 @@ static esp_err_t sd_mount(void)
 {
     esp_vfs_fat_sdmmc_mount_config_t mc = {
         .format_if_mount_failed = false,
-        /* Two directory handles (the broadcast's playlist scan and the index) plus
+        /* Two directory handles (the broadcast's library scan and the index) plus
          * the decoder's file and one download is four; six leaves headroom rather
          * than sitting exactly on the limit. */
         .max_files = 6,
@@ -221,7 +221,11 @@ void app_main(void)
         .station_name = STATION_NAME,
         .port = HTTP_PORT,
         .pcm_cb = on_pcm,
-        /* .out_hz = 48000,  .bitrate = 192,  .max_clients = 4, ... */
+        /* Leave the station format at its default: 44100 Hz / 128 kbps CBR, joint
+         * stereo. 48000/192 is the fidelity alternative. If the device's own
+         * telemetry shows the encoder over 35 % of one core, or starvation rebases
+         * during a soak, the fallback is a LOWER format - 32000 Hz / 96 kbps -
+         * never a higher bit rate: more bits per second costs more, not less. */
     };
     err = mini_icecast_start(&cfg);
     if (err != ESP_OK) {

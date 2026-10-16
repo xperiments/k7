@@ -154,8 +154,6 @@ size_t http_url_decode(const char *in, char *out, size_t out_size)
             if (hi < 0 || lo < 0) return (size_t)-1;
             c = (hi << 4) | lo;
             p += 2;
-        } else if (c == '+') {
-            c = ' '; /* form encoding; harmless for the paths we serve */
         }
         if (n + 1 >= out_size) return (size_t)-1; /* refuse rather than truncate */
         out[n++] = (char)c;
@@ -208,7 +206,9 @@ static int parse_request(char *buf, http_request_t *req)
     if (strlen(buf) == 0 || strlen(buf) >= sizeof req->method) return 400;
     strcpy(req->method, buf);
 
-    /* Absolute-form request target (some clients use it for proxies). */
+    /* Absolute-form request target: legal in HTTP/1.0 (RFC 1945) and HTTP/1.1
+     * (RFC 7230 section 5.3.2), and what a proxy or a hand-typed
+     * "GET http://host:8000/stream" sends. */
     if (target[0] != '/') {
         char *scheme = strstr(target, "://");
         if (!scheme) return 400;

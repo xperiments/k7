@@ -44,7 +44,7 @@ static const uint16_t k_mp3_rates[3][3] = {
 };
 
 /* Length of the MP3 frame starting at h, or 0 when h is not a frame header. */
-static size_t mp3_frame_len(const uint8_t *h)
+static __attribute__((unused)) size_t mp3_frame_len(const uint8_t *h)
 {
     if (h[0] != 0xFF || (h[1] & 0xE0) != 0xE0) return 0;
     unsigned version = (h[1] >> 3) & 3, layer = (h[1] >> 1) & 3;
@@ -60,7 +60,7 @@ static size_t mp3_frame_len(const uint8_t *h)
 /* Walks `data` as a sequence of whole MP3 frames. Returns the number of frames,
  * or -1 if a frame boundary is not a frame header, and reports how many bytes
  * are left over after the last whole frame. */
-static long mp3_count_frames(const uint8_t *data, size_t n, size_t *leftover)
+static __attribute__((unused)) long mp3_count_frames(const uint8_t *data, size_t n, size_t *leftover)
 {
     size_t off = 0;
     long frames = 0;
@@ -82,20 +82,20 @@ typedef struct {
     uint32_t phase;
 } pcm_gen_t;
 
-static void pcm_gen_init(pcm_gen_t *g, uint32_t seed)
+static __attribute__((unused)) void pcm_gen_init(pcm_gen_t *g, uint32_t seed)
 {
     g->state = seed ? seed : 1;
     g->phase = 0;
 }
 
-static uint32_t pcm_next(pcm_gen_t *g)
+static __attribute__((unused)) uint32_t pcm_next(pcm_gen_t *g)
 {
     g->state = g->state * 1103515245u + 12345u; /* the usual LCG: identical everywhere */
     return (g->state >> 8) & 0xFFFFFF;
 }
 
 /* A mix of noise and two slowly varying tones, comfortably inside int16. */
-static void pcm_gen_fill(pcm_gen_t *g, int16_t *stereo, size_t frames)
+static __attribute__((unused)) void pcm_gen_fill(pcm_gen_t *g, int16_t *stereo, size_t frames)
 {
     for (size_t i = 0; i < frames; i++) {
         int32_t l = (int32_t)(pcm_next(g) % 7001) - 3500;

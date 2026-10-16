@@ -35,7 +35,3 @@ CONFIG_LWIP_MAX_SOCKETS=16
 # assume (ML_MAX_NAME / CONFIG_FATFS_MAX_LFN).
 CONFIG_FATFS_LFN_HEAP=y
 CONFIG_FATFS_MAX_LFN=128
-
-# --------------------------------------------------------------- SD card bus
-# One SDMMC slot, 1-bit, on the pins in main/main.c.
-CONFIG_SDMMC_USE_I2C=n

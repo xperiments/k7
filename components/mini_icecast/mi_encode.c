@@ -10,14 +10,13 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "layer3.h"
+/* The encoder's own struct, read only for its size: the startup log exists to
+ * make the memory budget observable rather than arithmetic, and a hard-coded
+ * number would be 12 bytes wrong on the 32-bit target. Vendored and pinned, so
+ * this cannot drift silently - and the host test pins the absolute value too. */
+#include "types.h"
 
 #define TAG "encoder"
-
-/* sizeof(shine_global_config) measured on the 64-bit host build and pinned by
- * the host test. On the 32-bit target the struct is 12 bytes smaller, because
- * it holds three pointers. Reported at startup so the memory budget is visible
- * rather than arithmetic. */
-#define MI_ENC_STATE_BYTES 95896
 
 /* MP3 frame geometry, needed to re-frame the encoder's byte output. */
 static const uint16_t k_bitrates[2][16] = {
@@ -153,7 +152,7 @@ void mi_enc_free(mi_enc_t *e)
 size_t mi_enc_samples_per_frame(const mi_enc_t *e) { return e->spf; }
 size_t mi_enc_pending_bytes(const mi_enc_t *e) { return e->pending_n; }
 size_t mi_enc_buffered_frames(const mi_enc_t *e) { return e->acc_n; }
-size_t mi_enc_state_bytes(void) { return MI_ENC_STATE_BYTES; }
+size_t mi_enc_state_bytes(void) { return sizeof(shine_global_config); }
 bool mi_enc_uses_external_memory(const mi_enc_t *e) { return e->external; }
 uint64_t mi_enc_frames_encoded(const mi_enc_t *e) { return e->frames_encoded; }
 uint64_t mi_enc_encode_us(const mi_enc_t *e) { return e->encode_us; }

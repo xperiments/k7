@@ -231,6 +231,12 @@ fi
 if start_server "$FIX" 18096 "$TMP/srv4.log" --max-clients 4; then
     check_match "max_clients=4 is honoured as given" "$(cat "$TMP/srv4.log")" 'sends at most 4 clients'
 fi
+if start_server "$FIX" 18097 "$TMP/srv5.log" --max-clients 1; then
+    check_match "max_clients=1 is honoured as given" "$(cat "$TMP/srv5.log")" 'sends at most 1 clients'
+fi
+if start_server "$FIX" 18098 "$TMP/srv6.log" --max-clients 0; then
+    check_match "an unset client limit (0) is the documented default of 2" "$(cat "$TMP/srv6.log")" 'sends at most 2 clients'
+fi
 
 group "summary"
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"

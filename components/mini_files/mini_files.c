@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -18,7 +17,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "http_server.h"
-#include "mini_icecast.h"
+#include "mi_decode.h"     /* the authority on which source formats exist */
+#include "mini_icecast.h"  /* the broadcast's current title, for the index */
 
 #define TAG "files"
 
@@ -50,18 +50,15 @@ static bool name_is_safe(const char *name)
     return true;
 }
 
-static bool name_is_audio(const char *name)
-{
-    const char *e = strrchr(name, '.');
-    return e && (!strcasecmp(e, ".mp3") || !strcasecmp(e, ".flac") || !strcasecmp(e, ".wav"));
-}
+static bool name_is_audio(const char *name) { return mi_dec_format_of(name) != MI_FMT_NONE; }
 
 static const char *content_type_for(const char *name)
 {
-    const char *e = strrchr(name, '.');
-    if (e && !strcasecmp(e, ".flac")) return "audio/flac";
-    if (e && !strcasecmp(e, ".wav")) return "audio/wav";
-    return "audio/mpeg";
+    switch (mi_dec_format_of(name)) {
+    case MI_FMT_FLAC: return "audio/flac";
+    case MI_FMT_WAV:  return "audio/wav";
+    default:          return "audio/mpeg";
+    }
 }
 
 /* A bounded output buffer: the index can be any size, memory use is not. */

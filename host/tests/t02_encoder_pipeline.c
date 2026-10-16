@@ -158,8 +158,19 @@ int main(void)
     CHECK_EQ(bad_frames, 0, "every broadcast() call carried exactly one whole frame");
     CHECK_EQ(out_n + pending_t2, ref_n, "emitted + still-pending == the reference byte total");
     CHECK(memcmp(out, ref, out_n) == 0, "the emitted stream is byte-identical to the reference");
-    CHECK(pending_t2 < MI_ENC_MAX_FRAME_BYTES, "at most one frame is left pending (%u B)",
-          (unsigned)pending_t2);
+    /* The withheld bytes are an incomplete frame, and the number of bytes really
+     * missing from it is what shine's bit writer holds in its cache: fewer than
+     * four. "Less than a frame is pending" would be satisfied by withholding a
+     * whole frame, which is not what happens. */
+    if (pending_t2) {
+        size_t next_len = mp3_frame_len(ref + out_n);
+        CHECK(next_len > pending_t2, "the withheld bytes are a partial frame (%u of %u B)",
+              (unsigned)pending_t2, (unsigned)next_len);
+        CHECK(next_len - pending_t2 <= 3, "and fewer than four bytes of it are missing (%u)",
+              (unsigned)(next_len - pending_t2));
+    } else {
+        printf("      (no frame was outstanding at this flush)\n");
+    }
     size_t leftover = 1;
     long whole = mp3_count_frames(out, out_n, &leftover);
     CHECK_EQ(whole, (long)out_frames, "every emitted call is a frame, and they tile exactly");
@@ -184,6 +195,14 @@ int main(void)
     CHECK_EQ(mi_enc_frames_encoded(e), expect_calls, "the residual block was padded and encoded once");
     size_t pending = mi_enc_pending_bytes(e);
     CHECK_EQ(out_n + pending, ref_n, "emitted + pending == the reference (nothing dropped, nothing doubled)");
+    if (pending) {
+        size_t next_len = mp3_frame_len(ref + out_n);
+        CHECK(next_len > pending, "the withheld tail is a partial frame (%u of %u B)",
+              (unsigned)pending, (unsigned)next_len);
+        CHECK(next_len - pending <= 3, "and fewer than four bytes of it are missing (%u)",
+              (unsigned)(next_len - pending));
+        CHECK_EQ(pending < MI_ENC_MAX_FRAME_BYTES, true, "buffered bytes are under one frame");
+    }
     CHECK(memcmp(out, ref, out_n) == 0, "the emitted stream matches the reference byte for byte");
     CHECK_EQ(bad_frames, 0, "every call still carried exactly one whole frame");
 

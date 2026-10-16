@@ -4,7 +4,7 @@ An ESP32-S3 devkit with a microSD card in it joins your Wi-Fi and serves the car
 music over HTTP:
 
 * **one continuous live MP3 stream** at `http://<device>:8000/stream` — every
-  listener hears the same track at the same moment, and any player works, because
+  client hears the same track at the same moment, and any player works, because
   the stream format never changes;
 * **a browsable index** at `/`, listing the tracks on the card with their sizes
   and what is playing now;
@@ -389,7 +389,7 @@ GPL on the whole project.
   in.
 * **One download at a time.** A second concurrent download is declined with `503`
   rather than queued, so a 40 MB FLAC cannot starve the broadcast behind it.
-* **The stream is a broadcast**: it cannot be paused or seeked, and every listener
+* **The stream is a broadcast**: it cannot be paused or seeked, and every client
   hears the same moment.
 * **`shine`'s audio quality is below LAME's.** Real, acknowledged, and unavoidable
   at this power budget.

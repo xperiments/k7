@@ -28,3 +28,9 @@ Spec: `docs/specs/sd-stream-server.md` §5 D4, §9 T2c.
 - [x] The caller logs it: `ESP_LOGE(TAG, "cannot resample %s: %s", path, rs_err)`.
 
 Note: the specification's arithmetic is stated as `T = 2 * ceil(ZERO_X / fc)` giving ~540 and ~1486; the implementation's formula gives 270 and 744. Both exceed 256, so the guard is the same either way, and the guard is what matters.
+
+**Post-review note.** T2c's board rerun ("board reruns it as T2c too, to prove the padded frame
+survives on-device") is outstanding along with the rest of the board tier. Also, the specification's
+arithmetic for the tap count is stated as `T = 2 * ceil(ZERO_X / fc)` giving ~540 and ~1486 where the
+implementation computes 270 and 744 (the stated values double-count the factor of two). Both exceed
+the 256-tap row, so the guard fires either way; the guard, not the arithmetic, is what was fixed.

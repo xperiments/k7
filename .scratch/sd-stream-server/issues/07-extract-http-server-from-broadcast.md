@@ -36,3 +36,14 @@ Decision: ADR 0003.
 - [x] `icy-name:` carries no space after the colon.
 - [x] An unrecognised path is a 404 (`/nope`, `/index.html`), never the stream; a non-GET is 405.
 - [x] No descriptor leak: 160 rejected connections (404s and POSTs) leave the process's descriptor count unchanged (10 -> 10).
+
+**Post-review notes (accepted additions, not spec requirements).**
+
+* Every response is HTTP/1.0 with a `Server:` header and a small HTML body for errors
+  (`400/404/405/503`), where the pre-extraction code sent a bare status line for its only failure
+  case. The `/stream` response itself is byte-for-byte what it was apart from the changes the
+  specification asks for (`audio/mpeg`, no WAV header, canonical `icy-name`). The `Server:` header is
+  an addition; the status codes are unchanged.
+* The parser accepts an absolute-form request target (`GET http://host:8000/stream`). That is legal
+  in HTTP/1.0 and HTTP/1.1 (RFC 7230 §5.3.2) and is what a proxy forwards; without it such a request
+  would be a 400. It is eight lines and is commented with the reason.

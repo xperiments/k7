@@ -7,6 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "esp_heap_caps.h"
+#include "esp_log.h"
+
+#define TAG "resample"
+
 #define NPH   128 /* sub-sample phases in the kernel table (linear interpolation in between) */
 #define ZERO_X 8  /* sinc zero crossings on each side (at the cutoff frequency) */
 #define BATCH 256 /* output frames per emit() call */
@@ -52,6 +57,11 @@ static double kern(double d, double fc, double half)
 mi_rs_t *mi_rs_new(uint32_t in_hz, uint32_t out_hz, char *err, size_t err_size)
 {
     if (err && err_size) err[0] = 0;
+    if (!in_hz || !out_hz) {
+        rs_err(err, err_size, "cannot resample %u Hz to %u Hz: both rates must be non-zero",
+               (unsigned)in_hz, (unsigned)out_hz);
+        return NULL;
+    }
     mi_rs_t *r = calloc(1, sizeof *r);
     if (!r) {
         rs_err(err, err_size, "out of memory for the resampler");
@@ -66,15 +76,32 @@ mi_rs_t *mi_rs_new(uint32_t in_hz, uint32_t out_hz, char *err, size_t err_size)
         rs_err(err, err_size,
                "cannot resample %u Hz to %u Hz: %d taps exceeds the %d-tap kernel limit",
                (unsigned)in_hz, (unsigned)out_hz, T, MI_RS_MAX_TAPS);
-        free(r);
+        heap_caps_free(r);
         return NULL;
     }
-    r->tab = malloc(sizeof(float) * (NPH + 1) * T);
-    r->buf = malloc(sizeof(float) * 2 * (T + MAXIN + 8));
+    /* The kernel table is the largest allocation this project makes per track -
+     * up to ~130 KB for a low station rate - so it is external-memory-preferred
+     * with an internal fallback (requirement P3). The fallback is what gets
+     * logged loudly; the preferred path is logged at debug level, because this
+     * runs once per track and a fallback is the case worth seeing. */
+    size_t tab_bytes = sizeof(float) * (NPH + 1) * (size_t)T;
+    size_t buf_bytes = sizeof(float) * 2 * (size_t)(T + MAXIN + 8);
+    r->tab = heap_caps_malloc(tab_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    bool tab_external = r->tab != NULL;
+    if (!r->tab) r->tab = malloc(tab_bytes);
+    r->buf = heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    bool buf_external = r->buf != NULL;
+    if (!r->buf) r->buf = malloc(buf_bytes);
     if (!r->tab || !r->buf) {
         rs_err(err, err_size, "out of memory for the %d-tap resampler kernel", T);
         mi_rs_free(r);
         return NULL;
+    }
+    if (tab_external && buf_external) {
+        ESP_LOGD(TAG, "%d-tap kernel: %u B of tables in external memory", T, (unsigned)(tab_bytes + buf_bytes));
+    } else {
+        ESP_LOGW(TAG, "%d-tap kernel: %u B of tables in internal RAM (external memory unavailable)",
+                 T, (unsigned)(tab_bytes + buf_bytes));
     }
 
     for (int p = 0; p <= NPH; p++) {
@@ -140,7 +167,7 @@ void mi_rs_process(mi_rs_t *r, const int16_t *in, size_t n, mi_rs_emit_t emit, v
 void mi_rs_free(mi_rs_t *r)
 {
     if (!r) return;
-    free(r->tab);
-    free(r->buf);
-    free(r);
+    heap_caps_free(r->tab);
+    heap_caps_free(r->buf);
+    heap_caps_free(r);
 }

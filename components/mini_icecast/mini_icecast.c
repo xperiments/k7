@@ -1,5 +1,5 @@
 /*
- * mini_icecast - tiny live-radio server for ESP-IDF.
+ * mini_icecast - tiny live stream server for ESP-IDF.
  *
  * Decodes .mp3 / .flac / .wav at any sample rate, resamples everything to one
  * station format and encodes it to MP3, then broadcasts that to every connected
@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -37,7 +36,8 @@
 #define TITLE_MAX       120
 #define CHUNK_FRAMES    MINI_ICECAST_CHUNK_FRAMES
 #define CHUNK_BYTES     (CHUNK_FRAMES * 4)
-#define RADIO_TASK_STACK (24 * 1024) /* the FLAC/MP3 decoder scratch is the big one */
+#define RADIO_TASK_STACK (24 * 1024)     /* the FLAC/MP3 decoder scratch is the big one */
+#define TELEMETRY_TASK_STACK 4096        /* %f formatting on newlib is stack-hungry */
 #define TELEMETRY_PERIOD_MS 60000
 #define QUIET_PASSES    30 /* log "no playable files" once a minute, not once a loop */
 
@@ -71,22 +71,11 @@ static struct {
 
 /* ------------------------------------------------------------- clients */
 
-static bool send_all(int fd, const uint8_t *p, size_t n)
-{
-    while (n) {
-        int r = send(fd, p, n, 0);
-        if (r <= 0) return false; /* error or SO_SNDTIMEO expired: slow client -> drop */
-        p += r;
-        n -= (size_t)r;
-    }
-    return true;
-}
-
 static bool send_meta(client_t *c)
 {
     if (c->title_ver == S.title_ver) {
         uint8_t zero = 0;
-        return send_all(c->fd, &zero, 1);
+        return http_send_all(c->fd, &zero, 1);
     }
     char tmp[TITLE_MAX + 24];
     int len = snprintf(tmp, sizeof tmp, "StreamTitle='%s';", S.title);
@@ -96,18 +85,18 @@ static bool send_meta(client_t *c)
     buf[0] = (uint8_t)blocks;
     memcpy(buf + 1, tmp, len);
     c->title_ver = S.title_ver;
-    return send_all(c->fd, buf, 1 + blocks * 16);
+    return http_send_all(c->fd, buf, 1 + blocks * 16);
 }
 
 /* Sends audio, splitting it so a metadata block lands exactly every `metaint`
  * *encoded* bytes. */
 static bool client_push(client_t *c, const uint8_t *d, size_t n)
 {
-    if (!c->meta) return send_all(c->fd, d, n);
+    if (!c->meta) return http_send_all(c->fd, d, n);
     while (n) {
         size_t k = S.cfg.metaint - c->since_meta;
         if (k > n) k = n;
-        if (!send_all(c->fd, d, k)) return false;
+        if (!http_send_all(c->fd, d, k)) return false;
         d += k;
         n -= k;
         c->since_meta += k;
@@ -231,7 +220,7 @@ mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_ic
                      S.cfg.station_name);
     if (want_icy_metadata) n += snprintf(h + n, sizeof h - n, "icy-metaint: %u\r\n", (unsigned)S.cfg.metaint);
     n += snprintf(h + n, sizeof h - n, "\r\n");
-    bool sent = n > 0 && n < (int)sizeof h && send_all(fd, (const uint8_t *)h, (size_t)n);
+    bool sent = n > 0 && n < (int)sizeof h && http_send_all(fd, h, (size_t)n);
     if (!sent) {
         xSemaphoreTake(S.lock, portMAX_DELAY);
         c->reserved = false;
@@ -364,8 +353,7 @@ static void stream_file(const char *path)
 static bool is_audio(const char *name)
 {
     if (name[0] == '.') return false; /* macOS "._foo.mp3" AppleDouble files on the SD */
-    const char *e = strrchr(name, '.');
-    return e && (!strcasecmp(e, ".mp3") || !strcasecmp(e, ".flac") || !strcasecmp(e, ".wav"));
+    return mi_dec_format_of(name) != MI_FMT_NONE;
 }
 
 static void radio_task(void *arg)
@@ -487,9 +475,9 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
         return err2;
     }
 
-    /* Wi-Fi lives on core 0; keep the radio on core 1. */
-    if (xTaskCreatePinnedToCore(radio_task, "ice_radio", RADIO_TASK_STACK, NULL, 6, NULL, 1) != pdPASS ||
-        xTaskCreatePinnedToCore(telemetry_task, "ice_telem", 3072, NULL, 3, NULL, 1) != pdPASS) {
+    /* Wi-Fi lives on core 0; keep the broadcast on core 1. */
+    if (xTaskCreatePinnedToCore(radio_task, "ice_broadcast", RADIO_TASK_STACK, NULL, 6, NULL, 1) != pdPASS ||
+        xTaskCreatePinnedToCore(telemetry_task, "ice_telem", TELEMETRY_TASK_STACK, NULL, 3, NULL, 1) != pdPASS) {
         ESP_LOGE(TAG, "no memory for the radio task");
         return ESP_ERR_NO_MEM;
     }
