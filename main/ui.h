@@ -8,6 +8,11 @@
 
 #include "mini_icecast.h"
 
+/* How often the interface redraws. The reels are the only thing that changes on their
+ * own, and a cassette hub does not need 50 frames a second: this leaves the core for the
+ * network stack that shares it, which matters more than smoothness. */
+#define UI_FRAME_MS 100
+
 /* Build the screen and start updating it. Called once, after the services are up. */
 void ui_start(void);
 

@@ -126,12 +126,12 @@ void ui_cassette_create(void)
     lv_obj_set_scrollable(paper, false);
     s_title = text(scr, &lv_font_montserrat_22, lv_color_hex(0x1b2733), LV_ALIGN_TOP_LEFT,
                    LABEL_X + 6, LABEL_Y + 3);
-    lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_label_set_long_mode(s_title, LV_LABEL_LONG_DOT);
     lv_obj_set_width(s_title, LABEL_W - 12);
 
     /* The band: what the file is, and how far into it we are. */
     s_file = text(scr, &lv_font_montserrat_18, lv_color_hex(0xf0f2f5), LV_ALIGN_TOP_LEFT, BAND_X, BAND_Y);
-    lv_label_set_long_mode(s_file, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_label_set_long_mode(s_file, LV_LABEL_LONG_DOT);
     lv_obj_set_width(s_file, BAND_W - 150);
     s_facts = text(scr, &lv_font_montserrat_14, lv_color_hex(0x8f98a6), LV_ALIGN_TOP_RIGHT,
                    -(800 - BAND_X - BAND_W), BAND_Y + 4);

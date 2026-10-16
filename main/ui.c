@@ -194,15 +194,24 @@ static void ui_task(void *arg)
 
         int64_t t0 = esp_timer_get_time();
         lv_timer_handler();
-        /* The first frame draws the whole screen - the cassette image included - and how
-         * long that takes decides whether the interface delays everything else on this
-         * core at boot. The rest are small updates and cost a fraction of this. */
-        static bool first = true;
-        if (first) {
-            first = false;
-            ESP_LOGI(TAG, "first frame rendered in %d ms", (int)((esp_timer_get_time() - t0) / 1000));
-        }
-        vTaskDelay(pdMS_TO_TICKS(20)); /* ~50 Hz: enough for the reels, cheap for the encoder */
+        int frame_ms = (int)((esp_timer_get_time() - t0) / 1000);
+        /* What a frame costs decides the cadence below, and the first one also draws the
+         * whole screen - the cassette image included - which decides whether the
+         * interface delays everything else sharing its core at boot. */
+        static int n_frames, worst_ms;
+        if (frame_ms > worst_ms) worst_ms = frame_ms;
+        if (++n_frames == 50)
+            ESP_LOGI(TAG, "%d frames: worst %d ms, last %d ms", n_frames, worst_ms, frame_ms);
+        /* Rest for at least three times as long as the frame took. A frame here is
+         * expensive - two alpha-blended reel hubs transformed into an 800x480 buffer,
+         * measured at over 100 ms - and this task shares its core with the network
+         * stack. Without this the interface simply never catches up: it renders, sleeps
+         * a fixed 40 ms, renders again, and owns the core. Yielding in proportion to the
+         * work done keeps it under a quarter of the core whatever a frame costs, which
+         * matters more than the reels' smoothness. */
+        int rest = frame_ms * 3;
+        if (rest < UI_FRAME_MS) rest = UI_FRAME_MS;
+        vTaskDelay(pdMS_TO_TICKS(rest));
     }
 }
 
