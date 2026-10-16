@@ -59,16 +59,18 @@ idf.py build
 idf.py -p /dev/tty.usbserial-XXXX flash monitor
 ```
 
-Before the first build, edit the two lines at the top of `main/main.c`:
+Before the first build, put your network in place:
 
-```c
-#define WIFI_SSID "your-ssid"
-#define WIFI_PASS "your-password"
+```bash
+cp main/wifi_credentials.h.example main/wifi_credentials.h
+$EDITOR main/wifi_credentials.h        # your SSID and password
 ```
 
-These are compiled into the binary. There is no provisioning mechanism: changing
-them means editing the source and reflashing (a deliberate deferral, not an
-oversight).
+That header is **gitignored**, so a real network password never enters version
+control, while still being compiled into the binary. A clean checkout builds
+without it (the log warns that the device will not join a network). There is no
+runtime provisioning mechanism: changing the credentials means editing the header
+and reflashing (a deliberate deferral, not an oversight).
 
 `sdkconfig.defaults` sets the flash size to 16 MB and the application partition to
 1.5 MB, matching the N16R8 class of module. If your board has a different flash
@@ -115,27 +117,41 @@ cp host/fixtures/*.mp3 host/fixtures/*.flac host/fixtures/*.wav /Volumes/YOURCAR
 
 ### Card bus
 
-1-bit SDMMC, wired to these pins (`main/main.c`):
+**The card is wired over SPI**, which is *not* what the specification's §2.3
+assumed: that section read 1-bit SDMMC pins (CLK 39 / CMD 38 / D0 40) off the
+original example rather than off this board. Nothing is connected to those pins
+here, and the mount timed out with `sdmmc_init_ocr: send_op_cond (1) returned
+0x107` — the timeout this project's own degradation path then reported. The
+capability R2 asks for (the card mounted at `/sdcard`) is unchanged; the bus is
+not.
 
 | Signal | GPIO |
 |---|---|
-| `SD_CLK` | 39 |
-| `SD_CMD` | 38 |
-| `SD_D0` | 40 |
+| `SD_CS` | 10 |
+| `SD_CLK` (SCLK) | 12 |
+| `SD_MOSI` (DI) | 11 |
+| `SD_MISO` (DO) | 13 |
 
-Three costs, stated rather than discovered later:
+SPI mode runs at 20 MHz (`SDSPI_HOST_DEFAULT()`), which is the reliable choice on
+hand wiring; `host.max_freq_khz` in `main/main.c` raises it if your wiring and card
+tolerate it.
 
-1. **GPIO39 and GPIO40 are the USB-JTAG pins.** Using them for the card disables
-   on-chip JTAG on that port. Debugging over the board's separate USB-UART bridge
-   still works — that is the port to use for `idf.py monitor`.
-2. **GPIO0 is the skip button** and is also a strapping pin. Holding it while
+Two costs, stated rather than discovered later:
+
+1. **GPIO0 is the skip button** and is also a strapping pin. Holding it while
    resetting enters download mode, which is exactly how you flash. During normal
    operation, pressing it skips to the next track.
-3. **Hand-soldered card slots are the most likely source of intermittent
-   faults.** The firmware enables the internal pull-ups
-   (`SDMMC_SLOT_FLAG_INTERNAL_PULLUP`), but real 10 kΩ pull-ups on `CMD` and `D0`
-   may be needed if the card behaves erratically. The device is built to survive a
-   card that will not mount: see below.
+2. **A card that will not mount is still the most likely fault**, and a card that
+   mounts but has no `/music` directory looks the same from outside. The firmware
+   logs both distinctly, and the device is built to survive either: see below.
+
+Because the card is on SPI, the USB-JTAG pins are untouched and on-chip debugging
+survives — the cost the specification recorded for the SDMMC wiring does not apply
+to this board.
+
+To wire a board the specification's way instead, replace the SPI mount in
+`sd_mount()` with `SDMMC_HOST_DEFAULT()` plus an `sdmmc_slot_config_t` of width 1
+on those three pins; nothing above that function changes.
 
 ### PSRAM is a hard prerequisite, and its mode is not detected
 
@@ -353,9 +369,11 @@ PSRAM, chip revision v0.2, ESP-IDF v5.4.4), flashed over the USB-UART bridge.
 | Station format validated and logged (F1-F3) | `station format: 44100 Hz, 128 kbps CBR, joint stereo, MPEG-1` |
 | The encoder's state is measured, not assumed | `95880 B of state inside the vendored library` - 16 B less than on the host, because the struct holds three pointers |
 | The HTTP listener comes up on its own port | `http: listening on :8000 (backlog 16, max 4 at once)` |
+| The card mounts over SPI (R2) | `Name: SL32G`, `Type: SDHC`, `card: 30420 MB total, 30418 MB free` |
+| A mounted but empty card is distinguishable from an absent one | `card on SPI: CS 10, CLK 12, MOSI 11, MISO 13`, then `/sdcard/music does not exist` |
 | No card: the device degrades instead of aborting (R8/T10) | `no card mounted: ESP_ERR_TIMEOUT (0x107)` then `the device will still serve on the network` |
 | Card retries are paced, not a tight loop (T10) | `still no card: ...; retrying in 5 s`, one line per attempt |
-| A wrong SSID is diagnosable rather than silent | `Wi-Fi: cannot join "your-ssid" (reason 201), attempt 1; check WIFI_SSID/WIFI_PASS` |
+| A wrong SSID is diagnosable rather than silent | `Wi-Fi: cannot join "your-ssid" (reason 201), attempt 1; check main/wifi_credentials.h` |
 | The idle-library log is rate-limited, not per loop | one `no playable files` line in 20 s, not one per 2 s loop |
 | No reboots or asserts while idle | 20 s capture, zero `Rebooting`/`assert` lines |
 
@@ -374,13 +392,37 @@ card to serve, neither of which was available:
   (index), T7 (downloads), T8 (path guards), T9 (concurrent downloads)
 * T9b (SDMMC contention), T11 (the one-hour CPU and memory soak), T12 on the board,
   T13 (FATFS case sensitivity), and the board halves of T2c
-* the card failed to initialise (`sdmmc_init_ocr: send_op_cond (1) returned 0x107`,
-  a timeout - no card responding). Check that a FAT32 card is seated, then check
-  the 1-bit wiring on CLK/CMD/D0 and the pull-ups the specification warns about.
+### Running the rest of the board tier
 
-Put real credentials in `main/main.c`, insert a card with the fixture corpus in
-`/sdcard/music`, and the remaining tests in `host/tests/http_tests.sh` run against
-`http://<board-address>:8000/` in place of the host build.
+Two things are needed, and neither is in the repository:
+
+```bash
+cp main/wifi_credentials.h.example main/wifi_credentials.h
+$EDITOR main/wifi_credentials.h                 # SSID and password, gitignored
+idf.py -p /dev/cu.usbserial-834430 flash
+
+# and, on the card, a music directory holding the corpus:
+mkdir -p /Volumes/YOURCARD/music
+cp host/fixtures/*.mp3 host/fixtures/*.flac host/fixtures/*.wav /Volumes/YOURCARD/music/
+```
+
+Then the same assertions that pass on the host run against the device:
+
+```bash
+BOARD_URL=http://<board-address>:8000 SERIAL_LOG=/tmp/board.log \
+  sh host/tests/http_tests.sh
+```
+
+`SERIAL_LOG` is optional; with it, the startup-telemetry assertions are checked
+against the device's own log (the octal-PSRAM and free-memory lines only exist
+there). `host/tests/serial_log.py` produces one:
+
+```bash
+~/.espressif/python_env/idf5.4_py3.12_env/bin/python host/tests/serial_log.py -s 15 -o /tmp/board.log
+```
+
+T12 on the board is not a command-line check: it means flashing a build with a
+deliberately bad `out_hz` and watching it refuse to serve.
 
 ---
 

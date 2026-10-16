@@ -53,3 +53,17 @@ The card timeout is the fault the specification predicted (§2.3: hand-soldered 
 SDMMC is the most likely source of trouble). Whether it is a missing card, a seating
 problem, or the missing 10 kΩ pull-ups on CMD/D0 has not been determined - the README
 lists what to check.
+
+**Board follow-up: the retry path is no longer exercised.** With the SPI mount the card
+comes up on the first attempt (see ticket 01), so the 5 s retry loop is not covered on
+hardware yet. It was observed working on the earlier SDMMC-configured build, where every
+attempt failed:
+
+```
+W (6422) app: still no card: ESP_ERR_TIMEOUT (0x107); retrying in 5 s
+W (11496) app: still no card: ESP_ERR_TIMEOUT (0x107); retrying in 5 s
+```
+
+and the log above it showed the device serving on :8000 throughout. What has still not
+been demonstrated on hardware is the *success* half - a card inserted after boot being
+picked up without a reboot - because the card is now present from boot.

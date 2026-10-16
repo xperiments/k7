@@ -13,6 +13,7 @@
 #include "mini_icecast.h"
 
 #include <dirent.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -361,10 +362,19 @@ static void radio_task(void *arg)
     (void)arg;
     S.t0 = esp_timer_get_time();
     int quiet = 0;
+    bool reported_missing = false;
     for (;;) {
         DIR *d = opendir(S.cfg.music_dir);
         int played = 0;
         struct dirent *e;
+        if (!d && !reported_missing) {
+            /* Distinguish "the directory is not there" from "it is there and has
+             * nothing playable in it": they need different fixes. */
+            ESP_LOGE(TAG, "cannot open %s: %s", S.cfg.music_dir, strerror(errno));
+            reported_missing = true;
+        } else if (d) {
+            reported_missing = false;
+        }
         while (d && (e = readdir(d))) {
             if (!is_audio(e->d_name)) continue;
             char path[320];

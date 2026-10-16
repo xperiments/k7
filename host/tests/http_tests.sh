@@ -13,10 +13,15 @@ set -u
 HOST_BIN=${HOST_BIN:?set HOST_BIN to the built host server}
 HOST_DIR=${HOST_DIR:?set HOST_DIR to the host/ directory}
 FIX="$HOST_DIR/fixtures"
+BOARD_URL=${BOARD_URL:-}     # set to http://<device>:8000 for the board run
+SERIAL_LOG=${SERIAL_LOG:-}   # optional: a serial capture from the device
 PORT=${PORT:-18077}
 PORT2=$((PORT + 1))
 PY=${PYTHON:-python3}
 BASE="http://127.0.0.1:$PORT"
+if [ -n "$BOARD_URL" ]; then
+    BASE=${BOARD_URL%/}
+fi
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/xtape-http-tests.XXXXXX")
 
 PASS=0
@@ -72,9 +77,25 @@ run_expect_refusal() { # description log port [args...]
 # --------------------------------------------------------------- start talking
 
 group "starting the server against the fixture corpus"
-start_server "$FIX" "$PORT" "$TMP/srv.log" || exit 1
-SRV_PID=$LAST_PID
-ok "server up on $BASE"
+if [ -n "$BOARD_URL" ]; then
+    if ! curl -s -o /dev/null --max-time 8 "$BASE/"; then
+        printf 'the board at %s is not answering\n' "$BASE"
+        exit 1
+    fi
+    ok "board answering on $BASE (no local server started)"
+    if [ -n "$SERIAL_LOG" ]; then
+        STARTUP_LOG=$SERIAL_LOG
+        ok "reading the device's own startup log from $SERIAL_LOG"
+    else
+        STARTUP_LOG=/dev/null
+        printf '  note  no SERIAL_LOG given: the startup-log assertions are skipped\n'
+    fi
+else
+    start_server "$FIX" "$PORT" "$TMP/srv.log" || exit 1
+    SRV_PID=$LAST_PID
+    STARTUP_LOG=$TMP/srv.log
+    ok "server up on $BASE"
+fi
 
 group "T3  the live stream is continuous MPEG audio, not WAV"
 curl -s --max-time 6 "$BASE/stream" >"$TMP/stream.mp3"
@@ -87,9 +108,18 @@ check_match "in stereo" "$probe" '^channels=2$'
 check_match "at the station bit rate" "$probe" '^bit_rate=128000$'
 errors=$(ffmpeg -v error -i "$TMP/stream.mp3" -f null - 2>&1 | wc -l | tr -d ' ')
 check_eq "the whole capture decodes without a single error" "$errors" "0"
-check_match "the station format is logged at startup" "$(cat "$TMP/srv.log")" 'station format: 44100 Hz, 128 kbps CBR, joint stereo, MPEG-1'
-check_match "and names the encoder's state size" "$(cat "$TMP/srv.log")" '95896 B of state'
-check_match "and reports which memory the ring took" "$(cat "$TMP/srv.log")" 'burst ring: .* in external memory'
+if [ -s "$STARTUP_LOG" ]; then
+    check_match "the station format is logged at startup" "$(tr -d '\r' <"$STARTUP_LOG")" 'station format: 44100 Hz, 128 kbps CBR, joint stereo, MPEG-1'
+    check_match "and names the encoder's state size" "$(tr -d '\r' <"$STARTUP_LOG")" '[0-9]+ B of state inside the vendored library'
+    check_match "and reports which memory the ring took" "$(tr -d '\r' <"$STARTUP_LOG")" 'burst ring: .* in external memory'
+    check_match "and which memory the encoder staging took" "$(tr -d '\r' <"$STARTUP_LOG")" 'staging buffers in external memory'
+    if [ -n "$BOARD_URL" ]; then
+        # These two come from the firmware's own bring-up, which the host build
+        # does not compile: they only exist on the device.
+        check_match "and the free memory in both classes (P2)" "$(tr -d '\r' <"$STARTUP_LOG")" 'heap at startup: internal [0-9]+ B free, external [0-9]+ B free'
+        check_match "and that PSRAM really is octal and running" "$(tr -d '\r' <"$STARTUP_LOG")" 'psram: [0-9]+ KB \(octal mode'
+    fi
+fi
 
 group "T5  ICY metadata lands at exactly 16000 encoded bytes"
 curl -s --max-time 6 -D "$TMP/h5" -o "$TMP/b5" -H 'Icy-MetaData: 1' "$BASE/stream"
@@ -171,7 +201,9 @@ check_eq "so is a file-ish path" "$(curl -s -o /dev/null -w '%{http_code}' "$BAS
 check_eq "a non-GET method is refused" "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d x "$BASE/")" "405"
 check_eq "the root is served" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/")" "200"
 
-if command -v lsof >/dev/null 2>&1; then
+if [ -n "$BOARD_URL" ]; then
+    printf '  skip  descriptor leak check on the board (160 rejected connections exercised only the host build)\n'
+elif command -v lsof >/dev/null 2>&1; then
     pid=$SRV_PID
     if [ -n "$pid" ]; then
         before=$(lsof -p "$pid" 2>/dev/null | wc -l | tr -d ' ')
@@ -196,6 +228,27 @@ else
 fi
 
 group "T9  one download at a time, and the first one survives (D6)"
+if [ -n "$BOARD_URL" ]; then
+    pick=$($PY "$HOST_DIR/tests/biggest_track.py" "$BASE" 50000)
+    if [ -z "$pick" ]; then
+        printf '  skip  no track on the card is large enough for the slow-reader test (>50 KB)\n'
+    else
+        name=${pick%% *}
+        curl -s -o "$TMP/ref.bin" "$BASE/music/$name"
+        if $PY "$HOST_DIR/tests/two_downloads.py" "$(printf '%s' "$BASE" | sed -e 's#http://##' -e 's#:.*##')" \
+                "$(printf '%s' "$BASE" | sed -e 's#.*:##')" "$name" "$TMP/ref.bin" 0.2 >"$TMP/two.out" 2>&1; then
+            ok "$(cat "$TMP/two.out")"
+        else
+            bad "concurrent downloads: $(cat "$TMP/two.out")"
+        fi
+        if [ -n "$SERIAL_LOG" ] && grep -q 'starved' "$SERIAL_LOG"; then
+            bad "the live stream starved during a download"
+        else
+            ok "no starvation rebase logged while a download was running"
+        fi
+    fi
+fi
+if [ -z "$BOARD_URL" ]; then
 mkdir -p "$TMP/lib"
 cp "$FIX/tone-44100.flac" "$TMP/lib/tone-44100.flac"
 dd if=/dev/zero of="$TMP/lib/big.wav" bs=1048576 count=8 2>/dev/null
@@ -211,8 +264,15 @@ if start_server "$TMP/lib" "$PORT2" "$TMP/srv2.log"; then
         ok "no starvation rebase logged while a download was running"
     fi
 fi
+fi
 
 group "T12  the station format is validated before anything is served (F1, F2)"
+if [ -n "$BOARD_URL" ]; then
+    printf '  note  the refusal checks start host processes; on the board the same\n'
+    printf '        requirement is checked by flashing a deliberately bad out_hz\n'
+    printf '        (README, board status) and watching it refuse to serve\n'
+fi
+if [ -z "$BOARD_URL" ]; then
 run_expect_refusal "out_hz=44101 is refused" "$TMP/bad1.log" 18091 --out-hz 44101
 check_match "and the log names the rate" "$(cat "$TMP/bad1.log")" '44101'
 run_expect_refusal "out_hz=11000 is refused" "$TMP/bad2.log" 18092 --out-hz 11000
@@ -237,7 +297,13 @@ fi
 if start_server "$FIX" 18098 "$TMP/srv6.log" --max-clients 0; then
     check_match "an unset client limit (0) is the documented default of 2" "$(cat "$TMP/srv6.log")" 'sends at most 2 clients'
 fi
+fi
 
 group "summary"
+if [ -n "$BOARD_URL" ]; then
+    printf 'tier: board (%s)\n' "$BASE"
+else
+    printf 'tier: host build (macOS)\n'
+fi
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

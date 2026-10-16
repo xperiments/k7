@@ -47,3 +47,10 @@ default assumed a 2 MB chip and left the application partition 93 % full.
 
 Outstanding: the "flash a board that has never built this project" part is done here on
 this board; a second machine has not been tried.
+
+**Credentials moved out of version control.** `main/wifi_credentials.h` is gitignored and
+holds `WIFI_SSID`/`WIFI_PASS`; `main/wifi_credentials.h.example` is committed. A clean
+checkout still builds, with `#warning "main/wifi_credentials.h is missing: the device will
+not join a network"`. That keeps the compile-time-credential design the specification asks
+for while not putting a real network password in the repository. The README says so in the
+build section.

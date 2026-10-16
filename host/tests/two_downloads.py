@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """T9 helper: a second simultaneous download is declined, and the first is unharmed.
 
-    two_downloads.py <host> <port> <file-name> <local-path>
+    two_downloads.py <host> <port> <file-name> <local-path> [delay-seconds]
 
 The first client reads slowly, on purpose, so the server is still inside the
 download when the second request arrives. The first download must keep
@@ -15,6 +15,10 @@ import threading
 import time
 
 host, port, name, local_path = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+# How long to let the first download settle before asking for a second. The host
+# serves a local file fast, so it wants a longer gap; the board holds the download
+# open by filling a small socket window, and its send-stall timeout is 400 ms.
+delay = float(sys.argv[5]) if len(sys.argv) > 5 else 0.6
 
 first = {}
 
@@ -49,7 +53,7 @@ def slow_reader():
 
 t = threading.Thread(target=slow_reader)
 t.start()
-time.sleep(0.6)  # the first download is now mid-flight
+time.sleep(delay)  # the first download is now mid-flight
 
 s2 = socket.socket()
 s2.settimeout(5)

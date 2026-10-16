@@ -59,3 +59,23 @@ startup telemetry now appears before, and independently of, an association.
 
 Outstanding on this ticket's board tier: the HTTP tests, which need the device on a
 network (see the README's board status section).
+
+**Specification deviation found on hardware: the card is on SPI, not 1-bit SDMMC.**
+§2.3's pin table (CLK 39 / CMD 38 / D0 40) was [read] off the old `resources/main.c`,
+not off the board, and the board has nothing on those pins: the SDMMC mount returned
+`sdmmc_init_ocr: send_op_cond (1) returned 0x107` (a timeout, correctly reported by the
+degradation path from ticket 09). The card is actually wired as SPI - CS 10, CLK 12,
+MOSI 11, MISO 13 - and mounts as soon as `sd_mount()` uses `esp_vfs_fat_sdspi_mount()`
+instead: `Name: SL32G`, `Type: SDHC`, `card: 30420 MB total, 30418 MB free`.
+
+R2's capability (the card mounted at `/sdcard`) is met; R2's *mechanism* is not, and this
+ticket's pin bullet is superseded by the README's card-bus table. Two knock-on effects:
+the specification's GPIO39/40 cost (USB-JTAG disabled) does not apply to this board -
+those pins are free and on-chip debugging survives - and the 10 kΩ pull-up warning on
+CMD/D0 is about a bus that is not in use here.
+
+Also added while diagnosing: the mount now logs the filesystem's size and whether
+`music_dir` exists, because "mounted but empty" and "mounted but no such directory" look
+identical from outside; and the broadcast logs `cannot open /sdcard/music: No such file
+or directory` once, distinguishing a missing directory from a directory with nothing
+playable in it.

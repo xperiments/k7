@@ -2,8 +2,8 @@
  * SD stream server: an ESP32-S3 that joins Wi-Fi, mounts a microSD card and
  * serves one continuous MP3 stream plus a browsable, downloadable library.
  *
- * Edit WIFI_SSID / WIFI_PASS and the SD pins for your board. Everything else has
- * defaults that work.
+ * Edit the SD pins for your board, and put your network in main/wifi_credentials.h
+ * (copied from the .example file, gitignored). Everything else has defaults that work.
  *
  * Two things this firmware does that a deployer must know (README, deployment):
  *   - the Wi-Fi credentials are compiled into the binary;
@@ -14,9 +14,11 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "driver/gpio.h"
-#include "driver/sdmmc_host.h"
+#include "driver/sdspi_host.h"
+#include "driver/spi_common.h"
 #include "esp_chip_info.h"
 #include "esp_event.h"
 #include "esp_flash.h"
@@ -35,17 +37,33 @@
 #include "nvs_flash.h"
 #include "sdmmc_cmd.h"
 
+/* The credentials are compiled in, as the specification requires, but they live in
+ * a gitignored header so a real network password does not end up in version
+ * control. Copy main/wifi_credentials.h.example to main/wifi_credentials.h and
+ * fill it in; the placeholders below keep a clean checkout building. */
+#if defined(__has_include)
+#if __has_include("wifi_credentials.h")
+#include "wifi_credentials.h"
+#endif
+#endif
+#ifndef WIFI_SSID
 #define WIFI_SSID "your-ssid"
 #define WIFI_PASS "your-password"
+#warning "main/wifi_credentials.h is missing: the device will not join a network (see README)"
+#endif
 
-/* SDMMC, 1-bit mode (GPIO matrix on the S3). Change them for your board.
- * GPIO39/40 are the USB-JTAG pins: using them costs on-chip JTAG, and the board's
- * separate USB-UART bridge is then the way to see this log. GPIO0 is the BOOT
- * strapping pin and is the skip button; holding it during reset enters download
- * mode, which is how you flash. */
-#define SD_CLK 39
-#define SD_CMD 38
-#define SD_D0  40
+/* The card is wired over SPI, not the 1-bit SDMMC the specification's §2.3
+ * assumed (which read the pins off the original example rather than off this
+ * board). The SDMMC pins were connected to nothing, and the mount timed out:
+ * "sdmmc_init_ocr: send_op_cond (1) returned 0x107". SPI also leaves the
+ * USB-JTAG pins (39/40) alone, so on-chip debugging survives.
+ *
+ * GPIO0 is the BOOT strapping pin and is the skip button; holding it during
+ * reset enters download mode, which is how you flash. */
+#define SD_CS   10
+#define SD_CLK  12
+#define SD_MOSI 11
+#define SD_MISO 13
 
 #define MUSIC_DIR    "/sdcard/music"
 #define STATION_NAME "ESP32 Radio"
@@ -74,7 +92,7 @@ static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
         wifi_event_sta_disconnected_t *e = data;
         if (++wifi_attempts == 1 || wifi_attempts % 10 == 0)
             ESP_LOGW(TAG, "Wi-Fi: cannot join \"%s\" (reason %d), attempt %d; "
-                          "check WIFI_SSID/WIFI_PASS at the top of main.c",
+                          "check main/wifi_credentials.h",
                      WIFI_SSID, e->reason, wifi_attempts);
         esp_wifi_connect();
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
@@ -120,6 +138,8 @@ static void wifi_wait_connected(void)
 
 /* ---------------------------------------------------------------- SD card */
 
+static bool s_spi_bus_up;
+
 static esp_err_t sd_mount(void)
 {
     esp_vfs_fat_sdmmc_mount_config_t mc = {
@@ -130,18 +150,48 @@ static esp_err_t sd_mount(void)
         .max_files = 6,
         .allocation_unit_size = 16 * 1024,
     };
-    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-    host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
-    sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
-    slot.width = 1;
-    slot.clk = SD_CLK;
-    slot.cmd = SD_CMD;
-    slot.d0 = SD_D0;
-    slot.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP; /* add real 10k pull-ups on CMD/D0 if it is flaky */
+    sdmmc_host_t host = SDSPI_HOST_DEFAULT(); /* 20 MHz: reliable on hand wiring */
 
-    sdmmc_card_t *card;
-    esp_err_t err = esp_vfs_fat_sdmmc_mount("/sdcard", &host, &slot, &mc, &card);
-    if (err == ESP_OK) sdmmc_card_print_info(stdout, card);
+    /* The retry task comes back through here, and the bus may only be brought up
+     * once. A failed mount removes its own device, so retrying is safe. */
+    if (!s_spi_bus_up) {
+        spi_bus_config_t bus = {
+            .mosi_io_num = SD_MOSI,
+            .miso_io_num = SD_MISO,
+            .sclk_io_num = SD_CLK,
+            .quadwp_io_num = -1,
+            .quadhd_io_num = -1,
+            .max_transfer_sz = 4000,
+        };
+        esp_err_t err = spi_bus_initialize(host.slot, &bus, SDSPI_DEFAULT_DMA);
+        if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+            ESP_LOGE(TAG, "spi_bus_initialize: %s", esp_err_to_name(err));
+            return err;
+        }
+        s_spi_bus_up = true;
+    }
+
+    sdspi_device_config_t slot = SDSPI_DEVICE_CONFIG_DEFAULT();
+    slot.gpio_cs = SD_CS;
+    slot.host_id = host.slot;
+
+    sdmmc_card_t *card = NULL;
+    esp_err_t err = esp_vfs_fat_sdspi_mount("/sdcard", &host, &slot, &mc, &card);
+    if (err == ESP_OK) {
+        sdmmc_card_print_info(stdout, card);
+        ESP_LOGI(TAG, "card on SPI: CS %d, CLK %d, MOSI %d, MISO %d",
+                 SD_CS, SD_CLK, SD_MOSI, SD_MISO);
+        /* Without this line, "the card mounted but there is nothing to play" and
+         * "the card mounted but there is no music directory" look identical from
+         * the outside - which is the one question a cardless diagnosis asks. */
+        uint64_t total = 0, freeb = 0;
+        if (esp_vfs_fat_info("/sdcard", &total, &freeb) == ESP_OK)
+            ESP_LOGI(TAG, "card: %u MB total, %u MB free",
+                     (unsigned)(total >> 20), (unsigned)(freeb >> 20));
+        struct stat st;
+        ESP_LOGI(TAG, "%s %s", MUSIC_DIR,
+                 (stat(MUSIC_DIR, &st) == 0 && S_ISDIR(st.st_mode)) ? "exists" : "does not exist");
+    }
     return err;
 }
 
