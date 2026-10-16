@@ -18,6 +18,10 @@ CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
 # Fine-grained pacing in the radio task (vTaskDelay at 1 ms resolution).
 CONFIG_FREERTOS_HZ=1000
 
+# app_main mounts the card, brings up Wi-Fi and starts every service, and FATFS
+# plus the card print are not shallow. The default is 3584 bytes.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=6144
+
 # ---------------------------------------------------------------------- PSRAM
 # The mode is NOT auto-detected on the S3 (components/esp_psram/esp32s3/Kconfig.spiram
 # has no auto option): the wrong setting corrupts memory at boot rather than

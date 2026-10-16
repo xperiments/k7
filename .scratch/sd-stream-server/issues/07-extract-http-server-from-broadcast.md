@@ -53,3 +53,29 @@ Decision: ADR 0003.
 needs the device to have an address, so it is outstanding with the rest of the HTTP
 tests. The `Server:` header, the 404/405 handling and the descriptor-leak check have only
 been exercised against the host build so far.
+
+**Board bug, found and fixed: the connection task's stack was too small.** On the
+device, `GET /` killed the firmware:
+
+```
+W (8452) files: GET / -> cannot read /sdcard/music: No such file or directory
+***ERROR*** A stack overflow in task http_conn has been detected.
+Backtrace: ... |<-CORRUPTED
+Rebooting...
+```
+
+so the client saw the connection die with no response, and every request rebooted the
+board. 6 KB did not cover the deepest path in the firmware: `serve_connection`'s request
+buffer, the index's own buffers, `http_send_headers`' header block, the index's streaming
+writer and lwIP's `send()`. The host shim hands out >= 64 KB stacks, so no host test could
+have found this.
+
+`CONN_TASK_STACK` is now 10 KB, the writer's own buffer is 1 KB rather than 2 KB, and the
+accept and card-retry tasks were raised with it (6 KB each). The measurement that would
+have predicted it is now part of the telemetry: every connection task records its stack
+high-water mark and the periodic log reports the worst seen, next to the broadcast task's
+(`stack headroom: broadcast N B, worst connection M B`). After the fix the same request
+returns 200 in ~20 ms, three times in a row, with no reboot.
+
+T4 and the index's diagnostic page are the first board-tier results from this ticket; the
+rest of the HTTP tests still need a library on the card.

@@ -17,8 +17,15 @@
 
 #define TAG "http"
 
-#define CONN_TASK_STACK 6144
-#define ACCEPT_TASK_STACK 4096
+/* Stack budget for one connection task, which is the deepest path in the
+ * firmware: serve_connection's request buffer (1 KB) + the route's own locals
+ * (the index's directory and error buffers) + http_send_headers' header block +
+ * the index's 1 KB streaming writer + lwIP's send() and ESP_LOG's vsnprintf.
+ * Measured on the device: 6 KB overflowed while serving the index (detected as
+ * "A stack overflow in task http_conn"), 10 KB leaves a comfortable margin, and
+ * the margin is reported with the rest of the telemetry. */
+#define CONN_TASK_STACK 10240
+#define ACCEPT_TASK_STACK 6144
 
 typedef struct {
     const char  *prefix;
@@ -33,6 +40,7 @@ typedef struct {
 
 static struct {
     http_server_cfg_t cfg;
+    uint32_t          conn_stack_min; /* bytes of headroom left, worst connection seen */
     route_t           routes[HTTP_MAX_ROUTES];
     int               nroutes;
     SemaphoreHandle_t slots; /* caps concurrently-parsing connection tasks */
@@ -295,9 +303,15 @@ static void conn_task(void *arg)
     int fd = a->fd;
     free(a);
     serve_connection(fd);
+    /* How close this task came to its stack limit. Kept as a running minimum so
+     * the periodic telemetry reports the worst path taken, not the last one. */
+    uint32_t left = (uint32_t)uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t);
+    if (!S.conn_stack_min || left < S.conn_stack_min) S.conn_stack_min = left;
     xSemaphoreGive(S.slots);
     vTaskDelete(NULL);
 }
+
+uint32_t http_server_conn_stack_headroom_bytes(void) { return S.conn_stack_min; }
 
 static void accept_task(void *arg)
 {

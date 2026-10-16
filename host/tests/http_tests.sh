@@ -10,8 +10,10 @@
 # the specification and are not claimed by anything in this file.
 set -u
 
-HOST_BIN=${HOST_BIN:?set HOST_BIN to the built host server}
 HOST_DIR=${HOST_DIR:?set HOST_DIR to the host/ directory}
+# Only the host run needs the built server; a board run points at the device and
+# never starts a local process.
+HOST_BIN=${HOST_BIN:-$HOST_DIR/build/bin/icecast_host}
 FIX="$HOST_DIR/fixtures"
 BOARD_URL=${BOARD_URL:-}     # set to http://<device>:8000 for the board run
 SERIAL_LOG=${SERIAL_LOG:-}   # optional: a serial capture from the device
@@ -91,6 +93,10 @@ if [ -n "$BOARD_URL" ]; then
         printf '  note  no SERIAL_LOG given: the startup-log assertions are skipped\n'
     fi
 else
+    if [ ! -x "$HOST_BIN" ]; then
+        printf '%s is not built: make -C host (or set BOARD_URL for a board run)\n' "$HOST_BIN"
+        exit 1
+    fi
     start_server "$FIX" "$PORT" "$TMP/srv.log" || exit 1
     SRV_PID=$LAST_PID
     STARTUP_LOG=$TMP/srv.log

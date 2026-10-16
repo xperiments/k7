@@ -72,7 +72,7 @@
 /* A card that will not mount is the most likely fault this hardware has, so a
  * failed mount is not fatal: the device stays on the network and retries. */
 #define CARD_RETRY_MS 5000
-#define CARD_TASK_STACK 4096
+#define CARD_TASK_STACK 6144 /* FATFS mount and the card-print formatting are not shallow */
 
 static const char *TAG = "app";
 

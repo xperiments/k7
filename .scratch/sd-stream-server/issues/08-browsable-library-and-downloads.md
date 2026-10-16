@@ -42,3 +42,14 @@ Decision: ADR 0001.
 - [x] Exactly one download at a time: a mutex taken with a zero timeout, so a 40 MB FLAC cannot queue behind another and starve the broadcast.
 
 Two implementation notes: the guard also rejects a name whose decoded form contains a NUL (`tone.flac%00.txt` used to serve `tone.flac`), and `max_files` on the mount was raised from 4 to 6 because the file-descriptor accounting is two directory handles (the broadcast's scan and the index) plus the decoder's file plus one download — exactly 4 with no headroom.
+
+**Board bug, found and fixed: the two library failures shared a page.** With the card
+mounted but no `/sdcard/music`, the index answered "No card mounted" - the wrong problem,
+on the one surface that exists to say which problem it is. They are now distinct pages:
+`No card mounted` (quoting the mount error) and `No music directory` (naming the directory
+and the `opendir` error). The broadcast log distinguishes them too
+(`cannot open /sdcard/music: No such file or directory` once, rather than only "no
+playable files").
+
+Verified on the device: `GET /` returns 200, 722 bytes, ~20 ms, three times in a row, with
+the device staying up.

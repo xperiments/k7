@@ -83,6 +83,11 @@ esp_err_t http_send_error(int fd, int status, const char *detail);
 /* send() until everything is written or the send timeout fires. */
 bool http_send_all(int fd, const void *data, size_t n);
 
+/* The least stack headroom any connection task has had left, in bytes. Part of
+ * the memory-fit telemetry: a route that grows past the budget shows up here
+ * before it shows up as a crash. */
+uint32_t http_server_conn_stack_headroom_bytes(void);
+
 /* Decode a percent-encoded string in place into `out`.
  * Returns the decoded length, or (size_t)-1 if the encoding is malformed or the
  * decoded result would not fit - it never truncates silently, because a

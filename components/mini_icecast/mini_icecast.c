@@ -410,6 +410,10 @@ static void telemetry_task(void *arg)
         ESP_LOGI(TAG, "memory: internal %u B free, external %u B free; starvation rebases %" PRIu32,
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), S.rebases);
+        /* The other half of fit: how much stack the deepest tasks have left. */
+        ESP_LOGI(TAG, "stack headroom: broadcast %u B, worst connection %u B",
+                 (unsigned)(uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t)),
+                 (unsigned)http_server_conn_stack_headroom_bytes());
     }
 }
 

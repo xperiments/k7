@@ -72,7 +72,8 @@ static const char *content_type_for(const char *name)
 /* A bounded output buffer: the index can be any size, memory use is not. */
 typedef struct {
     int    fd;
-    char   buf[2048];
+    char   buf[1024]; /* bounded on purpose: this is the deepest frame in the
+                       * connection task's stack budget (see http_server.c) */
     size_t n;
     bool   ok;
 } writer_t;
@@ -159,24 +160,29 @@ static void send_page_start(writer_t *w, const char *title)
                ".n{color:#666;font-variant-numeric:tabular-nums}</style>");
 }
 
-/* The index doubles as the diagnostic surface when the card is missing (I3). */
-static void send_no_card(int fd, const char *dir, const char *why)
+/* The index doubles as the diagnostic surface (I3). There are two distinct
+ * failures and they need different fixes, so they must not share a heading: a
+ * card that is not there, and a card that is there but holds no music directory.
+ * Reporting the second as the first sends the reader looking for the wrong
+ * problem. */
+static void send_library_problem(int fd, const char *heading, const char *detail, const char *dir)
 {
     http_send_headers(fd, 200, "text/html; charset=utf-8", (size_t)-1, NULL);
     writer_t w = {fd, {0}, 0, true};
-    send_page_start(&w, "No card mounted");
-    w_puts(&w, "<h1>No card mounted</h1><p>The audio library is not available, but the device is "
-               "on the network and reachable - which is the point of this page.</p>");
-    w_puts(&w, "<p>Mount failed: ");
-    w_escaped(&w, why && why[0] ? why : "unknown error");
+    send_page_start(&w, heading);
+    w_puts(&w, "<h1>");
+    w_escaped(&w, heading);
+    w_puts(&w, "</h1><p>");
+    w_escaped(&w, detail);
     w_puts(&w, "</p>");
     if (dir && dir[0]) {
         w_puts(&w, "<p>Expected music directory: <code>");
         w_escaped(&w, dir);
         w_puts(&w, "</code></p>");
     }
-    w_puts(&w, "<p>A card inserted now is mounted automatically, and the library appears "
-               "without a reboot.</p>");
+    w_puts(&w, "<p>The device is on the network and reachable - which is the point of "
+               "this page. A card inserted now is mounted automatically, and the library "
+               "appears without a reboot.</p>");
     w_puts(&w, "<p><a href=\"/stream\">Listen to the live stream</a></p>");
     w_flush(&w);
 }
@@ -197,17 +203,24 @@ static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
     snapshot(dir, sizeof dir, err, sizeof err);
 
     if (!dir[0]) {
+        char detail[320];
+        snprintf(detail, sizeof detail,
+                 "No card is mounted, so there is no audio library to serve. Mount failed: %.120s",
+                 err[0] ? err : "unknown error");
         ESP_LOGI(TAG, "GET / -> no card (%s)", err[0] ? err : "not mounted");
-        send_no_card(fd, NULL, err);
+        send_library_problem(fd, "No card mounted", detail, NULL);
         return HTTP_HANDLED;
     }
 
     DIR *d = opendir(dir);
     if (!d) {
-        char why[192];
-        snprintf(why, sizeof why, "%s", strerror(errno));
+        char detail[384];
+        snprintf(detail, sizeof detail,
+                 "The card is mounted, but %.120s could not be opened: %.80s. Create it and put "
+                 "your tracks in it.",
+                 dir, strerror(errno));
         ESP_LOGW(TAG, "GET / -> cannot read %s: %s", dir, strerror(errno));
-        send_no_card(fd, dir, why);
+        send_library_problem(fd, "No music directory", detail, dir);
         return HTTP_HANDLED;
     }
 
