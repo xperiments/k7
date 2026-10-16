@@ -41,3 +41,22 @@ noise at -10 dBFS, delay-compensated against a 1057-sample codec delay): 96 kbps
 128 3.3 dB, 160 4.7 dB, 192 7.1 dB, 256 11.9 dB, 320 15.5 dB. That measurement is what moved
 the default from 32 kHz/96 kbps to 44.1 kHz/256 kbps, since the bit rate turned out to cost
 almost no CPU.
+
+**Board evidence for the fixed-point claim (T2c and the digest).** The end-of-track
+flush is the part of the pipeline that only a real track length can exercise, so it was
+checked on the device rather than argued: a 16-second capture of the live stream carried
+`tail-44100` - 34 266 frames, deliberately not a multiple of 1152 - three times, and the
+whole 530 808-byte capture decodes with zero errors:
+
+```
+tracks carried during a 16 s capture (530808 bytes of audio):
+  tone-44100, tone-48000, tail-44100, tone-32000, tone-44100, tone-48000, tail-44100, ...
+ffmpeg -v error -i capture.mp3 -f null -        # no output: zero errors
+codec_name=mp3  sample_rate=44100  bit_rate=256000
+```
+
+The host-against-host digest protocol was re-run after the encoder changes and still
+produces identical spans and byte-identical audio from two independent servers
+(`MD5=5f9afd50107da645a44455746bdd6e3f` both sides). The host-against-board run remains
+the one step that needs a second machine on the same network, and its procedure is in
+the README.

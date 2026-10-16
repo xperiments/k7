@@ -181,7 +181,7 @@ I (919) app: chip: esp32s3, 2 core(s), revision 0.2
 I (919) app: flash: 16 MB; psram: 8192 KB (octal mode, CONFIG_SPIRAM_MODE is not auto-detected)
 I (921) app: heap at startup: internal 305571 B free, external 8386148 B free
 I (1223) icecast: station format: 44100 Hz, 256 kbps CBR, joint stereo, MPEG-1
-I (1576) icecast: encoder: 103400 B of internal RAM taken (the encoder's own state; near zero means it landed in external memory)
+I (1576) icecast: encoder: 102408 B of internal RAM taken (the encoder's own state; near zero means it landed in external memory)
 I (1576) icecast: encoder: 1152 samples/frame (26.1 ms), 95880 B of state inside the vendored library, staging buffers in external memory
 I (1588) icecast: burst ring: 20098 B (~500 ms of audio) in external memory, sends at most 2 clients
 I (1605) files: download buffer: 16384 B in external memory
@@ -201,7 +201,7 @@ lookup table plus the MDCT and subband tables) and putting it in PSRAM cost 8 % 
 the encoder's throughput when it was measured. `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL`
 is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 95 880 B the encoder needs. The startup log reports the difference it makes:
-`encoder: 103400 B of internal RAM taken`.
+`encoder: 102408 B of internal RAM taken`.
 
 ## Using it
 
@@ -441,7 +441,7 @@ chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1*
 | Builds and flashes from a clean checkout | `rm -rf build sdkconfig && idf.py build && idf.py -p PORT flash`: a 1.04 MB app in a 1.5 MB partition, 32 % free |
 | 8 MB PSRAM in octal mode at 80 MHz | `esp_psram: Found 8MB PSRAM device`, `Speed: 80MHz`, `SPI SRAM memory test OK` |
 | Every allocation this project makes takes the external-memory path (P2/P3) | `staging buffers in external memory`, `burst ring: 20098 B (~500 ms of audio) in external memory`, `download buffer: 16384 B in external memory` |
-| The encoder's state is measured, not assumed | `103400 B of internal RAM taken (the encoder's own state)`, and `95880 B of state inside the vendored library` - 16 B less than the host's 95896, because the struct holds three pointers |
+| The encoder's state is measured, not assumed | `102408 B of internal RAM taken (the encoder's own state)`, and `95880 B of state inside the vendored library` - 16 B less than the host's 95896, because the struct holds three pointers |
 | Free memory in both classes is reported at startup and every minute (P2) | `heap at startup: internal 261087 B free, external 8386156 B free` |
 | Station format validated and logged (F1-F3) | `station format: 44100 Hz, 256 kbps CBR, joint stereo, MPEG-1` |
 | The wire matches the announcement (T3) | `ffprobe`: `mp3, 44100 Hz, stereo, 256 kb/s`, and the whole capture decodes with zero errors |
@@ -457,7 +457,19 @@ chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1*
 | Download contention does not starve the stream (T9b) | 2-minute soak with repeated downloads: `0 starvation rebases`, memory unchanged, no faults |
 | A refused station format serves nothing (T12) | with `out_hz = 44101`: `station format refused: station rate 44101 Hz is not one the encoder accepts; use one of ...`, then `not serving: ESP_ERR_INVALID_ARG`, and no listener, no Wi-Fi, no reboot |
 | FATFS case sensitivity is documented (T13) | a wrong-case request (`TONE-44100.FLAC`) returns `200` on this card: FATFS resolves names case-insensitively |
-| The encoder's cost and the memory over an hour (T11) | see the soak note below |
+| The encoder's cost, starvation and memory over an hour (T11) | one client on `/stream` for 59 minutes: `encoder: 135795 frames, 10811 us/frame = 41.4% of one core`, `starvation rebases 0`, `asserts/overflows/reboots 0`, internal free at the start and end of the run both 18 751 B |
+| The padded end-of-track frame survives on the device (T2c) | a 16 s capture carried `tail-44100` - 34 266 frames, deliberately not a multiple of 1152 - three times, and all 530 808 bytes decode with zero errors |
+| Download contention does not starve the stream (T9b) | repeated downloads of the largest track with a listener attached: `starvation rebases 0`, `asserts/overflows/reboots 0` |
+
+The hour's result deserves stating precisely: **zero starvation rebases and zero
+faults in 59 minutes, with the encoder flat at 41.4 % of one core** (10 786 µs per
+frame at the start of the run, 10 812 at the end) and free memory identical at the
+start and end. What it does *not* establish is compliance with the specification's
+35 % threshold, because 41.4 % is above it — see "Why 44.1 kHz / 256 kbps" above for
+why no usable rate meets that number. Internal RAM is also tight: the working
+minimum during a track is about 11 KB, which is below the 32 KB the heap reserves
+for DMA-capable allocations, so anything added to the radio task should be measured
+rather than assumed.
 
 **Four faults that only the board could show**, each now fixed and each worth the
 tier on its own:

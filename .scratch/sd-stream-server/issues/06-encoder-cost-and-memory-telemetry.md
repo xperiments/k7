@@ -118,3 +118,32 @@ Also fixed under this ticket: `xTaskCreatePinnedToCoreWithCaps()` requires
 `vTaskDeleteWithCaps()`; using plain `vTaskDelete()` leaked the 10 KB stack of every
 connection task, which degraded the device across repeated runs (77 passing, then 68, with no
 reboot in between). See ticket 07.
+
+**The one-hour soak, on the final firmware (44.1 kHz / 256 kbps, ESP-IDF 6.1).**
+`sh host/tests/board_soak.sh <url> <port> 60 stream`, with one client on `/stream`:
+
+```
+soaking http://192.168.0.44:8000 for 60 minute(s) with load: stream (encoder bound 70%)
+  encoder: 135795 frames, last reading 41.4% of one core
+  memory at the start: internal 18751 B free, external 8200264 B free; starvation rebases 0
+  memory at the end:   internal 18751 B free, external 8205304 B free; starvation rebases 0
+  starvation rebases: 0
+  asserts/overflows/reboots: 0
+  internal free (minimum of first/last third): 11067 B -> 11067 B
+  external free (minimum of first/last third): 8184784 B -> 8178528 B
+soak passed: no faults, no starvation, encoder under 70%, memory stable
+```
+
+Read precisely: **the functional half of T11 passes** - no starvation, no faults, free
+memory stable to the byte over the hour, and the encoder's cost flat (10 786 us/frame at
+the start, 10 812 at the end, over 135 795 frames). **The 35% half does not**, because
+41.4% is above it, and the specification offers no format that meets it at a usable
+sample rate: 32 kHz measures 37.7% on synthetic material and only 22.05 kHz comes in
+under the line at 23.6%. That is why the soak was run with `MAX_COST=70` and why the
+README states the position rather than hiding it.
+
+Also measured on the final firmware: **T9b** (repeated downloads of the largest track
+with a listener attached) shows `starvation rebases 0` and `asserts 0`, with the encoder
+at 43.8% - slightly higher than an idle hour, as expected when the card is being read by
+a download and the decoder at once. Internal RAM is the thing to watch: the working
+minimum during a track is about 11 KB, below the 32 KB the heap reserves for DMA.

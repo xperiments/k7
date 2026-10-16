@@ -118,10 +118,20 @@ fi
 # minimum in the last third. Comparing two instantaneous samples would not work:
 # a track's decoder working set comes and goes, so consecutive readings differ by
 # more than any leak would, depending only on where in a track the sample landed.
+STABILITY=na
 for class in internal external; do
-    vals=$(printf '%s\n' "$lines" | sed -n "s/.*$class \([0-9]*\) B free.*/\1/p")
+    # Only the periodic telemetry lines: the startup line ("heap at startup:
+    # internal N B free") reports a much larger figure, because it is taken before
+    # Wi-Fi, the encoder and the decoder's working set exist, and comparing against
+    # it would report a leak on every run.
+    vals=$(printf '%s\n' "$lines" | grep 'memory: internal' |
+           sed -n "s/.*$class \([0-9]*\) B free.*/\1/p")
     n=$(printf '%s\n' "$vals" | grep -c . || true)
-    [ "$n" -ge 3 ] || continue
+    if [ "$n" -lt 6 ]; then
+        printf '  %s free: %s sample(s) - too few for a stability verdict\n' "$class" "$n"
+        continue
+    fi
+    STABILITY=checked
     third=$((n / 3))
     a=$(printf '%s\n' "$vals" | head -"$third" | sort -n | head -1)
     b=$(printf '%s\n' "$vals" | tail -"$third" | sort -n | head -1)
@@ -136,7 +146,12 @@ done
 
 if [ "$FAIL" -eq 0 ]; then
     echo
-    echo "soak passed: no faults, no starvation, encoder under ${MAX_COST}%, memory stable"
+    if [ "$STABILITY" = "checked" ]; then
+        echo "soak passed: no faults, no starvation, encoder under ${MAX_COST}%, memory stable"
+    else
+        echo "soak passed: no faults, no starvation, encoder under ${MAX_COST}%"
+        echo "             (memory stability not assessed: too few telemetry samples)"
+    fi
 else
     echo
     echo "soak FAILED (log kept at $LOG)"
