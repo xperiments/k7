@@ -180,6 +180,9 @@ void ui_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
 static void ui_task(void *arg)
 {
     (void)arg;
+    /* Says where it landed: this task's core is a decision (see ui_start), and a task
+     * that never runs is otherwise indistinguishable from a task that has nothing to do. */
+    ESP_LOGI(TAG, "ui task running on core %d", (int)xPortGetCoreID());
     uint32_t last_tick = 0;
     int last_elapsed = -1;
     for (;;) {
@@ -211,6 +214,12 @@ static void ui_task(void *arg)
          * matters more than the reels' smoothness. */
         int rest = frame_ms * 3;
         if (rest < UI_FRAME_MS) rest = UI_FRAME_MS;
+        if (rest > UI_REST_MAX_MS) rest = UI_REST_MAX_MS;   /* a slow frame must not freeze it */
+        static int n_rest;
+        if (n_rest < 3) {
+            n_rest++;
+            ESP_LOGI(TAG, "rest %d ms after a %d ms frame", rest, frame_ms);
+        }
         vTaskDelay(pdMS_TO_TICKS(rest));
     }
 }
@@ -240,15 +249,19 @@ void ui_start(void)
     /* No panel: a framebuffer this file owns. Still PSRAM, because it is far larger than
      * anything internal RAM could hold, and because the production board's buffers are
      * there too - the point is to exercise the same arrangement. */
-    uint8_t *fb = heap_caps_malloc(UI_FB_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    size_t strip = (size_t)UI_W * UI_DRAW_LINES * 2;
+    uint8_t *fb = heap_caps_malloc(strip, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!fb) {
-        ESP_LOGE(TAG, "no PSRAM for a %u B framebuffer", (unsigned)UI_FB_BYTES);
+        ESP_LOGE(TAG, "no PSRAM for a %u B draw buffer", (unsigned)strip);
         return;
     }
 #if CONFIG_APP_UI_SERIAL_DUMP
-    s_fb = fb;
+    /* The dump needs a whole screen to read; with a strip draw buffer there is no such
+     * buffer, so the dump allocates its own and renders one full refresh into it. */
+    s_fb = heap_caps_malloc(UI_FB_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_fb) ESP_LOGW(TAG, "no PSRAM for the screen dump; it will be skipped");
 #endif
-    lv_display_set_buffers(disp, fb, NULL, UI_FB_BYTES, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_buffers(disp, fb, NULL, strip, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(disp, ui_flush_cb);
 #endif
 
@@ -263,7 +276,13 @@ void ui_start(void)
 
     /* A task rather than lv_timer_handler() in the app's idle loop: the display the
      * panel will need has its own cadence, and this keeps the UI off the audio core. */
-    xTaskCreatePinnedToCore(ui_task, "ui", 6 * 1024, NULL, 3, NULL, 0);
+    /* Core 1, at a priority below the encoder's 6 and the connection workers' 5. The
+     * reference integration on this board pins its interface away from the core the
+     * application works on, and this is the same reasoning with this firmware's parts:
+     * Wi-Fi and lwIP own core 0, and the interface must never be able to starve them -
+     * which is exactly what it did when it lived there and rendered in a loop. */
+    if (xTaskCreatePinnedToCore(ui_task, "ui", 16 * 1024, NULL, 3, NULL, 1) != pdPASS)
+        ESP_LOGE(TAG, "no memory for the interface task: the screen will not update");
 
 #if CONFIG_APP_UI_SERIAL_DUMP
     /* Give the screen a moment to draw itself (and the broadcast a moment to report a

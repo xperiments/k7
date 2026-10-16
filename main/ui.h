@@ -8,10 +8,23 @@
 
 #include "mini_icecast.h"
 
+/* The draw buffer when there is no panel: one strip, not a whole screen. LVGL renders
+ * only the invalidated area into it, and a smaller buffer means less of the screen is
+ * touched per refresh - the arrangement the verified reference integration uses
+ * (SolidGL firmware, components/solidgl_platform/src/solidgl_platform.c). */
+#define UI_DRAW_LINES 40
+
 /* How often the interface redraws. The reels are the only thing that changes on their
  * own, and a cassette hub does not need 50 frames a second: this leaves the core for the
  * network stack that shares it, which matters more than smoothness. */
 #define UI_FRAME_MS 100
+
+/* And never rest longer than this, however expensive a frame was. The verified
+ * reference integration caps its own wait at 500 ms (`task_max_sleep_ms`), and the
+ * reason shows up at startup: the first frame draws the whole screen and costs seconds,
+ * so an uncapped "three times the frame" would freeze the interface for thirteen of
+ * them before it drew anything again. */
+#define UI_REST_MAX_MS 500
 
 /* Build the screen and start updating it. Called once, after the services are up. */
 void ui_start(void);
