@@ -61,7 +61,7 @@ SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/icecast_host.o
 TOOLS := $(BIN)/mi_bench $(BIN)/mi_encode_file $(BIN)/mi_frames
 TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t03_resampler_guard $(BIN)/t04_format_validation \
-         $(BIN)/t05_stream_formats
+         $(BIN)/t05_stream_formats $(BIN)/t06_status
 
 .PHONY: all test integration layering check tools fixtures bench clean help
 
@@ -107,6 +107,9 @@ $(BIN)/t04_format_validation: $(CORE_OBJ) $(OBJ)/t04_format_validation.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t05_stream_formats: $(CORE_OBJ) $(OBJ)/t05_stream_formats.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+$(BIN)/t06_status: $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/t06_status.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

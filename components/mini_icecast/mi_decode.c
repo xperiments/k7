@@ -101,6 +101,23 @@ out:
 
 uint32_t mi_dec_hz(const mi_dec_t *d) { return d->hz; }
 
+uint32_t mi_dec_duration_ms(const mi_dec_t *d)
+{
+    uint64_t frames;
+    switch (d->kind) {
+    case MI_FMT_MP3:  frames = (uint64_t)drmp3_get_pcm_frame_count((drmp3 *)&d->u.mp3); break;
+    case MI_FMT_FLAC: frames = (uint64_t)d->u.flac->totalPCMFrameCount; break;
+    case MI_FMT_WAV:  frames = (uint64_t)d->u.wav.totalPCMFrameCount; break;
+    default: return 0;
+    }
+    /* "Unknown" has to be recognised rather than converted: dr_mp3 reports
+     * DRMP3_UINT64_MAX for a file whose length it cannot determine, and a stream that
+     * never announced one reports 0. Reporting either as a duration would put a
+     * nonsense number on a progress bar. */
+    if (!frames || frames >= (1ULL << 40) || !d->hz) return 0;
+    return (uint32_t)((frames * 1000ULL) / d->hz);
+}
+
 size_t mi_dec_read(mi_dec_t *d, int16_t *out, size_t max_frames)
 {
     if (max_frames > MI_READ_FRAMES) max_frames = MI_READ_FRAMES;

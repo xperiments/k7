@@ -19,6 +19,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "mi_decode.h"   /* mi_fmt_t: the status struct reports a container */
+
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -76,6 +78,33 @@ esp_err_t mini_icecast_check_station(const mini_icecast_cfg_t *cfg, char *err, s
  * naming the offending value in the log, for a format or client limit that cannot
  * be served. Call it after the network is up: see mini_icecast_check_station(). */
 esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg);
+
+/* What the broadcast is playing, for a display.
+ *
+ * A snapshot: every string is copied out, so the caller holds no lock and the values
+ * cannot change underneath it. Fields are zero (and `format` is MI_FMT_NONE) when
+ * nothing is known yet - no card, nothing playable, or a track change in progress.
+ *
+ * `duration_ms` is 0 when the length is unknown; `elapsed_ms` counts the audio
+ * broadcast from the current track, so it is what a progress bar should show. For MP3
+ * the file's own length includes the encoder delay and padding the format carries, so
+ * a track can finish a few tens of milliseconds before the bar reaches the end. */
+#define MINI_ICECAST_STATUS_TITLE_MAX 128
+#define MINI_ICECAST_STATUS_FILE_MAX  160
+
+typedef struct {
+    char     title[MINI_ICECAST_STATUS_TITLE_MAX]; /* as sent in ICY metadata */
+    char     file[MINI_ICECAST_STATUS_FILE_MAX];   /* the file's name, extension included */
+    mi_fmt_t format;                               /* MI_FMT_NONE when nothing is playing */
+    uint32_t source_hz;                            /* the file's own sample rate */
+    uint32_t out_hz;                               /* the station rate */
+    uint32_t bitrate;                              /* the station bit rate, kbps */
+    uint32_t elapsed_ms;                           /* broadcast from this track so far */
+    uint32_t duration_ms;                          /* this track's length, 0 = unknown */
+    uint32_t library_count;                        /* playable files found on the card */
+} mini_icecast_status_t;
+
+void      mini_icecast_status(mini_icecast_status_t *out);
 
 void      mini_icecast_skip(void);                              /* jump to next track */
 size_t    mini_icecast_now_playing(char *out, size_t out_size); /* current title, for the index */

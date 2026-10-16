@@ -26,5 +26,11 @@ mi_fmt_t mi_dec_format_of(const char *name);
 
 mi_dec_t *mi_dec_open(const char *path); /* NULL if unsupported extension / unreadable / corrupt */
 uint32_t  mi_dec_hz(const mi_dec_t *d);
+
+/* The track's length, or 0 when the decoder cannot know it (a truncated file, a
+ * stream that never announced its length). For MP3 the figure includes the encoder
+ * delay and padding the format carries, so it runs a few tens of milliseconds long -
+ * the honest answer, since that is how much audio the file holds. */
+uint32_t  mi_dec_duration_ms(const mi_dec_t *d);
 size_t    mi_dec_read(mi_dec_t *d, int16_t *stereo, size_t max_frames); /* <= MI_READ_FRAMES; 0 = end */
 void      mi_dec_close(mi_dec_t *d);

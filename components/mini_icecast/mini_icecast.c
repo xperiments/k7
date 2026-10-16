@@ -57,6 +57,15 @@ static struct {
     client_t           clients[MAX_CLIENTS];
     SemaphoreHandle_t  lock;
     char               title[TITLE_MAX + 1];
+    char               file[MINI_ICECAST_STATUS_FILE_MAX];
+    mi_fmt_t           cur_fmt;
+    uint32_t           cur_src_hz;
+    uint32_t           cur_total_ms;
+    uint32_t           library_count;
+    /* Audio broadcast from the current track. Written only by the broadcast task and
+     * read by mini_icecast_status(); an aligned 32-bit load or store is atomic on this
+     * core, so the reader needs no lock for it. At 44.1 kHz it holds 27 hours. */
+    uint32_t           track_frames;
     uint32_t           title_ver;
     volatile bool      skip;
     int64_t            t0;            /* pacing clock origin (us) */
@@ -291,11 +300,29 @@ static void set_title(const char *name, size_t n)
     xSemaphoreGive(S.lock);
 }
 
+/* A new track: its name, its container, and a reset progress. Called before the file
+ * is opened, so the display shows the name while the decoder is still working. */
+static void set_track(const char *name)
+{
+    size_t n = strlen(name);
+    const char *dot = strrchr(name, '.');
+    if (dot) n = (size_t)(dot - name);
+    set_title(name, n);
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    snprintf(S.file, sizeof S.file, "%s", name);
+    S.cur_fmt = mi_dec_format_of(name);
+    S.cur_src_hz = 0;      /* known once the decoder is open */
+    S.cur_total_ms = 0;
+    S.track_frames = 0;
+    xSemaphoreGive(S.lock);
+}
+
 /* Real-time pacing driven by the number of encoded frames sent (sample-exact):
  * one call per encoder frame, which is the unit actually transmitted. */
 static void pace(uint32_t frames)
 {
     S.played_frames += frames;
+    S.track_frames += frames;
     int64_t played_us = S.played_frames * 1000000 / S.cfg.out_hz;
     int64_t now = esp_timer_get_time() - S.t0;
     if (now - played_us > 1000000) { /* we starved (no files, card hiccup): rebase the clock */
@@ -372,7 +399,12 @@ static void stream_file(const char *path)
         mi_dec_close(d);
         return;
     }
-    ESP_LOGI(TAG, "now playing: %s (%u Hz -> %u Hz)", S.title, (unsigned)mi_dec_hz(d), (unsigned)S.cfg.out_hz);
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    S.cur_src_hz = mi_dec_hz(d);
+    S.cur_total_ms = mi_dec_duration_ms(d);
+    xSemaphoreGive(S.lock);
+    ESP_LOGI(TAG, "now playing: %s (%u Hz -> %u Hz, %u ms)", S.title, (unsigned)mi_dec_hz(d),
+             (unsigned)S.cfg.out_hz, (unsigned)S.cur_total_ms);
 
     static int16_t in[MI_READ_FRAMES * 2];
     size_t n;
@@ -408,11 +440,24 @@ static void broadcast_task(void *arg)
         } else if (d) {
             reported_missing = false;
         }
+        /* How many playable files there are, counted before playing them: a display
+         * wants to say "of N", and a pass that streams as it scans cannot know N until
+         * it has finished. A second readdir pass is cheap next to decoding one track. */
+        if (d) {
+            rewinddir(d);
+            uint32_t count = 0;
+            while ((e = readdir(d)))
+                if (is_audio(e->d_name)) count++;
+            rewinddir(d);
+            xSemaphoreTake(S.lock, portMAX_DELAY);
+            S.library_count = count;
+            xSemaphoreGive(S.lock);
+        }
         while (d && (e = readdir(d))) {
             if (!is_audio(e->d_name)) continue;
             char path[320];
             snprintf(path, sizeof path, "%s/%s", S.cfg.music_dir, e->d_name);
-            set_title(e->d_name, (size_t)(strrchr(e->d_name, '.') - e->d_name));
+            set_track(e->d_name);
             S.skip = false;
             stream_file(path);
             played++;
@@ -560,6 +605,25 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
 }
 
 void mini_icecast_skip(void) { S.skip = true; }
+
+void mini_icecast_status(mini_icecast_status_t *out)
+{
+    if (!out) return;
+    memset(out, 0, sizeof *out);
+    out->format = MI_FMT_NONE;
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    snprintf(out->title, sizeof out->title, "%s", S.title);
+    snprintf(out->file, sizeof out->file, "%s", S.file);
+    out->format = S.cur_fmt;
+    out->source_hz = S.cur_src_hz;
+    out->out_hz = S.cfg.out_hz;
+    out->bitrate = S.cfg.bitrate;
+    out->duration_ms = S.cur_total_ms;
+    out->library_count = S.library_count;
+    xSemaphoreGive(S.lock);
+    /* Read outside the lock on purpose: see the field's comment. */
+    if (S.cfg.out_hz) out->elapsed_ms = (uint32_t)((uint64_t)S.track_frames * 1000ULL / S.cfg.out_hz);
+}
 
 size_t mini_icecast_now_playing(char *out, size_t out_size)
 {
