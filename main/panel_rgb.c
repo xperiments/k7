@@ -34,6 +34,7 @@ static const gpio_num_t k_data_pins[16] = {
 
 static esp_lcd_panel_handle_t s_panel;
 static SemaphoreHandle_t s_vsync;
+static int s_vsync_misses;
 
 /* Signalled from the RGB peripheral's own interrupt when a frame has been sent. This is
  * what bounds how fast the interface can redraw: one frame at a time, no tearing. */
@@ -90,7 +91,12 @@ esp_lcd_panel_handle_t panel_rgb_start(void)
     }
     s_vsync = xSemaphoreCreateCounting(2, 0);
     esp_lcd_rgb_panel_event_callbacks_t cbs = { .on_vsync = on_vsync };
-    esp_lcd_rgb_panel_register_event_callbacks(s_panel, &cbs, NULL);
+    /* Checked, not assumed: IDF rejects an on_vsync callback it cannot place in IRAM, and
+     * without the callback the flush handshake below has nothing to wait for. */
+    esp_err_t cb_err = esp_lcd_rgb_panel_register_event_callbacks(s_panel, &cbs, NULL);
+    if (cb_err != ESP_OK)
+        ESP_LOGE(TAG, "the panel refused the vsync callback (%s): frames will not wait for it",
+                 esp_err_to_name(cb_err));
     ESP_ERROR_CHECK(esp_lcd_panel_reset(s_panel));
     ESP_ERROR_CHECK(esp_lcd_panel_init(s_panel));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(s_panel, true));
@@ -112,10 +118,20 @@ void panel_rgb_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
     if (lv_display_flush_is_last(disp)) {
         /* Pointing the panel at one of its own framebuffers switches to it rather than
          * copying. Waiting for the next vsync afterwards is what keeps LVGL from drawing
-         * into a buffer the panel is still reading. */
+         * into a buffer the panel is still reading - but the wait is bounded, because the
+         * alternative is a first flush that never returns and a screen that stays black
+         * with nothing in the log to say why. Three misses are logged; after that the
+         * interface simply draws without the handshake, which shows a torn frame rather
+         * than no frame at all. */
         esp_lcd_panel_draw_bitmap(s_panel, 0, 0, PANEL_W, PANEL_H, px);
-        xSemaphoreTake(s_vsync, 0);              /* drop a stale signal, if any */
-        xSemaphoreTake(s_vsync, portMAX_DELAY);  /* wait for this frame to finish */
+        xSemaphoreTake(s_vsync, 0);                       /* drop a stale signal, if any */
+        if (xSemaphoreTake(s_vsync, pdMS_TO_TICKS(100)) != pdTRUE) {
+            if (s_vsync_misses < 3) {
+                s_vsync_misses++;
+                ESP_LOGW(TAG, "no vsync within 100 ms (miss %d): drawing without the handshake",
+                         s_vsync_misses);
+            }
+        }
     }
     lv_display_flush_ready(disp);
 }

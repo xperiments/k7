@@ -266,6 +266,13 @@ void ui_start(void)
 #endif
 
     ui_cassette_create();
+    /* One synchronous refresh before the task starts: the panel is showing uninitialised
+     * memory until something is drawn into it, and this is the frame that fills it. It is
+     * the expensive one (the whole screen, artwork included); doing it here rather than in
+     * the task means the task's own first frame is an ordinary update. */
+    int64_t t_boot = esp_timer_get_time();
+    lv_refr_now(disp);
+    ESP_LOGI(TAG, "first full refresh drawn in %d ms", (int)((esp_timer_get_time() - t_boot) / 1000));
 
     ESP_LOGI(TAG, "screen %dx%d, framebuffer %u KB in PSRAM, LVGL holds %u B",
              UI_W, UI_H, (unsigned)(UI_FB_BYTES / 1024), (unsigned)ui_lvgl_held_bytes());
