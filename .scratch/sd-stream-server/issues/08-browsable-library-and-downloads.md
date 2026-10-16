@@ -1,0 +1,33 @@
+# 08 — The card's library is browsable and downloadable
+
+**What to build:** Opening the device's root address in a browser shows the library on the card —
+each track's name and size, and what the live stream is playing right now. Clicking a track
+downloads that track's original, unmodified bytes. Comparing the downloaded file with the file on
+the card shows them identical.
+
+Downloads deliberately do not match the live stream's format: the stream exists to be reachable by
+anything, while a download retrieves what the card actually holds. A client that wants the lossless
+original gets the lossless original.
+
+Two behaviours protect the live stream, because the broadcast and any download read from the same
+card: malformed or non-audio names are refused before touching the filesystem, and only one
+download may proceed at a time. A second simultaneous request is declined rather than queued, so
+the stream never stalls behind someone else's large file.
+
+**Blocked by:** 07 — The HTTP surface is separated from the broadcast.
+
+**Status:** ready-for-agent
+
+- [ ] Opening the root address lists every audio track in the music directory exactly — no extras, nothing missing — with each entry's size matching the file's real size.
+- [ ] The page states which track the live stream is currently playing.
+- [ ] A requested track is returned byte-identical to the file on the card. Verified with a byte comparison, on the host and on the board.
+- [ ] A returned file's length and media type are correct, so a client sees a download that can be resumed or sized rather than an endless response.
+- [ ] Names containing a path separator, containing a parent-directory reference, beginning with a dot, or carrying a non-audio extension are refused without any filesystem access. Requesting a parent-directory escape never returns file contents.
+- [ ] A second simultaneous download is declined with a service-unavailable response. The first download continues, and the live stream keeps playing without audible interruption.
+- [ ] The download path reads in bounded chunks and honours a send timeout, so a client that stops reading cannot hold the card indefinitely.
+- [ ] The card's decoder and the download path never access the card concurrently in an unserialised way.
+
+Spec: `docs/specs/sd-stream-server.md` §6.2 (I1–I3), §6.3 (R7a–R7d), §5 D5, D6, §7 (A1, A2), §9 T6, T7, T8, T9, T9b.
+Decision: ADR 0001.
+
+## Comments

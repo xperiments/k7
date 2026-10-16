@@ -1,0 +1,15 @@
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+# fine-grained pacing in the radio task (vTaskDelay at 1 ms resolution)
+CONFIG_FREERTOS_HZ=1000
+# PCM is 176 KB/s per client: give each socket room to ride out Wi-Fi hiccups,
+# and let the burst-on-connect drain quickly
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=32768
+CONFIG_LWIP_TCP_WND_DEFAULT=16384
+# long file names on the SD
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=128
+# the burst ring (88 KB) and resampler tables go to PSRAM when available
+# CONFIG_SPIRAM=y
+# CONFIG_SPIRAM_MODE_OCT=y
+# CONFIG_SPIRAM_USE_MALLOC=y
