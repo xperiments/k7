@@ -98,9 +98,20 @@ esp_lcd_panel_handle_t panel_rgb_start(void)
     if (cb_err != ESP_OK)
         ESP_LOGE(TAG, "the panel refused the vsync callback (%s): frames will not wait for it",
                  esp_err_to_name(cb_err));
-    ESP_ERROR_CHECK(esp_lcd_panel_reset(s_panel));
-    ESP_ERROR_CHECK(esp_lcd_panel_init(s_panel));
-    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(s_panel, true));
+    /* None of these reboots the firmware. The panel's optional controls answer
+     * ESP_ERR_NOT_SUPPORTED when the profile does not wire them - this board has no
+     * display-enable pin, so disp_on_off says exactly that - and treating an optional
+     * feature's absence as a fatal error is what turned a working panel into a boot loop
+     * and a black screen. They are reported and stepped over. */
+    esp_err_t perr = esp_lcd_panel_reset(s_panel);
+    if (perr != ESP_OK) ESP_LOGW(TAG, "panel reset: %s (continuing)", esp_err_to_name(perr));
+    perr = esp_lcd_panel_init(s_panel);
+    if (perr != ESP_OK) ESP_LOGW(TAG, "panel init: %s (continuing)", esp_err_to_name(perr));
+    perr = esp_lcd_panel_disp_on_off(s_panel, true);
+    if (perr == ESP_ERR_NOT_SUPPORTED)
+        ESP_LOGI(TAG, "no display-enable pin in the profile, so disp_on_off does nothing");
+    else if (perr != ESP_OK)
+        ESP_LOGW(TAG, "panel display on: %s (continuing)", esp_err_to_name(perr));
 
     /* The backlight is a plain GPIO on this board (profile: backlight.gpio 2, active
      * high), not one of the I/O expander's pins. */

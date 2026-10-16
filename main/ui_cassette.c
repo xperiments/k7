@@ -109,7 +109,11 @@ void ui_cassette_create(void)
         lv_image_set_src(w, &k_wheel);
         lv_obj_set_pos(w, k_window[i].x - WHEEL_PX / 2, k_window[i].y - WHEEL_PX / 2);
         lv_image_set_pivot(w, WHEEL_PX / 2, WHEEL_PX / 2);
-        lv_image_set_antialias(w, true);
+        /* Antialiasing off, deliberately: an antialiased transform of an RGB565A8 image
+         * is done per pixel in software, and two of them per frame cost seconds on this
+         * part - measured, not feared. A hub with hard edges turning at ten frames a
+         * second is worth far more than a smooth one that starves the network stack. */
+        lv_image_set_antialias(w, false);
         s_wheel[i] = w;
     }
     lv_obj_t *front = lv_image_create(scr);

@@ -19,5 +19,8 @@ CONFIG_SPIRAM_MODE_OCT=y
 # unverified until there is hardware to try it on - with the note that reaching it would
 # need the flash in OPI mode as well.
 CONFIG_SPIRAM_SPEED_80M=y
-CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+# DIO, not QIO: it is what the reference project uses on this board and what every build
+# flashed to it so far has used. A flash mode the chip cannot boot from is a board that
+# does not come up at all, which is a worse failure than a screen that stays dark.
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
