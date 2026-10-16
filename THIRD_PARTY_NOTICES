@@ -40,3 +40,29 @@ libshine's own dependencies
 --------------------------------------------------------------------------------
 shine links only against the C standard library and libm. It has no further
 third-party dependencies.
+
+--------------------------------------------------------------------------------
+LVGL - the UI toolkit
+--------------------------------------------------------------------------------
+Location      managed_components/lvgl__lvgl/, fetched by the ESP-IDF component
+              manager from the Espressif component registry at build time. It is
+              pinned in main/idf_component.yml and dependencies.lock rather than
+              vendored into this repository, which is how the registry expects a
+              component to be consumed.
+Version       9.6.0~1 (lvgl/lvgl), the v9 line: v8.4 reached end-of-life in
+              March 2025.
+Licence       MIT, plus the fonts it bundles. The full text is in the fetched
+              component (managed_components/lvgl__lvgl/LICENCE.txt), and the
+              bundled Montserrat font is under the SIL Open Font License 1.1
+              (LICENCE.txt alongside the font sources).
+Modifications none.
+
+LVGL's memory behaviour is part of this project's design rather than a default it
+inherited: LV_USE_CUSTOM_MALLOC routes every LVGL allocation through
+heap_caps_malloc_prefer(PSRAM first), implemented in main/ui_fit.c, so the UI's
+memory never competes with the internal RAM that Wi-Fi's DMA buffers need. See
+docs/research/radio-player-memory-and-lvgl.md.
+
+--------------------------------------------------------------------------------
+libshine's own dependencies
+--------------------------------------------------------------------------------

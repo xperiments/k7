@@ -638,6 +638,10 @@ or from structure fields. Nothing in the LVGL columns is measured on this board.
 
 ## 12. What to change
 
+> **Implemented (2026-10-16).** Option (C) is in the firmware; see §15 for the
+> measured results and for one correction to the reasoning above. The text below is
+> kept as the analysis that led to it.
+
 1. **Decide the threshold, because every other number hangs off it.** Lower
    `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL` to 4096: measured +7.6 % encoder CPU for +119 KB internal free
    and a 4× larger largest block. If that CPU is unacceptable, keep 131072 and take route (A) in §9 —
@@ -713,3 +717,59 @@ or from structure fields. Nothing in the LVGL columns is measured on this board.
   `https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/api-guides/external-ram.html`,
   `…/api-reference/system/mem_alloc.html`, `…/api-reference/system/freertos.html`,
   `…/api-reference/peripherals/spi_master.html` and `…/api-reference/peripherals/lcd/spi_lcd.html`.
+
+## 15. Implementation status: what (C) cost when it was built (2026-10-16)
+
+Option (C) is implemented: `SPIRAM_MALLOC_ALWAYSINTERNAL=4096`, LVGL 9.6.0~1 with
+`LV_USE_CUSTOM_MALLOC`, an explicit PSRAM draw buffer, `LV_USE_ASSERT_MALLOC=y`, and a
+startup fit check (`main/ui_fit.c`) that builds a representative screen, reports what
+it costs, and frees it. The decision record is `docs/adr/0004-ui-memory-is-external.md`.
+
+**One correction to §9, found by implementing it.** Option (B) as written — "lower
+`SPIRAM_MALLOC_ALWAYSINTERNAL` to ≤4096 and let the default allocator do the work …
+widgets then land in PSRAM by policy" — is wrong, and the code says why:
+`heap_caps_malloc_default()` prefers internal memory for anything **at or below** the
+threshold (`if (size <= (size_t)malloc_alwaysinternal_limit)`). At 4096, LVGL's
+widgets — tens to hundreds of bytes — would *still* ask internal first and fall through
+to PSRAM only on exhaustion, which is the silent behaviour §9 is about. Making the
+placement deterministic needs a threshold of **0**, which changes every small
+allocation in the system, or a custom allocator for LVGL. The implementation takes the
+allocator route, so (C) is (B)'s threshold change **plus** (A)'s mechanism for LVGL,
+not (B) plus PSRAM draw buffers alone.
+
+**What the board reports, with the broadcast running (measured):**
+
+```
+ui: before the UI:     internal 157787 B free (largest 81920 B), psram 7998472 B free
+ui: display 320x240 with a 25600 B partial draw buffer in PSRAM
+ui: LVGL: 123 objects hold 54276 B in 956 blocks (peak 56312 B), all of it PSRAM
+ui: with the UI:       internal 157787 B free (largest 81920 B), psram 7980304 B free
+ui: verdict: the UI's memory is external; internal RAM was the same before and after
+ui: after freeing it: the screen is gone, LVGL keeps 6188 B of its own state in 94 blocks
+```
+
+- **A 320×240 screen of 123 objects costs 54 276 B, in 956 allocations** — about 57 B
+  per allocation once block overhead is real. That is the figure §10 estimated from
+  struct sizes; it is now measured.
+- **Internal RAM does not move at all**: 157 787 B free and an 81 920 B largest block,
+  identical before, during and after. The Wi-Fi margin is untouched by a UI.
+- The screen's memory is returned when it is freed; the 6 188 B that remain are LVGL's
+  theme and style state, not leakage.
+- **The encoder's cost is unchanged at 44.6 % of one core** on the wire, against 44.5 %
+  before LVGL existed. The fit check runs once, in `app_main` on core 0, and does not
+  perturb the audio core. (Under simultaneous downloads the same measurement reads
+  43-49 % across runs: that is SD-bus contention, not the UI.)
+- **Flash**: the image grows from 1.04 MB to 1.28 MB, which is why the app partition is
+  now 4 MB (`partitions.csv`, 68 % free) instead of the 1.5 MB single-app layout. The
+  estimate in §10 that LVGL's flash cost had to be measured is resolved.
+- **The custom backend is nine symbols, not the four the first attempt assumed**:
+  `lv_mem_init`, `lv_mem_deinit`, `lv_mem_add_pool`, `lv_mem_remove_pool`,
+  `lv_malloc_core`, `lv_realloc_core`, `lv_free_core`, `lv_mem_monitor_core`,
+  `lv_mem_test_core`. `src/stdlib/clib/lv_mem_core_clib.c` is the shape to copy;
+  omitting `lv_mem_init` produces `undefined reference to lv_mem_init` at link time.
+
+**Still to do when the real interface lands** (§10, §13): pin the LVGL task to core 1's
+opposite — core 0 — at a priority below the encoder's 6 and the HTTP workers' 5; decide
+the panel and its DMA path (`SPI_TRANS_DMA_USE_PSRAM` on 6.1, so the draw buffer can
+stay in PSRAM); and set a font budget deliberately, since fonts are the flash cost that
+grows fastest.

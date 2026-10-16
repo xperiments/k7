@@ -21,3 +21,8 @@ void  *heap_caps_malloc(size_t size, uint32_t caps);
 void  *heap_caps_calloc(size_t n, size_t size, uint32_t caps);
 void   heap_caps_free(void *p);
 size_t heap_caps_get_free_size(uint32_t caps);
+/* The largest single free block, which on the target is the number that decides
+ * whether a contiguous request such as Wi-Fi's receive buffers can be met at all.
+ * The host has no such constraint, so its shim reports the free total: the point of
+ * the host tier is behaviour, not the target's memory map. */
+size_t heap_caps_get_largest_free_block(uint32_t caps);

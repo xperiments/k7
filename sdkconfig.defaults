@@ -13,7 +13,10 @@ CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 # 1.5 MB application partition rather than the 1 MB default: the firmware is
 # about 0.95 MB with the Wi-Fi stack linked in.
-CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+# A 4 MB application partition (partitions.csv) instead of the 1.5 MB single-app
+# layout: 16 MB of flash, no OTA, and a UI to fit.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 # Fine-grained pacing in the radio task (vTaskDelay at 1 ms resolution).
 CONFIG_FREERTOS_HZ=1000
@@ -35,13 +38,38 @@ CONFIG_SPIRAM_SPEED_80M=y
 # encoder's state.
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 # Allocations up to this size prefer internal RAM. The encoder allocates its own
-# 95 KB of state with calloc(), and that state is its hottest working set (a 40 KB
-# lookup table plus the MDCT and subband tables); with the default 16 KB threshold
-# it lands in PSRAM, where every access can miss the shared cache - measured, that
-# cost 8 ms per encoder frame. This cannot be redirected from our side without
-# modifying the vendored encoder, so the heap policy is what keeps it internal.
-# Kconfig caps this at 131072, which is just above the 95 880 B the encoder needs.
-CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=131072
+# This threshold is the size below which an allocation asks internal RAM first,
+# falling back to PSRAM silently (heap_caps_malloc_default, heap_caps.c). It is set
+# low - small enough that no large buffer is pulled internal by accident - because
+# the internal heap is the resource that decides whether Wi-Fi can start at all:
+# esp_wifi_init() wants about 25 KB of *contiguous* DMA-capable internal RAM, and a
+# 100 KB encoder state allocated first made it fail outright ("wifi:malloc buffer
+# fail", then an abort and a reboot loop).
+#
+# The vendored encoder's 95 KB of state therefore lives in PSRAM now, at a measured
+# cost of 7.6% of encoder throughput - 41.4% to 44.5% of one core - which is the
+# price of the internal margin the rest of the system needs. In exchange the largest
+# single free internal block goes from 18 432 B to 77 824 B and internal free memory
+# from about 35 KB to about 155 KB. Keeping the state internal instead is possible by
+# raising this to 131072 (Kconfig's maximum, just above the 95 880 B it needs), and
+# that is the lever to reach for if encoder cost ever matters more than headroom.
+# See docs/research/radio-player-memory-and-lvgl.md.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
+
+# ------------------------------------------------------------------------ LVGL
+# The UI's memory comes from PSRAM because this project says so, not because the
+# default allocator happened to fall through to it:
+#   - LV_USE_CUSTOM_MALLOC routes LVGL through heap_caps_malloc_prefer(PSRAM first),
+#     implemented in main/ui_fit.c. Without it LVGL's many small allocations prefer
+#     *internal* RAM (heap_caps_malloc_default) and silently fall back to PSRAM when
+#     it runs out, which quietly spends the margin Wi-Fi needs.
+#   - LV_USE_ASSERT_MALLOC turns a failed allocation into a diagnostic instead of a
+#     null dereference somewhere later.
+#   - CLIB string functions instead of LVGL's own copies, for flash.
+CONFIG_LV_USE_CUSTOM_MALLOC=y
+CONFIG_LV_USE_ASSERT_MALLOC=y
+CONFIG_LV_USE_CLIB_STRING=y
+CONFIG_LV_COLOR_DEPTH_16=y
 
 # ----------------------------------------------------------------------- lwIP
 # MP3 at 128 kbps is 16 KB/s per client, but a burst on connect is sent at once:

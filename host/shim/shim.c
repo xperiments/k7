@@ -115,6 +115,11 @@ size_t heap_caps_get_free_size(uint32_t caps)
     return (caps & MALLOC_CAP_SPIRAM) ? HOST_SPIRAM_FREE : HOST_INTERNAL_FREE;
 }
 
+/* Deliberately the same figure as get_free_size(): the host's heap is not a model of
+ * the target's, and a fabricated "largest block" would be worse than an honest
+ * non-answer. Nothing on this tier acts on it. */
+size_t heap_caps_get_largest_free_block(uint32_t caps) { return heap_caps_get_free_size(caps); }
+
 /* --------------------------------------------------------------------- tasks */
 
 struct host_task {

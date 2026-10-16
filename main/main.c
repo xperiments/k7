@@ -381,6 +381,17 @@ void app_main(void)
     gpio_config(&io);
 
     for (;;) {
+#if CONFIG_APP_UI_FIT_CHECK
+        /* Once, ten seconds in, while the broadcast is running: what an LVGL screen
+         * costs on this board, and whether internal RAM notices. */
+        { static bool checked;
+          if (!checked && xTaskGetTickCount() > pdMS_TO_TICKS(10000)) {
+              checked = true;
+              extern void ui_fit_check(void);
+              ui_fit_check();
+          } }
+#endif
+
         char title[121];
         mini_icecast_now_playing(title, sizeof title);
         ESP_LOGI(TAG, "%-40.40s  L %3d%%  R %3d%%", title, (int)(level_l * 100), (int)(level_r * 100));

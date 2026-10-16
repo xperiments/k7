@@ -1,0 +1,15 @@
+menu "SD stream server"
+
+config APP_UI_FIT_CHECK
+    bool "Run the UI memory fit check at startup"
+    default y
+    help
+        Creates a throwaway LVGL screen once the services are running, reports what
+        its memory cost and where it came from, then frees it. It exists to prove
+        that the interface's memory is external by construction and that internal
+        RAM is untouched - the margin Wi-Fi needs for its contiguous DMA buffers.
+        When the real interface replaces main/ui_fit.c, this option goes with it.
+
+        See docs/research/radio-player-memory-and-lvgl.md.
+
+endmenu

@@ -440,8 +440,13 @@ static void telemetry_task(void *arg)
         double frame_us = 1000000.0 * (double)mi_enc_samples_per_frame(S.enc) / (double)S.cfg.out_hz;
         ESP_LOGI(TAG, "encoder: %" PRIu64 " frames, %.0f us/frame = %.1f%% of one core",
                  frames, per_frame, frame_us > 0 ? 100.0 * per_frame / frame_us : 0.0);
-        ESP_LOGI(TAG, "memory: internal %u B free, external %u B free; starvation rebases %" PRIu32,
+        /* The largest single free block is reported next to the free total because
+         * it is the number that actually constrains this firmware: esp_wifi_init()
+         * needs roughly 25 KB of contiguous DMA-capable internal RAM, and a
+         * fragmented heap with plenty free can still fail to produce it. */
+        ESP_LOGI(TAG, "memory: internal %u B free (largest block %u B), external %u B free; starvation rebases %" PRIu32,
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), S.rebases);
         /* The other half of fit: how much stack the deepest tasks have left. */
         ESP_LOGI(TAG, "stack headroom: broadcast %u B, worst connection %u B",

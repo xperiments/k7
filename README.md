@@ -663,6 +663,44 @@ The GPL-3.0 encoder port sometimes suggested for the ESP32
 (`fknrdcls/mp3_shine_esp32`) is deliberately **not** used anywhere: it would impose
 GPL on the whole project.
 
+## The UI's memory, decided in advance
+
+An LVGL interface is the next thing this firmware grows, and the memory for it is
+already arranged and measured rather than left to the default allocator. The decision
+is `docs/adr/0004-ui-memory-is-external.md`; the numbers behind it are
+`docs/research/radio-player-memory-and-lvgl.md`.
+
+What the board reports, at startup, with the broadcast running:
+
+```
+ui: before the UI:     internal 157787 B free (largest 81920 B), psram 7998472 B free
+ui: display 320x240 with a 25600 B partial draw buffer in PSRAM
+ui: LVGL: 123 objects hold 54276 B in 956 blocks (peak 56312 B), all of it PSRAM
+ui: with the UI:       internal 157787 B free (largest 81920 B), psram 7980304 B free
+ui: verdict: the UI's memory is external; internal RAM was the same before and after
+ui: after freeing it: the screen is gone, LVGL keeps 6188 B of its own state ...
+```
+
+Three things make that true, and the second is the one that is easy to get wrong:
+
+1. **`SPIRAM_MALLOC_ALWAYSINTERNAL` is 4096**, so the encoder's 95 KB of state lives in
+   PSRAM instead of internal RAM. That is the +7.6 % of encoder cost described above,
+   paid for a largest free internal block of 81 920 B instead of 18 432 B.
+2. **LVGL gets an explicit PSRAM allocator** (`LV_USE_CUSTOM_MALLOC`, implemented in
+   `main/ui_fit.c`). Lowering the threshold alone does not do this:
+   `heap_caps_malloc_default()` prefers internal memory for anything *at or below* the
+   threshold, so at 4096 every widget would still ask internal first and fall through to
+   PSRAM only when internal ran out — silently, which is exactly the failure mode that
+   rebooted this device once. Routing LVGL through
+   `heap_caps_malloc_prefer(PSRAM first)` makes the placement a decision.
+3. **The draw buffer is allocated from PSRAM explicitly**, and `LV_USE_ASSERT_MALLOC` is
+   on so a genuine failure is a diagnostic rather than a null dereference later.
+
+The image grew from 1.04 MB to 1.28 MB, so the app partition is 4 MB now
+(`partitions.csv`, 68 % free) rather than the 1.5 MB single-app layout. LVGL is a
+fetched dependency pinned by `main/idf_component.yml` and `dependencies.lock`; the host
+tier compiles only the server components and never sees it.
+
 ## The internal-RAM picture
 
 Worth stating plainly, because it constrains everything added on top of this

@@ -1,7 +1,7 @@
-idf_component_register(SRCS "main.c"
+idf_component_register(SRCS "main.c" "ui_fit.c"
                        INCLUDE_DIRS "."
                        REQUIRES esp_driver_gpio esp_driver_sdmmc esp_driver_sdspi esp_driver_spi fatfs nvs_flash
-                                esp_wifi esp_netif esp_event spi_flash esp_psram
+                                esp_wifi esp_netif esp_event spi_flash esp_psram esp_timer
                                 http_server mini_icecast mini_files)
 
 # main.c reaches the credentials with __has_include(), which does not appear in the

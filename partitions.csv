@@ -1,0 +1,8 @@
+# The board has 16 MB of flash and a UI makes the app much larger than the server
+# alone, so the app gets 4 MB rather than the 1.5 MB that
+# PARTITION_TABLE_SINGLE_APP_LARGE allows. There is no OTA slot: this firmware is
+# flashed over USB.
+# Name,   Type, SubType, Offset,  Size, Flags
+nvs,      data, nvs,     0x9000,  0x6000,
+phy_init, data, phy,     0xf000,  0x1000,
+factory,  app,  factory, 0x10000, 4M,

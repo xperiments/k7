@@ -7,8 +7,11 @@ build*/
 build/
 sdkconfig
 sdkconfig.old
+# Fetched dependencies. The sources are downloaded by the component manager, but the
+# lock file is committed: it is what makes the resolution reproducible, and LVGL's
+# memory behaviour is part of this project's design.
 managed_components/
-dependencies.lock
+!dependencies.lock
 
 # Host build output
 host/build/
