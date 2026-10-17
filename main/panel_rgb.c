@@ -162,8 +162,17 @@ esp_lcd_panel_handle_t panel_rgb_start(void)
 
 void panel_rgb_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
 {
-    (void)area;
+    (void)area; (void)px;
     if (lv_display_flush_is_last(disp)) {
+        /* The RGB driver scans a whole framebuffer out; it does not copy an area. So what
+         * it needs is the buffer LVGL is drawing into, not the pointer it hands over:
+         * LVGL's own documentation says `px_map` is the rendered image *of `area`*, which
+         * is a pointer into the middle of the buffer. Handing that over as if it were the
+         * start of an 800x480 framebuffer is a shifted, wrapped, doubled picture - exactly
+         * what the panel showed the first time it lit. */
+        lv_draw_buf_t *active = lv_display_get_buf_active(disp);
+        if (!active) { lv_display_flush_ready(disp); return; }
+        px = active->data;
         /* Pointing the panel at one of its own framebuffers switches to it rather than
          * copying. Waiting for the next vsync afterwards is what keeps LVGL from drawing
          * into a buffer the panel is still reading - but the wait is bounded, because the
