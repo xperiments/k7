@@ -29,8 +29,7 @@
 /* Build the screen and start updating it. Called once, after the services are up. */
 void ui_start(void);
 
-/* LVGL's flush hook. With an RGB panel the framebuffer *is* the display, so there is
- * nothing to copy out; with no panel this marks the buffer ready and nothing more. */
+/* LVGL's flush hook for the headless path: with no panel there is nothing to copy out. */
 void ui_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px);
 
 /* The cassette screen: created once, then updated from a status snapshot. */

@@ -24,3 +24,17 @@ CONFIG_SPIRAM_SPEED_80M=y
 # does not come up at all, which is a worse failure than a screen that stays dark.
 CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# From the reference project's own defaults for this board, where they are part of a
+# configuration that is known to drive this panel correctly:
+#   - LCD_RGB_RESTART_IN_VSYNC off. Its comment in that project is the clearest statement
+#     of what this project got wrong: on the S3 the driver builds the restart link from
+#     framebuffer zero and never moves it to the framebuffer the panel switches to, so a
+#     forced restart sends the framebuffer LVGL did not just draw "and the panel shows half
+#     of the drawn frames". ESP-IDF ships it off; this states it rather than leaving it to
+#     a default.
+#   - instructions and rodata from PSRAM, which is how that build frees internal RAM for
+#     everything else on a board whose interface, engine and card all want it.
+# CONFIG_LCD_RGB_RESTART_IN_VSYNC is not set
+CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
+CONFIG_SPIRAM_RODATA=y

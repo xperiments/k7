@@ -28,7 +28,7 @@
 #include "ui.h"
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-#include "esp_lcd_panel_rgb.h"   /* esp_lcd_rgb_panel_get_frame_buffer */
+#include "esp_lvgl_port.h"
 #include "panel_rgb.h"
 #endif
 
@@ -192,11 +192,22 @@ static void ui_task(void *arg)
 
         mini_icecast_status_t st;
         mini_icecast_status(&st);
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+        /* The port owns LVGL and runs lv_timer_handler() in its own task, so updates from
+         * here take its lock and nothing more. */
+        if (lvgl_port_lock(20)) {
+            ui_cassette_update(&st);
+            lvgl_port_unlock();
+        }
+#else
         ui_cassette_update(&st);
+#endif
         if ((int)st.elapsed_ms != last_elapsed) last_elapsed = (int)st.elapsed_ms;
 
         int64_t t0 = esp_timer_get_time();
+#if !CONFIG_APP_BOARD_SUNTON_8048S050C
         lv_timer_handler();
+#endif
         int frame_ms = (int)((esp_timer_get_time() - t0) / 1000);
         /* What a frame costs decides the cadence below, and the first one also draws the
          * whole screen - the cassette image included - which decides whether the
@@ -229,23 +240,17 @@ void ui_start(void)
     size_t internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     size_t largest_before = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 
-    lv_init();
-    lv_tick_set_cb(tick_ms);
-
-    lv_display_t *disp = lv_display_create(UI_W, UI_H);
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The draw buffers are the panel's own two framebuffers, in PSRAM, and the panel
-     * scans them out: nothing is copied anywhere. Direct mode with a full-screen buffer
-     * is what an RGB panel wants. */
-    esp_lcd_panel_handle_t panel = panel_rgb_start();
-    void *fb0 = NULL, *fb1 = NULL;
-    if (!panel || esp_lcd_rgb_panel_get_frame_buffer(panel, 2, &fb0, &fb1) != ESP_OK) {
-        ESP_LOGE(TAG, "no panel framebuffers; the screen will stay dark");
+    /* lvgl_port_init() calls lv_init() itself, and ticks come from the port's own task. */
+    lv_display_t *disp = panel_rgb_start();
+    if (!disp) {
+        ESP_LOGE(TAG, "the panel path did not come up; the screen will stay dark");
         return;
     }
-    lv_display_set_buffers(disp, fb0, fb1, UI_FB_BYTES, LV_DISPLAY_RENDER_MODE_DIRECT);
-    lv_display_set_flush_cb(disp, panel_rgb_flush_cb);
 #else
+    lv_init();
+    lv_tick_set_cb(tick_ms);
+    lv_display_t *disp = lv_display_create(UI_W, UI_H);
     /* No panel: a framebuffer this file owns. Still PSRAM, because it is far larger than
      * anything internal RAM could hold, and because the production board's buffers are
      * there too - the point is to exercise the same arrangement. */
@@ -265,14 +270,32 @@ void ui_start(void)
     lv_display_set_flush_cb(disp, ui_flush_cb);
 #endif
 
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The port's task is already running lv_timer_handler() by now, so building the screen
+     * outside its lock is two tasks inside LVGL at once - which draws the interface twice,
+     * at different offsets, into a buffer the panel is scanning. Everything LVGL-related in
+     * this function happens under the lock. */
+    if (!lvgl_port_lock(1000)) {
+        ESP_LOGE(TAG, "the LVGL port did not give its lock; no screen");
+        return;
+    }
+#endif
     ui_cassette_create();
-    /* One synchronous refresh before the task starts: the panel is showing uninitialised
-     * memory until something is drawn into it, and this is the frame that fills it. It is
-     * the expensive one (the whole screen, artwork included); doing it here rather than in
-     * the task means the task's own first frame is an ordinary update. */
+#if !CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* Without a port there is no task to draw for us, so this one frame is forced here:
+     * the screen must not be left showing uninitialised memory. With the port this must
+     * NOT be done - forcing a refresh bypasses the port's framebuffer switch, and the
+     * picture lands in a buffer the panel never scans. That is exactly why the panel kept
+     * showing the old contents while the cassette was drawn out of sight. */
     int64_t t_boot = esp_timer_get_time();
     lv_refr_now(disp);
-    ESP_LOGI(TAG, "first full refresh drawn in %d ms", (int)((esp_timer_get_time() - t_boot) / 1000));
+    lv_obj_invalidate(lv_screen_active());
+    lv_refr_now(disp);
+    ESP_LOGI(TAG, "both framebuffers filled in %d ms", (int)((esp_timer_get_time() - t_boot) / 1000));
+#endif
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    lvgl_port_unlock();
+#endif
 
     ESP_LOGI(TAG, "screen %dx%d, framebuffer %u KB in PSRAM, LVGL holds %u B",
              UI_W, UI_H, (unsigned)(UI_FB_BYTES / 1024), (unsigned)ui_lvgl_held_bytes());
