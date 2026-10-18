@@ -443,7 +443,7 @@ host result transfers.
 
 | # | Phase | Method | Runs on | Pass condition |
 |---|---|---|---|---|
-| T1 | Vendor `shine` | Host unit test: a `main()` built with the host compiler, or a Unity test in `components/shine/test/`, asserting `shine_check_config(44100,128)==3`, `shine_check_config(8000,128)==-1`, `shine_samples_per_pass()==1152`, `sizeof(shine_global_config)==95896`, and 100 encoded frames == 41 796 bytes | **host only** | Exact values match §4.1 — the probes in §13.1/§13.2 are the reference implementation |
+| T1 | Vendor `shine` | Host unit test: a `main()` built with the host compiler, or a Unity test in `components/portable/shine/test/`, asserting `shine_check_config(44100,128)==3`, `shine_check_config(8000,128)==-1`, `shine_samples_per_pass()==1152`, `sizeof(shine_global_config)==95896`, and 100 encoded frames == 41 796 bytes | **host only** | Exact values match §4.1 — the probes in §13.1/§13.2 are the reference implementation |
 | T2 | Encoder harness | Host unit test: 2620 chunks of 1024 frames (= 2 682 880 frames) through the accumulator; assert every `broadcast()` call receives whole MP3 frames and total bytes == expected | **both** | No partial frames, no dropped frames at the 1024→1152 boundary |
 | T2b | End-of-track flush (E5) | Host unit test: feed a file with a deliberately non-multiple-of-1152 frame count, then flush; assert the tail is neither dropped nor double-encoded | **both** | Output frames == `ceil(frames / 1152)`; residual padded with silence, not lost |
 | T2c | Resampler guard (D4) | Host unit test: `mi_rs_new(44100, 1000)` and `mi_rs_new(48000, 3000)` | **host only** | Return `NULL` with a diagnostic; no out-of-bounds write. Board reruns it as T2c too, to prove the padded frame survives on-device |

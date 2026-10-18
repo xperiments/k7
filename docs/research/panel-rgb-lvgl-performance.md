@@ -705,9 +705,9 @@ task runs at **priority 18** with no affinity (`CONFIG_LWIP_TCPIP_TASK_PRIO=18`,
 `CONFIG_LWIP_TCPIP_TASK_AFFINITY_NO_AFFINITY=y`, affinity `0x7FFFFFFF`) — all in `sdkconfig.sunton`.
 
 Core 1 carries the encoder and the HTTP server: `ice_broadcast` at **priority 6** and `ice_telem` at
-priority 3, both pinned to core 1 (`components/mini_icecast/mini_icecast.c:597-598`), and the four
+priority 3, both pinned to core 1 (`components/portable/mini_icecast/mini_icecast.c:597-598`), and the four
 connection workers plus the accept task at **priority 5** on core 1
-(`components/http_server/http_server.c:426-431`). The encoder's measured share is 44.6 % of one core
+(`components/portable/http_server/http_server.c:426-431`). The encoder's measured share is 44.6 % of one core
 (`docs/adr/0004-ui-memory-is-external.md:42`, and `radio-player-memory-and-lvgl.md:758-761`).
 
 The arithmetic that follows is the point: a priority-4 task is preempted by anything at priority 5 or

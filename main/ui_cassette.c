@@ -16,7 +16,7 @@
  *
  * This file is the adapter: it owns positions, fonts, diameters and LVGL objects. What
  * the screen should show - reel advance, pack fill, progress, the cleaned label - is
- * components/cassette, which the host tier can test. Nothing here re-derives any of it.
+ * components/portable/cassette, which the host tier can test. Nothing here re-derives any of it.
  */
 #include <math.h>
 

@@ -22,5 +22,5 @@ SOFTWARE.
 
 --------------------------------------------------------------------------
 This licence covers this project's own code. The vendored MP3 encoder in
-components/shine/ is LGPL-2.0-only and is NOT covered by the above; see
+components/portable/shine/ is LGPL-2.0-only and is NOT covered by the above; see
 THIRD_PARTY_NOTICES and LICENSES/LGPL-2.0.txt.

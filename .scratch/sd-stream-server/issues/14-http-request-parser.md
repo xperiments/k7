@@ -29,10 +29,10 @@ Extract the rules into the http_server interface as pure functions:
 - [ ] `http_server.c` no longer contains a request parser.
 - [ ] Host unit tests and the integration suite pass.
 
-**Files:** `components/http_server/http_parse.c` (new),
-`components/http_server/include/http_parse.h` (new),
-`components/http_server/http_server.c`,
-`components/http_server/include/http_server.h`,
+**Files:** `components/portable/http_server/http_parse.c` (new),
+`components/portable/http_server/include/http_parse.h` (new),
+`components/portable/http_server/http_server.c`,
+`components/portable/http_server/include/http_server.h`,
 `host/tests/t08_http_parse.c` (new), `host/Makefile`.
 
 **Note on the route callback type:** `http_route_t` carries the public `http_route_fn`, so

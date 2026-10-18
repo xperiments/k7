@@ -1,10 +1,12 @@
 # Host build for macOS.
 #
-# This target compiles the SAME component sources the firmware compiles, in the
-# same files, against host/include instead of ESP-IDF. It may add files (the
-# shim, the host main, the test mains); it may not fork a component. There is no
-# target conditional compilation anywhere in components/ - the shim is the only
-# thing that knows it is a Mac.
+# This target compiles the SAME portable component sources the firmware compiles,
+# in the same files, against host/include instead of ESP-IDF. It may add files (the
+# shim, the host main, the test mains); it may not fork a component. The app/
+# components (the screen display, and later the entry policy and the board adapter)
+# are firmware-only; host/tests/layering.sh H3 checks that none of them is compiled
+# here. There is no target conditional compilation anywhere in components/ - the shim
+# is the only thing that knows it is a Mac.
 #
 #   make -C host            build the runnable server
 #   make -C host test       build and run the unit tests (no board, no network)
@@ -26,43 +28,44 @@ CFLAGS += -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wno-gnu-zero-variadic-
 LDLIBS := -lpthread -lm
 
 INC := -I$(HERE)/include \
-       -I$(ROOT)/components/http_server/include \
-       -I$(ROOT)/components/mini_icecast/include \
-       -I$(ROOT)/components/mini_files/include \
-       -I$(ROOT)/components/cassette/include \
-       -I$(ROOT)/components/app_services/include \
-       -I$(ROOT)/components/dr_libs/include \
-       -I$(ROOT)/components/shine/src/lib \
+       -I$(ROOT)/components/portable/http_server/include \
+       -I$(ROOT)/components/portable/mini_icecast/include \
+       -I$(ROOT)/components/portable/mini_files/include \
+       -I$(ROOT)/components/portable/cassette/include \
+       -I$(ROOT)/components/portable/app_services/include \
+       -I$(ROOT)/components/portable/app_board/include \
+       -I$(ROOT)/components/portable/dr_libs/include \
+       -I$(ROOT)/components/portable/shine/src/lib \
        -I$(HERE) \
        -I$(HERE)/tests
 
-SHINE_SRC := $(wildcard $(ROOT)/components/shine/src/lib/*.c)
+SHINE_SRC := $(wildcard $(ROOT)/components/portable/shine/src/lib/*.c)
 SHINE_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(SHINE_SRC)))
 
-# The production sources. The firmware target compiles exactly these files.
+# The production sources. The firmware target compiles these portable files too.
 PROD_SRC := \
-  $(ROOT)/components/http_server/http_server.c \
-  $(ROOT)/components/http_server/http_parse.c \
-  $(ROOT)/components/mini_icecast/mini_icecast.c \
-  $(ROOT)/components/mini_icecast/mi_station.c \
-  $(ROOT)/components/mini_icecast/mi_burst.c \
-  $(ROOT)/components/mini_icecast/mi_icy.c \
-  $(ROOT)/components/mini_icecast/mi_ring.c \
-  $(ROOT)/components/mini_icecast/mi_encode.c \
-  $(ROOT)/components/mini_icecast/mi_decode.c \
-  $(ROOT)/components/mini_icecast/mi_resample.c \
-  $(ROOT)/components/mini_files/mini_files.c \
-  $(ROOT)/components/mini_files/music_dir.c \
-  $(ROOT)/components/cassette/cassette.c \
-  $(ROOT)/components/app_services/app_services.c \
+  $(ROOT)/components/portable/http_server/http_server.c \
+  $(ROOT)/components/portable/http_server/http_parse.c \
+  $(ROOT)/components/portable/mini_icecast/mini_icecast.c \
+  $(ROOT)/components/portable/mini_icecast/mi_station.c \
+  $(ROOT)/components/portable/mini_icecast/mi_burst.c \
+  $(ROOT)/components/portable/mini_icecast/mi_icy.c \
+  $(ROOT)/components/portable/mini_icecast/mi_ring.c \
+  $(ROOT)/components/portable/mini_icecast/mi_encode.c \
+  $(ROOT)/components/portable/mini_icecast/mi_decode.c \
+  $(ROOT)/components/portable/mini_icecast/mi_resample.c \
+  $(ROOT)/components/portable/mini_files/mini_files.c \
+  $(ROOT)/components/portable/mini_files/music_dir.c \
+  $(ROOT)/components/portable/cassette/cassette.c \
+  $(ROOT)/components/portable/app_services/app_services.c \
   $(SHINE_SRC)
 
-vpath %.c $(ROOT)/components/http_server \
-          $(ROOT)/components/mini_icecast \
-          $(ROOT)/components/mini_files \
-          $(ROOT)/components/cassette \
-          $(ROOT)/components/app_services \
-          $(ROOT)/components/shine/src/lib \
+vpath %.c $(ROOT)/components/portable/http_server \
+          $(ROOT)/components/portable/mini_icecast \
+          $(ROOT)/components/portable/mini_files \
+          $(ROOT)/components/portable/cassette \
+          $(ROOT)/components/portable/app_services \
+          $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
 
 CORE_OBJ := $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(SHINE_OBJ) $(OBJ)/shim.o

@@ -3,7 +3,7 @@
  *
  * Everything here is board-specific and moves as one: the pin map, the Wi-Fi
  * credentials, the retry-safe SPI bus setup, and the mount diagnostics. The
- * services composition (components/app_services) calls the four functions in
+ * services composition (components/portable/app_services) calls the four functions in
  * app_board.h and knows none of it. The host build has the other adapter.
  */
 #include <stdio.h>

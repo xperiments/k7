@@ -49,8 +49,8 @@ the worst-case download. The connection and the audio survive; the pacing clock 
       are a decoded-audio read-ahead buffer so an SD stall does not immediately starve the
       encoder, a slower download ceiling, or the documented lower station rate.
 
-**Files:** `components/mini_icecast/mini_icecast.c` (lag, client send),
-`components/mini_files/mini_files.c` (download backoff), `host/tests/board_soak.sh`.
+**Files:** `components/portable/mini_icecast/mini_icecast.c` (lag, client send),
+`components/portable/mini_files/mini_files.c` (download backoff), `host/tests/board_soak.sh`.
 
 **Evidence:** the board logs and soak scripts are transient; the numbers above are from
 the 2026-10-18 runs on the Sunton (192.168.0.44), station 44.1 kHz / 256 kbps.

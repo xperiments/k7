@@ -30,9 +30,9 @@ render markup. Trailing-slash directories are handled in one place.
 - [ ] UTF-8 names, awkward names and over-long names are covered by a test table.
 - [ ] Host unit tests and the integration suite pass.
 
-**Files:** `components/mini_files/include/music_dir.h` (new),
-`components/mini_files/music_dir.c` (new),
-`components/mini_files/mini_files.c`, `host/tests/t09_music_dir.c` (new),
+**Files:** `components/portable/mini_files/include/music_dir.h` (new),
+`components/portable/mini_files/music_dir.c` (new),
+`components/portable/mini_files/mini_files.c`, `host/tests/t09_music_dir.c` (new),
 `host/Makefile`.
 
 **Tests:** t09 uses `mkdtemp` with a mix of accepted and refused names, including

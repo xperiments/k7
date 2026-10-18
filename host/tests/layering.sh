@@ -26,14 +26,14 @@ printf '\nS1/S3  the broadcast component owns no socket, no parsing and no marku
 # specification asks for the /stream hand-off to work exactly as it did before the
 # extraction. What it must not do is listen, read or parse requests, route, or
 # render pages.
-for f in "$ROOT"/components/mini_icecast/*.c "$ROOT"/components/mini_icecast/include/*.h; do
+for f in "$ROOT"/components/portable/mini_icecast/*.c "$ROOT"/components/portable/mini_icecast/include/*.h; do
     absent "$f" 'listen\(|accept\(|recv\(|socket\(' 'no sockets: '"$(basename "$f")"
     absent "$f" 'strcasestr|strstr\(buf|Icy-MetaData:' 'no request parsing: '"$(basename "$f")"
     absent "$f" '<html|<body|<h1>|href=' 'no markup: '"$(basename "$f")"
 done
 
 printf '\nS4  the HTTP component knows nothing about audio or files\n'
-for f in "$ROOT"/components/http_server/*.c "$ROOT"/components/http_server/include/*.h; do
+for f in "$ROOT"/components/portable/http_server/*.c "$ROOT"/components/portable/http_server/include/*.h; do
     absent "$f" '#include.*(mi_decode|mi_encode|mi_resample|mini_icecast|mini_files)' 'includes no audio or file header: '"$(basename "$f")"
     absent "$f" '(mini_icecast|mini_files|mi_encode|mi_decode|mi_resample)_' 'calls nothing in those components: '"$(basename "$f")"
     absent "$f" 'music_dir|\.mp3|\.flac|now_playing' 'no library concepts: '"$(basename "$f")"
@@ -44,9 +44,11 @@ users=$(grep -rl 'mini_files\.h' "$ROOT/components" "$ROOT/main" 2>/dev/null | g
 for f in $users; do
     case "$f" in
     */main/*) printf '  ok    %s may depend on mini_files (the appliance)\n' "$(basename "$f")" ;;
-    */app_services/*)
+    */portable/app_services/*)
         printf '  ok    %s may depend on mini_files (the composition module is the application layer, moved)\n' \
                "$(basename "$f")" ;;
+    */app/*)
+        printf '  ok    %s may depend on mini_files (an app-only module)\n' "$(basename "$f")" ;;
     *)
         printf '  FAIL  %s depends on mini_files\n' "$f"
         fail=1
@@ -57,7 +59,7 @@ done
 
 printf '\nS3  the broadcast keeps exactly its documented surface\n'
 for sym in mini_icecast_start mini_icecast_skip mini_icecast_now_playing mini_icecast_register_client; do
-    if grep -q "$sym" "$ROOT/components/mini_icecast/include/mini_icecast.h"; then
+    if grep -q "$sym" "$ROOT/components/portable/mini_icecast/include/mini_icecast.h"; then
         printf '  ok    %s is public\n' "$sym"
     else
         printf '  FAIL  %s is missing from the public header\n' "$sym"
@@ -74,8 +76,8 @@ else
     printf '  ok    components are target-agnostic; the shim carries the difference\n'
 fi
 
-printf '\nH3  the host build compiles the same sources, and forks none of them\n'
-for src in "$ROOT"/components/*/*.c; do
+printf '\nH3  every portable component compiles on the host; no app-only source does\n'
+for src in "$ROOT"/components/portable/*/*.c; do
     case "$src" in
     */shine/*) continue ;; # vendored: picked up by wildcard
     esac
@@ -87,6 +89,26 @@ for src in "$ROOT"/components/*/*.c; do
         fail=1
     fi
 done
+app_srcs=$(find "$ROOT/components/app" -name '*.c' 2>/dev/null || true)
+if [ -n "$app_srcs" ]; then
+    for src in $app_srcs; do
+        base=$(basename "$src")
+        if grep -q "$base" "$ROOT/host/Makefile"; then
+            printf '  FAIL  app-only source %s is compiled by the host build\n' "$src"
+            fail=1
+        else
+            printf '  ok    app-only %s stays out of the host build\n' "$base"
+        fi
+    done
+else
+    printf '  ok    (no app-only sources yet)\n'
+fi
+if grep -rn --include='*.c' --include='*.h' -E '__APPLE__|host/include|_host\.c' "$ROOT/components/app" 2>/dev/null; then
+    printf '  FAIL  an app-only component carries a host fallback\n'
+    fail=1
+else
+    printf '  ok    no app-only component carries a host fallback\n'
+fi
 forks=$(find "$ROOT/components" "$ROOT/main" -name '*_host.c' 2>/dev/null || true)
 if [ -n "$forks" ]; then
     printf '  FAIL  forked source files exist: %s\n' "$forks"
@@ -96,11 +118,11 @@ else
 fi
 
 printf '\nL1  the vendored encoder is unmodified\n'
-if [ -f "$ROOT/components/shine/COPYING" ] && [ -f "$ROOT/LICENSES/LGPL-2.0.txt" ]; then
-    if cmp -s "$ROOT/components/shine/COPYING" "$ROOT/LICENSES/LGPL-2.0.txt"; then
+if [ -f "$ROOT/components/portable/shine/COPYING" ] && [ -f "$ROOT/LICENSES/LGPL-2.0.txt" ]; then
+    if cmp -s "$ROOT/components/portable/shine/COPYING" "$ROOT/LICENSES/LGPL-2.0.txt"; then
         printf '  ok    the shipped licence text matches the vendored one\n'
     else
-        printf '  FAIL  LICENSES/LGPL-2.0.txt differs from components/shine/COPYING\n'
+        printf '  FAIL  LICENSES/LGPL-2.0.txt differs from components/portable/shine/COPYING\n'
         fail=1
     fi
 else

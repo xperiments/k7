@@ -27,7 +27,7 @@ Spec: `docs/specs/sd-stream-server.md` §10 (H1–H4, H6), §5 D1, §9 T4.
 
 ## Comments
 
-- [x] Vendored `dr_mp3.h`, `dr_flac.h`, `dr_wav.h` (public domain / MIT-0) as their own `components/dr_libs` component; the component registrations no longer name directories that do not exist (`include/` now exists, `third_party/` became its own component).
+- [x] Vendored `dr_mp3.h`, `dr_flac.h`, `dr_wav.h` (public domain / MIT-0) as their own `components/portable/dr_libs` component; the component registrations no longer name directories that do not exist (`include/` now exists, `third_party/` became its own component).
 - [x] `make -C host` builds `host/build/bin/icecast_host` with one command.
 - [x] The host build compiles the same production sources. `make -C host layering` fails the build if a component source is missing from the host Makefile or if a `*_host.c` fork exists. H2 is enforced too: no `CONFIG_IDF_TARGET` anywhere in `components/`.
 - [x] Music directory and port are runtime arguments; default port 18000, no elevation.

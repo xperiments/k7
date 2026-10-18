@@ -11,7 +11,7 @@ idf_component_register(SRCS ${app_srcs}
                        EMBED_FILES "assets/hub_frames.bin"
                        REQUIRES esp_driver_gpio esp_driver_sdmmc esp_driver_sdspi esp_driver_spi fatfs nvs_flash
                                 esp_wifi esp_netif esp_event spi_flash esp_psram esp_timer esp_lcd
-                                http_server mini_icecast mini_files cassette app_services)
+                                http_server mini_icecast mini_files cassette app_services app_board)
 
 # board_esp32.c reaches the credentials with __has_include(), which does not appear in
 # the compiler's dependency file - so without this, creating or editing

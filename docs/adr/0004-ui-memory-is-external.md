@@ -66,5 +66,5 @@ with it.
 
 `main/ui_fit.c` no longer exists. The allocator and the PSRAM draw-buffer rule live in
 `main/ui.c`, the screen in `main/ui_cassette.c`, and the screen's testable arithmetic in
-`components/cassette/`. The decision above is unchanged; only the placeholder file it was
+`components/portable/cassette/`. The decision above is unchanged; only the placeholder file it was
 first proved in is gone.

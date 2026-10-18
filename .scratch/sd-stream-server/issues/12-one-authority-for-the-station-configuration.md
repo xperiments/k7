@@ -23,10 +23,10 @@ resolve-and-discard; `start()` becomes resolve-and-use. Nothing else may hold a 
 - [ ] An invalid format produces the same refusal message from both entry points.
 - [ ] `t04_format_validation` pins the default table and the zero-means-default rule.
 
-**Files:** `components/mini_icecast/include/mi_station.h` (new),
-`components/mini_icecast/mi_station.c` (new),
-`components/mini_icecast/mini_icecast.c`,
-`components/mini_icecast/include/mini_icecast.h`,
+**Files:** `components/portable/mini_icecast/include/mi_station.h` (new),
+`components/portable/mini_icecast/mi_station.c` (new),
+`components/portable/mini_icecast/mini_icecast.c`,
+`components/portable/mini_icecast/include/mini_icecast.h`,
 `host/tests/t04_format_validation.c`, `host/Makefile`.
 
 **Interface:** `esp_err_t mi_station_resolve(const mini_icecast_cfg_t *cfg,
@@ -41,7 +41,7 @@ station is asserted to be what `mini_icecast_start()` would use.
 
 ## Comments
 
-- Added `components/mini_icecast/mi_station.c/.h`: the default table, the client-range check and
+- Added `components/portable/mini_icecast/mi_station.c/.h`: the default table, the client-range check and
   `mi_enc_check_format()`, in one `mi_station_resolve()`.
 - `mini_icecast_check_station()` is now resolve-and-discard; `mini_icecast_start()` is
   resolve-and-use. The resolved station is what the rest of the broadcast reads.

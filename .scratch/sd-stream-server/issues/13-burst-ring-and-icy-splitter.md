@@ -35,11 +35,11 @@ choose the sink (`http_send_all`), and keep the timeout semantics unchanged.
 - [ ] `mini_icecast.c` no longer contains `ring_`/`send_meta` arithmetic.
 - [ ] Host unit tests and the integration suite (metadata, burst-on-connect) pass.
 
-**Files:** `components/mini_icecast/include/mi_burst.h` (new),
-`components/mini_icecast/mi_burst.c` (new),
-`components/mini_icecast/include/mi_icy.h` (new),
-`components/mini_icecast/mi_icy.c` (new),
-`components/mini_icecast/mini_icecast.c`, `host/tests/t07_burst_icy.c` (new),
+**Files:** `components/portable/mini_icecast/include/mi_burst.h` (new),
+`components/portable/mini_icecast/mi_burst.c` (new),
+`components/portable/mini_icecast/include/mi_icy.h` (new),
+`components/portable/mini_icecast/mi_icy.c` (new),
+`components/portable/mini_icecast/mini_icecast.c`, `host/tests/t07_burst_icy.c` (new),
 `host/Makefile`.
 
 **Tests:** t07 drives the ring through several times its capacity with uneven record sizes

@@ -336,13 +336,15 @@ inserting a card later brings the library up with no reboot.
 
 ## Host build and tests (no board needed)
 
-The same component sources compile for macOS against a small shim
+The same portable component sources compile for macOS against a small shim
 (`host/include/`, `host/shim/shim.c`) that stands in for the eleven ESP-IDF
 functions the code uses, and a board adapter (`host/board_host.c`) that stands in
 for Wi-Fi and the card mount. There is no target conditional compilation anywhere
 in `components/`: the shim and the host board adapter are the only pieces that
 know it is a Mac, which is what keeps "the tests pass on the host" from meaning
-"the firmware is nothing like what was tested".
+"the firmware is nothing like what was tested". The `app/` components — the screen
+display, and later the entry policy and the board adapter — cannot run on the host,
+so they are not compiled there; `make -C host layering` checks that they stay out.
 
 ```bash
 make -C host                # build the runnable server
@@ -614,32 +616,36 @@ sh host/tests/digest.sh http://127.0.0.1:18001 http://<board-address>:8000 12
 main/                       the appliance: configuration, display, skip button, console line
   board_esp32.c             the board adapter: Wi-Fi, SPI card mount, hardware census
 components/
-  app_services/             composes the services in the one order that fits memory
-    app_board.h             what the services need from a board, and nothing else
-  http_server/              listening socket, connection workers, routing
-    http_parse.c/.h         request-line rules and route matching, no socket
-  mini_icecast/             PCM in -> MP3 -> ICY broadcast, client fan-out
-    mi_decode.c/.h          mp3/flac/wav -> stereo int16 (vendored dr_libs)
-    mi_resample.c/.h        windowed-sinc resampler to the station rate
-    mi_encode.c/.h          the 1024<->1152 mismatch, whole frames out
-    mi_station.c/.h         the station configuration, resolved once
-    mi_burst.c/.h           the burst on connect, as whole encoded frames
-    mi_icy.c/.h             the metadata interval and its 16-byte blocks
-    mi_ring.c/.h            the per-client send ring: the audio task never writes a socket
-    mini_icecast.c/.h       pacing, client list, station status
-  mini_files/               GET / index, GET /music/<name> download
-    music_dir.c/.h          the directory's name, path and listing rules
-  cassette/                 what the screen shows: reels, packs, progress, label
-  dr_libs/                  vendored dr_mp3 / dr_flac / dr_wav (public domain / MIT-0)
-  shine/                    vendored toots/shine MP3 encoder (LGPL-2.0-only)
+  portable/                 every .c compiles on the host as well (H3)
+    app_board/              what the services need from a board, and nothing else
+    app_services/           composes the services in the one order that fits memory
+    http_server/            listening socket, connection workers, routing
+      http_parse.c/.h       request-line rules and route matching, no socket
+    mini_icecast/           PCM in -> MP3 -> ICY broadcast, client fan-out
+      mi_decode.c/.h        mp3/flac/wav -> stereo int16 (vendored dr_libs)
+      mi_resample.c/.h      windowed-sinc resampler to the station rate
+      mi_encode.c/.h        the 1024<->1152 mismatch, whole frames out
+      mi_station.c/.h       the station configuration, resolved once
+      mi_burst.c/.h         the burst on connect, as whole encoded frames
+      mi_icy.c/.h           the metadata interval and its 16-byte blocks
+      mi_ring.c/.h          the per-client send ring: the audio task never writes a socket
+      mini_icecast.c/.h     pacing, client list, station status
+    mini_files/             GET / index, GET /music/<name> download
+      music_dir.c/.h        the directory's name, path and listing rules
+    cassette/               what the screen shows: reels, packs, progress, label
+    dr_libs/                vendored dr_mp3 / dr_flac / dr_wav (public domain / MIT-0)
+    shine/                  vendored toots/shine MP3 encoder (LGPL-2.0-only)
+  app/                      firmware only: the screen, and later the entry policy and board adapter
 host/                       the host build: shim, board adapter, fixtures, tests, tools
 ```
 
 The dependency direction is one-way and is checked by `make -C host layering`:
 `mini_files` and `mini_icecast` depend on `http_server`; only the application
-layer (`app_services` and `main/`) depends on `mini_files`; `mini_icecast` owns no
-socket, parses no request and renders no markup; `cassette` depends only on the
-broadcast's status snapshot. The binary search for the seam is in
+layer (`app_services` in `portable/` and `main/`) depends on `mini_files`;
+`mini_icecast` owns no socket, parses no request and renders no markup; `cassette`
+depends only on the broadcast's status snapshot. The split between `portable/` and
+`app/` is itself a rule: every `.c` under `portable/` must be in `host/Makefile`,
+and no source under `app/` may be. The binary search for the seam is in
 `docs/adr/0003-extract-http-server-from-mini-icecast.md`.
 
 The services are composed once, in `app_services`, and both entry points call it:
@@ -710,7 +716,7 @@ is the number quoted for headroom.
 ## Licensing
 
 This project's own code is MIT-licensed (`LICENSE`). The vendored MP3 encoder is
-not: **`components/shine/` is LGPL-2.0-only**, kept as unmodified source in its own
+not: **`components/portable/shine/` is LGPL-2.0-only**, kept as unmodified source in its own
 component so that you can replace or patch it and relink — which is what
 LGPL-2.0 section 6 requires. `LICENSES/LGPL-2.0.txt` and `THIRD_PARTY_NOTICES`
 ship with the sources, and this project's own licence is unaffected by the

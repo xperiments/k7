@@ -21,8 +21,8 @@ The console line and the cassette then read one interface.
 - [ ] The console line still reports L/R percentages.
 - [ ] `t06_status` asserts the level is in range and non-zero while a fixture is playing.
 
-**Files:** `components/mini_icecast/include/mini_icecast.h`,
-`components/mini_icecast/mini_icecast.c`, `main/main.c`, `host/icecast_host.c`,
+**Files:** `components/portable/mini_icecast/include/mini_icecast.h`,
+`components/portable/mini_icecast/mini_icecast.c`, `main/main.c`, `host/icecast_host.c`,
 `host/tests/t06_status.c`.
 
 **Interface change:** this removes a documented callback. If a future FFT wants the raw

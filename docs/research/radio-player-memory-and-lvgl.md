@@ -23,7 +23,7 @@ Three kinds of number appear in this note and they are never mixed:
 
 And one warning that applies to every cross-version number in this note: the tree in `build/` was
 compiled at 19:01 from a source revision older than the current one (`main/main.c` changed at 21:31,
-`components/mini_icecast/mini_icecast.c` at 21:27). **Its DIRAM figure is therefore not comparable to
+`components/portable/mini_icecast/mini_icecast.c` at 21:27). **Its DIRAM figure is therefore not comparable to
 the 6.1 build** — see §5.
 
 ---
@@ -127,12 +127,12 @@ Three things in that table matter for the rest of the note:
   **12 584 B of internal `.bss`**, and it is almost exactly three 4 KB staging buffers:
   `S.chunk[CHUNK_FRAMES*2]` = 4 096 B, `tmp[CHUNK_BYTES]` = 4 096 B and `in[MI_READ_FRAMES*2]` =
   4 096 B, plus a 4×`client_t` table and the title buffer
-  (`components/mini_icecast/mini_icecast.c:55-72,148,347`). These are *not* DMA buffers and not touched
+  (`components/portable/mini_icecast/mini_icecast.c:55-72,148,347`). These are *not* DMA buffers and not touched
   by an ISR — each is walked once per 26 ms frame.
 - The encoder archive is 22 353 B of DIRAM plus 560 B in the 16 KB IRAM block. **The frequently quoted
   "~35 KB of encoder code in IRAM" is not what this map shows**: `libshine.a` is 22 913 B of internal
   RAM in total (`idf_size.py --archives`), of which code is 14 351 B and the rest is literals and
-  rodata pulled in by the same `* (noflash)` fragment (`components/shine/linker.lf`). The archive's own
+  rodata pulled in by the same `* (noflash)` fragment (`components/portable/shine/linker.lf`). The archive's own
   `.text` totals 24 459 B, but `--gc-sections` discards unlinked functions; roughly 9.5 KB of archive
   text never reaches the image. Either the README's figure counts the pre-GC archive, or it is stale —
   **it should be re-measured rather than quoted.**

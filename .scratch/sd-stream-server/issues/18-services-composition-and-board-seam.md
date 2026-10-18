@@ -12,7 +12,7 @@ Add an `app_services` component whose interface is one call — resolve the stat
 the board, start the services in the documented order, return a report of what came up and
 what did not — and a board seam with two real adapters:
 
-- `components/app_services/include/app_board.h` — what the services need from the board and
+- `components/portable/app_services/include/app_board.h` — what the services need from the board and
   nothing else: `app_board_net_start()`, `app_board_card_mount()`,
   `app_board_wait_online()`, `app_board_log_hardware()`.
 - `main/board_esp32.c` — Wi-Fi (credentials, event logging, retry), SPI microSD mount and
@@ -40,10 +40,10 @@ that `app_services` may depend on `mini_files` (it is the application layer, mov
 - [ ] `make -C host layering` allows and names the app_services dependency.
 - [ ] Host tests, integration, and both firmware builds pass.
 
-**Files:** `components/app_services/include/app_services.h` (new),
-`components/app_services/app_services.c` (new),
-`components/app_services/CMakeLists.txt` (new),
-`components/app_services/include/app_board.h` (new),
+**Files:** `components/portable/app_services/include/app_services.h` (new),
+`components/portable/app_services/app_services.c` (new),
+`components/portable/app_services/CMakeLists.txt` (new),
+`components/portable/app_services/include/app_board.h` (new),
 `main/board_esp32.c` (new), `main/main.c`, `main/CMakeLists.txt`,
 `host/board_host.c` (new), `host/icecast_host.c`, `host/Makefile`,
 `host/tests/layering.sh`, `README.md`, `CONTEXT.md`.
@@ -55,7 +55,7 @@ checks the dependency direction; no unit test starts tasks.
 
 ## Comments
 
-- Added `components/app_services/` (`app_services_start()`, `app_services_check()`, the report)
+- Added `components/portable/app_services/` (`app_services_start()`, `app_services_check()`, the report)
   and its board seam `app_board.h`.
 - Added `main/board_esp32.c` (Wi-Fi credentials and events, the retry-safe SPI mount, the
   hardware census) and `host/board_host.c` (no network, the fixture directory always mounted).

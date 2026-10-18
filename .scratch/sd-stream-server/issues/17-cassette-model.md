@@ -38,8 +38,8 @@ redraw-only-when-changed rule. The commented-out label variant, the unused stati
 - [ ] `main/CMakeLists.txt` requires the component; `host/Makefile` compiles it.
 - [ ] Host unit tests and both firmware builds pass.
 
-**Files:** `components/cassette/include/cassette.h` (new),
-`components/cassette/cassette.c` (new), `components/cassette/CMakeLists.txt` (new),
+**Files:** `components/portable/cassette/include/cassette.h` (new),
+`components/portable/cassette/cassette.c` (new), `components/portable/cassette/CMakeLists.txt` (new),
 `main/ui_cassette.c`, `main/ui.c`, `main/CMakeLists.txt`,
 `host/tests/t10_cassette.c` (new), `host/Makefile`.
 
@@ -51,7 +51,7 @@ dump.
 
 ## Comments
 
-- Added `components/cassette/` with one verb, `cassette_step(status, now_ms)`, and a frame
+- Added `components/portable/cassette/` with one verb, `cassette_step(status, now_ms)`, and a frame
   carrying the cleaned title and its change flag, permille and its change flag, pack fill,
   hub frames, playing and the level. No LVGL include.
 - `main/ui_cassette.c` is the adapter: objects, layout, diameters, applying a frame. The reel

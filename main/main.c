@@ -11,7 +11,7 @@
  *     port, with no authentication.
  * Do not put it on an untrusted network or forward its port.
  *
- * The services and their load-bearing order live in components/app_services; the
+ * The services and their load-bearing order live in components/portable/app_services; the
  * board (Wi-Fi, card, census) lives in board_esp32.c. This file is the appliance:
  * its configuration, the display, the skip button and the console line.
  */
@@ -145,7 +145,7 @@ void app_main(void)
     /* The services resolve the station first (arithmetic only), then bring up the
      * network before the broadcast takes its internal RAM, then the file surface,
      * the broadcast and the listener. The order and its reasons are in
-     * components/app_services. */
+     * components/portable/app_services. */
     app_services_report_t report;
     err = app_services_start(&svc, &report);
     if (err != ESP_OK) {

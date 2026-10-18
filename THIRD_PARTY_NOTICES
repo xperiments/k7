@@ -8,11 +8,11 @@ directory and built from source as part of this project's build.
 --------------------------------------------------------------------------------
 shine - fixed-point MP3 encoder
 --------------------------------------------------------------------------------
-Location      components/shine/
+Location      components/portable/shine/
 Version       toots/shine @ ab5e3526b64af1a2eaa43aa6f441a7312e013519 (main)
 Licence       GNU Library General Public License, version 2 (LGPL-2.0-only).
               The text contains no "or later" clause: LGPL-2.0 only.
-Licence text  LICENSES/LGPL-2.0.txt (identical to components/shine/COPYING)
+Licence text  LICENSES/LGPL-2.0.txt (identical to components/portable/shine/COPYING)
 Modifications none. The sources are vendored verbatim and compiled from source
               inside this project's own build tree.
 
@@ -20,7 +20,7 @@ LGPL-2.0 section 6 permits distributing a work that uses this library under term
 of your choice, provided the library's use is noticed (this file), its licence is
 supplied (LICENSES/LGPL-2.0.txt), and the recipient can relink against a modified
 version of the library. Keeping shine as unmodified, separately-built source is
-what makes that relink path exist: replace or patch components/shine/, rebuild,
+what makes that relink path exist: replace or patch components/portable/shine/, rebuild,
 and this project links against your version.
 
 Not used: fknrdcls/mp3_shine_esp32 is GPL-3.0 and is deliberately absent from
@@ -29,7 +29,7 @@ this project; using it would impose GPL on everything here.
 --------------------------------------------------------------------------------
 dr_libs - dr_mp3, dr_flac, dr_wav (single-file audio decoders)
 --------------------------------------------------------------------------------
-Location      components/dr_libs/include/
+Location      components/portable/dr_libs/include/
 Versions      dr_mp3 v0.7.4, dr_flac v0.13.4, dr_wav v0.14.6 (mackron/dr_libs)
 Licence       choice of public domain (Unlicense) or MIT No Attribution (MIT-0).
               The licence statement is at the end of each header file.
