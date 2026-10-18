@@ -158,3 +158,9 @@ encoder cost (41.4 % -> 44.5 % of one core). The same census corrected two figur
 that were wrong in the README: the encoder's IRAM code is 14 351 B (22 913 B with its
 tables), not "~35 KB", and the startup internal-free figure quoted in the board table
 was from an older build.
+
+- Board check (Sunton, 2026-10-18): the "stack headroom: broadcast" line was reporting the
+  *telemetry* task's high-water mark - `uxTaskGetStackHighWaterMark(NULL)` asks about the
+  task doing the asking. It now reports the broadcast task's, through the handle kept in
+  `mini_icecast_start()`. On the Sunton it reads 17 556 B, which is the number that matters
+  when the decoder and the ICY block builder are on that stack.

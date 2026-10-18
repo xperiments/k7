@@ -77,11 +77,20 @@ CONFIG_LV_USE_CUSTOM_MALLOC=y
 CONFIG_LV_USE_ASSERT_MALLOC=y
 CONFIG_LV_USE_CLIB_STRING=y
 CONFIG_LV_COLOR_DEPTH_16=y
-# The screen's three text sizes, and the transform support the turning reels need.
+# The screen's text sizes: 48 for the label's side letter, 22 for the title, 18 for
+# the file name, 14 for the facts and the time.
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_18=y
 CONFIG_LV_FONT_MONTSERRAT_22=y
+CONFIG_LV_FONT_MONTSERRAT_48=y
 CONFIG_LV_DRAW_SW_COMPLEX=y
+
+
+# LVGL's own performance monitor: CPU and FPS in a label on the system layer, top
+# right where the shell is empty. This is the built-in overlay, not a custom counter.
+CONFIG_LV_USE_SYSMON=y
+CONFIG_LV_USE_PERF_MONITOR=y
+CONFIG_LV_PERF_MONITOR_ALIGN_TOP_RIGHT=y
 
 # ----------------------------------------------------------------------- lwIP
 # MP3 at 128 kbps is 16 KB/s per client, but a burst on connect is sent at once:

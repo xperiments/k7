@@ -13,6 +13,7 @@
 #include "mini_icecast.h"
 
 #include <dirent.h>
+#include <math.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -29,9 +30,13 @@
 #include "freertos/task.h"
 #include "http_server.h"
 #include "lwip/sockets.h"
+#include "mi_burst.h"
 #include "mi_decode.h"
 #include "mi_encode.h"
+#include "mi_icy.h"
+#include "mi_ring.h"
 #include "mi_resample.h"
+#include "mi_station.h"
 
 #define MAX_CLIENTS     MINI_ICECAST_MAX_CLIENTS
 #define TITLE_MAX       120
@@ -44,16 +49,30 @@
 
 static const char *TAG = "icecast";
 
+#define SENDER_TASK_STACK      4096
+/* How much audio a client's ring can hold. This is the jitter budget: a download
+ * on the same Wi-Fi has been measured stalling the stream for seconds, and the
+ * ring is what lets the connection survive that instead of being dropped. Ten
+ * seconds at the station rate, so it scales down with a lower-bit-rate station. */
+#define CLIENT_RING_MS         10000
+#define CLIENT_SEND_TIMEOUT_MS 10000       /* one send may wait this long for the network */
+#define HEADER_SEND_TIMEOUT_MS 250         /* a connecting client must take its headers */
+#define SEND_BUF_BYTES         (MI_ENC_MAX_FRAME_BYTES + 64) /* one ring read */
+#define SEND_BUF_FALLBACK      4096
+
 typedef struct {
-    int      fd;
-    bool     reserved;    /* claimed by a connecting client, not yet on the air */
-    bool     meta;        /* client asked for ICY metadata */
-    uint32_t since_meta;  /* encoded bytes sent since the last metadata block */
-    uint32_t title_ver;   /* last title version this client has received */
+    int       fd;
+    bool      reserved;   /* claimed by a connecting client, not yet on the air */
+    bool      dead;       /* the producer found it too slow; the sender must close it */
+    mi_icy_t *icy;        /* NULL when the client did not ask for metadata */
+    mi_ring_t *ring;      /* framed bytes waiting for the sender */
+    uint8_t   *send_buf;  /* per-client: the sender tasks run concurrently */
+    SemaphoreHandle_t wake; /* given whenever the ring gains data */
 } client_t;
 
 static struct {
-    mini_icecast_cfg_t cfg;
+    const char        *music_dir; /* the card's directory, from the configuration */
+    mi_station_t       station;   /* resolved once by mi_station_resolve() */
     client_t           clients[MAX_CLIENTS];
     SemaphoreHandle_t  lock;
     char               title[TITLE_MAX + 1];
@@ -66,132 +85,128 @@ static struct {
      * read by mini_icecast_status(); an aligned 32-bit load or store is atomic on this
      * core, so the reader needs no lock for it. At 44.1 kHz it holds 27 hours. */
     uint32_t           track_frames;
+    /* Level of the chunk being encoded, for the display. Same lock-free discipline
+     * as track_frames; a 32-bit float store is atomic on this core. */
+    volatile float     level_l, level_r;
     uint32_t           title_ver;
     volatile bool      skip;
     int64_t            t0;            /* pacing clock origin (us) */
     int64_t            played_frames; /* encoded frames broadcast since t0 */
     int16_t            chunk[CHUNK_FRAMES * 2]; /* output chunker, persists across tracks */
     size_t             chunk_n;
-    uint8_t           *ring;          /* burst-on-connect history: records of [len16 LE][frame] */
-    size_t             ring_size, ring_head, ring_tail, ring_used;
-    bool               ring_external;
+    mi_burst_t        *burst;         /* history for a client connecting mid-track */
+    TaskHandle_t       broadcast_handle; /* for the stack-headroom telemetry */
     mi_enc_t          *enc;
     uint32_t           rebases;       /* starvation rebases: 0 over a healthy soak */
+    /* How far behind real time the last pacing call found the broadcast. Read by
+     * the download path to decide when to yield the card; a 32-bit store/load is
+     * atomic on this core, so it needs no lock. */
+    volatile uint32_t  lag_ms;
 } S;
 
 /* ------------------------------------------------------------- clients */
 
-static bool send_meta(client_t *c)
+/* The producer's sink for the ICY splitter. It writes framed bytes into the
+ * client's ring and never touches the socket: the sender task owns the fd. A full
+ * ring means the client is too slow, so it is marked dead and the broadcast moves
+ * on. The broadcast lock is held, which is what makes the dead flag safe. */
+static bool client_sink(void *ctx, mi_icy_kind_t kind, const uint8_t *d, size_t n)
 {
-    if (c->title_ver == S.title_ver) {
-        uint8_t zero = 0;
-        return http_send_all(c->fd, &zero, 1);
+    (void)kind;
+    client_t *c = ctx;
+    if (!c->ring) return false;
+    if (mi_ring_put(c->ring, d, n) != n) {
+        c->dead = true;
+        return false;
     }
-    char tmp[TITLE_MAX + 24];
-    int len = snprintf(tmp, sizeof tmp, "StreamTitle='%s';", S.title);
-    int blocks = (len + 15) / 16; /* the length byte counts 16-byte blocks */
-    uint8_t buf[1 + 16 * 10];
-    memset(buf, 0, 1 + blocks * 16);
-    buf[0] = (uint8_t)blocks;
-    memcpy(buf + 1, tmp, len);
-    c->title_ver = S.title_ver;
-    return http_send_all(c->fd, buf, 1 + blocks * 16);
+    xSemaphoreGive(c->wake);
+    return true;
 }
 
-/* Sends audio, splitting it so a metadata block lands exactly every `metaint`
- * *encoded* bytes. */
+/* Frame the audio and queue it. mi_icy owns the metadata interval and the block
+ * framing; the sender only sees bytes. */
 static bool client_push(client_t *c, const uint8_t *d, size_t n)
 {
-    if (!c->meta) return http_send_all(c->fd, d, n);
-    while (n) {
-        size_t k = S.cfg.metaint - c->since_meta;
-        if (k > n) k = n;
-        if (!http_send_all(c->fd, d, k)) return false;
-        d += k;
-        n -= k;
-        c->since_meta += k;
-        if (c->since_meta == S.cfg.metaint) {
-            c->since_meta = 0;
-            if (!send_meta(c)) return false;
+    if (c->fd < 0 || c->dead) return false;
+    if (!c->icy) return client_sink(c, MI_ICY_AUDIO, d, n);
+    return mi_icy_push(c->icy, d, n, S.title, S.title_ver, client_sink, c);
+}
+
+/* Queue the history, oldest first, through the same splitter the live stream uses.
+ * Called with the broadcast lock held, before the sender is woken, so the burst and
+ * the next live frame cannot interleave. */
+static bool queue_history(client_t *c, size_t *queued_bytes) /* lock held */
+{
+    *queued_bytes = 0;
+    static uint8_t tmp[CHUNK_BYTES > MI_ENC_MAX_FRAME_BYTES ? CHUNK_BYTES : MI_ENC_MAX_FRAME_BYTES];
+    mi_burst_cursor_t cur;
+    mi_burst_begin(S.burst, &cur);
+    size_t n;
+    while ((n = mi_burst_next(S.burst, &cur, tmp, sizeof tmp)) > 0) {
+        if (!client_push(c, tmp, n)) return false;
+        *queued_bytes += n;
+    }
+    return true;
+}
+
+/* The sender's teardown. `fd` is the descriptor it was using; if the slot has
+ * already been reused the descriptor is not ours to close. */
+static void sender_close(int slot, int fd, const char *why)
+{
+    client_t *c = &S.clients[slot];
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    if (c->fd == fd) {
+        ESP_LOGI(TAG, "client %d gone (%s)", slot, why);
+        close(fd);
+        c->fd = -1;
+        if (c->icy) {
+            mi_icy_free(c->icy);
+            c->icy = NULL;
+        }
+        c->dead = false;
+    }
+    xSemaphoreGive(S.lock);
+}
+
+/* One permanent task per client slot. It owns the socket: the audio task only
+ * queues bytes, so a stalled listener costs its own sender and nothing else. */
+static void sender_task(void *arg)
+{
+    int slot = (int)(intptr_t)arg;
+    client_t *c = &S.clients[slot];
+    for (;;) {
+        xSemaphoreTake(c->wake, portMAX_DELAY);
+        for (;;) {
+            xSemaphoreTake(S.lock, portMAX_DELAY);
+            int fd = c->fd;
+            bool dead = c->dead;
+            xSemaphoreGive(S.lock);
+            if (fd < 0) break;
+            if (dead) {
+                sender_close(slot, fd, "too slow for the stream");
+                break;
+            }
+            size_t n = mi_ring_get(c->ring, c->send_buf, SEND_BUF_BYTES);
+            if (!n) break;
+            if (!http_send_all(fd, c->send_buf, n)) {
+                sender_close(slot, fd, "send failed");
+                break;
+            }
         }
     }
-    return true;
-}
-
-/* ---- burst-on-connect history: the last ~burst_ms of whole encoded frames ---- */
-
-static void ring_peek(size_t pos, uint8_t *out, size_t n)
-{
-    size_t first = S.ring_size - pos;
-    if (first > n) first = n;
-    memcpy(out, S.ring + pos, first);
-    memcpy(out + first, S.ring, n - first);
-}
-
-static void ring_drop_oldest(void)
-{
-    uint8_t lb[2];
-    ring_peek(S.ring_tail, lb, 2);
-    size_t n = 2 + (size_t)(lb[0] | (lb[1] << 8));
-    S.ring_tail = (S.ring_tail + n) % S.ring_size;
-    S.ring_used -= n;
-}
-
-static void ring_put(const uint8_t *d, size_t n) /* lock held */
-{
-    while (S.ring_used + n + 2 > S.ring_size) ring_drop_oldest();
-    uint8_t lb[2] = {(uint8_t)(n & 0xFF), (uint8_t)(n >> 8)};
-    for (int part = 0; part < 2; part++) {
-        const uint8_t *src = part ? d : lb;
-        size_t len = part ? n : 2, first = S.ring_size - S.ring_head;
-        if (first > len) first = len;
-        memcpy(S.ring + S.ring_head, src, first);
-        memcpy(S.ring, src + first, len - first);
-        S.ring_head = (S.ring_head + len) % S.ring_size;
-        S.ring_used += len;
-    }
-}
-
-/* The burst-on-connect is the only send made while the broadcast's lock is held, so
- * its window is the worst case one client can stall every other listener. It is
- * deliberately short: the rebase threshold is 1 s, and a 1 s window was measured
- * stalling the broadcast for 1116 ms when a client connected while the network was
- * busy downloading - which cost every listener a starvation rebase. 250 ms is ample
- * for 20 KB on a healthy link (that is 80 KB/s) and keeps one slow client's worst
- * case far below the threshold. */
-#define BURST_SEND_TIMEOUT_MS 250
-
-static bool ring_burst(client_t *c, size_t *sent_bytes) /* lock held */
-{
-    *sent_bytes = 0;
-    static uint8_t tmp[CHUNK_BYTES > MI_ENC_MAX_FRAME_BYTES ? CHUNK_BYTES : MI_ENC_MAX_FRAME_BYTES];
-    size_t pos = S.ring_tail, left = S.ring_used;
-    while (left) {
-        uint8_t lb[2];
-        ring_peek(pos, lb, 2);
-        size_t n = (size_t)(lb[0] | (lb[1] << 8));
-        if (n > sizeof tmp) break; /* corrupt record: stop rather than overrun */
-        ring_peek((pos + 2) % S.ring_size, tmp, n);
-        if (!client_push(c, tmp, n)) return false; /* goes through ICY splitting too */
-        *sent_bytes += n;
-        pos = (pos + 2 + n) % S.ring_size;
-        left -= 2 + n;
-    }
-    return true;
 }
 
 static void broadcast(const uint8_t *d, size_t n)
 {
     xSemaphoreTake(S.lock, portMAX_DELAY);
-    ring_put(d, n);
-    for (int i = 0; i < S.cfg.max_clients; i++) {
+    mi_burst_put(S.burst, d, n);
+    for (int i = 0; i < S.station.max_clients; i++) {
         client_t *c = &S.clients[i];
-        if (c->fd < 0) continue;
-        if (!client_push(c, d, n)) {
-            ESP_LOGI(TAG, "client %d gone", i);
-            close(c->fd);
-            c->fd = -1;
-        }
+        if (c->fd < 0 || c->dead) continue;
+        bool was_dead = c->dead;
+        client_push(c, d, n); /* a full ring marks it dead; its sender closes it */
+        if (!was_dead && c->dead)
+            ESP_LOGW(TAG, "client %d fell behind and was dropped", i);
     }
     xSemaphoreGive(S.lock);
 }
@@ -205,7 +220,7 @@ static http_result_t stream_route(int fd, const http_request_t *req, void *ctx)
     case MINI_ICECAST_REGISTERED:
         return HTTP_UPGRADED; /* the broadcast owns the fd now; do not close it */
     case MINI_ICECAST_REGISTER_FULL:
-        ESP_LOGW(TAG, "refusing a client: all %u slots are taken", (unsigned)S.cfg.max_clients);
+        ESP_LOGW(TAG, "refusing a client: all %u slots are taken", (unsigned)S.station.max_clients);
         http_send_error(fd, 503, "every stream slot is taken; try again in a moment");
         return HTTP_HANDLED;
     default:
@@ -215,27 +230,33 @@ static http_result_t stream_route(int fd, const http_request_t *req, void *ctx)
 
 mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_icy_metadata)
 {
+    /* The splitter holds no socket, so it can be made before the slot is claimed.
+     * Failing to allocate it is a failed registration, not a silent downgrade:
+     * the headers below promise a metadata interval. */
+    mi_icy_t *icy = want_icy_metadata ? mi_icy_new(S.station.metaint) : NULL;
+    if (want_icy_metadata && !icy) return MINI_ICECAST_REGISTER_FAILED;
+
     /* Reserve a slot under the lock, so two simultaneous connects cannot claim
      * the same one. A reserved slot still has fd < 0, so broadcast() skips it. */
     xSemaphoreTake(S.lock, portMAX_DELAY);
     int slot = -1;
-    for (int i = 0; i < S.cfg.max_clients; i++)
+    for (int i = 0; i < S.station.max_clients; i++)
         if (S.clients[i].fd < 0 && !S.clients[i].reserved) { slot = i; break; }
     if (slot < 0) {
         xSemaphoreGive(S.lock);
+        mi_icy_free(icy);
         return MINI_ICECAST_REGISTER_FULL;
     }
     client_t *c = &S.clients[slot];
     c->reserved = true;
-    c->meta = want_icy_metadata;
-    c->since_meta = 0;
-    c->title_ver = 0; /* forces the current title into the first metadata block */
+    c->dead = false;
+    c->icy = icy;
+    mi_ring_reset(c->ring);
     xSemaphoreGive(S.lock);
 
-    /* Bound every send on this socket before the first one: the headers below go out
-     * before the broadcast owns the fd, and an unbounded send there would pin a
-     * connection worker on a client that connects and never reads. */
-    struct timeval to = {.tv_sec = 0, .tv_usec = BURST_SEND_TIMEOUT_MS * 1000};
+    /* Bound the header write: it happens before the sender owns the fd, and an
+     * unbounded send there would pin a connection worker on a silent client. */
+    struct timeval to = {.tv_sec = 0, .tv_usec = HEADER_SEND_TIMEOUT_MS * 1000};
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &to, sizeof to);
 
     /* Headers first: MP3 needs no container header at all, and the station name
@@ -244,46 +265,44 @@ mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_ic
     int n = snprintf(h, sizeof h,
                      "HTTP/1.0 200 OK\r\nContent-Type: audio/mpeg\r\n"
                      "icy-name:%s\r\nCache-Control: no-cache\r\nConnection: close\r\n",
-                     S.cfg.station_name);
-    if (want_icy_metadata) n += snprintf(h + n, sizeof h - n, "icy-metaint: %u\r\n", (unsigned)S.cfg.metaint);
+                     S.station.station_name);
+    if (want_icy_metadata) n += snprintf(h + n, sizeof h - n, "icy-metaint: %u\r\n", (unsigned)S.station.metaint);
     n += snprintf(h + n, sizeof h - n, "\r\n");
     bool sent = n > 0 && n < (int)sizeof h && http_send_all(fd, h, (size_t)n);
     if (!sent) {
         xSemaphoreTake(S.lock, portMAX_DELAY);
         c->reserved = false;
+        c->icy = NULL;
         xSemaphoreGive(S.lock);
+        mi_icy_free(icy);
         return MINI_ICECAST_REGISTER_FAILED;
     }
 
-    /* Register + burst under the lock broadcast() uses: the client gets the
-     * history and then the next live frame, with no gap and no duplicate.
-     *
-     * If the window expires the client is dropped rather than registered with a
-     * partial burst. Tempting as "send what fits and let it start live" looks, a
-     * timeout can land in the middle of a frame - send() is free to accept part of
-     * one before the window closes - and the live stream would then continue on top
-     * of a half-written frame. Measured: doing that put a decode error into the
-     * stream that T3 catches. A client that cannot take its history inside the
-     * window is not in a state to be handed a gapless stream, so it is refused and
-     * may reconnect. */
+    /* From here the sender owns the socket and may wait longer for the network. */
+    struct timeval snd = {.tv_sec = CLIENT_SEND_TIMEOUT_MS / 1000,
+                          .tv_usec = (CLIENT_SEND_TIMEOUT_MS % 1000) * 1000};
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof snd);
+
+    /* Queue the history, then make the client live, both under the broadcast
+     * lock: the burst is followed by the next live frame with no gap and no
+     * duplicate. The sender drains it at the network's pace; the audio task does
+     * not wait for a single byte of it. */
     xSemaphoreTake(S.lock, portMAX_DELAY);
     c->fd = fd;
     size_t burst = 0;
-    bool complete = ring_burst(c, &burst);
-    bool window_expired = !complete && (errno == EAGAIN || errno == EWOULDBLOCK);
-    if (!complete) c->fd = -1;
-    c->reserved = false;
-    xSemaphoreGive(S.lock);
-    if (!complete) {
-        if (window_expired)
-            ESP_LOGW(TAG, "client %d fell behind after %u B of history (window %d ms); refused",
-                     slot, (unsigned)burst, BURST_SEND_TIMEOUT_MS);
+    bool queued = queue_history(c, &burst);
+    if (!queued) {
+        c->fd = -1;
+        c->icy = NULL;
+        c->dead = false;
+        c->reserved = false;
+        close(fd); /* the sender was never given it */
+        xSemaphoreGive(S.lock);
+        mi_icy_free(icy);
         return MINI_ICECAST_REGISTER_FAILED;
     }
-
-    struct timeval snd = {.tv_sec = HTTP_CLIENT_STALL_MS / 1000,
-                          .tv_usec = (HTTP_CLIENT_STALL_MS % 1000) * 1000};
-    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof snd);
+    c->reserved = false;
+    xSemaphoreGive(S.lock);
     ESP_LOGI(TAG, "client %d connected (icy=%d, burst=%u B)", slot, want_icy_metadata, (unsigned)burst);
     return MINI_ICECAST_REGISTERED;
 }
@@ -323,9 +342,11 @@ static void pace(uint32_t frames)
 {
     S.played_frames += frames;
     S.track_frames += frames;
-    int64_t played_us = S.played_frames * 1000000 / S.cfg.out_hz;
+    int64_t played_us = S.played_frames * 1000000 / S.station.out_hz;
     int64_t now = esp_timer_get_time() - S.t0;
-    if (now - played_us > 1000000) { /* we starved (no files, card hiccup): rebase the clock */
+    int64_t behind = now - played_us;
+    S.lag_ms = behind > 0 ? (uint32_t)(behind / 1000) : 0;
+    if (behind > 1000000) { /* we starved (no files, card hiccup): rebase the clock */
         S.rebases++;
         /* A starving device rebases every couple of seconds; the first few matter,
          * then the running count in the periodic telemetry is enough. */
@@ -335,7 +356,7 @@ static void pace(uint32_t frames)
         S.t0 += now - played_us;
         now = played_us;
     }
-    int64_t ahead = played_us - now - (int64_t)S.cfg.lead_ms * 1000;
+    int64_t ahead = played_us - now - (int64_t)S.station.lead_ms * 1000;
     if (ahead > 0) vTaskDelay(pdMS_TO_TICKS(ahead / 1000)); /* CONFIG_FREERTOS_HZ=1000 */
 }
 
@@ -347,9 +368,23 @@ static void on_frame(const uint8_t *frame, size_t bytes, void *ctx)
     pace((uint32_t)mi_enc_samples_per_frame(S.enc));
 }
 
+/* The display's level, computed where the PCM already is: the same chunk the
+ * encoder is about to take. RMS, normalised to 0..1. */
+static void measure_level(void)
+{
+    int64_t sl = 0, sr = 0;
+    for (size_t i = 0; i < CHUNK_FRAMES; i++) {
+        int32_t l = S.chunk[2 * i], r = S.chunk[2 * i + 1];
+        sl += (int64_t)l * l;
+        sr += (int64_t)r * r;
+    }
+    S.level_l = sqrtf((float)sl / (float)CHUNK_FRAMES) / 32768.0f;
+    S.level_r = sqrtf((float)sr / (float)CHUNK_FRAMES) / 32768.0f;
+}
+
 static void emit_chunk(void)
 {
-    if (S.cfg.pcm_cb) S.cfg.pcm_cb(S.chunk, CHUNK_FRAMES, S.cfg.pcm_cb_ctx);
+    measure_level();
     mi_enc_feed(S.enc, S.chunk, CHUNK_FRAMES, on_frame, NULL);
 }
 
@@ -393,7 +428,7 @@ static void stream_file(const char *path)
         return;
     }
     char rs_err[160];
-    mi_rs_t *rs = mi_rs_new(mi_dec_hz(d), S.cfg.out_hz, rs_err, sizeof rs_err);
+    mi_rs_t *rs = mi_rs_new(mi_dec_hz(d), S.station.out_hz, rs_err, sizeof rs_err);
     if (!rs) {
         ESP_LOGE(TAG, "cannot resample %s: %s", path, rs_err);
         mi_dec_close(d);
@@ -404,7 +439,7 @@ static void stream_file(const char *path)
     S.cur_total_ms = mi_dec_duration_ms(d);
     xSemaphoreGive(S.lock);
     ESP_LOGI(TAG, "now playing: %s (%u Hz -> %u Hz, %u ms)", S.title, (unsigned)mi_dec_hz(d),
-             (unsigned)S.cfg.out_hz, (unsigned)S.cur_total_ms);
+             (unsigned)S.station.out_hz, (unsigned)S.cur_total_ms);
 
     static int16_t in[MI_READ_FRAMES * 2];
     size_t n;
@@ -429,13 +464,13 @@ static void broadcast_task(void *arg)
     int quiet = 0;
     bool reported_missing = false;
     for (;;) {
-        DIR *d = opendir(S.cfg.music_dir);
+        DIR *d = opendir(S.music_dir);
         int played = 0;
         struct dirent *e;
         if (!d && !reported_missing) {
             /* Distinguish "the directory is not there" from "it is there and has
              * nothing playable in it": they need different fixes. */
-            ESP_LOGE(TAG, "cannot open %s: %s", S.cfg.music_dir, strerror(errno));
+            ESP_LOGE(TAG, "cannot open %s: %s", S.music_dir, strerror(errno));
             reported_missing = true;
         } else if (d) {
             reported_missing = false;
@@ -456,7 +491,7 @@ static void broadcast_task(void *arg)
         while (d && (e = readdir(d))) {
             if (!is_audio(e->d_name)) continue;
             char path[320];
-            snprintf(path, sizeof path, "%s/%s", S.cfg.music_dir, e->d_name);
+            snprintf(path, sizeof path, "%s/%s", S.music_dir, e->d_name);
             set_track(e->d_name);
             S.skip = false;
             stream_file(path);
@@ -465,7 +500,7 @@ static void broadcast_task(void *arg)
         if (d) closedir(d);
         if (!played) {
             if (quiet++ % QUIET_PASSES == 0)
-                ESP_LOGW(TAG, "no playable files in %s", S.cfg.music_dir);
+                ESP_LOGW(TAG, "no playable files in %s", S.music_dir);
             vTaskDelay(pdMS_TO_TICKS(2000));
         } else {
             quiet = 0;
@@ -482,7 +517,7 @@ static void telemetry_task(void *arg)
         uint64_t frames = mi_enc_frames_encoded(S.enc);
         uint64_t us = mi_enc_encode_us(S.enc);
         double per_frame = frames ? (double)us / (double)frames : 0.0;
-        double frame_us = 1000000.0 * (double)mi_enc_samples_per_frame(S.enc) / (double)S.cfg.out_hz;
+        double frame_us = 1000000.0 * (double)mi_enc_samples_per_frame(S.enc) / (double)S.station.out_hz;
         ESP_LOGI(TAG, "encoder: %" PRIu64 " frames, %.0f us/frame = %.1f%% of one core",
                  frames, per_frame, frame_us > 0 ? 100.0 * per_frame / frame_us : 0.0);
         /* The largest single free block is reported next to the free total because
@@ -494,8 +529,12 @@ static void telemetry_task(void *arg)
                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), S.rebases);
         /* The other half of fit: how much stack the deepest tasks have left. */
+        /* The broadcast's own high-water mark, not this task's: the old line
+         * passed NULL, which asks about the task doing the asking. */
         ESP_LOGI(TAG, "stack headroom: broadcast %u B, worst connection %u B",
-                 (unsigned)(uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t)),
+                 (unsigned)(S.broadcast_handle
+                                ? uxTaskGetStackHighWaterMark(S.broadcast_handle) * sizeof(StackType_t)
+                                : 0),
                  (unsigned)http_server_conn_stack_headroom_bytes());
     }
 }
@@ -508,41 +547,30 @@ esp_err_t mini_icecast_check_station(const mini_icecast_cfg_t *cfg, char *err, s
         if (err && err_size) snprintf(err, err_size, "no music directory configured");
         return ESP_ERR_INVALID_ARG;
     }
-    if (mi_enc_check_format(cfg->out_hz, cfg->bitrate, err, err_size) < 0)
-        return ESP_ERR_INVALID_ARG;
-    return ESP_OK;
+    /* Resolve-and-discard. The defaults, the client limit and the format
+     * arithmetic are mi_station's, so this cannot disagree with start(). */
+    return mi_station_resolve(cfg, NULL, err, err_size);
 }
 
 esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
 {
     if (!cfg || !cfg->music_dir) return ESP_ERR_INVALID_ARG;
-    S.cfg = *cfg;
-    if (!S.cfg.station_name) S.cfg.station_name = "ESP32 Radio";
-    if (!S.cfg.port) S.cfg.port = 8000;
-    if (!S.cfg.out_hz) S.cfg.out_hz = 44100;
-    if (!S.cfg.bitrate) S.cfg.bitrate = MINI_ICECAST_BITRATE_DEFAULT;
-    if (!S.cfg.metaint) S.cfg.metaint = MINI_ICECAST_METAINT_DEFAULT;
-    if (!S.cfg.lead_ms) S.cfg.lead_ms = 1500;
-    if (!S.cfg.burst_ms) S.cfg.burst_ms = 500;
-    if (!S.cfg.max_clients) S.cfg.max_clients = 2; /* documented default */
-    if (S.cfg.max_clients > MAX_CLIENTS) {
-        ESP_LOGE(TAG, "max_clients %u is outside the documented 1..%d range",
-                 (unsigned)S.cfg.max_clients, MAX_CLIENTS);
-        return ESP_ERR_INVALID_ARG; /* refuse rather than silently coerce */
-    }
 
-    /* Station format: checked here, before anything is served. */
+    /* Resolve once, before anything is allocated: a format that cannot be
+     * served is refused without touching the heap or the network. */
     char err[192];
-    int mpeg = mi_enc_check_format(S.cfg.out_hz, S.cfg.bitrate, err, sizeof err);
-    if (mpeg < 0) {
-        ESP_LOGE(TAG, "station format refused: %s", err);
+    if (mi_station_resolve(cfg, &S.station, err, sizeof err) != ESP_OK) {
+        ESP_LOGE(TAG, "station configuration refused: %s", err);
         return ESP_ERR_INVALID_ARG;
     }
+    S.music_dir = cfg->music_dir;
+
     ESP_LOGI(TAG, "station format: %u Hz, %u kbps CBR, joint stereo, %s",
-             (unsigned)S.cfg.out_hz, (unsigned)S.cfg.bitrate, mi_enc_mpeg_name(mpeg));
+             (unsigned)S.station.out_hz, (unsigned)S.station.bitrate,
+             mi_enc_mpeg_name(S.station.mpeg));
 
     size_t internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    S.enc = mi_enc_new(S.cfg.out_hz, S.cfg.bitrate, err, sizeof err);
+    S.enc = mi_enc_new(S.station.out_hz, S.station.bitrate, err, sizeof err);
     size_t internal_after = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!S.enc) {
         ESP_LOGE(TAG, "encoder: %s", err);
@@ -557,34 +585,57 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     ESP_LOGI(TAG, "encoder: %u samples/frame (%.1f ms), %u B of state inside the vendored "
                   "library, staging buffers in %s",
              (unsigned)mi_enc_samples_per_frame(S.enc),
-             1000.0 * (double)mi_enc_samples_per_frame(S.enc) / (double)S.cfg.out_hz,
+             1000.0 * (double)mi_enc_samples_per_frame(S.enc) / (double)S.station.out_hz,
              (unsigned)mi_enc_state_bytes(),
              mi_enc_uses_external_memory(S.enc) ? "external memory" : "internal RAM (fallback)");
     if (mi_enc_corrects_padding(S.enc))
         ESP_LOGW(TAG, "this station format needs the encoder's padding bit corrected (see the log above)");
 
-    /* The ring now holds *encoded* bytes, so it is sized by the station's byte
-     * rate; burst_ms still means the same duration of audio. The slack covers a
-     * whole record so ring_put() can always make room. */
-    S.ring_size = (size_t)S.cfg.bitrate * 1000 / 8 * S.cfg.burst_ms / 1000 + CHUNK_BYTES + 2;
-    S.ring = heap_caps_malloc(S.ring_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    S.ring_external = S.ring != NULL;
-    if (!S.ring) S.ring = malloc(S.ring_size);
-    if (!S.ring) {
-        ESP_LOGE(TAG, "out of memory for the %u B burst ring", (unsigned)S.ring_size);
+    /* The ring holds *encoded* bytes, so it is sized by the station's byte rate;
+     * burst_ms still means the same duration of audio. The slack is one internal
+     * chunk, which is larger than any encoded frame, so the newest record can
+     * always be kept. mi_burst refuses a capacity that cannot hold a record. */
+    size_t ring_bytes =
+        (size_t)S.station.bitrate * 1000 / 8 * S.station.burst_ms / 1000 + CHUNK_BYTES + 2;
+    S.burst = mi_burst_new(ring_bytes, true);
+    if (!S.burst) {
+        ESP_LOGE(TAG, "out of memory for the %u B burst ring", (unsigned)ring_bytes);
         return ESP_ERR_NO_MEM;
     }
     ESP_LOGI(TAG, "burst ring: %u B (~%u ms of audio) in %s, sends at most %u clients",
-             (unsigned)S.ring_size, (unsigned)S.cfg.burst_ms,
-             S.ring_external ? "external memory" : "internal RAM (fallback)",
-             (unsigned)S.cfg.max_clients);
+             (unsigned)mi_burst_capacity(S.burst), (unsigned)S.station.burst_ms,
+             mi_burst_uses_external_memory(S.burst) ? "external memory" : "internal RAM (fallback)",
+             (unsigned)S.station.max_clients);
 
     S.lock = xSemaphoreCreateMutex();
     if (!S.lock) return ESP_ERR_NO_MEM;
+    size_t client_ring_bytes = (size_t)S.station.bitrate * 1000 / 8 * CLIENT_RING_MS / 1000 + 4096;
     for (int i = 0; i < MAX_CLIENTS; i++) {
-        S.clients[i].fd = -1;
-        S.clients[i].reserved = false;
+        client_t *c = &S.clients[i];
+        c->fd = -1;
+        c->reserved = false;
+        c->dead = false;
+        c->icy = NULL;
+        c->ring = NULL;
+        c->wake = NULL;
+        c->send_buf = NULL;
+        if (i >= S.station.max_clients) continue;
+        c->ring = mi_ring_new(client_ring_bytes, true);
+        c->wake = xSemaphoreCreateBinary();
+        c->send_buf = heap_caps_malloc(SEND_BUF_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!c->send_buf) c->send_buf = malloc(SEND_BUF_BYTES);
+        if (!c->ring || !c->wake || !c->send_buf) {
+            ESP_LOGE(TAG, "no memory for client %d's send ring", i);
+            return ESP_ERR_NO_MEM;
+        }
+        if (xTaskCreatePinnedToCore(sender_task, "ice_send", SENDER_TASK_STACK,
+                                    (void *)(intptr_t)i, 4, NULL, 0) != pdPASS) {
+            ESP_LOGE(TAG, "no memory for client %d's sender task", i);
+            return ESP_ERR_NO_MEM;
+        }
     }
+    ESP_LOGI(TAG, "stream: %u client slot(s), %u B send ring each (~%u ms); the audio task never writes a socket",
+             (unsigned)S.station.max_clients, (unsigned)client_ring_bytes, (unsigned)CLIENT_RING_MS);
     S.skip = false;
 
     esp_err_t err2 = http_server_register_route("/stream", stream_route, NULL);
@@ -593,18 +644,25 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
         return err2;
     }
 
-    /* Wi-Fi lives on core 0; keep the broadcast on core 1. */
-    if (xTaskCreatePinnedToCore(broadcast_task, "ice_broadcast", BROADCAST_TASK_STACK, NULL, 6, NULL, 1) != pdPASS ||
-        xTaskCreatePinnedToCore(telemetry_task, "ice_telem", TELEMETRY_TASK_STACK, NULL, 3, NULL, 1) != pdPASS) {
+    /* Wi-Fi lives on core 0; keep the broadcast on core 1. The handle is kept for
+     * the telemetry's stack-headroom line. */
+    BaseType_t ok_broadcast =
+        xTaskCreatePinnedToCore(broadcast_task, "ice_broadcast", BROADCAST_TASK_STACK, NULL, 6,
+                                &S.broadcast_handle, 1);
+    BaseType_t ok_telem =
+        xTaskCreatePinnedToCore(telemetry_task, "ice_telem", TELEMETRY_TASK_STACK, NULL, 3, NULL, 1);
+    if (ok_broadcast != pdPASS || ok_telem != pdPASS) {
         ESP_LOGE(TAG, "no memory for the broadcast task");
         return ESP_ERR_NO_MEM;
     }
     ESP_LOGI(TAG, "GET /stream is ready; call http_server_start() to listen on port %u",
-             (unsigned)S.cfg.port);
+             (unsigned)S.station.port);
     return ESP_OK;
 }
 
 void mini_icecast_skip(void) { S.skip = true; }
+
+uint32_t mini_icecast_lag_ms(void) { return S.lag_ms; }
 
 void mini_icecast_status(mini_icecast_status_t *out)
 {
@@ -616,13 +674,15 @@ void mini_icecast_status(mini_icecast_status_t *out)
     snprintf(out->file, sizeof out->file, "%s", S.file);
     out->format = S.cur_fmt;
     out->source_hz = S.cur_src_hz;
-    out->out_hz = S.cfg.out_hz;
-    out->bitrate = S.cfg.bitrate;
+    out->out_hz = S.station.out_hz;
+    out->bitrate = S.station.bitrate;
     out->duration_ms = S.cur_total_ms;
     out->library_count = S.library_count;
     xSemaphoreGive(S.lock);
-    /* Read outside the lock on purpose: see the field's comment. */
-    if (S.cfg.out_hz) out->elapsed_ms = (uint32_t)((uint64_t)S.track_frames * 1000ULL / S.cfg.out_hz);
+    /* Read outside the lock on purpose: see the field comments. */
+    if (S.station.out_hz) out->elapsed_ms = (uint32_t)((uint64_t)S.track_frames * 1000ULL / S.station.out_hz);
+    out->level_l = S.level_l;
+    out->level_r = S.level_r;
 }
 
 size_t mini_icecast_now_playing(char *out, size_t out_size)

@@ -1,76 +1,118 @@
 /*
  * The cassette screen.
  *
- * The artwork is two pieces: the shell (assets/cs_front.png) and one reel hub
- * (assets/cs_wheel.png). The hubs go *behind* the shell, centred on the two reel
- * windows the shell's alpha channel cuts, so they show through the windows and turn -
- * which is what a cassette does. Every number below was measured from the artwork by
- * tools/convert_cassette_assets.py rather than eyeballed, so re-exporting the art and
- * re-running that tool keeps the hubs in their windows.
+ * The design is drawn here, not shipped as one bitmap: a light grey shell, two black
+ * tape packs of different sizes, and a cream label with a red "B" and a rule. The only
+ * bitmap left is the hub: assets/hub/ holds 20 opaque 168x168 keyframes of the whole
+ * hub, exported for a 2-second loop. tools/convert_cassette_assets.py converts them to
+ * RGB565 exactly as exported - no alpha, no recolour, no compositing - and adds 96x96
+ * crop descriptors that point into the same frame data.
  *
- * Layer order is the whole trick: children of a container are drawn in the order they
- * were created, so the two hubs are created first and the shell last. Creating the
- * shell first would hide them.
+ * The firmware draws only the 96x96 crop of each frame; the frame around it is the
+ * UI's, not part of the exported blob. That is the MASK_AT_168 = 96 arrangement: no
+ * full 168 frame is stored and no 168 frame is redrawn. There is no lv_image_set_rotation():
+ * LVGL's software transform is per pixel and was measured at over 100 ms per frame on
+ * this part; the frame sequence is the rotation.
+ *
+ * This file is the adapter: it owns positions, fonts, diameters and LVGL objects. What
+ * the screen should show - reel advance, pack fill, progress, the cleaned label - is
+ * components/cassette, which the host tier can test. Nothing here re-derives any of it.
  */
-#include <stdio.h>
-#include <string.h>
+#include <math.h>
 
 #include "esp_log.h"
 #include "lvgl.h"
 
+#include "cassette.h"
 #include "ui.h"
+#include "assets/hub_frames.h"
 
-/* Measured by tools/convert_cassette_assets.py: the shell scaled to leave a band for
- * the file's details, and the centres of the two reel windows in panel coordinates. */
-#define FRONT_W 618
-#define FRONT_H 400
-#define FRONT_X 91
-#define FRONT_Y 14
-#define WHEEL_PX 135
-static const struct { int x, y; } k_window[2] = { { 272, 197 }, { 524, 197 } };
+static const char *TAG = "ui";
 
-/* The band below the cassette. */
+/* The 800x480 panel: the hub's static ring is 168 px and the rotating mask is the
+ * converter's HUB_FRAME_W (96 px). The packs stay the reference's 245/310 so the
+ * black tape rings the hub at both ends of a side. */
+static const struct { int x, y; } k_hub[2] = { { 216, 234 }, { 600-16, 234 } };
+#define HUB_RING_D 168
+#define PACK_MIN_D 168
+#define PACK_MAX_D 400
+
+/* The tape strands leave the bottom edge where it is tangent to a full pack:
+ * 216 - 400/2 = 16 on the left, 584 + 400/2 = 784 on the right. */
+#define STRAND_X_L 16
+#define STRAND_X_R 784
+#define STRAND_Y 480
+#define STRAND_W 4
+
+/* The label: cream bar, red side square, the rule the title sits above. */
+#define LABEL_X 32
+#define LABEL_Y 16
+#define LABEL_W 735
+#define LABEL_H 75
+#define LABEL_R 12
+
+#define B_X 44
+#define B_Y 27
+#define B_D 53
+#define B_R 9
+
+#define TITLE_X 127
+#define TITLE_Y 40
+#define TITLE_W 439
+
+/* The band below the tape. */
 #define BAND_Y 424
-#define BAND_H 52
-#define BAND_X FRONT_X
-#define BAND_W FRONT_W
+#define BAND_X 91
+#define BAND_W 618
 
-/* The shell's own label strip, which the title is written over. Sampled from the art:
- * covering the printed placeholder with its own paper colour keeps the label looking
- * printed rather than pasted. */
-#define LABEL_X 244
-#define LABEL_Y 76
-#define LABEL_W 372
-#define LABEL_H 30
-#define LABEL_COLOR lv_color_hex(0xf2f1ee)
+/* How often the reel timer wakes. Frames advance on the 2 s loop from the generated
+ * header, not on this period: the model keeps the loop at 100 ms per frame even when
+ * lv_timer_handler() is late. */
+#define REEL_TICK_MS 72
 
-/* The artwork, embedded by EMBED_FILES in main/CMakeLists.txt. RGB565A8: LVGL's
- * two-plane format, colour first then alpha, which is what the converter writes. */
-extern const uint8_t cs_front_bin_start[] asm("_binary_cs_front_bin_start");
-extern const uint8_t cs_wheel_bin_start[] asm("_binary_cs_wheel_bin_start");
+/* Colours, read off the reference. */
+#define COL_BG          0x444444
+#define COL_TAPE        0x993333
+#define COL_TAPE_DARK   0x881111
+#define COL_LABEL       0xf4eabb
+#define COL_LABEL_EDGE  0xe6d8a8
+#define COL_RED         0xf03d3a
+#define COL_INK         0x230e11
+#define COL_HUB_RING    0xe6e6e6
+#define COL_BAR_BG      0xb9c0bb
+#define COL_BAR_FG      0xf03d3a
 
-static const lv_image_dsc_t k_front = {
-    .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565A8,
-                .w = FRONT_W, .h = FRONT_H, .stride = FRONT_W * 2 },
-    .data_size = (uint32_t)(FRONT_W * FRONT_H * 3),
-    .data = cs_front_bin_start,
-};
-static const lv_image_dsc_t k_wheel = {
-    .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565A8,
-                .w = WHEEL_PX, .h = WHEEL_PX, .stride = WHEEL_PX * 2 },
-    .data_size = (uint32_t)(WHEEL_PX * WHEEL_PX * 3),
-    .data = cs_wheel_bin_start,
-};
-
-static lv_obj_t *s_wheel[2];
-static lv_obj_t *s_title, *s_file, *s_facts, *s_time, *s_bar;
-static int       s_angle[2];           /* tenths of a degree, so the reels can crawl */
-static uint32_t  s_last_ms;
+static cassette_t *s_model;
+static lv_obj_t *s_hub[2], *s_pack[2], *s_strand[2];
+static lv_point_precise_t s_strand_pts[2][2];
+static lv_obj_t *s_title, *s_bar;
+static int      s_pack_d[2];      /* px, so a redraw happens only when it changes */
+static uint8_t  s_shown_hub[2];   /* the art frame currently on screen */
 
 /* ------------------------------------------------------------------ helpers */
 
-static lv_obj_t *text(lv_obj_t *parent, const lv_font_t *font, lv_color_t colour, lv_align_t align,
-                      int x, int y)
+static lv_obj_t *box(lv_obj_t *parent, int x, int y, int w, int h, int r, uint32_t bg)
+{
+    lv_obj_t *o = lv_obj_create(parent);
+    lv_obj_remove_style_all(o);
+    lv_obj_set_pos(o, x, y);
+    lv_obj_set_size(o, w, h);
+    lv_obj_set_style_bg_color(o, lv_color_hex(bg), 0);
+    lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(o, r, 0);
+    lv_obj_set_style_border_width(o, 3, LV_PART_MAIN);
+    lv_obj_set_style_border_color(o, lv_color_hex(COL_TAPE_DARK), LV_PART_MAIN);
+    lv_obj_set_scrollable(o, false);
+    return o;
+}
+
+static lv_obj_t *disc(lv_obj_t *parent, int cx, int cy, int d, uint32_t bg)
+{
+    return box(parent, cx - d / 2, cy - d / 2, d, d, LV_RADIUS_CIRCLE, bg);
+}
+
+static lv_obj_t *text(lv_obj_t *parent, const lv_font_t *font, lv_color_t colour,
+                      lv_align_t align, int x, int y)
 {
     lv_obj_t *l = lv_label_create(parent);
     lv_obj_set_style_text_font(l, font, 0);
@@ -79,20 +121,99 @@ static lv_obj_t *text(lv_obj_t *parent, const lv_font_t *font, lv_color_t colour
     return l;
 }
 
-static void fmt_time(char *out, size_t n, uint32_t ms)
+/* The tape strand: a 3 px line from the bottom edge to the point where it leaves the
+ * pack tangentially, so the strand never cuts across the pack it comes from. The foot
+ * is fixed; the tangent point is a function of the radius, which is why the line is
+ * vertical when that pack is full and leans as it empties. Of the two tangents from
+ * the foot, take the one on the outside of the pack: add the angle on the left,
+ * subtract it on the right. */
+static void strand_set(int i, int d)
 {
-    if (!ms) { snprintf(out, n, "--:--"); return; }
-    snprintf(out, n, "%u:%02u", (unsigned)(ms / 60000), (unsigned)((ms / 1000) % 60));
+    int cx = k_hub[i].x, cy = k_hub[i].y, r = d / 2;
+    int foot_x = i ? STRAND_X_R : STRAND_X_L;
+    double dx = foot_x - cx, dy = STRAND_Y - cy;
+    double dist = sqrt(dx * dx + dy * dy);
+    double alpha = acos(r / dist);
+    double theta = atan2(dy, dx) + (i ? -alpha : alpha);
+    int tip_x = cx + (int)lround(r * cos(theta));
+    int tip_y = cy + (int)lround(r * sin(theta));
+
+    /* The line's own box is the bounding rect of its ends, so a redraw costs the
+     * strand and not the whole screen. */
+    int x1 = LV_MIN(foot_x, tip_x);
+    int w = LV_MAX(LV_ABS(tip_x - foot_x) + 1, STRAND_W);
+    int h = STRAND_Y - tip_y + 1;
+
+    s_strand_pts[i][0].x = foot_x - x1;
+    s_strand_pts[i][0].y = STRAND_Y - tip_y;
+    s_strand_pts[i][1].x = tip_x - x1 + (i == 0 ? 3 : -3);
+    s_strand_pts[i][1].y = 0;
+
+    lv_obj_set_pos(s_strand[i], x1, tip_y);
+    lv_obj_set_size(s_strand[i], w, h);
+    lv_line_set_points(s_strand[i], s_strand_pts[i], 2);
 }
 
-static const char *fmt_name(mi_fmt_t f)
+static void pack_set(int i, int d)
 {
-    switch (f) {
-    case MI_FMT_MP3: return "MP3";
-    case MI_FMT_FLAC: return "FLAC";
-    case MI_FMT_WAV: return "WAV";
-    default: return "--";
+    if (d == s_pack_d[i]) return;
+    s_pack_d[i] = d;
+    lv_obj_set_size(s_pack[i], d, d);
+    lv_obj_set_pos(s_pack[i], k_hub[i].x - d / 2, k_hub[i].y - d / 2);
+    strand_set(i, d);
+}
+
+/* Apply a model frame: only what changed is touched. */
+static void apply_frame(const cassette_frame_t *f)
+{
+    if (!f) return;
+
+    if (f->title_changed) {
+        const char *label = f->title[0] ? f->title
+                          : f->playing ? ""
+                          : "no card, or nothing to play";
+        lv_label_set_text(s_title, label);
     }
+    if (f->permille_changed) lv_bar_set_value(s_bar, f->permille, LV_ANIM_OFF);
+
+    for (int i = 0; i < 2; i++) {
+        if (f->hub_frame[i] != s_shown_hub[i]) {
+            s_shown_hub[i] = f->hub_frame[i];
+            lv_image_set_src(s_hub[i], &k_hub_crops[s_shown_hub[i]]);
+        }
+    }
+
+    /* Pack fill is the model's; the diameter is the screen's. Both packs use the
+     * same range, and an even diameter keeps the disc symmetric on the pixel grid. */
+    int span = PACK_MAX_D - PACK_MIN_D;
+    int d0 = (PACK_MIN_D + span * f->pack_fill[0] / 1000) & ~1;
+    int d1 = (PACK_MIN_D + span * f->pack_fill[1] / 1000) & ~1;
+    pack_set(0, d0);
+    pack_set(1, d1);
+}
+
+/* The reels. The artist exported twenty keyframes for a two-second loop; the model
+ * advances them on that clock and stops them when nothing is playing. */
+static void reel_tick(lv_timer_t *t)
+{
+    (void)t;
+    if (!s_model) return;
+    const cassette_frame_t *f = cassette_step(s_model, NULL, lv_tick_get());
+    apply_frame(f);
+
+#if CONFIG_APP_UI_SERIAL_DUMP
+    /* A still image cannot show that the hubs turn, so a diagnostic build says it. */
+    static uint32_t last_log;
+    uint32_t now = lv_tick_get();
+    if (!f) return;
+    if (now - last_log > 1000) {
+        last_log = now;
+        ESP_LOGI(TAG, "hubs %u/%u and %u/%u, packs %d/%d px, %u permille",
+                 (unsigned)f->hub_frame[0], HUB_FRAME_COUNT,
+                 (unsigned)f->hub_frame[1], HUB_FRAME_COUNT,
+                 s_pack_d[0], s_pack_d[1], (unsigned)f->permille);
+    }
+#endif
 }
 
 /* ------------------------------------------------------------------- build */
@@ -100,135 +221,85 @@ static const char *fmt_name(mi_fmt_t f)
 void ui_cassette_create(void)
 {
     lv_obj_t *scr = lv_screen_active();
-    lv_obj_set_style_bg_color(scr, lv_color_hex(0x101216), 0);
+    lv_obj_set_style_bg_color(scr, lv_color_hex(COL_BG), 0);
     lv_obj_set_scrollable(scr, false);
 
-    /* The hubs, then the shell over them. */
+    /* The tape: two packs, then the tape strand that joins each to the bottom edge.
+     * Each pack carries its strand in the same colour. */
     for (int i = 0; i < 2; i++) {
-        lv_obj_t *w = lv_image_create(scr);
-        lv_image_set_src(w, &k_wheel);
-        lv_obj_set_pos(w, k_window[i].x - WHEEL_PX / 2, k_window[i].y - WHEEL_PX / 2);
-        lv_image_set_pivot(w, WHEEL_PX / 2, WHEEL_PX / 2);
-        /* Antialiasing off, deliberately: an antialiased transform of an RGB565A8 image
-         * is done per pixel in software, and two of them per frame cost seconds on this
-         * part - measured, not feared. A hub with hard edges turning at ten frames a
-         * second is worth far more than a smooth one that starves the network stack. */
-        lv_image_set_antialias(w, false);
-        s_wheel[i] = w;
+        s_strand[i] = lv_line_create(scr);
+
+        s_pack_d[i] = (i == 0) ? PACK_MAX_D : PACK_MIN_D;
+        s_pack[i] = disc(scr, k_hub[i].x, k_hub[i].y, s_pack_d[i], COL_TAPE);
+
+        lv_obj_remove_style_all(s_strand[i]);
+        lv_obj_set_style_line_color(s_strand[i], lv_color_hex(COL_TAPE_DARK), 0);
+        lv_obj_set_style_line_width(s_strand[i], STRAND_W, 0);
+        strand_set(i, s_pack_d[i]);
     }
-    lv_obj_t *front = lv_image_create(scr);
-    lv_image_set_src(front, &k_front);
-    lv_obj_set_pos(front, FRONT_X, FRONT_Y);
 
-    /* The title, written on the shell's own label strip. */
-    lv_obj_t *paper = lv_obj_create(scr);
-    lv_obj_remove_style_all(paper);
-    lv_obj_set_size(paper, LABEL_W, LABEL_H);
-    lv_obj_set_pos(paper, LABEL_X, LABEL_Y);
-    lv_obj_set_style_bg_color(paper, LABEL_COLOR, 0);
-    lv_obj_set_style_bg_opa(paper, LV_OPA_COVER, 0);
-    lv_obj_set_scrollable(paper, false);
-    s_title = text(scr, &lv_font_montserrat_22, lv_color_hex(0x1b2733), LV_ALIGN_TOP_LEFT,
-                   LABEL_X + 6, LABEL_Y + 3);
-    lv_label_set_long_mode(s_title, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(s_title, LABEL_W - 12);
+    /* The hubs: only the 96x96 crop is animated. No static 168 frame is stored or
+     * drawn; the disc behind it is the UI's own background. No recolor, no alpha. */
+    for (int i = 0; i < 2; i++) {
+        int cx = k_hub[i].x, cy = k_hub[i].y;
+        disc(scr, cx, cy, HUB_RING_D, COL_HUB_RING);
 
-    /* The band: what the file is, and how far into it we are. */
-    s_file = text(scr, &lv_font_montserrat_18, lv_color_hex(0xf0f2f5), LV_ALIGN_TOP_LEFT, BAND_X, BAND_Y);
-    lv_label_set_long_mode(s_file, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(s_file, BAND_W - 150);
-    s_facts = text(scr, &lv_font_montserrat_14, lv_color_hex(0x8f98a6), LV_ALIGN_TOP_RIGHT,
-                   -(800 - BAND_X - BAND_W), BAND_Y + 4);
+        lv_obj_t *hub = lv_image_create(scr);
+        lv_image_set_src(hub, &k_hub_crops[0]);
+        lv_obj_set_pos(hub, cx - HUB_CROP_W / 2, cy - HUB_CROP_H / 2);
 
+        s_hub[i] = hub;
+        s_shown_hub[i] = 0;
+    }
+
+    /* The label, the red side square and the rule the title sits above. */
+    lv_obj_t *paper = box(scr, LABEL_X, LABEL_Y, LABEL_W, LABEL_H, LABEL_R, COL_LABEL);
+    lv_obj_set_style_border_color(paper, lv_color_hex(COL_LABEL_EDGE), 0);
+    lv_obj_set_style_border_width(paper, 1, 0);
+    lv_obj_set_style_border_opa(paper, LV_OPA_COVER, 0);
+
+    lv_obj_t *side = box(scr, B_X, B_Y, B_D, B_D, B_R, COL_RED);
+    lv_obj_t *letter = text(side, &lv_font_montserrat_48, lv_color_hex(COL_LABEL),
+                            LV_ALIGN_CENTER, 0, 0);
+    lv_label_set_text(letter, "B");
+
+    s_title = text(scr, &lv_font_montserrat_22, lv_color_hex(COL_INK),
+                   LV_ALIGN_TOP_LEFT, TITLE_X, TITLE_Y);
+    lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL);
+    lv_obj_set_width(s_title, TITLE_W);
+
+    /* The band: how far into the file we are. Dark ink on the light shell, with the
+     * same red as the label's side square for the progress. */
     s_bar = lv_bar_create(scr);
-    lv_obj_set_size(s_bar, BAND_W - 96, 10);
-    lv_obj_set_pos(s_bar, BAND_X, BAND_Y + 30);
+    lv_obj_set_size(s_bar, BAND_W, 40);
+    lv_obj_set_pos(s_bar, BAND_X, BAND_Y);
     lv_bar_set_range(s_bar, 0, 1000);
-    lv_obj_set_style_bg_color(s_bar, lv_color_hex(0x2a2f38), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(s_bar, lv_color_hex(0xd8a24a), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(s_bar, lv_color_hex(COL_BAR_BG), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_bar, lv_color_hex(COL_BAR_FG), LV_PART_INDICATOR);
     lv_obj_set_style_radius(s_bar, 5, LV_PART_MAIN);
     lv_obj_set_style_radius(s_bar, 5, LV_PART_INDICATOR);
-    s_time = text(scr, &lv_font_montserrat_14, lv_color_hex(0x8f98a6), LV_ALIGN_TOP_RIGHT,
-                  -(800 - BAND_X - BAND_W), BAND_Y + 28);
 
-    ui_cassette_update(NULL);
+    /* The model: the art's clock is its input, so a change of art does not change
+     * the arithmetic. */
+    s_model = cassette_new(HUB_LOOP_MS, HUB_FRAME_COUNT, CASSETTE_DEFAULT_BAR_MS);
+    if (!s_model) ESP_LOGW(TAG, "no model for the cassette: the screen will not update");
+    else cassette_reset(s_model);
+
+    if (!lv_timer_create(reel_tick, REEL_TICK_MS, NULL))
+        ESP_LOGW(TAG, "no timer for the reels: the hubs will stay still");
+
+    /* LVGL's own performance monitor: CPU and FPS in a label on the system layer,
+     * placed top-right by CONFIG_LV_PERF_MONITOR_ALIGN_TOP_RIGHT. */
+    lv_sysmon_show_performance(NULL);
+
+    /* Draw the empty screen now; the first status update replaces it. */
+    if (s_model) apply_frame(cassette_step(s_model, NULL, lv_tick_get()));
 }
 
 /* ------------------------------------------------------------------ update */
 
 void ui_cassette_update(const mini_icecast_status_t *st)
 {
-    static mini_icecast_status_t last;
-    static bool have;
-
-    if (st) last = *st;
-    else { memset(&last, 0, sizeof last); last.format = MI_FMT_NONE; }
-    const mini_icecast_status_t *s = &last;
-
-    /* Text only when it changed: a label that is rewritten every 20 ms would restart
-     * its scroll and re-invalidate the whole band, which costs more than it shows. */
-    static char shown_file[MINI_ICECAST_STATUS_FILE_MAX], shown_title[MINI_ICECAST_STATUS_TITLE_MAX];
-    const char *title = s->title[0] ? s->title : "no card, or nothing to play";
-    if (!have || strcmp(shown_title, title) != 0) {
-        lv_label_set_text(s_title, title);
-        snprintf(shown_title, sizeof shown_title, "%.120s", title);
-    }
-    if (!have || strcmp(shown_file, s->file) != 0) {
-        lv_label_set_text(s_file, s->file[0] ? s->file : "");
-        snprintf(shown_file, sizeof shown_file, "%.150s", s->file);
-    }
-
-    char facts[96];
-    if (s->format != MI_FMT_NONE)
-        snprintf(facts, sizeof facts, "%s  %u Hz -> %u kHz  %u kbps  %u tracks", fmt_name(s->format),
-                 (unsigned)s->source_hz, (unsigned)(s->out_hz / 1000), (unsigned)s->bitrate,
-                 (unsigned)s->library_count);
-    else
-        snprintf(facts, sizeof facts, "--");
-    lv_label_set_text(s_facts, facts);
-
-    char elapsed[16], total[16], both[40];
-    fmt_time(elapsed, sizeof elapsed, s->elapsed_ms);
-    fmt_time(total, sizeof total, s->duration_ms);
-    snprintf(both, sizeof both, "%s / %s", elapsed, total);
-    lv_label_set_text(s_time, both);
-
-    if (s->duration_ms) {
-        uint32_t permille = (uint32_t)((uint64_t)s->elapsed_ms * 1000ULL / s->duration_ms);
-        lv_bar_set_value(s_bar, permille > 1000 ? 1000 : permille, LV_ANIM_OFF);
-    } else {
-        lv_bar_set_value(s_bar, 0, LV_ANIM_OFF);
-    }
-
-    /* The reels turn while there is something playing, and keep the angle they are at
-     * when it stops. A real cassette's hubs turn together, driven by the tape; the
-     * take-up hub slows as its pack grows and the supply hub speeds up, which is what
-     * the two rates below are - an approximation of that, not a simulation. */
-    have = true;
-    uint32_t now = lv_tick_get();
-    if (!s_last_ms) s_last_ms = now;
-    uint32_t dt = now - s_last_ms;
-    s_last_ms = now;
-    if (s->file[0] && dt < 500) {
-        uint32_t permille = s->duration_ms ? (uint32_t)((uint64_t)s->elapsed_ms * 1000ULL / s->duration_ms) : 0;
-        /* 0.36 deg/ms at the start of a side, 0.72 by the end (supply reel), and the
-         * other way round for the take-up reel. */
-        uint32_t supply = 360 + 360 * permille / 1000;
-        uint32_t takeup = 720 - 360 * permille / 1000;
-        s_angle[0] = (s_angle[0] + (int)(supply * dt / 10)) % 3600;
-        s_angle[1] = (s_angle[1] + (int)(takeup * dt / 10)) % 3600;
-        lv_image_set_rotation(s_wheel[0], s_angle[0]);
-        lv_image_set_rotation(s_wheel[1], s_angle[1]);
-#if CONFIG_APP_UI_SERIAL_DUMP
-        /* A diagnostic build says what the reels are doing, because a still image
-         * cannot show that they turn. One line a second is enough to see it. */
-        static uint32_t last_log;
-        if (now - last_log > 1000) {
-            last_log = now;
-            ESP_LOGI("ui", "reels %d.%d deg (supply), %d.%d deg (take-up), %u ms into %u ms",
-                     s_angle[0] / 10, s_angle[0] % 10, s_angle[1] / 10, s_angle[1] % 10,
-                     (unsigned)s->elapsed_ms, (unsigned)s->duration_ms);
-        }
-#endif
-    }
+    if (!s_model) return;
+    apply_frame(cassette_step(s_model, st, lv_tick_get()));
 }

@@ -15,6 +15,7 @@
 #include "freertos/idf_additions.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "http_parse.h"
 #include "lwip/sockets.h"
 
 #define TAG "http"
@@ -29,17 +30,10 @@
 #define CONN_TASK_STACK 10240
 #define ACCEPT_TASK_STACK 6144
 
-typedef struct {
-    const char  *prefix;
-    size_t       plen;
-    http_route_fn fn;
-    void        *ctx;
-} route_t;
-
 static struct {
     http_server_cfg_t cfg;
     uint32_t          conn_stack_min; /* bytes of headroom left, worst connection seen */
-    route_t           routes[HTTP_MAX_ROUTES];
+    http_route_t      routes[HTTP_MAX_ROUTES];
     int               nroutes;
     /* Connection workers take accepted sockets off this ring. There is one worker
      * per slot, created once, so no task is created or destroyed per request. */
@@ -48,29 +42,6 @@ static struct {
     SemaphoreHandle_t jobs;       /* connections waiting for a worker */
     SemaphoreHandle_t free_slots; /* workers not currently serving */
 } S;
-
-/* ------------------------------------------------------------- text helpers */
-
-/* Value of a request header, with leading whitespace skipped, or NULL. */
-static const char *find_header(const char *req, const char *name)
-{
-    size_t nlen = strlen(name);
-    const char *p = strstr(req, "\r\n");
-    if (!p) return NULL;
-    p += 2;
-    for (;;) {
-        const char *eol = strstr(p, "\r\n");
-        size_t len = eol ? (size_t)(eol - p) : strlen(p);
-        if (len == 0) return NULL; /* end of headers */
-        if (len > nlen && strncasecmp(p, name, nlen) == 0 && p[nlen] == ':') {
-            const char *v = p + nlen + 1;
-            while (v < p + len && (*v == ' ' || *v == '\t')) v++;
-            return v;
-        }
-        if (!eol) return NULL;
-        p = eol + 2;
-    }
-}
 
 static const char *reason_phrase(int status)
 {
@@ -175,22 +146,11 @@ size_t http_url_decode(const char *in, char *out, size_t out_size)
 
 /* ------------------------------------------------------------------ routing */
 
-static route_t *match_route(const char *path)
-{
-    route_t *best = NULL;
-    for (int i = 0; i < S.nroutes; i++) {
-        route_t *r = &S.routes[i];
-        if (strncmp(path, r->prefix, r->plen) != 0) continue;
-        if (!best || r->plen > best->plen) best = r;
-    }
-    return best;
-}
-
 esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void *ctx)
 {
     if (!prefix || !fn || prefix[0] != '/') return ESP_ERR_INVALID_ARG;
     if (S.nroutes >= HTTP_MAX_ROUTES) return ESP_ERR_NO_MEM;
-    route_t *r = &S.routes[S.nroutes++];
+    http_route_t *r = &S.routes[S.nroutes++];
     r->prefix = prefix;
     r->plen = strlen(prefix);
     r->fn = fn;
@@ -199,43 +159,6 @@ esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void 
 }
 
 /* --------------------------------------------------------------- connection */
-
-/* Returns 0 on success, or an HTTP status to answer with. */
-static int parse_request(char *buf, http_request_t *req)
-{
-    char *line_end = strstr(buf, "\r\n");
-    if (!line_end) return 400;
-    *line_end = 0;
-
-    char *sp1 = strchr(buf, ' ');
-    if (!sp1) return 400;
-    *sp1 = 0;
-    char *target = sp1 + 1;
-    char *sp2 = strchr(target, ' ');
-    if (sp2) *sp2 = 0;
-
-    if (strlen(buf) == 0 || strlen(buf) >= sizeof req->method) return 400;
-    strcpy(req->method, buf);
-
-    /* Absolute-form request target: legal in HTTP/1.0 (RFC 1945) and HTTP/1.1
-     * (RFC 7230 section 5.3.2), and what a proxy or a hand-typed
-     * "GET http://host:8000/stream" sends. */
-    if (target[0] != '/') {
-        char *scheme = strstr(target, "://");
-        if (!scheme) return 400;
-        char *slash = strchr(scheme + 3, '/');
-        if (!slash) return 400;
-        target = slash;
-    }
-    char *query = strchr(target, '?');
-    if (query) *query = 0;
-    if (strlen(target) >= sizeof req->path) return 414;
-    strcpy(req->path, target);
-
-    const char *icy = find_header(line_end + 2, "icy-metadata");
-    req->want_icy_metadata = icy != NULL && icy[0] == '1';
-    return 0;
-}
 
 static void set_socket_options(int fd)
 {
@@ -276,7 +199,7 @@ static void serve_connection(int fd)
 
     http_request_t req;
     memset(&req, 0, sizeof req);
-    int status = parse_request(buf, &req);
+    int status = http_parse_request(buf, &req);
     if (status) {
         ESP_LOGW(TAG, "malformed request -> %d", status);
         http_send_error(fd, status, "malformed request line");
@@ -290,7 +213,7 @@ static void serve_connection(int fd)
         return;
     }
 
-    route_t *r = match_route(req.path);
+    const http_route_t *r = http_route_match(S.routes, S.nroutes, req.path);
     if (!r) {
         ESP_LOGI(TAG, "GET %s -> 404", req.path);
         http_send_error(fd, 404, "no such path");

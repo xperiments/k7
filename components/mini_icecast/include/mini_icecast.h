@@ -8,9 +8,11 @@
  * MP3 at one bit rate and broadcast in real time. Because the station format
  * never changes, track changes are seamless for every player.
  *
- * This component produces audio and owns the client list, the burst ring and the
- * pacing clock. It owns no listening socket, no request parsing and no routing:
- * it registers a route with http_server, which is what calls back in.
+ * This component produces audio and owns the client list, the burst ring, the
+ * per-client send rings and their sender tasks, and the pacing clock. It owns no
+ * listening socket, no request parsing and no routing: it registers a route with
+ * http_server, which is what calls back in. The audio task never writes a socket:
+ * it queues framed bytes for a sender, so a slow listener cannot slow the stream.
  *
  * Features: pacing, burst-on-connect, ICY metadata (StreamTitle), track change, skip.
  * Bandwidth: bitrate/8 bytes/s per client (32 KB/s at 256 kbps): fine for a LAN.
@@ -26,14 +28,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* Called for every output chunk (MINI_ICECAST_CHUNK_FRAMES stereo frames, int16,
- * out_hz), as that chunk is handed to the encoder. It carries the same PCM
- * *content* that goes on the wire, but as unencoded 1024-frame chunks, up to one
- * encoder frame (26 ms at 44.1 kHz, 72 ms at 8 kHz) ahead of it. Same task as the
- * pacing loop: keep it fast or copy the data out (e.g. into a ring buffer for an
- * FFT task). It also runs ~lead_ms ahead of what a remote client hears. */
-typedef void (*mini_icecast_pcm_cb_t)(const int16_t *stereo, size_t frames, void *ctx);
 
 #define MINI_ICECAST_CHUNK_FRAMES 1024
 #define MINI_ICECAST_MAX_CLIENTS 4  /* the client table size; max_clients must fit in it */
@@ -56,8 +50,6 @@ typedef struct {
     uint32_t    metaint;       /* bytes of audio between ICY metadata blocks, default 16000 */
     uint32_t    lead_ms;       /* how far ahead of real time we send, default 1500 */
     uint32_t    burst_ms;      /* history sent on connect, default 500, in external memory if present */
-    mini_icecast_pcm_cb_t pcm_cb;
-    void       *pcm_cb_ctx;
 } mini_icecast_cfg_t;
 
 /* Check a configuration without starting anything.
@@ -102,7 +94,19 @@ typedef struct {
     uint32_t elapsed_ms;                           /* broadcast from this track so far */
     uint32_t duration_ms;                          /* this track's length, 0 = unknown */
     uint32_t library_count;                        /* playable files found on the card */
+    /* RMS of the chunk being encoded, 0..1 per channel: the display's level, not
+     * the wire's. Written by the broadcast task per chunk and read without the
+     * lock like elapsed_ms - a 32-bit float store is atomic on this core. */
+    float    level_l;
+    float    level_r;
 } mini_icecast_status_t;
+
+/* How far behind real time the broadcast is, in milliseconds, or 0 when it is
+ * keeping up. Written by the pacing loop and read without the lock like the
+ * status fields. A lower-priority consumer of the same microSD card - the
+ * download path - uses it to back off when the stream is starving, instead of
+ * taking the bus for a fixed slice whether it is needed or not. */
+uint32_t  mini_icecast_lag_ms(void);
 
 void      mini_icecast_status(mini_icecast_status_t *out);
 
@@ -113,13 +117,14 @@ size_t    mini_icecast_now_playing(char *out, size_t out_size); /* current title
 typedef enum {
     MINI_ICECAST_REGISTERED = 0,  /* the fd is on the air and outlives the request */
     MINI_ICECAST_REGISTER_FULL,   /* every client slot is taken: answer 503 */
-    MINI_ICECAST_REGISTER_FAILED, /* headers or burst could not be sent: just close */
+    MINI_ICECAST_REGISTER_FAILED, /* headers or the send ring could not be prepared: just close */
 } mini_icecast_register_result_t;
 
-/* Put an already-accepted connection on the air: write the stream headers, then
- * register it and send the burst under the broadcast lock. The caller must not
- * close the fd afterwards when this returns MINI_ICECAST_REGISTERED. Called by
- * the "/stream" route; applications do not normally call this. */
+/* Put an already-accepted connection on the air: write the stream headers, queue
+ * the burst into that client's send ring, and hand the fd to its sender task. The
+ * caller must not close the fd afterwards when this returns
+ * MINI_ICECAST_REGISTERED. Called by the "/stream" route; applications do not
+ * normally call this. */
 mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_icy_metadata);
 
 #ifdef __cplusplus

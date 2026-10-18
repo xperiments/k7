@@ -39,11 +39,14 @@ for f in "$ROOT"/components/http_server/*.c "$ROOT"/components/http_server/inclu
     absent "$f" 'music_dir|\.mp3|\.flac|now_playing' 'no library concepts: '"$(basename "$f")"
 done
 
-printf '\nS4  nothing depends on mini_files except the applications\n'
+printf '\nS4  nothing depends on mini_files except the application layer\n'
 users=$(grep -rl 'mini_files\.h' "$ROOT/components" "$ROOT/main" 2>/dev/null | grep -v '/mini_files/' || true)
 for f in $users; do
     case "$f" in
-    */main/*) printf '  ok    %s may depend on mini_files\n' "$(basename "$f")" ;;
+    */main/*) printf '  ok    %s may depend on mini_files (the appliance)\n' "$(basename "$f")" ;;
+    */app_services/*)
+        printf '  ok    %s may depend on mini_files (the composition module is the application layer, moved)\n' \
+               "$(basename "$f")" ;;
     *)
         printf '  FAIL  %s depends on mini_files\n' "$f"
         fail=1

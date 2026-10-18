@@ -61,3 +61,10 @@ Costs and constraints, all measured:
 `main/ui_fit.c` is groundwork and says so. When the real interface arrives it replaces
 that file, keeping the allocator and the PSRAM draw-buffer rule, and the fit check goes
 with it.
+
+## Implementation note (architecture review, 2026-10-18)
+
+`main/ui_fit.c` no longer exists. The allocator and the PSRAM draw-buffer rule live in
+`main/ui.c`, the screen in `main/ui_cassette.c`, and the screen's testable arithmetic in
+`components/cassette/`. The decision above is unchanged; only the placeholder file it was
+first proved in is gone.

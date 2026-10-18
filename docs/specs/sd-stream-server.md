@@ -312,6 +312,13 @@ receives the same PCM *content*, as unencoded chunks, up to one encoder frame (~
 of the wire. The `on_pcm()` visualizer in `main.c:103-113` needs no code change; only the
 promise needs to stop overstating itself.
 
+> **Superseded (ticket 16).** The callback was retired after the cassette screen became
+> the display: `mini_icecast_status_t` now carries the per-channel RMS level, computed
+> where the PCM already passes through, and nothing consumes raw PCM. C1 was satisfied
+> while the callback existed; there is no callback left to describe. A future consumer of
+> raw PCM - an FFT, a second sink - gets an interface designed for it then, rather than an
+> unused hook kept for a hypothetical one.
+
 ---
 
 ## 5. Defects to fix

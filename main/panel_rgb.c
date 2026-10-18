@@ -28,7 +28,7 @@ static const char *TAG = "panel";
 
 #define PANEL_W 800
 #define PANEL_H 480
-#define PCLK_HZ 16000000
+#define PCLK_HZ 18000000
 #define BACKLIGHT_GPIO 2
 
 /* boards/sunton-8048s050c.json -> wiring.dataPins */
@@ -38,13 +38,15 @@ static const gpio_num_t k_data_pins[16] = {
 
 static esp_lcd_panel_handle_t s_panel;
 
-/* The port's own task: the reference project's parameters, which it measured - core 1 so
- * the refresh does not queue behind the application's core, a 16 KB stack after it
- * measured 72 bytes of margin at half that, and a 500 ms cap on its sleep. */
+/* The port's own task: the reference project's parameters, adjusted for this firmware's
+ * core split - the broadcast/encoder owns core 1, so the refresh lives on core 0 with
+ * Wi-Fi and lwIP, below their priorities, and no longer queues behind the encoder. A
+ * 16 KB stack after the reference measured 72 bytes of margin at half that, and a
+ * 500 ms cap on its sleep. */
 static const lvgl_port_cfg_t k_port = {
     .task_priority = 4,
     .task_stack = 16384,
-    .task_affinity = 1,
+    .task_affinity = 0,
     .task_max_sleep_ms = 500,
     .timer_period_ms = 5,
 };

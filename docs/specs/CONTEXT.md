@@ -83,6 +83,23 @@ The display title of the track the live stream is currently carrying. A presenta
 deliberately not the track's filename or the station name.
 _Avoid_: current song, stream title, ID3 title
 
+### The display
+
+**Cassette screen**:
+The 800x480 drawing of a cassette that shows what is playing: two reels, two tape
+packs and a label. A presentation of the live stream, never a source of truth.
+_Avoid_: UI, GUI, dashboard
+
+**Reel frame**:
+One of the twenty keyframes of the hub art, advanced on a two-second loop. The
+sequence is the rotation; the frames are not.
+_Avoid_: sprite, animation step, image frame
+
+**Label**:
+The paper strip on the cassette that carries the cleaned **Now playing** title,
+with parenthesised asides dropped.
+_Avoid_: title bar, caption, marquee
+
 ### Clients and access
 
 **Client**:
@@ -126,6 +143,12 @@ The rule that a piece of work is finished only once its tests have passed on the
 on the board. The host pass finds problems cheaply; the board pass is what makes the result
 evidence about the device.
 _Avoid_: CI, staging, pre-check
+
+**Board adapter**:
+The one module that differs between the firmware and the host build: Wi-Fi, the
+card mount and the hardware census. Two adapters exist, so the seam is real rather
+than hypothetical.
+_Avoid_: platform layer, HAL, driver shim
 
 **Board-only property**:
 Something the host build cannot establish by construction — processor headroom, memory fit,

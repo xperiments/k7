@@ -52,7 +52,16 @@ echo "serial: $SERIAL_PORT -> $LOG"
 # Capture first: it resets the board, so the run covers a clean boot.
 "$PY" "$HERE/serial_log.py" -p "$SERIAL_PORT" -s "$SECS" -o "$LOG" &
 CAP=$!
-sleep 4
+# The capture resets the board, and boot plus Wi-Fi takes about five seconds.
+# Asking for the library before that is a race, and it silently turns a download
+# soak into a stream-only one.
+n=0
+while [ "$n" -lt 100 ]; do
+    curl -s -o /dev/null --max-time 1 "$BASE/" && break
+    n=$((n + 1))
+    sleep 0.2
+done
+sleep 1
 
 # One client on the live stream for the whole run: T11 asks for that, and T9b
 # wants the broadcast busy while the card is under download pressure.

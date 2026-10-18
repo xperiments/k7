@@ -1,0 +1,7 @@
+version: "1.0.0"
+description: "Compose the file surface, the broadcast and the HTTP listener once, above the board adapter."
+license: "MIT"
+targets:
+  - esp32s3
+dependencies:
+  idf: ">=5.4"

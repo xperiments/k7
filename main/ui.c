@@ -184,7 +184,6 @@ static void ui_task(void *arg)
      * that never runs is otherwise indistinguishable from a task that has nothing to do. */
     ESP_LOGI(TAG, "ui task running on core %d", (int)xPortGetCoreID());
     uint32_t last_tick = 0;
-    int last_elapsed = -1;
     for (;;) {
         uint32_t now = tick_ms();
         lv_tick_inc(now - last_tick);
@@ -202,7 +201,6 @@ static void ui_task(void *arg)
 #else
         ui_cassette_update(&st);
 #endif
-        if ((int)st.elapsed_ms != last_elapsed) last_elapsed = (int)st.elapsed_ms;
 
         int64_t t0 = esp_timer_get_time();
 #if !CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -216,13 +214,13 @@ static void ui_task(void *arg)
         if (frame_ms > worst_ms) worst_ms = frame_ms;
         if (++n_frames == 50)
             ESP_LOGI(TAG, "%d frames: worst %d ms, last %d ms", n_frames, worst_ms, frame_ms);
-        /* Rest for at least three times as long as the frame took. A frame here is
-         * expensive - two alpha-blended reel hubs transformed into an 800x480 buffer,
-         * measured at over 100 ms - and this task shares its core with the network
-         * stack. Without this the interface simply never catches up: it renders, sleeps
-         * a fixed 40 ms, renders again, and owns the core. Yielding in proportion to the
-         * work done keeps it under a quarter of the core whatever a frame costs, which
-         * matters more than the reels' smoothness. */
+        /* Rest for at least three times as long as the frame took. A frame here can be
+         * expensive - on this part a full-screen invalidation has cost over 100 ms - and
+         * this task shares its core with the network stack. Without this the interface
+         * simply never catches up: it renders, sleeps a fixed 40 ms, renders again, and
+         * owns the core. Yielding in proportion to the work done keeps it under a
+         * quarter of the core whatever a frame costs, which matters more than the
+         * screen's smoothness. */
         int rest = frame_ms * 3;
         if (rest < UI_FRAME_MS) rest = UI_FRAME_MS;
         if (rest > UI_REST_MAX_MS) rest = UI_REST_MAX_MS;   /* a slow frame must not freeze it */
@@ -306,12 +304,12 @@ void ui_start(void)
 
     /* A task rather than lv_timer_handler() in the app's idle loop: the display the
      * panel will need has its own cadence, and this keeps the UI off the audio core. */
-    /* Core 1, at a priority below the encoder's 6 and the connection workers' 5. The
-     * reference integration on this board pins its interface away from the core the
-     * application works on, and this is the same reasoning with this firmware's parts:
-     * Wi-Fi and lwIP own core 0, and the interface must never be able to starve them -
-     * which is exactly what it did when it lived there and rendered in a loop. */
-    if (xTaskCreatePinnedToCore(ui_task, "ui", 16 * 1024, NULL, 3, NULL, 1) != pdPASS)
+    /* Core 0, the core the broadcast/encoder does not use; it now sits with Wi-Fi and
+     * lwIP at priority 3, below their tasks and below the LVGL port's 4, so it yields
+     * to the network instead of queueing behind the encoder on core 1. The port task
+     * is mostly parked on the panel's vsync, so it does not starve Wi-Fi the way the
+     * old render-in-a-loop interface did. */
+    if (xTaskCreatePinnedToCore(ui_task, "ui", 16 * 1024, NULL, 3, NULL, 0) != pdPASS)
         ESP_LOGE(TAG, "no memory for the interface task: the screen will not update");
 
 #if CONFIG_APP_UI_SERIAL_DUMP

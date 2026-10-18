@@ -1,49 +1,29 @@
 /*
  * The host build's entry point.
  *
- * It is a *host* main, not a fork of the firmware: it calls exactly the same
- * component sources the firmware does (mini_icecast, mi_encode, mi_decode,
- * mi_resample, mini_files, http_server), linked against the host shim instead of
- * ESP-IDF. What it replaces is the board's Wi-Fi and microSD bring-up, which the
- * host has no equivalent of - here the music directory is a path and the
- * "card" is always mounted.
+ * It is a *host* main, not a fork of the firmware: it calls the same service
+ * composition the firmware does (app_services, which starts mini_files,
+ * mini_icecast and http_server in the one order), linked against the host shim
+ * and the host board adapter instead of ESP-IDF. What it replaces is the board's
+ * Wi-Fi and microSD bring-up - here the music directory is a path and the "card"
+ * is always mounted.
  *
  * Usage: icecast_host [--music-dir DIR] [--port N] [--out-hz N] [--bitrate N]
  *                     [--max-clients N] [--metaint N] [--lead-ms N] [--burst-ms N]
  *                     [--name NAME]
  */
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "app_services.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "http_server.h"
-#include "mini_files.h"
 #include "mini_icecast.h"
 
 static const char *TAG = "host";
-
-/* The same visualiser the firmware wires up (main/main.c): it proves the pcm_cb
- * contract on the host, where a wrong frame count or a stale pointer is cheap to
- * notice. */
-static volatile float level_l, level_r;
-
-static void on_pcm(const int16_t *pcm, size_t frames, void *ctx)
-{
-    (void)ctx;
-    int64_t sl = 0, sr = 0;
-    for (size_t i = 0; i < frames; i++) {
-        int l = pcm[2 * i], r = pcm[2 * i + 1];
-        sl += (int64_t)l * l;
-        sr += (int64_t)r * r;
-    }
-    level_l = sqrtf((float)sl / (float)frames) / 32768.0f;
-    level_r = sqrtf((float)sr / (float)frames) / 32768.0f;
-}
 
 static void usage(const char *argv0)
 {
@@ -90,35 +70,25 @@ int main(int argc, char **argv)
         }
     }
 
-    mini_icecast_cfg_t icfg = {
+    /* The same composition the firmware runs, with the host's board adapter: the
+     * fixture directory is always mounted and there is no network to bring up. */
+    app_services_cfg_t cfg = {
         .music_dir = music_dir,
         .station_name = station,
         .port = port,
-        .max_clients = max_clients,
         .out_hz = out_hz,
         .bitrate = bitrate,
+        .max_clients = max_clients,
+        .max_conns = 4,
         .metaint = metaint,
         .lead_ms = lead_ms,
         .burst_ms = burst_ms,
-        .pcm_cb = on_pcm,
+        .server_name = "mini_icecast/host",
     };
-    esp_err_t err = mini_icecast_start(&icfg);
+    app_services_report_t report;
+    esp_err_t err = app_services_start(&cfg, &report);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "cannot start the broadcast: %s", esp_err_to_name(err));
-        return 1;
-    }
-
-    mini_files_cfg_t fcfg = {.station_name = station, .music_dir = music_dir, .mount_error = NULL};
-    err = mini_files_start(&fcfg);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "cannot start the file surface: %s", esp_err_to_name(err));
-        return 1;
-    }
-
-    http_server_cfg_t scfg = {.port = port, .server_name = "mini_icecast/host", .max_conns = 4};
-    err = http_server_start(&scfg);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "cannot start the HTTP server: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "%s", report.failure[0] ? report.failure : esp_err_to_name(err));
         return 1;
     }
 
@@ -126,10 +96,10 @@ int main(int argc, char **argv)
     fflush(stdout);
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(5000));
-        char title[121];
-        mini_icecast_now_playing(title, sizeof title);
-        printf("now playing: %-40.40s  L %3d%%  R %3d%%\n", title, (int)(level_l * 100),
-               (int)(level_r * 100));
+        mini_icecast_status_t st;
+        mini_icecast_status(&st);
+        printf("now playing: %-40.40s  L %3d%%  R %3d%%\n", st.title,
+               (int)(st.level_l * 100), (int)(st.level_r * 100));
         fflush(stdout);
     }
     return 0;

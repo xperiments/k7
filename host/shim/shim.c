@@ -223,6 +223,17 @@ static host_sem_t *sem_new(unsigned max, unsigned initial)
 
 SemaphoreHandle_t xSemaphoreCreateMutex(void) { return sem_new(1, 1); }
 
+SemaphoreHandle_t xSemaphoreCreateBinary(void) { return sem_new(1, 0); }
+
+void vSemaphoreDelete(SemaphoreHandle_t handle)
+{
+    host_sem_t *s = handle;
+    if (!s) return;
+    pthread_mutex_destroy(&s->m);
+    pthread_cond_destroy(&s->c);
+    free(s);
+}
+
 SemaphoreHandle_t xSemaphoreCreateCounting(UBaseType_t max_count, UBaseType_t initial_count)
 {
     return sem_new(max_count, initial_count);

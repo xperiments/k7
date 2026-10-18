@@ -72,6 +72,19 @@ int main(void)
     CHECK(got_playing, "a track is playing and its source rate is known");
     if (!got_playing) return 1;
 
+    /* The display's level rides in the same snapshot (ticket 16): the callback it
+     * used to come from is gone, so this is the only way a screen can see it. */
+    bool got_level = false;
+    for (int i = 0; i < 40 && !got_level; i++) {
+        usleep(100 * 1000);
+        mini_icecast_status(&st);
+        got_level = st.level_l > 0.0f || st.level_r > 0.0f;
+    }
+    CHECK(st.level_l >= 0.0f && st.level_l <= 1.0f && st.level_r >= 0.0f && st.level_r <= 1.0f,
+          "the level is 0..1 per channel (%f, %f)", (double)st.level_l, (double)st.level_r);
+    CHECK(got_level, "the level is non-zero while a track plays (%f, %f)",
+          (double)st.level_l, (double)st.level_r);
+
     /* The name and the facts a display puts next to it. */
     CHECK(st.title[0] != 0, "there is a title to show");
     CHECK(strncmp(st.title, st.file, strlen(st.title)) == 0,

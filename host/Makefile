@@ -29,6 +29,8 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/http_server/include \
        -I$(ROOT)/components/mini_icecast/include \
        -I$(ROOT)/components/mini_files/include \
+       -I$(ROOT)/components/cassette/include \
+       -I$(ROOT)/components/app_services/include \
        -I$(ROOT)/components/dr_libs/include \
        -I$(ROOT)/components/shine/src/lib \
        -I$(HERE) \
@@ -40,23 +42,36 @@ SHINE_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(SHINE_SRC)))
 # The production sources. The firmware target compiles exactly these files.
 PROD_SRC := \
   $(ROOT)/components/http_server/http_server.c \
+  $(ROOT)/components/http_server/http_parse.c \
   $(ROOT)/components/mini_icecast/mini_icecast.c \
+  $(ROOT)/components/mini_icecast/mi_station.c \
+  $(ROOT)/components/mini_icecast/mi_burst.c \
+  $(ROOT)/components/mini_icecast/mi_icy.c \
+  $(ROOT)/components/mini_icecast/mi_ring.c \
   $(ROOT)/components/mini_icecast/mi_encode.c \
   $(ROOT)/components/mini_icecast/mi_decode.c \
   $(ROOT)/components/mini_icecast/mi_resample.c \
   $(ROOT)/components/mini_files/mini_files.c \
+  $(ROOT)/components/mini_files/music_dir.c \
+  $(ROOT)/components/cassette/cassette.c \
+  $(ROOT)/components/app_services/app_services.c \
   $(SHINE_SRC)
 
 vpath %.c $(ROOT)/components/http_server \
           $(ROOT)/components/mini_icecast \
           $(ROOT)/components/mini_files \
+          $(ROOT)/components/cassette \
+          $(ROOT)/components/app_services \
           $(ROOT)/components/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
 
-CORE_OBJ := $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_resample.o $(SHINE_OBJ) $(OBJ)/shim.o
-HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/mini_icecast.o $(OBJ)/mini_files.o
+CORE_OBJ := $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(SHINE_OBJ) $(OBJ)/shim.o
+BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o $(OBJ)/mi_ring.o
+CASSETTE_OBJ := $(OBJ)/cassette.o
+SVC_OBJ := $(OBJ)/app_services.o
+HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/mini_icecast.o $(OBJ)/mini_files.o $(OBJ)/music_dir.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
-SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/icecast_host.o
+SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o
 
 TOOLS := $(BIN)/mi_bench $(BIN)/mi_encode_file $(BIN)/mi_frames
 # The harness helpers are Python; override PYTHON where the default python3 is not the
@@ -65,7 +80,8 @@ PYTHON ?= python3
 
 TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t03_resampler_guard $(BIN)/t04_format_validation \
-         $(BIN)/t05_stream_formats $(BIN)/t06_status
+         $(BIN)/t05_stream_formats $(BIN)/t06_status $(BIN)/t07_burst_icy \
+         $(BIN)/t08_http_parse $(BIN)/t09_music_dir $(BIN)/t10_cassette $(BIN)/t11_ring
 
 .PHONY: all test integration layering check tools fixtures bench clean help
 
@@ -106,7 +122,7 @@ $(BIN)/t03_resampler_guard: $(CORE_OBJ) $(OBJ)/t03_resampler_guard.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t04_format_validation: $(CORE_OBJ) $(OBJ)/t04_format_validation.o
+$(BIN)/t04_format_validation: $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/t04_format_validation.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
@@ -114,6 +130,26 @@ $(BIN)/t05_stream_formats: $(CORE_OBJ) $(OBJ)/t05_stream_formats.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(BIN)/t06_status: $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/t06_status.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t07_burst_icy: $(CORE_OBJ) $(BURST_OBJ) $(OBJ)/t07_burst_icy.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t08_http_parse: $(OBJ)/http_parse.o $(OBJ)/t08_http_parse.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t09_music_dir: $(CORE_OBJ) $(OBJ)/music_dir.o $(OBJ)/t09_music_dir.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t10_cassette: $(CORE_OBJ) $(CASSETTE_OBJ) $(OBJ)/t10_cassette.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t11_ring: $(CORE_OBJ) $(OBJ)/mi_ring.o $(OBJ)/t11_ring.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

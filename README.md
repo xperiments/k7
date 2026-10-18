@@ -239,7 +239,6 @@ mini_icecast_cfg_t cfg = {
     .out_hz = 44100,      /* 44100 48000 32000 22050 24000 16000 11025 12000 8000 */
     .bitrate = 256,       /* must be one the encoder accepts at that rate */
     .max_clients = 4,     /* 1..4; anything else is refused, not coerced */
-    .pcm_cb = on_pcm,
 };
 ```
 
@@ -339,14 +338,16 @@ inserting a card later brings the library up with no reboot.
 
 The same component sources compile for macOS against a small shim
 (`host/include/`, `host/shim/shim.c`) that stands in for the eleven ESP-IDF
-functions the code uses. There is no target conditional compilation anywhere in
-`components/`: the shim is the only thing that knows it is a Mac, which is what
-keeps "the tests pass on the host" from meaning "the firmware is nothing like what
-was tested".
+functions the code uses, and a board adapter (`host/board_host.c`) that stands in
+for Wi-Fi and the card mount. There is no target conditional compilation anywhere
+in `components/`: the shim and the host board adapter are the only pieces that
+know it is a Mac, which is what keeps "the tests pass on the host" from meaning
+"the firmware is nothing like what was tested".
 
 ```bash
 make -C host                # build the runnable server
-make -C host test           # unit tests: encoder, accumulator, resampler guard, format validation
+make -C host test           # unit tests: encoder, pipeline, resampler, format, stream, status,
+                            # request parsing, burst/ICY, music directory, cassette model
 make -C host integration    # T3-T9 and T12 against the real server over HTTP
 make -C host layering       # architectural rules: no sockets in the broadcast, no audio in the HTTP layer
 make -C host check          # all three
@@ -472,6 +473,44 @@ minimum during a track is about 11 KB, which is below the 32 KB the heap reserve
 for DMA-capable allocations, so anything added to the radio task should be measured
 rather than assumed.
 
+### The Sunton 8048S050C (800x480 panel attached)
+
+The same firmware on the panel board, measured 2026-10-18 with the architecture-review
+changes flashed.
+
+| Check | Result |
+|---|---|
+| Boot | panel up through the port, card mounted, Wi-Fi at `192.168.0.44`, station 44100 Hz / 256 kbps |
+| HTTP surface (`BOARD_URL` run) | 54 passed, 0 failed among the checks that do not name a fixture; the 26 failures are `tone-*` / `tail-*` 404s, because the card holds a real library |
+| Index and downloads from the card's own library | 4 tracks, labels and sizes self-consistent; every download's length, media type and container magic match; traversal 400; non-audio 404; a wrong-case name resolves (FATFS) |
+| One download at a time (D6) | second request 503; the lock is free again about 4 s after an aborted client |
+| A refused station format (F1) | `out_hz = 44101`: refuses, names the rate and the accepted set, brings up no Wi-Fi, no card and no listener, and does not reboot |
+| 3-minute idle (no listener, no downloads) | encoder 58.8 %, **0 starvation rebases** |
+| 5-minute stream-only soak | encoder 59.9 %, **0 starvation rebases**, 0 faults |
+| 10-minute soak with repeated downloads | encoder 68.9 %, **17 starvation rebases** (bursty), 0 faults; **the listener stayed connected for the whole run** |
+
+The download path has to share one SD bus and one radio with the broadcast, and a fixed
+1 ms yield per 16 KB was measured helping and then not - the contention arrives in bursts.
+The download now starts gently and backs off for two seconds whenever
+`mini_icecast_lag_ms()` reports the broadcast behind; that took the download soak from
+about fifty starvation rebases in twelve minutes to **zero in ten**, with the encoder at
+62.3 %. The station rate was not the fix: before the backoff, 32 kHz / 96 kbps still
+produced forty rebases in five minutes (61.3 %), so the encoder's frame rate was never the
+only bottleneck.
+
+The listener now survives the download. The audio task never writes a socket: each client has
+a 10-second send ring in PSRAM and its own permanent sender task, and the download is paced at
+about 1.3 MB/s rather than arriving in bursts. Before this, a synchronous send on the audio
+task with lwIP's 5.7 KB buffer was dropped in 10-30 s. The same soak still reports 17
+starvation rebases, bursty, so the broadcast can still fall a second behind under the
+worst-case download; the connection and the audio continue and the pacing clock rebases.
+That residual is the open part of ticket 19. The external-memory heuristic in the soak flags a
+small drop; the 60 s samples oscillate by more than that and return, so it is allocation
+churn, not a leak.
+
+The devkit table above is unaffected - it has no panel, and its documented soak results
+stand.
+
 **Five faults that only the board could show**, each now fixed and each worth the
 tier on its own:
 
@@ -572,25 +611,43 @@ sh host/tests/digest.sh http://127.0.0.1:18001 http://<board-address>:8000 12
 ## Architecture
 
 ```
-main/                       app_main: NVS, Wi-Fi, card mount + retry, hand-off, skip button, levels
+main/                       the appliance: configuration, display, skip button, console line
+  board_esp32.c             the board adapter: Wi-Fi, SPI card mount, hardware census
 components/
-  http_server/              listening socket, per-connection parse and route   (knows nothing about audio)
+  app_services/             composes the services in the one order that fits memory
+    app_board.h             what the services need from a board, and nothing else
+  http_server/              listening socket, connection workers, routing
+    http_parse.c/.h         request-line rules and route matching, no socket
   mini_icecast/             PCM in -> MP3 -> ICY broadcast, client fan-out
     mi_decode.c/.h          mp3/flac/wav -> stereo int16 (vendored dr_libs)
     mi_resample.c/.h        windowed-sinc resampler to the station rate
     mi_encode.c/.h          the 1024<->1152 mismatch, whole frames out
-    mini_icecast.c/.h       pacing, burst, ICY metadata, client list
+    mi_station.c/.h         the station configuration, resolved once
+    mi_burst.c/.h           the burst on connect, as whole encoded frames
+    mi_icy.c/.h             the metadata interval and its 16-byte blocks
+    mi_ring.c/.h            the per-client send ring: the audio task never writes a socket
+    mini_icecast.c/.h       pacing, client list, station status
   mini_files/               GET / index, GET /music/<name> download
+    music_dir.c/.h          the directory's name, path and listing rules
+  cassette/                 what the screen shows: reels, packs, progress, label
   dr_libs/                  vendored dr_mp3 / dr_flac / dr_wav (public domain / MIT-0)
   shine/                    vendored toots/shine MP3 encoder (LGPL-2.0-only)
-host/                       the host build: shim, fixtures, tests, tools
+host/                       the host build: shim, board adapter, fixtures, tests, tools
 ```
 
 The dependency direction is one-way and is checked by `make -C host layering`:
-`mini_files` and `mini_icecast` depend on `http_server`; nothing depends on
-`mini_files`; `mini_icecast` owns no socket, parses no request and renders no
-markup. The binary search for the seam is in
+`mini_files` and `mini_icecast` depend on `http_server`; only the application
+layer (`app_services` and `main/`) depends on `mini_files`; `mini_icecast` owns no
+socket, parses no request and renders no markup; `cassette` depends only on the
+broadcast's status snapshot. The binary search for the seam is in
 `docs/adr/0003-extract-http-server-from-mini-icecast.md`.
+
+The services are composed once, in `app_services`, and both entry points call it:
+the firmware through `main/board_esp32.c` and the host build through
+`host/board_host.c`. The order is not cosmetic — the station is resolved before
+anything allocates, the network comes up before the encoder takes its internal RAM,
+and the listener starts last — and it now has one home instead of one per entry
+point.
 
 Requests are parsed on a pool of connection workers, capped by a connection limit,
 with a generous listen backlog — so a client that connects and says nothing, or reads
@@ -687,7 +744,7 @@ Three things make that true, and the second is the one that is easy to get wrong
    PSRAM instead of internal RAM. That is the +7.6 % of encoder cost described above,
    paid for a largest free internal block of 81 920 B instead of 18 432 B.
 2. **LVGL gets an explicit PSRAM allocator** (`LV_USE_CUSTOM_MALLOC`, implemented in
-   `main/ui_fit.c`). Lowering the threshold alone does not do this:
+   `main/ui.c`). Lowering the threshold alone does not do this:
    `heap_caps_malloc_default()` prefers internal memory for anything *at or below* the
    threshold, so at 4096 every widget would still ask internal first and fall through to
    PSRAM only when internal ran out — silently, which is exactly the failure mode that

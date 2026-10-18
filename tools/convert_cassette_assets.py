@@ -1,141 +1,172 @@
 #!/usr/bin/env python3
-"""Turn the cassette artwork into what the firmware can blit, and measure it.
+"""Turn the reel-hub frame sequence into what the firmware can blit.
 
-    python3 tools/convert_cassette_assets.py            # writes main/assets/*.bin
-    python3 tools/convert_cassette_assets.py --check     # only re-measures, writes nothing
+    python3 tools/convert_cassette_assets.py            # writes main/assets/hub_frames.{bin,h}
+    python3 tools/convert_cassette_assets.py --check    # only validates and reports
 
-Why this exists rather than LVGL's own LVGLImage.py: that tool needs `pypng`, and the
-formats wanted here are plain (RGB565 plus an alpha plane). What matters is that the
-conversion is reproducible and that the layout numbers are *measured from the art*
-rather than typed in by hand, which is what the geometry half does: the reel holes are
-found in the alpha channel, by flood fill, so moving or resizing the artwork cannot
-silently leave the wheels sitting in the wrong place.
+The screen is drawn by main/ui_cassette.c. The hub art comes from assets/hub/NNN.png:
+20 opaque 168x168 keyframes of the whole hub, exported for a 2-second loop. The outer
+ring and the black background are identical in every keyframe, so only the centre turns.
 
-Output format is LVGL's RGB565A8: every row of RGB565 (little-endian, stride = w * 2)
-followed by every row of 8-bit alpha (stride = w). The blobs are embedded into the
-firmware with EMBED_FILES and wrapped in an lv_image_dsc_t by main/ui_cassette.c.
+What this exports: only the MASK_AT_168 = 96 centre of each of the 20 frames. The
+frame around it is the UI's business; no full 168 frame is stored.
+
+The frames are opaque, so the tool processes them as they are: no alpha mask, no
+recolour and no compositing. It fails if a frame has transparent pixels - transparency
+would drag the renderer back into a per-pixel alpha blend, the cost this pipeline exists
+to avoid. The firmware blits only the 96x96 centre per frame, which is the area that
+actually changes.
+
+The blob is the 20 crops concatenated. The header wraps them in lv_image_dsc_t
+descriptors and carries the sizes and the loop time. Both are embedded by
+main/CMakeLists.txt and rebuilt by this tool; do not edit them by hand.
 
 Requires Pillow (`pip install pillow`), which the project's documentation lists for
 the host tooling.
 """
 import argparse
+import glob
+import os
+import re
 import struct
 import sys
-from collections import deque
 
 try:
     from PIL import Image
 except ImportError:
     sys.exit("needs Pillow: pip install pillow")
 
-FRONT = "assets/cs_front.png"
-WHEEL = "assets/cs_wheel.png"
-PANEL_W, PANEL_H = 800, 480          # the Sunton 8048S050C's panel
-MARGIN = 20                          # breathing room around the cassette
-# The cassette is sized so a band is left below it for the file's name, its format and
-# the progress bar - the tape is the picture, the band is the information.
-ART_MAX_H = 400
+HUB_DIR = "assets/hub"
+OUT_BIN = "main/assets/hub_frames.bin"
+OUT_HDR = "main/assets/hub_frames.h"
+LOOP_MS = 2000      # the artist's 20 keyframes are a 2-second loop
+MASK_AT_168 = 96    # the animated centre's size at the native hub size
 
 
-def measure_holes(path):
-    """The reel windows, found in the alpha channel rather than assumed.
+def frame_number(path):
+    m = re.search(r"(\d+)", os.path.basename(path))
+    if not m:
+        sys.exit(f"cannot read a frame number from {path}")
+    return int(m.group(1))
 
-    Returns (width, height, [(cx, cy, diameter), ...]) in the artwork's own pixels.
-    """
-    im = Image.open(path).convert("RGBA")
+
+def load_frames():
+    paths = sorted(glob.glob(os.path.join(HUB_DIR, "*.png")), key=frame_number)
+    if len(paths) < 2:
+        sys.exit(f"need at least two frames in {HUB_DIR}/, found {len(paths)}")
+
+    frames = []
+    size = None
+    for p in paths:
+        im = Image.open(p).convert("RGBA")
+        if im.size[0] != im.size[1]:
+            sys.exit(f"{p} is {im.size[0]}x{im.size[1]}, expected a square frame")
+        if size is None:
+            size = im.size
+        elif im.size != size:
+            sys.exit(f"{p} is {im.size[0]}x{im.size[1]}, the other frames are "
+                     f"{size[0]}x{size[1]}")
+        if im.getchannel("A").getextrema()[0] < 255:
+            sys.exit(f"{p} has transparent pixels. The frames must be opaque: the whole "
+                     "hub is baked into each image, and the firmware blits RGB565.")
+        frames.append(im.convert("RGB"))
+    return frames, size
+
+
+def rgb565(im):
+    """Opaque RGB565 rows, little-endian, the stride the descriptors declare."""
     w, h = im.size
-    a = im.getchannel("A").load()
-    transparent = [[a[x, y] < 16 for x in range(w)] for y in range(h)]
-    seen = [[False] * w for _ in range(h)]
-    holes = []
-    # Only the middle band can hold a reel window: the outer shadow is transparent too.
-    for y0 in range(int(h * 0.30), int(h * 0.70), 3):
-        for x0 in range(0, w, 3):
-            if not transparent[y0][x0] or seen[y0][x0]:
-                continue
-            q = deque([(y0, x0)])
-            seen[y0][x0] = True
-            xs, ys = [], []
-            while q:
-                y, x = q.popleft()
-                if not transparent[y][x]:
-                    continue
-                xs.append(x)
-                ys.append(y)
-                for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                    ny, nx = y + dy, x + dx
-                    if 0 <= ny < h and 0 <= nx < w and not seen[ny][nx] and transparent[ny][nx]:
-                        seen[ny][nx] = True
-                        q.append((ny, nx))
-            bw, bh = max(xs) - min(xs) + 1, max(ys) - min(ys) + 1
-            # A reel window is round and reasonably large; the shadow is neither.
-            if len(xs) > 500 and abs(bw - bh) <= 4:
-                holes.append((sum(xs) / len(xs), sum(ys) / len(ys), (bw + bh) / 2.0))
-    holes.sort()
-    return w, h, holes
-
-
-def rgb565a8(im):
-    """LVGL's RGB565A8: RGB565 rows, then alpha rows, both at their own stride."""
-    w, h = im.size
-    px = im.convert("RGBA").load()
-    colour = bytearray()
-    alpha = bytearray()
+    px = im.load()
+    data = bytearray(w * h * 2)
+    i = 0
     for y in range(h):
         for x in range(w):
-            r, g, b, a = px[x, y]
-            colour += struct.pack("<H", ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3))
-            alpha.append(a)
-    return bytes(colour) + bytes(alpha)
+            r, g, b = px[x, y]
+            struct.pack_into("<H", data, i, ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3))
+            i += 2
+    return bytes(data)
+
+
+def header_text(count, src_px, mask_px):
+    crop_x = (src_px - mask_px) // 2
+    crop_y = (src_px - mask_px) // 2
+    out = []
+    out.append("/* Generated by tools/convert_cassette_assets.py from the PNG frames")
+    out.append(" * in %s/. Do not edit: re-run the tool after changing the art. */" % HUB_DIR)
+    out.append("#pragma once")
+    out.append("")
+    out.append("#include <stdint.h>")
+    out.append("")
+    out.append('#include "lvgl.h"')
+    out.append("")
+    out.append("#define HUB_FRAME_COUNT %d" % count)
+    out.append("#define HUB_FRAME_W %d" % src_px)
+    out.append("#define HUB_FRAME_H %d" % src_px)
+    out.append("#define HUB_CROP_W %d" % mask_px)
+    out.append("#define HUB_CROP_H %d" % mask_px)
+    out.append("#define HUB_CROP_X %d" % crop_x)
+    out.append("#define HUB_CROP_Y %d" % crop_y)
+    out.append("#define HUB_CROP_BYTES (HUB_CROP_W * HUB_CROP_H * 2)")
+    out.append("#define HUB_LOOP_MS %d" % LOOP_MS)
+    out.append("#define HUB_FRAME_MS (HUB_LOOP_MS / HUB_FRAME_COUNT)")
+    out.append("")
+    out.append("/* Only the %dx%d animated centre of each of the %d frames is exported."
+               % (mask_px, mask_px, count))
+    out.append(" * The frame around it is the UI's business: no full 168 frame is stored.")
+    out.append(" * No alpha, no recolour: the crops are blitted as opaque RGB565. */")
+    out.append("")
+    out.append("/* EMBED_FILES puts main/assets/hub_frames.bin in the image under this name. */")
+    out.append('extern const uint8_t hub_frames_bin_start[] asm("_binary_hub_frames_bin_start");')
+    out.append("")
+    out.append("static const lv_image_dsc_t k_hub_crops[HUB_FRAME_COUNT] = {")
+    for i in range(count):
+        out.append("    {")
+        out.append("        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,")
+        out.append("                    .w = HUB_CROP_W, .h = HUB_CROP_H,")
+        out.append("                    .stride = HUB_CROP_W * 2 },")
+        out.append("        .data_size = HUB_CROP_BYTES,")
+        out.append("        .data = hub_frames_bin_start + %d * HUB_CROP_BYTES," % i)
+        out.append("    },")
+    out.append("};")
+    out.append("")
+    return "\n".join(out)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--check", action="store_true", help="measure only, write nothing")
-    ap.add_argument("--front", default=FRONT)
-    ap.add_argument("--wheel", default=WHEEL)
+    ap.add_argument("--check", action="store_true", help="validate and report, write nothing")
     args = ap.parse_args()
 
-    fw, fh, holes = measure_holes(args.front)
-    if len(holes) != 2:
-        sys.exit(f"expected two reel windows in {args.front}, found {len(holes)}")
-    print(f"front {fw}x{fh}, reel windows at "
-          + ", ".join(f"({cx:.1f},{cy:.1f}) {d:.1f} px" for cx, cy, d in holes))
+    frames, size = load_frames()
+    count = len(frames)
+    frame_ms = LOOP_MS / count
+    mask_px = max(16, round(size[0] * MASK_AT_168 / 168))
+    if mask_px > size[0]:
+        sys.exit(f"the {mask_px} px crop does not fit a {size[0]} px frame")
+    left = (size[0] - mask_px) // 2
+    top = (size[1] - mask_px) // 2
+    blob = count * mask_px * mask_px * 2
 
-    # One scale for both images, so the wheels keep their size relative to the shell.
-    scale = min((PANEL_W - 2 * MARGIN) / fw, ART_MAX_H / fh)
-    fwt, fht = round(fw * scale), round(fh * scale)
-    wheel_px = round(holes[0][2] * 2 * scale)  # the wheel is twice the window's width
-    wheel_px = max(wheel_px, 8)
-    print(f"scale {scale:.4f}: front -> {fwt}x{fht}, wheel -> {wheel_px}x{wheel_px}")
-
-    off_x, off_y = (PANEL_W - fwt) // 2, 14
-    for cx, cy, _d in holes:
-        print(f"  window centre on the panel: ({off_x + cx * scale:.1f}, {off_y + cy * scale:.1f})")
-
-    print(f"#define UI_FRONT_W {fwt}")
-    print(f"#define UI_FRONT_H {fht}")
-    print(f"#define UI_FRONT_X {off_x}")
-    print(f"#define UI_FRONT_Y {off_y}")
-    print(f"#define UI_WHEEL_PX {wheel_px}")
-    print("#define UI_WINDOW_COUNT 2")
-    print("static const struct { uint16_t x, y; } k_window[UI_WINDOW_COUNT] = {")
-    for cx, cy, _d in holes:
-        print(f"    {{ {round(off_x + cx * scale)}, {round(off_y + cy * scale)} }},")
-    print("};")
+    print(f"{count} opaque frames in {HUB_DIR}/, {size[0]}x{size[1]}; exporting only the "
+          f"{mask_px}x{mask_px} animated centre; loop {LOOP_MS} ms, {frame_ms:g} ms/frame")
+    print(f"blob {blob} B ({blob // 1024} KB)")
+    if LOOP_MS % count:
+        print(f"warning: {LOOP_MS} ms does not divide into {count} frames exactly; "
+              "HUB_FRAME_MS is truncated")
 
     if args.check:
+        print("--check: nothing written")
         return
 
-    front = Image.open(args.front).convert("RGBA").resize((fwt, fht), Image.LANCZOS)
-    wheel = Image.open(args.wheel).convert("RGBA").resize((wheel_px, wheel_px), Image.LANCZOS)
-    for name, im in (("cs_front", front), ("cs_wheel", wheel)):
-        blob = rgb565a8(im)
-        path = f"main/assets/{name}.bin"
-        with open(path, "wb") as f:
-            f.write(blob)
-        print(f"wrote {path}: {im.size[0]}x{im.size[1]}, {len(blob)} B "
-              f"({len(blob) // 1024} KB of {3 * 1024} KB per 1024 px)")
+    os.makedirs(os.path.dirname(OUT_BIN), exist_ok=True)
+    with open(OUT_BIN, "wb") as f:
+        for im in frames:
+            f.write(rgb565(im.crop((left, top, left + mask_px, top + mask_px))))
+    print(f"wrote {OUT_BIN}")
+
+    with open(OUT_HDR, "w") as f:
+        f.write(header_text(count, size[0], mask_px))
+    print(f"wrote {OUT_HDR}")
 
 
 if __name__ == "__main__":

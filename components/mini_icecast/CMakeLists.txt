@@ -1,4 +1,4 @@
-idf_component_register(SRCS "mini_icecast.c" "mi_encode.c" "mi_decode.c" "mi_resample.c"
+idf_component_register(SRCS "mini_icecast.c" "mi_station.c" "mi_burst.c" "mi_icy.c" "mi_ring.c" "mi_encode.c" "mi_decode.c" "mi_resample.c"
                        INCLUDE_DIRS "include"
                        PRIV_REQUIRES http_server lwip esp_timer dr_libs shine)
 # Hot loops (resampler, FLAC/MP3 decode, encoder staging): speed over size.

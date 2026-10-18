@@ -16,15 +16,22 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "http_server.h"
 #include "mi_decode.h"     /* the authority on which source formats exist */
 #include "mini_icecast.h"  /* the broadcast's current title, for the index */
+#include "music_dir.h"     /* the music directory's rules, in one place */
 
 #define TAG "files"
 
-#define ML_MAX_NAME 128  /* CONFIG_FATFS_MAX_LFN is 128 */
-#define ML_PATH_MAX 256  /* music_dir + '/' + a 128-byte name */
+#define ML_PATH_MAX MUSIC_PATH_MAX /* the card state's directory buffer */
 #define ML_CHUNK    16384 /* download read size (R7d: bounded chunks) */
+/* The download's steady ceiling. The stream needs 32 KB/s; 16 KB every 12 ms is
+ * about 1.3 MB/s, so a 40 MB track still takes half a minute and the radio has a
+ * predictable gap between the download's packets instead of a saturating burst.
+ * This is the part the lag-driven backoff cannot do: it reacts after the stream
+ * has already been pushed behind. */
+#define ML_CHUNK_PAUSE_MS 12
 
 static struct {
     SemaphoreHandle_t lock;   /* guards the card state below */
@@ -38,27 +45,6 @@ static struct {
 } F;
 
 /* ------------------------------------------------------------------ helpers */
-
-/* A name is safe when it cannot escape the music directory (defect D5). This is
- * checked before anything touches the filesystem. */
-static bool name_is_safe(const char *name)
-{
-    if (!name[0]) return false;
-    if (name[0] == '.') return false;              /* also excludes macOS "._foo.mp3" */
-    if (strstr(name, "..")) return false;
-    if (strchr(name, '/') || strchr(name, '\\')) return false;
-    return true;
-}
-
-static bool name_is_audio(const char *name) { return mi_dec_format_of(name) != MI_FMT_NONE; }
-
-/* Join the music directory and a name into `out`, refusing rather than
- * truncating: a truncated path would name a different file. */
-static bool path_join(char *out, size_t out_size, const char *dir, const char *name)
-{
-    int n = snprintf(out, out_size, "%s/%s", dir, name);
-    return n > 0 && (size_t)n < out_size;
-}
 
 static const char *content_type_for(const char *name)
 {
@@ -189,6 +175,26 @@ static void send_library_problem(int fd, const char *heading, const char *detail
 
 /* ------------------------------------------------------------------- index */
 
+/* The index's rendering of one accepted track. music_dir_list owns which names
+ * get here; this owns the markup. */
+typedef struct {
+    writer_t *w;
+    int       listed;
+} index_ctx_t;
+
+static bool index_entry(void *ctx, const char *name, unsigned long long size)
+{
+    index_ctx_t *c = ctx;
+    writer_t *w = c->w;
+    w_puts(w, "<li><a href=\"/music/");
+    w_url_encoded(w, name);
+    w_puts(w, "\">");
+    w_escaped(w, name);
+    w_printf(w, "</a> <span class=\"n\">%llu B</span></li>", size);
+    c->listed++;
+    return w->ok;
+}
+
 static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
@@ -212,8 +218,10 @@ static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
         return HTTP_HANDLED;
     }
 
-    DIR *d = opendir(dir);
-    if (!d) {
+    /* Probe first: the two failures need different pages, and the walk below
+     * happens after the headers, when it is too late to choose one. */
+    DIR *probe = opendir(dir);
+    if (!probe) {
         char detail[384];
         snprintf(detail, sizeof detail,
                  "The card is mounted, but %.120s could not be opened: %.80s. Create it and put "
@@ -223,6 +231,7 @@ static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
         send_library_problem(fd, "No music directory", detail, dir);
         return HTTP_HANDLED;
     }
+    closedir(probe);
 
     char title[121];
     mini_icecast_now_playing(title, sizeof title);
@@ -238,29 +247,18 @@ static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
     w_puts(&w, "</strong> &middot; <a href=\"/stream\">live stream (MP3)</a></p>");
     w_puts(&w, "<ul>");
 
-    int listed = 0;
-    struct dirent *e;
-    while ((e = readdir(d))) {
-        const char *name = e->d_name;
-        if (!name_is_safe(name) || !name_is_audio(name)) continue;
-        if (strlen(name) > ML_MAX_NAME) continue; /* longer than the card's LFN limit */
-        char path[ML_PATH_MAX];
-        if (!path_join(path, sizeof path, dir, name)) continue;
-        struct stat st;
-        if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) continue;
-        w_puts(&w, "<li><a href=\"/music/");
-        w_url_encoded(&w, name);
-        w_puts(&w, "\">");
-        w_escaped(&w, name);
-        w_printf(&w, "</a> <span class=\"n\">%llu B</span></li>", (unsigned long long)st.st_size);
-        listed++;
-        if (!w.ok) break;
+    index_ctx_t listing = {&w, 0};
+    int walked = music_dir_list(dir, index_entry, &listing);
+    if (walked < 0) {
+        /* It was readable a moment ago; say so rather than send a page that
+         * silently claims there is no music. */
+        w_puts(&w, "<li>The music directory became unreadable while listing it.</li>");
     }
-    closedir(d);
     w_puts(&w, "</ul>");
-    if (!listed) w_puts(&w, "<p>The music directory contains no .mp3, .flac or .wav files.</p>");
+    if (!listing.listed && walked >= 0)
+        w_puts(&w, "<p>The music directory contains no .mp3, .flac or .wav files.</p>");
     w_flush(&w);
-    ESP_LOGI(TAG, "GET / -> %d track(s)", listed);
+    ESP_LOGI(TAG, "GET / -> %d track(s)", listing.listed);
     return HTTP_HANDLED;
 }
 
@@ -272,7 +270,7 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
     static const char prefix[] = "/music/";
     const char *raw = req->path + (sizeof prefix - 1);
 
-    char name[ML_MAX_NAME + 1];
+    char name[MUSIC_NAME_MAX + 1];
     size_t name_len = http_url_decode(raw, name, sizeof name);
     if (name_len == (size_t)-1) {
         ESP_LOGW(TAG, "GET %s -> 400 (undecodable or over-long name)", req->path);
@@ -286,34 +284,25 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
         http_send_error(fd, 400, "that file name is not accepted");
         return HTTP_HANDLED;
     }
-    if (!name_is_safe(name)) {
-        ESP_LOGW(TAG, "GET %s -> 400 (unsafe name)", req->path);
-        http_send_error(fd, 400, "that file name is not accepted");
-        return HTTP_HANDLED;
-    }
-    if (!name_is_audio(name)) {
-        ESP_LOGI(TAG, "GET %s -> 404 (not an audio file)", req->path);
-        http_send_error(fd, 404, "only .mp3, .flac and .wav are served");
-        return HTTP_HANDLED;
-    }
 
     char dir[ML_PATH_MAX];
     snapshot(dir, sizeof dir, NULL, 0);
-    if (!dir[0]) {
+
+    /* D5: one rule decides the name, the join and the containment, so this route
+     * cannot be more permissive than the index that links here. */
+    char path[MUSIC_PATH_MAX], why[MUSIC_WHY_MAX];
+    switch (music_resolve(dir, name, path, sizeof path, why, sizeof why)) {
+    case MUSIC_OK:
+        break;
+    case MUSIC_NO_CARD:
         http_send_error(fd, 503, "no card is mounted");
         return HTTP_HANDLED;
-    }
-
-    /* D5: build the path, then re-verify it really is inside the music
-     * directory before touching the filesystem. */
-    char path[ML_PATH_MAX];
-    if (!path_join(path, sizeof path, dir, name)) {
-        http_send_error(fd, 400, "that file name does not fit the path");
+    case MUSIC_UNSUPPORTED:
+        ESP_LOGI(TAG, "GET %s -> 404 (not an audio file)", req->path);
+        http_send_error(fd, 404, "only .mp3, .flac and .wav are served");
         return HTTP_HANDLED;
-    }
-    size_t dlen = strlen(dir);
-    if (strncmp(path, dir, dlen) != 0 || path[dlen] != '/') {
-        ESP_LOGE(TAG, "refusing %s: it does not sit under %s", path, dir);
+    default:
+        ESP_LOGW(TAG, "GET %s -> 400 (%s)", req->path, why);
         http_send_error(fd, 400, "that file name is not accepted");
         return HTTP_HANDLED;
     }
@@ -344,6 +333,11 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
     }
     int64_t t0 = esp_timer_get_time();
     size_t sent = 0;
+    /* Start gently and stay gentle for a while after the broadcast reports it is
+     * behind: the lag reading returns to zero as soon as the clock rebases, so a
+     * one-frame reading would end the backoff before the next read is safe. */
+    static uint32_t backoff_until;
+    backoff_until = xTaskGetTickCount() + pdMS_TO_TICKS(1000);
     for (;;) {
         ssize_t r = read(f, F.buf, F.buf_size);
         if (r < 0) {
@@ -356,6 +350,22 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
             break;
         }
         sent += (size_t)r;
+        /* The size came from stat(), so the last chunk is known: release the
+         * download lock at once rather than sleeping after it. The next request
+         * can arrive the moment the client has its last byte, and a 20 ms sleep
+         * here made that request a 503. */
+        if (sent >= (size_t)st.st_size) break;
+        /* The steady ceiling, before the lag-driven backoff below. */
+        vTaskDelay(pdMS_TO_TICKS(ML_CHUNK_PAUSE_MS));
+        /* The live stream has priority on the one SD bus. Yield between chunks so
+         * the broadcast's decoder read can take it, and back off much harder for
+         * two seconds after the broadcast says it is behind: a fixed slice was
+         * measured helping and then not, because the contention arrives in bursts
+         * (card latency, Wi-Fi) rather than as a steady share. */
+        uint32_t now_ticks = xTaskGetTickCount();
+        if (mini_icecast_lag_ms() > 250) backoff_until = now_ticks + pdMS_TO_TICKS(2000);
+        bool slow = (int32_t)(backoff_until - now_ticks) > 0;
+        vTaskDelay(pdMS_TO_TICKS(slow ? 20 : 1));
     }
     close(f);
     int64_t ms = (esp_timer_get_time() - t0) / 1000;
