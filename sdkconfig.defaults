@@ -67,7 +67,7 @@ CONFIG_FATFS_API_ENCODING_UTF_8=y
 # The UI's memory comes from PSRAM because this project says so, not because the
 # default allocator happened to fall through to it:
 #   - LV_USE_CUSTOM_MALLOC routes LVGL through heap_caps_malloc_prefer(PSRAM first),
-#     implemented in components/app/screen_display/screen_display.c. Without it LVGL's
+#     implemented in components/app/screen_display/lvgl_mem.c. Without it LVGL's
 #     many small allocations prefer *internal* RAM (heap_caps_malloc_default) and
 #     silently fall back to PSRAM when it runs out, which quietly spends the margin
 #     Wi-Fi needs.

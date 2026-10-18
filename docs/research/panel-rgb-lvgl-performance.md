@@ -923,11 +923,11 @@ and the work each implies:
 
 | Element | LVGL path | Work per invalidation | Source |
 |---|---|---|---|
-| Background, tape packs, label, red side square, 168 px ring | `lv_obj_create` + `lv_obj_set_style_radius` + `bg_opa = COVER` → `lv_draw_sw_fill` | a radius mask per fill, per row, via the circle cache | `ui_cassette.c:95-111`, `src/draw/sw/lv_draw_sw_fill.c:59-99` |
-| Two hub keyframes | `lv_image_create` + `lv_image_set_src`, RGB565, no alpha, no recolor, no transform | a straight `lv_draw_sw_blend` from the image buffer | `ui_cassette.c:203-213`, `src/draw/sw/lv_draw_sw_img.c:274-283` |
-| Title | `lv_label_set_long_mode(LV_LABEL_LONG_SCROLL)`, montserrat 22 | the label's box re-invalidated on every animation step | `ui_cassette.c:228-231`, `src/widgets/label/lv_label.c:1476-1482` |
-| "B" | montserrat 48 label over the red square | glyph blits | `ui_cassette.c:221-224` |
-| Progress bar | created, radius 5, **never updated** — the update block is commented out | none | `ui_cassette.c:242-249`, `:356-361` |
+| Background, tape packs, label, red side square, 168 px ring | `lv_obj_create` + `lv_obj_set_style_radius` + `bg_opa = COVER` → `lv_draw_sw_fill` | a radius mask per fill, per row, via the circle cache | `cassette_view.c:95-111`, `src/draw/sw/lv_draw_sw_fill.c:59-99` |
+| Two hub keyframes | `lv_image_create` + `lv_image_set_src`, RGB565, no alpha, no recolor, no transform | a straight `lv_draw_sw_blend` from the image buffer | `cassette_view.c:203-213`, `src/draw/sw/lv_draw_sw_img.c:274-283` |
+| Title | `lv_label_set_long_mode(LV_LABEL_LONG_SCROLL)`, montserrat 22 | the label's box re-invalidated on every animation step | `cassette_view.c:228-231`, `src/widgets/label/lv_label.c:1476-1482` |
+| "B" | montserrat 48 label over the red square | glyph blits | `cassette_view.c:221-224` |
+| Progress bar | created, radius 5, **never updated** — the update block is commented out | none | `cassette_view.c:242-249`, `:356-361` |
 
 **A radius fill requires `LV_DRAW_SW_COMPLEX`, and disabling it deletes the drawing.** In
 `lv_draw_sw_fill()` the plain-rectangle case is taken only when there is no radius and no gradient;
@@ -963,9 +963,9 @@ What a radius costs: `lv_draw_sw_fill()` allocates one row of `lv_opa_t` per fil
 the circle cache (`acquire_mask_radius_from_cache()`, `src/draw/sw/lv_draw_sw_mask.c:1227-1280`),
 which holds `CONFIG_LV_DRAW_SW_CIRCLE_CACHE_SIZE = 4` circles at "radius * 4 bytes per circle"
 (`Kconfig:574-580`, `sdkconfig.sunton`). A pack is up to 400 px across, i.e. a radius of 200
-(`ui_cassette.c:36`, `PACK_MAX_D 400`), so one uncached radius is a 3 400-step circumference
+(`cassette_view.c:36`, `PACK_MAX_D 400`), so one uncached radius is a 3 400-step circumference
 computation. The packs only change size when the track's permille changes
-(`ui_cassette.c:158-163`), which is once per `duration_ms/1000` — rarely — so this is a per-track
+(`cassette_view.c:158-163`), which is once per `duration_ms/1000` — rarely — so this is a per-track
 cost, not a per-frame one.
 
 The image path is the cheap one: with no transform, no radius, no recolor and no colorkey, LVGL takes
@@ -986,11 +986,11 @@ static void set_ofs_x_anim(void * obj, int32_t v)
 `lv_anim_speed_clamped(40, 300, 10000)` (`lv_label.c:31`). The animation timer runs at
 `LV_DEF_REFR_PERIOD` (`src/misc/lv_anim.c:67`), so **the scrolling title invalidates and repaints its
 439 px-wide box on every refresh cycle** — the only element in the UI that does. `TITLE_W` is 439
-(`ui_cassette.c:57`, `:231`).
+(`cassette_view.c:57`, `:231`).
 
 Put together, the steady-state invalidation per refresh cycle is one label box; per 100 ms it adds two
 9 216-pixel image blits, i.e. 36 864 B (ARITHMETIC from `hub_frames.h:12-18` and
-`ui_cassette.c:147-153`). A full-screen invalidation instead costs 768 000 B painted **plus** 768 000 B
+`cassette_view.c:147-153`). A full-screen invalidation instead costs 768 000 B painted **plus** 768 000 B
 copied by the direct-mode sync (`lv_refr.c:782-784`, §4d) = 1 536 000 B of PSRAM traffic in one cycle
 (ARITHMETIC), 25.6 MB/s if it happened every 60 ms, on top of the scan-out's 29.98 MB/s. Which of the
 two regimes the board is in when it reports 15 FPS is exactly what the render/flush split and
@@ -1233,7 +1233,7 @@ be made without a rebuild.
 
 Local sources, by path:
 
-- This project: `components/app/screen_display/panel_rgb.c`, `components/app/screen_display/screen_display.c`, `components/app/screen_display/cassette_view.c`, `components/app/screen_display/include/ui.h`,
+- This project: `components/app/screen_display/panel_rgb.c`, `components/app/screen_display/screen_display.c`, `components/app/screen_display/cassette_view.c`, `components/app/screen_display/include/screen_display.h`,
   `components/app/screen_display/include/hub_frames.h`, `components/app/screen_display/CMakeLists.txt`, `components/app/screen_display/assets/hub_frames.bin`,
   `boards/sunton-8048s050c.json`, `sdkconfig.defaults`, `sdkconfig.defaults.sunton`,
   `sdkconfig.sunton`, `build_sunton/config/sdkconfig.h`, `build_sunton/CMakeCache.txt`,

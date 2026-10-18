@@ -737,12 +737,12 @@ is `docs/adr/0004-ui-memory-is-external.md`; the numbers behind it are
 What the board reports, at startup, with the broadcast running:
 
 ```
-ui: before the UI:     internal 157787 B free (largest 81920 B), psram 7998472 B free
-ui: display 320x240 with a 25600 B partial draw buffer in PSRAM
-ui: LVGL: 123 objects hold 54276 B in 956 blocks (peak 56312 B), all of it PSRAM
-ui: with the UI:       internal 157787 B free (largest 81920 B), psram 7980304 B free
-ui: verdict: the UI's memory is external; internal RAM was the same before and after
-ui: after freeing it: the screen is gone, LVGL keeps 6188 B of its own state ...
+screen: before the screen:     internal 157787 B free (largest 81920 B), psram 7998472 B free
+screen: display 320x240 with a 25600 B partial draw buffer in PSRAM
+screen: LVGL: 123 objects hold 54276 B in 956 blocks (peak 56312 B), all of it PSRAM
+screen: with the screen:       internal 157787 B free (largest 81920 B), psram 7980304 B free
+screen: verdict: the screen's memory is external; internal RAM was the same before and after
+screen: after freeing it: the screen is gone, LVGL keeps 6188 B of its own state ...
 ```
 
 Three things make that true, and the second is the one that is easy to get wrong:
@@ -751,7 +751,7 @@ Three things make that true, and the second is the one that is easy to get wrong
    PSRAM instead of internal RAM. That is the +7.6 % of encoder cost described above,
    paid for a largest free internal block of 81 920 B instead of 18 432 B.
 2. **LVGL gets an explicit PSRAM allocator** (`LV_USE_CUSTOM_MALLOC`, implemented in
-   `components/app/screen_display/screen_display.c`). Lowering the threshold alone does not do this:
+   `components/app/screen_display/lvgl_mem.c`). Lowering the threshold alone does not do this:
    `heap_caps_malloc_default()` prefers internal memory for anything *at or below* the
    threshold, so at 4096 every widget would still ask internal first and fall through to
    PSRAM only when internal ran out — silently, which is exactly the failure mode that

@@ -24,10 +24,10 @@
 #include "lvgl.h"
 
 #include "cassette.h"
-#include "ui.h"
+#include "cassette_view.h"
 #include "hub_frames.h"
 
-static const char *TAG = "ui";
+static const char *TAG = "screen";
 
 /* The 800x480 panel: the hub's static ring is 168 px and the rotating mask is the
  * converter's HUB_FRAME_W (96 px). The packs stay the reference's 245/310 so the
@@ -218,7 +218,7 @@ static void reel_tick(lv_timer_t *t)
 
 /* ------------------------------------------------------------------- build */
 
-void ui_cassette_create(void)
+void cassette_view_create(void)
 {
     lv_obj_t *scr = lv_screen_active();
     lv_obj_set_style_bg_color(scr, lv_color_hex(COL_BG), 0);
@@ -298,7 +298,7 @@ void ui_cassette_create(void)
 
 /* ------------------------------------------------------------------ update */
 
-void ui_cassette_update(const mini_icecast_status_t *st)
+void cassette_view_update(const mini_icecast_status_t *st)
 {
     if (!s_model) return;
     apply_frame(cassette_step(s_model, st, lv_tick_get()));

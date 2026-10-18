@@ -64,7 +64,8 @@ with it.
 
 ## Implementation note (architecture review, 2026-10-18)
 
-`main/ui_fit.c` no longer exists. The allocator and the PSRAM draw-buffer rule live in
+`main/ui_fit.c` no longer exists. The allocator lives in
+`components/app/screen_display/lvgl_mem.c`, the display, draw buffer and task in
 `components/app/screen_display/screen_display.c`, the screen in
 `components/app/screen_display/cassette_view.c`, and the screen's testable arithmetic in
 `components/portable/cassette/`. The decision above is unchanged; only the placeholder file it was

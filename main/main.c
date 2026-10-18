@@ -30,7 +30,7 @@
 #include "app_services.h"
 #include "mini_files.h"
 #include "mini_icecast.h"
-#include "ui.h"
+#include "screen_display.h"
 
 #define MUSIC_DIR    "/sdcard/music"
 #define STATION_NAME "ESP32 Radio"
@@ -162,7 +162,11 @@ void app_main(void)
     }
 
     /* The screen comes last, once there is something to show and a status to read. */
-    ui_start();
+    esp_err_t screen_err = screen_display_start();
+    if (screen_err != ESP_OK) {
+        ESP_LOGE(TAG, "the screen did not start: %s; the device still serves",
+                 esp_err_to_name(screen_err));
+    }
 
     /* A card that failed to mount at boot is retried; the index reports the state
      * until it succeeds (R8). */

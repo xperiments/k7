@@ -1,16 +1,16 @@
 /*
- * The UI's memory, its display, and the loop that keeps the screen current.
+ * The screen display: its memory, its display, and the loop that keeps the cassette
+ * current.
  *
  * Memory placement is deliberate rather than inherited (ADR 0004): LVGL allocates
  * through heap_caps_malloc_prefer(PSRAM first) because the default path prefers
  * internal memory for anything below SPIRAM_MALLOC_ALWAYSINTERNAL and falls through to
  * PSRAM only when internal runs out - silently, spending the margin Wi-Fi needs for
- * its contiguous DMA buffers. The counts this file keeps are reported at startup so
- * the claim stays checkable.
+ * its contiguous DMA buffers. The allocator in lvgl_mem.c counts what it holds, and the
+ * boot log reports it so the claim stays checkable.
  *
  * The screen itself is a physical 800x480 RGB panel on the Sunton board and nothing at
- * all on the development board, where the UI is rendered headless into a PSRAM
- * framebuffer. CONFIG_APP_UI_SERIAL_DUMP makes that framebuffer readable over the
+ * all on the development board, where it is rendered headless into a PSRAM framebuffer. CONFIG_APP_UI_SERIAL_DUMP makes that framebuffer readable over the
  * console, which is how the layout is checked without a panel: see
  * tools/decode_screen_dump.py.
  */
@@ -24,95 +24,45 @@
 #include "freertos/task.h"
 #include "lvgl.h"
 
+#include "cassette_view.h"
+#include "lvgl_mem.h"
 #include "mini_icecast.h"
-#include "ui.h"
+#include "screen_display.h"
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 #include "esp_lvgl_port.h"
 #include "panel_rgb.h"
 #endif
 
-static const char *TAG = "ui";
+static const char *TAG = "screen";
 
 /* The panel, and the framebuffer when there is no panel to scan it out. */
 #define UI_W 800
 #define UI_H 480
 #define UI_FB_BYTES (UI_W * UI_H * 2)
 
+/* The draw buffer when there is no panel: one strip, not a whole screen. LVGL renders
+ * only the invalidated area into it, and a smaller buffer means less of the screen is
+ * touched per refresh - the arrangement the verified reference integration uses
+ * (SolidGL firmware, components/solidgl_platform/src/solidgl_platform.c). */
+#define UI_DRAW_LINES 40
+
+/* How long the screen task rests between status updates. The reels are not on this
+ * clock - cassette_view.c runs them from their own timer - so this is the cadence for
+ * the text and the host-side redraw alone, and labels do not need 50 updates a second.
+ * That leaves the core for the network stack that shares it. */
+#define UI_FRAME_MS 100
+
+/* And never rest longer than this, however expensive a frame was. The verified
+ * reference integration caps its own wait at 500 ms (`task_max_sleep_ms`), and the
+ * reason shows up at startup: the first frame draws the whole screen and costs seconds,
+ * so an uncapped "three times the frame" would freeze the screen for thirteen of them
+ * before it drew anything again. */
+#define UI_REST_MAX_MS 500
+
 #if CONFIG_APP_UI_SERIAL_DUMP
 static uint8_t *s_fb;         /* only kept when it has to be dumped */
 #endif
-
-/* ------------------------------------------------- LVGL's allocator, in PSRAM */
-/* LV_USE_CUSTOM_MALLOC means the backend is supplied here in full: nine symbols.
- * src/stdlib/clib/lv_mem_core_clib.c is the shape being replaced, so anything it
- * provides must exist here - including lv_mem_init(). */
-
-static size_t lv_held, lv_held_peak, lv_blocks;
-
-size_t ui_lvgl_held_bytes(void) { return lv_held; }
-size_t ui_lvgl_peak_bytes(void) { return lv_held_peak; }
-
-void lv_mem_init(void) { }
-void lv_mem_deinit(void) { }
-lv_mem_pool_t lv_mem_add_pool(void *mem, size_t bytes) { (void)mem; (void)bytes; return NULL; }
-void lv_mem_remove_pool(lv_mem_pool_t pool) { (void)pool; }
-
-void *lv_malloc_core(size_t size)
-{
-    void *p = heap_caps_malloc_prefer(size, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
-                                      MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    if (p) {
-        lv_held += heap_caps_get_allocated_size(p);
-        if (lv_held > lv_held_peak) lv_held_peak = lv_held;
-        lv_blocks++;
-    }
-    return p;
-}
-
-void *lv_realloc_core(void *p, size_t new_size)
-{
-    size_t was = p ? heap_caps_get_allocated_size(p) : 0;
-    void *q = heap_caps_realloc_prefer(p, new_size, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
-                                       MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    if (q) {
-        if (!p) lv_blocks++;   /* realloc from NULL is an allocation, and freed as one */
-        lv_held = lv_held - was + heap_caps_get_allocated_size(q);
-        if (lv_held > lv_held_peak) lv_held_peak = lv_held;
-    }
-    return q;
-}
-
-void lv_free_core(void *p)
-{
-    if (!p) return;
-    lv_held -= heap_caps_get_allocated_size(p);
-    lv_blocks--;
-    heap_caps_free(p);
-}
-
-void lv_mem_monitor_core(lv_mem_monitor_t *mon)
-{
-    multi_heap_info_t info;
-    heap_caps_get_info(&info, MALLOC_CAP_SPIRAM);
-    mon->total_size = info.total_free_bytes + info.total_allocated_bytes;
-    mon->free_size = info.total_free_bytes;
-    mon->free_biggest_size = info.largest_free_block;
-    mon->free_cnt = info.free_blocks;
-    mon->used_cnt = info.allocated_blocks;
-    mon->max_used = info.total_allocated_bytes;
-    size_t total = mon->total_size ? mon->total_size : 1;
-    mon->used_pct = (uint8_t)(100 - (100 * mon->free_size) / total);
-    mon->frag_pct = (uint8_t)(100 - (100 * mon->free_biggest_size) / (mon->free_size ? mon->free_size : 1));
-}
-
-lv_result_t lv_mem_test_core(void)
-{
-    void *p = lv_malloc_core(64);
-    if (!p) return LV_RESULT_INVALID;
-    lv_free_core(p);
-    return LV_RESULT_OK;
-}
 
 /* --------------------------------------------------------------- the display */
 
@@ -177,12 +127,12 @@ static void ui_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
     lv_display_flush_ready(disp);
 }
 
-static void ui_task(void *arg)
+static void screen_task(void *arg)
 {
     (void)arg;
-    /* Says where it landed: this task's core is a decision (see ui_start), and a task
+    /* Says where it landed: this task's core is a decision (see screen_display_start), and a task
      * that never runs is otherwise indistinguishable from a task that has nothing to do. */
-    ESP_LOGI(TAG, "ui task running on core %d", (int)xPortGetCoreID());
+    ESP_LOGI(TAG, "screen task running on core %d", (int)xPortGetCoreID());
     uint32_t last_tick = 0;
     for (;;) {
         uint32_t now = tick_ms();
@@ -195,11 +145,11 @@ static void ui_task(void *arg)
         /* The port owns LVGL and runs lv_timer_handler() in its own task, so updates from
          * here take its lock and nothing more. */
         if (lvgl_port_lock(20)) {
-            ui_cassette_update(&st);
+            cassette_view_update(&st);
             lvgl_port_unlock();
         }
 #else
-        ui_cassette_update(&st);
+        cassette_view_update(&st);
 #endif
 
         int64_t t0 = esp_timer_get_time();
@@ -209,7 +159,7 @@ static void ui_task(void *arg)
         int frame_ms = (int)((esp_timer_get_time() - t0) / 1000);
         /* What a frame costs decides the cadence below, and the first one also draws the
          * whole screen - the cassette image included - which decides whether the
-         * interface delays everything else sharing its core at boot. */
+         * screen delays everything else sharing its core at boot. */
         static int n_frames, worst_ms;
         if (frame_ms > worst_ms) worst_ms = frame_ms;
         if (++n_frames == 50)
@@ -233,7 +183,7 @@ static void ui_task(void *arg)
     }
 }
 
-void ui_start(void)
+esp_err_t screen_display_start(void)
 {
     size_t internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     size_t largest_before = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
@@ -243,12 +193,16 @@ void ui_start(void)
     lv_display_t *disp = panel_rgb_start();
     if (!disp) {
         ESP_LOGE(TAG, "the panel path did not come up; the screen will stay dark");
-        return;
+        return ESP_FAIL;
     }
 #else
     lv_init();
     lv_tick_set_cb(tick_ms);
     lv_display_t *disp = lv_display_create(UI_W, UI_H);
+    if (!disp) {
+        ESP_LOGE(TAG, "no LVGL display for the headless path");
+        return ESP_ERR_NO_MEM;
+    }
     /* No panel: a framebuffer this file owns. Still PSRAM, because it is far larger than
      * anything internal RAM could hold, and because the production board's buffers are
      * there too - the point is to exercise the same arrangement. */
@@ -256,7 +210,7 @@ void ui_start(void)
     uint8_t *fb = heap_caps_malloc(strip, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!fb) {
         ESP_LOGE(TAG, "no PSRAM for a %u B draw buffer", (unsigned)strip);
-        return;
+        return ESP_ERR_NO_MEM;
     }
 #if CONFIG_APP_UI_SERIAL_DUMP
     /* The dump needs a whole screen to read; with a strip draw buffer there is no such
@@ -275,10 +229,10 @@ void ui_start(void)
      * this function happens under the lock. */
     if (!lvgl_port_lock(1000)) {
         ESP_LOGE(TAG, "the LVGL port did not give its lock; no screen");
-        return;
+        return ESP_ERR_TIMEOUT;
     }
 #endif
-    ui_cassette_create();
+    cassette_view_create();
 #if !CONFIG_APP_BOARD_SUNTON_8048S050C
     /* Without a port there is no task to draw for us, so this one frame is forced here:
      * the screen must not be left showing uninitialised memory. With the port this must
@@ -296,21 +250,23 @@ void ui_start(void)
 #endif
 
     ESP_LOGI(TAG, "screen %dx%d, framebuffer %u KB in PSRAM, LVGL holds %u B",
-             UI_W, UI_H, (unsigned)(UI_FB_BYTES / 1024), (unsigned)ui_lvgl_held_bytes());
-    ESP_LOGI(TAG, "ui memory: internal free %u B (largest %u B) before, %u B (largest %u B) after building the screen",
+             UI_W, UI_H, (unsigned)(UI_FB_BYTES / 1024), (unsigned)screen_display_lvgl_held());
+    ESP_LOGI(TAG, "screen memory: internal free %u B (largest %u B) before, %u B (largest %u B) after building the screen",
              (unsigned)internal_before, (unsigned)largest_before,
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 
     /* A task rather than lv_timer_handler() in the app's idle loop: the display the
-     * panel will need has its own cadence, and this keeps the UI off the audio core. */
+     * panel will need has its own cadence, and this keeps the screen off the audio core. */
     /* Core 0, the core the broadcast/encoder does not use; it now sits with Wi-Fi and
      * lwIP at priority 3, below their tasks and below the LVGL port's 4, so it yields
      * to the network instead of queueing behind the encoder on core 1. The port task
      * is mostly parked on the panel's vsync, so it does not starve Wi-Fi the way the
-     * old render-in-a-loop interface did. */
-    if (xTaskCreatePinnedToCore(ui_task, "ui", 16 * 1024, NULL, 3, NULL, 0) != pdPASS)
-        ESP_LOGE(TAG, "no memory for the interface task: the screen will not update");
+     * old render-in-a-loop screen did. */
+    if (xTaskCreatePinnedToCore(screen_task, "screen", 16 * 1024, NULL, 3, NULL, 0) != pdPASS) {
+        ESP_LOGE(TAG, "no memory for the screen task: the screen will not update");
+        return ESP_ERR_NO_MEM;
+    }
 
 #if CONFIG_APP_UI_SERIAL_DUMP
     /* Give the screen a moment to draw itself (and the broadcast a moment to report a
@@ -318,4 +274,6 @@ void ui_start(void)
     vTaskDelay(pdMS_TO_TICKS(4000));
     dump_screen();
 #endif
+
+    return ESP_OK;
 }
