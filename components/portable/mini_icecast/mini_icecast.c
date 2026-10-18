@@ -213,6 +213,19 @@ static void broadcast(const uint8_t *d, size_t n)
 
 /* ------------------------------------------------------------ HTTP route */
 
+/* What the stream route did with a connection. Private: the route below is the only
+ * caller, so the fd hand-off is not part of the broadcast's public surface. */
+typedef enum {
+    MINI_ICECAST_REGISTERED = 0,  /* the fd is on the air and outlives the request */
+    MINI_ICECAST_REGISTER_FULL,   /* every client slot is taken: answer 503 */
+    MINI_ICECAST_REGISTER_FAILED, /* headers or the send ring could not be prepared: just close */
+} mini_icecast_register_result_t;
+
+/* Put an already-accepted connection on the air: write the stream headers, queue the
+ * burst into that client's send ring, and hand the fd to its sender task. The caller
+ * must not close the fd when this returns MINI_ICECAST_REGISTERED. */
+static mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_icy_metadata);
+
 static http_result_t stream_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
@@ -228,7 +241,7 @@ static http_result_t stream_route(int fd, const http_request_t *req, void *ctx)
     }
 }
 
-mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_icy_metadata)
+static mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_icy_metadata)
 {
     /* The splitter holds no socket, so it can be made before the slot is claimed.
      * Failing to allocate it is a failed registration, not a silent downgrade:

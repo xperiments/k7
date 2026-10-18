@@ -113,20 +113,6 @@ void      mini_icecast_status(mini_icecast_status_t *out);
 void      mini_icecast_skip(void);                              /* jump to next track */
 size_t    mini_icecast_now_playing(char *out, size_t out_size); /* current title, for the index */
 
-/* What mini_icecast_register_client() did with a connection. */
-typedef enum {
-    MINI_ICECAST_REGISTERED = 0,  /* the fd is on the air and outlives the request */
-    MINI_ICECAST_REGISTER_FULL,   /* every client slot is taken: answer 503 */
-    MINI_ICECAST_REGISTER_FAILED, /* headers or the send ring could not be prepared: just close */
-} mini_icecast_register_result_t;
-
-/* Put an already-accepted connection on the air: write the stream headers, queue
- * the burst into that client's send ring, and hand the fd to its sender task. The
- * caller must not close the fd afterwards when this returns
- * MINI_ICECAST_REGISTERED. Called by the "/stream" route; applications do not
- * normally call this. */
-mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_icy_metadata);
-
 #ifdef __cplusplus
 }
 #endif

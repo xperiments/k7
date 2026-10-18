@@ -58,12 +58,21 @@ done
 [ -n "$users" ] || printf '  ok    (nothing at all)\n'
 
 printf '\nS3  the broadcast keeps exactly its documented surface\n'
-for sym in mini_icecast_start mini_icecast_skip mini_icecast_now_playing mini_icecast_register_client; do
+for sym in mini_icecast_check_station mini_icecast_start mini_icecast_status \
+           mini_icecast_lag_ms mini_icecast_skip mini_icecast_now_playing; do
     if grep -q "$sym" "$ROOT/components/portable/mini_icecast/include/mini_icecast.h"; then
         printf '  ok    %s is public\n' "$sym"
     else
         printf '  FAIL  %s is missing from the public header\n' "$sym"
         fail=1
+    fi
+done
+for sym in mini_icecast_register_client mini_icecast_register_result_t; do
+    if grep -q "$sym" "$ROOT/components/portable/mini_icecast/include/mini_icecast.h"; then
+        printf '  FAIL  %s is still public (the /stream route is the only caller)\n' "$sym"
+        fail=1
+    else
+        printf '  ok    %s is private\n' "$sym"
     fi
 done
 
