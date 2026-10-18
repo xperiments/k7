@@ -1,9 +1,9 @@
 /*
  * app_services - the one place the services and their order live.
  *
- * The comments in main.c that explained why the network had to come before the
- * encoder, and why validation had to come before either, have moved here; that is
- * what the ordering is now.
+ * The comments that explained why the network had to come before the encoder, and
+ * why validation had to come before either, have moved here; that is what the
+ * ordering is now.
  */
 #include "app_services.h"
 

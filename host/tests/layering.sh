@@ -67,13 +67,13 @@ for sym in mini_icecast_start mini_icecast_skip mini_icecast_now_playing mini_ic
     fi
 done
 
-printf '\nH2  no target conditional compilation in a production component\n'
-if grep -rn 'CONFIG_IDF_TARGET' "$ROOT/components" >/dev/null 2>&1; then
-    printf '  FAIL  a component branches on the target\n'
-    grep -rn 'CONFIG_IDF_TARGET' "$ROOT/components" | sed 's/^/        /'
+printf '\nH2  no target conditional compilation in a portable component\n'
+if grep -rn 'CONFIG_IDF_TARGET' "$ROOT/components/portable" >/dev/null 2>&1; then
+    printf '  FAIL  a portable component branches on the target\n'
+    grep -rn 'CONFIG_IDF_TARGET' "$ROOT/components/portable" | sed 's/^/        /'
     fail=1
 else
-    printf '  ok    components are target-agnostic; the shim carries the difference\n'
+    printf '  ok    portable components are target-agnostic; the app group carries the board/target difference\n'
 fi
 
 printf '\nH3  every portable component compiles on the host; no app-only source does\n'

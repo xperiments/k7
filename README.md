@@ -63,8 +63,8 @@ idf.py -p /dev/tty.usbserial-XXXX flash monitor
 Before the first build, put your network in place:
 
 ```bash
-cp main/wifi_credentials.h.example main/wifi_credentials.h
-$EDITOR main/wifi_credentials.h        # your SSID and password
+cp components/app/board_esp32/wifi_credentials.h.example components/app/board_esp32/wifi_credentials.h
+$EDITOR components/app/board_esp32/wifi_credentials.h        # your SSID and password
 ```
 
 That header is **gitignored**, so a real network password never enters version
@@ -134,7 +134,7 @@ not.
 | `SD_MISO` (DO) | 13 |
 
 SPI mode runs at 20 MHz (`SDSPI_HOST_DEFAULT()`), which is the reliable choice on
-hand wiring; `host.max_freq_khz` in `main/main.c` raises it if your wiring and card
+hand wiring; `host.max_freq_khz` in `components/app/board_esp32/board_esp32.c` raises it if your wiring and card
 tolerate it.
 
 Two costs, stated rather than discovered later:
@@ -230,11 +230,11 @@ cmp track.flac /Volumes/YOURCARD/music/track.flac
 
 ### Station format
 
-Default **44 100 Hz / 256 kbps CBR / joint stereo**. Set it in `main/main.c` on the
-`mini_icecast_cfg_t`:
+Default **44 100 Hz / 256 kbps CBR / joint stereo**. Set it in
+`components/app/appliance/appliance.c` on the `app_services_cfg_t`:
 
 ```c
-mini_icecast_cfg_t cfg = {
+app_services_cfg_t svc = {
     .music_dir = MUSIC_DIR,
     .out_hz = 44100,      /* 44100 48000 32000 22050 24000 16000 11025 12000 8000 */
     .bitrate = 256,       /* must be one the encoder accepts at that rate */
@@ -340,11 +340,13 @@ The same portable component sources compile for macOS against a small shim
 (`host/include/`, `host/shim/shim.c`) that stands in for the eleven ESP-IDF
 functions the code uses, and a board adapter (`host/board_host.c`) that stands in
 for Wi-Fi and the card mount. There is no target conditional compilation anywhere
-in `components/`: the shim and the host board adapter are the only pieces that
+in `components/portable/`: the shim and the host board adapter are the only pieces that
 know it is a Mac, which is what keeps "the tests pass on the host" from meaning
-"the firmware is nothing like what was tested". The `app/` components — the screen
-display, and later the entry policy and the board adapter — cannot run on the host,
-so they are not compiled there; `make -C host layering` checks that they stay out.
+"the firmware is nothing like what was tested". The `app/` components — the entry
+policy, the board adapter and the screen display — cannot run on the host, so they
+are not compiled there, and they are where the board and target choices belong; the
+host's own adapter is `host/board_host.c`.
+`make -C host layering` checks that the app sources stay out.
 
 ```bash
 make -C host                # build the runnable server
@@ -453,7 +455,7 @@ chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1*
 | A mounted but empty card is distinguishable from an absent one | `card on SPI: CS 10, CLK 12, MOSI 11, MISO 13`, then `/sdcard/music does not exist` |
 | No card: the device degrades instead of aborting (R8/T10) | `no card mounted: ESP_ERR_TIMEOUT (0x107)` then `the device will still serve on the network` |
 | Card retries are paced, not a tight loop (T10) | `still no card: ...; retrying in 5 s`, one line per attempt |
-| A wrong SSID is diagnosable rather than silent | `Wi-Fi: cannot join ... (reason 201), attempt 1; check main/wifi_credentials.h` |
+| A wrong SSID is diagnosable rather than silent | `Wi-Fi: cannot join ... (reason 201), attempt 1; check components/app/board_esp32/wifi_credentials.h` |
 | The HTTP surface, end to end (T3-T9) | `BOARD_URL=http://192.168.0.44:8000 sh host/tests/http_tests.sh`: **80 passed, 0 failed**, three runs in a row with no reboot in between |
 | ICY metadata at the advertised interval (T5) | `metadata block at exactly 16000: StreamTitle='...' (2 blocks, 32 bytes)` |
 | Downloads are the card's bytes (T7) | all eleven fixtures `byte-identical`, with `Content-Length` and media type checked |
@@ -558,8 +560,8 @@ tier on its own:
 Two things are needed first, and neither is in the repository:
 
 ```bash
-cp main/wifi_credentials.h.example main/wifi_credentials.h
-$EDITOR main/wifi_credentials.h                 # SSID and password; gitignored
+cp components/app/board_esp32/wifi_credentials.h.example components/app/board_esp32/wifi_credentials.h
+$EDITOR components/app/board_esp32/wifi_credentials.h                 # SSID and password; gitignored
 idf.py -p /dev/cu.usbserial-834430 flash
 
 # and, on the card, a music directory holding the corpus:
@@ -613,8 +615,7 @@ sh host/tests/digest.sh http://127.0.0.1:18001 http://<board-address>:8000 12
 ## Architecture
 
 ```
-main/                       the appliance: configuration, skip button, console line
-  board_esp32.c             the board adapter: Wi-Fi, SPI card mount, hardware census
+main/                       the entry point: app_main and the build surface
 components/
   portable/                 every .c compiles on the host as well (H3)
     app_board/              what the services need from a board, and nothing else
@@ -635,14 +636,16 @@ components/
     cassette/               what the screen shows: reels, packs, progress, label
     dr_libs/                vendored dr_mp3 / dr_flac / dr_wav (public domain / MIT-0)
     shine/                  vendored toots/shine MP3 encoder (LGPL-2.0-only)
-  app/                      firmware only: the screen, and later the entry policy and board adapter
+  app/                      firmware only: the entry policy, the board adapter and the screen
+    appliance/              the entry policy: station format, card retry, console, skip
+    board_esp32/            Wi-Fi, SPI card mount, hardware census; credentials live here
     screen_display/         panel bring-up, LVGL's PSRAM allocator, the cassette view
 host/                       the host build: shim, board adapter, fixtures, tests, tools
 ```
 
 The dependency direction is one-way and is checked by `make -C host layering`:
 `mini_files` and `mini_icecast` depend on `http_server`; only the application
-layer (`app_services` in `portable/` and `main/`) depends on `mini_files`;
+layer (`app_services` in `portable/` and `appliance` in `app/`) depends on `mini_files`;
 `mini_icecast` owns no socket, parses no request and renders no markup; `cassette`
 depends only on the broadcast's status snapshot. The split between `portable/` and
 `app/` is itself a rule: every `.c` under `portable/` must be in `host/Makefile`,
@@ -650,7 +653,8 @@ and no source under `app/` may be. The binary search for the seam is in
 `docs/adr/0003-extract-http-server-from-mini-icecast.md`.
 
 The services are composed once, in `app_services`, and both entry points call it:
-the firmware through `main/board_esp32.c` and the host build through
+the appliance (`components/app/appliance`) and the host build through
+`host/icecast_host.c`. The board adapter is `components/app/board_esp32/board_esp32.c`; the host's is
 `host/board_host.c`. The order is not cosmetic — the station is resolved before
 anything allocates, the network comes up before the encoder takes its internal RAM,
 and the listener starts last — and it now has one home instead of one per entry

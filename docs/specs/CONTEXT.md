@@ -106,6 +106,14 @@ The paper strip on the cassette that carries the cleaned **Now playing** title,
 with parenthesised asides dropped.
 _Avoid_: title bar, caption, marquee
 
+### The appliance
+
+**Appliance**:
+The device's entry policy: the station configuration, the card retry, the console line
+and the skip button. It starts the services and the **Screen display**; it is never a
+source of truth.
+_Avoid_: main, firmware
+
 ### Clients and access
 
 **Client**:

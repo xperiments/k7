@@ -3,7 +3,7 @@
  * app_services - the device's services, composed once.
  *
  * The order below is load-bearing and used to exist only as the sequence of calls
- * in app_main and, differently, in host/icecast_host.c:
+ * in the appliance and, differently, in host/icecast_host.c:
  *
  *   1. resolve the station format  (arithmetic only: no heap, no hardware)
  *   2. board network               (Wi-Fi's DMA buffers win the internal-RAM race)
@@ -12,8 +12,8 @@
  *   5. broadcast                   (the encoder takes its internal RAM last)
  *   6. HTTP listener               (starts serving what is already registered)
  *
- * Both entry points call this, so the host build exercises the device's
- * composition instead of a second one, and the ordering has one home.
+ * The appliance and the host entry point call this, so the host build exercises the
+ * device's composition instead of a second one, and the ordering has one home.
  */
 #include <stdbool.h>
 #include <stddef.h>

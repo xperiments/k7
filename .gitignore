@@ -1,5 +1,5 @@
 # Real Wi-Fi credentials: compiled in, deliberately not tracked
-main/wifi_credentials.h
+components/app/board_esp32/wifi_credentials.h
 
 # ESP-IDF build output and configuration. `build*/
 sdkconfig.sunton

@@ -3,10 +3,10 @@
  * app_board - what the services need from the board, and nothing else.
  *
  * The seam exists because it already has two real adapters: the ESP32-S3 board
- * (main/board_esp32.c: Wi-Fi credentials, the SPI card mount, the hardware
- * census) and the host build (host/board_host.c: no network, the fixture
- * directory always mounted). The composition module calls this and knows nothing
- * about GPIOs, esp_wifi or FAT.
+ * (components/app/board_esp32/board_esp32.c: Wi-Fi credentials, the SPI card mount,
+ * the hardware census) and the host build (host/board_host.c: no network, the
+ * fixture directory always mounted). The composition and the appliance call this and
+ * know nothing about GPIOs, esp_wifi or FAT.
  */
 #include <stdint.h>
 

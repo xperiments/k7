@@ -30,8 +30,9 @@
 
 /* The credentials are compiled in, as the specification requires, but they live in
  * a gitignored header so a real network password does not end up in version
- * control. Copy main/wifi_credentials.h.example to main/wifi_credentials.h and
- * fill it in; the placeholders below keep a clean checkout building. */
+ * control. Copy components/app/board_esp32/wifi_credentials.h.example to
+ * wifi_credentials.h and fill it in; the placeholders below keep a clean checkout
+ * building. */
 #if defined(__has_include)
 #if __has_include("wifi_credentials.h")
 #include "wifi_credentials.h"
@@ -40,7 +41,7 @@
 #ifndef WIFI_SSID
 #define WIFI_SSID "your-ssid"
 #define WIFI_PASS "your-password"
-#warning "main/wifi_credentials.h is missing: the device will not join a network (see README)"
+#warning "components/app/board_esp32/wifi_credentials.h is missing: the device will not join a network (see README)"
 #endif
 
 /* The card is wired over SPI, not the 1-bit SDMMC the specification's §2.3
@@ -78,7 +79,7 @@ static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
         wifi_event_sta_disconnected_t *e = data;
         if (++wifi_attempts == 1 || wifi_attempts % 10 == 0)
             ESP_LOGW(TAG, "Wi-Fi: cannot join \"%s\" (reason %d), attempt %d; "
-                          "check main/wifi_credentials.h",
+                          "check components/app/board_esp32/wifi_credentials.h",
                      WIFI_SSID, e->reason, wifi_attempts);
         esp_wifi_connect();
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
