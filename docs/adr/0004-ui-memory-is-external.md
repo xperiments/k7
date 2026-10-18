@@ -54,9 +54,9 @@ Costs and constraints, all measured:
   task belongs on core 0 at a lower priority, as `docs/research/radio-player-memory-and-lvgl.md`
   sets out. The fit check runs in `app_main` on core 0 and does not disturb the
   encoder's measurements.
-- **LVGL is a fetched dependency, not vendored** (`main/idf_component.yml`, pinned by
-  the committed `dependencies.lock`), and it is an application-layer dependency: the
-  host tier still compiles only the server components and never sees it.
+- **LVGL is a fetched dependency, not vendored** (`components/app/screen_display/idf_component.yml`,
+  pinned by the committed `dependencies.lock`), and it is an application-layer dependency:
+  the host tier still compiles only the portable components and never sees it.
 
 `main/ui_fit.c` is groundwork and says so. When the real interface arrives it replaces
 that file, keeping the allocator and the PSRAM draw-buffer rule, and the fit check goes
@@ -65,6 +65,7 @@ with it.
 ## Implementation note (architecture review, 2026-10-18)
 
 `main/ui_fit.c` no longer exists. The allocator and the PSRAM draw-buffer rule live in
-`main/ui.c`, the screen in `main/ui_cassette.c`, and the screen's testable arithmetic in
+`components/app/screen_display/screen_display.c`, the screen in
+`components/app/screen_display/cassette_view.c`, and the screen's testable arithmetic in
 `components/portable/cassette/`. The decision above is unchanged; only the placeholder file it was
 first proved in is gone.

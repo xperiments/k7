@@ -1,0 +1,24 @@
+menu "Screen display"
+
+config APP_UI_SERIAL_DUMP
+    bool "Dump the rendered screen over the serial console once at startup"
+    default n
+    help
+        With no panel attached this is how the interface can be looked at: the
+        framebuffer is sent as base64 rows ("UIROW <n> <data>") a few seconds after
+        boot, and tools/decode_screen_dump.py turns a captured log into a PNG. Off by
+        default: it is a diagnostic, and it slows the boot it is enabled on.
+
+        See docs/research/radio-player-memory-and-lvgl.md.
+
+config APP_UI_DUMP_STRIDE
+    int "Sample every Nth pixel when dumping the screen"
+    depends on APP_UI_SERIAL_DUMP
+    default 2
+    range 1 8
+    help
+        The console runs at 115200 baud, so a full 800x480 dump takes minutes. Every
+        second pixel in both directions makes it 400x240 and about twenty seconds,
+        which is enough to check a layout and quick enough to iterate on.
+
+endmenu

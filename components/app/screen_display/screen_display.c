@@ -169,7 +169,7 @@ static void dump_screen(void)
 }
 #endif
 
-void ui_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
+static void ui_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
 {
     (void)area; (void)px;
     /* With an RGB panel the framebuffer is scanned out continuously, so a finished

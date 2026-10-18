@@ -1,19 +1,7 @@
-## Dependencies for the application layer.
+## Dependencies for the entry point and the board adapter.
 ##
-## The server components (http_server, mini_icecast, mini_files) are in this
-## repository and deliberately do not depend on any of these: the host build
-## compiles them, and the host tier must stay free of anything that cannot run
-## there. LVGL belongs to the application, not to the broadcast.
+## The portable components are in this repository and deliberately do not depend on
+## anything that cannot run on the host. LVGL belongs to the screen display component,
+## not to the broadcast or the main entry point.
 dependencies:
   idf: ">=5.4"
-
-  ## The UI toolkit for the final product. v9 rather than v8: v8.4 reached
-  ## end-of-life in March 2025.
-  lvgl/lvgl: "^9.6.0"
-
-  ## The verified display integration, rather than this project's own hand-rolled one.
-  ## A hand-written RGB path had the panel doubling and banding the picture while the
-  ## reference project ran the same board correctly; the port owns the framebuffer and
-  ## vsync handshake that is easy to get subtly wrong, and its `avoid_tearing` path
-  ## gives LVGL the panel's own two buffers in direct mode.
-  espressif/esp_lvgl_port: "^2"

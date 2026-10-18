@@ -21,7 +21,7 @@
  * The frame around it is the UI's business: no full 168 frame is stored.
  * No alpha, no recolour: the crops are blitted as opaque RGB565. */
 
-/* EMBED_FILES puts main/assets/hub_frames.bin in the image under this name. */
+/* EMBED_FILES puts components/app/screen_display/assets/hub_frames.bin in the image under this name. */
 extern const uint8_t hub_frames_bin_start[] asm("_binary_hub_frames_bin_start");
 
 static const lv_image_dsc_t k_hub_crops[HUB_FRAME_COUNT] = {

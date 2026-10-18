@@ -1,17 +1,12 @@
-# The panel driver only exists on the board that has a panel. This is a build-time
-# choice in the application, not a target check in a component: the components do not
-# know which board they are on (H2).
-set(app_srcs "main.c" "ui.c" "ui_cassette.c" "board_esp32.c")
-if(CONFIG_APP_BOARD_SUNTON_8048S050C)
-    list(APPEND app_srcs "panel_rgb.c")
-endif()
+# The entry point and the board adapter. The screen lives in
+# components/app/screen_display; its panel selection is part of that component.
+set(app_srcs "main.c" "board_esp32.c")
 
 idf_component_register(SRCS ${app_srcs}
                        INCLUDE_DIRS "."
-                       EMBED_FILES "assets/hub_frames.bin"
                        REQUIRES esp_driver_gpio esp_driver_sdmmc esp_driver_sdspi esp_driver_spi fatfs nvs_flash
-                                esp_wifi esp_netif esp_event spi_flash esp_psram esp_timer esp_lcd
-                                http_server mini_icecast mini_files cassette app_services app_board)
+                                esp_wifi esp_netif esp_event spi_flash esp_psram
+                                http_server mini_icecast mini_files app_services app_board screen_display)
 
 # board_esp32.c reaches the credentials with __has_include(), which does not appear in
 # the compiler's dependency file - so without this, creating or editing

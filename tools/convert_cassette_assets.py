@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Turn the reel-hub frame sequence into what the firmware can blit.
 
-    python3 tools/convert_cassette_assets.py            # writes main/assets/hub_frames.{bin,h}
+    python3 tools/convert_cassette_assets.py            # writes include/hub_frames.h and assets/hub_frames.bin
     python3 tools/convert_cassette_assets.py --check    # only validates and reports
 
-The screen is drawn by main/ui_cassette.c. The hub art comes from assets/hub/NNN.png:
-20 opaque 168x168 keyframes of the whole hub, exported for a 2-second loop. The outer
-ring and the black background are identical in every keyframe, so only the centre turns.
+The screen is drawn by components/app/screen_display/cassette_view.c. The hub art comes
+from assets/hub/NNN.png: 20 opaque 168x168 keyframes of the whole hub, exported for a
+2-second loop. The outer ring and the black background are identical in every keyframe,
+so only the centre turns.
 
 What this exports: only the MASK_AT_168 = 96 centre of each of the 20 frames. The
 frame around it is the UI's business; no full 168 frame is stored.
@@ -19,7 +20,8 @@ actually changes.
 
 The blob is the 20 crops concatenated. The header wraps them in lv_image_dsc_t
 descriptors and carries the sizes and the loop time. Both are embedded by
-main/CMakeLists.txt and rebuilt by this tool; do not edit them by hand.
+components/app/screen_display/CMakeLists.txt and rebuilt by this tool; do not edit them
+by hand.
 
 Requires Pillow (`pip install pillow`), which the project's documentation lists for
 the host tooling.
@@ -37,8 +39,8 @@ except ImportError:
     sys.exit("needs Pillow: pip install pillow")
 
 HUB_DIR = "assets/hub"
-OUT_BIN = "main/assets/hub_frames.bin"
-OUT_HDR = "main/assets/hub_frames.h"
+OUT_BIN = "components/app/screen_display/assets/hub_frames.bin"
+OUT_HDR = "components/app/screen_display/include/hub_frames.h"
 LOOP_MS = 2000      # the artist's 20 keyframes are a 2-second loop
 MASK_AT_168 = 96    # the animated centre's size at the native hub size
 
@@ -115,7 +117,7 @@ def header_text(count, src_px, mask_px):
     out.append(" * The frame around it is the UI's business: no full 168 frame is stored.")
     out.append(" * No alpha, no recolour: the crops are blitted as opaque RGB565. */")
     out.append("")
-    out.append("/* EMBED_FILES puts main/assets/hub_frames.bin in the image under this name. */")
+    out.append("/* EMBED_FILES puts components/app/screen_display/assets/hub_frames.bin in the image under this name. */")
     out.append('extern const uint8_t hub_frames_bin_start[] asm("_binary_hub_frames_bin_start");')
     out.append("")
     out.append("static const lv_image_dsc_t k_hub_crops[HUB_FRAME_COUNT] = {")

@@ -12,8 +12,9 @@
  * Do not put it on an untrusted network or forward its port.
  *
  * The services and their load-bearing order live in components/portable/app_services; the
- * board (Wi-Fi, card, census) lives in board_esp32.c. This file is the appliance:
- * its configuration, the display, the skip button and the console line.
+ * board (Wi-Fi, card, census) lives in board_esp32.c; the screen in
+ * components/app/screen_display. This file is the appliance: its configuration, the skip
+ * button and the console line.
  */
 #include <stdio.h>
 #include <string.h>

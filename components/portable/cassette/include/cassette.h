@@ -2,8 +2,8 @@
 /*
  * cassette - what the cassette screen should show, with no GUI toolkit.
  *
- * The screen's arithmetic used to live in main/ui_cassette.c, behind LVGL
- * objects, where the only way to observe it was to look at a panel or decode a
+ * The screen's arithmetic used to live in components/app/screen_display/cassette_view.c,
+ * behind LVGL objects, where the only way to observe it was to look at a panel or decode a
  * serial framebuffer dump. The rules are small and easy to get wrong: a reel
  * advances one art frame per loop_ms / frame_count, a long gap between calls must
  * not skip the whole loop, the supply and take-up packs trade size with the
@@ -11,8 +11,8 @@
  * must not be rewritten for a sub-pixel change.
  *
  * This module owns all of that and returns a frame. The adapter in
- * main/ui_cassette.c owns the pixels: positions, fonts, diameters, LVGL objects.
- * There is no LVGL include here, so host/Makefile can compile it.
+ * components/app/screen_display/cassette_view.c owns the pixels: positions, fonts,
+ * diameters, LVGL objects. There is no LVGL include here, so host/Makefile can compile it.
  */
 #include <stdbool.h>
 #include <stdint.h>

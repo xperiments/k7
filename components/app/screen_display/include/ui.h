@@ -2,9 +2,8 @@
  * is this project's decision, and how it reaches the panel is the board's business. */
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
-
-#include "lvgl.h"
 
 #include "mini_icecast.h"
 
@@ -29,9 +28,6 @@
 
 /* Build the screen and start updating it. Called once, after the services are up. */
 void ui_start(void);
-
-/* LVGL's flush hook for the headless path: with no panel there is nothing to copy out. */
-void ui_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px);
 
 /* The cassette screen: created once, then updated from a status snapshot. */
 void ui_cassette_create(void);

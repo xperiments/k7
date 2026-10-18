@@ -21,7 +21,7 @@ Four kinds of number appear here and they are never mixed:
   `build_sunton/sd_stream_server.map` (the Sunton build; `build_sunton/CMakeCache.txt` records
   `SDKCONFIG_DEFAULTS:STRING=sdkconfig.defaults;sdkconfig.defaults.sunton` and
   `build_sunton/config/sdkconfig.h` records `CONFIG_APP_BOARD_SUNTON_8048S050C 1`), and
-  `main/assets/hub_frames.bin`.
+  `components/app/screen_display/assets/hub_frames.bin`.
 - **DOCUMENTED** — a Kconfig `help` string, a `.rst` page, a header comment, or a line of source,
   always cited by file and line.
 - **ARITHMETIC** — a value computed here from DOCUMENTED inputs that are cited next to it. The
@@ -61,15 +61,15 @@ failed attempts were reverted the same day (§10, "Result"); none of the levers 
 | Item | Value | Source |
 |---|---|---|
 | Toolchain | LVGL 9.6.0, `esp_lvgl_port` 2.9.0, ESP-IDF 6.1, ESP32-S3 at 240 MHz | `dependencies.lock`; `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240` in `sdkconfig.sunton` |
-| Panel | 800x480 RGB565, pclk **16 MHz** → 25.625 ms per frame, 39.02 fps | `main/panel_rgb.c:31`, §2 |
-| Framebuffers | **2**, in PSRAM, bounce buffer **0** | `main/panel_rgb.c:73-74`, `:80` |
-| LVGL render path | **direct mode**, `avoid_tearing`, no `bb_mode` | `main/panel_rgb.c:119`, `:122` |
-| Refresh task | **core 0**, priority 4, 16 KB stack, 500 ms sleep cap | `main/panel_rgb.c:46-51` |
+| Panel | 800x480 RGB565, pclk **16 MHz** → 25.625 ms per frame, 39.02 fps | `components/app/screen_display/panel_rgb.c:31`, §2 |
+| Framebuffers | **2**, in PSRAM, bounce buffer **0** | `components/app/screen_display/panel_rgb.c:73-74`, `:80` |
+| LVGL render path | **direct mode**, `avoid_tearing`, no `bb_mode` | `components/app/screen_display/panel_rgb.c:119`, `:122` |
+| Refresh task | **core 0**, priority 4, 16 KB stack, 500 ms sleep cap | `components/app/screen_display/panel_rgb.c:46-51` |
 | Refresh period | **33 ms** (`LV_DEF_REFR_PERIOD`), a 30 fps cap on the reported number | `CONFIG_LV_DEF_REFR_PERIOD` in `build_sunton/config/sdkconfig.h`, §1 |
 | Compiler | **`-Og`** (`CONFIG_COMPILER_OPTIMIZATION_DEBUG`) | `build_sunton/config/sdkconfig.h` |
 | Memory clocks | octal PSRAM 80 MHz (`CONFIG_SPIRAM_MODE_OCT`, `CONFIG_SPIRAM_SPEED_80M`), flash DIO 80 MHz | `build_sunton/config/sdkconfig.h` |
 | Monitor | LVGL's own perf label, top right, 300 ms report (`CONFIG_LV_USE_PERF_MONITOR`) | `build_sunton/config/sdkconfig.h`, §1 |
-| Content | the cassette: two 96x96 hub crops at 100 ms, scrolling title, static packs | `main/ui_cassette.c` |
+| Content | the cassette: two 96x96 hub crops at 100 ms, scrolling title, static packs | `components/app/screen_display/cassette_view.c` |
 | Observation | **15 FPS** on the perf label, reported 2026-10-17 | MEASURED (board), §1 |
 | Not yet recorded | the `render \| flush` split on the label's second line | the first reading any change should carry |
 
@@ -215,7 +215,7 @@ frame period    = 410 000 / pclk
 The values are the board profile's — `pclkHz 16000000`, `hsyncPulseWidth 4`, `hsyncBackPorch 8`,
 `hsyncFrontPorch 8`, `vsyncPulseWidth 4`, `vsyncBackPorch 8`, `vsyncFrontPorch 8`
 (`boards/sunton-8048s050c.json`, "timings") — and are the ones the firmware programs
-(`main/panel_rgb.c:58-69`).
+(`components/app/screen_display/panel_rgb.c:58-69`).
 
 | pclk | line time (820/pclk) | frame (410 000/pclk) | refresh rate | active-pixel bytes/s | pclk data rate |
 |---|---|---|---|---|---|
@@ -246,7 +246,7 @@ Two consequences that matter for the rest of the note:
 ## 3. What `esp_lvgl_port` 2.9.0 does in direct mode with `avoid_tearing`
 
 The configuration under test is `num_fbs = 2`, `bounce_buffer_size_px = 0`,
-`flags.fb_in_psram = true` (`main/panel_rgb.c:73-80`), `direct_mode = true` with
+`flags.fb_in_psram = true` (`components/app/screen_display/panel_rgb.c:73-80`), `direct_mode = true` with
 `buffer_size = PANEL_W * PANEL_H` and `double_buffer = true` (`panel_rgb.c:107-121`), and
 `rgb_cfg.flags.avoid_tearing = true` (`panel_rgb.c:122`).
 
@@ -698,7 +698,7 @@ static const lvgl_port_cfg_t k_port = {
     .task_affinity = 0,
 ```
 
-(`main/panel_rgb.c:46-52`.) Core 0 is the network core, and everything on it runs above priority 4:
+(`components/app/screen_display/panel_rgb.c:46-52`.) Core 0 is the network core, and everything on it runs above priority 4:
 Wi-Fi's task is pinned there (`CONFIG_ESP_WIFI_TASK_PINNED_TO_CORE_0=y`), the esp_timer task is on
 CPU0 (`CONFIG_ESP_TIMER_TASK_AFFINITY=0x0`, `CONFIG_ESP_TIMER_TASK_AFFINITY_CPU0=y`), and lwIP's TCP/IP
 task runs at **priority 18** with no affinity (`CONFIG_LWIP_TCPIP_TASK_PRIO=18`,
@@ -723,7 +723,7 @@ awake, and they block on sockets while serving.
 
 The reference project on this board keeps its refresh task on core 1 at the same priority 4
 (`~/Documents/SolidGL/firmware/components/solidgl_platform/src/solidgl_platform.c:303-320`,
-`.task_affinity = 1` at `:312`), and this repository's own `main/panel_rgb.c` did too until commit
+`.task_affinity = 1` at `:312`), and this repository's own `components/app/screen_display/panel_rgb.c` did too until commit
 `8c8d6e7` was followed by an uncommitted change: `git show 8c8d6e7:main/panel_rgb.c` has
 `.task_affinity = 1` with the comment "core 1 so the refresh does not queue behind the application's
 core", and the working tree has `.task_affinity = 0` with "the refresh lives on core 0 with Wi-Fi and
@@ -893,8 +893,8 @@ through the cache.
 
 ### Where the hub frames live (a link measurement, because it decides the draw cost)
 
-`main/assets/hub_frames.bin` is 368 640 B on disk, embedded with `EMBED_FILES`
-(`main/CMakeLists.txt:9-11`), and in the Sunton image it is not in flash:
+`components/app/screen_display/assets/hub_frames.bin` is 368 640 B on disk, embedded with `EMBED_FILES`
+(`components/app/screen_display/CMakeLists.txt:9-11`), and in the Sunton image it is not in flash:
 
 ```
  .rodata.embedded
@@ -910,7 +910,7 @@ external-RAM data window (`SOC_EXTRAM_DATA_LOW 0x3C000000`, `SOC_EXTRAM_DATA_HIG
 `CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y` / `CONFIG_SPIRAM_RODATA=y`
 (`sdkconfig.defaults.sunton:39-40`, `sdkconfig.sunton`). So every hub blit reads its
 pixels from PSRAM and shares bandwidth with the scan-out — 18 432 B per crop, 2 crops per 100 ms
-(`main/assets/hub_frames.h:12,18`, `main/ui_cassette.c:147-153`), i.e. 368 640 B/s (ARITHMETIC):
+(`components/app/screen_display/include/hub_frames.h:12,18`, `components/app/screen_display/cassette_view.c:147-153`), i.e. 368 640 B/s (ARITHMETIC):
 0.001 % of the scan-out's 29.98 MB/s. The frames' location is not a performance lever; it is a fact
 that rules the image path out as a cause.
 
@@ -918,7 +918,7 @@ that rules the image path out as a cause.
 
 ## 6. What this UI asks the renderer to draw, and which switch gates it
 
-The cassette is drawn, not shipped as a bitmap (`main/ui_cassette.c:4-15`). The draw paths it uses,
+The cassette is drawn, not shipped as a bitmap (`components/app/screen_display/cassette_view.c:4-15`). The draw paths it uses,
 and the work each implies:
 
 | Element | LVGL path | Work per invalidation | Source |
@@ -1030,7 +1030,7 @@ what would settle each one. The reference configuration is the baseline above.
 
 | # | Lever | Exact change | Expected effect | Confidence | What must be measured on the board |
 |---|---|---|---|---|---|
-| 1 | Refresh task placement | `.task_affinity = 1` in `k_port`, priority left at 4 (`main/panel_rgb.c:46-52`) | **big if preemption is the missing term**: moves the task off the core Wi-Fi is pinned to (`sdkconfig.sunton`) onto the core whose encoder at 6 leaves 55.4 % free; it cannot starve the encoder (4 < 6), and lwIP at 18 is unpinned so it preempts on either core | high on the mechanism (`panel_rgb.c:46-52`, `sdkconfig.sunton`); **low** on the size until measured | encoder % unchanged and no stream underrun (telemetry), plus `refr_cnt`/`redraw_cnt` and `render \| flush` before/after |
+| 1 | Refresh task placement | `.task_affinity = 1` in `k_port`, priority left at 4 (`components/app/screen_display/panel_rgb.c:46-52`) | **big if preemption is the missing term**: moves the task off the core Wi-Fi is pinned to (`sdkconfig.sunton`) onto the core whose encoder at 6 leaves 55.4 % free; it cannot starve the encoder (4 < 6), and lwIP at 18 is unpinned so it preempts on either core | high on the mechanism (`panel_rgb.c:46-52`, `sdkconfig.sunton`); **low** on the size until measured | encoder % unchanged and no stream underrun (telemetry), plus `refr_cnt`/`redraw_cnt` and `render \| flush` before/after |
 | 2 | Refresh period | `CONFIG_LV_DEF_REFR_PERIOD=16` in `sdkconfig.defaults`, or `lv_timer_set_period(lv_display_get_refr_timer(disp), 16)` after `lvgl_port_add_disp_rgb()` | **big**: raises the sysmon cap from 30 to 62 (`lv_sysmon.c:303-305`) and lets the panel's 39.02 fps be reached; cannot shorten a cycle that already exceeds 16 ms | high — the period is the timer's period (`lv_display.c:125`) and the sysmon reads it back | FPS and the `render \| flush` split before/after; the same board/panel config runs 16 ms in SolidGL (`solidgl_platform.c:393-397`) |
 | 3 | Render/flush split | `CONFIG_LV_USE_PERF_MONITOR_LOG_MODE=y` for one run | **diagnostic, not a gain** — it is what decides whether #4 or #5–#7 is the lever | high — the log prints `refr_cnt`, `redraw_cnt`, render and flush separately (`lv_sysmon.c:358-375`) | 20 consecutive `sysmon:` lines while the reels turn |
 | 4 | Compiler level | `CONFIG_COMPILER_OPTIMIZATION_PERF=y`; delete the stale `CONFIG_COMPILER_OPTIMIZATION_DEBUG=y` | **medium**: -Og → -O2 over all of LVGL, the driver and the UI (`Kconfig:432-439`); the one published measurement on this board class moved LVGL 9.2 by 0 fps (`performance.md:107-109`) | high that the code changes; low on the size of the effect for *this* UI | FPS + render ms before/after |
@@ -1141,7 +1141,7 @@ No rebuild is needed for the first reading if the label is still on screen: its 
 `total ms (render | flush)` (`lv_sysmon.c:390-397`). The log mode adds `refr_cnt` and `redraw_cnt`
 (`lv_sysmon.c:365`) and removes the label's own repaints from the measurement.
 
-**Step 1 — move the refresh task to core 1, one line, priority unchanged.** In `main/panel_rgb.c:49`:
+**Step 1 — move the refresh task to core 1, one line, priority unchanged.** In `components/app/screen_display/panel_rgb.c:49`:
 
 ```c
     .task_affinity = 1,   /* was 0; core 1's encoder runs at priority 6, this task at 4 */
@@ -1154,7 +1154,7 @@ underrun, and the sysmon's `refr_cnt`/`redraw_cnt` and `render | flush` split ha
 workers at priority 5 will preempt the refresh briefly while they are awake; that is the intended order.
 
 **Step 2 — the refresh period, a second one-line A/B, reversible on its own.** In
-`main/panel_rgb.c`, after `lvgl_port_add_disp_rgb()` succeeds (`panel_rgb.c:124-128`):
+`components/app/screen_display/panel_rgb.c`, after `lvgl_port_add_disp_rgb()` succeeds (`panel_rgb.c:124-128`):
 
 ```c
     lv_timer_t *refr = lv_display_get_refr_timer(disp);
@@ -1233,8 +1233,8 @@ be made without a rebuild.
 
 Local sources, by path:
 
-- This project: `main/panel_rgb.c`, `main/ui.c`, `main/ui_cassette.c`, `main/ui.h`,
-  `main/assets/hub_frames.h`, `main/CMakeLists.txt`, `main/assets/hub_frames.bin`,
+- This project: `components/app/screen_display/panel_rgb.c`, `components/app/screen_display/screen_display.c`, `components/app/screen_display/cassette_view.c`, `components/app/screen_display/include/ui.h`,
+  `components/app/screen_display/include/hub_frames.h`, `components/app/screen_display/CMakeLists.txt`, `components/app/screen_display/assets/hub_frames.bin`,
   `boards/sunton-8048s050c.json`, `sdkconfig.defaults`, `sdkconfig.defaults.sunton`,
   `sdkconfig.sunton`, `build_sunton/config/sdkconfig.h`, `build_sunton/CMakeCache.txt`,
   `build_sunton/sd_stream_server.map`, `docs/research/radio-player-memory-and-lvgl.md`.

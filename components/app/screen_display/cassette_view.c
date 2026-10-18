@@ -25,7 +25,7 @@
 
 #include "cassette.h"
 #include "ui.h"
-#include "assets/hub_frames.h"
+#include "hub_frames.h"
 
 static const char *TAG = "ui";
 

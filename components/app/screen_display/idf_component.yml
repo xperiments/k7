@@ -1,0 +1,17 @@
+version: "1.0.0"
+description: "The screen display: panel bring-up, LVGL's PSRAM allocator and the cassette view."
+license: "MIT"
+targets:
+  - esp32s3
+dependencies:
+  idf: ">=5.4"
+
+  ## The UI toolkit. v9 rather than v8: v8.4 reached end-of-life in March 2025.
+  lvgl/lvgl: "^9.6.0"
+
+  ## The verified display integration, rather than this project's own hand-rolled one.
+  ## A hand-written RGB path had the panel doubling and banding the picture while the
+  ## reference project ran the same board correctly; the port owns the framebuffer and
+  ## vsync handshake that is easy to get subtly wrong, and its `avoid_tearing` path
+  ## gives LVGL the panel's own two buffers in direct mode.
+  espressif/esp_lvgl_port: "^2"

@@ -613,7 +613,7 @@ sh host/tests/digest.sh http://127.0.0.1:18001 http://<board-address>:8000 12
 ## Architecture
 
 ```
-main/                       the appliance: configuration, display, skip button, console line
+main/                       the appliance: configuration, skip button, console line
   board_esp32.c             the board adapter: Wi-Fi, SPI card mount, hardware census
 components/
   portable/                 every .c compiles on the host as well (H3)
@@ -636,6 +636,7 @@ components/
     dr_libs/                vendored dr_mp3 / dr_flac / dr_wav (public domain / MIT-0)
     shine/                  vendored toots/shine MP3 encoder (LGPL-2.0-only)
   app/                      firmware only: the screen, and later the entry policy and board adapter
+    screen_display/         panel bring-up, LVGL's PSRAM allocator, the cassette view
 host/                       the host build: shim, board adapter, fixtures, tests, tools
 ```
 
@@ -750,7 +751,7 @@ Three things make that true, and the second is the one that is easy to get wrong
    PSRAM instead of internal RAM. That is the +7.6 % of encoder cost described above,
    paid for a largest free internal block of 81 920 B instead of 18 432 B.
 2. **LVGL gets an explicit PSRAM allocator** (`LV_USE_CUSTOM_MALLOC`, implemented in
-   `main/ui.c`). Lowering the threshold alone does not do this:
+   `components/app/screen_display/screen_display.c`). Lowering the threshold alone does not do this:
    `heap_caps_malloc_default()` prefers internal memory for anything *at or below* the
    threshold, so at 4096 every widget would still ask internal first and fall through to
    PSRAM only when internal ran out — silently, which is exactly the failure mode that
@@ -761,8 +762,8 @@ Three things make that true, and the second is the one that is easy to get wrong
 
 The image grew from 1.04 MB to 1.28 MB, so the app partition is 4 MB now
 (`partitions.csv`, 68 % free) rather than the 1.5 MB single-app layout. LVGL is a
-fetched dependency pinned by `main/idf_component.yml` and `dependencies.lock`; the host
-tier compiles only the server components and never sees it.
+fetched dependency pinned by `components/app/screen_display/idf_component.yml` and
+`dependencies.lock`; the host tier compiles only the portable components and never sees it.
 
 ## Putting your own music on the card
 
