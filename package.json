@@ -11,7 +11,8 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "font:kalam": "npx --yes lv_font_conv --font assets/fonts/Kalam-Regular.ttf --size 28 --bpp 4 --format lvgl --no-compress --range '0x20-0x7F,0xA0-0xFF,0x2010-0x2015,0x2018-0x201D,0x2026' --lv-include lvgl.h --lv-font-name kalam_28 --output components/app/screen_display/font_kalam_28.c",
-    "flash:monitor": "bash -c 'source ~/esp/esp-idf-6.1/export.sh; lsof -t /dev/cu.usbserial-834430 | xargs kill; idf.py -B build_sunton -p /dev/cu.usbserial-834430 flash monitor'"
+    "font:kalam": "npx --yes lv_font_conv --font assets/fonts/Kalam-Regular.ttf --size 36 --bpp 4 --format lvgl --no-compress --range '0x20-0x7F,0xA0-0xFF,0x2010-0x2015,0x2018-0x201D,0x2026' --lv-include lvgl.h --lv-font-name kalam_36 --output components/app/screen_display/font_kalam_36.c",
+    "flash:monitor": "bash -c 'source ~/esp/esp-idf-6.1/export.sh; lsof -t /dev/cu.usbserial-834430 | xargs kill; idf.py -B build_sunton -p /dev/cu.usbserial-834430 flash monitor'",
+    "assets": "python3 tools/convert_cassette_assets.py"
   }
 }

@@ -28,7 +28,7 @@
 #include "cassette_view.h"
 #include "hub_frames.h"
 
-LV_FONT_DECLARE(kalam_28);
+LV_FONT_DECLARE(kalam_36);
 
 static const char *TAG = "screen";
 
@@ -401,7 +401,7 @@ void cassette_view_create(void)
                             LV_ALIGN_CENTER, 0, 0);
     lv_label_set_text(letter, "B");
 
-    s_title = text(scr, &kalam_28, lv_color_hex(COL_INK),
+    s_title = text(scr, &kalam_36, lv_color_hex(COL_INK),
                    LV_ALIGN_TOP_LEFT, TITLE_X, TITLE_Y);
     lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_title, TITLE_W);
