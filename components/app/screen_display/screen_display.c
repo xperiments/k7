@@ -47,11 +47,11 @@ static const char *TAG = "screen";
  * (SolidGL firmware, components/solidgl_platform/src/solidgl_platform.c). */
 #define UI_DRAW_LINES 40
 
-/* How long the screen task rests between status updates. The reels are on this clock
- * too: their frame follows the track's audio position, so a 10 Hz poll is exactly the
- * art's 10 fps. A slower poll would skip frames, not stretch the loop. That leaves the
- * core for the network stack that shares it. */
-#define UI_FRAME_MS 100
+/* How long the screen task rests between status updates, and the display's refresh
+ * period: the art is 50 frames over a 2 s loop, so one frame is 40 ms. The reels follow
+ * the track's audio position, so this poll is exactly the art's 25 fps. A slower poll
+ * would skip frames, not stretch the loop. */
+#define UI_FRAME_MS 40
 
 /* And never rest longer than this, however expensive a frame was. The verified
  * reference integration caps its own wait at 500 ms (`task_max_sleep_ms`), and the
@@ -239,6 +239,8 @@ esp_err_t screen_display_start(void)
 #endif
     lv_display_set_buffers(disp, fb, NULL, strip, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(disp, ui_flush_cb);
+    lv_timer_t *refr = lv_display_get_refr_timer(disp);
+    if (refr) lv_timer_set_period(refr, UI_FRAME_MS);
 #endif
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -251,6 +253,9 @@ esp_err_t screen_display_start(void)
         return ESP_ERR_TIMEOUT;
     }
 #endif
+    /* Match the refresh to the art's frame period: 50 frames over 2 s is 40 ms. */
+    lv_timer_t *refr = lv_display_get_refr_timer(disp);
+    if (refr) lv_timer_set_period(refr, UI_FRAME_MS);
     cassette_view_create();
 #if !CONFIG_APP_BOARD_SUNTON_8048S050C
     /* Without a port there is no task to draw for us, so this one frame is forced here:
