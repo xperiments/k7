@@ -15,7 +15,7 @@
  * this part; the frame sequence is the rotation.
  *
  * This file is the adapter: it owns positions, fonts, diameters and LVGL objects. What
- * the screen should show - reel advance, pack fill, progress, the cleaned label - is
+ * the screen should show - reel position, pack fill, progress, the cleaned label - is
  * components/portable/cassette, which the host tier can test. Nothing here re-derives any of it.
  */
 #include <math.h>
@@ -64,11 +64,6 @@ static const struct { int x, y; } k_hub[2] = { { 216, 234 }, { 600-16, 234 } };
 #define BAND_Y 424
 #define BAND_X 91
 #define BAND_W 618
-
-/* How often the reel timer wakes. Frames advance on the 2 s loop from the generated
- * header, not on this period: the model keeps the loop at 100 ms per frame even when
- * lv_timer_handler() is late. */
-#define REEL_TICK_MS 72
 
 /* Colours, read off the reference. */
 #define COL_BG          0x444444
@@ -192,30 +187,6 @@ static void apply_frame(const cassette_frame_t *f)
     pack_set(1, d1);
 }
 
-/* The reels. The artist exported twenty keyframes for a two-second loop; the model
- * advances them on that clock and stops them when nothing is playing. */
-static void reel_tick(lv_timer_t *t)
-{
-    (void)t;
-    if (!s_model) return;
-    const cassette_frame_t *f = cassette_step(s_model, NULL, lv_tick_get());
-    apply_frame(f);
-
-#if CONFIG_APP_UI_SERIAL_DUMP
-    /* A still image cannot show that the hubs turn, so a diagnostic build says it. */
-    static uint32_t last_log;
-    uint32_t now = lv_tick_get();
-    if (!f) return;
-    if (now - last_log > 1000) {
-        last_log = now;
-        ESP_LOGI(TAG, "hubs %u/%u and %u/%u, packs %d/%d px, %u permille",
-                 (unsigned)f->hub_frame[0], HUB_FRAME_COUNT,
-                 (unsigned)f->hub_frame[1], HUB_FRAME_COUNT,
-                 s_pack_d[0], s_pack_d[1], (unsigned)f->permille);
-    }
-#endif
-}
-
 /* ------------------------------------------------------------------- build */
 
 void cassette_view_create(void)
@@ -285,9 +256,6 @@ void cassette_view_create(void)
     if (!s_model) ESP_LOGW(TAG, "no model for the cassette: the screen will not update");
     else cassette_reset(s_model);
 
-    if (!lv_timer_create(reel_tick, REEL_TICK_MS, NULL))
-        ESP_LOGW(TAG, "no timer for the reels: the hubs will stay still");
-
     /* LVGL's own performance monitor: CPU and FPS in a label on the system layer,
      * placed top-right by CONFIG_LV_PERF_MONITOR_ALIGN_TOP_RIGHT. */
     lv_sysmon_show_performance(NULL);
@@ -301,5 +269,19 @@ void cassette_view_create(void)
 void cassette_view_update(const mini_icecast_status_t *st)
 {
     if (!s_model) return;
-    apply_frame(cassette_step(s_model, st, lv_tick_get()));
+    const cassette_frame_t *f = cassette_step(s_model, st, lv_tick_get());
+    apply_frame(f);
+
+#if CONFIG_APP_UI_SERIAL_DUMP
+    /* A still image cannot show that the hubs turn, so a diagnostic build says it. */
+    static uint32_t last_log;
+    uint32_t now = lv_tick_get();
+    if (f && now - last_log > 1000) {
+        last_log = now;
+        ESP_LOGI(TAG, "hubs %u/%u and %u/%u, packs %d/%d px, %u permille",
+                 (unsigned)f->hub_frame[0], HUB_FRAME_COUNT,
+                 (unsigned)f->hub_frame[1], HUB_FRAME_COUNT,
+                 s_pack_d[0], s_pack_d[1], (unsigned)f->permille);
+    }
+#endif
 }

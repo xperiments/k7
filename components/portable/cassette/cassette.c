@@ -1,21 +1,20 @@
 /*
- * cassette - the screen's state, advanced by the clock and the broadcast's status.
+ * cassette - the screen's state, derived from the broadcast's status.
  *
- * Two callers advance it: the status poll and the reel timer. Both are serialised
- * by the LVGL port's lock on the panel path, and both run in the same task on the
- * headless path, so this module holds no lock of its own - the same arrangement
- * the statics it replaces relied on, made explicit.
+ * The screen task advances it from the status poll, and the creation path advances
+ * it once to draw the empty screen. On the panel path both callers hold the LVGL
+ * port's lock; on the headless path there is only one task. The module therefore
+ * holds no lock of its own.
+ *
+ * The reels follow the track's audio position (`status.elapsed_ms`), not a wall
+ * clock and not the cadence of the calls: a long gap reports where the tape is,
+ * and a stopped track holds the last frame.
  */
 #include "cassette.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-/* A gap longer than this is a stalled task, not elapsed audio: advancing the
- * whole reel over it would make the tape jump. 250 ms is about two and a half
- * art frames at the exported loop's rate. */
-#define REEL_MAX_DT_MS 250
 
 struct cassette {
     cassette_frame_t frame;
@@ -26,10 +25,7 @@ struct cassette {
     uint32_t frame_ms;
     uint32_t bar_period_ms;
 
-    uint32_t reel_acc[2]; /* time carried towards the next art frame */
-    uint8_t  hub_frame[2];
-    uint32_t last_ms;
-    bool     have_last;
+    uint8_t  hub_frame[2]; /* the frame the reels are holding */
 
     uint32_t shown_permille;
     uint32_t last_bar_ms;
@@ -84,10 +80,7 @@ void cassette_reset(cassette_t *c)
     memset(&c->status, 0, sizeof c->status);
     c->status.format = MI_FMT_NONE;
     c->have_status = false;
-    memset(c->reel_acc, 0, sizeof c->reel_acc);
     memset(c->hub_frame, 0, sizeof c->hub_frame);
-    c->last_ms = 0;
-    c->have_last = false;
     c->shown_permille = 0;
     c->last_bar_ms = 0;
     c->have_shown = false;
@@ -142,26 +135,15 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
     c->frame.pack_fill[0] = (uint16_t)(1000 - c->shown_permille);
     c->frame.pack_fill[1] = (uint16_t)c->shown_permille;
 
-    /* The reels: one art frame per frame_ms, with a long gap clamped so the tape
-     * does not leap forward after a stalled task. Time is recorded even when the
-     * reels are stopped, so resuming does not spend a backlog. */
-    uint32_t dt = 0;
-    if (c->have_last) dt = now_ms - c->last_ms;
-    c->last_ms = now_ms;
-    c->have_last = true;
-    if (dt > REEL_MAX_DT_MS) dt = REEL_MAX_DT_MS;
-    if (c->frame.playing && dt) {
-        for (int i = 0; i < 2; i++) {
-            c->reel_acc[i] += dt;
-            while (c->reel_acc[i] >= c->frame_ms) {
-                c->reel_acc[i] -= c->frame_ms;
-                c->hub_frame[i] = (uint8_t)((c->hub_frame[i] + 1) % c->frame_count);
-            }
-            c->frame.hub_frame[i] = c->hub_frame[i];
-        }
-    } else {
-        for (int i = 0; i < 2; i++) c->frame.hub_frame[i] = c->hub_frame[i];
+    /* The reels: the track's audio position picks the art frame, so the frame is
+     * reproducible and independent of how often this is called. A stopped track
+     * holds the last frame; a new track starts the loop again at elapsed 0. */
+    if (c->frame.playing) {
+        uint32_t frame = c->status.elapsed_ms / c->frame_ms;
+        for (int i = 0; i < 2; i++)
+            c->hub_frame[i] = (uint8_t)(frame % c->frame_count);
     }
+    for (int i = 0; i < 2; i++) c->frame.hub_frame[i] = c->hub_frame[i];
 
     return &c->frame;
 }

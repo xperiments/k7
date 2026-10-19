@@ -97,8 +97,9 @@ packs and a label. A presentation of the live stream, never a source of truth.
 _Avoid_: UI, GUI, dashboard
 
 **Reel frame**:
-One of the twenty keyframes of the hub art, advanced on a two-second loop. The
-sequence is the rotation; the frames are not.
+One of the twenty keyframes of the hub art. The frame sits at the track's audio
+position - one keyframe per `loop_ms / frame_count` of elapsed audio - so a stopped
+track holds its last frame and the sequence, not the frames, is the rotation.
 _Avoid_: sprite, animation step, image frame
 
 **Label**:

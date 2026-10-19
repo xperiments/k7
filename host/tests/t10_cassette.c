@@ -1,9 +1,9 @@
 /*
  * T17: the cassette's arithmetic, without LVGL.
  *
- * The reel loop, the clamped gap, the pack fill, the progress throttle and the
- * label clean are all rules a panel used to be the only witness to. Each is pinned
- * here by feeding a time series: no display, no serial dump.
+ * The reel position, the hold when stopped, the pack fill, the progress throttle and
+ * the label clean are all rules a panel used to be the only witness to. Each is pinned
+ * here by feeding status snapshots: no display, no serial dump.
  */
 #include "test_util.h"
 
@@ -91,32 +91,40 @@ static void test_reels(void)
 
     mini_icecast_status_t st = mkstatus("Song", "song.mp3", 0, 10000, 0.1f);
     const cassette_frame_t *f = cassette_step(c, &st, 0);
-    CHECK_EQ(f->hub_frame[0], 0, "the first step does not advance (no elapsed time)");
+    CHECK_EQ(f->hub_frame[0], 0, "elapsed 0 is frame 0");
+    CHECK_EQ(f->hub_frame[1], 0, "both hubs share the position");
 
-    f = cassette_step(c, NULL, 100);
-    CHECK_EQ(f->hub_frame[0], 1, "100 ms advances one of twenty frames over 2 s");
-    CHECK_EQ(f->hub_frame[1], 1, "both hubs advance together");
+    /* The frame follows the audio position, not the call cadence: the same elapsed
+     * at a wildly different `now` must not change it. */
+    st.elapsed_ms = 100;
+    f = cassette_step(c, &st, 999999);
+    CHECK_EQ(f->hub_frame[0], 1, "100 ms of audio is one frame");
+    st.elapsed_ms = 150;
+    f = cassette_step(c, &st, 1000001);
+    CHECK_EQ(f->hub_frame[0], 1, "half a frame later is still frame 1");
+    st.elapsed_ms = 1900;
+    f = cassette_step(c, &st, 0);
+    CHECK_EQ(f->hub_frame[0], 19, "1.9 s is the last frame");
+    st.elapsed_ms = 2000;
+    f = cassette_step(c, &st, 0);
+    CHECK_EQ(f->hub_frame[0], 0, "2 s wraps the loop");
 
-    for (int i = 2; i <= 19; i++) f = cassette_step(c, NULL, (uint32_t)i * 100);
-    CHECK_EQ(f->hub_frame[0], 19, "the loop reaches its last frame at 1.9 s");
-    f = cassette_step(c, NULL, 2000);
-    CHECK_EQ(f->hub_frame[0], 0, "and wraps at 2 s");
+    /* A long gap reports the tape's position; there is no backlog to spend. */
+    st.elapsed_ms = 15000;
+    f = cassette_step(c, &st, 0);
+    CHECK_EQ(f->hub_frame[0], 10, "15 s of audio is frame 10, wherever it is called");
 
-    /* A long gap is clamped: 8 s of stall must not spin the reels 80 frames. */
-    f = cassette_step(c, NULL, 10000);
-    CHECK_EQ(f->hub_frame[0], 2, "an 8 s gap advances only the clamped 250 ms (two frames)");
-
-    /* Stopped: time passes, the art does not move. */
+    /* Stopped: the last frame holds, and a status-less step does not move it. */
     mini_icecast_status_t idle = mkstatus("", "", 0, 0, 0);
-    f = cassette_step(c, &idle, 10000);
-    f = cassette_step(c, NULL, 10100);
-    CHECK_EQ(f->hub_frame[0], 2, "the reels stop when nothing is playing");
+    f = cassette_step(c, &idle, 0);
+    CHECK_EQ(f->hub_frame[0], 10, "a stopped track holds the last frame");
+    f = cassette_step(c, NULL, 123456);
+    CHECK_EQ(f->hub_frame[0], 10, "a status-less step holds it too");
 
-    /* Resume: no backlog is spent. */
-    f = cassette_step(c, &st, 10200);
-    CHECK_EQ(f->hub_frame[0], 3, "resuming advances from where it stopped");
-    f = cassette_step(c, NULL, 10300);
-    CHECK_EQ(f->hub_frame[0], 4, "and keeps advancing");
+    /* A new track starts the loop at its own elapsed 0. */
+    st = mkstatus("Other", "other.mp3", 0, 5000, 0.1f);
+    f = cassette_step(c, &st, 0);
+    CHECK_EQ(f->hub_frame[0], 0, "a new track starts the loop again");
 
     cassette_free(c);
 }

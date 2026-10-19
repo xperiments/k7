@@ -47,10 +47,10 @@ static const char *TAG = "screen";
  * (SolidGL firmware, components/solidgl_platform/src/solidgl_platform.c). */
 #define UI_DRAW_LINES 40
 
-/* How long the screen task rests between status updates. The reels are not on this
- * clock - cassette_view.c runs them from their own timer - so this is the cadence for
- * the text and the host-side redraw alone, and labels do not need 50 updates a second.
- * That leaves the core for the network stack that shares it. */
+/* How long the screen task rests between status updates. The reels are on this clock
+ * too: their frame follows the track's audio position, so a 10 Hz poll is exactly the
+ * art's 10 fps. A slower poll would skip frames, not stretch the loop. That leaves the
+ * core for the network stack that shares it. */
 #define UI_FRAME_MS 100
 
 /* And never rest longer than this, however expensive a frame was. The verified

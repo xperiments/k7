@@ -1,7 +1,7 @@
 #pragma once
 /*
- * The cassette screen's LVGL view: objects, layout, fonts and the reel timer. Private
- * to screen_display; the arithmetic is components/portable/cassette.
+ * The cassette screen's LVGL view: objects, layout and fonts. Private to
+ * screen_display; the arithmetic is components/portable/cassette.
  */
 #include "mini_icecast.h"
 
