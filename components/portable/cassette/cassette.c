@@ -34,6 +34,7 @@ struct cassette {
     uint32_t last_elapsed;
     bool     have_last;
     bool     was_playing;
+    float    peak_l, peak_r; /* the VU peak-hold, 0..1 */
 
     uint32_t shown_permille;
     uint32_t last_bar_ms;
@@ -101,6 +102,8 @@ void cassette_reset(cassette_t *c)
     c->last_elapsed = 0;
     c->have_last = false;
     c->was_playing = false;
+    c->peak_l = 0.0f;
+    c->peak_r = 0.0f;
     c->shown_permille = 0;
     c->last_bar_ms = 0;
     c->have_shown = false;
@@ -133,6 +136,13 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
     c->frame.playing = c->have_status && c->status.file[0] && c->status.format != MI_FMT_NONE;
     c->frame.level_l = c->have_status ? c->status.level_l : 0.0f;
     c->frame.level_r = c->have_status ? c->status.level_r : 0.0f;
+
+    /* The VU's peak-hold: the status carries RMS, not a sample peak, so hold the
+     * highest recent RMS with a slow fall. 0.97 per 40 ms step is about 0.47/s. */
+    c->peak_l = fmaxf(c->frame.level_l, c->peak_l * 0.97f);
+    c->peak_r = fmaxf(c->frame.level_r, c->peak_r * 0.97f);
+    c->frame.vu_l = c->peak_l;
+    c->frame.vu_r = c->peak_r;
 
     /* The position, stepped at the bar's period rather than at the poll rate: a
      * one-second step is ample for a bar and stops a sub-pixel change from

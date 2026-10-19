@@ -19,6 +19,7 @@
  * components/portable/cassette, which the host tier can test. Nothing here re-derives any of it.
  */
 #include <math.h>
+#include <stdint.h>
 
 #include "esp_log.h"
 #include "lvgl.h"
@@ -77,12 +78,27 @@ static const struct { int x, y; } k_hub[2] = { { 216, 234 }, { 600-16, 234 } };
 #define COL_BAR_BG      0xb9c0bb
 #define COL_BAR_FG      0xf03d3a
 
+/* The tape's solid edge enters at the tangent and runs TAPE_ARC_DEG to the top;
+ * the dashed VU continues from there. LVGL angles: 0 = 3 o'clock, 90 = 6, and
+ * positive is clockwise. The left reel runs clockwise; the right mirrors it. */
+#define TAPE_ARC_DEG 90
+#define VU_ARC_DEG CONFIG_APP_UI_VU_ARC_DEG
+#define VU_DASH_DEG 4
+#define VU_GAP_DEG 4
+#define VU_DASH_COUNT ((VU_ARC_DEG + VU_DASH_DEG + VU_GAP_DEG - 1) / (VU_DASH_DEG + VU_GAP_DEG))
+#define TAPE_WIDTH 4
+#define VU_WIDTH 4
+#define VU_PEAK_LIT 0xffd08a
+
 static cassette_t *s_model;
 static lv_obj_t *s_hub[2], *s_pack[2], *s_strand[2];
+static lv_obj_t *s_vu[2];         /* dashed VU overlay, one per pack */
 static lv_point_precise_t s_strand_pts[2][2];
 static lv_obj_t *s_title, *s_bar;
 static int      s_pack_d[2];      /* px, so a redraw happens only when it changes */
 static uint8_t  s_shown_hub[2];   /* the art frame currently on screen */
+static int      s_tangent_deg[2]; /* where the strand leaves the pack, LVGL degrees */
+static int      s_vu_lit[2];      /* dashes lit by the peak-hold, 0..VU_DASH_COUNT */
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -133,6 +149,11 @@ static void strand_set(int i, int d)
     int tip_x = cx + (int)lround(r * cos(theta));
     int tip_y = cy + (int)lround(r * sin(theta));
 
+    int deg = (int)lround(theta * 180.0 / 3.14159265358979323846);
+    deg %= 360;
+    if (deg < 0) deg += 360;
+    s_tangent_deg[i] = deg;
+
     /* The line's own box is the bounding rect of its ends, so a redraw costs the
      * strand and not the whole screen. */
     int x1 = LV_MIN(foot_x, tip_x);
@@ -149,6 +170,39 @@ static void strand_set(int i, int d)
     lv_line_set_points(s_strand[i], s_strand_pts[i], 2);
 }
 
+static bool angle_in_arc(int a, int start, int dir, int length)
+{
+    int d = dir > 0 ? a - start : start - a;
+    d = ((d % 360) + 360) % 360;
+    return d <= length;
+}
+
+/* The overlay is only as large as the VU arc's bounding box, so its 25 Hz
+ * invalidation redraws the dashes and the pack under them, not the whole pack. */
+static void vu_geom_set(int i)
+{
+    if (!s_vu[i]) return;
+    int r = s_pack_d[i] / 2;
+    int cx = k_hub[i].x, cy = k_hub[i].y;
+    int dir = i ? -1 : 1;
+    int start = s_tangent_deg[i] + dir * TAPE_ARC_DEG;
+    int angles[] = { start, start + dir * VU_ARC_DEG, 0, 90, 180, 270 };
+    int x1 = INT32_MAX, y1 = INT32_MAX, x2 = INT32_MIN, y2 = INT32_MIN;
+    for (int k = 0; k < (int)(sizeof angles / sizeof angles[0]); k++) {
+        if (!angle_in_arc(angles[k], start, dir, VU_ARC_DEG)) continue;
+        int px = cx + (int)lround((r - 2) * cos(angles[k] * 3.14159265358979323846 / 180.0));
+        int py = cy + (int)lround((r - 2) * sin(angles[k] * 3.14159265358979323846 / 180.0));
+        if (px < x1) x1 = px;
+        if (px > x2) x2 = px;
+        if (py < y1) y1 = py;
+        if (py > y2) y2 = py;
+    }
+    if (x1 > x2) { x1 = cx - r; x2 = cx + r; y1 = cy - r; y2 = cy + r; }
+    int pad = 6;
+    lv_obj_set_pos(s_vu[i], x1 - pad, y1 - pad);
+    lv_obj_set_size(s_vu[i], x2 - x1 + 2 * pad, y2 - y1 + 2 * pad);
+}
+
 static void pack_set(int i, int d)
 {
     if (d == s_pack_d[i]) return;
@@ -156,6 +210,7 @@ static void pack_set(int i, int d)
     lv_obj_set_size(s_pack[i], d, d);
     lv_obj_set_pos(s_pack[i], k_hub[i].x - d / 2, k_hub[i].y - d / 2);
     strand_set(i, d);
+    vu_geom_set(i);
 }
 
 /* The pack area, and therefore the tape length on it, is proportional to the fill:
@@ -166,6 +221,77 @@ static int pack_diameter(uint16_t fill)
     double min = PACK_MIN_D, max = PACK_MAX_D;
     double d = sqrt(min * min + (max * max - min * min) * (double)fill / 1000.0);
     return ((int)lround(d)) & ~1;
+}
+
+/* LVGL draws an arc clockwise from start to end; a counter-clockwise segment is
+ * the same points with the ends swapped. */
+static void draw_arc(lv_layer_t *layer, int cx, int cy, int r,
+                     int start, int length, int dir, lv_color_t color,
+                     lv_opa_t opa, int width, int rounded)
+{
+    if (length <= 0) return;
+    int s = dir > 0 ? start : start - length;
+    int e = dir > 0 ? start + length : start;
+    lv_draw_arc_dsc_t dsc;
+    lv_draw_arc_dsc_init(&dsc);
+    dsc.color = color;
+    dsc.opa = opa;
+    dsc.width = width;
+    dsc.center.x = cx;
+    dsc.center.y = cy;
+    dsc.radius = r;
+    dsc.start_angle = s;
+    dsc.end_angle = e;
+    dsc.rounded = rounded;
+    lv_draw_arc(layer, &dsc);
+}
+
+/* The solid tape edge, drawn on the pack so it redraws only when the pack resizes. */
+static void pack_draw_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    lv_layer_t *layer = lv_event_get_layer(e);
+    int r = s_pack_d[i] / 2;
+    int dir = i ? -1 : 1;
+    draw_arc(layer, k_hub[i].x, k_hub[i].y, r - 2,
+             s_tangent_deg[i], TAPE_ARC_DEG, dir,
+             lv_color_hex(COL_TAPE_DARK), LV_OPA_COVER, TAPE_WIDTH, 1);
+}
+
+/* The dashed VU, in its own overlay so the 25 Hz level changes do not repaint
+ * the pack's fill or its tape line. */
+static void vu_draw_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    lv_layer_t *layer = lv_event_get_layer(e);
+    int r = s_pack_d[i] / 2;
+    int dir = i ? -1 : 1;
+    int start = s_tangent_deg[i] + dir * TAPE_ARC_DEG;
+    int lit = s_vu_lit[i];
+
+    for (int k = 0; k < VU_DASH_COUNT; k++) {
+        int off = k * (VU_DASH_DEG + VU_GAP_DEG);
+        int len = VU_DASH_DEG;
+        if (off + len > VU_ARC_DEG) len = VU_ARC_DEG - off;
+        if (len <= 0) break;
+        int s = start + dir * off;
+        bool peak = lit > 0 && k == lit - 1;
+        lv_color_t color = lv_color_hex(peak ? VU_PEAK_LIT : COL_TAPE_DARK);
+        lv_opa_t opa = k < lit ? LV_OPA_COVER : LV_OPA_30;
+        draw_arc(layer, k_hub[i].x, k_hub[i].y, r - 2, s, len, dir,
+                 color, opa, VU_WIDTH, 0);
+    }
+}
+
+/* Map a 0..1 peak-hold to the VU dashes. The scale is dB over -48..0, so the
+ * meter moves like a VU rather than a linear amplitude. */
+static int vu_lit(float vu)
+{
+    if (vu <= 0.001f) return 0;
+    float db = 20.0f * log10f(vu);
+    if (db < -48.0f) db = -48.0f;
+    if (db > 0.0f) db = 0.0f;
+    return (int)lroundf((db + 48.0f) / 48.0f * VU_DASH_COUNT);
 }
 
 /* Apply a model frame: only what changed is touched. */
@@ -192,6 +318,18 @@ static void apply_frame(const cassette_frame_t *f)
      * same range. */
     pack_set(0, pack_diameter(f->pack_fill[0]));
     pack_set(1, pack_diameter(f->pack_fill[1]));
+
+    /* The VU is the only thing that changes every poll; invalidate just its
+     * overlay so the pack and its tape line stay put. */
+    int lit0 = vu_lit(f->vu_l), lit1 = vu_lit(f->vu_r);
+    if (lit0 != s_vu_lit[0]) {
+        s_vu_lit[0] = lit0;
+        if (s_vu[0]) lv_obj_invalidate(s_vu[0]);
+    }
+    if (lit1 != s_vu_lit[1]) {
+        s_vu_lit[1] = lit1;
+        if (s_vu[1]) lv_obj_invalidate(s_vu[1]);
+    }
 }
 
 /* ------------------------------------------------------------------- build */
@@ -214,6 +352,8 @@ void cassette_view_create(void)
         lv_obj_set_style_line_color(s_strand[i], lv_color_hex(COL_TAPE_DARK), 0);
         lv_obj_set_style_line_width(s_strand[i], STRAND_W, 0);
         strand_set(i, s_pack_d[i]);
+        lv_obj_add_event_cb(s_pack[i], pack_draw_cb, LV_EVENT_DRAW_MAIN_END,
+                            (void *)(intptr_t)i);
     }
 
     /* The hubs: only the 96x96 crop is animated. No static 168 frame is stored or
@@ -228,6 +368,24 @@ void cassette_view_create(void)
 
         s_hub[i] = hub;
         s_shown_hub[i] = 0;
+    }
+
+    /* The VU: a transparent overlay sized to its arc, above the hub ring and below
+     * the label. Its own 25 Hz invalidation leaves the pack fill and tape line
+     * alone. */
+    for (int i = 0; i < 2; i++) {
+        lv_obj_t *vu = lv_obj_create(scr);
+        lv_obj_remove_style_all(vu);
+        lv_obj_set_style_bg_opa(vu, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(vu, 0, 0);
+        lv_obj_set_style_pad_all(vu, 0, 0);
+        lv_obj_set_scrollable(vu, false);
+        lv_obj_clear_flag(vu, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(vu, vu_draw_cb, LV_EVENT_DRAW_MAIN_END,
+                            (void *)(intptr_t)i);
+        s_vu[i] = vu;
+        s_vu_lit[i] = 0;
+        vu_geom_set(i);
     }
 
     /* The label, the red side square and the rule the title sits above. */

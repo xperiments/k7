@@ -7,6 +7,8 @@
  */
 #include "test_util.h"
 
+#include <math.h>
+
 #include "cassette.h"
 
 static mini_icecast_status_t mkstatus(const char *title, const char *file,
@@ -66,6 +68,7 @@ static void test_initial_and_progress(void)
     CHECK_EQ(f->hub_frame[0], 0, "the phase starts at zero");
     CHECK_EQ(f->hub_frame[1], 0, "both reels start at the same phase");
     CHECK(f->level_l == 0.5f && f->level_r == 0.5f, "the level passes through");
+    CHECK(f->vu_l == 0.5f && f->vu_r == 0.5f, "the VU starts at the level");
 
     /* The same title again: no label work. */
     st = mkstatus("(live, 1984, Le Spectrum) Song", "song.mp3", 1000, 10000, 0.5f);
@@ -204,6 +207,43 @@ static void test_reset(void)
     CHECK(f->permille_changed, "and is reported changed");
     CHECK_EQ(f->pack_fill[0], 1000, "the supply pack is full again");
     CHECK_EQ(f->hub_frame[0], 0, "the reels are back at frame 0");
+    CHECK(f->vu_l == 0.0f && f->vu_r == 0.0f, "and the VU is back at zero");
+    cassette_free(c);
+}
+
+static void test_vu(void)
+{
+    cassette_t *c = cassette_new(20, 1000);
+    CHECK(c != NULL, "the VU model starts");
+    if (!c) return;
+
+    mini_icecast_status_t st = mkstatus("Song", "song.mp3", 0, 600000, 0.8f);
+    const cassette_frame_t *f = cassette_step(c, &st, 0);
+    CHECK(fabsf(f->vu_l - 0.8f) < 0.001f, "a loud chunk shows on the VU");
+    CHECK(fabsf(f->vu_r - 0.8f) < 0.001f, "both channels");
+
+    st = mkstatus("Song", "song.mp3", 25, 600000, 0.2f);
+    f = cassette_step(c, &st, 25);
+    CHECK(f->vu_l > 0.2f, "the peak holds above a quiet chunk");
+    CHECK(f->vu_l < 0.8f, "but starts to fall");
+
+    float prev = f->vu_l;
+    for (int k = 0; k < 20; k++) {
+        st = mkstatus("Song", "song.mp3", 50 + k * 25, 600000, 0.2f);
+        f = cassette_step(c, &st, 50 + k * 25);
+        CHECK(f->vu_l <= prev + 0.0001f, "the hold falls monotonically");
+        prev = f->vu_l;
+    }
+    CHECK(f->vu_l < 0.5f, "and has fallen after half a second");
+
+    st = mkstatus("Song", "song.mp3", 600, 600000, 0.9f);
+    f = cassette_step(c, &st, 600);
+    CHECK(fabsf(f->vu_l - 0.9f) < 0.001f, "a new peak attacks immediately");
+
+    cassette_reset(c);
+    f = cassette_step(c, NULL, 700);
+    CHECK(f->vu_l == 0.0f && f->vu_r == 0.0f, "a reset clears the VU");
+
     cassette_free(c);
 }
 
@@ -213,6 +253,7 @@ int main(void)
     test_reels();
     test_bar_throttle();
     test_reset();
+    test_vu();
 
     CHECK(cassette_new(0, 1000) == NULL, "no frames means no reel");
 

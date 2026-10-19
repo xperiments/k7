@@ -48,6 +48,7 @@ typedef struct {
     uint8_t  hub_frame[2];              /* index into the reel art, one revolution = frame_count */
     bool     playing;                   /* the reels follow the audio only while this is true */
     float    level_l, level_r;          /* 0..1 RMS, passed through from the status */
+    float    vu_l, vu_r;                /* 0..1 peak-hold of the RMS, for the VU meter */
 } cassette_frame_t;
 
 typedef struct cassette cassette_t;

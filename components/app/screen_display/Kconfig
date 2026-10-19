@@ -21,4 +21,13 @@ config APP_UI_DUMP_STRIDE
         second pixel in both directions makes it 400x240 and about twenty seconds,
         which is enough to check a layout and quick enough to iterate on.
 
+config APP_UI_VU_ARC_DEG
+    int "VU arc length in degrees"
+    default 90
+    range 0 180
+    help
+        The dashed VU arc continues from the solid tape arc at the top of each
+        pack. 90 gives a quarter-circle; the number of dashes follows from this
+        and the 4-degree dash and gap. The left reel is L, the right R.
+
 endmenu

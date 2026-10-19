@@ -93,7 +93,8 @@ _Avoid_: UI, GUI
 
 **Cassette screen**:
 The 800x480 drawing of a cassette that shows what is playing: two reels, two tape
-packs and a label. A presentation of the live stream, never a source of truth.
+packs, a label and a **VU meter** on each reel. A presentation of the live stream,
+never a source of truth.
 _Avoid_: UI, GUI, dashboard
 
 **Reel frame**:
@@ -107,6 +108,12 @@ How far a reel has turned through its art, from its pack radius. The tape moves 
 47.625 mm/s, so a full reel turns slower than an empty one; the supply's fill is
 1000 minus the take-up's, so the two reels' phases and speeds differ.
 _Avoid_: angle, offset
+
+**VU meter**:
+The dashed arc that continues the tape edge on each reel, showing the peak-hold of one
+channel: the left reel is L, the right R. Its length is a screen setting, not part of
+the cassette.
+_Avoid_: level bar, meter, peak meter
 
 **Label**:
 The paper strip on the cassette that carries the cleaned **Now playing** title,
