@@ -113,9 +113,9 @@ lv_display_t *panel_rgb_start(void)
         .color_format = LV_COLOR_FORMAT_RGB565,
         .flags = {
             .buff_spiram = true,
-            /* The port takes the panel's own two framebuffers, LVGL draws straight into
-             * them, and each frame closes with the panel's vsync: nothing is copied into
-             * the buffer being scanned. */
+            /* The port takes the panel's own two framebuffers, LVGL draws straight
+             * into them, and each frame closes with the panel's vsync: nothing is
+             * copied into the buffer being scanned. */
             .direct_mode = true,
         },
     };

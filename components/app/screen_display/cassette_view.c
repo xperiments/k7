@@ -1,11 +1,14 @@
 /*
  * The cassette screen.
  *
- * The design is drawn here, not shipped as one bitmap: a light grey shell, two black
- * tape packs of different sizes, and a cream label with a red "B" and a rule. The only
- * bitmap left is the hub: assets/hub/ holds the opaque 168x168 keyframes of the whole
- * hub, one revolution. tools/convert_cassette_assets.py converts them to
- * RGB565 exactly as exported - no alpha, no recolour, no compositing - and adds 96x96
+ * The cassette body is drawn here: a light grey shell, two black tape packs of
+ * different sizes, the small cream label (LVGL objects) and the progress band. The
+ * full cover comes from assets/labels/glabel-full.png and is exported as RGB565A8
+ * because its tape window is transparent, so the reels show through it; it is a
+ * static image, drawn when the cover slides in on a two-finger swipe. The hub comes
+ * from assets/hub/: the opaque 168x168 keyframes of the whole hub, one revolution.
+ * tools/convert_cassette_assets.py converts both to what the firmware blits: the hubs
+ * to RGB565 exactly as exported - no alpha, no recolour, no compositing - with 96x96
  * crop descriptors that point into the same frame data.
  *
  * The firmware draws only the 96x96 crop of each frame; the frame around it is the
@@ -26,7 +29,12 @@
 
 #include "cassette.h"
 #include "cassette_view.h"
+#include "fx_drawer.h"
 #include "hub_frames.h"
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+#include "label_cover.h"
+#include "touch_gt911.h"
+#endif
 
 LV_FONT_DECLARE(kalam_36);
 
@@ -36,6 +44,7 @@ static const char *TAG = "screen";
  * converter's HUB_FRAME_W (96 px). The packs stay the reference's 245/310 so the
  * black tape rings the hub at both ends of a side. */
 static const struct { int x, y; } k_hub[2] = { { 216, 234 }, { 600-16, 234 } };
+static const struct { int x, y; } k_window[2] = { { 120+180, 180 }, { 800-120-180, 268+20 } };
 #define HUB_RING_D 168
 #define PACK_MIN_D 168
 #define PACK_MAX_D 400
@@ -45,38 +54,55 @@ static const struct { int x, y; } k_hub[2] = { { 216, 234 }, { 600-16, 234 } };
 #define STRAND_X_L 16
 #define STRAND_X_R 784
 #define STRAND_Y 480
-#define STRAND_W 4
+#define STRAND_W 8
 
-/* The label: cream bar, red side square, the rule the title sits above. */
+/* The small label: the cream bar one-finger up/down slides in and out. It is the
+ * label that was there before the full cover existed, and it keeps the title. */
 #define LABEL_X 32
-#define LABEL_Y 16
+#define LABEL_Y 32
 #define LABEL_W 735
-#define LABEL_H 75
+#define LABEL_H 60
 #define LABEL_R 12
+#define PAPER_HIDDEN_Y (-LABEL_H - 8)
+#define PAPER_ANIM_MS 260
+#define SMALL_TITLE_X 56   /* screen coordinates; the child position is relative to the paper */
+#define SMALL_TITLE_Y 40
+#define SMALL_TITLE_W 439
 
-#define B_X 44
-#define B_Y 27
-#define B_D 53
-#define B_R 9
+/* The big cover: the supplied cassette label, at 16,16, a two-finger swipe away. Its
+ * tape window is transparent (RGB565A8), so the reels behind it show through. The
+ * title is written on the label's rule, to the right of its blue logo; it is a child
+ * of the cover and travels with it. The cover hides just above the screen, so showing
+ * it is a downward slide and hiding it is the reverse. It is the panel board's, because
+ * the two-finger gesture that opens it is. */
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+#define COVER_X 16
+#define COVER_Y 16
+#define COVER_HIDDEN_Y (-LABEL_COVER_H - 8)
+#define COVER_ANIM_MS 300
+#define COVER_TITLE_X 142  /* the label's rule starts at 142, its logo ends at 121 */
+#define COVER_TITLE_Y 74   /* the label's third rule, at 114, is the writing line */
+#define COVER_TITLE_W 439
+#endif
 
-#define TITLE_X 127
-#define TITLE_Y 40
-#define TITLE_W 439
+#define B_X 91
+#define B_Y 424
+#define B_D 40
+#define B_R 6
 
 /* The band below the tape. */
-#define BAND_Y 424
-#define BAND_X 91
-#define BAND_W 618
+#define BAND_Y 434
+#define BAND_X 141
+#define BAND_W 568
 
 /* Colours, read off the reference. */
-#define COL_BG          0x444444
-#define COL_TAPE        0x993333
-#define COL_TAPE_DARK   0x881111
-#define COL_LABEL       0xf4eabb
-#define COL_LABEL_EDGE  0xe6d8a8
-#define COL_RED         0xf03d3a
-#define COL_INK         0x230e11
-#define COL_HUB_RING    0xe6e6e6
+#define COL_BG          0x3C2B2A
+#define COL_TAPE        0x2E1C19
+#define COL_TAPE_DARK   0xE54820
+#define COL_LABEL       0xFFFFFF // 0xf4eabb
+#define COL_RED         0xE54820
+#define COL_INK         0x000099
+#define COL_HUB_RING    0xF3F2EE
 #define COL_BAR_BG      0xb9c0bb
 #define COL_BAR_FG      0xf03d3a
 
@@ -88,21 +114,50 @@ static const struct { int x, y; } k_hub[2] = { { 216, 234 }, { 600-16, 234 } };
 #define VU_DASH_DEG 4
 #define VU_GAP_DEG 4
 #define VU_DASH_COUNT ((VU_ARC_DEG + VU_DASH_DEG + VU_GAP_DEG - 1) / (VU_DASH_DEG + VU_GAP_DEG))
-#define TAPE_WIDTH 4
-#define VU_WIDTH 4
+#define TAPE_WIDTH 8
+#define VU_WIDTH 8
 #define VU_PEAK_LIT 0xffd08a
 
 static cassette_t *s_model;
 static lv_obj_t *s_hub[2], *s_pack[2], *s_strand[2];
 static lv_obj_t *s_vu[2];         /* dashed VU overlay, one per pack */
 static lv_point_precise_t s_strand_pts[2][2];
-static lv_obj_t *s_title, *s_bar;
+static lv_obj_t *s_title;          /* the small label's title */
+static lv_obj_t *s_bar;
+static lv_obj_t *s_paper;          /* the small cream label */
+static bool      s_paper_shown;
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+static lv_obj_t *s_cover_title;    /* the big cover's title, on the label's rule */
+static lv_obj_t *s_cover;          /* the full label cover */
+static bool      s_cover_shown;
+/* The touch adapter reports a two-finger swipe from the two contacts; this is what
+ * suppresses the one-finger action and the click for the same touch. It resets on the
+ * next press. */
+static bool      s_two_finger_seen;
+#endif
 static int      s_pack_d[2];      /* px, so a redraw happens only when it changes */
 static uint8_t  s_shown_hub[2];   /* the art frame currently on screen */
 static int      s_tangent_deg[2]; /* where the strand leaves the pack, LVGL degrees */
 static int      s_vu_lit[2];      /* dashes lit by the peak-hold, 0..VU_DASH_COUNT */
 
 /* ------------------------------------------------------------------ helpers */
+
+/*
+ * The screen is a picture, not a control surface today: every decoration must stop
+ * taking a press, or the press stops at whichever box is under the finger and the
+ * screen's own click never fires. Clearing the flag on the whole tree makes the screen
+ * the one hit-test target, which is the "tap anywhere" this view gives. A future
+ * control is created after this walk and stays clickable, so it takes its own press.
+ */
+static void make_decorative(lv_obj_t *obj)
+{
+    uint32_t count = lv_obj_get_child_count(obj);
+    for (uint32_t i = 0; i < count; i++) {
+        lv_obj_t *child = lv_obj_get_child(obj, i);
+        lv_obj_set_clickable(child, false);
+        make_decorative(child);
+    }
+}
 
 static lv_obj_t *box(lv_obj_t *parent, int x, int y, int w, int h, int r, uint32_t bg)
 {
@@ -113,8 +168,21 @@ static lv_obj_t *box(lv_obj_t *parent, int x, int y, int w, int h, int r, uint32
     lv_obj_set_style_bg_color(o, lv_color_hex(bg), 0);
     lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(o, r, 0);
-    lv_obj_set_style_border_width(o, 3, LV_PART_MAIN);
-    lv_obj_set_style_border_color(o, lv_color_hex(COL_TAPE_DARK), LV_PART_MAIN);
+    lv_obj_set_scrollable(o, false);
+    return o;
+}
+
+static lv_obj_t *border_box(lv_obj_t *parent, int x, int y, int w, int h, int r, uint32_t bg, uint32_t border_col, int border_width)
+{
+    lv_obj_t *o = lv_obj_create(parent);
+    lv_obj_remove_style_all(o);
+    lv_obj_set_pos(o, x, y);
+    lv_obj_set_size(o, w, h);
+    lv_obj_set_style_bg_color(o, lv_color_hex(bg), 0);
+    lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(o, r, 0);
+    lv_obj_set_style_border_color(o, lv_color_hex(border_col), 0);
+    lv_obj_set_style_border_width(o, border_width, 0);
     lv_obj_set_scrollable(o, false);
     return o;
 }
@@ -255,7 +323,7 @@ static void pack_draw_cb(lv_event_t *e)
     lv_layer_t *layer = lv_event_get_layer(e);
     int r = s_pack_d[i] / 2;
     int dir = i ? -1 : 1;
-    draw_arc(layer, k_hub[i].x, k_hub[i].y, r - 2,
+    draw_arc(layer, k_hub[i].x -(i==0 ?  3 : -3), k_hub[i].y, r - 2,
              s_tangent_deg[i], TAPE_ARC_DEG, dir,
              lv_color_hex(COL_TAPE_DARK), LV_OPA_COVER, TAPE_WIDTH, 1);
 }
@@ -306,6 +374,9 @@ static void apply_frame(const cassette_frame_t *f)
                           : f->playing ? ""
                           : "no card, or nothing to play";
         lv_label_set_text(s_title, label);
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+        lv_label_set_text(s_cover_title, label);
+#endif
     }
     if (f->permille_changed) lv_bar_set_value(s_bar, f->permille, LV_ANIM_OFF);
 
@@ -336,20 +407,211 @@ static void apply_frame(const cassette_frame_t *f)
 
 /* ------------------------------------------------------------------- build */
 
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* Hide the small label at once, deleting a slide in flight; the big cover's show uses
+ * this so the two never cover each other. */
+static void paper_hide_now(void)
+{
+    if (!s_paper) return;
+    lv_anim_delete(s_paper, (lv_anim_exec_xcb_t)lv_obj_set_y);
+    s_paper_shown = false;
+    lv_obj_set_y(s_paper, PAPER_HIDDEN_Y);
+    lv_obj_set_hidden(s_paper, true);
+}
+#endif
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* Hide the big cover at once, deleting a slide in flight; the small label's show uses
+ * this so the two never cover each other. */
+static void cover_hide_now(void)
+{
+    if (!s_cover) return;
+    lv_anim_delete(s_cover, (lv_anim_exec_xcb_t)lv_obj_set_y);
+    s_cover_shown = false;
+    lv_obj_set_y(s_cover, COVER_HIDDEN_Y);
+    lv_obj_set_hidden(s_cover, true);
+}
+#else
+static void cover_hide_now(void) {}
+#endif
+
+static void paper_anim_hidden_cb(lv_anim_t *a)
+{
+    (void)a;
+    if (!s_paper_shown) lv_obj_set_hidden(s_paper, true);
+}
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+static void cover_anim_hidden_cb(lv_anim_t *a)
+{
+    (void)a;
+    if (!s_cover_shown) lv_obj_set_hidden(s_cover, true);
+}
+#endif
+
+/* The small label, one finger. Showing it takes the big cover away, because the cover
+ * would otherwise hide it. The title is its child, so one property is the animation. */
+static void paper_set_shown(bool show)
+{
+    if (!s_paper || show == s_paper_shown) return;
+    if (show) cover_hide_now();
+    s_paper_shown = show;
+
+    lv_anim_delete(s_paper, (lv_anim_exec_xcb_t)lv_obj_set_y);
+    if (show) lv_obj_set_hidden(s_paper, false);
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, s_paper);
+    lv_anim_set_values(&a, lv_obj_get_y(s_paper), show ? LABEL_Y : PAPER_HIDDEN_Y);
+    lv_anim_set_duration(&a, PAPER_ANIM_MS);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+    lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_y);
+    if (!show) lv_anim_set_completed_cb(&a, paper_anim_hidden_cb);
+    lv_anim_start(&a);
+}
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* The big cover, two fingers. Showing it takes the small label away. */
+static void cover_set_shown(bool show)
+{
+    if (!s_cover || show == s_cover_shown) return;
+    if (show) paper_hide_now();
+    s_cover_shown = show;
+
+    lv_anim_delete(s_cover, (lv_anim_exec_xcb_t)lv_obj_set_y);
+    if (show) lv_obj_set_hidden(s_cover, false);
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, s_cover);
+    lv_anim_set_values(&a, lv_obj_get_y(s_cover), show ? COVER_Y : COVER_HIDDEN_Y);
+    lv_anim_set_duration(&a, COVER_ANIM_MS);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+    lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_y);
+    if (!show) lv_anim_set_completed_cb(&a, cover_anim_hidden_cb);
+    lv_anim_start(&a);
+}
+#endif
+
+/* A new touch clears the two-finger latch from the previous one. */
+static void screen_pressed_cb(lv_event_t *e)
+{
+    (void)e;
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    s_two_finger_seen = false;
+#endif
+}
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* The touch adapter reports a two-finger swipe from the contacts themselves; the cover
+ * is what it means. It is called from the port's task, inside the read, so it runs
+ * before the one-finger gesture for the same touch. */
+static void screen_two_finger_cb(int dx, int dy)
+{
+    s_two_finger_seen = true;
+    /* Direction decides, so both gestures can live on the same two fingers: to the
+     * left pulls in the effects panel from the right edge, to the right toggles the
+     * big label cover. */
+    if (fx_drawer_swipe(dx, dy)) {
+        ESP_LOGI(TAG, "two-finger swipe: effects panel %s",
+                 fx_drawer_is_open() ? "open" : "closed");
+        return;
+    }
+    cover_set_shown(!s_cover_shown);
+    ESP_LOGI(TAG, "two-finger swipe right: cover %s", s_cover_shown ? "shown" : "hidden");
+}
+#endif
+
+/*
+ * The classic one-finger gestures: left/right are the transport, down/up the small
+ * label. A two-finger swipe does not come through here; the touch adapter reports it,
+ * and `seen` keeps this handler from acting on the same touch as well.
+ */
+static void screen_gesture_cb(lv_event_t *e)
+{
+    (void)e;
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    if (s_two_finger_seen) return;
+#endif
+    lv_indev_t *indev = lv_indev_active();
+    if (!indev) return;
+    switch (lv_indev_get_gesture_dir(indev)) {
+        case LV_DIR_LEFT:
+            mini_icecast_skip();
+            ESP_LOGI(TAG, "swipe left: next track");
+            break;
+        case LV_DIR_RIGHT:
+            mini_icecast_prev();
+            ESP_LOGI(TAG, "swipe right: previous track");
+            break;
+        case LV_DIR_BOTTOM:
+            paper_set_shown(true);
+            ESP_LOGI(TAG, "swipe down: small label shown");
+            break;
+        case LV_DIR_TOP:
+            paper_set_shown(false);
+            ESP_LOGI(TAG, "swipe up: small label hidden");
+            break;
+        default:
+            break;
+    }
+}
+
+/* The one thing a tap does today, and it is the same action the BOOT button has. The
+ * status the next frame reads carries the new title, so the tap needs no other reply. */
+static void screen_clicked_cb(lv_event_t *e)
+{
+    (void)e;
+    /* A swipe is a release too, and LVGL sends CLICKED after the gesture. The gesture
+     * has already acted; the click must not act a second time. A two-finger swipe
+     * sets `seen`; a one-finger one leaves its direction on the input device. */
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    if (s_two_finger_seen) return;
+#endif
+    lv_indev_t *indev = lv_indev_active();
+    if (indev && lv_indev_get_gesture_dir(indev) != LV_DIR_NONE) return;
+    mini_icecast_skip();
+    ESP_LOGI(TAG, "tap: next track");
+}
+
 void cassette_view_create(void)
 {
     lv_obj_t *scr = lv_screen_active();
     lv_obj_set_style_bg_color(scr, lv_color_hex(COL_BG), 0);
     lv_obj_set_scrollable(scr, false);
 
+
+    static lv_point_precise_t points[][2] = {
+        {{40, 30},  {760, 30}},
+        {{40, 70}, {760, 70}},
+        {{40, 110}, {760, 110}}
+    };
+
+    for (int i = 0; i < 3; i++) {
+        lv_obj_t *line = lv_line_create(scr);
+
+        lv_line_set_points(line, points[i], 2);
+
+        lv_obj_set_style_line_color(line, lv_color_hex(0x573534), 0);
+        lv_obj_set_style_line_width(line, 3, 0);
+        lv_obj_set_style_line_opa(line, LV_OPA_COVER, 0);
+    }
+
+    /* The window: a border box around the cassette view. */
+    lv_obj_t *window = box(
+        scr,
+        k_window[0].x, k_window[0].y, k_window[1].x - k_window[0].x, k_window[1].y - k_window[0].y, 16,
+        0x220000);
+
     /* The tape: two packs, then the tape strand that joins each to the bottom edge.
      * Each pack carries its strand in the same colour. */
     for (int i = 0; i < 2; i++) {
-        s_strand[i] = lv_line_create(scr);
 
         s_pack_d[i] = (i == 0) ? PACK_MAX_D : PACK_MIN_D;
         s_pack[i] = disc(scr, k_hub[i].x, k_hub[i].y, s_pack_d[i], COL_TAPE);
 
+        s_strand[i] = lv_line_create(scr);
         lv_obj_remove_style_all(s_strand[i]);
         lv_obj_set_style_line_color(s_strand[i], lv_color_hex(COL_TAPE_DARK), 0);
         lv_obj_set_style_line_width(s_strand[i], STRAND_W, 0);
@@ -390,32 +652,55 @@ void cassette_view_create(void)
         vu_geom_set(i);
     }
 
-    /* The label, the red side square and the rule the title sits above. */
-    lv_obj_t *paper = box(scr, LABEL_X, LABEL_Y, LABEL_W, LABEL_H, LABEL_R, COL_LABEL);
-    lv_obj_set_style_border_color(paper, lv_color_hex(COL_LABEL_EDGE), 0);
-    lv_obj_set_style_border_width(paper, 1, 0);
-    lv_obj_set_style_border_opa(paper, LV_OPA_COVER, 0);
+    /* The small label: the cream bar one-finger up/down slides in and out. Its title
+     * is its child, so the bar and the title move as one. */
+    s_paper = box(scr, LABEL_X, LABEL_Y, LABEL_W, LABEL_H, LABEL_R, COL_LABEL);
+    lv_obj_set_y(s_paper, PAPER_HIDDEN_Y);
+    lv_obj_set_hidden(s_paper, true);
+    s_title = text(s_paper, &kalam_36, lv_color_hex(COL_INK),
+                   LV_ALIGN_TOP_LEFT, SMALL_TITLE_X - LABEL_X, SMALL_TITLE_Y - LABEL_Y);
+    lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL);
+    lv_obj_set_width(s_title, SMALL_TITLE_W);
 
-    lv_obj_t *side = box(scr, B_X, B_Y, B_D, B_D, B_R, COL_RED);
-    lv_obj_t *letter = text(side, &lv_font_montserrat_48, lv_color_hex(COL_LABEL),
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The big cover: the full cassette label at 16,16, two fingers away. Its tape
+     * window is transparent, so the reels show through. The title is written on the
+     * label's rule and is its child. */
+    s_cover = lv_image_create(scr);
+    lv_image_set_src(s_cover, &k_label_cover);
+    /* No background or padding of the widget's own: the alpha window must show the
+     * reels, and the title's coordinates are the image's. */
+    lv_obj_set_style_bg_opa(s_cover, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_cover, 0, 0);
+    lv_obj_set_style_pad_all(s_cover, 0, 0);
+    lv_obj_set_pos(s_cover, COVER_X, COVER_Y);
+    lv_obj_set_size(s_cover, LABEL_COVER_W, LABEL_COVER_H);
+    lv_obj_set_y(s_cover, COVER_HIDDEN_Y);
+    lv_obj_set_hidden(s_cover, true);
+    s_cover_title = text(s_cover, &kalam_36, lv_color_hex(COL_INK),
+                         LV_ALIGN_TOP_LEFT, COVER_TITLE_X, COVER_TITLE_Y);
+    lv_label_set_long_mode(s_cover_title, LV_LABEL_LONG_SCROLL);
+    lv_obj_set_width(s_cover_title, COVER_TITLE_W);
+#endif
+
+    lv_obj_t *side = border_box(scr, B_X, B_Y, B_D, B_D, B_R, COL_BG, COL_TAPE_DARK, 2);
+    lv_obj_t *letter = text(side, &lv_font_montserrat_22, lv_color_hex(COL_TAPE_DARK),
                             LV_ALIGN_CENTER, 0, 0);
     lv_label_set_text(letter, "B");
-
-    s_title = text(scr, &kalam_36, lv_color_hex(COL_INK),
-                   LV_ALIGN_TOP_LEFT, TITLE_X, TITLE_Y);
-    lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL);
-    lv_obj_set_width(s_title, TITLE_W);
 
     /* The band: how far into the file we are. Dark ink on the light shell, with the
      * same red as the label's side square for the progress. */
     s_bar = lv_bar_create(scr);
-    lv_obj_set_size(s_bar, BAND_W, 40);
+    lv_obj_set_size(s_bar, BAND_W, 20);
     lv_obj_set_pos(s_bar, BAND_X, BAND_Y);
     lv_bar_set_range(s_bar, 0, 1000);
     lv_obj_set_style_bg_color(s_bar, lv_color_hex(COL_BAR_BG), LV_PART_MAIN);
     lv_obj_set_style_bg_color(s_bar, lv_color_hex(COL_BAR_FG), LV_PART_INDICATOR);
     lv_obj_set_style_radius(s_bar, 5, LV_PART_MAIN);
-    lv_obj_set_style_radius(s_bar, 5, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(s_bar, 10, LV_PART_INDICATOR);
+
+
+
 
     /* The model: the art's frame count is the angular resolution; the tape
      * geometry supplies the speeds. */
@@ -425,10 +710,24 @@ void cassette_view_create(void)
 
     /* LVGL's own performance monitor: CPU and FPS in a label on the system layer,
      * placed top-right by CONFIG_LV_PERF_MONITOR_ALIGN_TOP_RIGHT. */
-    lv_sysmon_show_performance(NULL);
+    // lv_sysmon_show_performance(NULL);
 
     /* Draw the empty screen now; the first status update replaces it. */
     if (s_model) apply_frame(cassette_step(s_model, NULL, lv_tick_get()));
+
+    /* The picture is built. Make the screen the one thing a finger can hit; its click
+     * is next track, a one-finger swipe is the transport and the small label, and a
+     * two-finger swipe is the big cover. */
+    lv_obj_set_clickable(scr, true);
+    make_decorative(scr);
+    lv_obj_add_event_cb(scr, screen_pressed_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(scr, screen_clicked_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(scr, screen_gesture_cb, LV_EVENT_GESTURE, NULL);
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The touch adapter's two-finger swipe; it is called before the one-finger
+     * gesture for the same touch, so `seen` is already set when that one arrives. */
+    touch_gt911_set_two_finger_cb(screen_two_finger_cb);
+#endif
 }
 
 /* ------------------------------------------------------------------ update */

@@ -62,8 +62,18 @@ int http_parse_request(char *buf, http_request_t *req)
         if (!slash) return 400;
         target = slash;
     }
+    /* The query is kept, not dropped: a route that takes parameters (/fx) reads
+     * it from req->query, still percent-encoded like the path, and the caller
+     * decodes what it needs. An over-long query is a 414 for the same reason an
+     * over-long path is. */
     char *query = strchr(target, '?');
-    if (query) *query = 0;
+    if (query) {
+        *query = 0;
+        if (strlen(query + 1) >= sizeof req->query) return 414;
+        strcpy(req->query, query + 1);
+    } else {
+        req->query[0] = 0;
+    }
     if (strlen(target) >= sizeof req->path) return 414;
     strcpy(req->path, target);
 

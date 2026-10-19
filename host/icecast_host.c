@@ -36,7 +36,8 @@ static void usage(const char *argv0)
            "  --metaint N       encoded bytes between ICY metadata blocks (default 16000)\n"
            "  --lead-ms N       how far ahead of real time to send (default 1500)\n"
            "  --burst-ms N      history sent on connect (default 500)\n"
-           "  --name NAME       station name (icy-name)\n",
+           "  --name NAME       station name (icy-name)\n"
+           "  --fx              run the tape effect on the stream (the firmware's .fx = 1)\n",
            argv0, MINI_ICECAST_MAX_CLIENTS);
 }
 
@@ -47,6 +48,7 @@ int main(int argc, char **argv)
     uint16_t port = 18000;
     uint32_t out_hz = 44100, bitrate = 128, metaint = 16000, lead_ms = 1500, burst_ms = 500;
     uint8_t max_clients = 2;
+    uint8_t fx = 0;
 
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -63,6 +65,7 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--lead-ms") && v) { lead_ms = (uint32_t)atoi(v); i++; }
         else if (!strcmp(a, "--burst-ms") && v) { burst_ms = (uint32_t)atoi(v); i++; }
         else if (!strcmp(a, "--name") && v) { station = v; i++; }
+        else if (!strcmp(a, "--fx")) { fx = 1; }
         else {
             fprintf(stderr, "%s: unrecognised argument %s\n", argv[0], a);
             usage(argv[0]);
@@ -83,6 +86,7 @@ int main(int argc, char **argv)
         .metaint = metaint,
         .lead_ms = lead_ms,
         .burst_ms = burst_ms,
+        .fx = fx,
         .server_name = "mini_icecast/host",
     };
     app_services_report_t report;

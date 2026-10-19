@@ -315,6 +315,16 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
         return HTTP_HANDLED;
     }
 
+    /* The broadcast steps off the card for the duration: sharing it measured
+     * 55 KB/s for the download and still made the stream miss deadlines, while
+     * alone the card gives 250 KB/s. The broadcast plays its idle bed meanwhile
+     * and resumes the track where it stopped, so the listener hears a break, not
+     * a skip. The deadline is a safety net: this task releases the park on every
+     * exit path below, and it expires anyway if it does not. */
+    mini_icecast_park_card(600000);
+    vTaskDelay(pdMS_TO_TICKS(80)); /* let the broadcast reach its next chunk */
+    bool parked_here = true;
+
     struct stat st;
     if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) {
         ESP_LOGI(TAG, "GET %s -> 404 (no such file)", req->path);
@@ -331,6 +341,13 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
         close(f);
         goto done;
     }
+    /* A download is a bulk transfer on a link that stalls. Measured on this
+     * board: the card gives 16 KB per 62 ms (250 KB/s), a send normally takes
+     * 2-4 ms, and Wi-Fi now and then holds a send for more than the server-wide
+     * 400 ms deadline - which ends the transfer with "client stopped reading"
+     * after a few tens of kilobytes. The stream can afford that; a 26 MB file
+     * cannot, so this socket waits far longer before calling the client gone. */
+    http_send_timeout_ms(fd, 5000);
     int64_t t0 = esp_timer_get_time();
     size_t sent = 0;
     /* Start gently and stay gentle for a while after the broadcast reports it is
@@ -355,23 +372,28 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
          * can arrive the moment the client has its last byte, and a 20 ms sleep
          * here made that request a 503. */
         if (sent >= (size_t)st.st_size) break;
-        /* The steady ceiling, before the lag-driven backoff below. */
-        vTaskDelay(pdMS_TO_TICKS(ML_CHUNK_PAUSE_MS));
-        /* The live stream has priority on the one SD bus. Yield between chunks so
-         * the broadcast's decoder read can take it, and back off much harder for
-         * two seconds after the broadcast says it is behind: a fixed slice was
-         * measured helping and then not, because the contention arrives in bursts
-         * (card latency, Wi-Fi) rather than as a steady share. */
+        /* The live stream has priority on the one SD bus. Measured on this board:
+         * the card gives 16 KB per 62 ms (250 KB/s) and the broadcast needs
+         * 120 KB/s of it, so a download that runs flat out starves the stream -
+         * 5 rebases in a 200 s transfer. A steady 16 KB per 100 ms, and much less
+         * for two seconds after the broadcast reports it is behind, measured 55
+         * KB/s and 2 rebases: better, not solved. The contention turns out to be
+         * the radio rather than the card - the station is already sending its own
+         * 32 KB/s - so a download that leaves the stream untouched has to stay
+         * near 30 KB/s, which is the next thing to try. */
         uint32_t now_ticks = xTaskGetTickCount();
         if (mini_icecast_lag_ms() > 250) backoff_until = now_ticks + pdMS_TO_TICKS(2000);
         bool slow = (int32_t)(backoff_until - now_ticks) > 0;
-        vTaskDelay(pdMS_TO_TICKS(slow ? 20 : 1));
+        /* No pacing while the broadcast is parked: the card is ours, and the
+         * whole point of the park is to use it flat out. */
+        if (!parked_here) vTaskDelay(pdMS_TO_TICKS(slow ? 100 : ML_CHUNK_PAUSE_MS));
     }
     close(f);
     int64_t ms = (esp_timer_get_time() - t0) / 1000;
     ESP_LOGI(TAG, "GET %s -> %u/%u B in %d ms", name, (unsigned)sent, (unsigned)st.st_size, (int)ms);
 
 done:
+    if (parked_here) mini_icecast_unpark_card();
     xSemaphoreGive(F.dl);
     return HTTP_HANDLED;
 }

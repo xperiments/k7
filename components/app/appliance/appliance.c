@@ -133,6 +133,22 @@ void appliance_run(void)
          * connection worker as soon as it is registered. */
         .max_clients = 4,
         .max_conns = 4,
+        /* The tape effect on the broadcast ("FX"), or the decoder's output as it
+         * always was ("normal").
+         *
+         * Measured on this board, 44.1 kHz / 256 kbps, same material, two runs
+         * each: encoder alone 60.6 % of one core; with the effect, encoder 59.8 %
+         * plus the effect's 11.0 % = 70.8 %, with zero starvation rebases. The
+         * encoder's own cost does not move, so the effect is simply additive, and
+         * it is per stream rather than per listener.
+         *
+         * Set to 0 and the stream is the decoder's output sample for sample, at no
+         * extra cost. It is not switchable at run time because two encoders would
+         * not fit on the core the broadcast owns.
+         *
+         * The reasoning, the measurements and the two operating points are in
+         * docs/research/tape-fx-output-stream.md (§6.5-§6.7). */
+        .fx = 1,
     };
 
     /* The services resolve the station first (arithmetic only), then bring up the

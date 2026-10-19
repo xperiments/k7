@@ -89,9 +89,9 @@ CONFIG_LV_DRAW_SW_COMPLEX=y
 
 # LVGL's own performance monitor: CPU and FPS in a label on the system layer, top
 # right where the shell is empty. This is the built-in overlay, not a custom counter.
-CONFIG_LV_USE_SYSMON=y
-CONFIG_LV_USE_PERF_MONITOR=y
-CONFIG_LV_PERF_MONITOR_ALIGN_TOP_RIGHT=y
+# CONFIG_LV_USE_SYSMON=y
+# CONFIG_LV_USE_PERF_MONITOR=y
+# CONFIG_LV_PERF_MONITOR_ALIGN_TOP_RIGHT=y
 
 # ----------------------------------------------------------------------- lwIP
 # MP3 at 128 kbps is 16 KB/s per client, but a burst on connect is sent at once:

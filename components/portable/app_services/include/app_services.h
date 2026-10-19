@@ -20,6 +20,7 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "mini_icecast.h"   /* mini_icecast_fx_t: the tuning the appliance passes down */
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,6 +37,8 @@ typedef struct {
     uint32_t    metaint;      /* 0 = the broadcast's default (16000) */
     uint32_t    lead_ms;      /* 0 = the broadcast's default (1500) */
     uint32_t    burst_ms;     /* 0 = the broadcast's default (500) */
+    uint8_t     fx;           /* 1 = the tape effect on the stream; see mini_icecast_cfg_t */
+    mini_icecast_fx_t fx_tune; /* zeroed = the effect's own defaults */
     const char *server_name;  /* HTTP Server: header; NULL = the server's default */
 } app_services_cfg_t;
 

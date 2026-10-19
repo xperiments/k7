@@ -129,7 +129,7 @@ static esp_err_t sd_mount(const char *music_dir, char *err, size_t err_size)
         /* Two directory handles (the broadcast's library scan and the index) plus
          * the decoder's file and one download is four; six leaves headroom rather
          * than sitting exactly on the limit. */
-        .max_files = 6,
+        .max_files = 8,
         .allocation_unit_size = 16 * 1024,
     };
     sdmmc_host_t host = SDSPI_HOST_DEFAULT(); /* 20 MHz: reliable on hand wiring */

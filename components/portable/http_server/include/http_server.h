@@ -31,6 +31,7 @@ extern "C" {
 #define HTTP_HEADER_TIMEOUT_MS 2000
 
 #define HTTP_PATH_MAX 512 /* raw (percent-encoded) request target */
+#define HTTP_QUERY_MAX 256 /* raw (percent-encoded) query string, without the ? */
 #define HTTP_HEADER_MAX 1024
 #define HTTP_MAX_ROUTES 8
 #define HTTP_LISTEN_BACKLOG 16
@@ -39,6 +40,7 @@ extern "C" {
 typedef struct {
     char method[8];           /* request method, e.g. "GET" */
     char path[HTTP_PATH_MAX]; /* request target, percent-encoded, query stripped */
+    char query[HTTP_QUERY_MAX]; /* everything after the '?', percent-encoded; "" if none */
     bool want_icy_metadata;   /* the client asked for inline ICY metadata */
 } http_request_t;
 
@@ -82,6 +84,11 @@ esp_err_t http_send_error(int fd, int status, const char *detail);
 
 /* send() until everything is written or the send timeout fires. */
 bool http_send_all(int fd, const void *data, size_t n);
+
+/* How long a single send() may block before the client is treated as gone. The
+ * per-connection default is HTTP_CLIENT_STALL_MS; a route that transfers more
+ * than a few kilobytes over a link that stalls should ask for longer. */
+void http_send_timeout_ms(int fd, uint32_t ms);
 
 /* The least stack headroom any connection task has had left, in bytes. Part of
  * the memory-fit telemetry: a route that grows past the budget shows up here

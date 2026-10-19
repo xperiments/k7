@@ -1,5 +1,5 @@
 version: "1.0.0"
-description: "The screen display: panel bring-up, LVGL's PSRAM allocator and the cassette view."
+description: "The screen display: panel and touch bring-up, LVGL's PSRAM allocator and the cassette view."
 license: "MIT"
 targets:
   - esp32s3
@@ -15,3 +15,10 @@ dependencies:
   ## vsync handshake that is easy to get subtly wrong, and its `avoid_tearing` path
   ## gives LVGL the panel's own two buffers in direct mode.
   espressif/esp_lvgl_port: "^2"
+
+  ## The panel board's touch controller. The GT911 driver is the one the reference
+  ## project runs on this board, and `esp_lcd_touch` is the interface the screen
+  ## display's touch adapter is written against. They are fetched for every build of
+  ## this component; only the Sunton build compiles against them.
+  espressif/esp_lcd_touch: "1.2.1"
+  espressif/esp_lcd_touch_gt911: "1.2.1"

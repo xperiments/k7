@@ -3,7 +3,8 @@
  * http_parse - what a request line and a route table mean, without a socket.
  *
  * The rules here are the ones a client can violate: absolute-form request
- * targets, query strings, over-long paths, case-insensitive `Icy-MetaData`, and
+ * targets, query strings (kept, for routes that take parameters), over-long paths,
+ * case-insensitive `Icy-MetaData`, and
  * longest-prefix routing. They used to be static inside the connection worker,
  * where the only way to observe them was to open a connection. They are pure
  * functions now, so the awkward requests can be tested as a table.

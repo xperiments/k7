@@ -515,6 +515,20 @@ churn, not a leak.
 The devkit table above is unaffected - it has no panel, and its documented soak results
 stand.
 
+**Touch.** The panel board's GT911 is now the screen's pointer: I2C0 at 0x5D, SDA 19,
+SCL 20, INT 18, RST 38, read every 10 ms. It is polled rather than interrupt-driven
+because this board's INT line does not carry the touch (the reference project measured it
+idling through a press), and the last point the controller reported is latched so one
+press is one press rather than one per read. A tap anywhere is the BOOT button's action,
+next track. A one-finger left/right swipe is next/previous; a one-finger down/up swipe
+slides the small label (with the title on it) in and out. Any two-finger swipe toggles
+the big cover in and out. The Sunton build compiles this path; the board tier has not
+yet recorded a finger, so the rows above are unchanged.
+
+The label cover is `assets/labels/glabel-full.png`, converted to RGB565A8 (814 KB) so
+its tape window is a hole the reels show through. The app image is 3.05 MB with 27% of
+its 4 MB partition free.
+
 **Five faults that only the board could show**, each now fixed and each worth the
 tier on its own:
 
@@ -634,14 +648,23 @@ components/
     mini_files/             GET / index, GET /music/<name> download
       music_dir.c/.h        the directory's name, path and listing rules
     cassette/               what the screen shows: reels, packs, progress, label
+    tape_fx/                the tape effect on the stream: saturation, wow/flutter, hiss
     dr_libs/                vendored dr_mp3 / dr_flac / dr_wav (public domain / MIT-0)
     shine/                  vendored toots/shine MP3 encoder (LGPL-2.0-only)
   app/                      firmware only: the entry policy, the board adapter and the screen
     appliance/              the entry policy: station format, card retry, console, skip
     board_esp32/            Wi-Fi, SPI card mount, hardware census; credentials live here
-    screen_display/         panel bring-up, LVGL's PSRAM allocator, the cassette view
+    screen_display/         panel and touch bring-up, LVGL's PSRAM allocator, the cassette view
 host/                       the host build: shim, board adapter, fixtures, tests, tools
 ```
+
+`tape_fx` is optional and chosen at build time: `appliance.c` sets `.fx = 1` in the
+`app_services` configuration, and with `.fx = 0` the broadcast never calls it, so the stream is
+the decoder's output sample for sample. It runs on the PCM chunk before the encoder, which
+costs 9.0 % of one core at 44.1 kHz on top of the encoder's 52.9 %, once for the stream rather
+than once per listener. The measurements behind those two numbers, and why the effect cannot be
+a second simultaneous stream, are in
+[`docs/research/tape-fx-output-stream.md`](./docs/research/tape-fx-output-stream.md).
 
 The dependency direction is one-way and is checked by `make -C host layering`:
 `mini_files` and `mini_icecast` depend on `http_server`; only the application

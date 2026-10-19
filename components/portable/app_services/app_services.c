@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "app_board.h"
+#include "fx_ui.h"
 #include "esp_log.h"
 #include "http_server.h"
 #include "mi_station.h"
@@ -44,6 +45,8 @@ esp_err_t app_services_check(const app_services_cfg_t *cfg, char *err, size_t er
         .metaint = cfg->metaint,
         .lead_ms = cfg->lead_ms,
         .burst_ms = cfg->burst_ms,
+        .fx = cfg->fx,
+        .fx_tune = cfg->fx_tune,
     };
     return mi_station_resolve(&ice, NULL, err, err_size);
 }
@@ -107,10 +110,16 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         .metaint = cfg->metaint,
         .lead_ms = cfg->lead_ms,
         .burst_ms = cfg->burst_ms,
+        .fx = cfg->fx,
+        .fx_tune = cfg->fx_tune,
     };
     e = mini_icecast_start(&ice);
     if (e != ESP_OK) return fail(report, e, "broadcast");
     if (report) report->broadcast_up = true;
+
+    /* The effect's control page, if this station has the effect. It registers a
+     * route, so it has to run before http_server_start(). */
+    (void)fx_ui_start();
 
     /* 6. The listener, last: every route is registered by now. */
     http_server_cfg_t http = {

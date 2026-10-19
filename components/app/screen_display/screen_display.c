@@ -25,6 +25,10 @@
 #include "lvgl.h"
 
 #include "cassette_view.h"
+#include "fx_drawer.h"
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+#include "panel_rgb.h"
+#endif
 #include "lvgl_mem.h"
 #include "mini_icecast.h"
 #include "screen_display.h"
@@ -32,6 +36,7 @@
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 #include "esp_lvgl_port.h"
 #include "panel_rgb.h"
+#include "touch_gt911.h"
 #endif
 
 static const char *TAG = "screen";
@@ -153,10 +158,12 @@ static void screen_task(void *arg)
          * here take its lock and nothing more. */
         if (lvgl_port_lock(20)) {
             cassette_view_update(&st);
+            fx_drawer_update(&st);
             lvgl_port_unlock();
         }
 #else
         cassette_view_update(&st);
+        fx_drawer_update(&st);
 #endif
 
         int64_t t0 = esp_timer_get_time();
@@ -257,6 +264,20 @@ esp_err_t screen_display_start(void)
     if (refr) lv_timer_set_period(refr, UI_FRAME_MS);
 #endif
     cassette_view_create();
+    /* After the view's decoration pass, which makes the whole picture one hit
+     * target: a control created later keeps its own press. */
+    fx_drawer_create();
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The view is built before the pointer is bound, so the first tap lands on the
+     * finished screen. A controller that does not answer leaves a working screen
+     * without a pointer, which is the right failure: the picture is what the device
+     * is for, and the log names the layer that did not come up. */
+    esp_err_t touch_err = touch_gt911_start(disp);
+    if (touch_err != ESP_OK) {
+        ESP_LOGW(TAG, "the touch controller did not start: %s; the screen still runs",
+                 esp_err_to_name(touch_err));
+    }
+#endif
 #if !CONFIG_APP_BOARD_SUNTON_8048S050C
     /* Without a port there is no task to draw for us, so this one frame is forced here:
      * the screen must not be left showing uninitialised memory. With the port this must

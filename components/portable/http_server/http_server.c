@@ -172,6 +172,12 @@ static void set_socket_options(int fd)
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
 }
 
+void http_send_timeout_ms(int fd, uint32_t ms)
+{
+    struct timeval snd = {.tv_sec = ms / 1000, .tv_usec = (ms % 1000) * 1000};
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof snd);
+}
+
 /* Reads, parses and routes one request. Closes the fd unless a route took it. */
 static void serve_connection(int fd)
 {

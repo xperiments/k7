@@ -1,0 +1,11 @@
+bench
+bench_v3
+bench_v4
+compare
+probe
+render
+xfade
+alias
+*.o
+*.dis
+audio/*.wav
