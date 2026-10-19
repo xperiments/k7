@@ -3,8 +3,8 @@
  *
  * The design is drawn here, not shipped as one bitmap: a light grey shell, two black
  * tape packs of different sizes, and a cream label with a red "B" and a rule. The only
- * bitmap left is the hub: assets/hub/ holds 20 opaque 168x168 keyframes of the whole
- * hub, exported for a 2-second loop. tools/convert_cassette_assets.py converts them to
+ * bitmap left is the hub: assets/hub/ holds the opaque 168x168 keyframes of the whole
+ * hub, one revolution. tools/convert_cassette_assets.py converts them to
  * RGB565 exactly as exported - no alpha, no recolour, no compositing - and adds 96x96
  * crop descriptors that point into the same frame data.
  *
@@ -158,6 +158,16 @@ static void pack_set(int i, int d)
     strand_set(i, d);
 }
 
+/* The pack area, and therefore the tape length on it, is proportional to the fill:
+ * the diameter grows as the square root, the same relation the model uses for the
+ * radius. An even diameter keeps the disc symmetric on the pixel grid. */
+static int pack_diameter(uint16_t fill)
+{
+    double min = PACK_MIN_D, max = PACK_MAX_D;
+    double d = sqrt(min * min + (max * max - min * min) * (double)fill / 1000.0);
+    return ((int)lround(d)) & ~1;
+}
+
 /* Apply a model frame: only what changed is touched. */
 static void apply_frame(const cassette_frame_t *f)
 {
@@ -179,12 +189,9 @@ static void apply_frame(const cassette_frame_t *f)
     }
 
     /* Pack fill is the model's; the diameter is the screen's. Both packs use the
-     * same range, and an even diameter keeps the disc symmetric on the pixel grid. */
-    int span = PACK_MAX_D - PACK_MIN_D;
-    int d0 = (PACK_MIN_D + span * f->pack_fill[0] / 1000) & ~1;
-    int d1 = (PACK_MIN_D + span * f->pack_fill[1] / 1000) & ~1;
-    pack_set(0, d0);
-    pack_set(1, d1);
+     * same range. */
+    pack_set(0, pack_diameter(f->pack_fill[0]));
+    pack_set(1, pack_diameter(f->pack_fill[1]));
 }
 
 /* ------------------------------------------------------------------- build */
@@ -250,9 +257,9 @@ void cassette_view_create(void)
     lv_obj_set_style_radius(s_bar, 5, LV_PART_MAIN);
     lv_obj_set_style_radius(s_bar, 5, LV_PART_INDICATOR);
 
-    /* The model: the art's clock is its input, so a change of art does not change
-     * the arithmetic. */
-    s_model = cassette_new(HUB_LOOP_MS, HUB_FRAME_COUNT, CASSETTE_DEFAULT_BAR_MS);
+    /* The model: the art's frame count is the angular resolution; the tape
+     * geometry supplies the speeds. */
+    s_model = cassette_new(HUB_FRAME_COUNT, CASSETTE_DEFAULT_BAR_MS);
     if (!s_model) ESP_LOGW(TAG, "no model for the cassette: the screen will not update");
     else cassette_reset(s_model);
 

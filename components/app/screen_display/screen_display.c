@@ -48,9 +48,9 @@ static const char *TAG = "screen";
 #define UI_DRAW_LINES 40
 
 /* How long the screen task rests between status updates, and the display's refresh
- * period: the art is 50 frames over a 2 s loop, so one frame is 40 ms. The reels follow
- * the track's audio position, so this poll is exactly the art's 25 fps. A slower poll
- * would skip frames, not stretch the loop. */
+ * period. The reel's fastest case is the empty hub: 36 frames over 1.45 s is 24.8 fps,
+ * so the screen runs at 25 fps (40 ms). The reels integrate their own speed from the
+ * pack radius; this is the ceiling, not a constant frame rate. */
 #define UI_FRAME_MS 40
 
 /* And never rest longer than this, however expensive a frame was. The verified
@@ -252,10 +252,10 @@ esp_err_t screen_display_start(void)
         ESP_LOGE(TAG, "the LVGL port did not give its lock; no screen");
         return ESP_ERR_TIMEOUT;
     }
-#endif
-    /* Match the refresh to the art's frame period: 50 frames over 2 s is 40 ms. */
+    /* The reel's fastest case is the empty hub: 36 frames in 1.45 s is 24.8 fps. */
     lv_timer_t *refr = lv_display_get_refr_timer(disp);
     if (refr) lv_timer_set_period(refr, UI_FRAME_MS);
+#endif
     cassette_view_create();
 #if !CONFIG_APP_BOARD_SUNTON_8048S050C
     /* Without a port there is no task to draw for us, so this one frame is forced here:

@@ -97,10 +97,16 @@ packs and a label. A presentation of the live stream, never a source of truth.
 _Avoid_: UI, GUI, dashboard
 
 **Reel frame**:
-One of the twenty keyframes of the hub art. The frame sits at the track's audio
-position - one keyframe per `loop_ms / frame_count` of elapsed audio - so a stopped
-track holds its last frame and the sequence, not the frames, is the rotation.
+One of the keyframes of the hub art, one per 360/frame_count degrees of rotation.
+The frame follows the reel's **phase**, which the pack radius sets; a stopped track
+holds its last frame.
 _Avoid_: sprite, animation step, image frame
+
+**Reel phase**:
+How far a reel has turned through its art, from its pack radius. The tape moves at
+47.625 mm/s, so a full reel turns slower than an empty one; the supply's fill is
+1000 minus the take-up's, so the two reels' phases and speeds differ.
+_Avoid_: angle, offset
 
 **Label**:
 The paper strip on the cassette that carries the cleaned **Now playing** title,

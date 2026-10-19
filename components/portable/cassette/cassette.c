@@ -6,15 +6,20 @@
  * port's lock; on the headless path there is only one task. The module therefore
  * holds no lock of its own.
  *
- * The reels follow the track's audio position (`status.elapsed_ms`), not a wall
- * clock and not the cadence of the calls: a long gap reports where the tape is,
- * and a stopped track holds the last frame.
+ * The reels follow the track's tape position, not a wall clock: each reel
+ * integrates the tape speed at its own pack radius (v/r), so the supply and
+ * take-up turn at different speeds. A stopped track holds them; a new track
+ * starts them at zero.
  */
 #include "cassette.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* The angular speed is v/r; this turns radius and speed into revolutions/s. */
+#define CASSETTE_TWO_PI 6.28318530718f
 
 struct cassette {
     cassette_frame_t frame;
@@ -22,10 +27,13 @@ struct cassette {
     bool     have_status;
 
     uint16_t frame_count;
-    uint32_t frame_ms;
     uint32_t bar_period_ms;
 
-    uint8_t  hub_frame[2]; /* the frame the reels are holding */
+    uint8_t  hub_frame[2]; /* the frames the reels are holding */
+    float    phase[2];     /* revolutions through the art, 0..1 */
+    uint32_t last_elapsed;
+    bool     have_last;
+    bool     was_playing;
 
     uint32_t shown_permille;
     uint32_t last_bar_ms;
@@ -34,6 +42,16 @@ struct cassette {
     char     shown_title[CASSETTE_TITLE_MAX];
     bool     have_title;
 };
+
+/* The pack radius for a fill (0..1000). The tape length, and therefore the pack
+ * area, is proportional to the fill: the radius grows as the square root. */
+static float pack_radius(uint32_t fill)
+{
+    float hub = CASSETTE_HUB_RADIUS_MM;
+    float full = CASSETTE_FULL_RADIUS_MM;
+    float f = (float)fill / 1000.0f;
+    return sqrtf(hub * hub + (full * full - hub * hub) * f);
+}
 
 /* Metadata titles often carry an aside in parentheses - "(live, 1984, Le
  * Spectrum)" - which is longer than the label and says less than the song. Drop
@@ -59,14 +77,12 @@ static void title_clean(const char *in, char *out, size_t n)
     if (start) memmove(out, out + start, o - start + 1);
 }
 
-cassette_t *cassette_new(uint32_t loop_ms, uint16_t frame_count, uint32_t bar_period_ms)
+cassette_t *cassette_new(uint16_t frame_count, uint32_t bar_period_ms)
 {
-    if (loop_ms == 0 || frame_count == 0) return NULL;
+    if (frame_count == 0) return NULL;
     cassette_t *c = calloc(1, sizeof *c);
     if (!c) return NULL;
     c->frame_count = frame_count;
-    c->frame_ms = loop_ms / frame_count;
-    if (c->frame_ms == 0) c->frame_ms = 1;
     c->bar_period_ms = bar_period_ms;
     return c;
 }
@@ -81,6 +97,10 @@ void cassette_reset(cassette_t *c)
     c->status.format = MI_FMT_NONE;
     c->have_status = false;
     memset(c->hub_frame, 0, sizeof c->hub_frame);
+    memset(c->phase, 0, sizeof c->phase);
+    c->last_elapsed = 0;
+    c->have_last = false;
+    c->was_playing = false;
     c->shown_permille = 0;
     c->last_bar_ms = 0;
     c->have_shown = false;
@@ -116,7 +136,8 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
 
     /* The position, stepped at the bar's period rather than at the poll rate: a
      * one-second step is ample for a bar and stops a sub-pixel change from
-     * invalidating it ten times a second. */
+     * invalidating it ten times a second. The reels use the current position
+     * below, so their speed follows the pack radius. */
     uint32_t permille = 0;
     if (c->have_status && c->status.duration_ms)
         permille = (uint32_t)((uint64_t)c->status.elapsed_ms * 1000ULL / c->status.duration_ms);
@@ -135,14 +156,38 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
     c->frame.pack_fill[0] = (uint16_t)(1000 - c->shown_permille);
     c->frame.pack_fill[1] = (uint16_t)c->shown_permille;
 
-    /* The reels: the track's audio position picks the art frame, so the frame is
-     * reproducible and independent of how often this is called. A stopped track
-     * holds the last frame; a new track starts the loop again at elapsed 0. */
+    /* A track with no duration still needs a side for the reel fill; the bar
+     * stays at zero because it has nothing to measure against. */
+    uint32_t position = permille;
+    if (c->have_status && !c->status.duration_ms)
+        position = (uint32_t)((uint64_t)c->status.elapsed_ms * 1000ULL / CASSETTE_NOMINAL_SIDE_MS);
+    if (position > 1000) position = 1000;
+
+    /* The reels: each reel integrates the tape speed at its own pack radius, so
+     * the supply and take-up turn at different speeds. The first step of a track
+     * starts at zero; a track change (elapsed going backwards) or a stop starts
+     * them again. The frame is the phase's position in the art. */
     if (c->frame.playing) {
-        uint32_t frame = c->status.elapsed_ms / c->frame_ms;
+        uint32_t elapsed = c->status.elapsed_ms;
+        bool restart = !c->was_playing || (c->have_last && elapsed < c->last_elapsed);
+        if (restart) {
+            c->phase[0] = c->phase[1] = 0.0f;
+        } else if (c->have_last) {
+            float dt = (float)(elapsed - c->last_elapsed) / 1000.0f;
+            uint32_t fill[2] = { 1000 - position, position };
+            for (int i = 0; i < 2; i++) {
+                float r = pack_radius(fill[i]);
+                float rev_s = CASSETTE_TAPE_SPEED_MM_S / (CASSETTE_TWO_PI * r);
+                c->phase[i] = fmodf(c->phase[i] + rev_s * dt, 1.0f);
+            }
+        }
         for (int i = 0; i < 2; i++)
-            c->hub_frame[i] = (uint8_t)(frame % c->frame_count);
+            c->hub_frame[i] = (uint8_t)((uint32_t)(c->phase[i] * (float)c->frame_count)
+                                        % c->frame_count);
     }
+    c->was_playing = c->frame.playing;
+    c->last_elapsed = c->have_status ? c->status.elapsed_ms : 0;
+    c->have_last = c->have_status;
     for (int i = 0; i < 2; i++) c->frame.hub_frame[i] = c->hub_frame[i];
 
     return &c->frame;

@@ -1,9 +1,9 @@
 /*
  * T17: the cassette's arithmetic, without LVGL.
  *
- * The reel position, the hold when stopped, the pack fill, the progress throttle and
- * the label clean are all rules a panel used to be the only witness to. Each is pinned
- * here by feeding status snapshots: no display, no serial dump.
+ * The two reels' speeds, the hold when stopped, the pack fill, the progress throttle
+ * and the label clean are all rules a panel used to be the only witness to. Each is
+ * pinned here by feeding status snapshots: no display, no serial dump.
  */
 #include "test_util.h"
 
@@ -24,12 +24,33 @@ static mini_icecast_status_t mkstatus(const char *title, const char *file,
     return st;
 }
 
+/* How many times one reel's art frame changes over a position window. A faster
+ * reel changes frames more often; this is the speed the domain cares about. */
+static int frame_changes(cassette_t *c, uint32_t from, uint32_t to, uint32_t duration,
+                         uint32_t step, int reel)
+{
+    cassette_reset(c);
+    mini_icecast_status_t st = mkstatus("Song", "song.mp3", from, duration, 0.1f);
+    const cassette_frame_t *f = cassette_step(c, &st, from);
+    int prev = f->hub_frame[reel];
+    int changes = 0;
+    for (uint32_t t = from + step; t <= to; t += step) {
+        st = mkstatus("Song", "song.mp3", t, duration, 0.1f);
+        f = cassette_step(c, &st, t);
+        if (f->hub_frame[reel] != prev) {
+            changes++;
+            prev = f->hub_frame[reel];
+        }
+    }
+    return changes;
+}
+
 static void test_initial_and_progress(void)
 {
     /* bar_period 0: the progress may update on every step, which makes the
      * elapsed -> permille mapping observable. */
-    cassette_t *c = cassette_new(2000, 20, 0);
-    CHECK(c != NULL, "a 2 s loop of 20 frames is accepted");
+    cassette_t *c = cassette_new(20, 0);
+    CHECK(c != NULL, "a 20-frame reel is accepted");
     if (!c) return;
 
     mini_icecast_status_t st = mkstatus("(live, 1984, Le Spectrum) Song", "song.mp3", 0, 10000, 0.5f);
@@ -42,8 +63,8 @@ static void test_initial_and_progress(void)
     CHECK(f->permille_changed, "the first frame reports the bar changed");
     CHECK_EQ(f->pack_fill[0], 1000, "the supply pack starts full");
     CHECK_EQ(f->pack_fill[1], 0, "the take-up pack starts empty");
-    CHECK_EQ(f->hub_frame[0], 0, "the reels start at frame 0");
-    CHECK_EQ(f->hub_frame[1], 0, "both reels start at frame 0");
+    CHECK_EQ(f->hub_frame[0], 0, "the phase starts at zero");
+    CHECK_EQ(f->hub_frame[1], 0, "both reels start at the same phase");
     CHECK(f->level_l == 0.5f && f->level_r == 0.5f, "the level passes through");
 
     /* The same title again: no label work. */
@@ -85,53 +106,61 @@ static void test_initial_and_progress(void)
 
 static void test_reels(void)
 {
-    cassette_t *c = cassette_new(2000, 20, 1000);
+    cassette_t *c = cassette_new(20, 1000);
     CHECK(c != NULL, "the reel model starts");
     if (!c) return;
 
-    mini_icecast_status_t st = mkstatus("Song", "song.mp3", 0, 10000, 0.1f);
+    /* A full supply and an empty take-up: the take-up is at the hub, the supply
+     * at the full pack, so their frames differ. */
+    mini_icecast_status_t st = mkstatus("Song", "song.mp3", 0, 600000, 0.1f);
     const cassette_frame_t *f = cassette_step(c, &st, 0);
-    CHECK_EQ(f->hub_frame[0], 0, "elapsed 0 is frame 0");
-    CHECK_EQ(f->hub_frame[1], 0, "both hubs share the position");
+    CHECK_EQ(f->hub_frame[0], 0, "the phase starts at zero");
+    CHECK_EQ(f->hub_frame[1], 0, "both reels start at the same phase");
 
-    /* The frame follows the audio position, not the call cadence: the same elapsed
-     * at a wildly different `now` must not change it. */
-    st.elapsed_ms = 100;
-    f = cassette_step(c, &st, 999999);
-    CHECK_EQ(f->hub_frame[0], 1, "100 ms of audio is one frame");
-    st.elapsed_ms = 150;
-    f = cassette_step(c, &st, 1000001);
-    CHECK_EQ(f->hub_frame[0], 1, "half a frame later is still frame 1");
-    st.elapsed_ms = 1900;
-    f = cassette_step(c, &st, 0);
-    CHECK_EQ(f->hub_frame[0], 19, "1.9 s is the last frame");
-    st.elapsed_ms = 2000;
-    f = cassette_step(c, &st, 0);
-    CHECK_EQ(f->hub_frame[0], 0, "2 s wraps the loop");
+    /* Over the first tenth of the side the take-up turns faster than the supply. */
+    int supply = frame_changes(c, 0, 60000, 600000, 25, 0);
+    int takeup = frame_changes(c, 0, 60000, 600000, 25, 1);
+    CHECK(takeup > supply, "the empty take-up turns faster than the full supply (%d > %d)",
+          takeup, supply);
 
-    /* A long gap reports the tape's position; there is no backlog to spend. */
-    st.elapsed_ms = 15000;
-    f = cassette_step(c, &st, 0);
-    CHECK_EQ(f->hub_frame[0], 10, "15 s of audio is frame 10, wherever it is called");
+    /* At half the side both packs have the same radius, so the reels turn at
+     * the same speed even though their phases are different. */
+    int mid_supply = frame_changes(c, 300000, 310000, 600000, 25, 0);
+    int mid_takeup = frame_changes(c, 300000, 310000, 600000, 25, 1);
+    int mid_diff = mid_supply - mid_takeup;
+    if (mid_diff < 0) mid_diff = -mid_diff;
+    CHECK(mid_diff <= 1, "the reels turn at the same speed at half the side (%d vs %d)",
+          mid_supply, mid_takeup);
 
-    /* Stopped: the last frame holds, and a status-less step does not move it. */
+    /* At the end the supply is empty and the take-up full: the supply is faster. */
+    supply = frame_changes(c, 540000, 600000, 600000, 25, 0);
+    takeup = frame_changes(c, 540000, 600000, 600000, 25, 1);
+    CHECK(supply > takeup, "the empty supply turns faster than the full take-up (%d > %d)",
+          supply, takeup);
+
+    /* Stopped: the frames hold, and a status-less step does not move them. */
     mini_icecast_status_t idle = mkstatus("", "", 0, 0, 0);
-    f = cassette_step(c, &idle, 0);
-    CHECK_EQ(f->hub_frame[0], 10, "a stopped track holds the last frame");
-    f = cassette_step(c, NULL, 123456);
-    CHECK_EQ(f->hub_frame[0], 10, "a status-less step holds it too");
+    f = cassette_step(c, &idle, 600000);
+    int held0 = f->hub_frame[0], held1 = f->hub_frame[1];
+    f = cassette_step(c, NULL, 600025);
+    CHECK_EQ(f->hub_frame[0], held0, "a stopped track holds the supply frame");
+    CHECK_EQ(f->hub_frame[1], held1, "and the take-up frame");
 
-    /* A new track starts the loop at its own elapsed 0. */
-    st = mkstatus("Other", "other.mp3", 0, 5000, 0.1f);
+    /* The same position at a different wall time is the same frame: the reels
+     * follow the tape, not the call cadence. */
+    st = mkstatus("Song", "song.mp3", 150000, 600000, 0.1f);
     f = cassette_step(c, &st, 0);
-    CHECK_EQ(f->hub_frame[0], 0, "a new track starts the loop again");
+    int a0 = f->hub_frame[0], a1 = f->hub_frame[1];
+    f = cassette_step(c, &st, 123456);
+    CHECK_EQ(f->hub_frame[0], a0, "the supply frame does not depend on now_ms");
+    CHECK_EQ(f->hub_frame[1], a1, "the take-up frame does not depend on now_ms");
 
     cassette_free(c);
 }
 
 static void test_bar_throttle(void)
 {
-    cassette_t *c = cassette_new(2000, 20, 1000);
+    cassette_t *c = cassette_new(20, 1000);
     CHECK(c != NULL, "the throttled model starts");
     if (!c) return;
 
@@ -161,7 +190,7 @@ static void test_bar_throttle(void)
 
 static void test_reset(void)
 {
-    cassette_t *c = cassette_new(2000, 20, 1000);
+    cassette_t *c = cassette_new(20, 1000);
     mini_icecast_status_t st = mkstatus("Song", "song.mp3", 5000, 10000, 0.4f);
     cassette_step(c, &st, 0);
     cassette_step(c, NULL, 1000);
@@ -185,8 +214,7 @@ int main(void)
     test_bar_throttle();
     test_reset();
 
-    CHECK(cassette_new(0, 20, 1000) == NULL, "a zero loop cannot advance");
-    CHECK(cassette_new(2000, 0, 1000) == NULL, "no frames means no reel");
+    CHECK(cassette_new(0, 1000) == NULL, "no frames means no reel");
 
     TEST_END();
 }

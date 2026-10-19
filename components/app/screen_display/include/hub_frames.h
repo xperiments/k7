@@ -14,11 +14,10 @@
 #define HUB_CROP_X 36
 #define HUB_CROP_Y 36
 #define HUB_CROP_BYTES (HUB_CROP_W * HUB_CROP_H * 2)
-#define HUB_LOOP_MS 2000
-#define HUB_FRAME_MS (HUB_LOOP_MS / HUB_FRAME_COUNT)
 
 /* Only the 96x96 animated centre of each of the 20 frames is exported.
  * The frame around it is the UI's business: no full 168 frame is stored.
+ * The frames are one revolution; the count is its angular resolution.
  * No alpha, no recolour: the crops are blitted as opaque RGB565. */
 
 /* EMBED_FILES puts components/app/screen_display/assets/hub_frames.bin in the image under this name. */

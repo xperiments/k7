@@ -5,12 +5,14 @@
     python3 tools/convert_cassette_assets.py --check    # only validates and reports
 
 The screen is drawn by components/app/screen_display/cassette_view.c. The hub art comes
-from assets/hub/NNN.png: 20 opaque 168x168 keyframes of the whole hub, exported for a
-2-second loop. The outer ring and the black background are identical in every keyframe,
-so only the centre turns.
+from assets/hub/NNN.png: opaque 168x168 keyframes of the whole hub, one revolution.
+The outer ring and the black background are identical in every keyframe, so only the
+centre turns.
 
-What this exports: only the MASK_AT_168 = 96 centre of each of the 20 frames. The
-frame around it is the UI's business; no full 168 frame is stored.
+What this exports: only the MASK_AT_168 = 96 centre of each frame. The frame around it
+is the UI's business; no full 168 frame is stored. The number of frames is the angular
+resolution: one frame per 360/count degrees. The playback speed is not in the art; the
+firmware derives it from the tape geometry (see components/portable/cassette).
 
 The frames are opaque, so the tool processes them as they are: no alpha mask, no
 recolour and no compositing. It fails if a frame has transparent pixels - transparency
@@ -18,8 +20,8 @@ would drag the renderer back into a per-pixel alpha blend, the cost this pipelin
 to avoid. The firmware blits only the 96x96 centre per frame, which is the area that
 actually changes.
 
-The blob is the 20 crops concatenated. The header wraps them in lv_image_dsc_t
-descriptors and carries the sizes and the loop time. Both are embedded by
+The blob is the crops concatenated. The header wraps them in lv_image_dsc_t
+descriptors and carries the sizes. Both are embedded by
 components/app/screen_display/CMakeLists.txt and rebuilt by this tool; do not edit them
 by hand.
 
@@ -41,7 +43,6 @@ except ImportError:
 HUB_DIR = "assets/hub"
 OUT_BIN = "components/app/screen_display/assets/hub_frames.bin"
 OUT_HDR = "components/app/screen_display/include/hub_frames.h"
-LOOP_MS = 2000      # the artist's 20 keyframes are a 2-second loop
 MASK_AT_168 = 96    # the animated centre's size at the native hub size
 
 
@@ -109,12 +110,11 @@ def header_text(count, src_px, mask_px):
     out.append("#define HUB_CROP_X %d" % crop_x)
     out.append("#define HUB_CROP_Y %d" % crop_y)
     out.append("#define HUB_CROP_BYTES (HUB_CROP_W * HUB_CROP_H * 2)")
-    out.append("#define HUB_LOOP_MS %d" % LOOP_MS)
-    out.append("#define HUB_FRAME_MS (HUB_LOOP_MS / HUB_FRAME_COUNT)")
     out.append("")
     out.append("/* Only the %dx%d animated centre of each of the %d frames is exported."
                % (mask_px, mask_px, count))
     out.append(" * The frame around it is the UI's business: no full 168 frame is stored.")
+    out.append(" * The frames are one revolution; the count is its angular resolution.")
     out.append(" * No alpha, no recolour: the crops are blitted as opaque RGB565. */")
     out.append("")
     out.append("/* EMBED_FILES puts components/app/screen_display/assets/hub_frames.bin in the image under this name. */")
@@ -141,7 +141,6 @@ def main():
 
     frames, size = load_frames()
     count = len(frames)
-    frame_ms = LOOP_MS / count
     mask_px = max(16, round(size[0] * MASK_AT_168 / 168))
     if mask_px > size[0]:
         sys.exit(f"the {mask_px} px crop does not fit a {size[0]} px frame")
@@ -150,11 +149,8 @@ def main():
     blob = count * mask_px * mask_px * 2
 
     print(f"{count} opaque frames in {HUB_DIR}/, {size[0]}x{size[1]}; exporting only the "
-          f"{mask_px}x{mask_px} animated centre; loop {LOOP_MS} ms, {frame_ms:g} ms/frame")
+          f"{mask_px}x{mask_px} animated centre; one revolution at {360 / count:g} deg/frame")
     print(f"blob {blob} B ({blob // 1024} KB)")
-    if LOOP_MS % count:
-        print(f"warning: {LOOP_MS} ms does not divide into {count} frames exactly; "
-              "HUB_FRAME_MS is truncated")
 
     if args.check:
         print("--check: nothing written")
