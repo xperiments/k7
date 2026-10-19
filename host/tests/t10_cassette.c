@@ -64,7 +64,7 @@ static void test_initial_and_progress(void)
     CHECK_EQ(f->permille, 0, "the position starts at zero");
     CHECK(f->permille_changed, "the first frame reports the bar changed");
     CHECK_EQ(f->pack_fill[0], 1000, "the supply pack starts full");
-    CHECK_EQ(f->pack_fill[1], 0, "the take-up pack starts empty");
+    CHECK_EQ(f->pack_fill[1], CASSETTE_MIN_FILL, "the empty take-up keeps the minimum load");
     CHECK_EQ(f->hub_frame[0], 0, "the phase starts at zero");
     CHECK_EQ(f->hub_frame[1], 0, "both reels start at the same phase");
     CHECK(f->level_l == 0.5f && f->level_r == 0.5f, "the level passes through");
@@ -76,13 +76,13 @@ static void test_initial_and_progress(void)
     CHECK(!f->title_changed, "an unchanged title is not reported changed");
     CHECK_EQ(f->permille, 100, "one second of ten is 100 permille");
     CHECK(f->permille_changed, "and the bar is told to move");
-    CHECK_EQ(f->pack_fill[0], 900, "the supply pack shrinks");
-    CHECK_EQ(f->pack_fill[1], 100, "the take-up pack grows");
+    CHECK_EQ(f->pack_fill[0], CASSETTE_MIN_FILL + (1000 - CASSETTE_MIN_FILL) * 900 / 1000, "the supply pack shrinks");
+    CHECK_EQ(f->pack_fill[1], CASSETTE_MIN_FILL + (1000 - CASSETTE_MIN_FILL) * 100 / 1000, "the take-up pack grows");
 
     st = mkstatus("Song", "song.mp3", 20000, 10000, 0.5f);
     f = cassette_step(c, &st, 200);
     CHECK_EQ(f->permille, 1000, "a position past the end is clamped to 1000");
-    CHECK_EQ(f->pack_fill[0], 0, "an empty supply pack");
+    CHECK_EQ(f->pack_fill[0], CASSETTE_MIN_FILL, "the empty supply keeps the minimum load");
     CHECK_EQ(f->pack_fill[1], 1000, "a full take-up pack");
 
     st = mkstatus("Other Song", "other.mp3", 0, 5000, 0.25f);

@@ -163,8 +163,11 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
         c->frame.permille_changed = false;
     }
     c->frame.permille = c->shown_permille;
-    c->frame.pack_fill[0] = (uint16_t)(1000 - c->shown_permille);
-    c->frame.pack_fill[1] = (uint16_t)c->shown_permille;
+    /* The empty side never goes below the minimum load: the tape edge and the VU
+     * must stay outside the hub ring. */
+    uint32_t load = 1000 - CASSETTE_MIN_FILL;
+    c->frame.pack_fill[0] = (uint16_t)(CASSETTE_MIN_FILL + load * (1000 - c->shown_permille) / 1000);
+    c->frame.pack_fill[1] = (uint16_t)(CASSETTE_MIN_FILL + load * c->shown_permille / 1000);
 
     /* A track with no duration still needs a side for the reel fill; the bar
      * stays at zero because it has nothing to measure against. */
@@ -184,7 +187,11 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
             c->phase[0] = c->phase[1] = 0.0f;
         } else if (c->have_last) {
             float dt = (float)(elapsed - c->last_elapsed) / 1000.0f;
-            uint32_t fill[2] = { 1000 - position, position };
+            uint32_t load = 1000 - CASSETTE_MIN_FILL;
+            uint32_t fill[2] = {
+                CASSETTE_MIN_FILL + load * (1000 - position) / 1000,
+                CASSETTE_MIN_FILL + load * position / 1000,
+            };
             for (int i = 0; i < 2; i++) {
                 float r = pack_radius(fill[i]);
                 float rev_s = CASSETTE_TAPE_SPEED_MM_S / (CASSETTE_TWO_PI * r);

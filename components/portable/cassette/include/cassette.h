@@ -36,6 +36,9 @@ extern "C" {
 #define CASSETTE_HUB_RADIUS_MM   11.0f
 #define CASSETTE_FULL_RADIUS_MM  24.0f
 #define CASSETTE_TAPE_SPEED_MM_S 47.625f
+/* The empty reel keeps a minimum tape load: with a bare hub the pack's edge sits
+ * under the hub ring, hiding the tape arc and the VU meter. */
+#define CASSETTE_MIN_FILL 80
 /* A track whose status has no duration still needs a side for the reel fill. */
 #define CASSETTE_NOMINAL_SIDE_MS 1800000u  /* 30 min */
 
@@ -44,7 +47,7 @@ typedef struct {
     bool     title_changed;             /* the adapter only rewrites the label when true */
     uint32_t permille;                  /* position through the track, 0..1000 */
     bool     permille_changed;          /* the adapter only moves the bar when true */
-    uint16_t pack_fill[2];              /* 0..1000: [0] supply, [1] take-up */
+    uint16_t pack_fill[2];              /* CASSETTE_MIN_FILL..1000: [0] supply, [1] take-up */
     uint8_t  hub_frame[2];              /* index into the reel art, one revolution = frame_count */
     bool     playing;                   /* the reels follow the audio only while this is true */
     float    level_l, level_r;          /* 0..1 RMS, passed through from the status */

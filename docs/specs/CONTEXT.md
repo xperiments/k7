@@ -112,7 +112,8 @@ _Avoid_: angle, offset
 **VU meter**:
 The dashed arc that continues the tape edge on each reel, showing the peak-hold of one
 channel: the left reel is L, the right R. Its length is a screen setting, not part of
-the cassette.
+the cassette. The empty reel keeps a minimum tape load, so its arc stays outside the
+hub ring.
 _Avoid_: level bar, meter, peak meter
 
 **Label**:
