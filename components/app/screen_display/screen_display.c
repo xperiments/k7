@@ -66,7 +66,12 @@ static uint8_t *s_fb;         /* only kept when it has to be dumped */
 
 /* --------------------------------------------------------------- the display */
 
+#if !CONFIG_APP_BOARD_SUNTON_8048S050C
+/* The headless display has no port to tick LVGL, so lv_tick_set_cb() asks the system
+ * clock. On the panel the port's own esp_timer does it (esp_lvgl_port.c), and nothing
+ * in this file may increment the tick a second time. */
 static uint32_t tick_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
+#endif
 
 #if CONFIG_APP_UI_SERIAL_DUMP
 /* The dump, as log lines: "UIROW <row> <chunk> <base64>".
@@ -119,13 +124,16 @@ static void dump_screen(void)
 }
 #endif
 
+#if !CONFIG_APP_BOARD_SUNTON_8048S050C
+/* The headless path has no panel to hand the finished draw to: the framebuffer is the
+ * whole of it. On the panel the port owns its own flush callback and the vsync
+ * handshake, so this one is not compiled there. */
 static void ui_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
 {
     (void)area; (void)px;
-    /* With an RGB panel the framebuffer is scanned out continuously, so a finished
-     * draw is complete without any copy. With no panel this is the whole of it. */
     lv_display_flush_ready(disp);
 }
+#endif
 
 static void screen_task(void *arg)
 {
@@ -133,12 +141,11 @@ static void screen_task(void *arg)
     /* Says where it landed: this task's core is a decision (see screen_display_start), and a task
      * that never runs is otherwise indistinguishable from a task that has nothing to do. */
     ESP_LOGI(TAG, "screen task running on core %d", (int)xPortGetCoreID());
-    uint32_t last_tick = 0;
     for (;;) {
-        uint32_t now = tick_ms();
-        lv_tick_inc(now - last_tick);
-        last_tick = now;
-
+        /* No lv_tick_inc() here. The panel path is ticked by the port's own esp_timer,
+         * and the headless path by lv_tick_set_cb(tick_ms). Incrementing it in both
+         * places ran every LVGL timer - refresh, reels, sysmon, scroll - at twice
+         * real time (and added the whole uptime on the first pass). */
         mini_icecast_status_t st;
         mini_icecast_status(&st);
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -161,9 +168,21 @@ static void screen_task(void *arg)
          * whole screen - the cassette image included - which decides whether the
          * screen delays everything else sharing its core at boot. */
         static int n_frames, worst_ms;
+        static uint32_t tick0, sys0;
         if (frame_ms > worst_ms) worst_ms = frame_ms;
-        if (++n_frames == 50)
-            ESP_LOGI(TAG, "%d frames: worst %d ms, last %d ms", n_frames, worst_ms, frame_ms);
+        if (n_frames == 0) {
+            /* Both clocks are sampled at the same instant, so the difference between
+             * the two deltas is the tick's drift - not the boot offset between lv_init()
+             * and this task. After the single-tick fix the two should agree. */
+            tick0 = lv_tick_get();
+            sys0 = (uint32_t)(esp_timer_get_time() / 1000);
+        }
+        if (++n_frames == 50) {
+            uint32_t tick_dt = lv_tick_get() - tick0;
+            uint32_t sys_dt = (uint32_t)(esp_timer_get_time() / 1000) - sys0;
+            ESP_LOGI(TAG, "%d frames: worst %d ms, last %d ms; LVGL advanced %u ms over %u ms of system time",
+                     n_frames, worst_ms, frame_ms, (unsigned)tick_dt, (unsigned)sys_dt);
+        }
         /* Rest for at least three times as long as the frame took. A frame here can be
          * expensive - on this part a full-screen invalidation has cost over 100 ms - and
          * this task shares its core with the network stack. Without this the interface
