@@ -1,0 +1,16 @@
+{
+  "name": "xtape",
+  "version": "1.0.0",
+  "description": "An ESP32-S3 devkit with a microSD card in it joins your Wi-Fi and serves the card's music over HTTP:",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "font:kalam": "npx --yes lv_font_conv --font assets/fonts/Kalam-Regular.ttf --size 28 --bpp 4 --format lvgl --no-compress --range '0x20-0x7F,0xA0-0xFF,0x2010-0x2015,0x2018-0x201D,0x2026' --lv-include lvgl.h --lv-font-name kalam_28 --output components/app/screen_display/font_kalam_28.c"
+  }
+}
