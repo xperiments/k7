@@ -28,6 +28,8 @@
 #include "cassette_view.h"
 #include "hub_frames.h"
 
+LV_FONT_DECLARE(kalam_28);
+
 static const char *TAG = "screen";
 
 /* The 800x480 panel: the hub's static ring is 168 px and the rotating mask is the
@@ -399,7 +401,7 @@ void cassette_view_create(void)
                             LV_ALIGN_CENTER, 0, 0);
     lv_label_set_text(letter, "B");
 
-    s_title = text(scr, &lv_font_montserrat_22, lv_color_hex(COL_INK),
+    s_title = text(scr, &kalam_28, lv_color_hex(COL_INK),
                    LV_ALIGN_TOP_LEFT, TITLE_X, TITLE_Y);
     lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_title, TITLE_W);

@@ -1,7 +1,7 @@
 # The panel driver only exists on the board that has a panel. This is a build-time
 # choice inside the screen display, not a target check: the RGB panel and the
 # headless framebuffer are two adapters behind the same public interface.
-set(screen_srcs "screen_display.c" "cassette_view.c" "lvgl_mem.c")
+set(screen_srcs "screen_display.c" "cassette_view.c" "lvgl_mem.c" "font_kalam_28.c")
 if(CONFIG_APP_BOARD_SUNTON_8048S050C)
     list(APPEND screen_srcs "panel_rgb.c")
 endif()
