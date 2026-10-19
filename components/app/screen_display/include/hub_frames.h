@@ -6,7 +6,7 @@
 
 #include "lvgl.h"
 
-#define HUB_FRAME_COUNT 20
+#define HUB_FRAME_COUNT 36
 #define HUB_FRAME_W 168
 #define HUB_FRAME_H 168
 #define HUB_CROP_W 96
@@ -15,10 +15,11 @@
 #define HUB_CROP_Y 36
 #define HUB_CROP_BYTES (HUB_CROP_W * HUB_CROP_H * 2)
 
-/* Only the 96x96 animated centre of each of the 20 frames is exported.
+/* Only the 96x96 animated centre of each of the 36 frames is exported.
  * The frame around it is the UI's business: no full 168 frame is stored.
  * The frames are one revolution; the count is its angular resolution.
- * No alpha, no recolour: the crops are blitted as opaque RGB565. */
+ * The source alpha is flattened onto the ring; the crops are blitted as
+ * opaque RGB565. */
 
 /* EMBED_FILES puts components/app/screen_display/assets/hub_frames.bin in the image under this name. */
 extern const uint8_t hub_frames_bin_start[] asm("_binary_hub_frames_bin_start");
@@ -163,5 +164,117 @@ static const lv_image_dsc_t k_hub_crops[HUB_FRAME_COUNT] = {
                     .stride = HUB_CROP_W * 2 },
         .data_size = HUB_CROP_BYTES,
         .data = hub_frames_bin_start + 19 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 20 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 21 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 22 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 23 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 24 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 25 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 26 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 27 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 28 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 29 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 30 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 31 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 32 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 33 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 34 * HUB_CROP_BYTES,
+    },
+    {
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                    .w = HUB_CROP_W, .h = HUB_CROP_H,
+                    .stride = HUB_CROP_W * 2 },
+        .data_size = HUB_CROP_BYTES,
+        .data = hub_frames_bin_start + 35 * HUB_CROP_BYTES,
     },
 };

@@ -5,9 +5,11 @@
     python3 tools/convert_cassette_assets.py --check    # only validates and reports
 
 The screen is drawn by components/app/screen_display/cassette_view.c. The hub art comes
-from assets/hub/NNN.png: opaque 168x168 keyframes of the whole hub, one revolution.
-The outer ring and the black background are identical in every keyframe, so only the
-centre turns.
+from assets/hub/NNN.png: 168x168 keyframes of the whole hub, one revolution. The source
+frames may be RGBA: the transparent pixels are the holes that show the static hub ring
+behind the image. The tool composites them onto the ring colour (`--background`, default
+e6e6e6) so the firmware still blits opaque RGB565; a per-pixel alpha blend at 25 Hz is
+the cost this pipeline avoids.
 
 What this exports: only the MASK_AT_168 = 96 centre of each frame. The frame around it
 is the UI's business; no full 168 frame is stored. The number of frames is the angular
@@ -24,6 +26,9 @@ The blob is the crops concatenated. The header wraps them in lv_image_dsc_t
 descriptors and carries the sizes. Both are embedded by
 components/app/screen_display/CMakeLists.txt and rebuilt by this tool; do not edit them
 by hand.
+
+The exported pixels are opaque RGB565: any source alpha is flattened here, at build
+time, not blended by the firmware.
 
 Requires Pillow (`pip install pillow`), which the project's documentation lists for
 the host tooling.
@@ -53,7 +58,7 @@ def frame_number(path):
     return int(m.group(1))
 
 
-def load_frames():
+def load_frames(background):
     paths = sorted(glob.glob(os.path.join(HUB_DIR, "*.png")), key=frame_number)
     if len(paths) < 2:
         sys.exit(f"need at least two frames in {HUB_DIR}/, found {len(paths)}")
@@ -69,10 +74,11 @@ def load_frames():
         elif im.size != size:
             sys.exit(f"{p} is {im.size[0]}x{im.size[1]}, the other frames are "
                      f"{size[0]}x{size[1]}")
-        if im.getchannel("A").getextrema()[0] < 255:
-            sys.exit(f"{p} has transparent pixels. The frames must be opaque: the whole "
-                     "hub is baked into each image, and the firmware blits RGB565.")
-        frames.append(im.convert("RGB"))
+        # The transparent pixels are the hub holes; flatten them onto the ring so the
+        # descriptor stays RGB565 and the firmware never blends alpha.
+        canvas = Image.new("RGBA", im.size, background + (255,))
+        canvas.alpha_composite(im)
+        frames.append(canvas.convert("RGB"))
     return frames, size
 
 
@@ -115,7 +121,8 @@ def header_text(count, src_px, mask_px):
                % (mask_px, mask_px, count))
     out.append(" * The frame around it is the UI's business: no full 168 frame is stored.")
     out.append(" * The frames are one revolution; the count is its angular resolution.")
-    out.append(" * No alpha, no recolour: the crops are blitted as opaque RGB565. */")
+    out.append(" * The source alpha is flattened onto the ring; the crops are blitted as")
+    out.append(" * opaque RGB565. */")
     out.append("")
     out.append("/* EMBED_FILES puts components/app/screen_display/assets/hub_frames.bin in the image under this name. */")
     out.append('extern const uint8_t hub_frames_bin_start[] asm("_binary_hub_frames_bin_start");')
@@ -137,9 +144,17 @@ def header_text(count, src_px, mask_px):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="validate and report, write nothing")
+    ap.add_argument("--background", default="e6e6e6",
+                    help="RGB hex the transparent pixels are composited onto "
+                         "(the hub ring; default e6e6e6)")
     args = ap.parse_args()
 
-    frames, size = load_frames()
+    bg = args.background.lstrip("#")
+    if len(bg) != 6:
+        sys.exit(f"--background needs six hex digits, got {args.background!r}")
+    background = tuple(int(bg[i:i + 2], 16) for i in (0, 2, 4))
+
+    frames, size = load_frames(background)
     count = len(frames)
     mask_px = max(16, round(size[0] * MASK_AT_168 / 168))
     if mask_px > size[0]:
@@ -148,8 +163,9 @@ def main():
     top = (size[1] - mask_px) // 2
     blob = count * mask_px * mask_px * 2
 
-    print(f"{count} opaque frames in {HUB_DIR}/, {size[0]}x{size[1]}; exporting only the "
-          f"{mask_px}x{mask_px} animated centre; one revolution at {360 / count:g} deg/frame")
+    print(f"{count} frames in {HUB_DIR}/, {size[0]}x{size[1]}; exporting only the "
+          f"{mask_px}x{mask_px} animated centre; one revolution at {360 / count:g} deg/frame; "
+          f"alpha flattened onto #{bg}")
     print(f"blob {blob} B ({blob // 1024} KB)")
 
     if args.check:
