@@ -8,9 +8,10 @@
  * JSON view and the binary view. Lookups walk the arena; they never touch the
  * filesystem.
  *
- * This module knows nothing about HTTP, the broadcast, the display or the card's
- * mount state. It is given a directory and produces a generation; the application
- * decides when to build one and who may read it.
+ * This module knows nothing about HTTP, the broadcast or the display. It is told
+ * whether a card is present (a no-card generation is built without touching the
+ * filesystem) and produces one generation; the application decides when to build
+ * one and who may read it.
  */
 #include <stdbool.h>
 #include <stddef.h>
@@ -41,14 +42,14 @@ typedef enum {
 typedef enum {
     LIB_OK = 0,
     LIB_INVALID_ARG, /* no Music directory, or one that does not fit the path ceiling */
-    LIB_NO_DIR,      /* the Music directory cannot be opened */
     LIB_NO_MEM,
 } lib_result_t;
 
 typedef enum {
     LIB_STATE_OK = 0,
+    LIB_STATE_NO_CARD,
+    LIB_STATE_NO_DIR,
     LIB_STATE_EMPTY,
-    LIB_STATE_TRUNCATED,
     LIB_STATE_ERROR,
 } lib_state_t;
 
@@ -60,18 +61,28 @@ typedef struct {
     bool        build_json;/* false builds only the binary view */
 } library_cfg_t;
 
-/* Scan the Music directory and build one immutable generation. On LIB_NO_DIR the
- * directory could not be opened and *out is NULL; an empty directory is a valid
- * generation with state LIB_STATE_EMPTY. */
+/* Scan the Music directory and build one immutable generation. A missing or
+ * unreadable Music directory is still a generation: it has state
+ * LIB_STATE_NO_DIR and an error sentence, so the HTTP surface can stay
+ * diagnosable. An empty directory has state LIB_STATE_EMPTY. */
 lib_result_t library_open(const library_cfg_t *cfg, library_t **out);
+
+/* Build the no-card generation without touching the filesystem. `reason` is the
+ * mount error, or NULL; it becomes the generation's error sentence. */
+lib_result_t library_open_no_card(const library_cfg_t *cfg, const char *reason,
+                                  library_t **out);
+
 void         library_close(library_t *lib);
 
 lib_state_t  library_state(const library_t *lib);
+const char  *library_state_name(lib_state_t state);
 const char  *library_error(const library_t *lib); /* "" when there is nothing to report */
 bool         library_truncated(const library_t *lib);
 
+uint32_t     library_generation(const library_t *lib);
 uint32_t     library_node_count(const library_t *lib);
 uint32_t     library_track_count(const library_t *lib);
+uint32_t     library_dir_count(const library_t *lib); /* excludes the root */
 uint64_t     library_total_bytes(const library_t *lib);
 uint32_t     library_crc32(const library_t *lib); /* the blob header's CRC */
 

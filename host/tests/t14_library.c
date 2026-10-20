@@ -245,10 +245,38 @@ static void test_empty_root(void)
 
 static void test_no_dir(void)
 {
-    library_cfg_t cfg = {.music_dir = "/definitely/not/a/xtape/library"};
-    library_t *lib = (library_t *)0x1;
-    CHECK_EQ(library_open(&cfg, &lib), LIB_NO_DIR, "missing Music directory is refused");
-    CHECK(lib == NULL, "missing Music directory produces no generation");
+    library_cfg_t cfg = {.music_dir = "/definitely/not/a/xtape/library", .build_json = true};
+    library_t *lib = NULL;
+    CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "missing Music directory still opens");
+    CHECK(lib != NULL, "missing Music directory produces a generation");
+    CHECK_EQ(library_state(lib), LIB_STATE_NO_DIR, "missing Music directory state");
+    CHECK_EQ(library_track_count(lib), 0, "missing Music directory has no tracks");
+    CHECK(library_error(lib)[0] != 0, "missing Music directory has a diagnosis");
+    size_t len = 0;
+    const char *json = library_json(lib, &len);
+    CHECK(json != NULL && json_balanced(json), "missing Music directory JSON is valid");
+    CHECK(strstr(json, "\"state\":\"no_dir\"") != NULL, "missing Music directory JSON state");
+    library_close(lib);
+}
+
+static void test_no_card(void)
+{
+    char *root = temp_root();
+    library_cfg_t cfg = {.music_dir = root, .build_json = true};
+    library_t *lib = NULL;
+    CHECK_EQ(library_open_no_card(&cfg, "host says no", &lib), LIB_OK, "no-card generation opens");
+    CHECK(lib != NULL, "no-card generation exists");
+    CHECK_EQ(library_state(lib), LIB_STATE_NO_CARD, "no-card state");
+    CHECK_EQ(library_track_count(lib), 0, "no-card has no tracks");
+    CHECK_EQ(library_node_count(lib), 1, "no-card has only the root node");
+    CHECK(strstr(library_error(lib), "host says no") != NULL, "no-card carries the reason");
+    size_t len = 0;
+    const char *json = library_json(lib, &len);
+    CHECK(json != NULL && json_balanced(json), "no-card JSON is valid");
+    CHECK(strstr(json, "\"state\":\"no_card\"") != NULL, "no-card JSON state");
+    library_close(lib);
+    remove_tree(root);
+    free(root);
 }
 
 static void test_main_tree(void)
@@ -292,7 +320,9 @@ static void test_main_tree(void)
     CHECK(!library_truncated(lib), "tree is not truncated");
     CHECK_EQ(library_node_count(lib), 10, "root + 4 dirs + 5 tracks");
     CHECK_EQ(library_track_count(lib), 5, "five playable tracks");
+    CHECK_EQ(library_dir_count(lib), 4, "four directories below the root");
     CHECK_EQ(library_total_bytes(lib), 111, "track bytes are summed");
+    CHECK_EQ(library_generation(lib), 1, "first generation");
 
     /* Root children are name-sorted, dirs and tracks together. */
     CHECK_EQ(library_child_count(lib, 0), 5, "root has five children");
@@ -418,11 +448,12 @@ static void test_truncation(void)
     library_t *lib = NULL;
     CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "capped tree opens");
     CHECK_EQ(library_track_count(lib), 3, "track cap stops the scan at three");
-    CHECK_EQ(library_state(lib), LIB_STATE_TRUNCATED, "track cap sets the state");
+    CHECK_EQ(library_state(lib), LIB_STATE_OK, "a capped tree is still ok");
     CHECK(library_truncated(lib), "track cap sets truncated");
     size_t len = 0;
     const char *json = library_json(lib, &len);
     CHECK(json_balanced(json), "truncated JSON is valid");
+    CHECK(strstr(json, "\"state\":\"ok\"") != NULL, "truncated JSON keeps the ok state");
     CHECK(strstr(json, "\"truncated\":true") != NULL, "truncated JSON flag");
     const disk_header_t *h = library_blob(lib, &len);
     CHECK((h->flags & 0x2u) != 0, "blob truncated flag");
@@ -434,7 +465,7 @@ static void test_truncation(void)
     lib = NULL;
     CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "byte-capped tree opens");
     CHECK_EQ(library_track_count(lib), 0, "byte cap stops before any track");
-    CHECK_EQ(library_state(lib), LIB_STATE_TRUNCATED, "byte cap sets the state");
+    CHECK_EQ(library_state(lib), LIB_STATE_EMPTY, "a byte-capped empty tree is empty");
     CHECK(library_truncated(lib), "byte cap sets truncated");
     size_t capped_len = 0;
     CHECK(library_json(lib, &capped_len) == NULL, "byte cap serves the binary view only");
@@ -546,6 +577,7 @@ int main(void)
     test_utf8();
     test_empty_root();
     test_no_dir();
+    test_no_card();
     test_main_tree();
     test_json_escaping();
     test_truncation();

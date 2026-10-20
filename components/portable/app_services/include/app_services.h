@@ -8,9 +8,11 @@
  *   1. resolve the station format  (arithmetic only: no heap, no hardware)
  *   2. board network               (Wi-Fi's DMA buffers win the internal-RAM race)
  *   3. card mount                  (a missing card is reported, not fatal)
- *   4. file surface                (the index and downloads)
- *   5. broadcast                   (the encoder takes its internal RAM last)
- *   6. HTTP listener               (starts serving what is already registered)
+ *   4. library                     (the boot-built tree, arena and JSON)
+ *   5. file surface                (the index and downloads)
+ *   6. library endpoint            (GET /api/library from the prebuilt JSON)
+ *   7. broadcast                   (the encoder takes its internal RAM last)
+ *   8. HTTP listener               (starts serving what is already registered)
  *
  * The appliance and the host entry point call this, so the host build exercises the
  * device's composition instead of a second one, and the ordering has one home.
@@ -36,6 +38,8 @@ typedef struct {
     uint32_t    metaint;      /* 0 = the broadcast's default (16000) */
     uint32_t    lead_ms;      /* 0 = the broadcast's default (1500) */
     uint32_t    burst_ms;     /* 0 = the broadcast's default (500) */
+    uint32_t    library_max_bytes;  /* 0 = the library's default (4 MiB) */
+    uint32_t    library_max_tracks; /* 0 = the library's default (20000) */
     const char *server_name;  /* HTTP Server: header; NULL = the server's default */
 } app_services_cfg_t;
 

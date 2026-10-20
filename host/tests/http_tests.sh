@@ -1,5 +1,5 @@
 #!/bin/sh
-# Host acceptance tests for the HTTP surface: T3, T4, T5, T6, T7, T8, T9 and T12,
+# Host acceptance tests for the HTTP surface: T3, T4, T5, T6, T7, T8, T9, T12 and T14,
 # run against the real server on this machine with no board attached.
 #
 #   HOST_BIN=host/build/bin/icecast_host HOST_DIR=host sh host/tests/http_tests.sh
@@ -60,6 +60,22 @@ start_server() { # dir port log [extra args...]
         sleep 0.1
     done
     printf 'server on port %s did not come up; its log:\n' "$port"
+    cat "$log"
+    return 1
+}
+
+start_no_card_server() { # dir port log [extra args...]
+    dir=$1; port=$2; log=$3; shift 3
+    XTAPE_HOST_NO_CARD=1 HOST_LOG_LEVEL=info "$HOST_BIN" --music-dir "$dir" --port "$port" "$@" >"$log" 2>&1 &
+    pid=$!
+    PIDS="$PIDS $pid"
+    n=0
+    while [ "$n" -lt 80 ]; do
+        if curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$port/" 2>/dev/null; then LAST_PID=$pid; return 0; fi
+        n=$((n + 1))
+        sleep 0.1
+    done
+    printf 'no-card server on port %s did not come up; its log:\n' "$port"
     cat "$log"
     return 1
 }
@@ -133,6 +149,7 @@ if [ -s "$STARTUP_LOG" ]; then
     check_match "and names the encoder's state size" "$(tr -d '\r' <"$STARTUP_LOG")" '[0-9]+ B of state inside the vendored library'
     check_match "and reports which memory the ring took" "$(tr -d '\r' <"$STARTUP_LOG")" 'burst ring: .* in external memory'
     check_match "and which memory the encoder staging took" "$(tr -d '\r' <"$STARTUP_LOG")" 'staging buffers in external memory'
+    check_match "the library scan is logged with counts, bytes and memory" "$(tr -d '\r' <"$STARTUP_LOG")" 'library: state=[a-z_]+ tracks=[0-9]+ dirs=[0-9]+ bytes=[0-9]+ scan=[0-9]+ ms arena=[0-9]+ B json=[0-9]+ B psram=[0-9]+ -> [0-9]+ B'
     if [ -n "$BOARD_URL" ]; then
         # These two come from the firmware's own bring-up, which the host build
         # does not compile: they only exist on the device.
@@ -180,6 +197,106 @@ fi
 check_match "the page says what is playing" "$(cat "$TMP/index.html")" 'Now playing:'
 check_match "and links the live stream" "$(cat "$TMP/index.html")" 'href="/stream"'
 check_match "and serves a content type a browser can render" "$(curl -s -D - -o /dev/null "$BASE/")" 'Content-Type: text/html; charset=utf-8'
+
+group "T14  the prebuilt library is served without the card"
+curl -s -D "$TMP/libhdr" -o "$TMP/lib.json" "$BASE/api/library"
+LIB_HDR=$(tr -d '\r' <"$TMP/libhdr")
+LIB_BYTES=$(wc -c <"$TMP/lib.json" | tr -d ' ')
+check_eq "GET /api/library is a 200" "$(printf '%s' "$LIB_HDR" | head -1 | awk '{print $2}')" "200"
+check_match "and is typed application/json" "$LIB_HDR" '^Content-Type: application/json$'
+check_match "and carries a real Content-Length ($LIB_BYTES B)" "$LIB_HDR" "^Content-Length: $LIB_BYTES$"
+if $PY -m json.tool "$TMP/lib.json" >/dev/null 2>&1; then
+    ok "the body is valid JSON"
+else
+    bad "the body is not valid JSON"
+fi
+LIB_GEN=$($PY -c 'import json,sys; print(json.load(open(sys.argv[1]))["generation"])' "$TMP/lib.json")
+check_match "and names the generation ($LIB_GEN)" "$LIB_HDR" "^ETag: \"gen-$LIB_GEN\"$"
+if [ -n "$BOARD_URL" ]; then
+    if $PY -c 'import json,sys; d=json.load(open(sys.argv[1])); assert all(k in d for k in ("root","generation","count","bytes","state","truncated","error","tree")); assert d["state"] in ("ok","empty","no_card","no_dir","error")' "$TMP/lib.json" 2>/dev/null; then
+        ok "board library JSON has the expected shape"
+    else
+        bad "board library JSON shape"
+    fi
+elif $PY "$HOST_DIR/tests/check_library.py" "$TMP/lib.json" "$FIX" --state ok >"$TMP/lib.out" 2>&1; then
+    ok "$(cat "$TMP/lib.out")"
+else
+    bad "library JSON: $(cat "$TMP/lib.out")"
+fi
+
+if [ -z "$BOARD_URL" ]; then
+    # The endpoint must answer from the boot-built JSON even after the file is gone.
+    mkdir -p "$TMP/frozen"
+    cp -R "$FIX/." "$TMP/frozen/"
+    if start_server "$TMP/frozen" 18101 "$TMP/frozen.log"; then
+        rm -f "$TMP/frozen/tone-44100.flac"
+        curl -s -D "$TMP/frozenhdr" -o "$TMP/frozen.json" "http://127.0.0.1:18101/api/library"
+        check_match "the JSON still lists a file deleted after boot" "$(cat "$TMP/frozen.json")" '"name":"tone-44100.flac"'
+        check_eq "and its Content-Length still matches the body" \
+            "$(tr -d '\r' <"$TMP/frozenhdr" | sed -n 's/^Content-Length: //p')" \
+            "$(wc -c <"$TMP/frozen.json" | tr -d ' ')"
+        check_eq "GET /music for the deleted file is now a 404" \
+            "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18101/music/tone-44100.flac")" "404"
+    fi
+
+    # A nested tree through the endpoint: paths and playlist order, not just
+    # a flat directory.
+    mkdir -p "$TMP/nested/Album/Deep"
+    cp "$FIX/tone-44100.flac" "$TMP/nested/Album/01 - Song.flac"
+    cp "$FIX/tone-44100.wav" "$TMP/nested/Album/Deep/02 - Song.wav"
+    cp "$FIX/tone-44100.mp3" "$TMP/nested/loose.mp3"
+    if start_server "$TMP/nested" 18106 "$TMP/nested.log"; then
+        curl -s -o "$TMP/nested.json" "http://127.0.0.1:18106/api/library"
+        if $PY "$HOST_DIR/tests/check_library.py" "$TMP/nested.json" "$TMP/nested" --state ok >"$TMP/nested.out" 2>&1; then
+            ok "a nested tree matches os.walk() through /api/library"
+        else
+            bad "nested tree: $(cat "$TMP/nested.out")"
+        fi
+        check_match "and its paths use the tree, not the flat directory" "$(cat "$TMP/nested.json")" '"path":"Album/01 - Song.flac"'
+    fi
+
+    # Boot-time states: no card, no Music directory, empty, truncated.
+    if start_no_card_server "$FIX" 18102 "$TMP/nocard.log"; then
+        code=$(curl -s -o "$TMP/nocard.json" -w '%{http_code}' "http://127.0.0.1:18102/api/library")
+        check_eq "no card is a 200, not a 500" "$code" "200"
+        if $PY "$HOST_DIR/tests/check_library.py" "$TMP/nocard.json" "$FIX" --state no_card >"$TMP/nocard.out" 2>&1; then
+            ok "no card is a diagnosable 200 with state no_card"
+        else
+            bad "no card state: $(cat "$TMP/nocard.out")"
+        fi
+        check_match "and the boot log names it" "$(cat "$TMP/nocard.log")" 'library: state=no_card '
+    fi
+    mkdir -p "$TMP/no-music-parent"
+    if start_server "$TMP/no-music-parent/missing" 18103 "$TMP/nodir.log"; then
+        code=$(curl -s -o "$TMP/nodir.json" -w '%{http_code}' "http://127.0.0.1:18103/api/library")
+        check_eq "missing directory is a 200, not a 500" "$code" "200"
+        if $PY "$HOST_DIR/tests/check_library.py" "$TMP/nodir.json" "$TMP/no-music-parent/missing" --state no_dir >"$TMP/nodir.out" 2>&1; then
+            ok "a missing Music directory is a diagnosable 200 with state no_dir"
+        else
+            bad "missing directory state: $(cat "$TMP/nodir.out")"
+        fi
+    fi
+    mkdir -p "$TMP/empty"
+    if start_server "$TMP/empty" 18104 "$TMP/empty.log"; then
+        code=$(curl -s -o "$TMP/empty.json" -w '%{http_code}' "http://127.0.0.1:18104/api/library")
+        check_eq "an empty library is a 200" "$code" "200"
+        if $PY "$HOST_DIR/tests/check_library.py" "$TMP/empty.json" "$TMP/empty" --state empty >"$TMP/empty.out" 2>&1; then
+            ok "an empty Music directory is a diagnosable 200 with state empty"
+        else
+            bad "empty state: $(cat "$TMP/empty.out")"
+        fi
+    fi
+    if start_server "$FIX" 18105 "$TMP/trunc.log" --library-max-tracks 1; then
+        code=$(curl -s -o "$TMP/trunc.json" -w '%{http_code}' "http://127.0.0.1:18105/api/library")
+        check_eq "a truncated library is a 200" "$code" "200"
+        if $PY "$HOST_DIR/tests/check_library.py" "$TMP/trunc.json" "$FIX" --state ok --truncated >"$TMP/trunc.out" 2>&1; then
+            ok "a capped boot is a 200, state ok and truncated true"
+        else
+            bad "truncated view: $(cat "$TMP/trunc.out")"
+        fi
+        check_match "and the body says truncated" "$(cat "$TMP/trunc.json")" '"truncated":true'
+    fi
+fi
 
 group "T7  downloads are the original bytes, sized and typed"
 for f in "$FIX"/*; do

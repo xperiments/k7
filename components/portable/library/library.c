@@ -124,6 +124,7 @@ typedef struct {
     bool root_failed;
     bool alloc_failed;
     unsigned unreadable_dirs;
+    char error[160];
 } lib_scan_t;
 
 struct library {
@@ -134,6 +135,8 @@ struct library {
     char    *music_dir;
     char     error[160];
     lib_state_t state;
+    bool truncated;
+    uint32_t generation;
     uint32_t node_count;
     uint32_t track_count;
     uint64_t total_bytes;
@@ -373,8 +376,13 @@ static void scan_dir(lib_scan_t *s, const char *root, uint32_t dir)
     }
     DIR *d = opendir(dir_path);
     if (!d) {
-        if (dir == 0) s->root_failed = true;
-        else s->unreadable_dirs++;
+        if (dir == 0) {
+            s->root_failed = true;
+            snprintf(s->error, sizeof s->error, "cannot read the Music directory: %.100s",
+                     strerror(errno));
+        } else {
+            s->unreadable_dirs++;
+        }
         ESP_LOGW(TAG, "cannot read %s: %s", dir_path, strerror(errno));
         return;
     }
@@ -562,11 +570,12 @@ static void json_node_open(const library_t *lib, json_w_t *w, lib_node_t n,
     }
 }
 
-static const char *state_name(lib_state_t s)
+const char *library_state_name(lib_state_t s)
 {
     switch (s) {
+    case LIB_STATE_NO_CARD: return "no_card";
+    case LIB_STATE_NO_DIR: return "no_dir";
     case LIB_STATE_EMPTY: return "empty";
-    case LIB_STATE_TRUNCATED: return "truncated";
     case LIB_STATE_ERROR: return "error";
     default: return "ok";
     }
@@ -576,10 +585,13 @@ static void json_document(const library_t *lib, json_w_t *w)
 {
     jw_puts(w, "{\"root\":\"");
     jw_escaped(w, lib->music_dir, strlen(lib->music_dir));
-    jw_printf(w, "\",\"generation\":1,\"count\":%u,\"bytes\":%llu,\"state\":\"%s\","
-                 "\"truncated\":%s,\"tree\":",
-              (unsigned)lib->track_count, (unsigned long long)lib->total_bytes,
-              state_name(lib->state), lib->state == LIB_STATE_TRUNCATED ? "true" : "false");
+    jw_printf(w, "\",\"generation\":%u,\"count\":%u,\"bytes\":%llu,\"state\":\"%s\","
+                 "\"truncated\":%s,\"error\":\"",
+              (unsigned)lib->generation, (unsigned)lib->track_count,
+              (unsigned long long)lib->total_bytes, library_state_name(lib->state),
+              lib->truncated ? "true" : "false");
+    jw_escaped(w, lib->error, strlen(lib->error));
+    jw_puts(w, "\",\"tree\":");
 
     const lib_node_disk_t *nodes =
         (const lib_node_disk_t *)((const char *)lib->arena + LIB_HEADER_SIZE);
@@ -638,7 +650,7 @@ static void json_document(const library_t *lib, json_w_t *w)
 
 /* ------------------------------------------------------------- final build */
 
-static bool build_arena(lib_scan_t *s, const char *music_dir, bool truncated,
+static bool build_arena(lib_scan_t *s, bool truncated,
                         void **out_arena, size_t *out_size, uint32_t *out_nodes,
                         uint32_t *out_tracks, uint64_t *out_bytes, uint32_t *out_crc)
 {
@@ -741,7 +753,6 @@ static bool build_arena(lib_scan_t *s, const char *music_dir, bool truncated,
     *out_tracks = track_count;
     *out_bytes = s->total_bytes;
     *out_crc = h->crc32;
-    (void)music_dir;
     return true;
 }
 
@@ -773,71 +784,69 @@ static json_result_t build_json(library_t *lib, uint64_t max_total)
 
 /* ------------------------------------------------------------------- API */
 
-lib_result_t library_open(const library_cfg_t *cfg, library_t **out)
+static void free_scan(lib_scan_t *s)
 {
-    if (out) *out = NULL;
+    free(s->nodes);
+    free(s->names);
+    free(s->queue);
+}
+
+static lib_result_t resolve_root(const library_cfg_t *cfg, char *root, size_t cap,
+                                 size_t *max_path)
+{
     if (!cfg || !cfg->music_dir || !cfg->music_dir[0]) return LIB_INVALID_ARG;
+    size_t len = strlen(cfg->music_dir);
+    while (len > 1 && cfg->music_dir[len - 1] == '/') len--;
+    if (len >= cap) return LIB_INVALID_ARG;
+    memcpy(root, cfg->music_dir, len);
+    root[len] = 0;
+    size_t mp = cfg->max_path ? cfg->max_path : LIB_PATH_MAX - 1;
+    if (mp > LIB_PATH_MAX - 1) mp = LIB_PATH_MAX - 1;
+    if (len > mp) return LIB_INVALID_ARG;
+    *max_path = mp;
+    return LIB_OK;
+}
 
-    char root[LIB_PATH_MAX];
-    size_t root_len = strlen(cfg->music_dir);
-    while (root_len > 1 && cfg->music_dir[root_len - 1] == '/') root_len--;
-    if (root_len >= sizeof root) return LIB_INVALID_ARG;
-    memcpy(root, cfg->music_dir, root_len);
-    root[root_len] = 0;
-    size_t max_path = cfg->max_path ? cfg->max_path : LIB_PATH_MAX - 1;
-    if (max_path > LIB_PATH_MAX - 1) max_path = LIB_PATH_MAX - 1;
-    if (root_len > max_path) return LIB_INVALID_ARG;
-
-    lib_scan_t s;
-    memset(&s, 0, sizeof s);
-    s.max_bytes = cfg->max_bytes ? cfg->max_bytes : LIB_DEFAULT_MAX_BYTES;
-    s.max_tracks = cfg->max_tracks ? cfg->max_tracks : LIB_DEFAULT_MAX_TRACKS;
-    s.max_path = max_path;
-
+static lib_result_t begin_scan(const library_cfg_t *cfg, char *root, size_t cap,
+                               lib_scan_t *s, uint32_t *root_node)
+{
+    memset(s, 0, sizeof *s);
+    size_t max_path = 0;
+    lib_result_t rr = resolve_root(cfg, root, cap, &max_path);
+    if (rr != LIB_OK) return rr;
+    s->max_bytes = cfg->max_bytes ? cfg->max_bytes : LIB_DEFAULT_MAX_BYTES;
+    s->max_tracks = cfg->max_tracks ? cfg->max_tracks : LIB_DEFAULT_MAX_TRACKS;
+    s->max_path = max_path;
     char root_name[LIB_NAME_MAX + 1];
     base_name(root, root_name, sizeof root_name);
-    uint32_t root_node = scan_add_node(&s, LIB_NODE_NONE, root_name, strlen(root_name),
-                                       LIB_DIR, MI_FMT_NONE, 0);
-    if (root_node == LIB_NODE_NONE) {
-        free(s.nodes); free(s.names); free(s.queue);
+    uint32_t n = scan_add_node(s, LIB_NODE_NONE, root_name, strlen(root_name),
+                               LIB_DIR, MI_FMT_NONE, 0);
+    if (n == LIB_NODE_NONE) {
+        free_scan(s);
         return LIB_NO_MEM;
     }
-    if (scan_budget_stop(&s, 0, false)) {
-        s.truncated = true;
-        s.stop = true;
-    }
-    if (!s.stop && !scan_grow_queue(&s)) {
-        free(s.nodes); free(s.names); free(s.queue);
-        return LIB_NO_MEM;
-    }
-    if (!s.stop) {
-        s.queue[s.qcount++] = root_node;
-        for (uint32_t head = 0; head < s.qcount && !s.stop; head++)
-            scan_dir(&s, root, s.queue[head]);
-    }
-    if (s.root_failed) {
-        free(s.nodes); free(s.names); free(s.queue);
-        return LIB_NO_DIR;
-    }
-    if (s.alloc_failed) {
-        free(s.nodes); free(s.names); free(s.queue);
-        return LIB_NO_MEM;
-    }
+    *root_node = n;
+    return LIB_OK;
+}
 
-    bool truncated = s.truncated;
+static lib_result_t finish_library(lib_scan_t *s, const char *root, lib_state_t state,
+                                   const char *error, bool want_json, uint64_t max_bytes,
+                                   library_t **out)
+{
+    bool truncated = s->truncated;
     void *arena = NULL;
     size_t arena_size = 0;
     uint32_t nodes_n = 0, tracks_n = 0, crc = 0;
     uint64_t total = 0;
-    if (!build_arena(&s, root, truncated, &arena, &arena_size, &nodes_n, &tracks_n, &total, &crc)) {
-        free(s.nodes); free(s.names); free(s.queue);
+    if (!build_arena(s, truncated, &arena, &arena_size, &nodes_n, &tracks_n, &total, &crc)) {
+        free_scan(s);
         return LIB_NO_MEM;
     }
 
     library_t *lib = calloc(1, sizeof *lib);
     if (!lib) {
         heap_caps_free(arena);
-        free(s.nodes); free(s.names); free(s.queue);
+        free_scan(s);
         return LIB_NO_MEM;
     }
     lib->arena = arena;
@@ -846,48 +855,99 @@ lib_result_t library_open(const library_cfg_t *cfg, library_t **out)
     lib->track_count = tracks_n;
     lib->total_bytes = total;
     lib->crc32 = crc;
-    if (arena_size > s.max_bytes) truncated = true;
-    lib->state = truncated ? LIB_STATE_TRUNCATED
-                           : (tracks_n ? LIB_STATE_OK : LIB_STATE_EMPTY);
+    lib->generation = ((const lib_header_disk_t *)lib->arena)->generation;
+    if (arena_size > max_bytes) truncated = true;
+    lib->state = state;
+    lib->truncated = truncated;
     if (truncated) {
         ((lib_header_disk_t *)lib->arena)->flags |= LIB_FLAG_TRUNC;
         ESP_LOGW(TAG, "library truncated at %u tracks, %u nodes (cap %llu bytes)",
-                 (unsigned)tracks_n, (unsigned)nodes_n, (unsigned long long)s.max_bytes);
+                 (unsigned)tracks_n, (unsigned)nodes_n, (unsigned long long)max_bytes);
     }
-    if (s.unreadable_dirs)
+    if (error && error[0]) {
+        snprintf(lib->error, sizeof lib->error, "%s", error);
+    } else if (s->unreadable_dirs) {
         snprintf(lib->error, sizeof lib->error, "%u director%s could not be read",
-                 s.unreadable_dirs, s.unreadable_dirs == 1 ? "y" : "ies");
+                 s->unreadable_dirs, s->unreadable_dirs == 1 ? "y" : "ies");
+    }
     lib->music_dir = malloc(strlen(root) + 1);
     if (!lib->music_dir) {
         library_close(lib);
-        free(s.nodes); free(s.names); free(s.queue);
+        free_scan(s);
         return LIB_NO_MEM;
     }
     strcpy(lib->music_dir, root);
 
-    if (cfg->build_json) {
-        json_result_t jr = build_json(lib, s.max_bytes);
+    if (want_json) {
+        json_result_t jr = build_json(lib, max_bytes);
         if (jr == JSON_NO_MEM) {
             library_close(lib);
-            free(s.nodes); free(s.names); free(s.queue);
+            free_scan(s);
             return LIB_NO_MEM;
         }
         if (jr == JSON_TOO_LARGE) {
-            lib->state = LIB_STATE_TRUNCATED;
+            lib->truncated = true;
             ((lib_header_disk_t *)lib->arena)->flags |= LIB_FLAG_TRUNC;
             snprintf(lib->error, sizeof lib->error,
                      "JSON view would exceed the %llu-byte budget; serving the binary view only",
-                     (unsigned long long)s.max_bytes);
+                     (unsigned long long)max_bytes);
             ESP_LOGW(TAG, "%s", lib->error);
         }
     }
 
-    free(s.nodes);
-    free(s.names);
-    free(s.queue);
+    free_scan(s);
     if (out) *out = lib;
     else library_close(lib);
     return LIB_OK;
+}
+
+lib_result_t library_open(const library_cfg_t *cfg, library_t **out)
+{
+    if (out) *out = NULL;
+    char root[LIB_PATH_MAX];
+    lib_scan_t s;
+    uint32_t root_node = LIB_NODE_NONE;
+    lib_result_t rr = begin_scan(cfg, root, sizeof root, &s, &root_node);
+    if (rr != LIB_OK) return rr;
+
+    if (scan_budget_stop(&s, 0, false)) {
+        s.truncated = true;
+        s.stop = true;
+    }
+    if (!s.stop && !scan_grow_queue(&s)) {
+        free_scan(&s);
+        return LIB_NO_MEM;
+    }
+    if (!s.stop) {
+        s.queue[s.qcount++] = root_node;
+        for (uint32_t head = 0; head < s.qcount && !s.stop; head++)
+            scan_dir(&s, root, s.queue[head]);
+    }
+    if (s.alloc_failed) {
+        free_scan(&s);
+        return LIB_NO_MEM;
+    }
+
+    lib_state_t state = s.root_failed ? LIB_STATE_NO_DIR
+                       : s.track_count ? LIB_STATE_OK : LIB_STATE_EMPTY;
+    const char *error = s.root_failed ? s.error : NULL;
+    return finish_library(&s, root, state, error, cfg->build_json, s.max_bytes, out);
+}
+
+lib_result_t library_open_no_card(const library_cfg_t *cfg, const char *reason,
+                                  library_t **out)
+{
+    if (out) *out = NULL;
+    char root[LIB_PATH_MAX];
+    lib_scan_t s;
+    uint32_t root_node = LIB_NODE_NONE;
+    lib_result_t rr = begin_scan(cfg, root, sizeof root, &s, &root_node);
+    if (rr != LIB_OK) return rr;
+    (void)root_node;
+
+    char why[160];
+    snprintf(why, sizeof why, "no card mounted: %s", reason && reason[0] ? reason : "not mounted");
+    return finish_library(&s, root, LIB_STATE_NO_CARD, why, cfg->build_json, s.max_bytes, out);
 }
 
 void library_close(library_t *lib)
@@ -921,9 +981,16 @@ static const char *strings(const library_t *lib)
 
 lib_state_t library_state(const library_t *lib) { return lib ? lib->state : LIB_STATE_ERROR; }
 const char *library_error(const library_t *lib) { return lib ? lib->error : "no library"; }
-bool library_truncated(const library_t *lib) { return lib && lib->state == LIB_STATE_TRUNCATED; }
+bool library_truncated(const library_t *lib) { return lib && lib->truncated; }
+uint32_t library_generation(const library_t *lib) { return lib ? lib->generation : 0; }
 uint32_t library_node_count(const library_t *lib) { return lib ? lib->node_count : 0; }
 uint32_t library_track_count(const library_t *lib) { return lib ? lib->track_count : 0; }
+uint32_t library_dir_count(const library_t *lib)
+{
+    return (lib && lib->node_count > lib->track_count)
+               ? lib->node_count - lib->track_count - 1
+               : 0;
+}
 uint64_t library_total_bytes(const library_t *lib) { return lib ? lib->total_bytes : 0; }
 uint32_t library_crc32(const library_t *lib) { return lib ? lib->crc32 : 0; }
 lib_node_t library_root(const library_t *lib) { return lib ? 0 : LIB_NODE_NONE; }
