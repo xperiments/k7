@@ -28,6 +28,7 @@ int http_parse_request(char *buf, http_request_t *req);
 typedef struct {
     const char  *prefix;
     size_t       plen;
+    const char  *method; /* NULL means "GET" */
     http_route_fn fn;
     void         *ctx;
 } http_route_t;
@@ -35,6 +36,10 @@ typedef struct {
 /* The route whose prefix is the longest match for `path`, or NULL. The compare is
  * a plain prefix compare: a path is matched raw (still percent-encoded). */
 const http_route_t *http_route_match(const http_route_t *routes, int count, const char *path);
+/* The longest prefix whose method also matches; a wrong-method path is deliberately
+ * not a match, so the server can tell 405 from 404. */
+const http_route_t *http_route_match_method(const http_route_t *routes, int count,
+                                            const char *path, const char *method);
 
 #ifdef __cplusplus
 }

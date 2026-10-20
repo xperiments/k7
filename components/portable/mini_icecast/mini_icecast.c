@@ -96,9 +96,14 @@ static struct {
     volatile float     level_l, level_r;
     uint32_t           title_ver;
     volatile bool      skip;
-    /* A request for the track before this one. The broadcast task owns the directory
-     * position it goes back to; the display only raises the flag. */
+    /* A request for the track before this one. The broadcast task owns the
+     * Playlist position it goes back to; the display only raises the flag. */
     volatile bool      prev;
+    volatile bool      play_pending;
+    const library_t   *pending_library;
+    char               pending_path[LIB_PATH_MAX];
+    uint32_t           pending_index;
+    uint32_t           pending_generation;
     int64_t            t0;            /* pacing clock origin (us) */
     int64_t            played_frames; /* encoded frames broadcast since t0 */
     int16_t            chunk[CHUNK_FRAMES * 2]; /* output chunker, persists across tracks */
@@ -247,6 +252,141 @@ typedef enum {
  * burst into that client's send ring, and hand the fd to its sender task. The caller
  * must not close the fd when this returns MINI_ICECAST_REGISTERED. */
 static mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_icy_metadata);
+
+static const char *json_ws(const char *p)
+{
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    return p;
+}
+
+static bool json_utf8(uint32_t cp, char *out, size_t *n, size_t cap)
+{
+    if (cp < 0x80) {
+        if (*n + 1 >= cap) return false;
+        out[(*n)++] = (char)cp;
+    } else if (cp < 0x800) {
+        if (*n + 2 >= cap) return false;
+        out[(*n)++] = (char)(0xC0 | (cp >> 6));
+        out[(*n)++] = (char)(0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+        if (*n + 3 >= cap) return false;
+        out[(*n)++] = (char)(0xE0 | (cp >> 12));
+        out[(*n)++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        out[(*n)++] = (char)(0x80 | (cp & 0x3F));
+    } else {
+        if (*n + 4 >= cap) return false;
+        out[(*n)++] = (char)(0xF0 | (cp >> 18));
+        out[(*n)++] = (char)(0x80 | ((cp >> 12) & 0x3F));
+        out[(*n)++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        out[(*n)++] = (char)(0x80 | (cp & 0x3F));
+    }
+    return true;
+}
+
+static bool json_string(const char **pp, char *out, size_t cap)
+{
+    const char *p = *pp;
+    if (*p++ != '"') return false;
+    size_t n = 0;
+    while (*p && *p != '"') {
+        unsigned char c = (unsigned char)*p++;
+        if (c < 0x20) return false;
+        if (c != '\\') {
+            if (n + 1 >= cap) return false;
+            out[n++] = (char)c;
+            continue;
+        }
+        c = (unsigned char)*p++;
+        switch (c) {
+        case '"': case '\\': case '/': out[n++] = (char)c; break;
+        case 'b': out[n++] = '\b'; break;
+        case 'f': out[n++] = '\f'; break;
+        case 'n': out[n++] = '\n'; break;
+        case 'r': out[n++] = '\r'; break;
+        case 't': out[n++] = '\t'; break;
+        case 'u': {
+            uint32_t cp = 0;
+            for (int i = 0; i < 4; i++) {
+                char h = *p++;
+                int v = (h >= '0' && h <= '9') ? h - '0'
+                      : (h >= 'a' && h <= 'f') ? h - 'a' + 10
+                      : (h >= 'A' && h <= 'F') ? h - 'A' + 10 : -1;
+                if (v < 0) return false;
+                cp = cp * 16 + (uint32_t)v;
+            }
+            if (cp >= 0xD800 && cp <= 0xDBFF && p[0] == '\\' && p[1] == 'u') {
+                uint32_t low = 0;
+                const char *q = p + 2;
+                for (int i = 0; i < 4; i++) {
+                    char h = *q++;
+                    int v = (h >= '0' && h <= '9') ? h - '0'
+                          : (h >= 'a' && h <= 'f') ? h - 'a' + 10
+                          : (h >= 'A' && h <= 'F') ? h - 'A' + 10 : -1;
+                    if (v < 0) return false;
+                    low = low * 16 + (uint32_t)v;
+                }
+                if (low < 0xDC00 || low > 0xDFFF) return false;
+                cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                p = q;
+            } else if (cp >= 0xD800 && cp <= 0xDFFF) {
+                return false;
+            }
+            if (cp < 0x20) return false;
+            if (!json_utf8(cp, out, &n, cap)) return false;
+            break;
+        }
+        default: return false;
+        }
+        if (n + 1 >= cap) return false;
+    }
+    if (*p != '"') return false;
+    out[n] = 0;
+    *pp = p + 1;
+    return true;
+}
+
+/* The body is exactly {"path":"..."}; unknown keys are refused rather than
+ * silently ignored, so a typo cannot look like a successful play request. */
+static bool json_play_path(const char *body, char *out, size_t cap)
+{
+    const char *p = json_ws(body);
+    if (*p++ != '{') return false;
+    p = json_ws(p);
+    if (*p == '}') return false;
+    char key[32];
+    if (!json_string(&p, key, sizeof key)) return false;
+    if (strcmp(key, "path") != 0) return false;
+    p = json_ws(p);
+    if (*p++ != ':') return false;
+    p = json_ws(p);
+    if (!json_string(&p, out, cap)) return false;
+    p = json_ws(p);
+    if (*p++ != '}') return false;
+    p = json_ws(p);
+    return *p == 0;
+}
+
+static void send_json(int fd, int status, const char *body)
+{
+    if (http_send_headers(fd, status, "application/json", strlen(body), NULL) == ESP_OK)
+        http_send_all(fd, body, strlen(body));
+}
+
+static http_result_t play_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)ctx;
+    char rel[LIB_PATH_MAX];
+    if (!req->body || !json_play_path((const char *)req->body, rel, sizeof rel)) {
+        send_json(fd, 400, "{\"ok\":false,\"error\":\"bad request\"}");
+        return HTTP_HANDLED;
+    }
+    if (!mini_icecast_play(rel)) {
+        send_json(fd, 404, "{\"ok\":false,\"error\":\"no such track\"}");
+        return HTTP_HANDLED;
+    }
+    send_json(fd, 200, "{\"ok\":true}");
+    return HTTP_HANDLED;
+}
 
 static http_result_t stream_route(int fd, const http_request_t *req, void *ctx)
 {
@@ -569,7 +709,7 @@ static void stream_file(const char *path)
     /* `prev` leaves the loop the same way `skip` does: the transport below decides
      * which entry to play next. */
     for (;;) {
-        if (S.skip || S.prev) break;
+        if (S.skip || S.prev || S.play_pending) break;
         if (parked()) { idle_pump(); continue; }   /* a download owns the card */
         n = mi_dec_read(d, in, MI_READ_FRAMES);
         if (n == 0) break;
@@ -579,6 +719,33 @@ static void stream_file(const char *path)
     flush_pipeline();
     mi_rs_free(rs);
     mi_dec_close(d);
+}
+
+static bool take_pending(const library_t *lib, uint32_t generation, uint32_t *index)
+{
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    bool pending = S.play_pending;
+    const library_t *got_lib = S.pending_library;
+    uint32_t got_index = S.pending_index;
+    uint32_t got_generation = S.pending_generation;
+    char pending_path[LIB_PATH_MAX];
+    snprintf(pending_path, sizeof pending_path, "%s", S.pending_path);
+    if (pending) S.play_pending = false;
+    xSemaphoreGive(S.lock);
+    if (!pending) return false;
+    if (got_lib == lib && got_generation == generation) {
+        *index = got_index;
+        return true;
+    }
+    /* A rescan may have replaced the generation while the request was pending.
+     * The relative path is the stable key; re-resolve it in the new generation. */
+    if (!lib) return false;
+    lib_node_t n = library_find(lib, pending_path);
+    if (n == LIB_NODE_NONE || library_kind(lib, n) != LIB_TRACK) return false;
+    uint32_t fresh = library_track_index(lib, n);
+    if (fresh == LIB_NODE_NONE) return false;
+    *index = fresh;
+    return true;
 }
 
 static void broadcast_task(void *arg)
@@ -625,7 +792,16 @@ static void broadcast_task(void *arg)
             if (!same_library || library_generation(lib) != generation) break;
 
             uint32_t index;
-            if (back) {
+            bool forced = take_pending(lib, generation, &index);
+            if (forced) {
+                if (history_count == TRACK_HISTORY) {
+                    memmove(history, history + 1, sizeof history[0] * (TRACK_HISTORY - 1));
+                    history_count--;
+                }
+                history[history_count++] = index;
+                history_pos = history_count - 1;
+                back = false;
+            } else if (back) {
                 if (history_pos > 0) history_pos--;
                 else if (history_count > 0) history_pos = 0; /* no earlier track: replay */
                 else break;
@@ -806,8 +982,10 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     S.prev = false;
 
     esp_err_t err2 = http_server_register_route("/stream", stream_route, NULL);
+    if (err2 == ESP_OK)
+        err2 = http_server_register_route_method("/api/play", "POST", play_route, NULL);
     if (err2 != ESP_OK) {
-        ESP_LOGE(TAG, "cannot register /stream: %s", esp_err_to_name(err2));
+        ESP_LOGE(TAG, "cannot register the broadcast routes: %s", esp_err_to_name(err2));
         return err2;
     }
 
@@ -825,6 +1003,29 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     ESP_LOGI(TAG, "GET /stream is ready; call http_server_start() to listen on port %u",
              (unsigned)S.station.port);
     return ESP_OK;
+}
+
+bool mini_icecast_play(const char *relpath)
+{
+    if (!relpath || !relpath[0]) return false;
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    const library_t *lib = S.library;
+    xSemaphoreGive(S.lock);
+    if (!lib) return false;
+    lib_node_t n = library_find(lib, relpath);
+    if (n == LIB_NODE_NONE || library_kind(lib, n) != LIB_TRACK) return false;
+    uint32_t index = library_track_index(lib, n);
+    if (index == LIB_NODE_NONE) return false;
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    S.pending_library = lib;
+    snprintf(S.pending_path, sizeof S.pending_path, "%s", relpath);
+    S.pending_index = index;
+    S.pending_generation = library_generation(lib);
+    S.play_pending = true;
+    S.skip = false;
+    S.prev = false;
+    xSemaphoreGive(S.lock);
+    return true;
 }
 
 void mini_icecast_set_library(const library_t *lib)

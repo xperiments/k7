@@ -1,5 +1,5 @@
 #!/bin/sh
-# Host acceptance tests for the HTTP surface: T3, T4, T5, T6, T7, T8, T9, T12 and T14,
+# Host acceptance tests for the HTTP surface: T3, T4, T5, T6, T7, T8, T9, T12, T14 and T15,
 # run against the real server on this machine with no board attached.
 #
 #   HOST_BIN=host/build/bin/icecast_host HOST_DIR=host sh host/tests/http_tests.sh
@@ -404,6 +404,41 @@ if [ -z "$BOARD_URL" ]; then
         else
             bad "truncated binary: $(cat "$TMP/truncbin.out")"
         fi
+    fi
+fi
+
+group "T15  POST /api/play selects a Track"
+if [ -z "$BOARD_URL" ]; then
+    mkdir -p "$TMP/play/Album/Deep"
+    $PY - "$TMP/play" <<'PYX'
+import os, sys, wave
+root = sys.argv[1]
+for rel in ("Album/Deep/three.wav", "Album/one.wav", "two.wav"):
+    path = os.path.join(root, rel)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(44100)
+        w.writeframes(b"\0\0" * (44100 * 8))
+PYX
+    if start_server "$TMP/play" 18107 "$TMP/play.log"; then
+        if $PY "$HOST_DIR/tests/post_play.py" 127.0.0.1 18107 >"$TMP/play.out" 2>&1; then
+            cat "$TMP/play.out"
+            ok "POST /api/play wire cases all passed"
+        else
+            cat "$TMP/play.out"
+            bad "POST /api/play wire cases failed"
+        fi
+        curl -s -o "$TMP/playing.html" "http://127.0.0.1:18107/"
+        check_match "the index now names the selected Track" "$(cat "$TMP/playing.html")" 'Now playing: <strong>two</strong>'
+        check_eq "a POST to a GET-only route is a 405" \
+            "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' "http://127.0.0.1:18107/api/library")" "405"
+        check_eq "a POST to an unknown path is a 404" \
+            "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' "http://127.0.0.1:18107/nope")" "404"
+        check_eq "the live stream still answers after an unknown play" \
+            "$(curl -s -o /dev/null --max-time 3 -w '%{http_code}' "http://127.0.0.1:18107/stream")" "200"
+    else
+        bad "the POST /api/play fixture server did not start"
     fi
 fi
 

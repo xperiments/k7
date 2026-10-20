@@ -212,7 +212,10 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 | `GET /` | The index: every Track in the Library tree, in Playlist order, with its size, what is playing now, and a link to the stream. Also the device's diagnostic page when no card is mounted. |
 | `GET /stream` | The live stream: continuous `audio/mpeg` at the station rate and bit rate. Ask with `Icy-MetaData: 1` and the current track is interleaved every 16 000 encoded bytes. |
 | `GET /music/<url-encoded-relative-path>` | The original, untranscoded bytes at any depth, with `Content-Length` and a media type from the extension. One download at a time; a second gets `503`. |
-| anything else | `404`. |
+| `GET /api/library` | The prebuilt Library JSON, with `state`, counts and a generation ETag. |
+| `GET /api/library.bin` | The same generation as an arena: versioned header, nodes, edges, track index and CRC. |
+| `POST /api/play` | `{"path":"Album/song.mp3"}` selects any Track at the next chunk boundary. A bad path is a 404 and leaves the stream alone. |
+| anything else | `404`, or `405` for a known path with the wrong method. |
 
 ```bash
 # Listen on the desktop

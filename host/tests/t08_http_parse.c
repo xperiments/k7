@@ -59,6 +59,21 @@ int main(void)
              "an absolute-form target with no path is malformed");
     CHECK_EQ(parse("GET http:// HTTP/1.0\r\n\r\n", &req), 400, "a scheme with nothing after it is malformed");
 
+    CHECK_EQ(parse("POST /api/play HTTP/1.0\r\nContent-Length: 12\r\n"
+                   "Content-Type: application/json\r\n\r\n", &req), 0,
+             "a POST with a body length parses");
+    CHECK(req.has_content_length, "the body length is present");
+    CHECK_EQ(req.content_length, 12, "the body length is 12");
+    CHECK(strcmp(req.content_type, "application/json") == 0, "the JSON type is recorded");
+    CHECK_EQ(parse("POST /api/play HTTP/1.0\r\nContent-Length: 12\r\n"
+                   "Content-Type: application/json; charset=utf-8\r\n\r\n", &req), 0,
+             "a type with a parameter parses");
+    CHECK(strcmp(req.content_type, "application/json") == 0, "the parameter is stripped");
+    CHECK_EQ(parse("POST /api/play HTTP/1.0\r\nContent-Length: nope\r\n\r\n", &req), 400,
+             "a non-numeric length is 400");
+    CHECK_EQ(parse("POST /api/play HTTP/1.0\r\nContent-Length: 8x\r\n\r\n", &req), 400,
+             "a trailing junk length is 400");
+
     CHECK_EQ(parse("OPTIONS / HTTP/1.0\r\n\r\n", &req), 0, "a non-GET method parses");
     CHECK(strcmp(req.method, "OPTIONS") == 0, "the method is reported; 405 is the caller's decision");
 
@@ -97,6 +112,18 @@ int main(void)
     CHECK(r == &routes[0], "the root matches /");
     r = http_route_match(routes, 3, "/nope");
     CHECK(r == &routes[0], "an unknown path falls through to /");
+    http_route_t methods[2] = {
+        {.prefix = "/api/play", .plen = 9, .method = "POST", .fn = dummy},
+        {.prefix = "/api/library", .plen = 12, .method = "GET", .fn = dummy},
+    };
+    CHECK(http_route_match_method(methods, 2, "/api/play", "POST") == &methods[0],
+          "POST /api/play matches the POST route");
+    CHECK(http_route_match_method(methods, 2, "/api/play", "GET") == NULL,
+          "GET /api/play does not match the POST route");
+    CHECK(http_route_match_method(methods, 2, "/api/library", "GET") == &methods[1],
+          "GET /api/library matches the GET route");
+    CHECK(http_route_match_method(methods, 2, "/api/library", "POST") == NULL,
+          "POST /api/library does not match the GET route");
     CHECK(http_route_match(routes, 0, "/") == NULL, "no routes, no match");
     CHECK(http_route_match(NULL, 3, "/") == NULL, "no table, no match");
 

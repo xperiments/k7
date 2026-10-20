@@ -138,6 +138,11 @@ bool      mini_icecast_card_parked(void);
  * generation at its first Track. NULL idles. */
 void      mini_icecast_set_library(const library_t *lib);
 
+/* Play a Track by its relative path at the next chunk boundary, like skip.
+ * Returns false when the path is unknown or the Library has no generation; the
+ * current track then keeps playing. */
+bool      mini_icecast_play(const char *relpath);
+
 void      mini_icecast_skip(void);                              /* jump to next track */
 void      mini_icecast_prev(void);                              /* jump to the previous track */
 size_t    mini_icecast_now_playing(char *out, size_t out_size); /* current title, for the index */

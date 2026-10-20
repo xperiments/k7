@@ -7,6 +7,7 @@
  */
 #include "http_parse.h"
 
+#include <stdint.h>
 #include <string.h>
 #include <strings.h>
 
@@ -79,6 +80,34 @@ int http_parse_request(char *buf, http_request_t *req)
 
     const char *icy = find_header(line_end + 2, "icy-metadata");
     req->want_icy_metadata = icy != NULL && icy[0] == '1';
+
+    const char *cl = find_header(line_end + 2, "content-length");
+    if (cl) {
+        size_t value = 0;
+        const char *p = cl;
+        if (*p < '0' || *p > '9') return 400;
+        while (*p >= '0' && *p <= '9') {
+            if (value > (SIZE_MAX - 9) / 10) return 400;
+            value = value * 10 + (size_t)(*p - '0');
+            p++;
+        }
+        if (*p != '\r' && *p != '\n') return 400;
+        req->has_content_length = true;
+        req->content_length = value;
+    }
+
+    const char *ct = find_header(line_end + 2, "content-type");
+    if (ct) {
+        size_t n = 0;
+        while (ct[n] && ct[n] != '\r' && ct[n] != '\n' && ct[n] != ';' &&
+               n + 1 < sizeof req->content_type) {
+            char c = ct[n];
+            if (c >= 'A' && c <= 'Z') c = (char)(c + ('a' - 'A'));
+            req->content_type[n++] = c;
+        }
+        while (n && (req->content_type[n - 1] == ' ' || req->content_type[n - 1] == '\t')) n--;
+        req->content_type[n] = 0;
+    }
     return 0;
 }
 
@@ -89,6 +118,23 @@ const http_route_t *http_route_match(const http_route_t *routes, int count, cons
     for (int i = 0; i < count; i++) {
         const http_route_t *r = &routes[i];
         if (!r->prefix || r->plen == 0) continue;
+        if (strncmp(path, r->prefix, r->plen) != 0) continue;
+        if (!best || r->plen > best->plen) best = r;
+    }
+    return best;
+}
+
+const http_route_t *http_route_match_method(const http_route_t *routes, int count,
+                                            const char *path, const char *method)
+{
+    if (!routes || !path) return NULL;
+    const char *want = method && method[0] ? method : "GET";
+    const http_route_t *best = NULL;
+    for (int i = 0; i < count; i++) {
+        const http_route_t *r = &routes[i];
+        if (!r->prefix || r->plen == 0) continue;
+        const char *have = r->method && r->method[0] ? r->method : "GET";
+        if (strcasecmp(have, want) != 0) continue;
         if (strncmp(path, r->prefix, r->plen) != 0) continue;
         if (!best || r->plen > best->plen) best = r;
     }

@@ -50,7 +50,10 @@ static const char *reason_phrase(int status)
     case 400: return "Bad Request";
     case 404: return "Not Found";
     case 405: return "Method Not Allowed";
+    case 411: return "Length Required";
+    case 413: return "Content Too Large";
     case 414: return "URI Too Long";
+    case 415: return "Unsupported Media Type";
     case 500: return "Internal Server Error";
     case 503: return "Service Unavailable";
     default:  return "Error";
@@ -146,16 +149,24 @@ size_t http_url_decode(const char *in, char *out, size_t out_size)
 
 /* ------------------------------------------------------------------ routing */
 
-esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void *ctx)
+esp_err_t http_server_register_route_method(const char *prefix, const char *method,
+                                            http_route_fn fn, void *ctx)
 {
     if (!prefix || !fn || prefix[0] != '/') return ESP_ERR_INVALID_ARG;
+    if (!method || !method[0]) method = "GET";
     if (S.nroutes >= HTTP_MAX_ROUTES) return ESP_ERR_NO_MEM;
     http_route_t *r = &S.routes[S.nroutes++];
     r->prefix = prefix;
     r->plen = strlen(prefix);
+    r->method = method;
     r->fn = fn;
     r->ctx = ctx;
     return ESP_OK;
+}
+
+esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void *ctx)
+{
+    return http_server_register_route_method(prefix, "GET", fn, ctx);
 }
 
 /* --------------------------------------------------------------- connection */
@@ -178,6 +189,22 @@ void http_send_timeout_ms(int fd, uint32_t ms)
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof snd);
 }
 
+/* Discard a rejected POST body that is already on the socket. Closing with
+ * unread bytes sends RST and can destroy the error response, so the cap branch
+ * reads what the client sent before closing. The cap keeps a hostile declared
+ * length from pinning the worker. */
+static void discard_body(int fd, size_t len)
+{
+    if (len > 65536) len = 65536;
+    char tmp[256];
+    while (len) {
+        size_t want = len < sizeof tmp ? len : sizeof tmp;
+        int r = recv(fd, tmp, want, 0);
+        if (r <= 0) break;
+        len -= (size_t)r;
+    }
+}
+
 /* Reads, parses and routes one request. Closes the fd unless a route took it. */
 static void serve_connection(int fd)
 {
@@ -196,12 +223,15 @@ static void serve_connection(int fd)
         close(fd);
         return;
     }
-    if (!strstr(buf, "\r\n\r\n")) {
+    char *header_end = strstr(buf, "\r\n\r\n");
+    if (!header_end) {
         ESP_LOGW(TAG, "request header too large (%u bytes)", (unsigned)n);
         http_send_error(fd, 400, "request header too large or incomplete");
         close(fd);
         return;
     }
+    size_t header_len = (size_t)(header_end - buf) + 4;
+    size_t body_in_buf = n > header_len ? n - header_len : 0;
 
     http_request_t req;
     memset(&req, 0, sizeof req);
@@ -212,21 +242,85 @@ static void serve_connection(int fd)
         close(fd);
         return;
     }
-    if (strcmp(req.method, "GET") != 0) {
-        ESP_LOGI(TAG, "%s %s -> 405", req.method, req.path);
-        http_send_error(fd, 405, "only GET is served");
+
+    const http_route_t *r = http_route_match_method(S.routes, S.nroutes, req.path, req.method);
+    if (!r) {
+        bool path_exists = false;
+        for (int i = 0; i < S.nroutes; i++) {
+            const http_route_t *candidate = &S.routes[i];
+            if (!candidate->prefix || candidate->plen == 0) continue;
+            if (strncmp(req.path, candidate->prefix, candidate->plen) != 0) continue;
+            /* "/" is the index catch-all, but the index only serves the root;
+             * a method mismatch on /nope is a 404, not a 405. */
+            if (candidate->plen > 1 || strcmp(req.path, "/") == 0) {
+                path_exists = true;
+                break;
+            }
+        }
+        if (path_exists) {
+            ESP_LOGI(TAG, "%s %s -> 405", req.method, req.path);
+            http_send_error(fd, 405, "that method is not served for this path");
+        } else {
+            ESP_LOGI(TAG, "%s %s -> 404", req.method, req.path);
+            http_send_error(fd, 404, "no such path");
+        }
         close(fd);
         return;
     }
 
-    const http_route_t *r = http_route_match(S.routes, S.nroutes, req.path);
-    if (!r) {
-        ESP_LOGI(TAG, "GET %s -> 404", req.path);
-        http_send_error(fd, 404, "no such path");
-        close(fd);
-        return;
+    uint8_t *body = NULL;
+    const char *route_method = r->method && r->method[0] ? r->method : "GET";
+    if (strcasecmp(route_method, "POST") == 0) {
+        if (!req.has_content_length) {
+            ESP_LOGI(TAG, "POST %s -> 411", req.path);
+            http_send_error(fd, 411, "Content-Length is required");
+            close(fd);
+            return;
+        }
+        if (req.content_length > HTTP_BODY_MAX) {
+            ESP_LOGI(TAG, "POST %s -> 413 (%u bytes)", req.path, (unsigned)req.content_length);
+            http_send_error(fd, 413, "the request body is too large");
+            discard_body(fd, req.content_length > body_in_buf ? req.content_length - body_in_buf : 0);
+            close(fd);
+            return;
+        }
+        if (strcmp(req.content_type, "application/json") != 0) {
+            ESP_LOGI(TAG, "POST %s -> 415 (%s)", req.path, req.content_type[0] ? req.content_type : "no type");
+            http_send_error(fd, 415, "the request body must be application/json");
+            discard_body(fd, req.content_length > body_in_buf ? req.content_length - body_in_buf : 0);
+            close(fd);
+            return;
+        }
+
+        body = heap_caps_malloc(req.content_length + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!body) body = malloc(req.content_length + 1);
+        if (!body) {
+            http_send_error(fd, 503, "no memory for the request body");
+            close(fd);
+            return;
+        }
+        size_t copied = body_in_buf < req.content_length ? body_in_buf : req.content_length;
+        if (copied) memcpy(body, buf + header_len, copied);
+        size_t got = copied;
+        while (got < req.content_length) {
+            int r2 = recv(fd, body + got, req.content_length - got, 0);
+            if (r2 <= 0) {
+                ESP_LOGW(TAG, "POST %s -> 400 (short body %u/%u)", req.path, (unsigned)got,
+                         (unsigned)req.content_length);
+                http_send_error(fd, 400, "the request body is incomplete");
+                free(body);
+                close(fd);
+                return;
+            }
+            got += (size_t)r2;
+        }
+        body[req.content_length] = 0;
+        req.body = body;
+        req.body_len = req.content_length;
     }
+
     if (r->fn(fd, &req, r->ctx) != HTTP_UPGRADED) close(fd);
+    free(body);
 }
 
 /* Start a long-lived task, with its stack in external memory where possible.

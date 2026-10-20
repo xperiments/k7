@@ -31,6 +31,7 @@ extern "C" {
 #define HTTP_HEADER_TIMEOUT_MS 2000
 
 #define HTTP_PATH_MAX 512 /* raw (percent-encoded) request target */
+#define HTTP_BODY_MAX 8192 /* a POST body larger than this is 413 */
 #define HTTP_QUERY_MAX 256 /* raw (percent-encoded) query string, without the ? */
 #define HTTP_HEADER_MAX 1024
 #define HTTP_MAX_ROUTES 8
@@ -42,6 +43,13 @@ typedef struct {
     char path[HTTP_PATH_MAX]; /* request target, percent-encoded, query stripped */
     char query[HTTP_QUERY_MAX]; /* everything after the '?', percent-encoded; "" if none */
     bool want_icy_metadata;   /* the client asked for inline ICY metadata */
+    bool has_content_length;
+    size_t content_length;
+    char content_type[64];    /* lower-case value up to the first ';'; "" if absent */
+    /* The POST body, heap-owned by the server for the duration of the route.
+     * NUL-terminated for the JSON parsers, so body_len excludes the NUL. */
+    const uint8_t *body;
+    size_t body_len;
 } http_request_t;
 
 /* What a route handler did with the connection.
@@ -67,6 +75,10 @@ typedef struct {
  * and "/music/" takes precedence over it. Must be called before
  * http_server_start(), which is when main() should call it. */
 esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void *ctx);
+/* Register a route for one method. The GET wrapper above is the common case.
+ * A path match with the wrong method is a 405, not a 404. */
+esp_err_t http_server_register_route_method(const char *prefix, const char *method,
+                                            http_route_fn fn, void *ctx);
 
 /* Bind, listen and start accepting. Returns once the socket is listening. */
 esp_err_t http_server_start(const http_server_cfg_t *cfg);
