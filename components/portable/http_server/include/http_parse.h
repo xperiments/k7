@@ -25,12 +25,15 @@ extern "C" {
 int http_parse_request(char *buf, http_request_t *req);
 
 /* A route table entry. The server keeps its own array; tests can build one. */
+typedef void (*http_error_fn)(int fd, int status, const char *detail, void *ctx);
+
 typedef struct {
     const char  *prefix;
     size_t       plen;
     const char  *method; /* NULL means "GET" */
     http_route_fn fn;
     void         *ctx;
+    http_error_fn error_fn; /* optional transport-error renderer */
 } http_route_t;
 
 /* The route whose prefix is the longest match for `path`, or NULL. The compare is

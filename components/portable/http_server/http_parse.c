@@ -96,6 +96,18 @@ int http_parse_request(char *buf, http_request_t *req)
         req->content_length = value;
     }
 
+    const char *mpv = find_header(line_end + 2, "mcp-protocol-version");
+    if (mpv) {
+        size_t n = 0;
+        while (mpv[n] && mpv[n] != '\r' && mpv[n] != '\n' && n + 1 < sizeof req->mcp_protocol_version) {
+            req->mcp_protocol_version[n] = mpv[n];
+            n++;
+        }
+        while (n && (req->mcp_protocol_version[n - 1] == ' ' || req->mcp_protocol_version[n - 1] == '\t'))
+            n--;
+        req->mcp_protocol_version[n] = 0;
+    }
+
     const char *ct = find_header(line_end + 2, "content-type");
     if (ct) {
         size_t n = 0;

@@ -402,6 +402,18 @@ that does not resolve is a 404 and does not interrupt the current Track. `Accept
 at 8192 bytes. Missing length is 411, oversized is 413, and a non-JSON type is 415; bytes that
 arrived with the header block are preserved.
 
+### 6.5 `POST /mcp` — read-only MCP
+
+**Requirement M1.** Speak the legacy 2025-11-25 MCP lifecycle, stateless and JSON-only:
+`initialize` (echoing 2025-11-25/2025-06-18/2025-03-26 and falling back to 2025-11-25),
+`notifications/initialized`, `tools/list`, `tools/call` and `ping`. Every JSON-RPC response
+carries `MCP-Protocol-Version`; no `Mcp-Session-Id` is emitted and `Accept` is ignored.
+
+**Requirement M2.** The read-only tools are `library_stats`, `library_list`,
+`library_search`, `library_track` and `player_status`; results are text content only. The
+transport error table is ticket 09's (411/413/415/400) plus `-32600`, `-32601`, `-32602`,
+`-32700`; a notification is 202 with no body.
+
 ---
 
 ## 7. Access model and its consequences

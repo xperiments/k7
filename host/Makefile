@@ -32,6 +32,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/audio_format/include \
        -I$(ROOT)/components/portable/library/include \
        -I$(ROOT)/components/portable/library_http/include \
+       -I$(ROOT)/components/portable/mcp/include \
        -I$(ROOT)/components/portable/mini_icecast/include \
        -I$(ROOT)/components/portable/mini_files/include \
        -I$(ROOT)/components/portable/cassette/include \
@@ -52,6 +53,7 @@ PROD_SRC := \
   $(ROOT)/components/portable/audio_format/audio_format.c \
   $(ROOT)/components/portable/library/library.c \
   $(ROOT)/components/portable/library_http/library_http.c \
+  $(ROOT)/components/portable/mcp/mcp.c \
   $(ROOT)/components/portable/mini_icecast/mini_icecast.c \
   $(ROOT)/components/portable/mini_icecast/mi_station.c \
   $(ROOT)/components/portable/mini_icecast/mi_burst.c \
@@ -69,6 +71,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/audio_format \
           $(ROOT)/components/portable/library \
           $(ROOT)/components/portable/library_http \
+          $(ROOT)/components/portable/mcp \
           $(ROOT)/components/portable/mini_icecast \
           $(ROOT)/components/portable/mini_files \
           $(ROOT)/components/portable/cassette \
@@ -79,7 +82,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
 CORE_OBJ := $(OBJ)/audio_format.o $(OBJ)/library.o $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(SHINE_OBJ) $(OBJ)/shim.o
 BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o $(OBJ)/mi_ring.o
 CASSETTE_OBJ := $(OBJ)/cassette.o
-SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o
+SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/mini_icecast.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o

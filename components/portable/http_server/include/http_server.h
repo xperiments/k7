@@ -34,7 +34,7 @@ extern "C" {
 #define HTTP_BODY_MAX 8192 /* a POST body larger than this is 413 */
 #define HTTP_QUERY_MAX 256 /* raw (percent-encoded) query string, without the ? */
 #define HTTP_HEADER_MAX 1024
-#define HTTP_MAX_ROUTES 8
+#define HTTP_MAX_ROUTES 10
 #define HTTP_LISTEN_BACKLOG 16
 #define HTTP_MAX_CONNS 6
 
@@ -46,6 +46,7 @@ typedef struct {
     bool has_content_length;
     size_t content_length;
     char content_type[64];    /* lower-case value up to the first ';'; "" if absent */
+    char mcp_protocol_version[16]; /* MCP-Protocol-Version, "" when absent */
     /* The POST body, heap-owned by the server for the duration of the route.
      * NUL-terminated for the JSON parsers, so body_len excludes the NUL. */
     const uint8_t *body;
@@ -79,6 +80,11 @@ esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void 
  * A path match with the wrong method is a 405, not a 404. */
 esp_err_t http_server_register_route_method(const char *prefix, const char *method,
                                             http_route_fn fn, void *ctx);
+/* A route that wants to render its own transport errors (MCP does). */
+typedef void (*http_error_fn)(int fd, int status, const char *detail, void *ctx);
+esp_err_t http_server_register_route_method_ex(const char *prefix, const char *method,
+                                               http_route_fn fn, void *ctx,
+                                               http_error_fn error_fn);
 
 /* Bind, listen and start accepting. Returns once the socket is listening. */
 esp_err_t http_server_start(const http_server_cfg_t *cfg);

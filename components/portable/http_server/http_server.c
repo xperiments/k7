@@ -47,6 +47,7 @@ static const char *reason_phrase(int status)
 {
     switch (status) {
     case 200: return "OK";
+    case 202: return "Accepted";
     case 400: return "Bad Request";
     case 404: return "Not Found";
     case 405: return "Method Not Allowed";
@@ -149,8 +150,9 @@ size_t http_url_decode(const char *in, char *out, size_t out_size)
 
 /* ------------------------------------------------------------------ routing */
 
-esp_err_t http_server_register_route_method(const char *prefix, const char *method,
-                                            http_route_fn fn, void *ctx)
+esp_err_t http_server_register_route_method_ex(const char *prefix, const char *method,
+                                               http_route_fn fn, void *ctx,
+                                               http_error_fn error_fn)
 {
     if (!prefix || !fn || prefix[0] != '/') return ESP_ERR_INVALID_ARG;
     if (!method || !method[0]) method = "GET";
@@ -161,7 +163,14 @@ esp_err_t http_server_register_route_method(const char *prefix, const char *meth
     r->method = method;
     r->fn = fn;
     r->ctx = ctx;
+    r->error_fn = error_fn;
     return ESP_OK;
+}
+
+esp_err_t http_server_register_route_method(const char *prefix, const char *method,
+                                            http_route_fn fn, void *ctx)
+{
+    return http_server_register_route_method_ex(prefix, method, fn, ctx, NULL);
 }
 
 esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void *ctx)
@@ -187,6 +196,15 @@ void http_send_timeout_ms(int fd, uint32_t ms)
 {
     struct timeval snd = {.tv_sec = ms / 1000, .tv_usec = (ms % 1000) * 1000};
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof snd);
+}
+
+static void post_error(int fd, const http_route_t *r, int status, const char *detail)
+{
+    if (r && r->error_fn) {
+        r->error_fn(fd, status, detail, r->ctx);
+    } else {
+        http_send_error(fd, status, detail);
+    }
 }
 
 /* Discard a rejected POST body that is already on the socket. Closing with
@@ -257,6 +275,9 @@ static void serve_connection(int fd)
                 break;
             }
         }
+        if (strcasecmp(req.method, "POST") == 0 && req.has_content_length) {
+            discard_body(fd, req.content_length > body_in_buf ? req.content_length - body_in_buf : 0);
+        }
         if (path_exists) {
             ESP_LOGI(TAG, "%s %s -> 405", req.method, req.path);
             http_send_error(fd, 405, "that method is not served for this path");
@@ -273,20 +294,20 @@ static void serve_connection(int fd)
     if (strcasecmp(route_method, "POST") == 0) {
         if (!req.has_content_length) {
             ESP_LOGI(TAG, "POST %s -> 411", req.path);
-            http_send_error(fd, 411, "Content-Length is required");
+            post_error(fd, r, 411, "Content-Length is required");
             close(fd);
             return;
         }
         if (req.content_length > HTTP_BODY_MAX) {
             ESP_LOGI(TAG, "POST %s -> 413 (%u bytes)", req.path, (unsigned)req.content_length);
-            http_send_error(fd, 413, "the request body is too large");
+            post_error(fd, r, 413, "the request body is too large");
             discard_body(fd, req.content_length > body_in_buf ? req.content_length - body_in_buf : 0);
             close(fd);
             return;
         }
         if (strcmp(req.content_type, "application/json") != 0) {
             ESP_LOGI(TAG, "POST %s -> 415 (%s)", req.path, req.content_type[0] ? req.content_type : "no type");
-            http_send_error(fd, 415, "the request body must be application/json");
+            post_error(fd, r, 415, "the request body must be application/json");
             discard_body(fd, req.content_length > body_in_buf ? req.content_length - body_in_buf : 0);
             close(fd);
             return;
@@ -295,7 +316,7 @@ static void serve_connection(int fd)
         body = heap_caps_malloc(req.content_length + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!body) body = malloc(req.content_length + 1);
         if (!body) {
-            http_send_error(fd, 503, "no memory for the request body");
+            post_error(fd, r, 500, "no memory for the request body");
             close(fd);
             return;
         }
@@ -307,7 +328,7 @@ static void serve_connection(int fd)
             if (r2 <= 0) {
                 ESP_LOGW(TAG, "POST %s -> 400 (short body %u/%u)", req.path, (unsigned)got,
                          (unsigned)req.content_length);
-                http_send_error(fd, 400, "the request body is incomplete");
+                post_error(fd, r, 400, "the request body is incomplete");
                 free(body);
                 close(fd);
                 return;

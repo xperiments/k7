@@ -1,5 +1,5 @@
 #!/bin/sh
-# Host acceptance tests for the HTTP surface: T3, T4, T5, T6, T7, T8, T9, T12, T14 and T15,
+# Host acceptance tests for the HTTP surface: T3, T4, T5, T6, T7, T8, T9, T12, T14, T15 and T16,
 # run against the real server on this machine with no board attached.
 #
 #   HOST_BIN=host/build/bin/icecast_host HOST_DIR=host sh host/tests/http_tests.sh
@@ -324,6 +324,10 @@ if [ -z "$BOARD_URL" ]; then
             "$(curl -s -o /dev/null -w '%{http_code}' --path-as-is "http://127.0.0.1:18106/music/Album%2F01%20-%20Song.flac")" "400"
         check_eq "a parent segment is refused" \
             "$(curl -s -o /dev/null -w '%{http_code}' --path-as-is "http://127.0.0.1:18106/music/Album/../loose.mp3")" "400"
+        curl -s -o "$TMP/mcpnested.json" -X POST -H 'Content-Type: application/json' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"library_track","arguments":{"path":"Album/Deep/02 - Song.wav"}}}' \
+            "http://127.0.0.1:18106/mcp"
+        check_match "MCP resolves a track three levels deep" "$(cat "$TMP/mcpnested.json")" 'Album/Deep/02 - Song.wav'
         curl -s -o "$TMP/nested.bin" "http://127.0.0.1:18106/api/library.bin"
         if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/nested.bin" "$TMP/nested" --state ok >"$TMP/nestedbin.out" 2>&1; then
             ok "the binary view reconstructs the nested tree"
@@ -440,6 +444,17 @@ PYX
     else
         bad "the POST /api/play fixture server did not start"
     fi
+fi
+
+group "T16  the read-only MCP endpoint"
+if [ -n "$BOARD_URL" ]; then
+    printf '  skip  MCP acceptance is host-only (the fixture count is the oracle)\n'
+elif $PY "$HOST_DIR/tests/mcp_tests.py" "$SRV_HOST" "$SRV_PORT" >"$TMP/mcp.out" 2>&1; then
+    cat "$TMP/mcp.out"
+    ok "MCP initialize/tools/error table all passed"
+else
+    cat "$TMP/mcp.out"
+    bad "MCP acceptance failed"
 fi
 
 group "T7  downloads are the original bytes, sized and typed"

@@ -65,6 +65,12 @@ int main(void)
     CHECK(req.has_content_length, "the body length is present");
     CHECK_EQ(req.content_length, 12, "the body length is 12");
     CHECK(strcmp(req.content_type, "application/json") == 0, "the JSON type is recorded");
+    CHECK_EQ(parse("POST /mcp HTTP/1.0\r\nMCP-Protocol-Version: 2025-06-18 \r\n"
+                   "Content-Type: application/json\r\nContent-Length: 2\r\n\r\n", &req), 0,
+             "the MCP version header parses");
+    CHECK(strcmp(req.mcp_protocol_version, "2025-06-18") == 0,
+          "and trailing whitespace is trimmed");
+    CHECK_EQ(req.content_length, 2, "and the POST length is still parsed");
     CHECK_EQ(parse("POST /api/play HTTP/1.0\r\nContent-Length: 12\r\n"
                    "Content-Type: application/json; charset=utf-8\r\n\r\n", &req), 0,
              "a type with a parameter parses");

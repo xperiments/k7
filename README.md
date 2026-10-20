@@ -17,12 +17,13 @@ path; downloads are the fidelity path.
 
 > ## Read this before you deploy it
 >
-> **This firmware serves a live stream and an unauthenticated file index to
-> anyone who can reach port 8000, and its Wi-Fi credentials are compiled into the
-> binary.** There is no authentication anywhere: not on the index, not on the
-> downloads, and not on the stream (`/stream` deliberately stays open even if auth
-> is ever added — car head units and hardware players cannot send credentials in a
-> stream URL).
+> **This firmware serves a live stream, the file index, the library API and a
+> read-only MCP endpoint to anyone who can reach port 8000, and its Wi-Fi
+> credentials are compiled into the binary.** There is no authentication
+> anywhere: not on the index, not on the downloads, not on the stream, and not on
+> `/api/play` or `/mcp`. (`/stream` deliberately stays open even if auth is ever
+> added — car head units and hardware players cannot send credentials in a stream
+> URL.)
 >
 > That is a deliberate choice for a LAN appliance holding audio you own. It is
 > **not** safe on an untrusted network, and it must **not** be port-forwarded or
@@ -215,6 +216,7 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 | `GET /api/library` | The prebuilt Library JSON, with `state`, counts and a generation ETag. |
 | `GET /api/library.bin` | The same generation as an arena: versioned header, nodes, edges, track index and CRC. |
 | `POST /api/play` | `{"path":"Album/song.mp3"}` selects any Track at the next chunk boundary. A bad path is a 404 and leaves the stream alone. |
+| `POST /mcp` | Read-only MCP (2025-11-25): `initialize`, `ping`, `tools/list`, `tools/call` for `library_stats`, `library_list`, `library_search`, `library_track` and `player_status`. |
 | anything else | `404`, or `405` for a known path with the wrong method. |
 
 ```bash

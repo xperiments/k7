@@ -17,6 +17,7 @@
 #include "http_server.h"
 #include "library.h"
 #include "library_http.h"
+#include "mcp.h"
 #include "mi_station.h"
 #include "mini_files.h"
 #include "mini_icecast.h"
@@ -164,6 +165,12 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     e = mini_icecast_start(&ice);
     if (e != ESP_OK) return fail(report, e, "broadcast");
     if (report) report->broadcast_up = true;
+
+    /* The MCP endpoint is registered before the listener, after the broadcast
+     * exists because player_status reads its snapshot. */
+    mcp_cfg_t mcp = {.library = s_library, .scan_ms = (uint32_t)scan_ms};
+    e = mcp_start(&mcp);
+    if (e != ESP_OK) return fail(report, e, "MCP endpoint");
 
     /* 8. The listener, last: every route is registered by now. */
     http_server_cfg_t http = {
