@@ -29,6 +29,7 @@ LDLIBS := -lpthread -lm
 
 INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/http_server/include \
+       -I$(ROOT)/components/portable/audio_format/include \
        -I$(ROOT)/components/portable/mini_icecast/include \
        -I$(ROOT)/components/portable/mini_files/include \
        -I$(ROOT)/components/portable/cassette/include \
@@ -46,6 +47,7 @@ SHINE_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(SHINE_SRC)))
 PROD_SRC := \
   $(ROOT)/components/portable/http_server/http_server.c \
   $(ROOT)/components/portable/http_server/http_parse.c \
+  $(ROOT)/components/portable/audio_format/audio_format.c \
   $(ROOT)/components/portable/mini_icecast/mini_icecast.c \
   $(ROOT)/components/portable/mini_icecast/mi_station.c \
   $(ROOT)/components/portable/mini_icecast/mi_burst.c \
@@ -61,6 +63,7 @@ PROD_SRC := \
   $(SHINE_SRC)
 
 vpath %.c $(ROOT)/components/portable/http_server \
+          $(ROOT)/components/portable/audio_format \
           $(ROOT)/components/portable/mini_icecast \
           $(ROOT)/components/portable/mini_files \
           $(ROOT)/components/portable/cassette \
@@ -68,7 +71,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
 
-CORE_OBJ := $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(SHINE_OBJ) $(OBJ)/shim.o
+CORE_OBJ := $(OBJ)/audio_format.o $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(SHINE_OBJ) $(OBJ)/shim.o
 BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o $(OBJ)/mi_ring.o
 CASSETTE_OBJ := $(OBJ)/cassette.o
 SVC_OBJ := $(OBJ)/app_services.o
@@ -110,7 +113,7 @@ $(BIN)/mi_encode_file: $(CORE_OBJ) $(OBJ)/mi_encode_file.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/mi_frames: $(OBJ)/mi_decode.o $(OBJ)/shim.o $(SHINE_OBJ) $(OBJ)/mi_frames.o
+$(BIN)/mi_frames: $(OBJ)/audio_format.o $(OBJ)/mi_decode.o $(OBJ)/shim.o $(SHINE_OBJ) $(OBJ)/mi_frames.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

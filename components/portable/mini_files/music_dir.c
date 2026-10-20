@@ -10,7 +10,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "mi_decode.h"
+#include "audio_format.h"
 
 static bool name_is_safe(const char *name)
 {

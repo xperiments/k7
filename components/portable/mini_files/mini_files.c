@@ -18,7 +18,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "http_server.h"
-#include "mi_decode.h"     /* the authority on which source formats exist */
+#include "audio_format.h" /* the authority on which source formats exist */
 #include "mini_icecast.h"  /* the broadcast's current title, for the index */
 #include "music_dir.h"     /* the music directory's rules, in one place */
 

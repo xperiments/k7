@@ -3,8 +3,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <strings.h>
 
 #define DR_MP3_IMPLEMENTATION
 #define DR_MP3_NO_STDIO
@@ -31,17 +29,6 @@ struct mi_dec {
         drwav   wav;
     } u;
 };
-
-mi_fmt_t mi_dec_format_of(const char *name)
-{
-    if (!name) return MI_FMT_NONE;
-    const char *ext = strrchr(name, '.');
-    if (!ext) return MI_FMT_NONE;
-    if (!strcasecmp(ext, ".mp3")) return MI_FMT_MP3;
-    if (!strcasecmp(ext, ".flac")) return MI_FMT_FLAC;
-    if (!strcasecmp(ext, ".wav")) return MI_FMT_WAV;
-    return MI_FMT_NONE;
-}
 
 static size_t cb_read(void *ud, void *out, size_t n) { return fread(out, 1, n, ((mi_dec_t *)ud)->f); }
 

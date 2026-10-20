@@ -22,7 +22,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "mi_decode.h"   /* mi_fmt_t: the status struct reports a container */
+#include "audio_format.h" /* mi_fmt_t: the status struct reports a container */
 
 #include "esp_err.h"
 

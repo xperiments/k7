@@ -1,5 +1,5 @@
 #!/bin/sh
-# Ticket 07 (S1-S4) and requirement H2/H3: the architectural rules are checked,
+# Ticket 07 (S1-S4), ticket 02 (S5) and requirement H2/H3: the architectural rules are checked,
 # not just intended.
 #
 #   ROOT=. sh host/tests/layering.sh
@@ -124,6 +124,52 @@ if [ -n "$forks" ]; then
     fail=1
 else
     printf '  ok    no *_host.c fork of any component source\n'
+fi
+
+printf '\nS5  the source-format authority sits below the broadcast and the file surface\n'
+# audio_format is a leaf: it must not learn about the components that consume it,
+# in source or in its component dependency list. The library component lands in
+# ticket 03; the rule below is the lower half of the library<->broadcast cycle
+# guard and applies to it as soon as the directory exists.
+for f in "$ROOT"/components/portable/audio_format/*.c "$ROOT"/components/portable/audio_format/include/*.h; do
+    absent "$f" '#include.*(mini_icecast|mini_files|http_server|library)' \
+           'audio_format includes no consumer: '"$(basename "$f")"
+done
+if grep -qE '(mini_icecast|mini_files|library)' "$ROOT/components/portable/audio_format/CMakeLists.txt"; then
+    printf '  FAIL  audio_format requires a consumer in its CMakeLists\n'
+    fail=1
+else
+    printf '  ok    audio_format requires no consumer\n'
+fi
+for header in mini_icecast/include/mini_icecast.h mini_icecast/include/mi_decode.h; do
+    if grep -q '#include "audio_format.h"' "$ROOT/components/portable/$header"; then
+        printf '  ok    %s takes the format authority from audio_format\n' "$header"
+    else
+        printf '  FAIL  %s does not include audio_format.h\n' "$header"
+        fail=1
+    fi
+done
+if [ -d "$ROOT/components/portable/library" ]; then
+    for f in "$ROOT"/components/portable/library/*.c "$ROOT"/components/portable/library/include/*.h; do
+        absent "$f" '#include.*(mini_icecast|mini_files|http_server)' \
+               'library includes no consumer: '"$(basename "$f")"
+    done
+    if grep -qE '(mini_icecast|mini_files)' "$ROOT/components/portable/library/CMakeLists.txt" 2>/dev/null; then
+        printf '  FAIL  library requires the broadcast or the file surface\n'
+        fail=1
+    else
+        printf '  ok    library requires neither the broadcast nor the file surface\n'
+    fi
+else
+    printf '  ok    (library component not present yet; its rule applies when ticket 03 adds it)\n'
+fi
+definitions=$(grep -rlE '^[[:space:]]*mi_fmt_t[[:space:]]+mi_dec_format_of[[:space:]]*\([^;]*\)[[:space:]]*$' \
+                  "$ROOT/components/portable" --include='*.c' --include='*.h' 2>/dev/null | wc -l | tr -d ' ')
+if [ "$definitions" = "1" ]; then
+    printf '  ok    exactly one component defines the source-format rule\n'
+else
+    printf '  FAIL  %s components define the source-format rule\n' "$definitions"
+    fail=1
 fi
 
 printf '\nL1  the vendored encoder is unmodified\n'
