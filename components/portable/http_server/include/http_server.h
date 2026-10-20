@@ -47,6 +47,8 @@ typedef struct {
     size_t content_length;
     char content_type[64];    /* lower-case value up to the first ';'; "" if absent */
     char mcp_protocol_version[16]; /* MCP-Protocol-Version, "" when absent */
+    char origin[128];         /* Origin header, "" when absent */
+    char host[128];           /* Host header, "" when absent */
     /* The POST body, heap-owned by the server for the duration of the route.
      * NUL-terminated for the JSON parsers, so body_len excludes the NUL. */
     const uint8_t *body;

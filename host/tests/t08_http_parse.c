@@ -65,6 +65,12 @@ int main(void)
     CHECK(req.has_content_length, "the body length is present");
     CHECK_EQ(req.content_length, 12, "the body length is 12");
     CHECK(strcmp(req.content_type, "application/json") == 0, "the JSON type is recorded");
+    CHECK_EQ(parse("POST /mcp HTTP/1.0\r\nHost: xtape.local:8000\r\n"
+                   "Origin: http://xtape.local:8000\r\n"
+                   "Content-Type: application/json\r\nContent-Length: 2\r\n\r\n", &req), 0,
+             "Host and Origin parse");
+    CHECK(strcmp(req.host, "xtape.local:8000") == 0, "the Host value is recorded");
+    CHECK(strcmp(req.origin, "http://xtape.local:8000") == 0, "the Origin value is recorded");
     CHECK_EQ(parse("POST /mcp HTTP/1.0\r\nMCP-Protocol-Version: 2025-06-18 \r\n"
                    "Content-Type: application/json\r\nContent-Length: 2\r\n\r\n", &req), 0,
              "the MCP version header parses");

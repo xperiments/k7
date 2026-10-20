@@ -414,6 +414,15 @@ carries `MCP-Protocol-Version`; no `Mcp-Session-Id` is emitted and `Accept` is i
 transport error table is ticket 09's (411/413/415/400) plus `-32600`, `-32601`, `-32602`,
 `-32700`; a notification is 202 with no body.
 
+**Requirement M3.** Advertise `xtape.local` and `_mcp._tcp` on port 8000 with TXT
+`path=/mcp`, `endpoint=http://xtape.local:8000/mcp`, `device_type=mcp:device`, only after the
+listener is up and Wi-Fi has an address. The hostname is fixed, so one device per LAN.
+
+**Requirement M4.** Validate `Origin` only when present: it must be `http://`, carry no
+path/query/fragment, equal `Host`, and pin to the current local IP or `xtape.local` at the
+server port. Missing `Host` with an `Origin`, or a rebinding domain, is 403 before JSON parsing.
+A request without `Origin` is accepted even with a different `Host`.
+
 ---
 
 ## 7. Access model and its consequences

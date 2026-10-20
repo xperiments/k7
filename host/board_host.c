@@ -9,6 +9,7 @@
  */
 #include "app_board.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 
 esp_err_t app_board_net_start(uint16_t http_port) { (void)http_port; return ESP_OK; }
@@ -26,5 +27,20 @@ app_board_card_t app_board_card_mount(const char *expected_music_dir)
 }
 
 void app_board_wait_online(void) { }
+
+bool app_board_local_ip(char *out, size_t out_size)
+{
+    if (!out || !out_size) return false;
+    snprintf(out, out_size, "127.0.0.1");
+    return true;
+}
+
+esp_err_t app_board_mdns_start(const char *hostname, uint16_t port, const char *path)
+{
+    (void)hostname;
+    (void)port;
+    (void)path;
+    return ESP_OK; /* there is no mDNS in the host build */
+}
 
 void app_board_log_hardware(void) { }

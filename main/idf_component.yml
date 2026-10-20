@@ -5,3 +5,4 @@
 ## not to the broadcast or the main entry point.
 dependencies:
   idf: ">=5.4"
+  espressif/mdns: "^1.8.0"

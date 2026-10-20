@@ -108,6 +108,27 @@ int http_parse_request(char *buf, http_request_t *req)
         req->mcp_protocol_version[n] = 0;
     }
 
+    const char *hostv = find_header(line_end + 2, "host");
+    if (hostv) {
+        size_t n = 0;
+        while (hostv[n] && hostv[n] != '\r' && hostv[n] != '\n' && n + 1 < sizeof req->host) {
+            req->host[n] = hostv[n];
+            n++;
+        }
+        while (n && (req->host[n - 1] == ' ' || req->host[n - 1] == '\t')) n--;
+        req->host[n] = 0;
+    }
+    const char *originv = find_header(line_end + 2, "origin");
+    if (originv) {
+        size_t n = 0;
+        while (originv[n] && originv[n] != '\r' && originv[n] != '\n' && n + 1 < sizeof req->origin) {
+            req->origin[n] = originv[n];
+            n++;
+        }
+        while (n && (req->origin[n - 1] == ' ' || req->origin[n - 1] == '\t')) n--;
+        req->origin[n] = 0;
+    }
+
     const char *ct = find_header(line_end + 2, "content-type");
     if (ct) {
         size_t n = 0;

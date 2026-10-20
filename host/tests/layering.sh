@@ -57,6 +57,13 @@ for f in $users; do
 done
 [ -n "$users" ] || printf '  ok    (nothing at all)\n'
 
+printf '\nM1  mDNS stays in the board adapter and never reaches the host or MCP\n'
+absent "$ROOT/host/board_host.c" 'mdns\.h|mdns_init\(|mdns_service_add' 'the host adapter links no mDNS'
+absent "$ROOT/components/portable/mcp/mcp.c" 'mdns\.h|mdns_[a-z]' 'MCP links no mDNS'
+for f in "$ROOT"/components/portable/app_board/include/*.h; do
+    absent "$f" 'mdns\.h' 'the app_board seam does not expose the mDNS library: '"$(basename "$f")"
+done
+
 printf '\nS3  the broadcast keeps exactly its documented surface\n'
 for sym in mini_icecast_check_station mini_icecast_start mini_icecast_status \
            mini_icecast_lag_ms mini_icecast_skip mini_icecast_now_playing; do

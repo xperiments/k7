@@ -24,9 +24,11 @@ def check(label, got, want):
         print(f"  ok    {label}")
 
 
-def request(method, path, headers=None, body=None, omit_length=False):
+def request(method, path, headers=None, body=None, omit_length=False, omit_host=False):
     headers = dict(headers or {})
-    header = f"{method} {path} HTTP/1.0\r\nHost: {HOST}:{PORT}\r\n"
+    header = f"{method} {path} HTTP/1.0\r\n"
+    if not omit_host and "Host" not in headers:
+        header += f"Host: {HOST}:{PORT}\r\n"
     if body is not None and not omit_length:
         headers.setdefault("Content-Type", "application/json")
         header += f"Content-Length: {len(body)}\r\n"
@@ -235,6 +237,36 @@ def main():
     doc = json.loads(payload)
     check("and keeps the id", doc["id"], long_id)
     check("and still names the protocol", hdrs.get("mcp-protocol-version"), "2025-11-25")
+
+    # Origin is checked only when present and pinned to the device address or
+    # xtape.local, not merely echoed from Host.
+    base = f"{HOST}:{PORT}"
+    status, _hdrs, doc = call(initialize(), {"Host": base, "Origin": f"http://{base}"})
+    check("Origin pinned to the local IP is accepted", status, 200)
+    status, _hdrs, doc = call(initialize(), {"Host": f"xtape.local:{PORT}",
+                                            "Origin": f"http://xtape.local:{PORT}"})
+    check("Origin pinned to xtape.local is accepted", status, 200)
+    status, _hdrs, doc = call(initialize(), {"Host": "evil.example:9999",
+                                            "Origin": "http://evil.example:9999"})
+    check("a rebinding authority is 403", status, 403)
+    check("and is -32600", doc["error"]["code"], -32600)
+    status, _hdrs, doc = call(initialize(), {"Host": base,
+                                            "Origin": "http://evil.example:9999"})
+    check("a mismatched Origin is 403", status, 403)
+    body = json.dumps(initialize(), separators=(",", ":")).encode()
+    status, _hdrs, doc = request("POST", "/mcp", {"Origin": f"http://{base}"}, body,
+                                 omit_host=True)
+    check("Origin without Host is 403", status, 403)
+    status, _hdrs, doc = call(initialize(), {"Host": "elsewhere.invalid",
+                                            "Origin": f"http://{base}"})
+    check("a mismatched Host is 403", status, 403)
+    status, _hdrs, doc = call(initialize(), {"Host": "elsewhere.invalid"})
+    check("Host alone is not rejected", status, 200)
+    status, _hdrs, payload = request(
+        "POST", "/mcp", {"Host": base, "Origin": "http://evil.example:9999"},
+        b'{"jsonrpc":"2.0",')
+    check("bad Origin is 403 before JSON parsing", status, 403)
+    check("and is -32600, not -32700", json.loads(payload)["error"]["code"], -32600)
 
     if FAIL:
         print(f"{FAIL} failure(s)")

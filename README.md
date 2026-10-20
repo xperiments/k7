@@ -109,6 +109,11 @@ one line, and the error message names the component.
 * The index and downloads use that Playlist order; the live stream plays it in
   order, looping forever.
 
+The MCP endpoint is also advertised over mDNS as `xtape.local` (`_mcp._tcp`, port 8000,
+TXT `path=/mcp`, `endpoint=http://xtape.local:8000/mcp`, `device_type=mcp:device`). The
+hostname is fixed: **one xtape per LAN**. Discover it with `dns-sd -B _mcp._tcp` (macOS) or
+`avahi-browse -rt _mcp._tcp` (Linux).
+
 To try it without a music collection, copy the test corpus from
 `host/fixtures/` onto the card:
 
@@ -859,8 +864,8 @@ to PSRAM and takes internal free from 35 327 B to **154 643 B** (largest block 1
   encoder is the only one that fits this power budget.
 * **No seek, no range requests, no transcoding on download.** Downloads are the
   original bytes.
-* **No Wi-Fi provisioning UI**, no mDNS, no OTA updates. Credentials are compiled
-  in.
+* **No Wi-Fi provisioning UI** and no OTA updates; discovery is the fixed
+  `xtape.local`, so two devices on one LAN collide. Credentials are compiled in.
 * **One download at a time.** A second concurrent download is declined with `503`
   rather than queued, so a 40 MB FLAC cannot starve the broadcast behind it.
 * **The stream is a broadcast**: it cannot be paused or seeked, and every client

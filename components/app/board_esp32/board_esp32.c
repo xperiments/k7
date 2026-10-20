@@ -21,6 +21,7 @@
 #include "esp_psram.h"
 #include "esp_vfs_fat.h"
 #include "esp_wifi.h"
+#include "mdns.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
@@ -66,6 +67,7 @@ static const char *TAG = "board";
 static EventGroupHandle_t wifi_ev;
 static int wifi_attempts;
 static uint16_t s_http_port = 8000;
+static char s_local_ip[16];
 
 static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
@@ -84,6 +86,7 @@ static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
         esp_wifi_connect();
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *e = data;
+        snprintf(s_local_ip, sizeof s_local_ip, IPSTR, IP2STR(&e->ip_info.ip));
         ESP_LOGI(TAG, "stream: http://" IPSTR ":%u/stream  library: http://" IPSTR ":%u/",
                  IP2STR(&e->ip_info.ip), (unsigned)s_http_port,
                  IP2STR(&e->ip_info.ip), (unsigned)s_http_port);
@@ -116,6 +119,40 @@ esp_err_t app_board_net_start(uint16_t http_port)
 void app_board_wait_online(void)
 {
     if (wifi_ev) xEventGroupWaitBits(wifi_ev, 1, pdFALSE, pdTRUE, portMAX_DELAY);
+}
+
+bool app_board_local_ip(char *out, size_t out_size)
+{
+    if (!out || !out_size || !s_local_ip[0]) return false;
+    snprintf(out, out_size, "%s", s_local_ip);
+    return true;
+}
+
+esp_err_t app_board_mdns_start(const char *hostname, uint16_t port, const char *path)
+{
+    if (!hostname || !hostname[0] || !path || !path[0]) return ESP_ERR_INVALID_ARG;
+    esp_err_t e = mdns_init();
+    if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "mdns_init: %s", esp_err_to_name(e));
+        return e;
+    }
+    mdns_hostname_set(hostname);
+    mdns_instance_name_set(hostname);
+    char endpoint[96];
+    snprintf(endpoint, sizeof endpoint, "http://%s.local:%u%s", hostname, (unsigned)port, path);
+    mdns_txt_item_t txt[] = {
+        {"path", path},
+        {"endpoint", endpoint},
+        {"device_type", "mcp:device"},
+    };
+    e = mdns_service_add(hostname, "_mcp", "_tcp", port, txt, sizeof txt / sizeof txt[0]);
+    if (e == ESP_OK) {
+        ESP_LOGI(TAG, "mDNS: %s.local _mcp._tcp port %u, endpoint %s",
+                 hostname, (unsigned)port, endpoint);
+    } else {
+        ESP_LOGE(TAG, "mdns_service_add: %s", esp_err_to_name(e));
+    }
+    return e;
 }
 
 /* ---------------------------------------------------------------- SD card */

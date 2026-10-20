@@ -53,6 +53,8 @@ typedef struct {
 
 static const library_t *L;
 static uint32_t L_scan_ms;
+static mcp_local_ip_fn L_local_ip;
+static uint16_t L_port = 8000;
 
 /* --------------------------------------------------------------- JSON read */
 
@@ -808,9 +810,38 @@ static bool supported_version(const char *v)
            strcmp(v, MCP_VERSION_ALT2) == 0;
 }
 
+static bool origin_ok(const http_request_t *req)
+{
+    if (!req->origin[0]) return true; /* native clients do not send Origin */
+    if (!req->host[0]) return false;
+    if (strncasecmp(req->origin, "http://", 7) != 0) return false;
+    const char *auth = req->origin + 7;
+    if (!*auth || strpbrk(auth, "/?#@")) return false;
+    if (strcasecmp(auth, req->host) != 0) return false;
+
+    char suffix[16];
+    snprintf(suffix, sizeof suffix, ":%u", (unsigned)L_port);
+    size_t alen = strlen(auth), slen = strlen(suffix);
+    if (alen < slen || strcasecmp(auth + alen - slen, suffix) != 0) return false;
+
+    char local[32];
+    if (L_local_ip && L_local_ip(local, sizeof local)) {
+        char pinned[64];
+        snprintf(pinned, sizeof pinned, "%s:%u", local, (unsigned)L_port);
+        if (strcasecmp(auth, pinned) == 0) return true;
+    }
+    char mdns[64];
+    snprintf(mdns, sizeof mdns, "xtape.local:%u", (unsigned)L_port);
+    return strcasecmp(auth, mdns) == 0;
+}
+
 static http_result_t post_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
+    if (!origin_ok(req)) {
+        rpc_error(fd, 403, NULL, NULL, -32600, "origin rejected");
+        return HTTP_HANDLED;
+    }
     if (strcmp(req->path, "/mcp") != 0) {
         rpc_error(fd, 404, NULL, NULL, -32600, "no such path");
         return HTTP_HANDLED;
@@ -1017,6 +1048,8 @@ esp_err_t mcp_start(const mcp_cfg_t *cfg)
     if (!cfg) return ESP_ERR_INVALID_ARG;
     L = cfg->library;
     L_scan_ms = cfg->scan_ms;
+    L_local_ip = cfg->local_ip;
+    L_port = cfg->port ? cfg->port : 8000;
     esp_err_t err = http_server_register_route_method_ex("/mcp", "POST", post_route, NULL,
                                                           mcp_body_error);
     if (err == ESP_OK) err = http_server_register_route("/mcp", get_route, NULL);
