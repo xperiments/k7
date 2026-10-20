@@ -212,6 +212,40 @@ else
 fi
 LIB_GEN=$($PY -c 'import json,sys; print(json.load(open(sys.argv[1]))["generation"])' "$TMP/lib.json")
 check_match "and names the generation ($LIB_GEN)" "$LIB_HDR" "^ETag: \"gen-$LIB_GEN\"$"
+LIB_ETAG=$(printf '%s\n' "$LIB_HDR" | sed -n 's/^ETag: //p')
+
+curl -s -D "$TMP/binhdr" -o "$TMP/lib.bin" "$BASE/api/library.bin"
+BIN_HDR=$(tr -d '\r' <"$TMP/binhdr")
+BIN_BYTES=$(wc -c <"$TMP/lib.bin" | tr -d ' ')
+check_eq "GET /api/library.bin is a 200" "$(printf '%s' "$BIN_HDR" | head -1 | awk '{print $2}')" "200"
+check_match "and is typed application/octet-stream" "$BIN_HDR" '^Content-Type: application/octet-stream$'
+check_match "and carries a real Content-Length ($BIN_BYTES B)" "$BIN_HDR" "^Content-Length: $BIN_BYTES$"
+check_eq "and shares the JSON generation" "$(printf '%s\n' "$BIN_HDR" | sed -n 's/^ETag: //p')" "$LIB_ETAG"
+check_match "and is offered as a download" "$BIN_HDR" '^Content-Disposition: attachment; filename="library.bin"$'
+if [ -n "$BOARD_URL" ]; then
+    if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/lib.bin" / --header-only >"$TMP/bin.out" 2>&1; then
+        ok "$(cat "$TMP/bin.out")"
+    else
+        bad "board binary header: $(cat "$TMP/bin.out")"
+    fi
+elif $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/lib.bin" "$FIX" --state ok >"$TMP/bin.out" 2>&1; then
+    ok "$(cat "$TMP/bin.out")"
+else
+    bad "binary view: $(cat "$TMP/bin.out")"
+fi
+BIN_GEN=$(sed -n 's/.*generation \([0-9]*\).*/\1/p' "$TMP/bin.out" | head -1)
+check_eq "the binary header and the JSON body share generation" "$BIN_GEN" "$LIB_GEN"
+
+if [ -z "$BOARD_URL" ]; then
+    # A single flipped byte must fail the independent CRC check.
+    cp "$TMP/lib.bin" "$TMP/lib-corrupt.bin"
+    $PY -c 'import sys; p=sys.argv[1]; b=bytearray(open(p,"rb").read()); b[64+26]^=1; open(p,"wb").write(b)' "$TMP/lib-corrupt.bin"
+    if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/lib-corrupt.bin" "$FIX" --state ok >/dev/null 2>&1; then
+        bad "a corrupted blob passed the CRC check"
+    else
+        ok "a corrupted blob fails the independent CRC check"
+    fi
+fi
 if [ -n "$BOARD_URL" ]; then
     if $PY -c 'import json,sys; d=json.load(open(sys.argv[1])); assert all(k in d for k in ("root","generation","count","bytes","state","truncated","error","tree")); assert d["state"] in ("ok","empty","no_card","no_dir","error")' "$TMP/lib.json" 2>/dev/null; then
         ok "board library JSON has the expected shape"
@@ -229,8 +263,15 @@ if [ -z "$BOARD_URL" ]; then
     mkdir -p "$TMP/frozen"
     cp -R "$FIX/." "$TMP/frozen/"
     if start_server "$TMP/frozen" 18101 "$TMP/frozen.log"; then
+        curl -s -o "$TMP/frozen.bin.before" "http://127.0.0.1:18101/api/library.bin"
         rm -f "$TMP/frozen/tone-44100.flac"
         curl -s -D "$TMP/frozenhdr" -o "$TMP/frozen.json" "http://127.0.0.1:18101/api/library"
+        curl -s -o "$TMP/frozen.bin.after" "http://127.0.0.1:18101/api/library.bin"
+        if cmp -s "$TMP/frozen.bin.before" "$TMP/frozen.bin.after"; then
+            ok "the binary view is byte-identical after a post-boot deletion"
+        else
+            bad "the binary view changed after a post-boot deletion"
+        fi
         check_match "the JSON still lists a file deleted after boot" "$(cat "$TMP/frozen.json")" '"name":"tone-44100.flac"'
         check_eq "and its Content-Length still matches the body" \
             "$(tr -d '\r' <"$TMP/frozenhdr" | sed -n 's/^Content-Length: //p')" \
@@ -253,6 +294,12 @@ if [ -z "$BOARD_URL" ]; then
             bad "nested tree: $(cat "$TMP/nested.out")"
         fi
         check_match "and its paths use the tree, not the flat directory" "$(cat "$TMP/nested.json")" '"path":"Album/01 - Song.flac"'
+        curl -s -o "$TMP/nested.bin" "http://127.0.0.1:18106/api/library.bin"
+        if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/nested.bin" "$TMP/nested" --state ok >"$TMP/nestedbin.out" 2>&1; then
+            ok "the binary view reconstructs the nested tree"
+        else
+            bad "nested binary: $(cat "$TMP/nestedbin.out")"
+        fi
     fi
 
     # Boot-time states: no card, no Music directory, empty, truncated.
@@ -265,6 +312,12 @@ if [ -z "$BOARD_URL" ]; then
             bad "no card state: $(cat "$TMP/nocard.out")"
         fi
         check_match "and the boot log names it" "$(cat "$TMP/nocard.log")" 'library: state=no_card '
+        curl -s -o "$TMP/nocard.bin" "http://127.0.0.1:18102/api/library.bin"
+        if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/nocard.bin" "$FIX" --state no_card >"$TMP/nocardbin.out" 2>&1; then
+            ok "the no-card binary is an empty root"
+        else
+            bad "no-card binary: $(cat "$TMP/nocardbin.out")"
+        fi
     fi
     mkdir -p "$TMP/no-music-parent"
     if start_server "$TMP/no-music-parent/missing" 18103 "$TMP/nodir.log"; then
@@ -274,6 +327,12 @@ if [ -z "$BOARD_URL" ]; then
             ok "a missing Music directory is a diagnosable 200 with state no_dir"
         else
             bad "missing directory state: $(cat "$TMP/nodir.out")"
+        fi
+        curl -s -o "$TMP/nodir.bin" "http://127.0.0.1:18103/api/library.bin"
+        if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/nodir.bin" "$TMP/no-music-parent/missing" --state no_dir >"$TMP/nodirbin.out" 2>&1; then
+            ok "the missing-directory binary is an empty root"
+        else
+            bad "missing-directory binary: $(cat "$TMP/nodirbin.out")"
         fi
     fi
     mkdir -p "$TMP/empty"
@@ -285,6 +344,12 @@ if [ -z "$BOARD_URL" ]; then
         else
             bad "empty state: $(cat "$TMP/empty.out")"
         fi
+        curl -s -o "$TMP/empty.bin" "http://127.0.0.1:18104/api/library.bin"
+        if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/empty.bin" "$TMP/empty" --state empty >"$TMP/emptybin.out" 2>&1; then
+            ok "the empty binary is an empty root"
+        else
+            bad "empty binary: $(cat "$TMP/emptybin.out")"
+        fi
     fi
     if start_server "$FIX" 18105 "$TMP/trunc.log" --library-max-tracks 1; then
         code=$(curl -s -o "$TMP/trunc.json" -w '%{http_code}' "http://127.0.0.1:18105/api/library")
@@ -295,6 +360,12 @@ if [ -z "$BOARD_URL" ]; then
             bad "truncated view: $(cat "$TMP/trunc.out")"
         fi
         check_match "and the body says truncated" "$(cat "$TMP/trunc.json")" '"truncated":true'
+        curl -s -o "$TMP/trunc.bin" "http://127.0.0.1:18105/api/library.bin"
+        if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/trunc.bin" "$FIX" --state ok --truncated --subset >"$TMP/truncbin.out" 2>&1; then
+            ok "the truncated binary carries the same prefix"
+        else
+            bad "truncated binary: $(cat "$TMP/truncbin.out")"
+        fi
     fi
 fi
 

@@ -10,10 +10,11 @@
 
 static const library_t *L;
 
-static http_result_t library_route(int fd, const http_request_t *req, void *ctx)
+static http_result_t library_route(int fd, const http_request_t *req, void *ctx, bool binary)
 {
     (void)ctx;
-    if (strcmp(req->path, "/api/library") != 0) {
+    const char *path = binary ? "/api/library.bin" : "/api/library";
+    if (strcmp(req->path, path) != 0) {
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
     }
@@ -21,29 +22,61 @@ static http_result_t library_route(int fd, const http_request_t *req, void *ctx)
         http_send_error(fd, 503, "the library view is not available");
         return HTTP_HANDLED;
     }
+
     size_t len = 0;
-    const char *json = library_json(L, &len);
-    if (!json) {
-        http_send_error(fd, 503, "the JSON library view is not available");
+    const void *body = NULL;
+    const char *content_type = "application/json";
+    if (binary) {
+        body = library_blob(L, &len);
+        content_type = "application/octet-stream";
+    } else {
+        body = library_json(L, &len);
+    }
+    if (!body) {
+        http_send_error(fd, 503, "the library view is not available");
         return HTTP_HANDLED;
     }
 
-    char headers[64];
-    snprintf(headers, sizeof headers, "ETag: \"gen-%u\"\r\n",
-             (unsigned)library_generation(L));
-    http_send_timeout_ms(fd, 5000);
-    if (http_send_headers(fd, 200, "application/json", len, headers) != ESP_OK)
+    char headers[128];
+    int n = snprintf(headers, sizeof headers, "ETag: \"gen-%u\"\r\n",
+                     (unsigned)library_generation(L));
+    if (n < 0 || (size_t)n >= sizeof headers) {
+        http_send_error(fd, 500, "the library generation is not representable");
         return HTTP_HANDLED;
-    bool sent = http_send_all(fd, json, len);
-    ESP_LOGI(TAG, "GET /api/library -> %u B, gen %u, %s%s",
-             (unsigned)len, (unsigned)library_generation(L),
-             library_state_name(library_state(L)), sent ? "" : " (client stopped)");
+    }
+    if (binary) {
+        int m = snprintf(headers + n, sizeof headers - (size_t)n,
+                         "Content-Disposition: attachment; filename=\"library.bin\"\r\n");
+        if (m < 0 || (size_t)(n + m) >= sizeof headers) {
+            http_send_error(fd, 500, "the library response headers are too large");
+            return HTTP_HANDLED;
+        }
+    }
+    http_send_timeout_ms(fd, 5000);
+    if (http_send_headers(fd, 200, content_type, len, headers) != ESP_OK)
+        return HTTP_HANDLED;
+    bool sent = http_send_all(fd, body, len);
+    ESP_LOGI(TAG, "GET %s -> %u B, gen %u, %s%s", path, (unsigned)len,
+             (unsigned)library_generation(L), library_state_name(library_state(L)),
+             sent ? "" : " (client stopped)");
     return HTTP_HANDLED;
+}
+
+static http_result_t json_route(int fd, const http_request_t *req, void *ctx)
+{
+    return library_route(fd, req, ctx, false);
+}
+
+static http_result_t bin_route(int fd, const http_request_t *req, void *ctx)
+{
+    return library_route(fd, req, ctx, true);
 }
 
 esp_err_t library_http_start(const library_t *lib)
 {
     if (!lib) return ESP_ERR_INVALID_ARG;
     L = lib;
-    return http_server_register_route("/api/library", library_route, NULL);
+    esp_err_t err = http_server_register_route("/api/library.bin", bin_route, NULL);
+    if (err == ESP_OK) err = http_server_register_route("/api/library", json_route, NULL);
+    return err;
 }
