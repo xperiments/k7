@@ -1,15 +1,24 @@
 /*
  * T17: the cassette's arithmetic, without LVGL.
  *
- * The two reels' speeds, the hold when stopped, the pack fill, the progress throttle
- * and the label clean are all rules a panel used to be the only witness to. Each is
- * pinned here by feeding status snapshots: no display, no serial dump.
+ * The two reels' speeds, the hold when stopped, the pack fill, the progress throttle,
+ * the label clean and the reel change - the rewind that replaces the jump at a track
+ * boundary - are all rules a panel used to be the only witness to. Each is pinned
+ * here by feeding status snapshots: no display, no serial dump.
  */
 #include "test_util.h"
 
 #include <math.h>
 
 #include "cassette.h"
+
+/* How far apart two hub frames are on the art's ring, so a wrap is not a jump. */
+static int hub_gap(int a, int b, int frames)
+{
+    int d = (a - b) % frames;
+    if (d < 0) d += frames;
+    return d < frames - d ? d : frames - d;
+}
 
 static mini_icecast_status_t mkstatus(const char *title, const char *file,
                                       uint32_t elapsed, uint32_t duration, float level)
@@ -247,6 +256,156 @@ static void test_vu(void)
     cassette_free(c);
 }
 
+/* The reel change: the seconds after a track boundary, in the screen's 40 ms
+ * cadence. The rules worth pinning are the ones a panel would only show as "looks
+ * wrong": the first frame must be the one already on screen, the whole window must
+ * move the tape one way, the hubs must strobe, the deceleration must be in the tail,
+ * and the frame the window closes on must be the one normal play would have drawn. */
+static void test_rewind(void)
+{
+    const uint32_t side = 180000; /* a three-minute side */
+    const uint16_t fill_load = 1000 - CASSETTE_MIN_FILL;
+
+    cassette_t *c = cassette_new(36, 0);
+    CHECK(c != NULL, "the rewind model starts");
+    if (!c) return;
+
+    /* Play the outgoing side to its end. The long stretch is walked at the panel's
+     * cadence because the phase integrates per step; the last jump is a forward
+     * position, which is not a track change. */
+    uint32_t now = 0;
+    mini_icecast_status_t a = mkstatus("Song A", "a.mp3", 0, side, 0.3f);
+    const cassette_frame_t *f = cassette_step(c, &a, now);
+    for (uint32_t t = 40; t <= 60000; t += 40) {
+        a = mkstatus("Song A", "a.mp3", t, side, 0.3f);
+        f = cassette_step(c, &a, now += 40);
+    }
+    a = mkstatus("Song A", "a.mp3", side, side, 0.3f);
+    f = cassette_step(c, &a, now += 40);
+    CHECK_EQ(f->pack_fill[0], CASSETTE_MIN_FILL, "the side ends with the supply empty");
+    CHECK_EQ(f->pack_fill[1], 1000, "and the take-up full");
+    CHECK(!f->rewinding, "a side that is playing is not rewinding");
+
+    uint16_t old_fill[2] = { f->pack_fill[0], f->pack_fill[1] };
+    uint8_t old_hub[2] = { f->hub_frame[0], f->hub_frame[1] };
+
+    /* The track changes. The first frame of the new song is the last frame of the old
+     * one, or the window has not done its job. */
+    mini_icecast_status_t b = mkstatus("Song B", "b.mp3", 0, side, 0.3f);
+    f = cassette_step(c, &b, now += 40);
+    CHECK(f->rewinding, "a track change opens the rewind window");
+    CHECK_EQ(f->rewind_permille, 0, "at its start");
+    CHECK_EQ(f->pack_fill[0], old_fill[0], "the supply pack does not jump on the first frame");
+    CHECK_EQ(f->pack_fill[1], old_fill[1], "nor does the take-up pack");
+    CHECK(hub_gap(f->hub_frame[0], old_hub[0], 36) <= 1, "nor the supply hub");
+    CHECK(hub_gap(f->hub_frame[1], old_hub[1], 36) <= 1, "nor the take-up hub");
+
+    /* The window, at the panel's cadence. It is half-open: the step that reaches
+     * CASSETTE_REWIND_MS is the first one of normal play. */
+    uint32_t early_delta = 0, late_delta = 0;
+    uint16_t prev_takeup = f->pack_fill[1];
+    uint16_t prev_supply = f->pack_fill[0];
+    uint8_t prev_hub0 = f->hub_frame[0];
+    int hub_changes = 0, hub_steps = 0;
+    for (uint32_t t = 40; t < CASSETTE_REWIND_MS; t += 40) {
+        b = mkstatus("Song B", "b.mp3", t, side, 0.3f);
+        f = cassette_step(c, &b, now += 40);
+        CHECK(f->rewinding, "the window is open until its last step (%u ms)", (unsigned)t);
+        /* The new song's position creeps forward under the window, so on a short side
+         * the final steps can round the fill up by a unit or two: sub-pixel, and the
+         * visible motion is still one way. */
+        CHECK(f->pack_fill[1] <= prev_takeup + 2, "the take-up pack only empties (%u ms)", (unsigned)t);
+        CHECK(f->pack_fill[0] + 2 >= prev_supply, "the supply pack only fills (%u ms)", (unsigned)t);
+        CHECK(f->rewind_permille <= 1000, "the window's progress stays in range");
+        if (t < CASSETTE_REWIND_MS - CASSETTE_REWIND_EASE_MS) {
+            hub_steps++;
+            if (f->hub_frame[0] != prev_hub0) hub_changes++;
+        }
+        if (t == 440) early_delta = (uint32_t)(prev_takeup - f->pack_fill[1]);
+        if (t == CASSETTE_REWIND_MS - 40) late_delta = (uint32_t)(prev_takeup - f->pack_fill[1]);
+        prev_takeup = f->pack_fill[1];
+        prev_supply = f->pack_fill[0];
+        prev_hub0 = f->hub_frame[0];
+    }
+    /* 11 revolutions over 8 s is about 2 art frames per 40 ms step: faster than play,
+     * and still traceable. */
+    CHECK(hub_changes >= hub_steps - 2, "the hubs change frame almost every step (%d of %d)",
+          hub_changes, hub_steps);
+    CHECK(early_delta > late_delta * 2, "the transport decelerates into the end (%u then %u)",
+          (unsigned)early_delta, (unsigned)late_delta);
+
+    /* The window closes on the next step, and what it lands on is what normal play
+     * would have drawn for the same track at the same position. A second model that
+     * only ever saw song B is the oracle. */
+    b = mkstatus("Song B", "b.mp3", CASSETTE_REWIND_MS, side, 0.3f);
+    f = cassette_step(c, &b, now += 40);
+    CHECK(!f->rewinding, "the window is over after its length");
+    CHECK_EQ(f->rewind_permille, 0, "and reports no progress");
+
+    cassette_t *ref = cassette_new(36, 0);
+    CHECK(ref != NULL, "the reference model starts");
+    if (ref) {
+        mini_icecast_status_t r = mkstatus("Song B", "b.mp3", 0, side, 0.3f);
+        const cassette_frame_t *rf = cassette_step(ref, &r, 0);
+        for (uint32_t t = 40; t <= CASSETTE_REWIND_MS; t += 40) {
+            r = mkstatus("Song B", "b.mp3", t, side, 0.3f);
+            rf = cassette_step(ref, &r, t);
+        }
+        CHECK_EQ(f->hub_frame[0], rf->hub_frame[0], "the supply hub lands on the playing frame");
+        CHECK_EQ(f->hub_frame[1], rf->hub_frame[1], "and so does the take-up hub");
+        CHECK(f->hub_frame[0] == rf->hub_frame[0] && f->hub_frame[1] == rf->hub_frame[1],
+              "both hub frames land where play would have put them (%u/%u vs %u/%u)",
+              (unsigned)f->hub_frame[0], (unsigned)f->hub_frame[1],
+              (unsigned)rf->hub_frame[0], (unsigned)rf->hub_frame[1]);
+        CHECK_EQ(f->pack_fill[0], rf->pack_fill[0], "the packs land on the playing fill");
+        CHECK_EQ(f->pack_fill[1], rf->pack_fill[1], "both of them");
+        CHECK_EQ(f->permille, rf->permille, "and the bar is the position, not the tape");
+        cassette_free(ref);
+    }
+
+    /* A change inside the window restarts it from what is on screen, not from the
+     * side it replaces. */
+    cassette_reset(c);
+    a = mkstatus("Song A", "a.mp3", side, side, 0.3f);
+    cassette_step(c, &a, now += 40);
+    b = mkstatus("Song B", "b.mp3", 0, side, 0.3f);
+    cassette_step(c, &b, now += 40);
+    b = mkstatus("Song B", "b.mp3", 400, side, 0.3f);
+    f = cassette_step(c, &b, now += 400);
+    CHECK(f->rewinding, "the window is open when the next change lands");
+    uint16_t mid_fill[2] = { f->pack_fill[0], f->pack_fill[1] };
+    uint8_t mid_hub[2] = { f->hub_frame[0], f->hub_frame[1] };
+    mini_icecast_status_t c_song = mkstatus("Song C", "c.mp3", 0, side, 0.2f);
+    f = cassette_step(c, &c_song, now += 40);
+    CHECK(f->rewinding, "a change during a change opens a new window");
+    CHECK_EQ(f->pack_fill[0], mid_fill[0], "the supply pack does not jump");
+    CHECK_EQ(f->pack_fill[1], mid_fill[1], "the take-up pack does not jump");
+    CHECK(hub_gap(f->hub_frame[0], mid_hub[0], 36) <= 1, "the supply hub does not jump");
+    CHECK(hub_gap(f->hub_frame[1], mid_hub[1], 36) <= 1, "the take-up hub does not jump");
+
+    /* The first status after boot has no side to rewind from. */
+    cassette_reset(c);
+    mini_icecast_status_t mid = mkstatus("Song B", "b.mp3", 90000, side, 0.3f);
+    f = cassette_step(c, &mid, now += 40);
+    CHECK(!f->rewinding, "joining a song mid-way is not a track change");
+    CHECK_EQ(f->pack_fill[0], CASSETTE_MIN_FILL + fill_load * 500 / 1000, "it lands on the position");
+
+    /* And a status that stops playing closes the window: there is no side to rewind. */
+    cassette_reset(c);
+    a = mkstatus("Song A", "a.mp3", side, side, 0.3f);
+    cassette_step(c, &a, now += 40);
+    b = mkstatus("Song B", "b.mp3", 0, side, 0.3f);
+    cassette_step(c, &b, now += 40);
+    f = cassette_step(c, &b, now += 400);
+    CHECK(f->rewinding, "the window survives while the song plays");
+    mini_icecast_status_t empty = mkstatus("", "", 0, 0, 0);
+    f = cassette_step(c, &empty, now += 40);
+    CHECK(!f->rewinding, "a stop closes the window");
+    CHECK(!f->playing, "and the screen shows nothing playing");
+
+    cassette_free(c);
+}
+
 int main(void)
 {
     test_initial_and_progress();
@@ -254,6 +413,7 @@ int main(void)
     test_bar_throttle();
     test_reset();
     test_vu();
+    test_rewind();
 
     CHECK(cassette_new(0, 1000) == NULL, "no frames means no reel");
 

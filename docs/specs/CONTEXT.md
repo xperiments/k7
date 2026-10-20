@@ -106,8 +106,19 @@ _Avoid_: sprite, animation step, image frame
 **Reel phase**:
 How far a reel has turned through its art, from its pack radius. The tape moves at
 47.625 mm/s, so a full reel turns slower than an empty one; the supply's fill is
-1000 minus the take-up's, so the two reels' phases and speeds differ.
+1000 minus the take-up's, so the two reels' phases and speeds differ. The **reel
+change** is the one exception: inside its window the phase is interpolated, not
+integrated.
 _Avoid_: angle, offset
+
+**Reel change**:
+The eight seconds after a track boundary in which the screen shows the outgoing side's
+tape winding back onto the supply reel - both packs migrating and both hubs turning in
+reverse - instead of jumping to the new side. It is driven by the new track's elapsed
+time and lands on exactly the state normal play shows when it closes, so the change has
+no break in it. The label, the progress bar and the **VU meter** are not part of it: they
+follow the new song from its first frame.
+_Avoid_: transition, animation, reel swap
 
 **VU meter**:
 The dashed arc that continues the tape edge on each reel, showing the peak-hold of one

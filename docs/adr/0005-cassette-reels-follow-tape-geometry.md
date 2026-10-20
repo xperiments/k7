@@ -52,3 +52,7 @@ the drawn pack and the reel phase agree.
   own ceiling at 18 MHz is 43.9 fps. 25 fps is the real model's fastest reel, not a
   panel limit.
 - The art is 36 frames (0.66 MB) instead of 50 (0.92 MB).
+- Superseded in part by
+  [ADR 0011](./0011-cassette-rewinds-on-a-track-change.md): a track change no longer starts
+  the reels at zero. It plays a 2 s rewind, interpolated between the state on screen and the
+  one this model would draw at the end of that window.

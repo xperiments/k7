@@ -8,8 +8,12 @@
  *
  * The reels follow the track's tape position, not a wall clock: each reel
  * integrates the tape speed at its own pack radius (v/r), so the supply and
- * take-up turn at different speeds. A stopped track holds them; a new track
- * starts them at zero.
+ * take-up turn at different speeds. A stopped track holds them; a track change
+ * plays a rewind (CASSETTE_REWIND_MS) that starts on the frame already on screen
+ * and ends on the one normal play shows when the window closes, so the reels never
+ * jump. That window is the only place the module departs from the tape geometry:
+ * the reverse spin is a perceptual rate, not v/r, because a real rewind would be
+ * hundreds of revolutions in less time than the art can show.
  */
 #include "cassette.h"
 
@@ -36,6 +40,16 @@ struct cassette {
     bool     was_playing;
     float    peak_l, peak_r; /* the VU peak-hold, 0..1 */
 
+    /* The reel change. `shown_q` and `shown_phase` are what the screen has now, so a
+     * new window can start from them instead of from the model's idea of the position;
+     * that is also what makes a change during a window restart without a jump. */
+    bool     rewinding;
+    uint32_t rewind_t0_ms;      /* the elapsed the window opened at */
+    uint32_t rewind_q0;         /* the position the packs were showing, 0..1000 */
+    float    rewind_offset[2];  /* revolutions still to unwind, whole + fraction */
+    uint32_t shown_q;           /* the position the packs are showing, 0..1000 */
+    float    shown_phase[2];    /* the hub phase on screen */
+
     uint32_t shown_permille;
     uint32_t last_bar_ms;
     bool     have_shown;
@@ -43,6 +57,36 @@ struct cassette {
     char     shown_title[CASSETTE_TITLE_MAX];
     bool     have_title;
 };
+
+/* ----------------------------------------------------------------- rewind */
+
+/* How far the rewind has got (0..1) at a linear time p (0..1): a constant rate for
+ * all but the last EASE_MS, then a rate that falls to zero, so the reels wind down
+ * into the start of the song instead of stopping dead. The shape is normalised to
+ * reach exactly 1, which is what lets the window land on the normal state. */
+static float rewind_ease(float p)
+{
+    float tail = (float)CASSETTE_REWIND_EASE_MS / (float)CASSETTE_REWIND_MS;
+    float hold = 1.0f - tail;
+    /* The rate is 1 for `hold` of the window and 1-u^2 for the tail; their integrals
+     * are `hold` and tail*2/3, so `total` is what the shape has to be divided by. */
+    float total = hold + tail * 2.0f / 3.0f;
+
+    if (p <= 0.0f) return 0.0f;
+    if (p >= 1.0f) return 1.0f;
+    if (p <= hold) return p / total;
+    float u = (p - hold) / tail;
+    return (hold + tail * (u - u * u * u / 3.0f)) / total;
+}
+
+/* The art frame for a phase. The reverse spin carries a whole number of revolutions,
+ * so the phase can be well past 1; only the fraction selects a frame. */
+static uint8_t hub_index(float phase, uint16_t frame_count)
+{
+    float frac = phase - floorf(phase);
+    if (frac < 0.0f) frac += 1.0f;
+    return (uint8_t)((uint32_t)(frac * (float)frame_count) % frame_count);
+}
 
 /* The pack radius for a fill (0..1000). The tape length, and therefore the pack
  * area, is proportional to the fill: the radius grows as the square root. */
@@ -104,6 +148,12 @@ void cassette_reset(cassette_t *c)
     c->was_playing = false;
     c->peak_l = 0.0f;
     c->peak_r = 0.0f;
+    c->rewinding = false;
+    c->rewind_t0_ms = 0;
+    c->rewind_q0 = 0;
+    memset(c->rewind_offset, 0, sizeof c->rewind_offset);
+    c->shown_q = 0;
+    memset(c->shown_phase, 0, sizeof c->shown_phase);
     c->shown_permille = 0;
     c->last_bar_ms = 0;
     c->have_shown = false;
@@ -163,11 +213,6 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
         c->frame.permille_changed = false;
     }
     c->frame.permille = c->shown_permille;
-    /* The empty side never goes below the minimum load: the tape edge and the VU
-     * must stay outside the hub ring. */
-    uint32_t load = 1000 - CASSETTE_MIN_FILL;
-    c->frame.pack_fill[0] = (uint16_t)(CASSETTE_MIN_FILL + load * (1000 - c->shown_permille) / 1000);
-    c->frame.pack_fill[1] = (uint16_t)(CASSETTE_MIN_FILL + load * c->shown_permille / 1000);
 
     /* A track with no duration still needs a side for the reel fill; the bar
      * stays at zero because it has nothing to measure against. */
@@ -176,12 +221,22 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
         position = (uint32_t)((uint64_t)c->status.elapsed_ms * 1000ULL / CASSETTE_NOMINAL_SIDE_MS);
     if (position > 1000) position = 1000;
 
+    uint32_t elapsed = c->have_status ? c->status.elapsed_ms : 0;
+
+    /* A track change is the only thing that makes the reels jump, so it is also the
+     * only thing that opens the rewind. It is decided before the phase is reset,
+     * because the window has to start on the frame that is already on screen; the
+     * first status after boot has no side to rewind from and is not a change. */
+    bool track_change = c->frame.playing && c->was_playing && c->have_last &&
+                        elapsed < c->last_elapsed;
+    float from_phase[2] = { c->shown_phase[0], c->shown_phase[1] };
+    uint32_t from_q = c->shown_q;
+
     /* The reels: each reel integrates the tape speed at its own pack radius, so
      * the supply and take-up turn at different speeds. The first step of a track
      * starts at zero; a track change (elapsed going backwards) or a stop starts
      * them again. The frame is the phase's position in the art. */
     if (c->frame.playing) {
-        uint32_t elapsed = c->status.elapsed_ms;
         bool restart = !c->was_playing || (c->have_last && elapsed < c->last_elapsed);
         if (restart) {
             c->phase[0] = c->phase[1] = 0.0f;
@@ -198,14 +253,62 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
                 c->phase[i] = fmodf(c->phase[i] + rev_s * dt, 1.0f);
             }
         }
-        for (int i = 0; i < 2; i++)
-            c->hub_frame[i] = (uint8_t)((uint32_t)(c->phase[i] * (float)c->frame_count)
-                                        % c->frame_count);
     }
+
+    /* Open the window on what is on screen and end it on what normal play shows when
+     * it closes. The spin carries a whole number of revolutions: only a phase's
+     * fraction selects a frame, so `offset` can be ~REVS and still start on the frame
+     * that was already drawn. */
+    if (track_change) {
+        c->rewinding = true;
+        c->rewind_t0_ms = elapsed;
+        c->rewind_q0 = from_q;
+        for (int i = 0; i < 2; i++) {
+            float f = from_phase[i] - c->phase[i];
+            c->rewind_offset[i] = f + roundf(CASSETTE_REWIND_REVS - f);
+        }
+    }
+    /* The window is half-open: the step that reaches CASSETTE_REWIND_MS is already
+     * normal play. A status that stops playing has no side to rewind, and a window
+     * frozen by a paused clock would never close. */
+    uint32_t since = elapsed > c->rewind_t0_ms ? elapsed - c->rewind_t0_ms : 0;
+    if (c->rewinding && (!c->frame.playing || since >= CASSETTE_REWIND_MS))
+        c->rewinding = false;
+
+    c->frame.rewinding = c->rewinding;
+    c->frame.rewind_permille = 0;
+
+    /* What the screen shows: the normal state, or the window between the state it
+     * opened on and the one normal play will show when it closes. Both pairs move
+     * together, so the tape and the hubs decelerate as one transport. */
+    uint32_t q = c->shown_permille;
+    float disp[2] = { c->phase[0], c->phase[1] };
+    if (c->rewinding) {
+        float p = (float)since / (float)CASSETTE_REWIND_MS;
+        if (p > 1.0f) p = 1.0f;
+        float left = 1.0f - rewind_ease(p); /* the share of the rewind still to run */
+        q = (uint32_t)((float)c->shown_permille +
+                       ((float)c->rewind_q0 - (float)c->shown_permille) * left + 0.5f);
+        for (int i = 0; i < 2; i++) disp[i] = c->phase[i] + c->rewind_offset[i] * left;
+        c->frame.rewind_permille = (uint16_t)(p * 1000.0f + 0.5f);
+    }
+    if (q > 1000) q = 1000;
+    c->shown_q = q;
+    for (int i = 0; i < 2; i++) c->shown_phase[i] = disp[i];
+
+    /* The empty side never goes below the minimum load: the tape edge and the VU
+     * must stay outside the hub ring. */
+    uint32_t load = 1000 - CASSETTE_MIN_FILL;
+    c->frame.pack_fill[0] = (uint16_t)(CASSETTE_MIN_FILL + load * (1000 - q) / 1000);
+    c->frame.pack_fill[1] = (uint16_t)(CASSETTE_MIN_FILL + load * q / 1000);
+    for (int i = 0; i < 2; i++) {
+        c->hub_frame[i] = hub_index(disp[i], c->frame_count);
+        c->frame.hub_frame[i] = c->hub_frame[i];
+    }
+
     c->was_playing = c->frame.playing;
     c->last_elapsed = c->have_status ? c->status.elapsed_ms : 0;
     c->have_last = c->have_status;
-    for (int i = 0; i < 2; i++) c->frame.hub_frame[i] = c->hub_frame[i];
 
     return &c->frame;
 }

@@ -737,10 +737,14 @@ void cassette_view_update(const mini_icecast_status_t *st)
     uint32_t now = lv_tick_get();
     if (f && now - last_log > 1000) {
         last_log = now;
-        ESP_LOGI(TAG, "hubs %u/%u and %u/%u, packs %d/%d px, %u permille",
+        /* The reel change lasts 8 s, so a one-second log catches most of its frames -
+         * enough to tune the spin and the ease against real frame costs. */
+        ESP_LOGI(TAG, "hubs %u/%u and %u/%u, packs %d/%d px, %u permille%s%u",
                  (unsigned)f->hub_frame[0], HUB_FRAME_COUNT,
                  (unsigned)f->hub_frame[1], HUB_FRAME_COUNT,
-                 s_pack_d[0], s_pack_d[1], (unsigned)f->permille);
+                 s_pack_d[0], s_pack_d[1], (unsigned)f->permille,
+                 f->rewinding ? ", rewinding " : "",
+                 f->rewinding ? (unsigned)f->rewind_permille : 0u);
     }
 #endif
 }
