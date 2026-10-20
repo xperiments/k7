@@ -344,7 +344,8 @@ against the code**; two are new, introduced by R6/R7.
 
 ### 6.1 `GET /stream` — the live stream
 
-Unchanged from today except for the output format:
+The stream consumes the Library Playlist: depth-first, name-sorted, no per-pass
+`readdir()`. Unchanged from today except for the output format:
 
 - `Content-Type: audio/mpeg` (was `audio/wav`, `mini_icecast.c:224`).
 - The WAV header emission is **deleted** — both `wav_header()` (`mini_icecast.c:181-191`) and
@@ -630,7 +631,7 @@ for uninteresting reasons:
 | Ports below 1024 need root on macOS | Host tests bind a high port; the port must be a parameter, not a compiled-in default |
 | macOS `SO_RCVTIMEO`/`SO_SNDTIMEO` take `struct timeval`, and lwIP follows BSD | Already compatible; assert it in T4 rather than assuming |
 | Path case sensitivity | T13 is board-only (see §9) |
-| `music_dir` path | Must be a runtime argument in the host build, exactly as `mini_icecast_cfg_t.music_dir` already is (`mini_icecast.h:19`) — the host uses a fixture directory, the board uses `/sdcard/music` |
+| `music_dir` path | Must be a runtime argument in the host build — the host uses a fixture directory, the board uses `/sdcard/music`; it builds the Library generation, which is what the broadcast consumes |
 
 ### 10.9 The two-tier acceptance statement
 
@@ -754,6 +755,6 @@ committed host test rather than depending on them.
 | `docs/adr/0001-serve-original-bytes-not-transcoded.md` | Why downloads are not MP3 (§6.3) |
 | `docs/adr/0002-vendor-shine-as-separate-lgpl-component.md` | Why `shine` is a separate component (§8) |
 | `docs/adr/0003-extract-http-server-from-mini-icecast.md` | Why the HTTP layer is extracted (§3) |
-| `docs/adr/0012-boot-built-library-arena.md` | The boot-built Library tree that will replace the flat Music-directory model, changing §6.2 and §6.3 when implemented; not yet implemented |
+| `docs/adr/0012-boot-built-library-arena.md` | The boot-built Library tree that replaced the flat Music-directory model in §6.2/§6.3 |
 | `docs/specs/CONTEXT.md` | Glossary for the terms this specification depends on |
 | `CONTEXT-MAP.md` | How this context relates to the radio-player context |

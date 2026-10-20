@@ -11,7 +11,6 @@
  */
 #include "test_util.h"
 
-#include <dirent.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -19,7 +18,6 @@
 #include <unistd.h>
 
 #include "mini_icecast.h"
-#include "mi_decode.h"
 
 #define HZ 44100
 #define KBPS 128
@@ -56,20 +54,17 @@ static bool write_silence_wav(const char *path, int seconds)
     return ok;
 }
 
-/* The directory order the broadcast will see, restricted to the names it accepts. */
-static bool read_order(const char *dir, char names[][MINI_ICECAST_STATUS_FILE_MAX], int want)
+/* The Playlist order the broadcast will consume. */
+static bool read_order(const library_t *lib, char names[][MINI_ICECAST_STATUS_FILE_MAX], int want)
 {
-    int count = 0;
-    DIR *d = opendir(dir);
-    if (!d) return false;
-    struct dirent *e;
-    while ((e = readdir(d)) && count < want) {
-        if (e->d_name[0] == '.' || mi_dec_format_of(e->d_name) == MI_FMT_NONE) continue;
-        snprintf(names[count], MINI_ICECAST_STATUS_FILE_MAX, "%s", e->d_name);
-        count++;
+    if (library_track_count(lib) != (uint32_t)want) return false;
+    for (int i = 0; i < want; i++) {
+        lib_node_t n = library_track_at(lib, (uint32_t)i);
+        uint16_t len = 0;
+        const char *name = library_name(lib, n, &len);
+        snprintf(names[i], MINI_ICECAST_STATUS_FILE_MAX, "%.*s", (int)len, name);
     }
-    closedir(d);
-    return count == want;
+    return true;
 }
 
 static bool wait_for_file(const char *want, char *last, size_t last_size)
@@ -92,18 +87,35 @@ int main(void)
         printf("FATAL: cannot create %s\n", dir);
         return 1;
     }
-    char one[192], two[192];
-    snprintf(one, sizeof one, "%s/one.wav", dir);
+    char album[192], deep[192], one[192], two[192], three[192];
+    snprintf(album, sizeof album, "%s/Album", dir);
+    snprintf(deep, sizeof deep, "%s/Album/Deep", dir);
+    snprintf(one, sizeof one, "%s/Album/one.wav", dir);
     snprintf(two, sizeof two, "%s/two.wav", dir);
+    snprintf(three, sizeof three, "%s/Album/Deep/three.wav", dir);
+    if (mkdir(album, 0700) != 0 || mkdir(deep, 0700) != 0) {
+        printf("FATAL: cannot create the nested fixture\n");
+        return 1;
+    }
+    bool wrote = write_silence_wav(one, TRACK_SECONDS) &&
+                 write_silence_wav(two, TRACK_SECONDS) &&
+                 write_silence_wav(three, TRACK_SECONDS);
+    CHECK(wrote, "three long WAV tracks were written under %s", dir);
 
-    bool wrote = write_silence_wav(one, TRACK_SECONDS) && write_silence_wav(two, TRACK_SECONDS);
-    char order[2][MINI_ICECAST_STATUS_FILE_MAX];
-    bool listed = read_order(dir, order, 2);
-    CHECK(wrote, "two long WAV tracks were written to %s", dir);
-    CHECK(listed, "the directory lists both tracks");
-
+    library_cfg_t lc = {.music_dir = dir, .build_json = false};
+    library_t *lib = NULL;
+    CHECK_EQ(library_open(&lc, &lib), LIB_OK, "the transport Library opens");
+    char order[3][MINI_ICECAST_STATUS_FILE_MAX];
+    char paths[3][LIB_PATH_MAX];
+    bool listed = read_order(lib, order, 3);
+    CHECK(listed, "the Playlist has all three tracks");
+    for (int i = 0; i < 3; i++) {
+        lib_node_t n = library_track_at(lib, (uint32_t)i);
+        CHECK(library_relpath(lib, n, paths[i], sizeof paths[i]) != (size_t)-1,
+              "path %d builds", i);
+    }
     mini_icecast_cfg_t cfg = {
-        .music_dir = dir,
+        .library = lib,
         .station_name = "transport",
         .port = 18101,
         .out_hz = HZ,
@@ -116,22 +128,81 @@ int main(void)
     if (listed) {
         CHECK(wait_for_file(order[0], last, sizeof last),
               "the first track is %s (saw %s)", order[0], last);
+        mini_icecast_status_t st;
+        mini_icecast_status(&st);
+        CHECK(strcmp(st.path, paths[0]) == 0, "the status path is %s (got %s)", paths[0], st.path);
+        CHECK(st.path[0] != 0 && strchr(st.path, '/') != NULL,
+              "the first track is several levels deep: %s", st.path);
+        CHECK_EQ(st.generation, 1, "the status names generation 1");
+        CHECK_EQ(st.track_index, 0, "the first track is Playlist index 0");
+        CHECK_EQ(st.library_count, 3, "the library count is three");
 
         mini_icecast_skip();
         CHECK(wait_for_file(order[1], last, sizeof last),
-              "skip moves to the next track %s (saw %s)", order[1], last);
+              "skip moves to %s (saw %s)", order[1], last);
+
+        mini_icecast_skip();
+        CHECK(wait_for_file(order[2], last, sizeof last),
+              "skip moves to %s (saw %s)", order[2], last);
+
+        mini_icecast_prev();
+        CHECK(wait_for_file(order[1], last, sizeof last),
+              "prev returns to %s (saw %s)", order[1], last);
 
         mini_icecast_prev();
         CHECK(wait_for_file(order[0], last, sizeof last),
               "prev returns to %s (saw %s)", order[0], last);
 
+        mini_icecast_prev();
+        CHECK(wait_for_file(order[0], last, sizeof last),
+              "prev at the first track replays it (saw %s)", last);
+
         mini_icecast_skip();
         CHECK(wait_for_file(order[1], last, sizeof last),
               "skip after prev moves forward through the history to %s (saw %s)", order[1], last);
+
+        mini_icecast_skip();
+        CHECK(wait_for_file(order[2], last, sizeof last),
+              "skip moves to the last track %s (saw %s)", order[2], last);
+        mini_icecast_skip();
+        CHECK(wait_for_file(order[0], last, sizeof last),
+              "skip at the last track wraps to %s (saw %s)", order[0], last);
+        mini_icecast_prev();
+        CHECK(wait_for_file(order[0], last, sizeof last),
+              "prev at the first track of a new lap replays it (saw %s)", last);
     }
 
+    /* A new generation resets the history and starts at its first Track. */
+    char dir2[128], fresh[192];
+    snprintf(dir2, sizeof dir2, "/tmp/xtape-transport2-%ld", (long)getpid());
+    snprintf(fresh, sizeof fresh, "%s/new.wav", dir2);
+    if (mkdir(dir2, 0700) != 0 || !write_silence_wav(fresh, TRACK_SECONDS)) {
+        printf("FATAL: cannot create the second generation\n");
+        return 1;
+    }
+    library_cfg_t lc2 = {.music_dir = dir2, .build_json = false};
+    library_t *lib2 = NULL;
+    CHECK_EQ(library_open(&lc2, &lib2), LIB_OK, "the second generation opens");
+    mini_icecast_set_library(lib2);
+    mini_icecast_skip(); /* leave the current generation's track */
+    CHECK(wait_for_file("new.wav", last, sizeof last),
+          "a generation change starts at its first Track (saw %s)", last);
+    mini_icecast_status_t next;
+    mini_icecast_status(&next);
+    CHECK(strcmp(next.path, "new.wav") == 0, "the new generation's path is new.wav (got %s)", next.path);
+    CHECK_EQ(next.track_index, 0, "the new generation starts at index 0");
+    CHECK_EQ(next.library_count, 1, "the new generation has one Track");
+    mini_icecast_prev();
+    CHECK(wait_for_file("new.wav", last, sizeof last),
+          "prev at the only Track replays it (saw %s)", last);
+
+    unlink(fresh);
+    rmdir(dir2);
     unlink(one);
     unlink(two);
+    unlink(three);
+    rmdir(deep);
+    rmdir(album);
     rmdir(dir);
     TEST_END();
 }

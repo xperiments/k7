@@ -49,8 +49,14 @@ int main(void)
         return 1;
     }
 
+    library_cfg_t lc = {.music_dir = dir, .build_json = false};
+    library_t *lib = NULL;
+    if (library_open(&lc, &lib) != LIB_OK || !lib) {
+        printf("FATAL: the Library did not open\n");
+        return 1;
+    }
     mini_icecast_cfg_t cfg = {
-        .music_dir = dir,
+        .library = lib,
         .station_name = "test",
         .port = 18099,
         .out_hz = HZ,
@@ -71,6 +77,12 @@ int main(void)
     }
     CHECK(got_playing, "a track is playing and its source rate is known");
     if (!got_playing) return 1;
+    CHECK(st.path[0] != 0, "the status carries the Track's relative path: %s", st.path);
+    CHECK_EQ(st.generation, library_generation(lib), "the status names the generation");
+    CHECK(st.track_index < st.library_count, "the track index is inside the Playlist");
+    const char *slash = strrchr(st.path, '/');
+    CHECK(strcmp(st.file, slash ? slash + 1 : st.path) == 0,
+          "the file name is the last segment of the path");
 
     /* The display's level rides in the same snapshot (ticket 16): the callback it
      * used to come from is gone, so this is the only way a screen can see it. */

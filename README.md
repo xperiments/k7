@@ -105,9 +105,8 @@ one line, and the error message names the component.
   or stereo. Files whose name begins with `.` are ignored (that is how macOS
   AppleDouble `._track.mp3` files are skipped).
 * Long file names are enabled up to 128 characters (`CONFIG_FATFS_MAX_LFN=128`).
-* The index and downloads use that Playlist order. The live stream still walks the
-  directory in its own order until the broadcast change lands; the two converge
-  then.
+* The index and downloads use that Playlist order; the live stream plays it in
+  order, looping forever.
 
 To try it without a music collection, copy the test corpus from
 `host/fixtures/` onto the card:

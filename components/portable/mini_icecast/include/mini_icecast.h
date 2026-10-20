@@ -23,6 +23,7 @@
 #include <stdint.h>
 
 #include "audio_format.h" /* mi_fmt_t: the status struct reports a container */
+#include "library.h"       /* the immutable Playlist the broadcast consumes */
 
 #include "esp_err.h"
 
@@ -39,7 +40,10 @@ extern "C" {
 #define MINI_ICECAST_METAINT_DEFAULT 16000
 
 typedef struct {
-    const char *music_dir;     /* e.g. "/sdcard/music": any mix of .mp3 .flac .wav, any sample rate */
+    /* The Playlist to broadcast; NULL means idle/no card. The caller keeps the
+     * generation alive for as long as the broadcast may use it (ticket 11 adds
+     * the lease). */
+    const library_t *library;
     const char *station_name;  /* icy-name, default "ESP32 Radio" */
     uint16_t    port;          /* default 8000; used in the startup log */
     /* 1..MINI_ICECAST_MAX_CLIENTS. Every field here treats 0 as "leave it at the
@@ -88,13 +92,16 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg);
 typedef struct {
     char     title[MINI_ICECAST_STATUS_TITLE_MAX]; /* as sent in ICY metadata */
     char     file[MINI_ICECAST_STATUS_FILE_MAX];   /* the file's name, extension included */
+    char     path[LIB_PATH_MAX];                   /* the Track's relative path, "" when idle */
     mi_fmt_t format;                               /* MI_FMT_NONE when nothing is playing */
     uint32_t source_hz;                            /* the file's own sample rate */
     uint32_t out_hz;                               /* the station rate */
     uint32_t bitrate;                              /* the station bit rate, kbps */
     uint32_t elapsed_ms;                           /* broadcast from this track so far */
     uint32_t duration_ms;                          /* this track's length, 0 = unknown */
-    uint32_t library_count;                        /* playable files found on the card */
+    uint32_t library_count;                        /* Tracks in the Library generation */
+    uint32_t generation;                           /* the generation the Playlist came from */
+    uint32_t track_index;                          /* position in the Playlist, 0-based; 0 when idle */
     /* RMS of the chunk being encoded, 0..1 per channel: the display's level, not
      * the wire's. Written by the broadcast task per chunk and read without the
      * lock like elapsed_ms - a 32-bit float store is atomic on this core. */
@@ -122,12 +129,14 @@ void      mini_icecast_status(mini_icecast_status_t *out);
  *
  * max_ms bounds the park so a caller that never returns cannot leave the station
  * on the bed forever. Safe from any task. */
-/* The library directory the station was started with. */
-const char *mini_icecast_music_dir(void);
-
 void      mini_icecast_park_card(uint32_t max_ms);
 void      mini_icecast_unpark_card(void);
 bool      mini_icecast_card_parked(void);
+
+/* Replace the Playlist generation. The caller keeps `lib` alive until the next
+ * call or shutdown; the broadcast resets its history and starts the new
+ * generation at its first Track. NULL idles. */
+void      mini_icecast_set_library(const library_t *lib);
 
 void      mini_icecast_skip(void);                              /* jump to next track */
 void      mini_icecast_prev(void);                              /* jump to the previous track */

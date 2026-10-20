@@ -40,10 +40,9 @@ esp_err_t app_services_check(const app_services_cfg_t *cfg, char *err, size_t er
         return ESP_ERR_INVALID_ARG;
     }
     /* The station module is the authority on the defaults and the arithmetic.
-     * music_dir is not part of the station format; it is passed so the cfg type
-     * is the one the broadcast uses. */
+     * The Library has not been built yet at validation time; only the station
+     * fields are being checked here. */
     mini_icecast_cfg_t ice = {
-        .music_dir = cfg->music_dir,
         .station_name = cfg->station_name,
         .port = cfg->port,
         .max_clients = cfg->max_clients,
@@ -110,8 +109,8 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     uint32_t psram_after = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     if (lr != LIB_OK || !s_library) {
         /* A failed generation must not take the device off the network. The
-         * index and the broadcast still have their own paths; /api/library is
-         * simply unavailable until the next boot/rescan. */
+         * file surface still serves its diagnostic page; the broadcast idles and
+         * /api/library is unavailable until the next boot/rescan. */
         ESP_LOGE(TAG, "library: cannot build a generation (%s); /api/library is unavailable"
                       " (scan %lld ms, psram %u -> %u B)",
                  lr == LIB_INVALID_ARG ? "invalid argument" : "out of memory",
@@ -152,7 +151,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     /* 7. The broadcast, now that Wi-Fi's buffers exist. It starts even with no
      * card: the task waits for the directory rather than failing the boot. */
     mini_icecast_cfg_t ice = {
-        .music_dir = cfg->music_dir,
+        .library = s_library,
         .station_name = cfg->station_name,
         .port = cfg->port,
         .max_clients = cfg->max_clients,

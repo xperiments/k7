@@ -12,9 +12,7 @@
  */
 #include "mini_icecast.h"
 
-#include <dirent.h>
 #include <math.h>
-#include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,13 +74,16 @@ typedef struct {
 } client_t;
 
 static struct {
-    const char        *music_dir; /* the card's directory, from the configuration */
+    const library_t   *library;   /* the Playlist this broadcast consumes */
     mi_station_t       station;   /* resolved once by mi_station_resolve() */
     client_t           clients[MAX_CLIENTS];
     SemaphoreHandle_t  lock;
     char               title[TITLE_MAX + 1];
     char               file[MINI_ICECAST_STATUS_FILE_MAX];
+    char               path[LIB_PATH_MAX];
     mi_fmt_t           cur_fmt;
+    uint32_t           generation;
+    uint32_t           track_index;
     uint32_t           cur_src_hz;
     uint32_t           cur_total_ms;
     uint32_t           library_count;
@@ -353,24 +354,54 @@ static void set_title(const char *name, size_t n)
     xSemaphoreGive(S.lock);
 }
 
-/* A new track: its name, its container, and a reset progress. Called before the file
- * is opened, so the display shows the name while the decoder is still working. */
-static void set_track(const char *name)
+/* A new Track: its name, relative path, Playlist position and container, with a
+ * reset progress. Called before the file is opened, so the display shows the name
+ * while the decoder is still working. */
+static void set_track(const library_t *lib, uint32_t index, lib_node_t n)
 {
-    size_t n = strlen(name);
-    const char *dot = strrchr(name, '.');
-    if (dot) n = (size_t)(dot - name);
-    set_title(name, n);
+    uint16_t nlen = 0;
+    const char *name = library_name(lib, n, &nlen);
+    char file[MINI_ICECAST_STATUS_FILE_MAX];
+    snprintf(file, sizeof file, "%.*s", (int)nlen, name);
+    size_t stem = strlen(file);
+    const char *dot = strrchr(file, '.');
+    if (dot) stem = (size_t)(dot - file);
+    set_title(file, stem);
+
+    char rel[LIB_PATH_MAX];
+    if (library_relpath(lib, n, rel, sizeof rel) == (size_t)-1) rel[0] = 0;
     xSemaphoreTake(S.lock, portMAX_DELAY);
-    snprintf(S.file, sizeof S.file, "%s", name);
-    S.cur_fmt = mi_dec_format_of(name);
+    snprintf(S.file, sizeof S.file, "%s", file);
+    snprintf(S.path, sizeof S.path, "%s", rel);
+    S.cur_fmt = library_format(lib, n);
     S.cur_src_hz = 0;      /* known once the decoder is open */
     S.cur_total_ms = 0;
+    S.generation = library_generation(lib);
+    S.track_index = index;
     S.track_frames = 0;
     /* The bed's frames are subtracted from the position, so this counter has to
      * start over with the track. It did not, and after the first park every later
      * track computed a negative position and the display sat at zero. */
     S.idle_frames = 0;
+    xSemaphoreGive(S.lock);
+}
+
+static void clear_track(void)
+{
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    bool changed = S.title[0] || S.file[0] || S.path[0] || S.cur_fmt != MI_FMT_NONE ||
+                   S.track_index != 0;
+    S.title[0] = 0;
+    S.file[0] = 0;
+    S.path[0] = 0;
+    S.cur_fmt = MI_FMT_NONE;
+    S.cur_src_hz = 0;
+    S.cur_total_ms = 0;
+    S.generation = 0;
+    S.track_index = 0;
+    S.track_frames = 0;
+    S.idle_frames = 0;
+    if (changed) S.title_ver++;
     xSemaphoreGive(S.lock);
 }
 
@@ -452,7 +483,6 @@ void mini_icecast_unpark_card(void)
 
 bool mini_icecast_card_parked(void) { return parked(); }
 
-const char *mini_icecast_music_dir(void) { return S.music_dir; }
 static void emit_chunk(void)
 {
     measure_level();
@@ -551,106 +581,95 @@ static void stream_file(const char *path)
     mi_dec_close(d);
 }
 
-static bool is_audio(const char *name)
-{
-    if (name[0] == '.') return false; /* macOS "._foo.mp3" AppleDouble files on the SD */
-    return mi_dec_format_of(name) != MI_FMT_NONE;
-}
-
-/* The playable entry a saved directory position names. The position came from
- * telldir() on this same directory, so it is the entry that was played then; the
- * is_audio() check catches a card that changed under the history. */
-static bool seek_track(DIR *d, long pos, struct dirent **out)
-{
-    if (pos < 0) return false;
-    seekdir(d, pos);
-    struct dirent *e = readdir(d);
-    if (!e || !is_audio(e->d_name)) return false;
-    *out = e;
-    return true;
-}
-
 static void broadcast_task(void *arg)
 {
     (void)arg;
     S.t0 = esp_timer_get_time();
     int quiet = 0;
-    bool reported_missing = false;
     for (;;) {
-        DIR *d = opendir(S.music_dir);
-        int played = 0;
-        struct dirent *e;
-        if (!d && !reported_missing) {
-            /* Distinguish "the directory is not there" from "it is there and has
-             * nothing playable in it": they need different fixes. */
-            ESP_LOGE(TAG, "cannot open %s: %s", S.music_dir, strerror(errno));
-            reported_missing = true;
-        } else if (d) {
-            reported_missing = false;
+        xSemaphoreTake(S.lock, portMAX_DELAY);
+        const library_t *lib = S.library;
+        xSemaphoreGive(S.lock);
+        uint32_t count = lib ? library_track_count(lib) : 0;
+        xSemaphoreTake(S.lock, portMAX_DELAY);
+        S.library_count = count;
+        xSemaphoreGive(S.lock);
+
+        if (!lib || !count) {
+            clear_track();
+            S.skip = false;
+            S.prev = false;
+            if (quiet++ % QUIET_PASSES == 0) {
+                if (!lib) ESP_LOGW(TAG, "no Library generation; idling");
+                else ESP_LOGW(TAG, "no Tracks in the Library (state %s); idling",
+                              library_state_name(library_state(lib)));
+            }
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            continue;
         }
-        /* How many playable files there are, counted before playing them: a display
-         * wants to say "of N", and a pass that streams as it scans cannot know N until
-         * it has finished. A second readdir pass is cheap next to decoding one track. */
-        if (d) {
-            rewinddir(d);
-            uint32_t count = 0;
-            while ((e = readdir(d)))
-                if (is_audio(e->d_name)) count++;
-            rewinddir(d);
-            xSemaphoreTake(S.lock, portMAX_DELAY);
-            S.library_count = count;
-            xSemaphoreGive(S.lock);
-        }
-        /* The entries this pass has played, by directory position. `prev` walks back
-         * through it and `skip` walks forward; only when the cursor is at the end does
-         * the next track come from readdir(). The positions are valid while `d` is
-         * open, so the history is rebuilt with the next pass. */
-        long history[TRACK_HISTORY];
+        quiet = 0;
+
+        uint32_t generation = library_generation(lib);
+        /* Playlist positions this pass has played. `prev` walks back through it and
+         * `skip` walks forward; only at its end is a new position appended. */
+        uint32_t history[TRACK_HISTORY];
         int history_count = 0;
-        int history_pos = -1; /* the entry playing now */
-        bool back = false;    /* the last request was prev */
-        while (d) {
+        int history_pos = -1;
+        bool back = false;
+        int played = 0;
+
+        for (;;) {
+            xSemaphoreTake(S.lock, portMAX_DELAY);
+            bool same_library = S.library == lib;
+            xSemaphoreGive(S.lock);
+            if (!same_library || library_generation(lib) != generation) break;
+
+            uint32_t index;
             if (back) {
                 if (history_pos > 0) history_pos--;
                 else if (history_count > 0) history_pos = 0; /* no earlier track: replay */
                 else break;
-                if (!seek_track(d, history[history_pos], &e)) break;
+                index = history[history_pos];
             } else if (history_pos + 1 < history_count) {
-                /* The user is walking forward again through tracks already played. */
                 history_pos++;
-                if (!seek_track(d, history[history_pos], &e)) break;
+                index = history[history_pos];
             } else {
-                long pos = -1;
-                do {
-                    pos = telldir(d);
-                    e = readdir(d);
-                } while (e && !is_audio(e->d_name));
-                if (!e || pos < 0) break;
+                bool wrap = history_count && (history[history_count - 1] + 1) % count == 0;
+                index = history_count ? (history[history_count - 1] + 1) % count : 0;
+                if (wrap) {
+                    /* A new lap starts with a fresh history, as the old directory
+                     * pass did; `prev` at the first Track replays it. */
+                    history_count = 0;
+                    history_pos = -1;
+                }
                 if (history_count == TRACK_HISTORY) {
-                    /* The oldest entry leaves; the cursor follows the array. */
                     memmove(history, history + 1, sizeof history[0] * (TRACK_HISTORY - 1));
                     history_count--;
                     history_pos--;
                 }
-                history[history_count++] = pos;
+                history[history_count++] = index;
                 history_pos = history_count - 1;
             }
-            char path[320];
-            snprintf(path, sizeof path, "%s/%s", S.music_dir, e->d_name);
-            set_track(e->d_name);
+
+            lib_node_t n = library_track_at(lib, index);
+            if (n == LIB_NODE_NONE) break;
+            char path[LIB_PATH_MAX];
+            if (library_abspath(lib, n, path, sizeof path) == (size_t)-1) {
+                ESP_LOGW(TAG, "track %u has no absolute path; stopping this pass", (unsigned)index);
+                break;
+            }
+            set_track(lib, index, n);
             S.skip = false;
             S.prev = false;
             stream_file(path);
             played++;
             back = S.prev;
         }
-        if (d) closedir(d);
+
         if (!played) {
             if (quiet++ % QUIET_PASSES == 0)
-                ESP_LOGW(TAG, "no playable files in %s", S.music_dir);
+                ESP_LOGW(TAG, "no Track could be played from the Library");
             vTaskDelay(pdMS_TO_TICKS(2000));
-        } else {
-            quiet = 0;
         }
     }
 }
@@ -690,8 +709,8 @@ static void telemetry_task(void *arg)
 
 esp_err_t mini_icecast_check_station(const mini_icecast_cfg_t *cfg, char *err, size_t err_size)
 {
-    if (!cfg || !cfg->music_dir) {
-        if (err && err_size) snprintf(err, err_size, "no music directory configured");
+    if (!cfg) {
+        if (err && err_size) snprintf(err, err_size, "no configuration given");
         return ESP_ERR_INVALID_ARG;
     }
     /* Resolve-and-discard. The defaults, the client limit and the format
@@ -701,7 +720,7 @@ esp_err_t mini_icecast_check_station(const mini_icecast_cfg_t *cfg, char *err, s
 
 esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
 {
-    if (!cfg || !cfg->music_dir) return ESP_ERR_INVALID_ARG;
+    if (!cfg) return ESP_ERR_INVALID_ARG;
 
     /* Resolve once, before anything is allocated: a format that cannot be
      * served is refused without touching the heap or the network. */
@@ -710,7 +729,7 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
         ESP_LOGE(TAG, "station configuration refused: %s", err);
         return ESP_ERR_INVALID_ARG;
     }
-    S.music_dir = cfg->music_dir;
+    S.library = cfg->library;
 
     ESP_LOGI(TAG, "station format: %u Hz, %u kbps CBR, joint stereo, %s",
              (unsigned)S.station.out_hz, (unsigned)S.station.bitrate,
@@ -808,6 +827,15 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     return ESP_OK;
 }
 
+void mini_icecast_set_library(const library_t *lib)
+{
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    S.library = lib;
+    S.skip = false;
+    S.prev = false;
+    xSemaphoreGive(S.lock);
+}
+
 void mini_icecast_skip(void) { S.skip = true; }
 
 void mini_icecast_prev(void) { S.prev = true; }
@@ -822,7 +850,10 @@ void mini_icecast_status(mini_icecast_status_t *out)
     xSemaphoreTake(S.lock, portMAX_DELAY);
     snprintf(out->title, sizeof out->title, "%s", live_title());
     snprintf(out->file, sizeof out->file, "%s", S.file);
+    snprintf(out->path, sizeof out->path, "%s", S.path);
     out->format = S.cur_fmt;
+    out->generation = S.generation;
+    out->track_index = S.track_index;
     out->source_hz = S.cur_src_hz;
     out->out_hz = S.station.out_hz;
     out->bitrate = S.station.bitrate;

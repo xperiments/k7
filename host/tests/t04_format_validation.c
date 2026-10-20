@@ -72,7 +72,7 @@ int main(void)
 
     /* Ticket 12: one interpretation of the configuration. Every station field
      * zero means "the documented default", and the resolved station says so. */
-    mini_icecast_cfg_t cfg = {.music_dir = "fixtures"};
+    mini_icecast_cfg_t cfg = {0};
     mi_station_t st;
     err[0] = 0;
     CHECK_EQ(mi_station_resolve(&cfg, &st, err, sizeof err), ESP_OK,
