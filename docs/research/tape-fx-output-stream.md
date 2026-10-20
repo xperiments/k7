@@ -1,5 +1,14 @@
 # Tape FX on the output stream
 
+> **Retired.** This effect was built, measured and then removed from the product at the
+> owner's request: it ran on the stream, but its character was too subtle to be worth the
+> remaining headroom, and the settings never earned a place in the interface. What is below is
+> the record of the investigation - the measurements, the two operating points, the null tests
+> and the reasons a number came out the way it did - and it describes code that no longer
+> exists in this tree. It is kept because the numbers are still the answers to the questions
+> they were asked: what a per-sample effect costs on this chip, what a division costs, what
+> the encoder costs, and how far a cassette emulation can go before it is audible.
+
 Is a C99 tape_fx (saturation + 3 biquads per channel + a 1024-sample modulated delay + hiss,
 two `sinf()` per sample) viable per-sample before the MP3 encoder, and what does it cost?
 
@@ -502,22 +511,53 @@ fixed number of instructions per sample.
 
 ## 7. What it does to the sound (MEASURED)
 
-`probe.c` against the shipped component - `head_q = 0.85` and the unity make-up gain - with a
--20 dBFS sine, output RMS against input RMS:
+### 7.1 The transfer function of each type
 
-| 50 Hz | 110 Hz | 440 Hz | 1 kHz | 2 kHz | 5 kHz | 10 kHz | 15 kHz | 18 kHz |
-|---|---|---|---|---|---|---|---|---|
-| +1.4 dB | +1.1 dB | -0.1 dB | -0.1 dB | -0.1 dB | -0.3 dB | **-6.8 dB** | -20.8 dB | -32.1 dB |
+Pink noise at -18 dBFS through the shipped component (`.scratch/fx-audible/`), measured
+spectrum of the output over the measured spectrum of the input, normalised to 1 kHz. These are
+the numbers with `dolby = K`, so the hiss is out of the way and what is left is the filter:
+
+| Hz | 40 | 63 | 80 | 110 | 160 | 250 | 500 | 1k | 2k | 4k | 6k | 8k | 10k | 12k | 14k | 16k |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| NORMAL | +3.8 | **+5.5** | +5.3 | +4.3 | +2.9 | +2.2 | +1.8 | 0 | **-3.8** | +0.1 | -1.0 | -4.5 | -9.0 | **-15.5** | -20.9 | -27.7 |
+| CHROME | -0.6 | +1.3 | +1.3 | +0.9 | +0.2 | -0.1 | 0.0 | 0 | -0.3 | +0.2 | -0.7 | -1.4 | -3.2 | -8.3 | -13.3 | -20.1 |
+| METAL | -3.0 | -1.0 | -0.8 | -0.9 | -1.2 | -1.3 | -0.9 | 0 | **+1.4** | 0.0 | -1.5 | -1.9 | -1.9 | -4.0 | -5.7 | -10.4 |
+
+The shape is one broad presence bell at 2 kHz (-6 dB / 0 / +3 dB), one low shelf at 110 Hz
+(4.0 / 2.0 / 0.8 dB) and one low-pass (7 / 11 / 16 kHz corner at `head_q = 1`): NORMAL is a
+worn ferric - fat bottom, scooped middle, dull top - and METAL is open and forward.
 
 1. **Unity, at last.** The draft was +3.0 dB hot and moved between +0.8 and +4.6 dB with the
-   knobs. The component is -0.1 dB at 1 kHz, and the encoded stream now measures the same RMS
-   with the effect on and off (-20.1 dBFS both ways, §5).
-2. **The default is no longer dark.** At `head_q = 0.6` the corner was 6.5 kHz and 10 kHz came
-   out 10.9 dB down; at 0.85 it is 7.7 kHz and 10 kHz is 6.8 dB down. The tape type is the
-   bigger lever: at the same head quality, CHROME is -2.6 dB at 10 kHz and METAL -1.3 dB.
-3. **"Dolby" is still a noise-floor knob**: silence-in RMS is -65.8 dBFS (off), -76.2 (B),
-   -87.7 (C), -330 (K, i.e. nothing). It subtracts from the hiss level; it does not compress and
-   expand the high band the way Dolby B does.
+   knobs. The component is -0.1 dB at 1 kHz, and the encoded stream measures the same RMS with
+   the effect on and off (-20.1 dBFS both ways, §5).
+2. **The first cut of these tables was inaudible, and that is the interesting part.** With
+   `lp_base` at 9/12/15 kHz and a 2.5/1.5/1.0 dB bump, every type sat within 1.5 dB of every
+   other below 8 kHz and the three differed by at most 5 dB at 10 kHz. On a cassette that is
+   plausible; on real music, which is already limited at both ends, it is nothing. The tables
+   are now 7/11/16 kHz and 4.0/2.0/0.8 dB: NORMAL is 10 dB down at 10 kHz where METAL is flat,
+   and the two differ by ~3 dB at 63 Hz. A difference you have to A/B is not a difference.
+   The second pass went further and moved the character into the middle, where every system and
+   most ears live: NORMAL is 5 dB down at 2 kHz and 6 dB up at 63 Hz against METAL. Everything
+   above 8 kHz is now the icing rather than the cake.
+3. **Measured end to end, through the board.** Two 10 s captures of the same broadcast, decoded
+   and compared band by band against a dry capture (levels relative to the 1.3-2.6 kHz band, so
+   the track's own tilt cancels):
+
+   | capture | 8-11 kHz | 11-14 kHz | 14-18 kHz |
+   |---|---|---|---|
+   | dry | -3.0 dB | -5.7 dB | -7.3 dB |
+   | NORMAL | **-14.8 dB** | **-25.2 dB** | -35.7 dB |
+   | METAL | -1.7 dB | -4.4 dB | -10.0 dB |
+
+   So the setting reaches the running effect, survives the encoder, the Wi-Fi link and the
+   client's decoder, and is 10 dB wide in the band where cymbals live.
+4. **"Dolby" is a noise-floor knob, and it was set too low to be one.** Silence in, RMS out:
+   -55.6 dBFS (off), -65.8 (B), -76.2 (C), and nothing (K). Those are 10 dB steps, and they
+   only move hiss: the hiss used to sit at -66 dBFS, below the noise of the room any station
+   plays in, so turning Dolby on and off changed nothing anyone could hear. The base is now
+   -54 instead of -64. It is still not Dolby B's high-band compander: it subtracts from the
+   noise, it does not compress and expand the top end, and on loud material what it changes is
+   what it is supposed to change - the noise, not the music.
 
 ## 8. What changed in the component, and what is still open
 
@@ -533,9 +573,11 @@ fixed number of instructions per sample.
 | 6 | denormals in the biquad states on silence | **open**. The host bench showed no slowdown (`./bench 20 2 1`); the board test is in §10 |
 | 7 | the delay line was twice the size it needed to be | **fixed**: `TAPE_FX_DLY_LEN 512` (4 KB). The worst case is 285 samples at 44.1 kHz and 311 at 48 kHz; 256 would clip at maximum wear |
 
-The default head quality moved from 0.6 to 0.85 (§7), which is one line in `tape_fx.h`
-(`TAPE_FX_DEFAULT_HEAD_Q`). The other open choice is worth naming because it is a sound decision
-rather than a defect: "Dolby" is a noise-floor knob rather than Dolby B's high-band compander.
+The default head quality moved from 0.6 to 0.85 (`TAPE_FX_DEFAULT_HEAD_Q`). The type tables in
+`recompute()` were widened after the first build turned out to be inaudible (§7.2), and the hiss
+base went from -64 to -54 for the same reason (§7.4). The remaining choice is worth naming
+because it is a sound decision rather than a defect: "Dolby" is a noise-floor knob rather than
+Dolby B's high-band compander.
 
 ## 9. Open questions to measure on the board
 

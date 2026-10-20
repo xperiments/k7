@@ -29,7 +29,6 @@
 
 #include "cassette.h"
 #include "cassette_view.h"
-#include "fx_drawer.h"
 #include "hub_frames.h"
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 #include "label_cover.h"
@@ -509,17 +508,11 @@ static void screen_pressed_cb(lv_event_t *e)
  * before the one-finger gesture for the same touch. */
 static void screen_two_finger_cb(int dx, int dy)
 {
+    (void)dx;
+    (void)dy;
     s_two_finger_seen = true;
-    /* Direction decides, so both gestures can live on the same two fingers: to the
-     * left pulls in the effects panel from the right edge, to the right toggles the
-     * big label cover. */
-    if (fx_drawer_swipe(dx, dy)) {
-        ESP_LOGI(TAG, "two-finger swipe: effects panel %s",
-                 fx_drawer_is_open() ? "open" : "closed");
-        return;
-    }
     cover_set_shown(!s_cover_shown);
-    ESP_LOGI(TAG, "two-finger swipe right: cover %s", s_cover_shown ? "shown" : "hidden");
+    ESP_LOGI(TAG, "two-finger swipe: cover %s", s_cover_shown ? "shown" : "hidden");
 }
 #endif
 

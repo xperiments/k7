@@ -62,7 +62,7 @@ int http_parse_request(char *buf, http_request_t *req)
         if (!slash) return 400;
         target = slash;
     }
-    /* The query is kept, not dropped: a route that takes parameters (/fx) reads
+    /* The query is kept, not dropped: a route that takes parameters reads
      * it from req->query, still percent-encoded like the path, and the caller
      * decodes what it needs. An over-long query is a 414 for the same reason an
      * over-long path is. */

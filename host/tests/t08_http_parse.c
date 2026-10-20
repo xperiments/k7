@@ -103,9 +103,9 @@ int main(void)
 
     /* The query survives parsing, because a route can take parameters. The path
      * stays clean, so longest-prefix routing is unaffected. */
-    CHECK_EQ(parse("GET /fx?head_q=0.9&type=1 HTTP/1.0\r\n\r\n", &req), 0, "a query parses");
-    CHECK(strcmp(req.path, "/fx") == 0, "the path excludes the query");
-    CHECK(strcmp(req.query, "head_q=0.9&type=1") == 0, "the query is kept verbatim");
+    CHECK_EQ(parse("GET /search?q=0.9&n=1 HTTP/1.0\r\n\r\n", &req), 0, "a query parses");
+    CHECK(strcmp(req.path, "/search") == 0, "the path excludes the query");
+    CHECK(strcmp(req.query, "q=0.9&n=1") == 0, "the query is kept verbatim");
 
     CHECK_EQ(parse("GET /stream HTTP/1.0\r\n\r\n", &req), 0, "a request with no query parses");
     CHECK(req.query[0] == 0, "and its query is empty, not stale from the last request");
@@ -113,7 +113,7 @@ int main(void)
     /* An over-long query is refused the way an over-long path is. */
     {
         char raw[HTTP_HEADER_MAX];
-        int n = snprintf(raw, sizeof raw, "GET /fx?%0*d HTTP/1.0\r\n\r\n", (int)(HTTP_QUERY_MAX + 10), 7);
+        int n = snprintf(raw, sizeof raw, "GET /search?%0*d HTTP/1.0\r\n\r\n", (int)(HTTP_QUERY_MAX + 10), 7);
         CHECK(n > 0 && (size_t)n < sizeof raw, "the case fits in the header buffer");
         CHECK_EQ(parse(raw, &req), 414, "an over-long query is 414");
     }

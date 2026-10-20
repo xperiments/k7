@@ -37,7 +37,6 @@
 #include "mi_ring.h"
 #include "mi_resample.h"
 #include "mi_station.h"
-#include "tape_fx.h"
 
 #define MAX_CLIENTS     MINI_ICECAST_MAX_CLIENTS
 #define TITLE_MAX       120
@@ -103,23 +102,11 @@ static struct {
     int64_t            played_frames; /* encoded frames broadcast since t0 */
     int16_t            chunk[CHUNK_FRAMES * 2]; /* output chunker, persists across tracks */
     size_t             chunk_n;
-    /* The tape effect, when the station is configured with it. 4 KB of internal
-     * RAM, touched only by the broadcast task, and it keeps its state across
-     * chunks and tracks so the tape never stops rolling. */
-    tape_fx_t          fx;
-    bool               fx_supported; /* the station was built with the effect */
-    volatile bool      fx_enabled;   /* the user has it switched on */
-    float              fx_gain;      /* wet amount, ramped between 0 and 1 */
-    bool               fx_ready;     /* the effect's state matches the audio */
-    int16_t            fx_scratch[CHUNK_FRAMES * 2]; /* the dry copy while fading */
-    uint32_t           fx_gen;     /* the tuning generation currently applied */
     /* While a download owns the card the broadcast plays a noise bed instead of
      * reading the SD. park_until is a deadline in esp_timer microseconds, so a
      * caller that dies cannot park the station forever. */
     volatile int64_t   park_until;
     uint64_t           idle_frames; /* frames of bed, kept out of the track position */
-    uint64_t           fx_us;      /* time in the effect, reported by the telemetry task */
-    uint64_t           fx_frames;
     mi_burst_t        *burst;         /* history for a client connecting mid-track */
     TaskHandle_t       broadcast_handle; /* for the stack-headroom telemetry */
     mi_enc_t          *enc;
@@ -433,34 +420,6 @@ static void measure_level(void)
     S.level_r = sqrtf((float)sr / (float)CHUNK_FRAMES) / 32768.0f;
 }
 
-/* The effect's tuning is handed over lock-free: a control surface writes the
- * values and then bumps a generation counter with release semantics, and the
- * audio task reads the counter with acquire and applies the whole snapshot
- * before the next chunk. A partial update can never be applied, and the audio
- * task never blocks on a UI. */
-static mini_icecast_fx_t fx_tune_next;
-static uint32_t          fx_tune_gen;
-
-static void fx_tune_apply(const mini_icecast_fx_t *v)
-{
-    if (!v->set) return;
-    tape_fx_set_tape_type(&S.fx, (tape_type_t)(v->type > TAPE_METAL ? TAPE_METAL : v->type));
-    tape_fx_set_dolby(&S.fx, (tape_dolby_t)(v->dolby > DOLBY_K ? DOLBY_K : v->dolby));
-    tape_fx_set_tape_quality(&S.fx, v->tape_q);
-    tape_fx_set_head_quality(&S.fx, v->head_q);
-    tape_fx_set_motor_quality(&S.fx, v->motor_q);
-}
-
-esp_err_t mini_icecast_set_fx(const mini_icecast_fx_t *tune)
-{
-    if (!tune) return ESP_ERR_INVALID_ARG;
-    if (!S.enc || !S.fx_supported) return ESP_ERR_INVALID_STATE;
-    fx_tune_next = *tune;
-    __atomic_store_n(&fx_tune_gen,
-                     __atomic_load_n(&fx_tune_gen, __ATOMIC_RELAXED) + 1, __ATOMIC_RELEASE);
-    return ESP_OK;
-}
-
 static bool parked(void)
 {
     int64_t until = S.park_until;
@@ -493,78 +452,9 @@ void mini_icecast_unpark_card(void)
 
 bool mini_icecast_card_parked(void) { return parked(); }
 
-bool mini_icecast_fx_supported(void) { return S.fx_supported; }
 const char *mini_icecast_music_dir(void) { return S.music_dir; }
-bool mini_icecast_fx_enabled(void) { return S.fx_enabled; }
-
-esp_err_t mini_icecast_set_fx_enabled(bool on)
-{
-    if (!S.fx_supported) return ESP_ERR_INVALID_STATE;
-    if (S.fx_enabled == on) return ESP_OK;
-    S.fx_enabled = on;   /* the audio task ramps to it at the next chunk */
-    ESP_LOGI(TAG, "tape_fx: %s", on ? "on" : "off");
-    return ESP_OK;
-}
-
-/* The tape effect, when the station is configured with it. Runs on whatever PCM
- * the encoder is about to take - a whole chunk, or the partial one at the end of
- * a track - because that is the only place the signal is whole and in place.
- * A chunk takes ~2.1 ms of the 23.2 ms it represents. */
-static void fx_apply(size_t frames)
-{
-    if (!S.fx_supported) return;
-
-    uint32_t gen = __atomic_load_n(&fx_tune_gen, __ATOMIC_ACQUIRE);
-    if (gen != S.fx_gen) {
-        fx_tune_apply(&fx_tune_next);
-        S.fx_gen = gen;
-    }
-
-    /* Switching the effect in or out of a live stream cannot be a jump: enabling
-     * one inserts a 4 ms delay line whose contents are whatever was there before,
-     * so the two versions of the chunk are crossfaded over one chunk (~23 ms).
-     * Fully on is the fast path and costs nothing extra. */
-    float target = S.fx_enabled ? 1.f : 0.f;
-    if (S.fx_gain == 0.f && target == 0.f) {
-        S.fx_ready = false;   /* switched off: its state goes stale from here */
-        return;
-    }
-
-    /* Coming back from off, the delay line and the filter states still hold
-     * whatever was playing when it went off. Run one chunk through the effect and
-     * throw it away: that costs one chunk of CPU once, and it is what makes the
-     * fade below start from current audio instead of from minutes-old audio. */
-    if (!S.fx_ready) {
-        memcpy(S.fx_scratch, S.chunk, frames * sizeof(int16_t) * 2);
-        tape_fx_process_s16(&S.fx, S.fx_scratch, frames, 2);
-        S.fx_ready = true;
-        return;               /* this chunk is sent dry, untouched */
-    }
-
-    int64_t t0 = esp_timer_get_time();
-    if (S.fx_gain >= 1.f && target >= 1.f) {
-        tape_fx_process_s16(&S.fx, S.chunk, frames, 2);
-    } else {
-        memcpy(S.fx_scratch, S.chunk, frames * sizeof(int16_t) * 2);
-        tape_fx_process_s16(&S.fx, S.fx_scratch, frames, 2);
-        const size_t n = frames * 2;
-        const float step = (target - S.fx_gain) / (float)n;
-        float g = S.fx_gain;
-        for (size_t i = 0; i < n; i++) {
-            g += step;
-            float w = g < 0.f ? 0.f : (g > 1.f ? 1.f : g);
-            float dry = (float)S.chunk[i], wet = (float)S.fx_scratch[i];
-            S.chunk[i] = (int16_t)(dry + (wet - dry) * w);
-        }
-        S.fx_gain = target;
-    }
-    S.fx_us += (uint64_t)(esp_timer_get_time() - t0);
-    S.fx_frames += frames;
-}
-
 static void emit_chunk(void)
 {
-    fx_apply(CHUNK_FRAMES);
     measure_level();
     mi_enc_feed(S.enc, S.chunk, CHUNK_FRAMES, on_frame, NULL);
 }
@@ -588,9 +478,8 @@ static void chunk_append(const int16_t *s, size_t frames, void *ctx)
 }
 
 /* What the station plays while a download owns the card: a quiet noise bed, so the
- * stream keeps flowing and a listener hears "busy" rather than dead air. It goes
- * through the effect like everything else, which is why it sounds like tape hiss
- * rather than like a noise generator. IDLE_BED_DBFS is peak, before the effect. */
+ * stream keeps flowing and a listener hears "busy" rather than dead air.
+ * IDLE_BED_DBFS is its peak level. */
 #define IDLE_BED_DBFS (-40.0f)                      /* 10^(-40/20) = 0.01 full scale */
 #define IDLE_BED_AMP  (32767.f * 0.01f)
 
@@ -616,7 +505,6 @@ static void idle_pump(void)
 static void flush_pipeline(void)
 {
     if (S.chunk_n) {
-        fx_apply(S.chunk_n);
         mi_enc_feed(S.enc, S.chunk, S.chunk_n, on_frame, NULL);
         S.chunk_n = 0;
     }
@@ -779,13 +667,6 @@ static void telemetry_task(void *arg)
         double frame_us = 1000000.0 * (double)mi_enc_samples_per_frame(S.enc) / (double)S.station.out_hz;
         ESP_LOGI(TAG, "encoder: %" PRIu64 " frames, %.0f us/frame = %.1f%% of one core",
                  frames, per_frame, frame_us > 0 ? 100.0 * per_frame / frame_us : 0.0);
-        /* What the effect costs, measured the same way as the encoder's number, so
-         * the two are directly comparable and the headroom is a subtraction. */
-        if (S.fx_supported && S.fx_frames) {
-            double per = (double)S.fx_us / (double)S.fx_frames;
-            ESP_LOGI(TAG, "tape_fx: %.2f us/chunk = %.1f%% of one core",
-                     per * CHUNK_FRAMES, per * (double)S.station.out_hz / 10000.0);
-        }
         /* The largest single free block is reported next to the free total because
          * it is the number that actually constrains this firmware: esp_wifi_init()
          * needs roughly 25 KB of contiguous DMA-capable internal RAM, and a
@@ -830,8 +711,6 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
         return ESP_ERR_INVALID_ARG;
     }
     S.music_dir = cfg->music_dir;
-    S.fx_supported = cfg->fx != 0;
-    S.fx_enabled = S.fx_supported;
 
     ESP_LOGI(TAG, "station format: %u Hz, %u kbps CBR, joint stereo, %s",
              (unsigned)S.station.out_hz, (unsigned)S.station.bitrate,
@@ -858,20 +737,6 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
              mi_enc_uses_external_memory(S.enc) ? "external memory" : "internal RAM (fallback)");
     if (mi_enc_corrects_padding(S.enc))
         ESP_LOGW(TAG, "this station format needs the encoder's padding bit corrected (see the log above)");
-
-    /* The effect is initialised after the encoder for the same reason the encoder
-     * is allocated early: it is 4 KB of internal RAM, and the order memory is
-     * taken in is part of what keeps Wi-Fi's DMA buffers available. */
-    if (S.fx_supported) {
-        tape_fx_init(&S.fx, (float)S.station.out_hz);
-        fx_tune_apply(&cfg->fx_tune);   /* a no-op unless the caller set it */
-
-        ESP_LOGI(TAG, "tape_fx: on (%u B of state), applied to the chunk before the encoder; "
-                      "the stream now carries saturation, wow/flutter and hiss",
-                 (unsigned)sizeof(tape_fx_t));
-    } else {
-        ESP_LOGI(TAG, "tape_fx: off; the stream is the decoder's output, sample for sample");
-    }
 
     /* The ring holds *encoded* bytes, so it is sized by the station's byte rate;
      * burst_ms still means the same duration of audio. The slack is one internal
@@ -956,12 +821,6 @@ void mini_icecast_status(mini_icecast_status_t *out)
     out->format = MI_FMT_NONE;
     xSemaphoreTake(S.lock, portMAX_DELAY);
     snprintf(out->title, sizeof out->title, "%s", live_title());
-    out->fx_on    = S.fx_enabled;
-    out->fx_type  = (uint8_t)S.fx.type;
-    out->fx_dolby = (uint8_t)S.fx.dolby;
-    out->fx_tape_q  = S.fx.tape_q;
-    out->fx_head_q  = S.fx.head_q;
-    out->fx_motor_q = S.fx.motor_q;
     snprintf(out->file, sizeof out->file, "%s", S.file);
     out->format = S.cur_fmt;
     out->source_hz = S.cur_src_hz;

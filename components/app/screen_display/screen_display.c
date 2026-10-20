@@ -25,7 +25,6 @@
 #include "lvgl.h"
 
 #include "cassette_view.h"
-#include "fx_drawer.h"
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 #include "panel_rgb.h"
 #endif
@@ -158,12 +157,10 @@ static void screen_task(void *arg)
          * here take its lock and nothing more. */
         if (lvgl_port_lock(20)) {
             cassette_view_update(&st);
-            fx_drawer_update(&st);
             lvgl_port_unlock();
         }
 #else
         cassette_view_update(&st);
-        fx_drawer_update(&st);
 #endif
 
         int64_t t0 = esp_timer_get_time();
@@ -264,9 +261,6 @@ esp_err_t screen_display_start(void)
     if (refr) lv_timer_set_period(refr, UI_FRAME_MS);
 #endif
     cassette_view_create();
-    /* After the view's decoration pass, which makes the whole picture one hit
-     * target: a control created later keeps its own press. */
-    fx_drawer_create();
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     /* The view is built before the pointer is bound, so the first tap lands on the
      * finished screen. A controller that does not answer leaves a working screen

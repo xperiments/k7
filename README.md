@@ -648,7 +648,6 @@ components/
     mini_files/             GET / index, GET /music/<name> download
       music_dir.c/.h        the directory's name, path and listing rules
     cassette/               what the screen shows: reels, packs, progress, label
-    tape_fx/                the tape effect on the stream: saturation, wow/flutter, hiss
     dr_libs/                vendored dr_mp3 / dr_flac / dr_wav (public domain / MIT-0)
     shine/                  vendored toots/shine MP3 encoder (LGPL-2.0-only)
   app/                      firmware only: the entry policy, the board adapter and the screen
@@ -657,14 +656,6 @@ components/
     screen_display/         panel and touch bring-up, LVGL's PSRAM allocator, the cassette view
 host/                       the host build: shim, board adapter, fixtures, tests, tools
 ```
-
-`tape_fx` is optional and chosen at build time: `appliance.c` sets `.fx = 1` in the
-`app_services` configuration, and with `.fx = 0` the broadcast never calls it, so the stream is
-the decoder's output sample for sample. It runs on the PCM chunk before the encoder, which
-costs 9.0 % of one core at 44.1 kHz on top of the encoder's 52.9 %, once for the stream rather
-than once per listener. The measurements behind those two numbers, and why the effect cannot be
-a second simultaneous stream, are in
-[`docs/research/tape-fx-output-stream.md`](./docs/research/tape-fx-output-stream.md).
 
 The dependency direction is one-way and is checked by `make -C host layering`:
 `mini_files` and `mini_icecast` depend on `http_server`; only the application

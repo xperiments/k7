@@ -114,15 +114,5 @@ int main(void)
              "9 clients is outside the documented range");
     CHECK(strstr(err, "9") != NULL, "the refusal names the value: '%s'", err);
 
-    /* The runtime tuning seam exists before the station does, and refusing it is
-     * part of its contract: there is no effect to retune. */
-    {
-        mini_icecast_fx_t tune = {.set = true, .type = 0, .dolby = 3,
-                                  .tape_q = 0.7f, .head_q = 0.9f, .motor_q = 0.5f};
-        CHECK_EQ(mini_icecast_set_fx(&tune), ESP_ERR_INVALID_STATE,
-                 "retuning before the broadcast starts is refused");
-        CHECK_EQ(mini_icecast_set_fx(NULL), ESP_ERR_INVALID_ARG, "a null tuning is refused");
-    }
-
     TEST_END();
 }
