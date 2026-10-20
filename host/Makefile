@@ -30,6 +30,7 @@ LDLIBS := -lpthread -lm
 INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/http_server/include \
        -I$(ROOT)/components/portable/audio_format/include \
+       -I$(ROOT)/components/portable/library/include \
        -I$(ROOT)/components/portable/mini_icecast/include \
        -I$(ROOT)/components/portable/mini_files/include \
        -I$(ROOT)/components/portable/cassette/include \
@@ -48,6 +49,7 @@ PROD_SRC := \
   $(ROOT)/components/portable/http_server/http_server.c \
   $(ROOT)/components/portable/http_server/http_parse.c \
   $(ROOT)/components/portable/audio_format/audio_format.c \
+  $(ROOT)/components/portable/library/library.c \
   $(ROOT)/components/portable/mini_icecast/mini_icecast.c \
   $(ROOT)/components/portable/mini_icecast/mi_station.c \
   $(ROOT)/components/portable/mini_icecast/mi_burst.c \
@@ -64,6 +66,7 @@ PROD_SRC := \
 
 vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/audio_format \
+          $(ROOT)/components/portable/library \
           $(ROOT)/components/portable/mini_icecast \
           $(ROOT)/components/portable/mini_files \
           $(ROOT)/components/portable/cassette \
@@ -88,7 +91,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t03_resampler_guard $(BIN)/t04_format_validation \
          $(BIN)/t05_stream_formats $(BIN)/t06_status $(BIN)/t07_burst_icy \
          $(BIN)/t08_http_parse $(BIN)/t09_music_dir $(BIN)/t10_cassette $(BIN)/t11_ring \
-         $(BIN)/t12_transport
+         $(BIN)/t12_transport $(BIN)/t14_library
 
 .PHONY: all test integration layering check tools fixtures bench clean help
 
@@ -161,6 +164,10 @@ $(BIN)/t11_ring: $(CORE_OBJ) $(OBJ)/mi_ring.o $(OBJ)/t11_ring.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t12_transport: $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/t12_transport.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t14_library: $(OBJ)/library.o $(OBJ)/audio_format.o $(OBJ)/shim.o $(OBJ)/t14_library.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

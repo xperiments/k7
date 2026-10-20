@@ -135,7 +135,7 @@ for f in "$ROOT"/components/portable/audio_format/*.c "$ROOT"/components/portabl
     absent "$f" '#include.*(mini_icecast|mini_files|http_server|library)' \
            'audio_format includes no consumer: '"$(basename "$f")"
 done
-if grep -qE '(mini_icecast|mini_files|library)' "$ROOT/components/portable/audio_format/CMakeLists.txt"; then
+if grep -qE '(mini_icecast|mini_files|http_server|library)' "$ROOT/components/portable/audio_format/CMakeLists.txt"; then
     printf '  FAIL  audio_format requires a consumer in its CMakeLists\n'
     fail=1
 else
@@ -154,7 +154,7 @@ if [ -d "$ROOT/components/portable/library" ]; then
         absent "$f" '#include.*(mini_icecast|mini_files|http_server)' \
                'library includes no consumer: '"$(basename "$f")"
     done
-    if grep -qE '(mini_icecast|mini_files)' "$ROOT/components/portable/library/CMakeLists.txt" 2>/dev/null; then
+    if grep -qE '(mini_icecast|mini_files|http_server)' "$ROOT/components/portable/library/CMakeLists.txt" 2>/dev/null; then
         printf '  FAIL  library requires the broadcast or the file surface\n'
         fail=1
     else
