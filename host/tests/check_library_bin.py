@@ -29,7 +29,8 @@ def fixture_tracks(root):
             if not d.startswith(".") and not os.path.islink(os.path.join(dirpath, d))
         )
         for name in sorted(filenames):
-            if name.startswith(".") or os.path.islink(os.path.join(dirpath, name)):
+            if (name.startswith(".") or ".." in name or "/" in name or "\\" in name
+                    or len(name) > 128 or os.path.islink(os.path.join(dirpath, name))):
                 continue
             if os.path.splitext(name)[1].lower() not in AUDIO:
                 continue

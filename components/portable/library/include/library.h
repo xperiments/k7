@@ -99,6 +99,10 @@ mi_fmt_t     library_format(const library_t *lib, lib_node_t n);
  * it does not fit, and 0 for the root (whose relative path is empty). */
 size_t       library_relpath(const library_t *lib, lib_node_t n, char *buf, size_t buf_size);
 
+/* Build the absolute path (Music directory + relative path) for a node. This is
+ * the only place the route and the broadcast turn a tree node into a filename. */
+size_t       library_abspath(const library_t *lib, lib_node_t n, char *buf, size_t buf_size);
+
 /* Split relpath on '/', walk the children: exact match first, then an ASCII
  * case-insensitive fallback. An empty path is the root. A path that is empty in
  * a segment, contains "." or "..", or matches more than one child in the

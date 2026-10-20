@@ -278,6 +278,8 @@ if [ -z "$BOARD_URL" ]; then
             "$(wc -c <"$TMP/frozen.json" | tr -d ' ')"
         check_eq "GET /music for the deleted file is now a 404" \
             "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18101/music/tone-44100.flac")" "404"
+        curl -s -o "$TMP/frozen.html" "http://127.0.0.1:18101/"
+        check_match "the index still lists the deleted file from the tree" "$(cat "$TMP/frozen.html")" 'tone-44100\.flac'
     fi
 
     # A nested tree through the endpoint: paths and playlist order, not just
@@ -294,6 +296,34 @@ if [ -z "$BOARD_URL" ]; then
             bad "nested tree: $(cat "$TMP/nested.out")"
         fi
         check_match "and its paths use the tree, not the flat directory" "$(cat "$TMP/nested.json")" '"path":"Album/01 - Song.flac"'
+        curl -s -o "$TMP/nested.html" "http://127.0.0.1:18106/"
+        if $PY "$HOST_DIR/tests/check_index.py" "$TMP/nested.html" "$TMP/nested" >"$TMP/nestedindex.out" 2>&1; then
+            ok "$(cat "$TMP/nestedindex.out")"
+        else
+            bad "nested index: $(cat "$TMP/nestedindex.out")"
+        fi
+        for rel in "Album/01 - Song.flac" "Album/Deep/02 - Song.wav" "loose.mp3"; do
+            enc=$(printf '%s' "$rel" | sed 's/ /%20/g')
+            curl -s -D "$TMP/ndhdr" -o "$TMP/nd.bin" "http://127.0.0.1:18106/music/$enc"
+            if cmp -s "$TMP/nd.bin" "$TMP/nested/$rel"; then
+                ok "nested download is byte-identical: $rel"
+            else
+                bad "nested download differs: $rel"
+            fi
+            check_eq "nested length: $rel" \
+                "$(tr -d '\r' <"$TMP/ndhdr" | sed -n 's/^Content-Length: //p')" \
+                "$(wc -c <"$TMP/nested/$rel" | tr -d ' ')"
+            case "$rel" in
+            *.flac) want_type=audio/flac ;;
+            *.wav)  want_type=audio/wav ;;
+            *)      want_type=audio/mpeg ;;
+            esac
+            check_match "nested type: $rel" "$(tr -d '\r' <"$TMP/ndhdr")" "^Content-Type: $want_type$"
+        done
+        check_eq "an encoded slash is refused" \
+            "$(curl -s -o /dev/null -w '%{http_code}' --path-as-is "http://127.0.0.1:18106/music/Album%2F01%20-%20Song.flac")" "400"
+        check_eq "a parent segment is refused" \
+            "$(curl -s -o /dev/null -w '%{http_code}' --path-as-is "http://127.0.0.1:18106/music/Album/../loose.mp3")" "400"
         curl -s -o "$TMP/nested.bin" "http://127.0.0.1:18106/api/library.bin"
         if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/nested.bin" "$TMP/nested" --state ok >"$TMP/nestedbin.out" 2>&1; then
             ok "the binary view reconstructs the nested tree"
@@ -312,6 +342,8 @@ if [ -z "$BOARD_URL" ]; then
             bad "no card state: $(cat "$TMP/nocard.out")"
         fi
         check_match "and the boot log names it" "$(cat "$TMP/nocard.log")" 'library: state=no_card '
+        curl -s -o "$TMP/nocard.html" "http://127.0.0.1:18102/"
+        check_match "the index says no card" "$(cat "$TMP/nocard.html")" 'No card mounted'
         curl -s -o "$TMP/nocard.bin" "http://127.0.0.1:18102/api/library.bin"
         if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/nocard.bin" "$FIX" --state no_card >"$TMP/nocardbin.out" 2>&1; then
             ok "the no-card binary is an empty root"
@@ -328,6 +360,8 @@ if [ -z "$BOARD_URL" ]; then
         else
             bad "missing directory state: $(cat "$TMP/nodir.out")"
         fi
+        curl -s -o "$TMP/nodir.html" "http://127.0.0.1:18103/"
+        check_match "the index says the music directory is missing" "$(cat "$TMP/nodir.html")" 'No music directory'
         curl -s -o "$TMP/nodir.bin" "http://127.0.0.1:18103/api/library.bin"
         if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/nodir.bin" "$TMP/no-music-parent/missing" --state no_dir >"$TMP/nodirbin.out" 2>&1; then
             ok "the missing-directory binary is an empty root"
@@ -344,6 +378,8 @@ if [ -z "$BOARD_URL" ]; then
         else
             bad "empty state: $(cat "$TMP/empty.out")"
         fi
+        curl -s -o "$TMP/empty.html" "http://127.0.0.1:18104/"
+        check_match "the index says there are no tracks" "$(cat "$TMP/empty.html")" 'contains no tracks'
         curl -s -o "$TMP/empty.bin" "http://127.0.0.1:18104/api/library.bin"
         if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/empty.bin" "$TMP/empty" --state empty >"$TMP/emptybin.out" 2>&1; then
             ok "the empty binary is an empty root"
@@ -360,6 +396,8 @@ if [ -z "$BOARD_URL" ]; then
             bad "truncated view: $(cat "$TMP/trunc.out")"
         fi
         check_match "and the body says truncated" "$(cat "$TMP/trunc.json")" '"truncated":true'
+        curl -s -o "$TMP/trunc.html" "http://127.0.0.1:18105/"
+        check_match "the index notes the truncation" "$(cat "$TMP/trunc.html")" 'truncated at 1 tracks'
         curl -s -o "$TMP/trunc.bin" "http://127.0.0.1:18105/api/library.bin"
         if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/trunc.bin" "$FIX" --state ok --truncated --subset >"$TMP/truncbin.out" 2>&1; then
             ok "the truncated binary carries the same prefix"

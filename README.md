@@ -8,7 +8,7 @@ music over HTTP:
   the stream format never changes;
 * **a browsable index** at `/`, listing the tracks on the card with their sizes
   and what is playing now;
-* **byte-exact downloads** at `/music/<name>` — the original `.mp3`, `.flac` or
+* **byte-exact downloads** at `/music/<relative path>` — the original `.mp3`, `.flac` or
   `.wav` exactly as it sits on the card, not a transcode.
 
 Anything the card holds at any sample rate is decoded, resampled to one station
@@ -97,14 +97,17 @@ one line, and the error message names the component.
 ## The card
 
 * Format the card as **FAT32** (exFAT also works if enabled in `menuconfig`).
-* Put your tracks in a **single flat directory**: `/sdcard/music/`. There is no
-  recursion into subdirectories and no database — what is in that one directory
-  is the library.
+* Put your tracks under `/sdcard/music/`, in subdirectories if you like. The tree
+  is scanned once at boot into a PSRAM arena; there is no per-request directory
+  walk. Names are sorted case-insensitively, directories and tracks interleave,
+  and the Playlist is that depth-first order.
 * Accepted extensions: `.mp3`, `.flac`, `.wav`, in any case. Any sample rate, mono
   or stereo. Files whose name begins with `.` are ignored (that is how macOS
   AppleDouble `._track.mp3` files are skipped).
 * Long file names are enabled up to 128 characters (`CONFIG_FATFS_MAX_LFN=128`).
-* Tracks are played in directory order, looping forever.
+* The index and downloads use that Playlist order. The live stream still walks the
+  directory in its own order until the broadcast change lands; the two converge
+  then.
 
 To try it without a music collection, copy the test corpus from
 `host/fixtures/` onto the card:
@@ -207,9 +210,9 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 
 | URL | What it does |
 |---|---|
-| `GET /` | The index: every track in `music_dir`, with its size, what is playing now, and a link to the stream. Also the device's diagnostic page when no card is mounted. |
+| `GET /` | The index: every Track in the Library tree, in Playlist order, with its size, what is playing now, and a link to the stream. Also the device's diagnostic page when no card is mounted. |
 | `GET /stream` | The live stream: continuous `audio/mpeg` at the station rate and bit rate. Ask with `Icy-MetaData: 1` and the current track is interleaved every 16 000 encoded bytes. |
-| `GET /music/<url-encoded-name>` | The original, untranscoded bytes, with `Content-Length` and a media type from the extension. One download at a time; a second gets `503`. |
+| `GET /music/<url-encoded-relative-path>` | The original, untranscoded bytes at any depth, with `Content-Length` and a media type from the extension. One download at a time; a second gets `503`. |
 | anything else | `404`. |
 
 ```bash
@@ -645,8 +648,9 @@ components/
       mi_icy.c/.h           the metadata interval and its 16-byte blocks
       mi_ring.c/.h          the per-client send ring: the audio task never writes a socket
       mini_icecast.c/.h     pacing, client list, station status
-    mini_files/             GET / index, GET /music/<name> download
-      music_dir.c/.h        the directory's name, path and listing rules
+    library/                the immutable tree, arena, JSON, Playlist and lookup
+    library_http/           GET /api/library[.bin] from the prebuilt views
+    mini_files/             GET / index, GET /music/<relative path> download
     cassette/               what the screen shows: reels, packs, progress, label
     dr_libs/                vendored dr_mp3 / dr_flac / dr_wav (public domain / MIT-0)
     shine/                  vendored toots/shine MP3 encoder (LGPL-2.0-only)

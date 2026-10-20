@@ -291,6 +291,7 @@ static void test_main_tree(void)
     file_at(root, "loose.wav", 33);
     file_at(root, "Caf\xc3\xa9.mp3", 44);
     file_at(root, ".hidden.mp3", 1);
+    file_at(root, "mix..final.mp3", 1);
     file_at(root, "notes.txt", 1);
 
     char link[LIB_PATH_MAX];
@@ -362,6 +363,15 @@ static void test_main_tree(void)
     CHECK(!has_name(lib, "Artist/Album/notes.txt", LIB_TRACK), "non-audio is not indexed");
     CHECK(!has_name(lib, "link.mp3", LIB_TRACK), "symlink is not indexed");
     CHECK(!has_name(lib, name129, LIB_TRACK), "a 129-byte name is not indexed");
+    CHECK(!has_name(lib, "mix..final.mp3", LIB_TRACK), "a name containing .. is not indexed");
+
+    char loose_abs[LIB_PATH_MAX];
+    lib_node_t loose_node = library_find(lib, "loose.wav");
+    CHECK_EQ(library_abspath(lib, loose_node, loose_abs, sizeof loose_abs),
+             strlen(root) + 1 + strlen("loose.wav"), "absolute path length");
+    char want_loose[LIB_PATH_MAX];
+    snprintf(want_loose, sizeof want_loose, "%s/loose.wav", root);
+    CHECK(strcmp(loose_abs, want_loose) == 0, "absolute path is root + relative path");
 
     /* The tree is immutable: a lookup after the file moves still uses the arena. */
     char loose[LIB_PATH_MAX], moved[LIB_PATH_MAX];

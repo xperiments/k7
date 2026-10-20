@@ -48,7 +48,8 @@ static void card_task(void *arg)
         app_board_card_t card = app_board_card_mount(MUSIC_DIR);
         if (card.music_dir) {
             mini_files_set_card(card.music_dir, NULL);
-            ESP_LOGI(TAG, "card mounted after %d retries: %s is now available", attempt + 1, MUSIC_DIR);
+            ESP_LOGI(TAG, "card mounted after %d retries: %s; the Library generation will be "
+                          "rebuilt by the rescan path", attempt + 1, MUSIC_DIR);
             vTaskDelete(NULL);
             return;
         }

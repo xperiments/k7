@@ -61,7 +61,6 @@ PROD_SRC := \
   $(ROOT)/components/portable/mini_icecast/mi_decode.c \
   $(ROOT)/components/portable/mini_icecast/mi_resample.c \
   $(ROOT)/components/portable/mini_files/mini_files.c \
-  $(ROOT)/components/portable/mini_files/music_dir.c \
   $(ROOT)/components/portable/cassette/cassette.c \
   $(ROOT)/components/portable/app_services/app_services.c \
   $(SHINE_SRC)
@@ -80,8 +79,8 @@ vpath %.c $(ROOT)/components/portable/http_server \
 CORE_OBJ := $(OBJ)/audio_format.o $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(SHINE_OBJ) $(OBJ)/shim.o
 BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o $(OBJ)/mi_ring.o
 CASSETTE_OBJ := $(OBJ)/cassette.o
-SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/library.o
-HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/mini_icecast.o $(OBJ)/mini_files.o $(OBJ)/music_dir.o $(BURST_OBJ)
+SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o
+HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/mini_icecast.o $(OBJ)/mini_files.o $(OBJ)/library.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o
 
@@ -93,7 +92,7 @@ PYTHON ?= python3
 TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t03_resampler_guard $(BIN)/t04_format_validation \
          $(BIN)/t05_stream_formats $(BIN)/t06_status $(BIN)/t07_burst_icy \
-         $(BIN)/t08_http_parse $(BIN)/t09_music_dir $(BIN)/t10_cassette $(BIN)/t11_ring \
+         $(BIN)/t08_http_parse $(BIN)/t10_cassette $(BIN)/t11_ring \
          $(BIN)/t12_transport $(BIN)/t14_library
 
 .PHONY: all test integration layering check tools fixtures bench clean help
@@ -151,10 +150,6 @@ $(BIN)/t07_burst_icy: $(CORE_OBJ) $(BURST_OBJ) $(OBJ)/t07_burst_icy.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t08_http_parse: $(OBJ)/http_parse.o $(OBJ)/t08_http_parse.o
-	@mkdir -p $(BIN)
-	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
-
-$(BIN)/t09_music_dir: $(CORE_OBJ) $(OBJ)/music_dir.o $(OBJ)/t09_music_dir.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

@@ -229,7 +229,7 @@ static bool name_is_component(const char *name, size_t len)
 {
     if (len == 0 || len > LIB_NAME_MAX) return false;
     if (name[0] == '.') return false; /* dot-files, "." and ".." */
-    if (len == 2 && name[0] == '.' && name[1] == '.') return false;
+    if (strstr(name, "..")) return false; /* ticket 06: the route refuses this shape too */
     if (strchr(name, '/') || strchr(name, '\\')) return false;
     if (!library_utf8_valid(name, len)) return false;
     return true;
@@ -1069,6 +1069,16 @@ size_t library_relpath(const library_t *lib, lib_node_t n, char *buf, size_t buf
         }
     }
     return len;
+}
+
+size_t library_abspath(const library_t *lib, lib_node_t n, char *buf, size_t buf_size)
+{
+    if (!lib || n >= lib->node_count || !buf || !buf_size) return (size_t)-1;
+    char rel[LIB_PATH_MAX];
+    size_t rl = library_relpath(lib, n, rel, sizeof rel);
+    if (rl == (size_t)-1) return (size_t)-1;
+    int k = snprintf(buf, buf_size, "%s%s%s", lib->music_dir, rl ? "/" : "", rel);
+    return (k < 0 || (size_t)k >= buf_size) ? (size_t)-1 : (size_t)k;
 }
 
 static bool ascii_eq_fold(const char *a, size_t alen, const char *b, size_t blen)

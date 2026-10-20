@@ -134,7 +134,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
      * cardless device stays diagnosable. */
     mini_files_cfg_t files = {
         .station_name = cfg->station_name,
-        .music_dir = card.music_dir,
+        .library = s_library,
         .mount_error = card.music_dir ? NULL : card.mount_error,
     };
     e = mini_files_start(&files);

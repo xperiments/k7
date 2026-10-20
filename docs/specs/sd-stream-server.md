@@ -26,11 +26,11 @@ flagged so they can be disproved on hardware.
 |---|---|
 | R1 | Boot on an ESP32-S3 devkit **with PSRAM**, join Wi-Fi using credentials compiled into the source |
 | R2 | Mount the microSD card over 1-bit SDMMC at `/sdcard` |
-| R3 | Decode `.mp3`, `.flac`, `.wav` — any sample rate — from `music_dir` |
+| R3 | Decode `.mp3`, `.flac`, `.wav` — any sample rate — from the Library tree |
 | R4 | Resample everything to one station rate and encode to **MP3** |
 | R5 | Broadcast one continuous ICY stream at `GET /stream` on port 8000 |
-| R6 | Serve an HTML index of `music_dir` at `GET /` |
-| R7 | Serve the **original, untranscoded bytes** of a file at `GET /music/<name>` |
+| R6 | Serve an HTML index of the Library tree at `GET /` |
+| R7 | Serve the **original, untranscoded bytes** of a Track at `GET /music/<relative path>` |
 | R8 | Degrade rather than abort when the card is absent or unreadable |
 
 ### Out of scope, explicitly
@@ -161,7 +161,9 @@ components/
     mi_decode.c/.h
     mi_resample.c/.h
     mini_icecast.c/.h
-  mini_files/             GET / index, GET /music/<name> download            (new)
+  library/                boot-built tree, arena, JSON, Playlist and lookup  (new)
+  library_http/           GET /api/library[.bin] from the prebuilt views    (new)
+  mini_files/             GET / index, GET /music/<relative path> download  (new)
   shine/                  vendored, unmodified, separate licence             (new)
 ```
 
@@ -171,7 +173,8 @@ short-lived task that reads and parses the request header and routes it:
 - `GET /stream` → hand the fd to `mini_icecast` for registration (under the broadcast lock,
   burst included, exactly as `handle_new()` does today at `mini_icecast.c:237-246`), then the
   routing task exits.
-- `GET /` and `GET /music/<name>` → served entirely inside the routing task by `mini_files`.
+- `GET /` and `GET /music/<relative path>` → served entirely inside the routing task by
+  `mini_files`, reading the Library generation.
 - Anything else → `404`.
 
 **Requirement S2.** A connection limit caps concurrently-parsing tasks, and `listen()`'s
@@ -332,7 +335,7 @@ against the code**; two are new, introduced by R6/R7.
 | D2 | `"icy-name: %s\r\n"` has a space after the colon (`mini_icecast.c:225`); real Icecast emits none. | **[read]** | Emit `icy-name:` with no space. Low stakes against permissive parsers, but this server is the natural loopback fixture for a client-side parser, so canonical headers matter. |
 | D3 | `max_clients` is documented `1..4` (`mini_icecast.h:22`) but silently coerced to 2 (`mini_icecast.c:395`) while `clients[]` is sized `MAX_CLIENTS 4` (`:32`). | **[read]** | Honour the value across the full 1..4 range, and reject out-of-range with a diagnostic log instead of silent coercion. |
 | D4 | Resampler stack overflow at extreme downsampling: `double row[256]` at `mi_resample.c:47` is indexed by `T`; `T = 2 * ceil(ZERO_X / fc)` with `fc = 0.95 * out/in` for downsampling. `48000 → 3000` gives `T ≈ 540`, `44100 → 1000` gives `T ≈ 1486`. | **[read, arithmetic re-derived]** | Not reachable at a 44.1/48 kHz station, but `out_hz` is user-configurable, so clamp or assert `T <= 256` at construction and fail `mi_rs_new()` with a diagnostic rather than overflowing the radio task's stack. |
-| D5 | **New.** Path handling for R7. Nothing sanitizes a filename from a request today because nothing accepted one. | **[read]** | Reject any name containing `/`, containing `..`, beginning with `.` (this also excludes macOS `._foo.mp3` AppleDouble files, which `mini_icecast.c:378` already filters), or whose extension is not `.mp3`/`.flac`/`.wav` case-insensitively. Build the path with `snprintf` into a fixed buffer and re-verify it lies under `music_dir` before `stat()`. |
+| D5 | **New.** Path handling for R7. Nothing sanitizes a filename from a request today because nothing accepted one. | **[read]** | Decode one path segment at a time; reject an empty segment, `.`/`..`, a leading `.`, a NUL, a `/` or `\` inside a segment, and a non-audio node. Resolve only through the Library tree, then open `root + relative path`; never join a request path directly. |
 | D6 | **New.** SDMMC contention between the decoder and downloads. | **[read]** | Serialize downloads behind a mutex; exactly **one** download at a time (R7), returning `503` to a second requester rather than queueing it. A 40 MB FLAC download is the worst case for card arbitration, and the radio must never starve. Also raise `max_files` above `main.c:79`'s `4` only if measurement demands it — with one download plus one decoder, 4 is ample. |
 
 ---
@@ -358,9 +361,9 @@ Unchanged from today except for the output format:
 
 ### 6.2 `GET /` — the index
 
-**Requirement I1.** One flat HTML page listing every file in `music_dir` that `is_audio()`
-accepts (`mini_icecast.c:376-381`), each row showing the filename, its size, and a link to
-`/music/<url-encoded-name>`. One directory, no recursion, no pagination.
+**Requirement I1.** One HTML page listing every Track in the Library tree in Playlist order,
+each row showing the relative path, its size, and a link to
+`/music/<url-encoded-relative-path>`. The tree may be nested; there is no pagination.
 
 **Requirement I2.** The page also shows the current title via `mini_icecast_now_playing()`
 (`mini_icecast.c:415`), and a link to `/stream`.
@@ -373,7 +376,7 @@ Filenames are url-encoded in links and url-decoded on receipt. FATFS LFN is alre
 for 128 chars (`sdkconfig.defaults`, `CONFIG_FATFS_MAX_LFN=128`), so a 128-byte path buffer is
 sufficient, but the decode must not overflow it.
 
-### 6.3 `GET /music/<name>` — download
+### 6.3 `GET /music/<relative path>` — download
 
 **Requirement R7a.** Serve the file's **original bytes**, untranscoded, with a
 `Content-Length` from `stat()` and a `Content-Type` chosen by extension (`.mp3` →
@@ -392,7 +395,7 @@ stream path already has (`mini_icecast.c:36`, `:198`).
 
 ## 7. Access model and its consequences
 
-`GET /` and `GET /music/<name>` are **open to anyone who can reach port 8000**. There is no
+`GET /` and `GET /music/<relative path>` are **open to anyone who can reach port 8000**. There is no
 authentication, by decision and not by omission.
 
 The reasoning: the card holds audio you own, the device is intended for your own LAN, and any
@@ -450,8 +453,8 @@ host result transfers.
 | T3 | End-to-end wire format | `curl -s http://<addr>:8000/stream \| ffprobe -` | **both** | `ffprobe` reports **MPEG audio, 44100 Hz, 128 kb/s, joint stereo**, not WAV. On the host this runs against the host build of the real server (§10.5) |
 | T4 | Accept loop (D1) | Open a TCP connection to the port and send nothing; then immediately connect a real client | **both** | Second client receives headers within 2 s; no 2 s stall |
 | T5 | ICY metadata | `curl -s -H 'Icy-MetaData: 1' http://<addr>:8000/stream \| head -c 40000` and inspect | **both** | `icy-metaint: 16000` present; a `StreamTitle='...';` block appears at byte offset 16 000 of the body |
-| T6 | Index | `curl -s http://<addr>:8000/` | **both** | Lists exactly the `.mp3/.flac/.wav` files in `music_dir`, with sizes matching `ls -l` (host) / the FATFS listing (board) |
-| T7 | Download | `curl -s -o out.flac http://<addr>:8000/music/<name>.flac && cmp out.flac <path>` | **both** | Byte-identical |
+| T6 | Index | `curl -s http://<addr>:8000/` | **both** | Lists exactly the `.mp3/.flac/.wav` Tracks in the Library tree, in Playlist order, with sizes matching `ls -l` (host) / the FATFS listing (board) |
+| T7 | Download | `curl -s -o out.flac http://<addr>:8000/music/<relative-path>.flac && cmp out.flac <path>` | **both** | Byte-identical, at any depth |
 | T8 | Path guard (D5) | `curl -s -o /dev/null -w '%{http_code}' 'http://<addr>:8000/music/..%2f..%2fetc%2fpasswd'` and variants | **both** | `400` or `404`; never file contents |
 | T9 | Download concurrency (D6) | Start two downloads of a large FLAC simultaneously | **both** | One streams, the other gets `503`; `/stream` audio does not glitch |
 | T9b | Decoder/download contention | Download a large FLAC repeatedly while `/stream` is being probed | **board only** | Zero starvation rebases logged; `ffprobe` never reports a discontinuity |
