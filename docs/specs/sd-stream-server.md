@@ -751,5 +751,6 @@ committed host test rather than depending on them.
 | `docs/adr/0001-serve-original-bytes-not-transcoded.md` | Why downloads are not MP3 (§6.3) |
 | `docs/adr/0002-vendor-shine-as-separate-lgpl-component.md` | Why `shine` is a separate component (§8) |
 | `docs/adr/0003-extract-http-server-from-mini-icecast.md` | Why the HTTP layer is extracted (§3) |
+| `docs/adr/0012-boot-built-library-arena.md` | The boot-built Library tree that will replace the flat Music-directory model, changing §6.2 and §6.3 when implemented; not yet implemented |
 | `docs/specs/CONTEXT.md` | Glossary for the terms this specification depends on |
 | `CONTEXT-MAP.md` | How this context relates to the radio-player context |

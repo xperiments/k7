@@ -9,13 +9,23 @@ consumer side is a separate context — see [`CONTEXT-MAP.md`](../../CONTEXT-MAP
 ### The library
 
 **Music directory**:
-The single directory on the mounted card that the server plays and lists. Its contents define
-the library; there is no database and no recursion into subdirectories.
-_Avoid_: library root, media path, play list
+The root directory on the mounted card. Its contents, recursively, define the library; the
+directory is not itself the library. There is no database.
+_Avoid_: library root, media path
+
+**Library tree**:
+The directories and tracks under the music directory, as one ordered tree. The playlist and the
+JSON view are views of it.
+_Avoid_: file list, index
 
 **Track**:
-One playable audio file in the music directory, in any of the three accepted source formats.
+One playable audio file in the library tree, in any of the three accepted source formats.
 _Avoid_: song, item, entry
+
+**Playlist**:
+The ordered sequence of tracks the broadcast plays: depth-first, name-sorted, derived from the
+library tree. It is not stored separately.
+_Avoid_: queue, play list, rotation
 
 **Source format**:
 The container and codec a track is stored in — MP3, FLAC or WAV. What the card holds, not what
