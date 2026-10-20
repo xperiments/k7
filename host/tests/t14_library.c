@@ -582,6 +582,41 @@ static void test_deep_path(void)
     free(root);
 }
 
+
+static void test_store(void)
+{
+    char *root = temp_root();
+    file_at(root, "a.wav", 3);
+    library_cfg_t cfg = {.music_dir = root, .build_json = true,
+                         .generation = library_next_generation()};
+    library_t *one = NULL;
+    CHECK_EQ(library_open(&cfg, &one), LIB_OK, "store generation one opens");
+    CHECK(library_publish(one), "generation one publishes");
+    CHECK_EQ(library_current_generation(), library_generation(one), "the current generation is one");
+
+    const library_t *held = library_acquire();
+    CHECK(held == one, "acquire returns the published generation");
+    CHECK_EQ(library_refs(one), 2, "the publisher and the reader each hold a reference");
+
+    library_cfg_t cfg2 = {.music_dir = root, .build_json = true,
+                          .generation = library_next_generation()};
+    library_t *two = NULL;
+    CHECK_EQ(library_open(&cfg2, &two), LIB_OK, "store generation two opens");
+    CHECK(library_generation(two) > library_generation(one), "the rescan number advances");
+    CHECK(library_publish(two), "generation two publishes");
+    CHECK_EQ(library_refs(one), 1, "the retired generation survives its slow reader");
+    CHECK_EQ(library_current_generation(), library_generation(two), "the current generation is two");
+
+    library_release(held); /* the last reader frees generation one */
+    const library_t *again = library_acquire();
+    CHECK(again == two, "a new lease sees generation two");
+    CHECK_EQ(library_refs(two), 2, "the new lease is counted");
+    library_release(again);
+    remove_tree(root);
+    /* The published generation intentionally outlives this test process; there is
+     * no app shutdown hook and a dangling current pointer would be worse. */
+}
+
 int main(void)
 {
     test_utf8();
@@ -593,6 +628,7 @@ int main(void)
     test_truncation();
     test_unreadable_dir();
     test_deep_path();
+    test_store();
 
     /* The host filesystem is case-insensitive, so it cannot hold two names that
      * differ only by case; the ambiguous-fallback refusal is implemented in

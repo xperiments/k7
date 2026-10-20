@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -137,11 +138,84 @@ struct library {
     lib_state_t state;
     bool truncated;
     uint32_t generation;
+    uint32_t refs;
     uint32_t node_count;
     uint32_t track_count;
     uint64_t total_bytes;
     uint32_t crc32;
 };
+
+/* ----------------------------------------------------------- generation store */
+
+static pthread_mutex_t g_store_lock = PTHREAD_MUTEX_INITIALIZER;
+static library_t *g_current;
+static uint32_t g_next_generation = 1;
+
+uint32_t library_next_generation(void)
+{
+    pthread_mutex_lock(&g_store_lock);
+    uint32_t g = g_next_generation++;
+    if (g == 0) g = g_next_generation++;
+    pthread_mutex_unlock(&g_store_lock);
+    return g;
+}
+
+uint32_t library_refs(const library_t *lib) { return lib ? lib->refs : 0; }
+
+uint32_t library_current_generation(void)
+{
+    pthread_mutex_lock(&g_store_lock);
+    uint32_t g = g_current ? g_current->generation : 0;
+    pthread_mutex_unlock(&g_store_lock);
+    return g;
+}
+
+bool library_publish(library_t *next)
+{
+    if (!next) return false;
+    bool free_old = false;
+    library_t *old;
+    pthread_mutex_lock(&g_store_lock);
+    old = g_current;
+    if (old == next || (old && next->generation <= old->generation)) {
+        pthread_mutex_unlock(&g_store_lock);
+        return false;
+    }
+    next->refs = 1;
+    g_current = next;
+    if (old) {
+        if (old->refs > 0) old->refs--;
+        if (old->refs == 0) free_old = true;
+    }
+    pthread_mutex_unlock(&g_store_lock);
+    if (free_old) library_close(old);
+    return true;
+}
+
+const library_t *library_acquire(void)
+{
+    pthread_mutex_lock(&g_store_lock);
+    library_t *p = g_current;
+    if (p) p->refs++;
+    pthread_mutex_unlock(&g_store_lock);
+    return p;
+}
+
+void library_release(const library_t *lib)
+{
+    if (!lib) return;
+    bool free_it = false;
+    pthread_mutex_lock(&g_store_lock);
+    library_t *p = (library_t *)lib;
+    if (p->refs == 0) {
+        pthread_mutex_unlock(&g_store_lock);
+        return; /* double release: do not free somebody else's pointer */
+    }
+    p->refs--;
+    if (p->refs == 0 && p != g_current) free_it = true;
+    pthread_mutex_unlock(&g_store_lock);
+    if (free_it) library_close(p);
+}
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -831,7 +905,7 @@ static lib_result_t begin_scan(const library_cfg_t *cfg, char *root, size_t cap,
 
 static lib_result_t finish_library(lib_scan_t *s, const char *root, lib_state_t state,
                                    const char *error, bool want_json, uint64_t max_bytes,
-                                   library_t **out)
+                                   uint32_t generation, library_t **out)
 {
     bool truncated = s->truncated;
     void *arena = NULL;
@@ -855,7 +929,9 @@ static lib_result_t finish_library(lib_scan_t *s, const char *root, lib_state_t 
     lib->track_count = tracks_n;
     lib->total_bytes = total;
     lib->crc32 = crc;
-    lib->generation = ((const lib_header_disk_t *)lib->arena)->generation;
+    lib->refs = 1;
+    lib->generation = generation ? generation : 1;
+    ((lib_header_disk_t *)lib->arena)->generation = lib->generation;
     if (arena_size > max_bytes) truncated = true;
     lib->state = state;
     lib->truncated = truncated;
@@ -931,7 +1007,8 @@ lib_result_t library_open(const library_cfg_t *cfg, library_t **out)
     lib_state_t state = s.root_failed ? LIB_STATE_NO_DIR
                        : s.track_count ? LIB_STATE_OK : LIB_STATE_EMPTY;
     const char *error = s.root_failed ? s.error : NULL;
-    return finish_library(&s, root, state, error, cfg->build_json, s.max_bytes, out);
+    return finish_library(&s, root, state, error, cfg->build_json, s.max_bytes,
+                          cfg->generation, out);
 }
 
 lib_result_t library_open_no_card(const library_cfg_t *cfg, const char *reason,
@@ -947,12 +1024,17 @@ lib_result_t library_open_no_card(const library_cfg_t *cfg, const char *reason,
 
     char why[160];
     snprintf(why, sizeof why, "no card mounted: %s", reason && reason[0] ? reason : "not mounted");
-    return finish_library(&s, root, LIB_STATE_NO_CARD, why, cfg->build_json, s.max_bytes, out);
+    return finish_library(&s, root, LIB_STATE_NO_CARD, why, cfg->build_json, s.max_bytes,
+                          cfg->generation, out);
 }
 
 void library_close(library_t *lib)
 {
     if (!lib) return;
+    pthread_mutex_lock(&g_store_lock);
+    bool unsafe = lib == g_current || lib->refs > 1;
+    pthread_mutex_unlock(&g_store_lock);
+    if (unsafe) return; /* a published or leased generation is not closed directly */
     if (lib->json) heap_caps_free(lib->json);
     if (lib->arena) heap_caps_free(lib->arena);
     free(lib->music_dir);

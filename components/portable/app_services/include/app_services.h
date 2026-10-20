@@ -63,6 +63,17 @@ esp_err_t app_services_check(const app_services_cfg_t *cfg, char *err, size_t er
  * missing card is not a failure: the file surface still serves the index. */
 esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_t *report);
 
+/* Build and publish a new Library generation off the side. Returns ESP_OK when
+ * the scan task started, ESP_ERR_INVALID_STATE when one is already running, and
+ * ESP_ERR_NO_MEM when the task could not be created. The broadcast finishes its
+ * current Track on the old generation. */
+esp_err_t app_services_rescan(void);
+
+/* Tell the composition whether the retry task has a mounted card. The rescan
+ * uses the no-card generation when there is none, so the state stays
+ * diagnostic instead of turning into a filesystem error. */
+void app_services_card_state(bool present, const char *mount_error);
+
 #ifdef __cplusplus
 }
 #endif

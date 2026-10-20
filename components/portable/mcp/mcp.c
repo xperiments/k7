@@ -572,7 +572,7 @@ static bool arg_int(const char *body, const jtok_t *t, int nt, int args,
     return jtok_int(body, &t[v], out);
 }
 
-static bool tool_library_list(w_t *w, const char *body, const jtok_t *t, int nt, int args)
+static bool tool_library_list(w_t *w, const library_t *lib, const char *body, const jtok_t *t, int nt, int args)
 {
     char path[LIB_PATH_MAX] = {0};
     if (!arg_string(body, t, nt, args, "path", path, sizeof path, false)) {
@@ -585,21 +585,21 @@ static bool tool_library_list(w_t *w, const char *body, const jtok_t *t, int nt,
         w_puts(w, "depth must be 1..8 and limit 1..200");
         return false;
     }
-    if (!L) { w_puts(w, "no library generation"); return false; }
-    lib_node_t n = path[0] ? library_find(L, path) : library_root(L);
+    if (!lib) { w_puts(w, "no library generation"); return false; }
+    lib_node_t n = path[0] ? library_find(lib, path) : library_root(lib);
     if (n == LIB_NODE_NONE) { w_puts(w, "no such directory"); return false; }
-    if (library_kind(L, n) != LIB_DIR) { w_puts(w, "not a directory"); return false; }
+    if (library_kind(lib, n) != LIB_DIR) { w_puts(w, "not a directory"); return false; }
 
     w_puts(w, "{\"path\":\"");
     w_escaped(w, path);
     w_puts(w, "\",\"entries\":[");
-    list_ctx_t c = {w, L, (unsigned)limit, 0, false, true};
+    list_ctx_t c = {w, lib, (unsigned)limit, 0, false, true};
     list_children(&c, n, (unsigned)depth);
     w_printf(w, "],\"truncated\":%s}", c.truncated ? "true" : "false");
     return true;
 }
 
-static bool tool_library_search(w_t *w, const char *body, const jtok_t *t, int nt, int args)
+static bool tool_library_search(w_t *w, const library_t *lib, const char *body, const jtok_t *t, int nt, int args)
 {
     char query[256];
     if (!arg_string(body, t, nt, args, "query", query, sizeof query, true) || !query[0]) {
@@ -611,42 +611,42 @@ static bool tool_library_search(w_t *w, const char *body, const jtok_t *t, int n
         w_puts(w, "limit must be 1..50");
         return false;
     }
-    if (!L) { w_puts(w, "no library generation"); return false; }
+    if (!lib) { w_puts(w, "no library generation"); return false; }
     w_puts(w, "{\"query\":\"");
     w_escaped(w, query);
     w_puts(w, "\",\"tracks\":[");
     unsigned found = 0;
     bool truncated = false;
     bool first = true;
-    for (uint32_t i = 0; i < library_track_count(L); i++) {
-        lib_node_t n = library_track_at(L, i);
+    for (uint32_t i = 0; i < library_track_count(lib); i++) {
+        lib_node_t n = library_track_at(lib, i);
         char rel[LIB_PATH_MAX];
-        if (library_relpath(L, n, rel, sizeof rel) == (size_t)-1) continue;
+        if (library_relpath(lib, n, rel, sizeof rel) == (size_t)-1) continue;
         if (!ascii_contains(rel, query)) continue;
         if (found >= (unsigned)limit) { truncated = true; break; }
         if (!first) w_put(w, ",");
         first = false;
-        write_track(w, L, n);
+        write_track(w, lib, n);
         found++;
     }
     w_printf(w, "],\"truncated\":%s}", truncated ? "true" : "false");
     return true;
 }
 
-static bool tool_library_track(w_t *w, const char *body, const jtok_t *t, int nt, int args)
+static bool tool_library_track(w_t *w, const library_t *lib, const char *body, const jtok_t *t, int nt, int args)
 {
     char path[LIB_PATH_MAX];
     if (!arg_string(body, t, nt, args, "path", path, sizeof path, true) || !path[0]) {
         w_puts(w, "path is required and must fit the path ceiling");
         return false;
     }
-    if (!L) { w_puts(w, "no library generation"); return false; }
-    lib_node_t n = library_find(L, path);
-    if (n == LIB_NODE_NONE || library_kind(L, n) != LIB_TRACK) {
+    if (!lib) { w_puts(w, "no library generation"); return false; }
+    lib_node_t n = library_find(lib, path);
+    if (n == LIB_NODE_NONE || library_kind(lib, n) != LIB_TRACK) {
         w_puts(w, "no such track");
         return false;
     }
-    write_track(w, L, n);
+    write_track(w, lib, n);
     return true;
 }
 
@@ -981,26 +981,34 @@ static http_result_t post_route(int fd, const http_request_t *req, void *ctx)
             return HTTP_HANDLED;
         }
 
+        bool owned = false;
+        const library_t *lib = L;
+        if (!lib) {
+            lib = library_acquire();
+            owned = true;
+        }
         char *text = heap_caps_malloc(MCP_TEXT_MAX, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!text) text = malloc(MCP_TEXT_MAX);
         if (!text) {
+            if (owned) library_release(lib);
             rpc_error(fd, 500, body, id, -32603, "out of memory");
             return HTTP_HANDLED;
         }
         w_t tw = w_make(text, MCP_TEXT_MAX);
         bool ok = true;
         if (strcmp(name, "library_stats") == 0) {
-            write_stats(&tw, L);
+            write_stats(&tw, lib);
         } else if (strcmp(name, "library_list") == 0) {
-            ok = tool_library_list(&tw, body, tokens, nt, args);
+            ok = tool_library_list(&tw, lib, body, tokens, nt, args);
         } else if (strcmp(name, "library_search") == 0) {
-            ok = tool_library_search(&tw, body, tokens, nt, args);
+            ok = tool_library_search(&tw, lib, body, tokens, nt, args);
         } else if (strcmp(name, "library_track") == 0) {
-            ok = tool_library_track(&tw, body, tokens, nt, args);
+            ok = tool_library_track(&tw, lib, body, tokens, nt, args);
         } else if (strcmp(name, "player_status") == 0) {
             tool_player_status(&tw);
         } else {
             free(text);
+            if (owned) library_release(lib);
             rpc_error(fd, 200, body, id, -32602, "unknown tool");
             return HTTP_HANDLED;
         }
@@ -1011,6 +1019,7 @@ static http_result_t post_route(int fd, const http_request_t *req, void *ctx)
         }
         rpc_tool(fd, body, id, text, !ok);
         free(text);
+        if (owned) library_release(lib);
         return HTTP_HANDLED;
     }
 

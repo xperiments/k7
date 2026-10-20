@@ -99,7 +99,8 @@ one line, and the error message names the component.
 
 * Format the card as **FAT32** (exFAT also works if enabled in `menuconfig`).
 * Put your tracks under `/sdcard/music/`, in subdirectories if you like. The tree
-  is scanned once at boot into a PSRAM arena; there is no per-request directory
+  is scanned at boot and by an explicit rescan into a PSRAM arena; there is no
+per-request directory
   walk. Names are sorted case-insensitively, directories and tracks interleave,
   and the Playlist is that depth-first order.
 * Accepted extensions: `.mp3`, `.flac`, `.wav`, in any case. Any sample rate, mono
@@ -221,6 +222,7 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 | `GET /api/library` | The prebuilt Library JSON, with `state`, counts and a generation ETag. |
 | `GET /api/library.bin` | The same generation as an arena: versioned header, nodes, edges, track index and CRC. |
 | `POST /api/play` | `{"path":"Album/song.mp3"}` selects any Track at the next chunk boundary. A bad path is a 404 and leaves the stream alone. |
+| `POST /api/rescan` | `{}` starts one asynchronous Library rescan; `202` when started, `409` when one is already running. The old generation stays readable; the broadcast parks on the idle bed for the scan, resumes the current Track, and switches to the new generation at its next pass. |
 | `POST /mcp` | Read-only MCP (2025-11-25): `initialize`, `ping`, `tools/list`, `tools/call` for `library_stats`, `library_list`, `library_search`, `library_track` and `player_status`. |
 | anything else | `404`, or `405` for a known path with the wrong method. |
 
@@ -866,6 +868,9 @@ to PSRAM and takes internal free from 35 327 B to **154 643 B** (largest block 1
   original bytes.
 * **No Wi-Fi provisioning UI** and no OTA updates; discovery is the fixed
   `xtape.local`, so two devices on one LAN collide. Credentials are compiled in.
+* **Card removal is not hot-detected.** If the card is pulled after boot, reads start
+  failing, the broadcast skips the Track, and the Library stays stale until you rescan
+  (`POST /api/rescan`) or reboot.
 * **One download at a time.** A second concurrent download is declined with `503`
   rather than queued, so a 40 MB FLAC cannot starve the broadcast behind it.
 * **The stream is a broadcast**: it cannot be paused or seeked, and every client

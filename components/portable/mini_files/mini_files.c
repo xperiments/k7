@@ -169,22 +169,21 @@ static void send_library_problem(int fd, const char *heading, const char *detail
 
 /* ------------------------------------------------------------------- index */
 
-static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
+static const library_t *files_acquire(bool *owned)
 {
-    (void)ctx;
+    if (F.lib) { *owned = false; return F.lib; }
+    *owned = true;
+    return library_acquire();
+}
+
+static http_result_t index_with_lib(int fd, const http_request_t *req, const library_t *lib)
+{
     if (strcmp(req->path, "/") != 0) {
         ESP_LOGI(TAG, "GET %s -> 404", req->path);
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
     }
-    if (!F.lib) {
-        ESP_LOGE(TAG, "GET / -> no library generation");
-        send_library_problem(fd, "No library generation",
-                             "The Library was not built at boot; the serial log says why.");
-        return HTTP_HANDLED;
-    }
-
-    lib_state_t state = library_state(F.lib);
+    lib_state_t state = library_state(lib);
     if (state == LIB_STATE_NO_CARD) {
         bool card_mounted = false;
         char err[sizeof F.err];
@@ -195,7 +194,7 @@ static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
                                  "A card is mounted, but the Library generation is still the "
                                  "boot-time no-card one. The rescan path replaces it.");
         } else {
-            if (!err[0]) snprintf(err, sizeof err, "%s", library_error(F.lib));
+            if (!err[0]) snprintf(err, sizeof err, "%s", library_error(lib));
             ESP_LOGI(TAG, "GET / -> no card (%s)", err[0] ? err : "not mounted");
             send_library_problem(fd, "No card mounted",
                                  err[0] ? err : "No card is mounted, so there is no audio library.");
@@ -205,13 +204,13 @@ static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
     if (state == LIB_STATE_NO_DIR) {
         char detail[256];
         snprintf(detail, sizeof detail, "%.200s. Create it and put your tracks there.",
-                 library_error(F.lib));
-        ESP_LOGW(TAG, "GET / -> no music directory (%s)", library_error(F.lib));
+                 library_error(lib));
+        ESP_LOGW(TAG, "GET / -> no music directory (%s)", library_error(lib));
         send_library_problem(fd, "No music directory", detail);
         return HTTP_HANDLED;
     }
     if (state == LIB_STATE_ERROR) {
-        send_library_problem(fd, "Library error", library_error(F.lib));
+        send_library_problem(fd, "Library error", library_error(lib));
         return HTTP_HANDLED;
     }
 
@@ -228,24 +227,24 @@ static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
     w_escaped(&w, title);
     w_puts(&w, "</strong> &middot; <a href=\"/stream\">live stream (MP3)</a></p>");
 
-    uint32_t count = library_track_count(F.lib);
-    if (library_truncated(F.lib)) {
+    uint32_t count = library_track_count(lib);
+    if (library_truncated(lib)) {
         w_printf(&w, "<p>The library is truncated at %u tracks.</p>", (unsigned)count);
     }
     w_puts(&w, "<ul>");
     uint32_t listed = 0;
     for (uint32_t i = 0; i < count && w.ok; i++) {
-        lib_node_t n = library_track_at(F.lib, i);
+        lib_node_t n = library_track_at(lib, i);
         if (n == LIB_NODE_NONE) continue;
         char rel[LIB_PATH_MAX];
-        size_t rlen = library_relpath(F.lib, n, rel, sizeof rel);
+        size_t rlen = library_relpath(lib, n, rel, sizeof rel);
         if (rlen == (size_t)-1) continue;
         w_puts(&w, "<li><a href=\"/music/");
         w_url_path(&w, rel);
         w_puts(&w, "\">");
         w_escaped(&w, rel);
         w_printf(&w, "</a> <span class=\"n\">%llu B</span></li>",
-                 (unsigned long long)library_size(F.lib, n));
+                 (unsigned long long)library_size(lib, n));
         listed++;
     }
     w_puts(&w, "</ul>");
@@ -253,6 +252,22 @@ static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
     w_flush(&w);
     ESP_LOGI(TAG, "GET / -> %u track(s)", (unsigned)listed);
     return HTTP_HANDLED;
+}
+
+static http_result_t index_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)ctx;
+    bool owned = false;
+    const library_t *lib = files_acquire(&owned);
+    if (!lib) {
+        ESP_LOGE(TAG, "GET / -> no library generation");
+        send_library_problem(fd, "No library generation",
+                             "The Library was not built at boot; the serial log says why.");
+        return HTTP_HANDLED;
+    }
+    http_result_t r = index_with_lib(fd, req, lib);
+    if (owned) library_release(lib);
+    return r;
 }
 
 /* ---------------------------------------------------------------- download */
@@ -296,17 +311,21 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
 {
     (void)ctx;
     static const char prefix[] = "/music/";
-    if (!F.lib) {
+    bool owned = false;
+    const library_t *lib = files_acquire(&owned);
+    if (!lib) {
         http_send_error(fd, 503, "the library is not available");
         return HTTP_HANDLED;
     }
-    lib_state_t state = library_state(F.lib);
+    lib_state_t state = library_state(lib);
     if (state == LIB_STATE_NO_CARD) {
         http_send_error(fd, 503, "no card is mounted");
+        if (owned) library_release(lib);
         return HTTP_HANDLED;
     }
     if (state == LIB_STATE_NO_DIR || state == LIB_STATE_EMPTY) {
         http_send_error(fd, 404, "no such track");
+        if (owned) library_release(lib);
         return HTTP_HANDLED;
     }
 
@@ -315,20 +334,23 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
     if (!decode_relpath(raw, rel, sizeof rel)) {
         ESP_LOGW(TAG, "GET %s -> 400 (malformed path)", req->path);
         http_send_error(fd, 400, "that track path is not accepted");
+        if (owned) library_release(lib);
         return HTTP_HANDLED;
     }
 
-    lib_node_t n = library_find(F.lib, rel);
-    if (n == LIB_NODE_NONE || library_kind(F.lib, n) != LIB_TRACK) {
+    lib_node_t n = library_find(lib, rel);
+    if (n == LIB_NODE_NONE || library_kind(lib, n) != LIB_TRACK) {
         ESP_LOGI(TAG, "GET %s -> 404 (not a track in the library)", req->path);
         http_send_error(fd, 404, "no such track");
+        if (owned) library_release(lib);
         return HTTP_HANDLED;
     }
 
     char path[LIB_PATH_MAX];
-    if (library_abspath(F.lib, n, path, sizeof path) == (size_t)-1) {
+    if (library_abspath(lib, n, path, sizeof path) == (size_t)-1) {
         ESP_LOGW(TAG, "GET %s -> 404 (absolute path does not fit)", req->path);
         http_send_error(fd, 404, "no such track");
+        if (owned) library_release(lib);
         return HTTP_HANDLED;
     }
 
@@ -337,6 +359,7 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
     if (xSemaphoreTake(F.dl, 0) != pdTRUE) {
         ESP_LOGW(TAG, "GET %s -> 503 (a download is already running)", req->path);
         http_send_error(fd, 503, "only one download at a time; the live stream has priority");
+        if (owned) library_release(lib);
         return HTTP_HANDLED;
     }
 
@@ -360,7 +383,7 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
         http_send_error(fd, 404, "the file cannot be opened");
         goto done;
     }
-    if (http_send_headers(fd, 200, content_type_for(library_format(F.lib, n)),
+    if (http_send_headers(fd, 200, content_type_for(library_format(lib, n)),
                           (size_t)st.st_size, NULL) != ESP_OK) {
         close(f);
         goto done;
@@ -404,10 +427,21 @@ static http_result_t download_route(int fd, const http_request_t *req, void *ctx
 done:
     if (parked_here) mini_icecast_unpark_card();
     xSemaphoreGive(F.dl);
+    if (owned) library_release(lib);
     return HTTP_HANDLED;
 }
 
 /* -------------------------------------------------------------------- API */
+
+bool mini_files_card_lock(uint32_t timeout_ms)
+{
+    return xSemaphoreTake(F.dl, pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
+}
+
+void mini_files_card_unlock(void)
+{
+    xSemaphoreGive(F.dl);
+}
 
 void mini_files_set_card(const char *music_dir, const char *mount_error)
 {

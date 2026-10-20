@@ -1,5 +1,5 @@
 #!/bin/sh
-# Host acceptance tests for the HTTP surface: T3, T4, T5, T6, T7, T8, T9, T12, T14, T15 and T16,
+# Host acceptance tests for the HTTP surface: T3, T4, T5, T6, T7, T8, T9, T12, T14, T15, T16 and T17,
 # run against the real server on this machine with no board attached.
 #
 #   HOST_BIN=host/build/bin/icecast_host HOST_DIR=host sh host/tests/http_tests.sh
@@ -456,6 +456,37 @@ else
     cat "$TMP/mcp.out"
     bad "MCP acceptance failed"
 fi
+
+group "T17  rescan generations, leases and the card-less state"
+MUT="$TMP/rescan-music"
+mkdir -p "$MUT"
+$PY - "$FIX" "$MUT" <<'PYEOF'
+import shutil, sys
+src, dst = sys.argv[1], sys.argv[2]
+for i in range(3000):
+    shutil.copyfile(f"{src}/tiny-44100.wav", f"{dst}/t{i:04d}.wav")
+PYEOF
+start_server "$MUT" "$((PORT + 2))" "$TMP/rescan.log"
+if $PY "$HOST_DIR/tests/rescan_tests.py" 127.0.0.1 "$((PORT + 2))" "$MUT" 3000 >"$TMP/rescan.out" 2>&1; then
+    cat "$TMP/rescan.out"
+    ok "rescan generations, the slow reader and the broadcast switch all passed"
+else
+    cat "$TMP/rescan.out"
+    bad "rescan acceptance failed"
+fi
+
+EMPTY="$TMP/rescan-empty"
+mkdir -p "$EMPTY"
+start_no_card_server "$EMPTY" "$((PORT + 3))" "$TMP/rescan-nocard.log"
+check_match "a card-less rescan stays no_card" \
+    "$(curl -s "http://127.0.0.1:$((PORT + 3))/api/library")" '"state":"no_card"'
+curl -s -o "$TMP/rescan-nocard.out" -X POST -H 'Content-Type: application/json' --data '{}' \
+    "http://127.0.0.1:$((PORT + 3))/api/rescan"
+sleep 1
+check_match "and its new generation is still no_card" \
+    "$(curl -s "http://127.0.0.1:$((PORT + 3))/api/library")" '"generation":2.*"state":"no_card"'
+check_match "the card-less index stays diagnosable" \
+    "$(curl -s "http://127.0.0.1:$((PORT + 3))/")" "No card mounted"
 
 group "T7  downloads are the original bytes, sized and typed"
 for f in "$FIX"/*; do

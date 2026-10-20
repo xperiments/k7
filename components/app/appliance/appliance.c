@@ -48,12 +48,26 @@ static void card_task(void *arg)
         app_board_card_t card = app_board_card_mount(MUSIC_DIR);
         if (card.music_dir) {
             mini_files_set_card(card.music_dir, NULL);
-            ESP_LOGI(TAG, "card mounted after %d retries: %s; the Library generation will be "
-                          "rebuilt by the rescan path", attempt + 1, MUSIC_DIR);
-            vTaskDelete(NULL);
-            return;
+            app_services_card_state(true, NULL);
+            for (;;) {
+                esp_err_t e = app_services_rescan();
+                if (e == ESP_OK) {
+                    ESP_LOGI(TAG, "card mounted after %d retries: %s; rescan started",
+                             attempt + 1, MUSIC_DIR);
+                    vTaskDelete(NULL);
+                    return;
+                }
+                if (e == ESP_ERR_INVALID_STATE) {
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    continue;
+                }
+                ESP_LOGE(TAG, "card mounted but the rescan cannot start: %s; retrying",
+                         esp_err_to_name(e));
+                vTaskDelay(pdMS_TO_TICKS(CARD_RETRY_MS));
+            }
         }
         mini_files_set_card(NULL, card.mount_error);
+        app_services_card_state(false, card.mount_error);
         ESP_LOGW(TAG, "still no card: %s; retrying in %d s",
                  card.mount_error ? card.mount_error : "unknown error", CARD_RETRY_MS / 1000);
         attempt++;

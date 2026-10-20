@@ -58,6 +58,7 @@ typedef struct {
     uint32_t    max_bytes; /* 0 = LIB_DEFAULT_MAX_BYTES */
     uint32_t    max_tracks;/* 0 = LIB_DEFAULT_MAX_TRACKS */
     uint32_t    max_path;  /* 0 = FILENAME_MAX; absolute path ceiling for the scan */
+    uint32_t    generation;/* 0 = 1; the number embedded in the JSON and blob */
     bool        build_json;/* false builds only the binary view */
 } library_cfg_t;
 
@@ -72,6 +73,23 @@ lib_result_t library_open(const library_cfg_t *cfg, library_t **out);
 lib_result_t library_open_no_card(const library_cfg_t *cfg, const char *reason,
                                   library_t **out);
 
+/* The generation number for the next build. The application calls this before
+ * library_open(); a rescan must use a number larger than the published one. */
+uint32_t     library_next_generation(void);
+
+/* Publish a built generation. The store takes the caller's reference; the old
+ * generation is freed when its last reader releases it. Returns false when
+ * `next` is NULL. */
+bool         library_publish(library_t *next);
+
+/* A lease on the current generation, or NULL when none has been published. Every
+ * acquire must be paired with release. */
+const library_t *library_acquire(void);
+void         library_release(const library_t *lib);
+uint32_t     library_current_generation(void); /* 0 when none is published */
+uint32_t     library_refs(const library_t *lib); /* test/diagnostic only */
+
+/* Close an unpublished generation, or a leased one that has no readers. */
 void         library_close(library_t *lib);
 
 lib_state_t  library_state(const library_t *lib);

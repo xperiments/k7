@@ -402,7 +402,21 @@ that does not resolve is a 404 and does not interrupt the current Track. `Accept
 at 8192 bytes. Missing length is 411, oversized is 413, and a non-JSON type is 415; bytes that
 arrived with the header block are preserved.
 
-### 6.5 `POST /mcp` — read-only MCP
+### 6.5 `POST /api/rescan` — generations
+
+**Requirement G1.** A rescan builds a new Library generation off to the side, without
+blocking readers; one scan at a time; `202` when started and `409` when one is running.
+`library_publish()` swaps the current pointer atomically. Existing readers keep a lease on the
+old arena/JSON until they finish, and only the last release frees it. The broadcast resumes its
+current Track on the old lease, then starts the new generation at its next pass. The scan
+parks the broadcast on the idle bed (and resumes the Track) to keep the 5.4.4 VFS readdir/stat
+cache safe; parking is reference-counted so a concurrent download cannot unpark the scan.
+
+**Requirement G2.** A card that arrives after boot is mounted by the retry task, which starts
+a rescan; both the index and the broadcast recover without a reboot. A boot without a card
+publishes a `no_card` generation, and a rescan while still card-less keeps that state.
+
+### 6.6 `POST /mcp` — read-only MCP
 
 **Requirement M1.** Speak the legacy 2025-11-25 MCP lifecycle, stateless and JSON-only:
 `initialize` (echoing 2025-11-25/2025-06-18/2025-03-26 and falling back to 2025-11-25),
@@ -496,6 +510,8 @@ host result transfers.
 | T12 | Format validation (F1/F2) | Start the server with `out_hz = 44101`, and with `out_hz = 8000, bitrate = 64` | **both** | First fails loudly; second starts and logs MPEG-2.5 (`shine_check_config` returned 0, accepted per E1) |
 | T13 | Case sensitivity (bonus) | Request `/music/<NAME>.MP3` in the wrong case | **board only** | Documented behaviour, whichever way FATFS resolves it. **Not** a host test — macOS APFS/HFS+ is case-insensitive by default, so the host would give a falsely reassuring result. This is the one place the host is *weaker* than the board, which is why it is called out |
 | T15 | POST play control | Raw `POST /api/play` with a nested path, split/one-packet bodies, 411/413/415 and an unknown path | **both** | Accepted body changes the Track at the next chunk; errors do not interrupt the stream; `Accept` is ignored |
+| T16 | MCP read-only surface | `initialize` in three legacy revisions, notifications, `tools/list`, all five tools and the error table | **host** | Version echo/fallback, 202 notifications, 411/413/415 JSON-RPC, no session header, `Accept` ignored |
+| T17 | Rescan generations | A slow `/api/library` reader, a rescan with one added Track, a second simultaneous rescan and a card-less rescan | **host** | Old JSON completes; generation advances; broadcast sees the new count; one 202 and one 409; `no_card` stays diagnosable |
 
 ---
 

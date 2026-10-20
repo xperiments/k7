@@ -100,7 +100,7 @@ static struct {
      * Playlist position it goes back to; the display only raises the flag. */
     volatile bool      prev;
     volatile bool      play_pending;
-    const library_t   *pending_library;
+
     char               pending_path[LIB_PATH_MAX];
     uint32_t           pending_index;
     uint32_t           pending_generation;
@@ -112,6 +112,7 @@ static struct {
      * reading the SD. park_until is a deadline in esp_timer microseconds, so a
      * caller that dies cannot park the station forever. */
     volatile int64_t   park_until;
+    int                park_refs;     /* download and rescan can park together */
     uint64_t           idle_frames; /* frames of bed, kept out of the track position */
     mi_burst_t        *burst;         /* history for a client connecting mid-track */
     TaskHandle_t       broadcast_handle; /* for the stack-headroom telemetry */
@@ -599,26 +600,38 @@ static bool parked(void)
 
 void mini_icecast_park_card(uint32_t max_ms)
 {
-    S.park_until = esp_timer_get_time() + (int64_t)max_ms * 1000;
-    /* The ICY splitter only rewrites a metadata block when the version changes,
-     * so "Processing" has to bump it or clients keep reading the old title until
-     * the next track. */
+    /* Two independent owners can need the card: a download and a rescan. A
+     * reference count means the second unpark cannot release the first owner's
+     * park. The deadline still protects against a caller that dies outright. */
     xSemaphoreTake(S.lock, portMAX_DELAY);
-    S.title_ver++;
+    int64_t now = esp_timer_get_time();
+    if (S.park_until == 0 || now >= S.park_until) S.park_refs = 0; /* expired owner */
+    int64_t until = now + (int64_t)max_ms * 1000;
+    bool first = S.park_refs == 0;
+    if (first) {
+        S.park_until = until;
+        S.title_ver++;
+    } else if (until > S.park_until) {
+        S.park_until = until;
+    }
+    S.park_refs++;
     xSemaphoreGive(S.lock);
-    ESP_LOGI(TAG, "card parked for up to %u ms: the stream plays the idle bed", (unsigned)max_ms);
+    if (first)
+        ESP_LOGI(TAG, "card parked for up to %u ms: the stream plays the idle bed", (unsigned)max_ms);
 }
 
 void mini_icecast_unpark_card(void)
 {
-    bool was = S.park_until != 0;
-    S.park_until = 0;
-    if (was) {
-        xSemaphoreTake(S.lock, portMAX_DELAY);
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    bool was = S.park_refs > 0;
+    if (S.park_refs > 0) S.park_refs--;
+    bool last = was && S.park_refs == 0;
+    if (last) {
+        S.park_until = 0;
         S.title_ver++;
-        xSemaphoreGive(S.lock);
-        ESP_LOGI(TAG, "card released: the track resumes where it stopped");
     }
+    xSemaphoreGive(S.lock);
+    if (last) ESP_LOGI(TAG, "card released: the track resumes where it stopped");
 }
 
 bool mini_icecast_card_parked(void) { return parked(); }
@@ -725,27 +738,44 @@ static bool take_pending(const library_t *lib, uint32_t generation, uint32_t *in
 {
     xSemaphoreTake(S.lock, portMAX_DELAY);
     bool pending = S.play_pending;
-    const library_t *got_lib = S.pending_library;
     uint32_t got_index = S.pending_index;
     uint32_t got_generation = S.pending_generation;
     char pending_path[LIB_PATH_MAX];
     snprintf(pending_path, sizeof pending_path, "%s", S.pending_path);
-    if (pending) S.play_pending = false;
-    xSemaphoreGive(S.lock);
-    if (!pending) return false;
-    if (got_lib == lib && got_generation == generation) {
+    if (!pending) {
+        xSemaphoreGive(S.lock);
+        return false;
+    }
+    if (got_generation == generation) {
+        S.play_pending = false;
+        xSemaphoreGive(S.lock);
         *index = got_index;
         return true;
     }
+    xSemaphoreGive(S.lock);
+
     /* A rescan may have replaced the generation while the request was pending.
-     * The relative path is the stable key; re-resolve it in the new generation. */
+     * The relative path is the stable key. Keep the request pending through the
+     * old pass; it is consumed when the new generation's pass resolves it, and
+     * dropped only once the pass is already on the current generation. */
     if (!lib) return false;
     lib_node_t n = library_find(lib, pending_path);
-    if (n == LIB_NODE_NONE || library_kind(lib, n) != LIB_TRACK) return false;
-    uint32_t fresh = library_track_index(lib, n);
-    if (fresh == LIB_NODE_NONE) return false;
-    *index = fresh;
-    return true;
+    if (n != LIB_NODE_NONE && library_kind(lib, n) == LIB_TRACK) {
+        uint32_t fresh = library_track_index(lib, n);
+        if (fresh != LIB_NODE_NONE) {
+            xSemaphoreTake(S.lock, portMAX_DELAY);
+            S.play_pending = false;
+            xSemaphoreGive(S.lock);
+            *index = fresh;
+            return true;
+        }
+    }
+    if (library_generation(lib) == library_current_generation()) {
+        xSemaphoreTake(S.lock, portMAX_DELAY);
+        S.play_pending = false;
+        xSemaphoreGive(S.lock);
+    }
+    return false;
 }
 
 static void broadcast_task(void *arg)
@@ -754,9 +784,14 @@ static void broadcast_task(void *arg)
     S.t0 = esp_timer_get_time();
     int quiet = 0;
     for (;;) {
+        bool owned = false;
         xSemaphoreTake(S.lock, portMAX_DELAY);
         const library_t *lib = S.library;
         xSemaphoreGive(S.lock);
+        if (!lib) {
+            lib = library_acquire();
+            owned = true;
+        }
         uint32_t count = lib ? library_track_count(lib) : 0;
         xSemaphoreTake(S.lock, portMAX_DELAY);
         S.library_count = count;
@@ -771,6 +806,7 @@ static void broadcast_task(void *arg)
                 else ESP_LOGW(TAG, "no Tracks in the Library (state %s); idling",
                               library_state_name(library_state(lib)));
             }
+            if (owned) library_release(lib);
             vTaskDelay(pdMS_TO_TICKS(2000));
             continue;
         }
@@ -787,7 +823,8 @@ static void broadcast_task(void *arg)
 
         for (;;) {
             xSemaphoreTake(S.lock, portMAX_DELAY);
-            bool same_library = S.library == lib;
+            bool same_library = S.library ? S.library == lib
+                                          : library_current_generation() == generation;
             xSemaphoreGive(S.lock);
             if (!same_library || library_generation(lib) != generation) break;
 
@@ -842,6 +879,7 @@ static void broadcast_task(void *arg)
             back = S.prev;
         }
 
+        if (owned) library_release(lib);
         if (!played) {
             if (quiet++ % QUIET_PASSES == 0)
                 ESP_LOGW(TAG, "no Track could be played from the Library");
@@ -1011,13 +1049,23 @@ bool mini_icecast_play(const char *relpath)
     xSemaphoreTake(S.lock, portMAX_DELAY);
     const library_t *lib = S.library;
     xSemaphoreGive(S.lock);
+    bool owned = false;
+    if (!lib) {
+        lib = library_acquire();
+        owned = true;
+    }
     if (!lib) return false;
     lib_node_t n = library_find(lib, relpath);
-    if (n == LIB_NODE_NONE || library_kind(lib, n) != LIB_TRACK) return false;
+    if (n == LIB_NODE_NONE || library_kind(lib, n) != LIB_TRACK) {
+        if (owned) library_release(lib);
+        return false;
+    }
     uint32_t index = library_track_index(lib, n);
-    if (index == LIB_NODE_NONE) return false;
+    if (index == LIB_NODE_NONE) {
+        if (owned) library_release(lib);
+        return false;
+    }
     xSemaphoreTake(S.lock, portMAX_DELAY);
-    S.pending_library = lib;
     snprintf(S.pending_path, sizeof S.pending_path, "%s", relpath);
     S.pending_index = index;
     S.pending_generation = library_generation(lib);
@@ -1025,6 +1073,7 @@ bool mini_icecast_play(const char *relpath)
     S.skip = false;
     S.prev = false;
     xSemaphoreGive(S.lock);
+    if (owned) library_release(lib);
     return true;
 }
 

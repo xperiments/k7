@@ -40,6 +40,12 @@ esp_err_t mini_files_start(const mini_files_cfg_t *cfg);
  * card"; `mount_error` is then shown. */
 void mini_files_set_card(const char *music_dir, const char *mount_error);
 
+/* The card is a single resource shared with a download. A rescan takes this
+ * before scanning so the two never walk FATFS at once; the download route uses
+ * the same lock. Returns false when it could not be taken within timeout_ms. */
+bool mini_files_card_lock(uint32_t timeout_ms);
+void mini_files_card_unlock(void);
+
 #ifdef __cplusplus
 }
 #endif
