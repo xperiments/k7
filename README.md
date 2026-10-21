@@ -100,13 +100,20 @@ one line, and the error message names the component.
 * Format the card as **FAT32** (exFAT also works if enabled in `menuconfig`).
 * Put your tracks under `/sdcard/music/`, in subdirectories if you like. The tree
   is scanned at boot and by an explicit rescan into a PSRAM arena; there is no
-per-request directory
-  walk. Names are sorted case-insensitively, directories and tracks interleave,
-  and the Playlist is that depth-first order.
+  per-request directory walk. Names are sorted case-insensitively, directories and
+  tracks interleave, and the Playlist is that depth-first order.
+* Each name may be up to 128 characters; a complete path must fit `FILENAME_MAX`
+  (1024 bytes on this build, with a 1025-byte tree buffer). A file whose path is
+  longer is skipped and logged, not silently truncated.
 * Accepted extensions: `.mp3`, `.flac`, `.wav`, in any case. Any sample rate, mono
   or stereo. Files whose name begins with `.` are ignored (that is how macOS
   AppleDouble `._track.mp3` files are skipped).
-* Long file names are enabled up to 128 characters (`CONFIG_FATFS_MAX_LFN=128`).
+* FATFS long names are enabled up to 128 characters (`CONFIG_FATFS_MAX_LFN=128`).
+* The Library arena and its JSON live in PSRAM, with a **4 MiB byte budget** and a
+  20 000-track cap. At the cap the scan stops, `truncated` becomes true, and the
+  index/JSON say so; it does not reboot. A 64-track, 2.28 GB card measured
+  `scan=96 ms arena=6285 B json=12343 B`; a forced one-track cap logged
+  `truncated=1`. The boot scan is synchronous, with a 16 KB main-task stack.
 * The index and downloads use that Playlist order; the live stream plays it in
   order, looping forever.
 
@@ -466,7 +473,7 @@ chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1*
 
 | What | Evidence |
 |---|---|
-| Builds and flashes from a clean checkout | `rm -rf build sdkconfig && idf.py build && idf.py -p PORT flash`: a 1.04 MB app in a 1.5 MB partition, 32 % free |
+| Builds and flashes from a clean checkout | `idf.py build && idf.py -p PORT flash`: the current app is `0x2fa490` (3.12 MB) in the 4 MB factory partition, 26 % free |
 | 8 MB PSRAM in octal mode at 80 MHz | `esp_psram: Found 8MB PSRAM device`, `Speed: 80MHz`, `SPI SRAM memory test OK` |
 | Every allocation this project makes takes the external-memory path (P2/P3) | `staging buffers in external memory`, `burst ring: 20098 B (~500 ms of audio) in external memory`, `download buffer: 16384 B in external memory` |
 | The encoder's state is measured, not assumed | `102408 B of internal RAM taken (the encoder's own state)`, and `95880 B of state inside the vendored library` - 16 B less than the host's 95896, because the struct holds three pointers |
@@ -694,7 +701,9 @@ layer (`app_services` in `portable/` and `appliance` in `app/`) depends on `mini
 depends only on the broadcast's status snapshot. The split between `portable/` and
 `app/` is itself a rule: every `.c` under `portable/` must be in `host/Makefile`,
 and no source under `app/` may be. The binary search for the seam is in
-`docs/adr/0003-extract-http-server-from-mini-icecast.md`.
+`docs/adr/0003-extract-http-server-from-mini-icecast.md`; the boot-built Library
+tree, its arena, JSON, generation and leases are in
+[`docs/adr/0012-boot-built-library-arena.md`](docs/adr/0012-boot-built-library-arena.md).
 
 The services are composed once, in `app_services`, and both entry points call it:
 the appliance (`components/app/appliance`) and the host build through

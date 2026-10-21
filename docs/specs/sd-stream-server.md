@@ -37,8 +37,8 @@ flagged so they can be disproved on hardware.
 
 Opus, Vorbis, Ogg, WebM, Matroska, AAC — the plan's §1 removes all of them and this
 specification reinstates none. Also excluded: TLS, HTTP authentication, transcode-on-demand,
-range/seek support, OTA updates, mDNS, and any runtime mechanism for changing Wi-Fi
-credentials. The last one is a deliberate deferral, recorded in §11.
+range/seek support, OTA updates, and any runtime mechanism for changing Wi-Fi credentials.
+(mDNS advertisement of `_mcp._tcp` is part of the MCP surface, not general service discovery.) The last one is a deliberate deferral, recorded in §11.
 
 ### Non-goals worth stating
 
@@ -342,6 +342,25 @@ against the code**; two are new, introduced by R6/R7.
 
 ## 6. HTTP surface
 
+| Method and path | Response | Contract |
+|---|---|---|
+| `GET /stream` | `audio/mpeg` | Live Playlist broadcast, ICY metadata optional |
+| `GET /` | HTML | Index in Playlist order; diagnostic page without a card |
+| `GET /music/<relative path>` | original bytes | Nested download, one at a time |
+| `GET /api/library` | `application/json` | Prebuilt tree, generation, state, truncation |
+| `GET /api/library.bin` | `application/octet-stream` | Versioned arena, CRC and generation |
+| `POST /api/play` | `application/json` | `{"path":"..."}`; next-chunk switch |
+| `POST /api/rescan` | `application/json` | `{}`; `202` started, `409` already scanning |
+| `POST /mcp` | `application/json` | MCP 2025-11-25; read-only by default |
+
+**Library memory and scan.** The arena and JSON are built off the request path, in PSRAM,
+under `LIB_DEFAULT_MAX_BYTES` (4 MiB) and `LIB_DEFAULT_MAX_TRACKS` (20 000). A cap stops the
+scan, sets `truncated`, and is reported by the index/JSON; it is not a reboot. On the board a
+64-track/2.28 GB card measured `scan=96 ms arena=6285 B json=12343 B psram=5295632 -> 5275936 B`,
+and a one-track diagnostic cap reported `truncated=1`. The synchronous boot scan needs a
+`CONFIG_ESP_MAIN_TASK_STACK_SIZE` of 16 KiB; rescan runs in an 8 KiB task and parks the
+broadcast.
+
 ### 6.1 `GET /stream` — the live stream
 
 The stream consumes the Library Playlist: depth-first, name-sorted, no per-pass
@@ -373,9 +392,12 @@ each row showing the relative path, its size, and a link to
 stating that no card is present and quoting the mount error — not a 500, and not a connection
 refusal. The index is the diagnostic surface.
 
-Filenames are url-encoded in links and url-decoded on receipt. FATFS LFN is already configured
-for 128 chars (`sdkconfig.defaults`, `CONFIG_FATFS_MAX_LFN=128`), so a 128-byte path buffer is
-sufficient, but the decode must not overflow it.
+Filenames are url-encoded in links and url-decoded on receipt. FATFS LFN is configured for
+128 chars (`sdkconfig.defaults`, `CONFIG_FATFS_MAX_LFN=128`), but the **path** buffer is
+`LIB_PATH_MAX = FILENAME_MAX + 1` (1025 bytes on this build), not 128: the decoded relative path
+may be up to `FILENAME_MAX` bytes. `HTTP_PATH_MAX` (512 raw bytes) bounds what a URL can address;
+the MCP `player_play` body can name a longer path. Decode one segment at a time and reject an
+overflow rather than truncating it.
 
 ### 6.3 `GET /music/<relative path>` — download
 
