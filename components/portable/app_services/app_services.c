@@ -288,6 +288,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         .library = NULL, /* MCP leases the published generation per call */
         .scan_ms = (uint32_t)scan_ms,
         .local_ip = app_board_local_ip,
+        .rescan = app_services_rescan,
         .port = cfg->port,
     };
     e = mcp_start(&mcp);

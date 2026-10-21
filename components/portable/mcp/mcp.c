@@ -14,6 +14,15 @@
 
 #define TAG "mcp"
 
+#ifndef XTAPE_MCP_CONTROL
+#define XTAPE_MCP_CONTROL 0
+#endif
+#if XTAPE_MCP_CONTROL
+#define MCP_CONTROL 1
+#else
+#define MCP_CONTROL 0
+#endif
+
 #define MCP_VERSION       "2025-11-25"
 #define MCP_VERSION_ALT1  "2025-06-18"
 #define MCP_VERSION_ALT2  "2025-03-26"
@@ -54,6 +63,7 @@ typedef struct {
 static const library_t *L;
 static uint32_t L_scan_ms;
 static mcp_local_ip_fn L_local_ip;
+static mcp_rescan_fn L_rescan;
 static uint16_t L_port = 8000;
 
 /* --------------------------------------------------------------- JSON read */
@@ -572,6 +582,85 @@ static bool arg_int(const char *body, const jtok_t *t, int nt, int args,
     return jtok_int(body, &t[v], out);
 }
 
+#if MCP_CONTROL
+static bool control_play(w_t *w, const library_t *lib, const char *body, const jtok_t *t,
+                         int nt, int args)
+{
+    char path[LIB_PATH_MAX] = {0};
+    if (!arg_string(body, t, nt, args, "path", path, sizeof path, false)) {
+        w_puts(w, "path is invalid or too long");
+        return false;
+    }
+    if (path[0]) {
+        if (!mini_icecast_play(path)) {
+            w_puts(w, "no such track");
+            return false;
+        }
+        w_puts(w, "{\"accepted\":true}");
+        return true;
+    }
+
+    int id = -1, generation = -1;
+    if (!arg_int(body, t, nt, args, "id", &id, -1) ||
+        !arg_int(body, t, nt, args, "generation", &generation, -1) ||
+        id < 0 || generation < 0) {
+        w_puts(w, "path, or id with generation, is required");
+        return false;
+    }
+    if (!lib || generation != (int)library_generation(lib) ||
+        (uint32_t)id >= library_node_count(lib)) {
+        w_puts(w, "the generation or id is not current");
+        return false;
+    }
+    lib_node_t n = (lib_node_t)id;
+    if (library_kind(lib, n) != LIB_TRACK) {
+        w_puts(w, "the id is not a track");
+        return false;
+    }
+    char rel[LIB_PATH_MAX];
+    if (library_relpath(lib, n, rel, sizeof rel) == (size_t)-1 ||
+        !mini_icecast_play(rel)) {
+        w_puts(w, "the track could not be played");
+        return false;
+    }
+    w_puts(w, "{\"accepted\":true}");
+    return true;
+}
+
+static bool control_skip(w_t *w)
+{
+    mini_icecast_skip();
+    w_puts(w, "{\"accepted\":true}");
+    return true;
+}
+
+static bool control_prev(w_t *w)
+{
+    mini_icecast_prev();
+    w_puts(w, "{\"accepted\":true}");
+    return true;
+}
+
+static bool control_rescan(w_t *w)
+{
+    if (!L_rescan) {
+        w_puts(w, "a rescan is not available in this build");
+        return false;
+    }
+    esp_err_t e = L_rescan();
+    if (e == ESP_OK) {
+        w_puts(w, "{\"started\":true}");
+        return true;
+    }
+    if (e == ESP_ERR_INVALID_STATE) {
+        w_puts(w, "a scan is already running");
+        return false;
+    }
+    w_puts(w, "the scan could not be started");
+    return false;
+}
+#endif
+
 static bool tool_library_list(w_t *w, const library_t *lib, const char *body, const jtok_t *t, int nt, int args)
 {
     char path[LIB_PATH_MAX] = {0};
@@ -667,7 +756,8 @@ static void tool_player_status(w_t *w)
              (unsigned)st.track_index);
 }
 
-static const char TOOLS[] =
+#if !MCP_CONTROL
+static const char TOOLS_READONLY[] =
     "{\"tools\":["
     "{\"name\":\"library_stats\",\"description\":\"Counts, bytes, generation and truncation of the boot-built library.\","
     "\"inputSchema\":{\"type\":\"object\",\"properties\":{}},\"annotations\":{\"readOnlyHint\":true}},"
@@ -686,6 +776,43 @@ static const char TOOLS[] =
     "{\"name\":\"player_status\",\"description\":\"What the live broadcast is playing.\","
     "\"inputSchema\":{\"type\":\"object\",\"properties\":{}},\"annotations\":{\"readOnlyHint\":true}}"
     "]}";
+#endif
+
+#if MCP_CONTROL
+static const char TOOLS_CONTROL[] =
+    "{\"tools\":["
+    "{\"name\":\"library_stats\",\"description\":\"Counts, bytes, generation and truncation of the boot-built library.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{}},\"annotations\":{\"readOnlyHint\":true}},"
+    "{\"name\":\"library_list\",\"description\":\"List a directory in playlist order.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},"
+    "\"depth\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":8},"
+    "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":200}}},"
+    "\"annotations\":{\"readOnlyHint\":true}},"
+    "{\"name\":\"library_search\",\"description\":\"Find tracks whose relative path contains a query, case-insensitively.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},"
+    "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50}},\"required\":[\"query\"]},"
+    "\"annotations\":{\"readOnlyHint\":true}},"
+    "{\"name\":\"library_track\",\"description\":\"Metadata for one track by relative path.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},"
+    "\"required\":[\"path\"]},\"annotations\":{\"readOnlyHint\":true}},"
+    "{\"name\":\"player_status\",\"description\":\"What the live broadcast is playing.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{}},\"annotations\":{\"readOnlyHint\":true}},"
+    "{\"name\":\"player_play\",\"description\":\"Play a Track now, by relative path or by id and generation.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},"
+    "\"id\":{\"type\":\"integer\",\"minimum\":0},"
+    "\"generation\":{\"type\":\"integer\",\"minimum\":1}}},"
+    "\"annotations\":{\"readOnlyHint\":false,\"destructiveHint\":false}},"
+    "{\"name\":\"player_skip\",\"description\":\"Advance to the next Track.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{}},"
+    "\"annotations\":{\"readOnlyHint\":false,\"destructiveHint\":false}},"
+    "{\"name\":\"player_prev\",\"description\":\"Go back to the previous Track.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{}},"
+    "\"annotations\":{\"readOnlyHint\":false,\"destructiveHint\":false}},"
+    "{\"name\":\"library_rescan\",\"description\":\"Start a background Library rescan.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{}},"
+    "\"annotations\":{\"readOnlyHint\":false,\"destructiveHint\":false}}"
+    "]}";
+#endif
 
 /* --------------------------------------------------------------- responses */
 
@@ -956,7 +1083,11 @@ static http_result_t post_route(int fd, const http_request_t *req, void *ctx)
     }
 
     if (strcmp(method, "tools/list") == 0) {
-        rpc_result(fd, 200, body, id, TOOLS);
+#if MCP_CONTROL
+        rpc_result(fd, 200, body, id, TOOLS_CONTROL);
+#else
+        rpc_result(fd, 200, body, id, TOOLS_READONLY);
+#endif
         return HTTP_HANDLED;
     }
 
@@ -1006,6 +1137,16 @@ static http_result_t post_route(int fd, const http_request_t *req, void *ctx)
             ok = tool_library_track(&tw, lib, body, tokens, nt, args);
         } else if (strcmp(name, "player_status") == 0) {
             tool_player_status(&tw);
+#if MCP_CONTROL
+        } else if (strcmp(name, "player_play") == 0) {
+            ok = control_play(&tw, lib, body, tokens, nt, args);
+        } else if (strcmp(name, "player_skip") == 0) {
+            ok = control_skip(&tw);
+        } else if (strcmp(name, "player_prev") == 0) {
+            ok = control_prev(&tw);
+        } else if (strcmp(name, "library_rescan") == 0) {
+            ok = control_rescan(&tw);
+#endif
         } else {
             free(text);
             if (owned) library_release(lib);
@@ -1058,6 +1199,7 @@ esp_err_t mcp_start(const mcp_cfg_t *cfg)
     L = cfg->library;
     L_scan_ms = cfg->scan_ms;
     L_local_ip = cfg->local_ip;
+    L_rescan = cfg->rescan;
     L_port = cfg->port ? cfg->port : 8000;
     esp_err_t err = http_server_register_route_method_ex("/mcp", "POST", post_route, NULL,
                                                           mcp_body_error);

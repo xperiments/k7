@@ -115,6 +115,14 @@ TXT `path=/mcp`, `endpoint=http://xtape.local:8000/mcp`, `device_type=mcp:device
 hostname is fixed: **one xtape per LAN**. Discover it with `dns-sd -B _mcp._tcp` (macOS) or
 `avahi-browse -rt _mcp._tcp` (Linux).
 
+The default build exposes only the read-only tools. A control build adds `player_play`,
+`player_skip`, `player_prev` and `library_rescan`:
+
+```
+make -C host control          # host control binary + control-check
+XTAPE_MCP_CONTROL=1 idf.py build
+```
+
 To try it without a music collection, copy the test corpus from
 `host/fixtures/` onto the card:
 
@@ -223,7 +231,7 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 | `GET /api/library.bin` | The same generation as an arena: versioned header, nodes, edges, track index and CRC. |
 | `POST /api/play` | `{"path":"Album/song.mp3"}` selects any Track at the next chunk boundary. A bad path is a 404 and leaves the stream alone. |
 | `POST /api/rescan` | `{}` starts one asynchronous Library rescan; `202` when started, `409` when one is already running. The old generation stays readable; the broadcast parks on the idle bed for the scan, resumes the current Track, and switches to the new generation at its next pass. |
-| `POST /mcp` | Read-only MCP (2025-11-25): `initialize`, `ping`, `tools/list`, `tools/call` for `library_stats`, `library_list`, `library_search`, `library_track` and `player_status`. |
+| `POST /mcp` | MCP (2025-11-25): `initialize`, `ping`, `tools/list`, `tools/call` for `library_stats`, `library_list`, `library_search`, `library_track` and `player_status`. Read-only by default; a build with `XTAPE_MCP_CONTROL=1` adds `player_play`, `player_skip`, `player_prev` and `library_rescan`. |
 | anything else | `404`, or `405` for a known path with the wrong method. |
 
 ```bash

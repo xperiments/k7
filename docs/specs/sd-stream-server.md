@@ -428,6 +428,12 @@ carries `MCP-Protocol-Version`; no `Mcp-Session-Id` is emitted and `Accept` is i
 transport error table is ticket 09's (411/413/415/400) plus `-32600`, `-32601`, `-32602`,
 `-32700`; a notification is 202 with no body.
 
+**Requirement M2b.** Control tools (`player_play`, `player_skip`, `player_prev`,
+`library_rescan`) are compiled only with `XTAPE_MCP_CONTROL=1`. Without it they are absent from
+`tools/list` and a call naming one is `-32602`. With it, play/skip/prev change the broadcast,
+an invalid path is a tool error that leaves the stream playing, and rescan returns immediately
+with a tool error when one is already running.
+
 **Requirement M3.** Advertise `xtape.local` and `_mcp._tcp` on port 8000 with TXT
 `path=/mcp`, `endpoint=http://xtape.local:8000/mcp`, `device_type=mcp:device`, only after the
 listener is up and Wi-Fi has an address. The hostname is fixed, so one device per LAN.

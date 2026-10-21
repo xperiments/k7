@@ -18,13 +18,16 @@
 
 HERE  := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 ROOT  := $(HERE)/..
-BUILD := $(HERE)/build
+BUILD ?= $(HERE)/build
 OBJ   := $(BUILD)/obj
 BIN   := $(BUILD)/bin
 
 CC     ?= cc
 CFLAGS ?= -O2 -g
 CFLAGS += -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wno-gnu-zero-variadic-macro-arguments
+ifeq ($(XTAPE_MCP_CONTROL),1)
+CFLAGS += -DXTAPE_MCP_CONTROL=1
+endif
 LDLIBS := -lpthread -lm
 
 INC := -I$(HERE)/include \
@@ -98,9 +101,16 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t08_http_parse $(BIN)/t10_cassette $(BIN)/t11_ring \
          $(BIN)/t12_transport $(BIN)/t14_library
 
-.PHONY: all test integration layering check tools fixtures bench clean help
+.PHONY: all test integration layering check tools fixtures bench control control-check clean help
 
 all: $(SERVER)
+
+# A separate object tree, so the default binary and the control build can coexist.
+control:
+	$(MAKE) -C $(HERE) BUILD=$(BUILD)/control XTAPE_MCP_CONTROL=1 all
+
+control-check: control
+	CONTROL_BIN=$(BUILD)/control/bin/icecast_host sh $(HERE)/tests/control_tests.sh
 
 # Vendored encoder: compiled unmodified, so its warnings are not ours to fix.
 $(SHINE_OBJ): CFLAGS += -w
