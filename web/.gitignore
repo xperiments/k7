@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.vite/
+public/models/
+public/ort/
+*.local
+.DS_Store
+
+# npm cache workaround for a non-writable ~/.npm
+.npm-cache/
+*.ses

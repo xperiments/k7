@@ -1,0 +1,53 @@
+# Third-party notices
+
+The application code in this directory is licensed AGPL-3.0 (see [`LICENSE`](./LICENSE)).
+The ONNX model weights are **not** distributed in this repository. `npm run models` downloads
+them from the Music Technology Group (UPF) and pins each file by SHA-256.
+
+## Models
+
+Source: <https://essentia.upf.edu/models.html>
+
+| File | Purpose |
+|---|---|
+| `discogs-effnet-bsdynamic-1.onnx` | EffNet embeddings for the tag heads |
+| `msd-musicnn-1.onnx` | MusiCNN embeddings for valence/arousal |
+| `mood_happy-discogs-effnet-1.onnx` | happy / not happy |
+| `mood_sad-discogs-effnet-1.onnx` | sad / not sad |
+| `mood_aggressive-discogs-effnet-1.onnx` | aggressive / not aggressive |
+| `mood_relaxed-discogs-effnet-1.onnx` | relaxed / not relaxed |
+| `mood_party-discogs-effnet-1.onnx` | party / not party |
+| `danceability-discogs-effnet-1.onnx` | danceable / not danceable |
+| `deam-msd-musicnn-2.onnx` | valence and arousal (DEAM) |
+
+Licence: the MTG models page states **CC BY-NC-SA 4.0**; the MTG licensing page states
+**CC BY-NC-ND 4.0**. The two pages disagree, but both restrict use to non-commercial
+purposes, and MTG offers a proprietary licence on request. Because the application relies on
+these weights, the combined application is non-commercial.
+
+Attribution and references:
+
+- Bogdanov, D. et al. *Essentia: An Audio Analysis Library for Music Information Retrieval.*
+  ISMIR 2013.
+- Alonso-Jiménez, P. et al. *TensorFlow vs. PyTorch in Essentia.* arXiv:2003.07393 (2020) —
+  model evaluation and cross-collection transfer numbers.
+- Pons, J., Serra, X. *musicnn: Pre-trained convolutional neural networks for music audio
+  tagging.* arXiv:1909.06654 (2019).
+- Fonseca, E., Ferraro, A., Serra, X. *Improving sound event classification by increasing
+  shift invariance in convolutional neural networks.* arXiv:2107.00623 (2021) — the EffNet
+  front end.
+- Aljanaki, A., Yang, Y.-H., Soleymani, M. *DEAM: MediaEval Database for Emotional Analysis
+  in Music* (2016).
+
+## Runtime and libraries
+
+| Component | Licence |
+|---|---|
+| Essentia.js 0.1.3 | AGPL-3.0 |
+| ONNX Runtime Web 1.30.0 | MIT |
+| React 19 | MIT |
+| Vite 8 | MIT |
+| `idb` 8 | ISC |
+| `music-metadata` 12 | MIT |
+| `taglib-wasm` 2.4 | MIT wrapper; TagLib LGPL-2.1 / MPL-1.1 |
+| Vitest, `onnxruntime-node` (development only) | MIT |
