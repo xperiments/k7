@@ -489,6 +489,13 @@ chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1*
 | The padded end-of-track frame survives on the device (T2c) | a 16 s capture carried `tail-44100` - 34 266 frames, deliberately not a multiple of 1152 - three times, and all 530 808 bytes decode with zero errors |
 | Download contention does not starve the stream (T9b) | repeated downloads of the largest track with a listener attached: `starvation rebases 0`, `asserts/overflows/reboots 0` |
 
+| Library tree on a real nested card (ticket 13) | a temporary three-level fixture made `tracks=65 dirs=2 scan=137 ms arena=6430 B json=12631 B`; JSON, binary CRC/parentage, the 88 244 B nested download and `POST /api/play` all agreed, and `player_status` showed `zz-xtape-nested/Deep/one-second.wav` |
+| Full card scan at boot (ticket 13) | 64 tracks / 2.28 GB: `state=ok tracks=64 dirs=0 bytes=2277100658 scan=96 ms arena=6285 B json=12343 B psram=5295632 -> 5275936 B truncated=0`; synchronous scan stays |
+| MCP through mDNS (ticket 13) | `initialize` and `tools/list` over `http://xtape.local:8000/mcp`, `MCP-Protocol-Version: 2025-11-25`, five read-only tools; `dns-sd` listed `_mcp._tcp`; control tools were absent from the default build |
+| Ten-minute rescan/download soak (ticket 13) | 10 min with a listener, repeated 46 MB downloads and four rescans: `starvation rebases: 0`, `asserts/overflows/reboots: 0`, encoder 52.9 %, internal minimum 66 043 -> 57 855 B, external 2 039 048 -> 2 079 160 B |
+| Main-task stack at the full card (ticket 13) | the first full scan overflowed the 6 144 B main stack; `CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384` fixed it and the same card then booted in 96 ms |
+| Library cap diagnostic (ticket 13) | a temporary `max_tracks=1` build logged `tracks=1 ... scan=7 ms arena=228 B json=424 B ... truncated=1`, so truncation is visible at the cap as well as under it |
+
 The hour's result deserves stating precisely: **zero starvation rebases and zero
 faults in 59 minutes, with the encoder flat at 41.4 % of one core** (10 786 µs per
 frame at the start of the run, 10 812 at the end) and free memory identical at the

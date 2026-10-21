@@ -3,6 +3,9 @@
 #
 #   sh host/tests/board_soak.sh <base-url> <serial-port> <minutes> [stream|downloads]
 #
+# Set RESCAN=1 to POST /api/rescan once a minute during the soak. That is the
+# ticket-13 path: a scan and a download sharing the card and the broadcast.
+#
 # It resets the board, captures its serial log for the whole run, attaches one
 # client to the live stream, and (with `downloads`) keeps pulling the largest
 # track off the card at the same time. Then it reads the device's own telemetry
@@ -26,6 +29,7 @@ LOAD=${4:-stream}
 # bound instead, and says so on the command line rather than being silently
 # exempted.
 MAX_COST=${MAX_COST:-35}
+RESCAN=${RESCAN:-0}
 HERE=$(dirname "$0")
 
 # serial_log.py needs pyserial. The ESP-IDF python environment has it; a bare
@@ -68,6 +72,17 @@ sleep 1
 curl -s -o /dev/null --max-time "$SECS" "$BASE/stream" &
 STREAM=$!
 
+if [ "$RESCAN" = 1 ]; then
+    echo "requesting a rescan once a minute during the soak"
+    ( end=$(( $(date +%s) + SECS ))
+      while [ "$(date +%s)" -lt "$end" ]; do
+          curl -s -o /dev/null -X POST -H 'Content-Type: application/json' \
+              --data '{}' "$BASE/api/rescan" || true
+          sleep 60
+      done ) &
+    SCAN=$!
+fi
+
 if [ "$LOAD" = downloads ]; then
     name=$("$PY" "$HERE/biggest_track.py" "$BASE" 50000 | cut -d' ' -f1)
     if [ -z "$name" ]; then
@@ -86,6 +101,7 @@ fi
 wait $CAP
 kill "$STREAM" 2>/dev/null
 [ -n "${DL:-}" ] && kill "$DL" 2>/dev/null
+[ -n "${SCAN:-}" ] && kill "$SCAN" 2>/dev/null
 sleep 1
 
 # ---------------------------------------------------------------- the verdict
@@ -94,6 +110,8 @@ lines=$(tr -d '\r' <"$LOG")
 
 rebases=$(printf '%s\n' "$lines" | grep -c 'starved for' || true)
 crashes=$(printf '%s\n' "$lines" | grep -cE 'assert failed|stack overflow|Rebooting' || true)
+rescans=$(printf '%s\n' "$lines" | grep -c 'library rescan: generation' || true)
+scan_faults=$(printf '%s\n' "$lines" | grep -cE 'library rescan:.*failed|stack overflow in task main' || true)
 cost=$(printf '%s\n' "$lines" | sed -n 's/.*= \([0-9.]*\)% of one core.*/\1/p' | tail -1)
 frames=$(printf '%s\n' "$lines" | sed -n 's/.*encoder: \([0-9]*\) frames.*/\1/p' | tail -1)
 first_mem=$(printf '%s\n' "$lines" | grep -m1 'memory: internal' | sed 's/.*memory: //')
@@ -105,10 +123,15 @@ printf '  encoder: %s frames, last reading %s%% of one core\n' "${frames:-none}"
 printf '  memory at the start: %s\n' "${first_mem:-none}"
 printf '  memory at the end:   %s\n' "${last_mem:-none}"
 printf '  starvation rebases: %s\n' "$rebases"
+printf '  rescans published: %s\n' "$rescans"
 printf '  asserts/overflows/reboots: %s\n' "$crashes"
 
 [ "$crashes" = "0" ] || { echo "FAIL: the device reported a fault"; FAIL=1; }
 [ "$rebases" = "0" ] || { echo "FAIL: $rebases starvation rebase(s)"; FAIL=1; }
+if [ "$RESCAN" = 1 ]; then
+    [ "$scan_faults" = "0" ] || { echo "FAIL: a rescan reported a fault"; FAIL=1; }
+    [ "$rescans" -ge 2 ] || { echo "FAIL: fewer than two rescans published"; FAIL=1; }
+fi
 if [ -n "$cost" ]; then
     awk "BEGIN{exit !($cost < $MAX_COST)}" || {
         echo "FAIL: encoder cost ${cost}% is not below ${MAX_COST}%"

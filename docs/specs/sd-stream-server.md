@@ -518,6 +518,7 @@ host result transfers.
 | T15 | POST play control | Raw `POST /api/play` with a nested path, split/one-packet bodies, 411/413/415 and an unknown path | **both** | Accepted body changes the Track at the next chunk; errors do not interrupt the stream; `Accept` is ignored |
 | T16 | MCP read-only surface | `initialize` in three legacy revisions, notifications, `tools/list`, all five tools and the error table | **host** | Version echo/fallback, 202 notifications, 411/413/415 JSON-RPC, no session header, `Accept` ignored |
 | T17 | Rescan generations | A slow `/api/library` reader, a rescan with one added Track, a second simultaneous rescan and a card-less rescan | **host** | Old JSON completes; generation advances; broadcast sees the new count; one 202 and one 409; `no_card` stays diagnosable |
+| T18 | Board Library tree and soak | A real card (64 tracks), a temporary three-level fixture, mDNS/MCP through `xtape.local`, and a 10-minute stream + download + rescan soak | **board** | Boot logs scan/arena/JSON/PSRAM/truncated; nested JSON/blob/download/play agree; `dns-sd` sees `_mcp._tcp`; 0 rebases/faults over 10 min; synchronous scan stays |
 
 ---
 
