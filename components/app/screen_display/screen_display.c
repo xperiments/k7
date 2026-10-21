@@ -15,6 +15,7 @@
  * tools/decode_screen_dump.py.
  */
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "esp_heap_caps.h"
@@ -33,6 +34,7 @@
 #include "screen_display.h"
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
+#include "backlight.h"
 #include "esp_lvgl_port.h"
 #include "panel_rgb.h"
 #include "touch_gt911.h"
@@ -139,9 +141,80 @@ static void ui_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
 }
 #endif
 
-static void screen_task(void *arg)
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* The idle ladder: 2 minutes -> 60%, 5 -> 30%, 10 -> 0%, all measured from the same
+ * last touch. The steps are tested from the longest first, so the level only ever
+ * moves one way as time passes and a touch takes it straight back to awake. */
+static int backlight_target_for_idle(uint32_t idle_ms)
+{
+    if (idle_ms >= (uint32_t)CONFIG_APP_UI_BACKLIGHT_DIM3_S * 1000u)
+        return CONFIG_APP_UI_BACKLIGHT_DIM3_PCT;
+    if (idle_ms >= (uint32_t)CONFIG_APP_UI_BACKLIGHT_DIM2_S * 1000u)
+        return CONFIG_APP_UI_BACKLIGHT_DIM2_PCT;
+    if (idle_ms >= (uint32_t)CONFIG_APP_UI_BACKLIGHT_DIM1_S * 1000u)
+        return CONFIG_APP_UI_BACKLIGHT_DIM1_PCT;
+    return CONFIG_APP_UI_BACKLIGHT_AWAKE_PCT;
+}
+#endif
+
+#if CONFIG_APP_UI_BACKLIGHT_TEST
+/* A white screen and a large number: the point is to compare the panel at exact
+ * levels, without the sleep timer or the cassette drawing over it. */
+static lv_obj_t *s_test_label;
+
+static void backlight_test_create(void)
+{
+    lv_obj_t *scr = lv_screen_active();
+    lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(scr, false);
+
+    s_test_label = lv_label_create(scr);
+    lv_obj_set_style_text_font(s_test_label, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(s_test_label, lv_color_black(), 0);
+    lv_label_set_text(s_test_label, "100%");
+    lv_obj_align(s_test_label, LV_ALIGN_CENTER, 0, -30);
+
+    lv_obj_t *sub = lv_label_create(scr);
+    lv_obj_set_style_text_font(sub, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_color(sub, lv_color_black(), 0);
+    lv_label_set_text_fmt(sub, "%d Hz - 100 - 80 - 60 - 40 - 20 - 0",
+                          CONFIG_APP_UI_BACKLIGHT_PWM_HZ);
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 40);
+
+    ESP_LOGI(TAG, "backlight test screen: %d Hz, cycling 100/80/60/40/20/0 every 5 s",
+             CONFIG_APP_UI_BACKLIGHT_PWM_HZ);
+}
+
+static void backlight_test_task(void *arg)
 {
     (void)arg;
+    static const int levels[] = { 100, 80, 60, 40, 20, 0 };
+    for (;;) {
+        for (size_t i = 0; i < sizeof levels / sizeof levels[0]; i++) {
+            /* Put the number up before the light changes, so the first frame at the
+             * new level already carries it. At 0% the label is there but black. */
+            if (lvgl_port_lock(100)) {
+                lv_label_set_text_fmt(s_test_label, "%d%%", levels[i]);
+                lvgl_port_unlock();
+            }
+            backlight_set_percent_immediate(levels[i]);
+            ESP_LOGI(TAG, "backlight test: %d%%", levels[i]);
+            vTaskDelay(pdMS_TO_TICKS(5000));
+        }
+    }
+}
+#endif
+
+static void screen_task(void *arg)
+{
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The panel's display, for LVGL's inactivity clock: the backlight's sleep timer
+     * is the same clock the touch adapter feeds, so a press resets both. */
+    lv_display_t *disp = arg;
+#else
+    (void)arg;
+#endif
     /* Says where it landed: this task's core is a decision (see screen_display_start), and a task
      * that never runs is otherwise indistinguishable from a task that has nothing to do. */
     ESP_LOGI(TAG, "screen task running on core %d", (int)xPortGetCoreID());
@@ -156,9 +229,25 @@ static void screen_task(void *arg)
         /* The port owns LVGL and runs lv_timer_handler() in its own task, so updates from
          * here take its lock and nothing more. */
         if (lvgl_port_lock(20)) {
+            /* Backlight sleep: an idle ladder, not a single dim. LVGL resets this
+             * clock on every press, and the touch adapter also restores the awake
+             * level in the read itself, so a touch is immediate; this is what walks
+             * the level down while the screen is left alone. */
+            uint32_t idle_ms = lv_display_get_inactive_time(disp);
+            int target = backlight_target_for_idle(idle_ms);
+            static int shown_pct = CONFIG_APP_UI_BACKLIGHT_AWAKE_PCT;
+            if (target != shown_pct) {
+                shown_pct = target;
+                backlight_set_percent(target);
+                ESP_LOGI(TAG, "backlight %d%% after %u s without a touch",
+                         target, (unsigned)(idle_ms / 1000u));
+            }
             cassette_view_update(&st);
             lvgl_port_unlock();
         }
+        /* One fade step per pass. backlight_set_percent() has already taken the first
+         * step for the transition it asked for; this keeps a running fade moving. */
+        backlight_tick();
 #else
         cassette_view_update(&st);
 #endif
@@ -197,6 +286,11 @@ static void screen_task(void *arg)
         int rest = frame_ms * 3;
         if (rest < UI_FRAME_MS) rest = UI_FRAME_MS;
         if (rest > UI_REST_MAX_MS) rest = UI_REST_MAX_MS;   /* a slow frame must not freeze it */
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+        /* Keep the fade's cadence steady through a slow frame. It is a duty step, not
+         * a full redraw, so the longer screen rest is the expensive part. */
+        if (backlight_is_fading() && rest > UI_FRAME_MS) rest = UI_FRAME_MS;
+#endif
         static int n_rest;
         if (n_rest < 3) {
             n_rest++;
@@ -260,12 +354,18 @@ esp_err_t screen_display_start(void)
     lv_timer_t *refr = lv_display_get_refr_timer(disp);
     if (refr) lv_timer_set_period(refr, UI_FRAME_MS);
 #endif
+#if CONFIG_APP_UI_BACKLIGHT_TEST
+    backlight_test_create();
+#else
     cassette_view_create();
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
+#endif
+#if CONFIG_APP_BOARD_SUNTON_8048S050C && !CONFIG_APP_UI_BACKLIGHT_TEST
     /* The view is built before the pointer is bound, so the first tap lands on the
      * finished screen. A controller that does not answer leaves a working screen
      * without a pointer, which is the right failure: the picture is what the device
-     * is for, and the log names the layer that did not come up. */
+     * is for, and the log names the layer that did not come up. The visual backlight
+     * test needs no pointer, and a touch during it would wake the level and spoil the
+     * comparison. */
     esp_err_t touch_err = touch_gt911_start(disp);
     if (touch_err != ESP_OK) {
         ESP_LOGW(TAG, "the touch controller did not start: %s; the screen still runs",
@@ -302,10 +402,19 @@ esp_err_t screen_display_start(void)
      * to the network instead of queueing behind the encoder on core 1. The port task
      * is mostly parked on the panel's vsync, so it does not starve Wi-Fi the way the
      * old render-in-a-loop screen did. */
-    if (xTaskCreatePinnedToCore(screen_task, "screen", 16 * 1024, NULL, 3, NULL, 0) != pdPASS) {
+#if CONFIG_APP_UI_BACKLIGHT_TEST
+    /* The test task owns the backlight; the normal screen task would fight it with
+     * the idle ladder, so it is not started in this build. */
+    if (xTaskCreatePinnedToCore(backlight_test_task, "bltest", 4096, NULL, 3, NULL, 0) != pdPASS) {
+        ESP_LOGE(TAG, "no memory for the backlight test task");
+        return ESP_ERR_NO_MEM;
+    }
+#else
+    if (xTaskCreatePinnedToCore(screen_task, "screen", 16 * 1024, disp, 3, NULL, 0) != pdPASS) {
         ESP_LOGE(TAG, "no memory for the screen task: the screen will not update");
         return ESP_ERR_NO_MEM;
     }
+#endif
 
 #if CONFIG_APP_UI_SERIAL_DUMP
     /* Give the screen a moment to draw itself (and the broadcast a moment to report a

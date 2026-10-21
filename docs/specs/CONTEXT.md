@@ -134,8 +134,21 @@ _Avoid_: transition, animation, reel swap
 The dashed arc that continues the tape edge on each reel, showing the peak-hold of one
 channel: the left reel is L, the right R. Its length is a screen setting, not part of
 the cassette. The empty reel keeps a minimum tape load, so its arc stays outside the
-hub ring.
+hub ring. When the full **label cover** is up the reels are behind it, so the same two
+meters move to the bottom row as rows of short vertical bars on the progress band's
+centre line, in the free pockets that row leaves: same peak-hold, same dB scale, only
+the drawing changes.
 _Avoid_: level bar, meter, peak meter
+
+**Label cover**:
+The full-bleed cover art, `assets/labels/k7logo.png`, drawn at 0,0 over the 800x480
+panel; a two-finger swipe slides it over the screen. Cover art is 800x480 from now on,
+the panel's own size, so it carries no margin. Its black triangle and circle are
+transparent and it is stored as RGB565A8, so the reels show through them. When the
+slide ends the screen background fades from the cassette's colour to the cover's own
+backdrop, `COL_COVER_BG`; the small **label** is hidden and the **VU meters** sit as
+bar rows on the progress band's centre line.
+_Avoid_: big label, sticker, overlay
 
 **Label**:
 The paper strip on the cassette that carries the cleaned **Now playing** title,

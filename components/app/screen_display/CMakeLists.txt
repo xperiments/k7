@@ -4,11 +4,11 @@
 # GT911 is the panel board's input adapter. The big label cover belongs to that input
 # too: its two-finger gesture is what opens it, so a board without the touch adapter
 # does not carry its 814 KB blob.
-set(screen_srcs "screen_display.c" "cassette_view.c" "lvgl_mem.c" "font_kalam_36.c")
-set(screen_reqs mini_icecast cassette esp_timer esp_lcd esp_driver_gpio)
+set(screen_srcs "screen_display.c" "cassette_view.c" "lvgl_mem.c" "font_oxanium_36.c")
+set(screen_reqs mini_icecast cassette esp_timer esp_lcd esp_driver_gpio esp_driver_ledc)
 set(screen_embeds "assets/hub_frames.bin")
 if(CONFIG_APP_BOARD_SUNTON_8048S050C)
-    list(APPEND screen_srcs "panel_rgb.c" "touch_gt911.c")
+    list(APPEND screen_srcs "panel_rgb.c" "touch_gt911.c" "backlight.c")
     list(APPEND screen_reqs esp_lcd_touch esp_lcd_touch_gt911 esp_driver_i2c)
     list(APPEND screen_embeds "assets/label_cover.bin")
 endif()

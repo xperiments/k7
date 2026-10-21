@@ -33,6 +33,7 @@
 #include "esp_log.h"
 #include "esp_lvgl_port.h"
 
+#include "backlight.h"
 #include "touch_gt911.h"
 
 static const char *TAG = "touch";
@@ -61,6 +62,12 @@ static touch_two_finger_cb_t s_two_finger_cb;
 static bool s_two_down;
 static bool s_two_sent;
 static int32_t s_two_x, s_two_y;
+
+/* The first press after the backlight dimmed only wakes the screen. The whole press
+ * is withheld from LVGL until the finger lifts, so the wake cannot also skip a track,
+ * open the cover, or slide the label: `s_wake_only` stays set for the press and is
+ * cleared on the release. */
+static bool s_wake_only;
 
 void touch_gt911_set_two_finger_cb(touch_two_finger_cb_t cb)
 {
@@ -135,14 +142,39 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
         ESP_LOGI(TAG, "[GDBG] contacts=%u", points);
     }
 
-    touch_two_finger_check(point, points);
+    /* A press on a dimmed screen is the wake-up, not an action. Set the latch on the
+     * landing and keep it until the finger lifts; report no point for the whole press
+     * so LVGL sees no click and no gesture from it. */
+    bool wake_only = s_wake_only;
+    if (have_point && !wake_only && backlight_is_dimmed()) {
+        s_wake_only = true;
+        wake_only = true;
+        backlight_set_percent(CONFIG_APP_UI_BACKLIGHT_AWAKE_PCT);
+        /* The press is deliberately not reported to LVGL, so LVGL will not reset its
+         * own inactivity clock from it. Do it here: otherwise the screen task sees the
+         * old idle time on its next pass and dims the screen straight back down. */
+        lv_display_trigger_activity(lv_indev_get_display(indev));
+        ESP_LOGI(TAG, "touch wakes the backlight; the press is not an action");
+    }
+    if (!have_point) s_wake_only = false;
+
+    if (wake_only) {
+        /* Keep the multi-touch detector out of this press too: two fingers on a dark
+         * screen are a wake, not the cover gesture. */
+        s_two_down = false;
+        s_two_sent = false;
+    } else {
+        touch_two_finger_check(point, points);
+    }
 
     if (have_point) {
-        data->point.x = point[0].x;
-        data->point.y = point[0].y;
         last_x = point[0].x;
         last_y = point[0].y;
-        data->state = LV_INDEV_STATE_PRESSED;
+        if (!wake_only) {
+            data->point.x = point[0].x;
+            data->point.y = point[0].y;
+            data->state = LV_INDEV_STATE_PRESSED;
+        }
     }
 
     if (data->state == last_state) return;

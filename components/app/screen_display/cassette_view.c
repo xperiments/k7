@@ -3,10 +3,14 @@
  *
  * The cassette body is drawn here: a light grey shell, two black tape packs of
  * different sizes, the small cream label (LVGL objects) and the progress band. The
- * full cover comes from assets/labels/glabel-full.png and is exported as RGB565A8
- * because its tape window is transparent, so the reels show through it; it is a
- * static image, drawn when the cover slides in on a two-finger swipe. The hub comes
- * from assets/hub/: the opaque 168x168 keyframes of the whole hub, one revolution.
+ * full cover comes from assets/labels/k7logo.png: an 800x480 image, the panel's own
+ * size, exported as RGB565A8 and drawn full-bleed at 0,0 when it slides in on a
+ * two-finger swipe. Its black triangle and circle carry alpha, so the reels show
+ * through them; once the cover has slid in, the screen background fades from COL_BG to
+ * the cover's own backdrop, COL_COVER_BG. While the cover is up the reels, and with
+ * them the VU arcs, are behind it, so the same two meters move to the bottom row as
+ * rows of short vertical bars on the progress band's centre line. The hub comes from
+ * assets/hub/: the opaque 168x168 keyframes of the whole hub, one revolution.
  * tools/convert_cassette_assets.py converts both to what the firmware blits: the hubs
  * to RGB565 exactly as exported - no alpha, no recolour, no compositing - with 96x96
  * crop descriptors that point into the same frame data.
@@ -35,18 +39,18 @@
 #include "touch_gt911.h"
 #endif
 
-LV_FONT_DECLARE(kalam_36);
+LV_FONT_DECLARE(oxanium_36);
 
 static const char *TAG = "screen";
 
 /* The 800x480 panel: the hub's static ring is 168 px and the rotating mask is the
  * converter's HUB_FRAME_W (96 px). The packs stay the reference's 245/310 so the
  * black tape rings the hub at both ends of a side. */
-static const struct { int x, y; } k_hub[2] = { { 216, 234 }, { 600-16, 234 } };
-static const struct { int x, y; } k_window[2] = { { 120+180, 180 }, { 800-120-180, 268+20 } };
+static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } };
+// static const struct { int x, y; } k_window[2] = { { 120+180, 180 }, { 800-120-180, 268+20 } };
 #define HUB_RING_D 168
 #define PACK_MIN_D 168
-#define PACK_MAX_D 400
+#define PACK_MAX_D 380
 
 /* The tape strands leave the bottom edge where it is tangent to a full pack:
  * 216 - 400/2 = 16 on the left, 584 + 400/2 = 784 on the right. */
@@ -68,20 +72,23 @@ static const struct { int x, y; } k_window[2] = { { 120+180, 180 }, { 800-120-18
 #define SMALL_TITLE_Y 40
 #define SMALL_TITLE_W 439
 
-/* The big cover: the supplied cassette label, at 16,16, a two-finger swipe away. Its
- * tape window is transparent (RGB565A8), so the reels behind it show through. The
- * title is written on the label's rule, to the right of its blue logo; it is a child
- * of the cover and travels with it. The cover hides just above the screen, so showing
- * it is a downward slide and hiding it is the reverse. It is the panel board's, because
- * the two-finger gesture that opens it is. */
+/* The big cover: the supplied full cover, full-bleed at 0,0, a two-finger swipe away.
+ * Cover art is 800x480, the panel's own size, so the cover has no margin. This one
+ * keeps its alpha (RGB565A8): the black triangle and circle are transparent, so the
+ * reels show through them. The compact VU carries the meters while the cover is up.
+ * The title is a child of the cover and travels with it; it sits on the empty
+ * band at the top of the art, clear of the compact VU rows at the bottom. The cover
+ * hides just above the screen, so showing it is a downward slide and hiding it is the
+ * reverse. It is the panel board's, because the two-finger gesture that opens it is. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-#define COVER_X 16
-#define COVER_Y 16
+#define COVER_X 0
+#define COVER_Y 0
 #define COVER_HIDDEN_Y (-LABEL_COVER_H - 8)
 #define COVER_ANIM_MS 300
-#define COVER_TITLE_X 142  /* the label's rule starts at 142, its logo ends at 121 */
-#define COVER_TITLE_Y 74   /* the label's third rule, at 114, is the writing line */
-#define COVER_TITLE_W 439
+#define COVER_BG_FADE_MS 500
+#define COVER_TITLE_X 40
+#define COVER_TITLE_Y 8
+#define COVER_TITLE_W 720
 #endif
 
 #define B_X 91
@@ -96,11 +103,13 @@ static const struct { int x, y; } k_window[2] = { { 120+180, 180 }, { 800-120-18
 
 /* Colours, read off the reference. */
 #define COL_BG          0x3C2B2A
+#define COL_COVER_BG     0xB48744   /* the cover's background, behind the transparent shapes */
 #define COL_TAPE        0x2E1C19
 #define COL_TAPE_DARK   0xE54820
 #define COL_LABEL       0xFFFFFF // 0xf4eabb
 #define COL_RED         0xE54820
-#define COL_INK         0x000099
+#define COL_INK         0x444444
+#define COL_COVER_INK   0xEEEEEE   /* the dark cover needs light ink, not the label's blue */
 #define COL_HUB_RING    0xF3F2EE
 #define COL_BAR_BG      0xb9c0bb
 #define COL_BAR_FG      0xf03d3a
@@ -116,6 +125,24 @@ static const struct { int x, y; } k_window[2] = { { 120+180, 180 }, { 800-120-18
 #define TAPE_WIDTH 8
 #define VU_WIDTH 8
 #define VU_PEAK_LIT 0xffd08a
+
+/* The VU when the full cover is up. The arcs sit behind the cover, so the same two
+ * meters become rows of short vertical bars on the progress band's centre line: one
+ * row in the pocket between the B button and the left tape strand, the other between
+ * the band and the right strand. The pockets are about 56 px and the strands sweep in
+ * as the packs empty, so the rows stay clear of both. Lit is the tape red, the
+ * peak-hold the cream one. */
+#define VU_COMPACT_X        34
+#define VU_COMPACT_W        56
+#define VU_COMPACT_H        20
+#define VU_COMPACT_Y        444   /* BAND_Y 434 + half the 20 px band */
+#define VU_COMPACT_DASH_W   6
+#define VU_COMPACT_DASH_GAP 5
+#define VU_COMPACT_DASH_H   8
+#define VU_COMPACT_DASH_R   1   /* the same slight rounding the dashes had */
+#define VU_COMPACT_COUNT    5
+#define VU_COMPACT_ROW_W    (VU_COMPACT_COUNT * VU_COMPACT_DASH_W + \
+                             (VU_COMPACT_COUNT - 1) * VU_COMPACT_DASH_GAP)
 
 static cassette_t *s_model;
 static lv_obj_t *s_hub[2], *s_pack[2], *s_strand[2];
@@ -137,7 +164,9 @@ static bool      s_two_finger_seen;
 static int      s_pack_d[2];      /* px, so a redraw happens only when it changes */
 static uint8_t  s_shown_hub[2];   /* the art frame currently on screen */
 static int      s_tangent_deg[2]; /* where the strand leaves the pack, LVGL degrees */
-static int      s_vu_lit[2];      /* dashes lit by the peak-hold, 0..VU_DASH_COUNT */
+static int      s_vu_lit[2];      /* dashes lit by the peak-hold, 0..the mode's count */
+static float    s_vu_level[2];    /* the last peak-hold, so a mode change can remap it */
+static bool     s_vu_compact;     /* the cover is up: the bottom-row dash rows */
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -251,6 +280,15 @@ static bool angle_in_arc(int a, int start, int dir, int length)
 static void vu_geom_set(int i)
 {
     if (!s_vu[i]) return;
+    if (s_vu_compact) {
+        /* The row is centred on the band and sits in a bottom-row pocket. The cover
+         * sits above the reels, so the rows are drawn over it; the left meter is L,
+         * the right R. */
+        int x = i ? 800 - VU_COMPACT_X - VU_COMPACT_W : VU_COMPACT_X;
+        lv_obj_set_pos(s_vu[i], x, VU_COMPACT_Y - VU_COMPACT_H / 2);
+        lv_obj_set_size(s_vu[i], VU_COMPACT_W, VU_COMPACT_H);
+        return;
+    }
     int r = s_pack_d[i] / 2;
     int cx = k_hub[i].x, cy = k_hub[i].y;
     int dir = i ? -1 : 1;
@@ -279,7 +317,7 @@ static void pack_set(int i, int d)
     lv_obj_set_size(s_pack[i], d, d);
     lv_obj_set_pos(s_pack[i], k_hub[i].x - d / 2, k_hub[i].y - d / 2);
     strand_set(i, d);
-    vu_geom_set(i);
+    if (!s_vu_compact) vu_geom_set(i);
 }
 
 /* The pack area, and therefore the tape length on it, is proportional to the fill:
@@ -315,6 +353,22 @@ static void draw_arc(lv_layer_t *layer, int cx, int cy, int r,
     lv_draw_arc(layer, &dsc);
 }
 
+/* One bar of the compact VU: a short, rounded vertical segment. */
+static void draw_dash(lv_layer_t *layer, int x, int y, lv_color_t color, lv_opa_t opa)
+{
+    lv_draw_rect_dsc_t dsc;
+    lv_draw_rect_dsc_init(&dsc);
+    dsc.bg_color = color;
+    dsc.bg_opa = opa;
+    dsc.radius = VU_COMPACT_DASH_R;
+    int y1 = y - VU_COMPACT_DASH_H / 2;
+    lv_area_t area = {
+        x, y1,
+        x + VU_COMPACT_DASH_W - 1, y1 + VU_COMPACT_DASH_H - 1,
+    };
+    lv_draw_rect(layer, &dsc, &area);
+}
+
 /* The solid tape edge, drawn on the pack so it redraws only when the pack resizes. */
 static void pack_draw_cb(lv_event_t *e)
 {
@@ -327,12 +381,36 @@ static void pack_draw_cb(lv_event_t *e)
              lv_color_hex(COL_TAPE_DARK), LV_OPA_COVER, TAPE_WIDTH, 1);
 }
 
+/* The cover mode: the same peak-hold as the arcs, drawn as a row of vertical bars
+ * that fill from the outer edge inwards. The last lit bar is the peak, as on the
+ * arc. */
+static void vu_compact_draw(lv_layer_t *layer, int i)
+{
+    int lit = s_vu_lit[i];
+    int base = i ? 800 - VU_COMPACT_X - VU_COMPACT_W : VU_COMPACT_X;
+    int x0 = base + (VU_COMPACT_W - VU_COMPACT_ROW_W) / 2;
+
+    for (int k = 0; k < VU_COMPACT_COUNT; k++) {
+        bool peak = lit > 0 && k == lit - 1;
+        /* The two rows mirror each other: both fill from the screen's edge towards
+         * the band, as the two arcs mirror around the reels. */
+        int n = i ? VU_COMPACT_COUNT - 1 - k : k;
+        draw_dash(layer, x0 + n * (VU_COMPACT_DASH_W + VU_COMPACT_DASH_GAP),
+                  VU_COMPACT_Y, lv_color_hex(peak ? VU_PEAK_LIT : COL_TAPE_DARK),
+                  k < lit ? LV_OPA_COVER : LV_OPA_30);
+    }
+}
+
 /* The dashed VU, in its own overlay so the 25 Hz level changes do not repaint
  * the pack's fill or its tape line. */
 static void vu_draw_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
     lv_layer_t *layer = lv_event_get_layer(e);
+    if (s_vu_compact) {
+        vu_compact_draw(layer, i);
+        return;
+    }
     int r = s_pack_d[i] / 2;
     int dir = i ? -1 : 1;
     int start = s_tangent_deg[i] + dir * TAPE_ARC_DEG;
@@ -352,16 +430,47 @@ static void vu_draw_cb(lv_event_t *e)
     }
 }
 
-/* Map a 0..1 peak-hold to the VU dashes. The scale is dB over -48..0, so the
- * meter moves like a VU rather than a linear amplitude. */
-static int vu_lit(float vu)
+/* Map a 0..1 peak-hold to `count` lit dashes. The scale is dB over -48..0, so the
+ * meter moves like a VU rather than a linear amplitude. The arc and the compact row
+ * use the same mapping, only their dash count differs. */
+static int vu_lit_n(float vu, int count)
 {
-    if (vu <= 0.001f) return 0;
+    if (vu <= 0.001f || count <= 0) return 0;
     float db = 20.0f * log10f(vu);
     if (db < -48.0f) db = -48.0f;
     if (db > 0.0f) db = 0.0f;
-    return (int)lroundf((db + 48.0f) / 48.0f * VU_DASH_COUNT);
+    return (int)lroundf((db + 48.0f) / 48.0f * count);
 }
+
+static int vu_count(void)
+{
+    return s_vu_compact ? VU_COMPACT_COUNT : VU_DASH_COUNT;
+}
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* The cover is the mode switch: the objects are the same, the geometry and the
+ * drawing callback branch on it. The last level is remapped so the first frame after
+ * the switch does not flash an empty meter. Only this board carries the cover, so
+ * this is also the only build that switches modes. */
+static void vu_set_compact(bool compact)
+{
+    if (compact == s_vu_compact) return;
+    s_vu_compact = compact;
+    int count = vu_count();
+    for (int i = 0; i < 2; i++) {
+        if (!s_vu[i]) continue;
+        s_vu_lit[i] = vu_lit_n(s_vu_level[i], count);
+        vu_geom_set(i);
+        /* The compact rows belong on top of the cover. When they go back to the
+         * reels they must be behind the small label too: the label is a solid bar,
+         * and an arc painted over it looks like the meter is floating on the title.
+         * Insert below the paper, not merely below the cover. */
+        if (compact) lv_obj_move_to_index(s_vu[i], -1);
+        else if (s_paper) lv_obj_move_to_index(s_vu[i], lv_obj_get_index(s_paper));
+        lv_obj_invalidate(s_vu[i]);
+    }
+}
+#endif
 
 /* Apply a model frame: only what changed is touched. */
 static void apply_frame(const cassette_frame_t *f)
@@ -392,8 +501,12 @@ static void apply_frame(const cassette_frame_t *f)
     pack_set(1, pack_diameter(f->pack_fill[1]));
 
     /* The VU is the only thing that changes every poll; invalidate just its
-     * overlay so the pack and its tape line stay put. */
-    int lit0 = vu_lit(f->vu_l), lit1 = vu_lit(f->vu_r);
+     * overlay so the pack and its tape line stay put. The cover decides whether
+     * that overlay is the arc or the compact row. */
+    s_vu_level[0] = f->vu_l;
+    s_vu_level[1] = f->vu_r;
+    int lit0 = vu_lit_n(s_vu_level[0], vu_count());
+    int lit1 = vu_lit_n(s_vu_level[1], vu_count());
     if (lit0 != s_vu_lit[0]) {
         s_vu_lit[0] = lit0;
         if (s_vu[0]) lv_obj_invalidate(s_vu[0]);
@@ -420,6 +533,53 @@ static void paper_hide_now(void)
 #endif
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* The cover's alpha shapes look through to the screen. The screen's backdrop is mixed
+ * between the cassette's colour and the cover's: 0 is COL_BG, 255 is COL_COVER_BG, so
+ * the show can wait for the slide and then fade the backdrop in behind it. */
+#define COVER_BG_MIX_COVER 255
+static uint8_t s_cover_bg_mix;
+
+static void cover_bg_mix_set(uint8_t mix)
+{
+    if (mix == s_cover_bg_mix) return;
+    s_cover_bg_mix = mix;
+    lv_obj_set_style_bg_color(lv_screen_active(),
+                              lv_color_mix(lv_color_hex(COL_COVER_BG),
+                                           lv_color_hex(COL_BG), mix), 0);
+}
+
+static void cover_bg_fade_cb(void *var, int32_t value)
+{
+    (void)var;
+    cover_bg_mix_set((uint8_t)value);
+}
+
+/* Fade between the two backdrops from whatever is on screen now, so a fade can be
+ * reversed in flight without a jump. */
+static void cover_bg_fade(bool cover, uint32_t ms)
+{
+    lv_obj_t *scr = lv_screen_active();
+    lv_anim_delete(scr, cover_bg_fade_cb);
+    int32_t target = cover ? COVER_BG_MIX_COVER : 0;
+    if ((int32_t)s_cover_bg_mix == target) return;
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, scr);
+    lv_anim_set_exec_cb(&a, cover_bg_fade_cb);
+    lv_anim_set_values(&a, s_cover_bg_mix, target);
+    lv_anim_set_duration(&a, ms);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+    lv_anim_start(&a);
+}
+
+/* No animation: used when the cover is put away at once or before a fresh slide. */
+static void cover_bg_now(void)
+{
+    lv_anim_delete(lv_screen_active(), cover_bg_fade_cb);
+    cover_bg_mix_set(0);
+}
+
 /* Hide the big cover at once, deleting a slide in flight; the small label's show uses
  * this so the two never cover each other. */
 static void cover_hide_now(void)
@@ -429,6 +589,8 @@ static void cover_hide_now(void)
     s_cover_shown = false;
     lv_obj_set_y(s_cover, COVER_HIDDEN_Y);
     lv_obj_set_hidden(s_cover, true);
+    vu_set_compact(false);
+    cover_bg_now();
 }
 #else
 static void cover_hide_now(void) {}
@@ -444,7 +606,17 @@ static void paper_anim_hidden_cb(lv_anim_t *a)
 static void cover_anim_hidden_cb(lv_anim_t *a)
 {
     (void)a;
-    if (!s_cover_shown) lv_obj_set_hidden(s_cover, true);
+    if (!s_cover_shown) {
+        lv_obj_set_hidden(s_cover, true);
+        cover_bg_now();
+    }
+}
+
+/* The slide is over and the cover sits on the panel; only now fade the backdrop in. */
+static void cover_anim_shown_cb(lv_anim_t *a)
+{
+    (void)a;
+    if (s_cover_shown) cover_bg_fade(true, COVER_BG_FADE_MS);
 }
 #endif
 
@@ -457,7 +629,12 @@ static void paper_set_shown(bool show)
     s_paper_shown = show;
 
     lv_anim_delete(s_paper, (lv_anim_exec_xcb_t)lv_obj_set_y);
-    if (show) lv_obj_set_hidden(s_paper, false);
+    if (show) {
+        lv_obj_set_hidden(s_paper, false);
+        /* The VU rows are moved to the top while the cover is up; bring the paper
+         * back in front so the arcs never paint over its title. */
+        lv_obj_move_foreground(s_paper);
+    }
 
     lv_anim_t a;
     lv_anim_init(&a);
@@ -477,6 +654,12 @@ static void cover_set_shown(bool show)
     if (!s_cover || show == s_cover_shown) return;
     if (show) paper_hide_now();
     s_cover_shown = show;
+    /* The reels go behind the cover, so the meters go to the band's ends. A show
+     * starts on the cassette's backdrop and fades to the cover's once the slide has
+     * ended; a hide fades back while the cover slides away. */
+    vu_set_compact(show);
+    if (show) cover_bg_now();
+    else cover_bg_fade(false, COVER_ANIM_MS);
 
     lv_anim_delete(s_cover, (lv_anim_exec_xcb_t)lv_obj_set_y);
     if (show) lv_obj_set_hidden(s_cover, false);
@@ -488,7 +671,7 @@ static void cover_set_shown(bool show)
     lv_anim_set_duration(&a, COVER_ANIM_MS);
     lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
     lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_y);
-    if (!show) lv_anim_set_completed_cb(&a, cover_anim_hidden_cb);
+    lv_anim_set_completed_cb(&a, show ? cover_anim_shown_cb : cover_anim_hidden_cb);
     lv_anim_start(&a);
 }
 #endif
@@ -592,10 +775,10 @@ void cassette_view_create(void)
     }
 
     /* The window: a border box around the cassette view. */
-    lv_obj_t *window = box(
-        scr,
-        k_window[0].x, k_window[0].y, k_window[1].x - k_window[0].x, k_window[1].y - k_window[0].y, 16,
-        0x220000);
+    // lv_obj_t *window = box(
+    //     scr,
+    //     k_window[0].x, k_window[0].y, k_window[1].x - k_window[0].x, k_window[1].y - k_window[0].y, 16,
+    //     0x220000);
 
     /* The tape: two packs, then the tape strand that joins each to the bottom edge.
      * Each pack carries its strand in the same colour. */
@@ -650,19 +833,20 @@ void cassette_view_create(void)
     s_paper = box(scr, LABEL_X, LABEL_Y, LABEL_W, LABEL_H, LABEL_R, COL_LABEL);
     lv_obj_set_y(s_paper, PAPER_HIDDEN_Y);
     lv_obj_set_hidden(s_paper, true);
-    s_title = text(s_paper, &kalam_36, lv_color_hex(COL_INK),
+    s_title = text(s_paper, &oxanium_36, lv_color_hex(COL_INK),
                    LV_ALIGN_TOP_LEFT, SMALL_TITLE_X - LABEL_X, SMALL_TITLE_Y - LABEL_Y);
     lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_title, SMALL_TITLE_W);
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The big cover: the full cassette label at 16,16, two fingers away. Its tape
-     * window is transparent, so the reels show through. The title is written on the
-     * label's rule and is its child. */
+    /* The big cover: the full cover at 0,0, two fingers away. Cover art is 800x480,
+     * the panel's size, so it sits full-bleed. Its black shapes are transparent, so the
+     * reels show through them; the title is written on the empty band at the top and is
+     * its child. */
     s_cover = lv_image_create(scr);
     lv_image_set_src(s_cover, &k_label_cover);
-    /* No background or padding of the widget's own: the alpha window must show the
-     * reels, and the title's coordinates are the image's. */
+    /* No background or padding of the widget's own, so the image sits at the object's
+     * origin and the title's coordinates are the image's. */
     lv_obj_set_style_bg_opa(s_cover, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_cover, 0, 0);
     lv_obj_set_style_pad_all(s_cover, 0, 0);
@@ -670,7 +854,7 @@ void cassette_view_create(void)
     lv_obj_set_size(s_cover, LABEL_COVER_W, LABEL_COVER_H);
     lv_obj_set_y(s_cover, COVER_HIDDEN_Y);
     lv_obj_set_hidden(s_cover, true);
-    s_cover_title = text(s_cover, &kalam_36, lv_color_hex(COL_INK),
+    s_cover_title = text(s_cover, &oxanium_36, lv_color_hex(COL_COVER_INK),
                          LV_ALIGN_TOP_LEFT, COVER_TITLE_X, COVER_TITLE_Y);
     lv_label_set_long_mode(s_cover_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_cover_title, COVER_TITLE_W);

@@ -28,6 +28,104 @@ config APP_UI_VU_ARC_DEG
     help
         The dashed VU arc continues from the solid tape arc at the top of each
         pack. 90 gives a quarter-circle; the number of dashes follows from this
-        and the 4-degree dash and gap. The left reel is L, the right R.
+        and the 4-degree dash and gap. The left reel is L, the right R. While the
+        full label cover is up the same meters are bottom-row bars instead, so
+        this length sets only the arcs on the reels.
+
+config APP_UI_BACKLIGHT_AWAKE_PCT
+    int "Backlight brightness while awake (%)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default 100
+    range 1 100
+    help
+        The boot level and the level a touch restores. The maximum by default.
+
+config APP_UI_BACKLIGHT_PWM_HZ
+    int "Backlight PWM frequency (Hz)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default 400
+    range 100 50000
+    help
+        The frequency on GPIO 2. 400 Hz with 8-bit resolution is what the
+        board's reference firmware (xtouch-pro / esp32_smartdisplay) uses.
+        Higher frequencies made this panel cut out part-way down the range.
+
+config APP_UI_BACKLIGHT_DIM1_S
+    int "First dim delay (s)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default 120
+    range 5 36000
+    help
+        After this long with no touch the backlight fades to
+        APP_UI_BACKLIGHT_DIM1_PCT. Default two minutes. The timer follows
+        LVGL's own inactivity clock, so it counts from any press, not from a
+        separate poll.
+
+config APP_UI_BACKLIGHT_DIM1_PCT
+    int "First dim brightness (%)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default 60
+    range 0 100
+
+config APP_UI_BACKLIGHT_DIM2_S
+    int "Second dim delay (s)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default 300
+    range 5 36000
+    help
+        Idle time for the second step, measured from the same last touch as the
+        first. Default five minutes.
+
+config APP_UI_BACKLIGHT_DIM2_PCT
+    int "Second dim brightness (%)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default 30
+    range 0 100
+
+config APP_UI_BACKLIGHT_DIM3_S
+    int "Third dim delay (s)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default 600
+    range 5 36000
+    help
+        Idle time for the last step. Default ten minutes, with the third level
+        at 0%: the backlight is off, and the next touch fades it back to
+        APP_UI_BACKLIGHT_AWAKE_PCT.
+
+config APP_UI_BACKLIGHT_DIM3_PCT
+    int "Third dim brightness (%)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default 0
+    range 0 100
+
+config APP_UI_BACKLIGHT_DIM_FADE_MS
+    int "Backlight dim fade time (ms)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default 2500
+    range 0 10000
+    help
+        How long the fade down to a dimmer level takes. Long enough that the
+        step is visible rather than a cut; 0 switches instantly.
+
+config APP_UI_BACKLIGHT_WAKE_FADE_MS
+    int "Backlight wake fade time (ms)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default 300
+    range 0 5000
+    help
+        How long the fade back to the awake level takes. Shorter than the dim:
+        a touch should feel like it brought the screen back, not like it is
+        still waking up.
+
+config APP_UI_BACKLIGHT_TEST
+    bool "Visual backlight test screen"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default n
+    help
+        Replaces the cassette with a white test screen and steps the backlight
+        through 100, 80, 60, 40, 20 and 0 percent, five seconds at each level.
+        The current level is printed in large type, so the PWM range can be
+        checked on the panel without waiting for the sleep timer. It is a
+        diagnostic build: leave it off for the normal interface.
 
 endmenu

@@ -1,0 +1,8 @@
+# Visual backlight test build. Layer it on top of the project and Sunton defaults:
+#
+#     idf.py -B build_backlight_test -D SDKCONFIG=sdkconfig.backlight-test \
+#       -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.sunton;sdkconfig.defaults.backlight-test" \
+#       build
+#
+# The resulting screen is white and steps 100/80/60/40/20/0 every five seconds.
+CONFIG_APP_UI_BACKLIGHT_TEST=y

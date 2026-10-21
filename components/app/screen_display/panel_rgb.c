@@ -23,13 +23,13 @@
 #include "freertos/task.h"
 
 #include "panel_rgb.h"
+#include "backlight.h"
 
 static const char *TAG = "panel";
 
 #define PANEL_W 800
 #define PANEL_H 480
 #define PCLK_HZ 18000000
-#define BACKLIGHT_GPIO 2
 
 /* boards/sunton-8048s050c.json -> wiring.dataPins */
 static const gpio_num_t k_data_pins[16] = {
@@ -129,10 +129,11 @@ lv_display_t *panel_rgb_start(void)
     ESP_LOGI(TAG, "panel up through esp_lvgl_port: %dx%d, two framebuffers in PSRAM, pclk %u Hz",
              PANEL_W, PANEL_H, (unsigned)PCLK_HZ);
 
-    /* Something visible before anything above this layer is trusted to work. */
-    gpio_config_t bl = { .pin_bit_mask = 1ULL << BACKLIGHT_GPIO, .mode = GPIO_MODE_OUTPUT };
-    gpio_config(&bl);
-    gpio_set_level(BACKLIGHT_GPIO, 1);
-    ESP_LOGI(TAG, "backlight on GPIO %d", BACKLIGHT_GPIO);
+    /* Something visible before anything above this layer is trusted to work. The
+     * backlight is PWM now so the screen can dim itself; start it at the awake level. */
+    esp_err_t bl_err = backlight_start();
+    if (bl_err != ESP_OK)
+        ESP_LOGW(TAG, "the backlight started without brightness control: %s",
+                 esp_err_to_name(bl_err));
     return disp;
 }

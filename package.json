@@ -11,8 +11,12 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "font:kalam": "npx --yes lv_font_conv --font assets/fonts/Kalam-Regular.ttf --size 36 --bpp 4 --format lvgl --no-compress --range '0x20-0x7F,0xA0-0xFF,0x2010-0x2015,0x2018-0x201D,0x2026' --lv-include lvgl.h --lv-font-name kalam_36 --output components/app/screen_display/font_kalam_36.c",
+    "font:oxanium": "npx --yes lv_font_conv --font assets/fonts/Oxanium-Light.ttf --size 36 --bpp 4 --format lvgl --no-compress --range '0x20-0x7F,0xA0-0xFF,0x2010-0x2015,0x2018-0x201D,0x2026' --lv-include lvgl.h --lv-font-name oxanium_36 --output components/app/screen_display/font_oxanium_36.c",
     "flash": "bash -c 'source ~/esp/esp-idf-6.1/export.sh; lsof -t /dev/cu.usbserial-834430 | xargs kill; idf.py -B build_sunton -p /dev/cu.usbserial-834430 flash monitor'",
-    "assets": "python3 tools/convert_cassette_assets.py"
+    "build:backlight-test": "bash -c 'source ~/esp/esp-idf-6.1/export.sh; idf.py -B build_backlight_test -D SDKCONFIG=sdkconfig.backlight-test -D SDKCONFIG_DEFAULTS=\"sdkconfig.defaults;sdkconfig.defaults.sunton;sdkconfig.defaults.backlight-test\" build'",
+    "flash:backlight-test": "bash -c 'source ~/esp/esp-idf-6.1/export.sh; lsof -t /dev/cu.usbserial-834430 | xargs kill; idf.py -B build_backlight_test -p /dev/cu.usbserial-834430 flash monitor'",
+    "monitor": "bash -c 'source ~/esp/esp-idf-6.1/export.sh; lsof -t /dev/cu.usbserial-834430 | xargs kill; idf.py -B build_sunton -p /dev/cu.usbserial-834430 monitor'",
+    "assets": "python3 tools/convert_cassette_assets.py",
+    "reconfigure": "bash -c 'source ~/esp/esp-idf-6.1/export.sh; idf.py reconfigure'"
   }
 }

@@ -22,3 +22,6 @@ host/build/
 
 # macOS
 .DS_Store
+
+# Generated config for the visual backlight test build
+sdkconfig.backlight-test

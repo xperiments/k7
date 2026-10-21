@@ -561,9 +561,24 @@ slides the small label (with the title on it) in and out. Any two-finger swipe t
 the big cover in and out. The Sunton build compiles this path; the board tier has not
 yet recorded a finger, so the rows above are unchanged.
 
-The label cover is `assets/labels/glabel-full.png`, converted to RGB565A8 (814 KB) so
-its tape window is a hole the reels show through. The app image is 3.05 MB with 27% of
-its 4 MB partition free.
+**Backlight sleep.** GPIO 2 is now a 400 Hz, 8-bit LEDC duty instead of an on/off pin. The
+screen starts at full brightness, then fades to 60% after 2 minutes, 30% after 5
+minutes, and 0% after 10 minutes without a touch; a touch fades it back to full from
+wherever it is. The first press after a dim only wakes the screen, so it cannot skip a
+track or open the cover by accident. The steps and the fades are Kconfig values
+(`APP_UI_BACKLIGHT_AWAKE_PCT`, `APP_UI_BACKLIGHT_DIM1_S`/`_PCT`,
+`APP_UI_BACKLIGHT_DIM2_S`/`_PCT`, `APP_UI_BACKLIGHT_DIM3_S`/`_PCT`,
+`APP_UI_BACKLIGHT_DIM_FADE_MS`, `APP_UI_BACKLIGHT_WAKE_FADE_MS`). If LEDC refuses the
+pin, the backlight falls back to a plain output held high, so the panel stays lit and
+only dimming is lost. For a visual check, `APP_UI_BACKLIGHT_TEST=y` replaces the
+cassette with a white screen and steps the backlight through 100/80/60/40/20/0 every
+five seconds, printing the level in large type.
+
+The label cover is `assets/labels/k7logo.png`, converted to RGB565A8 (1.1 MB) and drawn
+full-bleed at 0,0: cover art is 800x480 from now on, the panel's own size, so it needs
+no margin. Its black triangle and circle are transparent, so the reels show through
+them. The app image was 3.05 MB with 27% of its 4 MB partition free before this cover;
+re-check it after the next build.
 
 **Five faults that only the board could show**, each now fixed and each worth the
 tier on its own:
