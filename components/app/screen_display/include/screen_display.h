@@ -14,9 +14,12 @@
 extern "C" {
 #endif
 
-/* Bring the screen up and start updating it. Call once, after the services are up.
- * Returns ESP_OK, or the reason the screen stayed dark; the device still serves. */
-esp_err_t screen_display_start(void);
+/* Bring the screen up and start updating it. `music_dir` is the card directory the
+ * broadcast's Track paths are relative to: the Artwork level reads a Track's own
+ * picture from it. Pass NULL on a build with no card reader; the screen still runs and
+ * the Artwork level stays empty. Call once, after the services are up. Returns ESP_OK,
+ * or the reason the screen stayed dark; the device still serves. */
+esp_err_t screen_display_start(const char *music_dir);
 
 #ifdef __cplusplus
 }

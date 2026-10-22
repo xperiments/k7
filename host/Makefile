@@ -39,6 +39,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/mini_icecast/include \
        -I$(ROOT)/components/portable/mini_files/include \
        -I$(ROOT)/components/portable/cassette/include \
+       -I$(ROOT)/components/portable/artwork/include \
        -I$(ROOT)/components/portable/app_services/include \
        -I$(ROOT)/components/portable/app_board/include \
        -I$(ROOT)/components/portable/dr_libs/include \
@@ -67,6 +68,9 @@ PROD_SRC := \
   $(ROOT)/components/portable/mini_icecast/mi_resample.c \
   $(ROOT)/components/portable/mini_files/mini_files.c \
   $(ROOT)/components/portable/cassette/cassette.c \
+  $(ROOT)/components/portable/artwork/artwork.c \
+  $(ROOT)/components/portable/artwork/id3.c \
+  $(ROOT)/components/portable/artwork/flac.c \
   $(ROOT)/components/portable/app_services/app_services.c \
   $(SHINE_SRC)
 
@@ -78,6 +82,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/mini_icecast \
           $(ROOT)/components/portable/mini_files \
           $(ROOT)/components/portable/cassette \
+          $(ROOT)/components/portable/artwork \
           $(ROOT)/components/portable/app_services \
           $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
@@ -85,6 +90,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
 CORE_OBJ := $(OBJ)/audio_format.o $(OBJ)/library.o $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(SHINE_OBJ) $(OBJ)/shim.o
 BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o $(OBJ)/mi_ring.o
 CASSETTE_OBJ := $(OBJ)/cassette.o
+ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o
 SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/mini_icecast.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
@@ -99,7 +105,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t03_resampler_guard $(BIN)/t04_format_validation \
          $(BIN)/t05_stream_formats $(BIN)/t06_status $(BIN)/t07_burst_icy \
          $(BIN)/t08_http_parse $(BIN)/t10_cassette $(BIN)/t11_ring \
-         $(BIN)/t12_transport $(BIN)/t14_library
+         $(BIN)/t12_transport $(BIN)/t14_library $(BIN)/t15_artwork
 
 .PHONY: all test integration layering check tools fixtures bench control control-check clean help
 
@@ -117,7 +123,12 @@ $(SHINE_OBJ): CFLAGS += -w
 
 $(OBJ)/%.o: %.c
 	@mkdir -p $(OBJ)
-	$(CC) $(CFLAGS) $(INC) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP $(INC) -c $< -o $@
+
+# Header dependencies: a change to artwork.h or mini_icecast.h has to rebuild every
+# object that includes it. Without this, a struct's layout changed in a header while a
+# stale .o kept the old one, and the test linked two disagreeing views of the same type.
+-include $(wildcard $(OBJ)/*.d)
 
 $(SERVER): $(SERVER_OBJ)
 	@mkdir -p $(BIN)
@@ -179,6 +190,10 @@ $(BIN)/t12_transport: $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/t12_transport.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t14_library: $(OBJ)/library.o $(OBJ)/audio_format.o $(OBJ)/shim.o $(OBJ)/t14_library.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t15_artwork: $(ARTWORK_OBJ) $(OBJ)/audio_format.o $(OBJ)/t15_artwork.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

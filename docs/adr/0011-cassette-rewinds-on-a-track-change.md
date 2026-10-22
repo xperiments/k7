@@ -77,3 +77,7 @@ window the reel is exactly where play was going to put it, with no jump at eithe
   saw the new track.
 - A track shorter than 8 s never finishes a rewind, so its packs stay part-way. That is
   honest — nothing finished rewinding — and it is why the window is not queued.
+- Superseded in part by
+  [ADR 0015](./0015-tape-edge-and-vu-fade-through-the-reel-change.md): the VU is hidden
+  for the window and the tape's red edge turns to the tape colour; both return as it
+  closes.

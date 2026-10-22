@@ -557,15 +557,37 @@ because this board's INT line does not carry the touch (the reference project me
 idling through a press), and the last point the controller reported is latched so one
 press is one press rather than one per read. A tap anywhere is the BOOT button's action,
 next track. A one-finger left/right swipe is next/previous; a one-finger down/up swipe
-slides the small label (with the title on it) in and out. Any two-finger swipe toggles
-the big cover in and out. The Sunton build compiles this path; the board tier has not
-yet recorded a finger, so the rows above are unchanged.
+moves one Level - Bare, Label cover, Artwork - and the ends do not wrap. At Bare, where
+the up swipe has no Level to move to, it peeks the small cream title bar: one up swipe
+slides it in. While it is up, either vertical swipe slides it out, and a down swipe only
+moves to the K7 cover once the bar is away; any Level change puts it away. The
+two-finger swipe is reserved for the menu: it moves no Level today, and the view still
+latches it so the same touch cannot also trip the one-finger gesture or the click. The
+Sunton build compiles this path; the board tier has not yet recorded a finger, so the
+rows above are unchanged. The order and the reserved gesture are
+[`docs/adr/0014-three-level-swipe-order-and-menu-gesture.md`](docs/adr/0014-three-level-swipe-order-and-menu-gesture.md).
+
+**Track artwork.** The Artwork Level is the cassette Case, `assets/labels/cover.jpg`,
+full-bleed at 800x480, with the playing MP3's own cover in its window: (101,23) to
+(704,408), 603x385. `components/portable/artwork` locates the ID3v2.3/2.4 `APIC` frame
+(or a native FLAC `PICTURE` block), `artwork_loader.c` decodes the JPEG with TJpgDec and
+fits it to the window in one 464 KB PSRAM buffer; the view hides the picture when a new
+Track is requested, so the decode writes it while it is not drawn. The JPEG is read from
+the card on demand, so neither the encoded bytes nor a full-size RGB copy sit in PSRAM,
+and the screen hands the fitted picture to the view under the LVGL lock. The Case is
+embedded as the original 45 KB JPEG and decoded once at start into 768 KB of PSRAM;
+embedding it as a raw RGB565 blob would not fit the 4 MB app partition. Only JPEG is
+decoded; a PNG picture is located and skipped. The card read is chunked and backs off
+while the broadcast is behind, and a Track with no usable picture leaves the Case's
+window empty. The host tier covers the locator and the fit; the panel pass for the
+decode and the card contention is still owed. The decision is
+[`docs/adr/0013-artwork-level-and-case-window.md`](docs/adr/0013-artwork-level-and-case-window.md).
 
 **Backlight sleep.** GPIO 2 is now a 400 Hz, 8-bit LEDC duty instead of an on/off pin. The
 screen starts at full brightness, then fades to 60% after 2 minutes, 30% after 5
 minutes, and 0% after 10 minutes without a touch; a touch fades it back to full from
 wherever it is. The first press after a dim only wakes the screen, so it cannot skip a
-track or open the cover by accident. The steps and the fades are Kconfig values
+track or move a Level by accident. The steps and the fades are Kconfig values
 (`APP_UI_BACKLIGHT_AWAKE_PCT`, `APP_UI_BACKLIGHT_DIM1_S`/`_PCT`,
 `APP_UI_BACKLIGHT_DIM2_S`/`_PCT`, `APP_UI_BACKLIGHT_DIM3_S`/`_PCT`,
 `APP_UI_BACKLIGHT_DIM_FADE_MS`, `APP_UI_BACKLIGHT_WAKE_FADE_MS`). If LEDC refuses the
@@ -575,10 +597,19 @@ cassette with a white screen and steps the backlight through 100/80/60/40/20/0 e
 five seconds, printing the level in large type.
 
 The label cover is `assets/labels/k7logo.png`, converted to RGB565A8 (1.1 MB) and drawn
-full-bleed at 0,0: cover art is 800x480 from now on, the panel's own size, so it needs
-no margin. Its black triangle and circle are transparent, so the reels show through
-them. The app image was 3.05 MB with 27% of its 4 MB partition free before this cover;
-re-check it after the next build.
+full-bleed at 0,0: the label cover is 800x480, the panel's own size, so it needs no
+margin. Its black triangle and circle are transparent, so the reels show through them.
+The app image is 3.51 MB with 16% of its 4 MB partition free after the cover, the Case
+and the artwork path; re-check it after the next build.
+
+**The Artwork decode on this board.** The first card track, `01 - La Leyenda Del
+Tiempo.mp3`, carries a 239x236 `APIC` JPEG of 22,080 B; the loader turned it into the
+603x385 window in **691 ms** (open 5 ms) and the view showed it. The loader starts with
+**971,248 B** free in PSRAM and **504,300 B** after its one 464,310 B cover buffer; the
+Case is the 768,000 B backdrop decoded at start. The MP3's JPEG is read from the card on
+demand, so there is no encoded copy in PSRAM. The app's rodata and instructions stay in
+PSRAM: moving them to flash freed about 1.8 MB but brought the panel's glitches back, so
+the artwork path was fitted around the memory instead of taking that trade.
 
 **Five faults that only the board could show**, each now fixed and each worth the
 tier on its own:
@@ -700,12 +731,14 @@ components/
     library_http/           GET /api/library[.bin] from the prebuilt views
     mini_files/             GET / index, GET /music/<relative path> download
     cassette/               what the screen shows: reels, packs, progress, label
+    artwork/                where a Track's picture is: ID3 APIC, FLAC PICTURE, the fit
     dr_libs/                vendored dr_mp3 / dr_flac / dr_wav (public domain / MIT-0)
     shine/                  vendored toots/shine MP3 encoder (LGPL-2.0-only)
   app/                      firmware only: the entry policy, the board adapter and the screen
     appliance/              the entry policy: station format, card retry, console, skip
     board_esp32/            Wi-Fi, SPI card mount, hardware census; credentials live here
-    screen_display/         panel and touch bring-up, LVGL's PSRAM allocator, the cassette view
+    screen_display/         panel and touch bring-up, LVGL's PSRAM allocator, the cassette view,
+                            the Level machine and the artwork loader
 host/                       the host build: shim, board adapter, fixtures, tests, tools
 ```
 
@@ -713,7 +746,8 @@ The dependency direction is one-way and is checked by `make -C host layering`:
 `mini_files` and `mini_icecast` depend on `http_server`; only the application
 layer (`app_services` in `portable/` and `appliance` in `app/`) depends on `mini_files`;
 `mini_icecast` owns no socket, parses no request and renders no markup; `cassette`
-depends only on the broadcast's status snapshot. The split between `portable/` and
+depends only on the broadcast's status snapshot; `artwork` is a leaf over `audio_format`
+with no LVGL, no ESP-IDF and no card. The split between `portable/` and
 `app/` is itself a rule: every `.c` under `portable/` must be in `host/Makefile`,
 and no source under `app/` may be. The binary search for the seam is in
 `docs/adr/0003-extract-http-server-from-mini-icecast.md`; the boot-built Library
@@ -831,11 +865,23 @@ Three things make that true, and the second is the one that is easy to get wrong
    `heap_caps_malloc_prefer(PSRAM first)` makes the placement a decision.
 3. **The draw buffer is allocated from PSRAM explicitly**, and `LV_USE_ASSERT_MALLOC` is
    on so a genuine failure is a diagnostic rather than a null dereference later.
+4. **The Artwork cover is one 464 KB PSRAM buffer** (603x385 RGB565), reused for every
+   Track. The view hides the picture when a new Track is requested, so the decode writes
+   it while the panel is not drawing it; a second buffer would cost 464 KB this board
+   does not have. The Case is one 768 KB PSRAM buffer, decoded once at start from the
+   embedded 45 KB JPEG. The Track's JPEG is read from the card on demand, so neither the
+   encoded bytes nor a full-size RGB copy are held; the only extra workspace is a band
+   (width x 16 rows) for a streaming fit or a smaller crop for an upscale. The app's
+   rodata and instructions stay in PSRAM - the panel needs them there; moving either to
+   flash brought the glitches back - which is why only about 1.7 MB is free before the
+   cover. The loader's own 16 KB stack takes the PSRAM-first path, with an internal
+   fallback.
 
-The image grew from 1.04 MB to 1.28 MB, so the app partition is 4 MB now
-(`partitions.csv`, 68 % free) rather than the 1.5 MB single-app layout. LVGL is a
-fetched dependency pinned by `components/app/screen_display/idf_component.yml` and
-`dependencies.lock`; the host tier compiles only the portable components and never sees it.
+The image is 3.51 MB with the label cover, the Case and the artwork path, so the app
+partition is 4 MB with 16 % free (`partitions.csv`) rather than the 1.5 MB single-app
+layout. LVGL is a fetched dependency pinned by
+`components/app/screen_display/idf_component.yml` and `dependencies.lock`; the host tier
+compiles only the portable components and never sees it.
 
 ## Putting your own music on the card
 
@@ -861,6 +907,9 @@ Two things about a real library that synthetic fixtures never exercise, both han
   represent `é` or `ú`, so a library with accents in its titles would show mangled names
   even though the pages are declared UTF-8. The card's own long-name support is
   unchanged; this only decides the encoding the filesystem hands back.
+* **Cover art shows up when it is a JPEG.** An MP3's ID3 `APIC` (or a FLAC `PICTURE`) is
+  read only when the Artwork level is opened; it fills the Case's 603x385 window and is
+  centre-cropped, never squeezed. A PNG picture is skipped.
 
 The board tier's index check runs in `--superset` mode: on the host it still insists the
 index lists *exactly* the fixture corpus, but against the board it requires every fixture
@@ -912,6 +961,9 @@ to PSRAM and takes internal free from 35 327 B to **154 643 B** (largest block 1
   (`POST /api/rescan`) or reboot.
 * **One download at a time.** A second concurrent download is declined with `503`
   rather than queued, so a 40 MB FLAC cannot starve the broadcast behind it.
+* **Track artwork is JPEG only.** A PNG picture in an `APIC` or `PICTURE` block is
+  located and reported but not drawn; the case window does not carry LodePNG. A track
+  with no usable picture leaves the Case's window empty.
 * **The stream is a broadcast**: it cannot be paused or seeked, and every client
   hears the same moment.
 * **`shine`'s audio quality is below LAME's.** Real, acknowledged, and unavoidable

@@ -57,10 +57,15 @@ Licence       MIT, plus the fonts it bundles. The full text is in the fetched
               (LICENCE.txt alongside the font sources).
 Modifications none.
 
+Bundled       TJpgDec (ChaN, permissive) and LodePNG (zlib) are vendored inside
+              LVGL's src/libs/ and compiled by its build; the artwork loader calls
+              TJpgDec directly. Their licence texts sit beside their sources.
+
 LVGL's memory behaviour is part of this project's design rather than a default it
 inherited: LV_USE_CUSTOM_MALLOC routes every LVGL allocation through
-heap_caps_malloc_prefer(PSRAM first), implemented in main/ui_fit.c, so the UI's
-memory never competes with the internal RAM that Wi-Fi's DMA buffers need. See
+heap_caps_malloc_prefer(PSRAM first), implemented in
+components/app/screen_display/lvgl_mem.c, so the UI's memory never competes with
+the internal RAM that Wi-Fi's DMA buffers need. See
 docs/research/radio-player-memory-and-lvgl.md.
 
 --------------------------------------------------------------------------------

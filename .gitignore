@@ -25,3 +25,5 @@ host/build/
 
 # Generated config for the visual backlight test build
 sdkconfig.backlight-test
+
+.scratch/

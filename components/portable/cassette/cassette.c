@@ -188,9 +188,11 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
     c->frame.level_r = c->have_status ? c->status.level_r : 0.0f;
 
     /* The VU's peak-hold: the status carries RMS, not a sample peak, so hold the
-     * highest recent RMS with a slow fall. 0.97 per 40 ms step is about 0.47/s. */
-    c->peak_l = fmaxf(c->frame.level_l, c->peak_l * 0.97f);
-    c->peak_r = fmaxf(c->frame.level_r, c->peak_r * 0.97f);
+     * highest recent RMS with a fast fall. 0.90 per 40 ms step is about 0.07/s
+     * (-23 dB/s), so the peak follows a real drop instead of hanging on its last
+     * dash; a new peak still attacks in the same frame. */
+    c->peak_l = fmaxf(c->frame.level_l, c->peak_l * 0.90f);
+    c->peak_r = fmaxf(c->frame.level_r, c->peak_r * 0.90f);
     c->frame.vu_l = c->peak_l;
     c->frame.vu_r = c->peak_r;
 

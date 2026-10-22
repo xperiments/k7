@@ -2,18 +2,30 @@
  * The cassette screen.
  *
  * The cassette body is drawn here: a light grey shell, two black tape packs of
- * different sizes, the small cream label (LVGL objects) and the progress band. The
- * full cover comes from assets/labels/k7logo.png: an 800x480 image, the panel's own
- * size, exported as RGB565A8 and drawn full-bleed at 0,0 when it slides in on a
- * two-finger swipe. Its black triangle and circle carry alpha, so the reels show
- * through them; once the cover has slid in, the screen background fades from COL_BG to
- * the cover's own backdrop, COL_COVER_BG. While the cover is up the reels, and with
- * them the VU arcs, are behind it, so the same two meters move to the bottom row as
- * rows of short vertical bars on the progress band's centre line. The hub comes from
- * assets/hub/: the opaque 168x168 keyframes of the whole hub, one revolution.
- * tools/convert_cassette_assets.py converts both to what the firmware blits: the hubs
- * to RGB565 exactly as exported - no alpha, no recolour, no compositing - with 96x96
- * crop descriptors that point into the same frame data.
+ * different sizes and the progress band. The screen has three levels - Bare, Label
+ * cover and Artwork - and exactly one sheet is shown at a time. A one-finger down/up
+ * swipe moves one level; the two-finger swipe is reserved for the menu and does
+ * nothing yet. The level changes in one frame, before LVGL draws: a transition that
+ * redraws a full-screen sheet per frame was measured to stutter on this panel.
+ *
+ * The Label cover comes from assets/labels/k7logo.png: an 800x480 image, the panel's
+ * own size, exported as RGB565A8 and drawn full-bleed at 0,0. Its black triangle and
+ * circle carry alpha, so the reels show through them; once the cover is up the screen
+ * background fades from COL_BG to the cover's own backdrop, COL_COVER_BG. While the
+ * cover is up the reels, and with them the VU arcs, are behind it, so the same two
+ * meters move to the bottom row as rows of short vertical bars on the progress band's
+ * centre line.
+ *
+ * The Artwork level is a screen of its own: the cassette Case backdrop
+ * (assets/labels/cover.jpg) full-bleed, the Track's picture filling the case's window,
+ * and the title on the band below. Neither picture is decoded here; the board adapter
+ * (artwork_loader.c) locates, decodes and fits them and hands the finished descriptors
+ * in under the LVGL lock, so the view never touches the card or a decoder.
+ *
+ * The hub comes from assets/hub/: the opaque 168x168 keyframes of the whole hub, one
+ * revolution. tools/convert_cassette_assets.py converts both to what the firmware
+ * blits: the hubs to RGB565 exactly as exported - no alpha, no recolour, no
+ * compositing - with 96x96 crop descriptors that point into the same frame data.
  *
  * The firmware draws only the 96x96 crop of each frame; the frame around it is the
  * UI's, not part of the exported blob. That is the MASK_AT_168 = 96 arrangement: no
@@ -22,11 +34,13 @@
  * this part; the frame sequence is the rotation.
  *
  * This file is the adapter: it owns positions, fonts, diameters and LVGL objects. What
- * the screen should show - reel position, pack fill, progress, the cleaned label - is
+ * the screen should show - reel position, pack fill, progress, the cleaned title - is
  * components/portable/cassette, which the host tier can test. Nothing here re-derives any of it.
  */
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "esp_log.h"
 #include "lvgl.h"
@@ -35,6 +49,7 @@
 #include "cassette_view.h"
 #include "hub_frames.h"
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
+#include "artwork_loader.h"
 #include "label_cover.h"
 #include "touch_gt911.h"
 #endif
@@ -59,8 +74,19 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 #define STRAND_Y 480
 #define STRAND_W 8
 
-/* The small label: the cream bar one-finger up/down slides in and out. It is the
- * label that was there before the full cover existed, and it keeps the title. */
+/* The big cover: the supplied full cover, full-bleed at 0,0, the Label cover level.
+ * Cover art is 800x480, the panel's own size, so the cover has no margin. This one
+ * keeps its alpha (RGB565A8): the black triangle and circle are transparent, so the
+ * reels show through them. The compact VU carries the meters while the cover is up.
+ * The title is a child of the cover; it sits on the empty band at the top of the art,
+ * clear of the compact VU rows at the bottom. The cover hides just above the screen,
+ * so a level change places it at 0,0 in one frame. It is the panel board's, because
+ * the vertical gestures that reach its level are. */
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* The small label: the cream bar with the Now playing title. It is not a Level: the up
+ * swipe at Bare has no Level to move to, so it peeks this bar over the cassette, and
+ * the next up swipe or any Level change puts it away. It rests at LABEL_Y and hides
+ * just above the screen, so the show slides down and the hide slides back. */
 #define LABEL_X 32
 #define LABEL_Y 32
 #define LABEL_W 735
@@ -70,25 +96,30 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 #define PAPER_ANIM_MS 260
 #define SMALL_TITLE_X 56   /* screen coordinates; the child position is relative to the paper */
 #define SMALL_TITLE_Y 40
-#define SMALL_TITLE_W 439
+/* The title's box keeps the same 24 px inset on the right as the text has on the left:
+ * from LABEL_X+24 to LABEL_W-24. The old 439 stopped just past the bar's midpoint. */
+#define SMALL_TITLE_W (LABEL_W - 2 * (SMALL_TITLE_X - LABEL_X))
 
-/* The big cover: the supplied full cover, full-bleed at 0,0, a two-finger swipe away.
- * Cover art is 800x480, the panel's own size, so the cover has no margin. This one
- * keeps its alpha (RGB565A8): the black triangle and circle are transparent, so the
- * reels show through them. The compact VU carries the meters while the cover is up.
- * The title is a child of the cover and travels with it; it sits on the empty
- * band at the top of the art, clear of the compact VU rows at the bottom. The cover
- * hides just above the screen, so showing it is a downward slide and hiding it is the
- * reverse. It is the panel board's, because the two-finger gesture that opens it is. */
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
 #define COVER_X 0
 #define COVER_Y 0
 #define COVER_HIDDEN_Y (-LABEL_COVER_H - 8)
-#define COVER_ANIM_MS 300
 #define COVER_BG_FADE_MS 500
 #define COVER_TITLE_X 40
 #define COVER_TITLE_Y 8
 #define COVER_TITLE_W 720
+
+/* The Artwork level: the Case backdrop, assets/labels/cover.jpg, full-bleed at 0,0,
+ * with the Track's picture in its window - (101,23) to (704,408), 603x385 - and the
+ * title on the band below. The Case is opaque, so the cassette, the bar and the compact
+ * VU are covered rather than redrawn. The title sits in the free band under the case,
+ * clear of the window. */
+#define ART_X 101
+#define ART_Y 23
+#define ART_W 603
+#define ART_H 385
+#define ART_TITLE_Y 424
+#define ART_TITLE_W 720
+#define ART_HIDDEN_Y (-480 - 8)
 #endif
 
 #define B_X 91
@@ -106,13 +137,14 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 #define COL_COVER_BG     0xB48744   /* the cover's background, behind the transparent shapes */
 #define COL_TAPE        0x2E1C19
 #define COL_TAPE_DARK   0xE54820
-#define COL_LABEL       0xFFFFFF // 0xf4eabb
 #define COL_RED         0xE54820
+#define COL_LABEL       0xFFFFFF
 #define COL_INK         0x444444
-#define COL_COVER_INK   0xEEEEEE   /* the dark cover needs light ink, not the label's blue */
+#define COL_COVER_INK   0xEEEEEE   /* the dark cover needs light ink */
 #define COL_HUB_RING    0xF3F2EE
 #define COL_BAR_BG      0xb9c0bb
 #define COL_BAR_FG      0xf03d3a
+#define COL_ART_BG      0x141414   /* the Artwork screen's backdrop when the Case did not decode */
 
 /* The tape's solid edge enters at the tangent and runs TAPE_ARC_DEG to the top;
  * the dashed VU continues from there. LVGL angles: 0 = 3 o'clock, 90 = 6, and
@@ -126,40 +158,73 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 #define VU_WIDTH 8
 #define VU_PEAK_LIT 0xffd08a
 
+/* The tape's red edge and the VU are playing indications, not part of the reel change:
+ * when the rewind starts they fade out, stay dark while the tape winds back, and fade
+ * in as the new side begins. One second each way, over the eight-second window. */
+#define REWIND_FADE_MS 1000
+
 /* The VU when the full cover is up. The arcs sit behind the cover, so the same two
- * meters become rows of short vertical bars on the progress band's centre line: one
- * row in the pocket between the B button and the left tape strand, the other between
- * the band and the right strand. The pockets are about 56 px and the strands sweep in
- * as the packs empty, so the rows stay clear of both. Lit is the tape red, the
- * peak-hold the cream one. */
+ * meters become vertical stacks of wide segments in the pockets at the bottom of the
+ * screen: one between the B button and the left tape strand, the other between the band
+ * and the right strand. The pockets are about 56 px and the strands sweep in as the
+ * packs empty, so the stacks stay clear of both. Each segment is 20 px wide, and both
+ * stacks grow upward from the band's centre line; lit is the tape red, the peak-hold the
+ * cream one. */
 #define VU_COMPACT_X        34
 #define VU_COMPACT_W        56
-#define VU_COMPACT_H        20
-#define VU_COMPACT_Y        444   /* BAND_Y 434 + half the 20 px band */
-#define VU_COMPACT_DASH_W   6
-#define VU_COMPACT_DASH_GAP 5
+#define VU_COMPACT_Y        444   /* BAND_Y 434 + half the 20 px band; the stack's centre */
+#define VU_COMPACT_DASH_W   20
 #define VU_COMPACT_DASH_H   8
+#define VU_COMPACT_DASH_GAP 5
 #define VU_COMPACT_DASH_R   1   /* the same slight rounding the dashes had */
 #define VU_COMPACT_COUNT    5
-#define VU_COMPACT_ROW_W    (VU_COMPACT_COUNT * VU_COMPACT_DASH_W + \
+#define VU_COMPACT_STACK_H  (VU_COMPACT_COUNT * VU_COMPACT_DASH_H + \
                              (VU_COMPACT_COUNT - 1) * VU_COMPACT_DASH_GAP)
+
+/* The three positions of the cassette screen, ordered by how much of it the sheet
+ * covers: Bare, then the K7 sticker, then Artwork. A one-finger down swipe moves one
+ * level towards Artwork, an up swipe one towards Bare, and the ends do not wrap.
+ * Exactly one sheet is shown at a time. */
+enum {
+    LEVEL_BARE = 0,
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    LEVEL_COVER,
+    LEVEL_ART,
+#endif
+};
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+#define LEVEL_MAX LEVEL_ART
+#else
+#define LEVEL_MAX LEVEL_BARE
+#endif
 
 static cassette_t *s_model;
 static lv_obj_t *s_hub[2], *s_pack[2], *s_strand[2];
 static lv_obj_t *s_vu[2];         /* dashed VU overlay, one per pack */
 static lv_point_precise_t s_strand_pts[2][2];
-static lv_obj_t *s_title;          /* the small label's title */
 static lv_obj_t *s_bar;
-static lv_obj_t *s_paper;          /* the small cream label */
-static bool      s_paper_shown;
+static int       s_level;
+static mini_icecast_status_t s_status;  /* the last status, for the Artwork request */
+static bool      s_have_status;
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-static lv_obj_t *s_cover_title;    /* the big cover's title, on the label's rule */
-static lv_obj_t *s_cover;          /* the full label cover */
-static bool      s_cover_shown;
+static lv_obj_t *s_paper;          /* the small cream label, an overlay on Bare */
+static lv_obj_t *s_title;          /* the paper's title */
+static bool      s_paper_shown;
+static lv_obj_t *s_cover_title;    /* the big cover's title, on the empty top band */
+static lv_obj_t *s_cover;          /* the full label cover (Label cover level) */
+static lv_obj_t *s_art_sheet;      /* the Artwork level: its own full screen */
+static lv_obj_t *s_case_img;       /* the Case backdrop; the loader owns its pixels */
+static lv_obj_t *s_art_img;        /* the Track picture in the Case's window */
+static lv_obj_t *s_art_title;      /* the Artwork level's title */
 /* The touch adapter reports a two-finger swipe from the two contacts; this is what
  * suppresses the one-finger action and the click for the same touch. It resets on the
  * next press. */
 static bool      s_two_finger_seen;
+/* The view remembers the last artwork request, so a 25 Hz update is a string compare
+ * rather than a loader call. */
+static char      s_art_path[LIB_PATH_MAX];
+static mi_fmt_t  s_art_fmt;
+static bool      s_art_requested;
 #endif
 static int      s_pack_d[2];      /* px, so a redraw happens only when it changes */
 static uint8_t  s_shown_hub[2];   /* the art frame currently on screen */
@@ -167,6 +232,7 @@ static int      s_tangent_deg[2]; /* where the strand leaves the pack, LVGL degr
 static int      s_vu_lit[2];      /* dashes lit by the peak-hold, 0..the mode's count */
 static float    s_vu_level[2];    /* the last peak-hold, so a mode change can remap it */
 static bool     s_vu_compact;     /* the cover is up: the bottom-row dash rows */
+static lv_opa_t s_tape_opa = LV_OPA_COVER; /* the tape edge and VU; 0 through the reel change */
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -281,12 +347,12 @@ static void vu_geom_set(int i)
 {
     if (!s_vu[i]) return;
     if (s_vu_compact) {
-        /* The row is centred on the band and sits in a bottom-row pocket. The cover
-         * sits above the reels, so the rows are drawn over it; the left meter is L,
+        /* The stack is centred on the band and sits in a bottom-row pocket. The cover
+         * sits above the reels, so the stacks are drawn over it; the left meter is L,
          * the right R. */
         int x = i ? 800 - VU_COMPACT_X - VU_COMPACT_W : VU_COMPACT_X;
-        lv_obj_set_pos(s_vu[i], x, VU_COMPACT_Y - VU_COMPACT_H / 2);
-        lv_obj_set_size(s_vu[i], VU_COMPACT_W, VU_COMPACT_H);
+        lv_obj_set_pos(s_vu[i], x, VU_COMPACT_Y - VU_COMPACT_STACK_H / 2);
+        lv_obj_set_size(s_vu[i], VU_COMPACT_W, VU_COMPACT_STACK_H);
         return;
     }
     int r = s_pack_d[i] / 2;
@@ -369,6 +435,20 @@ static void draw_dash(lv_layer_t *layer, int x, int y, lv_color_t color, lv_opa_
     lv_draw_rect(layer, &dsc, &area);
 }
 
+/* The tape opacity scales every VU dash, lit or not, so the meter fades as one. */
+static lv_opa_t vu_opa(lv_opa_t base)
+{
+    return (lv_opa_t)((uint32_t)base * s_tape_opa / LV_OPA_COVER);
+}
+
+/* The tape edge's colour follows the rewind envelope: the playing red (COL_TAPE_DARK)
+ * when s_tape_opa is full, the tape's own brown (COL_TAPE) when it is zero. On the pack
+ * the edge then merges with the tape; the strands stay visible as dark tape. */
+static lv_color_t tape_edge_color(void)
+{
+    return lv_color_mix(lv_color_hex(COL_TAPE_DARK), lv_color_hex(COL_TAPE), s_tape_opa);
+}
+
 /* The solid tape edge, drawn on the pack so it redraws only when the pack resizes. */
 static void pack_draw_cb(lv_event_t *e)
 {
@@ -378,26 +458,24 @@ static void pack_draw_cb(lv_event_t *e)
     int dir = i ? -1 : 1;
     draw_arc(layer, k_hub[i].x -(i==0 ?  3 : -3), k_hub[i].y, r - 2,
              s_tangent_deg[i], TAPE_ARC_DEG, dir,
-             lv_color_hex(COL_TAPE_DARK), LV_OPA_COVER, TAPE_WIDTH, 1);
+             tape_edge_color(), LV_OPA_COVER, TAPE_WIDTH, 1);
 }
 
-/* The cover mode: the same peak-hold as the arcs, drawn as a row of vertical bars
- * that fill from the outer edge inwards. The last lit bar is the peak, as on the
- * arc. */
+/* The cover mode: the same peak-hold as the arcs, drawn as a vertical stack of wide
+ * segments in each pocket. Both stacks grow upward from the band, so the bottom
+ * segment lights first and the top lit one is the peak, as on the arc. */
 static void vu_compact_draw(lv_layer_t *layer, int i)
 {
     int lit = s_vu_lit[i];
-    int base = i ? 800 - VU_COMPACT_X - VU_COMPACT_W : VU_COMPACT_X;
-    int x0 = base + (VU_COMPACT_W - VU_COMPACT_ROW_W) / 2;
+    int x = (i ? 800 - VU_COMPACT_X - VU_COMPACT_W : VU_COMPACT_X) +
+            (VU_COMPACT_W - VU_COMPACT_DASH_W) / 2;
+    int y0 = VU_COMPACT_Y + (VU_COMPACT_STACK_H - VU_COMPACT_DASH_H) / 2;
 
     for (int k = 0; k < VU_COMPACT_COUNT; k++) {
         bool peak = lit > 0 && k == lit - 1;
-        /* The two rows mirror each other: both fill from the screen's edge towards
-         * the band, as the two arcs mirror around the reels. */
-        int n = i ? VU_COMPACT_COUNT - 1 - k : k;
-        draw_dash(layer, x0 + n * (VU_COMPACT_DASH_W + VU_COMPACT_DASH_GAP),
-                  VU_COMPACT_Y, lv_color_hex(peak ? VU_PEAK_LIT : COL_TAPE_DARK),
-                  k < lit ? LV_OPA_COVER : LV_OPA_30);
+        int y = y0 - k * (VU_COMPACT_DASH_H + VU_COMPACT_DASH_GAP);
+        draw_dash(layer, x, y, lv_color_hex(peak ? VU_PEAK_LIT : COL_TAPE_DARK),
+                  k < lit ? vu_opa(LV_OPA_COVER) : vu_opa(LV_OPA_30));
     }
 }
 
@@ -424,7 +502,7 @@ static void vu_draw_cb(lv_event_t *e)
         int s = start + dir * off;
         bool peak = lit > 0 && k == lit - 1;
         lv_color_t color = lv_color_hex(peak ? VU_PEAK_LIT : COL_TAPE_DARK);
-        lv_opa_t opa = k < lit ? LV_OPA_COVER : LV_OPA_30;
+        lv_opa_t opa = k < lit ? vu_opa(LV_OPA_COVER) : vu_opa(LV_OPA_30);
         draw_arc(layer, k_hub[i].x, k_hub[i].y, r - 2, s, len, dir,
                  color, opa, VU_WIDTH, 0);
     }
@@ -447,6 +525,44 @@ static int vu_count(void)
     return s_vu_compact ? VU_COMPACT_COUNT : VU_DASH_COUNT;
 }
 
+/* The tape's red edge and the VU belong to playback, not to the reel change. The
+ * rewind fades the VU out and cross-fades the tape's edge to the tape's own colour:
+ * full at the window's start, zero over its first second, zero for the body, and back
+ * over its last second as the new side starts. The rewind's permille is linear in
+ * time, so the ramp is a plain interpolation. */
+static lv_opa_t rewind_tape_opa(const cassette_frame_t *f)
+{
+    if (!f || !f->rewinding) return LV_OPA_COVER;
+
+    uint32_t elapsed = (uint32_t)f->rewind_permille * CASSETTE_REWIND_MS / 1000u;
+    uint32_t fade_in_at = CASSETTE_REWIND_MS - REWIND_FADE_MS;
+    if (elapsed < REWIND_FADE_MS)
+        return (lv_opa_t)((uint32_t)LV_OPA_COVER * (REWIND_FADE_MS - elapsed) /
+                          REWIND_FADE_MS);
+    if (elapsed > fade_in_at)
+        return (lv_opa_t)((uint32_t)LV_OPA_COVER * (elapsed - fade_in_at) / REWIND_FADE_MS);
+    return LV_OPA_TRANSP;
+}
+
+/* Push a new tape opacity into the objects that carry the edge: the strand lines take
+ * the mixed colour, the packs (their draw callback paints the solid arc) read it from
+ * tape_edge_color(), and the VU overlays read s_tape_opa directly for their opacity. The
+ * packs grow and shrink through the rewind anyway, so this adds no full-screen redraw
+ * of its own. */
+static void tape_opa_apply(lv_opa_t opa)
+{
+    s_tape_opa = opa;
+    lv_color_t edge = tape_edge_color();
+    for (int i = 0; i < 2; i++) {
+        if (s_strand[i]) {
+            lv_obj_set_style_line_color(s_strand[i], edge, 0);
+            lv_obj_invalidate(s_strand[i]);
+        }
+        if (s_pack[i]) lv_obj_invalidate(s_pack[i]);
+        if (s_vu[i]) lv_obj_invalidate(s_vu[i]);
+    }
+}
+
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 /* The cover is the mode switch: the objects are the same, the geometry and the
  * drawing callback branch on it. The last level is remapped so the first frame after
@@ -462,9 +578,9 @@ static void vu_set_compact(bool compact)
         s_vu_lit[i] = vu_lit_n(s_vu_level[i], count);
         vu_geom_set(i);
         /* The compact rows belong on top of the cover. When they go back to the
-         * reels they must be behind the small label too: the label is a solid bar,
-         * and an arc painted over it looks like the meter is floating on the title.
-         * Insert below the paper, not merely below the cover. */
+         * reels they must be behind both the cover and the small label: an arc
+         * painted over either would float on it. Insert below the paper, which is
+         * below the cover in creation order. */
         if (compact) lv_obj_move_to_index(s_vu[i], -1);
         else if (s_paper) lv_obj_move_to_index(s_vu[i], lv_obj_get_index(s_paper));
         lv_obj_invalidate(s_vu[i]);
@@ -477,15 +593,28 @@ static void apply_frame(const cassette_frame_t *f)
 {
     if (!f) return;
 
+    /* The reel change owns the tape edge and the VU: they fade out over its first
+     * second, stay dark, and fade back in for the new side. Do this before the pack
+     * draws so this frame's redraw already carries the new opacity. */
+    lv_opa_t tape_opa = rewind_tape_opa(f);
+    if (tape_opa != s_tape_opa) {
+        tape_opa_apply(tape_opa);
+        if (tape_opa == LV_OPA_TRANSP)
+            ESP_LOGI(TAG, "rewind: tape edge now COL_TAPE, VU hidden");
+        else if (tape_opa == LV_OPA_COVER)
+            ESP_LOGI(TAG, "rewind: tape edge back to COL_TAPE_DARK, VU back");
+    }
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
     if (f->title_changed) {
         const char *label = f->title[0] ? f->title
                           : f->playing ? ""
                           : "no card, or nothing to play";
         lv_label_set_text(s_title, label);
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
         lv_label_set_text(s_cover_title, label);
-#endif
+        lv_label_set_text(s_art_title, label);
     }
+#endif
     if (f->permille_changed) lv_bar_set_value(s_bar, f->permille, LV_ANIM_OFF);
 
     for (int i = 0; i < 2; i++) {
@@ -505,8 +634,9 @@ static void apply_frame(const cassette_frame_t *f)
      * that overlay is the arc or the compact row. */
     s_vu_level[0] = f->vu_l;
     s_vu_level[1] = f->vu_r;
-    int lit0 = vu_lit_n(s_vu_level[0], vu_count());
-    int lit1 = vu_lit_n(s_vu_level[1], vu_count());
+    int count = vu_count();
+    int lit0 = vu_lit_n(s_vu_level[0], count);
+    int lit1 = vu_lit_n(s_vu_level[1], count);
     if (lit0 != s_vu_lit[0]) {
         s_vu_lit[0] = lit0;
         if (s_vu[0]) lv_obj_invalidate(s_vu[0]);
@@ -520,22 +650,9 @@ static void apply_frame(const cassette_frame_t *f)
 /* ------------------------------------------------------------------- build */
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-/* Hide the small label at once, deleting a slide in flight; the big cover's show uses
- * this so the two never cover each other. */
-static void paper_hide_now(void)
-{
-    if (!s_paper) return;
-    lv_anim_delete(s_paper, (lv_anim_exec_xcb_t)lv_obj_set_y);
-    s_paper_shown = false;
-    lv_obj_set_y(s_paper, PAPER_HIDDEN_Y);
-    lv_obj_set_hidden(s_paper, true);
-}
-#endif
-
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
 /* The cover's alpha shapes look through to the screen. The screen's backdrop is mixed
  * between the cassette's colour and the cover's: 0 is COL_BG, 255 is COL_COVER_BG, so
- * the show can wait for the slide and then fade the backdrop in behind it. */
+ * the Label cover level can fade its own backdrop in behind the picture. */
 #define COVER_BG_MIX_COVER 255
 static uint8_t s_cover_bg_mix;
 
@@ -573,66 +690,126 @@ static void cover_bg_fade(bool cover, uint32_t ms)
     lv_anim_start(&a);
 }
 
-/* No animation: used when the cover is put away at once or before a fresh slide. */
+/* No animation: used before a level change settles the backdrop at once. */
 static void cover_bg_now(void)
 {
     lv_anim_delete(lv_screen_active(), cover_bg_fade_cb);
     cover_bg_mix_set(0);
 }
+#endif /* CONFIG_APP_BOARD_SUNTON_8048S050C */
 
-/* Hide the big cover at once, deleting a slide in flight; the small label's show uses
- * this so the two never cover each other. */
-static void cover_hide_now(void)
+/* ------------------------------------------------------------- the level machine */
+
+/* Where each sheet rests and where it hides. The full-screen sheets are full-bleed at
+ * 0,0. */
+static int sheet_rest_y(int level)
 {
-    if (!s_cover) return;
-    lv_anim_delete(s_cover, (lv_anim_exec_xcb_t)lv_obj_set_y);
-    s_cover_shown = false;
-    lv_obj_set_y(s_cover, COVER_HIDDEN_Y);
-    lv_obj_set_hidden(s_cover, true);
-    vu_set_compact(false);
-    cover_bg_now();
+    switch (level) {
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+        case LEVEL_COVER: return COVER_Y;
+        case LEVEL_ART:   return 0;
+#endif
+        default:          return 0;
+    }
 }
-#else
-static void cover_hide_now(void) {}
+
+static int sheet_hidden_y(int level)
+{
+    switch (level) {
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+        case LEVEL_COVER: return COVER_HIDDEN_Y;
+        case LEVEL_ART:   return ART_HIDDEN_Y;
+#endif
+        default:          return 0;
+    }
+}
+
+static lv_obj_t *sheet_obj(int level)
+{
+    switch (level) {
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+        case LEVEL_COVER: return s_cover;
+        case LEVEL_ART:   return s_art_sheet;
+#endif
+        default:          return NULL;
+    }
+}
+
+/* No level change animates. The full-screen sheets are 800x480, and a transition that
+ * redraws one of them per frame was measured to stutter on this panel; the level moves
+ * in one frame, before LVGL draws. */
+static void sheet_hide_now(int level)
+{
+    lv_obj_t *o = sheet_obj(level);
+    if (!o) return;
+    lv_anim_delete(o, (lv_anim_exec_xcb_t)lv_obj_set_y);
+    lv_obj_set_y(o, sheet_hidden_y(level));
+    lv_obj_set_hidden(o, true);
+}
+
+/* Put a sheet where it rests, visible; every other sheet is hidden by level_settled(). */
+static void sheet_show_at_rest(int level)
+{
+    lv_obj_t *o = sheet_obj(level);
+    if (!o) return;
+    lv_anim_delete(o, (lv_anim_exec_xcb_t)lv_obj_set_y);
+    lv_obj_set_y(o, sheet_rest_y(level));
+    lv_obj_set_hidden(o, false);
+    /* The Artwork screen sits above the decorations. The K7 cover stays below the bar
+     * and the B button: it is the cassette's own label. */
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    if (level == LEVEL_ART) {
+        lv_obj_move_foreground(o);
+    }
+#endif
+}
+
+/* Leave exactly the target sheet visible. */
+static void level_settled(void)
+{
+    for (int level = LEVEL_BARE + 1; level <= LEVEL_MAX; level++) {
+        if (level != s_level) sheet_hide_now(level);
+    }
+}
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* Ask the loader for the current Track's picture. The loader dedupes too, but this
+ * remembers the request so a 25 Hz update is a string compare, not a lock. */
+static void art_request(void)
+{
+    if (!s_have_status || !s_art_sheet) return;
+    if (s_art_requested && s_art_fmt == s_status.format &&
+        strcmp(s_art_path, s_status.path) == 0) return;
+    s_art_requested = true;
+    s_art_fmt = s_status.format;
+    snprintf(s_art_path, sizeof s_art_path, "%s", s_status.path);
+    /* A new Track: put the frame back until its picture lands, rather than leaving the
+     * previous Track's cover up while it decodes. */
+    if (s_art_img) lv_obj_set_hidden(s_art_img, true);
+    ESP_LOGI(TAG, "artwork request: %s (fmt %d)", s_status.path, (int)s_status.format);
+    artwork_loader_request(s_status.path, s_status.format);
+}
 #endif
 
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
 static void paper_anim_hidden_cb(lv_anim_t *a)
 {
     (void)a;
     if (!s_paper_shown) lv_obj_set_hidden(s_paper, true);
 }
 
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-static void cover_anim_hidden_cb(lv_anim_t *a)
-{
-    (void)a;
-    if (!s_cover_shown) {
-        lv_obj_set_hidden(s_cover, true);
-        cover_bg_now();
-    }
-}
-
-/* The slide is over and the cover sits on the panel; only now fade the backdrop in. */
-static void cover_anim_shown_cb(lv_anim_t *a)
-{
-    (void)a;
-    if (s_cover_shown) cover_bg_fade(true, COVER_BG_FADE_MS);
-}
-#endif
-
-/* The small label, one finger. Showing it takes the big cover away, because the cover
- * would otherwise hide it. The title is its child, so one property is the animation. */
+/* The small label, the one overlay that lives on Bare. It is not a Level: the up swipe
+ * at Bare has no Level to move to, so it peeks the bar instead. Showing it brings it in
+ * front of the cassette's own VU; hiding it slides it back above the screen and hides
+ * the object once the slide is over. */
 static void paper_set_shown(bool show)
 {
     if (!s_paper || show == s_paper_shown) return;
-    if (show) cover_hide_now();
     s_paper_shown = show;
 
     lv_anim_delete(s_paper, (lv_anim_exec_xcb_t)lv_obj_set_y);
     if (show) {
         lv_obj_set_hidden(s_paper, false);
-        /* The VU rows are moved to the top while the cover is up; bring the paper
-         * back in front so the arcs never paint over its title. */
         lv_obj_move_foreground(s_paper);
     }
 
@@ -647,34 +824,53 @@ static void paper_set_shown(bool show)
     lv_anim_start(&a);
 }
 
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-/* The big cover, two fingers. Showing it takes the small label away. */
-static void cover_set_shown(bool show)
+/* Put the paper away at once, deleting a slide in flight. A Level change uses this so
+ * the label never rides over the K7 cover or the Artwork screen. */
+static void paper_hide_now(void)
 {
-    if (!s_cover || show == s_cover_shown) return;
-    if (show) paper_hide_now();
-    s_cover_shown = show;
-    /* The reels go behind the cover, so the meters go to the band's ends. A show
-     * starts on the cassette's backdrop and fades to the cover's once the slide has
-     * ended; a hide fades back while the cover slides away. */
-    vu_set_compact(show);
-    if (show) cover_bg_now();
-    else cover_bg_fade(false, COVER_ANIM_MS);
-
-    lv_anim_delete(s_cover, (lv_anim_exec_xcb_t)lv_obj_set_y);
-    if (show) lv_obj_set_hidden(s_cover, false);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_cover);
-    lv_anim_set_values(&a, lv_obj_get_y(s_cover), show ? COVER_Y : COVER_HIDDEN_Y);
-    lv_anim_set_duration(&a, COVER_ANIM_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-    lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_y);
-    lv_anim_set_completed_cb(&a, show ? cover_anim_shown_cb : cover_anim_hidden_cb);
-    lv_anim_start(&a);
+    if (!s_paper) return;
+    lv_anim_delete(s_paper, (lv_anim_exec_xcb_t)lv_obj_set_y);
+    s_paper_shown = false;
+    lv_obj_set_y(s_paper, PAPER_HIDDEN_Y);
+    lv_obj_set_hidden(s_paper, true);
 }
 #endif
+
+/* Move the level by one. The level is a position, not a command, so a swipe at an end
+ * does nothing and the ends do not wrap. */
+static void set_level(int target)
+{
+    if (target < LEVEL_BARE) target = LEVEL_BARE;
+    if (target > LEVEL_MAX) target = LEVEL_MAX;
+    if (target == s_level) return;
+
+    s_level = target;
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The small label belongs to Bare alone. Any Level change puts it away before the
+     * target sheet is placed. */
+    paper_hide_now();
+
+    /* The reels go behind the K7 cover, so the meters move to the band's ends. The
+     * Artwork screen is opaque and covers them either way. */
+    vu_set_compact(target >= LEVEL_COVER);
+    if (target == LEVEL_ART) art_request();
+
+    if (target == LEVEL_COVER) {
+        cover_bg_now();
+        cover_bg_fade(true, COVER_BG_FADE_MS);
+    } else if (target == LEVEL_ART) {
+        cover_bg_now();
+    } else {
+        cover_bg_fade(false, COVER_BG_FADE_MS);
+    }
+#endif
+
+    if (target != LEVEL_BARE) sheet_show_at_rest(target);
+    level_settled();
+
+    ESP_LOGI(TAG, "level %d", s_level);
+}
 
 /* A new touch clears the two-finger latch from the previous one. */
 static void screen_pressed_cb(lv_event_t *e)
@@ -686,23 +882,27 @@ static void screen_pressed_cb(lv_event_t *e)
 }
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-/* The touch adapter reports a two-finger swipe from the contacts themselves; the cover
- * is what it means. It is called from the port's task, inside the read, so it runs
- * before the one-finger gesture for the same touch. */
+/* The two-finger swipe is reserved for the menu (on/off), which is not designed yet.
+ * The port still reports it, and this callback keeps the one-finger handler and the
+ * click from acting on the same touch: a two-finger gesture must not change a Level,
+ * skip a Track or open the sticker by accident. When the menu lands, it takes this
+ * callback and nothing in touch_gt911.c has to change. */
 static void screen_two_finger_cb(int dx, int dy)
 {
     (void)dx;
     (void)dy;
     s_two_finger_seen = true;
-    cover_set_shown(!s_cover_shown);
-    ESP_LOGI(TAG, "two-finger swipe: cover %s", s_cover_shown ? "shown" : "hidden");
+    ESP_LOGI(TAG, "two-finger swipe: reserved for the menu");
 }
 #endif
 
 /*
- * The classic one-finger gestures: left/right are the transport, down/up the small
- * label. A two-finger swipe does not come through here; the touch adapter reports it,
- * and `seen` keeps this handler from acting on the same touch as well.
+ * The classic one-finger gestures: left/right are the transport; down/up move one
+ * level, towards Artwork and towards Bare. At Bare the up swipe has no Level to move
+ * to, so it peeks the small title label; while the label is up, either vertical swipe
+ * puts it away before a down gesture is allowed to move to the Label cover. A
+ * two-finger swipe does not come through here; the touch adapter reports it, and `seen`
+ * keeps this handler from acting on the same touch as well.
  */
 static void screen_gesture_cb(lv_event_t *e)
 {
@@ -722,12 +922,29 @@ static void screen_gesture_cb(lv_event_t *e)
             ESP_LOGI(TAG, "swipe right: previous track");
             break;
         case LV_DIR_BOTTOM:
-            paper_set_shown(true);
-            ESP_LOGI(TAG, "swipe down: small label shown");
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+            /* The label is a peek, not a Level: while it is up, the down swipe puts it
+             * away first; only the next one moves to the K7 cover. */
+            if (s_level == LEVEL_BARE && s_paper_shown) {
+                paper_set_shown(false);
+                ESP_LOGI(TAG, "swipe down at Bare: small label hidden");
+                break;
+            }
+#endif
+            set_level(s_level + 1);
             break;
         case LV_DIR_TOP:
-            paper_set_shown(false);
-            ESP_LOGI(TAG, "swipe up: small label hidden");
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+            /* At Bare there is no Level above to move to: the up swipe peeks the small
+             * label, and while it is up the next up swipe puts it away. */
+            if (s_level == LEVEL_BARE) {
+                paper_set_shown(!s_paper_shown);
+                ESP_LOGI(TAG, "swipe up at Bare: small label %s",
+                         s_paper_shown ? "shown" : "hidden");
+                break;
+            }
+#endif
+            set_level(s_level - 1);
             break;
         default:
             break;
@@ -811,7 +1028,7 @@ void cassette_view_create(void)
     }
 
     /* The VU: a transparent overlay sized to its arc, above the hub ring and below
-     * the label. Its own 25 Hz invalidation leaves the pack fill and tape line
+     * the cover. Its own 25 Hz invalidation leaves the pack fill and tape line
      * alone. */
     for (int i = 0; i < 2; i++) {
         lv_obj_t *vu = lv_obj_create(scr);
@@ -820,7 +1037,7 @@ void cassette_view_create(void)
         lv_obj_set_style_border_width(vu, 0, 0);
         lv_obj_set_style_pad_all(vu, 0, 0);
         lv_obj_set_scrollable(vu, false);
-        lv_obj_clear_flag(vu, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_clickable(vu, false);
         lv_obj_add_event_cb(vu, vu_draw_cb, LV_EVENT_DRAW_MAIN_END,
                             (void *)(intptr_t)i);
         s_vu[i] = vu;
@@ -828,8 +1045,11 @@ void cassette_view_create(void)
         vu_geom_set(i);
     }
 
-    /* The small label: the cream bar one-finger up/down slides in and out. Its title
-     * is its child, so the bar and the title move as one. */
+    /* The small label: the cream bar the up swipe at Bare peeks. Its title is its
+     * child, so the bar and the title move as one. It hides above the screen until
+     * that swipe, and any Level change puts it away. It is not a Level. */
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
     s_paper = box(scr, LABEL_X, LABEL_Y, LABEL_W, LABEL_H, LABEL_R, COL_LABEL);
     lv_obj_set_y(s_paper, PAPER_HIDDEN_Y);
     lv_obj_set_hidden(s_paper, true);
@@ -838,11 +1058,10 @@ void cassette_view_create(void)
     lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_title, SMALL_TITLE_W);
 
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The big cover: the full cover at 0,0, two fingers away. Cover art is 800x480,
-     * the panel's size, so it sits full-bleed. Its black shapes are transparent, so the
-     * reels show through them; the title is written on the empty band at the top and is
-     * its child. */
+    /* The big cover: the supplied full cover at 0,0, one swipe past Bare. Cover art is
+     * 800x480, the panel's size, so it sits full-bleed. Its black shapes are
+     * transparent, so the reels show through them; the title is written on the empty
+     * band at the top and is its child. */
     s_cover = lv_image_create(scr);
     lv_image_set_src(s_cover, &k_label_cover);
     /* No background or padding of the widget's own, so the image sits at the object's
@@ -866,7 +1085,7 @@ void cassette_view_create(void)
     lv_label_set_text(letter, "B");
 
     /* The band: how far into the file we are. Dark ink on the light shell, with the
-     * same red as the label's side square for the progress. */
+     * same red as the B button for the progress. */
     s_bar = lv_bar_create(scr);
     lv_obj_set_size(s_bar, BAND_W, 20);
     lv_obj_set_pos(s_bar, BAND_X, BAND_Y);
@@ -878,6 +1097,36 @@ void cassette_view_create(void)
 
 
 
+
+    /* The Artwork level: its own full screen, above everything else. The Case backdrop
+     * is full-bleed at 0,0; the Track picture fills its window at 101,23. The loader
+     * owns both sets of pixels, and both are hidden until they land. */
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    s_art_sheet = box(scr, 0, 0, 800, 480, 0, COL_ART_BG);
+    lv_obj_set_y(s_art_sheet, ART_HIDDEN_Y);
+    lv_obj_set_hidden(s_art_sheet, true);
+
+    s_case_img = lv_image_create(s_art_sheet);
+    lv_obj_set_style_bg_opa(s_case_img, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_case_img, 0, 0);
+    lv_obj_set_style_pad_all(s_case_img, 0, 0);
+    lv_obj_set_pos(s_case_img, 0, 0);
+    lv_obj_set_size(s_case_img, 800, 480);
+    lv_obj_set_hidden(s_case_img, true);
+
+    s_art_img = lv_image_create(s_art_sheet);
+    lv_obj_set_style_bg_opa(s_art_img, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_art_img, 0, 0);
+    lv_obj_set_style_pad_all(s_art_img, 0, 0);
+    lv_obj_set_pos(s_art_img, ART_X, ART_Y);
+    lv_obj_set_size(s_art_img, ART_W, ART_H);
+    lv_obj_set_hidden(s_art_img, true);
+
+    s_art_title = text(s_art_sheet, &oxanium_36, lv_color_hex(COL_COVER_INK),
+                       LV_ALIGN_TOP_MID, 0, ART_TITLE_Y);
+    lv_obj_set_width(s_art_title, ART_TITLE_W);
+    lv_label_set_long_mode(s_art_title, LV_LABEL_LONG_SCROLL);
+#endif
 
     /* The model: the art's frame count is the angular resolution; the tape
      * geometry supplies the speeds. */
@@ -893,8 +1142,8 @@ void cassette_view_create(void)
     if (s_model) apply_frame(cassette_step(s_model, NULL, lv_tick_get()));
 
     /* The picture is built. Make the screen the one thing a finger can hit; its click
-     * is next track, a one-finger swipe is the transport and the small label, and a
-     * two-finger swipe is the big cover. */
+     * is next track, a one-finger swipe is the transport or the next Level, and a
+     * two-finger swipe is reserved for the menu. */
     lv_obj_set_clickable(scr, true);
     make_decorative(scr);
     lv_obj_add_event_cb(scr, screen_pressed_cb, LV_EVENT_PRESSED, NULL);
@@ -902,7 +1151,8 @@ void cassette_view_create(void)
     lv_obj_add_event_cb(scr, screen_gesture_cb, LV_EVENT_GESTURE, NULL);
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     /* The touch adapter's two-finger swipe; it is called before the one-finger
-     * gesture for the same touch, so `seen` is already set when that one arrives. */
+     * gesture for the same touch, so `seen` is already set when that one arrives. It
+     * does not move a Level: the menu will take it later. */
     touch_gt911_set_two_finger_cb(screen_two_finger_cb);
 #endif
 }
@@ -912,8 +1162,18 @@ void cassette_view_create(void)
 void cassette_view_update(const mini_icecast_status_t *st)
 {
     if (!s_model) return;
+    if (st) {
+        s_status = *st;
+        s_have_status = true;
+    }
     const cassette_frame_t *f = cassette_step(s_model, st, lv_tick_get());
     apply_frame(f);
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* At the Artwork level a track change means a new picture. The view remembers the
+     * request, so this is a string compare on the frames that do not change it. */
+    if (s_level == LEVEL_ART) art_request();
+#endif
 
 #if CONFIG_APP_UI_SERIAL_DUMP
     /* A still image cannot show that the hubs turn, so a diagnostic build says it. */
@@ -932,3 +1192,27 @@ void cassette_view_update(const mini_icecast_status_t *st)
     }
 #endif
 }
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+void cassette_view_set_artwork(const lv_image_dsc_t *dsc)
+{
+    if (!s_art_img) return;
+    if (dsc) {
+        lv_image_set_src(s_art_img, dsc);
+        lv_obj_set_hidden(s_art_img, false);
+    } else {
+        lv_obj_set_hidden(s_art_img, true);
+    }
+}
+
+void cassette_view_set_case(const lv_image_dsc_t *dsc)
+{
+    if (!s_case_img) return;
+    if (dsc) {
+        lv_image_set_src(s_case_img, dsc);
+        lv_obj_set_hidden(s_case_img, false);
+    } else {
+        lv_obj_set_hidden(s_case_img, true);
+    }
+}
+#endif

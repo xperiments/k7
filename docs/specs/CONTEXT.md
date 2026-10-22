@@ -107,6 +107,18 @@ packs, a label and a **VU meter** on each reel. A presentation of the live strea
 never a source of truth.
 _Avoid_: UI, GUI, dashboard
 
+**Level**:
+One of the three positions of the cassette screen, ordered by how much of it the
+**sheet** covers: Bare, Label cover and Artwork. A one-finger down swipe moves one
+towards Artwork, an up swipe one towards Bare, and the ends do not wrap. At Bare, a down
+swipe dismisses the **Label** first if it is up, and only the next one moves. The Level
+changes in one frame.
+_Avoid_: state, step, mode, page
+
+**Sheet**:
+The layer a Level draws over the cassette. Exactly one is shown at a time.
+_Avoid_: layer, overlay, page
+
 **Reel frame**:
 One of the keyframes of the hub art, one per 360/frame_count degrees of rotation.
 The frame follows the reel's **phase**, which the pack radius sets; a stopped track
@@ -126,33 +138,61 @@ The eight seconds after a track boundary in which the screen shows the outgoing 
 tape winding back onto the supply reel - both packs migrating and both hubs turning in
 reverse - instead of jumping to the new side. It is driven by the new track's elapsed
 time and lands on exactly the state normal play shows when it closes, so the change has
-no break in it. The label, the progress bar and the **VU meter** are not part of it: they
-follow the new song from its first frame.
+no break in it. The title and the progress bar are not part of it: they follow the new
+song from its first frame. For the window the tape's red edge cross-fades to the tape's
+own colour and the **VU meter** fades out - they are playing indications, and nothing is
+playing while the tape winds back - and both return as the window closes.
 _Avoid_: transition, animation, reel swap
 
 **VU meter**:
 The dashed arc that continues the tape edge on each reel, showing the peak-hold of one
 channel: the left reel is L, the right R. Its length is a screen setting, not part of
 the cassette. The empty reel keeps a minimum tape load, so its arc stays outside the
-hub ring. When the full **label cover** is up the reels are behind it, so the same two
-meters move to the bottom row as rows of short vertical bars on the progress band's
-centre line, in the free pockets that row leaves: same peak-hold, same dB scale, only
-the drawing changes.
+hub ring. The peak-hold falls about 23 dB/s, so it follows a real drop instead of
+hanging on the last dash. When the **Label cover** is up the reels are behind it, so the
+same two meters move to the bottom as vertical stacks of five 20 px-wide segments, one in
+each free pocket beside the band, growing upward from the band's centre line: same
+peak-hold, same dB scale, only the drawing changes.
 _Avoid_: level bar, meter, peak meter
 
 **Label cover**:
-The full-bleed cover art, `assets/labels/k7logo.png`, drawn at 0,0 over the 800x480
-panel; a two-finger swipe slides it over the screen. Cover art is 800x480 from now on,
-the panel's own size, so it carries no margin. Its black triangle and circle are
+The K7 sticker, `assets/labels/k7logo.png`, drawn full-bleed at 0,0 over the 800x480
+panel at the Label cover Level; one-finger down from Bare reaches it. It is 800x480, the
+panel's own size, so it carries no margin. Its black triangle and circle are
 transparent and it is stored as RGB565A8, so the reels show through them. When the
-slide ends the screen background fades from the cassette's colour to the cover's own
-backdrop, `COL_COVER_BG`; the small **label** is hidden and the **VU meters** sit as
-bar rows on the progress band's centre line.
-_Avoid_: big label, sticker, overlay
+Level settles the screen background fades from the cassette's colour to the cover's own
+backdrop, `COL_COVER_BG`; the **VU meters** sit as vertical segment stacks beside the
+progress band.
+_Avoid_: big label, sticker, overlay, carátula
+
+**Artwork**:
+The Level that shows a **Track artwork** in the **Case**'s **Window**, with the **Now
+playing** title on the band under the Case. It is not the **Label cover**: that is the K7
+sticker, and the Case stays even when the Track carries no picture.
+_Avoid_: cover, album art, portada
+
+**Case**:
+The cassette-case backdrop of the **Artwork** Level, `assets/labels/cover.jpg`,
+full-bleed at 800x480. Its **Window** is where the **Track artwork** shows.
+_Avoid_: frame, shell, background, funda
+
+**Window**:
+The rectangle of the **Case** where the **Track artwork** is drawn: (101,23) to
+(704,408), 603x385. The picture is fitted cover-style and centre-cropped, never squeezed.
+_Avoid_: hole, cutout, slot, ventana
+
+**Track artwork**:
+The picture a Track carries in its own file: an ID3v2.3/2.4 `APIC` frame in an MP3, or
+a native FLAC `PICTURE` block, preferring the front cover. JPEG is decoded; a PNG is
+located but not drawn. A Track with no usable picture leaves the **Window** empty.
+_Avoid_: cover, embedded art, portada
 
 **Label**:
-The paper strip on the cassette that carries the cleaned **Now playing** title,
-with parenthesised asides dropped.
+The cream paper strip that carries the cleaned **Now playing** title, shown as an
+overlay on **Bare** by an up swipe at that Level. It is hidden by the next vertical swipe
+at Bare or by any Level change: a down swipe at Bare dismisses it before it is allowed to
+move to the Label cover. It is not a Level and not one of the **sheet**s of the one-finger
+cycle.
 _Avoid_: title bar, caption, marquee
 
 ### The appliance

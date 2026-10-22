@@ -33,8 +33,9 @@ CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 #     forced restart sends the framebuffer LVGL did not just draw "and the panel shows half
 #     of the drawn frames". ESP-IDF ships it off; this states it rather than leaving it to
 #     a default.
-#   - instructions and rodata from PSRAM, which is how that build frees internal RAM for
-#     everything else on a board whose interface, engine and card all want it.
+#   - instructions and rodata from PSRAM. Moving either to flash brought the panel's
+#     glitches back on this board; the Artwork level is fitted around the PSRAM cost
+#     instead (one cover buffer, the JPEG read on demand, no encoded copy).
 # CONFIG_LCD_RGB_RESTART_IN_VSYNC is not set
 CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
 CONFIG_SPIRAM_RODATA=y

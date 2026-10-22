@@ -34,6 +34,7 @@
 #include "screen_display.h"
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
+#include "artwork_loader.h"
 #include "backlight.h"
 #include "esp_lvgl_port.h"
 #include "panel_rgb.h"
@@ -300,8 +301,9 @@ static void screen_task(void *arg)
     }
 }
 
-esp_err_t screen_display_start(void)
+esp_err_t screen_display_start(const char *music_dir)
 {
+    (void)music_dir;
     size_t internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     size_t largest_before = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 
@@ -386,6 +388,17 @@ esp_err_t screen_display_start(void)
 #endif
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     lvgl_port_unlock();
+
+#if !CONFIG_APP_UI_BACKLIGHT_TEST
+    /* The card side of the Artwork level, started after the view so a request can only
+     * arrive once there is an image object to hand the picture to. A failure is logged
+     * and the level stays empty: the screen is still the appliance's. */
+    esp_err_t art_err = artwork_loader_start(music_dir);
+    if (art_err != ESP_OK) {
+        ESP_LOGW(TAG, "the artwork loader did not start: %s; the Artwork level stays empty",
+                 esp_err_to_name(art_err));
+    }
+#endif
 #endif
 
     ESP_LOGI(TAG, "screen %dx%d, framebuffer %u KB in PSRAM, LVGL holds %u B",

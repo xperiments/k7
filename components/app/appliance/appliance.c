@@ -169,8 +169,9 @@ void appliance_run(void)
         for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    /* The screen comes last, once there is something to show and a status to read. */
-    esp_err_t screen_err = screen_display_start();
+    /* The screen comes last, once there is something to show and a status to read.
+     * MUSIC_DIR is also the root the Artwork level reads a Track's own picture from. */
+    esp_err_t screen_err = screen_display_start(MUSIC_DIR);
     if (screen_err != ESP_OK) {
         ESP_LOGE(TAG, "the screen did not start: %s; the device still serves",
                  esp_err_to_name(screen_err));

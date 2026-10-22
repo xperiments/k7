@@ -57,9 +57,11 @@ extern "C" {
  * time, where one frame per update would read as slow motion.
  *
  * The whole transport decelerates over the last EASE_MS so the reels wind down into
- * the start of the song. The progress bar, the label and the VU are not part of the
- * fiction: the bar snaps to the new position, the label names the new song and the VU
- * follows the new audio from the first frame. */
+ * the start of the song. The progress bar and the label are not part of the fiction:
+ * the bar snaps to the new position and the label names the new song. The VU data still
+ * follows the new audio from the first frame, but the view cross-fades the tape's red
+ * edge to the tape's own colour and fades the meters out for the window, so nothing is
+ * metered while the tape winds back. */
 #define CASSETTE_REWIND_MS      8000
 #define CASSETTE_REWIND_EASE_MS 1200
 #define CASSETTE_REWIND_REVS    11.0f
