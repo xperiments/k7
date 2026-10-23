@@ -169,9 +169,9 @@ static const lv_color_t k_col_hub_ring  = COL_DARKEN_HEX(0xF15A22, 70);
 static const lv_color_t k_col_hub_ink   = COL_DARKEN_HEX(0xF15A22, 50); /* the divider and the hub's centre dot */
 static const lv_color_t k_col_bar_bg    = COL_HEX(0xB9C0BB);
 static const lv_color_t k_col_bar_fg    = COL_HEX(0xF15A22); /* the tape's red */
-/* The VU meter, read off assets: a black panel, a grid of the lit red at half strength
- * over black, and segments that are the lit red or this dim red. */
-static const lv_color_t k_col_meter_bg  = COL_HEX(0x000000);
+/* The VU meter, read off assets: a grid of the lit red at half strength, and segments
+ * that are either the lit red or this dim red. There is no panel behind them - the
+ * cassette shows through. */
 static const lv_color_t k_col_meter_dim = COL_HEX(0x7F2C18);
 // static const lv_color_t k_col_guide     = COL_HEX(0x573534); /* the layout guides at the top */
 
@@ -414,10 +414,10 @@ static void hub_frame_set(int i, uint8_t frame)
 #define METER_SEG_W  9
 #define METER_SEG_H  4
 #define METER_PITCH  5
-#define METER_BOTTOM 105      /* panel-relative y of the bottom segment */
+#define METER_BOTTOM 104      /* panel-relative y of the bottom segment's foot */
 #define METER_GAP    6
-#define METER_GRID_X 15       /* the lattice: 12 columns, 14 rows, 5 px apart */
-#define METER_GRID_Y 44
+#define METER_GRID_X 10       /* the lattice: 12 columns, 14 rows, 5 px apart, centred */
+#define METER_GRID_Y 39
 #define METER_GRID_C 12
 #define METER_GRID_R 14
 
@@ -985,9 +985,15 @@ void cassette_view_create(void)
     /* The VU meter: the mockup's panel between the reels, created before the hubs so it
      * sits behind them. The grid is its draw callback; the segments are objects, so a
      * level change repaints a few cells and not the panel. */
-    s_meter = box(scr, METER_X - METER_W / 2, METER_Y - METER_H / 2,
-                  METER_W, METER_H, METER_R, k_col_meter_bg);
+    s_meter = lv_obj_create(scr);
+    lv_obj_remove_style_all(s_meter);
+    lv_obj_set_style_bg_opa(s_meter, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_meter, 0, 0);
+    lv_obj_set_style_pad_all(s_meter, 0, 0);
+    lv_obj_set_scrollable(s_meter, false);
     lv_obj_set_clickable(s_meter, false);
+    lv_obj_set_pos(s_meter, METER_X - METER_W / 2, METER_Y - METER_H / 2);
+    lv_obj_set_size(s_meter, METER_W, METER_H);
     lv_obj_add_event_cb(s_meter, meter_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
 
     int bar_x = (METER_W - (METER_COLS * METER_SEG_W + (METER_COLS - 1) * METER_GAP)) / 2;
