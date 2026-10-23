@@ -1,8 +1,8 @@
 /*
  * The cassette screen.
  *
- * The cassette body is drawn here: a light grey shell, two black tape packs of
- * different sizes and the progress band. The screen has three levels - Bare, Label
+ * The cassette body is drawn here: a light grey shell and two black tape packs of
+ * different sizes. The screen has three levels - Bare, Label
  * cover and Artwork - and exactly one sheet is shown at a time. A one-finger down/up
  * swipe moves one level; the two-finger swipe is reserved for the menu and does
  * nothing yet. The level changes in one frame, before LVGL draws: a transition that
@@ -90,8 +90,7 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 /* The small label: the bar with the Now playing title. It is not a Level: the up
  * swipe at Bare has no Level to move to, so it peeks this bar over the cassette, and
  * the next up swipe or any Level change puts it away. It rests at LABEL_Y and hides
- * below the screen, so the show slides up and the hide slides back. The band at the
- * bottom uses the same x and width. */
+ * below the screen, so the show slides up and the hide slides back. */
 #define LABEL_X 96
 #define LABEL_Y 324
 #define LABEL_W 608
@@ -109,8 +108,7 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
  * Cover art is 800x480, the panel's own size, so the cover has no margin. This one
  * keeps its alpha (RGB565A8): the black triangle and circle are transparent, so the
  * reels show through them.
- * The title is a child of the cover; it sits on the empty band at the top of the art,
- * clear of the progress band at the bottom. The cover hides just above the screen,
+ * The title is a child of the cover; it sits on the empty band at the top of the art. The cover hides just above the screen,
  * so a level change places it at 0,0 in one frame. It is the panel board's, because
  * the vertical gestures that reach its level are. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -124,8 +122,8 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 
 /* The Artwork level: the Case backdrop, assets/labels/cover.jpg, full-bleed at 0,0,
  * with the Track's picture in its window - (101,23) to (704,408), 603x385 - and the
- * title on the band below. The Case is opaque, so the cassette and the bar are covered
- * rather than redrawn. The title sits in the free band under the case,
+ * title on the band below. The Case is opaque, so the cassette is covered rather than
+ * redrawn. The title sits in the free band under the case,
  * clear of the window. */
 #define ART_X 101
 #define ART_Y 23
@@ -136,11 +134,6 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 #define ART_HIDDEN_Y (-480 - 8)
 #endif
 
-/* The band below the tape: the same x and width as the small label, so the two line up. */
-#define BAND_Y 434
-#define BAND_X LABEL_X
-#define BAND_W LABEL_W
-
 /* The palette, read off the reference, as 0xRRGGBB. lv_color_hex() is a function
  * (lv_color.h:283), so it cannot initialise a constant; COL_HEX() is the same split done
  * at compile time on top of LVGL's own aggregate initialiser (lv_color.h:215). The result
@@ -148,7 +141,7 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 #define COL_HEX(c) LV_COLOR_MAKE(((c) >> 16) & 0xFF, ((c) >> 8) & 0xFF, (c) & 0xFF)
 
 /* A darker 0xRRGGBB: `pct` percent of the original, folded at compile time so a shade is a
- * const like any other colour - COL_DARKEN_HEX(0xF15A22, 70) is 0xA83F17. It takes a
+ * const like any other colour - COL_DARKEN_HEX(COL_PRIMARY, 70) is 0xA83F17. It takes a
  * literal, not a name, because the channels of an lv_color_t are not a constant expression
  * once it is an object; to darken a colour that is already an lv_color_t, LVGL has
  * lv_color_darken(). */
@@ -157,21 +150,23 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
             (((((c) >> 8) & 0xFF) * (pct) / 100) << 8) |                              \
              ((((c) & 0xFF) * (pct) / 100)))
 
-static const lv_color_t k_col_bg        = COL_HEX(0x111111);
+#define COL_BLACK 0x111111
+#define COL_PRIMARY 0xF15A22
+
+static const lv_color_t k_col_black        = COL_HEX(COL_BLACK);
+static const lv_color_t k_col_bg        = COL_HEX(COL_BLACK);
 /* The playing red: the hub's ring and divider, and the small label's ink. */
-static const lv_color_t k_col_tape_dark = COL_HEX(0xF15A22);
+static const lv_color_t k_col_tape_dark = COL_HEX(COL_PRIMARY);
 /* The tape's own body, and the dim end of the rewind fade: the hub ring cross-fades
  * from the playing red into this. */
-static const lv_color_t k_col_tape      = COL_DARKEN_HEX(0xF15A22, 50);
-static const lv_color_t k_col_hub_ring  = COL_DARKEN_HEX(0xF15A22, 70);
-static const lv_color_t k_col_hub_ink   = COL_DARKEN_HEX(0xF15A22, 50); /* the divider and the hub's centre dot */
-static const lv_color_t k_col_bar_bg    = COL_HEX(0xB9C0BB);
-static const lv_color_t k_col_bar_fg    = COL_HEX(0xF15A22); /* the tape's red */
+static const lv_color_t k_col_tape      = COL_DARKEN_HEX(COL_PRIMARY, 50);
+static const lv_color_t k_col_hub_ring  = COL_DARKEN_HEX(COL_PRIMARY, 10);
+static const lv_color_t k_col_hub_ink   = COL_DARKEN_HEX(COL_PRIMARY, 80);
 /* The VU meter, read off assets: a grid of the lit red at half strength, and segments
  * that are either the lit red or this dim red. There is no panel behind them - the
  * cassette shows through. */
 static const lv_color_t k_col_meter_dim = COL_HEX(0x7F2C18);
-static const lv_color_t k_col_meter_lit = COL_HEX(0xF15A22); /* the lit red */
+static const lv_color_t k_col_meter_lit = COL_HEX(COL_PRIMARY); /* the lit red */
 
 /* The touch board's own Levels: its cover, its small label and the Artwork backdrop. They
  * live inside the guard because a board without those Levels never reads them. */
@@ -180,7 +175,7 @@ static const lv_color_t k_col_cover_bg  = COL_HEX(0xB48744); /* behind the cover
 static const lv_color_t k_col_cover_ink = COL_HEX(0xEEEEEE); /* the dark cover needs light ink */
 static const lv_color_t k_col_art_bg    = COL_HEX(0x141414); /* until the Case lands */
 static const lv_color_t k_col_paper     = COL_HEX(0x000000); /* the small label's fill */
-static const lv_color_t k_col_primary   = COL_HEX(0xF15A22); /* its border and title */
+static const lv_color_t k_col_primary   = COL_HEX(COL_PRIMARY); /* its border and title */
 #endif
 
 /* The hub ring is the playing indication: full red while a track plays, dimmed while a
@@ -215,7 +210,6 @@ static hub_spoke_t s_hub_spoke[2][2];
 static lv_obj_t *s_rim[2];          /* the 168 px hub circle the rewind dims */
 static lv_obj_t *s_pack[2], *s_strand[2];
 static lv_point_precise_t s_strand_pts[2][2];
-static lv_obj_t *s_bar;
 static int       s_level;
 static mini_icecast_status_t s_status;  /* the last status, for the Artwork request */
 static bool      s_have_status;
@@ -540,7 +534,6 @@ static void apply_frame(const cassette_frame_t *f)
         lv_label_set_text(s_art_title, label);
     }
 #endif
-    if (f->permille_changed) lv_bar_set_value(s_bar, f->permille, LV_ANIM_OFF);
 
     for (int i = 0; i < 2; i++) {
         if (f->hub_frame[i] != s_shown_hub[i]) {
@@ -929,7 +922,7 @@ void cassette_view_create(void)
     for (int i = 0; i < 2; i++) {
         int cx = k_hub[i].x, cy = k_hub[i].y;
         lv_obj_t *rim = disc(scr, cx, cy, HUB_RING_D, k_col_hub_ring);
-        lv_obj_set_style_border_color(rim, k_col_tape_dark, 0);
+        lv_obj_set_style_border_color(rim, k_col_black, 0);
         lv_obj_set_style_border_opa(rim, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(rim, HUB_RIM_W, 0);
         s_rim[i] = rim;
@@ -982,17 +975,6 @@ void cassette_view_create(void)
     lv_label_set_long_mode(s_cover_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_cover_title, COVER_TITLE_W);
 #endif
-
-    /* The band: how far into the file we are, under the label and the same width as
-     * it. Dark ink on the light shell, with the tape red for the progress. */
-    s_bar = lv_bar_create(scr);
-    lv_obj_set_size(s_bar, BAND_W, 20);
-    lv_obj_set_pos(s_bar, BAND_X, BAND_Y);
-    lv_bar_set_range(s_bar, 0, 1000);
-    lv_obj_set_style_bg_color(s_bar, k_col_bar_bg, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(s_bar, k_col_bar_fg, LV_PART_INDICATOR);
-    lv_obj_set_style_radius(s_bar, 5, LV_PART_MAIN);
-    lv_obj_set_style_radius(s_bar, 10, LV_PART_INDICATOR);
 
 
 

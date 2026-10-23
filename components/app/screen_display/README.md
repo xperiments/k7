@@ -99,14 +99,13 @@ not changed is not touched at all.
 ## The reel change
 
 Eight seconds after a track boundary the model returns the rewind window: the packs
-migrate back and the hubs turn in reverse (ADR 0011). The view treats the tape's red edge
-as a playing indication, so for the window it cross-fades the tape's own lines
-from `COL_TAPE_DARK` to `COL_TAPE` and fades the VU out; both return over the window's
-last second. `rewind_tape_opa()` turns the model's `rewind_permille` into that envelope,
-and `tape_edge_color()` uses it to mix the edge colour. `tape_opa_apply()` sets the strand
-lines and invalidates the packs, whose draw callback paints the solid arc. The progress bar and the titles do not fade:
-they are chrome and information, not tape. The model is untouched: it still reports `rewind_permille`, and the host tier still tests the reel
-arithmetic.
+migrate back and the hubs turn in reverse (ADR 0011). The view treats the hub ring as the
+playing indication: over the window it mixes each ring's border from `k_col_tape_dark` to
+`k_col_tape` and back over the window's last second. `rewind_tape_opa()` turns the model's
+`rewind_permille` into that envelope and `tape_opa_apply()` applies it to the two rings.
+Nothing else fades: the meter, the title and the cassette are information, not tape. The
+model is untouched: it still reports `rewind_permille`, and the host tier still tests the
+reel arithmetic.
 
 ## The Track picture and the Case
 
