@@ -12,7 +12,7 @@
  * own size, exported as RGB565A8 and drawn full-bleed at 0,0. Its black triangle and
  * circle carry alpha, so the reels show through them; once the cover is up the screen
  * background fades from k_col_bg to the cover's own k_col_cover_bg. While the
- * cover is up the reels are behind it, and so is the wave view: both are drawn with the
+ * cover is up the reels are behind it, and so is the VU meter: both are drawn with the
  * cassette, not over the cover.
  *
  * The Artwork level is a screen of its own: the cassette Case backdrop
@@ -169,8 +169,10 @@ static const lv_color_t k_col_hub_ring  = COL_DARKEN_HEX(0xF15A22, 70);
 static const lv_color_t k_col_hub_ink   = COL_DARKEN_HEX(0xF15A22, 50); /* the divider and the hub's centre dot */
 static const lv_color_t k_col_bar_bg    = COL_HEX(0xB9C0BB);
 static const lv_color_t k_col_bar_fg    = COL_HEX(0xF15A22); /* the tape's red */
-static const lv_color_t k_col_wave_l    = COL_HEX(0xF15A22); /* the wave's left trace */
-static const lv_color_t k_col_wave_r    = COL_HEX(0xFFD08A); /* the wave's right trace */
+/* The VU meter, read off assets: a black panel, a grid of the lit red at half strength
+ * over black, and segments that are the lit red or this dim red. */
+static const lv_color_t k_col_meter_bg  = COL_HEX(0x000000);
+static const lv_color_t k_col_meter_dim = COL_HEX(0x7F2C18);
 // static const lv_color_t k_col_guide     = COL_HEX(0x573534); /* the layout guides at the top */
 
 /* The touch board's own Levels: its cover, its small label and the Artwork backdrop. They
@@ -398,65 +400,81 @@ static void hub_frame_set(int i, uint8_t frame)
         spoke_set(&s_hub_spoke[i][k], k_hub[i].x, k_hub[i].y, a + (k ? HUB_HALF_TURN : 0.0));
 
 }
-/* The wave view: the last WAVE_SAMPLES levels of each channel, one sample per UI tick,
- * drawn as two traces in a square box between the reels. The box is created before the
- * hubs, so a hub paints over the wave rather than under it. */
-#define WAVE_SIZE 120
-#define WAVE_SAMPLES WAVE_SIZE   /* one sample per column: ~4.8 s at 40 ms a tick */
-#define WAVE_X 400               /* the gap between the two reels */
-#define WAVE_Y 226
+/* The VU meter: the mockup's black panel with a grid, and one column of segments per
+ * channel filling from the bottom. Geometry is the mockup's at 1:1 - the panel 80x149,
+ * segments 9 px wide, 4 tall, 5 apart, twelve to a column, the bottom one 105 px down
+ * the panel. */
+#define METER_W      80
+#define METER_H      149
+#define METER_R      3
+#define METER_X      400      /* between the reels */
+#define METER_Y      226
+#define METER_COLS   2        /* one bar per channel */
+#define METER_CELLS  12
+#define METER_SEG_W  9
+#define METER_SEG_H  4
+#define METER_PITCH  5
+#define METER_BOTTOM 105      /* panel-relative y of the bottom segment */
+#define METER_GAP    6
+#define METER_GRID_X 15       /* the lattice: 12 columns, 14 rows, 5 px apart */
+#define METER_GRID_Y 44
+#define METER_GRID_C 12
+#define METER_GRID_R 14
 
-static lv_obj_t *s_wave;                    /* the box a frame invalidates */
-static lv_obj_t *s_wave_line[2];            /* L and R traces */
-static lv_point_precise_t s_wave_pts[2][WAVE_SAMPLES];
-static uint8_t s_wave_amp[2][WAVE_SAMPLES]; /* dB-mapped level, 0..255, oldest first */
+static lv_obj_t *s_meter;                          /* the panel; the grid is drawn in it */
+static lv_obj_t *s_meter_seg[METER_COLS][METER_CELLS];
+static int s_meter_lit[METER_COLS];                /* segments lit, so a redraw is rare */
 
-/* Map a 0..1 peak-hold onto 0..255 over the meter's own scale: dB over -48..0, so the
- * traces move like a VU rather than a linear amplitude. */
-static uint8_t wave_amp(float vu)
+/* The lattice behind the segments: one click per 5 px, the lit red at half strength,
+ * which over black is the same value drawn opaque. */
+static void meter_draw_cb(lv_event_t *e)
 {
-    if (vu <= 0.001f) return 0;
-    float db = 20.0f * log10f(vu);
+    lv_layer_t *layer = lv_event_get_layer(e);
+    /* A draw callback works in screen coordinates, so the panel's origin is added to
+     * the lattice's own offsets. */
+    lv_area_t panel;
+    lv_obj_get_coords(lv_event_get_target_obj(e), &panel);
+    int x0 = panel.x1 + METER_GRID_X, y0 = panel.y1 + METER_GRID_Y;
+
+    lv_draw_line_dsc_t dsc;
+    lv_draw_line_dsc_init(&dsc);
+    dsc.color = k_col_tape;
+    dsc.width = 1;
+    dsc.opa = LV_OPA_COVER;
+
+    for (int c = 0; c <= METER_GRID_C; c++) {
+        dsc.p1.x = x0 + c * METER_PITCH;
+        dsc.p1.y = y0;
+        dsc.p2.x = dsc.p1.x;
+        dsc.p2.y = y0 + METER_GRID_R * METER_PITCH;
+        lv_draw_line(layer, &dsc);
+    }
+    for (int r = 0; r <= METER_GRID_R; r++) {
+        dsc.p1.x = x0;
+        dsc.p1.y = y0 + r * METER_PITCH;
+        dsc.p2.x = x0 + METER_GRID_C * METER_PITCH;
+        dsc.p2.y = dsc.p1.y;
+        lv_draw_line(layer, &dsc);
+    }
+}
+
+/* A column's segments, lit from the bottom. The scale is dB over -48..0, as the old
+ * meter used, so the bars move like a VU rather than following a linear amplitude. */
+static void meter_level_set(int ch, float vu)
+{
+    if (!s_meter) return;
+
+    float db = vu > 0.001f ? 20.0f * log10f(vu) : -48.0f;
     if (db < -48.0f) db = -48.0f;
     if (db > 0.0f) db = 0.0f;
-    return (uint8_t)lroundf((db + 48.0f) / 48.0f * 255.0f);
-}
+    int lit = (int)lroundf((db + 48.0f) / 48.0f * METER_CELLS);
 
-/* Rebuild both traces from the history. The points are local to their line object,
- * which is fixed at WAVE_SIZE square, so a points update never resizes it. */
-static void wave_draw(void)
-{
-    for (int ch = 0; ch < 2; ch++) {
-        for (int x = 0; x < WAVE_SAMPLES; x++) {
-            int h = s_wave_amp[ch][x] * (WAVE_SIZE - 2) / 255;
-            s_wave_pts[ch][x].x = x;
-            s_wave_pts[ch][x].y = WAVE_SIZE - 1 - h;
-        }
-        lv_line_set_points(s_wave_line[ch], s_wave_pts[ch], WAVE_SAMPLES);
+    if (lit == s_meter_lit[ch]) return;
+    s_meter_lit[ch] = lit;
+    for (int k = 0; k < METER_CELLS; k++) {
+        lv_obj_set_style_bg_color(s_meter_seg[ch][k],
+                                  k < lit ? k_col_tape_dark : k_col_meter_dim, 0);
     }
-}
-
-/* Push one tick: shift the history left, append, redraw. Every column moves, so the box
- * is invalidated unless the whole history already equals the new sample - a silent track
- * then costs no redraw at all. */
-static void wave_push(float level_l, float level_r)
-{
-    if (!s_wave) return;
-    float level[2] = { level_l, level_r };
-    bool still = true;
-
-    for (int ch = 0; ch < 2; ch++) {
-        uint8_t amp = wave_amp(level[ch]);
-        for (int x = 0; x < WAVE_SAMPLES; x++) {
-            if (s_wave_amp[ch][x] != amp) { still = false; break; }
-        }
-        memmove(&s_wave_amp[ch][0], &s_wave_amp[ch][1], WAVE_SAMPLES - 1);
-        s_wave_amp[ch][WAVE_SAMPLES - 1] = amp;
-    }
-
-    if (still) return;
-    wave_draw();
-    lv_obj_invalidate(s_wave);
 }
 
 static void pack_set(int i, int d)
@@ -591,8 +609,9 @@ static void apply_frame(const cassette_frame_t *f)
         }
     }
 
-    /* The wave: one history step per frame. */
-    wave_push(f->vu_l, f->vu_r);
+    /* The meter: one column per channel. */
+    meter_level_set(0, f->vu_l);
+    meter_level_set(1, f->vu_r);
 
     /* Pack fill is the model's; the diameter is the screen's. Both packs use the
      * same range. */
@@ -963,29 +982,26 @@ void cassette_view_create(void)
                             (void *)(intptr_t)i);
     }
 
-    /* The wave view: two traces in a 120x120 box in the gap between the reels. Created
-     * before the hubs, so it sits behind them; transparent, so the tape shows through. */
-    s_wave = lv_obj_create(scr);
-    lv_obj_remove_style_all(s_wave);
-    lv_obj_set_style_bg_opa(s_wave, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(s_wave, 0, 0);
-    lv_obj_set_style_pad_all(s_wave, 0, 0);
-    lv_obj_set_scrollable(s_wave, false);
-    lv_obj_set_clickable(s_wave, false);
-    lv_obj_set_pos(s_wave, WAVE_X - WAVE_SIZE / 2, WAVE_Y - WAVE_SIZE / 2);
-    lv_obj_set_size(s_wave, WAVE_SIZE, WAVE_SIZE);
+    /* The VU meter: the mockup's panel between the reels, created before the hubs so it
+     * sits behind them. The grid is its draw callback; the segments are objects, so a
+     * level change repaints a few cells and not the panel. */
+    s_meter = box(scr, METER_X - METER_W / 2, METER_Y - METER_H / 2,
+                  METER_W, METER_H, METER_R, k_col_meter_bg);
+    lv_obj_set_clickable(s_meter, false);
+    lv_obj_add_event_cb(s_meter, meter_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
 
-    for (int ch = 0; ch < 2; ch++) {
-        lv_obj_t *ln = lv_line_create(s_wave);
-        lv_obj_remove_style_all(ln);
-        lv_obj_set_pos(ln, 0, 0);
-        lv_obj_set_size(ln, WAVE_SIZE, WAVE_SIZE);
-        lv_obj_set_style_line_color(ln, ch ? k_col_wave_r : k_col_wave_l, 0);
-        lv_obj_set_style_line_width(ln, 2, 0);
-        lv_obj_set_style_line_rounded(ln, false, 0);
-        s_wave_line[ch] = ln;
+    int bar_x = (METER_W - (METER_COLS * METER_SEG_W + (METER_COLS - 1) * METER_GAP)) / 2;
+    for (int ch = 0; ch < METER_COLS; ch++) {
+        for (int k = 0; k < METER_CELLS; k++) {
+            lv_obj_t *seg = box(s_meter,
+                                bar_x + ch * (METER_SEG_W + METER_GAP),
+                                METER_BOTTOM - k * METER_PITCH - METER_SEG_H,
+                                METER_SEG_W, METER_SEG_H, 0, k_col_meter_dim);
+            lv_obj_set_clickable(seg, false);
+            s_meter_seg[ch][k] = seg;
+        }
+        s_meter_lit[ch] = 0;
     }
-    wave_draw();
 
     /* The hubs: the rim is painted once and never invalidated. Only the two spokes
      * move, and each is its own object so its bounding box stays small. */

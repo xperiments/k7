@@ -80,19 +80,20 @@ placed at rest and every other sheet is hidden before LVGL draws. There is no sl
 1.15 MB read and a 0.77 MB write, and the RGB panel's scanout wants the same PSRAM. The
 small title bar's own 260 ms slide is kept: it moves a 735x60 bar, not the panel.
 
-## The wave view
+## The VU meter
 
 The status carries the RMS of the same 1024-frame chunk the encoder is about to take
 (0..1, full scale), measured by `measure_level()` in `components/portable/mini_icecast`.
 `components/portable/cassette` turns it into a peak-hold: `vu = max(level, vu * 0.90)`
 per 40 ms update, about -23 dB/s, so the peak follows a real drop instead of hanging.
 
-The view draws that as a 120x120 wave between the reels, behind the hubs: one sample per
-UI tick, so 120 columns hold about 4.8 s of history, L in the tape red and R in cream.
-The level is mapped over -48..0 dB before it is stored, so the traces move like a meter
-rather than a linear amplitude. Each tick shifts the history one column left and
-invalidates the box; when the whole history already equals the new sample - silence, or
-nothing playing - nothing is redrawn.
+The view draws it as a segmented meter between the reels, behind the hubs: an 80x149 black
+panel with a 5 px grid and one column per channel, twelve segments to a column filling
+from the bottom. Lit segments are the tape red, unlit the dim red the mockup uses, and the
+level is mapped over -48..0 dB so the bars move like a meter rather than a linear
+amplitude. Only the segments are objects: a level change recolours the cells that flipped
+and invalidates those few pixels, never the panel, and a column whose count has not
+changed is not touched at all.
 
 ## The reel change
 
