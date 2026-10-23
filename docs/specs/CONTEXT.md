@@ -103,8 +103,8 @@ _Avoid_: UI, GUI
 
 **Cassette screen**:
 The 800x480 drawing of a cassette that shows what is playing: two reels, two tape
-packs, a label and a **VU meter** on each reel. A presentation of the live stream,
-never a source of truth.
+packs, a label and a **VU meter**. A presentation of the live stream, never a source of
+truth.
 _Avoid_: UI, GUI, dashboard
 
 **Level**:
@@ -120,13 +120,13 @@ The layer a Level draws over the cassette. Exactly one is shown at a time.
 _Avoid_: layer, overlay, page
 
 **Reel frame**:
-One of the keyframes of the hub art, one per 360/frame_count degrees of rotation.
-The frame follows the reel's **phase**, which the pack radius sets; a stopped track
-holds its last frame.
+One step of the hub's animation: the divider turns 360/frame_count degrees per frame,
+which at the 40 ms tick is ten degrees. The frame follows the reel's **phase**, which the
+pack radius sets; a stopped track holds its last frame.
 _Avoid_: sprite, animation step, image frame
 
 **Reel phase**:
-How far a reel has turned through its art, from its pack radius. The tape moves at
+How far a reel has turned through one revolution, from its pack radius. The tape moves at
 47.625 mm/s, so a full reel turns slower than an empty one; the supply's fill is
 1000 minus the take-up's, so the two reels' phases and speeds differ. The **reel
 change** is the one exception: inside its window the phase is interpolated, not
@@ -138,21 +138,20 @@ The eight seconds after a track boundary in which the screen shows the outgoing 
 tape winding back onto the supply reel - both packs migrating and both hubs turning in
 reverse - instead of jumping to the new side. It is driven by the new track's elapsed
 time and lands on exactly the state normal play shows when it closes, so the change has
-no break in it. The title and the progress bar are not part of it: they follow the new
-song from its first frame. For the window the tape's red edge cross-fades to the tape's
-own colour and the **VU meter** fades out - they are playing indications, and nothing is
-playing while the tape winds back - and both return as the window closes.
+no break in it. The title and the **VU meter** are not part of it: they follow the new
+song from its first frame. For the window each hub's ring dims from the playing red to the
+tape's own colour, then returns as the window closes - the ring is the playing indication,
+and nothing is playing while the tape winds back.
 _Avoid_: transition, animation, reel swap
 
 **VU meter**:
-The dashed arc that continues the tape edge on each reel, showing the peak-hold of one
-channel: the left reel is L, the right R. Its length is a screen setting, not part of
-the cassette. The empty reel keeps a minimum tape load, so its arc stays outside the
-hub ring. The peak-hold falls about 23 dB/s, so it follows a real drop instead of
-hanging on the last dash. When the **Label cover** is up the reels are behind it, so the
-same two meters move to the bottom as vertical stacks of five 20 px-wide segments, one in
-each free pocket beside the band, growing upward from the band's centre line: same
-peak-hold, same dB scale, only the drawing changes.
+The segmented display in the top right corner, showing the peak-hold of both channels:
+one column of twelve segments per channel, filling from the bottom, on an 8-cell lattice.
+Lit segments are the playing red, the rest a dim red; there is no panel behind them, so
+the screen shows through. Each column is driven over -48..0 dB, so the bars move like a
+meter rather than a linear amplitude, and the peak-hold falls about 23 dB/s, so they
+follow a real drop instead of hanging. The meter is chrome, not tape: the **reel change**
+does not touch it.
 _Avoid_: level bar, meter, peak meter
 
 **Label cover**:
@@ -161,8 +160,7 @@ panel at the Label cover Level; one-finger down from Bare reaches it. It is 800x
 panel's own size, so it carries no margin. Its black triangle and circle are
 transparent and it is stored as RGB565A8, so the reels show through them. When the
 Level settles the screen background fades from the cassette's colour to the cover's own
-backdrop, `COL_COVER_BG`; the **VU meters** sit as vertical segment stacks beside the
-progress band.
+backdrop, `k_col_cover_bg`.
 _Avoid_: big label, sticker, overlay, carátula
 
 **Artwork**:
