@@ -61,7 +61,6 @@ static const char *TAG = "screen";
 /* The 800x480 panel: the hub rim is 168 px. The packs stay the reference's 245/310 so
  * the black tape rings the hub at both ends of a side. */
 static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } };
-// static const struct { int x, y; } k_window[2] = { { 120+180, 180 }, { 800-120-180, 268+20 } };
 #define HUB_RING_D 168
 #define PACK_MIN_D 168
 #define PACK_MAX_D 380
@@ -159,13 +158,12 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
              ((((c) & 0xFF) * (pct) / 100)))
 
 static const lv_color_t k_col_bg        = COL_HEX(0x111111);
-/* The playing red: the tape's edge, and the hub's rim and divider. */
+/* The playing red: the hub's ring and divider, and the small label's ink. */
 static const lv_color_t k_col_tape_dark = COL_HEX(0xF15A22);
-/* The tape's own body. The same value as the edge today, and kept apart because the
- * rewind cross-fades the edge into it (tape_edge_color()), so the two are free to
- * differ again without touching a call site. */
+/* The tape's own body, and the dim end of the rewind fade: the hub ring cross-fades
+ * from the playing red into this. */
 static const lv_color_t k_col_tape      = COL_DARKEN_HEX(0xF15A22, 50);
-static const lv_color_t k_col_hub_ring  = COL_DARKEN_HEX(0xF15A22, 70); 
+static const lv_color_t k_col_hub_ring  = COL_DARKEN_HEX(0xF15A22, 70);
 static const lv_color_t k_col_hub_ink   = COL_DARKEN_HEX(0xF15A22, 50); /* the divider and the hub's centre dot */
 static const lv_color_t k_col_bar_bg    = COL_HEX(0xB9C0BB);
 static const lv_color_t k_col_bar_fg    = COL_HEX(0xF15A22); /* the tape's red */
@@ -173,7 +171,7 @@ static const lv_color_t k_col_bar_fg    = COL_HEX(0xF15A22); /* the tape's red *
  * that are either the lit red or this dim red. There is no panel behind them - the
  * cassette shows through. */
 static const lv_color_t k_col_meter_dim = COL_HEX(0x7F2C18);
-// static const lv_color_t k_col_guide     = COL_HEX(0x573534); /* the layout guides at the top */
+static const lv_color_t k_col_meter_lit = COL_HEX(0xF15A22); /* the lit red */
 
 /* The touch board's own Levels: its cover, its small label and the Artwork backdrop. They
  * live inside the guard because a board without those Levels never reads them. */
@@ -182,17 +180,12 @@ static const lv_color_t k_col_cover_bg  = COL_HEX(0xB48744); /* behind the cover
 static const lv_color_t k_col_cover_ink = COL_HEX(0xEEEEEE); /* the dark cover needs light ink */
 static const lv_color_t k_col_art_bg    = COL_HEX(0x141414); /* until the Case lands */
 static const lv_color_t k_col_paper     = COL_HEX(0x000000); /* the small label's fill */
+static const lv_color_t k_col_primary   = COL_HEX(0xF15A22); /* its border and title */
 #endif
 
-/* The tape's solid edge enters at the tangent and runs TAPE_ARC_DEG to the top. LVGL
- * angles: 0 = 3 o'clock, 90 = 6, and positive is clockwise. The left reel runs
- * clockwise; the right mirrors it. */
-#define TAPE_ARC_DEG 90
-#define TAPE_WIDTH 4
-
-/* The tape's red edge is a playing indication, not part of the reel change:
- * when the rewind starts they fade out, stay dark while the tape winds back, and fade
- * in as the new side begins. One second each way, over the eight-second window. */
+/* The hub ring is the playing indication: full red while a track plays, dimmed while a
+ * reel change winds the tape back, back over its last second as the new side starts.
+ * One second each way, over the eight-second window. */
 #define REWIND_FADE_MS 1000
 
 /* The three positions of the cassette screen, ordered by how much of it the sheet
@@ -219,6 +212,7 @@ typedef struct {
 } hub_spoke_t;
 
 static hub_spoke_t s_hub_spoke[2][2];
+static lv_obj_t *s_rim[2];          /* the 168 px hub circle the rewind dims */
 static lv_obj_t *s_pack[2], *s_strand[2];
 static lv_point_precise_t s_strand_pts[2][2];
 static lv_obj_t *s_bar;
@@ -247,8 +241,7 @@ static bool      s_art_requested;
 #endif
 static int      s_pack_d[2];      /* px, so a redraw happens only when it changes */
 static uint8_t  s_shown_hub[2];   /* the animation frame currently on screen */
-static int      s_tangent_deg[2]; /* where the strand leaves the pack, LVGL degrees */
-static lv_opa_t s_tape_opa = LV_OPA_COVER; /* the tape edge; 0 through the reel change */
+static lv_opa_t s_tape_opa = LV_OPA_COVER; /* the hub ring's; 0 through the reel change */
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -337,11 +330,6 @@ static void strand_set(int i, int d)
     int tip_x = cx + (int)lround(r * cos(theta));
     int tip_y = cy + (int)lround(r * sin(theta));
 
-    int deg = (int)lround(theta * 180.0 / 3.14159265358979323846);
-    deg %= 360;
-    if (deg < 0) deg += 360;
-    s_tangent_deg[i] = deg;
-
     /* The line's own box is the bounding rect of its ends, so a redraw costs the
      * strand and not the whole screen. */
     int x1 = LV_MIN(foot_x, tip_x);
@@ -398,15 +386,14 @@ static void hub_frame_set(int i, uint8_t frame)
 
     for (int k = 0; k < 2; k++)
         spoke_set(&s_hub_spoke[i][k], k_hub[i].x, k_hub[i].y, a + (k ? HUB_HALF_TURN : 0.0));
-
 }
-/* The VU meter: the mockup's black panel with a grid, and one column of segments per
- * channel filling from the bottom. Geometry is the mockup's at 1:1 - the panel 80x149,
- * segments 9 px wide, 4 tall, 5 apart, twelve to a column, the bottom one 104 px down
- * the panel. The lattice is the sketch's 12 cells less two at each end. */
+
+/* The VU meter: a lattice with one column of segments per channel filling from the
+ * bottom, the mockup's geometry at 1:1. Segments are 9 px wide, 4 tall, 5 apart, twelve
+ * to a column, the bottom one 104 px down the box; the lattice is the sketch's 12 cells
+ * less two at each end, and there is no panel behind either. */
 #define METER_W      44      /* the 8-cell lattice plus a 2 px margin each side */
 #define METER_H      149
-#define METER_R      3
 #define METER_X      762     /* top-right: 16 px in from the right edge, */
 #define METER_Y      90      /* and 16 px down from the top */
 #define METER_COLS   2        /* one bar per channel */
@@ -473,7 +460,7 @@ static void meter_level_set(int ch, float vu)
     s_meter_lit[ch] = lit;
     for (int k = 0; k < METER_CELLS; k++) {
         lv_obj_set_style_bg_color(s_meter_seg[ch][k],
-                                  k < lit ? k_col_tape_dark : k_col_meter_dim, 0);
+                                  k < lit ? k_col_meter_lit : k_col_meter_dim, 0);
     }
 }
 
@@ -496,52 +483,9 @@ static int pack_diameter(uint16_t fill)
     return ((int)lround(d)) & ~1;
 }
 
-/* LVGL draws an arc clockwise from start to end; a counter-clockwise segment is
- * the same points with the ends swapped. */
-static void draw_arc(lv_layer_t *layer, int cx, int cy, int r,
-                     int start, int length, int dir, lv_color_t color,
-                     lv_opa_t opa, int width, int rounded)
-{
-    if (length <= 0) return;
-    int s = dir > 0 ? start : start - length;
-    int e = dir > 0 ? start + length : start;
-    lv_draw_arc_dsc_t dsc;
-    lv_draw_arc_dsc_init(&dsc);
-    dsc.color = color;
-    dsc.opa = opa;
-    dsc.width = width;
-    dsc.center.x = cx;
-    dsc.center.y = cy;
-    dsc.radius = r;
-    dsc.start_angle = s;
-    dsc.end_angle = e;
-    dsc.rounded = rounded;
-    lv_draw_arc(layer, &dsc);
-}
-/* The tape edge's colour follows the rewind envelope: the playing red (k_col_tape_dark)
- * when s_tape_opa is full, the tape's own brown (k_col_tape) when it is zero. On the pack
- * the edge then merges with the tape; the strands stay visible as dark tape. */
-static lv_color_t tape_edge_color(void)
-{
-    return lv_color_mix(k_col_tape_dark, k_col_tape, s_tape_opa);
-}
-
-/* The solid tape edge, drawn on the pack so it redraws only when the pack resizes. */
-static void pack_draw_cb(lv_event_t *e)
-{
-    int i = (int)(intptr_t)lv_event_get_user_data(e);
-    lv_layer_t *layer = lv_event_get_layer(e);
-    int r = s_pack_d[i] / 2;
-    int dir = i ? -1 : 1;
-    draw_arc(layer, k_hub[i].x -(i==0 ?  3 : -3), k_hub[i].y, r - 2,
-             s_tangent_deg[i], TAPE_ARC_DEG, dir,
-             tape_edge_color(), LV_OPA_COVER, TAPE_WIDTH, 1);
-}
-/* The tape's red edge belongs to playback, not to the reel change. The rewind
- * cross-fades the edge to the tape's own colour:
- * full at the window's start, zero over its first second, zero for the body, and back
- * over its last second as the new side starts. The rewind's permille is linear in
- * time, so the ramp is a plain interpolation. */
+/* The rewind envelope, from the model's permille: full at the window's start, zero over
+ * its first second, zero for the body, and back over its last second as the new side
+ * starts. The permille is linear in time, so the ramp is a plain interpolation. */
 static lv_opa_t rewind_tape_opa(const cassette_frame_t *f)
 {
     if (!f || !f->rewinding) return LV_OPA_COVER;
@@ -556,20 +500,16 @@ static lv_opa_t rewind_tape_opa(const cassette_frame_t *f)
     return LV_OPA_TRANSP;
 }
 
-/* Push a new tape opacity into the objects that carry the edge: the strand lines take
- * the mixed colour, and the packs (their draw callback paints the solid arc) read it from
- * tape_edge_color(). The packs grow and shrink through the rewind anyway, so this adds no
- * full-screen redraw of its own. */
+/* Push the envelope into the hub rings: the full red at full opacity, the dim red at
+ * zero. Only the border changes, so each ring invalidates its own 168 px circle and
+ * nothing else. */
 static void tape_opa_apply(lv_opa_t opa)
 {
     s_tape_opa = opa;
-    lv_color_t edge = tape_edge_color();
     for (int i = 0; i < 2; i++) {
-        if (s_strand[i]) {
-            lv_obj_set_style_line_color(s_strand[i], edge, 0);
-            lv_obj_invalidate(s_strand[i]);
-        }
-        if (s_pack[i]) lv_obj_invalidate(s_pack[i]);
+        if (!s_rim[i]) continue;
+        lv_obj_set_style_border_color(s_rim[i],
+                                      lv_color_mix(k_col_tape_dark, k_col_tape, opa), 0);
     }
 }
 
@@ -578,16 +518,16 @@ static void apply_frame(const cassette_frame_t *f)
 {
     if (!f) return;
 
-    /* The reel change owns the tape edge: it fades out over its first
-     * second, stay dark, and fade back in for the new side. Do this before the pack
-     * draws so this frame's redraw already carries the new opacity. */
+    /* The reel change owns the hub ring: it dims over the window's first second, stays
+     * dim, and comes back over its last as the new side starts. Do this before the rest
+     * of the frame draws, so this frame's redraw already carries the new colour. */
     lv_opa_t tape_opa = rewind_tape_opa(f);
     if (tape_opa != s_tape_opa) {
         tape_opa_apply(tape_opa);
         if (tape_opa == LV_OPA_TRANSP)
-            ESP_LOGI(TAG, "rewind: tape edge now the tape's colour");
+            ESP_LOGI(TAG, "rewind: the hub ring dims");
         else if (tape_opa == LV_OPA_COVER)
-            ESP_LOGI(TAG, "rewind: tape edge back to the playing red");
+            ESP_LOGI(TAG, "rewind: the hub ring back to the playing red");
     }
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -943,31 +883,8 @@ void cassette_view_create(void)
     lv_obj_set_style_bg_color(scr, k_col_bg, 0);
     lv_obj_set_scrollable(scr, false);
 
-
-    // static lv_point_precise_t points[][2] = {
-    //     {{40, 30},  {760, 30}},
-    //     {{40, 70}, {760, 70}},
-    //     {{40, 110}, {760, 110}}
-    // };
-
-    // for (int i = 0; i < 3; i++) {
-    //     lv_obj_t *line = lv_line_create(scr);
-
-    //     lv_line_set_points(line, points[i], 2);
-
-    //     lv_obj_set_style_line_color(line, k_col_guide, 0);
-    //     lv_obj_set_style_line_width(line, 3, 0);
-    //     lv_obj_set_style_line_opa(line, LV_OPA_COVER, 0);
-    // }
-
-    /* The window: a border box around the cassette view. */
-    // lv_obj_t *window = box(
-    //     scr,
-    //     k_window[0].x, k_window[0].y, k_window[1].x - k_window[0].x, k_window[1].y - k_window[0].y, 16,
-    //     0x220000);
-
     /* The tape: two packs, then the tape strand that joins each to the bottom edge.
-     * Each pack carries its strand in the same colour. */
+     * The strands are the tape's own colour, fixed. */
     for (int i = 0; i < 2; i++) {
 
         s_pack_d[i] = (i == 0) ? PACK_MAX_D : PACK_MIN_D;
@@ -975,16 +892,14 @@ void cassette_view_create(void)
 
         s_strand[i] = lv_line_create(scr);
         lv_obj_remove_style_all(s_strand[i]);
-        lv_obj_set_style_line_color(s_strand[i], k_col_tape_dark, 0);
+        lv_obj_set_style_line_color(s_strand[i], k_col_tape, 0);
         lv_obj_set_style_line_width(s_strand[i], STRAND_W, 0);
         strand_set(i, s_pack_d[i]);
-        lv_obj_add_event_cb(s_pack[i], pack_draw_cb, LV_EVENT_DRAW_MAIN_END,
-                            (void *)(intptr_t)i);
     }
 
-    /* The VU meter: the mockup's panel between the reels, created before the hubs so it
-     * sits behind them. The grid is its draw callback; the segments are objects, so a
-     * level change repaints a few cells and not the panel. */
+    /* The VU meter, top right. It is created before the hubs, so anything drawn later
+     * sits over it; the lattice is its draw callback and the segments are objects, so a
+     * level change repaints a few cells and nothing else. */
     s_meter = lv_obj_create(scr);
     lv_obj_remove_style_all(s_meter);
     lv_obj_set_style_bg_opa(s_meter, LV_OPA_TRANSP, 0);
@@ -1014,9 +929,10 @@ void cassette_view_create(void)
     for (int i = 0; i < 2; i++) {
         int cx = k_hub[i].x, cy = k_hub[i].y;
         lv_obj_t *rim = disc(scr, cx, cy, HUB_RING_D, k_col_hub_ring);
-        lv_obj_set_style_border_color(rim, lv_color_hex(0x000000), 0);
+        lv_obj_set_style_border_color(rim, k_col_tape_dark, 0);
         lv_obj_set_style_border_opa(rim, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(rim, HUB_RIM_W, 0);
+        s_rim[i] = rim;
 
         for (int k = 0; k < 2; k++) {
             lv_obj_t *sp = lv_line_create(scr);
@@ -1027,7 +943,7 @@ void cassette_view_create(void)
             s_hub_spoke[i][k].obj = sp;
         }
 
-        lv_obj_t *pack_center = disc(scr, k_hub[i].x, k_hub[i].y, 10, k_col_hub_ink);
+        disc(scr, k_hub[i].x, k_hub[i].y, 10, k_col_hub_ink);
         s_shown_hub[i] = 0;
         hub_frame_set(i, 0);
     }
@@ -1038,10 +954,10 @@ void cassette_view_create(void)
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     s_paper = border_box(scr, LABEL_X, LABEL_Y, LABEL_W, LABEL_H, LABEL_R,
-                         k_col_paper, 30, k_col_tape_dark, 2);
+                         k_col_paper, 30, k_col_primary, 2);
     lv_obj_set_y(s_paper, PAPER_HIDDEN_Y);
     lv_obj_set_hidden(s_paper, true);
-    s_title = text(s_paper, &oxanium_36, k_col_tape_dark,
+    s_title = text(s_paper, &oxanium_36, k_col_primary,
                    LV_ALIGN_TOP_LEFT, SMALL_TITLE_X - LABEL_X, SMALL_TITLE_Y - LABEL_Y);
     lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_title, SMALL_TITLE_W);
