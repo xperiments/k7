@@ -12,9 +12,8 @@
  * own size, exported as RGB565A8 and drawn full-bleed at 0,0. Its black triangle and
  * circle carry alpha, so the reels show through them; once the cover is up the screen
  * background fades from k_col_bg to the cover's own k_col_cover_bg. While the
- * cover is up the reels, and with them the VU arcs, are behind it, so the same two
- * meters move to the bottom row as rows of short vertical bars on the progress band's
- * centre line.
+ * cover is up the reels are behind it, and so is the wave view: both are drawn with the
+ * cassette, not over the cover.
  *
  * The Artwork level is a screen of its own: the cassette Case backdrop
  * (assets/labels/cover.jpg) full-bleed, the Track's picture filling the case's window,
@@ -87,7 +86,7 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 #define STRAND_X_L 16
 #define STRAND_X_R 784
 #define STRAND_Y 480
-#define STRAND_W 8
+#define STRAND_W 4
 
 /* The small label: the bar with the Now playing title. It is not a Level: the up
  * swipe at Bare has no Level to move to, so it peeks this bar over the cassette, and
@@ -110,9 +109,9 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 /* The big cover: the supplied full cover, full-bleed at 0,0, the Label cover level.
  * Cover art is 800x480, the panel's own size, so the cover has no margin. This one
  * keeps its alpha (RGB565A8): the black triangle and circle are transparent, so the
- * reels show through them. The compact VU carries the meters while the cover is up.
+ * reels show through them.
  * The title is a child of the cover; it sits on the empty band at the top of the art,
- * clear of the compact VU rows at the bottom. The cover hides just above the screen,
+ * clear of the progress band at the bottom. The cover hides just above the screen,
  * so a level change places it at 0,0 in one frame. It is the panel board's, because
  * the vertical gestures that reach its level are. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -126,8 +125,8 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 
 /* The Artwork level: the Case backdrop, assets/labels/cover.jpg, full-bleed at 0,0,
  * with the Track's picture in its window - (101,23) to (704,408), 603x385 - and the
- * title on the band below. The Case is opaque, so the cassette, the bar and the compact
- * VU are covered rather than redrawn. The title sits in the free band under the case,
+ * title on the band below. The Case is opaque, so the cassette and the bar are covered
+ * rather than redrawn. The title sits in the free band under the case,
  * clear of the window. */
 #define ART_X 101
 #define ART_Y 23
@@ -159,19 +158,20 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
             (((((c) >> 8) & 0xFF) * (pct) / 100) << 8) |                              \
              ((((c) & 0xFF) * (pct) / 100)))
 
-static const lv_color_t k_col_bg        = COL_HEX(0x3C2B2A);
+static const lv_color_t k_col_bg        = COL_HEX(0x111111);
 /* The playing red: the tape's edge, and the hub's rim and divider. */
 static const lv_color_t k_col_tape_dark = COL_HEX(0xF15A22);
 /* The tape's own body. The same value as the edge today, and kept apart because the
  * rewind cross-fades the edge into it (tape_edge_color()), so the two are free to
  * differ again without touching a call site. */
-static const lv_color_t k_col_tape      = COL_HEX(0xF15A22);
-static const lv_color_t k_col_hub_ring  = COL_HEX(0xF15A22); /* the rim's fill, the tape's red */
-static const lv_color_t k_col_hub_ink   = COL_HEX(0x666666); /* the divider and the hub's centre dot */
+static const lv_color_t k_col_tape      = COL_DARKEN_HEX(0xF15A22, 50);
+static const lv_color_t k_col_hub_ring  = COL_DARKEN_HEX(0xF15A22, 70); 
+static const lv_color_t k_col_hub_ink   = COL_DARKEN_HEX(0xF15A22, 50); /* the divider and the hub's centre dot */
 static const lv_color_t k_col_bar_bg    = COL_HEX(0xB9C0BB);
-static const lv_color_t k_col_bar_fg    = COL_HEX(0xF03D3A);
-static const lv_color_t k_col_vu_peak   = COL_HEX(0xFFD08A); /* the VU's peak dash */
-static const lv_color_t k_col_guide     = COL_HEX(0x573534); /* the layout guides at the top */
+static const lv_color_t k_col_bar_fg    = COL_HEX(0xF15A22); /* the tape's red */
+static const lv_color_t k_col_wave_l    = COL_HEX(0xF15A22); /* the wave's left trace */
+static const lv_color_t k_col_wave_r    = COL_HEX(0xFFD08A); /* the wave's right trace */
+// static const lv_color_t k_col_guide     = COL_HEX(0x573534); /* the layout guides at the top */
 
 /* The touch board's own Levels: its cover, its small label and the Artwork backdrop. They
  * live inside the guard because a board without those Levels never reads them. */
@@ -182,39 +182,16 @@ static const lv_color_t k_col_art_bg    = COL_HEX(0x141414); /* until the Case l
 static const lv_color_t k_col_paper     = COL_HEX(0x000000); /* the small label's fill */
 #endif
 
-/* The tape's solid edge enters at the tangent and runs TAPE_ARC_DEG to the top;
- * the dashed VU continues from there. LVGL angles: 0 = 3 o'clock, 90 = 6, and
- * positive is clockwise. The left reel runs clockwise; the right mirrors it. */
+/* The tape's solid edge enters at the tangent and runs TAPE_ARC_DEG to the top. LVGL
+ * angles: 0 = 3 o'clock, 90 = 6, and positive is clockwise. The left reel runs
+ * clockwise; the right mirrors it. */
 #define TAPE_ARC_DEG 90
-#define VU_ARC_DEG CONFIG_APP_UI_VU_ARC_DEG
-#define VU_DASH_DEG 4
-#define VU_GAP_DEG 4
-#define VU_DASH_COUNT ((VU_ARC_DEG + VU_DASH_DEG + VU_GAP_DEG - 1) / (VU_DASH_DEG + VU_GAP_DEG))
-#define TAPE_WIDTH 8
-#define VU_WIDTH 8
+#define TAPE_WIDTH 4
 
-/* The tape's red edge and the VU are playing indications, not part of the reel change:
+/* The tape's red edge is a playing indication, not part of the reel change:
  * when the rewind starts they fade out, stay dark while the tape winds back, and fade
  * in as the new side begins. One second each way, over the eight-second window. */
 #define REWIND_FADE_MS 1000
-
-/* The VU when the full cover is up. The arcs sit behind the cover, so the same two
- * meters become vertical stacks of wide segments in the pockets at the bottom of the
- * screen: one between the left tape strand and the band's left end, the other between
- * the band's right end and the right strand. The strands sweep in as the packs empty,
- * so the stacks stay clear of both. Each segment is 20 px wide, and both stacks grow
- * upward from the band's centre line; lit is the tape red, the peak-hold the cream
- * one. */
-#define VU_COMPACT_X        34
-#define VU_COMPACT_W        56
-#define VU_COMPACT_Y        444   /* BAND_Y 434 + half the 20 px band; the stack's centre */
-#define VU_COMPACT_DASH_W   20
-#define VU_COMPACT_DASH_H   8
-#define VU_COMPACT_DASH_GAP 5
-#define VU_COMPACT_DASH_R   1   /* the same slight rounding the dashes had */
-#define VU_COMPACT_COUNT    5
-#define VU_COMPACT_STACK_H  (VU_COMPACT_COUNT * VU_COMPACT_DASH_H + \
-                             (VU_COMPACT_COUNT - 1) * VU_COMPACT_DASH_GAP)
 
 /* The three positions of the cassette screen, ordered by how much of it the sheet
  * covers: Bare, then the K7 sticker, then Artwork. A one-finger down swipe moves one
@@ -241,7 +218,6 @@ typedef struct {
 
 static hub_spoke_t s_hub_spoke[2][2];
 static lv_obj_t *s_pack[2], *s_strand[2];
-static lv_obj_t *s_vu[2];         /* dashed VU overlay, one per pack */
 static lv_point_precise_t s_strand_pts[2][2];
 static lv_obj_t *s_bar;
 static int       s_level;
@@ -270,10 +246,7 @@ static bool      s_art_requested;
 static int      s_pack_d[2];      /* px, so a redraw happens only when it changes */
 static uint8_t  s_shown_hub[2];   /* the animation frame currently on screen */
 static int      s_tangent_deg[2]; /* where the strand leaves the pack, LVGL degrees */
-static int      s_vu_lit[2];      /* dashes lit by the peak-hold, 0..the mode's count */
-static float    s_vu_level[2];    /* the last peak-hold, so a mode change can remap it */
-static bool     s_vu_compact;     /* the cover is up: the bottom-row dash rows */
-static lv_opa_t s_tape_opa = LV_OPA_COVER; /* the tape edge and VU; 0 through the reel change */
+static lv_opa_t s_tape_opa = LV_OPA_COVER; /* the tape edge; 0 through the reel change */
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -425,47 +398,65 @@ static void hub_frame_set(int i, uint8_t frame)
         spoke_set(&s_hub_spoke[i][k], k_hub[i].x, k_hub[i].y, a + (k ? HUB_HALF_TURN : 0.0));
 
 }
+/* The wave view: the last WAVE_SAMPLES levels of each channel, one sample per UI tick,
+ * drawn as two traces in a square box between the reels. The box is created before the
+ * hubs, so a hub paints over the wave rather than under it. */
+#define WAVE_SIZE 120
+#define WAVE_SAMPLES WAVE_SIZE   /* one sample per column: ~4.8 s at 40 ms a tick */
+#define WAVE_X 400               /* the gap between the two reels */
+#define WAVE_Y 226
 
-static bool angle_in_arc(int a, int start, int dir, int length)
+static lv_obj_t *s_wave;                    /* the box a frame invalidates */
+static lv_obj_t *s_wave_line[2];            /* L and R traces */
+static lv_point_precise_t s_wave_pts[2][WAVE_SAMPLES];
+static uint8_t s_wave_amp[2][WAVE_SAMPLES]; /* dB-mapped level, 0..255, oldest first */
+
+/* Map a 0..1 peak-hold onto 0..255 over the meter's own scale: dB over -48..0, so the
+ * traces move like a VU rather than a linear amplitude. */
+static uint8_t wave_amp(float vu)
 {
-    int d = dir > 0 ? a - start : start - a;
-    d = ((d % 360) + 360) % 360;
-    return d <= length;
+    if (vu <= 0.001f) return 0;
+    float db = 20.0f * log10f(vu);
+    if (db < -48.0f) db = -48.0f;
+    if (db > 0.0f) db = 0.0f;
+    return (uint8_t)lroundf((db + 48.0f) / 48.0f * 255.0f);
 }
 
-/* The overlay is only as large as the VU arc's bounding box, so its 25 Hz
- * invalidation redraws the dashes and the pack under them, not the whole pack. */
-static void vu_geom_set(int i)
+/* Rebuild both traces from the history. The points are local to their line object,
+ * which is fixed at WAVE_SIZE square, so a points update never resizes it. */
+static void wave_draw(void)
 {
-    if (!s_vu[i]) return;
-    if (s_vu_compact) {
-        /* The stack is centred on the band and sits in a bottom-row pocket. The cover
-         * sits above the reels, so the stacks are drawn over it; the left meter is L,
-         * the right R. */
-        int x = i ? 800 - VU_COMPACT_X - VU_COMPACT_W : VU_COMPACT_X;
-        lv_obj_set_pos(s_vu[i], x, VU_COMPACT_Y - VU_COMPACT_STACK_H / 2);
-        lv_obj_set_size(s_vu[i], VU_COMPACT_W, VU_COMPACT_STACK_H);
-        return;
+    for (int ch = 0; ch < 2; ch++) {
+        for (int x = 0; x < WAVE_SAMPLES; x++) {
+            int h = s_wave_amp[ch][x] * (WAVE_SIZE - 2) / 255;
+            s_wave_pts[ch][x].x = x;
+            s_wave_pts[ch][x].y = WAVE_SIZE - 1 - h;
+        }
+        lv_line_set_points(s_wave_line[ch], s_wave_pts[ch], WAVE_SAMPLES);
     }
-    int r = s_pack_d[i] / 2;
-    int cx = k_hub[i].x, cy = k_hub[i].y;
-    int dir = i ? -1 : 1;
-    int start = s_tangent_deg[i] + dir * TAPE_ARC_DEG;
-    int angles[] = { start, start + dir * VU_ARC_DEG, 0, 90, 180, 270 };
-    int x1 = INT32_MAX, y1 = INT32_MAX, x2 = INT32_MIN, y2 = INT32_MIN;
-    for (int k = 0; k < (int)(sizeof angles / sizeof angles[0]); k++) {
-        if (!angle_in_arc(angles[k], start, dir, VU_ARC_DEG)) continue;
-        int px = cx + (int)lround((r - 2) * cos(angles[k] * 3.14159265358979323846 / 180.0));
-        int py = cy + (int)lround((r - 2) * sin(angles[k] * 3.14159265358979323846 / 180.0));
-        if (px < x1) x1 = px;
-        if (px > x2) x2 = px;
-        if (py < y1) y1 = py;
-        if (py > y2) y2 = py;
+}
+
+/* Push one tick: shift the history left, append, redraw. Every column moves, so the box
+ * is invalidated unless the whole history already equals the new sample - a silent track
+ * then costs no redraw at all. */
+static void wave_push(float level_l, float level_r)
+{
+    if (!s_wave) return;
+    float level[2] = { level_l, level_r };
+    bool still = true;
+
+    for (int ch = 0; ch < 2; ch++) {
+        uint8_t amp = wave_amp(level[ch]);
+        for (int x = 0; x < WAVE_SAMPLES; x++) {
+            if (s_wave_amp[ch][x] != amp) { still = false; break; }
+        }
+        memmove(&s_wave_amp[ch][0], &s_wave_amp[ch][1], WAVE_SAMPLES - 1);
+        s_wave_amp[ch][WAVE_SAMPLES - 1] = amp;
     }
-    if (x1 > x2) { x1 = cx - r; x2 = cx + r; y1 = cy - r; y2 = cy + r; }
-    int pad = 6;
-    lv_obj_set_pos(s_vu[i], x1 - pad, y1 - pad);
-    lv_obj_set_size(s_vu[i], x2 - x1 + 2 * pad, y2 - y1 + 2 * pad);
+
+    if (still) return;
+    wave_draw();
+    lv_obj_invalidate(s_wave);
 }
 
 static void pack_set(int i, int d)
@@ -475,7 +466,6 @@ static void pack_set(int i, int d)
     lv_obj_set_size(s_pack[i], d, d);
     lv_obj_set_pos(s_pack[i], k_hub[i].x - d / 2, k_hub[i].y - d / 2);
     strand_set(i, d);
-    if (!s_vu_compact) vu_geom_set(i);
 }
 
 /* The pack area, and therefore the tape length on it, is proportional to the fill:
@@ -510,29 +500,6 @@ static void draw_arc(lv_layer_t *layer, int cx, int cy, int r,
     dsc.rounded = rounded;
     lv_draw_arc(layer, &dsc);
 }
-
-/* One bar of the compact VU: a short, rounded vertical segment. */
-static void draw_dash(lv_layer_t *layer, int x, int y, lv_color_t color, lv_opa_t opa)
-{
-    lv_draw_rect_dsc_t dsc;
-    lv_draw_rect_dsc_init(&dsc);
-    dsc.bg_color = color;
-    dsc.bg_opa = opa;
-    dsc.radius = VU_COMPACT_DASH_R;
-    int y1 = y - VU_COMPACT_DASH_H / 2;
-    lv_area_t area = {
-        x, y1,
-        x + VU_COMPACT_DASH_W - 1, y1 + VU_COMPACT_DASH_H - 1,
-    };
-    lv_draw_rect(layer, &dsc, &area);
-}
-
-/* The tape opacity scales every VU dash, lit or not, so the meter fades as one. */
-static lv_opa_t vu_opa(lv_opa_t base)
-{
-    return (lv_opa_t)((uint32_t)base * s_tape_opa / LV_OPA_COVER);
-}
-
 /* The tape edge's colour follows the rewind envelope: the playing red (k_col_tape_dark)
  * when s_tape_opa is full, the tape's own brown (k_col_tape) when it is zero. On the pack
  * the edge then merges with the tape; the strands stay visible as dark tape. */
@@ -552,73 +519,8 @@ static void pack_draw_cb(lv_event_t *e)
              s_tangent_deg[i], TAPE_ARC_DEG, dir,
              tape_edge_color(), LV_OPA_COVER, TAPE_WIDTH, 1);
 }
-
-/* The cover mode: the same peak-hold as the arcs, drawn as a vertical stack of wide
- * segments in each pocket. Both stacks grow upward from the band, so the bottom
- * segment lights first and the top lit one is the peak, as on the arc. */
-static void vu_compact_draw(lv_layer_t *layer, int i)
-{
-    int lit = s_vu_lit[i];
-    int x = (i ? 800 - VU_COMPACT_X - VU_COMPACT_W : VU_COMPACT_X) +
-            (VU_COMPACT_W - VU_COMPACT_DASH_W) / 2;
-    int y0 = VU_COMPACT_Y + (VU_COMPACT_STACK_H - VU_COMPACT_DASH_H) / 2;
-
-    for (int k = 0; k < VU_COMPACT_COUNT; k++) {
-        bool peak = lit > 0 && k == lit - 1;
-        int y = y0 - k * (VU_COMPACT_DASH_H + VU_COMPACT_DASH_GAP);
-        draw_dash(layer, x, y, (peak ? k_col_vu_peak : k_col_tape_dark),
-                  k < lit ? vu_opa(LV_OPA_COVER) : vu_opa(LV_OPA_30));
-    }
-}
-
-/* The dashed VU, in its own overlay so the 25 Hz level changes do not repaint
- * the pack's fill or its tape line. */
-static void vu_draw_cb(lv_event_t *e)
-{
-    int i = (int)(intptr_t)lv_event_get_user_data(e);
-    lv_layer_t *layer = lv_event_get_layer(e);
-    if (s_vu_compact) {
-        vu_compact_draw(layer, i);
-        return;
-    }
-    int r = s_pack_d[i] / 2;
-    int dir = i ? -1 : 1;
-    int start = s_tangent_deg[i] + dir * TAPE_ARC_DEG;
-    int lit = s_vu_lit[i];
-
-    for (int k = 0; k < VU_DASH_COUNT; k++) {
-        int off = k * (VU_DASH_DEG + VU_GAP_DEG);
-        int len = VU_DASH_DEG;
-        if (off + len > VU_ARC_DEG) len = VU_ARC_DEG - off;
-        if (len <= 0) break;
-        int s = start + dir * off;
-        bool peak = lit > 0 && k == lit - 1;
-        lv_color_t color = peak ? k_col_vu_peak : k_col_tape_dark;
-        lv_opa_t opa = k < lit ? vu_opa(LV_OPA_COVER) : vu_opa(LV_OPA_30);
-        draw_arc(layer, k_hub[i].x, k_hub[i].y, r - 2, s, len, dir,
-                 color, opa, VU_WIDTH, 0);
-    }
-}
-
-/* Map a 0..1 peak-hold to `count` lit dashes. The scale is dB over -48..0, so the
- * meter moves like a VU rather than a linear amplitude. The arc and the compact row
- * use the same mapping, only their dash count differs. */
-static int vu_lit_n(float vu, int count)
-{
-    if (vu <= 0.001f || count <= 0) return 0;
-    float db = 20.0f * log10f(vu);
-    if (db < -48.0f) db = -48.0f;
-    if (db > 0.0f) db = 0.0f;
-    return (int)lroundf((db + 48.0f) / 48.0f * count);
-}
-
-static int vu_count(void)
-{
-    return s_vu_compact ? VU_COMPACT_COUNT : VU_DASH_COUNT;
-}
-
-/* The tape's red edge and the VU belong to playback, not to the reel change. The
- * rewind fades the VU out and cross-fades the tape's edge to the tape's own colour:
+/* The tape's red edge belongs to playback, not to the reel change. The rewind
+ * cross-fades the edge to the tape's own colour:
  * full at the window's start, zero over its first second, zero for the body, and back
  * over its last second as the new side starts. The rewind's permille is linear in
  * time, so the ramp is a plain interpolation. */
@@ -637,10 +539,9 @@ static lv_opa_t rewind_tape_opa(const cassette_frame_t *f)
 }
 
 /* Push a new tape opacity into the objects that carry the edge: the strand lines take
- * the mixed colour, the packs (their draw callback paints the solid arc) read it from
- * tape_edge_color(), and the VU overlays read s_tape_opa directly for their opacity. The
- * packs grow and shrink through the rewind anyway, so this adds no full-screen redraw
- * of its own. */
+ * the mixed colour, and the packs (their draw callback paints the solid arc) read it from
+ * tape_edge_color(). The packs grow and shrink through the rewind anyway, so this adds no
+ * full-screen redraw of its own. */
 static void tape_opa_apply(lv_opa_t opa)
 {
     s_tape_opa = opa;
@@ -651,50 +552,24 @@ static void tape_opa_apply(lv_opa_t opa)
             lv_obj_invalidate(s_strand[i]);
         }
         if (s_pack[i]) lv_obj_invalidate(s_pack[i]);
-        if (s_vu[i]) lv_obj_invalidate(s_vu[i]);
     }
 }
-
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-/* The cover is the mode switch: the objects are the same, the geometry and the
- * drawing callback branch on it. The last level is remapped so the first frame after
- * the switch does not flash an empty meter. Only this board carries the cover, so
- * this is also the only build that switches modes. */
-static void vu_set_compact(bool compact)
-{
-    if (compact == s_vu_compact) return;
-    s_vu_compact = compact;
-    int count = vu_count();
-    for (int i = 0; i < 2; i++) {
-        if (!s_vu[i]) continue;
-        s_vu_lit[i] = vu_lit_n(s_vu_level[i], count);
-        vu_geom_set(i);
-        /* The compact rows belong on top of the cover. When they go back to the
-         * reels they must be behind both the cover and the small label: an arc
-         * painted over either would float on it. Insert below the paper, which is
-         * below the cover in creation order. */
-        if (compact) lv_obj_move_to_index(s_vu[i], -1);
-        else if (s_paper) lv_obj_move_to_index(s_vu[i], lv_obj_get_index(s_paper));
-        lv_obj_invalidate(s_vu[i]);
-    }
-}
-#endif
 
 /* Apply a model frame: only what changed is touched. */
 static void apply_frame(const cassette_frame_t *f)
 {
     if (!f) return;
 
-    /* The reel change owns the tape edge and the VU: they fade out over its first
+    /* The reel change owns the tape edge: it fades out over its first
      * second, stay dark, and fade back in for the new side. Do this before the pack
      * draws so this frame's redraw already carries the new opacity. */
     lv_opa_t tape_opa = rewind_tape_opa(f);
     if (tape_opa != s_tape_opa) {
         tape_opa_apply(tape_opa);
         if (tape_opa == LV_OPA_TRANSP)
-            ESP_LOGI(TAG, "rewind: tape edge now the tape's colour, VU hidden");
+            ESP_LOGI(TAG, "rewind: tape edge now the tape's colour");
         else if (tape_opa == LV_OPA_COVER)
-            ESP_LOGI(TAG, "rewind: tape edge back to the playing red, VU back");
+            ESP_LOGI(TAG, "rewind: tape edge back to the playing red");
     }
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -716,27 +591,14 @@ static void apply_frame(const cassette_frame_t *f)
         }
     }
 
+    /* The wave: one history step per frame. */
+    wave_push(f->vu_l, f->vu_r);
+
     /* Pack fill is the model's; the diameter is the screen's. Both packs use the
      * same range. */
     pack_set(0, pack_diameter(f->pack_fill[0]));
     pack_set(1, pack_diameter(f->pack_fill[1]));
 
-    /* The VU is the only thing that changes every poll; invalidate just its
-     * overlay so the pack and its tape line stay put. The cover decides whether
-     * that overlay is the arc or the compact row. */
-    s_vu_level[0] = f->vu_l;
-    s_vu_level[1] = f->vu_r;
-    int count = vu_count();
-    int lit0 = vu_lit_n(s_vu_level[0], count);
-    int lit1 = vu_lit_n(s_vu_level[1], count);
-    if (lit0 != s_vu_lit[0]) {
-        s_vu_lit[0] = lit0;
-        if (s_vu[0]) lv_obj_invalidate(s_vu[0]);
-    }
-    if (lit1 != s_vu_lit[1]) {
-        s_vu_lit[1] = lit1;
-        if (s_vu[1]) lv_obj_invalidate(s_vu[1]);
-    }
 }
 
 /* ------------------------------------------------------------------- build */
@@ -891,7 +753,7 @@ static void paper_anim_hidden_cb(lv_anim_t *a)
 
 /* The small label, the one overlay that lives on Bare. It is not a Level: the up swipe
  * at Bare has no Level to move to, so it peeks the bar instead. Showing it brings it in
- * front of the cassette's own VU; hiding it slides it back above the screen and hides
+ * front of the cassette's own art; hiding it slides it back above the screen and hides
  * the object once the slide is over. */
 static void paper_set_shown(bool show)
 {
@@ -942,9 +804,6 @@ static void set_level(int target)
      * target sheet is placed. */
     paper_hide_now();
 
-    /* The reels go behind the K7 cover, so the meters move to the band's ends. The
-     * Artwork screen is opaque and covers them either way. */
-    vu_set_compact(target >= LEVEL_COVER);
     if (target == LEVEL_ART) art_request();
 
     if (target == LEVEL_COVER) {
@@ -1066,21 +925,21 @@ void cassette_view_create(void)
     lv_obj_set_scrollable(scr, false);
 
 
-    static lv_point_precise_t points[][2] = {
-        {{40, 30},  {760, 30}},
-        {{40, 70}, {760, 70}},
-        {{40, 110}, {760, 110}}
-    };
+    // static lv_point_precise_t points[][2] = {
+    //     {{40, 30},  {760, 30}},
+    //     {{40, 70}, {760, 70}},
+    //     {{40, 110}, {760, 110}}
+    // };
 
-    for (int i = 0; i < 3; i++) {
-        lv_obj_t *line = lv_line_create(scr);
+    // for (int i = 0; i < 3; i++) {
+    //     lv_obj_t *line = lv_line_create(scr);
 
-        lv_line_set_points(line, points[i], 2);
+    //     lv_line_set_points(line, points[i], 2);
 
-        lv_obj_set_style_line_color(line, k_col_guide, 0);
-        lv_obj_set_style_line_width(line, 3, 0);
-        lv_obj_set_style_line_opa(line, LV_OPA_COVER, 0);
-    }
+    //     lv_obj_set_style_line_color(line, k_col_guide, 0);
+    //     lv_obj_set_style_line_width(line, 3, 0);
+    //     lv_obj_set_style_line_opa(line, LV_OPA_COVER, 0);
+    // }
 
     /* The window: a border box around the cassette view. */
     // lv_obj_t *window = box(
@@ -1104,12 +963,36 @@ void cassette_view_create(void)
                             (void *)(intptr_t)i);
     }
 
+    /* The wave view: two traces in a 120x120 box in the gap between the reels. Created
+     * before the hubs, so it sits behind them; transparent, so the tape shows through. */
+    s_wave = lv_obj_create(scr);
+    lv_obj_remove_style_all(s_wave);
+    lv_obj_set_style_bg_opa(s_wave, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_wave, 0, 0);
+    lv_obj_set_style_pad_all(s_wave, 0, 0);
+    lv_obj_set_scrollable(s_wave, false);
+    lv_obj_set_clickable(s_wave, false);
+    lv_obj_set_pos(s_wave, WAVE_X - WAVE_SIZE / 2, WAVE_Y - WAVE_SIZE / 2);
+    lv_obj_set_size(s_wave, WAVE_SIZE, WAVE_SIZE);
+
+    for (int ch = 0; ch < 2; ch++) {
+        lv_obj_t *ln = lv_line_create(s_wave);
+        lv_obj_remove_style_all(ln);
+        lv_obj_set_pos(ln, 0, 0);
+        lv_obj_set_size(ln, WAVE_SIZE, WAVE_SIZE);
+        lv_obj_set_style_line_color(ln, ch ? k_col_wave_r : k_col_wave_l, 0);
+        lv_obj_set_style_line_width(ln, 2, 0);
+        lv_obj_set_style_line_rounded(ln, false, 0);
+        s_wave_line[ch] = ln;
+    }
+    wave_draw();
+
     /* The hubs: the rim is painted once and never invalidated. Only the two spokes
      * move, and each is its own object so its bounding box stays small. */
     for (int i = 0; i < 2; i++) {
         int cx = k_hub[i].x, cy = k_hub[i].y;
         lv_obj_t *rim = disc(scr, cx, cy, HUB_RING_D, k_col_hub_ring);
-        lv_obj_set_style_border_color(rim, k_col_hub_ink, 0);
+        lv_obj_set_style_border_color(rim, lv_color_hex(0x000000), 0);
         lv_obj_set_style_border_opa(rim, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(rim, HUB_RIM_W, 0);
 
@@ -1125,24 +1008,6 @@ void cassette_view_create(void)
         lv_obj_t *pack_center = disc(scr, k_hub[i].x, k_hub[i].y, 10, k_col_hub_ink);
         s_shown_hub[i] = 0;
         hub_frame_set(i, 0);
-    }
-
-    /* The VU: a transparent overlay sized to its arc, above the hub ring and below
-     * the cover. Its own 25 Hz invalidation leaves the pack fill and tape line
-     * alone. */
-    for (int i = 0; i < 2; i++) {
-        lv_obj_t *vu = lv_obj_create(scr);
-        lv_obj_remove_style_all(vu);
-        lv_obj_set_style_bg_opa(vu, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(vu, 0, 0);
-        lv_obj_set_style_pad_all(vu, 0, 0);
-        lv_obj_set_scrollable(vu, false);
-        lv_obj_set_clickable(vu, false);
-        lv_obj_add_event_cb(vu, vu_draw_cb, LV_EVENT_DRAW_MAIN_END,
-                            (void *)(intptr_t)i);
-        s_vu[i] = vu;
-        s_vu_lit[i] = 0;
-        vu_geom_set(i);
     }
 
     /* The small label: the cream bar the up swipe at Bare peeks. Its title is its

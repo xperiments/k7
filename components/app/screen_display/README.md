@@ -12,9 +12,7 @@ and nothing else. Everything else is private:
   arithmetic is `components/portable/cassette`. The Label cover is
   `assets/labels/k7logo.png`, an RGB565A8 800x480 image, full-bleed at 0,0. Its black
   triangle and circle are transparent, so the reels show through them. While it is up the
-  VU arcs are hidden behind it, so the same two meters move to the bottom as vertical
-  stacks of 20 px-wide segments, one in each free pocket beside the band, growing upward
-  from the band's centre line. The Artwork level is the cassette Case, `assets/labels/cover.jpg`, full-bleed at
+  wave view is hidden behind it with the reels. The Artwork level is the cassette Case, `assets/labels/cover.jpg`, full-bleed at
   0,0, with the Track picture in its window at (101,23), 603x385, and the title on the
   band below.
 - `artwork_loader.c` — the card side of the Artwork level: locates a Track's own picture
@@ -63,7 +61,7 @@ The cassette screen has three Levels, and exactly one sheet is shown at a time:
 | Level | Sheet | What is on screen |
 | --- | --- | --- |
 | Bare | none | the cassette alone, with no label; an up swipe peeks the small title bar |
-| Label cover | `k7logo` full-bleed | the K7 sticker; its tape windows show the reels; compact VU |
+| Label cover | `k7logo` full-bleed | the K7 sticker; its tape windows show the reels |
 | Artwork | the Case + the Track picture | `cover.jpg` full-bleed; the picture fills its window, 603x385; the title below |
 
 A one-finger down/up swipe moves one Level - down from Bare to the Label cover to
@@ -82,26 +80,29 @@ placed at rest and every other sheet is hidden before LVGL draws. There is no sl
 1.15 MB read and a 0.77 MB write, and the RGB panel's scanout wants the same PSRAM. The
 small title bar's own 260 ms slide is kept: it moves a 735x60 bar, not the panel.
 
-## The VU meters
+## The wave view
 
 The status carries the RMS of the same 1024-frame chunk the encoder is about to take
 (0..1, full scale), measured by `measure_level()` in `components/portable/mini_icecast`.
 `components/portable/cassette` turns it into a peak-hold: `vu = max(level, vu * 0.90)`
-per 40 ms update, about -23 dB/s, so the peak follows a real drop instead of hanging on
-its last dash. The view maps it to dashes over -48..0 dB - 12 on the arc, and 5 segments
-stacked upward in each compact pocket, 20 px wide - and the last lit dash is the cream
-peak. During the reel change the whole meter fades out (ADR 0015).
+per 40 ms update, about -23 dB/s, so the peak follows a real drop instead of hanging.
+
+The view draws that as a 120x120 wave between the reels, behind the hubs: one sample per
+UI tick, so 120 columns hold about 4.8 s of history, L in the tape red and R in cream.
+The level is mapped over -48..0 dB before it is stored, so the traces move like a meter
+rather than a linear amplitude. Each tick shifts the history one column left and
+invalidates the box; when the whole history already equals the new sample - silence, or
+nothing playing - nothing is redrawn.
 
 ## The reel change
 
 Eight seconds after a track boundary the model returns the rewind window: the packs
 migrate back and the hubs turn in reverse (ADR 0011). The view treats the tape's red edge
-and the VU as playing indications, so for the window it cross-fades the tape's own lines
+as a playing indication, so for the window it cross-fades the tape's own lines
 from `COL_TAPE_DARK` to `COL_TAPE` and fades the VU out; both return over the window's
-last second. `rewind_tape_opa()` turns the model's `rewind_permille` into that envelope:
-the VU uses it as opacity, and `tape_edge_color()` uses it to mix the edge colour.
-`tape_opa_apply()` sets the strand lines and invalidates the packs (their draw callback
-paints the solid arc) and the VU overlays. The progress bar and the titles do not fade:
+last second. `rewind_tape_opa()` turns the model's `rewind_permille` into that envelope,
+and `tape_edge_color()` uses it to mix the edge colour. `tape_opa_apply()` sets the strand
+lines and invalidates the packs, whose draw callback paints the solid arc. The progress bar and the titles do not fade:
 they are chrome and information, not tape. The model is untouched: it still reports `rewind_permille`, and the host tier still tests the reel
 arithmetic.
 
