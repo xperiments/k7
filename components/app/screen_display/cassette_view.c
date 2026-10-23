@@ -143,30 +143,33 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 #define BAND_X LABEL_X
 #define BAND_W LABEL_W
 
-/* The palette, read off the reference. lv_color_t is {blue, green, red} of 8 bits each
- * (lv_color.h:109-113) and LV_COLOR_MAKE() is an aggregate initialiser (:215), so these
- * are real constants: no lv_color_hex() is evaluated where a colour is used. */
-static const lv_color_t k_col_bg        = LV_COLOR_MAKE(0x3C, 0x2B, 0x2A);
+/* The palette, read off the reference, as 0xRRGGBB. lv_color_hex() is a function
+ * (lv_color.h:283), so it cannot initialise a constant; COL_HEX() is the same split done
+ * at compile time on top of LVGL's own aggregate initialiser (lv_color.h:215). The result
+ * is a real lv_color_t, so no conversion runs where a colour is used. */
+#define COL_HEX(c) LV_COLOR_MAKE(((c) >> 16) & 0xFF, ((c) >> 8) & 0xFF, (c) & 0xFF)
+
+static const lv_color_t k_col_bg        = COL_HEX(0x3C2B2A);
 /* The playing red: the tape's edge, and the hub's rim and divider. */
-static const lv_color_t k_col_tape_dark = LV_COLOR_MAKE(0xF1, 0x5A, 0x22);
+static const lv_color_t k_col_tape_dark = COL_HEX(0xF15A22);
 /* The tape's own body. The same value as the edge today, and kept apart because the
  * rewind cross-fades the edge into it (tape_edge_color()), so the two are free to
  * differ again without touching a call site. */
-static const lv_color_t k_col_tape      = LV_COLOR_MAKE(0xF1, 0x5A, 0x22);
-static const lv_color_t k_col_hub_ring  = LV_COLOR_MAKE(0xF1, 0x5A, 0x22); /* the rim's fill, the tape's red */
-static const lv_color_t k_col_hub_ink   = LV_COLOR_MAKE(0x66, 0x66, 0x66); /* the divider and the hub's centre dot */
-static const lv_color_t k_col_bar_bg    = LV_COLOR_MAKE(0xB9, 0xC0, 0xBB);
-static const lv_color_t k_col_bar_fg    = LV_COLOR_MAKE(0xF0, 0x3D, 0x3A);
-static const lv_color_t k_col_vu_peak   = LV_COLOR_MAKE(0xFF, 0xD0, 0x8A); /* the VU's peak dash */
-static const lv_color_t k_col_guide     = LV_COLOR_MAKE(0x57, 0x35, 0x34); /* the layout guides at the top */
+static const lv_color_t k_col_tape      = COL_HEX(0xF15A22);
+static const lv_color_t k_col_hub_ring  = COL_HEX(0xF15A22); /* the rim's fill, the tape's red */
+static const lv_color_t k_col_hub_ink   = COL_HEX(0x666666); /* the divider and the hub's centre dot */
+static const lv_color_t k_col_bar_bg    = COL_HEX(0xB9C0BB);
+static const lv_color_t k_col_bar_fg    = COL_HEX(0xF03D3A);
+static const lv_color_t k_col_vu_peak   = COL_HEX(0xFFD08A); /* the VU's peak dash */
+static const lv_color_t k_col_guide     = COL_HEX(0x573534); /* the layout guides at the top */
 
 /* The touch board's own Levels: its cover, its small label and the Artwork backdrop. They
  * live inside the guard because a board without those Levels never reads them. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-static const lv_color_t k_col_cover_bg  = LV_COLOR_MAKE(0xB4, 0x87, 0x44); /* behind the cover's shapes */
-static const lv_color_t k_col_cover_ink = LV_COLOR_MAKE(0xEE, 0xEE, 0xEE); /* the dark cover needs light ink */
-static const lv_color_t k_col_art_bg    = LV_COLOR_MAKE(0x14, 0x14, 0x14); /* until the Case lands */
-static const lv_color_t k_col_paper     = LV_COLOR_MAKE(0x00, 0x00, 0x00); /* the small label's fill */
+static const lv_color_t k_col_cover_bg  = COL_HEX(0xB48744); /* behind the cover's shapes */
+static const lv_color_t k_col_cover_ink = COL_HEX(0xEEEEEE); /* the dark cover needs light ink */
+static const lv_color_t k_col_art_bg    = COL_HEX(0x141414); /* until the Case lands */
+static const lv_color_t k_col_paper     = COL_HEX(0x000000); /* the small label's fill */
 #endif
 
 /* The tape's solid edge enters at the tangent and runs TAPE_ARC_DEG to the top;
