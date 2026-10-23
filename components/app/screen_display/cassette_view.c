@@ -149,6 +149,16 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
  * is a real lv_color_t, so no conversion runs where a colour is used. */
 #define COL_HEX(c) LV_COLOR_MAKE(((c) >> 16) & 0xFF, ((c) >> 8) & 0xFF, (c) & 0xFF)
 
+/* A darker 0xRRGGBB: `pct` percent of the original, folded at compile time so a shade is a
+ * const like any other colour - COL_DARKEN_HEX(0xF15A22, 70) is 0xA83F17. It takes a
+ * literal, not a name, because the channels of an lv_color_t are not a constant expression
+ * once it is an object; to darken a colour that is already an lv_color_t, LVGL has
+ * lv_color_darken(). */
+#define COL_DARKEN_HEX(c, pct)                                                        \
+    COL_HEX((((((c) >> 16) & 0xFF) * (pct) / 100) << 16) |                            \
+            (((((c) >> 8) & 0xFF) * (pct) / 100) << 8) |                              \
+             ((((c) & 0xFF) * (pct) / 100)))
+
 static const lv_color_t k_col_bg        = COL_HEX(0x3C2B2A);
 /* The playing red: the tape's edge, and the hub's rim and divider. */
 static const lv_color_t k_col_tape_dark = COL_HEX(0xF15A22);
