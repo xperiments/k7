@@ -6,7 +6,9 @@
 # without the touch adapter carries neither the cover blob nor the artwork loader.
 set(screen_srcs "screen_display.c" "cassette_view.c" "lvgl_mem.c" "font_oxanium_36.c")
 set(screen_reqs mini_icecast cassette artwork esp_timer esp_lcd esp_driver_gpio esp_driver_ledc)
-set(screen_embeds "assets/hub_frames.bin")
+# The hubs are drawn by cassette_view.c, so the only art left to embed belongs to the
+# touch board's Levels.
+set(screen_embeds "")
 if(CONFIG_APP_BOARD_SUNTON_8048S050C)
     list(APPEND screen_srcs "panel_rgb.c" "touch_gt911.c" "backlight.c" "artwork_loader.c")
     list(APPEND screen_reqs esp_lcd_touch esp_lcd_touch_gt911 esp_driver_i2c lvgl__lvgl)

@@ -22,16 +22,18 @@
  * (artwork_loader.c) locates, decodes and fits them and hands the finished descriptors
  * in under the LVGL lock, so the view never touches the card or a decoder.
  *
- * The hub comes from assets/hub/: the opaque 168x168 keyframes of the whole hub, one
- * revolution. tools/convert_cassette_assets.py converts both to what the firmware
- * blits: the hubs to RGB565 exactly as exported - no alpha, no recolour, no
- * compositing - with 96x96 crop descriptors that point into the same frame data.
+ * The hubs are drawn, not blitted: a static paper rim with a divided circle turning
+ * inside it and a dot in one half. The rim is painted once and never invalidated; the
+ * two spokes and the dot are separate objects repositioned per frame. That split is the
+ * whole point - LVGL invalidates an object's bounding box, so a diameter drawn as one
+ * object would invalidate the hub, while two opposite radii invalidate two quadrants.
+ * The spokes stop short of the centre and of the rim for the same reason. See
+ * docs/research/hub-drawn-vs-blitted.md for the measurements behind the geometry.
  *
- * The firmware draws only the 96x96 crop of each frame; the frame around it is the
- * UI's, not part of the exported blob. That is the MASK_AT_168 = 96 arrangement: no
- * full 168 frame is stored and no 168 frame is redrawn. There is no lv_image_set_rotation():
- * LVGL's software transform is per pixel and was measured at over 100 ms per frame on
- * this part; the frame sequence is the rotation.
+ * The frame count is the animation's angular resolution, not an asset: at playback
+ * speed one revolution takes 1.451 s and the UI refreshes every 40 ms, so 36 frames is
+ * one 10-degree step per refresh. There is no lv_image_set_rotation(): LVGL's software
+ * transform is per pixel and was measured at over 100 ms per frame on this part.
  *
  * This file is the adapter: it owns positions, fonts, diameters and LVGL objects. What
  * the screen should show - reel position, pack fill, progress, the cleaned title - is
@@ -47,7 +49,6 @@
 
 #include "cassette.h"
 #include "cassette_view.h"
-#include "hub_frames.h"
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 #include "artwork_loader.h"
 #include "label_cover.h"
@@ -58,14 +59,31 @@ LV_FONT_DECLARE(oxanium_36);
 
 static const char *TAG = "screen";
 
-/* The 800x480 panel: the hub's static ring is 168 px and the rotating mask is the
- * converter's HUB_FRAME_W (96 px). The packs stay the reference's 245/310 so the
- * black tape rings the hub at both ends of a side. */
+/* The 800x480 panel: the hub rim is 168 px. The packs stay the reference's 245/310 so
+ * the black tape rings the hub at both ends of a side. */
 static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } };
 // static const struct { int x, y; } k_window[2] = { { 120+180, 180 }, { 800-120-180, 268+20 } };
 #define HUB_RING_D 168
 #define PACK_MIN_D 168
 #define PACK_MAX_D 380
+
+/* The drawn hub: a paper rim with a divided circle turning inside it and a dot in one
+ * half. The frame count is the angular resolution of the animation (see the header). */
+#define HUB_FRAME_COUNT 36
+#define HUB_RIM_W 2
+#define HUB_SPOKE_W 2
+#define HUB_SPOKE_R0 20    /* the divider stops short of the centre, which shrinks its */
+#define HUB_SPOKE_R1 82    /* box ~1.45x against 0..84; 82 is the rim's inner edge */
+#define HUB_DOT_ORBIT 42   /* how far out the dot turns */
+#define HUB_DOT_OFF 16     /* and how far off the divider, so it reads as a mark not a bead */
+#define HUB_DOT_D 8
+
+/* One frame's angle, and half a turn, where the opposite spoke sits. LVGL measures
+ * angles from 3 o'clock, positive clockwise, and the model's hub_frame rises with the
+ * phase (cassette.c:84-88) - so a rising angle is the direction the old art turned:
+ * its orange marker advanced ~10 deg per frame clockwise, read off assets/hub/001-005. */
+static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAME_COUNT;
+#define HUB_HALF_TURN 3.14159265358979323846
 
 /* The tape strands leave the bottom edge where it is tangent to a full pack:
  * 216 - 400/2 = 16 on the left, 584 + 400/2 = 784 on the right. */
@@ -138,6 +156,7 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 #define COL_INK         0x444444
 #define COL_COVER_INK   0xEEEEEE   /* the dark cover needs light ink */
 #define COL_HUB_RING    0xF3F2EE
+#define COL_HUB_INK     0x323232   /* the art's own dark, read off assets/hub/001.png */
 #define COL_BAR_BG      0xb9c0bb
 #define COL_BAR_FG      0xf03d3a
 #define COL_ART_BG      0x141414   /* the Artwork screen's backdrop when the Case did not decode */
@@ -195,7 +214,14 @@ enum {
 #endif
 
 static cassette_t *s_model;
-static lv_obj_t *s_hub[2], *s_pack[2], *s_strand[2];
+typedef struct {
+    lv_obj_t *obj;
+    lv_point_precise_t pts[2];
+} hub_spoke_t;
+
+static hub_spoke_t s_hub_spoke[2][2];
+static lv_obj_t *s_hub_dot[2];
+static lv_obj_t *s_pack[2], *s_strand[2];
 static lv_obj_t *s_vu[2];         /* dashed VU overlay, one per pack */
 static lv_point_precise_t s_strand_pts[2][2];
 static lv_obj_t *s_bar;
@@ -223,7 +249,7 @@ static mi_fmt_t  s_art_fmt;
 static bool      s_art_requested;
 #endif
 static int      s_pack_d[2];      /* px, so a redraw happens only when it changes */
-static uint8_t  s_shown_hub[2];   /* the art frame currently on screen */
+static uint8_t  s_shown_hub[2];   /* the animation frame currently on screen */
 static int      s_tangent_deg[2]; /* where the strand leaves the pack, LVGL degrees */
 static int      s_vu_lit[2];      /* dashes lit by the peak-hold, 0..the mode's count */
 static float    s_vu_level[2];    /* the last peak-hold, so a mode change can remap it */
@@ -336,6 +362,56 @@ static void strand_set(int i, int d)
     lv_obj_set_pos(s_strand[i], x1, tip_y);
     lv_obj_set_size(s_strand[i], w, h);
     lv_line_set_points(s_strand[i], s_strand_pts[i], 2);
+}
+
+/* One half of the hub's divider: a 2 px radius from HUB_SPOKE_R0 to HUB_SPOKE_R1 at
+ * `a` radians, LVGL's convention (0 = 3 o'clock, positive clockwise). The object's
+ * box is the stroke's bounding box, padded so the line and its round caps are not
+ * clipped - and that box is the whole invalidation cost, which is why the radius stops
+ * short of the centre. Two opposite spokes are two objects on purpose: each is clipped
+ * to its own quadrant, and two quadrant boxes are never joined into the hub's full
+ * box (lv_refr_join_area() joins only when the union is smaller than the sum). */
+static void spoke_set(hub_spoke_t *sp, int cx, int cy, double a)
+{
+    int x0 = cx + (int)lround(HUB_SPOKE_R0 * cos(a));
+    int y0 = cy + (int)lround(HUB_SPOKE_R0 * sin(a));
+    int x1 = cx + (int)lround(HUB_SPOKE_R1 * cos(a));
+    int y1 = cy + (int)lround(HUB_SPOKE_R1 * sin(a));
+
+    int pad = HUB_SPOKE_W / 2 + 1;
+    int ox = LV_MIN(x0, x1) - pad, oy = LV_MIN(y0, y1) - pad;
+
+    /* The size is explicit, so lv_line's own self-size refresh returns early
+     * (lv_obj_pos.c:759-764) and the pad survives the points update below. */
+    sp->pts[0].x = x0 - ox;
+    sp->pts[0].y = y0 - oy;
+    sp->pts[1].x = x1 - ox;
+    sp->pts[1].y = y1 - oy;
+
+    lv_obj_set_pos(sp->obj, ox, oy);
+    lv_obj_set_size(sp->obj, LV_ABS(x1 - x0) + 2 * pad + 1,
+                    LV_ABS(y1 - y0) + 2 * pad + 1);
+    lv_line_set_points(sp->obj, sp->pts, 2);
+}
+
+/* The moving parts of hub `i` for a frame: the two spokes and the dot. Only these
+ * objects are ever invalidated; the rim is painted once and left alone. The dot is
+ * what makes the rotation readable - a bare divided circle is the same picture after
+ * half a turn. */
+static void hub_frame_set(int i, uint8_t frame)
+{
+    double a = (double)frame * k_hub_step;
+
+    for (int k = 0; k < 2; k++)
+        spoke_set(&s_hub_spoke[i][k], k_hub[i].x, k_hub[i].y, a + (k ? HUB_HALF_TURN : 0.0));
+
+    /* The dot is offset perpendicular to the divider, so it sits inside one of the two
+     * halves rather than on the line, and turns with the assembly. */
+    lv_obj_set_pos(s_hub_dot[i],
+                   k_hub[i].x + (int)lround(HUB_DOT_ORBIT * cos(a) - HUB_DOT_OFF * sin(a))
+                               - HUB_DOT_D / 2,
+                   k_hub[i].y + (int)lround(HUB_DOT_ORBIT * sin(a) + HUB_DOT_OFF * cos(a))
+                               - HUB_DOT_D / 2);
 }
 
 static bool angle_in_arc(int a, int start, int dir, int length)
@@ -624,7 +700,7 @@ static void apply_frame(const cassette_frame_t *f)
     for (int i = 0; i < 2; i++) {
         if (f->hub_frame[i] != s_shown_hub[i]) {
             s_shown_hub[i] = f->hub_frame[i];
-            lv_image_set_src(s_hub[i], &k_hub_crops[s_shown_hub[i]]);
+            hub_frame_set(i, s_shown_hub[i]);
         }
     }
 
@@ -1017,18 +1093,27 @@ void cassette_view_create(void)
                             (void *)(intptr_t)i);
     }
 
-    /* The hubs: only the 96x96 crop is animated. No static 168 frame is stored or
-     * drawn; the disc behind it is the UI's own background. No recolor, no alpha. */
+    /* The hubs: the rim is painted once and never invalidated. Only the two spokes and
+     * the dot move, and each is its own object so its bounding box stays small. */
     for (int i = 0; i < 2; i++) {
         int cx = k_hub[i].x, cy = k_hub[i].y;
-        disc(scr, cx, cy, HUB_RING_D, COL_HUB_RING);
+        lv_obj_t *rim = disc(scr, cx, cy, HUB_RING_D, COL_HUB_RING);
+        lv_obj_set_style_border_color(rim, lv_color_hex(COL_HUB_INK), 0);
+        lv_obj_set_style_border_opa(rim, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(rim, HUB_RIM_W, 0);
 
-        lv_obj_t *hub = lv_image_create(scr);
-        lv_image_set_src(hub, &k_hub_crops[0]);
-        lv_obj_set_pos(hub, cx - HUB_CROP_W / 2, cy - HUB_CROP_H / 2);
+        for (int k = 0; k < 2; k++) {
+            lv_obj_t *sp = lv_line_create(scr);
+            lv_obj_remove_style_all(sp);
+            lv_obj_set_style_line_color(sp, lv_color_hex(COL_HUB_INK), 0);
+            lv_obj_set_style_line_width(sp, HUB_SPOKE_W, 0);
+            lv_obj_set_style_line_rounded(sp, true, 0);
+            s_hub_spoke[i][k].obj = sp;
+        }
 
-        s_hub[i] = hub;
+        s_hub_dot[i] = disc(scr, cx, cy, HUB_DOT_D, COL_HUB_INK);
         s_shown_hub[i] = 0;
+        hub_frame_set(i, 0);
     }
 
     /* The VU: a transparent overlay sized to its arc, above the hub ring and below
