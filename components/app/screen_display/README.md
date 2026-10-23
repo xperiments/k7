@@ -87,13 +87,14 @@ The status carries the RMS of the same 1024-frame chunk the encoder is about to 
 `components/portable/cassette` turns it into a peak-hold: `vu = max(level, vu * 0.90)`
 per 40 ms update, about -23 dB/s, so the peak follows a real drop instead of hanging.
 
-The view draws it as a segmented meter between the reels, behind the hubs: an 80x149 black
-panel with a 5 px grid and one column per channel, twelve segments to a column filling
-from the bottom. Lit segments are the tape red, unlit the dim red the mockup uses, and the
-level is mapped over -48..0 dB so the bars move like a meter rather than a linear
-amplitude. Only the segments are objects: a level change recolours the cells that flipped
-and invalidates those few pixels, never the panel, and a column whose count has not
-changed is not touched at all.
+The view draws it as a segmented meter in the top right corner: an 8-cell lattice of 5 px
+steps and one column per channel, twelve segments to a column filling from the bottom.
+There is no panel behind it - the lattice and the segments are the only things painted, so
+the cassette shows through. Lit segments are the tape red, unlit the dim red the mockup
+uses, and the level is mapped over -48..0 dB so the bars move like a meter rather than a
+linear amplitude. Only the segments are objects: a level change recolours the cells that
+flipped and invalidates those few pixels, never the lattice, and a column whose count has
+not changed is not touched at all.
 
 ## The reel change
 

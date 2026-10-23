@@ -402,13 +402,13 @@ static void hub_frame_set(int i, uint8_t frame)
 }
 /* The VU meter: the mockup's black panel with a grid, and one column of segments per
  * channel filling from the bottom. Geometry is the mockup's at 1:1 - the panel 80x149,
- * segments 9 px wide, 4 tall, 5 apart, twelve to a column, the bottom one 105 px down
- * the panel. */
-#define METER_W      80
+ * segments 9 px wide, 4 tall, 5 apart, twelve to a column, the bottom one 104 px down
+ * the panel. The lattice is the sketch's 12 cells less two at each end. */
+#define METER_W      44      /* the 8-cell lattice plus a 2 px margin each side */
 #define METER_H      149
 #define METER_R      3
-#define METER_X      400      /* between the reels */
-#define METER_Y      226
+#define METER_X      762     /* top-right: 16 px in from the right edge, */
+#define METER_Y      90      /* and 16 px down from the top */
 #define METER_COLS   2        /* one bar per channel */
 #define METER_CELLS  12
 #define METER_SEG_W  9
@@ -416,9 +416,9 @@ static void hub_frame_set(int i, uint8_t frame)
 #define METER_PITCH  5
 #define METER_BOTTOM 104      /* panel-relative y of the bottom segment's foot */
 #define METER_GAP    6
-#define METER_GRID_X 10       /* the lattice: 12 columns, 14 rows, 5 px apart, centred */
+#define METER_GRID_X 2        /* the lattice: 8 columns, 14 rows, 5 px apart, centred */
 #define METER_GRID_Y 39
-#define METER_GRID_C 12
+#define METER_GRID_C 8
 #define METER_GRID_R 14
 
 static lv_obj_t *s_meter;                          /* the panel; the grid is drawn in it */
