@@ -1,7 +1,8 @@
 # The hub: 36 blitted frames or LVGL-drawn primitives — what the space really is, and what the draw costs (2026-10-23)
 
 > **Status: implemented.** Branch `ui/drawn-hub` replaces the blob with the drawn hub that
-> §5 prices: a static rim, two opposite radii from r 20 to 82, and a dot off the divider.
+> §5 prices: a static rim, two opposite radii from r 20 to 82, and a dot at 90° to the
+> divider, r 76.
 > §1–§2 below describe the arrangement *before* that change — they are the baseline the
 > measurements are against, and `hub_frames.bin` no longer exists in the tree.
 > `docs/research/panel-rgb-lvgl-performance.md` is a dated snapshot of an earlier build and
@@ -225,7 +226,9 @@ The consequences that are easy to get wrong:
   nearly halves — 6 200 px against 11 950 — because each object is clipped to its own quadrant and the
   two boxes are disjoint, so `lv_refr_join_area()` never merges them (`lv_refr.c:655-668`).
 - **A dot is essentially free**, and a short mark nearly so. Any design whose only moving piece is a
-  small mark, or a small mark plus one radius, lands *below* today's blit.
+  small mark, or a small mark plus one radius, lands *below* today's blit. The dot's own box grows with
+  its orbit as well as with its step: at r 42 it is ~250 px/tick, at r 76 ~450 px/tick (2 hubs,
+  8 px dot) - which is why the built design's total is ~10 500 rather than ~10 100.
 - Shortening the inner ends of the line does shrink every box, but by less than the line's length
   suggests: at r 20…84 the same two-radius divider is **14 400 → 10 100 px/cycle** (a factor of 1.45,
   not the ~3 an eyeball estimate gives), because a tick's box is the *old ∪ new* swept box and the
@@ -236,7 +239,7 @@ The consequences that are easy to get wrong:
 | Variant (r 20…84, 2 hubs, per 10° tick) | px/cycle | vs today's 18 432 px | ESTIMATE |
 |---|---|---|---|
 | divider as **one** `lv_line` + dot | ~24 400 | 1.3× more | 1.5–3.7 ms |
-| **as built: two opposite radii, two objects, + dot** | **~10 100** | **1.8× less** | **0.6–1.5 ms** |
+| **as built: two opposite radii, two objects, + dot** | **~10 500** | **1.8× less** | **0.6–1.6 ms** |
 | divider **static**, only the dot turns | ~500 | 37× less | 0.03–0.08 ms |
 
 The middle row is what this branch builds. Note how the two currencies disagree, and why: it moves

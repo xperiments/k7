@@ -74,9 +74,8 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 #define HUB_SPOKE_W 2
 #define HUB_SPOKE_R0 20    /* the divider stops short of the centre, which shrinks its */
 #define HUB_SPOKE_R1 82    /* box ~1.45x against 0..84; 82 is the rim's inner edge */
-#define HUB_DOT_ORBIT 42   /* how far out the dot turns */
-#define HUB_DOT_OFF 16     /* and how far off the divider, so it reads as a mark not a bead */
-#define HUB_DOT_D 8
+#define HUB_DOT_ORBIT 76   /* at 90 deg to the divider: the divider is the 180 line, */
+#define HUB_DOT_DIAM 8     /* the dot marks the 90, out by the rim's inner edge (82) */
 
 /* One frame's angle, and half a turn, where the opposite spoke sits. LVGL measures
  * angles from 3 o'clock, positive clockwise, and the model's hub_frame rises with the
@@ -155,7 +154,7 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 #define COL_LABEL       COL_TAPE_DARK //0xFFFFFF
 #define COL_INK         0x444444
 #define COL_COVER_INK   0xEEEEEE   /* the dark cover needs light ink */
-#define COL_HUB_RING    0xF3F2EE
+#define COL_HUB_RING    COL_TAPE_DARK
 #define COL_HUB_INK     0x323232   /* the art's own dark, read off assets/hub/001.png */
 #define COL_BAR_BG      0xb9c0bb
 #define COL_BAR_FG      0xf03d3a
@@ -405,13 +404,13 @@ static void hub_frame_set(int i, uint8_t frame)
     for (int k = 0; k < 2; k++)
         spoke_set(&s_hub_spoke[i][k], k_hub[i].x, k_hub[i].y, a + (k ? HUB_HALF_TURN : 0.0));
 
-    /* The dot is offset perpendicular to the divider, so it sits inside one of the two
-     * halves rather than on the line, and turns with the assembly. */
+    /* The dot sits at 90 deg to the divider and turns with the assembly: (-sin, cos) is
+     * the divider's normal, so the spokes are the 180 and 0 and the dot marks the 90. It
+     * is what makes the rotation readable - a bare divided circle is the same picture
+     * after half a turn. */
     lv_obj_set_pos(s_hub_dot[i],
-                   k_hub[i].x + (int)lround(HUB_DOT_ORBIT * cos(a) - HUB_DOT_OFF * sin(a))
-                               - HUB_DOT_D / 2,
-                   k_hub[i].y + (int)lround(HUB_DOT_ORBIT * sin(a) + HUB_DOT_OFF * cos(a))
-                               - HUB_DOT_D / 2);
+                   k_hub[i].x + (int)lround(-HUB_DOT_ORBIT * sin(a)) - HUB_DOT_DIAM / 2,
+                   k_hub[i].y + (int)lround(HUB_DOT_ORBIT * cos(a)) - HUB_DOT_DIAM / 2);
 }
 
 static bool angle_in_arc(int a, int start, int dir, int length)
@@ -1111,7 +1110,7 @@ void cassette_view_create(void)
             s_hub_spoke[i][k].obj = sp;
         }
 
-        s_hub_dot[i] = disc(scr, cx, cy, HUB_DOT_D, COL_HUB_INK);
+        s_hub_dot[i] = disc(scr, cx, cy, HUB_DOT_DIAM, COL_HUB_INK);
         s_shown_hub[i] = 0;
         hub_frame_set(i, 0);
     }
