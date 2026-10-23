@@ -1,8 +1,8 @@
 # The hub: 36 blitted frames or LVGL-drawn primitives — what the space really is, and what the draw costs (2026-10-23)
 
 > **Status: implemented.** Branch `ui/drawn-hub` replaces the blob with the drawn hub that
-> §5 prices: a static rim, two opposite radii from r 20 to 82, and a dot at 90° to the
-> divider, r 76.
+> §5 prices: a static rim and two opposite radii from r 30 to 66, turning as two objects.
+> The dot §6 argues for was built and then dropped as unneeded.
 > §1–§2 below describe the arrangement *before* that change — they are the baseline the
 > measurements are against, and `hub_frames.bin` no longer exists in the tree.
 > `docs/research/panel-rgb-lvgl-performance.md` is a dated snapshot of an earlier build and
@@ -226,31 +226,30 @@ The consequences that are easy to get wrong:
   nearly halves — 6 200 px against 11 950 — because each object is clipped to its own quadrant and the
   two boxes are disjoint, so `lv_refr_join_area()` never merges them (`lv_refr.c:655-668`).
 - **A dot is essentially free**, and a short mark nearly so. Any design whose only moving piece is a
-  small mark, or a small mark plus one radius, lands *below* today's blit. The dot's own box grows with
-  its orbit as well as with its step: at r 42 it is ~250 px/tick, at r 76 ~450 px/tick (2 hubs,
-  8 px dot) - which is why the built design's total is ~10 500 rather than ~10 100.
+  small mark, or a small mark plus one radius, lands *below* today's blit. A dot's box grows with its
+  orbit as well as its step - ~250 px/tick at r 42, ~450 at r 76 - but it is not in the build.
 - Shortening the inner ends of the line does shrink every box, but by less than the line's length
   suggests: at r 20…84 the same two-radius divider is **14 400 → 10 100 px/cycle** (a factor of 1.45,
   not the ~3 an eyeball estimate gives), because a tick's box is the *old ∪ new* swept box and the
   segment still reaches the rim. Computed from the code's geometry, both hubs, 4 spokes + 2 dots.
 
-**The design at issue — a rim, a dividing line and a dot in one half — therefore prices as:**
+**The design at issue — a rim with a dividing line — therefore prices as** (2 hubs, per 10° tick):
 
-| Variant (r 20…84, 2 hubs, per 10° tick) | px/cycle | vs today's 18 432 px | ESTIMATE |
+| Variant | px/cycle | vs today's 18 432 px | ESTIMATE |
 |---|---|---|---|
-| divider as **one** `lv_line` + dot | ~24 400 | 1.3× more | 1.5–3.7 ms |
-| **as built: two opposite radii, two objects, + dot** | **~10 500** | **1.8× less** | **0.6–1.6 ms** |
-| divider **static**, only the dot turns | ~500 | 37× less | 0.03–0.08 ms |
+| divider as **one** `lv_line` holding the diameter | ~24 400 | 1.3× more | 1.5–3.7 ms |
+| two opposite radii r 20…84, four objects | ~14 400 | 1.3× less | 0.9–2.2 ms |
+| **as built: two opposite radii r 30…66, width 4, no dot** | **~4 700** | **3.9× less** | **0.28–0.71 ms** |
 
-The middle row is what this branch builds. Note how the two currencies disagree, and why: it moves
-**1.8× fewer pixels** than the blit, but a drawn pixel costs 60–150 ns against the memcpy's 40–80 ns, so
-in *time* the change is roughly a wash (0.6–1.5 ms against 0.74–1.5 ms). The gain here is the 648 KiB,
-not the microseconds — and in pixels the insetting from r 0…84 to r 20…84 is worth 14 400 → 10 100, a
-factor of 1.45.
+The last row is the geometry that shipped. Trimming the divider at both ends pays more than any other
+decision in this note: 0…84 as one object is ~24 400 px/cycle, and the same divider cut to 30…66 is
+~4 700 — a factor of five, from moving two endpoints.
 
-The last row is the cheapest possible animation and still reads as rotation — but a static divider with
-an orbiting dot reads as a dial rather than a hub that turns, so it is a look decision, not an
-optimisation one.
+The shipped row moves **3.9× fewer pixels** than the blit, and because a drawn pixel costs only
+1.5–2× what a memcpy'd one does (60–150 ns against 40–80 ns), that survives translation into time:
+**0.28–0.71 ms against 0.74–1.5 ms**, so the drawn hub is roughly 2× cheaper per cycle *and* frees the
+648 KiB. Earlier revisions of this note claimed the time was a wash; that was true of the r 20…84
+divider it first described, not of the one that shipped.
 
 For the six-mark variant (a rim, a crosshair and six radial marks), the marks are ~690 px each and the
 crosshair is 4-fold symmetric — it carries no rotation cue and can be painted once, so the whole

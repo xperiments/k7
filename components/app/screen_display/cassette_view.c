@@ -22,11 +22,11 @@
  * (artwork_loader.c) locates, decodes and fits them and hands the finished descriptors
  * in under the LVGL lock, so the view never touches the card or a decoder.
  *
- * The hubs are drawn, not blitted: a static paper rim with a divided circle turning
- * inside it and a dot in one half. The rim is painted once and never invalidated; the
- * two spokes and the dot are separate objects repositioned per frame. That split is the
- * whole point - LVGL invalidates an object's bounding box, so a diameter drawn as one
- * object would invalidate the hub, while two opposite radii invalidate two quadrants.
+ * The hubs are drawn, not blitted: a static rim with a divided circle turning inside it.
+ * The rim is painted once and never invalidated; the two spokes are separate objects
+ * repositioned per frame. That split is the whole point - LVGL invalidates an object's
+ * bounding box, so a diameter drawn as one object would invalidate the hub, while two
+ * opposite radii invalidate two quadrants.
  * The spokes stop short of the centre and of the rim for the same reason. See
  * docs/research/hub-drawn-vs-blitted.md for the measurements behind the geometry.
  *
@@ -67,15 +67,13 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 #define PACK_MIN_D 168
 #define PACK_MAX_D 380
 
-/* The drawn hub: a paper rim with a divided circle turning inside it and a dot in one
- * half. The frame count is the angular resolution of the animation (see the header). */
+/* The drawn hub: a rim with a divided circle turning inside it. The frame count is the
+ * angular resolution of the animation (see the header). */
 #define HUB_FRAME_COUNT 36
 #define HUB_RIM_W 2
-#define HUB_SPOKE_W 2
-#define HUB_SPOKE_R0 20    /* the divider stops short of the centre, which shrinks its */
-#define HUB_SPOKE_R1 82    /* box ~1.45x against 0..84; 82 is the rim's inner edge */
-#define HUB_DOT_ORBIT 76   /* at 90 deg to the divider: the divider is the 180 line, */
-#define HUB_DOT_DIAM 8     /* the dot marks the 90, out by the rim's inner edge (82) */
+#define HUB_SPOKE_W 4
+#define HUB_SPOKE_R0 30    /* the divider stops short of the centre and of the rim (82); */
+#define HUB_SPOKE_R1 66    /* together they cut the box it invalidates ~3x on 0..84 */
 
 /* One frame's angle, and half a turn, where the opposite spoke sits. LVGL measures
  * angles from 3 o'clock, positive clockwise, and the model's hub_frame rises with the
@@ -154,8 +152,8 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 #define COL_LABEL       COL_TAPE_DARK //0xFFFFFF
 #define COL_INK         0x444444
 #define COL_COVER_INK   0xEEEEEE   /* the dark cover needs light ink */
-#define COL_HUB_RING    COL_TAPE_DARK
-#define COL_HUB_INK     0x323232   /* the art's own dark, read off assets/hub/001.png */
+#define COL_HUB_RING    0x000000
+#define COL_HUB_INK     COL_TAPE_DARK   /* the art's own dark, read off assets/hub/001.png */
 #define COL_BAR_BG      0xb9c0bb
 #define COL_BAR_FG      0xf03d3a
 #define COL_ART_BG      0x141414   /* the Artwork screen's backdrop when the Case did not decode */
@@ -219,7 +217,6 @@ typedef struct {
 } hub_spoke_t;
 
 static hub_spoke_t s_hub_spoke[2][2];
-static lv_obj_t *s_hub_dot[2];
 static lv_obj_t *s_pack[2], *s_strand[2];
 static lv_obj_t *s_vu[2];         /* dashed VU overlay, one per pack */
 static lv_point_precise_t s_strand_pts[2][2];
@@ -393,10 +390,10 @@ static void spoke_set(hub_spoke_t *sp, int cx, int cy, double a)
     lv_line_set_points(sp->obj, sp->pts, 2);
 }
 
-/* The moving parts of hub `i` for a frame: the two spokes and the dot. Only these
- * objects are ever invalidated; the rim is painted once and left alone. The dot is
- * what makes the rotation readable - a bare divided circle is the same picture after
- * half a turn. */
+/* The moving parts of hub `i` for a frame: the two spokes. Only these objects are ever
+ * invalidated; the rim is painted once and left alone. The divider is 2-fold symmetric,
+ * so the picture repeats every half turn - which reads fine in motion, because a 10 deg
+ * step is well inside the 90 deg where the shortest motion would turn ambiguous. */
 static void hub_frame_set(int i, uint8_t frame)
 {
     double a = (double)frame * k_hub_step;
@@ -404,13 +401,6 @@ static void hub_frame_set(int i, uint8_t frame)
     for (int k = 0; k < 2; k++)
         spoke_set(&s_hub_spoke[i][k], k_hub[i].x, k_hub[i].y, a + (k ? HUB_HALF_TURN : 0.0));
 
-    /* The dot sits at 90 deg to the divider and turns with the assembly: (-sin, cos) is
-     * the divider's normal, so the spokes are the 180 and 0 and the dot marks the 90. It
-     * is what makes the rotation readable - a bare divided circle is the same picture
-     * after half a turn. */
-    lv_obj_set_pos(s_hub_dot[i],
-                   k_hub[i].x + (int)lround(-HUB_DOT_ORBIT * sin(a)) - HUB_DOT_DIAM / 2,
-                   k_hub[i].y + (int)lround(HUB_DOT_ORBIT * cos(a)) - HUB_DOT_DIAM / 2);
 }
 
 static bool angle_in_arc(int a, int start, int dir, int length)
@@ -1092,8 +1082,8 @@ void cassette_view_create(void)
                             (void *)(intptr_t)i);
     }
 
-    /* The hubs: the rim is painted once and never invalidated. Only the two spokes and
-     * the dot move, and each is its own object so its bounding box stays small. */
+    /* The hubs: the rim is painted once and never invalidated. Only the two spokes
+     * move, and each is its own object so its bounding box stays small. */
     for (int i = 0; i < 2; i++) {
         int cx = k_hub[i].x, cy = k_hub[i].y;
         lv_obj_t *rim = disc(scr, cx, cy, HUB_RING_D, COL_HUB_RING);
@@ -1110,7 +1100,6 @@ void cassette_view_create(void)
             s_hub_spoke[i][k].obj = sp;
         }
 
-        s_hub_dot[i] = disc(scr, cx, cy, HUB_DOT_DIAM, COL_HUB_INK);
         s_shown_hub[i] = 0;
         hub_frame_set(i, 0);
     }
