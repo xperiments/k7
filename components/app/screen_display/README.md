@@ -99,9 +99,8 @@ from `COL_TAPE_DARK` to `COL_TAPE` and fades the VU out; both return over the wi
 last second. `rewind_tape_opa()` turns the model's `rewind_permille` into that envelope:
 the VU uses it as opacity, and `tape_edge_color()` uses it to mix the edge colour.
 `tape_opa_apply()` sets the strand lines and invalidates the packs (their draw callback
-paints the solid arc) and the VU overlays. The B button, the progress bar and the titles
-do not fade or recolour: they are chrome and information, not tape. The model is
-untouched: it still reports `rewind_permille`, and the host tier still tests the reel
+paints the solid arc) and the VU overlays. The progress bar and the titles do not fade:
+they are chrome and information, not tape. The model is untouched: it still reports `rewind_permille`, and the host tier still tests the reel
 arithmetic.
 
 ## The Track picture and the Case

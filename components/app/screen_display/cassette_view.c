@@ -74,6 +74,24 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 #define STRAND_Y 480
 #define STRAND_W 8
 
+/* The small label: the bar with the Now playing title. It is not a Level: the up
+ * swipe at Bare has no Level to move to, so it peeks this bar over the cassette, and
+ * the next up swipe or any Level change puts it away. It rests at LABEL_Y and hides
+ * below the screen, so the show slides up and the hide slides back. The band at the
+ * bottom uses the same x and width. */
+#define LABEL_X 96
+#define LABEL_Y 324
+#define LABEL_W 608
+#define LABEL_H 52
+#define LABEL_R 12
+#define PAPER_HIDDEN_Y (488)
+#define PAPER_ANIM_MS 260
+#define SMALL_TITLE_X LABEL_X+24   /* screen coordinates; the child position is relative to the paper */
+#define SMALL_TITLE_Y LABEL_Y+2
+/* The title's box keeps the same 24 px inset on the right as the text has on the left:
+ * from LABEL_X+24 to LABEL_W-24. */
+#define SMALL_TITLE_W (LABEL_W - 2 * (SMALL_TITLE_X - LABEL_X))
+
 /* The big cover: the supplied full cover, full-bleed at 0,0, the Label cover level.
  * Cover art is 800x480, the panel's own size, so the cover has no margin. This one
  * keeps its alpha (RGB565A8): the black triangle and circle are transparent, so the
@@ -83,23 +101,6 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
  * so a level change places it at 0,0 in one frame. It is the panel board's, because
  * the vertical gestures that reach its level are. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-/* The small label: the cream bar with the Now playing title. It is not a Level: the up
- * swipe at Bare has no Level to move to, so it peeks this bar over the cassette, and
- * the next up swipe or any Level change puts it away. It rests at LABEL_Y and hides
- * just above the screen, so the show slides down and the hide slides back. */
-#define LABEL_X 32
-#define LABEL_Y 32
-#define LABEL_W 735
-#define LABEL_H 60
-#define LABEL_R 12
-#define PAPER_HIDDEN_Y (-LABEL_H - 8)
-#define PAPER_ANIM_MS 260
-#define SMALL_TITLE_X 56   /* screen coordinates; the child position is relative to the paper */
-#define SMALL_TITLE_Y 40
-/* The title's box keeps the same 24 px inset on the right as the text has on the left:
- * from LABEL_X+24 to LABEL_W-24. The old 439 stopped just past the bar's midpoint. */
-#define SMALL_TITLE_W (LABEL_W - 2 * (SMALL_TITLE_X - LABEL_X))
-
 #define COVER_X 0
 #define COVER_Y 0
 #define COVER_HIDDEN_Y (-LABEL_COVER_H - 8)
@@ -122,15 +123,10 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 #define ART_HIDDEN_Y (-480 - 8)
 #endif
 
-#define B_X 91
-#define B_Y 424
-#define B_D 40
-#define B_R 6
-
-/* The band below the tape. */
+/* The band below the tape: the same x and width as the small label, so the two line up. */
 #define BAND_Y 434
-#define BAND_X 141
-#define BAND_W 568
+#define BAND_X LABEL_X
+#define BAND_W LABEL_W
 
 /* Colours, read off the reference. */
 #define COL_BG          0x3C2B2A
@@ -138,7 +134,7 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 #define COL_TAPE        0x2E1C19
 #define COL_TAPE_DARK   0xE54820
 #define COL_RED         0xE54820
-#define COL_LABEL       0xFFFFFF
+#define COL_LABEL       COL_TAPE_DARK //0xFFFFFF
 #define COL_INK         0x444444
 #define COL_COVER_INK   0xEEEEEE   /* the dark cover needs light ink */
 #define COL_HUB_RING    0xF3F2EE
@@ -165,11 +161,11 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 
 /* The VU when the full cover is up. The arcs sit behind the cover, so the same two
  * meters become vertical stacks of wide segments in the pockets at the bottom of the
- * screen: one between the B button and the left tape strand, the other between the band
- * and the right strand. The pockets are about 56 px and the strands sweep in as the
- * packs empty, so the stacks stay clear of both. Each segment is 20 px wide, and both
- * stacks grow upward from the band's centre line; lit is the tape red, the peak-hold the
- * cream one. */
+ * screen: one between the left tape strand and the band's left end, the other between
+ * the band's right end and the right strand. The strands sweep in as the packs empty,
+ * so the stacks stay clear of both. Each segment is 20 px wide, and both stacks grow
+ * upward from the band's centre line; lit is the tape red, the peak-hold the cream
+ * one. */
 #define VU_COMPACT_X        34
 #define VU_COMPACT_W        56
 #define VU_COMPACT_Y        444   /* BAND_Y 434 + half the 20 px band; the stack's centre */
@@ -266,26 +262,33 @@ static lv_obj_t *box(lv_obj_t *parent, int x, int y, int w, int h, int r, uint32
     return o;
 }
 
-static lv_obj_t *border_box(lv_obj_t *parent, int x, int y, int w, int h, int r, uint32_t bg, uint32_t border_col, int border_width)
+/* A rounded box with a border. `bg_opa` makes the fill optional: LV_OPA_TRANSP leaves
+ * only the border, so whatever is under the box shows through. */
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+static lv_obj_t *border_box(lv_obj_t *parent, int x, int y, int w, int h, int r,
+                            uint32_t bg, lv_opa_t bg_opa,
+                            uint32_t border_col, int border_width)
 {
     lv_obj_t *o = lv_obj_create(parent);
     lv_obj_remove_style_all(o);
     lv_obj_set_pos(o, x, y);
     lv_obj_set_size(o, w, h);
     lv_obj_set_style_bg_color(o, lv_color_hex(bg), 0);
-    lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_opa(o, bg_opa, 0);
     lv_obj_set_style_radius(o, r, 0);
     lv_obj_set_style_border_color(o, lv_color_hex(border_col), 0);
     lv_obj_set_style_border_width(o, border_width, 0);
     lv_obj_set_scrollable(o, false);
     return o;
 }
+#endif
 
 static lv_obj_t *disc(lv_obj_t *parent, int cx, int cy, int d, uint32_t bg)
 {
     return box(parent, cx - d / 2, cy - d / 2, d, d, LV_RADIUS_CIRCLE, bg);
 }
 
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
 static lv_obj_t *text(lv_obj_t *parent, const lv_font_t *font, lv_color_t colour,
                       lv_align_t align, int x, int y)
 {
@@ -295,6 +298,7 @@ static lv_obj_t *text(lv_obj_t *parent, const lv_font_t *font, lv_color_t colour
     lv_obj_align(l, align, x, y);
     return l;
 }
+#endif
 
 /* The tape strand: a 3 px line from the bottom edge to the point where it leaves the
  * pack tangentially, so the strand never cuts across the pack it comes from. The foot
@@ -755,8 +759,8 @@ static void sheet_show_at_rest(int level)
     lv_anim_delete(o, (lv_anim_exec_xcb_t)lv_obj_set_y);
     lv_obj_set_y(o, sheet_rest_y(level));
     lv_obj_set_hidden(o, false);
-    /* The Artwork screen sits above the decorations. The K7 cover stays below the bar
-     * and the B button: it is the cassette's own label. */
+    /* The Artwork screen sits above the decorations. The K7 cover stays below the bar:
+     * it is the cassette's own label. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     if (level == LEVEL_ART) {
         lv_obj_move_foreground(o);
@@ -1050,10 +1054,11 @@ void cassette_view_create(void)
      * that swipe, and any Level change puts it away. It is not a Level. */
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    s_paper = box(scr, LABEL_X, LABEL_Y, LABEL_W, LABEL_H, LABEL_R, COL_LABEL);
+    s_paper = border_box(scr, LABEL_X, LABEL_Y, LABEL_W, LABEL_H, LABEL_R,
+                         0x000000, 30, COL_TAPE_DARK, 2);
     lv_obj_set_y(s_paper, PAPER_HIDDEN_Y);
     lv_obj_set_hidden(s_paper, true);
-    s_title = text(s_paper, &oxanium_36, lv_color_hex(COL_INK),
+    s_title = text(s_paper, &oxanium_36, lv_color_hex(COL_TAPE_DARK),
                    LV_ALIGN_TOP_LEFT, SMALL_TITLE_X - LABEL_X, SMALL_TITLE_Y - LABEL_Y);
     lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_title, SMALL_TITLE_W);
@@ -1079,13 +1084,8 @@ void cassette_view_create(void)
     lv_obj_set_width(s_cover_title, COVER_TITLE_W);
 #endif
 
-    lv_obj_t *side = border_box(scr, B_X, B_Y, B_D, B_D, B_R, COL_BG, COL_TAPE_DARK, 2);
-    lv_obj_t *letter = text(side, &lv_font_montserrat_22, lv_color_hex(COL_TAPE_DARK),
-                            LV_ALIGN_CENTER, 0, 0);
-    lv_label_set_text(letter, "B");
-
-    /* The band: how far into the file we are. Dark ink on the light shell, with the
-     * same red as the B button for the progress. */
+    /* The band: how far into the file we are, under the label and the same width as
+     * it. Dark ink on the light shell, with the tape red for the progress. */
     s_bar = lv_bar_create(scr);
     lv_obj_set_size(s_bar, BAND_W, 20);
     lv_obj_set_pos(s_bar, BAND_X, BAND_Y);

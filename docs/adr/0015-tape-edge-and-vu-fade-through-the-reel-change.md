@@ -22,8 +22,8 @@ start, a one-second ramp to the tape colour / zero, held for the body of the win
 a one-second ramp back as the window closes. `REWIND_FADE_MS` is that 1 000 ms; the rest
 of the window's length stays in `CASSETTE_REWIND_MS`.
 
-The B button, the progress bar and the titles do not fade or recolour. They are chrome
-and information, not tape, and the bar and titles already follow the new song from its
+The progress bar and the titles do not fade or recolour. They are chrome and
+information, not tape, and the bar and titles already follow the new song from its
 first frame. The pack fill (`COL_TAPE`) is untouched: the packs are the rewind's own
 subject.
 
