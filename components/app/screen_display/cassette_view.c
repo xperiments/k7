@@ -11,7 +11,7 @@
  * The Label cover comes from assets/labels/k7logo.png: an 800x480 image, the panel's
  * own size, exported as RGB565A8 and drawn full-bleed at 0,0. Its black triangle and
  * circle carry alpha, so the reels show through them; once the cover is up the screen
- * background fades from COL_BG to the cover's own backdrop, COL_COVER_BG. While the
+ * background fades from k_col_bg to the cover's own k_col_cover_bg. While the
  * cover is up the reels, and with them the VU arcs, are behind it, so the same two
  * meters move to the bottom row as rows of short vertical bars on the progress band's
  * centre line.
@@ -72,8 +72,8 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 226 }, { 600-8+2, 226 } 
 #define HUB_FRAME_COUNT 36
 #define HUB_RIM_W 2
 #define HUB_SPOKE_W 4
-#define HUB_SPOKE_R0 30    /* the divider stops short of the centre and of the rim (82); */
-#define HUB_SPOKE_R1 66    /* together they cut the box it invalidates ~3x on 0..84 */
+#define HUB_SPOKE_R0 26    /* the divider stops short of the centre and of the rim (82); */
+#define HUB_SPOKE_R1 46    /* together they cut the box it invalidates ~7x on 0..84 */
 
 /* One frame's angle, and half a turn, where the opposite spoke sits. LVGL measures
  * angles from 3 o'clock, positive clockwise, and the model's hub_frame rises with the
@@ -143,20 +143,31 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 #define BAND_X LABEL_X
 #define BAND_W LABEL_W
 
-/* Colours, read off the reference. */
-#define COL_BG          0x3C2B2A
-#define COL_COVER_BG     0xB48744   /* the cover's background, behind the transparent shapes */
-#define COL_TAPE        0x2E1C19
-#define COL_TAPE_DARK   0xE54820
-#define COL_RED         0xE54820
-#define COL_LABEL       COL_TAPE_DARK //0xFFFFFF
-#define COL_INK         0x444444
-#define COL_COVER_INK   0xEEEEEE   /* the dark cover needs light ink */
-#define COL_HUB_RING    0x000000
-#define COL_HUB_INK     COL_TAPE_DARK   /* the art's own dark, read off assets/hub/001.png */
-#define COL_BAR_BG      0xb9c0bb
-#define COL_BAR_FG      0xf03d3a
-#define COL_ART_BG      0x141414   /* the Artwork screen's backdrop when the Case did not decode */
+/* The palette, read off the reference. lv_color_t is {blue, green, red} of 8 bits each
+ * (lv_color.h:109-113) and LV_COLOR_MAKE() is an aggregate initialiser (:215), so these
+ * are real constants: no lv_color_hex() is evaluated where a colour is used. */
+static const lv_color_t k_col_bg        = LV_COLOR_MAKE(0x3C, 0x2B, 0x2A);
+/* The playing red: the tape's edge, and the hub's rim and divider. */
+static const lv_color_t k_col_tape_dark = LV_COLOR_MAKE(0xF1, 0x5A, 0x22);
+/* The tape's own body. The same value as the edge today, and kept apart because the
+ * rewind cross-fades the edge into it (tape_edge_color()), so the two are free to
+ * differ again without touching a call site. */
+static const lv_color_t k_col_tape      = LV_COLOR_MAKE(0xF1, 0x5A, 0x22);
+static const lv_color_t k_col_hub_ring  = LV_COLOR_MAKE(0xF1, 0x5A, 0x22); /* the rim's fill, the tape's red */
+static const lv_color_t k_col_hub_ink   = LV_COLOR_MAKE(0x66, 0x66, 0x66); /* the divider and the hub's centre dot */
+static const lv_color_t k_col_bar_bg    = LV_COLOR_MAKE(0xB9, 0xC0, 0xBB);
+static const lv_color_t k_col_bar_fg    = LV_COLOR_MAKE(0xF0, 0x3D, 0x3A);
+static const lv_color_t k_col_vu_peak   = LV_COLOR_MAKE(0xFF, 0xD0, 0x8A); /* the VU's peak dash */
+static const lv_color_t k_col_guide     = LV_COLOR_MAKE(0x57, 0x35, 0x34); /* the layout guides at the top */
+
+/* The touch board's own Levels: its cover, its small label and the Artwork backdrop. They
+ * live inside the guard because a board without those Levels never reads them. */
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+static const lv_color_t k_col_cover_bg  = LV_COLOR_MAKE(0xB4, 0x87, 0x44); /* behind the cover's shapes */
+static const lv_color_t k_col_cover_ink = LV_COLOR_MAKE(0xEE, 0xEE, 0xEE); /* the dark cover needs light ink */
+static const lv_color_t k_col_art_bg    = LV_COLOR_MAKE(0x14, 0x14, 0x14); /* until the Case lands */
+static const lv_color_t k_col_paper     = LV_COLOR_MAKE(0x00, 0x00, 0x00); /* the small label's fill */
+#endif
 
 /* The tape's solid edge enters at the tangent and runs TAPE_ARC_DEG to the top;
  * the dashed VU continues from there. LVGL angles: 0 = 3 o'clock, 90 = 6, and
@@ -168,7 +179,6 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 #define VU_DASH_COUNT ((VU_ARC_DEG + VU_DASH_DEG + VU_GAP_DEG - 1) / (VU_DASH_DEG + VU_GAP_DEG))
 #define TAPE_WIDTH 8
 #define VU_WIDTH 8
-#define VU_PEAK_LIT 0xffd08a
 
 /* The tape's red edge and the VU are playing indications, not part of the reel change:
  * when the rewind starts they fade out, stay dark while the tape winds back, and fade
@@ -271,13 +281,13 @@ static void make_decorative(lv_obj_t *obj)
     }
 }
 
-static lv_obj_t *box(lv_obj_t *parent, int x, int y, int w, int h, int r, uint32_t bg)
+static lv_obj_t *box(lv_obj_t *parent, int x, int y, int w, int h, int r, lv_color_t bg)
 {
     lv_obj_t *o = lv_obj_create(parent);
     lv_obj_remove_style_all(o);
     lv_obj_set_pos(o, x, y);
     lv_obj_set_size(o, w, h);
-    lv_obj_set_style_bg_color(o, lv_color_hex(bg), 0);
+    lv_obj_set_style_bg_color(o, bg, 0);
     lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(o, r, 0);
     lv_obj_set_scrollable(o, false);
@@ -288,24 +298,24 @@ static lv_obj_t *box(lv_obj_t *parent, int x, int y, int w, int h, int r, uint32
  * only the border, so whatever is under the box shows through. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 static lv_obj_t *border_box(lv_obj_t *parent, int x, int y, int w, int h, int r,
-                            uint32_t bg, lv_opa_t bg_opa,
-                            uint32_t border_col, int border_width)
+                            lv_color_t bg, lv_opa_t bg_opa,
+                            lv_color_t border_col, int border_width)
 {
     lv_obj_t *o = lv_obj_create(parent);
     lv_obj_remove_style_all(o);
     lv_obj_set_pos(o, x, y);
     lv_obj_set_size(o, w, h);
-    lv_obj_set_style_bg_color(o, lv_color_hex(bg), 0);
+    lv_obj_set_style_bg_color(o, bg, 0);
     lv_obj_set_style_bg_opa(o, bg_opa, 0);
     lv_obj_set_style_radius(o, r, 0);
-    lv_obj_set_style_border_color(o, lv_color_hex(border_col), 0);
+    lv_obj_set_style_border_color(o, border_col, 0);
     lv_obj_set_style_border_width(o, border_width, 0);
     lv_obj_set_scrollable(o, false);
     return o;
 }
 #endif
 
-static lv_obj_t *disc(lv_obj_t *parent, int cx, int cy, int d, uint32_t bg)
+static lv_obj_t *disc(lv_obj_t *parent, int cx, int cy, int d, lv_color_t bg)
 {
     return box(parent, cx - d / 2, cy - d / 2, d, d, LV_RADIUS_CIRCLE, bg);
 }
@@ -510,12 +520,12 @@ static lv_opa_t vu_opa(lv_opa_t base)
     return (lv_opa_t)((uint32_t)base * s_tape_opa / LV_OPA_COVER);
 }
 
-/* The tape edge's colour follows the rewind envelope: the playing red (COL_TAPE_DARK)
- * when s_tape_opa is full, the tape's own brown (COL_TAPE) when it is zero. On the pack
+/* The tape edge's colour follows the rewind envelope: the playing red (k_col_tape_dark)
+ * when s_tape_opa is full, the tape's own brown (k_col_tape) when it is zero. On the pack
  * the edge then merges with the tape; the strands stay visible as dark tape. */
 static lv_color_t tape_edge_color(void)
 {
-    return lv_color_mix(lv_color_hex(COL_TAPE_DARK), lv_color_hex(COL_TAPE), s_tape_opa);
+    return lv_color_mix(k_col_tape_dark, k_col_tape, s_tape_opa);
 }
 
 /* The solid tape edge, drawn on the pack so it redraws only when the pack resizes. */
@@ -543,7 +553,7 @@ static void vu_compact_draw(lv_layer_t *layer, int i)
     for (int k = 0; k < VU_COMPACT_COUNT; k++) {
         bool peak = lit > 0 && k == lit - 1;
         int y = y0 - k * (VU_COMPACT_DASH_H + VU_COMPACT_DASH_GAP);
-        draw_dash(layer, x, y, lv_color_hex(peak ? VU_PEAK_LIT : COL_TAPE_DARK),
+        draw_dash(layer, x, y, (peak ? k_col_vu_peak : k_col_tape_dark),
                   k < lit ? vu_opa(LV_OPA_COVER) : vu_opa(LV_OPA_30));
     }
 }
@@ -570,7 +580,7 @@ static void vu_draw_cb(lv_event_t *e)
         if (len <= 0) break;
         int s = start + dir * off;
         bool peak = lit > 0 && k == lit - 1;
-        lv_color_t color = lv_color_hex(peak ? VU_PEAK_LIT : COL_TAPE_DARK);
+        lv_color_t color = peak ? k_col_vu_peak : k_col_tape_dark;
         lv_opa_t opa = k < lit ? vu_opa(LV_OPA_COVER) : vu_opa(LV_OPA_30);
         draw_arc(layer, k_hub[i].x, k_hub[i].y, r - 2, s, len, dir,
                  color, opa, VU_WIDTH, 0);
@@ -669,9 +679,9 @@ static void apply_frame(const cassette_frame_t *f)
     if (tape_opa != s_tape_opa) {
         tape_opa_apply(tape_opa);
         if (tape_opa == LV_OPA_TRANSP)
-            ESP_LOGI(TAG, "rewind: tape edge now COL_TAPE, VU hidden");
+            ESP_LOGI(TAG, "rewind: tape edge now the tape's colour, VU hidden");
         else if (tape_opa == LV_OPA_COVER)
-            ESP_LOGI(TAG, "rewind: tape edge back to COL_TAPE_DARK, VU back");
+            ESP_LOGI(TAG, "rewind: tape edge back to the playing red, VU back");
     }
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -720,7 +730,7 @@ static void apply_frame(const cassette_frame_t *f)
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 /* The cover's alpha shapes look through to the screen. The screen's backdrop is mixed
- * between the cassette's colour and the cover's: 0 is COL_BG, 255 is COL_COVER_BG, so
+ * between the cassette's colour and the cover's: 0 is k_col_bg, 255 is k_col_cover_bg, so
  * the Label cover level can fade its own backdrop in behind the picture. */
 #define COVER_BG_MIX_COVER 255
 static uint8_t s_cover_bg_mix;
@@ -730,8 +740,7 @@ static void cover_bg_mix_set(uint8_t mix)
     if (mix == s_cover_bg_mix) return;
     s_cover_bg_mix = mix;
     lv_obj_set_style_bg_color(lv_screen_active(),
-                              lv_color_mix(lv_color_hex(COL_COVER_BG),
-                                           lv_color_hex(COL_BG), mix), 0);
+                              lv_color_mix(k_col_cover_bg, k_col_bg, mix), 0);
 }
 
 static void cover_bg_fade_cb(void *var, int32_t value)
@@ -1040,7 +1049,7 @@ static void screen_clicked_cb(lv_event_t *e)
 void cassette_view_create(void)
 {
     lv_obj_t *scr = lv_screen_active();
-    lv_obj_set_style_bg_color(scr, lv_color_hex(COL_BG), 0);
+    lv_obj_set_style_bg_color(scr, k_col_bg, 0);
     lv_obj_set_scrollable(scr, false);
 
 
@@ -1055,7 +1064,7 @@ void cassette_view_create(void)
 
         lv_line_set_points(line, points[i], 2);
 
-        lv_obj_set_style_line_color(line, lv_color_hex(0x573534), 0);
+        lv_obj_set_style_line_color(line, k_col_guide, 0);
         lv_obj_set_style_line_width(line, 3, 0);
         lv_obj_set_style_line_opa(line, LV_OPA_COVER, 0);
     }
@@ -1071,11 +1080,11 @@ void cassette_view_create(void)
     for (int i = 0; i < 2; i++) {
 
         s_pack_d[i] = (i == 0) ? PACK_MAX_D : PACK_MIN_D;
-        s_pack[i] = disc(scr, k_hub[i].x, k_hub[i].y, s_pack_d[i], COL_TAPE);
+        s_pack[i] = disc(scr, k_hub[i].x, k_hub[i].y, s_pack_d[i], k_col_tape);
 
         s_strand[i] = lv_line_create(scr);
         lv_obj_remove_style_all(s_strand[i]);
-        lv_obj_set_style_line_color(s_strand[i], lv_color_hex(COL_TAPE_DARK), 0);
+        lv_obj_set_style_line_color(s_strand[i], k_col_tape_dark, 0);
         lv_obj_set_style_line_width(s_strand[i], STRAND_W, 0);
         strand_set(i, s_pack_d[i]);
         lv_obj_add_event_cb(s_pack[i], pack_draw_cb, LV_EVENT_DRAW_MAIN_END,
@@ -1086,20 +1095,21 @@ void cassette_view_create(void)
      * move, and each is its own object so its bounding box stays small. */
     for (int i = 0; i < 2; i++) {
         int cx = k_hub[i].x, cy = k_hub[i].y;
-        lv_obj_t *rim = disc(scr, cx, cy, HUB_RING_D, COL_HUB_RING);
-        lv_obj_set_style_border_color(rim, lv_color_hex(COL_HUB_INK), 0);
+        lv_obj_t *rim = disc(scr, cx, cy, HUB_RING_D, k_col_hub_ring);
+        lv_obj_set_style_border_color(rim, k_col_hub_ink, 0);
         lv_obj_set_style_border_opa(rim, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(rim, HUB_RIM_W, 0);
 
         for (int k = 0; k < 2; k++) {
             lv_obj_t *sp = lv_line_create(scr);
             lv_obj_remove_style_all(sp);
-            lv_obj_set_style_line_color(sp, lv_color_hex(COL_HUB_INK), 0);
+            lv_obj_set_style_line_color(sp, k_col_hub_ink, 0);
             lv_obj_set_style_line_width(sp, HUB_SPOKE_W, 0);
             lv_obj_set_style_line_rounded(sp, true, 0);
             s_hub_spoke[i][k].obj = sp;
         }
 
+        lv_obj_t *pack_center = disc(scr, k_hub[i].x, k_hub[i].y, 10, k_col_hub_ink);
         s_shown_hub[i] = 0;
         hub_frame_set(i, 0);
     }
@@ -1128,10 +1138,10 @@ void cassette_view_create(void)
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     s_paper = border_box(scr, LABEL_X, LABEL_Y, LABEL_W, LABEL_H, LABEL_R,
-                         0x000000, 30, COL_TAPE_DARK, 2);
+                         k_col_paper, 30, k_col_tape_dark, 2);
     lv_obj_set_y(s_paper, PAPER_HIDDEN_Y);
     lv_obj_set_hidden(s_paper, true);
-    s_title = text(s_paper, &oxanium_36, lv_color_hex(COL_TAPE_DARK),
+    s_title = text(s_paper, &oxanium_36, k_col_tape_dark,
                    LV_ALIGN_TOP_LEFT, SMALL_TITLE_X - LABEL_X, SMALL_TITLE_Y - LABEL_Y);
     lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_title, SMALL_TITLE_W);
@@ -1151,7 +1161,7 @@ void cassette_view_create(void)
     lv_obj_set_size(s_cover, LABEL_COVER_W, LABEL_COVER_H);
     lv_obj_set_y(s_cover, COVER_HIDDEN_Y);
     lv_obj_set_hidden(s_cover, true);
-    s_cover_title = text(s_cover, &oxanium_36, lv_color_hex(COL_COVER_INK),
+    s_cover_title = text(s_cover, &oxanium_36, k_col_cover_ink,
                          LV_ALIGN_TOP_LEFT, COVER_TITLE_X, COVER_TITLE_Y);
     lv_label_set_long_mode(s_cover_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_cover_title, COVER_TITLE_W);
@@ -1163,8 +1173,8 @@ void cassette_view_create(void)
     lv_obj_set_size(s_bar, BAND_W, 20);
     lv_obj_set_pos(s_bar, BAND_X, BAND_Y);
     lv_bar_set_range(s_bar, 0, 1000);
-    lv_obj_set_style_bg_color(s_bar, lv_color_hex(COL_BAR_BG), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(s_bar, lv_color_hex(COL_BAR_FG), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(s_bar, k_col_bar_bg, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_bar, k_col_bar_fg, LV_PART_INDICATOR);
     lv_obj_set_style_radius(s_bar, 5, LV_PART_MAIN);
     lv_obj_set_style_radius(s_bar, 10, LV_PART_INDICATOR);
 
@@ -1175,7 +1185,7 @@ void cassette_view_create(void)
      * is full-bleed at 0,0; the Track picture fills its window at 101,23. The loader
      * owns both sets of pixels, and both are hidden until they land. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    s_art_sheet = box(scr, 0, 0, 800, 480, 0, COL_ART_BG);
+    s_art_sheet = box(scr, 0, 0, 800, 480, 0, k_col_art_bg);
     lv_obj_set_y(s_art_sheet, ART_HIDDEN_Y);
     lv_obj_set_hidden(s_art_sheet, true);
 
@@ -1195,7 +1205,7 @@ void cassette_view_create(void)
     lv_obj_set_size(s_art_img, ART_W, ART_H);
     lv_obj_set_hidden(s_art_img, true);
 
-    s_art_title = text(s_art_sheet, &oxanium_36, lv_color_hex(COL_COVER_INK),
+    s_art_title = text(s_art_sheet, &oxanium_36, k_col_cover_ink,
                        LV_ALIGN_TOP_MID, 0, ART_TITLE_Y);
     lv_obj_set_width(s_art_title, ART_TITLE_W);
     lv_label_set_long_mode(s_art_title, LV_LABEL_LONG_SCROLL);

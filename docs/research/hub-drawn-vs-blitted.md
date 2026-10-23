@@ -1,8 +1,8 @@
 # The hub: 36 blitted frames or LVGL-drawn primitives — what the space really is, and what the draw costs (2026-10-23)
 
 > **Status: implemented.** Branch `ui/drawn-hub` replaces the blob with the drawn hub that
-> §5 prices: a static rim and two opposite radii from r 30 to 66, turning as two objects.
-> The dot §6 argues for was built and then dropped as unneeded.
+> §5 prices: a static rim and two opposite radii (r 26…46 as tuned at the time of writing),
+> turning as two objects. The dot §6 argues for was built and then dropped as unneeded.
 > §1–§2 below describe the arrangement *before* that change — they are the baseline the
 > measurements are against, and `hub_frames.bin` no longer exists in the tree.
 > `docs/research/panel-rgb-lvgl-performance.md` is a dated snapshot of an earlier build and
@@ -239,16 +239,16 @@ The consequences that are easy to get wrong:
 |---|---|---|---|
 | divider as **one** `lv_line` holding the diameter | ~24 400 | 1.3× more | 1.5–3.7 ms |
 | two opposite radii r 20…84, four objects | ~14 400 | 1.3× less | 0.9–2.2 ms |
-| **as built: two opposite radii r 30…66, width 4, no dot** | **~4 700** | **3.9× less** | **0.28–0.71 ms** |
+| **as built: two opposite radii r 26…46, width 4** | **~2 200** | **8.4× less** | **0.13–0.33 ms** |
 
 The last row is the geometry that shipped. Trimming the divider at both ends pays more than any other
-decision in this note: 0…84 as one object is ~24 400 px/cycle, and the same divider cut to 30…66 is
-~4 700 — a factor of five, from moving two endpoints.
+decision in this note: the same two objects spanning 0…84 invalidate ~14 900 px/cycle, and cut to
+26…46 they invalidate ~2 200 — a factor of 6.8, from moving four endpoints.
 
-The shipped row moves **3.9× fewer pixels** than the blit, and because a drawn pixel costs only
+The shipped row moves **8.4× fewer pixels** than the blit, and because a drawn pixel costs only
 1.5–2× what a memcpy'd one does (60–150 ns against 40–80 ns), that survives translation into time:
-**0.28–0.71 ms against 0.74–1.5 ms**, so the drawn hub is roughly 2× cheaper per cycle *and* frees the
-648 KiB. Earlier revisions of this note claimed the time was a wash; that was true of the r 20…84
+**0.13–0.33 ms against 0.74–1.5 ms**, so the drawn hub is several times cheaper per cycle *and* frees
+the 648 KiB. Earlier revisions of this note claimed the time was a wash; that was true of the r 20…84
 divider it first described, not of the one that shipped.
 
 For the six-mark variant (a rim, a crosshair and six radial marks), the marks are ~690 px each and the
