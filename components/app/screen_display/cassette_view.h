@@ -1,12 +1,19 @@
 #pragma once
 /*
- * The cassette screen's LVGL view: objects, layout, fonts and the Level machine.
- * Private to screen_display; the tape arithmetic is components/portable/cassette.
+ * The cassette screen: its composition, its pose and the model that drives it.
  *
- * The three Levels (Bare, Label cover, Artwork) live here. A one-finger down/up swipe
- * moves between them; the two-finger swipe is reserved for the menu. The panel board's
- * artwork loader locates and decodes a Track's picture and hands it in under the LVGL
- * lock, so the view never touches the card or a decoder.
+ * Private to screen_display; the tape arithmetic is components/portable/cassette.
+ * The screen's parts are private modules of the same component:
+ *
+ *   cassette_tapes    the packs, strands, rollers, run, hubs and the panel's frames
+ *   cassette_meter    the VU meter
+ *   cassette_levels   the Level machine, the Label, the Label cover and Artwork
+ *   screen_input      what a touch means, as intents
+ *   cassette_layout   the design grid (portable), cassette_style the palette,
+ *                     cassette_widgets the object helpers
+ *
+ * The panel board's artwork loader locates and decodes a Track's picture and hands it
+ * in under the LVGL lock, so no part of the screen touches the card or a decoder.
  */
 #include "lvgl.h"
 
@@ -15,11 +22,11 @@
 void cassette_view_create(void);
 void cassette_view_update(const mini_icecast_status_t *st);
 
-/* Where the cassette sits: 256 (LV_SCALE_NONE) is its design size, 200 is 0.78x, and the
- * design box is centred in the panel and then moved by (offset_x, offset_y) screen pixels
- * - right and down positive. The whole layout is re-placed at the new pose: at once when
- * ms is 0, or eased over ms milli-seconds, with the size and the offset moving together.
- * The scale is clamped to 32..1024; the offset is not.
+/* Where the cassette sits: 256 (CASSETTE_SCALE_NONE) is its design size, 200 is 0.78x,
+ * and the design box is centred in the panel and then moved by (offset_x, offset_y)
+ * screen pixels - right and down positive. The whole layout is re-placed at the new
+ * pose: at once when ms is 0, or eased over ms milli-seconds, with the size and the
+ * offset moving together. The scale is clamped to 32..1024; the offset is not.
  *
  * Called under the LVGL lock, like everything else on the screen. */
 void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms);
