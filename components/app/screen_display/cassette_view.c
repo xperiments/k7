@@ -64,7 +64,10 @@
 #include "lvgl.h"
 
 #include "cassette.h"
+#include "cassette_layout.h"
+#include "cassette_style.h"
 #include "cassette_view.h"
+#include "cassette_widgets.h"
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 #include "artwork_loader.h"
 #include "label_cover.h"
@@ -86,23 +89,16 @@ static const char *TAG = "screen";
  * blitted, so the 1-2 px lines stay sharp at any scale. The transform style is what
  * costs: it puts an ARGB layer under the container and re-samples the whole picture on
  * every repaint (see the header). */
-#define CASSETTE_SCALE       256   /* at rest: the design grid, pixel for pixel */
 #define CASSETTE_SCALE_LABEL 200   /* while the small label is up, so it clears the tape */
 
-typedef struct {
-    int scale;   /* 256 is the design box, pixel for pixel */
-    int dx;      /* screen pixels from the centred position: +x right, +y down */
-    int dy;
-} cassette_pose_t;
+/* The current pose, as a value: the layout module owns the design-grid conversion
+ * (cassette_layout.h). The macros are the view's shorthand for it; the parts that
+ * become modules take the pose on their place() call instead of reading this. */
+static cassette_pose_t s_pose = { CASSETTE_SCALE_NONE, 0, 0 };
 
-static cassette_pose_t s_pose = { CASSETTE_SCALE, 0, 0 };
-
-#define SC(v)  ((v) * s_pose.scale / 256)            /* a design length, in pixels */
-/* The design box, centred in the panel and then moved by the pose's offset. */
-#define CASSETTE_OX ((800 - SC(800)) / 2 + s_pose.dx)
-#define CASSETTE_OY ((480 - SC(480)) / 2 + s_pose.dy)
-#define SCX(x) (CASSETTE_OX + SC(x))                 /* a design x, in screen pixels */
-#define SCY(y) (CASSETTE_OY + SC(y))                 /* a design y, in screen pixels */
+#define SC(v)  cassette_len(s_pose, (v))             /* a design length, in pixels */
+#define SCX(x) cassette_x(s_pose, (x))               /* a design x, in screen pixels */
+#define SCY(y) cassette_y(s_pose, (y))               /* a design y, in screen pixels */
 
 /* The 800x480 panel: the hub rim is 168 px. The packs stay the reference's 245/310 so
  * the tape rings the hub at both ends of a side. A pack is not a filled disc: its
@@ -152,7 +148,7 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
  * STRAND_GUIDE_Y, and its diameter is rounded to an even number, so the tape's wrap ends
  * on the run's own row and on the roller's own rim. Scaling the design centre and the
  * design radius separately rounds them onto different pixels. */
-#define CASSETTE_GUIDE_D (SC(STRAND_GUIDE_D) & ~1)
+#define CASSETTE_GUIDE_D (cassette_len_even(s_pose, STRAND_GUIDE_D))
 #define CASSETTE_GUIDE_R (CASSETTE_GUIDE_D / 2)
 #define CASSETTE_GUIDE_Y (SCY(STRAND_RUN_Y) - CASSETTE_GUIDE_R)
 
@@ -204,52 +200,9 @@ static const double k_hub_step = 2.0 * 3.14159265358979323846 / (double)HUB_FRAM
 #define ART_HIDDEN_Y (-480 - 8)
 #endif
 
-/* The palette, read off the reference, as 0xRRGGBB. lv_color_hex() is a function
- * (lv_color.h:283), so it cannot initialise a constant; COL_HEX() is the same split done
- * at compile time on top of LVGL's own aggregate initialiser (lv_color.h:215). The result
- * is a real lv_color_t, so no conversion runs where a colour is used. */
-#define COL_HEX(c) LV_COLOR_MAKE(((c) >> 16) & 0xFF, ((c) >> 8) & 0xFF, (c) & 0xFF)
-
-/* A darker 0xRRGGBB: `pct` percent of the original, folded at compile time so a shade is a
- * const like any other colour - COL_DARKEN_HEX(COL_PRIMARY, 70) is 0xA83F17. It takes a
- * literal, not a name, because the channels of an lv_color_t are not a constant expression
- * once it is an object; to darken a colour that is already an lv_color_t, LVGL has
- * lv_color_darken(). */
-#define COL_DARKEN_HEX(c, pct)                                                        \
-    COL_HEX((((((c) >> 16) & 0xFF) * (pct) / 100) << 16) |                            \
-            (((((c) >> 8) & 0xFF) * (pct) / 100) << 8) |                              \
-             ((((c) & 0xFF) * (pct) / 100)))
-
-#define COL_BLACK 0x111111
-#define COL_PRIMARY 0xF15A22
-
-static const lv_color_t k_col_black        = COL_HEX(COL_BLACK);
-static const lv_color_t k_col_bg        = COL_HEX(COL_BLACK);
-/* The playing red: the hub's ring and divider, and the small label's ink. */
-static const lv_color_t k_col_tape_dark = COL_HEX(COL_PRIMARY);
-/* The tape's own body, and the dim end of the rewind fade: the hub ring cross-fades
- * from the playing red into this. */
-static const lv_color_t k_col_tape      = COL_DARKEN_HEX(COL_PRIMARY, 80);
-static const lv_color_t k_col_hub_ring  = COL_DARKEN_HEX(COL_PRIMARY, 10);
-static const lv_color_t k_col_hub_ink   = COL_DARKEN_HEX(COL_PRIMARY, 80);
-
-/* The VU meter, read off assets: a grid of the lit red at half strength, and segments
- * that are either the lit red or this dim red. There is no panel behind them - the
- * cassette shows through. */
-static const lv_color_t k_col_meter_dim = COL_HEX(0x7F2C18);
-static const lv_color_t k_col_meter_lit = COL_HEX(COL_PRIMARY);
-static const lv_color_t k_col_meter_back = COL_DARKEN_HEX(COL_PRIMARY, 30);
-
-/* The touch board's own Levels: its cover, its small label and the Artwork backdrop. They
- * live inside the guard because a board without those Levels never reads them. */
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-static const lv_color_t k_col_back      = COL_DARKEN_HEX(COL_PRIMARY, 20); /* the frames' border */
-static const lv_color_t k_col_cover_bg  = COL_HEX(0xB48744); /* behind the cover's shapes */
-static const lv_color_t k_col_cover_ink = COL_HEX(0xEEEEEE); /* the dark cover needs light ink */
-static const lv_color_t k_col_art_bg    = COL_HEX(0x141414); /* until the Case lands */
-static const lv_color_t k_col_paper     = COL_HEX(0x000000); /* the small label's fill */
-static const lv_color_t k_col_primary   = COL_HEX(COL_PRIMARY); /* its border and title */
-#endif
+/* The palette and the LVGL object helpers live in cassette_style.h and
+ * cassette_widgets.h: the view, the tapes, the meter and the Levels all read the
+ * same colours and build objects the same way. */
 
 /* The hub ring is the playing indication: full red while a track plays, dimmed while a
  * reel change winds the tape back, back over its last second as the new side starts.
@@ -318,68 +271,9 @@ static lv_opa_t s_tape_opa = LV_OPA_COVER; /* the hub ring's; 0 through the reel
 
 /* ------------------------------------------------------------------ helpers */
 
-/*
- * The screen is a picture, not a control surface today: every decoration must stop
- * taking a press, or the press stops at whichever box is under the finger and the
- * screen's own click never fires. Clearing the flag on the whole tree makes the screen
- * the one hit-test target, which is the "tap anywhere" this view gives. A future
- * control is created after this walk and stays clickable, so it takes its own press.
- */
-static void make_decorative(lv_obj_t *obj)
-{
-    uint32_t count = lv_obj_get_child_count(obj);
-    for (uint32_t i = 0; i < count; i++) {
-        lv_obj_t *child = lv_obj_get_child(obj, i);
-        lv_obj_set_clickable(child, false);
-        make_decorative(child);
-    }
-}
-
-static lv_obj_t *box(lv_obj_t *parent, int x, int y, int w, int h, int r, lv_color_t bg)
-{
-    lv_obj_t *o = lv_obj_create(parent);
-    lv_obj_remove_style_all(o);
-    lv_obj_set_pos(o, x, y);
-    lv_obj_set_size(o, w, h);
-    lv_obj_set_style_bg_color(o, bg, 0);
-    lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(o, r, 0);
-    lv_obj_set_scrollable(o, false);
-    return o;
-}
-
-/* A rounded box with a border. `bg_opa` makes the fill optional: LV_OPA_TRANSP leaves
- * only the border, so whatever is under the box shows through. */
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-static lv_obj_t *border_box(lv_obj_t *parent, int x, int y, int w, int h, int r,
-                            lv_color_t bg, lv_opa_t bg_opa,
-                            lv_color_t border_col, int border_width)
-{
-    lv_obj_t *o = lv_obj_create(parent);
-    lv_obj_remove_style_all(o);
-    lv_obj_set_pos(o, x, y);
-    lv_obj_set_size(o, w, h);
-    lv_obj_set_style_bg_color(o, bg, 0);
-    lv_obj_set_style_bg_opa(o, bg_opa, 0);
-    lv_obj_set_style_radius(o, r, 0);
-    lv_obj_set_style_border_color(o, border_col, 0);
-    lv_obj_set_style_border_width(o, border_width, 0);
-    lv_obj_set_scrollable(o, false);
-    return o;
-}
-#endif
-
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-static lv_obj_t *text(lv_obj_t *parent, const lv_font_t *font, lv_color_t colour,
-                      lv_align_t align, int x, int y)
-{
-    lv_obj_t *l = lv_label_create(parent);
-    lv_obj_set_style_text_font(l, font, 0);
-    lv_obj_set_style_text_color(l, colour, 0);
-    lv_obj_align(l, align, x, y);
-    return l;
-}
-#endif
+/* The object helpers are cassette_widgets.h: every object the screen builds is
+ * decorative at construction, so the screen is the one hit-test target and there is
+ * no finished-tree walk with an ordering rule for future controls. */
 
 /* Lay the tape path for side `i` as one polyline: the external tangent from the pack to
  * its roller, then the wrap around the roller down to the horizontal run. The tangent
@@ -651,7 +545,7 @@ static int pack_diameter(uint16_t fill)
 {
     double min = PACK_MIN_D, max = PACK_MAX_D;
     double d = sqrt(min * min + (max * max - min * min) * (double)fill / 1000.0);
-    return ((int)lround(d)) & ~1;
+    return cassette_even((int)lround(d));
 }
 
 /* ------------------------------------------------------------------ layout */
@@ -740,44 +634,33 @@ static void cassette_place(void)
 static cassette_pose_t s_pose_from;   /* the pose the change in flight started at */
 static cassette_pose_t s_pose_to;     /* and the one it is heading for */
 
-static int pose_lerp(int from, int to, int32_t step)
-{
-    return from + (int)(((int64_t)(to - from) * step) / 1024);
-}
-
 static void pose_anim_cb(void *var, int32_t step)
 {
     (void)var;
-    s_pose.scale = pose_lerp(s_pose_from.scale, s_pose_to.scale, step);
-    s_pose.dx    = pose_lerp(s_pose_from.dx, s_pose_to.dx, step);
-    s_pose.dy    = pose_lerp(s_pose_from.dy, s_pose_to.dy, step);
+    s_pose = cassette_pose_lerp(s_pose_from, s_pose_to, step);
     cassette_place();
 }
 
 void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms)
 {
     if (!s_cassette) return;
-    if (scale < 32) scale = 32;      /* below this the tape and the rings stop reading */
-    if (scale > 1024) scale = 1024;
 
-    /* A change in flight is replaced, not stacked, and the new one starts from the pose
-     * that is on screen now - the same way the backdrop fade reverses. */
+    /* The layout clamps the scale. A change in flight is replaced, not stacked, and the
+     * new one starts from the pose that is on screen now - the same way the backdrop
+     * fade reverses. */
+    cassette_pose_t target = cassette_pose(scale, offset_x, offset_y);
     bool was_animating = lv_anim_delete(s_cassette, pose_anim_cb);
-    if (!was_animating && scale == s_pose.scale &&
-        offset_x == s_pose.dx && offset_y == s_pose.dy) return;
+    if (!was_animating && target.scale == s_pose.scale &&
+        target.dx == s_pose.dx && target.dy == s_pose.dy) return;
 
     if (ms == 0) {
-        s_pose.scale = scale;
-        s_pose.dx = offset_x;
-        s_pose.dy = offset_y;
+        s_pose = target;
         cassette_place();
         return;
     }
 
     s_pose_from = s_pose;
-    s_pose_to.scale = scale;
-    s_pose_to.dx = offset_x;
-    s_pose_to.dy = offset_y;
+    s_pose_to = target;
 
     lv_anim_t a;
     lv_anim_init(&a);
@@ -1028,7 +911,7 @@ static void paper_set_shown(bool show)
 
     /* The bar and the cassette move together: the cassette gives the bar its room, so the
      * label never covers the tape. Same duration, so the two arrive as one. */
-    cassette_view_set_scale(show ? CASSETTE_SCALE_LABEL : CASSETTE_SCALE, 0, show ? -60:0,
+    cassette_view_set_scale(show ? CASSETTE_SCALE_LABEL : CASSETTE_SCALE_NONE, 0, show ? -60:0,
                             PAPER_ANIM_MS);
 
     lv_anim_delete(s_paper, (lv_anim_exec_xcb_t)lv_obj_set_y);
@@ -1055,7 +938,7 @@ static void paper_hide_now(void)
     if (!s_paper) return;
     /* A Level change is one frame: the cassette goes back to its resting size with it,
      * not on the bar's slide. */
-    cassette_view_set_scale(CASSETTE_SCALE, 0, 0, 0);
+    cassette_view_set_scale(CASSETTE_SCALE_NONE, 0, 0, 0);
     lv_anim_delete(s_paper, (lv_anim_exec_xcb_t)lv_obj_set_y);
     s_paper_shown = false;
     lv_obj_set_y(s_paper, PAPER_HIDDEN_Y);
@@ -1201,8 +1084,8 @@ void cassette_view_create(void)
     /* The cassette's own container: the body's objects are its children, not the screen's,
      * so the picture is one thing. It is full-bleed at 0,0 and has neither fill nor border,
      * which keeps every coordinate below a screen coordinate and lets the screen's own
-     * backdrop show through. It takes no press: make_decorative() clears that with the
-     * rest of the tree. */
+     * backdrop show through. It takes no press, and neither does anything under it:
+     * every object is decorative at construction. */
     s_cassette = lv_obj_create(scr);
     lv_obj_remove_style_all(s_cassette);
     lv_obj_set_pos(s_cassette, 0, 0);
@@ -1217,8 +1100,8 @@ void cassette_view_create(void)
      * cassette_place() is the one place that knows where the scale puts it, and it runs
      * once the picture is complete. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    s_frame[0] = border_box(s_cassette, 0, 0, 1, 1, 0, k_col_bg, 255, k_col_back, 1);
-    s_frame[1] = border_box(s_cassette, 0, 0, 1, 1, 0, k_col_bg, 255, k_col_back, 1);
+    s_frame[0] = cassette_border_box(s_cassette, 0, 0, 1, 1, 0, k_col_bg, 255, k_col_back, 1);
+    s_frame[1] = cassette_border_box(s_cassette, 0, 0, 1, 1, 0, k_col_bg, 255, k_col_back, 1);
 #endif
     /* The tape: two packs, two bottom rollers, the run between them and the two side
      * paths. A pack's box is transparent and carries no border; its rings are the draw
@@ -1231,6 +1114,7 @@ void cassette_view_create(void)
         lv_obj_set_style_bg_opa(s_pack[i], LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(s_pack[i], 0, 0);
         lv_obj_set_scrollable(s_pack[i], false);
+        lv_obj_set_clickable(s_pack[i], false);
         lv_obj_add_event_cb(s_pack[i], pack_draw_cb, LV_EVENT_DRAW_MAIN_END,
                             (void *)(intptr_t)i);
     }
@@ -1238,7 +1122,7 @@ void cassette_view_create(void)
     /* The rollers, under the tape: a ring whose bottom is STRAND_GUIDE_GAP px above the
      * screen edge. Its middle is empty - the tape runs round its edge. */
     for (int i = 0; i < 2; i++) {
-        s_roller[i] = box(s_cassette, 0, 0, 1, 1, LV_RADIUS_CIRCLE, k_col_bg);
+        s_roller[i] = cassette_box(s_cassette, 0, 0, 1, 1, LV_RADIUS_CIRCLE, k_col_bg);
         lv_obj_set_style_bg_opa(s_roller[i], LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_color(s_roller[i], k_col_tape, 0);
         lv_obj_set_style_border_opa(s_roller[i], LV_OPA_COVER, 0);
@@ -1251,6 +1135,7 @@ void cassette_view_create(void)
     lv_obj_remove_style_all(s_run);
     lv_obj_set_style_line_color(s_run, k_col_tape, 0);
     lv_obj_set_style_line_width(s_run, STRAND_W, 0);
+    lv_obj_set_clickable(s_run, false);
 
     /* The side paths, over the rollers: off the pack on the outer tangent, round the
      * roller and into the run. */
@@ -1260,6 +1145,7 @@ void cassette_view_create(void)
         lv_obj_set_style_bg_opa(s_strand[i], LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(s_strand[i], 0, 0);
         lv_obj_set_scrollable(s_strand[i], false);
+        lv_obj_set_clickable(s_strand[i], false);
         lv_obj_add_event_cb(s_strand[i], strand_draw_cb, LV_EVENT_DRAW_MAIN_END,
                             (void *)(intptr_t)i);
     }
@@ -1278,7 +1164,7 @@ void cassette_view_create(void)
 
     for (int ch = 0; ch < METER_COLS; ch++) {
         for (int k = 0; k < METER_CELLS; k++) {
-            lv_obj_t *seg = box(s_meter, 0, 0, 1, 1, 0, k_col_meter_dim);
+            lv_obj_t *seg = cassette_box(s_meter, 0, 0, 1, 1, 0, k_col_meter_dim);
             lv_obj_set_clickable(seg, false);
             s_meter_seg[ch][k] = seg;
         }
@@ -1288,7 +1174,7 @@ void cassette_view_create(void)
     /* The hubs: the rim is painted once and never invalidated. Only the two spokes
      * move, and each is its own object so its bounding box stays small. */
     for (int i = 0; i < 2; i++) {
-        s_rim[i] = box(s_cassette, 0, 0, 1, 1, LV_RADIUS_CIRCLE, k_col_hub_ring);
+        s_rim[i] = cassette_box(s_cassette, 0, 0, 1, 1, LV_RADIUS_CIRCLE, k_col_hub_ring);
         lv_obj_set_style_border_color(s_rim[i], k_col_black, 0);
         lv_obj_set_style_border_opa(s_rim[i], LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(s_rim[i], HUB_RIM_W, 0);
@@ -1299,6 +1185,7 @@ void cassette_view_create(void)
             lv_obj_set_style_line_color(sp, k_col_hub_ink, 0);
             lv_obj_set_style_line_width(sp, HUB_SPOKE_W, 0);
             lv_obj_set_style_line_rounded(sp, true, 0);
+            lv_obj_set_clickable(sp, false);
             s_hub_spoke[i][k].obj = sp;
         }
 
@@ -1313,11 +1200,11 @@ void cassette_view_create(void)
      * that swipe, and any Level change puts it away. It is not a Level. */
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    s_paper = border_box(scr, LABEL_X, LABEL_Y, LABEL_W, LABEL_H, LABEL_R,
+    s_paper = cassette_border_box(scr, LABEL_X, LABEL_Y, LABEL_W, LABEL_H, LABEL_R,
                          k_col_paper, 200, k_col_primary, 2);
     lv_obj_set_y(s_paper, PAPER_HIDDEN_Y);
     lv_obj_set_hidden(s_paper, true);
-    s_title = text(s_paper, &jura_36, k_col_primary,
+    s_title = cassette_text(s_paper, &jura_36, k_col_primary,
                    LV_ALIGN_TOP_LEFT, SMALL_TITLE_X - LABEL_X, SMALL_TITLE_Y - LABEL_Y);
     lv_label_set_long_mode(s_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_title, SMALL_TITLE_W);
@@ -1326,18 +1213,11 @@ void cassette_view_create(void)
      * 800x480, the panel's size, so it sits full-bleed. Its black shapes are
      * transparent, so the reels show through them; the title is written on the empty
      * band at the top and is its child. */
-    s_cover = lv_image_create(scr);
-    lv_image_set_src(s_cover, &k_label_cover);
-    /* No background or padding of the widget's own, so the image sits at the object's
-     * origin and the title's coordinates are the image's. */
-    lv_obj_set_style_bg_opa(s_cover, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(s_cover, 0, 0);
-    lv_obj_set_style_pad_all(s_cover, 0, 0);
-    lv_obj_set_pos(s_cover, COVER_X, COVER_Y);
-    lv_obj_set_size(s_cover, LABEL_COVER_W, LABEL_COVER_H);
+    s_cover = cassette_image(scr, &k_label_cover, COVER_X, COVER_Y,
+                             LABEL_COVER_W, LABEL_COVER_H);
     lv_obj_set_y(s_cover, COVER_HIDDEN_Y);
     lv_obj_set_hidden(s_cover, true);
-    s_cover_title = text(s_cover, &jura_36, k_col_cover_ink,
+    s_cover_title = cassette_text(s_cover, &jura_36, k_col_cover_ink,
                          LV_ALIGN_TOP_LEFT, COVER_TITLE_X, COVER_TITLE_Y);
     lv_label_set_long_mode(s_cover_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_cover_title, COVER_TITLE_W);
@@ -1350,27 +1230,17 @@ void cassette_view_create(void)
      * is full-bleed at 0,0; the Track picture fills its window at 101,23. The loader
      * owns both sets of pixels, and both are hidden until they land. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    s_art_sheet = box(scr, 0, 0, 800, 480, 0, k_col_art_bg);
+    s_art_sheet = cassette_box(scr, 0, 0, 800, 480, 0, k_col_art_bg);
     lv_obj_set_y(s_art_sheet, ART_HIDDEN_Y);
     lv_obj_set_hidden(s_art_sheet, true);
 
-    s_case_img = lv_image_create(s_art_sheet);
-    lv_obj_set_style_bg_opa(s_case_img, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(s_case_img, 0, 0);
-    lv_obj_set_style_pad_all(s_case_img, 0, 0);
-    lv_obj_set_pos(s_case_img, 0, 0);
-    lv_obj_set_size(s_case_img, 800, 480);
+    s_case_img = cassette_image(s_art_sheet, NULL, 0, 0, 800, 480);
     lv_obj_set_hidden(s_case_img, true);
 
-    s_art_img = lv_image_create(s_art_sheet);
-    lv_obj_set_style_bg_opa(s_art_img, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(s_art_img, 0, 0);
-    lv_obj_set_style_pad_all(s_art_img, 0, 0);
-    lv_obj_set_pos(s_art_img, ART_X, ART_Y);
-    lv_obj_set_size(s_art_img, ART_W, ART_H);
+    s_art_img = cassette_image(s_art_sheet, NULL, ART_X, ART_Y, ART_W, ART_H);
     lv_obj_set_hidden(s_art_img, true);
 
-    s_art_title = text(s_art_sheet, &jura_36, k_col_cover_ink,
+    s_art_title = cassette_text(s_art_sheet, &jura_36, k_col_cover_ink,
                        LV_ALIGN_TOP_MID, 0, ART_TITLE_Y);
     lv_obj_set_width(s_art_title, ART_TITLE_W);
     lv_label_set_long_mode(s_art_title, LV_LABEL_LONG_SCROLL);
@@ -1393,7 +1263,6 @@ void cassette_view_create(void)
      * is next track, a one-finger swipe is the transport or the next Level, and a
      * two-finger swipe is reserved for the menu. */
     lv_obj_set_clickable(scr, true);
-    make_decorative(scr);
     lv_obj_add_event_cb(scr, screen_pressed_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_add_event_cb(scr, screen_clicked_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(scr, screen_gesture_cb, LV_EVENT_GESTURE, NULL);
