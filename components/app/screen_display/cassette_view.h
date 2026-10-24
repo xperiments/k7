@@ -15,6 +15,15 @@
 void cassette_view_create(void);
 void cassette_view_update(const mini_icecast_status_t *st);
 
+/* Where the cassette sits: 256 (LV_SCALE_NONE) is its design size, 200 is 0.78x, and the
+ * design box is centred in the panel and then moved by (offset_x, offset_y) screen pixels
+ * - right and down positive. The whole layout is re-placed at the new pose: at once when
+ * ms is 0, or eased over ms milli-seconds, with the size and the offset moving together.
+ * The scale is clamped to 32..1024; the offset is not.
+ *
+ * Called under the LVGL lock, like everything else on the screen. */
+void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms);
+
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 /* The Track picture, fitted to the Case's window, or NULL while it is being decoded or
  * when the Track carries none. The pixels belong to the loader and stay valid until the

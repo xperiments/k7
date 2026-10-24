@@ -9,12 +9,25 @@ and nothing else. Everything else is private:
   the cassette current.
 - `lvgl_mem.c` — the `LV_USE_CUSTOM_MALLOC` backend, PSRAM first (ADR 0004).
 - `cassette_view.c` — the LVGL objects, layout, Level machine and touch actions; the tape
-  arithmetic is `components/portable/cassette`. The Label cover is
+  arithmetic is `components/portable/cassette`. Everything the cassette draws hangs off one
+  container object under the screen root — full-bleed, unpainted and at 0,0, so every
+  position in the file stays a screen coordinate — and the Level sheets are its siblings.
+  The layout is written on the label cover's 800x480 grid and scaled into pixels by
+  `s_pose` (`SC`/`SCX`/`SCY`), so a smaller cassette is drawn natively rather than
+  re-sampled through a transform layer. The pose is runtime: `cassette_view_set_scale()`
+  re-places every object at a scale, then moves the design box by an (x, y) offset in
+  screen pixels, both eased together. The small label's peek takes the cassette from 256
+  to 200 and back.
+  The two tape packs are concentric line circles, not filled discs: the outer circle is the
+  pack's radius and each inner one sits `PACK_RING_GAP` px in, so the screen shows through
+  between them. The tape leaves each pack on the outer tangent, wraps a 30 px roller whose
+  bottom sits 16 px above the screen edge, and joins a horizontal run between the two
+  rollers — the stretch of tape a cassette shows across its front. The Label cover is
   `assets/labels/k7logo.png`, an RGB565A8 800x480 image, full-bleed at 0,0. Its black
   triangle and circle are transparent, so the reels show through them. While it is up the
-  wave view is hidden behind it with the reels. The Artwork level is the cassette Case, `assets/labels/cover.jpg`, full-bleed at
-  0,0, with the Track picture in its window at (101,23), 603x385, and the title on the
-  band below.
+  wave view is hidden behind it with the reels. The Artwork level is the cassette Case,
+  `assets/labels/cover.jpg`, full-bleed at 0,0, with the Track picture in its window at
+  (101,23), 603x385, and the title on the band below.
 - `artwork_loader.c` — the card side of the Artwork level: locates a Track's own picture
   (`components/portable/artwork`), reads it, decodes the JPEG with TJpgDec and fits it to
   the Case's 603x385 window, on its own task. It also decodes the embedded Case JPEG once
@@ -67,7 +80,8 @@ The cassette screen has three Levels, and exactly one sheet is shown at a time:
 A one-finger down/up swipe moves one Level - down from Bare to the Label cover to
 Artwork, up the other way - and the ends do not wrap. At Bare the up swipe has no Level
 above to move to, so it peeks the small title bar: the first up swipe slides the cream
-bar in over the cassette. While it is up, either vertical swipe slides it out; a down
+bar in and shrinks the cassette to `CASSETTE_SCALE_LABEL` so the bar clears the tape,
+both over the same 260 ms. While it is up, either vertical swipe slides it out; a down
 swipe only moves to the Label cover once the bar is away. Any Level change puts it away
 at once. The bar is an overlay on Bare, not a fourth Level: it carries the same cleaned
 title as the K7 cover and the Artwork band.
@@ -78,7 +92,11 @@ click. The Level changes on release and it changes in one frame: the target shee
 placed at rest and every other sheet is hidden before LVGL draws. There is no slide. The
 300 ms slide was measured as a stutter: each frame of it moved a full-screen sheet, a
 1.15 MB read and a 0.77 MB write, and the RGB panel's scanout wants the same PSRAM. The
-small title bar's own 260 ms slide is kept: it moves a 735x60 bar, not the panel.
+small title bar's own 260 ms slide is kept: it moves a 735x60 bar, not the panel. Its
+cassette shrink re-places every part in the same 260 ms — geometry only, no bitmap and no
+re-sampled pixels — so what it costs is a redraw of the cassette, not of the panel's
+picture. `cassette_view_set_scale(scale, 0)` is the instant form if that ever reads as a
+stutter.
 
 ## The VU meter
 
@@ -87,10 +105,11 @@ The status carries the RMS of the same 1024-frame chunk the encoder is about to 
 `components/portable/cassette` turns it into a peak-hold: `vu = max(level, vu * 0.90)`
 per 40 ms update, about -23 dB/s, so the peak follows a real drop instead of hanging.
 
-The view draws it as a segmented meter in the top right corner: an 8-cell lattice of 5 px
-steps and one column per channel, twelve segments to a column filling from the bottom.
-There is no panel behind it - the lattice and the segments are the only things painted, so
-the cassette shows through. Lit segments are the tape red, unlit the dim red the mockup
+The view draws it as a segmented meter on the right, centred vertically in the outer
+frame: an 8-cell lattice of 10 px steps and one column per channel, twelve segments to a
+column filling from the bottom. The meter is 300 px tall, the mockup's 149 px box scaled
+up, so a segment is 18 x 8 px. There is no panel behind it - the lattice and the segments
+are the only things painted, so the cassette shows through. Lit segments are the tape red, unlit the dim red the mockup
 uses, and the level is mapped over -48..0 dB so the bars move like a meter rather than a
 linear amplitude. Only the segments are objects: a level change recolours the cells that
 flipped and invalidates those few pixels, never the lattice, and a column whose count has
