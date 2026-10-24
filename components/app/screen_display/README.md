@@ -12,17 +12,19 @@ and nothing else. Everything else is private:
   its animation, the model's step and the intent sink. It owns no geometry and no Level
   state; the picture is built from the modules below. The cassette's drawing hangs off
   one full-bleed, unpainted container at 0,0, so every position in the parts stays a
-  screen coordinate, and the Level sheets are the container's siblings.
+  screen coordinate, and the Level sheets and the transport drawer are the container's
+  siblings.
 - `cassette_layout` (`components/portable/cassette`) — the design grid the screen is
   written on: the 800x480 grid, the scale (256 = pixel for pixel), the centring, the
   offset, the even-diameter rounding and the animation's interpolation. It has no LVGL
   include, so the host tier compiles it and `host/tests/t16_layout.c` pins it. The view
   keeps the current pose and passes it to every part on `place()`.
 - `cassette_style.h` / `cassette_style.c` — the palette, one definition per colour, read
-  by the view, the tapes, the meter and the Levels.
+  by the view, the tapes, the meter, the Levels and the transport drawer.
 - `cassette_widgets.h` / `cassette_widgets.c` — the LVGL object helpers (`box`,
-  `border_box`, `text`, `image`). Every object is decorative at construction, so the
-  screen is the one hit-test target and there is no finished-tree walk.
+  `border_box`, `text`, `image`). Every object they build is decorative, so a press
+  reaches the screen rather than a painted box. The transport drawer is the one part that
+  opts its own roots into hit-testing, and it bubbles gestures back to the screen.
 - `cassette_tapes.c` — the tape body: the two packs, the two strands, the rollers, the
   run, the two hubs and, on the panel board, the two border frames. Its interface is
   `create(parent)`, `place(pose)`, `set(frame)`. A pack is one object whose draw callback
@@ -31,19 +33,30 @@ and nothing else. Everything else is private:
   invalidation stays in one quadrant; the run is its own line, so a fill change repaints
   two narrow sides. The tape leaves each pack on the outer tangent, wraps a 30 px roller
   whose bottom sits 16 px above the screen edge, and joins the run between the two
-  rollers.
-- `cassette_meter.c` — the VU meter, `create(parent)`, `place(pose)`, `set(frame)`. An
-  8-cell lattice of 10 px steps and one column per channel, twelve segments to a column
-  filling from the bottom; the panel is transparent, so the cassette shows through.
+  rollers. The two panel-board frames are filled with `k_col_frame` (FF00FF for the
+  current design) and drawn before every other part of the body.
+- `cassette_meter.c` — the VU meter, `create(parent)`, `place(pose)`, `set(frame)`. Two
+  100x24 rows centred on the right hub, L on top and R below; each row is a rounded
+  rectangle with an L/R badge, a 6 px gap and seven dim bars. One rounded lit fill grows
+  from the left and ends in a semicircle. The panel is transparent, so the hub shows
+  through.
 - `cassette_levels.c` — the Level machine, the Label, the Label cover, the Artwork sheet
   and the screen backdrop. Its interface is `create(screen, room)`, `apply(frame)`,
   `update(status)`, `swipe_down()` / `swipe_up()`, and `set_artwork()` / `set_case()`.
   The Label needs room from the cassette (the view shrinks and lifts it so the bar clears
-  the tape), and it asks through the one `room` callback rather than touching the pose.
+  the tape), and it asks through the one `room` callback rather than touching the pose. The
+  view composes that request with the transport drawer's.
+- `cassette_buttons.c` — the transport drawer: the three line-art buttons P, R, W, each
+  with a prebuilt pressed and an unpressed state, and the left-edge panel that slides in
+  and out. Its interface is `create(screen, room)`, `set_shown()`, `is_shown()` and
+  `raise()`. A press swaps states, a click pulses the button's scale, and the drawer
+  reports its visibility through the one `room` callback; the view turns that into the
+  cassette's 160/256 pose. It wires no transport action yet.
 - `screen_input.c` — the touch policy: a press, a click and a one-finger gesture (plus the
   touch adapter's two-finger swipe) become one `screen_intent_t`, with a latch that keeps
   one touch from being two intents. It names no Level and calls nothing above itself; the
-  view's sink maps the intents to the transport and the Level swipes.
+  view's sink maps the intents: a tap is next track, the horizontal swipes show and hide
+  the transport drawer, the vertical ones move the Levels, and two fingers are the menu.
 - `artwork_loader.c` — the card side of the Artwork level: locates a Track's own picture
   (`components/portable/artwork`), reads it, decodes the JPEG with TJpgDec and fits it to
   the Case's 603x385 window, on its own task. It also decodes the embedded Case JPEG once
@@ -65,10 +78,11 @@ and nothing else. Everything else is private:
 - `touch_gt911.c` — the Sunton touch adapter: a GT911 on I2C0, polled every 10 ms and
   bound to LVGL as the display's pointer. It feeds LVGL's multi-touch recognizer, so
   `screen_input.c` can tell a two-finger swipe from a one-finger one: a tap is next
-  track, a one-finger left/right swipe is next/previous, a one-finger down/up swipe moves
-  one Level through Bare, Label cover and Artwork, and at Bare an up swipe peeks the
-  small title bar. A two-finger swipe is reserved for the menu: it moves no Level today,
-  but it is still reported so it cannot fall through to the one-finger handler.
+  track, a one-finger right/left swipe slides the transport drawer in/out, a one-finger
+  down/up swipe moves one Level through Bare, Label cover and Artwork, and at Bare an up
+  swipe peeks the small title bar. A two-finger swipe is reserved for the menu: it moves no
+  Level today, but it is still reported so it cannot fall through to the one-finger
+  handler.
 - `assets/label_cover.bin`, `assets/cover.jpg` — both placed by
   `tools/convert_cassette_assets.py`. The label cover is generated and is RGB565A8 so its
   transparent shapes show the reels. `cover.jpg` is the Case, copied unchanged and
@@ -116,6 +130,30 @@ re-sampled pixels — so what it costs is a redraw of the cassette, not of the p
 picture. `cassette_view_set_scale(scale, 0)` is the instant form if that ever reads as a
 stutter.
 
+## The transport drawer
+
+The three buttons at the left edge live in `cassette_buttons.c`. The drawer is a 120 px
+panel, hidden off-screen at rest; a one-finger right swipe slides it in and a left swipe
+slides it out, both over 260 ms. While it is out the view puts the cassette at 160/256
+(`CASSETTE_SCALE_BUTTONS`): the tape is then 500 px wide, which leaves the drawer clear,
+and the 300 px-tall design box is centred on y=240, the same line as the middle button R.
+Its bottom edge also clears the Label's bar, so the Label's own -60 px lift is not added on
+top. The view arbitrates the two room requests; when the drawer is away, the Label's
+200/256 and lift come back.
+
+Each button is 96x96, rounded by 8 px, with a 64 px circle at its centre and P, R or W
+centred in the circle in Jura 36. Both states are built once: the unpressed state is the
+playing red at 2 px, the pressed one the cream ink at 3 px. `LV_EVENT_PRESSED` shows the
+pressed state; release or `LV_EVENT_PRESS_LOST` restores the other. A click runs a 160 ms
+scale pulse (256 -> 232 -> 256) and does nothing else: the buttons are placeholders, and
+the transport is not wired.
+
+The drawer is chrome above every sheet. It is created after the Levels, and the view raises
+it after a vertical swipe because the Artwork sheet raises itself when it settles. Its panel
+and button roots bubble gestures, so a swipe that starts on the drawer still reaches
+`screen_input`, and they bubble events, so a press clears the two-finger latch. The screen
+ignores a click whose target is not itself, so a button press cannot fall through as a tap.
+
 ## The VU meter
 
 The status carries the RMS of the same 1024-frame chunk the encoder is about to take
@@ -123,15 +161,15 @@ The status carries the RMS of the same 1024-frame chunk the encoder is about to 
 `components/portable/cassette` turns it into a peak-hold: `vu = max(level, vu * 0.90)`
 per 40 ms update, about -23 dB/s, so the peak follows a real drop instead of hanging.
 
-`cassette_meter.c` draws it as a segmented meter on the right, centred vertically in the
-outer frame: an 8-cell lattice of 10 px steps and one column per channel, twelve segments
-to a column filling from the bottom. The meter is 300 px tall, the mockup's 149 px box
-scaled up, so a segment is 18 x 8 px. There is no panel behind it - the lattice and the
-segments are the only things painted, so the cassette shows through. Lit segments are the
-tape red, unlit the dim red the mockup uses, and the level is mapped over -48..0 dB so the
-bars move like a meter rather than a linear amplitude. Only the segments are objects: a
-level change recolours the cells that flipped and invalidates those few pixels, never the
-lattice, and a column whose count has not changed is not touched at all.
+`cassette_meter.c` draws it inside the right hub: two 100x24 rows, 8 px apart, L on top
+and R below. Each row is a rounded rectangle (radius 12, half its height) with a 24 px L/R
+badge, a 6 px gap and seven 10 px dim bars; the bars touch each other and the row's top and
+bottom. The lit level is one rounded fill over the first lit bars, one step dimmer than the
+badge, so its right end is a semicircle; the row's clip_corner rounds the track's right end
+too. The fill is mapped over -48..0 dB so the row moves like a meter rather than a linear
+amplitude. There is no panel behind it - the rows, badges, track and fill are the only
+things painted, so the hub shows through. A level change only resizes the fill, and a row
+whose lit count has not changed is not touched.
 
 ## The reel change
 

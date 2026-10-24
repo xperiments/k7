@@ -38,11 +38,16 @@ extern const lv_color_t k_col_tape;
 extern const lv_color_t k_col_hub_ring;
 extern const lv_color_t k_col_hub_ink;
 
-/* The VU meter: a grid of the lit red at half strength, and segments that are
- * either the lit red or this dim red. There is no panel behind them. */
+/* The VU meter: the lit fill (85% of the playing red), the playing red of the L/R badge,
+ * the dim track, and the row background behind them. There is no panel behind them. */
 extern const lv_color_t k_col_meter_dim;
+extern const lv_color_t k_col_meter_bar;
 extern const lv_color_t k_col_meter_lit;
 extern const lv_color_t k_col_meter_back;
+
+/* The two rounded rectangles the cassette body is drawn on: the board's outer and inner
+ * frames. */
+extern const lv_color_t k_col_frame;
 
 /* The touch board's own Levels: its cover, its Label and the Artwork backdrop. They
  * are defined for both boards; a board without those Levels never reads them. */

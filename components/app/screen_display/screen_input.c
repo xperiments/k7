@@ -4,9 +4,11 @@
  * This is the whole of the screen's input: the press, the release's click, the one-finger
  * gesture, and the touch adapter's two-finger swipe. It decides which of those a touch is
  * and keeps one touch from being two of them, and hands the answer to the view's sink. What
- * a swipe means to the picture - which Level, which Track, whether the small label peeks or
- * hides - is not decided here: the sink owns that, and this file names no Level and calls
- * nothing above itself.
+ * a swipe means to the picture - which Level, whether the buttons slide out, whether the
+ * small label peeks or hides - is not decided here: the sink owns that, and this file names
+ * no Level and calls nothing above itself. A left/right swipe no longer skips a Track; it
+ * hides or shows the button drawer instead, which is why the transport is no longer in the
+ * gesture map.
  *
  * The log lines that are about the input itself - the swipe directions and the reserved
  * two-finger gesture - are kept here, with the view's tag, so the boot log reads as it did.
@@ -51,7 +53,9 @@ static void report(screen_intent_t intent)
     if (s_on_intent) s_on_intent(intent, s_ctx);
 }
 
-/* A new touch clears the two-finger latch from the previous one. */
+/* A new touch clears the two-finger latch from the previous one. The drawer and its
+ * buttons bubble their presses here, so a touch that starts on the transport is a new
+ * touch too. */
 static void screen_pressed_cb(lv_event_t *e)
 {
     (void)e;
@@ -75,12 +79,13 @@ static void screen_two_finger_cb(int dx, int dy)
 #endif
 
 /*
- * The one-finger gestures: left/right are the transport, down/up move one Level, towards
- * Artwork and towards Bare. The direction is the whole of this handler's knowledge; the
- * Levels, the ends of the order and the Bare label's peek are the sink's, which is where the
- * old handler's `s_level` and `s_paper_shown` tests went. A two-finger swipe does not come
- * through here: the touch adapter reports it, and the latch keeps this handler from acting
- * on the same touch as well.
+ * The one-finger gestures: left/right show and hide the buttons at the left edge, down/
+ * up move one Level towards Artwork and towards Bare. The direction is the whole of this
+ * handler's knowledge; the Levels, the ends of the order, the Bare label's peek and the
+ * drawer's slide are the sink's, which is where the old handler's `s_level` and
+ * `s_paper_shown` tests went. A two-finger swipe does not come through here: the touch
+ * adapter reports it, and the latch keeps this handler from acting on the same touch as
+ * well.
  */
 static void screen_gesture_cb(lv_event_t *e)
 {
@@ -90,12 +95,12 @@ static void screen_gesture_cb(lv_event_t *e)
     if (!indev) return;
     switch (lv_indev_get_gesture_dir(indev)) {
         case LV_DIR_LEFT:
-            report(SCREEN_INTENT_NEXT);
-            ESP_LOGI(TAG, "swipe left: next track");
+            report(SCREEN_INTENT_BUTTONS_HIDE);
+            ESP_LOGI(TAG, "swipe left: buttons hidden");
             break;
         case LV_DIR_RIGHT:
-            report(SCREEN_INTENT_PREV);
-            ESP_LOGI(TAG, "swipe right: previous track");
+            report(SCREEN_INTENT_BUTTONS_SHOW);
+            ESP_LOGI(TAG, "swipe right: buttons shown");
             break;
         case LV_DIR_BOTTOM:
             report(SCREEN_INTENT_LEVEL_DOWN);
@@ -114,10 +119,14 @@ static void screen_gesture_cb(lv_event_t *e)
  * two apart: a two-finger swipe has set the latch, and a one-finger swipe leaves its
  * direction on the input device, where it still is on the release. Only a click that is
  * neither is a tap.
+ *
+ * The drawer and its buttons bubble their clicks here. They are not the screen's tap:
+ * the target check drops every click that started on a child, so a button press cannot
+ * skip a Track and a tap on the drawer's margin is absorbed there.
  */
 static void screen_clicked_cb(lv_event_t *e)
 {
-    (void)e;
+    if (lv_event_get_target(e) != s_screen) return;
     if (s_two_finger_seen) return;
     lv_indev_t *indev = lv_indev_active();
     if (indev && lv_indev_get_gesture_dir(indev) != LV_DIR_NONE) return;

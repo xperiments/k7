@@ -555,17 +555,24 @@ stand.
 SCL 20, INT 18, RST 38, read every 10 ms. It is polled rather than interrupt-driven
 because this board's INT line does not carry the touch (the reference project measured it
 idling through a press), and the last point the controller reported is latched so one
-press is one press rather than one per read. A tap anywhere is the BOOT button's action,
-next track. A one-finger left/right swipe is next/previous; a one-finger down/up swipe
-moves one Level - Bare, Label cover, Artwork - and the ends do not wrap. At Bare, where
-the up swipe has no Level to move to, it peeks the small cream title bar: one up swipe
-slides it in. While it is up, either vertical swipe slides it out, and a down swipe only
-moves to the K7 cover once the bar is away; any Level change puts it away. The
-two-finger swipe is reserved for the menu: it moves no Level today, and the view still
-latches it so the same touch cannot also trip the one-finger gesture or the click. The
-Sunton build compiles this path; the board tier has not yet recorded a finger, so the
-rows above are unchanged. The order and the reserved gesture are
-[`docs/adr/0014-three-level-swipe-order-and-menu-gesture.md`](docs/adr/0014-three-level-swipe-order-and-menu-gesture.md).
+press is one press rather than one per read. A tap on the screen is the BOOT button's
+action, next track; a tap on the drawer itself is absorbed there. A one-finger right swipe
+slides the transport drawer in from the left edge, a left swipe slides it back out; while
+it is out the cassette scales to 160/256 so the tape clears the panel. The drawer's three
+line-art buttons (P, R, W) each prebuild a pressed and an unpressed state, swap them on
+press and release, and pulse their scale on a click; they are placeholders and do not drive
+the transport yet. A one-finger down/up swipe moves one Level - Bare, Label cover,
+Artwork - and the ends do not wrap. At Bare, where the up swipe has no Level to move to,
+it peeks the small cream title bar: one up swipe slides it in. While it is up, either
+vertical swipe slides it out, and a down swipe only moves to the K7 cover once the bar is
+away; any Level change puts it away. The two-finger swipe is reserved for the menu: it
+moves no Level today, and the view still latches it so the same touch cannot also trip
+the one-finger gesture or the click. The Sunton build compiles this path; the board tier
+has not yet recorded a finger, so the rows above are unchanged. The Level order and the
+reserved gesture are
+[`docs/adr/0014-three-level-swipe-order-and-menu-gesture.md`](docs/adr/0014-three-level-swipe-order-and-menu-gesture.md);
+the drawer and the horizontal swipes are
+[`docs/adr/0016-transport-drawer-and-horizontal-swipes.md`](docs/adr/0016-transport-drawer-and-horizontal-swipes.md).
 
 **Track artwork.** The Artwork Level is the cassette Case, `assets/labels/cover.jpg`,
 full-bleed at 800x480, with the playing MP3's own cover in its window: (101,23) to

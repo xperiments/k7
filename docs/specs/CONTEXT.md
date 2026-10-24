@@ -145,14 +145,25 @@ and nothing is playing while the tape winds back.
 _Avoid_: transition, animation, reel swap
 
 **VU meter**:
-The segmented display in the top right corner, showing the peak-hold of both channels:
-one column of twelve segments per channel, filling from the bottom, on an 8-cell lattice.
-Lit segments are the playing red, the rest a dim red; there is no panel behind them, so
-the screen shows through. Each column is driven over -48..0 dB, so the bars move like a
-meter rather than a linear amplitude, and the peak-hold falls about 23 dB/s, so they
-follow a real drop instead of hanging. The meter is chrome, not tape: the **reel change**
-does not touch it.
+The two rows inside the right hub, L on top and R below, showing the peak-hold of both
+channels. Each row is a rounded rectangle with an L/R badge on the left, a gap, seven
+touching dim bars and one rounded lit fill that grows from the left and ends in a
+semicircle; the fill is a step dimmer than the badge and the track a dim red.
+Each row is driven over -48..0 dB, so it moves like a meter rather than a linear
+amplitude, and the peak-hold falls about 23 dB/s, so it follows a real drop instead of
+hanging. The meter is chrome, not tape: the **reel change** does not touch it.
 _Avoid_: level bar, meter, peak meter
+
+**Transport drawer**:
+The three line-art buttons down the screen's left edge, P, R and W, hidden off-screen
+until a one-finger right swipe and put away by a left swipe. Each button is a 96x96
+rectangle rounded by 8 px with a 64 px circle at its centre and its letter centred in the
+circle in Jura; each carries a prebuilt pressed and an unpressed state, swapped on press
+and release. A click is a scale pulse only: the buttons are placeholders and do not
+command the **live stream** yet. While the drawer is out the cassette screen scales to
+160/256, so the tape clears the panel; the three buttons are centred vertically so R sits
+on y=240, and the cassette is centred to that same line. It is chrome, not a **sheet**.
+_Avoid_: menu, toolbar, controls
 
 **Label cover**:
 The K7 sticker, `assets/labels/k7logo.png`, drawn full-bleed at 0,0 over the 800x480

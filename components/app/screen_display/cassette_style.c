@@ -6,15 +6,18 @@
 const lv_color_t k_col_black      = COL_HEX(COL_BLACK);
 const lv_color_t k_col_bg         = COL_HEX(COL_BLACK);
 const lv_color_t k_col_tape_dark  = COL_HEX(COL_PRIMARY);
-const lv_color_t k_col_tape       = COL_DARKEN_HEX(COL_PRIMARY, 80);
-const lv_color_t k_col_hub_ring   = COL_DARKEN_HEX(COL_PRIMARY, 10);
+const lv_color_t k_col_tape       = COL_HEX(COL_PRIMARY);
+const lv_color_t k_col_hub_ring   = COL_DARKEN_HEX(COL_PRIMARY, 20);
 const lv_color_t k_col_hub_ink    = COL_DARKEN_HEX(COL_PRIMARY, 80);
 
 const lv_color_t k_col_meter_dim  = COL_HEX(0x7F2C18);
+const lv_color_t k_col_meter_bar  = COL_DARKEN_HEX(COL_PRIMARY, 85);
 const lv_color_t k_col_meter_lit  = COL_HEX(COL_PRIMARY);
 const lv_color_t k_col_meter_back = COL_DARKEN_HEX(COL_PRIMARY, 30);
 
-const lv_color_t k_col_back       = COL_DARKEN_HEX(COL_PRIMARY, 20);
+const lv_color_t k_col_frame      = COL_HEX(0xFF00FF);
+
+const lv_color_t k_col_back       = COL_DARKEN_HEX(COL_PRIMARY, 40);
 const lv_color_t k_col_cover_bg   = COL_HEX(0xB48744);
 const lv_color_t k_col_cover_ink  = COL_HEX(0xEEEEEE);
 const lv_color_t k_col_art_bg     = COL_HEX(0x141414);

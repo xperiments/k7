@@ -422,8 +422,9 @@ void cassette_tapes_create(lv_obj_t *parent)
      * the one place that knows where the scale puts it, and it runs once the body is
      * complete. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    s_frame[0] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_bg, 255, k_col_back, 1);
-    s_frame[1] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_bg, 255, k_col_back, 1);
+    /* The two rounded rectangles the body is drawn on. */
+    s_frame[0] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 255, k_col_back, 1);
+    s_frame[1] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 255, k_col_back, 1);
 #endif
     /* The tape: two packs, two bottom rollers, the run between them and the two side
      * paths. A pack's box is transparent and carries no border; its rings are the draw
