@@ -730,17 +730,22 @@ components/
     library/                the immutable tree, arena, JSON, Playlist and lookup
     library_http/           GET /api/library[.bin] from the prebuilt views
     mini_files/             GET / index, GET /music/<relative path> download
-    cassette/               what the screen shows: reels, packs, progress, label
+    cassette/               what the screen shows: reel phases, pack fills, tape ink, title
     artwork/                where a Track's picture is: ID3 APIC, FLAC PICTURE, the fit
     dr_libs/                vendored dr_mp3 / dr_flac / dr_wav (public domain / MIT-0)
     shine/                  vendored toots/shine MP3 encoder (LGPL-2.0-only)
   app/                      firmware only: the entry policy, the board adapter and the screen
     appliance/              the entry policy: station format, card retry, console, skip
     board_esp32/            Wi-Fi, SPI card mount, hardware census; credentials live here
-    screen_display/         panel and touch bring-up, LVGL's PSRAM allocator, the cassette view,
-                            the Level machine and the artwork loader
+    screen_display/         panel and touch bring-up, LVGL's PSRAM allocator, the cassette
+                            composition and its parts (tapes, meter, levels, input)
 host/                       the host build: shim, board adapter, fixtures, tests, tools
 ```
+
+The cassette screen is the composition: `cassette_tapes`, `cassette_meter`,
+`cassette_levels` and `screen_input` are its parts, and the design grid is the portable
+`cassette_layout` the host tier pins with `t16`. The view keeps the pose, steps the model
+and maps intents to actions; no part reads another's state.
 
 The dependency direction is one-way and is checked by `make -C host layering`:
 `mini_files` and `mini_icecast` depend on `http_server`; only the application
