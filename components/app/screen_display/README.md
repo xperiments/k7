@@ -93,7 +93,9 @@ The cassette screen has three Levels, and exactly one sheet is shown at a time:
 | Label cover | `k7logo` full-bleed | the K7 sticker; its tape windows show the reels |
 | Artwork | the Case + the Track picture | `cover.jpg` full-bleed; the picture fills its window, 603x385; the title below |
 
-`cassette_levels.c` owns the machine. A one-finger down/up swipe moves one Level - down
+`cassette_levels.c` owns the machine, and a table indexed by Level carries each sheet's
+rest and hidden position, whether reaching it asks for the Track's picture, and what the
+backdrop does on arrival. A one-finger down/up swipe moves one Level - down
 from Bare to the Label cover to Artwork, up the other way - and the ends do not wrap. At
 Bare the up swipe has no Level above to move to, so it peeks the small title bar: the
 first up swipe slides the cream bar in and shrinks the cassette to

@@ -75,6 +75,27 @@ enum {
 #define LEVEL_MAX LEVEL_BARE
 #endif
 
+/* What arriving at a Level does to the screen's backdrop. */
+enum {
+    BACKDROP_CASSETTE = 0,   /* the cassette's own colour */
+    BACKDROP_COVER,          /* fade to the Label cover's backdrop */
+    BACKDROP_ART,            /* the Artwork sheet covers the screen at once */
+};
+
+/* One row per Level: the sheet, where it rests and hides, whether reaching it asks for
+ * the Track's picture, and what the backdrop does on arrival. A board without the touch
+ * adapter has no rows beyond Bare. Adding a Level is a row here, an enum value and its
+ * creation; the machine itself does not name it. */
+typedef struct {
+    lv_obj_t *sheet;
+    int rest_y;
+    int hidden_y;
+    bool wants_art;
+    uint8_t backdrop;
+} level_sheet_t;
+
+static level_sheet_t s_sheets[LEVEL_MAX + 1];
+
 /* The small label: the bar with the Now playing title. It is not a Level: the up
  * swipe at Bare has no Level to move to, so it peeks this bar and the cassette gives it
  * the room by going to CASSETTE_SCALE_LABEL, and the next up swipe or any Level change
@@ -142,6 +163,9 @@ static lv_obj_t *s_art_sheet;      /* the Artwork level: its own full screen */
 static lv_obj_t *s_case_img;       /* the Case backdrop; the loader owns its pixels */
 static lv_obj_t *s_art_img;        /* the Track picture in the Case's window */
 static lv_obj_t *s_art_title;      /* the Artwork level's title */
+/* The three labels that carry the Now playing title: the Label, the cover's band and
+ * the Artwork band. One write per frame updates all of them. */
+static lv_obj_t *s_titles[3];
 /* The module remembers the last artwork request, so a 25 Hz update is a string compare
  * rather than a loader call. */
 static char      s_art_path[LIB_PATH_MAX];
@@ -151,60 +175,25 @@ static bool      s_art_requested;
 
 /* ------------------------------------------------------------------ the level machine */
 
-/* Where each sheet rests and where it hides. The full-screen sheets are full-bleed at
- * 0,0. */
-static int sheet_rest_y(int level)
-{
-    switch (level) {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-        case LEVEL_COVER: return COVER_Y;
-        case LEVEL_ART:   return 0;
-#endif
-        default:          return 0;
-    }
-}
-
-static int sheet_hidden_y(int level)
-{
-    switch (level) {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-        case LEVEL_COVER: return COVER_HIDDEN_Y;
-        case LEVEL_ART:   return ART_HIDDEN_Y;
-#endif
-        default:          return 0;
-    }
-}
-
-static lv_obj_t *sheet_obj(int level)
-{
-    switch (level) {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-        case LEVEL_COVER: return s_cover;
-        case LEVEL_ART:   return s_art_sheet;
-#endif
-        default:          return NULL;
-    }
-}
-
 /* No level change animates. The full-screen sheets are 800x480, and a transition that
  * redraws one of them per frame was measured to stutter on this panel; the level moves
  * in one frame, before LVGL draws. */
 static void sheet_hide_now(int level)
 {
-    lv_obj_t *o = sheet_obj(level);
+    lv_obj_t *o = s_sheets[level].sheet;
     if (!o) return;
     lv_anim_delete(o, (lv_anim_exec_xcb_t)lv_obj_set_y);
-    lv_obj_set_y(o, sheet_hidden_y(level));
+    lv_obj_set_y(o, s_sheets[level].hidden_y);
     lv_obj_set_hidden(o, true);
 }
 
 /* Put a sheet where it rests, visible; every other sheet is hidden by level_settled(). */
 static void sheet_show_at_rest(int level)
 {
-    lv_obj_t *o = sheet_obj(level);
+    lv_obj_t *o = s_sheets[level].sheet;
     if (!o) return;
     lv_anim_delete(o, (lv_anim_exec_xcb_t)lv_obj_set_y);
-    lv_obj_set_y(o, sheet_rest_y(level));
+    lv_obj_set_y(o, s_sheets[level].rest_y);
     lv_obj_set_hidden(o, false);
     /* The Artwork screen sits above the decorations. The K7 cover stays below the bar:
      * it is the cassette's own label. */
@@ -360,25 +349,30 @@ static void set_level(int target)
     if (target == s_level) return;
 
     s_level = target;
+    const level_sheet_t *sheet = &s_sheets[target];
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     /* The small label belongs to Bare alone. Any Level change puts it away before the
      * target sheet is placed. */
     paper_hide_now();
 
-    if (target == LEVEL_ART) art_request();
+    if (sheet->wants_art) art_request();
 
-    if (target == LEVEL_COVER) {
-        cover_bg_now();
-        cover_bg_fade(true, COVER_BG_FADE_MS);
-    } else if (target == LEVEL_ART) {
-        cover_bg_now();
-    } else {
-        cover_bg_fade(false, COVER_BG_FADE_MS);
+    switch (sheet->backdrop) {
+        case BACKDROP_COVER:
+            cover_bg_now();
+            cover_bg_fade(true, COVER_BG_FADE_MS);
+            break;
+        case BACKDROP_ART:
+            cover_bg_now();
+            break;
+        default:
+            cover_bg_fade(false, COVER_BG_FADE_MS);
+            break;
     }
 #endif
 
-    if (target != LEVEL_BARE) sheet_show_at_rest(target);
+    if (sheet->sheet) sheet_show_at_rest(target);
     level_settled();
 
     ESP_LOGI(TAG, "level %d", s_level);
@@ -427,9 +421,8 @@ void cassette_levels_apply(const cassette_frame_t *frame)
     const char *label = frame->title[0] ? frame->title
                       : frame->playing ? ""
                       : "no card, or nothing to play";
-    lv_label_set_text(s_title, label);
-    lv_label_set_text(s_cover_title, label);
-    lv_label_set_text(s_art_title, label);
+    for (size_t i = 0; i < sizeof s_titles / sizeof s_titles[0]; i++)
+        lv_label_set_text(s_titles[i], label);
 #else
     /* Bare alone has no title on it: the Label and the two bands are the touch
      * board's, so there is nothing to write. */
@@ -455,6 +448,9 @@ void cassette_levels_update(const mini_icecast_status_t *status)
 
 void cassette_levels_create(lv_obj_t *screen, cassette_levels_room_cb_t room, void *ctx)
 {
+    /* Bare is the one Level every board has: the cassette alone, with no sheet. */
+    s_sheets[LEVEL_BARE] = (level_sheet_t){ NULL, 0, 0, false, BACKDROP_CASSETTE };
+
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     s_screen = screen;
     s_room = room;
@@ -486,6 +482,9 @@ void cassette_levels_create(lv_obj_t *screen, cassette_levels_room_cb_t room, vo
     lv_label_set_long_mode(s_cover_title, LV_LABEL_LONG_SCROLL);
     lv_obj_set_width(s_cover_title, COVER_TITLE_W);
 
+    s_sheets[LEVEL_COVER] = (level_sheet_t){ s_cover, COVER_Y, COVER_HIDDEN_Y, false,
+                                             BACKDROP_COVER };
+
     /* The Artwork level: its own full screen, above everything else. The Case backdrop
      * is full-bleed at 0,0; the Track picture fills its window at 101,23. The loader
      * owns both sets of pixels, and both are hidden until they land. */
@@ -503,6 +502,13 @@ void cassette_levels_create(lv_obj_t *screen, cassette_levels_room_cb_t room, vo
                                 LV_ALIGN_TOP_MID, 0, ART_TITLE_Y);
     lv_obj_set_width(s_art_title, ART_TITLE_W);
     lv_label_set_long_mode(s_art_title, LV_LABEL_LONG_SCROLL);
+
+    s_titles[0] = s_title;
+    s_titles[1] = s_cover_title;
+    s_titles[2] = s_art_title;
+
+    s_sheets[LEVEL_ART] = (level_sheet_t){ s_art_sheet, 0, ART_HIDDEN_Y, true,
+                                           BACKDROP_ART };
 #else
     /* A board without the touch adapter has Bare alone, so there is no sheet to build
      * and no Label to give room to. */
