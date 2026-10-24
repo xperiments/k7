@@ -2,12 +2,16 @@ menu "Screen display"
 
 config APP_UI_SERIAL_DUMP
     bool "Dump the rendered screen over the serial console once at startup"
+    depends on !APP_BOARD_SUNTON_8048S050C
     default n
     help
         With no panel attached this is how the interface can be looked at: the
         framebuffer is sent as base64 rows ("UIROW <n> <data>") a few seconds after
         boot, and tools/decode_screen_dump.py turns a captured log into a PNG. Off by
         default: it is a diagnostic, and it slows the boot it is enabled on.
+
+        Only the headless path keeps a framebuffer to dump; the panel's is scanned out
+        by the RGB peripheral, so this is not offered on that board.
 
         See docs/research/radio-player-memory-and-lvgl.md.
 
@@ -21,9 +25,14 @@ config APP_UI_DUMP_STRIDE
         second pixel in both directions makes it 400x240 and about twenty seconds,
         which is enough to check a layout and quick enough to iterate on.
 
+# The backlight is the panel's pin and the idle ladder is measured on the touch
+# clock, so the whole group is a panel-board property. One dependency here, not one
+# per symbol below.
+menu "Backlight"
+    depends on APP_BOARD_SUNTON_8048S050C
+
 config APP_UI_BACKLIGHT_AWAKE_PCT
     int "Backlight brightness while awake (%)"
-    depends on APP_BOARD_SUNTON_8048S050C
     default 100
     range 1 100
     help
@@ -31,7 +40,6 @@ config APP_UI_BACKLIGHT_AWAKE_PCT
 
 config APP_UI_BACKLIGHT_PWM_HZ
     int "Backlight PWM frequency (Hz)"
-    depends on APP_BOARD_SUNTON_8048S050C
     default 400
     range 100 50000
     help
@@ -41,7 +49,6 @@ config APP_UI_BACKLIGHT_PWM_HZ
 
 config APP_UI_BACKLIGHT_DIM1_S
     int "First dim delay (s)"
-    depends on APP_BOARD_SUNTON_8048S050C
     default 120
     range 5 36000
     help
@@ -52,13 +59,11 @@ config APP_UI_BACKLIGHT_DIM1_S
 
 config APP_UI_BACKLIGHT_DIM1_PCT
     int "First dim brightness (%)"
-    depends on APP_BOARD_SUNTON_8048S050C
     default 60
     range 0 100
 
 config APP_UI_BACKLIGHT_DIM2_S
     int "Second dim delay (s)"
-    depends on APP_BOARD_SUNTON_8048S050C
     default 300
     range 5 36000
     help
@@ -67,13 +72,11 @@ config APP_UI_BACKLIGHT_DIM2_S
 
 config APP_UI_BACKLIGHT_DIM2_PCT
     int "Second dim brightness (%)"
-    depends on APP_BOARD_SUNTON_8048S050C
     default 30
     range 0 100
 
 config APP_UI_BACKLIGHT_DIM3_S
     int "Third dim delay (s)"
-    depends on APP_BOARD_SUNTON_8048S050C
     default 600
     range 5 36000
     help
@@ -83,13 +86,11 @@ config APP_UI_BACKLIGHT_DIM3_S
 
 config APP_UI_BACKLIGHT_DIM3_PCT
     int "Third dim brightness (%)"
-    depends on APP_BOARD_SUNTON_8048S050C
     default 0
     range 0 100
 
 config APP_UI_BACKLIGHT_DIM_FADE_MS
     int "Backlight dim fade time (ms)"
-    depends on APP_BOARD_SUNTON_8048S050C
     default 2500
     range 0 10000
     help
@@ -98,7 +99,6 @@ config APP_UI_BACKLIGHT_DIM_FADE_MS
 
 config APP_UI_BACKLIGHT_WAKE_FADE_MS
     int "Backlight wake fade time (ms)"
-    depends on APP_BOARD_SUNTON_8048S050C
     default 300
     range 0 5000
     help
@@ -108,7 +108,6 @@ config APP_UI_BACKLIGHT_WAKE_FADE_MS
 
 config APP_UI_BACKLIGHT_TEST
     bool "Visual backlight test screen"
-    depends on APP_BOARD_SUNTON_8048S050C
     default n
     help
         Replaces the cassette with a white test screen and steps the backlight
@@ -116,5 +115,7 @@ config APP_UI_BACKLIGHT_TEST
         The current level is printed in large type, so the PWM range can be
         checked on the panel without waiting for the sleep timer. It is a
         diagnostic build: leave it off for the normal interface.
+
+endmenu
 
 endmenu

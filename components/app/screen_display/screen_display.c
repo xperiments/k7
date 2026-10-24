@@ -26,9 +26,6 @@
 #include "lvgl.h"
 
 #include "cassette_view.h"
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-#include "panel_rgb.h"
-#endif
 #include "lvgl_mem.h"
 #include "mini_icecast.h"
 #include "screen_display.h"
