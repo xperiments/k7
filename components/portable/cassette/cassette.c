@@ -79,6 +79,22 @@ static float rewind_ease(float p)
     return (hold + tail * (u - u * u * u / 3.0f)) / total;
 }
 
+/* The tape's ink through the rewind window, from the window's progress: full at its
+ * start, gone over its first second, gone for the body, and back over its last second
+ * as the new side starts. The permille is linear in time, so each ramp is a plain
+ * interpolation. 1 is the playing red, 0 the tape's own colour. */
+static float rewind_tape_ink(uint16_t rewind_permille)
+{
+    uint32_t elapsed = (uint32_t)rewind_permille * CASSETTE_REWIND_MS / 1000u;
+    uint32_t fade_in_at = CASSETTE_REWIND_MS - CASSETTE_REWIND_FADE_MS;
+
+    if (elapsed < CASSETTE_REWIND_FADE_MS)
+        return 1.0f - (float)elapsed / (float)CASSETTE_REWIND_FADE_MS;
+    if (elapsed > fade_in_at)
+        return (float)(elapsed - fade_in_at) / (float)CASSETTE_REWIND_FADE_MS;
+    return 0.0f;
+}
+
 /* The art frame for a phase. The reverse spin carries a whole number of revolutions,
  * so the phase can be well past 1; only the fraction selects a frame. */
 static uint8_t hub_index(float phase, uint16_t frame_count)
@@ -163,6 +179,7 @@ void cassette_reset(cassette_t *c)
      * with, even when it is the same empty screen. */
     c->frame.title_changed = true;
     c->frame.permille_changed = true;
+    c->frame.tape_ink = 1.0f;
 }
 
 const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t *st, uint32_t now_ms)
@@ -294,6 +311,9 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
         for (int i = 0; i < 2; i++) disp[i] = c->phase[i] + c->rewind_offset[i] * left;
         c->frame.rewind_permille = (uint16_t)(p * 1000.0f + 0.5f);
     }
+    /* The ring's ink is a function of the window's progress alone: full outside it,
+     * and the fade's envelope inside. */
+    c->frame.tape_ink = c->rewinding ? rewind_tape_ink(c->frame.rewind_permille) : 1.0f;
     if (q > 1000) q = 1000;
     c->shown_q = q;
     for (int i = 0; i < 2; i++) c->shown_phase[i] = disp[i];

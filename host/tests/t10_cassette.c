@@ -406,6 +406,80 @@ static void test_rewind(void)
     cassette_free(c);
 }
 
+/* The rewind envelope, which the view used to apply to the hub ring itself: the ring is
+ * the playing red at the window's start, gone over its first second, gone for the body,
+ * and back over its last second as the new side starts. `tape_ink` is 1 at the red and
+ * 0 at the tape's own colour. */
+static void test_rewind_tape_ink(void)
+{
+    const uint32_t side = 180000;
+
+    cassette_t *c = cassette_new(36, 0);
+    CHECK(c != NULL, "the envelope model starts");
+    if (!c) return;
+
+    uint32_t now = 0;
+    mini_icecast_status_t a = mkstatus("Song A", "a.mp3", 60000, side, 0.3f);
+    const cassette_frame_t *f = cassette_step(c, &a, now);
+    CHECK(fabsf(f->tape_ink - 1.0f) < 0.01f, "outside a window the ring is the playing red");
+
+    /* A track change opens the window at full ink: the first frame must not dim. */
+    mini_icecast_status_t b = mkstatus("Song B", "b.mp3", 0, side, 0.3f);
+    f = cassette_step(c, &b, now += 40);
+    CHECK(f->rewinding, "the track change opens the window");
+    CHECK(fabsf(f->tape_ink - 1.0f) < 0.01f, "the envelope starts full (%.3f)", (double)f->tape_ink);
+
+    /* The first second: a linear ramp down to the tape's own colour. */
+    b = mkstatus("Song B", "b.mp3", 500, side, 0.3f);
+    f = cassette_step(c, &b, now += 500);
+    CHECK(f->rewinding, "the window is open half-way through its first second");
+    CHECK(fabsf(f->tape_ink - 0.5f) < 0.01f, "half-dimmed half-way down the ramp (%.3f)",
+          (double)f->tape_ink);
+
+    b = mkstatus("Song B", "b.mp3", 1000, side, 0.3f);
+    f = cassette_step(c, &b, now += 500);
+    CHECK(f->rewinding, "the window is still open at 1 s");
+    CHECK(fabsf(f->tape_ink) < 0.01f, "fully dimmed after its first second (%.3f)",
+          (double)f->tape_ink);
+
+    /* The body of the window: no ink. */
+    b = mkstatus("Song B", "b.mp3", 4000, side, 0.3f);
+    f = cassette_step(c, &b, now += 3000);
+    CHECK(f->rewinding, "the window is open mid-way");
+    CHECK(fabsf(f->tape_ink) < 0.01f, "and stays dim through the body (%.3f)", (double)f->tape_ink);
+
+    b = mkstatus("Song B", "b.mp3", 7000, side, 0.3f);
+    f = cassette_step(c, &b, now += 3000);
+    CHECK(f->rewinding, "the window is open at 7 s");
+    CHECK(fabsf(f->tape_ink) < 0.01f, "dim up to the last second (%.3f)", (double)f->tape_ink);
+
+    /* The last second: the ramp back to the playing red. */
+    b = mkstatus("Song B", "b.mp3", 7500, side, 0.3f);
+    f = cassette_step(c, &b, now += 500);
+    CHECK(f->rewinding, "the window is open half-way back up");
+    CHECK(fabsf(f->tape_ink - 0.5f) < 0.01f, "half-lit half-way back up (%.3f)", (double)f->tape_ink);
+
+    /* The window is half-open: the step that reaches CASSETTE_REWIND_MS is normal play. */
+    b = mkstatus("Song B", "b.mp3", CASSETTE_REWIND_MS, side, 0.3f);
+    f = cassette_step(c, &b, now += 500);
+    CHECK(!f->rewinding, "the window is over after its length");
+    CHECK_EQ(f->rewind_permille, 0, "and reports no progress");
+    CHECK(fabsf(f->tape_ink - 1.0f) < 0.01f, "back to the playing red at the cut (%.3f)",
+          (double)f->tape_ink);
+
+    b = mkstatus("Song B", "b.mp3", CASSETTE_REWIND_MS + 400, side, 0.3f);
+    f = cassette_step(c, &b, now += 400);
+    CHECK(fabsf(f->tape_ink - 1.0f) < 0.01f, "and it stays there after the window (%.3f)",
+          (double)f->tape_ink);
+
+    /* A reset is the empty screen: no window, so the ink is the red. */
+    cassette_reset(c);
+    f = cassette_step(c, NULL, now += 40);
+    CHECK(fabsf(f->tape_ink - 1.0f) < 0.01f, "a reset puts the ink back to 1");
+
+    cassette_free(c);
+}
+
 int main(void)
 {
     test_initial_and_progress();
@@ -414,6 +488,7 @@ int main(void)
     test_reset();
     test_vu();
     test_rewind();
+    test_rewind_tape_ink();
 
     CHECK(cassette_new(0, 1000) == NULL, "no frames means no reel");
 

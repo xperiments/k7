@@ -63,6 +63,8 @@ extern "C" {
  * edge to the tape's own colour and fades the meters out for the window, so nothing is
  * metered while the tape winds back. */
 #define CASSETTE_REWIND_MS      8000
+/* The ring dims over the window's first second and returns over its last. */
+#define CASSETTE_REWIND_FADE_MS 1000
 #define CASSETTE_REWIND_EASE_MS 1200
 #define CASSETTE_REWIND_REVS    11.0f
 /* A track whose status has no duration still needs a side for the reel fill. */
@@ -77,6 +79,7 @@ typedef struct {
     uint8_t  hub_frame[2];              /* index into the reel art, one revolution = frame_count */
     bool     rewinding;                 /* a track change is playing the tape back to the start */
     uint16_t rewind_permille;           /* 0..1000 through that window; 0 when not rewinding */
+    float    tape_ink;                  /* 0 = the tape's own colour, 1 = the playing red; 1 when not rewinding */
     bool     playing;                   /* the reels follow the audio only while this is true */
     float    level_l, level_r;          /* 0..1 RMS, passed through from the status */
     float    vu_l, vu_r;                /* 0..1 peak-hold of the RMS, for the VU meter */
