@@ -3,8 +3,9 @@
  *
  * The view used to convert design coordinates through a file-static pose and three
  * macros. This pins the conversion: the identity grid, the centring at a smaller
- * scale, the offset, the Label peek's pose, the even-diameter rule and the
- * interpolation the animator eases. No display, no serial dump.
+ * scale, the offset, the Label peek's pose, the transport drawer's pose, the
+ * even-diameter rule and the interpolation the animator eases. No display, no serial
+ * dump.
  */
 #include "test_util.h"
 
@@ -65,6 +66,24 @@ static void test_label_peek_pose(void)
     CHECK_EQ(cassette_len_even(p, 39), 30, "the roller at the peek");
 }
 
+static void test_transport_drawer_pose(void)
+{
+    /* What the transport drawer uses: 0.52x, pulled 51 px left so the tape starts at
+     * 148 px instead of the centred 199, and lifted 20 px onto the button column. */
+    cassette_pose_t p = cassette_pose(134, -51, -20);
+
+    CHECK_EQ(cassette_len(p, 800), 418, "the design box at the drawer's scale");
+    CHECK_EQ(cassette_origin_x(p), 140, "the box is 51 px left of centre");
+    CHECK_EQ(cassette_x(p, 16), 148, "the tape's outer frame starts at 148");
+    CHECK_EQ(cassette_x(p, 784), 550, "and ends at 550");
+    CHECK_EQ(cassette_x(p, 784) - cassette_x(p, 16), 402, "the tape is 402 px wide");
+    CHECK_EQ(cassette_len(p, 480), 251, "the scaled height is odd, so it truncates");
+    CHECK_EQ(cassette_origin_y(p), 94, "the box's top, centring then the -20 px lift");
+    CHECK_EQ(cassette_y(p, 16), 102, "the frame's top edge");
+    CHECK_EQ(cassette_y(p, 460), 334, "the bottom chips, the lowest ink");
+    CHECK_EQ(p.dx, -51, "the drawer's horizontal offset is kept");
+}
+
 static void test_rounding(void)
 {
     cassette_pose_t p200 = cassette_pose(200, 0, 0);
@@ -116,6 +135,7 @@ int main(void)
     test_half_scale_centres();
     test_offset_is_screen_pixels();
     test_label_peek_pose();
+    test_transport_drawer_pose();
     test_rounding();
     test_scale_clamp();
     test_lerp();

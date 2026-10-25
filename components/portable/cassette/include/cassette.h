@@ -11,7 +11,10 @@
  * The art's `frame_count` is the angular resolution: one frame per 360/frame_count
  * degrees. A stopped track holds the last frame, the packs trade size with the
  * track's position, the label drops parenthesised asides, and the progress bar must
- * not be rewritten for a sub-pixel change. A track change does not snap to the new
+ * not be rewritten for a sub-pixel change. The bar also carries the track's clock:
+ * `elapsed_ms` and `duration_ms` are the status's own, reported with `time_changed`
+ * only when their whole seconds differ, so the times are rewritten at the same one
+ * hertz the bar moves at. A track change does not snap to the new
  * side: for CASSETTE_REWIND_MS the tape runs back to the start on screen and lands
  * exactly where normal play picks it up, so the reel change has no break in it.
  *
@@ -75,6 +78,9 @@ typedef struct {
     bool     title_changed;             /* the adapter only rewrites the label when true */
     uint32_t permille;                  /* position through the track, 0..1000 */
     bool     permille_changed;          /* the adapter only moves the bar when true */
+    uint32_t elapsed_ms;                /* the broadcast's position in this track */
+    uint32_t duration_ms;               /* the track's length; 0 = unknown */
+    bool     time_changed;              /* the times' whole seconds differ: rewrite them */
     uint16_t pack_fill[2];              /* CASSETTE_MIN_FILL..1000: [0] supply, [1] take-up */
     uint8_t  hub_frame[2];              /* index into the reel art, one revolution = frame_count */
     bool     rewinding;                 /* a track change is playing the tape back to the start */

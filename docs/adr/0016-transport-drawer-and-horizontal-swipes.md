@@ -62,3 +62,10 @@ a drawer.
   finger on the panel; the build is the host-side check.
 - [ADR 0014](./0014-three-level-swipe-order-and-menu-gesture.md) still holds for the three
   Levels and the reserved two-finger gesture; only the horizontal transport is superseded.
+- Amended after tuning on the panel: the drawer's pose is 134/256 with a -51 px dx, so the
+  tape's 402 px box runs from x=148 to 550 rather than the 500 px at 160/256. Same
+  decision - give the drawer room - with a smaller tape and a left-shifted one.
+- Superseded in part by [ADR 0018](./0018-dj-eq-knobs-and-transport-arrows.md): the tap no
+  longer skips a track (the DJ block's arrows do), the cassette rests at 134/256 for the
+  right-hand block rather than because the drawer asks for room, and the drawer no longer
+  makes a room request. The drawer itself stays at the left edge.

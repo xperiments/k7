@@ -37,6 +37,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/library_http/include \
        -I$(ROOT)/components/portable/mcp/include \
        -I$(ROOT)/components/portable/mini_icecast/include \
+       -I$(ROOT)/components/portable/tone_eq/include \
        -I$(ROOT)/components/portable/mini_files/include \
        -I$(ROOT)/components/portable/cassette/include \
        -I$(ROOT)/components/portable/artwork/include \
@@ -66,12 +67,14 @@ PROD_SRC := \
   $(ROOT)/components/portable/mini_icecast/mi_encode.c \
   $(ROOT)/components/portable/mini_icecast/mi_decode.c \
   $(ROOT)/components/portable/mini_icecast/mi_resample.c \
+  $(ROOT)/components/portable/tone_eq/tone_eq.c \
   $(ROOT)/components/portable/mini_files/mini_files.c \
   $(ROOT)/components/portable/cassette/cassette.c \
   $(ROOT)/components/portable/cassette/cassette_layout.c \
   $(ROOT)/components/portable/artwork/artwork.c \
   $(ROOT)/components/portable/artwork/id3.c \
   $(ROOT)/components/portable/artwork/flac.c \
+  $(ROOT)/components/portable/artwork/tags.c \
   $(ROOT)/components/portable/app_services/app_services.c \
   $(SHINE_SRC)
 
@@ -81,6 +84,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/library_http \
           $(ROOT)/components/portable/mcp \
           $(ROOT)/components/portable/mini_icecast \
+          $(ROOT)/components/portable/tone_eq \
           $(ROOT)/components/portable/mini_files \
           $(ROOT)/components/portable/cassette \
           $(ROOT)/components/portable/artwork \
@@ -88,10 +92,10 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
 
-CORE_OBJ := $(OBJ)/audio_format.o $(OBJ)/library.o $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(SHINE_OBJ) $(OBJ)/shim.o
+CORE_OBJ := $(OBJ)/audio_format.o $(OBJ)/library.o $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(OBJ)/tone_eq.o $(SHINE_OBJ) $(OBJ)/shim.o
 BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o $(OBJ)/mi_ring.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o
-ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o
+ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/mini_icecast.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
@@ -107,7 +111,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t05_stream_formats $(BIN)/t06_status $(BIN)/t07_burst_icy \
          $(BIN)/t08_http_parse $(BIN)/t10_cassette $(BIN)/t11_ring \
          $(BIN)/t12_transport $(BIN)/t14_library $(BIN)/t15_artwork \
-         $(BIN)/t16_layout
+         $(BIN)/t16_layout $(BIN)/t17_tone_eq
 
 .PHONY: all test integration layering check tools fixtures bench control control-check clean help
 
@@ -200,6 +204,10 @@ $(BIN)/t15_artwork: $(ARTWORK_OBJ) $(OBJ)/audio_format.o $(OBJ)/t15_artwork.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t16_layout: $(OBJ)/cassette_layout.o $(OBJ)/t16_layout.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t17_tone_eq: $(OBJ)/tone_eq.o $(OBJ)/t17_tone_eq.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

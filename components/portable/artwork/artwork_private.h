@@ -57,3 +57,9 @@ artwork_result_t art_id3_locate(artwork_read_fn read, void *ctx, uint64_t file_s
                                 artwork_ref_t *out);
 artwork_result_t art_flac_locate(artwork_read_fn read, void *ctx, uint64_t file_size,
                                  artwork_ref_t *out);
+
+/* The two text-tag readers, in the same containers. */
+artwork_result_t art_id3_tags(artwork_read_fn read, void *ctx, uint64_t file_size,
+                              artwork_tags_t *out);
+artwork_result_t art_flac_tags(artwork_read_fn read, void *ctx, uint64_t file_size,
+                               artwork_tags_t *out);

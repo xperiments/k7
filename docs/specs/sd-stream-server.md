@@ -116,8 +116,8 @@ let a future reader rediscover them:
    The board has a separate USB-UART bridge (visible as `usbserial-834430` alongside the
    native `usbmodem834101`), so debugging survives over UART — but on-chip JTAG debugging
    does not. Accept, and say so in the README.
-2. **GPIO0 is already the skip button** (`main.c:138`) and is a strapping pin. Holding it at
-   boot enters download mode. That is a feature, not a bug, but the README must document it.
+2. **GPIO0 is a strapping pin.** Holding it at boot enters download mode. It is not a
+   runtime button; next and previous are the screen's DJ block. The README documents it.
 3. **[inferred]** The 1-bit SDMMC wiring on a hand-soldered card slot is the single most
    likely source of intermittent faults. `main.c:89` already sets
    `SDMMC_SLOT_FLAG_INTERNAL_PULLUP` and warns that real 10 kΩ pull-ups on CMD/D0 may be

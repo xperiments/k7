@@ -51,8 +51,11 @@ struct cassette {
     float    shown_phase[2];    /* the hub phase on screen */
 
     uint32_t shown_permille;
+    uint32_t shown_elapsed_ms;
+    uint32_t shown_duration_ms;
     uint32_t last_bar_ms;
     bool     have_shown;
+    bool     have_time;
 
     char     shown_title[CASSETTE_TITLE_MAX];
     bool     have_title;
@@ -171,14 +174,18 @@ void cassette_reset(cassette_t *c)
     c->shown_q = 0;
     memset(c->shown_phase, 0, sizeof c->shown_phase);
     c->shown_permille = 0;
+    c->shown_elapsed_ms = 0;
+    c->shown_duration_ms = 0;
     c->last_bar_ms = 0;
     c->have_shown = false;
+    c->have_time = false;
     c->shown_title[0] = 0;
     c->have_title = false;
     /* The adapter drew something; the next frame must say what to replace it
      * with, even when it is the same empty screen. */
     c->frame.title_changed = true;
     c->frame.permille_changed = true;
+    c->frame.time_changed = true;
     c->frame.tape_ink = 1.0f;
 }
 
@@ -213,13 +220,19 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
     c->frame.vu_l = c->peak_l;
     c->frame.vu_r = c->peak_r;
 
-    /* The position, stepped at the bar's period rather than at the poll rate: a
-     * one-second step is ample for a bar and stops a sub-pixel change from
-     * invalidating it ten times a second. The reels use the current position
-     * below, so their speed follows the pack radius. */
+    /* The position is stepped at the bar's period rather than at the poll rate: a
+     * one-second step is ample for a bar and stops a sub-pixel change from invalidating
+     * it ten times a second. The reels use the current position below, so their speed
+     * follows the pack radius. The times are the status's own elapsed and duration, not
+     * a re-derivation from the permille, so a track whose length is unknown still shows
+     * its elapsed seconds. They are compared every step - the whole-second test is what
+     * keeps the view from rewriting them - so play/stop and a newly known duration show
+     * at once rather than at the next bar step. */
+    uint32_t elapsed = c->have_status ? c->status.elapsed_ms : 0;
+    uint32_t duration = c->have_status ? c->status.duration_ms : 0;
     uint32_t permille = 0;
-    if (c->have_status && c->status.duration_ms)
-        permille = (uint32_t)((uint64_t)c->status.elapsed_ms * 1000ULL / c->status.duration_ms);
+    if (c->have_status && duration)
+        permille = (uint32_t)((uint64_t)elapsed * 1000ULL / duration);
     if (permille > 1000) permille = 1000;
 
     bool due = !c->have_shown || now_ms - c->last_bar_ms >= c->bar_period_ms;
@@ -233,14 +246,29 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
     }
     c->frame.permille = c->shown_permille;
 
+    /* No track, no clock: an idle screen shows 0:00 / --:--. The elapsed is clamped to
+     * the duration so a file's encoder padding cannot make the clock pass the end of its
+     * own bar. */
+    bool playing_changed = c->frame.playing != c->was_playing;
+    uint32_t shown_elapsed = c->frame.playing ? elapsed : 0;
+    uint32_t shown_duration = c->frame.playing ? duration : 0;
+    if (shown_duration && shown_elapsed > shown_duration) shown_elapsed = shown_duration;
+    bool time_changed = !c->have_time || playing_changed ||
+                        shown_elapsed / 1000 != c->shown_elapsed_ms / 1000 ||
+                        shown_duration / 1000 != c->shown_duration_ms / 1000;
+    c->frame.time_changed = time_changed;
+    c->frame.elapsed_ms = shown_elapsed;
+    c->frame.duration_ms = shown_duration;
+    c->shown_elapsed_ms = shown_elapsed;
+    c->shown_duration_ms = shown_duration;
+    c->have_time = true;
+
     /* A track with no duration still needs a side for the reel fill; the bar
      * stays at zero because it has nothing to measure against. */
     uint32_t position = permille;
     if (c->have_status && !c->status.duration_ms)
-        position = (uint32_t)((uint64_t)c->status.elapsed_ms * 1000ULL / CASSETTE_NOMINAL_SIDE_MS);
+        position = (uint32_t)((uint64_t)elapsed * 1000ULL / CASSETTE_NOMINAL_SIDE_MS);
     if (position > 1000) position = 1000;
-
-    uint32_t elapsed = c->have_status ? c->status.elapsed_ms : 0;
 
     /* A track change is the only thing that makes the reels jump, so it is also the
      * only thing that opens the rewind. It is decided before the phase is reset,

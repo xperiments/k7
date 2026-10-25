@@ -81,10 +81,13 @@ static bool s_started;
 
 static char s_music_dir[80];
 
-/* The latest request; replaced, never queued. */
+/* The latest request; replaced, never queued. The two flags say what the same Track
+ * still needs, so a picture request and a tags request for one Track cost one wake. */
 static char s_req_path[LIB_PATH_MAX];
 static mi_fmt_t s_req_fmt;
 static uint32_t s_req_seq;
+static bool s_req_art;
+static bool s_req_tags;
 
 /* The cover: one 603x385 buffer, allocated once for the life of the process. The view
  * hides the picture when a new Track is requested, so the decode writes it while it is
@@ -427,6 +430,64 @@ static void apply_cover(bool have)
     lvgl_port_unlock();
 }
 
+/* The text tags, handed in under the same lock as the picture. Empty fields are a real
+ * answer (the Track has no tags) and let the peek fall back to its path/filename. */
+static void apply_tags(const artwork_tags_t *tags)
+{
+    if (!lvgl_port_lock(1000)) return;
+    cassette_view_set_tags(tags->group, tags->song);
+    lvgl_port_unlock();
+}
+
+/* Read the Track's group/song tags. Small: one open, a header and the two frames (or
+ * one Vorbis comment block), then the card is released. A newer Track's request makes
+ * the result stale, so it is dropped rather than shown against the wrong song. */
+static void render_tags(const char *track_path, mi_fmt_t fmt, uint32_t seq)
+{
+    artwork_tags_t tags;
+    memset(&tags, 0, sizeof tags);
+    bool ok = false;
+    uint64_t open_ms = 0, read_ms = 0;
+
+    if (track_path[0] && fmt != MI_FMT_NONE) {
+        card_wait();
+
+        char path[sizeof s_music_dir + LIB_PATH_MAX + 2];
+        snprintf(path, sizeof path, "%s/%s", s_music_dir, track_path);
+
+        int64_t t_open = esp_timer_get_time();
+        FILE *f = fopen(path, "rb");
+        open_ms = (uint64_t)((esp_timer_get_time() - t_open) / 1000);
+        if (f) {
+            uint64_t size = file_size(f);
+            int64_t t_read = esp_timer_get_time();
+            artwork_result_t r = artwork_tags(fmt, file_read_at, f, size, &tags);
+            read_ms = (uint64_t)((esp_timer_get_time() - t_read) / 1000);
+            fclose(f);
+            ok = r == ARTWORK_OK;
+            if (!ok && r != ARTWORK_NONE) {
+                ESP_LOGI(TAG, "%s: tags: %s", track_path,
+                         r == ARTWORK_UNSUPPORTED ? "an unsupported tag"
+                         : r == ARTWORK_IO ? "read failed"
+                         : "the container is malformed");
+            }
+        } else {
+            ESP_LOGW(TAG, "%s: cannot open the Track; no tags", track_path);
+        }
+    }
+
+    if (seq != current_seq()) {
+        ESP_LOGI(TAG, "%s: tags superseded", track_path[0] ? track_path : "(none)");
+        return;
+    }
+
+    apply_tags(&tags);
+    ESP_LOGI(TAG, "%s: tags %s (group '%s', song '%s'; open %llu ms, read %llu ms)",
+             track_path[0] ? track_path : "(none)", ok ? "read" : "empty",
+             tags.group, tags.song,
+             (unsigned long long)open_ms, (unsigned long long)read_ms);
+}
+
 static void render_art(const char *track_path, mi_fmt_t fmt, uint32_t seq)
 {
     bool ok = false;
@@ -494,13 +555,21 @@ static void loader_task(void *arg)
         char path[LIB_PATH_MAX];
         mi_fmt_t fmt = MI_FMT_NONE;
         uint32_t seq = 0;
+        bool do_art = false, do_tags = false;
         if (xSemaphoreTake(s_lock, portMAX_DELAY) == pdTRUE) {
             snprintf(path, sizeof path, "%s", s_req_path);
             fmt = s_req_fmt;
             seq = s_req_seq;
+            do_art = s_req_art;
+            do_tags = s_req_tags;
+            s_req_art = false;
+            s_req_tags = false;
             xSemaphoreGive(s_lock);
         }
-        render_art(path, fmt, seq);
+        /* The tags first: they are a few hundred bytes and the labels become right while
+         * the picture is still decoding. A stale request does neither. */
+        if (do_tags) render_tags(path, fmt, seq);
+        if (do_art && seq == current_seq()) render_art(path, fmt, seq);
     }
 }
 
@@ -576,13 +645,34 @@ esp_err_t artwork_loader_start(const char *music_dir)
     return ESP_OK;
 }
 
-void artwork_loader_request(const char *track_path, mi_fmt_t format)
+/* One request channel: a path, its format, and what is still wanted for it. A new
+ * Track replaces both flags and increments the sequence a decode checks; a second
+ * request for the same Track only adds a flag, so a tags request cannot stale an
+ * in-flight picture of that same Track. */
+static void request(const char *track_path, mi_fmt_t format, bool art, bool tags)
 {
     if (!s_lock) return;
     if (xSemaphoreTake(s_lock, portMAX_DELAY) != pdTRUE) return;
-    snprintf(s_req_path, sizeof s_req_path, "%s", track_path ? track_path : "");
-    s_req_fmt = format;
-    s_req_seq++;
+    const char *path = track_path ? track_path : "";
+    if (strcmp(path, s_req_path) != 0 || format != s_req_fmt) {
+        snprintf(s_req_path, sizeof s_req_path, "%s", path);
+        s_req_fmt = format;
+        s_req_seq++;
+        s_req_art = false;
+        s_req_tags = false;
+    }
+    if (art) s_req_art = true;
+    if (tags) s_req_tags = true;
     xSemaphoreGive(s_lock);
     if (s_wake) xSemaphoreGive(s_wake);
+}
+
+void artwork_loader_request(const char *track_path, mi_fmt_t format)
+{
+    request(track_path, format, true, false);
+}
+
+void artwork_loader_request_tags(const char *track_path, mi_fmt_t format)
+{
+    request(track_path, format, false, true);
 }

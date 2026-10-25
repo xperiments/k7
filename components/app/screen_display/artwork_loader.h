@@ -1,12 +1,14 @@
 #pragma once
 /*
- * artwork_loader - the card side of the Artwork screen.
+ * artwork_loader - the card side of the Artwork screen and of the peek's tags.
  *
  * Locates a Track's own picture (components/portable/artwork), decodes it with TJpgDec
  * as the decoder reads the JPEG from the card on demand, and fits it to the Case's
  * window, 603x385 at (101,23). The Case itself (assets/labels/cover.jpg) is embedded as
- * a JPEG and decoded once at start. Work happens on its own task, off the audio core and
- * behind a one-slot request, so the view never touches the card or a decoder.
+ * a JPEG and decoded once at start. It also reads the Track's text tags - TPE1/TIT2 in
+ * an MP3, ARTIST/TITLE in a FLAC Vorbis comment - for the group and song labels on
+ * Bare's peek. Work happens on its own task, off the audio core and behind a one-slot
+ * request, so the view never touches the card or a decoder.
  *
  * Only JPEG is decoded. A PNG picture is located but refused with a log line: it is
  * rare in an MP3, and the case window does not need LodePNG's full-size buffer.
@@ -30,6 +32,11 @@ esp_err_t artwork_loader_start(const char *music_dir);
  * view dedupes while a Track does not change. An empty path, NULL or MI_FMT_NONE
  * clears the cover. */
 void artwork_loader_request(const char *track_path, mi_fmt_t format);
+
+/* Ask for a Track's text tags. A request for the same Track as a pending picture is
+ * coalesced with it (one open, one wake), and a new Track replaces both. The result is
+ * handed to the view under the LVGL lock; empty tags mean the Track carries none. */
+void artwork_loader_request_tags(const char *track_path, mi_fmt_t format);
 
 #ifdef __cplusplus
 }

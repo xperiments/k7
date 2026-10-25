@@ -1,11 +1,17 @@
 #pragma once
 /*
- * artwork - where a Track's picture is, and how it is fitted to the Case's window.
+ * artwork - what a Track's container says about it: its picture, and the text tags
+ * that name the group and the song.
  *
  * Two containers carry a picture: MP3 in an ID3v2.3/2.4 APIC frame, FLAC in a native
  * PICTURE metadata block. Both are located here by reading a few headers and returning
  * the picture's offset and length, so the bytes themselves are never held twice: the
  * board adapter reads them into a decode buffer only when it is about to decode.
+ *
+ * The same tags carry the names the screen puts over the cassette: TPE1 (artist) and
+ * TIT2 (title) in an MP3, ARTIST/ALBUMARTIST and TITLE in a FLAC Vorbis comment. They
+ * are read here through the same callback, into fixed buffers, so the display never
+ * walks a container and the broadcast never reads a file for the screen.
  *
  * The module reads through a callback rather than stdio, so the host build tests the
  * parsers against a byte array and the board passes fseek/fread. It has no LVGL and no
@@ -54,6 +60,26 @@ typedef struct {
  * pass 0 when it is not known. */
 artwork_result_t artwork_locate(mi_fmt_t format, artwork_read_fn read, void *ctx,
                                 uint64_t file_size, artwork_ref_t *out);
+
+/* The Track's text tags, as UTF-8. Both buffers are always NUL-terminated and both are
+ * empty when the container carries no such tag; a caller that has no better text falls
+ * back to the filename and the directory. */
+#define ARTWORK_TAG_MAX 96
+
+typedef struct {
+    char group[ARTWORK_TAG_MAX]; /* MP3 TPE1/TIT2 -> TPE2; FLAC ARTIST -> ALBUMARTIST */
+    char song[ARTWORK_TAG_MAX];  /* MP3 TIT2; FLAC TITLE */
+} artwork_tags_t;
+
+/* Read the group and song tags, by Source format. WAV has none.
+ *
+ * ARTWORK_OK means the container was read and `out` is valid, even if both fields are
+ * empty. ARTWORK_NONE means the file carries no tag this module reads. The other
+ * results are the container's: a malformed or truncated tag, an unsupported ID3
+ * version/unsync bit, or a failed read. `file_size` is used the same way as in
+ * artwork_locate(). */
+artwork_result_t artwork_tags(mi_fmt_t format, artwork_read_fn read, void *ctx,
+                              uint64_t file_size, artwork_tags_t *out);
 
 /* Scale-to-cover and centre-crop a source RGB565 image into a destination of exactly
  * dst_w x dst_h pixels. The source's aspect ratio is kept: the overflowing axis is

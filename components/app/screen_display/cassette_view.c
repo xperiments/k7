@@ -7,8 +7,9 @@
  *
  *   cassette_tapes    the packs, strands, rollers, run, hubs and the panel's frames
  *   cassette_meter    the VU meter
- *   cassette_levels   the Level machine, the Label, the Label cover and Artwork
+ *   cassette_levels   the Level machine, the Label cover and the Artwork sheet
  *   cassette_buttons  the three-button transport drawer at the left edge
+ *   cassette_eq       the DJ block at the right edge: GAIN, HI/MED/LOW and the < / > arrows
  *   screen_input      the touch policy, as intents
  *   cassette_layout   the design grid (portable, pinned by t16)
  *   cassette_style    the palette
@@ -28,6 +29,7 @@
 
 #include "cassette.h"
 #include "cassette_buttons.h"
+#include "cassette_eq.h"
 #include "cassette_layout.h"
 #include "cassette_levels.h"
 #include "cassette_meter.h"
@@ -39,67 +41,70 @@
 
 static const char *TAG = "screen";
 
-/* The Label's peek shrinks the cassette so the bar clears the tape; the bar's slide is
+/* The peek shrinks the cassette so the bar clears the tape; the bar's slide is
  * 260 ms, and the pose must run over the same time so the two arrive as one picture.
- * The transport drawer is the other caller that asks for room: at 160/256 the tape is
- * 500 px wide, which leaves the 120 px drawer clear, and its slide is the same 260 ms.
- * The design box is exactly 300 px tall at that scale, so centring it puts its centre on
- * 240 px - the same line as the middle button (R). No offset is needed. */
+ * The rest pose is the one the left drawer used to ask for: 134/256 puts the tape's
+ * 402 px box at 148..550, which clears the 120 px drawer on the left and leaves room
+ * for the 192 px DJ block at 592..784 on the right. The VU lands at about x=450. */
 #define CASSETTE_SCALE_LABEL   200
-#define CASSETTE_SCALE_BUTTONS 160
-#define CASSETTE_ROOM_MS       CASSETTE_BUTTONS_SLIDE_MS
+#define CASSETTE_SCALE_REST    134
+#define CASSETTE_REST_DX       (-51)
+#define CASSETTE_REST_DY       (-20)
+/* The peek's bar slides in 260 ms; the pose runs with it so the two arrive as one. */
+#define CASSETTE_ROOM_MS       260
 
 static cassette_t *s_model;
 static lv_obj_t *s_cassette;   /* the container everything the body draws hangs off */
 static cassette_pose_t s_pose = { CASSETTE_SCALE_NONE, 0, 0 };
 static cassette_pose_t s_pose_from;   /* the pose the change in flight started at */
 static cassette_pose_t s_pose_to;     /* and the one it is heading for */
-static bool s_label_wants_room;       /* the Label's peek is up */
-static bool s_buttons_want_room;      /* the transport drawer is out */
+static bool s_peek_wants_room;        /* the peek is up */
 
 /* ------------------------------------------------------------------ layout */
 
-/* The Label and the drawer both ask the cassette for room. The view keeps one pose, so
- * it arbitrates: the drawer is the smaller of the two (160/256) and wins while it is
- * out, and at that size the tape already clears the Label's bar, so the Label's -60 px
- * lift is not added on top. The centred 300 px box already puts the cassette's centre on
- * the R button's line. With the drawer away the Label's 200/256 and -60 px lift are what
- * they were; with neither, the cassette rests at its design size. A Level change asks for
- * the answer instantly; a swipe runs it over the slide it accompanies. */
+/* The peek asks the cassette for room. The rest pose already leaves the left drawer and
+ * the right DJ block clear, so the drawer no longer changes it; only the peek's 200/256
+ * and -60 px lift do. A Level change asks for the answer instantly; a swipe runs it over
+ * the slide it accompanies. */
 static void room_apply(bool instant)
 {
-    int scale = CASSETTE_SCALE_NONE;
-    int dy = 0;
-    if (s_buttons_want_room) {
-        scale = CASSETTE_SCALE_BUTTONS;
-    } else if (s_label_wants_room) {
+    int scale = CASSETTE_SCALE_REST;
+    int dx = CASSETTE_REST_DX;
+    int dy = CASSETTE_REST_DY;
+    if (s_peek_wants_room) {
         scale = CASSETTE_SCALE_LABEL;
+        dx = 0;
         dy = -60;
     }
-    cassette_view_set_scale(scale, 0, dy, instant ? 0 : CASSETTE_ROOM_MS);
+    cassette_view_set_scale(scale, dx, dy, instant ? 0 : CASSETTE_ROOM_MS);
 }
 
 static void levels_room_cb(bool shown, bool instant, void *ctx)
 {
     (void)ctx;
-    s_label_wants_room = shown;
+    s_peek_wants_room = shown;
     room_apply(instant);
 }
 
-/* The drawer reports its slide as it starts, so the tape and the panel move together. */
-static void buttons_room_cb(bool shown, void *ctx)
+/* Re-place every part at the current pose. The parts keep the pose themselves, so the
+ * draw callbacks (the pack rings, the lattice) follow without a second pass. The peek's
+ * two tethers both end on the left hub, so its screen points move with it: the group is
+ * above the hub and meets the top rim, the song is below it and meets the bottom one. */
+static void hubs_apply(void)
 {
-    (void)ctx;
-    s_buttons_want_room = shown;
-    room_apply(false);
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+    cassette_tapes_hub_anchor(0, true, &x0, &y0);
+    cassette_tapes_hub_anchor(0, false, &x1, &y1);
+    cassette_levels_set_hubs(x0, y0, x1, y1);
+#endif
 }
 
-/* Re-place every part at the current pose. The parts keep the pose themselves, so the
- * draw callbacks (the pack rings, the lattice) follow without a second pass. */
 static void cassette_place(void)
 {
     cassette_tapes_place(s_pose);
     cassette_meter_place(s_pose);
+    hubs_apply();
 }
 
 static void pose_anim_cb(void *var, int32_t step)
@@ -136,7 +141,7 @@ void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms)
     lv_anim_set_exec_cb(&a, pose_anim_cb);
     lv_anim_set_values(&a, 0, 1024);
     lv_anim_set_duration(&a, ms);
-    /* The Label's bar and the transport drawer drive this, so the ease is theirs: the
+    /* The peek's bar and the transport drawer drive this, so the ease is theirs: the
      * picture and the thing that asked for room arrive as one. */
     lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
     lv_anim_start(&a);
@@ -159,6 +164,10 @@ static void apply_frame(const cassette_frame_t *f)
 static void screen_intent_cb(screen_intent_t intent, void *ctx)
 {
     (void)ctx;
+    /* Edit mode is modal: the overlay owns the touch and the two-finger menu arrives from
+     * the adapter directly, so the view is the other half of the gate. */
+    if (cassette_eq_is_editing()) return;
+
     switch (intent) {
         case SCREEN_INTENT_BUTTONS_SHOW:
             cassette_buttons_set_shown(true);
@@ -170,14 +179,12 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
             cassette_levels_swipe_down();
             /* The Artwork sheet raises itself when it settles; chrome stays above it. */
             cassette_buttons_raise();
+            cassette_eq_raise();
             break;
         case SCREEN_INTENT_LEVEL_UP:
             cassette_levels_swipe_up();
             cassette_buttons_raise();
-            break;
-        case SCREEN_INTENT_TAP:
-            mini_icecast_skip();
-            ESP_LOGI(TAG, "tap: next track");
+            cassette_eq_raise();
             break;
         case SCREEN_INTENT_MENU:
             /* The menu is not designed yet; screen_input has already logged it. */
@@ -210,17 +217,25 @@ void cassette_view_create(void)
     lv_obj_set_scrollable(s_cassette, false);
     lv_obj_set_clickable(s_cassette, false);
 
-    /* The tapes first, then the meter: the meter paints inside the right hub. */
+    /* The tapes first, then the meter: the meter paints inside the right hub. The rest
+     * pose is the one the DJ block leaves room for, so the first paint is already it. */
+    s_pose = cassette_pose(CASSETTE_SCALE_REST, CASSETTE_REST_DX, CASSETTE_REST_DY);
     cassette_tapes_create(s_cassette);
     cassette_meter_create(s_cassette);
     cassette_place();
 
     /* The sheets are the screen's children, above the cassette's container. */
     cassette_levels_create(scr, levels_room_cb, NULL);
+    /* The peek exists now, so give it the resting pose's hub anchors. */
+    hubs_apply();
 
     /* The transport drawer is chrome, above every sheet: created after the Levels, and
      * raised again after a vertical swipe. It starts off screen and hidden. */
-    cassette_buttons_create(scr, buttons_room_cb, NULL);
+    cassette_buttons_create(scr);
+
+    /* The DJ block is chrome too, on the other edge; created last so it starts above the
+     * sheets, and raised with the drawer after a vertical swipe. */
+    cassette_eq_create(scr);
 
     /* The model: the tapes' frame count is the angular resolution; the geometry
      * supplies the speeds. */
@@ -232,9 +247,9 @@ void cassette_view_create(void)
     if (s_model) apply_frame(cassette_step(s_model, NULL, lv_tick_get()));
 
     /* The picture is built. Make the screen the one thing a finger can hit, then let
-     * screen_input decide what a touch means: a tap is next, a right swipe slides the
-     * buttons in, a left swipe slides them out, a vertical one moves a Level, and a
-     * two-finger one is the menu. */
+     * screen_input decide what a touch means: a right swipe slides the transport in, a
+     * left swipe slides it out, a vertical one moves a Level, and a two-finger one is the
+     * menu. A tap is not an action; next/previous belong to the block's arrows. */
     lv_obj_set_clickable(scr, true);
     screen_input_attach(scr, screen_intent_cb, NULL);
 }
@@ -281,5 +296,10 @@ void cassette_view_set_artwork(const lv_image_dsc_t *dsc)
 void cassette_view_set_case(const lv_image_dsc_t *dsc)
 {
     cassette_levels_set_case(dsc);
+}
+
+void cassette_view_set_tags(const char *group, const char *song)
+{
+    cassette_levels_set_tags(group, song);
 }
 #endif

@@ -49,7 +49,7 @@ static const struct { int x, y; } k_hub[2] = { { 216-6, 206 }, { 600-8+2, 206 } 
 #define HUB_RING_D 168
 #define PACK_MIN_D 168
 #define PACK_MAX_D 356
-#define PACK_RING_GAP 8
+#define PACK_RING_GAP 10
 #define PACK_RING_W 1
 
 /* The drawn hub: a rim with a divided circle turning inside it. The frame count is the
@@ -111,6 +111,14 @@ static lv_point_precise_t s_run_pts[2];
 static lv_obj_t *s_rim[2];                  /* the 168 px hub circle the rewind dims */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 static lv_obj_t *s_frame[2];        /* the cassette's two borders; the board's only */
+/* The three small rounded boxes along the bottom; the board's only, like the frames. */
+static const struct { int x, y, w, h; } k_chip[3] = {
+    { 120, 440, 50, 20 },
+    { 360, 430, 80, 30 },
+    { 800 - 120 - 50, 440, 50, 20 },
+};
+#define CHIP_R 8
+static lv_obj_t *s_chip[3];
 #endif
 static int      s_pack_d[2];      /* px, so a redraw happens only when it changes */
 static uint8_t  s_shown_hub[2];   /* the animation frame currently on screen */
@@ -340,6 +348,11 @@ void cassette_tapes_place(cassette_pose_t pose)
     lv_obj_set_style_radius(s_frame[0], SC(FRAME_R), 0);
     place_rect(s_frame[1], 122, 122, 556, 168);
     lv_obj_set_style_radius(s_frame[1], SC(16), 0);
+
+    for (int i = 0; i < 3; i++) {
+        place_rect(s_chip[i], k_chip[i].x, k_chip[i].y, k_chip[i].w, k_chip[i].h);
+        lv_obj_set_style_radius(s_chip[i], SC(CHIP_R), 0);
+    }
 #endif
 
     for (int i = 0; i < 2; i++) {
@@ -370,6 +383,15 @@ void cassette_tapes_place(cassette_pose_t pose)
 }
 
 /* ------------------------------------------------------- the model's frame */
+
+void cassette_tapes_hub_anchor(int index, bool top, int *x, int *y)
+{
+    if (!x || !y) return;
+    if (index < 0 || index > 1) index = 0;
+    int r = SC(HUB_RING_D) / 2;
+    *x = SCX(k_hub[index].x);
+    *y = SCY(k_hub[index].y) + (top ? -r : r);
+}
 
 /* Push the tape's ink into the hub rims: the playing red at LV_OPA_COVER, the tape's own
  * colour at LV_OPA_TRANSP. Only the border changes, so each rim invalidates its own
@@ -423,8 +445,14 @@ void cassette_tapes_create(lv_obj_t *parent)
      * complete. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     /* The two rounded rectangles the body is drawn on. */
-    s_frame[0] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 255, k_col_back, 1);
-    s_frame[1] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 255, k_col_back, 1);
+    s_frame[0] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 0, k_col_back, 1);
+    s_frame[1] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 0, k_col_back, 1);
+
+    /* The three small boxes along the bottom are objects too, placed by the pose in
+     * cassette_tapes_place(); a fixed position here would not scale with the cassette. */
+    for (int i = 0; i < 3; i++)
+        s_chip[i] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 255,
+                                        k_col_tape_dark, 1);
 #endif
     /* The tape: two packs, two bottom rollers, the run between them and the two side
      * paths. A pack's box is transparent and carries no border; its rings are the draw

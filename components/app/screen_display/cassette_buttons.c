@@ -11,8 +11,8 @@
  *
  * The button's root bubbles gestures to the panel, and the panel bubbles them to the
  * screen, so the same swipe that opens or closes the drawer works when it starts on a
- * button. The drawer itself is clickable so a tap on its margin is absorbed rather
- * than read as the screen's next-track tap; it has no click handler.
+ * button. The drawer itself is clickable so a tap on its margin is absorbed rather than
+ * read as a screen gesture; it has no click handler.
  *
  * Called under the LVGL lock, like everything else on the screen.
  */
@@ -31,8 +31,8 @@ LV_FONT_DECLARE(jura_36);
 static const char *TAG = "screen";
 
 /* The drawer: a 120 px strip at the left edge, hidden by sliding its own width out.
- * The three 96x96 buttons are 12 px apart and centred down the 480 px screen, so the
- * middle button (R) sits on the screen's vertical centre. */
+ * The three 96x96 buttons start 76 px from the screen's top and share their borders
+ * (a -2 px gap); the middle button (R) is therefore on y=218. */
 #define PANEL_W 120
 #define PANEL_H 480
 #define PANEL_HIDDEN_X (-PANEL_W)
@@ -41,9 +41,9 @@ static const char *TAG = "screen";
 #define BUTTON_W 96
 #define BUTTON_H 96
 #define BUTTON_R 8
-#define BUTTON_GAP 12
+#define BUTTON_GAP -2
 #define BUTTON_X ((PANEL_W - BUTTON_W) / 2)
-#define BUTTON_TOP ((PANEL_H - (BUTTON_COUNT * BUTTON_H + (BUTTON_COUNT - 1) * BUTTON_GAP)) / 2)
+#define BUTTON_TOP 64+12
 
 /* The circle is centred in the button: 16 px of line art on every side at 64 px. */
 #define CIRCLE_D 64
@@ -70,8 +70,6 @@ typedef struct {
 static lv_obj_t *s_panel;
 static cassette_button_t s_buttons[BUTTON_COUNT];
 static bool s_shown;
-static cassette_buttons_room_cb_t s_room;
-static void *s_room_ctx;
 
 /* --------------------------------------------------------------- the buttons */
 
@@ -190,7 +188,7 @@ static void button_create(lv_obj_t *parent, int index, const char *text, int y)
     lv_obj_set_style_transform_pivot_y(root, BUTTON_H / 2, 0);
     /* A swipe that starts on a button still reaches the screen's gesture handler, and
      * the press reaches screen_input so it can clear the two-finger latch. A click also
-     * bubbles, but screen_input ignores a click whose target is not the screen. */
+     * bubbles; the screen no longer gives a click a meaning. */
     lv_obj_set_gesture_bubble(root, true);
     lv_obj_set_event_bubble(root, true);
 
@@ -244,11 +242,9 @@ static void panel_slide(bool shown)
     lv_anim_start(&a);
 }
 
-void cassette_buttons_create(lv_obj_t *screen, cassette_buttons_room_cb_t room, void *ctx)
+void cassette_buttons_create(lv_obj_t *screen)
 {
     if (!screen || s_panel) return;
-    s_room = room;
-    s_room_ctx = ctx;
     s_shown = false;
 
     s_panel = lv_obj_create(screen);
@@ -260,12 +256,11 @@ void cassette_buttons_create(lv_obj_t *screen, cassette_buttons_room_cb_t room, 
     lv_obj_set_style_pad_all(s_panel, 0, 0);
     lv_obj_set_scrollable(s_panel, false);
     /* Clickable so the margins absorb a tap instead of letting it fall through to the
-     * screen's next-track tap; it has no click handler of its own. */
+     * screen's gesture handler; it has no click handler of its own. */
     lv_obj_set_clickable(s_panel, true);
     lv_obj_set_gesture_bubble(s_panel, true);
-    /* The panel's press reaches screen_input's latch-clearing handler, and a click on
-     * its margin bubbles to the screen but is ignored there: the target is not the
-     * screen. */
+    /* The panel's press reaches screen_input's latch-clearing handler; its click bubbles
+     * to the screen, which no longer gives a click a meaning. */
     lv_obj_set_event_bubble(s_panel, true);
     lv_obj_set_hidden(s_panel, true);
 
@@ -278,7 +273,6 @@ void cassette_buttons_set_shown(bool shown)
 {
     if (!s_panel || shown == s_shown) return;
     s_shown = shown;
-    if (s_room) s_room(shown, s_room_ctx);
     panel_slide(shown);
     ESP_LOGI(TAG, "buttons %s", shown ? "shown" : "hidden");
 }

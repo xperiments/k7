@@ -51,8 +51,9 @@
  * "sdmmc_init_ocr: send_op_cond (1) returned 0x107". SPI also leaves the
  * USB-JTAG pins (39/40) alone, so on-chip debugging survives.
  *
- * GPIO0 is the BOOT strapping pin and is the skip button; holding it during
- * reset enters download mode, which is how you flash. */
+ * GPIO0 is the BOOT strapping pin; holding it during reset enters download mode, which
+ * is how you flash. It is not a runtime button: next and previous are the screen's DJ
+ * block. */
 #define SD_CS   10
 #define SD_CLK  12
 #define SD_MOSI 11

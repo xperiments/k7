@@ -4,22 +4,23 @@
  *
  * The drawer is a 120 px panel that starts off-screen to the left and hidden. A
  * one-finger right swipe brings it in and a left swipe puts it away; the view turns
- * those two intents into cassette_buttons_set_shown(). While the drawer is out the
- * view scales the cassette to 160/256, so the tape clears the panel.
+ * those two intents into cassette_buttons_set_shown(). The cassette rests at 134/256
+ * (148..550), so the drawer already has room and no longer asks the view for a pose.
  *
  * The drawer holds three buttons down the left edge. Each is line art: a 96x96
  * rectangle rounded by 8 px, a 64 px circle at its centre, and the letter P, R or W
- * centred in that circle in Jura 36. The three are centred vertically, so R sits on the
- * screen's centre and the cassette is centred to it. Each button carries two prebuilt
- * state objects - unpressed and pressed - and swaps which one is visible on press and
- * release, so the pressed look costs no style change at touch time. A click is a short
- * scale pulse and nothing else: the transport is not wired yet.
+ * centred in that circle in Jura 36. The three start 76 px from the screen's top; the
+ * middle button (R) is therefore on y=218. Each button carries two prebuilt state
+ * objects - unpressed and pressed - and swaps which one is visible on press and release,
+ * so the pressed look costs no style change at touch time. A click is a short scale pulse
+ * and nothing else: the transport is not wired, and next/previous belong to the DJ
+ * block's arrows.
  *
  * Private to screen_display, created above the Levels in the child order. Every object
  * is built under the LVGL lock. The drawer and each button bubble gestures so a swipe
  * that starts on them still reaches screen_input's handler on the screen, and bubble
  * events so a press clears the two-finger latch; a click on the drawer's margin is
- * absorbed by the drawer, not read as the screen's tap.
+ * absorbed by the drawer, not read as a screen gesture.
  */
 #include <stdbool.h>
 
@@ -29,18 +30,13 @@
 extern "C" {
 #endif
 
-/* How long the drawer takes to slide in or out. The view runs the cassette's pose over
- * the same time, so the panel and the scaled tape arrive as one picture. */
+/* How long the drawer takes to slide in or out. */
 #define CASSETTE_BUTTONS_SLIDE_MS 260
 
-/* The drawer reports a visibility change as it starts the slide. The view uses it to
- * put the cassette at its drawer scale, or to give it back to whatever else asked for
- * room (the Label's peek). `ctx` is the value given to create(). */
-typedef void (*cassette_buttons_room_cb_t)(bool shown, void *ctx);
-
 /* Build the hidden drawer and its three buttons as children of `screen`, above whatever
- * exists when this is called. `room` is optional. */
-void cassette_buttons_create(lv_obj_t *screen, cassette_buttons_room_cb_t room, void *ctx);
+ * exists when this is called. The drawer no longer reports a room request: the resting
+ * pose already leaves it clear. */
+void cassette_buttons_create(lv_obj_t *screen);
 
 /* Slide the drawer in (true) or out (false). A call while the other slide is running
  * reverses from the current position; a call that names the state already held does

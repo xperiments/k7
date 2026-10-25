@@ -49,6 +49,14 @@ static void b_be24(buf_t *b, uint32_t v)
     b_u8(b, (uint8_t)v);
 }
 
+static void b_le32(buf_t *b, uint32_t v)
+{
+    b_u8(b, (uint8_t)v);
+    b_u8(b, (uint8_t)(v >> 8));
+    b_u8(b, (uint8_t)(v >> 16));
+    b_u8(b, (uint8_t)(v >> 24));
+}
+
 static void put_be32(uint8_t *p, uint32_t v)
 {
     p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16);
@@ -171,6 +179,44 @@ static size_t add_flac_picture(buf_t *blocks, bool last, uint8_t ptype, const ch
     b_bytes(blocks, img, img_len);
     (void)start;
     return img_at;
+}
+
+/* Append an ID3 text frame. `text` is the already-encoded payload after the encoding
+ * byte, so a UTF-16 case can hand in its BOM and code units. */
+static void add_text_frame(buf_t *body, int major, const char *id, uint8_t enc,
+                           const uint8_t *text, size_t text_len, bool plain_size)
+{
+    b_bytes(body, id, 4);
+    size_t size_at = body->n;
+    b_be32(body, 0);
+    b_u8(body, 0);
+    b_u8(body, 0);
+    size_t data = body->n;
+    b_u8(body, enc);
+    b_bytes(body, text, text_len);
+    uint32_t fsize = (uint32_t)(body->n - data);
+    if (major == 3 || plain_size) put_be32(body->p + size_at, fsize);
+    else put_syncsafe(body->p + size_at, fsize);
+}
+
+/* Append a FLAC VORBIS_COMMENT block (type 4). */
+static void add_flac_comments(buf_t *blocks, bool last, const char *const *comments, int n)
+{
+    static const char vendor[] = "xtape-test";
+    uint32_t body = (uint32_t)(4 + sizeof vendor - 1 + 4);
+    for (int i = 0; i < n; i++) body += 4 + (uint32_t)strlen(comments[i]);
+
+    b_u8(blocks, (uint8_t)((last ? 0x80 : 0) | 0x04));
+    b_be24(blocks, body);
+    /* Vorbis comments are little-endian, unlike FLAC's own header fields. */
+    b_le32(blocks, (uint32_t)sizeof vendor - 1);
+    b_bytes(blocks, vendor, sizeof vendor - 1);
+    b_le32(blocks, (uint32_t)n);
+    for (int i = 0; i < n; i++) {
+        uint32_t len = (uint32_t)strlen(comments[i]);
+        b_le32(blocks, len);
+        b_bytes(blocks, comments[i], len);
+    }
 }
 
 /* ------------------------------------------------------------------ reader */
@@ -393,6 +439,173 @@ static void test_flac_bad_magic(void)
              "a non-FLAC file is refused");
     CHECK_EQ(artwork_locate(MI_FMT_WAV, mem_read, &m, 4, &ref), ARTWORK_NONE,
              "a WAV has no artwork");
+}
+
+/* ------------------------------------------------------------------ tags */
+
+static void test_id3_tags_latin1(void)
+{
+    buf_t body = { g_body, 0, sizeof g_body };
+    add_text_frame(&body, 3, "TPE1", 0, (const uint8_t *)"The Beatles", 11, false);
+    add_text_frame(&body, 3, "TIT2", 0, (const uint8_t *)"Come Together", 13, false);
+    size_t total = wrap_id3(g_file, sizeof g_file, 3, 0, body.p, body.n);
+
+    mem_t m = { g_file, total };
+    artwork_tags_t tags;
+    CHECK_EQ(artwork_tags(MI_FMT_MP3, mem_read, &m, total, &tags), ARTWORK_OK,
+             "the v2.3 text tags are read");
+    CHECK(strcmp(tags.group, "The Beatles") == 0, "the group is TPE1: '%s'", tags.group);
+    CHECK(strcmp(tags.song, "Come Together") == 0, "the song is TIT2: '%s'", tags.song);
+}
+
+static void test_id3_tags_utf8(void)
+{
+    static const uint8_t group[] = "\xEF\xBB\xBF" "Caf\xC3\xA9 Tacvba";
+    static const uint8_t song[] = "Eres";
+    buf_t body = { g_body, 0, sizeof g_body };
+    add_text_frame(&body, 4, "TPE1", 3, group, sizeof group - 1, false);
+    add_text_frame(&body, 4, "TIT2", 3, song, sizeof song - 1, false);
+    size_t total = wrap_id3(g_file, sizeof g_file, 4, 0, body.p, body.n);
+
+    mem_t m = { g_file, total };
+    artwork_tags_t tags;
+    CHECK_EQ(artwork_tags(MI_FMT_MP3, mem_read, &m, total, &tags), ARTWORK_OK,
+             "a v2.4 UTF-8 tag is read");
+    CHECK(strcmp(tags.group, "Café Tacvba") == 0, "UTF-8 passes through, BOM dropped: '%s'", tags.group);
+    CHECK(strcmp(tags.song, "Eres") == 0, "and the song too");
+}
+
+static void test_id3_tags_utf16(void)
+{
+    /* "Björk" as UTF-16LE with a BOM: B j ö r k, each a code unit. */
+    static const uint8_t group[] = {
+        0xFF, 0xFE,
+        'B', 0, 'j', 0, 0xF6, 0, 'r', 0, 'k', 0,
+    };
+    buf_t body = { g_body, 0, sizeof g_body };
+    add_text_frame(&body, 3, "TPE1", 1, group, sizeof group, false);
+    size_t total = wrap_id3(g_file, sizeof g_file, 3, 0, body.p, body.n);
+
+    mem_t m = { g_file, total };
+    artwork_tags_t tags;
+    CHECK_EQ(artwork_tags(MI_FMT_MP3, mem_read, &m, total, &tags), ARTWORK_OK,
+             "a UTF-16 tag is read");
+    CHECK(strcmp(tags.group, "Björk") == 0, "UTF-16 becomes UTF-8: '%s'", tags.group);
+    CHECK(tags.song[0] == 0, "a missing TIT2 leaves the song empty");
+}
+
+static void test_id3_tags_fallbacks(void)
+{
+    /* TPE2 before TPE1: the album artist must not win over the artist. */
+    buf_t body = { g_body, 0, sizeof g_body };
+    add_text_frame(&body, 3, "TPE2", 0, (const uint8_t *)"Various Artists", 15, false);
+    add_text_frame(&body, 3, "TPE1", 0, (const uint8_t *)"The Band", 8, false);
+    size_t total = wrap_id3(g_file, sizeof g_file, 3, 0, body.p, body.n);
+
+    mem_t m = { g_file, total };
+    artwork_tags_t tags;
+    CHECK_EQ(artwork_tags(MI_FMT_MP3, mem_read, &m, total, &tags), ARTWORK_OK,
+             "the tag is read");
+    CHECK(strcmp(tags.group, "The Band") == 0, "TPE1 beats TPE2: '%s'", tags.group);
+
+    /* Without TPE1 the album artist is better than nothing. */
+    body.n = 0;
+    add_text_frame(&body, 3, "TPE2", 0, (const uint8_t *)"Various Artists", 15, false);
+    total = wrap_id3(g_file, sizeof g_file, 3, 0, body.p, body.n);
+    m.p = g_file; m.n = total;
+    CHECK_EQ(artwork_tags(MI_FMT_MP3, mem_read, &m, total, &tags), ARTWORK_OK,
+             "the fallback tag is read");
+    CHECK(strcmp(tags.group, "Various Artists") == 0, "TPE2 fills an empty group: '%s'",
+          tags.group);
+    CHECK(tags.song[0] == 0, "and the song is still empty");
+}
+
+static void test_id3_tags_none(void)
+{
+    /* A tag with only a frame this module does not read. */
+    static const uint8_t body[] = { 'T', 'A', 'L', 'B', 0, 0, 0, 6, 0, 0, 0, 'A', 'l', 'b', 'u', 'm' };
+    size_t total = wrap_id3(g_file, sizeof g_file, 3, 0, body, sizeof body);
+    mem_t m = { g_file, total };
+    artwork_tags_t tags;
+    CHECK_EQ(artwork_tags(MI_FMT_MP3, mem_read, &m, total, &tags), ARTWORK_OK,
+             "a tag with no text still parses");
+    CHECK(tags.group[0] == 0 && tags.song[0] == 0, "and both fields are empty");
+
+    /* A file with no ID3 header at all. */
+    mem_t plain = { (const uint8_t *)"not an mp3", 10 };
+    CHECK_EQ(artwork_tags(MI_FMT_MP3, mem_read, &plain, 10, &tags), ARTWORK_NONE,
+             "no container, no tags");
+    CHECK_EQ(artwork_tags(MI_FMT_WAV, mem_read, &plain, 10, &tags), ARTWORK_NONE,
+             "a WAV has no tags");
+}
+
+static void test_flac_tags(void)
+{
+    static const char *comments[] = {
+        "TITLE=Teardrop",
+        "ARTIST=Massive Attack",
+        "ALBUMARTIST=Massive Attack",
+    };
+    buf_t blocks = { g_body, 0, sizeof g_body };
+    add_flac_comments(&blocks, true, comments, 3);
+    size_t total = wrap_flac(g_file, sizeof g_file, blocks.p, blocks.n);
+
+    mem_t m = { g_file, total };
+    artwork_tags_t tags;
+    CHECK_EQ(artwork_tags(MI_FMT_FLAC, mem_read, &m, total, &tags), ARTWORK_OK,
+             "the Vorbis comments are read");
+    CHECK(strcmp(tags.group, "Massive Attack") == 0, "ARTIST is the group: '%s'", tags.group);
+    CHECK(strcmp(tags.song, "Teardrop") == 0, "TITLE is the song: '%s'", tags.song);
+
+    /* Keys are case-insensitive, and ALBUMARTIST is the fallback. */
+    static const char *lower[] = {
+        "title=Angel",
+        "albumartist=Massive Attack",
+    };
+    blocks.n = 0;
+    add_flac_comments(&blocks, true, lower, 2);
+    total = wrap_flac(g_file, sizeof g_file, blocks.p, blocks.n);
+    m.p = g_file; m.n = total;
+    CHECK_EQ(artwork_tags(MI_FMT_FLAC, mem_read, &m, total, &tags), ARTWORK_OK,
+             "lower-case keys are read");
+    CHECK(strcmp(tags.group, "Massive Attack") == 0, "ALBUMARTIST fills the group: '%s'",
+          tags.group);
+    CHECK(strcmp(tags.song, "Angel") == 0, "the lower-case title is the song: '%s'",
+          tags.song);
+
+    /* A FLAC with metadata but no Vorbis comment. */
+    blocks.n = 0;
+    b_u8(&blocks, 0x80 | 0x06);
+    b_be24(&blocks, 0);
+    total = wrap_flac(g_file, sizeof g_file, blocks.p, blocks.n);
+    m.p = g_file; m.n = total;
+    CHECK_EQ(artwork_tags(MI_FMT_FLAC, mem_read, &m, total, &tags), ARTWORK_NONE,
+             "no Vorbis comment, no tags");
+}
+
+static void test_tags_truncated(void)
+{
+    /* The ID3 header claims more bytes than the file holds. */
+    uint8_t file[16];
+    memcpy(file, "ID3\3\0\0", 6);
+    put_syncsafe(file + 6, 1000);
+    mem_t m = { file, sizeof file };
+    artwork_tags_t tags;
+    CHECK_EQ(artwork_tags(MI_FMT_MP3, mem_read, &m, sizeof file, &tags),
+             ARTWORK_BAD_FILE, "a tag larger than the file is refused");
+
+    /* A tag whose first frame runs past the tag end stops at the padding rule rather
+     * than reading outside it. */
+    buf_t body = { g_body, 0, sizeof g_body };
+    b_bytes(&body, "TIT2", 4);
+    b_be32(&body, 900);
+    b_u8(&body, 0); b_u8(&body, 0);
+    b_bytes(&body, "x", 1);
+    size_t total = wrap_id3(g_file, sizeof g_file, 3, 0, body.p, body.n);
+    m.p = g_file; m.n = total;
+    CHECK_EQ(artwork_tags(MI_FMT_MP3, mem_read, &m, total, &tags), ARTWORK_OK,
+             "a frame past the tag end is skipped, not read");
+    CHECK(tags.song[0] == 0, "and leaves the song empty");
 }
 
 /* --------------------------------------------------------------- the fit */
@@ -623,6 +836,14 @@ int main(void)
     test_flac_front();
     test_flac_no_picture();
     test_flac_bad_magic();
+
+    test_id3_tags_latin1();
+    test_id3_tags_utf8();
+    test_id3_tags_utf16();
+    test_id3_tags_fallbacks();
+    test_id3_tags_none();
+    test_flac_tags();
+    test_tags_truncated();
 
     test_scale_same_size();
     test_scale_crops_the_wide_side();

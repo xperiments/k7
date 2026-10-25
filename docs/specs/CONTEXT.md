@@ -89,8 +89,9 @@ hiccup — so that a slow moment does not leave it permanently behind.
 _Avoid_: drift correction, catch-up, resync
 
 **Now playing**:
-The display title of the track the live stream is currently carrying. A presentation string,
-deliberately not the track's filename or the station name.
+The name the screen gives the track the live stream is currently carrying. On the **Peek**
+it is the **Text tag**'s song, or the cleaned filename when the Track has none; the
+**Artwork** band uses the cleaned filename. Never the station name.
 _Avoid_: current song, stream title, ID3 title
 
 ### The display
@@ -111,7 +112,7 @@ _Avoid_: UI, GUI, dashboard
 One of the three positions of the cassette screen, ordered by how much of it the
 **sheet** covers: Bare, Label cover and Artwork. A one-finger down swipe moves one
 towards Artwork, an up swipe one towards Bare, and the ends do not wrap. At Bare, a down
-swipe dismisses the **Label** first if it is up, and only the next one moves. The Level
+swipe dismisses the **Peek** first if it is up, and only the next one moves. The Level
 changes in one frame.
 _Avoid_: state, step, mode, page
 
@@ -161,8 +162,9 @@ rectangle rounded by 8 px with a 64 px circle at its centre and its letter centr
 circle in Jura; each carries a prebuilt pressed and an unpressed state, swapped on press
 and release. A click is a scale pulse only: the buttons are placeholders and do not
 command the **live stream** yet. While the drawer is out the cassette screen scales to
-160/256, so the tape clears the panel; the three buttons are centred vertically so R sits
-on y=240, and the cassette is centred to that same line. It is chrome, not a **sheet**.
+134/256 and moves left to x=148, so the 402x232 tape clears the panel; the three buttons
+start 64 px from the top so R sits on y=220, and the cassette is centred to that same
+line. It is chrome, not a **sheet**.
 _Avoid_: menu, toolbar, controls
 
 **Label cover**:
@@ -175,8 +177,8 @@ backdrop, `k_col_cover_bg`.
 _Avoid_: big label, sticker, overlay, carátula
 
 **Artwork**:
-The Level that shows a **Track artwork** in the **Case**'s **Window**, with the **Now
-playing** title on the band under the Case. It is not the **Label cover**: that is the K7
+The Level that shows a **Track artwork** in the **Case**'s **Window**, with the cleaned
+filename on the band under the Case. It is not the **Label cover**: that is the K7
 sticker, and the Case stays even when the Track carries no picture.
 _Avoid_: cover, album art, portada
 
@@ -196,19 +198,51 @@ a native FLAC `PICTURE` block, preferring the front cover. JPEG is decoded; a PN
 located but not drawn. A Track with no usable picture leaves the **Window** empty.
 _Avoid_: cover, embedded art, portada
 
-**Label**:
-The cream paper strip that carries the cleaned **Now playing** title, shown as an
-overlay on **Bare** by an up swipe at that Level. It is hidden by the next vertical swipe
-at Bare or by any Level change: a down swipe at Bare dismisses it before it is allowed to
-move to the Label cover. It is not a Level and not one of the **sheet**s of the one-finger
-cycle.
+**Peek**:
+The overlay on **Bare** raised by an up swipe at that Level: the **Timeline bar** and the
+two **Now playing tag**s. It is hidden by the next vertical swipe at Bare or by any Level
+change: a down swipe at Bare dismisses it before it is allowed to move to the Label cover.
+It is not a Level and not one of the **sheet**s of the one-finger cycle. While it is up the
+cassette shrinks and lifts so the bar clears the tape, and the tags float over the
+cassette on their tethers to the hubs.
 _Avoid_: title bar, caption, marquee
+
+**Timeline bar**:
+The 568x52 strip at the bottom of the **Peek**, at (116,424). The Track's elapsed time on
+the left, its total on the right, and a 288x6 rounded track between them whose lit fill
+follows the position. With nothing playing it shows the screen's idle sentence instead.
+It replaced the old title bar: the names are on the **Now playing tag**s.
+_Avoid_: progress bar, seek bar, player bar
+
+**Now playing tag**:
+One of the two rounded 504x44 labels floating over the cassette in the **Peek**, centred
+on it at x=148..651: the group at (148,12) above the left hub, the song at (148,248)
+below it, their centres the same distance from the hub's centre. Both hang from that
+hub by a thin **Tether** that leaves on the hub's column (251 px); the text is 28 px. The text is
+the Track's **Text tag**, with the artist directory and the cleaned filename as the
+fallback. The two bob a few pixels out of phase; the tethers do not move with the bob.
+_Avoid_: label, chip, pill, caption
+
+**Tether**:
+The vertical two-point line from just inside a **Now playing tag** to the left hub's near
+rim: the group's from its bottom to the top rim, the song's from its top to the bottom
+rim. Its hub end follows the pose; its tag end stays under the tag's opaque fill, so the
+bob uncovers more or less of it.
+_Avoid_: leader, wire, connector
+
+**Text tag**:
+The group and song names a Track's own container carries: the ID3v2.3/2.4 `TPE1` (artist)
+and `TIT2` frames in an MP3, with `TPE2` as the artist fallback, or the `ARTIST` (with
+`ALBUMARTIST`) and `TITLE` Vorbis comments in a FLAC. Read on the display's loader task,
+not by the broadcast, into fixed UTF-8 buffers. A Track with no tag falls back to its path
+and filename.
+_Avoid_: metadata, ID3, tags, etiqueta
 
 ### The appliance
 
 **Appliance**:
-The device's entry policy: the station configuration, the card retry, the console line
-and the skip button. It starts the services and the **Screen display**; it is never a
+The device's entry policy: the station configuration, the card retry and the console
+line. It starts the services and the **Screen display**; it is never a
 source of truth.
 _Avoid_: main, firmware
 

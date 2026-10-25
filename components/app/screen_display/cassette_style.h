@@ -29,7 +29,7 @@
 extern const lv_color_t k_col_black;
 extern const lv_color_t k_col_bg;
 
-/* The playing red: the hub's ring and divider, and the small label's ink. */
+/* The playing red: the hub's ring and divider, and the peek's ink. */
 extern const lv_color_t k_col_tape_dark;
 
 /* The tape's own body, and the dim end of the rewind fade: the hub ring cross-fades
@@ -44,6 +44,12 @@ extern const lv_color_t k_col_meter_dim;
 extern const lv_color_t k_col_meter_bar;
 extern const lv_color_t k_col_meter_lit;
 extern const lv_color_t k_col_meter_back;
+
+/* The DJ block on the right: the unlit crown, the lit arc and the stick, hub and 0 dB
+ * tick. The carcase and the circle reuse the primary red. */
+extern const lv_color_t k_col_eq_dim;
+extern const lv_color_t k_col_eq_lit;
+extern const lv_color_t k_col_eq_tick;
 
 /* The two rounded rectangles the cassette body is drawn on: the board's outer and inner
  * frames. */

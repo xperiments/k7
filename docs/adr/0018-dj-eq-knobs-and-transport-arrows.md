@@ -1,0 +1,77 @@
+# The DJ block: three bands, a trim, and the only transport arrows
+
+The owner wants the cassette screen to carry a DJ channel strip, not a spectrum analyser:
+HI, MED and LOW plus a GAIN, in the same line-art language as the transport's P/R/W. The
+block has six cells because it sits on a 2x3 grid; the four cells the strip needs leave two,
+and those become the previous/next arrows. The screen's tap and the BOOT button stop
+skipping tracks: next and previous belong to those two arrows (and to the MCP, which is a
+control API rather than a gesture).
+
+The output is the Icecast stream, so the EQ is a broadcast tone control: it changes what
+every listener hears, and there is no local audio path to fight with. The PCM seam is the
+1024-frame chunk the encoder is about to take.
+
+## Decision
+
+- **The block is at the right edge.** Six 96x96 carcases in two touching columns at
+  x=592..784, three rows at y=76/170/264, so the block is 192x284 and leaves 16 px to the
+  screen. The 16 px is the inset of the 64 px circle inside each carcase, not a gap. The
+  left column is GAIN above the `<` and `>` arrows; the right column is HI, MED and LOW.
+- **The knobs are a 24-dot crown and a stick.** The crown is at r=26; the stick is 4x23
+  pivoted on the circle's centre. 0 dB is at twelve o'clock, the right side cuts and the
+  left side boosts; the arc lights from twelve to the stick on the side it points. The
+  twelve o'clock dot is the 0 dB tick.
+- **The ranges are the DJ ones.** GAIN -12..+12 dB, default -6; bands -26..+6 dB, default
+  0, at 200 Hz (low shelf), 1 kHz (bell, Q 0.7) and 4 kHz (high shelf). The trim is applied
+  before the bands. The int16 clamp is the last stage.
+- **Edit mode is modal.** A tap on a knob puts a transparent 800x480 overlay above every
+  object. A horizontal drag moves the value at 3 px per unit (right lowers, left raises)
+  after a 6 px dead zone; only a tap on the active knob leaves, and a tap on another knob
+  switches the edit. While it is up nothing else responds - the arrows, P/R/W, the drawer
+  and the Levels are behind the overlay - and the view drops every screen intent too,
+  because the touch adapter's two-finger menu arrives directly. The active circle blinks
+  its border 100% -> 27% -> 100%, 600 ms each way. The MCP is not a gesture or a click and
+  is untouched.
+- **Only the arrows do next/previous on the screen.** The screen's tap no longer skips a
+  track (`SCREEN_INTENT_TAP` is removed) and the BOOT button no longer skips either. The
+  P/R/W buttons remain placeholders.
+- **The cassette rests at 134/256**, 148..550, so both the 120 px drawer on the left and the
+  block on the right have room. The drawer no longer makes a room request; the peek's
+  200/256 is the only one. The block is chrome above the Level sheets, raised with the
+  drawer after a vertical swipe.
+
+## Considered options
+
+- **A 5-8 band graphic EQ.** Rejected: at 96 px per cell, eight columns are 12 px each, and
+  the spectrum analysis (or six biquads) costs more than the DJ strip; the owner wanted the
+  DJ vocabulary.
+- **Six bands instead of three plus a trim.** Rejected: the owner asked for HI/MED/LOW and a
+  GAIN, the DJ channel strip.
+- **A literal `lv_spinner`.** Rejected: it is an indefinite animation with no value. The
+  arc/crown gives the same visual language and a value that can be set.
+- **Move P/R/W to the right and put the knobs on the left.** Rejected: the owner keeps the
+  transport drawer on the left; the right edge was free.
+- **A fixed -6 dB pre-gain instead of a GAIN knob.** Rejected: the owner wants the trim as a
+  knob. The knob's default is the -6 dB the fixed gain used, so the headroom is unchanged
+  out of the box.
+- **A limiter after the EQ.** Not built: a hot trim plus a boosted band can reach the clamp,
+  and that is the mixer's behaviour. A limiter is a later decision, not a silent one.
+
+## Consequences
+
+- `components/portable/tone_eq` is a new leaf component: three RBJ biquads, a trim, a 2 dB
+  per-chunk slew and an int16 clamp. `mini_icecast` calls it in `emit_chunk()` and on the
+  partial tail in `flush_pipeline()`, both before `measure_level()`, so the trim and bands
+  shape the last 23 ms of a track too and the VU is the level that goes on the wire.
+  `host/tests/t17_tone_eq` pins the unity case, the trim, the three bands and the clamp.
+- `mini_icecast_eq_set()` and `mini_icecast_gain_set()` are the public targets; the filter
+  state and the coefficient rebuild stay on the broadcast task.
+- `cassette_eq` owns the block, the overlay, the blink and the audio calls. The view creates
+  it after the Levels, raises it with the drawer, and drops intents while `is_editing()`.
+- `screen_input` loses `SCREEN_INTENT_TAP` and the click handler; `appliance` loses the
+  BOOT-button skip. The drawer stays at the left edge and keeps its placeholders.
+- The block is always visible, including over the Label and Artwork sheets. At the peek's
+  200/256 the cassette is wider than the block's left edge and passes under it. Whether the
+  block should hide on those Levels is still open; this record keeps it chrome.
+- The MCP keeps `player_skip` and `player_prev`: it is the parallel control surface and the
+  one exception to "only these buttons".

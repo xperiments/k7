@@ -145,6 +145,14 @@ bool      mini_icecast_play(const char *relpath);
 
 void      mini_icecast_skip(void);                              /* jump to next track */
 void      mini_icecast_prev(void);                              /* jump to the previous track */
+
+/* The screen's tone controls: three band targets (0 = low, 1 = mid, 2 = high) and the
+ * trim, in dB. The ranges are the DJ ones: bands -26..+6, trim -12..+12. These only
+ * publish a target; the broadcast task applies it at its next chunk, at its slew rate.
+ * The trim's default is -6 dB. Safe to call from another task. */
+void      mini_icecast_eq_set(int band, float db);
+void      mini_icecast_gain_set(float db);
+
 size_t    mini_icecast_now_playing(char *out, size_t out_size); /* current title, for the index */
 
 #ifdef __cplusplus

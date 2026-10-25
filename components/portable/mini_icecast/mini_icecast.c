@@ -35,6 +35,7 @@
 #include "mi_ring.h"
 #include "mi_resample.h"
 #include "mi_station.h"
+#include "tone_eq.h"
 
 #define MAX_CLIENTS     MINI_ICECAST_MAX_CLIENTS
 #define TITLE_MAX       120
@@ -94,6 +95,13 @@ static struct {
     /* Level of the chunk being encoded, for the display. Same lock-free discipline
      * as track_frames; a 32-bit float store is atomic on this core. */
     volatile float     level_l, level_r;
+    /* The broadcast's tone: the three band targets and the trim, written by the screen
+     * and read by the broadcast task at its next chunk. Same lock-free discipline as
+     * the level; a 32-bit float store is atomic on this core. The filter state itself
+     * belongs to the broadcast task and is never touched from the screen. */
+    tone_eq_t          eq;
+    volatile float     eq_db[TONE_EQ_BANDS];
+    volatile float     eq_gain_db;
     uint32_t           title_ver;
     volatile bool      skip;
     /* A request for the track before this one. The broadcast task owns the
@@ -636,8 +644,23 @@ void mini_icecast_unpark_card(void)
 
 bool mini_icecast_card_parked(void) { return parked(); }
 
+/* Publish the screen's tone targets and run the EQ on `frames` of S.chunk. Both the full
+ * chunk and the partial tail at a track boundary take this path, so the trim and the bands
+ * never miss the last 23 ms. */
+static void tone_apply(size_t frames)
+{
+    for (int b = 0; b < TONE_EQ_BANDS; b++)
+        tone_eq_set_band(&S.eq, b, S.eq_db[b]);
+    tone_eq_set_gain(&S.eq, S.eq_gain_db);
+    tone_eq_process(&S.eq, S.chunk, frames);
+}
+
 static void emit_chunk(void)
 {
+    /* The tone first, so the display's level is the level that goes on the wire. The
+     * targets are read once per chunk; the module slews them and owns the filters. */
+    tone_apply(CHUNK_FRAMES);
+
     measure_level();
     mi_enc_feed(S.enc, S.chunk, CHUNK_FRAMES, on_frame, NULL);
 }
@@ -688,6 +711,7 @@ static void idle_pump(void)
 static void flush_pipeline(void)
 {
     if (S.chunk_n) {
+        tone_apply(S.chunk_n);
         mi_enc_feed(S.enc, S.chunk, S.chunk_n, on_frame, NULL);
         S.chunk_n = 0;
     }
@@ -945,6 +969,12 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     }
     S.library = cfg->library;
 
+    /* Neutral tone: bands at 0 dB and the trim at -6 dB, which is the headroom the
+     * +6 dB boosts would otherwise spend. The screen's knobs start at the same values. */
+    tone_eq_init(&S.eq, S.station.out_hz);
+    for (int b = 0; b < TONE_EQ_BANDS; b++) S.eq_db[b] = 0.0f;
+    S.eq_gain_db = TONE_EQ_GAIN_DEFAULT;
+
     ESP_LOGI(TAG, "station format: %u Hz, %u kbps CBR, joint stereo, %s",
              (unsigned)S.station.out_hz, (unsigned)S.station.bitrate,
              mi_enc_mpeg_name(S.station.mpeg));
@@ -1089,6 +1119,20 @@ void mini_icecast_set_library(const library_t *lib)
 void mini_icecast_skip(void) { S.skip = true; }
 
 void mini_icecast_prev(void) { S.prev = true; }
+
+/* The screen's four knobs. The values are targets for the broadcast task's next chunk;
+ * the filter state and the slew belong to that task, so these only publish a float. The
+ * ranges are enforced where the values are consumed (tone_eq_set_band/gain). */
+void mini_icecast_eq_set(int band, float db)
+{
+    if (band < 0 || band >= TONE_EQ_BANDS) return;
+    S.eq_db[band] = db;
+}
+
+void mini_icecast_gain_set(float db)
+{
+    S.eq_gain_db = db;
+}
 
 uint32_t mini_icecast_lag_ms(void) { return S.lag_ms; }
 

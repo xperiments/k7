@@ -4,13 +4,13 @@
 # GT911 is the panel board's input adapter. The label cover and the Artwork level
 # belong to that input too - the vertical gestures are what reach them - so a board
 # without the touch adapter carries neither the cover blob nor the artwork loader.
-set(screen_srcs "screen_display.c" "cassette_view.c" "cassette_tapes.c" "cassette_meter.c" "cassette_levels.c" "cassette_buttons.c" "cassette_style.c" "cassette_widgets.c" "screen_input.c" "lvgl_mem.c" "font_jura_36.c")
+set(screen_srcs "screen_display.c" "cassette_view.c" "cassette_tapes.c" "cassette_meter.c" "cassette_levels.c" "cassette_buttons.c" "cassette_eq.c" "cassette_style.c" "cassette_widgets.c" "screen_input.c" "lvgl_mem.c" "font_jura_36.c" "font_jura_28.c")
 set(screen_reqs mini_icecast cassette artwork esp_timer esp_lcd esp_driver_gpio esp_driver_ledc)
 # The hubs are drawn by cassette_view.c, so the only art left to embed belongs to the
 # touch board's Levels.
 set(screen_embeds "")
 if(CONFIG_APP_BOARD_SUNTON_8048S050C)
-    list(APPEND screen_srcs "panel_rgb.c" "touch_gt911.c" "backlight.c" "artwork_loader.c")
+    list(APPEND screen_srcs "panel_rgb.c" "touch_gt911.c" "backlight.c" "artwork_loader.c" "cassette_peek.c")
     list(APPEND screen_reqs esp_lcd_touch esp_lcd_touch_gt911 esp_driver_i2c lvgl__lvgl)
     list(APPEND screen_embeds "assets/label_cover.bin" "assets/cover.jpg")
 endif()

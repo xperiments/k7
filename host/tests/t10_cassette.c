@@ -480,6 +480,62 @@ static void test_rewind_tape_ink(void)
     cassette_free(c);
 }
 
+/* The bar's clock: the status's elapsed/duration, reported on whole seconds. */
+static void test_times(void)
+{
+    cassette_t *c = cassette_new(36, 1000);
+    CHECK(c != NULL, "the cassette starts");
+    if (!c) return;
+
+    mini_icecast_status_t st = mkstatus("Song", "song.mp3", 0, 225000, 0.2f);
+    const cassette_frame_t *f = cassette_step(c, &st, 0);
+    CHECK(f->time_changed, "the first frame reports the times changed");
+    CHECK_EQ(f->elapsed_ms, 0, "the clock starts at zero");
+    CHECK_EQ(f->duration_ms, 225000, "the duration is the status's");
+    CHECK_EQ(f->permille, 0, "and the bar starts at zero");
+
+    /* Inside the same second: the milliseconds move but the times do not. */
+    st = mkstatus("Song", "song.mp3", 900, 225000, 0.2f);
+    f = cassette_step(c, &st, 100);
+    CHECK(!f->time_changed, "a sub-second change is not reported");
+    CHECK_EQ(f->elapsed_ms, 900, "the exact elapsed is carried; the flag is what throttles it");
+
+    st = mkstatus("Song", "song.mp3", 1900, 225000, 0.2f);
+    f = cassette_step(c, &st, 1100);
+    CHECK(f->time_changed, "the next whole second is reported");
+    CHECK_EQ(f->elapsed_ms, 1900, "and the exact elapsed is carried");
+    CHECK(f->permille_changed, "the bar moves with it");
+    CHECK_EQ(f->permille, (uint32_t)(1900ULL * 1000ULL / 225000ULL), "the bar's share");
+
+    /* A track whose length is unknown still shows its elapsed clock. */
+    st = mkstatus("Song", "song.mp3", 5000, 0, 0.2f);
+    f = cassette_step(c, &st, 2100);
+    CHECK(f->time_changed, "a newly unknown duration is reported");
+    CHECK_EQ(f->duration_ms, 0, "no duration is zero");
+    CHECK_EQ(f->elapsed_ms, 5000, "the elapsed still runs");
+    CHECK_EQ(f->permille, 0, "but the bar has nothing to measure against");
+
+    /* Past the end: the clock is clamped to the duration. */
+    st = mkstatus("Song", "song.mp3", 240000, 225000, 0.2f);
+    f = cassette_step(c, &st, 3100);
+    CHECK_EQ(f->elapsed_ms, 225000, "the clock never passes the end");
+    CHECK_EQ(f->permille, 1000, "and the bar is full");
+
+    /* Idle: no track, no clock. */
+    st = mkstatus("", "", 0, 0, 0);
+    f = cassette_step(c, &st, 4100);
+    CHECK(!f->playing, "no file means not playing");
+    CHECK_EQ(f->elapsed_ms, 0, "an idle clock is zero");
+    CHECK_EQ(f->duration_ms, 0, "and has no duration");
+
+    /* A reset reports the times changed, so the adapter can rewrite them. */
+    cassette_reset(c);
+    f = cassette_step(c, NULL, 4200);
+    CHECK(f->time_changed, "a reset reports the times changed");
+
+    cassette_free(c);
+}
+
 int main(void)
 {
     test_initial_and_progress();
@@ -489,6 +545,7 @@ int main(void)
     test_vu();
     test_rewind();
     test_rewind_tape_ink();
+    test_times();
 
     CHECK(cassette_new(0, 1000) == NULL, "no frames means no reel");
 

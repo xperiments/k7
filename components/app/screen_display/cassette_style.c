@@ -15,11 +15,15 @@ const lv_color_t k_col_meter_bar  = COL_DARKEN_HEX(COL_PRIMARY, 85);
 const lv_color_t k_col_meter_lit  = COL_HEX(COL_PRIMARY);
 const lv_color_t k_col_meter_back = COL_DARKEN_HEX(COL_PRIMARY, 30);
 
-const lv_color_t k_col_frame      = COL_HEX(0xFF00FF);
+const lv_color_t k_col_eq_dim  = COL_DARKEN_HEX(COL_PRIMARY, 38);
+const lv_color_t k_col_eq_lit  = COL_HEX(COL_PRIMARY);
+const lv_color_t k_col_eq_tick = COL_HEX(0xFF8A3D);
+
+const lv_color_t k_col_frame      = COL_HEX(COL_BLACK);
 
 const lv_color_t k_col_back       = COL_DARKEN_HEX(COL_PRIMARY, 40);
 const lv_color_t k_col_cover_bg   = COL_HEX(0xB48744);
 const lv_color_t k_col_cover_ink  = COL_HEX(0xEEEEEE);
 const lv_color_t k_col_art_bg     = COL_HEX(0x141414);
-const lv_color_t k_col_paper      = COL_HEX(0x000000);
+const lv_color_t k_col_paper      = COL_HEX(COL_BLACK);
 const lv_color_t k_col_primary    = COL_HEX(COL_PRIMARY);

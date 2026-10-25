@@ -163,9 +163,9 @@ tolerate it.
 
 Two costs, stated rather than discovered later:
 
-1. **GPIO0 is the skip button** and is also a strapping pin. Holding it while
-   resetting enters download mode, which is exactly how you flash. During normal
-   operation, pressing it skips to the next track.
+1. **GPIO0 is a strapping pin.** Holding it while resetting enters download mode, which
+   is exactly how you flash. It has no runtime action: next and previous are the
+   screen's two DJ-block arrows.
 2. **A card that will not mount is still the most likely fault**, and a card that
    mounts but has no `/music` directory looks the same from outside. The firmware
    logs both distinctly, and the device is built to survive either: see below.
@@ -253,8 +253,8 @@ curl -s --max-time 5 http://192.168.1.42:8000/stream | ffprobe -
 curl -O http://192.168.1.42:8000/music/track.flac
 cmp track.flac /Volumes/YOURCARD/music/track.flac
 
-# Skip to the next track
-#   press the BOOT (GPIO0) button
+# Previous / next track
+#   tap the < or > arrow in the DJ block at the right edge
 ```
 
 ### Station format
@@ -555,24 +555,49 @@ stand.
 SCL 20, INT 18, RST 38, read every 10 ms. It is polled rather than interrupt-driven
 because this board's INT line does not carry the touch (the reference project measured it
 idling through a press), and the last point the controller reported is latched so one
-press is one press rather than one per read. A tap on the screen is the BOOT button's
-action, next track; a tap on the drawer itself is absorbed there. A one-finger right swipe
-slides the transport drawer in from the left edge, a left swipe slides it back out; while
-it is out the cassette scales to 160/256 so the tape clears the panel. The drawer's three
-line-art buttons (P, R, W) each prebuild a pressed and an unpressed state, swap them on
-press and release, and pulse their scale on a click; they are placeholders and do not drive
-the transport yet. A one-finger down/up swipe moves one Level - Bare, Label cover,
+press is one press rather than one per read. A tap on the screen is **not** an action: next
+and previous are the two arrows in the DJ block at the right edge. A tap on the drawer
+itself is absorbed there. A one-finger right swipe slides the transport drawer in from the
+left edge, a left swipe slides it back out. The cassette rests at 134/256 (148..550), so
+the 120 px drawer on the left and the 192 px DJ block on the right both have room; the
+drawer no longer changes the pose. The drawer's three line-art buttons (P, R, W) each
+prebuild a pressed and an unpressed state, swap them on press and release, and pulse their
+scale on a click; they are placeholders and do not drive the transport.
+
+The DJ block is six 96 px carcases in two touching columns at x=592..784, rows at
+76/170/264: GAIN above the `<` and `>` arrows in the first column, HI, MED and LOW in the
+second. The four knobs are a 24-dot crown and a stick, 0 dB at twelve o'clock, right cuts
+and left boosts; the arrows are the only next/previous controls and call
+`mini_icecast_prev()` / `mini_icecast_skip()`. A tap on a knob enters a modal edit mode: a
+transparent overlay owns the screen, a horizontal drag moves the value (left raises, right
+lowers), the active circle blinks, and only a tap on the active knob leaves. While it is up
+nothing else responds - the arrows, P/R/W, the drawer and the Levels - and the view drops
+every screen intent, including the two-finger menu. The audio is
+`components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell and a 4 kHz high shelf plus
+a trim before them, with the DJ ranges (GAIN -12..+12 dB, default -6; bands -26..+6 dB,
+default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder.
+
+A one-finger down/up swipe moves one Level - Bare, Label cover,
 Artwork - and the ends do not wrap. At Bare, where the up swipe has no Level to move to,
-it peeks the small cream title bar: one up swipe slides it in. While it is up, either
-vertical swipe slides it out, and a down swipe only moves to the K7 cover once the bar is
-away; any Level change puts it away. The two-finger swipe is reserved for the menu: it
+it raises the peek: the timeline bar slides up with the Track's elapsed, a growing fill and
+its total, and two rounded tags float over the cassette in the left hub's column - the
+group above the hub and the song below it, each hanging from that hub by a thin tether,
+bobbing a few pixels out of phase. The tag texts are the Track's ID3/FLAC tags, read by the artwork loader on its own
+task; until they land the group is the artist directory and the song the cleaned filename.
+While the peek is up, either vertical swipe slides it out, and a down swipe only moves to
+the K7 cover once it is away; any Level change puts it away. The two-finger swipe is
+reserved for the menu: it
 moves no Level today, and the view still latches it so the same touch cannot also trip
-the one-finger gesture or the click. The Sunton build compiles this path; the board tier
+the one-finger gesture. The Sunton build compiles this path; the board tier
 has not yet recorded a finger, so the rows above are unchanged. The Level order and the
 reserved gesture are
 [`docs/adr/0014-three-level-swipe-order-and-menu-gesture.md`](docs/adr/0014-three-level-swipe-order-and-menu-gesture.md);
 the drawer and the horizontal swipes are
-[`docs/adr/0016-transport-drawer-and-horizontal-swipes.md`](docs/adr/0016-transport-drawer-and-horizontal-swipes.md).
+[`docs/adr/0016-transport-drawer-and-horizontal-swipes.md`](docs/adr/0016-transport-drawer-and-horizontal-swipes.md);
+the DJ block, its ranges and the transport arrows are
+[`docs/adr/0018-dj-eq-knobs-and-transport-arrows.md`](docs/adr/0018-dj-eq-knobs-and-transport-arrows.md);
+the peek's bar, tags and tag reader are
+[`docs/adr/0017-peek-timeline-and-tags.md`](docs/adr/0017-peek-timeline-and-tags.md).
 
 **Track artwork.** The Artwork Level is the cassette Case, `assets/labels/cover.jpg`,
 full-bleed at 800x480, with the playing MP3's own cover in its window: (101,23) to
@@ -606,7 +631,7 @@ five seconds, printing the level in large type.
 The label cover is `assets/labels/k7logo.png`, converted to RGB565A8 (1.1 MB) and drawn
 full-bleed at 0,0: the label cover is 800x480, the panel's own size, so it needs no
 margin. Its black triangle and circle are transparent, so the reels show through them.
-The app image is 3.51 MB with 16% of its 4 MB partition free after the cover, the Case
+The app image is 2.86 MB with 32% of its 4 MB partition free after the cover, the Case
 and the artwork path; re-check it after the next build.
 
 **The Artwork decode on this board.** The first card track, `01 - La Leyenda Del
@@ -734,25 +759,28 @@ components/
       mi_icy.c/.h           the metadata interval and its 16-byte blocks
       mi_ring.c/.h          the per-client send ring: the audio task never writes a socket
       mini_icecast.c/.h     pacing, client list, station status
+    tone_eq/                the stream's three-band DJ EQ and trim, before the encoder
     library/                the immutable tree, arena, JSON, Playlist and lookup
     library_http/           GET /api/library[.bin] from the prebuilt views
     mini_files/             GET / index, GET /music/<relative path> download
     cassette/               what the screen shows: reel phases, pack fills, tape ink, title
-    artwork/                where a Track's picture is: ID3 APIC, FLAC PICTURE, the fit
+    artwork/                a Track's picture and text tags: ID3 APIC/TPE1/TIT2, FLAC
+                            PICTURE/Vorbis, the cover fit
     dr_libs/                vendored dr_mp3 / dr_flac / dr_wav (public domain / MIT-0)
     shine/                  vendored toots/shine MP3 encoder (LGPL-2.0-only)
   app/                      firmware only: the entry policy, the board adapter and the screen
-    appliance/              the entry policy: station format, card retry, console, skip
+    appliance/              the entry policy: station format, card retry, console
     board_esp32/            Wi-Fi, SPI card mount, hardware census; credentials live here
     screen_display/         panel and touch bring-up, LVGL's PSRAM allocator, the cassette
-                            composition and its parts (tapes, meter, levels, input)
+                            composition and its parts (tapes, meter, levels, peek, eq, input)
 host/                       the host build: shim, board adapter, fixtures, tests, tools
 ```
 
 The cassette screen is the composition: `cassette_tapes`, `cassette_meter`,
-`cassette_levels` and `screen_input` are its parts, and the design grid is the portable
-`cassette_layout` the host tier pins with `t16`. The view keeps the pose, steps the model
-and maps intents to actions; no part reads another's state.
+`cassette_levels`, `cassette_peek`, `cassette_buttons`, `cassette_eq` and `screen_input`
+are its parts, and the design grid is the portable `cassette_layout` the host tier pins
+with `t16`. The view keeps the pose, steps the model and maps intents to actions; no part
+reads another's state.
 
 The dependency direction is one-way and is checked by `make -C host layering`:
 `mini_files` and `mini_icecast` depend on `http_server`; only the application
@@ -889,8 +917,8 @@ Three things make that true, and the second is the one that is easy to get wrong
    cover. The loader's own 16 KB stack takes the PSRAM-first path, with an internal
    fallback.
 
-The image is 3.51 MB with the label cover, the Case and the artwork path, so the app
-partition is 4 MB with 16 % free (`partitions.csv`) rather than the 1.5 MB single-app
+The image is 2.86 MB with the label cover, the Case and the artwork path, so the app
+partition is 4 MB with 32 % free (`partitions.csv`) rather than the 1.5 MB single-app
 layout. LVGL is a fetched dependency pinned by
 `components/app/screen_display/idf_component.yml` and `dependencies.lock`; the host tier
 compiles only the portable components and never sees it.
@@ -931,6 +959,10 @@ dot-file, a non-audio extension or a wrong size.
 The live stream's title is the file's name without its extension, with apostrophes
 replaced by spaces: ICY metadata blocks are delimited by apostrophes and semicolons, so a
 name containing them cannot be sent verbatim.
+
+The group and song labels on the screen are not that title: they are the Track's own
+ID3/FLAC text tags, read by the display's loader for the peek and shown nowhere else. A
+listener's ICY client still sees the filename; the card is not re-read for the stream.
 
 ## The internal-RAM picture
 

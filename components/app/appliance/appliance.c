@@ -4,14 +4,13 @@
  * The ordering the appliance depends on is in app_services: the station is resolved
  * before anything allocates, the network comes up before the encoder takes its internal
  * RAM, and the listener starts last. The appliance adds what is above that: NVS, the
- * station format this product ships, the card retry after a missing card, the console
- * line and the BOOT button.
+ * station format this product ships, the card retry after a missing card, and the console
+ * line. The transport is the screen's, not a physical button's.
  */
 #include "appliance.h"
 
 #include <string.h>
 
-#include "driver/gpio.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -190,10 +189,9 @@ void appliance_run(void)
     if (mdns_err != ESP_OK)
         ESP_LOGE(TAG, "mDNS did not start: %s; the device still serves", esp_err_to_name(mdns_err));
 
-    /* BOOT button (GPIO0) = next track. */
-    gpio_config_t io = {.pin_bit_mask = 1ULL << GPIO_NUM_0, .mode = GPIO_MODE_INPUT, .pull_up_en = 1};
-    gpio_config(&io);
-
+    /* No BOOT-button transport: next and previous belong to the screen's DJ block, and
+     * the BOOT pin is left as the strapping input it is at reset. The status line below
+     * is the only thing this loop still does. */
     for (;;) {
         char shown[41];
         mini_icecast_status_t st;
@@ -201,12 +199,6 @@ void appliance_run(void)
         utf8_prefix(shown, sizeof shown, st.title, 40);
         ESP_LOGI(TAG, "%-40s  L %3d%%  R %3d%%", shown,
                  (int)(st.level_l * 100), (int)(st.level_r * 100));
-        for (int i = 0; i < 10; i++) {
-            if (!gpio_get_level(GPIO_NUM_0)) {
-                mini_icecast_skip();
-                vTaskDelay(pdMS_TO_TICKS(500)); /* debounce */
-            }
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
