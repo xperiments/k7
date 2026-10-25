@@ -13,9 +13,10 @@ deleted; the peek's text tags are not part of the cover and stay.
   meaning. The Level machine, the Label cover, the Artwork sheet, the Case backdrop, the
   sheet titles, the backdrop mix and the cover request are removed from
   `cassette_levels.c`, which is now the peek's host.
-- **`screen_input` names the intent, not the screen.** `SCREEN_INTENT_LEVEL_DOWN` and
-  `SCREEN_INTENT_LEVEL_UP` become one `SCREEN_INTENT_PEEK_TOGGLE`; `LV_DIR_BOTTOM` is not
-  reported. The two-finger menu latch and the drawer's left/right intents are unchanged.
+- **`screen_input` names the intent, not the screen.** The Level intents were replaced by
+  the peek's and later the VU meter's: today the peek is PEEK_SHOW/PEEK_HIDE and the
+  two-finger swipe is VU_SHOW/VU_HIDE (ADR 0014's amendments). The drawer's left/right
+  intents are unchanged.
 - **The peek's tags stay.** `tags_loader.c` is the tag half of the old artwork loader: one
   worker task, one path/format/sequence request, `components/portable/artwork`'s `tags.c`,
   and the result handed to the view under the LVGL lock. The path/filename fallback is

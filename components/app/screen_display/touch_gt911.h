@@ -16,8 +16,8 @@
  *  - Coordinates are the panel's native ones: this panel is not rotated, and the
  *    controller's axes are not swapped.
  *  - A two-finger swipe is reported through the callback, once per swipe; the view
- *    decides what it means (it is reserved for the menu today). It is detected from
- *    the two contacts themselves, so it does not depend on the controller's track ids.
+ *    decides what it means (a left shows the VU meter, a right hides it). It is detected
+ *    from the two contacts themselves, so it does not depend on the controller's track ids.
  */
 #include "esp_err.h"
 #include "lvgl.h"

@@ -11,6 +11,9 @@
  * with the view. The view supplies the parent and the pose. The panel is placed by the
  * design grid and its children are offsets inside it, so a scale change re-places the
  * whole meter in one pass.
+ *
+ * It starts hidden. A two-finger swipe left shows it, a right hides it; show/hide fade the
+ * panel's layered opacity over 220 ms, so the two rows and every child go together.
  */
 #include <math.h>
 
@@ -39,6 +42,7 @@
 #define METER_Y         206
 #define METER_DB_MIN    (-48.0f)
 #define METER_DB_MAX    0.0f
+#define METER_FADE_MS   220
 
 /* The pose the meter was last placed with, as a value. */
 static cassette_pose_t s_pose = { CASSETTE_SCALE_NONE, 0, 0 };
@@ -54,6 +58,7 @@ static lv_obj_t *s_label[2];                       /* the letters inside the bad
 static lv_obj_t *s_bar[2][METER_BARS];             /* the dim track */
 static lv_obj_t *s_fill[2];                        /* the lit rounded fill */
 static int s_lit[2];                               /* bars lit per row, 0..METER_BARS */
+static bool s_shown;                               /* the two-finger VU toggle */
 
 /* The number of lit bars for a level. The scale is dB over -48..0. */
 static int meter_lit(float vu)
@@ -123,6 +128,53 @@ void cassette_meter_create(lv_obj_t *parent)
         lv_obj_set_hidden(s_fill[ch], true);
         s_lit[ch] = 0;
     }
+
+    /* The VU meter is hidden at rest; the two-finger swipe left raises it. The panel's
+     * layered opacity fades the two rows and every child as one. */
+    lv_obj_set_style_opa_layered(s_meter, LV_OPA_TRANSP, 0);
+    lv_obj_set_hidden(s_meter, true);
+    s_shown = false;
+}
+
+/* The panel's opacity, applied to the rows and their children as one layer. */
+static void meter_opa_cb(void *var, int32_t v)
+{
+    lv_obj_set_style_opa_layered((lv_obj_t *)var, (lv_opa_t)v, 0);
+}
+
+static void meter_hide_done_cb(lv_anim_t *a)
+{
+    (void)a;
+    if (!s_shown && s_meter) lv_obj_set_hidden(s_meter, true);
+}
+
+static void meter_fade(bool show)
+{
+    if (!s_meter || show == s_shown) return;
+    s_shown = show;
+    lv_anim_delete(s_meter, meter_opa_cb);
+    if (show) lv_obj_set_hidden(s_meter, false);
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, s_meter);
+    lv_anim_set_exec_cb(&a, meter_opa_cb);
+    lv_anim_set_values(&a, lv_obj_get_style_opa_layered(s_meter, 0),
+                       show ? LV_OPA_COVER : LV_OPA_TRANSP);
+    lv_anim_set_duration(&a, METER_FADE_MS);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+    if (!show) lv_anim_set_completed_cb(&a, meter_hide_done_cb);
+    lv_anim_start(&a);
+}
+
+void cassette_meter_show(void)
+{
+    meter_fade(true);
+}
+
+void cassette_meter_hide(void)
+{
+    meter_fade(false);
 }
 
 void cassette_meter_place(cassette_pose_t pose)

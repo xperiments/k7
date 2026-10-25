@@ -10,7 +10,7 @@
  *
  * The edit overlay is the whole input policy for the block: while a knob is active it is
  * the only clickable object on the screen, so the placeholders, the drawer and the peek
- * cannot take the same touch. The two-finger menu bypasses LVGL (the touch adapter calls
+ * cannot take the same touch. The two-finger VU bypasses LVGL (the touch adapter calls
  * the view directly), which is why the view also checks is_editing().
  *
  * The block is hidden at rest, so the entry view is the untouched full-scale cassette; the
@@ -498,7 +498,7 @@ static void cell_clicked_cb(lv_event_t *e)
     /* The Filebrowser and Rec cells are placeholders until their functions land; only
      * the four knobs have a click. */
     if (slot >= KNOB_SLOTS) return;
-    /* The two-finger menu is reserved: a gesture that starts on a cell must not also be
+    /* The two-finger VU gesture is reserved: a gesture that starts on a cell must not also be
      * the cell's click. The latch is cleared by the next press, which the cell bubbles. */
     if (screen_input_two_finger_seen()) return;
     lv_indev_t *indev = lv_indev_active();

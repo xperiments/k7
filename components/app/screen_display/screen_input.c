@@ -67,17 +67,21 @@ bool screen_input_two_finger_seen(void)
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 /*
- * The two-finger swipe is reserved for the menu (on/off), which is not designed yet. The
- * port still reports it, and this callback keeps the one-finger handler from acting on the
- * same touch: a two-finger gesture must not toggle the peek or open the drawer by accident.
- * When the menu lands, it takes this intent and nothing in touch_gt911.c has to change. */
+ * The two-finger swipe is the VU meter's toggle: left shows it, right hides it. The
+ * callback also keeps the one-finger handler from acting on the same touch: a two-finger
+ * gesture must not toggle the peek or open the drawer by accident. A vertical two-finger
+ * swipe is not a toggle and only sets the latch. */
 static void screen_two_finger_cb(int dx, int dy)
 {
-    (void)dx;
     (void)dy;
     s_two_finger_seen = true;
-    ESP_LOGI(TAG, "two-finger swipe: reserved for the menu");
-    report(SCREEN_INTENT_MENU);
+    if (dx < 0) {
+        ESP_LOGI(TAG, "two-finger left: VU meter shown");
+        report(SCREEN_INTENT_VU_SHOW);
+    } else if (dx > 0) {
+        ESP_LOGI(TAG, "two-finger right: VU meter hidden");
+        report(SCREEN_INTENT_VU_HIDE);
+    }
 }
 #endif
 

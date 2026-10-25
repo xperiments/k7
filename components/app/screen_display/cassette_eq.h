@@ -21,12 +21,12 @@
  * click outside does nothing; there is no drag and no relative rotation. A double tap on
  * any small knob resets it to 0 dB and cancels the pending open, like a mixer's centre
  * detent, so the virtual knob never appears. While edit mode is on, the view ignores every
- * screen intent, because the touch adapter's two-finger menu arrives directly.
+ * screen intent, because the touch adapter's two-finger VU arrives directly.
  *
- * The block is a screen child, created after the Level sheets, so it is chrome like the
- * transport drawer: it stays above the sheets and the view raises it after a vertical
- * swipe. It is hidden at rest, so the entry view is the untouched full-scale cassette; the
- * view shows it together with the transport drawer, when the cassette is already at the
+ * The block is a screen child, created after the peek, so it is chrome like the
+ * transport drawer. It is hidden at rest, so the entry view is the untouched full-scale
+ * cassette; the view shows it together with the transport drawer, when the cassette is
+ * already at the
  * 134/256 control pose that leaves the right column room. The block slides in from the
  * right edge over the drawer's 260 ms and slides back out when the drawer leaves.
  */
@@ -49,7 +49,7 @@ void cassette_eq_set_shown(bool shown);
 void cassette_eq_raise(void);
 
 /* True while a knob is in edit mode. The overlay owns the touch; the view must drop every
- * screen intent, including the two-finger menu the touch adapter reports directly. */
+ * screen intent, including the two-finger VU the touch adapter reports directly. */
 bool cassette_eq_is_editing(void);
 
 #ifdef __cplusplus

@@ -1,8 +1,11 @@
 # The one-finger swipe cycles three Levels, and the two-finger swipe waits for the menu
 
 **Superseded by ADR 0019 for the Label cover and Artwork screens and the down/up Level
-cycle.** Bare is the only screen left; the up swipe toggles the peek and the down swipe
-does nothing. The two-finger menu intent is unchanged.
+cycle.** Bare is the only screen left; the up swipe opens the peek and the down swipe
+closes it. The two-finger swipe is now the VU meter's toggle, not the menu's.
+
+**Amended again:** a two-finger swipe left shows the VU meter and a right hides it; the
+meter starts hidden and fades in/out over 220 ms. The menu intent is gone.
 
 The cassette screen had four Levels - Bare, Label, Label cover and Artwork - and the
 one-finger down/up swipe moved through all of them. The Label level was a cream bar with

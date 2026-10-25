@@ -116,7 +116,7 @@ static void touch_two_finger_check(const esp_lcd_touch_point_data_t *point, uint
  * that the controller answered, and the point on the release is the last one the
  * finger was at because the controller reports the release as the absence of a point.
  *
- * Two contacts are also the two-finger swipe, which the view reserves for the menu. It
+ * Two contacts are also the two-finger swipe, which the view uses for the VU meter. It
  * is detected here, from the midpoint of the two points, so it does not depend on the
  * controller's track ids or on LVGL's multi-touch recognizer.
  */
@@ -160,7 +160,7 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
 
     if (wake_only) {
         /* Keep the multi-touch detector out of this press too: two fingers on a dark
-         * screen are a wake, not the menu gesture. */
+         * screen are a wake, not a two-finger gesture. */
         s_two_down = false;
         s_two_sent = false;
     } else {

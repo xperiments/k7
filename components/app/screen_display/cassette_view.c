@@ -189,7 +189,7 @@ static void apply_frame(const cassette_frame_t *f)
 static void screen_intent_cb(screen_intent_t intent, void *ctx)
 {
     (void)ctx;
-    /* Edit mode is modal: the overlay owns the touch and the two-finger menu arrives from
+    /* Edit mode is modal: the overlay owns the touch and the two-finger VU arrives from
      * the adapter directly, so the view is the other half of the gate. */
     if (cassette_eq_is_editing()) return;
 
@@ -221,8 +221,11 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
             /* The down swipe puts an open peek away; it does nothing when it is down. */
             if (s_peek_wants_room) cassette_levels_toggle_peek();
             break;
-        case SCREEN_INTENT_MENU:
-            /* The menu is not designed yet; screen_input has already logged it. */
+        case SCREEN_INTENT_VU_SHOW:
+            cassette_meter_show();
+            break;
+        case SCREEN_INTENT_VU_HIDE:
+            cassette_meter_hide();
             break;
         default:
             break;
@@ -283,7 +286,7 @@ void cassette_view_create(void)
     /* The picture is built. Make the screen the one thing a finger can hit, then let
      * screen_input decide what a touch means: a right swipe slides the transport and the
      * DJ block in, a left swipe slides them out, an up swipe toggles the peek, a down
-     * swipe does nothing, and a two-finger one is the menu. A tap is not an action;
+     * swipe does nothing, and a two-finger one toggles the VU meter. A tap is not an action;
      * next/previous belong to the block's arrows. */
     lv_obj_set_clickable(scr, true);
     screen_input_attach(scr, screen_intent_cb, NULL);

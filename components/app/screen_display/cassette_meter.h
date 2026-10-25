@@ -27,8 +27,14 @@ extern "C" {
 
 /* Build the two rows, their L/R badges and the fourteen bars under `parent`, the
  * cassette's container. The panel is transparent and takes no press. The view creates it
- * after the tapes, so the meter paints inside the right hub. */
+ * after the tapes, so the meter paints inside the right hub. The meter starts hidden; a
+ * two-finger swipe left shows it and a right hides it. */
 void cassette_meter_create(lv_obj_t *parent);
+
+/* Fade the whole meter in (show) or out (hide) over 220 ms. The meter is hidden at rest;
+ * show/hide are idempotent, and a show during a hide reverses from the current opacity. */
+void cassette_meter_show(void);
+void cassette_meter_hide(void);
 
 /* Put the meter and its rows where `pose` says. Called from the view's cassette
  * placement, so it runs on every step of a scale or offset change. */

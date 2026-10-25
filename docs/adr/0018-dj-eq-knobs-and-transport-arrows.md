@@ -44,7 +44,7 @@ every listener hears, and there is no local audio path to fight with. The PCM se
   gesture, so the virtual knob never appears. While it is up nothing else responds - the
   the left drawer's buttons, the right placeholders and the peek are behind the overlay -
   and the view drops every
-  screen intent too, because the touch adapter's two-finger menu arrives directly. Both
+  screen intent too, because the touch adapter's two-finger VU arrives directly. Both
   circles blink their border 100% -> 27% -> 100%, 600 ms each way. The MCP is not a gesture
   or a click and is untouched.
 - **Only the left drawer's `<` and `>` do next/previous on the screen.** The screen's tap

@@ -35,7 +35,8 @@ and nothing else. Everything else is private:
   whose bottom sits 16 px above the screen edge, and joins the run between the two
   rollers. The two panel-board frames are filled with `k_col_frame` (FF00FF for the
   current design) and drawn before every other part of the body.
-- `cassette_meter.c` — the VU meter, `create(parent)`, `place(pose)`, `set(frame)`. Two
+- `cassette_meter.c` — the VU meter, `create(parent)`, `place(pose)`, `set(frame)`,
+  `show()` and `hide()`. Two
   100x24 rows centred on the right hub, L on top and R below; each row is a rounded
   rectangle with an L/R badge, a 6 px gap and seven dim bars. One rounded lit fill grows
   from the left and ends in a semicircle. The panel is transparent, so the hub shows
@@ -273,6 +274,11 @@ too. The fill is mapped over -48..0 dB so the row moves like a meter rather than
 amplitude. There is no panel behind it - the rows, badges, track and fill are the only
 things painted, so the hub shows through. A level change only resizes the fill, and a row
 whose lit count has not changed is not touched.
+
+The meter starts hidden. A two-finger swipe left fades it in and a two-finger right fades
+it out and hides it, over 220 ms; the fade is the whole meter panel's layered opacity, so
+the two rows, badges and bars go together. A vertical two-finger swipe is neither and only
+sets the one-finger latch.
 
 ## The reel change
 

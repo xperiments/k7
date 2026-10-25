@@ -596,7 +596,9 @@ bobbing a few pixels out of phase. It cannot be raised while the transport drawe
 134/256 control pose; an open peek is closed by a down swipe, and an up swipe while it is up
 does nothing. The tag texts are the Track's ID3/FLAC tags, read by the tags loader on its own
 task; until they land the group is the artist directory and the song the cleaned filename.
-The two-finger swipe is reserved for the menu: the view still latches it so the same touch
+The two-finger swipe is the VU meter's toggle: a left shows it, a right hides it, and it
+starts hidden with a 220 ms fade. The view still latches the two-finger touch so the same
+touch
 cannot also trip the one-finger gesture. The Sunton build compiles this path; the board
 tier has not yet recorded a finger, so the rows above are unchanged. The removal and the
 parked cover pipeline are

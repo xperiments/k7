@@ -156,7 +156,9 @@ touching dim bars and one rounded lit fill that grows from the left and ends in 
 semicircle; the fill is a step dimmer than the badge and the track a dim red.
 Each row is driven over -48..0 dB, so it moves like a meter rather than a linear
 amplitude, and the peak-hold falls about 23 dB/s, so it follows a real drop instead of
-hanging. The meter is chrome, not tape: the **reel change** does not touch it.
+hanging. The meter starts hidden; a two-finger swipe left fades it in and a right fades it
+out and hides it, over 220 ms. It is chrome, not tape: the **reel change** does not touch
+it.
 _Avoid_: level bar, meter, peak meter
 
 **Transport drawer**:
