@@ -53,20 +53,21 @@ and nothing else. Everything else is private:
   the song on the right, each tethered to its hub. The texts come from ID3/FLAC tags read
   by the loader, with the artist directory and the filename as the fallback. One
   animation bobs both tags; each tether is a static line whose lower end follows the hub.
-- `cassette_buttons.c` — the transport drawer: the three line-art buttons P, R, W, each
-  with a prebuilt pressed and an unpressed state, and the left-edge panel that slides in
-  and out. Its interface is `create(screen, room)`, `set_shown()`, `is_shown()` and
-  `raise()`. A press swaps states and a click pulses the button's scale. The buttons are
-  placeholders: they wire no transport action. The drawer reports its visibility through
-  the `room` callback; the view turns that into the 134/256 control pose and shows the DJ
-  block with it.
+- `cassette_buttons.c` — the transport drawer: the three line-art buttons P, `<` and `>`,
+  each with a prebuilt pressed and an unpressed state, and the left-edge panel that slides
+  in and out. Its interface is `create(screen, room)`, `set_shown()`, `is_shown()` and
+  `raise()`. A press swaps states, a click pulses the button's scale, and `<`/`>` call
+  `mini_icecast_prev()` / `mini_icecast_skip()`; P is still a placeholder. The drawer
+  reports its visibility through the `room` callback; the view turns that into the 134/256
+  control pose and shows the DJ block with it.
 - `cassette_eq.c` — the DJ block at the right edge: six 96 px carcases in two touching
-  columns, the same carcase as P/R/W. The first column is GAIN above the < and > arrows;
-  the second is HI, MED and LOW. Each knob is a 44 px circle with a 24-dot crown outside
-  it and a line from the centre towards the rim; a tap opens a 3x virtual knob and a click on
-  its ring sets the target angle. The arrows are the only next/previous controls and call
-  `mini_icecast_prev()` / `mini_icecast_skip()`. Its interface is `create(screen)`,
-  `raise()` and `is_editing()`.
+  columns, the same carcase as the left drawer's. The first column is GAIN above the
+  Filebrowser and Rec placeholders (the open folder and the two circles; TBD); the second
+  is HI, MED and LOW. Each knob is a 44 px circle with a 24-dot crown outside it and a
+  line from the centre towards the rim; a tap opens a 3x virtual knob and a click on its
+  ring sets the target angle. The next/previous controls are the left drawer's `<` and
+  `>`; the right cells are placeholders. Its interface is `create(screen)`, `raise()` and
+  `is_editing()`.
 - `screen_input.c` — the touch policy: a press and a one-finger gesture (plus the touch
   adapter's two-finger swipe) become one `screen_intent_t`, with a latch that keeps one
   touch from being two intents. It names no screen and calls nothing above itself; the
@@ -98,7 +99,7 @@ and nothing else. Everything else is private:
   right/left swipe slides the transport drawer in/out, an up swipe toggles Bare's peek,
   and a down swipe has no meaning. A two-finger swipe is reserved for the menu; it is
   still reported so it cannot fall through to the one-finger handler. Next and previous
-  are the DJ block's arrows, never a screen gesture or a tap.
+  are the left drawer's `<` and `>`, never a screen gesture or a tap.
 - `assets/label_cover.bin`, `assets/cover.jpg` — parked with the Label cover and Artwork
   screens and not embedded in the firmware. They stay for when those screens come back;
   `tools/convert_cassette_assets.py` is still the way they are made.
@@ -182,16 +183,17 @@ the drawer is out the view puts it at 134/256 (`CASSETTE_SCALE_BUTTONS`), which 
 tape's box to 402x232 px at x=148..550: the 120 px drawer is clear on the left and the
 192 px DJ block at 592..784 has room on the right. The DJ block is shown and hidden with the
 drawer, and the pose runs over the same 260 ms. The three buttons start 76 px from the top,
-so the middle button R is on y=218; the -20 px dy puts the cassette's centre near that line.
+so the middle button `<` is on y=218; the -20 px dy puts the cassette's centre near that line.
 The drawer wins over the peek while it is out; when it slides away the peek's 200/256 and
 -60 px lift come back.
 
-Each button is 96x96, rounded by 8 px, with a 64 px circle at its centre and P, R or W
+Each button is 96x96, rounded by 8 px, with a 64 px circle at its centre and P, `<` or `>`
 centred in the circle in Jura 36. Both states are built once: the unpressed state is the
 playing red at 2 px, the pressed one the cream ink at 3 px. `LV_EVENT_PRESSED` shows the
 pressed state; release or `LV_EVENT_PRESS_LOST` restores the other. A click runs a 160 ms
-scale pulse (256 -> 232 -> 256) and does nothing else: the buttons are placeholders, and
-the transport is not wired.
+scale pulse (256 -> 232 -> 256); `<` and `>` also call `mini_icecast_prev()` /
+`mini_icecast_skip()`. P is still a placeholder; the transport's next/previous are these
+two arrows now.
 
 The drawer is chrome above the peek. It is created after `cassette_levels`, and its panel
 and button roots bubble gestures, so a swipe that starts on the drawer still reaches
@@ -204,13 +206,14 @@ longer gives a click any meaning.
 The six cells at the right edge live in `cassette_eq.c`. Two touching 96 px columns at
 x=592..784, three rows at y=76/170/264, so the block is 192x284 and its right edge leaves
 16 px to the screen. The 16 px is the inset of the 64 px circle inside each carcase, not a
-gap: the carcases share their borders like the P/R/W drawer. The first column is GAIN above
-the `<` and `>` arrows; the second is HI, MED and LOW. The block is hidden at rest, so the
-entry view is the full-scale cassette; the view shows it with the transport drawer, when the
-cassette is already at the 134/256 control pose. It slides in from the right edge over the
-same 260 ms as the drawer and slides back out when the drawer leaves.
+gap: the carcases share their borders like the left drawer's. The first column is GAIN
+above the Filebrowser and Rec placeholders; the second is HI, MED and LOW. The block is
+hidden at rest, so the entry view is the full-scale cassette; the view shows it with the
+transport drawer, when the cassette is already at the 134/256 control pose. It slides in
+from the right edge over the same 260 ms as the drawer and slides back out when the drawer
+leaves.
 
-Each knob is a 44 px circle - 30% smaller than the arrows' 64 px one - with a 24-dot
+Each knob is a 44 px circle - 30% smaller than the placeholders' 64 px one - with a 24-dot
 crown at r=32 outside it and a line from the centre towards the rim (the owner's tuned
 4 px width). 0 dB is at twelve
 o'clock; the right side cuts and the left side boosts, and the arc lights from twelve to
@@ -226,12 +229,13 @@ the big knob's centre circle closes. A click on the ring - the 284 px area aroun
 circle - is the target point: the knob jumps to that angle, 0 dB at twelve, clockwise
 cutting and counter-clockwise boosting. A click outside does nothing; there is no drag. A
 double tap on any small knob resets it to 0 dB and cancels the pending open, so the virtual
-knob never appears. While the overlay is up nothing else responds - the arrows, P/R/W, the
+knob never appears. While the overlay is up nothing else responds - the placeholders, the
 drawer and the peek are all behind it - and the view's sink drops every screen intent
 too, because the two-finger menu arrives from the touch adapter directly. Both the small
-active circle and the big one blink their border 100% -> 27% -> 100%, 600 ms each way. The
-arrows are the only next/previous controls and call `mini_icecast_prev()` /
-`mini_icecast_skip()`; the screen's tap and the BOOT button no longer do either.
+active circle and the big one blink their border 100% -> 27% -> 100%, 600 ms each way.
+The left drawer's `<` and `>` are the next/previous controls and call
+`mini_icecast_prev()` / `mini_icecast_skip()`; the screen's tap and the BOOT button no
+longer do either.
 
 The audio side is `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell (Q 0.7)
 and a 4 kHz high shelf, plus a trim applied before them. The knobs map to the DJ ranges:

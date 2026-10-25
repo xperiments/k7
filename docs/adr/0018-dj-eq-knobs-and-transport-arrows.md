@@ -1,7 +1,12 @@
 # The DJ block: three bands, a trim, and the only transport arrows
 
+**Amended by the control move:** the left drawer's `<` and `>` are the transport arrows
+now; the DJ block's two freed cells keep their carcases and become the Filebrowser and Rec
+placeholders (the owner's open folder and two-circle icons; TBD). The EQ knobs and their
+behaviour are unchanged.
+
 The owner wants the cassette screen to carry a DJ channel strip, not a spectrum analyser:
-HI, MED and LOW plus a GAIN, in the same line-art language as the transport's P/R/W. The
+HI, MED and LOW plus a GAIN, in the same line-art language as the left drawer's P/</>. The
 block has six cells because it sits on a 2x3 grid; the four cells the strip needs leave two,
 and those become the previous/next arrows. The screen's tap and the BOOT button stop
 skipping tracks: next and previous belong to those two arrows (and to the MCP, which is a
@@ -36,13 +41,16 @@ every listener hears, and there is no local audio path to fight with. The PCM se
   click outside does nothing; there is no drag and no relative rotation. A double tap on any
   small knob resets it to 0 dB and cancels the pending open, the mixer's centre-detent
   gesture, so the virtual knob never appears. While it is up nothing else responds - the
-  arrows, P/R/W, the drawer and the Levels are behind the overlay - and the view drops every
+  the left drawer's buttons, the right placeholders and the peek are behind the overlay -
+  and the view drops every
   screen intent too, because the touch adapter's two-finger menu arrives directly. Both
   circles blink their border 100% -> 27% -> 100%, 600 ms each way. The MCP is not a gesture
   or a click and is untouched.
-- **Only the arrows do next/previous on the screen.** The screen's tap no longer skips a
-  track (`SCREEN_INTENT_TAP` is removed) and the BOOT button no longer skips either. The
-  P/R/W buttons remain placeholders.
+- **Only the left drawer's `<` and `>` do next/previous on the screen.** The screen's tap
+  no longer skips a track (`SCREEN_INTENT_TAP` is removed) and the BOOT button no longer
+  skips either. The DJ block's two freed cells keep their carcases and become the
+  Filebrowser and Rec placeholders (the owner's open folder and two-circle icons; TBD); the
+  drawer's P remains a placeholder.
 - **The cassette enters at full scale; the controls get the 134/256 pose.** A right swipe
   brings the transport drawer and the DJ block in and scales the cassette to 134/256,
   148..550, so both the 120 px drawer on the left and the block on the right have room. A
@@ -81,7 +89,8 @@ every listener hears, and there is no local audio path to fight with. The PCM se
   it after the Levels, shows and hides it with the drawer, raises it with the drawer, and
   drops intents while `is_editing()`.
 - `screen_input` loses `SCREEN_INTENT_TAP` and the click handler; `appliance` loses the
-  BOOT-button skip. The drawer stays at the left edge and keeps its placeholders.
+  BOOT-button skip. The drawer stays at the left edge, its P is a placeholder and its `<`/`>`
+  are the transport's arrows.
 - The block is hidden at rest and shown with the drawer, including over the Label and
   Artwork sheets while the controls are out. At the peek's 200/256 (drawer away) the block
   is hidden, so the entry and peek views are unaffected. Whether the block should hide on

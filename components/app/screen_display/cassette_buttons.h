@@ -9,15 +9,15 @@
  * the panel and the DJ block's column on the right.
  *
  * The drawer holds three buttons down the left edge. Each is line art: a 96x96
- * rectangle rounded by 8 px, a 64 px circle at its centre, and the letter P, R or W
+ * rectangle rounded by 8 px, a 64 px circle at its centre, and the character P, < or >
  * centred in that circle in Jura 36. The three start 76 px from the screen's top; the
- * middle button (R) is therefore on y=218. Each button carries two prebuilt state
+ * middle button (<) is therefore on y=218. Each button carries two prebuilt state
  * objects - unpressed and pressed - and swaps which one is visible on press and release,
  * so the pressed look costs no style change at touch time. A click is a short scale pulse
- * and nothing else: the transport is not wired, and next/previous belong to the DJ
- * block's arrows.
+ * plus the button's action: < calls mini_icecast_prev(), > calls mini_icecast_skip(); P
+ * is still a placeholder. These two are the transport's next/previous now.
  *
- * Private to screen_display, created above the Levels in the child order. Every object
+ * Private to screen_display, created above the peek in the child order. Every object
  * is built under the LVGL lock. The drawer and each button bubble gestures so a swipe
  * that starts on them still reaches screen_input's handler on the screen, and bubble
  * events so a press clears the two-finger latch; a click on the drawer's margin is
@@ -52,9 +52,8 @@ void cassette_buttons_set_shown(bool shown);
 /* Whether the drawer is meant to be shown, true even while it is still sliding in. */
 bool cassette_buttons_is_shown(void);
 
-/* Put the drawer back on top of the screen's child order. The Levels raise their
- * Artwork sheet when it settles; the view calls this after a vertical swipe so the
- * drawer stays above every Level. */
+/* Put the drawer back on top of the screen's child order. The peek is the only sibling
+ * it competes with; the view still calls this where it used to re-raise the drawer. */
 void cassette_buttons_raise(void);
 
 #ifdef __cplusplus

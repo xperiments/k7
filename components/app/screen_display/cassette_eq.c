@@ -2,14 +2,16 @@
  * The DJ block on the right; see cassette_eq.h.
  *
  * Six carcases, two touching columns of three, the same 96 px box as the transport
- * buttons. The arrows keep the buttons' 64 px circle; the four knobs are a 30% smaller
- * 44 px circle with the 24-dot crown outside it, and a line from the centre to the rim.
- * The first column is GAIN above the < and > arrows; the second is HI, MED and LOW.
+ * buttons. The Filebrowser and Rec placeholders keep the buttons' 64 px circle; the four
+ * knobs are a 30% smaller 44 px circle with the 24-dot crown outside it, and a line from
+ * the centre towards the rim. The first column is GAIN above the Filebrowser and Rec
+ * placeholders; the second is HI, MED and LOW. The next/previous arrows are the left
+ * drawer's < and > now.
  *
  * The edit overlay is the whole input policy for the block: while a knob is active it is
- * the only clickable object on the screen, so the arrows, the drawer and the Levels cannot
- * take the same touch. The two-finger menu bypasses LVGL (the touch adapter calls the
- * view directly), which is why the view also checks is_editing().
+ * the only clickable object on the screen, so the placeholders, the drawer and the peek
+ * cannot take the same touch. The two-finger menu bypasses LVGL (the touch adapter calls
+ * the view directly), which is why the view also checks is_editing().
  *
  * The block is hidden at rest, so the entry view is the untouched full-scale cassette; the
  * view shows it with the transport drawer and hides it again, leaving edit mode, when the
@@ -26,13 +28,16 @@
 #include "mini_icecast.h"
 #include "screen_input.h"
 
-LV_FONT_DECLARE(jura_36);
+/* The left drawer's < and > are the transport arrows now; these two cells are the
+ * Filebrowser and Rec placeholders and use no font. */
 
 /* The six cells: two 96 px columns touching at x=688, three rows at 76/170/264, so the
  * bottom of the block is 360. The 16 px is the inset of the 64 px circle inside each
- * 96 px carcase, not a gap: the carcases share their borders like P/R/W. The arrows keep
- * that 64 px circle; the four knobs use a 30% smaller one (44 px) and the dot crown sits
- * outside it, with the line running from the centre to the rim.
+ * 96 px carcase, not a gap: the carcases share their borders like the left drawer's. The
+ * Filebrowser and Rec placeholders keep that 64 px circle; the four knobs use a 30%
+ * smaller one (44 px) and the dot crown sits outside it, with the line running from the
+ * centre towards the rim. The next/previous arrows are the left drawer's < and > now;
+ * these two cells are TBD.
  *
  * The edit view is one knob at 3x, 284 px (96+94+94) at x=206 (206..490, over the cassette)
  * with its top on the GAIN button's top, so it spans the block's 76..360 band. Circle 132,
@@ -89,8 +94,8 @@ enum {
     SLOT_HI   = 1,
     SLOT_MED  = 2,
     SLOT_LOW  = 3,
-    SLOT_PREV = 4,
-    SLOT_NEXT = 5,
+    SLOT_PREV = 4,   /* now Filebrowser (TBD) */
+    SLOT_NEXT = 5,   /* now Rec mode (TBD) */
     SLOT_COUNT = 6,
     KNOB_SLOTS = 4,
 };
@@ -226,13 +231,31 @@ static void knob_build(lv_obj_t *cell, int slot)
     knob_apply(slot);
 }
 
-static void arrow_build(lv_obj_t *cell, int slot)
+/* The two placeholder cells the arrows used to occupy: the Filebrowser's open folder and
+ * the Rec mode's two circles, the icons the owner supplied. They keep the 64 px circle and
+ * the carcase; the click is not wired (TBD). */
+static void icon_build(lv_obj_t *cell, int slot)
 {
     lv_obj_t *circle = cassette_border_box(cell, CIRCLE_INSET, CIRCLE_INSET,
                                            CIRCLE_D, CIRCLE_D, CIRCLE_R,
                                            k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
-    lv_obj_t *label = cassette_text(circle, &jura_36, k_col_eq_tick, LV_ALIGN_CENTER, 0, 0);
-    lv_label_set_text(label, slot == SLOT_PREV ? "<" : ">");
+    int c = CIRCLE_D / 2;
+
+    if (slot == SLOT_PREV) {
+        /* Folder: the tab on the top-left and the body under it. */
+        cassette_border_box(circle, c - 16, c - 13, 12, 7, 2,
+                            k_col_bg, LV_OPA_TRANSP, k_col_eq_tick, 2);
+        cassette_border_box(circle, c - 16, c - 7, 32, 20, 3,
+                            k_col_bg, LV_OPA_TRANSP, k_col_eq_tick, 2);
+    } else {
+        /* Rec mode: the two circles of the owner's voicemail mark and the bar between
+         * their bottoms. */
+        cassette_border_box(circle, c - 16, c - 7, 14, 14, 7,
+                            k_col_bg, LV_OPA_TRANSP, k_col_eq_tick, 2);
+        cassette_border_box(circle, c + 2, c - 7, 14, 14, 7,
+                            k_col_bg, LV_OPA_TRANSP, k_col_eq_tick, 2);
+        cassette_box(circle, c - 4, c + 7, 8, 2, 1, k_col_eq_tick);
+    }
 }
 
 /* The 3x knob, hidden until a knob is tapped. Its 284 px (96+94+94) hit area at x=206 is
@@ -458,11 +481,14 @@ static void open_later(int slot)
 static void cell_clicked_cb(lv_event_t *e)
 {
     /* The overlay should own the touch while editing; the guard comes first so even a
-     * click that somehow reaches a cell cannot skip a track. A hidden or still-sliding
-     * block takes no click at all. */
+     * click that somehow reaches a cell cannot work a placeholder or enter edit. A hidden
+     * or still-sliding block takes no click at all. */
     if (s_active >= 0 || !s_shown || s_sliding) return;
 
     int slot = (int)(intptr_t)lv_event_get_user_data(e) - 1;
+    /* The Filebrowser and Rec cells are placeholders until their functions land; only
+     * the four knobs have a click. */
+    if (slot >= KNOB_SLOTS) return;
     /* The two-finger menu is reserved: a gesture that starts on a cell must not also be
      * the cell's click. The latch is cleared by the next press, which the cell bubbles. */
     if (screen_input_two_finger_seen()) return;
@@ -470,14 +496,6 @@ static void cell_clicked_cb(lv_event_t *e)
     if (indev && (lv_indev_get_gesture_dir(indev) != LV_DIR_NONE ||
                   lv_indev_get_press_moved(indev))) return;
 
-    if (slot == SLOT_PREV) {
-        mini_icecast_prev();
-        return;
-    }
-    if (slot == SLOT_NEXT) {
-        mini_icecast_skip();
-        return;
-    }
     /* The second CLICKED of a double click: the DOUBLE_CLICKED handler already reset the
      * knob and cancelled the pending open, so this click must not start a new one. */
     if (s_reset_click) {
@@ -559,7 +577,7 @@ void cassette_eq_create(lv_obj_t *parent)
     for (int slot = 0; slot < SLOT_COUNT; slot++) {
         lv_obj_t *cell = cell_create(parent, slot);
         if (slot < KNOB_SLOTS) knob_build(cell, slot);
-        else arrow_build(cell, slot);
+        else icon_build(cell, slot);
         lv_obj_set_hidden(cell, true);
     }
     big_build(parent);

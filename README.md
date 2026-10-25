@@ -165,7 +165,7 @@ Two costs, stated rather than discovered later:
 
 1. **GPIO0 is a strapping pin.** Holding it while resetting enters download mode, which
    is exactly how you flash. It has no runtime action: next and previous are the
-   screen's two DJ-block arrows.
+   left drawer's two arrows.
 2. **A card that will not mount is still the most likely fault**, and a card that
    mounts but has no `/music` directory looks the same from outside. The firmware
    logs both distinctly, and the device is built to survive either: see below.
@@ -556,21 +556,23 @@ SCL 20, INT 18, RST 38, read every 10 ms. It is polled rather than interrupt-dri
 because this board's INT line does not carry the touch (the reference project measured it
 idling through a press), and the last point the controller reported is latched so one
 press is one press rather than one per read. A tap on the screen is **not** an action: next
-and previous are the two arrows in the DJ block at the right edge. A tap on the drawer
+and previous are the two arrows in the left drawer. A tap on the drawer
 itself is absorbed there. A one-finger right swipe slides the transport drawer in from the
 left edge and shows the DJ block at the right, a left swipe slides them back out. The
 cassette enters at full scale; while the controls are out it scales to 134/256 (148..550),
 so the 120 px drawer on the left and the 192 px DJ block on the right both have room. A
-left swipe restores the full view. The drawer's three line-art buttons (P, R, W) each
+left swipe restores the full view. The drawer's three line-art buttons (P, `<`, `>`) each
 prebuild a pressed and an unpressed state, swap them on press and release, and pulse their
-scale on a click; they are placeholders and do not drive the transport.
+scale on a click; `<` and `>` call `mini_icecast_prev()` / `mini_icecast_skip()`, so they
+are the transport's next/previous now, while P stays a placeholder.
 
 The DJ block is six 96 px carcases in two touching columns at x=592..784, rows at
-76/170/264: GAIN above the `<` and `>` arrows in the first column, HI, MED and LOW in the
-second. The four knobs are a 44 px circle (30% smaller than the arrows'), a 24-dot crown
-outside it and a line from the centre towards the rim, 0 dB at twelve o'clock, right cuts and
-left boosts; the arrows are the only next/previous controls and call
-`mini_icecast_prev()` / `mini_icecast_skip()`. A tap on a knob opens a modal edit mode
+76/170/264: GAIN above the Filebrowser and Rec placeholders in the first column, HI, MED
+and LOW in the second. The four knobs are a 44 px circle (30% smaller than the
+placeholders'), a 24-dot crown outside it and a line from the centre towards the rim, 0 dB
+at twelve o'clock, right cuts and left boosts. The two freed cells keep the 64 px circle
+and show the owner's open folder and two-circle icons; their functions are TBD. A tap on a
+knob opens a modal edit mode
 after 550 ms: a 3x virtual knob (284 px at x=206, top on the GAIN button's top, no outer
 square, just the circle, the crown and the line) appears over the cassette, which cuts out;
 on close the knob disappears and the cassette cuts back in. Only its centre circle closes,
@@ -597,7 +599,7 @@ parked cover pipeline are
 [`docs/adr/0019-remove-label-and-artwork-screens.md`](docs/adr/0019-remove-label-and-artwork-screens.md);
 the drawer and the horizontal swipes are
 [`docs/adr/0016-transport-drawer-and-horizontal-swipes.md`](docs/adr/0016-transport-drawer-and-horizontal-swipes.md);
-the DJ block, its ranges and the transport arrows are
+the DJ block's ranges and the transport arrows (now the left drawer's) are
 [`docs/adr/0018-dj-eq-knobs-and-transport-arrows.md`](docs/adr/0018-dj-eq-knobs-and-transport-arrows.md);
 the peek's bar, tags and tag reader are
 [`docs/adr/0017-peek-timeline-and-tags.md`](docs/adr/0017-peek-timeline-and-tags.md).

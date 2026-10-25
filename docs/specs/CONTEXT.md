@@ -160,15 +160,16 @@ hanging. The meter is chrome, not tape: the **reel change** does not touch it.
 _Avoid_: level bar, meter, peak meter
 
 **Transport drawer**:
-The three line-art buttons down the screen's left edge, P, R and W, hidden off-screen
+The three line-art buttons down the screen's left edge, P, `<` and `>`, hidden off-screen
 until a one-finger right swipe and put away by a left swipe. Each button is a 96x96
-rectangle rounded by 8 px with a 64 px circle at its centre and its letter centred in the
-circle in Jura; each carries a prebuilt pressed and an unpressed state, swapped on press
-and release. A click is a scale pulse only: the buttons are placeholders and do not
-command the **live stream** yet. While the drawer is out the cassette screen scales to
+rectangle rounded by 8 px with a 64 px circle at its centre and its character centred in
+the circle in Jura; each carries a prebuilt pressed and an unpressed state, swapped on
+press and release. A click is a scale pulse; `<` and `>` also call
+`mini_icecast_prev()` / `mini_icecast_skip()`, so they are the transport's next/previous,
+while P is still a placeholder. While the drawer is out the cassette screen scales to
 134/256 and moves left to x=148, so the 402x232 tape clears the panel; the three buttons
-start 64 px from the top so R sits on y=220, and the cassette is centred to that same
-line. It is chrome, not a **sheet**.
+start 64 px from the top so the middle `<` sits on y=220, and the cassette is centred to
+that same line. It is chrome, not the **Peek**.
 _Avoid_: menu, toolbar, controls
 
 **Label cover**:

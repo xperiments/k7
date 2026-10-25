@@ -25,6 +25,7 @@
 
 #include "cassette_style.h"
 #include "cassette_widgets.h"
+#include "mini_icecast.h"
 
 LV_FONT_DECLARE(jura_36);
 
@@ -32,7 +33,7 @@ static const char *TAG = "screen";
 
 /* The drawer: a 120 px strip at the left edge, hidden by sliding its own width out.
  * The three 96x96 buttons start 76 px from the screen's top and share their borders
- * (a -2 px gap); the middle button (R) is therefore on y=218. */
+ * (a -2 px gap); the middle button (<) is therefore on y=218. */
 #define PANEL_W 120
 #define PANEL_H 480
 #define PANEL_HIDDEN_X (-PANEL_W)
@@ -65,6 +66,7 @@ typedef struct {
     lv_obj_t *root;
     lv_obj_t *state_unpressed;
     lv_obj_t *state_pressed;
+    int action;      /* 0 = P (placeholder), 1 = prev, 2 = skip */
 } cassette_button_t;
 
 static lv_obj_t *s_panel;
@@ -130,9 +132,10 @@ static void button_press_lost_cb(lv_event_t *e)
     button_state_show(lv_event_get_user_data(e), false);
 }
 
-/* A click is the scale pulse and nothing else. A horizontal swipe that started here is
- * also a release and a click, so a touch with a gesture direction - or one that moved
- * past the press threshold - is not a tap and gets no pulse. */
+/* A click runs the button's action (P is a placeholder; `<` and `>` are next/previous)
+ * and the scale pulse. A horizontal swipe that started here is also a release and a
+ * click, so a touch with a gesture direction - or one that moved past the press
+ * threshold - is not a tap and does neither. */
 static void button_clicked_cb(lv_event_t *e)
 {
     cassette_button_t *b = lv_event_get_user_data(e);
@@ -142,6 +145,8 @@ static void button_clicked_cb(lv_event_t *e)
     lv_indev_t *indev = lv_indev_active();
     if (indev && (lv_indev_get_gesture_dir(indev) != LV_DIR_NONE ||
                   lv_indev_get_press_moved(indev))) return;
+    if (b->action == 1) mini_icecast_prev();
+    else if (b->action == 2) mini_icecast_skip();
     button_pulse(b->root);
 }
 
@@ -195,6 +200,7 @@ static void button_create(lv_obj_t *parent, int index, const char *text, int y)
     lv_obj_set_event_bubble(root, true);
 
     b->root = root;
+    b->action = index;
     b->state_unpressed = button_state_create(root, text, k_col_primary,
                                              BUTTON_BORDER_W, false);
     b->state_pressed = button_state_create(root, text, k_col_cover_ink,
@@ -268,7 +274,7 @@ void cassette_buttons_create(lv_obj_t *screen, cassette_buttons_room_cb_t room, 
     lv_obj_set_event_bubble(s_panel, true);
     lv_obj_set_hidden(s_panel, true);
 
-    static const char *const labels[] = { "P", "R", "W" };
+    static const char *const labels[] = { "P", "<", ">" };
     for (int i = 0; i < BUTTON_COUNT; i++)
         button_create(s_panel, i, labels[i], BUTTON_TOP + i * (BUTTON_H + BUTTON_GAP));
 }
