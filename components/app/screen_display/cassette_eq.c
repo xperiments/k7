@@ -238,30 +238,31 @@ static void knob_build(lv_obj_t *cell, int slot)
 
 /* The two placeholder cells the arrows used to occupy: the Filebrowser's folder and the
  * Rec mode's two circles, the icons the owner supplied. They keep the 64 px circle and the
- * carcase and use the button's own orange; the click is not wired (TBD). The shapes are
- * placed so their mass sits on the circle's centre (32,32): the folder body is centred and
- * carries its tab above, and the two circles plus their bar are centred as one mark. */
+ * carcase and use the drawer buttons' two inks: k_col_button_rect for the carcase and
+ * k_col_button_circle for the circle and the icon; the click is not wired (TBD). The shapes
+ * are placed so their mass sits on the circle's centre (32,32): the folder body is centred
+ * and carries its tab above, and the two circles plus their bar are centred as one mark. */
 static void icon_build(lv_obj_t *cell, int slot)
 {
     lv_obj_t *circle = cassette_border_box(cell, CIRCLE_INSET, CIRCLE_INSET,
                                            CIRCLE_D, CIRCLE_D, CIRCLE_R,
-                                           k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
+                                           k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 2);
     int c = CIRCLE_D / 2;
 
     if (slot == SLOT_PREV) {
         /* Folder: the body 1 px left of the circle's centre, the tab above its top-left. */
         cassette_border_box(circle, c - 17, c - 11, 32, 22, 3,
-                            k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 1);
+                            k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 1);
         cassette_border_box(circle, c - 17, c - 17, 12, 7, 2,
-                            k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 1);
+                            k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 1);
     } else {
         /* Rec mode: the two circles of the owner's voicemail mark and the bar between
          * their bottoms, the whole mark 2 px left of the circle's centre. */
         cassette_border_box(circle, c - 18, c - 8, 14, 14, 7,
-                            k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 1);
+                            k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 1);
         cassette_border_box(circle, c, c - 8, 14, 14, 7,
-                            k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 1);
-        cassette_box(circle, c - 6, c + 6, 9, 1, 1, k_col_eq_lit);
+                            k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 1);
+        cassette_box(circle, c - 6, c + 6, 9, 1, 1, k_col_button_circle);
     }
 }
 
@@ -526,9 +527,12 @@ static void cell_double_clicked_cb(lv_event_t *e)
 
 static lv_obj_t *cell_create(lv_obj_t *parent, int slot)
 {
+    /* The Filebrowser and Rec cells are buttons, so their carcase takes the drawer's
+     * rectangle ink; the four knob cells keep the EQ ink. */
+    lv_color_t ink = slot >= KNOB_SLOTS ? k_col_button_rect : k_col_eq_lit;
     lv_obj_t *cell = cassette_border_box(parent, cell_x(slot), cell_y(slot),
                                          CELL_W, CELL_H, CELL_R,
-                                         k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
+                                         k_col_bg, LV_OPA_TRANSP, ink, 2);
     lv_obj_set_clickable(cell, true);
     /* The press bubbles so screen_input clears its two-finger latch; the gesture does not,
      * so a swipe that starts on a cell is not a drawer or Level gesture. */
