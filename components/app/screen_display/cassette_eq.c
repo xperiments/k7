@@ -1,10 +1,10 @@
 /*
  * The DJ block on the right; see cassette_eq.h.
  *
- * Six carcases, two touching columns of three, the same 96 px box and 64 px circle as
- * the transport buttons. The first column is GAIN above the < and > arrows; the second
- * is HI, MED and LOW. The four knobs carry a 24-dot crown and a stick; the two arrows
- * carry the character the P/R/W buttons use.
+ * Six carcases, two touching columns of three, the same 96 px box as the transport
+ * buttons. The arrows keep the buttons' 64 px circle; the four knobs are a 30% smaller
+ * 44 px circle with the 24-dot crown outside it and a stem from the rim outward. The first
+ * column is GAIN above the < and > arrows; the second is HI, MED and LOW.
  *
  * The edit overlay is the whole input policy for the block: while a knob is active it is
  * the only clickable object on the screen, so the arrows, the drawer and the Levels cannot
@@ -29,7 +29,9 @@ LV_FONT_DECLARE(jura_36);
 
 /* The six cells: two 96 px columns touching at x=688, three rows at 76/170/264, so the
  * bottom of the block is 360. The 16 px is the inset of the 64 px circle inside each
- * 96 px carcase, not a gap: the carcases share their borders like P/R/W. */
+ * 96 px carcase, not a gap: the carcases share their borders like P/R/W. The arrows keep
+ * that 64 px circle; the four knobs use a 30% smaller one (44 px) and the dot crown sits
+ * outside it, with the stem running from the rim outward. */
 #define CELL_W       96
 #define CELL_H       96
 #define CELL_PITCH   94
@@ -39,13 +41,15 @@ LV_FONT_DECLARE(jura_36);
 #define CIRCLE_D     64
 #define CIRCLE_R     32
 #define CIRCLE_INSET 16
+#define KNOB_D       44
+#define KNOB_R       (KNOB_D / 2)
+#define KNOB_INSET   ((CELL_W - KNOB_D) / 2)
 #define DOT_COUNT    24
-#define DOT_R        26
+#define DOT_R        32   /* outside the knob circle, inside the carcase */
 #define DOT_D        4
-#define STICK_W      4
-#define STICK_L      23
-#define STICK_R      2
-#define HUB_D        6
+#define STICK_W      6
+#define STICK_L      24
+#define STICK_R      3
 #define PX_PER_UNIT  3
 #define TAP_SLOP     6
 #define BLINK_MS     600
@@ -147,28 +151,26 @@ static void knob_apply(int slot)
 
 static void knob_build(lv_obj_t *cell, int slot)
 {
-    lv_obj_t *circle = cassette_border_box(cell, CIRCLE_INSET, CIRCLE_INSET,
-                                           CIRCLE_D, CIRCLE_D, CIRCLE_R,
+    lv_obj_t *circle = cassette_border_box(cell, KNOB_INSET, KNOB_INSET,
+                                           KNOB_D, KNOB_D, KNOB_R,
                                            k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
     s_circle[slot] = circle;
 
+    int cx = CELL_W / 2, cy = CELL_H / 2;
     for (int i = 0; i < DOT_COUNT; i++) {
         float a = (float)i * 15.0f * 3.14159265358979323846f / 180.0f;
-        int x = CIRCLE_D / 2 + (int)lroundf((float)DOT_R * sinf(a));
-        int y = CIRCLE_D / 2 - (int)lroundf((float)DOT_R * cosf(a));
-        s_dot[slot][i] = cassette_box(circle, x - DOT_D / 2, y - DOT_D / 2,
+        int x = cx + (int)lroundf((float)DOT_R * sinf(a));
+        int y = cy - (int)lroundf((float)DOT_R * cosf(a));
+        s_dot[slot][i] = cassette_box(cell, x - DOT_D / 2, y - DOT_D / 2,
                                       DOT_D, DOT_D, DOT_D / 2, k_col_eq_dim);
     }
 
-    /* The stick starts at the hub and reaches just inside the dot ring. Its pivot is the
-     * bottom centre, which is the circle's centre once it sits at y = 32 - STICK_L. */
-    s_stick[slot] = cassette_box(circle, CIRCLE_D / 2 - STICK_W / 2, CIRCLE_D / 2 - STICK_L,
+    /* The stem is outside the circle: its bottom is the rim, its top is STICK_L further
+     * out, and its pivot is the circle's centre so it swings like the knob's line. */
+    s_stick[slot] = cassette_box(cell, cx - STICK_W / 2, cy - (KNOB_R + STICK_L),
                                  STICK_W, STICK_L, STICK_R, k_col_eq_tick);
     lv_obj_set_style_transform_pivot_x(s_stick[slot], STICK_W / 2, 0);
-    lv_obj_set_style_transform_pivot_y(s_stick[slot], STICK_L, 0);
-
-    cassette_box(circle, CIRCLE_D / 2 - HUB_D / 2, CIRCLE_D / 2 - HUB_D / 2,
-                 HUB_D, HUB_D, HUB_D / 2, k_col_eq_tick);
+    lv_obj_set_style_transform_pivot_y(s_stick[slot], KNOB_R + STICK_L, 0);
 
     knob_apply(slot);
 }

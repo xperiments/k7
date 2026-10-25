@@ -238,9 +238,10 @@ entry view is the full-scale cassette; the view shows it with the transport draw
 cassette is already at the 134/256 control pose. It slides in from the right edge over the
 same 260 ms as the drawer and slides back out when the drawer leaves.
 
-Each knob is a 24-dot crown at r=26 inside the circle and a 4x23 stick pivoted on the
+Each knob is a 44 px circle - 30% smaller than the arrows' 64 px one - with a 24-dot
+crown at r=32 outside it and a 6x24 stem running from the rim outward, pivoted on the
 circle's centre. 0 dB is at twelve o'clock; the right side cuts and the left side boosts,
-and the arc lights from twelve to the stick on the side it points. A tap on a knob enters
+and the arc lights from twelve to the stem on the side it points. A tap on a knob enters
 edit mode: a transparent 800x480 overlay above every object owns the touch, a horizontal
 drag moves the value at 3 px per unit after a 6 px dead zone (right lowers it, left raises
 it), and only a tap on the active knob leaves. Tapping another knob switches the edit. While

@@ -4,9 +4,11 @@
  *
  * Six 96 px cells in two touching columns, the same carcase as the transport's P/R/W:
  * the first column holds GAIN above the < and > transport arrows, the second the HI,
- * MED and LOW knobs. The four knobs are a 24-dot crown with a stick; 0 dB is at twelve
- * o'clock, the right side cuts and the left side boosts. The two arrows are the only
- * next/previous controls on the screen.
+ * MED and LOW knobs. The arrows keep the buttons' 64 px circle. Each knob is a 44 px
+ * circle (30% smaller), a 24-dot crown outside it at r=32, and a 6x24 stem from the rim
+ * outward, pivoted on the circle's centre. 0 dB is at twelve o'clock, the right side cuts
+ * and the left side boosts. The two arrows are the only next/previous controls on the
+ * screen.
  *
  * A tap on a knob enters edit mode, which is modal: a transparent overlay covers the
  * whole screen, a horizontal drag moves the knob (right cuts, left boosts) and everything

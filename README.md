@@ -567,8 +567,9 @@ scale on a click; they are placeholders and do not drive the transport.
 
 The DJ block is six 96 px carcases in two touching columns at x=592..784, rows at
 76/170/264: GAIN above the `<` and `>` arrows in the first column, HI, MED and LOW in the
-second. The four knobs are a 24-dot crown and a stick, 0 dB at twelve o'clock, right cuts
-and left boosts; the arrows are the only next/previous controls and call
+second. The four knobs are a 44 px circle (30% smaller than the arrows'), a 24-dot crown
+outside it and a stem from the rim outward, 0 dB at twelve o'clock, right cuts and left
+boosts; the arrows are the only next/previous controls and call
 `mini_icecast_prev()` / `mini_icecast_skip()`. A tap on a knob enters a modal edit mode: a
 transparent overlay owns the screen, a horizontal drag moves the value (left raises, right
 lowers), the active circle blinks, and only a tap on the active knob leaves. While it is up

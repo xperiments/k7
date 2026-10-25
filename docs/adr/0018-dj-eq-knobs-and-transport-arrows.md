@@ -17,10 +17,12 @@ every listener hears, and there is no local audio path to fight with. The PCM se
   x=592..784, three rows at y=76/170/264, so the block is 192x284 and leaves 16 px to the
   screen. The 16 px is the inset of the 64 px circle inside each carcase, not a gap. The
   left column is GAIN above the `<` and `>` arrows; the right column is HI, MED and LOW.
-- **The knobs are a 24-dot crown and a stick.** The crown is at r=26; the stick is 4x23
-  pivoted on the circle's centre. 0 dB is at twelve o'clock, the right side cuts and the
-  left side boosts; the arc lights from twelve to the stick on the side it points. The
-  twelve o'clock dot is the 0 dB tick.
+- **The knobs are a small circle, an outside crown and a rim stem.** The arrows keep the
+  buttons' 64 px circle; the knobs use 44 px (30% smaller). The 24-dot crown is at r=32,
+  outside that circle, and the 6x24 stem runs from the rim outward, pivoted on the
+  circle's centre. 0 dB is at twelve o'clock, the right side cuts and the left side boosts;
+  the arc lights from twelve to the stem on the side it points. The twelve o'clock dot is
+  the 0 dB tick.
 - **The ranges are the DJ ones.** GAIN -12..+12 dB, default -6; bands -26..+6 dB, default
   0, at 200 Hz (low shelf), 1 kHz (bell, Q 0.7) and 4 kHz (high shelf). The trim is applied
   before the bands. The int16 clamp is the last stage.
