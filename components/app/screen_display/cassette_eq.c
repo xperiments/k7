@@ -244,19 +244,19 @@ static void icon_build(lv_obj_t *cell, int slot)
     int c = CIRCLE_D / 2;
 
     if (slot == SLOT_PREV) {
-        /* Folder: the body centred on the circle, the tab above its top-left. */
-        cassette_border_box(circle, c - 16, c - 11, 32, 22, 3,
+        /* Folder: the body 1 px left of the circle's centre, the tab above its top-left. */
+        cassette_border_box(circle, c - 17, c - 11, 32, 22, 3,
                             k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
-        cassette_border_box(circle, c - 16, c - 17, 12, 7, 2,
+        cassette_border_box(circle, c - 17, c - 17, 12, 7, 2,
                             k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
     } else {
         /* Rec mode: the two circles of the owner's voicemail mark and the bar between
-         * their bottoms, the whole mark centred. */
-        cassette_border_box(circle, c - 16, c - 8, 14, 14, 7,
+         * their bottoms, the whole mark 3 px left of the circle's centre. */
+        cassette_border_box(circle, c - 19, c - 8, 14, 14, 7,
                             k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
-        cassette_border_box(circle, c + 2, c - 8, 14, 14, 7,
+        cassette_border_box(circle, c - 1, c - 8, 14, 14, 7,
                             k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
-        cassette_box(circle, c - 4, c + 6, 8, 2, 1, k_col_eq_lit);
+        cassette_box(circle, c - 7, c + 6, 8, 2, 1, k_col_eq_lit);
     }
 }
 
