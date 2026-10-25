@@ -10,6 +10,10 @@
  * the only clickable object on the screen, so the arrows, the drawer and the Levels cannot
  * take the same touch. The two-finger menu bypasses LVGL (the touch adapter calls the
  * view directly), which is why the view also checks is_editing().
+ *
+ * The block is hidden at rest, so the entry view is the untouched full-scale cassette; the
+ * view shows it with the transport drawer and hides it again, leaving edit mode, when the
+ * drawer slides away.
  */
 #include <math.h>
 
@@ -72,6 +76,7 @@ static lv_obj_t *s_dot[KNOB_SLOTS][DOT_COUNT];
 static lv_obj_t *s_stick[KNOB_SLOTS];
 static int s_value[KNOB_SLOTS];       /* 0..100; 50 is 0 dB on every knob */
 static int s_active;                  /* -1, or the knob slot being edited */
+static bool s_shown;                  /* the block is out with the transport drawer */
 static lv_obj_t *s_overlay;
 static lv_point_t s_press;
 static int s_start_value;
@@ -319,8 +324,9 @@ static void end_edit(void)
 static void cell_clicked_cb(lv_event_t *e)
 {
     /* The overlay should own the touch while editing; the guard comes first so even a
-     * click that somehow reaches a cell cannot skip a track. */
-    if (s_active >= 0) return;
+     * click that somehow reaches a cell cannot skip a track. A hidden block takes no
+     * click at all. */
+    if (s_active >= 0 || !s_shown) return;
 
     int slot = (int)(intptr_t)lv_event_get_user_data(e) - 1;
     /* The two-finger menu is reserved: a gesture that starts on a cell must not also be
@@ -372,17 +378,35 @@ void cassette_eq_create(lv_obj_t *parent)
         lv_obj_t *cell = cell_create(parent, slot);
         if (slot < KNOB_SLOTS) knob_build(cell, slot);
         else arrow_build(cell, slot);
+        lv_obj_set_hidden(cell, true);
     }
+    s_shown = false;
 
     /* The audio starts from the same values; this makes a rebuilt screen agree with it. */
     for (int slot = 0; slot < KNOB_SLOTS; slot++) knob_send(slot);
 }
 
+void cassette_eq_set_shown(bool shown)
+{
+    if (shown == s_shown) return;
+    s_shown = shown;
+
+    /* A hidden block cannot own the edit overlay. The drawer's show/hide is gated on edit
+     * mode by the view, but keeping the rule here makes it true from any caller. */
+    if (!shown && s_active >= 0) end_edit();
+
+    for (int slot = 0; slot < SLOT_COUNT; slot++)
+        if (s_cell[slot]) lv_obj_set_hidden(s_cell[slot], !shown);
+
+    if (shown) cassette_eq_raise();
+}
+
 void cassette_eq_raise(void)
 {
     /* Raising the cells above the overlay would break the modal edit; the view does not
-     * ask while editing, but the guard keeps that true from any caller. */
-    if (s_active >= 0) return;
+     * ask while editing, but the guard keeps that true from any caller. A hidden block has
+     * nothing to raise. */
+    if (!s_shown || s_active >= 0) return;
     for (int slot = 0; slot < SLOT_COUNT; slot++)
         if (s_cell[slot]) lv_obj_move_foreground(s_cell[slot]);
 }

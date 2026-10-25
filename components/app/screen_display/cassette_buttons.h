@@ -4,8 +4,9 @@
  *
  * The drawer is a 120 px panel that starts off-screen to the left and hidden. A
  * one-finger right swipe brings it in and a left swipe puts it away; the view turns
- * those two intents into cassette_buttons_set_shown(). The cassette rests at 134/256
- * (148..550), so the drawer already has room and no longer asks the view for a pose.
+ * those two intents into cassette_buttons_set_shown(). While the drawer is out the
+ * view scales the cassette to 134/256 and pulls it left to x=148, so the tape clears
+ * the panel and the DJ block's column on the right.
  *
  * The drawer holds three buttons down the left edge. Each is line art: a 96x96
  * rectangle rounded by 8 px, a 64 px circle at its centre, and the letter P, R or W
@@ -30,13 +31,18 @@
 extern "C" {
 #endif
 
-/* How long the drawer takes to slide in or out. */
+/* How long the drawer takes to slide in or out. The view runs the cassette's pose over
+ * the same time, so the panel, the scaled tape and the DJ block arrive as one picture. */
 #define CASSETTE_BUTTONS_SLIDE_MS 260
 
+/* The drawer reports a visibility change as it starts the slide. The view uses it to
+ * put the cassette at its control pose (134/256) and to show the DJ block with the
+ * drawer, or to give the cassette back to the peek. `ctx` is the value given to create(). */
+typedef void (*cassette_buttons_room_cb_t)(bool shown, void *ctx);
+
 /* Build the hidden drawer and its three buttons as children of `screen`, above whatever
- * exists when this is called. The drawer no longer reports a room request: the resting
- * pose already leaves it clear. */
-void cassette_buttons_create(lv_obj_t *screen);
+ * exists when this is called. `room` is optional. */
+void cassette_buttons_create(lv_obj_t *screen, cassette_buttons_room_cb_t room, void *ctx);
 
 /* Slide the drawer in (true) or out (false). A call while the other slide is running
  * reverses from the current position; a call that names the state already held does

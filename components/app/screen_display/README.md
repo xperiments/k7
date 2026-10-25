@@ -58,10 +58,11 @@ and nothing else. Everything else is private:
   animation bobs both tags; each tether is a static line whose lower end follows the hub.
 - `cassette_buttons.c` — the transport drawer: the three line-art buttons P, R, W, each
   with a prebuilt pressed and an unpressed state, and the left-edge panel that slides in
-  and out. Its interface is `create(screen)`, `set_shown()`, `is_shown()` and `raise()`.
-  A press swaps states and a click pulses the button's scale. The buttons are
-  placeholders: they wire no transport action. The resting pose leaves the drawer clear, so
-  the drawer makes no room request.
+  and out. Its interface is `create(screen, room)`, `set_shown()`, `is_shown()` and
+  `raise()`. A press swaps states and a click pulses the button's scale. The buttons are
+  placeholders: they wire no transport action. The drawer reports its visibility through
+  the `room` callback; the view turns that into the 134/256 control pose and shows the DJ
+  block with it.
 - `cassette_eq.c` — the DJ block at the right edge: six 96 px carcases in two touching
   columns, the same carcase as P/R/W. The first column is GAIN above the < and > arrows;
   the second is HI, MED and LOW. The four knobs are a 24-dot crown and a stick (0 dB at
@@ -203,13 +204,14 @@ Level change puts everything away in one frame.
 
 The three buttons at the left edge live in `cassette_buttons.c`. The drawer is a 120 px
 panel, hidden off-screen at rest; a one-finger right swipe slides it in and a left swipe
-slides it out, both over 260 ms. The cassette rests at 134/256 (`CASSETTE_SCALE_REST`):
-the tape's box is 402x232 px and runs from x=148 to 550, which leaves the drawer clear on
-the left and the DJ block clear on the right. That is the pose the drawer used to ask for;
-the drawer no longer changes it and makes no room request. The three buttons start 76 px
-from the top, so the middle button R is on y=218; the rest pose's -20 px dy puts the
-cassette's centre near that line. Its bottom edge also clears the peek's bar, so the peek's
--60 px lift is not added on top: the peek's 200/256 is the only room request left.
+slides it out, both over 260 ms. The entry view is the untouched full-scale cassette; while
+the drawer is out the view puts it at 134/256 (`CASSETTE_SCALE_BUTTONS`), which brings the
+tape's box to 402x232 px at x=148..550: the 120 px drawer is clear on the left and the
+192 px DJ block at 592..784 has room on the right. The DJ block is shown and hidden with the
+drawer, and the pose runs over the same 260 ms. The three buttons start 76 px from the top,
+so the middle button R is on y=218; the -20 px dy puts the cassette's centre near that line.
+The drawer wins over the peek while it is out; when it slides away the peek's 200/256 and
+-60 px lift come back.
 
 Each button is 96x96, rounded by 8 px, with a 64 px circle at its centre and P, R or W
 centred in the circle in Jura 36. Both states are built once: the unpressed state is the
@@ -231,7 +233,9 @@ The six cells at the right edge live in `cassette_eq.c`. Two touching 96 px colu
 x=592..784, three rows at y=76/170/264, so the block is 192x284 and its right edge leaves
 16 px to the screen. The 16 px is the inset of the 64 px circle inside each carcase, not a
 gap: the carcases share their borders like the P/R/W drawer. The first column is GAIN above
-the `<` and `>` arrows; the second is HI, MED and LOW.
+the `<` and `>` arrows; the second is HI, MED and LOW. The block is hidden at rest, so the
+entry view is the full-scale cassette; the view shows it with the transport drawer, when the
+cassette is already at the 134/256 control pose.
 
 Each knob is a 24-dot crown at r=26 inside the circle and a 4x23 stick pivoted on the
 circle's centre. 0 dB is at twelve o'clock; the right side cuts and the left side boosts,

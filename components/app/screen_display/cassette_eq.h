@@ -16,7 +16,9 @@
  *
  * The block is a screen child, created after the Level sheets, so it is chrome like the
  * transport drawer: it stays above the sheets and the view raises it after a vertical
- * swipe. It is always visible; the cassette rests at the smaller pose that leaves it room.
+ * swipe. It is hidden at rest, so the entry view is the untouched full-scale cassette; the
+ * view shows it together with the transport drawer, when the cassette is already at the
+ * 134/256 control pose that leaves the right column room.
  */
 #include "lvgl.h"
 
@@ -24,10 +26,16 @@
 extern "C" {
 #endif
 
-/* Build the block on `parent` (the screen). Call once, after the Levels and the drawer. */
+/* Build the block on `parent` (the screen), hidden. Call once, after the Levels and the
+ * drawer. */
 void cassette_eq_create(lv_obj_t *parent);
 
-/* Keep the block above the Level sheets after one of them raises itself. */
+/* Show or hide the block with the transport drawer. Hiding it also leaves edit mode: a
+ * hidden block must not own the overlay. */
+void cassette_eq_set_shown(bool shown);
+
+/* Keep the block above the Level sheets after one of them raises itself. A hidden block
+ * does nothing. */
 void cassette_eq_raise(void);
 
 /* True while a knob is in edit mode. The overlay owns the touch; the view must drop every

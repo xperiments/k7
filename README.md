@@ -558,9 +558,10 @@ idling through a press), and the last point the controller reported is latched s
 press is one press rather than one per read. A tap on the screen is **not** an action: next
 and previous are the two arrows in the DJ block at the right edge. A tap on the drawer
 itself is absorbed there. A one-finger right swipe slides the transport drawer in from the
-left edge, a left swipe slides it back out. The cassette rests at 134/256 (148..550), so
-the 120 px drawer on the left and the 192 px DJ block on the right both have room; the
-drawer no longer changes the pose. The drawer's three line-art buttons (P, R, W) each
+left edge and shows the DJ block at the right, a left swipe slides them back out. The
+cassette enters at full scale; while the controls are out it scales to 134/256 (148..550),
+so the 120 px drawer on the left and the 192 px DJ block on the right both have room. A
+left swipe restores the full view. The drawer's three line-art buttons (P, R, W) each
 prebuild a pressed and an unpressed state, swap them on press and release, and pulse their
 scale on a click; they are placeholders and do not drive the transport.
 

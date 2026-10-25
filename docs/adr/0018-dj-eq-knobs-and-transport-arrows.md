@@ -35,10 +35,12 @@ every listener hears, and there is no local audio path to fight with. The PCM se
 - **Only the arrows do next/previous on the screen.** The screen's tap no longer skips a
   track (`SCREEN_INTENT_TAP` is removed) and the BOOT button no longer skips either. The
   P/R/W buttons remain placeholders.
-- **The cassette rests at 134/256**, 148..550, so both the 120 px drawer on the left and the
-  block on the right have room. The drawer no longer makes a room request; the peek's
-  200/256 is the only one. The block is chrome above the Level sheets, raised with the
-  drawer after a vertical swipe.
+- **The cassette enters at full scale; the controls get the 134/256 pose.** A right swipe
+  brings the transport drawer and the DJ block in and scales the cassette to 134/256,
+  148..550, so both the 120 px drawer on the left and the block on the right have room. A
+  left swipe puts them away and restores the full entry view. The block is hidden at rest,
+  shown and hidden with the drawer, and chrome above the Level sheets. The peek's 200/256
+  is the other room request and comes back when the drawer is away.
 
 ## Considered options
 
@@ -67,11 +69,13 @@ every listener hears, and there is no local audio path to fight with. The PCM se
 - `mini_icecast_eq_set()` and `mini_icecast_gain_set()` are the public targets; the filter
   state and the coefficient rebuild stay on the broadcast task.
 - `cassette_eq` owns the block, the overlay, the blink and the audio calls. The view creates
-  it after the Levels, raises it with the drawer, and drops intents while `is_editing()`.
+  it after the Levels, shows and hides it with the drawer, raises it with the drawer, and
+  drops intents while `is_editing()`.
 - `screen_input` loses `SCREEN_INTENT_TAP` and the click handler; `appliance` loses the
   BOOT-button skip. The drawer stays at the left edge and keeps its placeholders.
-- The block is always visible, including over the Label and Artwork sheets. At the peek's
-  200/256 the cassette is wider than the block's left edge and passes under it. Whether the
-  block should hide on those Levels is still open; this record keeps it chrome.
+- The block is hidden at rest and shown with the drawer, including over the Label and
+  Artwork sheets while the controls are out. At the peek's 200/256 (drawer away) the block
+  is hidden, so the entry and peek views are unaffected. Whether the block should hide on
+  those Levels while the drawer is out is still open; this record keeps it chrome.
 - The MCP keeps `player_skip` and `player_prev`: it is the parallel control surface and the
   one exception to "only these buttons".

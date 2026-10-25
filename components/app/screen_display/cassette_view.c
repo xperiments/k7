@@ -41,17 +41,16 @@
 
 static const char *TAG = "screen";
 
-/* The peek shrinks the cassette so the bar clears the tape; the bar's slide is
- * 260 ms, and the pose must run over the same time so the two arrive as one picture.
- * The rest pose is the one the left drawer used to ask for: 134/256 puts the tape's
- * 402 px box at 148..550, which clears the 120 px drawer on the left and leaves room
- * for the 192 px DJ block at 592..784 on the right. The VU lands at about x=450. */
+/* The entry view is the untouched full-scale cassette. The transport drawer asks for the
+ * control pose: 134/256 puts the tape's 402 px box at 148..550, which clears the 120 px
+ * drawer on the left and leaves room for the 192 px DJ block at 592..784 on the right. The
+ * view shows the block with the drawer, and the pose runs over the drawer's 260 ms slide.
+ * The peek has its own 200/256 and -60 px lift; the drawer wins while it is out. */
 #define CASSETTE_SCALE_LABEL   200
-#define CASSETTE_SCALE_REST    134
-#define CASSETTE_REST_DX       (-51)
-#define CASSETTE_REST_DY       (-20)
-/* The peek's bar slides in 260 ms; the pose runs with it so the two arrive as one. */
-#define CASSETTE_ROOM_MS       260
+#define CASSETTE_SCALE_BUTTONS 134
+#define CASSETTE_BUTTONS_DX    (-51)
+#define CASSETTE_BUTTONS_DY    (-20)
+#define CASSETTE_ROOM_MS       CASSETTE_BUTTONS_SLIDE_MS
 
 static cassette_t *s_model;
 static lv_obj_t *s_cassette;   /* the container everything the body draws hangs off */
@@ -59,21 +58,26 @@ static cassette_pose_t s_pose = { CASSETTE_SCALE_NONE, 0, 0 };
 static cassette_pose_t s_pose_from;   /* the pose the change in flight started at */
 static cassette_pose_t s_pose_to;     /* and the one it is heading for */
 static bool s_peek_wants_room;        /* the peek is up */
+static bool s_buttons_want_room;      /* the transport drawer (and the DJ block) is out */
 
 /* ------------------------------------------------------------------ layout */
 
-/* The peek asks the cassette for room. The rest pose already leaves the left drawer and
- * the right DJ block clear, so the drawer no longer changes it; only the peek's 200/256
- * and -60 px lift do. A Level change asks for the answer instantly; a swipe runs it over
- * the slide it accompanies. */
+/* The drawer and the peek both ask the cassette for room. The view keeps one pose, so it
+ * arbitrates: the drawer is the smaller of the two (134/256) and wins while it is out, and
+ * at that size the tape already clears the peek's bar, so the peek's -60 px lift is not
+ * added on top. At rest the cassette is at its design size, the entry view. A Level change
+ * asks for the answer instantly; a swipe runs it over the slide it accompanies. */
 static void room_apply(bool instant)
 {
-    int scale = CASSETTE_SCALE_REST;
-    int dx = CASSETTE_REST_DX;
-    int dy = CASSETTE_REST_DY;
-    if (s_peek_wants_room) {
+    int scale = CASSETTE_SCALE_NONE;
+    int dx = 0;
+    int dy = 0;
+    if (s_buttons_want_room) {
+        scale = CASSETTE_SCALE_BUTTONS;
+        dx = CASSETTE_BUTTONS_DX;
+        dy = CASSETTE_BUTTONS_DY;
+    } else if (s_peek_wants_room) {
         scale = CASSETTE_SCALE_LABEL;
-        dx = 0;
         dy = -60;
     }
     cassette_view_set_scale(scale, dx, dy, instant ? 0 : CASSETTE_ROOM_MS);
@@ -84,6 +88,15 @@ static void levels_room_cb(bool shown, bool instant, void *ctx)
     (void)ctx;
     s_peek_wants_room = shown;
     room_apply(instant);
+}
+
+/* The drawer reports its slide as it starts, so the tape, the panel and the DJ block move
+ * together. */
+static void buttons_room_cb(bool shown, void *ctx)
+{
+    (void)ctx;
+    s_buttons_want_room = shown;
+    room_apply(false);
 }
 
 /* Re-place every part at the current pose. The parts keep the pose themselves, so the
@@ -171,9 +184,11 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
     switch (intent) {
         case SCREEN_INTENT_BUTTONS_SHOW:
             cassette_buttons_set_shown(true);
+            cassette_eq_set_shown(true);
             break;
         case SCREEN_INTENT_BUTTONS_HIDE:
             cassette_buttons_set_shown(false);
+            cassette_eq_set_shown(false);
             break;
         case SCREEN_INTENT_LEVEL_DOWN:
             cassette_levels_swipe_down();
@@ -217,9 +232,8 @@ void cassette_view_create(void)
     lv_obj_set_scrollable(s_cassette, false);
     lv_obj_set_clickable(s_cassette, false);
 
-    /* The tapes first, then the meter: the meter paints inside the right hub. The rest
-     * pose is the one the DJ block leaves room for, so the first paint is already it. */
-    s_pose = cassette_pose(CASSETTE_SCALE_REST, CASSETTE_REST_DX, CASSETTE_REST_DY);
+    /* The tapes first, then the meter: the meter paints inside the right hub. The first
+     * paint is the entry view, the full-scale cassette. */
     cassette_tapes_create(s_cassette);
     cassette_meter_create(s_cassette);
     cassette_place();
@@ -231,10 +245,10 @@ void cassette_view_create(void)
 
     /* The transport drawer is chrome, above every sheet: created after the Levels, and
      * raised again after a vertical swipe. It starts off screen and hidden. */
-    cassette_buttons_create(scr);
+    cassette_buttons_create(scr, buttons_room_cb, NULL);
 
     /* The DJ block is chrome too, on the other edge; created last so it starts above the
-     * sheets, and raised with the drawer after a vertical swipe. */
+     * sheets, hidden with the drawer and raised with it after a vertical swipe. */
     cassette_eq_create(scr);
 
     /* The model: the tapes' frame count is the angular resolution; the geometry
@@ -247,9 +261,10 @@ void cassette_view_create(void)
     if (s_model) apply_frame(cassette_step(s_model, NULL, lv_tick_get()));
 
     /* The picture is built. Make the screen the one thing a finger can hit, then let
-     * screen_input decide what a touch means: a right swipe slides the transport in, a
-     * left swipe slides it out, a vertical one moves a Level, and a two-finger one is the
-     * menu. A tap is not an action; next/previous belong to the block's arrows. */
+     * screen_input decide what a touch means: a right swipe slides the transport and the
+     * DJ block in, a left swipe slides them out, a vertical one moves a Level, and a
+     * two-finger one is the menu. A tap is not an action; next/previous belong to the
+     * block's arrows. */
     lv_obj_set_clickable(scr, true);
     screen_input_attach(scr, screen_intent_cb, NULL);
 }

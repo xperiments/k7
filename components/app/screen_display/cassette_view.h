@@ -26,13 +26,12 @@
 void cassette_view_create(void);
 void cassette_view_update(const mini_icecast_status_t *st);
 
-/* Where the cassette sits: 256 (CASSETTE_SCALE_NONE) is its design size, 200 is 0.78x
- * (the peek), and 134 is 0.52x (the rest pose, which leaves the left drawer and the right
- * DJ block room). The design box is centred in the panel and then moved by
- * (offset_x, offset_y) screen pixels - right and down positive. The whole layout is
- * re-placed at the new pose: at once when ms is 0, or eased over ms milli-seconds, with
- * the size and the offset moving together. The scale is clamped to 32..1024; the offset is
- * not.
+/* Where the cassette sits: 256 (CASSETTE_SCALE_NONE) is the full entry view, 200 is 0.78x
+ * (the peek), and 134 is 0.52x (the control view: the left drawer and the right DJ block).
+ * The design box is centred in the panel and then moved by (offset_x, offset_y) screen
+ * pixels - right and down positive. The whole layout is re-placed at the new pose: at once
+ * when ms is 0, or eased over ms milli-seconds, with the size and the offset moving
+ * together. The scale is clamped to 32..1024; the offset is not.
  *
  * Called under the LVGL lock, like everything else on the screen. */
 void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms);

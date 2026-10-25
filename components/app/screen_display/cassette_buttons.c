@@ -70,6 +70,8 @@ typedef struct {
 static lv_obj_t *s_panel;
 static cassette_button_t s_buttons[BUTTON_COUNT];
 static bool s_shown;
+static cassette_buttons_room_cb_t s_room;
+static void *s_room_ctx;
 
 /* --------------------------------------------------------------- the buttons */
 
@@ -242,9 +244,11 @@ static void panel_slide(bool shown)
     lv_anim_start(&a);
 }
 
-void cassette_buttons_create(lv_obj_t *screen)
+void cassette_buttons_create(lv_obj_t *screen, cassette_buttons_room_cb_t room, void *ctx)
 {
     if (!screen || s_panel) return;
+    s_room = room;
+    s_room_ctx = ctx;
     s_shown = false;
 
     s_panel = lv_obj_create(screen);
@@ -273,6 +277,7 @@ void cassette_buttons_set_shown(bool shown)
 {
     if (!s_panel || shown == s_shown) return;
     s_shown = shown;
+    if (s_room) s_room(shown, s_room_ctx);
     panel_slide(shown);
     ESP_LOGI(TAG, "buttons %s", shown ? "shown" : "hidden");
 }
