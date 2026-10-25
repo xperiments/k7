@@ -572,7 +572,8 @@ outside it and a line from the centre to the rim, 0 dB at twelve o'clock, right 
 left boosts; the arrows are the only next/previous controls and call
 `mini_icecast_prev()` / `mini_icecast_skip()`. A tap on a knob enters a modal edit mode: a
 transparent overlay owns the screen, a horizontal drag moves the value (left raises, right
-lowers), the active circle blinks, and only a tap on the active knob leaves. While it is up
+lowers), a double tap resets a knob to 0 dB, the active circle blinks, and only a tap on the
+active knob leaves. While it is up
 nothing else responds - the arrows, P/R/W, the drawer and the Levels - and the view drops
 every screen intent, including the two-finger menu. The audio is
 `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell and a 4 kHz high shelf plus

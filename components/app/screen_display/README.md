@@ -244,7 +244,8 @@ o'clock; the right side cuts and the left side boosts, and the arc lights from t
 the line on the side it points. A tap on a knob enters
 edit mode: a transparent 800x480 overlay above every object owns the touch, a horizontal
 drag moves the value at 3 px per unit after a 6 px dead zone (right lowers it, left raises
-it), and only a tap on the active knob leaves. Tapping another knob switches the edit. While
+it), and only a tap on the active knob leaves. Tapping another knob switches the edit. A
+double tap on any knob resets it to 0 dB and leaves edit mode. While
 the overlay is up nothing else responds - the arrows, P/R/W, the drawer and the Levels are
 all behind it - and the view's sink drops every screen intent too, because the two-finger
 menu arrives from the touch adapter directly. The active circle blinks its border

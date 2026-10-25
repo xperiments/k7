@@ -12,8 +12,9 @@
  * A tap on a knob enters edit mode, which is modal: a transparent overlay covers the
  * whole screen, a horizontal drag moves the knob (right cuts, left boosts) and everything
  * else - the arrows included - is blocked until the active knob is tapped again. Tapping
- * another knob switches the edit to it. While edit mode is on, the view ignores every
- * screen intent, because the touch adapter's two-finger menu arrives directly.
+ * another knob switches the edit to it. A double tap on any knob resets it to 0 dB and
+ * leaves edit mode, like a mixer's centre detent. While edit mode is on, the view ignores
+ * every screen intent, because the touch adapter's two-finger menu arrives directly.
  *
  * The block is a screen child, created after the Level sheets, so it is chrome like the
  * transport drawer: it stays above the sheets and the view raises it after a vertical

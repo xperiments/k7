@@ -28,11 +28,12 @@ every listener hears, and there is no local audio path to fight with. The PCM se
 - **Edit mode is modal.** A tap on a knob puts a transparent 800x480 overlay above every
   object. A horizontal drag moves the value at 3 px per unit (right lowers, left raises)
   after a 6 px dead zone; only a tap on the active knob leaves, and a tap on another knob
-  switches the edit. While it is up nothing else responds - the arrows, P/R/W, the drawer
-  and the Levels are behind the overlay - and the view drops every screen intent too,
-  because the touch adapter's two-finger menu arrives directly. The active circle blinks
-  its border 100% -> 27% -> 100%, 600 ms each way. The MCP is not a gesture or a click and
-  is untouched.
+  switches the edit. A double tap on any knob resets it to 0 dB and leaves, the mixer's
+  centre-detent gesture. While it is up nothing else responds - the arrows, P/R/W, the
+  drawer and the Levels are behind the overlay - and the view drops every screen intent
+  too, because the touch adapter's two-finger menu arrives directly. The active circle
+  blinks its border 100% -> 27% -> 100%, 600 ms each way. The MCP is not a gesture or a
+  click and is untouched.
 - **Only the arrows do next/previous on the screen.** The screen's tap no longer skips a
   track (`SCREEN_INTENT_TAP` is removed) and the BOOT button no longer skips either. The
   P/R/W buttons remain placeholders.
