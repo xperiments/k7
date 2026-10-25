@@ -1,12 +1,13 @@
 # The transport moves to a left-edge drawer, and the horizontal swipes drive it
 
 **Amended by ADR 0019:** the vertical Level gestures this ADR weighed the horizontal
-swipes against are gone. The up swipe is the peek and the down swipe does nothing; the
+swipes against are gone. The up swipe opens the peek and the down swipe closes it; the
 drawer's left/right swipes, the 134/256 control pose and its arbitration are unchanged.
 
 **Amended again:** the drawer's three buttons are P, `<` and `>`; the `<` and `>` call
 `mini_icecast_prev()` / `mini_icecast_skip()` and are the transport's next/previous, while
 P stays a placeholder. The DJ block's freed cells are the Filebrowser and Rec placeholders.
+While the drawer and the DJ block are out, either horizontal swipe puts them away.
 
 The cassette screen's tap and one-finger left/right swipe were the transport: a tap skipped
 to the next track and the swipes were next/previous. The product wants the transport

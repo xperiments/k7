@@ -11,7 +11,8 @@
  * reserved two-finger gesture are decided here, so the view does not have to: nothing in
  * this module calls mini_icecast, touches the peek or slides the button drawer.
  *
- * A left/right swipe hides or shows the transport drawer at the left edge. An up swipe at
+ * A right swipe shows the transport drawer at the left edge (with the DJ block); while
+ * they are out, either horizontal swipe hides them. An up swipe at
  * Bare is reported as PEEK_SHOW and a down swipe as PEEK_HIDE: the view raises the peek
  * only from the entry 100% pose and closes it on the down swipe. Two fingers are still the
  * menu's. A tap is not an intent: next and previous are the left drawer's arrows, whose
