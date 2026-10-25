@@ -214,7 +214,7 @@ static void knob_build(lv_obj_t *cell, int slot)
 {
     lv_obj_t *circle = cassette_border_box(cell, KNOB_INSET, KNOB_INSET,
                                            KNOB_D, KNOB_D, KNOB_R,
-                                           k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
+                                           k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 2);
     s_circle[slot] = circle;
 
     int cx = CELL_W / 2, cy = CELL_H / 2;
@@ -274,10 +274,11 @@ static void icon_build(lv_obj_t *cell, int slot)
 static void big_build(lv_obj_t *parent)
 {
     s_big_cell = cassette_border_box(parent, BIG_X, BIG_Y, BIG_D, BIG_D, BIG_R,
-                                     k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 0);
+                                     k_col_bg, LV_OPA_TRANSP, k_col_button_rect, 0);
     s_big_circle = cassette_border_box(s_big_cell, BIG_INSET, BIG_INSET,
                                        BIG_CIRCLE, BIG_CIRCLE, BIG_RADIUS,
-                                       k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, BIG_BORDER);
+                                       k_col_bg, LV_OPA_TRANSP, k_col_button_circle,
+                                       BIG_BORDER);
 
     for (int i = 0; i < DOT_COUNT; i++) {
         float a = (float)i * 15.0f * 3.14159265358979323846f / 180.0f;
@@ -527,12 +528,10 @@ static void cell_double_clicked_cb(lv_event_t *e)
 
 static lv_obj_t *cell_create(lv_obj_t *parent, int slot)
 {
-    /* The Filebrowser and Rec cells are buttons, so their carcase takes the drawer's
-     * rectangle ink; the four knob cells keep the EQ ink. */
-    lv_color_t ink = slot >= KNOB_SLOTS ? k_col_button_rect : k_col_eq_lit;
+    /* All six cells are buttons: the drawer's rectangle ink for the carcase. */
     lv_obj_t *cell = cassette_border_box(parent, cell_x(slot), cell_y(slot),
                                          CELL_W, CELL_H, CELL_R,
-                                         k_col_bg, LV_OPA_TRANSP, ink, 2);
+                                         k_col_bg, LV_OPA_TRANSP, k_col_button_rect, 2);
     lv_obj_set_clickable(cell, true);
     /* The press bubbles so screen_input clears its two-finger latch; the gesture does not,
      * so a swipe that starts on a cell is not a drawer or Level gesture. */

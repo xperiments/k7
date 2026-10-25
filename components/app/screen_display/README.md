@@ -212,10 +212,10 @@ x=593..784 (the first column nudged 1 px right; the second stays at 688), three 
 y=76/170/264, so the block is 191x284 and its right edge leaves
 16 px to the screen. The 16 px is the inset of the 64 px circle inside each carcase, not a
 gap: the carcases share their borders like the left drawer's. The first column is GAIN
-above the Filebrowser and Rec placeholders; the second is HI, MED and LOW. The two
-placeholder cells are buttons, so their carcases use `k_col_button_rect` and their circles
-and icons `k_col_button_circle`, the drawer's two inks; the four knobs keep the EQ inks.
-The block is
+above the Filebrowser and Rec placeholders; the second is HI, MED and LOW. All six cells
+use the drawer's two inks: `k_col_button_rect` for the carcases and `k_col_button_circle`
+for the circles (and the two placeholder icons); the knobs' crown and pointer keep the EQ
+inks. The block is
 hidden at rest, so the entry view is the full-scale cassette; the view shows it with the
 transport drawer, when the cassette is already at the 134/256 control pose. It slides in
 from the right edge over the same 260 ms as the drawer and slides back out when the drawer
