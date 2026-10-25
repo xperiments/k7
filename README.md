@@ -586,11 +586,13 @@ a trim before them, with the DJ ranges (GAIN -12..+12 dB, default 0; bands -26..
 default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder.
 
 The screen has one Level left: Bare, the cassette alone. The Label cover and Artwork
-screens below it, and the two down gestures that reached them, are removed. An up swipe at
-Bare raises the peek: the timeline bar slides up with the Track's elapsed, a growing fill
+screens below it, and the two down gestures that reached them, are removed. At the entry
+100% pose (256/256) an up swipe at Bare raises the peek: the timeline bar slides up with the
+Track's elapsed, a growing fill
 and its total, and two rounded tags float over the cassette in the left hub's column - the
 group above the hub and the song below it, each hanging from that hub by a thin tether,
-bobbing a few pixels out of phase. The next up swipe puts it away; a down swipe does
+bobbing a few pixels out of phase. It cannot be raised while the transport drawer holds the
+134/256 control pose; closing an open peek is always allowed, and a down swipe does
 nothing. The tag texts are the Track's ID3/FLAC tags, read by the tags loader on its own
 task; until they land the group is the artist directory and the song the cleaned filename.
 The two-finger swipe is reserved for the menu: the view still latches it so the same touch

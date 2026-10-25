@@ -203,6 +203,11 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
             cassette_eq_set_shown(false);
             break;
         case SCREEN_INTENT_PEEK_TOGGLE:
+            /* The peek is the entry view's overlay: only the 100% pose (256/256, with
+             * neither the drawer nor the peek asking for room) may raise it. Closing an
+             * open peek is always allowed. */
+            if (!s_peek_wants_room &&
+                (s_buttons_want_room || s_pose.scale != CASSETTE_SCALE_NONE)) break;
             cassette_levels_toggle_peek();
             break;
         case SCREEN_INTENT_MENU:

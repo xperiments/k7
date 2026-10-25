@@ -12,9 +12,10 @@
  * this module calls mini_icecast, touches the peek or slides the button drawer.
  *
  * A left/right swipe hides or shows the transport drawer at the left edge. An up swipe at
- * Bare toggles the peek; a down swipe has no meaning (the Label cover and Artwork screens
- * are gone). Two fingers are still the menu's. A tap is not an intent: next and previous
- * belong to the DJ block's own arrows, whose clicks are their cells' events and never
+ * Bare is reported as PEEK_TOGGLE; the view only raises the peek from the entry 100% pose
+ * and always allows closing it. A down swipe has no meaning (the Label cover and Artwork
+ * screens are gone). Two fingers are still the menu's. A tap is not an intent: next and
+ * previous are the left drawer's arrows, whose clicks are their own cells' and never
  * reach the screen.
  *
  * "One touch, one intent" is the point of the policy. LVGL sends the release of a swipe as

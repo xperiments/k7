@@ -112,9 +112,12 @@ controller simply has no pointer and no peek. A third panel promotes that select
 
 ## Bare and the peek
 
-The cassette screen has one screen: Bare, the cassette alone. The up swipe raises the
-peek - the timeline bar and the two floating tags - and the next up swipe puts it away.
-A down swipe does nothing; the Label cover and Artwork screens that used to sit below
+The cassette screen has one screen: Bare, the cassette alone. At the entry 100% pose
+(256/256) the up swipe raises the peek - the timeline bar and the two floating tags - and
+the next up swipe puts it away. The peek can only be raised from that 100% pose: while the
+transport drawer holds the 134/256 control pose (or the peek's own 200/256 is still
+settling) the up swipe does nothing, and closing an open peek is always allowed. A down
+swipe does nothing; the Label cover and Artwork screens that used to sit below
 Bare are gone, with their two down gestures and the Level machine.
 
 The peek's own 260 ms slide is kept: it moves a 568x52 bar and two 504x44 tags, not the
