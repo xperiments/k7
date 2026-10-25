@@ -3,8 +3,8 @@
  *
  * Six carcases, two touching columns of three, the same 96 px box as the transport
  * buttons. The arrows keep the buttons' 64 px circle; the four knobs are a 30% smaller
- * 44 px circle with the 24-dot crown outside it and a stem from the rim outward. The first
- * column is GAIN above the < and > arrows; the second is HI, MED and LOW.
+ * 44 px circle with the 24-dot crown outside it, and a line from the centre to the rim.
+ * The first column is GAIN above the < and > arrows; the second is HI, MED and LOW.
  *
  * The edit overlay is the whole input policy for the block: while a knob is active it is
  * the only clickable object on the screen, so the arrows, the drawer and the Levels cannot
@@ -48,7 +48,7 @@ LV_FONT_DECLARE(jura_36);
 #define DOT_R        32   /* outside the knob circle, inside the carcase */
 #define DOT_D        4
 #define STICK_W      6
-#define STICK_L      24
+#define STICK_L      KNOB_R   /* the radius: from the centre to the rim */
 #define STICK_R      3
 #define PX_PER_UNIT  3
 #define TAP_SLOP     6
@@ -165,12 +165,12 @@ static void knob_build(lv_obj_t *cell, int slot)
                                       DOT_D, DOT_D, DOT_D / 2, k_col_eq_dim);
     }
 
-    /* The stem is outside the circle: its bottom is the rim, its top is STICK_L further
-     * out, and its pivot is the circle's centre so it swings like the knob's line. */
-    s_stick[slot] = cassette_box(cell, cx - STICK_W / 2, cy - (KNOB_R + STICK_L),
+    /* The stem is inside the circle: from its centre to the rim, its pivot at the
+     * centre, so it swings like the knob's line and stops at the circle's edge. */
+    s_stick[slot] = cassette_box(cell, cx - STICK_W / 2, cy - STICK_L,
                                  STICK_W, STICK_L, STICK_R, k_col_eq_tick);
     lv_obj_set_style_transform_pivot_x(s_stick[slot], STICK_W / 2, 0);
-    lv_obj_set_style_transform_pivot_y(s_stick[slot], KNOB_R + STICK_L, 0);
+    lv_obj_set_style_transform_pivot_y(s_stick[slot], STICK_L, 0);
 
     knob_apply(slot);
 }
