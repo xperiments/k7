@@ -52,7 +52,7 @@ static const char *TAG = "screen";
 #define CASSETTE_BUTTONS_DY    (-20)
 #define CASSETTE_ROOM_MS       CASSETTE_BUTTONS_SLIDE_MS
 /* Edit mode's fade: the cassette recedes while the big virtual knob is up. */
-#define CASSETTE_DIM_MS        180
+#define CASSETTE_DIM_MS        560
 
 static cassette_t *s_model;
 static lv_obj_t *s_cassette;   /* the container everything the body draws hangs off */

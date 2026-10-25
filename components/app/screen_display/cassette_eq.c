@@ -78,7 +78,7 @@ LV_FONT_DECLARE(jura_36);
  * and resets to 0 dB instead of opening the virtual knob. The touch adapter's window is
  * 500 ms, so wait a little past it. */
 #define EDIT_DELAY_MS 550
-#define BIG_FADE_MS  180   /* the virtual knob's own fade; it follows the cassette's */
+#define BIG_FADE_MS  560   /* the virtual knob's own fade; it follows the cassette's */
 #define BLINK_MS     600
 #define BLINK_MIN_OPA 70
 /* The block enters and leaves with the transport drawer's 260 ms slide, from the right
@@ -313,7 +313,7 @@ static void blink_stop(int slot)
     blink_off(s_big_circle);
 }
 
-/* The virtual knob has its own opacity: it fades in only after the cassette's 180 ms
+/* The virtual knob has its own opacity: it fades in only after the cassette's 560 ms
  * fade-out, and fades out before the cassette is brought back. opa_layered keeps the
  * carcase, circle, crown and line together. */
 static void big_opa_cb(void *var, int32_t v)
