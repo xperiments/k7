@@ -244,21 +244,21 @@ o'clock; the right side cuts and the left side boosts, and the arc lights from t
 the line on the side it points.
 
 A tap on a knob opens edit mode after a 550 ms delay: a 3x virtual knob (284 px at x=206,
-the 96+94+94 length, its top on the GAIN button's top, the same 2 px stroke and a 6 px
-centre line) appears over the cassette, while a transparent 800x480 overlay owns the touch.
-The cassette fades out over 560 ms first and the knob fades in only after it; on close the
-knob fades out first and the cassette fades back in. The delay is there so a second tap is
-read as the reset double click instead of opening the knob. Only the big knob's centre
-circle closes. A click on the ring - the carcase outside that circle - is the target point:
-the knob jumps to that angle, 0 dB at twelve, clockwise cutting and counter-clockwise
-boosting. A click outside the knob does nothing; there is no drag. A double tap on any
-small knob resets it to 0 dB and cancels the pending open, so the virtual knob never
-appears. While the overlay is up nothing else responds - the arrows, P/R/W, the drawer and
-the Levels are all behind it - and the view's sink drops every screen intent too, because
-the two-finger menu arrives from the touch adapter directly. Both the small active circle
-and the big one blink their border 100% -> 27% -> 100%, 600 ms each way. The arrows are the
-only next/previous controls and call `mini_icecast_prev()` / `mini_icecast_skip()`; the
-screen's tap and the BOOT button no longer do either.
+the 96+94+94 length, its top on the GAIN button's top, a 2 px circle stroke and a 6 px
+centre line, with no outer square - only the circle, the crown and the line) appears over
+the cassette, while a transparent 800x480 overlay owns the touch. The cassette cuts out and
+the knob appears; on close the knob disappears and the cassette cuts back in. The delay is
+there so a second tap is read as the reset double click instead of opening the knob. Only
+the big knob's centre circle closes. A click on the ring - the 284 px area around that
+circle - is the target point: the knob jumps to that angle, 0 dB at twelve, clockwise
+cutting and counter-clockwise boosting. A click outside does nothing; there is no drag. A
+double tap on any small knob resets it to 0 dB and cancels the pending open, so the virtual
+knob never appears. While the overlay is up nothing else responds - the arrows, P/R/W, the
+drawer and the Levels are all behind it - and the view's sink drops every screen intent
+too, because the two-finger menu arrives from the touch adapter directly. Both the small
+active circle and the big one blink their border 100% -> 27% -> 100%, 600 ms each way. The
+arrows are the only next/previous controls and call `mini_icecast_prev()` /
+`mini_icecast_skip()`; the screen's tap and the BOOT button no longer do either.
 
 The audio side is `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell (Q 0.7)
 and a 4 kHz high shelf, plus a trim applied before them. The knobs map to the DJ ranges:

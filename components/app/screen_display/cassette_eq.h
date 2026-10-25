@@ -11,15 +11,15 @@
  *
  * A tap on a knob opens edit mode after a 550 ms delay, so a second tap is read as the
  * reset double click instead: a 3x virtual knob (284 px at x=206, the 96+94+94 length, its
- * top on the GAIN button's top) takes the cassette's centre. The cassette fades out first
- * and the knob fades in after it; on close the knob fades out first and the cassette comes
- * back. Only the knob's centre circle closes. A click on the ring - the carcase outside
- * that circle - is the target point: the knob jumps to that angle, 0 dB at twelve, clockwise
- * cutting and counter-clockwise boosting. A click outside the knob does nothing; there is
- * no drag and no relative rotation. A double tap on any small knob resets it to 0 dB and
- * cancels the pending open, like a mixer's centre detent, so the virtual knob never
- * appears. While edit mode is on, the view ignores every screen intent, because the touch
- * adapter's two-finger menu arrives directly.
+ * top on the GAIN button's top) takes the cassette's centre, with no outer square - just
+ * the circle, the crown and the line. The cassette cuts out and the knob appears; on close
+ * the knob disappears and the cassette cuts back in. Only the knob's centre circle closes.
+ * A click on the ring - the 284 px area around that circle - is the target point: the knob
+ * jumps to that angle, 0 dB at twelve, clockwise cutting and counter-clockwise boosting. A
+ * click outside does nothing; there is no drag and no relative rotation. A double tap on
+ * any small knob resets it to 0 dB and cancels the pending open, like a mixer's centre
+ * detent, so the virtual knob never appears. While edit mode is on, the view ignores every
+ * screen intent, because the touch adapter's two-finger menu arrives directly.
  *
  * The block is a screen child, created after the Level sheets, so it is chrome like the
  * transport drawer: it stays above the sheets and the view raises it after a vertical

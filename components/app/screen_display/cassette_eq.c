@@ -37,10 +37,9 @@ LV_FONT_DECLARE(jura_36);
  * The edit view is one knob at 3x, 284 px (96+94+94) at x=206 (206..490, over the cassette)
  * with its top on the GAIN button's top, so it spans the block's 76..360 band. Circle 132,
  * crown at r=96 with 12 px dots, a 6x66 line from the centre to the rim. A click on the
- * ring sets the target angle; a click on the centre circle closes. The cassette fades out
- * first and the knob fades in after it; on close the knob fades out first and the cassette
- * fades back in. The edit opens 550 ms after the first tap, so a double tap can reset to
- * 0 dB first. */
+ * ring sets the target angle; a click on the centre circle closes. The cassette cuts out
+ * and the knob appears; on close the knob disappears and the cassette cuts back in. The
+ * edit opens 550 ms after the first tap, so a double tap can reset to 0 dB first. */
 #define CELL_W       96
 #define CELL_H       96
 #define CELL_PITCH   94
@@ -71,14 +70,13 @@ LV_FONT_DECLARE(jura_36);
 #define BIG_RADIUS   66
 #define BIG_DOT_R    96
 #define BIG_DOT_D    12
-#define BIG_STICK_W  6   /* the centre line stays 6 px, like the small knob's */
+#define BIG_STICK_W  2   /* the centre line stays 6 px, like the small knob's */
 #define BIG_STICK_L  BIG_RADIUS
 #define BIG_STICK_R  3
 /* A knob's edit opens after this delay so a second tap is read as LVGL's double click
  * and resets to 0 dB instead of opening the virtual knob. The touch adapter's window is
  * 500 ms, so wait a little past it. */
 #define EDIT_DELAY_MS 550
-#define BIG_FADE_MS  560   /* the virtual knob's own fade; it follows the cassette's */
 #define BLINK_MS     600
 #define BLINK_MIN_OPA 70
 /* The block enters and leaves with the transport drawer's 260 ms slide, from the right
@@ -237,15 +235,15 @@ static void arrow_build(lv_obj_t *cell, int slot)
     lv_label_set_text(label, slot == SLOT_PREV ? "<" : ">");
 }
 
-/* The 3x knob, hidden until a knob is tapped. Its carcase is 284 px, the 96+94+94 length
- * of the block, at x=206 over the cassette with its top on the GAIN button's top. The art
+/* The 3x knob, hidden until a knob is tapped. Its 284 px (96+94+94) hit area at x=206 is
+ * invisible - there is no outer square, only the circle, the crown and the line. The art
  * is the small knob at 3x: circle 132, crown at r=96 with 12 px dots, a 6x66 line from the
  * centre to the rim. The centre circle is the close target; the ring around it is where
  * the target click lands. */
 static void big_build(lv_obj_t *parent)
 {
     s_big_cell = cassette_border_box(parent, BIG_X, BIG_Y, BIG_D, BIG_D, BIG_R,
-                                     k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, BIG_BORDER);
+                                     k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 0);
     s_big_circle = cassette_border_box(s_big_cell, BIG_INSET, BIG_INSET,
                                        BIG_CIRCLE, BIG_CIRCLE, BIG_RADIUS,
                                        k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, BIG_BORDER);
@@ -299,7 +297,7 @@ static void blink_off(lv_obj_t *circle)
     lv_obj_set_style_border_opa(circle, LV_OPA_COVER, 0);
 }
 
-/* The active small circle blinks under the faded cassette; the big one blinks too, so
+/* The active small circle blinks under the cut-away cassette; the big one blinks too, so
  * the edit reads at the centre. */
 static void blink_start(int slot)
 {
@@ -311,55 +309,6 @@ static void blink_stop(int slot)
 {
     blink_off(s_circle[slot]);
     blink_off(s_big_circle);
-}
-
-/* The virtual knob has its own opacity: it fades in only after the cassette's 560 ms
- * fade-out, and fades out before the cassette is brought back. opa_layered keeps the
- * carcase, circle, crown and line together. */
-static void big_opa_cb(void *var, int32_t v)
-{
-    lv_obj_set_style_opa_layered((lv_obj_t *)var, (lv_opa_t)v, 0);
-}
-
-static void big_out_done_cb(lv_anim_t *a)
-{
-    (void)a;
-    if (s_active >= 0) return;   /* a new edit took over before this finished */
-    if (s_big_cell) lv_obj_set_hidden(s_big_cell, true);
-    cassette_view_dim(false, 0);
-}
-
-static void big_fade_in(void)
-{
-    if (!s_big_cell) return;
-    lv_anim_delete(s_big_cell, big_opa_cb);
-    lv_obj_set_style_opa_layered(s_big_cell, LV_OPA_TRANSP, 0);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_big_cell);
-    lv_anim_set_exec_cb(&a, big_opa_cb);
-    lv_anim_set_values(&a, LV_OPA_TRANSP, LV_OPA_COVER);
-    lv_anim_set_duration(&a, BIG_FADE_MS);
-    lv_anim_set_delay(&a, BIG_FADE_MS);   /* after the cassette's fade-out */
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
-    lv_anim_start(&a);
-}
-
-static void big_fade_out(void)
-{
-    if (!s_big_cell) return;
-    lv_anim_delete(s_big_cell, big_opa_cb);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_big_cell);
-    lv_anim_set_exec_cb(&a, big_opa_cb);
-    lv_anim_set_values(&a, lv_obj_get_style_opa_layered(s_big_cell, 0), LV_OPA_TRANSP);
-    lv_anim_set_duration(&a, BIG_FADE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
-    lv_anim_set_completed_cb(&a, big_out_done_cb);
-    lv_anim_start(&a);
 }
 
 /* ----------------------------------------------------------------- edit mode */
@@ -378,10 +327,10 @@ static float angle_at(lv_point_t p)
     return atan2f(dx, uy) * 180.0f / 3.14159265358979323846f;
 }
 
-/* A click in the centre circle closes. A click on the ring (the 284 px carcase outside
- * that circle) is the target point: the knob jumps to that angle, 0 dB at twelve,
- * clockwise cutting, counter-clockwise boosting. A click outside the knob does nothing.
- * No drag and no relative rotation: one click both chooses and points. */
+/* A click in the centre circle closes. A click on the ring (the 284 px area outside that
+ * circle; no outer square is drawn) is the target point: the knob jumps to that angle,
+ * 0 dB at twelve, clockwise cutting, counter-clockwise boosting. A click outside the area
+ * does nothing. No drag and no relative rotation: one click both chooses and points. */
 static void overlay_clicked_cb(lv_event_t *e)
 {
     (void)e;
@@ -457,9 +406,8 @@ static void begin_edit(int slot)
         lv_obj_set_hidden(s_big_cell, false);
         lv_obj_move_foreground(s_big_cell);
         lv_obj_move_foreground(s_overlay);
-        big_fade_in();
     }
-    cassette_view_dim(true, 0);
+    cassette_view_dim(true);
     blink_start(slot);
 }
 
@@ -468,8 +416,8 @@ static void end_edit(void)
     if (s_active < 0) return;
     blink_stop(s_active);
     s_active = -1;
-    if (s_big_cell) big_fade_out();
-    /* The cassette comes back in big_out_done_cb, after the knob is gone. */
+    if (s_big_cell) lv_obj_set_hidden(s_big_cell, true);
+    cassette_view_dim(false);
     if (s_overlay) {
         /* The overlay is the event target of this click: delete it after the dispatcher
          * returns rather than under its own callback. */

@@ -36,12 +36,10 @@ void cassette_view_update(const mini_icecast_status_t *st);
  * Called under the LVGL lock, like everything else on the screen. */
 void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms);
 
-/* Fade the cassette's own picture out (dim true) or back in (false) over 560 ms, after
- * delay_ms. The Level sheets, the transport drawer and the DJ block are not in the
- * cassette's container and stay. The EQ's edit mode uses it: the big virtual knob fades in
- * only after the cassette has faded out, and the cassette comes back only after the knob
- * has faded out. */
-void cassette_view_dim(bool dim, uint32_t delay_ms);
+/* Cut the cassette's own picture out (dim true) or back in (false), in one frame. The
+ * Level sheets, the transport drawer and the DJ block are not in the cassette's container
+ * and stay. The EQ's edit mode uses it: the cassette goes and the virtual knob appears. */
+void cassette_view_dim(bool dim);
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 /* The Track picture, fitted to the Case's window, or NULL while it is being decoded or
