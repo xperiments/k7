@@ -403,7 +403,7 @@ void cassette_eq_create(lv_obj_t *parent)
     s_shown = false;
     s_sliding = false;
     s_slide_offset = EQ_SLIDE_OFFSET;
-    s_value[SLOT_GAIN] = 25;   /* -6 dB, the trim's headroom default */
+    s_value[SLOT_GAIN] = 50;   /* 0 dB, the same neutral as the three bands */
     s_value[SLOT_HI] = 50;
     s_value[SLOT_MED] = 50;
     s_value[SLOT_LOW] = 50;

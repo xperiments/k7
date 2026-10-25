@@ -22,7 +22,7 @@ every listener hears, and there is no local audio path to fight with. The PCM se
   r=32, outside that circle, and the 6x22 line runs from the circle's centre to its rim.
   0 dB is at twelve o'clock, the right side cuts and the left side boosts; the arc lights
   from twelve to the line on the side it points. The twelve o'clock dot is the 0 dB tick.
-- **The ranges are the DJ ones.** GAIN -12..+12 dB, default -6; bands -26..+6 dB, default
+- **The ranges are the DJ ones.** GAIN -12..+12 dB, default 0; bands -26..+6 dB, default
   0, at 200 Hz (low shelf), 1 kHz (bell, Q 0.7) and 4 kHz (high shelf). The trim is applied
   before the bands. The int16 clamp is the last stage.
 - **Edit mode is modal.** A tap on a knob puts a transparent 800x480 overlay above every
@@ -55,9 +55,9 @@ every listener hears, and there is no local audio path to fight with. The PCM se
   arc/crown gives the same visual language and a value that can be set.
 - **Move P/R/W to the right and put the knobs on the left.** Rejected: the owner keeps the
   transport drawer on the left; the right edge was free.
-- **A fixed -6 dB pre-gain instead of a GAIN knob.** Rejected: the owner wants the trim as a
-  knob. The knob's default is the -6 dB the fixed gain used, so the headroom is unchanged
-  out of the box.
+- **A fixed pre-gain instead of a GAIN knob.** Rejected: the owner wants the trim as a
+  knob. The knob starts at its 0 dB neutral, like the three bands, and the owner lowers it
+  when a hot source needs headroom.
 - **A limiter after the EQ.** Not built: a hot trim plus a boosted band can reach the clamp,
   and that is the mixer's behaviour. A limiter is a later decision, not a silent one.
 

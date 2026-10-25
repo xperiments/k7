@@ -576,7 +576,7 @@ lowers), the active circle blinks, and only a tap on the active knob leaves. Whi
 nothing else responds - the arrows, P/R/W, the drawer and the Levels - and the view drops
 every screen intent, including the two-finger menu. The audio is
 `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell and a 4 kHz high shelf plus
-a trim before them, with the DJ ranges (GAIN -12..+12 dB, default -6; bands -26..+6 dB,
+a trim before them, with the DJ ranges (GAIN -12..+12 dB, default 0; bands -26..+6 dB,
 default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder.
 
 A one-finger down/up swipe moves one Level - Bare, Label cover,

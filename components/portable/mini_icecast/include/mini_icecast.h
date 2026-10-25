@@ -149,7 +149,8 @@ void      mini_icecast_prev(void);                              /* jump to the p
 /* The screen's tone controls: three band targets (0 = low, 1 = mid, 2 = high) and the
  * trim, in dB. The ranges are the DJ ones: bands -26..+6, trim -12..+12. These only
  * publish a target; the broadcast task applies it at its next chunk, at its slew rate.
- * The trim's default is -6 dB. Safe to call from another task. */
+ * The trim's default is 0 dB, the same neutral as the bands. Safe to call from another
+ * task. */
 void      mini_icecast_eq_set(int band, float db);
 void      mini_icecast_gain_set(float db);
 

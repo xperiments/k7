@@ -5,8 +5,8 @@
  *
  * One low shelf, one mid bell and one high shelf, plus a gain applied before them. The
  * ranges are the ones the screen's knobs use: bands -26..+6 dB (a DJ cut is deeper than
- * the boost) and a trim of -12..+12 dB. The default trim is -6 dB, which buys the headroom
- * the +6 dB boosts would otherwise spend; the caller may move it.
+ * the boost) and a trim of -12..+12 dB. The default trim is 0 dB, the same neutral as the
+ * bands; the owner lowers it when a hot source needs headroom.
  *
  * Targets are smoothed per chunk (2 dB), so a knob moved quickly glides instead of
  * stepping the coefficients. The biquad state is never reset on a change: the filters are
@@ -36,7 +36,7 @@ enum {
 #define TONE_EQ_BAND_MAX_DB  (6.0f)
 #define TONE_EQ_GAIN_MIN_DB  (-12.0f)
 #define TONE_EQ_GAIN_MAX_DB  (12.0f)
-#define TONE_EQ_GAIN_DEFAULT (-6.0f)
+#define TONE_EQ_GAIN_DEFAULT (0.0f)
 
 /* One biquad: transposed direct form II, one state pair per channel. */
 typedef struct {
@@ -55,7 +55,7 @@ typedef struct {
     tone_eq_sec_t sec[TONE_EQ_BANDS];
 } tone_eq_t;
 
-/* Set the sample rate and the neutral state: bands at 0 dB, trim at -6 dB. */
+/* Set the sample rate and the neutral state: bands and trim at 0 dB. */
 void tone_eq_init(tone_eq_t *eq, uint32_t rate);
 
 /* Record a target. Out-of-range values are clamped; the change is applied by the next

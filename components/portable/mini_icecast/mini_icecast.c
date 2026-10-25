@@ -969,8 +969,8 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     }
     S.library = cfg->library;
 
-    /* Neutral tone: bands at 0 dB and the trim at -6 dB, which is the headroom the
-     * +6 dB boosts would otherwise spend. The screen's knobs start at the same values. */
+    /* Neutral tone: the bands and the trim start at 0 dB, the same as the screen's
+     * knobs. A hot source is the owner's to trim down. */
     tone_eq_init(&S.eq, S.station.out_hz);
     for (int b = 0; b < TONE_EQ_BANDS; b++) S.eq_db[b] = 0.0f;
     S.eq_gain_db = TONE_EQ_GAIN_DEFAULT;

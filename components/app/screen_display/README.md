@@ -254,7 +254,7 @@ longer do either.
 
 The audio side is `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell (Q 0.7)
 and a 4 kHz high shelf, plus a trim applied before them. The knobs map to the DJ ranges:
-GAIN -12..+12 dB (default -6) and the bands -26..+6 dB (default 0). The targets are
+GAIN -12..+12 dB (default 0) and the bands -26..+6 dB (default 0). The targets are
 published by `mini_icecast_eq_set()` / `mini_icecast_gain_set()`, read by the broadcast
 task once per 1024-frame chunk, and slewed at 2 dB per chunk before the coefficients are
 rebuilt, so a moved knob glides rather than steps. The EQ runs in `emit_chunk()` and on the
