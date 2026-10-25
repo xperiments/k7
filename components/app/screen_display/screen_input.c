@@ -4,11 +4,12 @@
  * This is the whole of the screen's input: the press, the one-finger gesture, and the
  * touch adapter's two-finger swipe. It decides which of those a touch is and keeps one
  * touch from being two of them, and hands the answer to the view's sink. What a swipe
- * means to the picture - which Level, whether the drawer slides out, whether the peek
- * shows or hides - is not decided here: the sink owns that, and this file names no Level
- * and calls nothing above itself. A left/right swipe no longer skips a Track; it hides or
- * shows the transport drawer instead. Next and previous belong to the DJ block's arrows,
- * whose clicks are their own objects' and never reach this module.
+ * means to the picture - whether the peek shows or hides, whether the drawer slides out -
+ * is not decided here: the sink owns that, and this file calls nothing above itself. A
+ * left/right swipe hides or shows the transport drawer. A down swipe does nothing (the
+ * Label cover and Artwork screens are gone); an up swipe toggles the peek. Next and
+ * previous belong to the DJ block's arrows, whose clicks are their own objects' and never
+ * reach this module.
  *
  * The log lines that are about the input itself - the swipe directions and the reserved
  * two-finger gesture - are kept here, with the view's tag, so the boot log reads as it did.
@@ -68,7 +69,7 @@ bool screen_input_two_finger_seen(void)
 /*
  * The two-finger swipe is reserved for the menu (on/off), which is not designed yet. The
  * port still reports it, and this callback keeps the one-finger handler from acting on the
- * same touch: a two-finger gesture must not change a Level or open the drawer by accident.
+ * same touch: a two-finger gesture must not toggle the peek or open the drawer by accident.
  * When the menu lands, it takes this intent and nothing in touch_gt911.c has to change. */
 static void screen_two_finger_cb(int dx, int dy)
 {
@@ -81,11 +82,10 @@ static void screen_two_finger_cb(int dx, int dy)
 #endif
 
 /*
- * The one-finger gestures: left/right show and hide the buttons at the left edge, down/
- * up move one Level towards Artwork and towards Bare. The direction is the whole of this
- * handler's knowledge; the Levels, the ends of the order, Bare's peek and the
- * drawer's slide are the sink's, which is where the old handler's `s_level` and
- * `s_paper_shown` tests went. A two-finger swipe does not come through here: the touch
+ * The one-finger gestures: left/right show and hide the buttons at the left edge, up
+ * toggles Bare's peek. The direction is the whole of this handler's knowledge; the peek's
+ * slide and the drawer's slide are the sink's. A down swipe is not reported: there is no
+ * screen below Bare any more. A two-finger swipe does not come through here: the touch
  * adapter reports it, and the latch keeps this handler from acting on the same touch as
  * well.
  */
@@ -104,11 +104,8 @@ static void screen_gesture_cb(lv_event_t *e)
             report(SCREEN_INTENT_BUTTONS_SHOW);
             ESP_LOGI(TAG, "swipe right: buttons shown");
             break;
-        case LV_DIR_BOTTOM:
-            report(SCREEN_INTENT_LEVEL_DOWN);
-            break;
         case LV_DIR_TOP:
-            report(SCREEN_INTENT_LEVEL_UP);
+            report(SCREEN_INTENT_PEEK_TOGGLE);
             break;
         default:
             break;

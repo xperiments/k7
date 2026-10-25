@@ -1,6 +1,15 @@
 #pragma once
 /*
- * artwork_loader - the card side of the Artwork screen and of the peek's tags.
+ * PARKED - the Artwork screen's cover pipeline. Not built.
+ *
+ * The Label cover and Artwork screens were removed; this loader and its cover request
+ * are kept in the tree for when the Artwork screen comes back. The peek's tags moved to
+ * tags_loader.h, which is the part still built. To restore the cover: add
+ * artwork_loader.c to screen_display/CMakeLists.txt, restore the label_cover.bin and
+ * cover.jpg embeds, put artwork.c/id3.c/flac.c back in components/portable/artwork, and
+ * bring back cassette_view_set_artwork()/set_case() and the Artwork sheet.
+ *
+ * artwork_loader - the card side of the Artwork screen.
  *
  * Locates a Track's own picture (components/portable/artwork), decodes it with TJpgDec
  * as the decoder reads the JPEG from the card on demand, and fits it to the Case's

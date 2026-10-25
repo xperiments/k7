@@ -1,5 +1,9 @@
 # The Artwork level puts the Track's picture in the cassette Case's window
 
+**Superseded by ADR 0019 for the Artwork screen and its cover.** The screen is removed and
+the cover pipeline is parked; the picture, the Case and the window below are kept for when
+it returns.
+
 The cassette screen had one piece of art: the K7 label cover, a static 800x480 sticker
 opened by a two-finger swipe. An MP3 usually carries its own picture in an ID3 `APIC`
 frame, and the product requirement is that the device show it. The first cut was a free

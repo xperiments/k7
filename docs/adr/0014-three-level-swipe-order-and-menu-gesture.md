@@ -1,5 +1,9 @@
 # The one-finger swipe cycles three Levels, and the two-finger swipe waits for the menu
 
+**Superseded by ADR 0019 for the Label cover and Artwork screens and the down/up Level
+cycle.** Bare is the only screen left; the up swipe toggles the peek and the down swipe
+does nothing. The two-finger menu intent is unchanged.
+
 The cassette screen had four Levels - Bare, Label, Label cover and Artwork - and the
 one-finger down/up swipe moved through all of them. The Label level was a cream bar with
 the **Now playing** title, sitting between Bare and the K7 sticker. The product wants

@@ -5,9 +5,10 @@
  * Six 96 px cells in two touching columns, the same carcase as the transport's P/R/W:
  * the first column holds GAIN above the < and > transport arrows, the second the HI,
  * MED and LOW knobs. The arrows keep the buttons' 64 px circle. Each knob is a 44 px
- * circle (30% smaller), a 24-dot crown outside it at r=32, and a 6x22 line from the centre
- * to the rim. 0 dB is at twelve o'clock, the right side cuts and the left side boosts. The
- * two arrows are the only next/previous controls on the screen.
+ * circle (30% smaller), a 24-dot crown outside it at r=32, and a line from the centre
+ * towards the rim (the owner's tuned 4 px width). 0 dB is at twelve o'clock, the right
+ * side cuts and the left side boosts. The two arrows are the only next/previous controls
+ * on the screen.
  *
  * A tap on a knob opens edit mode after a 550 ms delay, so a second tap is read as the
  * reset double click instead: a 3x virtual knob (284 px at x=206, the 96+94+94 length, its

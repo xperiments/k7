@@ -17,14 +17,14 @@
  *    few pixels, out of phase, on one animation; their tethers stay fixed and the tag's
  *    own fill hides the end.
  *
- * The tag texts are the Track's ID3/FLAC tags, read by artwork_loader on its own task
+ * The tag texts are the Track's ID3/FLAC tags, read by tags_loader on its own task
  * and handed in here; until they arrive (or when a Track has none) the group falls
  * back to the first directory of the Track's path and the song to the cleaned
  * filename. The bar's clock comes from the cassette frame.
  *
- * The overlay is an overlay on Bare, not a Level: this module is born and hidden by
- * cassette_levels and asks the cassette for room through the `room` callback, exactly
- * as the old Label did. The view owns the pose, so the hub anchors are handed in on
+ * The overlay is an overlay on Bare, not a screen of its own: this module is born and
+ * hidden by cassette_levels and asks the cassette for room through the `room` callback.
+ * The view owns the pose, so the hub anchors are handed in on
  * every pose change and only the tether's lower endpoint moves with them.
  *
  * Private to screen_display, and built only on the touch board: the gestures that
@@ -66,7 +66,7 @@ void cassette_peek_set_tags(const char *group, const char *song);
 void cassette_peek_set_hubs(int x0, int y0, int x1, int y1);
 
 /* Show the overlay (with the room request and the slide) or put it away. hide_now()
- * is the one-frame form a Level change uses. */
+ * is the one-frame form. */
 void cassette_peek_show(void);
 void cassette_peek_hide(void);
 void cassette_peek_hide_now(void);

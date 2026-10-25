@@ -36,7 +36,7 @@ LV_FONT_DECLARE(jura_36);
  *
  * The edit view is one knob at 3x, 284 px (96+94+94) at x=206 (206..490, over the cassette)
  * with its top on the GAIN button's top, so it spans the block's 76..360 band. Circle 132,
- * crown at r=96 with 12 px dots, a 6x66 line from the centre to the rim. A click on the
+ * crown at r=96 with 12 px dots, a line from the centre towards the rim. A click on the
  * ring sets the target angle; a click on the centre circle closes. The cassette cuts out
  * and the knob appears; on close the knob disappears and the cassette cuts back in. The
  * edit opens 550 ms after the first tap, so a double tap can reset to 0 dB first. */
@@ -55,8 +55,8 @@ LV_FONT_DECLARE(jura_36);
 #define DOT_COUNT    24
 #define DOT_R        32   /* outside the knob circle, inside the carcase */
 #define DOT_D        4
-#define STICK_W      6
-#define STICK_L      KNOB_R   /* the radius: from the centre to the rim */
+#define STICK_W      4
+#define STICK_L      16   /* the owner's tuned line: 4 wide, 16 long */
 #define STICK_R      3
 #define BIG_D        284
 #define BIG_X        206   /* the owner's x: 206..490, over the cassette */
@@ -70,9 +70,9 @@ LV_FONT_DECLARE(jura_36);
 #define BIG_RADIUS   66
 #define BIG_DOT_R    96
 #define BIG_DOT_D    12
-#define BIG_STICK_W  2   /* the centre line stays 6 px, like the small knob's */
-#define BIG_STICK_L  BIG_RADIUS
-#define BIG_STICK_R  3
+#define BIG_STICK_W  4   /* the big line's width; the owner's tuned value */
+#define BIG_STICK_L  46
+#define BIG_STICK_R  2
 /* A knob's edit opens after this delay so a second tap is read as LVGL's double click
  * and resets to 0 dB instead of opening the virtual knob. The touch adapter's window is
  * 500 ms, so wait a little past it. */
@@ -182,7 +182,7 @@ static void knob_apply(int slot)
     lv_obj_set_style_transform_rotation(s_stick[slot], (int32_t)lroundf(deg * 10.0f), 0);
 }
 
-/* The virtual knob shows the same value at 3x; its line stays 6 px wide. */
+/* The virtual knob shows the same value at 3x; its line is the owner's 4 px one. */
 static void big_apply(int slot)
 {
     int value = s_value[slot];
@@ -237,9 +237,9 @@ static void arrow_build(lv_obj_t *cell, int slot)
 
 /* The 3x knob, hidden until a knob is tapped. Its 284 px (96+94+94) hit area at x=206 is
  * invisible - there is no outer square, only the circle, the crown and the line. The art
- * is the small knob at 3x: circle 132, crown at r=96 with 12 px dots, a 6x66 line from the
- * centre to the rim. The centre circle is the close target; the ring around it is where
- * the target click lands. */
+ * is the small knob at 3x: circle 132, crown at r=96 with 12 px dots, a 4 px line from
+ * the centre towards the rim. The centre circle is the close target; the ring around it
+ * is where the target click lands. */
 static void big_build(lv_obj_t *parent)
 {
     s_big_cell = cassette_border_box(parent, BIG_X, BIG_Y, BIG_D, BIG_D, BIG_R,

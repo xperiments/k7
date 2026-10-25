@@ -202,16 +202,8 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
             cassette_buttons_set_shown(false);
             cassette_eq_set_shown(false);
             break;
-        case SCREEN_INTENT_LEVEL_DOWN:
-            cassette_levels_swipe_down();
-            /* The Artwork sheet raises itself when it settles; chrome stays above it. */
-            cassette_buttons_raise();
-            cassette_eq_raise();
-            break;
-        case SCREEN_INTENT_LEVEL_UP:
-            cassette_levels_swipe_up();
-            cassette_buttons_raise();
-            cassette_eq_raise();
+        case SCREEN_INTENT_PEEK_TOGGLE:
+            cassette_levels_toggle_peek();
             break;
         case SCREEN_INTENT_MENU:
             /* The menu is not designed yet; screen_input has already logged it. */
@@ -250,17 +242,17 @@ void cassette_view_create(void)
     cassette_meter_create(s_cassette);
     cassette_place();
 
-    /* The sheets are the screen's children, above the cassette's container. */
+    /* The peek is the screen's child, above the cassette's container. It is the only
+     * overlay left: the Label cover and Artwork sheets are gone. */
     cassette_levels_create(scr, levels_room_cb, NULL);
     /* The peek exists now, so give it the resting pose's hub anchors. */
     hubs_apply();
 
-    /* The transport drawer is chrome, above every sheet: created after the Levels, and
-     * raised again after a vertical swipe. It starts off screen and hidden. */
+    /* The transport drawer is chrome, above the peek. It starts off screen and hidden. */
     cassette_buttons_create(scr, buttons_room_cb, NULL);
 
     /* The DJ block is chrome too, on the other edge; created last so it starts above the
-     * sheets, hidden with the drawer and raised with it after a vertical swipe. */
+     * peek, hidden with the drawer. */
     cassette_eq_create(scr);
 
     /* The model: the tapes' frame count is the angular resolution; the geometry
@@ -274,9 +266,9 @@ void cassette_view_create(void)
 
     /* The picture is built. Make the screen the one thing a finger can hit, then let
      * screen_input decide what a touch means: a right swipe slides the transport and the
-     * DJ block in, a left swipe slides them out, a vertical one moves a Level, and a
-     * two-finger one is the menu. A tap is not an action; next/previous belong to the
-     * block's arrows. */
+     * DJ block in, a left swipe slides them out, an up swipe toggles the peek, a down
+     * swipe does nothing, and a two-finger one is the menu. A tap is not an action;
+     * next/previous belong to the block's arrows. */
     lv_obj_set_clickable(scr, true);
     screen_input_attach(scr, screen_intent_cb, NULL);
 }
@@ -289,7 +281,7 @@ void cassette_view_update(const mini_icecast_status_t *st)
     const cassette_frame_t *f = cassette_step(s_model, st, lv_tick_get());
     apply_frame(f);
 
-    /* The Levels keep the status for the Artwork request and make it themselves; this
+    /* The peek's host keeps the status for the tag request and makes it itself; this
      * is a string compare on the frames that do not change it. */
     cassette_levels_update(st);
 
@@ -315,16 +307,6 @@ void cassette_view_update(const mini_icecast_status_t *st)
 /* ------------------------------------------------------------------ hand-off */
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-void cassette_view_set_artwork(const lv_image_dsc_t *dsc)
-{
-    cassette_levels_set_artwork(dsc);
-}
-
-void cassette_view_set_case(const lv_image_dsc_t *dsc)
-{
-    cassette_levels_set_case(dsc);
-}
-
 void cassette_view_set_tags(const char *group, const char *song)
 {
     cassette_levels_set_tags(group, song);

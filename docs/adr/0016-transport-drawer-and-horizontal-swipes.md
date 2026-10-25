@@ -1,5 +1,9 @@
 # The transport moves to a left-edge drawer, and the horizontal swipes drive it
 
+**Amended by ADR 0019:** the vertical Level gestures this ADR weighed the horizontal
+swipes against are gone. The up swipe is the peek and the down swipe does nothing; the
+drawer's left/right swipes, the 134/256 control pose and its arbitration are unchanged.
+
 The cassette screen's tap and one-finger left/right swipe were the transport: a tap skipped
 to the next track and the swipes were next/previous. The product wants the transport
 visible at the left edge - three buttons, shown and hidden by the horizontal gestures. That

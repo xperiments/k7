@@ -18,7 +18,7 @@ task already shares its core with the network.
   (148,248) below it, their centres 118 px from the hub's centre on either side.
   Sixteen px of inset leaves 472 px of text, enough for a
   long title; a longer one is truncated with dots, not scrolled. The 28 px face is a
-  second Jura generated for the peek; the cover and Artwork bands keep 36.
+  second Jura generated for the peek; it is the only text size left on the screen.
 - **Each tag hangs from the same hub.** A vertical two-point `lv_line` joins the pill to
   the left hub's near rim: both leave on the hub's column (251 px), which is 20.4 % of
   the centred 504 px pill rather than a round quarter. The hub's column wins over the
@@ -75,14 +75,13 @@ task already shares its core with the network.
   their whole seconds differ, so the bar is rewritten at the same one hertz the position
   is. `t10_cassette` pins the clock.
 - `screen_display` gains `cassette_peek.c` (the bar, the tags, the tethers and the bob)
-  and `font_jura_28.c` for the peek's text, and loses the Label objects from
-  `cassette_levels.c`; the Levels still own when the peek is up and pass the view's room
-  callback through. The cover and Artwork band titles switch from marquee to dot
-  truncation, so no label on the screen scrolls. `cassette_tapes` exports the hub anchor.
-- `artwork_loader` carries two request flags on one path and sequence: a tags request for
-  the same Track as a pending picture is coalesced, a new Track replaces both, and a
-  stale result is dropped rather than shown against the wrong song. The tag read is one
-  more open per Track, on the loader task, behind the broadcast's lag wait.
+  and `font_jura_28.c` for the peek's text. `cassette_levels.c` is now the peek's host:
+  it creates the peek and passes the view's room callback through. The Label objects are
+  gone; the Label cover and Artwork sheets are removed by ADR 0019.
+- `tags_loader` carries the one request: a path, a format and a sequence, with a stale
+  result dropped rather than shown against the wrong song. The tag read is one open per
+  Track, on the loader task, behind the broadcast's lag wait. (ADR 0019 split this out of
+  `artwork_loader`; the cover half is parked.)
 - The board pass is owed for the visual result, the bob's read at 25 fps and the tag
   read's latency on a real card. The host tier cannot compile the LVGL view; it covers
   the parsers and the clock.

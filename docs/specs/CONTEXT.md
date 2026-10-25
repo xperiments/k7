@@ -90,8 +90,8 @@ _Avoid_: drift correction, catch-up, resync
 
 **Now playing**:
 The name the screen gives the track the live stream is currently carrying. On the **Peek**
-it is the **Text tag**'s song, or the cleaned filename when the Track has none; the
-**Artwork** band uses the cleaned filename. Never the station name.
+it is the **Text tag**'s song, or the cleaned filename when the Track has none. Never the
+station name.
 _Avoid_: current song, stream title, ID3 title
 
 ### The display
@@ -109,6 +109,9 @@ truth.
 _Avoid_: UI, GUI, dashboard
 
 **Level**:
+*(Removed by ADR 0019: Bare is the only screen. An up swipe at Bare toggles the **Peek**;
+a down swipe does nothing. The Label cover and Artwork entries below are parked
+vocabulary for when those screens return.)*
 One of the three positions of the cassette screen, ordered by how much of it the
 **sheet** covers: Bare, Label cover and Artwork. A one-finger down swipe moves one
 towards Artwork, an up swipe one towards Bare, and the ends do not wrap. At Bare, a down
@@ -117,6 +120,7 @@ changes in one frame.
 _Avoid_: state, step, mode, page
 
 **Sheet**:
+*(Removed with the Label cover and Artwork screens, ADR 0019.)*
 The layer a Level draws over the cassette. Exactly one is shown at a time.
 _Avoid_: layer, overlay, page
 
@@ -168,6 +172,7 @@ line. It is chrome, not a **sheet**.
 _Avoid_: menu, toolbar, controls
 
 **Label cover**:
+*(Parked with the removed Label cover screen, ADR 0019; the asset is not embedded.)*
 The K7 sticker, `assets/labels/k7logo.png`, drawn full-bleed at 0,0 over the 800x480
 panel at the Label cover Level; one-finger down from Bare reaches it. It is 800x480, the
 panel's own size, so it carries no margin. Its black triangle and circle are
@@ -177,34 +182,37 @@ backdrop, `k_col_cover_bg`.
 _Avoid_: big label, sticker, overlay, carátula
 
 **Artwork**:
+*(Parked with the removed Artwork screen, ADR 0019; the cover pipeline is not built.)*
 The Level that shows a **Track artwork** in the **Case**'s **Window**, with the cleaned
 filename on the band under the Case. It is not the **Label cover**: that is the K7
 sticker, and the Case stays even when the Track carries no picture.
 _Avoid_: cover, album art, portada
 
 **Case**:
+*(Parked with the removed Artwork screen, ADR 0019; the asset is not embedded.)*
 The cassette-case backdrop of the **Artwork** Level, `assets/labels/cover.jpg`,
 full-bleed at 800x480. Its **Window** is where the **Track artwork** shows.
 _Avoid_: frame, shell, background, funda
 
 **Window**:
+*(Parked with the removed Artwork screen, ADR 0019.)*
 The rectangle of the **Case** where the **Track artwork** is drawn: (101,23) to
 (704,408), 603x385. The picture is fitted cover-style and centre-cropped, never squeezed.
 _Avoid_: hole, cutout, slot, ventana
 
 **Track artwork**:
+*(Parked with the removed Artwork screen, ADR 0019; the locator and fit stay in the tree
+and the host test still builds them.)*
 The picture a Track carries in its own file: an ID3v2.3/2.4 `APIC` frame in an MP3, or
 a native FLAC `PICTURE` block, preferring the front cover. JPEG is decoded; a PNG is
 located but not drawn. A Track with no usable picture leaves the **Window** empty.
 _Avoid_: cover, embedded art, portada
 
 **Peek**:
-The overlay on **Bare** raised by an up swipe at that Level: the **Timeline bar** and the
-two **Now playing tag**s. It is hidden by the next vertical swipe at Bare or by any Level
-change: a down swipe at Bare dismisses it before it is allowed to move to the Label cover.
-It is not a Level and not one of the **sheet**s of the one-finger cycle. While it is up the
-cassette shrinks and lifts so the bar clears the tape, and the tags float over the
-cassette on their tethers to the hubs.
+The overlay on **Bare** raised by an up swipe, and put away by the next up swipe. It has
+the **Timeline bar** and the two **Now playing tag**s. There is no Level change to hide
+it now (ADR 0019). While it is up the cassette shrinks and lifts so the bar clears the
+tape, and the tags float over the cassette on their tethers to the hubs.
 _Avoid_: title bar, caption, marquee
 
 **Timeline bar**:

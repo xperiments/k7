@@ -568,7 +568,7 @@ scale on a click; they are placeholders and do not drive the transport.
 The DJ block is six 96 px carcases in two touching columns at x=592..784, rows at
 76/170/264: GAIN above the `<` and `>` arrows in the first column, HI, MED and LOW in the
 second. The four knobs are a 44 px circle (30% smaller than the arrows'), a 24-dot crown
-outside it and a line from the centre to the rim, 0 dB at twelve o'clock, right cuts and
+outside it and a line from the centre towards the rim, 0 dB at twelve o'clock, right cuts and
 left boosts; the arrows are the only next/previous controls and call
 `mini_icecast_prev()` / `mini_icecast_skip()`. A tap on a knob opens a modal edit mode
 after 550 ms: a 3x virtual knob (284 px at x=206, top on the GAIN button's top, no outer
@@ -582,21 +582,19 @@ overlay is up. The audio is
 a trim before them, with the DJ ranges (GAIN -12..+12 dB, default 0; bands -26..+6 dB,
 default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder.
 
-A one-finger down/up swipe moves one Level - Bare, Label cover,
-Artwork - and the ends do not wrap. At Bare, where the up swipe has no Level to move to,
-it raises the peek: the timeline bar slides up with the Track's elapsed, a growing fill and
-its total, and two rounded tags float over the cassette in the left hub's column - the
+The screen has one Level left: Bare, the cassette alone. The Label cover and Artwork
+screens below it, and the two down gestures that reached them, are removed. An up swipe at
+Bare raises the peek: the timeline bar slides up with the Track's elapsed, a growing fill
+and its total, and two rounded tags float over the cassette in the left hub's column - the
 group above the hub and the song below it, each hanging from that hub by a thin tether,
-bobbing a few pixels out of phase. The tag texts are the Track's ID3/FLAC tags, read by the artwork loader on its own
+bobbing a few pixels out of phase. The next up swipe puts it away; a down swipe does
+nothing. The tag texts are the Track's ID3/FLAC tags, read by the tags loader on its own
 task; until they land the group is the artist directory and the song the cleaned filename.
-While the peek is up, either vertical swipe slides it out, and a down swipe only moves to
-the K7 cover once it is away; any Level change puts it away. The two-finger swipe is
-reserved for the menu: it
-moves no Level today, and the view still latches it so the same touch cannot also trip
-the one-finger gesture. The Sunton build compiles this path; the board tier
-has not yet recorded a finger, so the rows above are unchanged. The Level order and the
-reserved gesture are
-[`docs/adr/0014-three-level-swipe-order-and-menu-gesture.md`](docs/adr/0014-three-level-swipe-order-and-menu-gesture.md);
+The two-finger swipe is reserved for the menu: the view still latches it so the same touch
+cannot also trip the one-finger gesture. The Sunton build compiles this path; the board
+tier has not yet recorded a finger, so the rows above are unchanged. The removal and the
+parked cover pipeline are
+[`docs/adr/0019-remove-label-and-artwork-screens.md`](docs/adr/0019-remove-label-and-artwork-screens.md);
 the drawer and the horizontal swipes are
 [`docs/adr/0016-transport-drawer-and-horizontal-swipes.md`](docs/adr/0016-transport-drawer-and-horizontal-swipes.md);
 the DJ block, its ranges and the transport arrows are
@@ -604,21 +602,16 @@ the DJ block, its ranges and the transport arrows are
 the peek's bar, tags and tag reader are
 [`docs/adr/0017-peek-timeline-and-tags.md`](docs/adr/0017-peek-timeline-and-tags.md).
 
-**Track artwork.** The Artwork Level is the cassette Case, `assets/labels/cover.jpg`,
-full-bleed at 800x480, with the playing MP3's own cover in its window: (101,23) to
-(704,408), 603x385. `components/portable/artwork` locates the ID3v2.3/2.4 `APIC` frame
-(or a native FLAC `PICTURE` block), `artwork_loader.c` decodes the JPEG with TJpgDec and
-fits it to the window in one 464 KB PSRAM buffer; the view hides the picture when a new
-Track is requested, so the decode writes it while it is not drawn. The JPEG is read from
-the card on demand, so neither the encoded bytes nor a full-size RGB copy sit in PSRAM,
-and the screen hands the fitted picture to the view under the LVGL lock. The Case is
-embedded as the original 45 KB JPEG and decoded once at start into 768 KB of PSRAM;
-embedding it as a raw RGB565 blob would not fit the 4 MB app partition. Only JPEG is
-decoded; a PNG picture is located and skipped. The card read is chunked and backs off
-while the broadcast is behind, and a Track with no usable picture leaves the Case's
-window empty. The host tier covers the locator and the fit; the panel pass for the
-decode and the card contention is still owed. The decision is
-[`docs/adr/0013-artwork-level-and-case-window.md`](docs/adr/0013-artwork-level-and-case-window.md).
+**Track artwork is parked.** The Artwork Level - the cassette Case and the playing MP3's
+own cover in its window - is removed. Its pipeline stays in the tree for later: the
+locator in `components/portable/artwork` (the ID3v2.3/2.4 `APIC` frame, or a native FLAC
+`PICTURE` block), the TJpgDec decode and fit in `artwork_loader.c`, and the Case and label
+assets. None of it is in the firmware build: the app no longer carries the TJpgDec include,
+the 45 KB Case JPEG or the 464 KB cover buffer. The host tier still builds and tests the
+locator and the fit (`host/tests/t15_artwork.c`). The peek's tags are the one part of the
+old artwork loader still built, in `tags_loader.c`. The old decision is
+[`docs/adr/0013-artwork-level-and-case-window.md`](docs/adr/0013-artwork-level-and-case-window.md),
+superseded by ADR 0019.
 
 **Backlight sleep.** GPIO 2 is now a 400 Hz, 8-bit LEDC duty instead of an on/off pin. The
 screen starts at full brightness, then fades to 60% after 2 minutes, 30% after 5
@@ -633,20 +626,14 @@ only dimming is lost. For a visual check, `APP_UI_BACKLIGHT_TEST=y` replaces the
 cassette with a white screen and steps the backlight through 100/80/60/40/20/0 every
 five seconds, printing the level in large type.
 
-The label cover is `assets/labels/k7logo.png`, converted to RGB565A8 (1.1 MB) and drawn
-full-bleed at 0,0: the label cover is 800x480, the panel's own size, so it needs no
-margin. Its black triangle and circle are transparent, so the reels show through them.
-The app image is 2.86 MB with 32% of its 4 MB partition free after the cover, the Case
-and the artwork path; re-check it after the next build.
-
-**The Artwork decode on this board.** The first card track, `01 - La Leyenda Del
-Tiempo.mp3`, carries a 239x236 `APIC` JPEG of 22,080 B; the loader turned it into the
-603x385 window in **691 ms** (open 5 ms) and the view showed it. The loader starts with
-**971,248 B** free in PSRAM and **504,300 B** after its one 464,310 B cover buffer; the
-Case is the 768,000 B backdrop decoded at start. The MP3's JPEG is read from the card on
-demand, so there is no encoded copy in PSRAM. The app's rodata and instructions stay in
-PSRAM: moving them to flash freed about 1.8 MB but brought the panel's glitches back, so
-the artwork path was fitted around the memory instead of taking that trade.
+The label cover and the Artwork decode are parked with the two screens: the label cover is
+`assets/labels/k7logo.png` (converted to RGB565A8, 1.1 MB, its black triangle and circle
+transparent so the reels showed through) and the Case is `assets/labels/cover.jpg`; neither
+is embedded now. The cover loader and its measurements (the first card track's 239x236
+`APIC` became the 603x385 window in 691 ms; 971,248 B of PSRAM before its 464,310 B cover
+buffer and 504,300 B after; the Case was a 768,000 B backdrop) stay in the parked
+`artwork_loader.c` and the git history. The app image is **1.65 MB** with **60%** of its
+4 MB partition free; re-check it after the next build.
 
 **Five faults that only the board could show**, each now fixed and each worth the
 tier on its own:
@@ -910,20 +897,16 @@ Three things make that true, and the second is the one that is easy to get wrong
    `heap_caps_malloc_prefer(PSRAM first)` makes the placement a decision.
 3. **The draw buffer is allocated from PSRAM explicitly**, and `LV_USE_ASSERT_MALLOC` is
    on so a genuine failure is a diagnostic rather than a null dereference later.
-4. **The Artwork cover is one 464 KB PSRAM buffer** (603x385 RGB565), reused for every
-   Track. The view hides the picture when a new Track is requested, so the decode writes
-   it while the panel is not drawing it; a second buffer would cost 464 KB this board
-   does not have. The Case is one 768 KB PSRAM buffer, decoded once at start from the
-   embedded 45 KB JPEG. The Track's JPEG is read from the card on demand, so neither the
-   encoded bytes nor a full-size RGB copy are held; the only extra workspace is a band
-   (width x 16 rows) for a streaming fit or a smaller crop for an upscale. The app's
-   rodata and instructions stay in PSRAM - the panel needs them there; moving either to
-   flash brought the glitches back - which is why only about 1.7 MB is free before the
-   cover. The loader's own 16 KB stack takes the PSRAM-first path, with an internal
-   fallback.
+4. **The Artwork cover buffer is parked.** The old Artwork path's 464 KB cover buffer and
+   768 KB Case are not allocated: the Label cover and Artwork screens are gone, and the
+   peek's tags loader is one small task with no picture buffer. The cover pipeline's
+   memory notes stay with the parked `artwork_loader.c`. The app's rodata and instructions
+   stay in PSRAM - the panel needs them there; moving either to flash brought the
+   glitches back - which is why only about 1.7 MB is free before the old cover; that
+   pressure is gone with the screens.
 
-The image is 2.86 MB with the label cover, the Case and the artwork path, so the app
-partition is 4 MB with 32 % free (`partitions.csv`) rather than the 1.5 MB single-app
+The image is 1.65 MB without the label cover, the Case and the artwork path, so the app
+partition is 4 MB with 60 % free (`partitions.csv`) rather than the 1.5 MB single-app
 layout. LVGL is a fetched dependency pinned by
 `components/app/screen_display/idf_component.yml` and `dependencies.lock`; the host tier
 compiles only the portable components and never sees it.

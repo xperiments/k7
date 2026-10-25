@@ -1,7 +1,7 @@
 # screen_display
 
 The screen: the panel (or the headless framebuffer), LVGL's PSRAM allocator, the
-cassette screen and, on the panel board, its touch controller and the card-side artwork
+cassette screen and, on the panel board, its touch controller and the card-side tags
 loader. The public interface is `include/screen_display.h` — `screen_display_start()`
 and nothing else. Everything else is private:
 
@@ -9,18 +9,17 @@ and nothing else. Everything else is private:
   the cassette current.
 - `lvgl_mem.c` — the `LV_USE_CUSTOM_MALLOC` backend, PSRAM first (ADR 0004).
 - `cassette_view.c` — the composition: the container under the screen root, the pose and
-  its animation, the model's step and the intent sink. It owns no geometry and no Level
+  its animation, the model's step and the intent sink. It owns no geometry and no peek
   state; the picture is built from the modules below. The cassette's drawing hangs off
   one full-bleed, unpainted container at 0,0, so every position in the parts stays a
-  screen coordinate, and the Level sheets and the transport drawer are the container's
-  siblings.
+  screen coordinate, and the peek and the transport drawer are the container's siblings.
 - `cassette_layout` (`components/portable/cassette`) — the design grid the screen is
   written on: the 800x480 grid, the scale (256 = pixel for pixel), the centring, the
   offset, the even-diameter rounding and the animation's interpolation. It has no LVGL
   include, so the host tier compiles it and `host/tests/t16_layout.c` pins it. The view
   keeps the current pose and passes it to every part on `place()`.
 - `cassette_style.h` / `cassette_style.c` — the palette, one definition per colour, read
-  by the view, the tapes, the meter, the Levels, the transport drawer and the DJ block.
+  by the view, the tapes, the meter, the peek, the transport drawer and the DJ block.
 - `cassette_widgets.h` / `cassette_widgets.c` — the LVGL object helpers (`box`,
   `border_box`, `text`, `image`). Every object they build is decorative, so a press
   reaches the screen rather than a painted box. The transport drawer and the DJ block's
@@ -41,14 +40,12 @@ and nothing else. Everything else is private:
   rectangle with an L/R badge, a 6 px gap and seven dim bars. One rounded lit fill grows
   from the left and ends in a semicircle. The panel is transparent, so the hub shows
   through.
-- `cassette_levels.c` — the Level machine, the Label cover, the Artwork sheet and the
-  screen backdrop. Its interface is `create(screen, room)`, `apply(frame)`,
-  `update(status)`, `swipe_down()` / `swipe_up()`, `set_artwork()` / `set_case()`,
-  `set_tags()` and `set_hubs()`. The peek needs room from the cassette (the view shrinks
-  and lifts it so the bar clears the tape) and its tethers need the hub anchors; the
-  Levels pass the room callback through and the view hands the anchors in on every pose
-  step. The peek is the only room request; the resting pose already clears the drawer and
-  the DJ block.
+- `cassette_levels.c` — the peek's host. Its interface is `create(screen, room)`,
+  `apply(frame)`, `update(status)`, `toggle_peek()`, `set_tags()` and `set_hubs()`. The
+  Label cover and Artwork screens and the Level machine are gone: Bare is the only screen.
+  The peek needs room from the cassette (the view shrinks and lifts it so the bar clears
+  the tape) and its tethers need the hub anchors; this module passes the view's room
+  callback through and the view hands the anchors in on every pose step.
 - `cassette_peek.c` — the up swipe's overlay: the timeline bar and the two floating tags.
   Its interface is `create(screen, room)`, `apply(frame)`, `set_path()`, `set_tags()`,
   `set_hubs()`, `show()` / `hide()` / `hide_now()` and `is_shown()`. The bar carries the
@@ -65,24 +62,22 @@ and nothing else. Everything else is private:
   block with it.
 - `cassette_eq.c` — the DJ block at the right edge: six 96 px carcases in two touching
   columns, the same carcase as P/R/W. The first column is GAIN above the < and > arrows;
-  the second is HI, MED and LOW. The four knobs are a 24-dot crown and a stick (0 dB at
-  twelve o'clock, right cuts, left boosts); a tap enters a modal edit overlay, the drag is
-  horizontal, and the active circle blinks. The arrows are the only next/previous controls
-  and call `mini_icecast_prev()` / `mini_icecast_skip()`. Its interface is
-  `create(screen)`, `raise()` and `is_editing()`.
+  the second is HI, MED and LOW. Each knob is a 44 px circle with a 24-dot crown outside
+  it and a line from the centre towards the rim; a tap opens a 3x virtual knob and a click on
+  its ring sets the target angle. The arrows are the only next/previous controls and call
+  `mini_icecast_prev()` / `mini_icecast_skip()`. Its interface is `create(screen)`,
+  `raise()` and `is_editing()`.
 - `screen_input.c` — the touch policy: a press and a one-finger gesture (plus the touch
   adapter's two-finger swipe) become one `screen_intent_t`, with a latch that keeps one
-  touch from being two intents. It names no Level and calls nothing above itself; the
+  touch from being two intents. It names no screen and calls nothing above itself; the
   view's sink maps the intents: the horizontal swipes show and hide the transport drawer,
-  the vertical ones move the Levels, and two fingers are the menu. A tap is not an intent:
-  next and previous are the DJ block's own cells, and the view drops every intent while a
-  knob is in edit mode.
-- `artwork_loader.c` — the card side of the Artwork level and of the peek's tags:
-  locates a Track's own picture (`components/portable/artwork`), reads it, decodes the
-  JPEG with TJpgDec and fits it to the Case's 603x385 window, on its own task. It also
-  reads the Track's text tags (TPE1/TIT2 in an MP3, ARTIST/TITLE in a FLAC Vorbis
-  comment) there, and hands them to the view under the LVGL lock. It decodes the
-  embedded Case JPEG once at start. The Levels never touch the card or a decoder.
+  an up swipe toggles the peek, a down swipe has no meaning, and two fingers are the menu.
+  A tap is not an intent: next and previous are the DJ block's own cells, and the view
+  drops every intent while a knob is in edit mode.
+- `tags_loader.c` — the card side of the peek's tags: reads the Track's text tags
+  (TPE1/TIT2 in an MP3, ARTIST/TITLE in a FLAC Vorbis comment) on its own task and hands
+  them to the view under the LVGL lock. The cover pipeline that used to share this loader
+  is parked in `artwork_loader.c` and is not built.
 - `panel_rgb.c` — the Sunton panel adapter, compiled only for that board.
 - `backlight.c` — the Sunton backlight on GPIO 2, now a 400 Hz, 8-bit LEDC duty rather than
   an on/off pin. It starts at `APP_UI_BACKLIGHT_AWAKE_PCT` (100% by default), then
@@ -100,64 +95,43 @@ and nothing else. Everything else is private:
 - `touch_gt911.c` — the Sunton touch adapter: a GT911 on I2C0, polled every 10 ms and
   bound to LVGL as the display's pointer. It feeds LVGL's multi-touch recognizer, so
   `screen_input.c` can tell a two-finger swipe from a one-finger one: a one-finger
-  right/left swipe slides the transport drawer in/out, a one-finger down/up swipe moves
-  one Level through Bare, Label cover and Artwork, and at Bare an up swipe raises the peek.
-  A two-finger swipe is reserved for the menu: it moves no Level today, but it is still
-  reported so it cannot fall through to the one-finger handler. Next and previous are the
-  DJ block's arrows, never a screen gesture or a tap.
-- `assets/label_cover.bin`, `assets/cover.jpg` — both placed by
-  `tools/convert_cassette_assets.py`. The label cover is generated and is RGB565A8 so its
-  transparent shapes show the reels. `cover.jpg` is the Case, copied unchanged and
-  embedded as the original 45 KB JPEG: the loader decodes it once at start instead of
-  carrying a 768 KB raw RGB565 copy in flash. The hubs are not an asset: the tapes draw
-  them, a static rim with a divided circle turning inside it, so there is no hub blob to
-  embed (the measurements behind that are in `docs/research/hub-drawn-vs-blitted.md`).
+  right/left swipe slides the transport drawer in/out, an up swipe toggles Bare's peek,
+  and a down swipe has no meaning. A two-finger swipe is reserved for the menu; it is
+  still reported so it cannot fall through to the one-finger handler. Next and previous
+  are the DJ block's arrows, never a screen gesture or a tap.
+- `assets/label_cover.bin`, `assets/cover.jpg` — parked with the Label cover and Artwork
+  screens and not embedded in the firmware. They stay for when those screens come back;
+  `tools/convert_cassette_assets.py` is still the way they are made.
 
 The panel and the headless path are two adapters behind the same interface, selected by
 `CONFIG_APP_BOARD_SUNTON_8048S050C` in this component's CMake. The touch adapter and the
-artwork loader are a second, input-side pair under the same selection: a board without a
-controller simply has no pointer and no Artwork level. A third panel promotes that
-selection to a `display_port` seam without changing `screen_display_start()`.
+tags loader are a second, input-side pair under the same selection: a board without a
+controller simply has no pointer and no peek. A third panel promotes that selection to a
+`display_port` seam without changing `screen_display_start()`.
 
-## The three Levels
+## Bare and the peek
 
-The cassette screen has three Levels, and exactly one sheet is shown at a time:
+The cassette screen has one screen: Bare, the cassette alone. The up swipe raises the
+peek - the timeline bar and the two floating tags - and the next up swipe puts it away.
+A down swipe does nothing; the Label cover and Artwork screens that used to sit below
+Bare are gone, with their two down gestures and the Level machine.
 
-| Level | Sheet | What is on screen |
-| --- | --- | --- |
-| Bare | none | the cassette alone; an up swipe raises the peek (timeline and tags) |
-| Label cover | `k7logo` full-bleed | the K7 sticker; its tape windows show the reels |
-| Artwork | the Case + the Track picture | `cover.jpg` full-bleed; the picture fills its window, 603x385; the title below |
-
-`cassette_levels.c` owns the machine, and a table indexed by Level carries each sheet's
-rest and hidden position, whether reaching it asks for the Track's picture, and what the
-backdrop does on arrival. A one-finger down/up swipe moves one Level - down
-from Bare to the Label cover to Artwork, up the other way - and the ends do not wrap. At
-Bare the up swipe has no Level above to move to, so it raises the peek: the timeline bar
-slides up and the cassette shrinks to `CASSETTE_SCALE_LABEL` so the bar clears the tape,
-both over the same 260 ms. The two tags appear with it - the group above the left hub,
-the song below it - and bob out of phase. While the peek is up, either vertical
-swipe slides it out; a down swipe only moves to the Label cover once the peek is away.
-Any Level change puts it away at once. The peek is an overlay on Bare, not a fourth Level.
-
-The two-finger swipe is reserved for the menu: it moves no Level today, and because
-`screen_input.c` still latches it, the same touch cannot also trip the one-finger gesture
-or the click. The Level changes on release and it changes in one frame: the target sheet
-is placed at rest and every other sheet is hidden before LVGL draws. There is no slide.
-The 300 ms slide was measured as a stutter: each frame of it moved a full-screen sheet, a
-1.15 MB read and a 0.77 MB write, and the RGB panel's scanout wants the same PSRAM. The
-peek's own 260 ms slide is kept: it moves a 568x52 bar and two 504x44 tags, not the
+The peek's own 260 ms slide is kept: it moves a 568x52 bar and two 504x44 tags, not the
 panel. Its cassette shrink re-places every part in the same 260 ms — geometry only, no
 bitmap and no re-sampled pixels — so what it costs is a redraw of the cassette, not of
 the panel's picture. `cassette_view_set_scale(scale, 0, dy, 0)` is the instant form if
 that ever reads as a stutter.
+
+The cover pipeline (the Track picture, the Case backdrop and their buffers) is parked in
+`artwork_loader.c`; the file and the assets are kept, but nothing in this build uses
+them. The peek's tags still come from the Track's container through `tags_loader.c`.
 
 ## The peek
 
 The peek is the one overlay on Bare, owned by `cassette_peek.c`. It has three things:
 the bar, the tags and the tethers.
 
-The bar is the old Label's paper strip, 568x52 at (116,424) with a 12 px radius. It no
+The bar is the old paper strip, 568x52 at (116,424) with a 12 px radius. It no
 longer carries the title. Its left box is the Track's elapsed time, its right box the
 total, and between them a 288x6 rounded track whose lit fill grows with the model's
 `permille`. The model reports whole-second changes (`time_changed`) and permille changes
@@ -170,19 +144,18 @@ and 28 px Jura text, centred on the cassette at x=148..651 (61 px of cassette on
 side): the group at (148,12) above the left hub, the song at (148,248) below it, their
 centres 118 px from the hub's centre on either side.
 Sixteen px of inset leaves 472 px of text, enough for a long title; a longer one is cut
-with dots, not scrolled. The peek uses a second Jura face at 28 px (`font_jura_28.c`); the
-cover and Artwork bands keep 36. Both tethers leave on the left hub's column (251 px;
-20.4 % of the centred 504 px pill rather than a round quarter, so the lines stay
+with dots, not scrolled. The peek uses a second Jura face at 28 px (`font_jura_28.c`);
+there is no 36 px band left on the screen. Both tethers leave on the left hub's column
+(251 px; 20.4 % of the centred 504 px pill rather than a round quarter, so the lines stay
 vertical): the group's from its bottom to the top rim, the song's from its top to the
 bottom rim.
-The cover and Artwork band titles use the same dot truncation, so no marquee runs anywhere
-on the screen. The texts are the Track's ID3/FLAC tags, read by the loader:
-TPE1 (artist, with TPE2 as its fallback), TIT2 in an MP3; ARTIST (with ALBUMARTIST as its
-fallback), TITLE in a FLAC Vorbis comment. Until they land - and for a Track that carries
-none - the group is the first directory of the Track's relative path and the song is the
-cleaned filename. A label wider than its pill is truncated with dots, not scrolled: a
-marquee would animate every frame the peek is up. A `—` stands in for a missing half;
-when both are missing the tags and tethers are hidden rather than floating empty.
+The texts are the Track's ID3/FLAC tags, read by `tags_loader`: TPE1 (artist, with TPE2
+as its fallback), TIT2 in an MP3; ARTIST (with ALBUMARTIST as its fallback), TITLE in a
+FLAC Vorbis comment. Until they land - and for a Track that carries none - the group is
+the first directory of the Track's relative path and the song is the cleaned filename. A
+label wider than its pill is truncated with dots, not scrolled: a marquee would animate
+every frame the peek is up. A `—` stands in for a missing half; when both are missing the
+tags and tethers are hidden rather than floating empty.
 
 Each tether is a two-point `lv_line` from 14 px inside its pill to the left hub's near
 rim: the group from its bottom to the top rim, the song from its top to the bottom rim.
@@ -197,8 +170,8 @@ in opposite phase. Its callback rounds the offset to a whole pixel and writes `y
 when that pixel changes, which is around eight writes per tag per second at 25 Hz; each
 write invalidates one 504x44 pill, not the cassette and not the screen. The tethers are
 static between pose changes. The peek's room request is the view's 200/256 pose with the
--60 px lift; the tags appear with the first frame, the bar runs its 260 ms slide, and a
-Level change puts everything away in one frame.
+-60 px lift; the tags appear with the first frame, the bar runs its 260 ms slide, and the
+next up swipe puts everything away.
 
 ## The transport drawer
 
@@ -220,12 +193,11 @@ pressed state; release or `LV_EVENT_PRESS_LOST` restores the other. A click runs
 scale pulse (256 -> 232 -> 256) and does nothing else: the buttons are placeholders, and
 the transport is not wired.
 
-The drawer is chrome above every sheet. It is created after the Levels, and the view raises
-it (together with the DJ block) after a vertical swipe because the Artwork sheet raises
-itself when it settles. Its panel and button roots bubble gestures, so a swipe that starts on
-the drawer still reaches `screen_input`, and they bubble events, so a press clears the
-two-finger latch. A button press cannot fall through as a tap: a click on a child is the
-child's, and the screen no longer gives a click any meaning.
+The drawer is chrome above the peek. It is created after `cassette_levels`, and its panel
+and button roots bubble gestures, so a swipe that starts on the drawer still reaches
+`screen_input`, and they bubble events, so a press clears the two-finger latch. A button
+press cannot fall through as a tap: a click on a child is the child's, and the screen no
+longer gives a click any meaning.
 
 ## The DJ block
 
@@ -239,13 +211,14 @@ cassette is already at the 134/256 control pose. It slides in from the right edg
 same 260 ms as the drawer and slides back out when the drawer leaves.
 
 Each knob is a 44 px circle - 30% smaller than the arrows' 64 px one - with a 24-dot
-crown at r=32 outside it and a 6x22 line from the centre to the rim. 0 dB is at twelve
+crown at r=32 outside it and a line from the centre towards the rim (the owner's tuned
+4 px width). 0 dB is at twelve
 o'clock; the right side cuts and the left side boosts, and the arc lights from twelve to
 the line on the side it points.
 
 A tap on a knob opens edit mode after a 550 ms delay: a 3x virtual knob (284 px at x=206,
-the 96+94+94 length, its top on the GAIN button's top, a 2 px circle stroke and a 6 px
-centre line, with no outer square - only the circle, the crown and the line) appears over
+the 96+94+94 length, its top on the GAIN button's top, a 2 px circle stroke and a centre
+line, with no outer square - only the circle, the crown and the line) appears over
 the cassette, while a transparent 800x480 overlay owns the touch. The cassette cuts out and
 the knob appears; on close the knob disappears and the cassette cuts back in. The delay is
 there so a second tap is read as the reset double click instead of opening the knob. Only
@@ -254,7 +227,7 @@ circle - is the target point: the knob jumps to that angle, 0 dB at twelve, cloc
 cutting and counter-clockwise boosting. A click outside does nothing; there is no drag. A
 double tap on any small knob resets it to 0 dB and cancels the pending open, so the virtual
 knob never appears. While the overlay is up nothing else responds - the arrows, P/R/W, the
-drawer and the Levels are all behind it - and the view's sink drops every screen intent
+drawer and the peek are all behind it - and the view's sink drops every screen intent
 too, because the two-finger menu arrives from the touch adapter directly. Both the small
 active circle and the big one blink their border 100% -> 27% -> 100%, 600 ms each way. The
 arrows are the only next/previous controls and call `mini_icecast_prev()` /
@@ -299,58 +272,24 @@ fades: the meter, the title and the cassette are information, not tape. The mode
 reports `rewind_permille`, and `t10_cassette` tests both the reel arithmetic and the
 `tape_ink` ramp.
 
-## The Track picture and the Case
+## Parked: the Track picture and the Case
 
-`artwork_loader.c` asks `components/portable/artwork` for the picture's offset and
-length — an ID3v2.3/2.4 `APIC` frame in an MP3, or a native FLAC `PICTURE` block,
-preferring the front-cover type — then reads it, decodes it and fits it to the Case's
-window: (101,23) to (704,408), 603x385. The fit is cover, not stretch: a non-square
-picture is centre-cropped, never squeezed. The window is the cyan rectangle of
-`assets/labels/cover.jpg`, so the Track picture replaces it and the case is the backdrop.
+The Artwork screen and its Label cover are removed. Their cover pipeline - the Track
+picture locator (`components/portable/artwork`'s `artwork_locate()`, `id3.c`, `flac.c`),
+the JPEG decode and fit, the Case backdrop and its buffers - is parked in
+`artwork_loader.c` and is not built. The cover sources stay in
+`components/portable/artwork` and the host test `t15_artwork` still builds and tests
+them. `assets/label_cover.bin` and `assets/cover.jpg` stay in the tree unembedded for
+when the screen comes back. The firmware no longer carries the TJpgDec include, the
+45 KB Case JPEG or the 464 KB cover buffer: the app image dropped by about 1.2 MB.
 
-The Case is one opaque 800x480 JPEG, embedded in the image. The loader decodes it once
-at start into one 768 000 B PSRAM buffer and hands the descriptor to the view's
-`cassette_view_set_case()`, which forwards it to the Levels; if the decode fails, the
-Artwork screen keeps its flat `k_col_art_bg` backdrop. The title sits on the free band under
-the case, at y=424.
-
-Only JPEG is decoded. TJpgDec is called directly on the encoded bytes rather than through
-LVGL's image decoder, which wants a file or the memfs driver and cannot hand back the
-single fitted buffer the screen needs. A PNG picture is located and refused with a log
-line: it is rare in an MP3, and the window does not justify LodePNG's full-size buffer.
-
-Memory is the project's scarce resource, so:
-
-- The cover is one 603x385 RGB565 buffer (464 310 B of PSRAM), allocated once and reused
-  for every Track. `cassette_levels.c` hides the picture when a new Track is requested, so
-  the decode writes it while the panel is not drawing it; a second buffer would not fit.
-- The Case is one 800x480 RGB565 buffer (768 000 B) in PSRAM, decoded once at start.
-  Embedding the 45 KB JPEG instead of a raw RGB565 blob is what keeps the app inside its
-  4 MB partition.
-- The Track's JPEG is read from the card **on demand**: TJpgDec asks for a few hundred
-  bytes at a time, so the encoded picture is never in PSRAM. The only workspace is a band
-  (width x 16 rows of RGB888) for a streaming fit, or a crop buffer no larger than the
-  window for an upscale; both are freed after the decode.
-- A picture whose crop is at least the window's size is box-filtered from TJpgDec's MCU
-  bands into that buffer (`artwork_cover_*`): no full-size RGB buffer exists even for a
-  4000x4000 JPEG. A smaller picture is decoded into the crop buffer and upscaled with
-  the portable bilinear fit.
-- The decode runs on core 0 at priority 2, below the screen and the network. The file
-  reads yield every 16 KB and back off while `mini_icecast_lag_ms()` says the broadcast
-  is behind: the VFS holds the volume lock for one `fread`.
-- A newer Track abandons the old read and decode instead of making the new picture wait.
-
-A Track with no usable picture leaves the Case's cyan window showing, with the title still
-on screen. The pictures live in PSRAM; the descriptors are handed to the view under the
-LVGL lock, so the Levels stay free of stdio, FATFS and the decoder.
+The peek keeps its text tags through `tags_loader.c`, which uses only
+`components/portable/artwork`'s `tags.c`; that is the part of the old loader still in the
+build.
 
 ## Board-only properties
 
-A host pass cannot establish the JPEG decode time, the PSRAM peak while a cover is read
-and decoded, or the card contention while the stream is running. Those are measured on
-the panel, and the numbers belong in the README's board tier. The panel pass has recorded
-the decode: the first card track's 239x236 `APIC` (22,080 B) became the 603x385 window in
-691 ms and showed, with 504,300 B of PSRAM left after the cover buffer. The host tier
-covers the locators and the fit (`host/tests/t15_artwork.c`) and the design grid
-(`host/tests/t16_layout.c`); the card contention and the PSRAM peak are the remaining
-board-only properties to watch.
+A host pass cannot establish the JPEG decode time or the card contention; those belong
+to the parked Artwork pipeline, and its board measurements are in the git history. The
+host tier covers the locators and the fit (`host/tests/t15_artwork.c`) and the design
+grid (`host/tests/t16_layout.c`).

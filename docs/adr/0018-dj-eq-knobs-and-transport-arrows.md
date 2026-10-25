@@ -19,7 +19,7 @@ every listener hears, and there is no local audio path to fight with. The PCM se
   left column is GAIN above the `<` and `>` arrows; the right column is HI, MED and LOW.
 - **The knobs are a small circle, an outside crown and a centre line.** The arrows keep
   the buttons' 64 px circle; the knobs use 44 px (30% smaller). The 24-dot crown is at
-  r=32, outside that circle, and the 6x22 line runs from the circle's centre to its rim.
+  r=32, outside that circle, and a line runs from the circle's centre towards its rim.
   0 dB is at twelve o'clock, the right side cuts and the left side boosts; the arc lights
   from twelve to the line on the side it points. The twelve o'clock dot is the 0 dB tick.
 - **The ranges are the DJ ones.** GAIN -12..+12 dB, default 0; bands -26..+6 dB, default
@@ -28,7 +28,7 @@ every listener hears, and there is no local audio path to fight with. The PCM se
 - **Edit mode is modal, on a 3x virtual knob.** A tap on a knob opens it after 550 ms, so a
   second tap is read as the reset double click first. The 284 px (96+94+94) virtual knob
   sits at x=206, its top on the GAIN button's top; there is no outer square, just the 132 px
-  circle with its 2 px stroke, the crown and the 6 px centre line. A transparent 800x480
+  circle with its 2 px stroke, the crown and the centre line. A transparent 800x480
   overlay owns the touch. The cassette cuts out and the knob appears; on close the knob
   disappears and the cassette cuts back in. Only the big knob's centre circle closes. A
   click on the ring - the 284 px area around that circle - is the target point: the knob

@@ -9,13 +9,13 @@
  * reports a two-finger swipe it detects from the contacts themselves. This module turns
  * those events into one intent and hands it to the view's sink. A swipe's direction and the
  * reserved two-finger gesture are decided here, so the view does not have to: nothing in
- * this module calls mini_icecast, moves a Level, touches the peek or slides the button
- * drawer.
+ * this module calls mini_icecast, touches the peek or slides the button drawer.
  *
- * A left/right swipe no longer skips a Track: it hides or shows the transport drawer at the
- * left edge. Down/up still moves one Level, and two fingers are still the menu's. A tap is
- * not an intent: next and previous belong to the DJ block's own arrows, whose clicks are
- * their cells' events and never reach the screen.
+ * A left/right swipe hides or shows the transport drawer at the left edge. An up swipe at
+ * Bare toggles the peek; a down swipe has no meaning (the Label cover and Artwork screens
+ * are gone). Two fingers are still the menu's. A tap is not an intent: next and previous
+ * belong to the DJ block's own arrows, whose clicks are their cells' events and never
+ * reach the screen.
  *
  * "One touch, one intent" is the point of the policy. LVGL sends the release of a swipe as
  * a click as well, and the two-finger swipe arrives while a one-finger gesture for the same
@@ -43,8 +43,7 @@ typedef enum {
     SCREEN_INTENT_NONE = 0,
     SCREEN_INTENT_BUTTONS_SHOW,
     SCREEN_INTENT_BUTTONS_HIDE,
-    SCREEN_INTENT_LEVEL_DOWN,
-    SCREEN_INTENT_LEVEL_UP,
+    SCREEN_INTENT_PEEK_TOGGLE,
     SCREEN_INTENT_MENU,
 } screen_intent_t;
 

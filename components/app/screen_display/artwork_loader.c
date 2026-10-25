@@ -1,4 +1,11 @@
 /*
+ * PARKED - the Artwork screen's cover pipeline. Not built.
+ *
+ * The Label cover and Artwork screens were removed; this loader is kept for when the
+ * Artwork screen comes back. The peek's tags live in tags_loader.c now. Restore this file,
+ * the cover assets, the artwork cover sources and the view's set_artwork()/set_case()
+ * together; it does not compile against the current view.
+ *
  * artwork_loader.c - the card, the JPEG decoder and the Artwork screen's cover, on
  * their own task.
  *
