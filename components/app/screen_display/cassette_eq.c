@@ -21,6 +21,7 @@
 
 #include "cassette_eq.h"
 #include "cassette_style.h"
+#include "cassette_view.h"
 #include "cassette_widgets.h"
 #include "mini_icecast.h"
 #include "screen_input.h"
@@ -31,7 +32,11 @@ LV_FONT_DECLARE(jura_36);
  * bottom of the block is 360. The 16 px is the inset of the 64 px circle inside each
  * 96 px carcase, not a gap: the carcases share their borders like P/R/W. The arrows keep
  * that 64 px circle; the four knobs use a 30% smaller one (44 px) and the dot crown sits
- * outside it, with the stem running from the rim outward. */
+ * outside it, with the line running from the centre to the rim.
+ *
+ * The edit view is one knob at 3x, 284 px (96+94+94) centred: circle 132, crown at r=96
+ * with 12 px dots, an 18x66 line from the centre to the rim. The finger's angle around
+ * that centre edits; a tap closes; the cassette fades out and back in. */
 #define CELL_W       96
 #define CELL_H       96
 #define CELL_PITCH   94
@@ -50,8 +55,22 @@ LV_FONT_DECLARE(jura_36);
 #define STICK_W      6
 #define STICK_L      KNOB_R   /* the radius: from the centre to the rim */
 #define STICK_R      3
-#define PX_PER_UNIT  3
-#define TAP_SLOP     6
+#define BIG_D        284
+#define BIG_X        ((800 - BIG_D) / 2)
+#define BIG_Y        ((480 - BIG_D) / 2)
+#define BIG_CX       (BIG_X + BIG_D / 2)
+#define BIG_CY       (BIG_Y + BIG_D / 2)
+#define BIG_R        24
+#define BIG_BORDER   6
+#define BIG_INSET    76
+#define BIG_CIRCLE   132
+#define BIG_RADIUS   66
+#define BIG_DOT_R    96
+#define BIG_DOT_D    12
+#define BIG_STICK_W  18
+#define BIG_STICK_L  BIG_RADIUS
+#define BIG_STICK_R  9
+#define TAP_DEG      6.0f   /* a rotation smaller than this is a tap/close */
 #define BLINK_MS     600
 #define BLINK_MIN_OPA 70
 /* The block enters and leaves with the transport drawer's 260 ms slide, from the right
@@ -88,9 +107,13 @@ static bool s_shown;                  /* the block is out with the transport dra
 static bool s_sliding;                /* the show/hide slide is in flight */
 static int32_t s_slide_offset = EQ_SLIDE_OFFSET;  /* px right of the resting position */
 static lv_obj_t *s_overlay;
-static lv_point_t s_press;
-static int s_start_value;
-static int s_moved;
+static lv_obj_t *s_big_cell;          /* the 3x edit knob, centred */
+static lv_obj_t *s_big_circle;
+static lv_obj_t *s_big_dot[DOT_COUNT];
+static lv_obj_t *s_big_stick;
+static float s_ang0;                  /* the press angle, degrees from twelve, clockwise */
+static int s_value0;                  /* the value at the press */
+static bool s_value_changed;          /* a rotation moved it: the release is not a close */
 
 /* ------------------------------------------------------------------ geometry */
 
@@ -129,12 +152,11 @@ static void knob_send(int slot)
 
 /* ---------------------------------------------------------------------- draw */
 
-/* Paint the crown and point the stick. The arc starts at twelve o'clock and runs to the
- * stick on the side it points: clockwise for a cut, counter-clockwise for a boost. The
- * dot at twelve is always the 0 dB tick. */
-static void knob_apply(int slot)
+/* Paint one crown. The arc starts at twelve o'clock and runs to the line on the side it
+ * points: clockwise for a cut, counter-clockwise for a boost. The dot at twelve is always
+ * the 0 dB tick. The small and the big knob share this. */
+static void paint_dots(lv_obj_t *dots[DOT_COUNT], int value)
 {
-    int value = s_value[slot];
     int span = (int)lroundf(fabsf((float)(value - 50)) / 50.0f * (float)(DOT_COUNT / 2));
 
     for (int i = 0; i < DOT_COUNT; i++) {
@@ -142,11 +164,25 @@ static void knob_apply(int slot)
         if (i == 0) c = k_col_eq_tick;
         else if (value < 50 && i <= span) c = k_col_eq_lit;
         else if (value > 50 && i >= DOT_COUNT - span) c = k_col_eq_lit;
-        lv_obj_set_style_bg_color(s_dot[slot][i], c, 0);
+        lv_obj_set_style_bg_color(dots[i], c, 0);
     }
+}
 
+static void knob_apply(int slot)
+{
+    int value = s_value[slot];
+    paint_dots(s_dot[slot], value);
     float deg = (50.0f - (float)value) * 3.6f;   /* 180 degrees per 50 units */
     lv_obj_set_style_transform_rotation(s_stick[slot], (int32_t)lroundf(deg * 10.0f), 0);
+}
+
+/* The virtual knob shows the same value at 3x; its line is 18x66. */
+static void big_apply(int slot)
+{
+    int value = s_value[slot];
+    paint_dots(s_big_dot, value);
+    float deg = (50.0f - (float)value) * 3.6f;
+    lv_obj_set_style_transform_rotation(s_big_stick, (int32_t)lroundf(deg * 10.0f), 0);
 }
 
 /* Double-tapping a knob is the mixer's reset-to-centre: 0 dB, like its neutral. */
@@ -154,6 +190,7 @@ static void knob_reset(int slot)
 {
     s_value[slot] = 50;
     knob_apply(slot);
+    if (s_big_stick && s_active == slot) big_apply(slot);
     knob_send(slot);
 }
 
@@ -192,6 +229,35 @@ static void arrow_build(lv_obj_t *cell, int slot)
     lv_label_set_text(label, slot == SLOT_PREV ? "<" : ">");
 }
 
+/* The 3x knob, hidden until a knob is tapped. Its carcase is 284 px, the 96+94+94 length
+ * of the block; the art is the small knob at 3x: circle 132, crown at r=96 with 12 px dots,
+ * an 18x66 line from the centre to the rim. The overlay above it takes the rotation. */
+static void big_build(lv_obj_t *parent)
+{
+    s_big_cell = cassette_border_box(parent, BIG_X, BIG_Y, BIG_D, BIG_D, BIG_R,
+                                     k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, BIG_BORDER);
+    s_big_circle = cassette_border_box(s_big_cell, BIG_INSET, BIG_INSET,
+                                       BIG_CIRCLE, BIG_CIRCLE, BIG_RADIUS,
+                                       k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, BIG_BORDER);
+
+    for (int i = 0; i < DOT_COUNT; i++) {
+        float a = (float)i * 15.0f * 3.14159265358979323846f / 180.0f;
+        int x = BIG_D / 2 + (int)lroundf((float)BIG_DOT_R * sinf(a));
+        int y = BIG_D / 2 - (int)lroundf((float)BIG_DOT_R * cosf(a));
+        s_big_dot[i] = cassette_box(s_big_cell, x - BIG_DOT_D / 2, y - BIG_DOT_D / 2,
+                                    BIG_DOT_D, BIG_DOT_D, BIG_DOT_D / 2, k_col_eq_dim);
+    }
+
+    s_big_stick = cassette_box(s_big_cell, BIG_D / 2 - BIG_STICK_W / 2,
+                               BIG_D / 2 - BIG_STICK_L, BIG_STICK_W, BIG_STICK_L,
+                               BIG_STICK_R, k_col_eq_tick);
+    lv_obj_set_style_transform_pivot_x(s_big_stick, BIG_STICK_W / 2, 0);
+    lv_obj_set_style_transform_pivot_y(s_big_stick, BIG_STICK_L, 0);
+
+    lv_obj_set_hidden(s_big_cell, true);
+    big_apply(SLOT_GAIN);
+}
+
 /* --------------------------------------------------------------------- blink */
 
 static void blink_cb(void *var, int32_t v)
@@ -199,9 +265,8 @@ static void blink_cb(void *var, int32_t v)
     lv_obj_set_style_border_opa((lv_obj_t *)var, (lv_opa_t)v, 0);
 }
 
-static void blink_start(int slot)
+static void blink_on(lv_obj_t *circle)
 {
-    lv_obj_t *circle = s_circle[slot];
     if (!circle) return;
     lv_anim_delete(circle, blink_cb);
 
@@ -217,33 +282,54 @@ static void blink_start(int slot)
     lv_anim_start(&a);
 }
 
-static void blink_stop(int slot)
+static void blink_off(lv_obj_t *circle)
 {
-    lv_obj_t *circle = s_circle[slot];
     if (!circle) return;
     lv_anim_delete(circle, blink_cb);
     lv_obj_set_style_border_opa(circle, LV_OPA_COVER, 0);
 }
 
+/* The active small circle blinks under the faded cassette; the big one blinks too, so
+ * the edit reads at the centre. */
+static void blink_start(int slot)
+{
+    blink_on(s_circle[slot]);
+    blink_on(s_big_circle);
+}
+
+static void blink_stop(int slot)
+{
+    blink_off(s_circle[slot]);
+    blink_off(s_big_circle);
+}
+
 /* ----------------------------------------------------------------- edit mode */
 
 static void end_edit(void);
-static void switch_edit(int slot);
+
+/* The angle from the big knob's centre: 0 at twelve, positive clockwise, in degrees. */
+static float angle_at(lv_point_t p)
+{
+    float dx = (float)(p.x - BIG_CX);
+    float uy = (float)(BIG_CY - p.y);
+    if (dx == 0.0f && uy == 0.0f) return 0.0f;
+    return atan2f(dx, uy) * 180.0f / 3.14159265358979323846f;
+}
 
 static void overlay_pressed_cb(lv_event_t *e)
 {
     (void)e;
     lv_indev_t *indev = lv_indev_active();
     if (!indev || s_active < 0) return;
-    lv_indev_get_point(indev, &s_press);
-    s_start_value = s_value[s_active];
-    s_moved = 0;
+    lv_point_t p;
+    lv_indev_get_point(indev, &p);
+    s_ang0 = angle_at(p);
+    s_value0 = s_value[s_active];
+    s_value_changed = false;
 }
 
-/* The drag is absolute from where the press started: right from the start lowers the
- * value, left raises it. The first TAP_SLOP pixels are a dead zone, so a tap with a little
- * finger jitter neither moves the value nor turns into a drag; a release that moved more
- * than TAP_SLOP is a drag, not the tap that exits. */
+/* The big knob is edited by rotation, relative to the press angle: clockwise cuts and
+ * counter-clockwise boosts. A movement under TAP_DEG does nothing, so a tap can close. */
 static void overlay_pressing_cb(lv_event_t *e)
 {
     (void)e;
@@ -252,42 +338,35 @@ static void overlay_pressing_cb(lv_event_t *e)
 
     lv_point_t p;
     lv_indev_get_point(indev, &p);
-    int dx = p.x - s_press.x;
-    int dy = p.y - s_press.y;
-    int adx = dx < 0 ? -dx : dx;
-    int ady = dy < 0 ? -dy : dy;
-    if (adx > s_moved) s_moved = adx;
-    if (ady > s_moved) s_moved = ady;
-    if (adx <= TAP_SLOP) return;
+    float d = angle_at(p) - s_ang0;
+    while (d > 180.0f) d -= 360.0f;
+    while (d < -180.0f) d += 360.0f;
+    if (fabsf(d) < TAP_DEG) return;
 
-    int eff = dx > 0 ? dx - TAP_SLOP : dx + TAP_SLOP;
-    int v = s_start_value - eff / PX_PER_UNIT;
+    int v = s_value0 - (int)lroundf(d * (50.0f / 180.0f));
     if (v < 0) v = 0;
     if (v > 100) v = 100;
     if (v == s_value[s_active]) return;
 
     s_value[s_active] = v;
+    s_value_changed = true;
     knob_apply(s_active);
+    big_apply(s_active);
     knob_send(s_active);
 }
 
+/* A tap closes. A rotation that moved the value does not: the release is part of the
+ * edit, and the next tap closes. */
 static void overlay_clicked_cb(lv_event_t *e)
 {
     (void)e;
-    if (s_active < 0 || s_moved > TAP_SLOP) return;
-    lv_indev_t *indev = lv_indev_active();
-    if (!indev) return;
-
-    lv_point_t p;
-    lv_indev_get_point(indev, &p);
-    int slot = knob_at(p.x, p.y);
-    if (slot == s_active) end_edit();
-    else if (slot >= 0) switch_edit(slot);
+    if (s_active < 0 || s_value_changed) return;
+    end_edit();
 }
 
-/* LVGL has already applied its own 400 ms / 10 px double-click rule: the second tap's
- * short click is a DOUBLE_CLICKED on the overlay. Reset the active knob and leave; the
- * CLICKED that follows sees s_active == -1 and does nothing. */
+/* LVGL has already applied its own double-click rule (500 ms, 20 px on this touch
+ * adapter): the second tap's short click is a DOUBLE_CLICKED on the overlay. Reset the
+ * active knob and leave; the CLICKED that follows sees s_active == -1 and does nothing. */
 static void overlay_double_clicked_cb(lv_event_t *e)
 {
     (void)e;
@@ -324,20 +403,18 @@ static void overlay_create(void)
 
 static void begin_edit(int slot)
 {
-    if (s_active >= 0) {
-        switch_edit(slot);
-        return;
-    }
+    if (s_active >= 0) return;
     s_active = slot;
-    overlay_create();
-    blink_start(slot);
-}
+    s_value_changed = false;
 
-static void switch_edit(int slot)
-{
-    if (slot == s_active || slot < 0 || slot >= KNOB_SLOTS) return;
-    blink_stop(s_active);
-    s_active = slot;
+    overlay_create();
+    if (s_big_cell) {
+        big_apply(slot);
+        lv_obj_set_hidden(s_big_cell, false);
+        lv_obj_move_foreground(s_big_cell);
+        lv_obj_move_foreground(s_overlay);
+    }
+    cassette_view_dim(true);
     blink_start(slot);
 }
 
@@ -346,6 +423,8 @@ static void end_edit(void)
     if (s_active < 0) return;
     blink_stop(s_active);
     s_active = -1;
+    if (s_big_cell) lv_obj_set_hidden(s_big_cell, true);
+    cassette_view_dim(false);
     if (s_overlay) {
         /* The overlay is the event target of this click: delete it after the dispatcher
          * returns rather than under its own callback. */
@@ -441,6 +520,8 @@ void cassette_eq_create(lv_obj_t *parent)
         else arrow_build(cell, slot);
         lv_obj_set_hidden(cell, true);
     }
+    s_value_changed = false;
+    big_build(parent);
 
     /* The audio starts from the same values; this makes a rebuilt screen agree with it. */
     for (int slot = 0; slot < KNOB_SLOTS; slot++) knob_send(slot);

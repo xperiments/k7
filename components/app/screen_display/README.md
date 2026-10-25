@@ -241,14 +241,18 @@ same 260 ms as the drawer and slides back out when the drawer leaves.
 Each knob is a 44 px circle - 30% smaller than the arrows' 64 px one - with a 24-dot
 crown at r=32 outside it and a 6x22 line from the centre to the rim. 0 dB is at twelve
 o'clock; the right side cuts and the left side boosts, and the arc lights from twelve to
-the line on the side it points. A tap on a knob enters
-edit mode: a transparent 800x480 overlay above every object owns the touch, a horizontal
-drag moves the value at 3 px per unit after a 6 px dead zone (right lowers it, left raises
-it), and only a tap on the active knob leaves. Tapping another knob switches the edit. A
-double tap on any knob resets it to 0 dB and leaves edit mode. While
-the overlay is up nothing else responds - the arrows, P/R/W, the drawer and the Levels are
-all behind it - and the view's sink drops every screen intent too, because the two-finger
-menu arrives from the touch adapter directly. The active circle blinks its border
+the line on the side it points.
+
+A tap on a knob opens edit mode: a 3x virtual knob (284 px, the 96+94+94 length of the
+block) appears at the centre, the cassette fades out over 180 ms, and a transparent 800x480
+overlay owns the touch. The value is edited by rotating the finger around that centre,
+relative to the press angle: clockwise cuts, counter-clockwise boosts; a 6 degree
+movement is the dead zone. A tap closes the virtual knob and the cassette fades back in. A
+rotation that moved the value does not close on release; the next tap does. A double tap
+on any small knob resets it to 0 dB and leaves. While the overlay is up nothing else
+responds - the arrows, P/R/W, the drawer and the Levels are all behind it - and the view's
+sink drops every screen intent too, because the two-finger menu arrives from the touch
+adapter directly. Both the small active circle and the big one blink their border
 100% -> 27% -> 100%, 600 ms each way. The arrows are the only next/previous controls and
 call `mini_icecast_prev()` / `mini_icecast_skip()`; the screen's tap and the BOOT button no
 longer do either.

@@ -51,6 +51,8 @@ static const char *TAG = "screen";
 #define CASSETTE_BUTTONS_DX    (-51)
 #define CASSETTE_BUTTONS_DY    (-20)
 #define CASSETTE_ROOM_MS       CASSETTE_BUTTONS_SLIDE_MS
+/* Edit mode's fade: the cassette recedes while the big virtual knob is up. */
+#define CASSETTE_DIM_MS        180
 
 static cassette_t *s_model;
 static lv_obj_t *s_cassette;   /* the container everything the body draws hangs off */
@@ -157,6 +159,32 @@ void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms)
     /* The peek's bar and the transport drawer drive this, so the ease is theirs: the
      * picture and the thing that asked for room arrive as one. */
     lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+    lv_anim_start(&a);
+}
+
+/* ------------------------------------------------------------------ dim */
+
+/* opa_layered, not opa: the style's opacity is applied to the object alone, while the
+ * layered one renders the container and its children into a layer and fades the layer.
+ * The tapes and the meter are children, so this is what makes the whole cassette recede. */
+static void dim_cb(void *var, int32_t v)
+{
+    lv_obj_set_style_opa_layered((lv_obj_t *)var, (lv_opa_t)v, 0);
+}
+
+void cassette_view_dim(bool dim)
+{
+    if (!s_cassette) return;
+    lv_anim_delete(s_cassette, dim_cb);
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, s_cassette);
+    lv_anim_set_exec_cb(&a, dim_cb);
+    lv_anim_set_values(&a, lv_obj_get_style_opa_layered(s_cassette, 0),
+                       dim ? LV_OPA_TRANSP : LV_OPA_COVER);
+    lv_anim_set_duration(&a, CASSETTE_DIM_MS);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
     lv_anim_start(&a);
 }
 

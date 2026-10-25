@@ -570,12 +570,11 @@ The DJ block is six 96 px carcases in two touching columns at x=592..784, rows a
 second. The four knobs are a 44 px circle (30% smaller than the arrows'), a 24-dot crown
 outside it and a line from the centre to the rim, 0 dB at twelve o'clock, right cuts and
 left boosts; the arrows are the only next/previous controls and call
-`mini_icecast_prev()` / `mini_icecast_skip()`. A tap on a knob enters a modal edit mode: a
-transparent overlay owns the screen, a horizontal drag moves the value (left raises, right
-lowers), a double tap resets a knob to 0 dB, the active circle blinks, and only a tap on the
-active knob leaves. While it is up
-nothing else responds - the arrows, P/R/W, the drawer and the Levels - and the view drops
-every screen intent, including the two-finger menu. The audio is
+`mini_icecast_prev()` / `mini_icecast_skip()`. A tap on a knob opens a modal edit mode: a
+3x virtual knob (284 px) takes the centre, the cassette fades out, and the finger's
+rotation around the centre edits it (clockwise cuts, counter-clockwise boosts); a tap
+closes it and the cassette fades back in. A double tap on a small knob resets it to 0 dB,
+both circles blink, and nothing else responds while the overlay is up. The audio is
 `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell and a 4 kHz high shelf plus
 a trim before them, with the DJ ranges (GAIN -12..+12 dB, default 0; bands -26..+6 dB,
 default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder.
