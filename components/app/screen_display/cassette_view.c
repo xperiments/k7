@@ -195,8 +195,9 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
 
     switch (intent) {
         case SCREEN_INTENT_BUTTONS_SHOW:
-            /* A right swipe brings the drawer and the DJ block in; while they are out,
-             * either horizontal swipe takes them back out. */
+        case SCREEN_INTENT_BUTTONS_HIDE:
+            /* Either horizontal swipe toggles the drawer and the DJ block: from the 100%
+             * entry either brings them in, and while they are out either takes them out. */
             if (cassette_buttons_is_shown()) {
                 cassette_buttons_set_shown(false);
                 cassette_eq_set_shown(false);
@@ -204,10 +205,6 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
                 cassette_buttons_set_shown(true);
                 cassette_eq_set_shown(true);
             }
-            break;
-        case SCREEN_INTENT_BUTTONS_HIDE:
-            cassette_buttons_set_shown(false);
-            cassette_eq_set_shown(false);
             break;
         case SCREEN_INTENT_PEEK_SHOW:
             /* The peek is the entry view's overlay: only the 100% pose (256/256, with

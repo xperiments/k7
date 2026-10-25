@@ -11,8 +11,9 @@
  * reserved two-finger gesture are decided here, so the view does not have to: nothing in
  * this module calls mini_icecast, touches the peek or slides the button drawer.
  *
- * A right swipe shows the transport drawer at the left edge (with the DJ block); while
- * they are out, either horizontal swipe hides them. An up swipe at
+ * Either horizontal swipe toggles the transport drawer at the left edge (with the DJ
+ * block): from the entry 100% pose either brings them in, and while they are out either
+ * takes them out. An up swipe at
  * Bare is reported as PEEK_SHOW and a down swipe as PEEK_HIDE: the view raises the peek
  * only from the entry 100% pose and closes it on the down swipe. A two-finger left is
  * VU_SHOW and a two-finger right VU_HIDE: the VU meter starts hidden and fades in/out. A

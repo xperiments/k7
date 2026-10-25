@@ -2,8 +2,8 @@
 /*
  * cassette_buttons - the transport drawer at the screen's left edge.
  *
- * The drawer is a 120 px panel that starts off-screen to the left and hidden. A
- * one-finger right swipe brings it in; while it is out, a left or right swipe puts it
+ * The drawer is a 120 px panel that starts off-screen to the left and hidden. Either
+ * horizontal swipe brings it in from the entry, and while it is out either puts it
  * away. The view turns those intents into cassette_buttons_set_shown(). While the drawer is out the
  * view scales the cassette to 134/256 and pulls it left to x=148, so the tape clears
  * the panel and the DJ block's column on the right.

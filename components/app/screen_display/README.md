@@ -181,8 +181,8 @@ next up swipe puts everything away.
 ## The transport drawer
 
 The three buttons at the left edge live in `cassette_buttons.c`. The drawer is a 120 px
-panel, hidden off-screen at rest; a one-finger right swipe slides it in; while it is out,
-either horizontal swipe slides it out, both over 260 ms. The entry view is the untouched
+panel, hidden off-screen at rest; either horizontal swipe slides it in from the entry; while
+it is out, either slides it out, both over 260 ms. The entry view is the untouched
 full-scale cassette; while
 the drawer is out the view puts it at 134/256 (`CASSETTE_SCALE_BUTTONS`), which brings the
 tape's box to 402x232 px at x=148..550: the 120 px drawer is clear on the left and the
