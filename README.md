@@ -566,7 +566,8 @@ prebuild a pressed and an unpressed state, swap them on press and release, and p
 scale on a click; `<` and `>` call `mini_icecast_prev()` / `mini_icecast_skip()`, so they
 are the transport's next/previous now, while P stays a placeholder.
 
-The DJ block is six 96 px carcases in two touching columns at x=592..784, rows at
+The DJ block is six 96 px carcases in two touching columns at x=593..784 (the first
+column is 1 px right of its nominal 592; the second stays at 688), rows at
 76/170/264: GAIN above the Filebrowser and Rec placeholders in the first column, HI, MED
 and LOW in the second. The four knobs are a 44 px circle (30% smaller than the
 placeholders'), a 24-dot crown outside it and a line from the centre towards the rim, 0 dB

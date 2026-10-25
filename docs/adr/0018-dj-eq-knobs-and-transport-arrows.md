@@ -19,7 +19,8 @@ every listener hears, and there is no local audio path to fight with. The PCM se
 ## Decision
 
 - **The block is at the right edge.** Six 96x96 carcases in two touching columns at
-  x=592..784, three rows at y=76/170/264, so the block is 192x284 and leaves 16 px to the
+  x=593..784 (the first column nudged 1 px right, the second stays at 688), three rows at
+  y=76/170/264, so the block is 191x284 and leaves 16 px to the
   screen. The 16 px is the inset of the 64 px circle inside each carcase, not a gap. The
   left column is GAIN above the `<` and `>` arrows; the right column is HI, MED and LOW.
 - **The knobs are a small circle, an outside crown and a centre line.** The arrows keep

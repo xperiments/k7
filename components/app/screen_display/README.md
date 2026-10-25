@@ -181,7 +181,7 @@ panel, hidden off-screen at rest; a one-finger right swipe slides it in and a le
 slides it out, both over 260 ms. The entry view is the untouched full-scale cassette; while
 the drawer is out the view puts it at 134/256 (`CASSETTE_SCALE_BUTTONS`), which brings the
 tape's box to 402x232 px at x=148..550: the 120 px drawer is clear on the left and the
-192 px DJ block at 592..784 has room on the right. The DJ block is shown and hidden with the
+192 px DJ block at 593..784 has room on the right. The DJ block is shown and hidden with the
 drawer, and the pose runs over the same 260 ms. The three buttons start 76 px from the top,
 so the middle button `<` is on y=218; the -20 px dy puts the cassette's centre near that line.
 The drawer wins over the peek while it is out; when it slides away the peek's 200/256 and
@@ -204,7 +204,8 @@ longer gives a click any meaning.
 ## The DJ block
 
 The six cells at the right edge live in `cassette_eq.c`. Two touching 96 px columns at
-x=592..784, three rows at y=76/170/264, so the block is 192x284 and its right edge leaves
+x=593..784 (the first column nudged 1 px right; the second stays at 688), three rows at
+y=76/170/264, so the block is 191x284 and its right edge leaves
 16 px to the screen. The 16 px is the inset of the 64 px circle inside each carcase, not a
 gap: the carcases share their borders like the left drawer's. The first column is GAIN
 above the Filebrowser and Rec placeholders; the second is HI, MED and LOW. The block is

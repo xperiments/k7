@@ -128,7 +128,12 @@ static bool s_reset_click;            /* the double click's second CLICKED is co
 
 /* ------------------------------------------------------------------ geometry */
 
-static int cell_x(int slot) { return BLOCK_LEFT + k_slot_col[slot] * CELL_W; }
+static int cell_x(int slot)
+{
+    int x = BLOCK_LEFT + k_slot_col[slot] * CELL_W;
+    /* The first column is nudged 1 px right; the second stays on BLOCK_LEFT + CELL_W. */
+    return k_slot_col[slot] == 0 ? x + 1 : x;
+}
 static int cell_y(int slot) { return BLOCK_TOP + k_slot_row[slot] * CELL_PITCH; }
 
 static int knob_at(int x, int y)
@@ -251,12 +256,12 @@ static void icon_build(lv_obj_t *cell, int slot)
                             k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
     } else {
         /* Rec mode: the two circles of the owner's voicemail mark and the bar between
-         * their bottoms, the whole mark 3 px left of the circle's centre. */
-        cassette_border_box(circle, c - 19, c - 8, 14, 14, 7,
+         * their bottoms, the whole mark 2 px left of the circle's centre. */
+        cassette_border_box(circle, c - 18, c - 8, 14, 14, 7,
                             k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
-        cassette_border_box(circle, c - 1, c - 8, 14, 14, 7,
+        cassette_border_box(circle, c, c - 8, 14, 14, 7,
                             k_col_bg, LV_OPA_TRANSP, k_col_eq_lit, 2);
-        cassette_box(circle, c - 7, c + 6, 8, 2, 1, k_col_eq_lit);
+        cassette_box(circle, c - 6, c + 6, 9, 2, 1, k_col_eq_lit);
     }
 }
 
