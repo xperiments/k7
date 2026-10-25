@@ -243,10 +243,11 @@ crown at r=32 outside it and a 6x22 line from the centre to the rim. 0 dB is at 
 o'clock; the right side cuts and the left side boosts, and the arc lights from twelve to
 the line on the side it points.
 
-A tap on a knob opens edit mode after a 550 ms delay: a 3x virtual knob (284 px at the
-16 px left margin, the 96+94+94 length, its top on the GAIN button's top, the same 2 px
-stroke and a 6 px centre line) appears over the faded cassette, which fades out over 180 ms
-while a transparent 800x480 overlay owns the touch. The delay is there so a second tap is
+A tap on a knob opens edit mode after a 550 ms delay: a 3x virtual knob (284 px at x=206,
+the 96+94+94 length, its top on the GAIN button's top, the same 2 px stroke and a 6 px
+centre line) appears over the cassette, while a transparent 800x480 overlay owns the touch.
+The cassette fades out over 180 ms first and the knob fades in only after it; on close the
+knob fades out first and the cassette fades back in. The delay is there so a second tap is
 read as the reset double click instead of opening the knob. Only the big knob's centre
 circle closes. A click on the ring - the carcase outside that circle - is the target point:
 the knob jumps to that angle, 0 dB at twelve, clockwise cutting and counter-clockwise

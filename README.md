@@ -571,8 +571,9 @@ second. The four knobs are a 44 px circle (30% smaller than the arrows'), a 24-d
 outside it and a line from the centre to the rim, 0 dB at twelve o'clock, right cuts and
 left boosts; the arrows are the only next/previous controls and call
 `mini_icecast_prev()` / `mini_icecast_skip()`. A tap on a knob opens a modal edit mode
-after 550 ms: a 3x virtual knob (284 px at the 16 px left margin, top on the GAIN button's
-top) appears over the faded cassette; only its centre circle closes, and a click on the
+after 550 ms: a 3x virtual knob (284 px at x=206, top on the GAIN button's top) appears over
+the cassette; the cassette fades out first, then the knob fades in, and on close the knob
+fades out before the cassette comes back. Only its centre circle closes, and a click on the
 ring is the target point, so the knob jumps to that angle (clockwise cuts, counter-clockwise
 boosts). The delay lets a double tap on a small knob reset it to 0 dB instead of opening
 the knob; both circles blink, and nothing else responds while the overlay is up. The audio is

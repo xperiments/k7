@@ -172,7 +172,7 @@ static void dim_cb(void *var, int32_t v)
     lv_obj_set_style_opa_layered((lv_obj_t *)var, (lv_opa_t)v, 0);
 }
 
-void cassette_view_dim(bool dim)
+void cassette_view_dim(bool dim, uint32_t delay_ms)
 {
     if (!s_cassette) return;
     lv_anim_delete(s_cassette, dim_cb);
@@ -184,6 +184,7 @@ void cassette_view_dim(bool dim)
     lv_anim_set_values(&a, lv_obj_get_style_opa_layered(s_cassette, 0),
                        dim ? LV_OPA_TRANSP : LV_OPA_COVER);
     lv_anim_set_duration(&a, CASSETTE_DIM_MS);
+    lv_anim_set_delay(&a, delay_ms);
     lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
     lv_anim_start(&a);
 }
