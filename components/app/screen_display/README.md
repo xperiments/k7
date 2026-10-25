@@ -235,7 +235,8 @@ x=592..784, three rows at y=76/170/264, so the block is 192x284 and its right ed
 gap: the carcases share their borders like the P/R/W drawer. The first column is GAIN above
 the `<` and `>` arrows; the second is HI, MED and LOW. The block is hidden at rest, so the
 entry view is the full-scale cassette; the view shows it with the transport drawer, when the
-cassette is already at the 134/256 control pose.
+cassette is already at the 134/256 control pose. It slides in from the right edge over the
+same 260 ms as the drawer and slides back out when the drawer leaves.
 
 Each knob is a 24-dot crown at r=26 inside the circle and a 4x23 stick pivoted on the
 circle's centre. 0 dB is at twelve o'clock; the right side cuts and the left side boosts,

@@ -39,8 +39,9 @@ every listener hears, and there is no local audio path to fight with. The PCM se
   brings the transport drawer and the DJ block in and scales the cassette to 134/256,
   148..550, so both the 120 px drawer on the left and the block on the right have room. A
   left swipe puts them away and restores the full entry view. The block is hidden at rest,
-  shown and hidden with the drawer, and chrome above the Level sheets. The peek's 200/256
-  is the other room request and comes back when the drawer is away.
+  shown and hidden with the drawer, sliding in from the right edge over the same 260 ms,
+  and chrome above the Level sheets. The peek's 200/256 is the other room request and comes
+  back when the drawer is away.
 
 ## Considered options
 

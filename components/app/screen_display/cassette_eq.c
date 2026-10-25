@@ -50,6 +50,10 @@ LV_FONT_DECLARE(jura_36);
 #define TAP_SLOP     6
 #define BLINK_MS     600
 #define BLINK_MIN_OPA 70
+/* The block enters and leaves with the transport drawer's 260 ms slide, from the right
+ * edge: at +208 the block's left edge is the screen's, so it is fully off. */
+#define EQ_SLIDE_MS     260
+#define EQ_SLIDE_OFFSET (800 - BLOCK_LEFT)
 
 enum {
     SLOT_GAIN = 0,
@@ -77,6 +81,8 @@ static lv_obj_t *s_stick[KNOB_SLOTS];
 static int s_value[KNOB_SLOTS];       /* 0..100; 50 is 0 dB on every knob */
 static int s_active;                  /* -1, or the knob slot being edited */
 static bool s_shown;                  /* the block is out with the transport drawer */
+static bool s_sliding;                /* the show/hide slide is in flight */
+static int32_t s_slide_offset = EQ_SLIDE_OFFSET;  /* px right of the resting position */
 static lv_obj_t *s_overlay;
 static lv_point_t s_press;
 static int s_start_value;
@@ -324,9 +330,9 @@ static void end_edit(void)
 static void cell_clicked_cb(lv_event_t *e)
 {
     /* The overlay should own the touch while editing; the guard comes first so even a
-     * click that somehow reaches a cell cannot skip a track. A hidden block takes no
-     * click at all. */
-    if (s_active >= 0 || !s_shown) return;
+     * click that somehow reaches a cell cannot skip a track. A hidden or still-sliding
+     * block takes no click at all. */
+    if (s_active >= 0 || !s_shown || s_sliding) return;
 
     int slot = (int)(intptr_t)lv_event_get_user_data(e) - 1;
     /* The two-finger menu is reserved: a gesture that starts on a cell must not also be
@@ -364,11 +370,37 @@ static lv_obj_t *cell_create(lv_obj_t *parent, int slot)
 
 /* ---------------------------------------------------------------------- public */
 
+/* The slide: move all six cells together, so the block enters from the right edge. The
+ * animation's variable is cell 0 only so a new show/hide can replace the old one. */
+static void eq_slide_cb(void *var, int32_t v)
+{
+    (void)var;
+    s_slide_offset = v;
+    for (int slot = 0; slot < SLOT_COUNT; slot++)
+        if (s_cell[slot]) lv_obj_set_x(s_cell[slot], cell_x(slot) + v);
+}
+
+static void eq_slide_done_cb(lv_anim_t *a)
+{
+    (void)a;
+    s_sliding = false;
+    s_slide_offset = s_shown ? 0 : EQ_SLIDE_OFFSET;
+    if (s_shown) {
+        cassette_eq_raise();
+        return;
+    }
+    for (int slot = 0; slot < SLOT_COUNT; slot++)
+        if (s_cell[slot]) lv_obj_set_hidden(s_cell[slot], true);
+}
+
 void cassette_eq_create(lv_obj_t *parent)
 {
     if (!parent || s_cell[0]) return;
 
     s_active = -1;
+    s_shown = false;
+    s_sliding = false;
+    s_slide_offset = EQ_SLIDE_OFFSET;
     s_value[SLOT_GAIN] = 25;   /* -6 dB, the trim's headroom default */
     s_value[SLOT_HI] = 50;
     s_value[SLOT_MED] = 50;
@@ -380,7 +412,6 @@ void cassette_eq_create(lv_obj_t *parent)
         else arrow_build(cell, slot);
         lv_obj_set_hidden(cell, true);
     }
-    s_shown = false;
 
     /* The audio starts from the same values; this makes a rebuilt screen agree with it. */
     for (int slot = 0; slot < KNOB_SLOTS; slot++) knob_send(slot);
@@ -388,17 +419,32 @@ void cassette_eq_create(lv_obj_t *parent)
 
 void cassette_eq_set_shown(bool shown)
 {
-    if (shown == s_shown) return;
+    if (!s_cell[0]) return;
+    if (shown == s_shown && !s_sliding) return;
     s_shown = shown;
 
-    /* A hidden block cannot own the edit overlay. The drawer's show/hide is gated on edit
-     * mode by the view, but keeping the rule here makes it true from any caller. */
+    /* A hidden block cannot own the edit overlay. The view gates the drawer's hide on edit
+     * mode, but keeping the rule here makes it true from any caller. */
     if (!shown && s_active >= 0) end_edit();
 
-    for (int slot = 0; slot < SLOT_COUNT; slot++)
-        if (s_cell[slot]) lv_obj_set_hidden(s_cell[slot], !shown);
-
+    lv_anim_delete(s_cell[0], eq_slide_cb);
+    s_sliding = true;
+    for (int slot = 0; slot < SLOT_COUNT; slot++) {
+        if (!s_cell[slot]) continue;
+        lv_obj_set_hidden(s_cell[slot], false);
+        lv_obj_set_x(s_cell[slot], cell_x(slot) + s_slide_offset);
+    }
     if (shown) cassette_eq_raise();
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, s_cell[0]);
+    lv_anim_set_exec_cb(&a, eq_slide_cb);
+    lv_anim_set_values(&a, s_slide_offset, shown ? 0 : EQ_SLIDE_OFFSET);
+    lv_anim_set_duration(&a, EQ_SLIDE_MS);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+    lv_anim_set_completed_cb(&a, eq_slide_done_cb);
+    lv_anim_start(&a);
 }
 
 void cassette_eq_raise(void)

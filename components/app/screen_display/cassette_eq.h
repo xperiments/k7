@@ -18,7 +18,8 @@
  * transport drawer: it stays above the sheets and the view raises it after a vertical
  * swipe. It is hidden at rest, so the entry view is the untouched full-scale cassette; the
  * view shows it together with the transport drawer, when the cassette is already at the
- * 134/256 control pose that leaves the right column room.
+ * 134/256 control pose that leaves the right column room. The block slides in from the
+ * right edge over the drawer's 260 ms and slides back out when the drawer leaves.
  */
 #include "lvgl.h"
 
@@ -30,8 +31,8 @@ extern "C" {
  * drawer. */
 void cassette_eq_create(lv_obj_t *parent);
 
-/* Show or hide the block with the transport drawer. Hiding it also leaves edit mode: a
- * hidden block must not own the overlay. */
+/* Show or hide the block with the transport drawer, sliding from the right edge. Hiding
+ * it also leaves edit mode: a hidden block must not own the overlay. */
 void cassette_eq_set_shown(bool shown);
 
 /* Keep the block above the Level sheets after one of them raises itself. A hidden block
