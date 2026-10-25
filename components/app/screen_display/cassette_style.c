@@ -3,8 +3,9 @@
  */
 #include "cassette_style.h"
 
-const lv_color_t k_col_black      = COL_HEX(COL_BLACK);
 const lv_color_t k_col_bg         = COL_HEX(COL_BLACK);
+const lv_color_t k_col_white      = COL_HEX(COL_WHITE);
+const lv_color_t k_col_glass      = COL_DARKEN_HEX(COL_WHITE,64);
 const lv_color_t k_col_tape_dark  = COL_HEX(COL_PRIMARY);
 const lv_color_t k_col_tape       = COL_HEX(COL_PRIMARY);
 const lv_color_t k_col_hub_ring   = COL_DARKEN_HEX(COL_PRIMARY, 20);

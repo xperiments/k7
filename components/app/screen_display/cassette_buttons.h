@@ -4,9 +4,12 @@
  *
  * The drawer is a 120 px panel that starts off-screen to the left and hidden. Either
  * horizontal swipe brings it in from the entry, and while it is out either puts it
- * away. The view turns those intents into cassette_buttons_set_shown(). While the drawer is out the
+ * away; a down swipe brings it in as well and an up swipe puts it away - the vertical
+ * ladder. The view turns those intents into cassette_buttons_set_shown(). While the drawer is out the
  * view scales the cassette to 134/256 and pulls it left to x=148, so the tape clears
- * the panel and the DJ block's column on the right.
+ * the panel and the DJ block's column on the right. The down swipe enters on the white
+ * page; the horizontal swipes keep the dark one. This module knows none of that: it
+ * slides the panel the view asks for.
  *
  * The drawer holds three buttons down the left edge. Each is line art: a 96x96
  * rectangle rounded by 8 px, a 64 px circle at its centre, and the character P, < or >
@@ -51,6 +54,15 @@ void cassette_buttons_set_shown(bool shown);
 
 /* Whether the drawer is meant to be shown, true even while it is still sliding in. */
 bool cassette_buttons_is_shown(void);
+
+/* Paint the page's style into all three buttons (both states). On the dark page it is the
+ * line art: the rectangle filled k_col_bg, the circle and its letter the playing red. On the
+ * white page the rectangle is filled k_col_white, the letter is k_col_bg (black), and the
+ * circle is a dome - a flat disc (no gradient) between a transparent wrapper that carries the
+ * broad shadow and the disc's own tight one, falling on the rectangle as a bezel, with no ring
+ * (LVGL shadows are outer-only and one per object; see cassette_circle_face()). The view
+ * calls it from its page flip. */
+void cassette_buttons_set_page(bool white);
 
 /* Put the drawer back on top of the screen's child order. The peek is the only sibling
  * it competes with; the view still calls this where it used to re-raise the drawer. */

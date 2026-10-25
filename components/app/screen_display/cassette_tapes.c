@@ -124,8 +124,10 @@ static int      s_pack_d[2];      /* px, so a redraw happens only when it change
 static uint8_t  s_shown_hub[2];   /* the animation frame currently on screen */
 /* The ink currently on the rims, at the resolution the border mix takes: tape_ink 1 is
  * LV_OPA_COVER. Like the view's cache it starts full, so a first frame that is not a reel
- * change writes nothing - and the rims, which are created with black borders, take the
- * playing red the first time the ink moves. */
+ * change writes nothing - and the rims are created with the playing red, so the state the
+ * cache claims is what is on screen from the first frame. (A black border here would only
+ * be visible on the controls view's white page, where it would read as an ink the cassette
+ * does not have.) */
 static lv_opa_t s_tape_ink = LV_OPA_COVER;
 
 /* ------------------------------------------------------------------ helpers */
@@ -502,10 +504,12 @@ void cassette_tapes_create(lv_obj_t *parent)
     }
 
     /* The hubs: the rim is painted once and never invalidated. Only the two spokes
-     * move, and each is its own object so its bounding box stays small. */
+     * move, and each is its own object so its bounding box stays small. The rim's border
+     * is the playing red from the first frame - it is the only thing the tape's ink
+     * writes - so the module's ink cache starts on the state that is on screen. */
     for (int i = 0; i < 2; i++) {
         s_rim[i] = cassette_box(parent, 0, 0, 1, 1, LV_RADIUS_CIRCLE, k_col_hub_ring);
-        lv_obj_set_style_border_color(s_rim[i], k_col_black, 0);
+        lv_obj_set_style_border_color(s_rim[i], k_col_tape_dark, 0);
         lv_obj_set_style_border_opa(s_rim[i], LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(s_rim[i], HUB_RIM_W, 0);
 

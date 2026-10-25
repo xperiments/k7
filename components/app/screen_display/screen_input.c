@@ -6,8 +6,10 @@
  * touch from being two of them, and hands the answer to the view's sink. What a swipe
  * means to the picture - whether the peek shows or hides, whether the drawer slides out -
  * is not decided here: the sink owns that, and this file calls nothing above itself. A
- * left/right swipe hides or shows the transport drawer. A down swipe does nothing (the
- * Label cover and Artwork screens are gone); an up swipe toggles the peek. Next and
+ * left/right swipe hides or shows the transport drawer. A down swipe is DOWN and an up
+ * swipe is UP: the view runs the vertical ladder, because a down swipe asks for the
+ * controls only when the peek is not up, and an up swipe takes the controls away only
+ * when they are out - otherwise it raises the peek. Next and
  * previous belong to the DJ block's arrows, whose clicks are their own objects' and never
  * reach this module.
  *
@@ -86,11 +88,12 @@ static void screen_two_finger_cb(int dx, int dy)
 #endif
 
 /*
- * The one-finger gestures: left/right ask to toggle the buttons at the left edge, up asks
- * for the peek and down asks to put it away. The direction is the whole of this handler's
- * knowledge; the peek's slide and the drawer's slide are the sink's. A two-finger swipe
- * does not come through here: the touch adapter reports it, and the latch keeps this
- * handler from acting on the same touch as well.
+ * The one-finger gestures: left/right ask to toggle the buttons at the left edge, and the
+ * vertical pair is reported as the direction - DOWN and UP - for the sink to make the
+ * controls' or the peek's. The direction is the whole of this handler's knowledge; the
+ * peek's slide and the drawer's slide are the sink's. A two-finger swipe does not come
+ * through here: the touch adapter reports it, and the latch keeps this handler from acting
+ * on the same touch as well.
  */
 static void screen_gesture_cb(lv_event_t *e)
 {
@@ -108,10 +111,10 @@ static void screen_gesture_cb(lv_event_t *e)
             ESP_LOGI(TAG, "swipe right: buttons toggle");
             break;
         case LV_DIR_TOP:
-            report(SCREEN_INTENT_PEEK_SHOW);
+            report(SCREEN_INTENT_UP);
             break;
         case LV_DIR_BOTTOM:
-            report(SCREEN_INTENT_PEEK_HIDE);
+            report(SCREEN_INTENT_DOWN);
             break;
         default:
             break;

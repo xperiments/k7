@@ -10,6 +10,9 @@
  *   cassette_levels   the Level machine, the Label cover and the Artwork sheet
  *   cassette_buttons  the three-button transport drawer at the left edge
  *   cassette_eq       the DJ block at the right edge: GAIN, HI/MED/LOW and the < / > arrows
+ *   cassette_header   the band that closes the controls screen across the top
+ *   cassette_footer   and the one that closes it across the bottom
+ *   cassette_window   the frame around the cassette between them
  *   screen_input      the touch policy, as intents
  *   cassette_layout   the design grid (portable, pinned by t16)
  *   cassette_style    the palette
@@ -20,6 +23,11 @@
  * geometry of its own and no Level state. The pose is a value every part receives on
  * its place() call, so a scale change is one animation over the whole picture.
  *
+ * It also owns the page. The cassette sits on the dark screen at rest; the down swipe
+ * shows the controls on a white page, and the horizontal swipes keep showing the same
+ * controls on the dark one. The page follows the gesture that opened the controls, and
+ * the cassette's own page-ink parts turn with it.
+ *
  * Called under the LVGL lock, like everything else on the screen.
  */
 #include <stdint.h>
@@ -28,8 +36,12 @@
 #include "lvgl.h"
 
 #include "cassette.h"
+#include "cassette_widgets.h"
 #include "cassette_buttons.h"
 #include "cassette_eq.h"
+#include "cassette_footer.h"
+#include "cassette_header.h"
+#include "cassette_window.h"
 #include "cassette_layout.h"
 #include "cassette_levels.h"
 #include "cassette_meter.h"
@@ -52,7 +64,44 @@ static const char *TAG = "screen";
 #define CASSETTE_BUTTONS_DY    (-20)
 #define CASSETTE_ROOM_MS       CASSETTE_BUTTONS_SLIDE_MS
 
+/* The white page's edge mark, all of it tunable by hand: a transparent rectangle centred on
+ * the tape, with only EDGE_SIDES of its borders lit. The default lights the top and the left
+ * - the edges opposite the dome's bottom-right shadow - and leaves the right and the bottom
+ * transparent. EDGE_COL is any palette name or a raw colour. */
+#define EDGE_W         466
+#define EDGE_H         272
+#define EDGE_R         10          /* corner radius: the bands' and buttons' 8 px */
+#define EDGE_BORDER_W  2
+#define EDGE_COL       k_col_glass
+#define EDGE_SIDES     (LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT)
+
+/* The mark's inner glow: a linear gradient at 135 degrees, EDGE_GLOW_NEAR at the top-left
+ * corner fading to EDGE_GLOW_FAR at the bottom-right, reaching it at EDGE_GLOW_FAR_FRAC
+ * (0..255 of the way along the diagonal: 255 is the far corner; a smaller number stops the
+ * fade early and leaves the rest empty). EDGE_GLOW_HEX is the glow's colour. */
+#define EDGE_GLOW_HEX       0xFFFFFF
+#define EDGE_GLOW_NEAR      60
+#define EDGE_GLOW_FAR       LV_OPA_TRANSP
+#define EDGE_GLOW_FAR_FRAC  255
+
+/* The glow does not come in with the chrome: it waits for the drawer's, the block's, the
+ * bands' and the window's 260 ms entrance to land, then fades in over EDGE_GLOW_FADE_MS. A
+ * fade of 0 would make it a cut, one frame after the delay. */
+#define EDGE_GLOW_DELAY_MS  260
+#define EDGE_GLOW_FADE_MS   200
+
+/* The tape's ink box in design coordinates is 16..784 x 16..460, so its centre is here. The
+ * mark is centred on it at the controls pose. */
+#define TAPE_CENTRE_X  400
+#define TAPE_CENTRE_Y  238
+
 static cassette_t *s_model;
+static lv_obj_t *s_screen;     /* the root: its backdrop is the page */
+static lv_obj_t *s_screen_back_cover; 
+static lv_obj_t *s_page_edge;  /* the white page's two-sided edge mark */
+/* The edge mark's gradient. LVGL's style keeps a pointer to the descriptor, so it outlives
+ * the object here and is filled once, before the object is built. */
+static lv_grad_dsc_t s_edge_grad;
 static lv_obj_t *s_cassette;   /* the container everything the body draws hangs off */
 static cassette_pose_t s_pose = { CASSETTE_SCALE_NONE, 0, 0 };
 static cassette_pose_t s_pose_from;   /* the pose the change in flight started at */
@@ -90,8 +139,92 @@ static void levels_room_cb(bool shown, bool instant, void *ctx)
     room_apply(instant);
 }
 
+/* --------------------------------------------------------------- the page */
+
+/* The controls view has two faces. The vertical ladder shows it on a white page - the down
+ * swipe's page - and the horizontal swipes show the same drawer and block on the dark
+ * screen they have always had. So the page follows the gesture that opened the controls,
+ * not the controls themselves: only the down swipe turns it white.
+ *
+ * The white page is the screen's whole backdrop. The line art keeps its inks on white, and
+ * the cassette's black holes turn white with it, so the picture reads as ink on paper. The
+ * flip is one frame - a colour animation would repaint the whole 800x480 panel on every
+ * step - and it runs as the drawer's slide starts, so the page and the chrome move together.
+ * The flag keeps a repeated request from invalidating the whole panel for a colour that is
+ * already there. */
+static bool s_page_white;
+
+/* The glow's fades. The object's opacity multiplies its gradient's stop opacities and its
+ * border, so one animation covers the whole mark. */
+static void edge_fade_cb(void *var, int32_t opa)
+{
+    lv_obj_set_style_opa((lv_obj_t *)var, (lv_opa_t)opa, 0);
+}
+
+/* The white page: wait for the entrance, then fade the mark in from nothing. Starting from
+ * transparent keeps a re-entry from flashing a mark that is already at full. */
+static void edge_reveal(void)
+{
+    if (!s_page_edge) return;
+    lv_anim_delete(s_page_edge, edge_fade_cb);
+    lv_obj_set_style_opa(s_page_edge, LV_OPA_TRANSP, 0);
+    lv_obj_set_hidden(s_page_edge, false);
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, s_page_edge);
+    lv_anim_set_exec_cb(&a, edge_fade_cb);
+    lv_anim_set_values(&a, LV_OPA_TRANSP, LV_OPA_COVER);
+    lv_anim_set_delay(&a, EDGE_GLOW_DELAY_MS);
+    lv_anim_set_duration(&a, EDGE_GLOW_FADE_MS);
+    /* Ease in: it starts softly out of nothing rather than popping at the first step. */
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_in);
+    lv_anim_start(&a);
+}
+
+/* The dark page, or a close before the delay ran out: cancel and hide, no fade out - the
+ * chrome is leaving and the page has already flipped. */
+static void edge_hide(void)
+{
+    if (!s_page_edge) return;
+    lv_anim_delete(s_page_edge, edge_fade_cb);
+    lv_obj_set_hidden(s_page_edge, true);
+}
+
+static void page_set(bool white)
+{
+    if (white == s_page_white) return;
+    s_page_white = white;
+    if (s_screen) lv_obj_set_style_bg_color(s_screen, white ? k_col_white : k_col_bg, 0);
+    if (white) edge_reveal();
+    else edge_hide();
+    cassette_header_set_page(white);
+    cassette_footer_set_page(white);
+    cassette_buttons_set_page(white);
+    cassette_eq_set_page(white);
+    /* The tape's window chips are not repainted: they are windows on the background, and the
+     * background behind them is k_col_bg on both pages - the dark screen at rest, the back
+     * cover on the white page. */
+}
+
+/* The one place that opens and closes the controls, whichever intent asked. `white` is the
+ * page the caller wants; only the down swipe asks for it, and a close always returns to
+ * the dark screen. Opening the controls also ends the peek: the peek and the controls are
+ * two overlays for one screen, and the white page carries only the controls. */
+static void controls_set_shown(bool shown, bool white)
+{
+    if (shown && s_peek_wants_room) cassette_levels_toggle_peek();
+    page_set(shown && white);
+    cassette_header_set_shown(shown);
+    cassette_footer_set_shown(shown);
+    cassette_window_set_shown(shown);
+    cassette_buttons_set_shown(shown);
+    cassette_eq_set_shown(shown);
+}
+
 /* The drawer reports its slide as it starts, so the tape, the panel and the DJ block move
- * together. */
+ * together. The page is not written here: it belongs to the intent that asked for the
+ * controls. */
 static void buttons_room_cb(bool shown, void *ctx)
 {
     (void)ctx;
@@ -125,6 +258,7 @@ static void pose_anim_cb(void *var, int32_t step)
     (void)var;
     s_pose = cassette_pose_lerp(s_pose_from, s_pose_to, step);
     cassette_place();
+
 }
 
 void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms)
@@ -196,27 +330,32 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
     switch (intent) {
         case SCREEN_INTENT_BUTTONS_SHOW:
         case SCREEN_INTENT_BUTTONS_HIDE:
-            /* Either horizontal swipe toggles the drawer and the DJ block: from the 100%
-             * entry either brings them in, and while they are out either takes them out. */
-            if (cassette_buttons_is_shown()) {
-                cassette_buttons_set_shown(false);
-                cassette_eq_set_shown(false);
-            } else {
-                cassette_buttons_set_shown(true);
-                cassette_eq_set_shown(true);
-            }
+            /* Either horizontal swipe toggles the drawer and the DJ block on the dark
+             * screen: from the 100% entry either brings them in, and while they are out
+             * either takes them out. The white page is not theirs to ask for - only the
+             * down swipe turns it on. */
+            controls_set_shown(!cassette_buttons_is_shown(), false);
             break;
-        case SCREEN_INTENT_PEEK_SHOW:
-            /* The peek is the entry view's overlay: only the 100% pose (256/256, with
-             * neither the drawer nor the peek asking for room) may raise it, and the up
-             * swipe does nothing while it is already up. */
-            if (s_peek_wants_room) break;
-            if (s_buttons_want_room || s_pose.scale != CASSETTE_SCALE_NONE) break;
-            cassette_levels_toggle_peek();
-            break;
-        case SCREEN_INTENT_PEEK_HIDE:
-            /* The down swipe puts an open peek away; it does nothing when it is down. */
+        case SCREEN_INTENT_DOWN:
+            /* Down is the ladder's way in: it shows the controls with the white page. An
+             * open peek is put away first, and the same swipe does only that - the peek
+             * and the controls never share the screen. If the controls are already out
+             * (from a horizontal swipe) the down swipe still asks for its page. */
             if (s_peek_wants_room) cassette_levels_toggle_peek();
+            else if (!s_buttons_want_room) controls_set_shown(true, true);
+            else page_set(true);
+            break;
+        case SCREEN_INTENT_UP:
+            /* Up is the way back out: it takes the controls away before it can mean the
+             * peek, and the page returns to the dark screen with them. With none out it
+             * raises the peek, and only from the 100% pose (256/256 with neither the drawer
+             * nor the peek asking for room); while the peek is already up it does
+             * nothing. */
+            if (s_buttons_want_room) {
+                controls_set_shown(false, false);
+            } else if (!s_peek_wants_room && s_pose.scale == CASSETTE_SCALE_NONE) {
+                cassette_levels_toggle_peek();
+            }
             break;
         case SCREEN_INTENT_VU_SHOW:
             cassette_meter_show();
@@ -236,6 +375,16 @@ void cassette_view_create(void)
     lv_obj_t *scr = lv_screen_active();
     lv_obj_set_style_bg_color(scr, k_col_bg, 0);
     lv_obj_set_scrollable(scr, false);
+    s_screen = scr;
+
+    s_screen_back_cover = cassette_box(scr, 16, 16, 768, 448, 0, k_col_bg);
+
+    /* The window is the frame the tape is drawn in, so it is the screen's first child: the
+     * cassette's picture passes over it - while the pose shrinks the tape into the window,
+     * the tape covers the border and reveals it as it goes - and nothing in the window can
+     * ever paint over the cassette. */
+    cassette_window_create(scr);
+
 
     /* The cassette's own container: the body's objects are its children, not the
      * screen's, so the picture is one thing. It is full-bleed at 0,0 and has neither
@@ -258,6 +407,33 @@ void cassette_view_create(void)
     cassette_meter_create(s_cassette);
     cassette_place();
 
+    /* The white page's edge mark: an L of lit borders on an otherwise transparent rectangle,
+     * centred on the tape. It goes down after the cassette, so the glow lies over the tape's
+     * picture, and before the peek and the chrome, so they cover it. It is hidden until the
+     * page turns white. */
+    cassette_pose_t controls = cassette_pose(CASSETTE_SCALE_BUTTONS, CASSETTE_BUTTONS_DX,
+                                             CASSETTE_BUTTONS_DY);
+    s_page_edge = cassette_border_box(scr,
+                                      cassette_x(controls, TAPE_CENTRE_X) - (EDGE_W / 2)+4,
+                                      cassette_y(controls, TAPE_CENTRE_Y) - EDGE_H / 2,
+                                      EDGE_W, EDGE_H, EDGE_R,
+                                      k_col_bg, LV_OPA_TRANSP, EDGE_COL, EDGE_BORDER_W);
+    lv_obj_set_style_border_side(s_page_edge, EDGE_SIDES, 0);
+
+    /* The inner glow: a static descriptor of two stops on a top-left -> bottom-right line.
+     * The stops carry the opacity, so the far corner is really transparent; the object's own
+     * bg_opa has to be COVER or LVGL skips the background (and the gradient) entirely. */
+    static const lv_color_t glow_cols[2] = { COL_HEX(EDGE_GLOW_HEX), COL_HEX(EDGE_GLOW_HEX) };
+    static const lv_opa_t glow_opa[2] = { EDGE_GLOW_NEAR, EDGE_GLOW_FAR };
+    static const uint8_t glow_frac[2] = { 0, EDGE_GLOW_FAR_FRAC };
+    lv_grad_init_stops(&s_edge_grad, glow_cols, glow_opa, glow_frac, 2);
+    lv_grad_linear_init(&s_edge_grad, LV_GRAD_LEFT, LV_GRAD_TOP,
+                        LV_GRAD_RIGHT, LV_GRAD_BOTTOM, LV_GRAD_EXTEND_PAD);
+    lv_obj_set_style_bg_opa(s_page_edge, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_grad(s_page_edge, &s_edge_grad, 0);
+
+    lv_obj_set_hidden(s_page_edge, true);
+
     /* The peek is the screen's child, above the cassette's container. It is the only
      * overlay left: the Label cover and Artwork sheets are gone. */
     cassette_levels_create(scr, levels_room_cb, NULL);
@@ -271,6 +447,12 @@ void cassette_view_create(void)
      * peek, hidden with the drawer. */
     cassette_eq_create(scr);
 
+    /* The bands across the top and the bottom of the controls screen: the frame that closes
+     * the drawer and the block on their top and bottom lines. They are chrome, hidden with
+     * them. The window is not here: it is the screen's first child, under the cassette. */
+    cassette_header_create(scr);
+    cassette_footer_create(scr);
+
     /* The model: the tapes' frame count is the angular resolution; the geometry
      * supplies the speeds. */
     s_model = cassette_new(CASSETTE_TAPES_FRAME_COUNT, CASSETTE_DEFAULT_BAR_MS);
@@ -281,9 +463,10 @@ void cassette_view_create(void)
     if (s_model) apply_frame(cassette_step(s_model, NULL, lv_tick_get()));
 
     /* The picture is built. Make the screen the one thing a finger can hit, then let
-     * screen_input decide what a touch means: a right swipe slides the transport and the
-     * DJ block in, a left swipe slides them out, an up swipe toggles the peek, a down
-     * swipe does nothing, and a two-finger one toggles the VU meter. A tap is not an action;
+     * screen_input decide what a touch means: either horizontal swipe toggles the
+     * transport drawer and the DJ block, a down swipe shows them, an up swipe takes them
+     * away again, an up swipe with none out raises the peek, a down swipe with the peek up
+     * puts it away, and a two-finger one toggles the VU meter. A tap is not an action;
      * next/previous belong to the block's arrows. */
     lv_obj_set_clickable(scr, true);
     screen_input_attach(scr, screen_intent_cb, NULL);

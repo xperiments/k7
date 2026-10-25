@@ -9,7 +9,7 @@
  *    fill that grows with its position, and its total. The old bar carried the title;
  *    the title is now on the tags.
  *  - Two rounded tags are centred on the cassette, above and below the left hub: the
- *    group above it and the song below it, their centres the same distance from the
+ *    song above it and the group below it, their centres the same distance from the
  *    hub's centre. Both hang from that one hub by a tether line, the group on its top
  *    rim and the song on its bottom rim. Both tethers leave on the hub's column (x=251),
  *    so they run vertically; at 504 px that is 20.4 % of the centred pill's width rather

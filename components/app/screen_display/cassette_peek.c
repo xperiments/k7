@@ -5,15 +5,16 @@
  * by the Track's clock: elapsed on the left, a 6 px track and its lit fill in the
  * middle, total on the right. The tags are two 504x44 pills centred on the cassette:
  * x=148..651, which leaves 61 px of cassette on each side and puts the two hubs about
- * 100 px in from the pills' ends. The group is at (148,12) above the left hub, the song
+ * 100 px in from the pills' ends. The song is at (148,12) above the left hub, the group
  * at (148,248) below it, the same distance from the hub's centre on either side. Their
- * 28 px text is left-aligned.
+ * 28 px text is left-aligned. A label with nothing to say is hidden with its tether
+ * rather than shown empty.
  *
  * The tethers follow from those positions. Both start on the left hub's column (x=251),
- * so they stay vertical: the group runs down from its bottom to the top of the rim, the
- * song up from its top to the bottom of the same rim. The upper end of each tether is
- * under the pill's opaque fill; the lower end is a hub anchor the view hands in on every
- * pose step.
+ * so they stay vertical: the upper label runs down from its bottom to the top of the rim,
+ * the lower one up from its top to the bottom of the same rim. The upper end of each
+ * tether is under the pill's opaque fill; the lower end is a hub anchor the view hands in
+ * on every pose step.
  *
  * The movement is deliberately cheap. One lv_anim drives both pills' y through a sine,
  * and the callback writes a new y only when the rounded pixel actually changes; the
@@ -59,7 +60,7 @@ static const char *TAG = "screen";
 #define PEEK_TRACK_W  (PEEK_W - 2 * PEEK_TRACK_X)
 #define PEEK_TRACK_H  6
 
-/* The two tags, both on the left hub's column: the group above it, the song below it,
+/* The two tags, both on the left hub's column: the song above it, the group below it,
  * their centres the same distance from the hub's centre. Sixteen px of inset leaves
  * 472 px of text at Jura 28, so a long title is cut with dots rather than scrolled. */
 #define PEEK_TAG_W    504
@@ -73,8 +74,8 @@ static const char *TAG = "screen";
 
 /* The tether's ends: both sit on the left hub's column at the peek pose (x=251), which
  * is 20.4 % of the centred 504 px pill rather than a round quarter; the hub's column
- * wins over the fraction, so the lines stay vertical. The group
- * leaves its bottom for the top rim, the song its top for the bottom rim. The pill end
+ * wins over the fraction, so the lines stay vertical. The upper label
+ * leaves its bottom for the top rim, the lower one its top for the bottom rim. The pill end
  * is PEEK_LINE_INSET px inside the pill, so the bob only uncovers more or less of the
  * line instead of detaching it. */
 /* The left hub's column at the peek pose. The pills are centred at x=400 and start at
@@ -125,11 +126,12 @@ static char s_tag_group[PEEK_TEXT_MAX];
 static char s_tag_song[PEEK_TEXT_MAX];
 static char s_fallback_group[PEEK_TEXT_MAX];
 static char s_fallback_song[PEEK_TEXT_MAX];
-static char s_shown_group[PEEK_TEXT_MAX];
-static char s_shown_song[PEEK_TEXT_MAX];
+static char s_shown_top[PEEK_TEXT_MAX];    /* the label above the hub */
+static char s_shown_bottom[PEEK_TEXT_MAX]; /* the one below it */
 
-/* The hub anchors, in screen pixels: [0] the left hub's top rim (the group's tether),
- * [1] the left hub's bottom rim (the song's). The view fills them from the tape geometry. */
+/* The hub anchors, in screen pixels: [0] the left hub's top rim (the upper label's tether),
+ * [1] the left hub's bottom rim (the lower one's). The view fills them from the tape
+ * geometry. */
 static lv_point_precise_t s_hub[2];
 
 /* lv_line keeps the pointer it is given, so each tether's two points live here rather
@@ -206,36 +208,37 @@ static void path_group(const char *path, char *out, size_t n)
     out[len] = 0;
 }
 
-/* With nothing on either label there is nothing to float: no playback, no tethers. The
- * bar stays up with its own idle message. */
+/* A label with nothing to say is hidden with its tether, on its own: an empty pill floating
+ * over the tape would say nothing, and there is no em dash standing in for it. The bar stays
+ * up with its own idle message. */
 static void tags_visible(void)
 {
-    bool present = s_tag_group[0] || s_tag_song[0] ||
-                   s_fallback_group[0] || s_fallback_song[0];
-    bool show = s_shown && present;
-    for (int i = 0; i < 2; i++) {
-        lv_obj_set_hidden(s_tag[i], !show);
-        lv_obj_set_hidden(s_line[i], !show);
-    }
+    bool top = s_shown && s_shown_top[0];
+    bool bottom = s_shown && s_shown_bottom[0];
+    lv_obj_set_hidden(s_tag[0], !top);
+    lv_obj_set_hidden(s_line[0], !top);
+    lv_obj_set_hidden(s_tag[1], !bottom);
+    lv_obj_set_hidden(s_line[1], !bottom);
 }
 
-/* The two labels from the tags, or the fallbacks while the tags are read (or absent). */
+/* The two labels from the tags, or the fallbacks while the tags are read (or absent). The
+ * song is the label above the hub and the group the one below it. */
 static void update_texts(void)
 {
     if (!s_tag_text[0] || !s_tag_text[1]) return;
 
     const char *group = s_tag_group[0] ? s_tag_group : s_fallback_group;
     const char *song = s_tag_song[0] ? s_tag_song : s_fallback_song;
-    const char *group_show = group[0] ? group : "\xE2\x80\x94"; /* an em dash */
-    const char *song_show = song[0] ? song : "\xE2\x80\x94";
+    const char *top = song;
+    const char *bottom = group;
 
-    if (strcmp(group_show, s_shown_group) != 0) {
-        snprintf(s_shown_group, sizeof s_shown_group, "%s", group_show);
-        lv_label_set_text(s_tag_text[0], s_shown_group);
+    if (strcmp(top, s_shown_top) != 0) {
+        snprintf(s_shown_top, sizeof s_shown_top, "%s", top);
+        lv_label_set_text(s_tag_text[0], s_shown_top);
     }
-    if (strcmp(song_show, s_shown_song) != 0) {
-        snprintf(s_shown_song, sizeof s_shown_song, "%s", song_show);
-        lv_label_set_text(s_tag_text[1], s_shown_song);
+    if (strcmp(bottom, s_shown_bottom) != 0) {
+        snprintf(s_shown_bottom, sizeof s_shown_bottom, "%s", bottom);
+        lv_label_set_text(s_tag_text[1], s_shown_bottom);
     }
     tags_visible();
 }
@@ -539,11 +542,6 @@ void cassette_peek_create(lv_obj_t *screen, cassette_peek_room_cb_t room, void *
         lv_obj_set_style_text_align(s_tag_text[i], LV_TEXT_ALIGN_LEFT, 0);
         lv_obj_set_hidden(s_tag[i], true);
     }
-    lv_label_set_text(s_tag_text[0], "\xE2\x80\x94");
-    lv_label_set_text(s_tag_text[1], "\xE2\x80\x94");
-    snprintf(s_shown_group, sizeof s_shown_group, "\xE2\x80\x94");
-    snprintf(s_shown_song, sizeof s_shown_song, "\xE2\x80\x94");
-
     update_idle();
     update_times();
     update_fill();

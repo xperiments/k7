@@ -559,7 +559,21 @@ press is one press rather than one per read. A tap on the screen is **not** an a
 and previous are the two arrows in the left drawer. A tap on the drawer
 itself is absorbed there. Either horizontal swipe slides the transport drawer in from the
 left edge and shows the DJ block at the right; while they are out, either horizontal swipe
-slides them back out. The
+slides them back out. The vertical swipes reach the same controls: a down swipe brings them
+in on a **white** page (`k_col_white` instead of the screen's near-black - the orange line
+art and the tape's window chips read as ink on paper), and an up swipe takes them away
+again. The white page is the down swipe's, not the controls': the horizontal swipes keep
+showing the same drawer and block on the dark screen, and any way out returns the page to
+dark. The page flips in one frame at the start of the drawer's slide. Two 2 px bands rounded
+by the buttons' 8 px close that screen top and bottom - 768x71 at (16,6), its bottom edge on
+the first button's and the first DJ cell's top line, and 768x115 at (16,359), its top edge
+on their bottom line - so the drawer, the block and the bands read as one frame. The bands
+are filled opaque in the page's colour (`k_col_bg` or `k_col_white`) so they cover the tape
+while they slide over it - as are the drawer's buttons and the DJ block's cells - and they
+slide in with the rest of the chrome, the header down from above the panel and the footer up
+from below it, over the drawer's 260 ms ease-out and back out the same way. A third rectangle, the
+470x284 window at (110,76), frames the tape in the same ink and fades in and out over the
+same time. The
 cassette enters at full scale; while the controls are out it scales to 134/256 (148..550),
 so the 120 px drawer on the left and the 192 px DJ block on the right both have room. A
 left swipe restores the full view. The drawer's three line-art buttons (P, `<`, `>`) each
@@ -569,8 +583,9 @@ are the transport's next/previous now, while P stays a placeholder.
 
 The DJ block is six 96 px carcases in two touching columns at x=593..784 (the first
 column is 1 px right of its nominal 592; the second stays at 688), rows at
-76/170/264: GAIN above the Filebrowser and Rec placeholders in the first column, HI, MED
-and LOW in the second. The four knobs are a 44 px circle (30% smaller than the
+76/170/264: GAIN above M and R in the first column, HI, MED and LOW in the second. M and R
+are the drawer's buttons moved to the block - the same circle, letter, two states and pulse,
+with no action yet. The four knobs are a 44 px circle (30% smaller than the
 placeholders'), a 24-dot crown outside it and a line from the centre towards the rim, 0 dB
 at twelve o'clock, right cuts and left boosts. The two freed cells keep the 64 px circle
 and show the owner's open folder and two-circle icons; their functions are TBD. A tap on a
@@ -591,10 +606,13 @@ screens below it, and the two down gestures that reached them, are removed. At t
 100% pose (256/256) an up swipe at Bare raises the peek: the timeline bar slides up with the
 Track's elapsed, a growing fill
 and its total, and two rounded tags float over the cassette in the left hub's column - the
-group above the hub and the song below it, each hanging from that hub by a thin tether,
+song above the hub and the group below it, each hanging from that hub by a thin tether,
 bobbing a few pixels out of phase. It cannot be raised while the transport drawer holds the
-134/256 control pose; an open peek is closed by a down swipe, and an up swipe while it is up
-does nothing. The tag texts are the Track's ID3/FLAC tags, read by the tags loader on its own
+134/256 control pose; an open peek is closed by a down swipe - which only puts the peek
+away, and does not go on to open the controls on the same swipe - and an up swipe while it
+is up does nothing. The down swipe's other job, and the up swipe's when it has no peek to
+raise, are the controls: down shows them with the white page, up takes them away. The tag
+texts are the Track's ID3/FLAC tags, read by the tags loader on its own
 task; until they land the group is the artist directory and the song the cleaned filename.
 The two-finger swipe is the VU meter's toggle: a left shows it, a right hides it, and it
 starts hidden with a 220 ms fade. The view still latches the two-finger touch so the same
@@ -605,6 +623,8 @@ parked cover pipeline are
 [`docs/adr/0019-remove-label-and-artwork-screens.md`](docs/adr/0019-remove-label-and-artwork-screens.md);
 the drawer and the horizontal swipes are
 [`docs/adr/0016-transport-drawer-and-horizontal-swipes.md`](docs/adr/0016-transport-drawer-and-horizontal-swipes.md);
+the vertical swipes and the white controls page are
+[`docs/adr/0020-down-swipe-controls-and-the-white-page.md`](docs/adr/0020-down-swipe-controls-and-the-white-page.md);
 the DJ block's ranges and the transport arrows (now the left drawer's) are
 [`docs/adr/0018-dj-eq-knobs-and-transport-arrows.md`](docs/adr/0018-dj-eq-knobs-and-transport-arrows.md);
 the peek's bar, tags and tag reader are

@@ -13,9 +13,11 @@
  *
  * Either horizontal swipe toggles the transport drawer at the left edge (with the DJ
  * block): from the entry 100% pose either brings them in, and while they are out either
- * takes them out. An up swipe at
- * Bare is reported as PEEK_SHOW and a down swipe as PEEK_HIDE: the view raises the peek
- * only from the entry 100% pose and closes it on the down swipe. A two-finger left is
+ * takes them out. The vertical pair is the ladder: a down swipe is DOWN and asks for the
+ * controls, an up swipe is UP and takes them away - but an up swipe with no controls out
+ * raises the peek and a down swipe with the peek up lowers it. Which of the two a vertical
+ * swipe is belongs to the view, because only it knows what is on screen; this module
+ * reports the direction. A two-finger left is
  * VU_SHOW and a two-finger right VU_HIDE: the VU meter starts hidden and fades in/out. A
  * tap is not an intent: next and previous are the left drawer's arrows, whose
  * clicks are their own cells' and never reach the screen.
@@ -46,8 +48,10 @@ typedef enum {
     SCREEN_INTENT_NONE = 0,
     SCREEN_INTENT_BUTTONS_SHOW,
     SCREEN_INTENT_BUTTONS_HIDE,
-    SCREEN_INTENT_PEEK_SHOW,
-    SCREEN_INTENT_PEEK_HIDE,
+    /* The vertical swipes, reported as the direction: the view knows whether they are the
+     * controls' way in and out or the peek's. */
+    SCREEN_INTENT_DOWN,
+    SCREEN_INTENT_UP,
     SCREEN_INTENT_VU_SHOW,
     SCREEN_INTENT_VU_HIDE,
 } screen_intent_t;

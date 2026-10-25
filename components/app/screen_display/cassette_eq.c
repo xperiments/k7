@@ -2,15 +2,15 @@
  * The DJ block on the right; see cassette_eq.h.
  *
  * Six carcases, two touching columns of three, the same 96 px box as the transport
- * buttons. The Filebrowser and Rec placeholders keep the buttons' 64 px circle; the four
+ * buttons. The first column is GAIN above M and R; the second is HI, MED and LOW. The four
  * knobs are a 30% smaller 44 px circle with the 24-dot crown outside it, and a line from
- * the centre towards the rim. The first column is GAIN above the Filebrowser and Rec
- * placeholders; the second is HI, MED and LOW. The next/previous arrows are the left
- * drawer's < and > now.
+ * the centre towards the rim. M and R are the drawer's buttons moved to the block: the
+ * same 64 px circle, letter, two states and click pulse, with no action yet. The
+ * next/previous arrows are the left drawer's < and >.
  *
  * The edit overlay is the whole input policy for the block: while a knob is active it is
- * the only clickable object on the screen, so the placeholders, the drawer and the peek
- * cannot take the same touch. The two-finger VU bypasses LVGL (the touch adapter calls
+ * the only clickable object on the screen, so M and R, the drawer and the peek cannot take
+ * the same touch. The two-finger VU bypasses LVGL (the touch adapter calls
  * the view directly), which is why the view also checks is_editing().
  *
  * The block is hidden at rest, so the entry view is the untouched full-scale cassette; the
@@ -28,16 +28,14 @@
 #include "mini_icecast.h"
 #include "screen_input.h"
 
-/* The left drawer's < and > are the transport arrows now; these two cells are the
- * Filebrowser and Rec placeholders and use no font. */
+LV_FONT_DECLARE(jura_36);
 
 /* The six cells: two 96 px columns touching at x=688, three rows at 76/170/264, so the
  * bottom of the block is 360. The 16 px is the inset of the 64 px circle inside each
- * 96 px carcase, not a gap: the carcases share their borders like the left drawer's. The
- * Filebrowser and Rec placeholders keep that 64 px circle; the four knobs use a 30%
- * smaller one (44 px) and the dot crown sits outside it, with the line running from the
- * centre towards the rim. The next/previous arrows are the left drawer's < and > now;
- * these two cells are TBD.
+ * 96 px carcase, not a gap: the carcases share their borders like the left drawer's. M and
+ * R keep that 64 px circle; the four knobs use a 30% smaller one (44 px) and the dot crown
+ * sits outside it, with the line running from the centre towards the rim. The
+ * next/previous arrows are the left drawer's < and >.
  *
  * The edit view is one knob at 3x, 284 px (96+94+94) at x=206 (206..490, over the cassette)
  * with its top on the GAIN button's top, so it spans the block's 76..360 band. Circle 132,
@@ -94,8 +92,8 @@ enum {
     SLOT_HI   = 1,
     SLOT_MED  = 2,
     SLOT_LOW  = 3,
-    SLOT_PREV = 4,   /* now Filebrowser (TBD) */
-    SLOT_NEXT = 5,   /* now Rec mode (TBD) */
+    SLOT_M    = 4,   /* the M button; its function is TBD */
+    SLOT_R    = 5,   /* the R button; its function is TBD */
     SLOT_COUNT = 6,
     KNOB_SLOTS = 4,
 };
@@ -110,6 +108,7 @@ static const int8_t k_slot_band[KNOB_SLOTS] = { -1, 2, 1, 0 };
 
 static lv_obj_t *s_cell[SLOT_COUNT];
 static lv_obj_t *s_circle[KNOB_SLOTS];
+static lv_obj_t *s_ambient[KNOB_SLOTS];   /* the transparent circle carrying the broad shadow */
 static lv_obj_t *s_dot[KNOB_SLOTS][DOT_COUNT];
 static lv_obj_t *s_stick[KNOB_SLOTS];
 static int s_value[KNOB_SLOTS];       /* 0..100; 50 is 0 dB on every knob */
@@ -212,9 +211,15 @@ static void knob_reset(int slot)
 
 static void knob_build(lv_obj_t *cell, int slot)
 {
-    lv_obj_t *circle = cassette_border_box(cell, KNOB_INSET, KNOB_INSET,
+    /* Two circles, like the drawer's buttons: the outer one carries the broad shadow and the
+     * inner one is the disc with the contact shadow and the ring. */
+    lv_obj_t *ambient = cassette_border_box(cell, KNOB_INSET, KNOB_INSET,
+                                            KNOB_D, KNOB_D, KNOB_R,
+                                            k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
+    lv_obj_t *circle = cassette_border_box(ambient, 0, 0,
                                            KNOB_D, KNOB_D, KNOB_R,
                                            k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 2);
+    s_ambient[slot] = ambient;
     s_circle[slot] = circle;
 
     int cx = CELL_W / 2, cy = CELL_H / 2;
@@ -236,34 +241,64 @@ static void knob_build(lv_obj_t *cell, int slot)
     knob_apply(slot);
 }
 
-/* The two placeholder cells the arrows used to occupy: the Filebrowser's folder and the
- * Rec mode's two circles, the icons the owner supplied. They keep the 64 px circle and the
- * carcase and use the drawer buttons' two inks: k_col_button_rect for the carcase and
- * k_col_button_circle for the circle and the icon; the click is not wired (TBD). The shapes
- * are placed so their mass sits on the circle's centre (32,32): the folder body is centred
- * and carries its tab above, and the two circles plus their bar are centred as one mark. */
-static void icon_build(lv_obj_t *cell, int slot)
-{
-    lv_obj_t *circle = cassette_border_box(cell, CIRCLE_INSET, CIRCLE_INSET,
-                                           CIRCLE_D, CIRCLE_D, CIRCLE_R,
-                                           k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 2);
-    int c = CIRCLE_D / 2;
+/* The M and R cells: the drawer's buttons, moved to the block. Each is the 64 px circle
+ * and one letter in Jura 36 - the same circle, corner and inks as the left drawer - with the
+ * drawer's two prebuilt states, a 2 px circle and a 3 px one, so a press costs a visibility
+ * swap and no style write. The cell itself is the rectangle; its carcase is shared with the
+ * block and does not thicken, so the pressed look is the circle's ring. Neither has an
+ * action yet: a click pulses the cell, as P does on the left. */
+#define TEXT_BUTTONS 2
+#define TEXT_RING_UNPRESSED 2
+#define TEXT_RING_PRESSED   3
 
-    if (slot == SLOT_PREV) {
-        /* Folder: the body 1 px left of the circle's centre, the tab above its top-left. */
-        cassette_border_box(circle, c - 17, c - 11, 32, 22, 3,
-                            k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 1);
-        cassette_border_box(circle, c - 17, c - 17, 12, 7, 2,
-                            k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 1);
-    } else {
-        /* Rec mode: the two circles of the owner's voicemail mark and the bar between
-         * their bottoms, the whole mark 2 px left of the circle's centre. */
-        cassette_border_box(circle, c - 18, c - 8, 14, 14, 7,
-                            k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 1);
-        cassette_border_box(circle, c, c - 8, 14, 14, 7,
-                            k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 1);
-        cassette_box(circle, c - 6, c + 6, 9, 1, 1, k_col_button_circle);
-    }
+typedef struct {
+    lv_obj_t *ambient[2];  /* the transparent circle carrying the broad shadow */
+    lv_obj_t *circle[2];   /* 0 = unpressed, 1 = pressed */
+    lv_obj_t *letter[2];
+} eq_text_button_t;
+
+static eq_text_button_t s_text[TEXT_BUTTONS];
+
+/* One state: the circle at the cell's inset and the letter inside it. */
+static void text_state_build(lv_obj_t *cell, const char *text, int ring_w, bool hidden,
+                             lv_obj_t **ambient_out, lv_obj_t **circle_out,
+                             lv_obj_t **letter_out)
+{
+    lv_obj_t *ambient = cassette_border_box(cell, CIRCLE_INSET, CIRCLE_INSET,
+                                            CIRCLE_D, CIRCLE_D, CIRCLE_R,
+                                            k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
+    lv_obj_t *circle = cassette_border_box(ambient, 0, 0,
+                                           CIRCLE_D, CIRCLE_D, CIRCLE_R,
+                                           k_col_bg, LV_OPA_TRANSP, k_col_button_circle,
+                                           ring_w);
+    lv_obj_t *letter = cassette_text(circle, &jura_36, k_col_button_circle,
+                                     LV_ALIGN_CENTER, 0, 0);
+    lv_label_set_text(letter, text);
+    lv_obj_set_hidden(ambient, hidden);
+    *ambient_out = ambient;
+    *circle_out = circle;
+    *letter_out = letter;
+}
+
+static void text_button_build(lv_obj_t *cell, int slot, const char *text)
+{
+    eq_text_button_t *b = &s_text[slot - SLOT_M];
+    text_state_build(cell, text, TEXT_RING_UNPRESSED, false,
+                     &b->ambient[0], &b->circle[0], &b->letter[0]);
+    text_state_build(cell, text, TEXT_RING_PRESSED, true,
+                     &b->ambient[1], &b->circle[1], &b->letter[1]);
+}
+
+/* Swap a text button's two states. */
+static void text_button_show(int slot, bool pressed)
+{
+    if (slot < SLOT_M) return;
+    eq_text_button_t *b = &s_text[slot - SLOT_M];
+    if (!b->ambient[0] || !b->ambient[1]) return;
+    /* The wrapper is the state: it holds the disc and carries the broad shadow, so hiding it
+     * hides the letter too and leaves only one state's shadow on the white page. */
+    lv_obj_set_hidden(b->ambient[0], pressed);
+    lv_obj_set_hidden(b->ambient[1], !pressed);
 }
 
 /* The 3x knob, hidden until a knob is tapped. Its 284 px (96+94+94) hit area at x=206 is
@@ -487,23 +522,68 @@ static void open_later(int slot)
 
 /* ------------------------------------------------------------------- the cells */
 
+/* The click pulse, the drawer button's triangle: 256 -> 232 -> 256 over 160 ms. A text
+ * button's cell pulses as a whole - carcase, circle and letter - like the left buttons. */
+#define PULSE_SCALE_NONE 256
+#define PULSE_SCALE      232
+#define PULSE_MS         160
+
+static void cell_pulse_cb(void *var, int32_t step)
+{
+    int32_t peak = step < 512 ? step : 1024 - step;
+    int32_t scale = PULSE_SCALE_NONE - (PULSE_SCALE_NONE - PULSE_SCALE) * peak / 512;
+    lv_obj_set_style_transform_scale((lv_obj_t *)var, scale, 0);
+}
+
+static void text_button_pulse(lv_obj_t *cell)
+{
+    if (!cell) return;
+    lv_anim_delete(cell, cell_pulse_cb);
+    lv_obj_set_style_transform_scale(cell, PULSE_SCALE_NONE, 0);
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, cell);
+    lv_anim_set_exec_cb(&a, cell_pulse_cb);
+    lv_anim_set_values(&a, 0, 1024);
+    lv_anim_set_duration(&a, PULSE_MS);
+    lv_anim_set_path_cb(&a, lv_anim_path_linear);
+    lv_anim_start(&a);
+}
+
+/* The M and R cells swap their circle on a press and back on release or a lost press, like
+ * the drawer's buttons. */
+static void cell_pressed_cb(lv_event_t *e)
+{
+    text_button_show((int)(intptr_t)lv_event_get_user_data(e) - 1, true);
+}
+
+static void cell_released_cb(lv_event_t *e)
+{
+    text_button_show((int)(intptr_t)lv_event_get_user_data(e) - 1, false);
+}
+
 static void cell_clicked_cb(lv_event_t *e)
 {
     /* The overlay should own the touch while editing; the guard comes first so even a
-     * click that somehow reaches a cell cannot work a placeholder or enter edit. A hidden
+     * click that somehow reaches a cell cannot work M or R or enter edit. A hidden
      * or still-sliding block takes no click at all. */
     if (s_active >= 0 || !s_shown || s_sliding) return;
 
     int slot = (int)(intptr_t)lv_event_get_user_data(e) - 1;
-    /* The Filebrowser and Rec cells are placeholders until their functions land; only
-     * the four knobs have a click. */
-    if (slot >= KNOB_SLOTS) return;
     /* The two-finger VU gesture is reserved: a gesture that starts on a cell must not also be
      * the cell's click. The latch is cleared by the next press, which the cell bubbles. */
     if (screen_input_two_finger_seen()) return;
     lv_indev_t *indev = lv_indev_active();
     if (indev && (lv_indev_get_gesture_dir(indev) != LV_DIR_NONE ||
                   lv_indev_get_press_moved(indev))) return;
+
+    /* M and R have no action yet; the press state and this pulse are the whole of their
+     * click, as P's are on the left. */
+    if (slot >= KNOB_SLOTS) {
+        text_button_pulse(s_cell[slot]);
+        return;
+    }
 
     /* The second CLICKED of a double click: the DOUBLE_CLICKED handler already reset the
      * knob and cancelled the pending open, so this click must not start a new one. */
@@ -531,14 +611,21 @@ static lv_obj_t *cell_create(lv_obj_t *parent, int slot)
     /* All six cells are buttons: the drawer's rectangle ink for the carcase. */
     lv_obj_t *cell = cassette_border_box(parent, cell_x(slot), cell_y(slot),
                                          CELL_W, CELL_H, CELL_R,
-                                         k_col_bg, LV_OPA_TRANSP, k_col_button_rect, 2);
+                                         k_col_bg, LV_OPA_COVER, k_col_button_rect, 2);
     lv_obj_set_clickable(cell, true);
     /* The press bubbles so screen_input clears its two-finger latch; the gesture does not,
      * so a swipe that starts on a cell is not a drawer or Level gesture. */
     lv_obj_set_event_bubble(cell, true);
+    /* The pulse is centred on the cell, not on its top-left corner. */
+    lv_obj_set_style_transform_pivot_x(cell, CELL_W / 2, 0);
+    lv_obj_set_style_transform_pivot_y(cell, CELL_H / 2, 0);
     /* Slot 0 is a valid user value, so the payload is slot + 1. */
     lv_obj_add_event_cb(cell, cell_clicked_cb, LV_EVENT_CLICKED, (void *)(intptr_t)(slot + 1));
     lv_obj_add_event_cb(cell, cell_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED,
+                        (void *)(intptr_t)(slot + 1));
+    lv_obj_add_event_cb(cell, cell_pressed_cb, LV_EVENT_PRESSED, (void *)(intptr_t)(slot + 1));
+    lv_obj_add_event_cb(cell, cell_released_cb, LV_EVENT_RELEASED, (void *)(intptr_t)(slot + 1));
+    lv_obj_add_event_cb(cell, cell_released_cb, LV_EVENT_PRESS_LOST,
                         (void *)(intptr_t)(slot + 1));
     s_cell[slot] = cell;
     return cell;
@@ -587,7 +674,8 @@ void cassette_eq_create(lv_obj_t *parent)
     for (int slot = 0; slot < SLOT_COUNT; slot++) {
         lv_obj_t *cell = cell_create(parent, slot);
         if (slot < KNOB_SLOTS) knob_build(cell, slot);
-        else icon_build(cell, slot);
+        else if (slot == SLOT_M) text_button_build(cell, slot, "M");
+        else text_button_build(cell, slot, "R");
         lv_obj_set_hidden(cell, true);
     }
     big_build(parent);
@@ -638,6 +726,43 @@ void cassette_eq_raise(void)
     if (!s_shown || s_active >= 0) return;
     for (int slot = 0; slot < SLOT_COUNT; slot++)
         if (s_cell[slot]) lv_obj_move_foreground(s_cell[slot]);
+}
+
+/* The white page paints the four knobs the way it paints the drawer's buttons: the 44 px
+ * circle becomes the dome - a flat light-grey disc with a soft lower-right shadow, no ring -
+ * while the crown, the stick and the carcases keep their inks. M and R take the same face,
+ * as they have the same circles. */
+void cassette_eq_set_page(bool white)
+{
+    lv_color_t ink = white ? k_col_white : k_col_bg;
+    for (int slot = 0; slot < SLOT_COUNT; slot++) {
+        if (s_cell[slot]) lv_obj_set_style_bg_color(s_cell[slot], ink, 0);
+    }
+    for (int slot = 0; slot < KNOB_SLOTS; slot++) {
+        if (!s_circle[slot]) continue;
+        cassette_circle_face(s_ambient[slot], s_circle[slot], white);
+        lv_obj_set_style_border_width(s_circle[slot], white ? 0 : 2, 0);
+        if (!white) lv_obj_set_style_border_color(s_circle[slot], k_col_button_circle, 0);
+    }
+
+    /* M and R: the dome and the black letter on the white page, the line art and the
+     * playing red on the dark one - the drawer buttons' treatment. Each state keeps its own
+     * ring width for the dark page. */
+    for (int i = 0; i < TEXT_BUTTONS; i++) {
+        for (int k = 0; k < 2; k++) {
+            lv_obj_t *circle = s_text[i].circle[k];
+            if (circle) {
+                cassette_circle_face(s_text[i].ambient[k], circle, white);
+                lv_obj_set_style_border_width(circle, white ? 0 : (k ? TEXT_RING_PRESSED
+                                                                    : TEXT_RING_UNPRESSED), 0);
+                if (!white)
+                    lv_obj_set_style_border_color(circle, k_col_button_circle, 0);
+            }
+            if (s_text[i].letter[k])
+                lv_obj_set_style_text_color(s_text[i].letter[k],
+                                            white ? k_col_bg : k_col_button_circle, 0);
+        }
+    }
 }
 
 bool cassette_eq_is_editing(void)

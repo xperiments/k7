@@ -6,7 +6,7 @@
 # The Label cover and Artwork screens are gone; the Artwork cover pipeline (TJpgDec, the
 # Case backdrop and the cover blob) is parked in artwork_loader.c and the assets stay in
 # assets/ for when that screen comes back. It is deliberately not built here.
-set(screen_srcs "screen_display.c" "cassette_view.c" "cassette_tapes.c" "cassette_meter.c" "cassette_levels.c" "cassette_buttons.c" "cassette_eq.c" "cassette_style.c" "cassette_widgets.c" "screen_input.c" "lvgl_mem.c" "font_jura_36.c" "font_jura_28.c")
+set(screen_srcs "screen_display.c" "cassette_view.c" "cassette_tapes.c" "cassette_meter.c" "cassette_levels.c" "cassette_buttons.c" "cassette_eq.c" "cassette_header.c" "cassette_footer.c" "cassette_window.c" "cassette_style.c" "cassette_widgets.c" "screen_input.c" "lvgl_mem.c" "font_jura_36.c" "font_jura_28.c")
 set(screen_reqs mini_icecast cassette artwork esp_timer esp_lcd esp_driver_gpio esp_driver_ledc)
 if(CONFIG_APP_BOARD_SUNTON_8048S050C)
     list(APPEND screen_srcs "panel_rgb.c" "touch_gt911.c" "backlight.c" "tags_loader.c" "cassette_peek.c")

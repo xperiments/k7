@@ -1,0 +1,43 @@
+#pragma once
+/*
+ * cassette_header - the band across the top of the controls screen.
+ *
+ * The controls screen is the transport drawer on the left and the DJ block on the right,
+ * both of which start at y=76. This is the frame that closes the screen across the top:
+ * 768x71 at (16,6), its bottom edge on the buttons' and the cells' top line and its 16 px
+ * side margins on the cassette's outer frame inset.
+ *
+ * It is line art like the carcases it joins: a 2 px border rounded by 8 px - the drawer
+ * buttons' corner - in the drawer's carcase ink, over an opaque fill in the page's colour
+ * (k_col_white on the white page, k_col_bg on the dark one), so the band covers what it
+ * slides over instead of letting the picture show through it. It moves with the rest of the
+ * controls chrome: a 260 ms ease-out slide down from just above the panel when the controls
+ * come out, and back up, hidden at the end, when they go away. It is on the white page the
+ * down swipe paints and on the dark page the horizontal swipes keep.
+ *
+ * Private to screen_display; the view decides when the controls are out and calls
+ * set_shown(). Built and written under the LVGL lock, like everything else on the screen.
+ */
+#include <stdbool.h>
+
+#include "lvgl.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Build the band as a child of the screen, at its hidden position above the panel. */
+void cassette_header_create(lv_obj_t *screen);
+
+/* Slide it in (true) or out (false) with the controls. A call while the other slide is
+ * running reverses from the current position; a call that names the state already held does
+ * nothing. The band is hidden once its slide out completes. */
+void cassette_header_set_shown(bool shown);
+
+/* Paint the opaque fill for the page behind the band: k_col_white while the controls hold
+ * the white page, k_col_bg on the dark screen. The view calls it from its page flip. */
+void cassette_header_set_page(bool white);
+
+#ifdef __cplusplus
+}
+#endif

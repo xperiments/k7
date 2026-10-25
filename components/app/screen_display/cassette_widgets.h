@@ -32,6 +32,19 @@ lv_obj_t *cassette_text(lv_obj_t *parent, const lv_font_t *font, lv_color_t colo
 lv_obj_t *cassette_image(lv_obj_t *parent, const lv_image_dsc_t *src,
                          int x, int y, int w, int h);
 
+/* Give a circle one of its two faces, for the parts the page flips - as a pair of objects,
+ * because LVGL draws one shadow per object. `ambient` is a transparent circle exactly under
+ * `dome` and carries the broad, soft shadow; `dome` is the disc itself and carries the tight
+ * contact shadow. Together they read as one raised button in the bezel around it. On the
+ * white page the disc is a flat light-grey fill (one colour, no gradient); on the dark page
+ * both are line art again - no shadows, no fill, and whatever is behind shows through. The
+ * caller owns the ring: its width and colour on `dome`, because the pressed states and M and
+ * R differ there; on the white page it sets the width to 0. LVGL's shadows are outer-only, so
+ * both are cast by their own object and fall on what is behind them; nothing here tries an
+ * inset. Every number is sized so the pair stays inside a 96 px bezel around either the 44 px
+ * knob or the 64 px button circle. */
+void cassette_circle_face(lv_obj_t *ambient, lv_obj_t *dome, bool white);
+
 #ifdef __cplusplus
 }
 #endif

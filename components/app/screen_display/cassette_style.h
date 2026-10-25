@@ -25,9 +25,17 @@
 
 #define COL_BLACK   0x111111
 #define COL_PRIMARY 0xF15A22
+#define COL_WHITE   0x909090
 
-extern const lv_color_t k_col_black;
 extern const lv_color_t k_col_bg;
+
+/* The controls view's page: the whole backdrop, and the fills that read as holes in the
+ * cassette, turn white while the transport drawer and the DJ block are out. The line art
+ * keeps its inks on top of it. */
+extern const lv_color_t k_col_white;
+
+/* A muted glass tone, 40 % of white: the controls page's edge mark is drawn with it. */
+extern const lv_color_t k_col_glass;
 
 /* The playing red: the hub's ring and divider, and the peek's ink. */
 extern const lv_color_t k_col_tape_dark;
