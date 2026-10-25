@@ -9,14 +9,16 @@
  * to the rim. 0 dB is at twelve o'clock, the right side cuts and the left side boosts. The
  * two arrows are the only next/previous controls on the screen.
  *
- * A tap on a knob enters edit mode, which is modal: a 3x virtual knob (284 px, the
- * 96+94+94 length, its top on the GAIN button's top) takes the centre over the faded
+ * A tap on a knob opens edit mode after a 550 ms delay, so a second tap is read as the
+ * reset double click instead: a 3x virtual knob (284 px at the 16 px left margin, the
+ * 96+94+94 length, its top on the GAIN button's top) takes the left side over the faded
  * cassette. Only its centre circle closes. A click on the ring - the carcase outside that
  * circle - is the target point: the knob jumps to that angle, 0 dB at twelve, clockwise
  * cutting and counter-clockwise boosting. A click outside the knob does nothing; there is
  * no drag and no relative rotation. A double tap on any small knob resets it to 0 dB and
- * leaves, like a mixer's centre detent. While edit mode is on, the view ignores every
- * screen intent, because the touch adapter's two-finger menu arrives directly.
+ * cancels the pending open, like a mixer's centre detent, so the virtual knob never
+ * appears. While edit mode is on, the view ignores every screen intent, because the touch
+ * adapter's two-finger menu arrives directly.
  *
  * The block is a screen child, created after the Level sheets, so it is chrome like the
  * transport drawer: it stays above the sheets and the view raises it after a vertical

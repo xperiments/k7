@@ -34,10 +34,11 @@ LV_FONT_DECLARE(jura_36);
  * that 64 px circle; the four knobs use a 30% smaller one (44 px) and the dot crown sits
  * outside it, with the line running from the centre to the rim.
  *
- * The edit view is one knob at 3x, 284 px (96+94+94) with its top on the GAIN button's
- * top, so it spans the block's 76..360 band. Circle 132, crown at r=96 with 12 px dots,
- * an 18x66 line from the centre to the rim. A click on the ring sets the target angle; a
- * click on the centre circle closes; the cassette fades out and back in. */
+ * The edit view is one knob at 3x, 284 px (96+94+94) at the 16 px left margin with its top
+ * on the GAIN button's top, so it spans the block's 76..360 band. Circle 132, crown at
+ * r=96 with 12 px dots, a 6x66 line from the centre to the rim. A click on the ring sets
+ * the target angle; a click on the centre circle closes; the cassette fades out and back
+ * in. The edit opens 550 ms after the first tap, so a double tap can reset to 0 dB first. */
 #define CELL_W       96
 #define CELL_H       96
 #define CELL_PITCH   94
@@ -57,7 +58,7 @@ LV_FONT_DECLARE(jura_36);
 #define STICK_L      KNOB_R   /* the radius: from the centre to the rim */
 #define STICK_R      3
 #define BIG_D        284
-#define BIG_X        ((800 - BIG_D) / 2)
+#define BIG_X        16   /* the screen's left margin; the knob is 284 wide */
 #define BIG_Y        BLOCK_TOP   /* the GAIN button's top: 76..360, the block's band */
 #define BIG_CX       (BIG_X + BIG_D / 2)
 #define BIG_CY       (BIG_Y + BIG_D / 2)
@@ -68,9 +69,13 @@ LV_FONT_DECLARE(jura_36);
 #define BIG_RADIUS   66
 #define BIG_DOT_R    96
 #define BIG_DOT_D    12
-#define BIG_STICK_W  18
+#define BIG_STICK_W  6   /* the centre line stays 6 px, like the small knob's */
 #define BIG_STICK_L  BIG_RADIUS
-#define BIG_STICK_R  9
+#define BIG_STICK_R  3
+/* A knob's edit opens after this delay so a second tap is read as LVGL's double click
+ * and resets to 0 dB instead of opening the virtual knob. The touch adapter's window is
+ * 500 ms, so wait a little past it. */
+#define EDIT_DELAY_MS 550
 #define BLINK_MS     600
 #define BLINK_MIN_OPA 70
 /* The block enters and leaves with the transport drawer's 260 ms slide, from the right
@@ -111,6 +116,9 @@ static lv_obj_t *s_big_cell;          /* the 3x edit knob, centred */
 static lv_obj_t *s_big_circle;
 static lv_obj_t *s_big_dot[DOT_COUNT];
 static lv_obj_t *s_big_stick;
+static lv_timer_t *s_open_timer;      /* the delayed edit open, 550 ms */
+static int s_pending_slot;            /* which knob that timer will open */
+static bool s_reset_click;            /* the double click's second CLICKED is consumed */
 
 /* ------------------------------------------------------------------ geometry */
 
@@ -173,7 +181,7 @@ static void knob_apply(int slot)
     lv_obj_set_style_transform_rotation(s_stick[slot], (int32_t)lroundf(deg * 10.0f), 0);
 }
 
-/* The virtual knob shows the same value at 3x; its line is 18x66. */
+/* The virtual knob shows the same value at 3x; its line stays 6 px wide. */
 static void big_apply(int slot)
 {
     int value = s_value[slot];
@@ -227,9 +235,10 @@ static void arrow_build(lv_obj_t *cell, int slot)
 }
 
 /* The 3x knob, hidden until a knob is tapped. Its carcase is 284 px, the 96+94+94 length
- * of the block, with its top on the GAIN button's top. The art is the small knob at 3x:
- * circle 132, crown at r=96 with 12 px dots, an 18x66 line from the centre to the rim. The
- * centre circle is the close target; the ring around it is the rotary control. */
+ * of the block, at the 16 px left margin with its top on the GAIN button's top. The art is
+ * the small knob at 3x: circle 132, crown at r=96 with 12 px dots, a 6x66 line from the
+ * centre to the rim. The centre circle is the close target; the ring around it is where
+ * the target click lands. */
 static void big_build(lv_obj_t *parent)
 {
     s_big_cell = cassette_border_box(parent, BIG_X, BIG_Y, BIG_D, BIG_D, BIG_R,
@@ -304,6 +313,9 @@ static void blink_stop(int slot)
 /* ----------------------------------------------------------------- edit mode */
 
 static void end_edit(void);
+static void begin_edit(int slot);
+static void open_later(int slot);
+static void cancel_open(void);
 
 /* The angle from the big knob's centre: 0 at twelve, positive clockwise, in degrees. */
 static float angle_at(lv_point_t p)
@@ -384,6 +396,7 @@ static void overlay_create(void)
 static void begin_edit(int slot)
 {
     if (s_active >= 0) return;
+    cancel_open();
     s_active = slot;
 
     overlay_create();
@@ -412,6 +425,33 @@ static void end_edit(void)
     }
 }
 
+/* The edit opens late: a second tap inside LVGL's 500 ms double-click window must win and
+ * reset the knob to 0 dB, not open the virtual knob. A single tap starts a 550 ms one-shot;
+ * the double click cancels it before it fires. */
+static void open_timer_cb(lv_timer_t *t)
+{
+    (void)t;
+    s_open_timer = NULL;
+    if (!s_shown || s_sliding || s_active >= 0) return;
+    begin_edit(s_pending_slot);
+}
+
+static void cancel_open(void)
+{
+    if (s_open_timer) {
+        lv_timer_delete(s_open_timer);
+        s_open_timer = NULL;
+    }
+}
+
+static void open_later(int slot)
+{
+    cancel_open();
+    s_pending_slot = slot;
+    s_open_timer = lv_timer_create(open_timer_cb, EDIT_DELAY_MS, NULL);
+    if (s_open_timer) lv_timer_set_repeat_count(s_open_timer, 1);
+}
+
 /* ------------------------------------------------------------------- the cells */
 
 static void cell_clicked_cb(lv_event_t *e)
@@ -437,7 +477,25 @@ static void cell_clicked_cb(lv_event_t *e)
         mini_icecast_skip();
         return;
     }
-    begin_edit(slot);
+    /* The second CLICKED of a double click: the DOUBLE_CLICKED handler already reset the
+     * knob and cancelled the pending open, so this click must not start a new one. */
+    if (s_reset_click) {
+        s_reset_click = false;
+        return;
+    }
+    open_later(slot);
+}
+
+/* A double click on a small knob is the reset gesture. It runs before the second CLICKED,
+ * cancels the delayed open and leaves s_active alone: the virtual knob never appears. */
+static void cell_double_clicked_cb(lv_event_t *e)
+{
+    if (s_active >= 0 || !s_shown || s_sliding) return;
+    int slot = (int)(intptr_t)lv_event_get_user_data(e) - 1;
+    if (slot >= KNOB_SLOTS) return;
+    cancel_open();
+    knob_reset(slot);
+    s_reset_click = true;
 }
 
 static lv_obj_t *cell_create(lv_obj_t *parent, int slot)
@@ -451,6 +509,8 @@ static lv_obj_t *cell_create(lv_obj_t *parent, int slot)
     lv_obj_set_event_bubble(cell, true);
     /* Slot 0 is a valid user value, so the payload is slot + 1. */
     lv_obj_add_event_cb(cell, cell_clicked_cb, LV_EVENT_CLICKED, (void *)(intptr_t)(slot + 1));
+    lv_obj_add_event_cb(cell, cell_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED,
+                        (void *)(intptr_t)(slot + 1));
     s_cell[slot] = cell;
     return cell;
 }
@@ -488,6 +548,8 @@ void cassette_eq_create(lv_obj_t *parent)
     s_shown = false;
     s_sliding = false;
     s_slide_offset = EQ_SLIDE_OFFSET;
+    s_open_timer = NULL;
+    s_reset_click = false;
     s_value[SLOT_GAIN] = 50;   /* 0 dB, the same neutral as the three bands */
     s_value[SLOT_HI] = 50;
     s_value[SLOT_MED] = 50;
@@ -510,6 +572,10 @@ void cassette_eq_set_shown(bool shown)
     if (!s_cell[0]) return;
     if (shown == s_shown && !s_sliding) return;
     s_shown = shown;
+    if (!shown) {
+        cancel_open();
+        s_reset_click = false;
+    }
 
     /* A hidden block cannot own the edit overlay. The view gates the drawer's hide on edit
      * mode, but keeping the rule here makes it true from any caller. */

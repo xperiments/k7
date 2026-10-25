@@ -25,18 +25,19 @@ every listener hears, and there is no local audio path to fight with. The PCM se
 - **The ranges are the DJ ones.** GAIN -12..+12 dB, default 0; bands -26..+6 dB, default
   0, at 200 Hz (low shelf), 1 kHz (bell, Q 0.7) and 4 kHz (high shelf). The trim is applied
   before the bands. The int16 clamp is the last stage.
-- **Edit mode is modal, on a 3x virtual knob.** A tap on a knob puts a 284 px (96+94+94)
-  virtual knob over the faded cassette, its top on the GAIN button's top and the same 2 px
-  stroke as the small carcase; a transparent 800x480 overlay owns the touch. Only the big
-  knob's centre circle closes. A click on the ring - the carcase outside that circle - is
-  the target point: the knob jumps to that angle, 0 dB at twelve, clockwise cutting and
-  counter-clockwise boosting. A click outside the knob does nothing; there is no drag and no
-  relative rotation. A double tap on any small knob resets it to 0 dB and leaves, the
-  mixer's centre-detent gesture. While it is up nothing else responds - the arrows, P/R/W,
-  the drawer and the Levels are behind the overlay - and the view drops every screen intent
-  too, because the touch adapter's two-finger menu arrives directly. Both circles blink
-  their border 100% -> 27% -> 100%, 600 ms each way. The MCP is not a gesture or a click and
-  is untouched.
+- **Edit mode is modal, on a 3x virtual knob.** A tap on a knob opens it after 550 ms, so a
+  second tap is read as the reset double click first. The 284 px (96+94+94) virtual knob
+  sits at the 16 px left margin, its top on the GAIN button's top, with the same 2 px stroke
+  as the small carcase and a 6 px centre line; a transparent 800x480 overlay owns the touch.
+  Only the big knob's centre circle closes. A click on the ring - the carcase outside that
+  circle - is the target point: the knob jumps to that angle, 0 dB at twelve, clockwise
+  cutting and counter-clockwise boosting. A click outside the knob does nothing; there is no
+  drag and no relative rotation. A double tap on any small knob resets it to 0 dB and
+  cancels the pending open, the mixer's centre-detent gesture, so the virtual knob never
+  appears. While it is up nothing else responds - the arrows, P/R/W, the drawer and the
+  Levels are behind the overlay - and the view drops every screen intent too, because the
+  touch adapter's two-finger menu arrives directly. Both circles blink their border
+  100% -> 27% -> 100%, 600 ms each way. The MCP is not a gesture or a click and is untouched.
 - **Only the arrows do next/previous on the screen.** The screen's tap no longer skips a
   track (`SCREEN_INTENT_TAP` is removed) and the BOOT button no longer skips either. The
   P/R/W buttons remain placeholders.
