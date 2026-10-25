@@ -243,16 +243,16 @@ crown at r=32 outside it and a 6x22 line from the centre to the rim. 0 dB is at 
 o'clock; the right side cuts and the left side boosts, and the arc lights from twelve to
 the line on the side it points.
 
-A tap on a knob opens edit mode: a 3x virtual knob (284 px, the 96+94+94 length of the
-block) appears at the centre, the cassette fades out over 180 ms, and a transparent 800x480
-overlay owns the touch. The value is edited by rotating the finger around that centre,
-relative to the press angle: clockwise cuts, counter-clockwise boosts; a 6 degree
-movement is the dead zone. A tap closes the virtual knob and the cassette fades back in. A
-rotation that moved the value does not close on release; the next tap does. A double tap
-on any small knob resets it to 0 dB and leaves. While the overlay is up nothing else
-responds - the arrows, P/R/W, the drawer and the Levels are all behind it - and the view's
-sink drops every screen intent too, because the two-finger menu arrives from the touch
-adapter directly. Both the small active circle and the big one blink their border
+A tap on a knob opens edit mode: a 3x virtual knob (284 px, the 96+94+94 length, its top
+on the GAIN button's top, the same 2 px stroke) appears at the centre, the cassette fades
+out over 180 ms, and a transparent 800x480 overlay owns the touch. Only the big knob's
+centre circle closes. A click on the ring - the carcase outside that circle - is the target
+point: the knob jumps to that angle, 0 dB at twelve, clockwise cutting and counter-clockwise
+boosting. A click outside the knob does nothing; there is no drag. A double tap on any
+small knob resets it to 0 dB and leaves. While the overlay is up nothing else responds -
+the arrows, P/R/W, the drawer and the Levels are all behind it - and the view's sink drops
+every screen intent too, because the two-finger menu arrives from the touch adapter
+directly. Both the small active circle and the big one blink their border
 100% -> 27% -> 100%, 600 ms each way. The arrows are the only next/previous controls and
 call `mini_icecast_prev()` / `mini_icecast_skip()`; the screen's tap and the BOOT button no
 longer do either.

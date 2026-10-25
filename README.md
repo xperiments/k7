@@ -571,10 +571,11 @@ second. The four knobs are a 44 px circle (30% smaller than the arrows'), a 24-d
 outside it and a line from the centre to the rim, 0 dB at twelve o'clock, right cuts and
 left boosts; the arrows are the only next/previous controls and call
 `mini_icecast_prev()` / `mini_icecast_skip()`. A tap on a knob opens a modal edit mode: a
-3x virtual knob (284 px) takes the centre, the cassette fades out, and the finger's
-rotation around the centre edits it (clockwise cuts, counter-clockwise boosts); a tap
-closes it and the cassette fades back in. A double tap on a small knob resets it to 0 dB,
-both circles blink, and nothing else responds while the overlay is up. The audio is
+3x virtual knob (284 px, top on the GAIN button's top) takes the centre over the faded
+cassette; only its centre circle closes, and a click on the ring is the target point, so
+the knob jumps to that angle (clockwise cuts, counter-clockwise boosts). A double tap on a
+small knob resets it to 0 dB, both circles blink, and nothing else responds while the
+overlay is up. The audio is
 `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell and a 4 kHz high shelf plus
 a trim before them, with the DJ ranges (GAIN -12..+12 dB, default 0; bands -26..+6 dB,
 default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder.

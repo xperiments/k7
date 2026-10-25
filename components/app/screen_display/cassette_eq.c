@@ -34,9 +34,10 @@ LV_FONT_DECLARE(jura_36);
  * that 64 px circle; the four knobs use a 30% smaller one (44 px) and the dot crown sits
  * outside it, with the line running from the centre to the rim.
  *
- * The edit view is one knob at 3x, 284 px (96+94+94) centred: circle 132, crown at r=96
- * with 12 px dots, an 18x66 line from the centre to the rim. The finger's angle around
- * that centre edits; a tap closes; the cassette fades out and back in. */
+ * The edit view is one knob at 3x, 284 px (96+94+94) with its top on the GAIN button's
+ * top, so it spans the block's 76..360 band. Circle 132, crown at r=96 with 12 px dots,
+ * an 18x66 line from the centre to the rim. A click on the ring sets the target angle; a
+ * click on the centre circle closes; the cassette fades out and back in. */
 #define CELL_W       96
 #define CELL_H       96
 #define CELL_PITCH   94
@@ -57,11 +58,11 @@ LV_FONT_DECLARE(jura_36);
 #define STICK_R      3
 #define BIG_D        284
 #define BIG_X        ((800 - BIG_D) / 2)
-#define BIG_Y        ((480 - BIG_D) / 2)
+#define BIG_Y        BLOCK_TOP   /* the GAIN button's top: 76..360, the block's band */
 #define BIG_CX       (BIG_X + BIG_D / 2)
 #define BIG_CY       (BIG_Y + BIG_D / 2)
 #define BIG_R        24
-#define BIG_BORDER   6
+#define BIG_BORDER   2   /* the same 2 px stroke as the small carcase and circle */
 #define BIG_INSET    76
 #define BIG_CIRCLE   132
 #define BIG_RADIUS   66
@@ -70,7 +71,6 @@ LV_FONT_DECLARE(jura_36);
 #define BIG_STICK_W  18
 #define BIG_STICK_L  BIG_RADIUS
 #define BIG_STICK_R  9
-#define TAP_DEG      6.0f   /* a rotation smaller than this is a tap/close */
 #define BLINK_MS     600
 #define BLINK_MIN_OPA 70
 /* The block enters and leaves with the transport drawer's 260 ms slide, from the right
@@ -111,9 +111,6 @@ static lv_obj_t *s_big_cell;          /* the 3x edit knob, centred */
 static lv_obj_t *s_big_circle;
 static lv_obj_t *s_big_dot[DOT_COUNT];
 static lv_obj_t *s_big_stick;
-static float s_ang0;                  /* the press angle, degrees from twelve, clockwise */
-static int s_value0;                  /* the value at the press */
-static bool s_value_changed;          /* a rotation moved it: the release is not a close */
 
 /* ------------------------------------------------------------------ geometry */
 
@@ -230,8 +227,9 @@ static void arrow_build(lv_obj_t *cell, int slot)
 }
 
 /* The 3x knob, hidden until a knob is tapped. Its carcase is 284 px, the 96+94+94 length
- * of the block; the art is the small knob at 3x: circle 132, crown at r=96 with 12 px dots,
- * an 18x66 line from the centre to the rim. The overlay above it takes the rotation. */
+ * of the block, with its top on the GAIN button's top. The art is the small knob at 3x:
+ * circle 132, crown at r=96 with 12 px dots, an 18x66 line from the centre to the rim. The
+ * centre circle is the close target; the ring around it is the rotary control. */
 static void big_build(lv_obj_t *parent)
 {
     s_big_cell = cassette_border_box(parent, BIG_X, BIG_Y, BIG_D, BIG_D, BIG_R,
@@ -316,52 +314,36 @@ static float angle_at(lv_point_t p)
     return atan2f(dx, uy) * 180.0f / 3.14159265358979323846f;
 }
 
-static void overlay_pressed_cb(lv_event_t *e)
+/* A click in the centre circle closes. A click on the ring (the 284 px carcase outside
+ * that circle) is the target point: the knob jumps to that angle, 0 dB at twelve,
+ * clockwise cutting, counter-clockwise boosting. A click outside the knob does nothing.
+ * No drag and no relative rotation: one click both chooses and points. */
+static void overlay_clicked_cb(lv_event_t *e)
 {
     (void)e;
+    if (s_active < 0) return;
     lv_indev_t *indev = lv_indev_active();
-    if (!indev || s_active < 0) return;
-    lv_point_t p;
-    lv_indev_get_point(indev, &p);
-    s_ang0 = angle_at(p);
-    s_value0 = s_value[s_active];
-    s_value_changed = false;
-}
-
-/* The big knob is edited by rotation, relative to the press angle: clockwise cuts and
- * counter-clockwise boosts. A movement under TAP_DEG does nothing, so a tap can close. */
-static void overlay_pressing_cb(lv_event_t *e)
-{
-    (void)e;
-    lv_indev_t *indev = lv_indev_active();
-    if (!indev || s_active < 0) return;
+    if (!indev) return;
 
     lv_point_t p;
     lv_indev_get_point(indev, &p);
-    float d = angle_at(p) - s_ang0;
-    while (d > 180.0f) d -= 360.0f;
-    while (d < -180.0f) d += 360.0f;
-    if (fabsf(d) < TAP_DEG) return;
+    int dx = p.x - BIG_CX, dy = p.y - BIG_CY;
+    if (dx * dx + dy * dy <= BIG_RADIUS * BIG_RADIUS) {
+        end_edit();
+        return;
+    }
+    if (p.x < BIG_X || p.x >= BIG_X + BIG_D ||
+        p.y < BIG_Y || p.y >= BIG_Y + BIG_D) return;
 
-    int v = s_value0 - (int)lroundf(d * (50.0f / 180.0f));
+    int v = 50 - (int)lroundf(angle_at(p) * (50.0f / 180.0f));
     if (v < 0) v = 0;
     if (v > 100) v = 100;
     if (v == s_value[s_active]) return;
 
     s_value[s_active] = v;
-    s_value_changed = true;
     knob_apply(s_active);
     big_apply(s_active);
     knob_send(s_active);
-}
-
-/* A tap closes. A rotation that moved the value does not: the release is part of the
- * edit, and the next tap closes. */
-static void overlay_clicked_cb(lv_event_t *e)
-{
-    (void)e;
-    if (s_active < 0 || s_value_changed) return;
-    end_edit();
 }
 
 /* LVGL has already applied its own double-click rule (500 ms, 20 px on this touch
@@ -394,8 +376,6 @@ static void overlay_create(void)
     lv_obj_set_style_pad_all(s_overlay, 0, 0);
     lv_obj_set_scrollable(s_overlay, false);
     lv_obj_set_clickable(s_overlay, true);
-    lv_obj_add_event_cb(s_overlay, overlay_pressed_cb, LV_EVENT_PRESSED, NULL);
-    lv_obj_add_event_cb(s_overlay, overlay_pressing_cb, LV_EVENT_PRESSING, NULL);
     lv_obj_add_event_cb(s_overlay, overlay_clicked_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(s_overlay, overlay_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED, NULL);
     lv_obj_move_foreground(s_overlay);
@@ -405,7 +385,6 @@ static void begin_edit(int slot)
 {
     if (s_active >= 0) return;
     s_active = slot;
-    s_value_changed = false;
 
     overlay_create();
     if (s_big_cell) {
@@ -520,7 +499,6 @@ void cassette_eq_create(lv_obj_t *parent)
         else arrow_build(cell, slot);
         lv_obj_set_hidden(cell, true);
     }
-    s_value_changed = false;
     big_build(parent);
 
     /* The audio starts from the same values; this makes a rebuilt screen agree with it. */
