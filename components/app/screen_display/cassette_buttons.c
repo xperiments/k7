@@ -51,8 +51,8 @@ static const char *TAG = "screen";
 #define CIRCLE_R (CIRCLE_D / 2)
 #define CIRCLE_INSET ((BUTTON_W - CIRCLE_D) / 2)
 
-/* The pressed state is the same line art in a brighter ink with a heavier line; the
- * unpressed state is the palette's playing red. */
+/* The rectangle and the circle have their own inks (k_col_button_rect and
+ * k_col_button_circle); the pressed state keeps them with a heavier line. */
 #define BUTTON_BORDER_W 2
 #define BUTTON_BORDER_W_PRESSED 3
 
@@ -152,9 +152,11 @@ static void button_clicked_cb(lv_event_t *e)
 
 /* One state: the rounded rectangle, the circle at its centre and the letter inside the
  * circle. Both states of a button are built by this function, so their geometry cannot
- * drift apart; only the ink, the border weight and the initial visibility differ. */
+ * drift apart; the rectangle's ink and the circle's ink (which is also the letter's) are
+ * separate arguments, and only the border weight and the initial visibility differ. */
 static lv_obj_t *button_state_create(lv_obj_t *parent, const char *text,
-                                     lv_color_t ink, int border_w, bool hidden)
+                                     lv_color_t rect_ink, lv_color_t circle_ink,
+                                     int border_w, bool hidden)
 {
     lv_obj_t *state = lv_obj_create(parent);
     lv_obj_remove_style_all(state);
@@ -167,11 +169,11 @@ static lv_obj_t *button_state_create(lv_obj_t *parent, const char *text,
     lv_obj_set_clickable(state, false);
 
     cassette_border_box(state, 0, 0, BUTTON_W, BUTTON_H, BUTTON_R,
-                        ink, LV_OPA_TRANSP, ink, border_w);
+                        rect_ink, LV_OPA_TRANSP, rect_ink, border_w);
     lv_obj_t *circle = cassette_border_box(state, CIRCLE_INSET, CIRCLE_INSET,
                                            CIRCLE_D, CIRCLE_D, CIRCLE_R,
-                                           ink, LV_OPA_TRANSP, ink, border_w);
-    lv_obj_t *letter = cassette_text(circle, &jura_36, ink, LV_ALIGN_CENTER, 0, 0);
+                                           circle_ink, LV_OPA_TRANSP, circle_ink, border_w);
+    lv_obj_t *letter = cassette_text(circle, &jura_36, circle_ink, LV_ALIGN_CENTER, 0, 0);
     lv_label_set_text(letter, text);
 
     lv_obj_set_hidden(state, hidden);
@@ -201,10 +203,10 @@ static void button_create(lv_obj_t *parent, int index, const char *text, int y)
 
     b->root = root;
     b->action = index;
-    b->state_unpressed = button_state_create(root, text, k_col_primary,
-                                             BUTTON_BORDER_W, false);
-    b->state_pressed = button_state_create(root, text, k_col_cover_ink,
-                                           BUTTON_BORDER_W_PRESSED, true);
+    b->state_unpressed = button_state_create(root, text, k_col_button_rect,
+                                             k_col_button_circle, BUTTON_BORDER_W, false);
+    b->state_pressed = button_state_create(root, text, k_col_button_rect,
+                                           k_col_button_circle, BUTTON_BORDER_W_PRESSED, true);
 
     lv_obj_add_event_cb(root, button_pressed_cb, LV_EVENT_PRESSED, b);
     lv_obj_add_event_cb(root, button_released_cb, LV_EVENT_RELEASED, b);

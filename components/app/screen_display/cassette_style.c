@@ -27,3 +27,5 @@ const lv_color_t k_col_cover_ink  = COL_HEX(0xEEEEEE);
 const lv_color_t k_col_art_bg     = COL_HEX(0x141414);
 const lv_color_t k_col_paper      = COL_HEX(COL_BLACK);
 const lv_color_t k_col_primary    = COL_HEX(COL_PRIMARY);
+const lv_color_t k_col_button_rect    = COL_DARKEN_HEX(COL_PRIMARY, 40);
+const lv_color_t k_col_button_circle    = COL_HEX(COL_PRIMARY);

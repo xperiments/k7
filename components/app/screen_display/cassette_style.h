@@ -63,3 +63,8 @@ extern const lv_color_t k_col_cover_ink;
 extern const lv_color_t k_col_art_bg;
 extern const lv_color_t k_col_paper;
 extern const lv_color_t k_col_primary;
+
+/* The left drawer's line art: the carcase rectangle and the inner circle are coloured
+ * separately. */
+extern const lv_color_t k_col_button_rect;
+extern const lv_color_t k_col_button_circle;

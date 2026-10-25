@@ -191,8 +191,9 @@ The drawer wins over the peek while it is out; when it slides away the peek's 20
 -60 px lift come back.
 
 Each button is 96x96, rounded by 8 px, with a 64 px circle at its centre and P, `<` or `>`
-centred in the circle in Jura 36. Both states are built once: the unpressed state is the
-playing red at 2 px, the pressed one the cream ink at 3 px. `LV_EVENT_PRESSED` shows the
+centred in the circle in Jura 36. The rectangle uses `k_col_button_rect` and the circle
+(and its letter) `k_col_button_circle`; the two states are built once, at 2 px and 3 px,
+with the same two inks. `LV_EVENT_PRESSED` shows the
 pressed state; release or `LV_EVENT_PRESS_LOST` restores the other. A click runs a 160 ms
 scale pulse (256 -> 232 -> 256); `<` and `>` also call `mini_icecast_prev()` /
 `mini_icecast_skip()`. P is still a placeholder; the transport's next/previous are these
