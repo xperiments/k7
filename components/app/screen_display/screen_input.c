@@ -82,12 +82,11 @@ static void screen_two_finger_cb(int dx, int dy)
 #endif
 
 /*
- * The one-finger gestures: left/right show and hide the buttons at the left edge, up
- * toggles Bare's peek. The direction is the whole of this handler's knowledge; the peek's
- * slide and the drawer's slide are the sink's. A down swipe is not reported: there is no
- * screen below Bare any more. A two-finger swipe does not come through here: the touch
- * adapter reports it, and the latch keeps this handler from acting on the same touch as
- * well.
+ * The one-finger gestures: left/right show and hide the buttons at the left edge, up asks
+ * for the peek and down asks to put it away. The direction is the whole of this handler's
+ * knowledge; the peek's slide and the drawer's slide are the sink's. A two-finger swipe
+ * does not come through here: the touch adapter reports it, and the latch keeps this
+ * handler from acting on the same touch as well.
  */
 static void screen_gesture_cb(lv_event_t *e)
 {
@@ -105,7 +104,10 @@ static void screen_gesture_cb(lv_event_t *e)
             ESP_LOGI(TAG, "swipe right: buttons shown");
             break;
         case LV_DIR_TOP:
-            report(SCREEN_INTENT_PEEK_TOGGLE);
+            report(SCREEN_INTENT_PEEK_SHOW);
+            break;
+        case LV_DIR_BOTTOM:
+            report(SCREEN_INTENT_PEEK_HIDE);
             break;
         default:
             break;

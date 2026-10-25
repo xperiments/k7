@@ -43,8 +43,8 @@ void cassette_levels_apply(const cassette_frame_t *frame);
  * request is deduped here, so a 25 Hz update is a string compare. */
 void cassette_levels_update(const mini_icecast_status_t *status);
 
-/* The up swipe at Bare: raise the peek, or put it away if it is up. The view only calls
- * this to raise it from the entry 100% pose; closing is allowed from any pose. */
+/* The peek toggle. The view calls it to raise the peek from the entry 100% pose and to
+ * put it away on the down swipe; an up swipe while it is up is ignored. */
 void cassette_levels_toggle_peek(void);
 
 /* The Track's text tags, UTF-8. Empty strings mean the Track carries none. */

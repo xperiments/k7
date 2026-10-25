@@ -2,9 +2,9 @@
  * cassette_levels.c - the peek's host on the Cassette screen.
  *
  * The Label cover and Artwork screens and the Level machine are removed. Bare is the
- * only screen: the up swipe at Bare raises or lowers the peek (the view raises it only
- * from the entry 100% pose), the down swipe has no
- * meaning, and no full-screen sheet exists. The peek itself is cassette_peek; this module
+ * only screen: the up swipe raises the peek (the view does that only from the entry 100%
+ * pose), the down swipe puts it away, and no full-screen sheet exists. The peek itself is
+ * cassette_peek; this module
  * only creates it, feeds it the frame and the tags, and owns the tag request dedupe.
  *
  * The peek's tags still come from the Track's container through tags_loader. The cover

@@ -12,11 +12,10 @@
  * this module calls mini_icecast, touches the peek or slides the button drawer.
  *
  * A left/right swipe hides or shows the transport drawer at the left edge. An up swipe at
- * Bare is reported as PEEK_TOGGLE; the view only raises the peek from the entry 100% pose
- * and always allows closing it. A down swipe has no meaning (the Label cover and Artwork
- * screens are gone). Two fingers are still the menu's. A tap is not an intent: next and
- * previous are the left drawer's arrows, whose clicks are their own cells' and never
- * reach the screen.
+ * Bare is reported as PEEK_SHOW and a down swipe as PEEK_HIDE: the view raises the peek
+ * only from the entry 100% pose and closes it on the down swipe. Two fingers are still the
+ * menu's. A tap is not an intent: next and previous are the left drawer's arrows, whose
+ * clicks are their own cells' and never reach the screen.
  *
  * "One touch, one intent" is the point of the policy. LVGL sends the release of a swipe as
  * a click as well, and the two-finger swipe arrives while a one-finger gesture for the same
@@ -44,7 +43,8 @@ typedef enum {
     SCREEN_INTENT_NONE = 0,
     SCREEN_INTENT_BUTTONS_SHOW,
     SCREEN_INTENT_BUTTONS_HIDE,
-    SCREEN_INTENT_PEEK_TOGGLE,
+    SCREEN_INTENT_PEEK_SHOW,
+    SCREEN_INTENT_PEEK_HIDE,
     SCREEN_INTENT_MENU,
 } screen_intent_t;
 

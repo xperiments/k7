@@ -592,8 +592,8 @@ Track's elapsed, a growing fill
 and its total, and two rounded tags float over the cassette in the left hub's column - the
 group above the hub and the song below it, each hanging from that hub by a thin tether,
 bobbing a few pixels out of phase. It cannot be raised while the transport drawer holds the
-134/256 control pose; closing an open peek is always allowed, and a down swipe does
-nothing. The tag texts are the Track's ID3/FLAC tags, read by the tags loader on its own
+134/256 control pose; an open peek is closed by a down swipe, and an up swipe while it is up
+does nothing. The tag texts are the Track's ID3/FLAC tags, read by the tags loader on its own
 task; until they land the group is the artist directory and the song the cleaned filename.
 The two-finger swipe is reserved for the menu: the view still latches it so the same touch
 cannot also trip the one-finger gesture. The Sunton build compiles this path; the board

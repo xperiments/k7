@@ -202,13 +202,17 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
             cassette_buttons_set_shown(false);
             cassette_eq_set_shown(false);
             break;
-        case SCREEN_INTENT_PEEK_TOGGLE:
+        case SCREEN_INTENT_PEEK_SHOW:
             /* The peek is the entry view's overlay: only the 100% pose (256/256, with
-             * neither the drawer nor the peek asking for room) may raise it. Closing an
-             * open peek is always allowed. */
-            if (!s_peek_wants_room &&
-                (s_buttons_want_room || s_pose.scale != CASSETTE_SCALE_NONE)) break;
+             * neither the drawer nor the peek asking for room) may raise it, and the up
+             * swipe does nothing while it is already up. */
+            if (s_peek_wants_room) break;
+            if (s_buttons_want_room || s_pose.scale != CASSETTE_SCALE_NONE) break;
             cassette_levels_toggle_peek();
+            break;
+        case SCREEN_INTENT_PEEK_HIDE:
+            /* The down swipe puts an open peek away; it does nothing when it is down. */
+            if (s_peek_wants_room) cassette_levels_toggle_peek();
             break;
         case SCREEN_INTENT_MENU:
             /* The menu is not designed yet; screen_input has already logged it. */
