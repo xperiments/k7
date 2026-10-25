@@ -288,6 +288,14 @@ esp_err_t touch_gt911_start(lv_display_t *display)
      * add up to the 50 px threshold. With the gate at zero the sum survives the quiet
      * reads; a tap is still a tap because it never moves 50 px. */
     lv_indev_set_gesture_min_velocity(indev, 0);
+    /* LVGL's double-click rule uses the scroll limit as the distance the two taps may
+     * drift apart. A finger double-tap on a 96 px knob can easily move 12-20 px, so the
+     * default 10 would drop the second click back to a single one; the screen has nothing
+     * to scroll, so the wider limit only relaxes the double-tap test. The window is 500 ms
+     * rather than the 400 default so a deliberate touch double-tap is not read as two
+     * single clicks. */
+    lv_indev_set_scroll_limit(indev, 20);
+    lv_indev_set_double_click_time(indev, 500);
     lvgl_port_unlock();
 
     ESP_LOGI(TAG, "GT911 on I2C%d at 0x%02X (SDA %d, SCL %d, INT %d, RST %d) drives LVGL's pointer, "

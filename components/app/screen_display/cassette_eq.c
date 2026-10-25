@@ -52,7 +52,6 @@ LV_FONT_DECLARE(jura_36);
 #define STICK_R      3
 #define PX_PER_UNIT  3
 #define TAP_SLOP     6
-#define DOUBLE_MS    350   /* a second tap on the active knob inside this resets it */
 #define BLINK_MS     600
 #define BLINK_MIN_OPA 70
 /* The block enters and leaves with the transport drawer's 260 ms slide, from the right
@@ -85,8 +84,6 @@ static lv_obj_t *s_dot[KNOB_SLOTS][DOT_COUNT];
 static lv_obj_t *s_stick[KNOB_SLOTS];
 static int s_value[KNOB_SLOTS];       /* 0..100; 50 is 0 dB on every knob */
 static int s_active;                  /* -1, or the knob slot being edited */
-static uint32_t s_last_click_ms;      /* the tap that entered or switched the edit */
-static bool s_tap_valid;              /* no drag since that tap: a second tap resets */
 static bool s_shown;                  /* the block is out with the transport drawer */
 static bool s_sliding;                /* the show/hide slide is in flight */
 static int32_t s_slide_offset = EQ_SLIDE_OFFSET;  /* px right of the resting position */
@@ -261,8 +258,6 @@ static void overlay_pressing_cb(lv_event_t *e)
     int ady = dy < 0 ? -dy : dy;
     if (adx > s_moved) s_moved = adx;
     if (ady > s_moved) s_moved = ady;
-    /* A real drag ends the double-tap window: a later tap leaves instead of resetting. */
-    if (adx > TAP_SLOP || ady > TAP_SLOP) s_tap_valid = false;
     if (adx <= TAP_SLOP) return;
 
     int eff = dx > 0 ? dx - TAP_SLOP : dx + TAP_SLOP;
@@ -286,18 +281,26 @@ static void overlay_clicked_cb(lv_event_t *e)
     lv_point_t p;
     lv_indev_get_point(indev, &p);
     int slot = knob_at(p.x, p.y);
-    if (slot < 0) return;
+    if (slot == s_active) end_edit();
+    else if (slot >= 0) switch_edit(slot);
+}
 
-    if (slot == s_active) {
-        /* A second tap within DOUBLE_MS is a double tap: reset the knob to 0 dB and
-         * leave, rather than only leaving. A slower tap, or one after a drag, is the
-         * plain exit. */
-        if (s_tap_valid && lv_tick_get() - s_last_click_ms <= DOUBLE_MS) knob_reset(slot);
-        end_edit();
-    } else {
-        /* The switch is the first tap of a possible double tap on the new knob. */
-        switch_edit(slot);
-    }
+/* LVGL has already applied its own 400 ms / 10 px double-click rule: the second tap's
+ * short click is a DOUBLE_CLICKED on the overlay. Reset the active knob and leave; the
+ * CLICKED that follows sees s_active == -1 and does nothing. */
+static void overlay_double_clicked_cb(lv_event_t *e)
+{
+    (void)e;
+    if (s_active < 0) return;
+    lv_indev_t *indev = lv_indev_active();
+    if (!indev) return;
+
+    lv_point_t p;
+    lv_indev_get_point(indev, &p);
+    int slot = knob_at(p.x, p.y);
+    if (slot != s_active) return;
+    knob_reset(slot);
+    end_edit();
 }
 
 static void overlay_create(void)
@@ -315,6 +318,7 @@ static void overlay_create(void)
     lv_obj_add_event_cb(s_overlay, overlay_pressed_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_add_event_cb(s_overlay, overlay_pressing_cb, LV_EVENT_PRESSING, NULL);
     lv_obj_add_event_cb(s_overlay, overlay_clicked_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(s_overlay, overlay_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED, NULL);
     lv_obj_move_foreground(s_overlay);
 }
 
@@ -325,8 +329,6 @@ static void begin_edit(int slot)
         return;
     }
     s_active = slot;
-    s_last_click_ms = lv_tick_get();
-    s_tap_valid = true;
     overlay_create();
     blink_start(slot);
 }
@@ -336,8 +338,6 @@ static void switch_edit(int slot)
     if (slot == s_active || slot < 0 || slot >= KNOB_SLOTS) return;
     blink_stop(s_active);
     s_active = slot;
-    s_last_click_ms = lv_tick_get();
-    s_tap_valid = true;
     blink_start(slot);
 }
 
