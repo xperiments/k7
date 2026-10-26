@@ -15,6 +15,12 @@
  * come out, and back up, hidden at the end, when they go away. It is on the white page the
  * down swipe paints and on the dark page the horizontal swipes keep.
  *
+ * The band carries the K7 mark: assets/labels/k7b.png, a 75x40 A8 mask with its horizontal
+ * centre on the drawer's button column (screen x=64) and its vertical centre on the band's,
+ * so it sits at (27,21) above the P button. The mask is tinted with the page's ink -
+ * k_col_primary on the dark page, k_col_bg on the white one - by the same set_page() call
+ * that repaints the band, and it slides and hides with it.
+ *
  * Private to screen_display; the view decides when the controls are out and calls
  * set_shown(). Built and written under the LVGL lock, like everything else on the screen.
  */

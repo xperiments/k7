@@ -96,7 +96,10 @@ and nothing else. Everything else is private:
   it. Each interface is `create(screen)`, `set_shown()` and `set_page()`. They move with the
   rest of the chrome: a 260 ms ease-out slide, down from above the panel and up from below
   it, reversed from wherever it is if the controls change their mind, and hidden at the end
-  of the slide out.
+  of the slide out. The header also carries the K7 mark from `assets/labels/k7b.png`, a
+  75x40 A8 mask tinted with the page's ink: `k_col_primary` on the dark page and `k_col_bg`
+  on the white one. It is centred on the drawer's button column (screen x=64) and on the
+  band's own middle, so it sits at (27,21) on the screen and reads as the drawer's mark.
 - `screen_input.c` — the touch policy: a press and a one-finger gesture (plus the touch
   adapter's two-finger swipe) become one `screen_intent_t`, with a latch that keeps one
   touch from being two intents. It names no screen and calls nothing above itself; the
@@ -259,6 +262,14 @@ they close and lets them cover the tape while they slide over it. They arrive wi
 of the chrome: the header drops from just above the panel and the footer rises from just
 below it, both over the drawer's 260 ms ease-out, and both are hidden when their slide out
 completes. A reversal starts from wherever the band is, like the drawer's own slide.
+
+The header carries the K7 mark on the left. `assets/labels/k7b.png` is greyscale art with
+transparency; the asset tool keeps only its alpha plane (A8, 75x40, 76 px stride) and the
+firmware tints that mask with `lv_obj_set_style_image_recolor()`: `k_col_primary` on the
+dark page and `k_col_bg` on the white one, flipped by the same `set_page()` call as the
+band's fill. Its horizontal centre is the drawer button column's (screen x=64) and its
+vertical centre is the band's (y=41.5), so the 75x40 mask sits at (11,15) in the band and
+(27,21) on the screen - above the P button, inside the frame.
 
 The third rectangle of the frame is the window around the picture, `cassette_window.c`:
 470x284 at (110,76), its top and bottom edges on the bands' lines and its sides in the gaps

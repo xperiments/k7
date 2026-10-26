@@ -573,7 +573,10 @@ while they slide over it - as are the drawer's buttons and the DJ block's cells 
 slide in with the rest of the chrome, the header down from above the panel and the footer up
 from below it, over the drawer's 260 ms ease-out and back out the same way. A third rectangle, the
 470x284 window at (110,76), frames the tape in the same ink and fades in and out over the
-same time. The
+same time. The header also carries the K7 mark (`assets/labels/k7b.png`, 75x40) above the P
+button, centred on the button column and on the band: it is an A8 mask tinted `COL_PRIMARY`
+on the dark page and black (`k_col_bg`) on the white one, so it flips with the page and
+slides with the header. The
 cassette enters at full scale; while the controls are out it scales to 134/256 (148..550),
 so the 120 px drawer on the left and the 192 px DJ block on the right both have room. A
 left swipe restores the full view. The drawer's three line-art buttons (P, `<`, `>`) each

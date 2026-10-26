@@ -64,12 +64,14 @@ extern const lv_color_t k_col_eq_tick;
 extern const lv_color_t k_col_frame;
 
 /* The touch board's own Levels: its cover, its Label and the Artwork backdrop. They
- * are defined for both boards; a board without those Levels never reads them. */
+ * are defined for both boards; a board without those Levels never reads them, except
+ * k_col_primary, which the header's K7 mark uses as its dark-page ink too. */
 extern const lv_color_t k_col_back;
 extern const lv_color_t k_col_cover_bg;
 extern const lv_color_t k_col_cover_ink;
 extern const lv_color_t k_col_art_bg;
 extern const lv_color_t k_col_paper;
+/* COL_PRIMARY itself: the line art's red, and the header mark's ink on the dark page. */
 extern const lv_color_t k_col_primary;
 
 /* The left drawer's line art: the carcase rectangle, the inner disc and the letter inside it

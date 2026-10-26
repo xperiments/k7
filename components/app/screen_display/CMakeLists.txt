@@ -16,4 +16,5 @@ endif()
 idf_component_register(SRCS ${screen_srcs}
                        INCLUDE_DIRS "include"
                        PRIV_INCLUDE_DIRS "."
-                       REQUIRES ${screen_reqs})
+                       REQUIRES ${screen_reqs}
+                       EMBED_FILES "assets/header_logo.bin")
