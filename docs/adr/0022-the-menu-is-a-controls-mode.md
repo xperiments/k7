@@ -38,8 +38,8 @@ not the block's six cells.
   carries the list's title and keeps the K7 mark; the footer band (768x115 at (16,359)) carries
   the now playing - song then group - and the band's position in the current list on the right.
 - **The Pad is one rectangle.** It fills the DJ block's footprint - (594,76) to (784,360) - with
-  opaque 0xFF00FF, the owner's marker for the touch area, and the whole rectangle is the one
-  surface; the block's six cells are not drawn in the mode. A vertical drag ratchets the list: 56 px
+  opaque 0xFF00FF and an 8 px corner, the owner's marker for the touch area, and the whole
+  rectangle is the one surface; the block's six cells are not drawn in the mode. A vertical drag ratchets the list: 56 px
   of travel per row at rest, each step instant, and the list rests only on row boundaries. A
   fast drag multiplies the rows per 56 px in the stages the accelerated-scrolling patent
   describes (1x/2x/4x, with a speed threshold and a duration hysteresis); the constants are

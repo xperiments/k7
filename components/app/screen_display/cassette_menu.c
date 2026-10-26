@@ -55,9 +55,9 @@ static const char *TAG = "menu";
 
 /* The Pad owns the DJ block's footprint. It is one opaque 0xFF00FF rectangle - the owner's
  * marker for the touch area - not a drawing of the block's six cells. */
-#define PAD_X 594
+#define PAD_X 596
 #define PAD_Y 76
-#define PAD_W 190
+#define PAD_W 186
 #define PAD_H 284
 #define PAD_FILL 0xFF00FF
 
@@ -423,8 +423,9 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     }
     lv_obj_set_hidden(s_page, true);
 
-    /* The Pad: one opaque magenta rectangle over the block's place. It marks the touch area
-     * the owner asked to see; the six carcases it replaces are not drawn in the mode. */
+    /* The Pad: one opaque magenta rectangle over the block's place, rounded by the chrome's
+     * 8 px. It marks the touch area the owner asked to see; the six carcases it replaces are
+     * not drawn in the mode. */
     s_pad = lv_obj_create(screen);
     lv_obj_remove_style_all(s_pad);
     lv_obj_set_pos(s_pad, PAD_X, PAD_Y);
@@ -432,7 +433,7 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     lv_obj_set_style_bg_color(s_pad, lv_color_hex(PAD_FILL), 0);
     lv_obj_set_style_bg_opa(s_pad, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_pad, 0, 0);
-    lv_obj_set_style_radius(s_pad, 0, 0);
+    lv_obj_set_style_radius(s_pad, 8, 0);
     lv_obj_set_style_pad_all(s_pad, 0, 0);
     lv_obj_set_scrollable(s_pad, false);
     lv_obj_set_clickable(s_pad, true);

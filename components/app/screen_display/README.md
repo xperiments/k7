@@ -181,7 +181,7 @@ Back/Enter/Close, and the header and footer carry the list's title and what is p
 model is portable - `components/portable/menu`, host test `t18_menu` - and owns the tree,
 the band, the window and the ratchet; `cassette_menu.c` draws five row slots, executes its
 actions and hides the cassette container for the mode's lifetime. The Pad is one opaque
-0xFF00FF rectangle over the block's place: a vertical drag ratchets one row per 56 px
+0xFF00FF rectangle, rounded by 8 px, over the block's place: a vertical drag ratchets one row per 56 px
 (1x/2x/4x by speed), a tap activates the band, and the rectangle does not bubble gestures so a
 drag cannot close the Menu.
 The root reaches Tracks, Browse, Shuffle (a mode of the broadcast, ADR 0023) and Settings

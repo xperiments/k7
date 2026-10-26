@@ -198,7 +198,8 @@ _Avoid_: screen, level, sheet, overlay, iPod menu
 
 **Pad**:
 The DJ block's footprint (190x284) as one touch surface while the **Menu** is up, drawn as one
-opaque 0xFF00FF rectangle - the owner's marker for the area - rather than the block's six cells.
+opaque 0xFF00FF rectangle with an 8 px corner - the owner's marker for the area - rather than
+the block's six cells.
 A vertical drag ratchets the list one row per 56 px of travel and rests only on row boundaries;
 a tap that never became a drag activates the **Band**.
 _Avoid_: D-pad, keypad, touch buttons
