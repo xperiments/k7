@@ -1,7 +1,7 @@
 # The Menu is a Controls mode, and its pad is one plate that ratchets
 
-**Amended by the owner:** the Pad is a white plate with a dark inner and three dotted guides
-inside it, not a drawing of the block's six cells; it began as one 0xFF00FF marker. The
+**Amended by the owner:** the Pad is a white plate with a dark inner and two dotted vertical
+guides inside it, not a drawing of the block's six cells; it began as one 0xFF00FF marker. The
 footprint, the ratchet and the tap are unchanged.
 
 The controls already close a frame around the cassette, and the owner wanted a menu reachable
@@ -38,9 +38,9 @@ area; its inner and guides are decoration, not the block's six cells.
   carries the list's title and keeps the K7 mark; the footer band (768x115 at (16,359)) carries
   the now playing - song then group - and the band's position in the current list on the right.
 - **The Pad is one plate.** It sits inside the DJ block's place - (596,76) to (782,360) - as a
-  white plate with an 8 px corner, a dark inner inset 8 px with the same corner, and three
-  dotted guides inside the inner (two verticals 20 px either side of its centre, inset 20 px
-  from the top and bottom; one horizontal on its centre line, inset 20 px from the sides). The
+  white plate with an 8 px corner, a dark inner inset 8 px with the same corner, and two dotted
+  vertical guides inside the inner (20 px either side of its centre, inset 20 px from the top
+  and bottom). The
   whole plate is the one surface; the inner and the guides are decorative, and the block's six
   cells are not drawn in the mode. A vertical drag ratchets the list: 56 px
   of travel per row at rest, each step instant, and the list rests only on row boundaries. A

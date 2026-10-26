@@ -44,7 +44,7 @@ The Menu draws inside the controls' existing frame; it adds no rectangle.
 | **Rows** | 112, 78 | 482x56 each | five of them, exactly filling the inner page |
 | Footer band | 16, 359 | 768x115 | now playing on the left, the band's position on the right |
 | Drawer buttons | 16, 76/170/264 | 96x96 each | P, `<`, `>` |
-| **Pad** | 596, 76 | 186x284 | a white plate with a dark inner inset 8 px, and three dotted guides, inside the DJ block's place |
+| **Pad** | 596, 76 | 186x284 | a white plate with a dark inner inset 8 px, and two dotted vertical guides, inside the DJ block's place |
 
 Row internals, relative to the row:
 
@@ -117,10 +117,9 @@ MENU
 ## The Pad
 
 A white plate (`k_col_white`, 8 px corner) over the block's place, with a dark inner
-(`k_col_bg`) inset 8 px and rounded by the same 8 px, and three dotted guides inside the inner:
-two verticals 20 px either side of its centre, inset 20 px from its top and bottom, and one
-horizontal on its centre line, inset 20 px from its sides. The guides are `lv_line` objects:
-2 px wide, a 2 px dash and a 4 px gap, rounded, in `k_col_white`. The whole plate is the one
+(`k_col_bg`) inset 8 px and rounded by the same 8 px, and two dotted vertical guides inside the
+inner, 20 px either side of its centre, inset 20 px from its top and bottom. The guides are
+`lv_line` objects: 2 px wide, a 2 px dash and a 4 px gap, rounded, in `k_col_white`. The whole plate is the one
 surface - the inner and the guides are decorative, so a press on them falls through to it - and
 the six carcases it replaces are not drawn in the mode: the view draws the plate and hides the
 DJ block, so the Pad owns no part of the block's object tree.

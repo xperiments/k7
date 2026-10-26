@@ -62,25 +62,20 @@ static const char *TAG = "menu";
 #define PAD_H 284
 #define PAD_INSET 8
 
-/* The inner plate, and the guides: two dotted verticals 20 px either side of its centre,
- * inset 20 px from its top and bottom, and one dotted horizontal on its centre line,
- * inset 20 px from its sides. */
+/* The inner plate, and its guides: two dotted verticals 20 px either side of its centre,
+ * inset 20 px from its top and bottom. */
 #define PAD_INNER_W (PAD_W - 2 * PAD_INSET)
 #define PAD_INNER_H (PAD_H - 2 * PAD_INSET)
 #define PAD_GUIDE_INSET 20
 #define PAD_GUIDE_X0 (PAD_INNER_W / 2 - PAD_GUIDE_INSET)
 #define PAD_GUIDE_X1 (PAD_INNER_W / 2 + PAD_GUIDE_INSET)
-#define PAD_GUIDE_Y  (PAD_INNER_H / 2)
 #define PAD_GUIDE_TOP PAD_GUIDE_INSET
 #define PAD_GUIDE_BOT (PAD_INNER_H - PAD_GUIDE_INSET)
-#define PAD_GUIDE_LEFT PAD_GUIDE_INSET
-#define PAD_GUIDE_RIGHT (PAD_INNER_W - PAD_GUIDE_INSET)
 
 /* lv_line keeps the caller's points, so they are static and constant. */
-static const lv_point_precise_t k_pad_guides[3][2] = {
+static const lv_point_precise_t k_pad_guides[2][2] = {
     { { PAD_GUIDE_X0, PAD_GUIDE_TOP }, { PAD_GUIDE_X0, PAD_GUIDE_BOT } },
     { { PAD_GUIDE_X1, PAD_GUIDE_TOP }, { PAD_GUIDE_X1, PAD_GUIDE_BOT } },
-    { { PAD_GUIDE_LEFT, PAD_GUIDE_Y }, { PAD_GUIDE_RIGHT, PAD_GUIDE_Y } },
 };
 
 /* A tap is a press that never travelled this far; the pad's ratchet owns everything else. */
@@ -476,7 +471,7 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     lv_obj_set_clickable(inner, false);
 
     /* The guides: dotted, light on the dark inner. */
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
         lv_obj_t *line = lv_line_create(inner);
         lv_obj_remove_style_all(line);
         lv_obj_set_pos(line, 0, 0);
