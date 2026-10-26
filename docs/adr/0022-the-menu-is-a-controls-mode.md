@@ -24,8 +24,9 @@ time and activates the band on a tap.
   hidden for the Menu's lifetime, so the 40 ms reel tick has nothing to invalidate and nothing
   redraws under the text. The Cover's wish is never touched: hiding the container is not a way
   off the page, so closing the Menu gives the Cover back exactly as it was.
-- **The frame is the existing window.** 478x284 at (110,76) - 38 px either side of the tape - with a 2 px border and 8 px corner,
-  whose top and bottom edges are the bands' lines; its inner 474x280 holds five 56 px rows.
+- **The frame is the existing window.** 485x284 at (110,76), its right edge tucked 1 px under the Pad's first cell, with a 2 px
+  border and 8 px corner, whose top and bottom edges are the bands' lines; its inner 481x280
+  holds five 56 px rows.
   No new rectangle is drawn; the window's own fill is recoloured to the page's while the Menu is
   up, because outside it the window is `k_col_bg` on both pages (the cassette stands on it).
 - **The bands carry the location and the now playing.** The header band (768x71 at (16,6))
