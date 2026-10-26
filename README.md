@@ -593,8 +593,8 @@ prebuild a pressed and an unpressed state, swap them on press and release, and p
 scale on a click; `<` and `>` call `mini_icecast_prev()` / `mini_icecast_skip()`, so they
 are the transport's next/previous now, while P stays a placeholder.
 
-The DJ block is six 96 px carcases in two touching columns at x=593..784 (the first
-column is 1 px right of its nominal 592; the second stays at 688), rows at
+The DJ block is six 96 px carcases in two touching columns at x=594..784 (the first
+column is 2 px right of its nominal 592; the second stays at 688), rows at
 76/170/264: GAIN above M and R in the first column, HI, MED and LOW in the second. M and R
 are the drawer's buttons moved to the block - the same circle, letter, two states and pulse;
 M opens the Menu and R is still a placeholder. The four knobs are a 44 px circle (30% smaller than the

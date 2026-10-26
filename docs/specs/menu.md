@@ -44,7 +44,7 @@ The Menu draws inside the controls' existing frame; it adds no rectangle.
 | **Rows** | 112, 78 | 474x56 each | five of them, exactly filling the inner page |
 | Footer band | 16, 359 | 768x115 | now playing on the left, the band's position on the right |
 | Drawer buttons | 16, 76/170/264 | 96x96 each | P, `<`, `>` |
-| **Pad** | 593, 76 | 191x284 | the DJ block's footprint: six 96x96 cells at a 94 px pitch |
+| **Pad** | 594, 76 | 190x284 | the DJ block's footprint: six 96x96 cells at a 94 px pitch |
 
 Row internals, relative to the row:
 

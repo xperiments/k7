@@ -139,8 +139,8 @@ static void *s_menu_ctx;
 static int cell_x(int slot)
 {
     int x = BLOCK_LEFT + k_slot_col[slot] * CELL_W;
-    /* The first column is nudged 1 px right; the second stays on BLOCK_LEFT + CELL_W. */
-    return k_slot_col[slot] == 0 ? x + 1 : x;
+    /* The first column is nudged 2 px right; the second stays on BLOCK_LEFT + CELL_W. */
+    return k_slot_col[slot] == 0 ? x + 2 : x;
 }
 static int cell_y(int slot) { return BLOCK_TOP + k_slot_row[slot] * CELL_PITCH; }
 

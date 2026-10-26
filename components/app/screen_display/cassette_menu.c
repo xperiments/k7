@@ -54,13 +54,14 @@ static const char *TAG = "menu";
 #define MENU_ROW_DOT_D 6
 
 /* The Pad takes the DJ block's footprint: six 96 px cells at a 94 px pitch, the first
- * column nudged 1 px right as the block's are, and a padded vertical rule between them. */
-#define PAD_X 593
+ * column nudged 2 px right as the block's are, and a padded vertical rule between them. */
+#define PAD_X 594
 #define PAD_Y 76
-#define PAD_W 191
+#define PAD_W 190
 #define PAD_H 284
 #define PAD_CELL 96
 #define PAD_PITCH 94
+#define PAD_COL2_X (PAD_CELL - 2)   /* the second column, 94 px after the first */
 
 /* A tap is a press that never travelled this far; the pad's ratchet owns everything else. */
 #define PAD_TAP_SLOP 8
@@ -450,12 +451,12 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
         int col = i / 3;
         int row = i % 3;
         s_pad_cell[i] = cassette_border_box(s_pad,
-                                            (col ? PAD_CELL - 1 : 0), row * PAD_PITCH,
+                                            (col ? PAD_COL2_X : 0), row * PAD_PITCH,
                                             PAD_CELL, PAD_CELL, 8,
                                             k_col_bg, LV_OPA_COVER, k_col_button_rect, 2);
     }
     /* The owner's padded rule: the two columns' shared line, inset 12 px top and bottom. */
-    cassette_box(s_pad, PAD_CELL - 1, 12, 2, PAD_H - 24, 0, k_col_button_rect);
+    cassette_box(s_pad, PAD_COL2_X, 12, 2, PAD_H - 24, 0, k_col_button_rect);
     lv_obj_set_hidden(s_pad, true);
 
     s_model = menu_new();

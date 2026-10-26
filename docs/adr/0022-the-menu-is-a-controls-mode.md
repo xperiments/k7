@@ -32,7 +32,7 @@ time and activates the band on a tap.
   carries the list's title and keeps the K7 mark; the footer band (768x115 at (16,359)) carries
   the now playing - song then group - and the band's position in the current list on the right.
 - **The Pad is one plate.** It fills the DJ block's footprint - six 96x96 cells at a 94 px
-  pitch, (593,76) to (784,360) - and is drawn as six carcases with a padded vertical rule
+  pitch, (594,76) to (784,360) - and is drawn as six carcases with a padded vertical rule
   between the two columns, but the cells never press. A vertical drag ratchets the list: 56 px
   of travel per row at rest, each step instant, and the list rests only on row boundaries. A
   fast drag multiplies the rows per 56 px in the stages the accelerated-scrolling patent
