@@ -13,6 +13,7 @@
 
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
@@ -167,6 +168,12 @@ void appliance_run(void)
         }
         for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
     }
+
+    /* The shuffle mode's order draws from the hardware RNG, and the seed is the app's
+     * to give: mini_icecast never calls esp_random() itself, so the host shim needs no
+     * such symbol (ADR 0023). The mode itself starts Off; this only arms the order the
+     * Menu's row toggles. */
+    mini_icecast_shuffle_seed((uint32_t)esp_random());
 
     /* The screen comes last, once there is something to show and a status to read.
      * MUSIC_DIR is also the root the Artwork level reads a Track's own picture from. */

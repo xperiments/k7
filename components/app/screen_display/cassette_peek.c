@@ -34,6 +34,7 @@
 #include "esp_log.h"
 #include "lvgl.h"
 
+#include "cassette.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 
@@ -193,21 +194,6 @@ static void update_idle(void)
     lv_obj_set_hidden(s_idle, s_playing);
 }
 
-/* The first directory of the Track's relative path is the group the library is filed
- * under; the ID3/FLAC tag replaces it when it lands. A flat library has none, and the
- * tag is then the only source. */
-static void path_group(const char *path, char *out, size_t n)
-{
-    out[0] = 0;
-    if (!path || !path[0]) return;
-    const char *slash = strchr(path, '/');
-    if (!slash || slash == path) return;
-    size_t len = (size_t)(slash - path);
-    if (len >= n) len = n - 1;
-    memcpy(out, path, len);
-    out[len] = 0;
-}
-
 /* A label with nothing to say is hidden with its tether, on its own: an empty pill floating
  * over the tape would say nothing, and there is no em dash standing in for it. The bar stays
  * up with its own idle message. */
@@ -354,7 +340,7 @@ static void bob_stop(void)
 
 void cassette_peek_set_path(const char *track_path)
 {
-    path_group(track_path, s_fallback_group, sizeof s_fallback_group);
+    cassette_path_group(track_path, s_fallback_group, sizeof s_fallback_group);
     /* A new Track's tags are not its predecessor's. */
     s_tag_group[0] = 0;
     s_tag_song[0] = 0;

@@ -19,7 +19,7 @@
  * lines and the sides sit in the gaps either side of the scaled tape. */
 #define WINDOW_X        110
 #define WINDOW_Y        76
-#define WINDOW_W        486
+#define WINDOW_W        470
 #define WINDOW_H        284
 
 /* The drawer buttons' corner and the carcases' 2 px stroke: the three rectangles and the
@@ -79,4 +79,22 @@ void cassette_window_set_shown(bool shown)
     if (!s_window || shown == s_shown) return;
     s_shown = shown;
     window_fade(shown);
+}
+
+void cassette_window_set_menu_page(bool on, bool white)
+{
+    if (!s_window) return;
+    /* Only the fill: the Menu draws its Rows on it, so while it is up the window is the
+     * page's ground (k_col_white on the white page, k_col_bg on the dark one). Outside the
+     * Menu it is k_col_bg again, the ground the cassette stands on. The border, the corner
+     * and the fade state belong to the cassette's window and are not touched. */
+    lv_obj_set_style_bg_color(s_window, (on && white) ? k_col_white : k_col_bg, 0);
+}
+
+void cassette_window_rect(int *x, int *y, int *w, int *h)
+{
+    if (x) *x = WINDOW_X;
+    if (y) *y = WINDOW_Y;
+    if (w) *w = WINDOW_W;
+    if (h) *h = WINDOW_H;
 }

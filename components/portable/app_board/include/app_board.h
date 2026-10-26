@@ -23,6 +23,10 @@ typedef struct {
     const char *mount_error; /* why, when music_dir is NULL */
 } app_board_card_t;
 
+/* The board's short name, for the Menu's About list. A value, not an adverb: the
+ * adapters return "8048S050C" and "host" and never touch hardware here. */
+const char *app_board_name(void);
+
 /* Bring the network stack up and start associating, without waiting. This must
  * happen before the services create sockets, and before the encoder takes its
  * internal RAM: esp_wifi_init() wants contiguous DMA-capable buffers. The port is

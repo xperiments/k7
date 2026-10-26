@@ -24,8 +24,8 @@ time and activates the band on a tap.
   hidden for the Menu's lifetime, so the 40 ms reel tick has nothing to invalidate and nothing
   redraws under the text. The Cover's wish is never touched: hiding the container is not a way
   off the page, so closing the Menu gives the Cover back exactly as it was.
-- **The frame is the existing window.** 486x284 at (110,76), 2 px border and 8 px corner, whose
-  top and bottom edges are the bands' lines; its inner 482x280 holds five 56 px rows exactly.
+- **The frame is the existing window.** 470x284 at (110,76), 2 px border and 8 px corner, whose
+  top and bottom edges are the bands' lines; its inner 466x280 holds five 56 px rows exactly.
   No new rectangle is drawn; the window's own fill is recoloured to the page's while the Menu is
   up, because outside it the window is `k_col_bg` on both pages (the cassette stands on it).
 - **The bands carry the location and the now playing.** The header band (768x71 at (16,6))
@@ -126,8 +126,8 @@ time and activates the band on a tap.
   the direct-mode sync copy - and a window shift repaints the page, 482 x 280 x 2 = 269,920 B
   painted; neither repaints the panel.
 - Memory: no scroll container, no spacers and no per-Track objects; the row text lives in five
-  fixed buffers owned by the model, so the view can hand LVGL stable pointers instead of
-  re-allocating a label per step; the icon font is a few KB.
+  fixed buffers owned by the model, and the view copies a row into LVGL when it redraws (the dots
+  long mode needs a mutable label, so static text cannot be used); the icon font is a few KB.
 - The board pass is owed: the ratchet feel and the acceleration thresholds, the tap/drag
   threshold, the band's contrast and the icon legibility, and the ignored M tap while the pose
   is still animating.

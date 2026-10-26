@@ -69,6 +69,10 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
  * current Track on the old generation. */
 esp_err_t app_services_rescan(void);
 
+/* Whether a rescan task is running. The Menu's Rescan row shows "Rescanning..." from it;
+ * starting a scan to find out would be the bug. */
+bool app_services_rescan_running(void);
+
 /* Tell the composition whether the retry task has a mounted card. The rescan
  * uses the no-card generation when there is none, so the state stays
  * diagnostic instead of turning into a filesystem error. */

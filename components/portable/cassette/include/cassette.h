@@ -114,6 +114,18 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
  * except the title and bar (so the adapter redraws them once). */
 void cassette_reset(cassette_t *c);
 
+
+/* Clean a display name for the screen: ASCII and typographic (U+2019) apostrophes become
+ * spaces, parenthesised asides are dropped, runs of whitespace collapse, the result is
+ * trimmed and truncated without splitting a UTF-8 sequence. With `stem`, everything from
+ * the last dot is dropped first - a file name; a tag title keeps its dots. Never splits a
+ * UTF-8 sequence. Returns `out`. */
+const char *cassette_clean_name(const char *in, bool stem, char *out, size_t n);
+
+/* The first directory of a Track's relative path - the group the library files it under -
+ * or the empty string when the path has none. Returns the length written. */
+size_t cassette_path_group(const char *path, char *out, size_t n);
+
 #ifdef __cplusplus
 }
 #endif

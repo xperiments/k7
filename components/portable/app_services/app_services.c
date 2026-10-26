@@ -139,6 +139,11 @@ void app_services_card_state(bool present, const char *mount_error)
     pthread_mutex_unlock(&s_card_lock);
 }
 
+bool app_services_rescan_running(void)
+{
+    return atomic_load(&s_rescan_running);
+}
+
 esp_err_t app_services_rescan(void)
 {
     if (atomic_exchange(&s_rescan_running, true)) return ESP_ERR_INVALID_STATE;

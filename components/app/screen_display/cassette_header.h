@@ -21,6 +21,11 @@
  * k_col_primary on the dark page, k_col_bg on the white one - by the same set_page() call
  * that repaints the band, and it slides and hides with it.
  *
+ * The Menu also puts the list's title here: Jura 36 at band x=104 - 18 px clear of the
+ * mark - vertically centred and ellipsized at 648 px. It takes the page's label ink
+ * (k_col_bg on the white page, k_col_primary on the dark one), is empty and hidden outside
+ * the Menu, and its text is copied from the caller.
+ *
  * Private to screen_display; the view decides when the controls are out and calls
  * set_shown(). Built and written under the LVGL lock, like everything else on the screen.
  */
@@ -41,8 +46,14 @@ void cassette_header_create(lv_obj_t *screen);
 void cassette_header_set_shown(bool shown);
 
 /* Paint the opaque fill for the page behind the band: k_col_white while the controls hold
- * the white page, k_col_bg on the dark screen. The view calls it from its page flip. */
+ * the white page, k_col_bg on the dark screen. The view calls it from its page flip. The
+ * Menu's title, if it has one, is repainted with the page's ink in the same call. */
 void cassette_header_set_page(bool white);
+
+/* The Menu's list title, or NULL to hide it. The text is copied - the caller's buffer may
+ * be reused - into a fixed buffer and ellipsized at the band's 648 px. It is empty and
+ * hidden outside the Menu. A call before the band is built is ignored. */
+void cassette_header_set_title(const char *title);
 
 #ifdef __cplusplus
 }

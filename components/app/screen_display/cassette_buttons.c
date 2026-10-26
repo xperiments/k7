@@ -14,6 +14,11 @@
  * button. The drawer itself is clickable so a tap on its margin is absorbed rather than
  * read as a screen gesture; it has no click handler.
  *
+ * The Menu turns the drawer into Close / Back / Enter. The mode only swaps each state's
+ * letter - font and text, on both the prebuilt states - and redirects the click to the
+ * Menu's callbacks; the pressed look, the pulse, the caps and the page ink are the same
+ * code for both modes.
+ *
  * Called under the LVGL lock, like everything else on the screen.
  */
 #include "cassette_buttons.h"
@@ -23,6 +28,7 @@
 #include "esp_log.h"
 #include "lvgl.h"
 
+#include "cassette_icons.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 #include "mini_icecast.h"
@@ -61,6 +67,13 @@ static const char *TAG = "screen";
 #define BUTTON_SCALE_PULSE 232
 #define BUTTON_PULSE_MS 160
 
+/* The three labels, in the id order: the Jura characters the drawer is built with and the
+ * Menu's icons, both swapped into the same label on both of a button's states. */
+static const char *const k_button_labels[CASSETTE_BUTTON_COUNT] = { "P", "<", ">" };
+static const char *const k_button_icons[CASSETTE_BUTTON_COUNT] = {
+    CASSETTE_ICON_TAPE, CASSETTE_ICON_LEFT, CASSETTE_ICON_RIGHT
+};
+
 /* One state of a button: the 96x96 wrapper that is shown or hidden, and the three parts the
  * page paints - the rectangle's opaque fill, the disc and its letter, which the dark page
  * draws in the button's own inks. */
@@ -87,6 +100,11 @@ static bool s_shown;
 static bool s_white;   /* the page the buttons are painted for, so a re-ink can repaint them */
 static cassette_buttons_room_cb_t s_room;
 static void *s_room_ctx;
+static bool s_menu;    /* the Menu owns the three buttons: Close / Back / Enter */
+static cassette_buttons_cb_t s_menu_back;
+static cassette_buttons_cb_t s_menu_enter;
+static cassette_buttons_cb_t s_menu_close;
+static void *s_menu_ctx;
 
 /* --------------------------------------------------------------- the buttons */
 
@@ -96,6 +114,27 @@ static void button_state_show(cassette_button_t *b, bool pressed)
     if (!b || !b->unpressed.state || !b->pressed.state) return;
     lv_obj_set_hidden(b->unpressed.state, pressed);
     lv_obj_set_hidden(b->pressed.state, !pressed);
+}
+
+/* One state's letter: the Jura character outside the Menu, the Menu's icon in it. The icon
+ * font is 36 px, the same size as the Jura character it replaces, so the 64 px circle keeps
+ * its proportions. Both states are written, so the swap is invisible whichever one is up. */
+static void button_state_label(cassette_button_state_t *s, cassette_button_id_t id, bool menu)
+{
+    if (!s->letter) return;
+    lv_obj_set_style_text_font(s->letter, menu ? &xtape_36 : &jura_36, 0);
+    lv_label_set_text(s->letter, menu ? k_button_icons[id] : k_button_labels[id]);
+}
+
+/* Put every built button's two states on the label the current mode asks for. */
+static void button_labels_apply(void)
+{
+    for (int i = 0; i < CASSETTE_BUTTON_COUNT; i++) {
+        cassette_button_t *b = &s_buttons[i];
+        if (!b->root) continue;
+        button_state_label(&b->unpressed, b->id, s_menu);
+        button_state_label(&b->pressed, b->id, s_menu);
+    }
 }
 
 /* The scale pulse, as a triangle over the animation's 0..1024 step. The completion
@@ -145,10 +184,11 @@ static void button_press_lost_cb(lv_event_t *e)
     button_state_show(lv_event_get_user_data(e), false);
 }
 
-/* A click runs the button's action (P is a placeholder; `<` and `>` are next/previous)
- * and the scale pulse. A horizontal swipe that started here is also a release and a
- * click, so a touch with a gesture direction - or one that moved past the press
- * threshold - is not a tap and does neither. */
+/* A click runs the button's action and the scale pulse. Outside the Menu P is a placeholder
+ * and `<` and `>` are next/previous; in it the three call the Menu's callbacks instead, and
+ * the transport is suspended for the Menu's lifetime. A horizontal swipe that started here
+ * is also a release and a click, so a touch with a gesture direction - or one that moved
+ * past the press threshold - is not a tap and does neither. */
 static void button_clicked_cb(lv_event_t *e)
 {
     cassette_button_t *b = lv_event_get_user_data(e);
@@ -158,8 +198,16 @@ static void button_clicked_cb(lv_event_t *e)
     lv_indev_t *indev = lv_indev_active();
     if (indev && (lv_indev_get_gesture_dir(indev) != LV_DIR_NONE ||
                   lv_indev_get_press_moved(indev))) return;
-    if (b->id == CASSETTE_BUTTON_PREV) mini_icecast_prev();
-    else if (b->id == CASSETTE_BUTTON_SKIP) mini_icecast_skip();
+    if (s_menu) {
+        cassette_buttons_cb_t cb = NULL;
+        if (b->id == CASSETTE_BUTTON_P) cb = s_menu_close;
+        else if (b->id == CASSETTE_BUTTON_PREV) cb = s_menu_back;
+        else if (b->id == CASSETTE_BUTTON_SKIP) cb = s_menu_enter;
+        if (cb) cb(s_menu_ctx);
+    } else {
+        if (b->id == CASSETTE_BUTTON_PREV) mini_icecast_prev();
+        else if (b->id == CASSETTE_BUTTON_SKIP) mini_icecast_skip();
+    }
     button_pulse(b->root);
 }
 
@@ -304,10 +352,12 @@ void cassette_buttons_create(lv_obj_t *screen, cassette_buttons_room_cb_t room, 
     lv_obj_set_event_bubble(s_panel, true);
     lv_obj_set_hidden(s_panel, true);
 
-    static const char *const labels[CASSETTE_BUTTON_COUNT] = { "P", "<", ">" };
     for (int i = 0; i < CASSETTE_BUTTON_COUNT; i++)
-        button_create(s_panel, (cassette_button_id_t)i, labels[i],
+        button_create(s_panel, (cassette_button_id_t)i, k_button_labels[i],
                       BUTTON_TOP + i * (BUTTON_H + BUTTON_GAP));
+    /* A mode set before create() still lands: the buttons were built with the Jura
+     * characters, and this swaps both states to the Menu's icons. */
+    if (s_menu) button_labels_apply();
 }
 
 void cassette_buttons_set_shown(bool shown)
@@ -359,6 +409,18 @@ void cassette_buttons_set_cap(cassette_button_id_t id, cassette_cap_t cap)
     b->pressed.cap = cap;
     button_state_page(&b->unpressed, s_white);
     button_state_page(&b->pressed, s_white);
+}
+
+void cassette_buttons_set_menu_mode(bool on, cassette_buttons_cb_t back,
+                                    cassette_buttons_cb_t enter,
+                                    cassette_buttons_cb_t close, void *ctx)
+{
+    s_menu = on;
+    s_menu_back = back;
+    s_menu_enter = enter;
+    s_menu_close = close;
+    s_menu_ctx = ctx;
+    button_labels_apply();
 }
 
 bool cassette_buttons_is_shown(void)

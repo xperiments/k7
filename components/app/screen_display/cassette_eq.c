@@ -16,6 +16,12 @@
  * The block is hidden at rest, so the entry view is the untouched full-scale cassette; the
  * view shows it with the transport drawer and hides it again, leaving edit mode, when the
  * drawer slides away.
+ *
+ * The Menu borrows two things from the block: M's click, through set_menu_cb(), and the
+ * block's place, which the Menu's Pad covers. Covering hides the six cells at once and
+ * takes the delayed open with it, so a timer cannot put the 3x knob over the Pad after the
+ * Menu has opened; it leaves the slide state and the knob values alone, and uncovering puts
+ * the cells back where the block's own state left them.
  */
 #include <math.h>
 
@@ -124,6 +130,9 @@ static lv_obj_t *s_big_stick;
 static lv_timer_t *s_open_timer;      /* the delayed edit open, 550 ms */
 static int s_pending_slot;            /* which knob that timer will open */
 static bool s_reset_click;            /* the double click's second CLICKED is consumed */
+static bool s_covered;                /* the Menu's Pad covers the block's place */
+static void (*s_menu_cb)(void *ctx);  /* the Menu opens on M's click */
+static void *s_menu_ctx;
 
 /* ------------------------------------------------------------------ geometry */
 
@@ -531,7 +540,7 @@ static void open_timer_cb(lv_timer_t *t)
 {
     (void)t;
     s_open_timer = NULL;
-    if (!s_shown || s_sliding || s_active >= 0) return;
+    if (!s_shown || s_sliding || s_active >= 0 || s_covered) return;
     begin_edit(s_pending_slot);
 }
 
@@ -597,9 +606,9 @@ static void cell_released_cb(lv_event_t *e)
 static void cell_clicked_cb(lv_event_t *e)
 {
     /* The overlay should own the touch while editing; the guard comes first so even a
-     * click that somehow reaches a cell cannot work M or R or enter edit. A hidden
-     * or still-sliding block takes no click at all. */
-    if (s_active >= 0 || !s_shown || s_sliding) return;
+     * click that somehow reaches a cell cannot work M or R or enter edit. A hidden,
+     * covered or still-sliding block takes no click at all. */
+    if (s_active >= 0 || !s_shown || s_sliding || s_covered) return;
 
     int slot = (int)(intptr_t)lv_event_get_user_data(e) - 1;
     /* The two-finger VU gesture is reserved: a gesture that starts on a cell must not also be
@@ -609,10 +618,12 @@ static void cell_clicked_cb(lv_event_t *e)
     if (indev && (lv_indev_get_gesture_dir(indev) != LV_DIR_NONE ||
                   lv_indev_get_press_moved(indev))) return;
 
-    /* M and R have no action yet; the press state and this pulse are the whole of their
-     * click, as P's are on the left. */
+    /* M and R have no transport action; the press state and this pulse are the whole of
+     * their click, as P's are on the left. M's click also opens the Menu when the view has
+     * given it that hook; R stays a placeholder. */
     if (slot >= KNOB_SLOTS) {
         text_button_pulse(s_cell[slot]);
+        if (slot == SLOT_M && s_menu_cb) s_menu_cb(s_menu_ctx);
         return;
     }
 
@@ -697,6 +708,7 @@ void cassette_eq_create(lv_obj_t *parent)
     s_slide_offset = EQ_SLIDE_OFFSET;
     s_open_timer = NULL;
     s_reset_click = false;
+    s_covered = false;
     s_white = false;
     s_value[SLOT_GAIN] = 50;   /* 0 dB, the same neutral as the three bands */
     s_value[SLOT_HI] = 50;
@@ -741,7 +753,10 @@ void cassette_eq_set_shown(bool shown)
     s_sliding = true;
     for (int slot = 0; slot < SLOT_COUNT; slot++) {
         if (!s_cell[slot]) continue;
-        lv_obj_set_hidden(s_cell[slot], false);
+        /* A covered block stays covered through the slide: the Menu is modal and the Pad
+         * covers this place. The x writes still run, so an uncover after the slide lands on
+         * the pose the block would have had. */
+        lv_obj_set_hidden(s_cell[slot], s_covered);
         lv_obj_set_x(s_cell[slot], cell_x(slot) + s_slide_offset);
     }
     if (shown) cassette_eq_raise();
@@ -760,9 +775,9 @@ void cassette_eq_set_shown(bool shown)
 void cassette_eq_raise(void)
 {
     /* Raising the cells above the overlay would break the modal edit; the view does not
-     * ask while editing, but the guard keeps that true from any caller. A hidden block has
-     * nothing to raise. */
-    if (!s_shown || s_active >= 0) return;
+     * ask while editing, but the guard keeps that true from any caller. A hidden block and
+     * a covered one have nothing to raise. */
+    if (!s_shown || s_active >= 0 || s_covered) return;
     for (int slot = 0; slot < SLOT_COUNT; slot++)
         if (s_cell[slot]) lv_obj_move_foreground(s_cell[slot]);
 }
@@ -808,6 +823,40 @@ void cassette_eq_set_cap(cassette_eq_button_t id, cassette_cap_t cap)
     if (!b->circle[0]) return;
     b->cap = cap;
     text_button_page(b, s_white);
+}
+
+void cassette_eq_set_menu_cb(void (*cb)(void *ctx), void *ctx)
+{
+    s_menu_cb = cb;
+    s_menu_ctx = ctx;
+}
+
+/* Hiding the block's place for the Menu. The cells are the roots of everything the block
+ * draws - the knobs' circles, crowns and sticks and M's and R's two states are children of
+ * them - so six hides take the whole block off the frame with no slide and no style write.
+ * The 3x knob and the edit overlay are screen children, outside the cells, and are dealt
+ * with by the timer/edit rules above: a pending open is cancelled and an open edit ended, so
+ * neither can draw or take a touch over the Pad. Uncovering is the same hide with the
+ * block's own shown state, and it never shows the 3x knob: that belongs to edit mode. */
+void cassette_eq_set_covered(bool covered)
+{
+    if (!s_cell[0] || covered == s_covered) return;
+    s_covered = covered;
+
+    if (covered) {
+        cancel_open();
+        s_reset_click = false;
+        /* The view gates the M tap on edit mode, so this is a guard: an edit cannot be open
+         * when the Menu opens, and if it somehow is, ending it here keeps the overlay and
+         * the big knob from leaking past the cover. */
+        if (s_active >= 0) end_edit();
+    }
+
+    for (int slot = 0; slot < SLOT_COUNT; slot++) {
+        if (!s_cell[slot]) continue;
+        lv_obj_set_hidden(s_cell[slot], covered || !s_shown);
+    }
+    if (s_big_cell) lv_obj_set_hidden(s_big_cell, true);
 }
 
 bool cassette_eq_is_editing(void)

@@ -596,11 +596,12 @@ are the transport's next/previous now, while P stays a placeholder.
 The DJ block is six 96 px carcases in two touching columns at x=593..784 (the first
 column is 1 px right of its nominal 592; the second stays at 688), rows at
 76/170/264: GAIN above M and R in the first column, HI, MED and LOW in the second. M and R
-are the drawer's buttons moved to the block - the same circle, letter, two states and pulse,
-with no action yet. The four knobs are a 44 px circle (30% smaller than the
+are the drawer's buttons moved to the block - the same circle, letter, two states and pulse;
+M opens the Menu and R is still a placeholder. The four knobs are a 44 px circle (30% smaller than the
 placeholders'), a 24-dot crown outside it and a line from the centre towards the rim, 0 dB
 at twelve o'clock, right cuts and left boosts. The two freed cells keep the 64 px circle
-and show the owner's open folder and two-circle icons; their functions are TBD. A tap on a
+and show the owner's open folder and two-circle icons; M opens the Menu below and R's
+function is still TBD. A tap on a
 knob opens a modal edit mode
 after 550 ms: a 3x virtual knob (284 px at x=206, top on the GAIN button's top, no outer
 square, just the circle, the crown and the line) appears over the cassette, which cuts out;
@@ -660,16 +661,21 @@ decision is
 superseded by ADR 0019 for the screens; the cover's new home is
 [`docs/adr/0021-white-page-cover.md`](docs/adr/0021-white-page-cover.md).
 
-**The Menu is designed, not built.** The owner's menu - a tap on the DJ block's M opens a
-mode of the controls, the cassette area becomes a five-row list, the block becomes a single
-Pad that ratchets a row per 56 px, the drawer becomes Back/Enter/Close, and the root reaches
-Tracks, Browse, Shuffle and Settings - is specified in
-[`docs/specs/menu.md`](docs/specs/menu.md), with
-[`docs/adr/0022-the-menu-is-a-controls-mode.md`](docs/adr/0022-the-menu-is-a-controls-mode.md)
-for the mode and the pad and
-[`docs/adr/0023-shuffle-is-a-broadcast-mode.md`](docs/adr/0023-shuffle-is-a-broadcast-mode.md)
-for the shuffle mode its root row toggles. None of it is in the firmware yet: M and R still
-do nothing, and the two-finger swipe still toggles the VU meter.
+**The Menu is the M cell's.** A tap on M, with the controls out, opens a mode of the
+controls on either page: the cassette area becomes the window's five-row page - Tracks,
+Browse, Shuffle and Settings, with Settings holding Backlight, Station, Library, Rescan and
+About - the block becomes one Pad and the drawer becomes Back/Enter/Close. A vertical drag
+on the Pad ratchets the band one row per 56 px, and a faster drag 2x or 4x; a tap that never
+became a drag activates it and the up swipe closes the mode. The cassette container is
+hidden for the mode's lifetime, so the reel tick costs nothing and the Cover comes back
+untouched. The model is portable (`components/portable/menu`, host test `t18_menu`);
+`cassette_menu.c` draws it. Shuffle toggles the broadcast's shuffle mode (ADR 0023) and
+Backlight pins the panel with a hold until reboot. The page, tree and rules are
+[`docs/specs/menu.md`](docs/specs/menu.md), with ADRs
+[0022](docs/adr/0022-the-menu-is-a-controls-mode.md) and
+[0023](docs/adr/0023-shuffle-is-a-broadcast-mode.md). The icon font's folder, gear, sun,
+info and SD glyphs are not drawn yet, so those rows show no icon until the owner re-exports
+`assets/fonts/xtape.ttf` and re-runs `npm run font:xtape`.
 
 **Backlight sleep.** GPIO 2 is now a 400 Hz, 8-bit LEDC duty instead of an on/off pin. The
 screen starts at full brightness, then fades to 60% after 2 minutes, 30% after 5
@@ -691,8 +697,8 @@ is embedded now. The Track picture does not need them - the cover uses the casse
 frames. The loader's measurements (the first card track's 239x236 `APIC` became the
 603x385 window in 691 ms; 971,248 B of PSRAM before its 464,310 B cover buffer and
 504,300 B after, with the Case's 768,000 B backdrop also allocated) are the board's
-reference; without the Case the cover costs 464,310 B. The app image is **1.68 MB** with
-**60%** of its 4 MB partition free; re-check it after the next build.
+reference; without the Case the cover costs 464,310 B. The app image is **1.70 MB** with
+**59%** of its 4 MB partition free, the Menu included; re-check it after the next build.
 
 **Five faults that only the board could show**, each now fixed and each worth the
 tier on its own:
@@ -963,8 +969,8 @@ Three things make that true, and the second is the one that is easy to get wrong
    the panel needs them there; moving either to flash brought the glitches back - which is
    why the boot log reports the PSRAM margin before and after the cover.
 
-The image is 1.68 MB with the cover loader and without the label cover or the Case, so
-the app partition is 4 MB with 60 % free (`partitions.csv`) rather than the 1.5 MB
+The image is 1.70 MB with the cover loader and the Menu, and without the label cover or the
+Case, so the app partition is 4 MB with 59 % free (`partitions.csv`) rather than the 1.5 MB
 single-app layout. LVGL is a fetched dependency pinned by
 `components/app/screen_display/idf_component.yml` and `dependencies.lock`; the host tier
 compiles only the portable components and never sees it.

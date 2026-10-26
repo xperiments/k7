@@ -57,6 +57,9 @@
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 #include "cassette_cover.h"
 #endif
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+#include "cassette_menu.h"
+#endif
 
 static const char *TAG = "screen";
 
@@ -339,6 +342,20 @@ static void apply_frame(const cassette_frame_t *f)
 
 /* ------------------------------------------------------------------ input */
 
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* The M cell's tap: the Menu opens only from the controls' settled 134/256 pose and never
+ * on top of a knob being edited. The page it was opened on is the page it returns to. */
+static void menu_cell_cb(void *ctx)
+{
+    (void)ctx;
+    if (cassette_eq_is_editing()) return;
+    if (!s_buttons_want_room) return;
+    if (s_pose.scale != CASSETTE_SCALE_BUTTONS) return;
+    if (cassette_menu_is_open()) return;
+    cassette_menu_open(s_page_white);
+}
+#endif
+
 /* What a touch means is screen_input's; what the screen does about it is here. */
 static void screen_intent_cb(screen_intent_t intent, void *ctx)
 {
@@ -346,6 +363,15 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
     /* Edit mode is modal: the overlay owns the touch and the two-finger VU arrives from
      * the adapter directly, so the view is the other half of the gate. */
     if (cassette_eq_is_editing()) return;
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The Menu is modal: the up swipe closes it and every other intent waits until it is
+     * gone. The Pad's drags never reach here - the plate does not bubble gestures. */
+    if (cassette_menu_is_open()) {
+        if (intent == SCREEN_INTENT_UP) cassette_menu_close();
+        return;
+    }
+#endif
 
     switch (intent) {
         case SCREEN_INTENT_BUTTONS_SHOW:
@@ -491,6 +517,14 @@ void cassette_view_create(void)
      * peek, hidden with the drawer. */
     cassette_eq_create(scr);
 
+    /* The Menu's page and Pad are drawn above the cassette and the block; the bands and the
+     * drawer are created after this, so the chrome stays above the rows. The M cell's hook
+     * opens it, gated on the controls' settled pose. */
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    cassette_menu_create(scr, s_cassette);
+    cassette_eq_set_menu_cb(menu_cell_cb, NULL);
+#endif
+
     /* The bands across the top and the bottom of the controls screen: the frame that closes
      * the drawer and the block on their top and bottom lines. They are chrome, hidden with
      * them. The window is not here: it is the screen's first child, under the cassette. */
@@ -527,6 +561,10 @@ void cassette_view_update(const mini_icecast_status_t *st)
     /* The peek's host keeps the status for the tag request and makes it itself; this
      * is a string compare on the frames that do not change it. */
     cassette_levels_update(st);
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The Menu's footer and its playing marker follow the same status. */
+    if (cassette_menu_is_open()) cassette_menu_update(st);
+#endif
 
 #if CONFIG_APP_UI_SERIAL_DUMP
     /* A still image cannot show that the hubs turn, so a diagnostic build says it. */
@@ -558,5 +596,6 @@ void cassette_view_set_cover(const lv_image_dsc_t *dsc)
 void cassette_view_set_tags(const char *group, const char *song)
 {
     cassette_levels_set_tags(group, song);
+    cassette_menu_set_tags(group, song);
 }
 #endif

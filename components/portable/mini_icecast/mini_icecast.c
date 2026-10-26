@@ -34,6 +34,7 @@
 #include "mi_icy.h"
 #include "mi_ring.h"
 #include "mi_resample.h"
+#include "mi_shuffle.h"
 #include "mi_station.h"
 #include "tone_eq.h"
 
@@ -130,6 +131,15 @@ static struct {
      * the download path to decide when to yield the card; a 32-bit store/load is
      * atomic on this core, so it needs no lock. */
     volatile uint32_t  lag_ms;
+    /* The shuffle mode (docs/adr/0023). The Menu only flips `shuffle_on`; the
+     * broadcast builds the order at the top of its next pass, while it holds the
+     * Library lease, and owns it for the pass. `shuffle.order` is one count*4 B
+     * allocation (80,000 B at 20,000 Tracks), PSRAM first; shuffle_generation is
+     * the generation the order was built from, so a rescan rebuilds it. */
+    bool               shuffle_on;
+    mi_shuffle_t       shuffle;
+    uint32_t           shuffle_generation;
+    uint32_t           shuffle_seed; /* published by mini_icecast_shuffle_seed() */
 } S;
 
 /* ------------------------------------------------------------- clients */
@@ -802,11 +812,130 @@ static bool take_pending(const library_t *lib, uint32_t generation, uint32_t *in
     return false;
 }
 
+/* --------------------------------------------------------------- shuffle */
+
+/* Free the order: the mode is off, or the generation that built it is gone. The
+ * pointer is cleared under the lock the pass reads it with, then the memory is
+ * released outside it, so no reader can still hold it. */
+static void shuffle_forget(void)
+{
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    uint32_t *order = S.shuffle.order;
+    S.shuffle.order = NULL;
+    S.shuffle.count = 0;
+    S.shuffle.cursor = 0;
+    S.shuffle.ready = false;
+    S.shuffle_generation = 0;
+    xSemaphoreGive(S.lock);
+    free(order);
+}
+
+/* Move the order's cursor to a picked Track, so the next advance continues from the
+ * pick instead of from where the order had got to. The order is not rebuilt. A pick
+ * made while the mode is off, or before the order covers the Playlist, is ignored. */
+static void shuffle_seek(uint32_t index)
+{
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    if (S.shuffle.ready && index < S.shuffle.count) (void)mi_shuffle_seek(&S.shuffle, index);
+    xSemaphoreGive(S.lock);
+}
+
+/* Start a pass with the shuffle order when the mode is on: build it here, at the top
+ * of the pass, where the Library lease is held (ADR 0023). The Menu only flips a
+ * flag, so this is where the allocation and the swaps run - never the UI thread.
+ *
+ * `have_current` says a Track of this generation is playing (a pass that restarted at
+ * a boundary after the mode changed); the order is then anchored at it, so the first
+ * advance takes the element after it. A fresh pass has no Track playing, so the order is
+ * anchored at Playlist index 0 like the linear pass, and *first_is_cursor tells the pass
+ * to play the cursor rather than advance it.
+ *
+ * Returns true when the pass is shuffled. On an allocation failure the mode is turned
+ * back off - mini_icecast_shuffle_enabled() must not claim a mode that is not running
+ * - and the pass continues in Playlist order. */
+static bool shuffle_pass_begin(uint32_t count, uint32_t generation, bool have_current,
+                               uint32_t current, bool *first_is_cursor)
+{
+    *first_is_cursor = false;
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    bool on = S.shuffle_on;
+    uint32_t rng = S.shuffle.rng;
+    uint32_t seed = S.shuffle_seed;
+    bool reuse = on && S.shuffle.ready && S.shuffle.count == count &&
+                 S.shuffle_generation == generation;
+    xSemaphoreGive(S.lock);
+    if (!on) return false;
+
+    if (reuse) {
+        /* Same generation: the order stands. A pass that restarts mid-generation may
+         * have moved the cursor, so put it back on the Track playing now. */
+        if (have_current) shuffle_seek(current);
+        *first_is_cursor = !have_current;
+        return true;
+    }
+
+    size_t bytes = (size_t)count * sizeof(uint32_t);
+    uint32_t *order = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!order) order = malloc(bytes);
+    if (!order) {
+        ESP_LOGE(TAG, "shuffle: no memory for the %u B order; the mode stays off, "
+                      "playback continues in Playlist order", (unsigned)bytes);
+        xSemaphoreTake(S.lock, portMAX_DELAY);
+        S.shuffle_on = false;
+        uint32_t *stale = S.shuffle.order;
+        S.shuffle.order = NULL;
+        S.shuffle.count = 0;
+        S.shuffle.cursor = 0;
+        S.shuffle.ready = false;
+        S.shuffle_generation = 0;
+        xSemaphoreGive(S.lock);
+        free(stale);
+        return false;
+    }
+
+    /* Build a private copy: the swaps and the RNG must not run under the lock, which
+     * the Menu polls through mini_icecast_shuffle_enabled(). The copy is installed
+     * only if the mode is still on afterwards; a seed that arrived before start()
+     * is applied here, where the RNG is still 0. */
+    mi_shuffle_t built = {0};
+    built.rng = rng;
+    if (!built.rng) mi_shuffle_seed(&built, seed);
+    (void)mi_shuffle_build(&built, order, count, have_current ? current : 0);
+
+    uint32_t *old = NULL;
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    bool install = S.shuffle_on;
+    if (install) {
+        old = S.shuffle.order;
+        S.shuffle = built;
+        S.shuffle_generation = generation;
+    }
+    xSemaphoreGive(S.lock);
+
+    if (!install) { /* the mode was turned off while the order was being built */
+        free(order);
+        return false;
+    }
+    free(old);
+    *first_is_cursor = !have_current;
+    return true;
+}
+
 static void broadcast_task(void *arg)
 {
     (void)arg;
     S.t0 = esp_timer_get_time();
     int quiet = 0;
+    /* Playlist positions the pass has played. `prev` walks back through them and
+     * `skip` walks forward; only at its end is a new position appended. They live
+     * across passes so a pass that restarts when the shuffle mode changes keeps the
+     * history `prev` walks, and are reset when the generation changes. */
+    uint32_t history[TRACK_HISTORY];
+    int history_count = 0;
+    int history_pos = -1;
+    bool back = false;
+    uint32_t history_generation = 0;
+    uint32_t history_tracks = 0;
     for (;;) {
         bool owned = false;
         xSemaphoreTake(S.lock, portMAX_DELAY);
@@ -837,24 +966,55 @@ static void broadcast_task(void *arg)
         quiet = 0;
 
         uint32_t generation = library_generation(lib);
-        /* Playlist positions this pass has played. `prev` walks back through it and
-         * `skip` walks forward; only at its end is a new position appended. */
-        uint32_t history[TRACK_HISTORY];
-        int history_count = 0;
-        int history_pos = -1;
-        bool back = false;
+        if (generation != history_generation || count != history_tracks) {
+            /* A new generation: the positions the old Playlist had mean nothing now. */
+            history_count = 0;
+            history_pos = -1;
+            back = false;
+            history_generation = generation;
+            history_tracks = count;
+        }
+
+        /* The Track this pass continues from, when one of this generation is playing:
+         * a pass that restarts at a Track boundary after the mode changed. A fresh
+         * pass has none and starts at the Playlist's first Track, as it always has. */
+        xSemaphoreTake(S.lock, portMAX_DELAY);
+        bool have_current = S.generation == generation && S.track_index < count;
+        uint32_t current = S.track_index;
+        xSemaphoreGive(S.lock);
+
+        /* The shuffle order is built at the top of the pass, while the Library lease
+         * is held; enabling the mode only flips a flag (ADR 0023). */
+        bool first_is_cursor = false;
+        bool pass_shuffle = shuffle_pass_begin(count, generation, have_current,
+                                               have_current ? current : 0, &first_is_cursor);
         int played = 0;
 
         for (;;) {
             xSemaphoreTake(S.lock, portMAX_DELAY);
             bool same_library = S.library ? S.library == lib
                                           : library_current_generation() == generation;
+            bool shuffle_mode = S.shuffle_on;
             xSemaphoreGive(S.lock);
-            if (!same_library || library_generation(lib) != generation) break;
+            if (!same_library || library_generation(lib) != generation) {
+                /* A new generation ends the pass; its order describes a Playlist that
+                 * is gone, and the next pass builds a new one with the mode still on. */
+                shuffle_forget();
+                break;
+            }
+            if (shuffle_mode != pass_shuffle) {
+                /* The Menu flipped the mode: end the pass here, at a Track boundary,
+                 * so the next pass builds or drops the order. No Track is interrupted. */
+                break;
+            }
 
             uint32_t index;
             bool forced = take_pending(lib, generation, &index);
             if (forced) {
+                /* A pick moves the order's cursor instead of rebuilding the order: the
+                 * next advance continues from the picked Track (ADR 0023). */
+                if (pass_shuffle) shuffle_seek(index);
+                first_is_cursor = false;
                 if (history_count == TRACK_HISTORY) {
                     memmove(history, history + 1, sizeof history[0] * (TRACK_HISTORY - 1));
                     history_count--;
@@ -871,9 +1031,27 @@ static void broadcast_task(void *arg)
                 history_pos++;
                 index = history[history_pos];
             } else {
-                bool wrap = history_count && (history[history_count - 1] + 1) % count == 0;
-                index = history_count ? (history[history_count - 1] + 1) % count : 0;
-                if (wrap) {
+                /* A new Playlist position: the shuffle order's next element when the
+                 * mode is on, else the position after the last one played. */
+                bool wrapped = false;
+                bool ordered = false;
+                if (pass_shuffle) {
+                    /* The order is read under the lock set(false) frees it with, so a
+                     * toggle between the check above and here cannot dangle. */
+                    xSemaphoreTake(S.lock, portMAX_DELAY);
+                    if (S.shuffle.ready && S.shuffle.count == count) {
+                        if (first_is_cursor) index = mi_shuffle_current(&S.shuffle);
+                        else index = mi_shuffle_next(&S.shuffle, &wrapped);
+                        first_is_cursor = false;
+                        ordered = true;
+                    }
+                    xSemaphoreGive(S.lock);
+                }
+                if (!ordered) {
+                    index = history_count ? (history[history_count - 1] + 1) % count : 0;
+                    wrapped = history_count && index == 0;
+                }
+                if (wrapped) {
                     /* A new lap starts with a fresh history, as the old directory
                      * pass did; `prev` at the first Track replays it. */
                     history_count = 0;
@@ -1119,6 +1297,50 @@ void mini_icecast_set_library(const library_t *lib)
 void mini_icecast_skip(void) { S.skip = true; }
 
 void mini_icecast_prev(void) { S.prev = true; }
+
+/* ---------------------------------------------------------- shuffle mode */
+
+void mini_icecast_shuffle_seed(uint32_t seed)
+{
+    /* Before start() there is no lock and no broadcast task yet: keep the seed for
+     * the first build. appliance.c seeds after the services start, but a boot path
+     * that seeds earlier must not crash on an uncreated mutex. */
+    if (!S.lock) {
+        S.shuffle_seed = seed;
+        return;
+    }
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    S.shuffle_seed = seed;
+    mi_shuffle_seed(&S.shuffle, seed);
+    xSemaphoreGive(S.lock);
+}
+
+void mini_icecast_shuffle_set(bool on)
+{
+    /* Only the flag is flipped here: the order is built (or freed) by the broadcast
+     * task at the next Track boundary, under its Library lease (ADR 0023). */
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    S.shuffle_on = on;
+    uint32_t *order = NULL;
+    if (!on) {
+        order = S.shuffle.order;
+        S.shuffle.order = NULL;
+        S.shuffle.count = 0;
+        S.shuffle.cursor = 0;
+        S.shuffle.ready = false;
+        S.shuffle_generation = 0;
+    }
+    xSemaphoreGive(S.lock);
+    free(order);
+}
+
+bool mini_icecast_shuffle_enabled(void)
+{
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    bool on = S.shuffle_on;
+    xSemaphoreGive(S.lock);
+    return on;
+}
 
 /* The screen's four knobs. The values are targets for the broadcast task's next chunk;
  * the filter state and the slew belong to that task, so these only publish a float. The

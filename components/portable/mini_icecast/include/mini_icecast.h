@@ -146,6 +146,33 @@ bool      mini_icecast_play(const char *relpath);
 void      mini_icecast_skip(void);                              /* jump to next track */
 void      mini_icecast_prev(void);                              /* jump to the previous track */
 
+/* Shuffle: a mode of the broadcast, not an action
+ * (docs/adr/0023-shuffle-is-a-broadcast-mode.md).
+ *
+ * One permutation of the whole Playlist, walked forward by the natural end of a Track
+ * and the next command and back by the previous one; the end of a lap clears the
+ * history, as the linear Playlist's lap does. A pick (mini_icecast_play) moves the
+ * order's cursor, so the next advance continues from it without rebuilding. A new
+ * Library generation builds a new order with the mode still on. The mode lives until
+ * reboot; there is no NVS entry.
+ *
+ * Seed it once at boot from the hardware RNG: the broadcast never calls esp_random()
+ * itself, so the app gives the randomness and the host tests can pin the sequence.
+ * Call the seed setter after mini_icecast_start() (or before it: the seed is kept for
+ * the first order). */
+void      mini_icecast_shuffle_seed(uint32_t seed);
+
+/* Turn the mode on or off. `set(true)` only publishes the request - the broadcast
+ * builds the order at the top of its next pass, off the UI thread, where it already
+ * holds the Library lease - so mini_icecast_shuffle_enabled() reads On immediately
+ * and the order catches up at the next Track boundary. `set(false)` frees the order
+ * and returns to Playlist order at the same boundary. If the order cannot be
+ * allocated the mode stays Off, the failure is logged, and playback continues in
+ * Playlist order: the row cannot claim a mode that is not running. Safe from any
+ * task; mini_icecast_shuffle_enabled() is what the Menu's row reads. */
+void      mini_icecast_shuffle_set(bool on);
+bool      mini_icecast_shuffle_enabled(void);
+
 /* The screen's tone controls: three band targets (0 = low, 1 = mid, 2 = high) and the
  * trim, in dB. The ranges are the DJ ones: bands -26..+6, trim -12..+12. These only
  * publish a target; the broadcast task applies it at its next chunk, at its slew rate.

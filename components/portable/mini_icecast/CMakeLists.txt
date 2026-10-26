@@ -1,4 +1,4 @@
-idf_component_register(SRCS "mini_icecast.c" "mi_station.c" "mi_burst.c" "mi_icy.c" "mi_ring.c" "mi_encode.c" "mi_decode.c" "mi_resample.c"
+idf_component_register(SRCS "mini_icecast.c" "mi_station.c" "mi_burst.c" "mi_icy.c" "mi_ring.c" "mi_encode.c" "mi_decode.c" "mi_resample.c" "mi_shuffle.c"
                        INCLUDE_DIRS "include"
                        REQUIRES audio_format library
                        PRIV_REQUIRES http_server lwip esp_timer dr_libs shine tone_eq)

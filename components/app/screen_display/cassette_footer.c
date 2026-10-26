@@ -1,19 +1,27 @@
 /*
  * The band across the bottom of the controls screen; see cassette_footer.h.
  *
- * One object, built once with its styles at its hidden position. It is the header's mirror,
- * and it arrives the way the drawer and the DJ block do - one 260 ms ease-out slide, hidden
- * again when it finishes leaving - so the whole frame of the controls screen lands together.
- * A full-width band has no direction to come in from sideways, so its slide is vertical: it
- * rises from below the panel.
+ * The band and its three Menu text lines are built once with their styles at the band's
+ * hidden position. It is the header's mirror, and it arrives the way the drawer and the DJ
+ * block do - one 260 ms ease-out slide, hidden again when it finishes leaving - so the whole
+ * frame of the controls screen lands together. A full-width band has no direction to come in
+ * from sideways, so its slide is vertical: it rises from below the panel.
+ *
+ * The Menu puts the now playing here: the song and the group on two left lines and the
+ * list's position on the right, all empty and hidden outside the Menu. Their ink is the
+ * page's label ink, repainted with the band by set_page().
  */
 #include "cassette_footer.h"
+
+#include <stdio.h>
 
 #include "lvgl.h"
 
 #include "cassette_buttons.h"   /* the drawer's slide time */
 #include "cassette_style.h"
 #include "cassette_widgets.h"
+
+LV_FONT_DECLARE(jura_28);
 
 /* The owner's geometry: 768 px wide at (16,359), 6 px short of the panel's bottom, so the
  * band's top edge is on the last button's and the last DJ cell's bottom line and its sides
@@ -32,7 +40,38 @@
  * screen's bottom edge. */
 #define FOOTER_HIDDEN_Y 480
 
+/* The Menu's now playing. The song and the group are top-left placed in band coordinates -
+ * Jura 28 at (24,20) and (24,54) - and ellipsized at 512 px so they stop 8 px before the
+ * position's box. The position is right-aligned at band x=744 and vertically centred, its
+ * 200 px box large enough for a "1204 / 1204" and clear of the two left lines. LVGL measures
+ * a child's position from the parent's content box, which starts after the band's 2 px
+ * border, so the style offsets are the band's coordinates less that border: the song at
+ * (22,18), the group at (22,52) and the position 22 px in from the inner right edge. */
+#define PLAY_TEXT_X     24
+#define PLAY_SONG_Y     20
+#define PLAY_GROUP_Y    54
+#define PLAY_TEXT_W     512
+#define PLAY_POS_X      744
+#define PLAY_POS_W      200
+#define PLAY_TEXT_ALIGN_X  (PLAY_TEXT_X - FOOTER_BORDER_W)
+#define PLAY_SONG_ALIGN_Y  (PLAY_SONG_Y - FOOTER_BORDER_W)
+#define PLAY_GROUP_ALIGN_Y (PLAY_GROUP_Y - FOOTER_BORDER_W)
+#define PLAY_POS_ALIGN_X (-(FOOTER_W - FOOTER_BORDER_W - PLAY_POS_X))
+
+/* The Menu's texts are copied because the caller's buffers may be reused. The Menu view
+ * builds the song and the group in 128-byte lines, and the position is short
+ * ("3 / 1204"); these hold the same without an earlier truncation. */
+#define PLAY_SONG_MAX   128
+#define PLAY_GROUP_MAX  128
+#define PLAY_POS_MAX    32
+
 static lv_obj_t *s_footer;
+static lv_obj_t *s_song;
+static lv_obj_t *s_group;
+static lv_obj_t *s_position;
+static char s_song_text[PLAY_SONG_MAX];
+static char s_group_text[PLAY_GROUP_MAX];
+static char s_position_text[PLAY_POS_MAX];
 static bool s_shown;
 
 static void footer_slide_cb(void *var, int32_t y)
@@ -67,6 +106,25 @@ static void footer_slide(bool shown)
     lv_anim_start(&a);
 }
 
+/* The now playing's ink on the page: the page's own label ink, k_col_bg on the white page
+ * and k_col_primary on the dark one, the same pair a Row's label takes. */
+static void footer_play_page(bool white)
+{
+    lv_color_t ink = white ? k_col_bg : k_col_primary;
+    if (s_song) lv_obj_set_style_text_color(s_song, ink, 0);
+    if (s_group) lv_obj_set_style_text_color(s_group, ink, 0);
+    if (s_position) lv_obj_set_style_text_color(s_position, ink, 0);
+}
+
+/* Copy one line into its fixed buffer and show or hide its label. */
+static void play_text_set(lv_obj_t *label, char *buf, size_t n, const char *text)
+{
+    if (!label) return;
+    snprintf(buf, n, "%s", text ? text : "");
+    lv_label_set_text(label, buf);
+    lv_obj_set_hidden(label, buf[0] == '\0');
+}
+
 void cassette_footer_create(lv_obj_t *screen)
 {
     if (!screen || s_footer) return;
@@ -74,6 +132,36 @@ void cassette_footer_create(lv_obj_t *screen)
     s_footer = cassette_border_box(screen, FOOTER_X, FOOTER_HIDDEN_Y, FOOTER_W, FOOTER_H,
                                    FOOTER_R, k_col_bg, LV_OPA_COVER, k_col_button_rect,
                                    FOOTER_BORDER_W);
+
+    /* The Menu's now playing, empty and hidden until the Menu fills it. The two left lines
+     * are top-left placed at the band's coordinates (the style offsets are inside the 2 px
+     * border, hence the subtraction); only the position uses the band's right alignment,
+     * where LVGL's vertical centring is what is wanted. */
+    s_song = cassette_text(s_footer, &jura_28, k_col_primary, LV_ALIGN_TOP_LEFT,
+                           PLAY_TEXT_ALIGN_X, PLAY_SONG_ALIGN_Y);
+    lv_obj_set_width(s_song, PLAY_TEXT_W);
+    lv_label_set_long_mode(s_song, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(s_song, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_hidden(s_song, true);
+
+    s_group = cassette_text(s_footer, &jura_28, k_col_primary, LV_ALIGN_TOP_LEFT,
+                            PLAY_TEXT_ALIGN_X, PLAY_GROUP_ALIGN_Y);
+    lv_obj_set_width(s_group, PLAY_TEXT_W);
+    lv_label_set_long_mode(s_group, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(s_group, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_hidden(s_group, true);
+
+    s_position = cassette_text(s_footer, &jura_28, k_col_primary, LV_ALIGN_RIGHT_MID,
+                               PLAY_POS_ALIGN_X, 0);
+    lv_obj_set_width(s_position, PLAY_POS_W);
+    /* The fixed box the text is right-aligned in; the alignment style keeps the right edge
+     * on the band's 744 as the width and the text change. */
+    lv_obj_align(s_position, LV_ALIGN_RIGHT_MID, PLAY_POS_ALIGN_X, 0);
+    lv_label_set_long_mode(s_position, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(s_position, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_hidden(s_position, true);
+
+    footer_play_page(false);
     lv_obj_set_hidden(s_footer, true);
 }
 
@@ -88,4 +176,12 @@ void cassette_footer_set_page(bool white)
 {
     if (!s_footer) return;
     lv_obj_set_style_bg_color(s_footer, white ? k_col_white : k_col_bg, 0);
+    footer_play_page(white);
+}
+
+void cassette_footer_set_playing(const char *song, const char *group, const char *position)
+{
+    play_text_set(s_song, s_song_text, sizeof s_song_text, song);
+    play_text_set(s_group, s_group_text, sizeof s_group_text, group);
+    play_text_set(s_position, s_position_text, sizeof s_position_text, position);
 }

@@ -117,28 +117,97 @@ static float pack_radius(uint32_t fill)
     return sqrtf(hub * hub + (full * full - hub * hub) * f);
 }
 
-/* Metadata titles often carry an aside in parentheses - "(live, 1984, Le
- * Spectrum)" - which is longer than the label and says less than the song. Drop
- * the parenthesised groups, and any stray bracket, from the copy that goes on the
- * label. */
-static void title_clean(const char *in, char *out, size_t n)
+/* Clean a display name: apostrophes (ASCII and U+2019) to spaces, parenthetical asides
+ * dropped, whitespace collapsed and trimmed, and - for a file name - the extension cut
+ * first. One function for the Peek's fallback title and the Menu's row labels, so the two
+ * cannot drift apart; the stem flag is the only difference. */
+static size_t utf8_sequence(const unsigned char *s, size_t left)
 {
-    size_t o = 0;
-    int depth = 0;
+    unsigned char c = s[0];
+    size_t len = 1;
+    if ((c & 0xE0u) == 0xC0u) len = 2;
+    else if ((c & 0xF0u) == 0xE0u) len = 3;
+    else if ((c & 0xF8u) == 0xF0u) len = 4;
+    return len <= left ? len : left;
+}
 
-    for (const char *p = in; *p && o + 1 < n; p++) {
-        if (*p == '(') { depth++; continue; }
-        if (*p == ')') { if (depth) depth--; continue; }
-        if (depth) continue;
-        out[o++] = *p;
+const char *cassette_clean_name(const char *in, bool stem, char *out, size_t n)
+{
+    if (!out) return out;
+    if (n == 0) return out;
+    out[0] = 0;
+    if (!in) return out;
+
+    size_t total = strlen(in);
+    size_t end = total;
+    if (stem) {
+        for (size_t i = total; i > 0; i--) {
+            if (in[i - 1] == '.') {
+                end = i - 1;
+                break;
+            }
+        }
     }
-    while (o && (out[o - 1] == ' ' || out[o - 1] == '\t')) o--;
+
+    size_t o = 0;
+    int depth = 0;        /* inside a parenthetical aside */
+    bool pending = false; /* a space is due before the next visible character */
+    for (size_t i = 0; i < end;) {
+        unsigned char c = (unsigned char)in[i];
+        unsigned char next1 = (i + 1 < end) ? (unsigned char)in[i + 1] : 0;
+        unsigned char next2 = (i + 2 < end) ? (unsigned char)in[i + 2] : 0;
+
+        if (depth > 0) {
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            i++;
+            continue;
+        }
+        if (c == '(') {
+            depth = 1;
+            i++;
+            continue;
+        }
+
+        bool space = c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\'';
+        size_t seq = 1;
+        if (c == 0xE2 && next1 == 0x80 && next2 == 0x99) { /* U+2019 */
+            space = true;
+            seq = 3;
+        } else if (!space) {
+            seq = utf8_sequence((const unsigned char *)in + i, end - i);
+        }
+
+        if (space) {
+            if (o > 0) pending = true;
+            i += seq;
+            continue;
+        }
+        if (pending) {
+            if (o + 1 >= n) break;
+            out[o++] = ' ';
+            pending = false;
+        }
+        if (o + seq >= n) break; /* never split a UTF-8 sequence */
+        for (size_t k = 0; k < seq; k++) out[o++] = in[i + k];
+        i += seq;
+    }
     out[o] = 0;
-    /* Dropping a leading aside leaves the separator space behind - "(live) Song"
-     * must read "Song", not " Song". The old inline copy trimmed only the end. */
-    size_t start = 0;
-    while (out[start] == ' ' || out[start] == '\t') start++;
-    if (start) memmove(out, out + start, o - start + 1);
+    return out;
+}
+
+size_t cassette_path_group(const char *path, char *out, size_t n)
+{
+    if (!out || n == 0) return 0;
+    out[0] = 0;
+    if (!path || !path[0]) return 0;
+    const char *slash = strchr(path, '/');
+    if (!slash || slash == path) return 0;
+    size_t len = (size_t)(slash - path);
+    if (len >= n) len = n - 1;
+    memcpy(out, path, len);
+    out[len] = 0;
+    return len;
 }
 
 cassette_t *cassette_new(uint16_t frame_count, uint32_t bar_period_ms)
@@ -199,7 +268,7 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
 
     /* The label: cleaned, and reported changed only when the text differs. */
     char clean[CASSETTE_TITLE_MAX];
-    title_clean(c->have_status ? c->status.title : "", clean, sizeof clean);
+    cassette_clean_name(c->have_status ? c->status.title : "", false, clean, sizeof clean);
     c->frame.title_changed = !c->have_title || strcmp(clean, c->shown_title) != 0;
     snprintf(c->frame.title, sizeof c->frame.title, "%s", clean);
     if (c->frame.title_changed) {

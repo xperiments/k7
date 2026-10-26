@@ -10,8 +10,10 @@ toggles. The vocabulary is in [CONTEXT.md](./CONTEXT.md): **Menu**, **Menu list*
 **Band**, **Pad**, **Page**, **Controls**.
 
 This document is the operational spec: geometry, the tree, the interaction rules, the data the
-lists read, and the split between the portable model and the LVGL view. It is a design; nothing
-of it is built yet.
+lists read, and the split between the portable model and the LVGL view. It describes what is
+built - `components/portable/menu` with `t18_menu`, `cassette_menu.c`, the chrome hooks in the
+five modules, and the shuffle mode of ADR 0023. The board pass is still owed: the Pad's feel,
+the acceleration thresholds, and the five icon glyphs that are not drawn yet.
 
 ## What it is
 
@@ -38,8 +40,8 @@ The Menu draws inside the controls' existing frame; it adds no rectangle.
 | Screen | 0, 0 | 800x480 | the panel |
 | Back cover | 16, 16 | 768x448 | the dark ground under the white page's margin |
 | Header band | 16, 6 | 768x71 | carries the K7 mark and the list's title |
-| **Menu page** | 110, 76 | 486x284 | the existing window; 2 px border, 8 px corner; inner 482x280; its fill is the Page's colour while the Menu is up and `k_col_bg` otherwise |
-| **Rows** | 112, 78 | 482x56 each | five of them, exactly filling the inner page |
+| **Menu page** | 110, 76 | 470x284 | the existing window; 2 px border, 8 px corner; inner 466x280; its fill is the Page's colour while the Menu is up and `k_col_bg` otherwise |
+| **Rows** | 112, 78 | 466x56 each | five of them, exactly filling the inner page |
 | Footer band | 16, 359 | 768x115 | now playing on the left, the band's position on the right |
 | Drawer buttons | 16, 76/170/264 | 96x96 each | P, `<`, `>` |
 | **Pad** | 593, 76 | 191x284 | the DJ block's footprint: six 96x96 cells at a 94 px pitch |
@@ -48,10 +50,11 @@ Row internals, relative to the row:
 
 | Part | x | notes |
 |---|---|---|
-| Band | 2 | inset 2 px on every side, 478x52, radius 8, the selected row's own fill |
+| Band | 2 | inset 2 px on every side, 462x52, radius 8, the selected row's own fill |
 | Icon | 16 | 24x24 from the icon font, vertically centred |
-| Label | 56 | Jura 28, vertically centred, ellipsized at 410 px |
-| Chevron or value | right, inset 16 | Jura 28; `>` for a list, the value for a setting, nothing for an action |
+| Label | 56 | Jura 28, vertically centred, at most 300 px (240 on a value row), ellipsized |
+| Playing dot | 364 | 6 px, centred vertically, the row's own ink |
+| Chevron or value | right, inset 16 | Jura 28; `>` for a list, the value for a setting (capped at 150 px), nothing for an action; the right edge is at 450 |
 
 The header title is Jura 36 at x=104 (18 px clear of the 75 px K7 mark) and vertically centred.
 The footer's first line (the song) is Jura 28 at (24, 20), the second (the group) at (24, 54);
@@ -88,32 +91,40 @@ MENU
 - The **playing Track's** Row carries a 6 px dot after its label, in the Row's own label ink (a
   shape, so it reads on both pages and on the band); activating the Row restarts the Track.
 - A **Track Row**'s label is the cleaned name: the library name without its extension,
-  apostrophes as spaces, parenthetical asides dropped - the same string the Peek falls back to.
-- Station's values: `MP3`, `44.1 kHz`, `192 kbps`. Library's: the state's name, `1,204 tracks`,
-  `38 dirs`, `12.4 GB`, `No`/`Yes`. About's: the app's version, the board's name, the app
-  partition's `1.68 MB of 4 MB`.
+  apostrophes (and the typographic U+2019) as spaces, parenthetical asides dropped, whitespace
+  collapsed - the same string the Peek falls back to.
+- Station's values: `MP3`, `44.1 kHz`, `192 kbps`, an em dash when the status is idle.
+  Library's: the state's name, `1,204 tracks` (`1 track` in the singular), `38 dirs`, `12.4 GB`
+  (binary units, one decimal), `No`/`Yes`. About's: the app's version, the board's short name
+  (`8048S050C`), the app partition's size (`4 MB`). A value row has no icon and no chevron.
 - **No card or no library**: Tracks and Browse are dimmed (40% opacity) and inert, and their
-  lists hold one non-selectable Row that repeats the state (`No card`, `Library empty`). Every
-  other list works, so Rescan and Library stay reachable.
-- **Rescan**: a tap starts `app_services_rescan()`; the Row reads `Rescanning...` and ignores
-  taps until the new generation lands. The Menu keeps its list; when the generation changes it
+  lists hold one non-selectable Row that repeats the state - `No card` (no card, no library
+  lease), `Library empty` (empty, or OK with zero Tracks), `Library error` (no directory or a
+  read error). Every other list works, so Rescan and Library stay reachable. An empty directory
+  inside a usable library is a blank Browse list, not a note.
+- **Rescan**: a tap starts `app_services_rescan()`; the Row reads `Rescanning...`, is dimmed and
+  ignores taps until the new generation lands. The Menu keeps its list; when the generation changes it
   re-resolves the Browse path against the new tree and pops to Browse's root if the directory has
   vanished. The Band clamps to the new count.
 - **Backlight**: a tap cycles `Auto`, `100%`, `60%`, `30%` in place. Auto is the idle ladder the
   screen already runs; any other value pins the panel with a hold so the ladder does not
-  overwrite it, and the choice lives until reboot. No NVS.
+  overwrite it, and the choice lives until reboot. No NVS. A hold also keeps the panel lit: the
+  idle dim and the screen-off step are skipped until Auto is chosen again, which is the cost of
+  a brightness the user chose.
 - **Shuffle**: the Row reads `mini_icecast_shuffle_enabled()` and toggles it; the order itself is
   the broadcast's (ADR 0023).
 
 ## The Pad
 
 One touch plate at the block's footprint, drawn as six carcases with a padded vertical rule
-between the two columns; the cells never press. The DJ block is hidden while the Menu is up.
+between the two columns; the cells never press. The view draws the plate itself and hides the
+DJ block, so the Pad owns no part of the block's object tree.
 
 - A **vertical drag** ratchets the list. At rest, **56 px of travel is one row**; a step is
   instant and the list rests only on row boundaries. A fast drag multiplies the rows per 56 px in
-  **three stages, 1x / 2x / 4x**, with a speed threshold per stage and a duration hysteresis
-  before dropping back; the constants are tuned on the board and live in the module.
+  **three stages, 1x / 2x / 4x**: 2x from 1200 px/s and 4x from 2400 px/s, holding a stage for
+  150 ms before dropping back to 1x; a fast sample can jump straight to 4x. The constants live in
+  the model and are tuned with a finger on the board.
 - A **tap** that never became a drag (no move beyond the touch's drag limit) activates the
   **Band**.
 - The **Band** starts on the first visible Row of a list (or the remembered Row) and moves one
@@ -171,15 +182,18 @@ changes the page itself: the up swipe that closes it leaves the white or dark pa
   lists rebuild from the new generation; the Band clamps.
 - A **Track request** is a relative path: the view calls `mini_icecast_play(path)` for the
   broadcast to resolve, exactly as a Browse selection does today.
-- Label text lives in five fixed buffers owned by the model (96 bytes each), so the view can hand
-  LVGL stable pointers with `lv_label_set_text_static()` and never allocates a label per step.
-  The library's strings are valid for as long as the lease is held.
+- Label text lives in five fixed buffers owned by the model (96 bytes each). The view copies a
+  row's text into LVGL with `lv_label_set_text()` on every redraw rather than handing the buffer
+  over as static text: LVGL 9's `LV_LABEL_LONG_DOT` writes its ellipsis into the label's copy, so
+  static text cannot be ellipsized. The copies happen per redraw (a step, a list change), not per
+  frame, and the library's strings are valid for as long as the lease is held.
 
 ## The model and the view
 
 - **`components/portable/menu`** - the model: the tree, the navigation, the window, the Band, the
-  ratchet, the row models and the name cleaning (one portable function, so the Row label and the
-  Peek's fallback cannot drift apart). It returns actions (`play this relative path`, `rescan`,
+  ratchet, the row models and the name cleaning - `cassette_clean_name()`, the one function the
+  Row label and the Peek's fallback share (the Menu passes `stem = true` to drop the file
+  extension; the Peek's title keeps its dots). It returns actions (`play this relative path`, `rescan`,
   `next backlight`, `toggle shuffle`, `close`) and needs no LVGL. Host-tested in `host/tests/t18_menu.c`
   through a small Library fixture, as `cassette` and `cassette_layout` are.
 - **`screen_display/cassette_menu.c`** - the view: five Row slots, the band, the Pad, the header
@@ -230,16 +244,9 @@ footer and Jura 36 in the header; the submenu chevron is Jura's `>` at 28 px.
 
 - Whether the shuffle mode is shown anywhere outside the Menu (the Peek, the footer); this cut
   says nowhere.
+- About's Partition shows the app partition's size. The running image's size has no runtime
+  field in `esp_app_get_description()`; until a source is added the row cannot read
+  "1.70 MB of 4 MB".
 - The acceleration thresholds, the hysteresis and the touch's drag limit: constants, tuned with a
   finger on the board.
-- The exact formatting of About's three values (version string, board name, partition figures);
-  the running image's size has no direct `esp_app_get_description()` field and needs its own
-  source (the partition's size is in the partition table).
-- Whether the Pad reuses the block's carcases or draws its own plate: a view detail, not a
-  behaviour.
 - NVS for the backlight hold and the shuffle mode: deferred; both live until reboot.
-- The window's width is 486 px in `cassette_window.c` but 470 px in its own comment and the
-  component README; the Menu inherits whichever is settled, and 486 makes the page overlap the
-  Pad's left column by 3 px. The width has to be decided before the Rows' x positions are.
-- Whether the window's fill is recoloured (this spec) or the Menu draws its own page plate
-  inside it: a view detail; the behaviour is the same.

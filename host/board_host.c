@@ -26,6 +26,8 @@ app_board_card_t app_board_card_mount(const char *expected_music_dir)
     return card;
 }
 
+const char *app_board_name(void) { return "host"; }
+
 void app_board_wait_online(void) { }
 
 bool app_board_local_ip(char *out, size_t out_size)

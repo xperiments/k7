@@ -15,6 +15,12 @@
  * out, and back down, hidden at the end, when they go away. It is on the white page the down
  * swipe paints and on the dark page the horizontal swipes keep.
  *
+ * The Menu puts the now playing here: the song on the first line at band (24,20) and the
+ * group on the second at (24,54), both Jura 28 and ellipsized; the list's position, like
+ * `3 / 1204`, is Jura 28 right-aligned at band x=744 and vertically centred. The lines take
+ * the page's label ink - k_col_bg on the white page, k_col_primary on the dark one - and
+ * are empty and hidden outside the Menu.
+ *
  * Private to screen_display; the view decides when the controls are out and calls
  * set_shown(). Built and written under the LVGL lock, like everything else on the screen.
  */
@@ -35,8 +41,15 @@ void cassette_footer_create(lv_obj_t *screen);
 void cassette_footer_set_shown(bool shown);
 
 /* Paint the opaque fill for the page behind the band: k_col_white while the controls hold
- * the white page, k_col_bg on the dark screen. The view calls it from its page flip. */
+ * the white page, k_col_bg on the dark screen. The view calls it from its page flip. The
+ * Menu's now playing, if it has one, is repainted with the page's ink in the same call. */
 void cassette_footer_set_page(bool white);
+
+/* The Menu's now playing: the song on the first line, the group on the second and the
+ * list's position on the right. A NULL or empty string hides its line. The texts are copied
+ * - the caller's buffers may be reused - into fixed buffers; anything longer is truncated
+ * and ellipsized. A call before the band is built is ignored. */
+void cassette_footer_set_playing(const char *song, const char *group, const char *position);
 
 #ifdef __cplusplus
 }

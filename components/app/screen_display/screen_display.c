@@ -232,13 +232,25 @@ static void screen_task(void *arg)
              * level in the read itself, so a touch is immediate; this is what walks
              * the level down while the screen is left alone. */
             uint32_t idle_ms = lv_display_get_inactive_time(disp);
-            int target = backlight_target_for_idle(idle_ms);
+            /* A manual hold outranks the ladder. The Menu's Backlight row pinned the
+             * level, and the owner's pick lasts until reboot, so the ladder must not
+             * walk it down and a touch must not fade it up either - the hold is the
+             * choice, and silently overriding it at two minutes would make the row a
+             * lie. The held level still goes through shown_pct, so cycling back to
+             * Auto leaves the ladder comparing against the level actually on the panel
+             * instead of one it last chose itself (30% held, 30% at five minutes, and
+             * the cache would otherwise say "already there" and never move). */
+            int hold = backlight_hold();
+            int target = hold ? hold : backlight_target_for_idle(idle_ms);
             static int shown_pct = CONFIG_APP_UI_BACKLIGHT_AWAKE_PCT;
             if (target != shown_pct) {
                 shown_pct = target;
                 backlight_set_percent(target);
-                ESP_LOGI(TAG, "backlight %d%% after %u s without a touch",
-                         target, (unsigned)(idle_ms / 1000u));
+                /* The hold has already logged its own level from the module; only the
+                 * ladder's steps want the idle time beside them. */
+                if (hold == 0)
+                    ESP_LOGI(TAG, "backlight %d%% after %u s without a touch",
+                             target, (unsigned)(idle_ms / 1000u));
             }
             cassette_view_update(&st);
             lvgl_port_unlock();

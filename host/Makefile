@@ -41,6 +41,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/mini_files/include \
        -I$(ROOT)/components/portable/cassette/include \
        -I$(ROOT)/components/portable/artwork/include \
+       -I$(ROOT)/components/portable/menu/include \
        -I$(ROOT)/components/portable/app_services/include \
        -I$(ROOT)/components/portable/app_board/include \
        -I$(ROOT)/components/portable/dr_libs/include \
@@ -75,6 +76,8 @@ PROD_SRC := \
   $(ROOT)/components/portable/artwork/id3.c \
   $(ROOT)/components/portable/artwork/flac.c \
   $(ROOT)/components/portable/artwork/tags.c \
+  $(ROOT)/components/portable/menu/menu.c \
+  $(ROOT)/components/portable/mini_icecast/mi_shuffle.c \
   $(ROOT)/components/portable/app_services/app_services.c \
   $(SHINE_SRC)
 
@@ -88,6 +91,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/mini_files \
           $(ROOT)/components/portable/cassette \
           $(ROOT)/components/portable/artwork \
+          $(ROOT)/components/portable/menu \
           $(ROOT)/components/portable/app_services \
           $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
@@ -96,8 +100,9 @@ CORE_OBJ := $(OBJ)/audio_format.o $(OBJ)/library.o $(OBJ)/mi_encode.o $(OBJ)/mi_
 BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o $(OBJ)/mi_ring.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
+MENU_OBJ := $(OBJ)/menu.o
 SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o
-HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/mini_icecast.o $(OBJ)/mini_files.o $(BURST_OBJ)
+HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o
 
@@ -111,7 +116,8 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t05_stream_formats $(BIN)/t06_status $(BIN)/t07_burst_icy \
          $(BIN)/t08_http_parse $(BIN)/t10_cassette $(BIN)/t11_ring \
          $(BIN)/t12_transport $(BIN)/t14_library $(BIN)/t15_artwork \
-         $(BIN)/t16_layout $(BIN)/t17_tone_eq
+         $(BIN)/t16_layout $(BIN)/t17_tone_eq \
+         $(BIN)/t18_menu $(BIN)/t19_shuffle
 
 .PHONY: all test integration layering check tools fixtures bench control control-check clean help
 
@@ -208,6 +214,14 @@ $(BIN)/t16_layout: $(OBJ)/cassette_layout.o $(OBJ)/t16_layout.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t17_tone_eq: $(OBJ)/tone_eq.o $(OBJ)/t17_tone_eq.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t18_menu: $(MENU_OBJ) $(CASSETTE_OBJ) $(OBJ)/library.o $(OBJ)/audio_format.o $(OBJ)/shim.o $(OBJ)/t18_menu.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t19_shuffle: $(OBJ)/mi_shuffle.o $(OBJ)/t19_shuffle.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

@@ -31,6 +31,12 @@
  * already at the
  * 134/256 control pose that leaves the right column room. The block slides in from the
  * right edge over the drawer's 260 ms and slides back out when the drawer leaves.
+ *
+ * The Menu opens on the M cell: set_menu_cb() gives that tap its action while the pulse and
+ * the state swap stay the M button's own. When the Menu's Pad takes the block's place,
+ * set_covered() hides the six cells in the same frame - no slide - and its own timer and
+ * overlay go with them, so nothing of the block can draw or take a touch over the Pad;
+ * uncover puts them back exactly where the block's own state says they are.
  */
 #include "lvgl.h"
 
@@ -80,6 +86,18 @@ void cassette_eq_set_cap(cassette_eq_button_t id, cassette_cap_t cap);
 /* True while a knob is in edit mode. The overlay owns the touch; the view must drop every
  * screen intent, including the two-finger VU the touch adapter reports directly. */
 bool cassette_eq_is_editing(void);
+
+/* The M cell's click hook: the Menu opens on it. It is called from the cell's click handler
+ * after the button's own pulse, under the LVGL lock; the press/release swap and the pulse
+ * are unchanged. `cb` NULL clears the hook. R stays a placeholder. */
+void cassette_eq_set_menu_cb(void (*cb)(void *ctx), void *ctx);
+
+/* The Menu's Pad covers the block's place. While `covered` is true the six cells are hidden
+ * in the same frame, with no slide, and a pending edit open is cancelled and an open one
+ * ended, so neither its overlay nor its 3x knob can outlive the cover. `covered` false
+ * shows the cells again in their current pose - the block's set_shown() slide state and the
+ * four knobs' values are untouched. */
+void cassette_eq_set_covered(bool covered);
 
 #ifdef __cplusplus
 }

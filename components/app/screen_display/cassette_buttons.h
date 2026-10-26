@@ -20,6 +20,13 @@
  * plus the button's action: < calls mini_icecast_prev(), > calls mini_icecast_skip(); P
  * is still a placeholder. These two are the transport's next/previous now.
  *
+ * While the Menu is up the three buttons change meaning: P closes it, < is Back and > is
+ * Enter, and their Jura characters become the icon font's cassette-tape and circled left
+ * and right in both states. The transport clicks are suspended for the Menu's lifetime;
+ * set_menu_mode(false) gives the characters and the transport back. The press/release swap,
+ * the click pulse and the caps are the same in both modes, and a page flip does not touch
+ * the labels.
+ *
  * Every button carries its own cap - the face and the letter of the disc on the white page -
  * so the three can differ from each other; cassette_buttons_set_cap() changes one at a time,
  * and the drawer starts all three in the palette's neutral grey and black. The dark page is
@@ -51,6 +58,11 @@ extern "C" {
  * put the cassette at its control pose (134/256) and to show the DJ block with the
  * drawer, or to give the cassette back to the peek. `ctx` is the value given to create(). */
 typedef void (*cassette_buttons_room_cb_t)(bool shown, void *ctx);
+
+/* The Menu's three actions: `close` (P), `back` (<) and `enter` (>). Called from the
+ * button's click handler, after the pressed state has been swapped back and in place of the
+ * transport action, under the LVGL lock. `ctx` is the value given to set_menu_mode(). */
+typedef void (*cassette_buttons_cb_t)(void *ctx);
 
 /* The three buttons, in the order they are stacked in the drawer - the character each one
  * shows, which is also the action it runs. */
@@ -90,6 +102,17 @@ void cassette_buttons_set_page(bool white);
  * character on it. The dark page ignores them; it stays the palette's line art. A button that
  * has not been built yet is left alone. */
 void cassette_buttons_set_cap(cassette_button_id_t id, cassette_cap_t cap);
+
+/* The Menu's three meanings. While `on` is true, P's circle shows CASSETTE_ICON_TAPE and
+ * calls `close`, < shows CASSETTE_ICON_LEFT and calls `back`, and > shows
+ * CASSETTE_ICON_RIGHT and calls `enter`, all in &xtape_36 and in both the pressed and the
+ * unpressed state; the transport clicks are suspended. `on` false restores the Jura 36
+ * "P", "<" and ">" and the transport actions. The click pulse and the press/release swaps
+ * keep working in both modes. A NULL callback does nothing. The mode is remembered if this
+ * is called before create(); the labels are applied to the buttons that exist. */
+void cassette_buttons_set_menu_mode(bool on, cassette_buttons_cb_t back,
+                                    cassette_buttons_cb_t enter,
+                                    cassette_buttons_cb_t close, void *ctx);
 
 /* Put the drawer back on top of the screen's child order. The peek is the only sibling
  * it competes with; the view still calls this where it used to re-raise the drawer. */

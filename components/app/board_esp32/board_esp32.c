@@ -117,6 +117,11 @@ esp_err_t app_board_net_start(uint16_t http_port)
     return ESP_OK;
 }
 
+const char *app_board_name(void)
+{
+    return "8048S050C";
+}
+
 void app_board_wait_online(void)
 {
     if (wifi_ev) xEventGroupWaitBits(wifi_ev, 1, pdFALSE, pdTRUE, portMAX_DELAY);

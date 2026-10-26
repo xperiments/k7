@@ -43,6 +43,13 @@ static int  s_fade_from_pct;
 static int  s_fade_ms;
 static int64_t s_fade_start_us;
 
+/* The Menu's manual level, 0 for Auto. While this is set the screen's idle ladder is
+ * not the owner of the level, so a held 30% is not walked down to 0% and not faded back
+ * to full by a touch. RAM only on purpose: the spec defers NVS and a Menu tap should
+ * not write the flash. It is read from the screen task and written from the port's task
+ * (the Menu's action executor), and it is one aligned int, so it needs no lock. */
+static int  s_hold_pct;
+
 /* The touch read and the screen task both drive the level, and a fade is a
  * read-modify-write of two integers. Serialise them. Static storage: no heap. */
 static StaticSemaphore_t s_lock_buf;
@@ -92,6 +99,31 @@ static void backlight_step_locked(void)
 
     if (backlight_write_locked(pct) == ESP_OK)
         s_current_pct = pct;
+}
+
+/* Start moving toward `percent`, or leave a fade already heading there alone. The caller
+ * holds s_lock. Shared by the percentage setter and the hold so both take the same path
+ * and the first step lands on the caller's frame. */
+static void backlight_fade_locked(int percent)
+{
+    if (percent == s_target_pct) {
+        /* A second request for the level already in flight must not restart the
+         * fade; a touch read asks every 10 ms while the finger is down. */
+        return;
+    }
+
+    s_fade_from_pct = (s_current_pct >= 0) ? s_current_pct : percent;
+    s_target_pct = percent;
+    s_fade_start_us = esp_timer_get_time();
+    /* A step up is the wake; a step down is the idle ladder. They get different
+     * times: the dim should be seen, the wake should feel immediate. */
+    s_fade_ms = (percent > s_fade_from_pct)
+                    ? CONFIG_APP_UI_BACKLIGHT_WAKE_FADE_MS
+                    : CONFIG_APP_UI_BACKLIGHT_DIM_FADE_MS;
+
+    /* First step now, so a wake begins on the frame of the touch and a dim begins
+     * before the screen task next rests. */
+    backlight_step_locked();
 }
 
 esp_err_t backlight_start(void)
@@ -154,6 +186,11 @@ esp_err_t backlight_start(void)
 
 bool backlight_is_dimmed(void)
 {
+    /* A hold is not dimming, whatever the level: the owner asked for it, the panel is
+     * meant to be read at it, and reporting true would let the touch adapter's wake
+     * path fade a pinned 30% back to full - which is exactly the behaviour a hold is
+     * there to stop. */
+    if (s_hold_pct != 0) return false;
     return s_pwm && s_target_pct >= 0 &&
            s_target_pct < CONFIG_APP_UI_BACKLIGHT_AWAKE_PCT;
 }
@@ -178,26 +215,43 @@ void backlight_set_percent(int percent)
     if (!s_pwm) return;
 
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    if (percent == s_target_pct) {
-        /* A second request for the level already in flight must not restart the
-         * fade; a touch read asks every 10 ms while the finger is down. */
-        xSemaphoreGive(s_lock);
-        return;
-    }
-
-    s_fade_from_pct = (s_current_pct >= 0) ? s_current_pct : percent;
-    s_target_pct = percent;
-    s_fade_start_us = esp_timer_get_time();
-    /* A step up is the wake; a step down is the idle ladder. They get different
-     * times: the dim should be seen, the wake should feel immediate. */
-    s_fade_ms = (percent > s_fade_from_pct)
-                    ? CONFIG_APP_UI_BACKLIGHT_WAKE_FADE_MS
-                    : CONFIG_APP_UI_BACKLIGHT_DIM_FADE_MS;
-
-    /* First step now, so a wake begins on the frame of the touch and a dim begins
-     * before the screen task next rests. */
-    backlight_step_locked();
+    backlight_fade_locked(percent);
     xSemaphoreGive(s_lock);
+}
+
+int backlight_hold(void)
+{
+    return s_hold_pct;
+}
+
+void backlight_set_hold(int percent)
+{
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    /* 0 is Auto, never "0%": the black step is the ladder's own at ten minutes and is
+     * still reachable through Auto. The Menu's cycle only offers 30, 60 and 100, so any
+     * other value is a caller's clamp rather than a fourth meaning. */
+    if (percent == s_hold_pct) return;   /* the Menu may re-state the level it read back */
+
+    s_hold_pct = percent;
+
+    /* Recorded even on the board whose LEDC refused the pin: the Menu's row still reads
+     * back what the owner picked, and only the dimming is lost. */
+    if (!s_pwm) return;
+
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    /* A hold is a level to sit at, not a ladder step, so it takes the ordinary fade:
+     * the Menu's tap should not cut the panel, and a wake from 0% still wants the short
+     * wake time. Auto applies nothing here - the ladder in the screen task is the only
+     * thing that knows what Auto means at the current idle time, so it takes the level
+     * back on its next pass. */
+    if (percent != 0) backlight_fade_locked(percent);
+    xSemaphoreGive(s_lock);
+
+    if (percent != 0)
+        ESP_LOGI(TAG, "backlight held at %d%% until reboot; the idle ladder is skipped", percent);
+    else
+        ESP_LOGI(TAG, "backlight hold cleared; the idle ladder owns the level again");
 }
 
 void backlight_set_percent_immediate(int percent)
