@@ -4,6 +4,9 @@
 build as the white page's cover, inside the cassette's frames. The two cover screens and
 the Case backdrop stay removed and parked; the loader is no longer parked.
 
+**Amended by [ADR 0022](./0022-the-menu-is-a-controls-mode.md):** the Menu adds no Level
+back. It is a mode of the Controls that covers the cassette area, entered from the M cell.
+
 The screen had three Levels - Bare, the K7 label cover and the Artwork Case with the
 Track's picture - reached by swiping down twice, and an up-swipe peek on Bare. The owner
 wants one screen: the cassette, its drawer, the DJ block and the peek. The two down

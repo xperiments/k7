@@ -151,7 +151,7 @@ and nothing else. Everything else is private:
   right/left swipe slides the transport drawer in/out, and the vertical pair is the
   controls' ladder and the peek's - down shows the controls (or puts an open peek away),
   then turns the white page's cover on, and up turns the cover off before it hides the
-  controls (or raises the peek). A two-finger swipe is reserved for the menu;
+  controls (or raises the peek). A two-finger swipe is the VU meter's toggle;
   it is
   still reported so it cannot fall through to the one-finger handler. Next and previous
   are the left drawer's `<` and `>`, never a screen gesture or a tap.
@@ -164,9 +164,19 @@ and nothing else. Everything else is private:
   frames are the frame. `tools/convert_cassette_assets.py` is still the way the old
   label-cover blob is made.
 
+**Designed, not built: the Menu.** A tap on the DJ block's M opens a mode of the controls:
+the cassette area becomes a five-row list, the block becomes one Pad that ratchets, the
+drawer becomes Back/Enter/Close and the header and footer carry the list's title and what is
+playing. It adds `cassette_menu.c` and a portable `menu` model (host test `t18_menu`), the
+five icon glyphs and their two font sizes, and the M hook in `cassette_eq`; the shuffle mode
+it toggles is `mini_icecast`'s. The tree, geometry and rules are in
+[`docs/specs/menu.md`](../../../docs/specs/menu.md), with ADR
+[0022](../../../docs/adr/0022-the-menu-is-a-controls-mode.md) and
+[0023](../../../docs/adr/0023-shuffle-is-a-broadcast-mode.md). None of it is built yet.
+
 The panel and the headless path are two adapters behind the same interface, selected by
 `CONFIG_APP_BOARD_SUNTON_8048S050C` in this component's CMake. The touch adapter and the
-tags loader are a second, input-side pair under the same selection: a board without a
+artwork loader are a second, input-side pair under the same selection: a board without a
 controller simply has no pointer and no peek. A third panel promotes that selection to a
 `display_port` seam without changing `screen_display_start()`.
 
@@ -323,7 +333,7 @@ longer gives a click any meaning.
 ## The white page
 
 The white page belongs to the down swipe, not to the controls. A down swipe that brings the
-drawer and the DJ block in paints the screen's backdrop `k_col_white` (0xFFFFFF) instead of
+drawer and the DJ block in paints the screen's backdrop `k_col_white` (0x909090) instead of
 `k_col_bg` (0x111111), so the orange line art and the cassette's window chips read as ink on
 paper; the horizontal swipes keep showing the same controls on the dark screen, and every way
 out - the up swipe or either horizontal one - returns the page to dark. A down swipe while the

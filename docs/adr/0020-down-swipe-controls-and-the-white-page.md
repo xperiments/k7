@@ -4,6 +4,10 @@
 down swipe prints the Track's cover on the cassette's body and the up swipe takes it off
 before it closes the controls; every way off the page still hides it.
 
+**Amended by [ADR 0022](./0022-the-menu-is-a-controls-mode.md):** a tap on the DJ block's M
+opens the Menu on this controls page - the cassette area becomes a five-row list, the block
+becomes the Pad and the drawer becomes Back/Enter/Close - on either page.
+
 The vertical swipes had one meaning each: the up swipe raised the peek and the down swipe
 put it away, and a down swipe with the peek down did nothing at all. The owner wants the
 down swipe to be the way into the transport drawer and the DJ block - the controls the

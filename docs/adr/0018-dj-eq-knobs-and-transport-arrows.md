@@ -5,6 +5,9 @@ now; the DJ block's two freed cells keep their carcases and become the Filebrows
 placeholders (the owner's open folder and two-circle icons; TBD). The EQ knobs and their
 behaviour are unchanged.
 
+**Amended by [ADR 0022](./0022-the-menu-is-a-controls-mode.md):** the M cell opens the Menu;
+R is still a placeholder. While the Menu is up the block's six cells give way to the Pad.
+
 The owner wants the cassette screen to carry a DJ channel strip, not a spectrum analyser:
 HI, MED and LOW plus a GAIN, in the same line-art language as the left drawer's P/</>. The
 block has six cells because it sits on a 2x3 grid; the four cells the strip needs leave two,

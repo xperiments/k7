@@ -10,6 +10,10 @@ P stays a placeholder. The DJ block's freed cells are the Filebrowser and Rec pl
 While the drawer and the DJ block are out, either horizontal swipe puts them away; from the
 entry 100% pose, either brings them in.
 
+**Amended by [ADR 0022](./0022-the-menu-is-a-controls-mode.md):** the Menu is the M cell's
+mode of the Controls. Two fingers stay the VU meter's, and the drawer's `<` and `>` mean Back and
+Enter while the Menu is up.
+
 The cassette screen's tap and one-finger left/right swipe were the transport: a tap skipped
 to the next track and the swipes were next/previous. The product wants the transport
 visible at the left edge - three buttons, shown and hidden by the horizontal gestures. That

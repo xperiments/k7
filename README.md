@@ -660,6 +660,17 @@ decision is
 superseded by ADR 0019 for the screens; the cover's new home is
 [`docs/adr/0021-white-page-cover.md`](docs/adr/0021-white-page-cover.md).
 
+**The Menu is designed, not built.** The owner's menu - a tap on the DJ block's M opens a
+mode of the controls, the cassette area becomes a five-row list, the block becomes a single
+Pad that ratchets a row per 56 px, the drawer becomes Back/Enter/Close, and the root reaches
+Tracks, Browse, Shuffle and Settings - is specified in
+[`docs/specs/menu.md`](docs/specs/menu.md), with
+[`docs/adr/0022-the-menu-is-a-controls-mode.md`](docs/adr/0022-the-menu-is-a-controls-mode.md)
+for the mode and the pad and
+[`docs/adr/0023-shuffle-is-a-broadcast-mode.md`](docs/adr/0023-shuffle-is-a-broadcast-mode.md)
+for the shuffle mode its root row toggles. None of it is in the firmware yet: M and R still
+do nothing, and the two-finger swipe still toggles the VU meter.
+
 **Backlight sleep.** GPIO 2 is now a 400 Hz, 8-bit LEDC duty instead of an on/off pin. The
 screen starts at full brightness, then fades to 60% after 2 minutes, 30% after 5
 minutes, and 0% after 10 minutes without a touch; a touch fades it back to full from

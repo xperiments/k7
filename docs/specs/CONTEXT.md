@@ -59,6 +59,14 @@ The single continuous broadcast every client shares. Every listener hears the sa
 the same moment, so it cannot be paused, seeked or replayed.
 _Avoid_: feed, radio, channel
 
+**Shuffle mode**:
+A mode of the **live stream**: a shuffled order of the whole **Playlist** that the broadcast
+walks one **Track** at a time - forward when a Track ends and when it is told to skip, back
+when it is told to go back. Turning it on does not interrupt the Track that is playing, picking a
+Track moves the order's cursor to it without rebuilding the order, and a new **Library
+generation** builds a new order. It changes neither the Playlist nor a Track's place in it.
+_Avoid_: random play, shuffle action, random next
+
 **Chunk**:
 A fixed-size parcel of decoded audio the server produces internally on its way to the encoder.
 It is an implementation quantity of the broadcast, invisible to listeners.
@@ -162,6 +170,58 @@ hanging. The meter starts hidden; a two-finger swipe left fades it in and a righ
 out and hides it, over 220 ms. It is chrome, not tape: the **reel change** does not touch
 it.
 _Avoid_: level bar, meter, peak meter
+
+**Controls**:
+What the swipes bring in over the cassette: the **Transport drawer**, the DJ block, the header
+and footer bands and the frame that closes around the tape, with the cassette posed to 134/256.
+The down swipe shows them on the white **page**; either horizontal swipe shows the same parts
+on the dark one. They never share the screen with the **Peek**.
+_Avoid_: menu, overlay, chrome
+
+**Page**:
+The ink the **Controls** are drawn on: the white page the down swipe asks for, or the dark
+screen either horizontal swipe keeps. It follows the gesture that opened the Controls, and
+every part on it - the drawer, the block, the bands, the **Cover**, the **Menu** - turns with
+it. It is not a Level or a **Sheet**.
+_Avoid_: lineart view, dark mode, theme, skin
+
+**Menu**:
+A mode of the **Controls**, not a Level or a screen of its own: the cassette area gives way to
+a list of destinations and the DJ block gives way to the **Pad**, while the **Transport
+drawer**, the header and footer bands and the **Page** stay. The M cell opens it, on the white
+page or the dark one, and it turns with the page like every other part. The cassette is hidden
+behind it. The header says where you are and the footer what is playing; activating a row acts
+in place, so the Menu stays up. An up swipe closes it, as P does, and as `<` does from the root;
+while it is up the other swipes and the two-finger gesture do nothing. Its **Menu list** and
+**Band** are remembered until the app restarts.
+_Avoid_: screen, level, sheet, overlay, iPod menu
+
+**Pad**:
+The DJ block's footprint (191x284) as one touch surface while the **Menu** is up: six carcases
+with the padded divider, drawn to keep the block's rhythm, but they never press as six
+buttons. A vertical drag ratchets the list one row per 56 px of travel and rests only on row
+boundaries; a tap that never became a drag activates the **Band**.
+_Avoid_: D-pad, keypad, touch buttons
+
+**Band**:
+The Menu row a tap on the **Pad** activates. It starts on the first visible row (or the one the
+list remembers) and moves one row per pad step in the direction of the drag; when it reaches
+the last visible row, the next step scrolls the list one row and the band stays on that edge
+row.
+_Avoid_: cursor, highlight, select bar
+
+**Menu list**:
+One screen of the **Menu**: its **Rows** and what they are drawn from - the root's four
+destinations, Settings' five, the **Playlist**, a directory of the **Library tree**, or one of
+the read-only lists. `<` goes up one, to the list that opened it - a directory's parent, or
+Settings - and the header names the one on top.
+_Avoid_: menu page, menu screen, level, sheet
+
+**Row**:
+One line of a **Menu list**: its icon, its label and, on the right, a chevron when it opens
+another list or a value when it shows a setting. Five rows fill the page between the bands. A
+row is never a touch target: only the **Pad** activates the **Band**.
+_Avoid_: item, entry, cell
 
 **Transport drawer**:
 The three line-art buttons down the screen's left edge, P, `<` and `>`, hidden off-screen

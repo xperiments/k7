@@ -7,6 +7,10 @@ closes it. The two-finger swipe is now the VU meter's toggle, not the menu's.
 **Amended again:** a two-finger swipe left shows the VU meter and a right hides it; the
 meter starts hidden and fades in/out over 220 ms. The menu intent is gone.
 
+**Amended by [ADR 0022](./0022-the-menu-is-a-controls-mode.md):** the menu is not the
+two-finger gesture's. It is the M cell's mode of the Controls, and the two-finger swipe stays the
+VU meter's (ADR 0020).
+
 The cassette screen had four Levels - Bare, Label, Label cover and Artwork - and the
 one-finger down/up swipe moved through all of them. The Label level was a cream bar with
 the **Now playing** title, sitting between Bare and the K7 sticker. The product wants
