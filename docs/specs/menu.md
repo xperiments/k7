@@ -44,7 +44,7 @@ The Menu draws inside the controls' existing frame; it adds no rectangle.
 | **Rows** | 112, 78 | 482x56 each | five of them, exactly filling the inner page |
 | Footer band | 16, 359 | 768x115 | now playing on the left, the band's position on the right |
 | Drawer buttons | 16, 76/170/264 | 96x96 each | P, `<`, `>` |
-| **Pad** | 596, 76 | 186x284 | a white plate with a dark inner inset 8 px, and two dotted vertical guides, inside the DJ block's place |
+| **Pad** | 596, 76 | 186x284 | a white plate with a dark inner inset 8 px, and one dotted vertical guide, inside the DJ block's place |
 
 Row internals, relative to the row:
 
@@ -52,7 +52,7 @@ Row internals, relative to the row:
 |---|---|---|
 | Band | 2 | inset 2 px on every side, 478x52, radius 8, the selected row's own fill |
 | Icon | 16 | 24x24 from the icon font, vertically centred |
-| Label | 56 | Jura 28, vertically centred, at most 300 px (240 on a value row), ellipsized |
+| Label | 56 | Jura 28, vertically centred, at most 400 px (340 on a value row), ellipsized |
 | Playing dot | 364 | 6 px, centred vertically, the row's own ink |
 | Chevron or value | right, inset 16 | Jura 28; `>` for a list, the value for a setting (capped at 150 px), nothing for an action; the right edge is at 466 |
 
@@ -117,9 +117,9 @@ MENU
 ## The Pad
 
 A white plate (`k_col_white`, 8 px corner) over the block's place, with a dark inner
-(`k_col_bg`) inset 8 px and rounded by the same 8 px, and two dotted vertical guides inside the
-inner, 20 px either side of its centre, inset 20 px from its top and bottom. The guides are
-`lv_line` objects: 2 px wide, a 2 px dash and a 4 px gap, rounded, in `k_col_white`. The whole plate is the one
+(`k_col_bg`) inset 8 px and rounded by the same 8 px, and one dotted vertical guide inside the
+inner, 66 px left of its centre and inset 66 px from its top and bottom. The guide is an
+`lv_line` object: 2 px wide, a 2 px dash and a 4 px gap, rounded, in `k_col_white`. The whole plate is the one
 surface - the inner and the guides are decorative, so a press on them falls through to it - and
 the six carcases it replaces are not drawn in the mode: the view draws the plate and hides the
 DJ block, so the Pad owns no part of the block's object tree.

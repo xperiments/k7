@@ -198,7 +198,7 @@ _Avoid_: screen, level, sheet, overlay, iPod menu
 
 **Pad**:
 The DJ block's place (186x284, 2 px in from the block on each side) as one touch surface while
-the **Menu** is up: a white plate with a dark inner inset 8 px and two dotted vertical guides
+the **Menu** is up: a white plate with a dark inner inset 8 px and one dotted vertical guide
 inside it, rather than the block's six cells. The inner and the guides are decoration; the plate is
 the surface.
 A vertical drag ratchets the list one row per 56 px of travel and rests only on row boundaries;

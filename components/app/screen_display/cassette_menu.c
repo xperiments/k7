@@ -45,8 +45,8 @@ static const char *TAG = "menu";
 /* The page's inner rect is the window's minus its 2 px border; the rows are 56 px and five
  * of them fill its 280 px exactly (docs/specs/menu.md). */
 #define MENU_ROW_H 56
-#define MENU_ROW_LABEL_W 300
-#define MENU_ROW_LABEL_W_VALUE 240
+#define MENU_ROW_LABEL_W 400
+#define MENU_ROW_LABEL_W_VALUE 340
 #define MENU_ROW_VALUE_W 150
 #define MENU_ROW_LABEL_X 56
 #define MENU_ROW_RIGHT_INSET 16
@@ -62,20 +62,18 @@ static const char *TAG = "menu";
 #define PAD_H 284
 #define PAD_INSET 8
 
-/* The inner plate, and its guides: two dotted verticals 20 px either side of its centre,
- * inset 20 px from its top and bottom. */
+/* The inner plate, and its guide: one dotted vertical, PAD_GUIDE_INSET left of the centre
+ * and inset the same distance from its top and bottom. */
 #define PAD_INNER_W (PAD_W - 2 * PAD_INSET)
 #define PAD_INNER_H (PAD_H - 2 * PAD_INSET)
-#define PAD_GUIDE_INSET 20
-#define PAD_GUIDE_X0 (PAD_INNER_W / 2 - PAD_GUIDE_INSET)
-#define PAD_GUIDE_X1 (PAD_INNER_W / 2 + PAD_GUIDE_INSET)
+#define PAD_GUIDE_INSET 66
+#define PAD_GUIDE_X (PAD_INNER_W / 2 - PAD_GUIDE_INSET)
 #define PAD_GUIDE_TOP PAD_GUIDE_INSET
 #define PAD_GUIDE_BOT (PAD_INNER_H - PAD_GUIDE_INSET)
 
 /* lv_line keeps the caller's points, so they are static and constant. */
-static const lv_point_precise_t k_pad_guides[2][2] = {
-    { { PAD_GUIDE_X0, PAD_GUIDE_TOP }, { PAD_GUIDE_X0, PAD_GUIDE_BOT } },
-    { { PAD_GUIDE_X1, PAD_GUIDE_TOP }, { PAD_GUIDE_X1, PAD_GUIDE_BOT } },
+static const lv_point_precise_t k_pad_guides[1][2] = {
+    { { PAD_GUIDE_X, PAD_GUIDE_TOP }, { PAD_GUIDE_X, PAD_GUIDE_BOT } },
 };
 
 /* A tap is a press that never travelled this far; the pad's ratchet owns everything else. */
@@ -431,6 +429,7 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
 
         s_right[i] = cassette_text(s_row[i], &jura_28, k_col_bg, LV_ALIGN_RIGHT_MID,
                                    -MENU_ROW_RIGHT_INSET, 0);
+        lv_obj_set_style_text_align(s_right[i], LV_TEXT_ALIGN_RIGHT, 0);
         lv_obj_set_width(s_right[i], MENU_ROW_VALUE_W);
         lv_label_set_long_mode(s_right[i], LV_LABEL_LONG_DOT);
 
@@ -471,7 +470,7 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     lv_obj_set_clickable(inner, false);
 
     /* The guides: dotted, light on the dark inner. */
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 1; i++) {
         lv_obj_t *line = lv_line_create(inner);
         lv_obj_remove_style_all(line);
         lv_obj_set_pos(line, 0, 0);
