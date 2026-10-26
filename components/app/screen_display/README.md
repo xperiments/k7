@@ -1,7 +1,7 @@
 # screen_display
 
 The screen: the panel (or the headless framebuffer), LVGL's PSRAM allocator, the
-cassette screen and, on the panel board, its touch controller and the card-side tags
+cassette screen and, on the panel board, its touch controller and the card-side artwork
 loader. The public interface is `include/screen_display.h` — `screen_display_start()`
 and nothing else. Everything else is private:
 
@@ -24,9 +24,11 @@ and nothing else. Everything else is private:
   by the view, the tapes, the meter, the peek, the transport drawer and the DJ block.
 - `cassette_widgets.h` / `cassette_widgets.c` — the LVGL object helpers (`box`,
   `border_box`, `text`, `image`) and `cassette_circle_face()`, which gives a circle the
-  white page's dome or the dark page's line-art face; the drawer's buttons and the DJ
-  block's knobs both use it. The face is a pair of objects - a transparent wrapper for the
-  broad shadow and the disc for the contact one - because LVGL draws one shadow per object.
+  white page's dome - its face the colour the caller passes - or the dark page's line-art
+  face; the drawer's buttons and the DJ block's knobs both use it. The face is a pair of
+  objects - a transparent wrapper for the broad shadow and the disc for the contact one -
+  because LVGL draws one shadow per object. `cassette_ink_t` is the pair of colours a button's
+  white-page cap carries (see the drawer below).
   Every object they build is decorative, so a press
   reaches the screen rather than a painted box. The transport drawer and the DJ block's
   six cells are the parts that opt their own roots into hit-testing; the drawer also
@@ -49,12 +51,25 @@ and nothing else. Everything else is private:
   rectangle with an L/R badge, a 6 px gap and seven dim bars. One rounded lit fill grows
   from the left and ends in a semicircle. The panel is transparent, so the hub shows
   through.
-- `cassette_levels.c` — the peek's host. Its interface is `create(screen, room)`,
-  `apply(frame)`, `update(status)`, `toggle_peek()`, `set_tags()` and `set_hubs()`. The
-  Label cover and Artwork screens and the Level machine are gone: Bare is the only screen.
-  The peek needs room from the cassette (the view shrinks and lifts it so the bar clears
-  the tape) and its tethers need the hub anchors; this module passes the view's room
-  callback through and the view hands the anchors in on every pose step.
+- `cassette_cover.c` — the white page's Track picture. `create(parent)` builds the clip
+  box, the A8 mask and the fallback hole; `place()` follows the frames' current pixels;
+  `set_image(dsc)` takes the loader's one buffer; `set_shown()` / `is_shown()` are the
+  page's wish. The label is the top layer: the stack is cinta < glow < label. The clip box
+  is frame 0 with its radius plus 2 px and `clip_corner`; the window is a real transparent
+  hole cut by an A8 bitmap mask (`min(width, height) / 2`, a pill whose ends are the hubs'
+  circles), so the glow and the cinta below show through. The frame[1] border takes the same
+  pill while the label is up (`cassette_tapes_set_cover_print()`), and the two frames are
+  raised over it (`cassette_tapes_raise_frames()`). The picture is scaled to frame 0's width
+  and top-aligned, so its height follows from its aspect and the frame clips the rest. A
+  pose that is not the controls pose does not show it: the mask is built at 402x188.
+- `cassette_levels.c` — the peek's host and the Track request. Its interface is
+  `create(screen, room)`, `apply(frame)`, `update(status)`, `toggle_peek()`, `set_tags()`
+  and `set_hubs()`. The Label cover and Artwork screens and the Level machine are gone:
+  Bare is the only screen. The peek needs room from the cassette (the view shrinks and
+  lifts it so the bar clears the tape) and its tethers need the hub anchors; this module
+  passes the view's room callback through and the view hands the anchors in on every pose
+  step. On a new Track it hides the old picture and asks `artwork_loader` for the new tags
+  and cover in one request slot.
 - `cassette_peek.c` — the up swipe's overlay: the timeline bar and the two floating tags.
   Its interface is `create(screen, room)`, `apply(frame)`, `set_path()`, `set_tags()`,
   `set_hubs()`, `show()` / `hide()` / `hide_now()` and `is_shown()`. The bar carries the
@@ -63,20 +78,22 @@ and nothing else. Everything else is private:
   by the loader, with the artist directory and the filename as the fallback. One
   animation bobs both tags; each tether is a static line whose lower end follows the hub.
 - `cassette_buttons.c` — the transport drawer: the three line-art buttons P, `<` and `>`,
-  each with a prebuilt pressed and an unpressed state, and the left-edge panel that slides
-  in and out. Its interface is `create(screen, room)`, `set_shown()`, `is_shown()` and
-  `raise()`. A press swaps states, a click pulses the button's scale, and `<`/`>` call
-  `mini_icecast_prev()` / `mini_icecast_skip()`; P is still a placeholder. The drawer
-  reports its visibility through the `room` callback; the view turns that into the 134/256
-  control pose and shows the DJ block with it.
+  each with a prebuilt pressed and an unpressed state and its own cap,
+  and the left-edge panel that slides in and out. Its interface is `create(screen, room)`,
+  `set_shown()`, `is_shown()`, `set_cap()` and `raise()`. A press swaps states, a click
+  pulses the button's scale, and `<`/`>` call `mini_icecast_prev()` / `mini_icecast_skip()`;
+  P is still a placeholder. The drawer reports its visibility through the `room` callback;
+  the view turns that into the 134/256 control pose and shows the DJ block with it.
 - `cassette_eq.c` — the DJ block at the right edge: six 96 px carcases in two touching
   columns, the same carcase as the left drawer's. The first column is GAIN above M and R;
   the second is HI, MED and LOW. M and R are the drawer's buttons moved to the block - the
-  same 64 px circle, Jura 36 letter, pressed and unpressed rings and click pulse - with no
-  action yet. Each knob is a 44 px circle with a 24-dot crown outside it and a line from the
-  centre towards the rim; a tap opens a 3x virtual knob and a click on its ring sets the
-  target angle. The next/previous controls are the left drawer's `<` and `>`. Its interface
-  is `create(screen)`, `raise()`, `set_page()` and `is_editing()`.
+  same 64 px circle, Jura 36 letter, pressed and unpressed rings, click pulse and four
+  inks, with no action yet; R is the only one that is not the playing red and the neutral
+  grey (its own red on the white page). Each
+  knob is a 44 px circle with a 24-dot crown outside it and a line from the centre towards the
+  rim; a tap opens a 3x virtual knob and a click on its ring sets the target angle. The
+  next/previous controls are the left drawer's `<` and `>`. Its interface is `create(screen)`,
+  `raise()`, `set_page()`, `set_cap()` and `is_editing()`.
 - `cassette_window.c` — the window around the cassette on the controls screen: 470x284 at
   (110,76), its top and bottom edges on the bands' lines and its sides in the gaps either
   side of the scaled tape. Same 2 px border, 8 px corner and carcase ink as the bands. It
@@ -108,10 +125,12 @@ and nothing else. Everything else is private:
   the peek), and two fingers are the menu.
   A tap is not an intent: next and previous are the DJ block's own cells, and the view
   drops every intent while a knob is in edit mode.
-- `tags_loader.c` — the card side of the peek's tags: reads the Track's text tags
-  (TPE1/TIT2 in an MP3, ARTIST/TITLE in a FLAC Vorbis comment) on its own task and hands
-  them to the view under the LVGL lock. The cover pipeline that used to share this loader
-  is parked in `artwork_loader.c` and is not built.
+- `artwork_loader.c` — the card side of the peek's tags and the white page's cover. It
+  locates the Track's picture (an ID3 `APIC` or a FLAC `PICTURE`), decodes the JPEG with
+  TJpgDec on its own task, and fits it cover-style into one 603x385 RGB565 buffer; the
+  same task reads the text tags (TPE1/TIT2, ARTIST/TITLE). Results are handed to the view
+  under the LVGL lock. The request is one slot, replaced rather than queued, and the read
+  backs off while the broadcast is behind. Compiled and started only on the panel board.
 - `panel_rgb.c` — the Sunton panel adapter, compiled only for that board.
 - `backlight.c` — the Sunton backlight on GPIO 2, now a 400 Hz, 8-bit LEDC duty rather than
   an on/off pin. It starts at `APP_UI_BACKLIGHT_AWAKE_PCT` (100% by default), then
@@ -131,13 +150,19 @@ and nothing else. Everything else is private:
   `screen_input.c` can tell a two-finger swipe from a one-finger one: a one-finger
   right/left swipe slides the transport drawer in/out, and the vertical pair is the
   controls' ladder and the peek's - down shows the controls (or puts an open peek away),
-  up hides the controls (or raises the peek). A two-finger swipe is reserved for the menu;
+  then turns the white page's cover on, and up turns the cover off before it hides the
+  controls (or raises the peek). A two-finger swipe is reserved for the menu;
   it is
   still reported so it cannot fall through to the one-finger handler. Next and previous
   are the left drawer's `<` and `>`, never a screen gesture or a tap.
-- `assets/label_cover.bin`, `assets/cover.jpg` — parked with the Label cover and Artwork
-  screens and not embedded in the firmware. They stay for when those screens come back;
-  `tools/convert_cassette_assets.py` is still the way they are made.
+- `assets/labels/k7b.png` — the K7 mark in the controls header. It is greyscale with an
+  alpha plane and only the alpha is exported, as `assets/header_logo.bin` (A8, 75x40),
+  by `tools/convert_cassette_assets.py`; CMake embeds that blob and `cassette_header.c`
+  tints it with the page's ink.
+- `assets/labels/cover.jpg` — the old Artwork Case, parked with the Label cover and
+  Artwork screens and not embedded. The white page's cover does not use it; the cassette's
+  frames are the frame. `tools/convert_cassette_assets.py` is still the way the old
+  label-cover blob is made.
 
 The panel and the headless path are two adapters behind the same interface, selected by
 `CONFIG_APP_BOARD_SUNTON_8048S050C` in this component's CMake. The touch adapter and the
@@ -153,9 +178,11 @@ down swipe puts it away; an up swipe while it is up does nothing. The peek can o
 raised from that 100% pose: while the transport drawer holds the 134/256 control pose (or
 the peek's own 200/256 is still settling) the up swipe does nothing. The down swipe's other
 job, when no peek is up, is the controls: it shows the drawer and the DJ block on the white
-page, and an up swipe with the controls out takes them away again. The Label cover and
-Artwork screens that used to sit below
-Bare are gone, with their two down gestures and the Level machine.
+page, and an up swipe with the controls out takes them away again. Once that page is white,
+a further down swipe turns the Track's cover on and the up swipe turns it off before it
+closes the controls; every way off the page takes the cover with them. The Label cover and
+Artwork screens that used to sit below Bare are gone, with their two down gestures and the
+Level machine.
 
 The peek's own 260 ms slide is kept: it moves a 568x52 bar and two 504x44 tags, not the
 panel. Its cassette shrink re-places every part in the same 260 ms — geometry only, no
@@ -163,9 +190,9 @@ bitmap and no re-sampled pixels — so what it costs is a redraw of the cassette
 the panel's picture. `cassette_view_set_scale(scale, 0, dy, 0)` is the instant form if
 that ever reads as a stutter.
 
-The cover pipeline (the Track picture, the Case backdrop and their buffers) is parked in
-`artwork_loader.c`; the file and the assets are kept, but nothing in this build uses
-them. The peek's tags still come from the Track's container through `tags_loader.c`.
+The Track's picture and text tags come from `artwork_loader.c`, which the panel board
+starts after the view. A Track with no usable picture simply shows no cover; a Track with
+no tags keeps the peek's filename fallback.
 
 ## The peek
 
@@ -190,7 +217,7 @@ there is no 36 px band left on the screen. Both tethers leave on the left hub's 
 (251 px; 20.4 % of the centred 504 px pill rather than a round quarter, so the lines stay
 vertical): the upper label's from its bottom to the top rim, the lower one's from its top
 to the bottom rim.
-The texts are the Track's ID3/FLAC tags, read by `tags_loader`: TPE1 (artist, with TPE2
+The texts are the Track's ID3/FLAC tags, read by `artwork_loader`: TPE1 (artist, with TPE2
 as its fallback), TIT2 in an MP3; ARTIST (with ALBUMARTIST as its fallback), TITLE in a
 FLAC Vorbis comment. Until they land - and for a Track that carries none - the group is
 the first directory of the Track's relative path and the song is the cleaned filename. A
@@ -232,18 +259,28 @@ The drawer wins over the peek while it is out; when it slides away the peek's 20
 
 Each button is 96x96, rounded by 8 px, with a 64 px circle at its centre and P, `<` or `>`
 centred in the circle in Jura 36. The rectangle uses `k_col_button_rect`, filled opaque
-with the page's colour. On the dark page the circle is line art - the `k_col_button_circle`
-ring at 2 px (3 px pressed) and a matching letter, set by `cassette_buttons_set_page()`.
+with the page's colour. Each button carries **its own cap** - `cassette_ink_t`, shared with
+the DJ block's M and R, and the white page's alone: the face of the disc there and the letter
+drawn on it. All of them start in `k_col_dome`'s neutral grey with the letter `k_col_bg`
+(black), and `cassette_buttons_set_cap()` changes one button at a time (both of its states,
+repainted for the page it is on). The dark page is not the caps': it is the palette's line art,
+the playing red ring and letter (`k_col_button_circle`, `k_col_button_letter`), the same for
+every button, whatever a cap says.
 
-On the white page the circle becomes a **dome**: a flat disc (`0x929292`, one colour - no
-gradient) with **two** outer shadows, because LVGL draws one per object. A transparent circle
-exactly under the disc carries the broad ambient one - 24 px of blur at a (2, 5) offset, 60 %
-black - and the disc itself carries the tight contact one - 8 px at (1, 2), 60 % black - so
-the edge is dark and the shade falls off into the bezel, with no ring. Both are outer-only;
-the dome is not inset anywhere. The contact one's whole blur sits inside the 96 px bezel
-(x=85, y=86); the broad one reaches x=94, and its faintest tail a couple of px past the
-bezel's bottom. Each has its own colour constant, so a tinted second shadow is a one-line
-change. The letter goes `k_col_bg` (black).
+On the white page the circle becomes a **dome**: a flat disc (one colour - no gradient) with
+**two** outer shadows, because LVGL draws one per object. A transparent circle exactly under
+the disc carries the broad ambient one - 24 px of blur at a (2, 5) offset, 60 % black - and
+the disc itself carries the tight contact one - 8 px at (1, 2), 60 % black - so the edge is
+dark and the shade falls off into the bezel, with no ring. Both are outer-only; the dome is
+not inset anywhere. The contact one's whole blur sits inside the 96 px bezel (x=85, y=86);
+the broad one reaches x=94, and its faintest tail a couple of px past the bezel's bottom.
+Each has its own colour constant, so a tinted second shadow is a one-line change.
+The dome's face - one flat colour, no gradient - is the button's own `face`, so a button whose
+disc is not the playing red can carry that colour on this page too, and the letter on it is its
+`letter`, `k_col_bg` (black) by default. The rim just inside the edge is always `k_col_dome`'s
+original grey, `CASSETTE_CAP_RIM_W` (4 px), so a coloured cap reads as a disc let into the
+original one; it is the disc's own border, which LVGL draws inward - an inset, not an outline -
+and on a cap whose face is already that grey it is invisible.
 Both states share the dome; the press still shows through the click pulse, not through a
 style change. `LV_EVENT_PRESSED` shows the
 pressed state; release or `LV_EVENT_PRESS_LOST` restores the other. A click runs a 160 ms
@@ -291,7 +328,8 @@ drawer and the DJ block in paints the screen's backdrop `k_col_white` (0xFFFFFF)
 paper; the horizontal swipes keep showing the same controls on the dark screen, and every way
 out - the up swipe or either horizontal one - returns the page to dark. A down swipe while the
 controls are already out (from a side swipe) leaves them where they are and only turns the
-page. The view owns the flip (`page_set()`, held in a flag so a repeat request costs
+page; once it is white, the next down swipe turns the cover on. The view owns the flip
+(`page_set()`, held in a flag so a repeat request costs
 nothing), and it runs in one frame as the drawer's slide starts - a colour animation would
 repaint the whole 800x480 panel on every step. The flip writes the screen's backdrop, the
 opaque fills of the two bands, the drawer's three buttons and the DJ block's six cells, the
@@ -303,15 +341,44 @@ The white is a margin: the flip also reveals `s_screen_back_cover`, a square-cor
 768x448 `k_col_bg` box at (16,16) that is the screen's first child, so on the white page the
 picture keeps its dark ground and the white reads as the 16 px ring around everything.
 
-One more thing belongs to that page, and only to it: the **edge mark**, built in the view
-right after the cassette so it lies over the tape's picture and under the peek and the chrome.
-It is a 466x272 rectangle centred on the tape at the controls pose (via `cassette_x/y`), and
-it has two parts. Its border is an L - top and left lit in `k_col_glass`, right and bottom
+The same page carries the **cover** when the Track has one. The down swipe turns it on and
+the up swipe turns it off before it closes the controls; every flip back to dark hides it.
+The picture is the loader's one 603x385 buffer, drawn by `cassette_cover.c` into the
+cassette's outer frame: its width is frame 0's, it is top-aligned, and it is clipped to the
+frame's radius plus 2 px, so the print's corners sit a little inside the shell's border. The
+label window - frame 1 - is a real transparent hole, cut by an A8 bitmap mask on the label's
+container, so the glow and the cinta below show through. The hole takes the largest radius
+the rectangle allows - `min(width, height) / 2`, a pill whose ends are the hubs' circles - and
+the label window's border follows the same pill while the label is up
+(`cassette_tapes_set_cover_print()`).
+
+The label is a child of the cassette container, created after the tape body and after the
+glow, so the stack is **cinta < glow < label**. It covers the body inside the outer frame;
+the tape exposed below the frame stays visible. The two frames are lifted over the label
+while it is up (`cassette_tapes_raise_frames()`) and put back at the bottom when it goes, so
+their borders stay crisp without moving the cinta. The label is re-placed on every pose step,
+and its picture is scaled at draw time, so the buffer stays the loader's one size; the
+controls pose scales it down, not up. The mask is built once at that pose (402x188) and the
+down swipe only shows the label when the pose has landed.
+
+The down fades the label in and the up fades it out over 1 s
+(`lv_anim_path_ease_in_out`), on the container's `opa_layered`, so the mask and the picture
+go together. A page flip or a Track change cuts it instead: the loader reuses the one cover
+buffer and the pose leaves the mask's size, so there is nothing to fade over.
+
+One more thing belongs to that page, and only to it: the **edge mark**, a child of the
+cassette created after the meter and before the label, so it sits between the cinta and the
+label. It is a 466x272 rectangle centred on the tape at the controls pose (via `cassette_x/y`),
+and it has two parts. Its border is an L - top and left lit in `k_col_glass`, right and bottom
 transparent (`EDGE_SIDES`). Its interior is a **linear gradient at 135 degrees**, white at the
 top-left corner fading to transparent at the bottom-right, with the two stops carrying the
 opacity. That gradient needs `CONFIG_LV_USE_DRAW_SW_COMPLEX_GRADIENTS`, which `sdkconfig.defaults`
 now turns on: LVGL ignores `LV_GRAD_DIR_LINEAR` without it. All of the mark's numbers are
 `EDGE_*` and `EDGE_GLOW_*` at the top of `cassette_view.c`.
+
+Being the middle layer, the mark lights the cinta (including the tape exposed below the
+frame) and is covered by the label inside the outer frame; the label's window lets it show
+through. The peek and the chrome are screen children above the cassette.
 
 The mark does not arrive with the chrome: `page_set()` starts a delayed fade, so it waits
 `EDGE_GLOW_DELAY_MS` (260 ms - the drawer's, the block's, the bands' and the window's
@@ -330,15 +397,25 @@ x=593..784 (the first column nudged 1 px right; the second stays at 688), three 
 y=76/170/264, so the block is 191x284 and its right edge leaves
 16 px to the screen. The 16 px is the inset of the 64 px circle inside each carcase, not a
 gap: the carcases share their borders like the left drawer's. The first column is GAIN
-above M and R; the second is HI, MED and LOW. All six cells use the drawer's two inks:
-`k_col_button_rect` for the carcases and `k_col_button_circle` for the circles, over the
-page's opaque fill (`cassette_eq_set_page()`), so the block covers the tape it slides
-across. On the white page the four knobs' 44 px circles and M's and R's 64 px circles take
-the dome face - flat `0x929292`, the same two shadows, no ring - and M and R
-take the black letter; the knobs' crown and pointer keep the EQ
-inks. The block is
-hidden at rest, so the entry view is the full-scale cassette; the view shows it with the
-transport drawer, when the cassette is already at the 134/256 control pose. It slides in
+above M and R; the second is HI, MED and LOW. All six cells are carcases over the page's
+opaque fill (`cassette_eq_set_page()`), so the block covers the tape it slides across: the
+page's own fill, except the four knobs' cells, which are the knob plate on the white page only -
+`k_col_knob_rect` filling them and `k_col_bg` for their border, so no carcase line runs round a
+knob. M's and R's cells keep the page's fill and the drawer's `k_col_button_rect` border, and
+so does every cell on the dark page. M and R carry their own caps, like the drawer's buttons, and those are the
+white page's alone: on the dark page both are the palette's playing red line art like
+everything else there; on the white page M's cap is `k_col_bg` (black) and R's
+`k_col_button_r`, and both letters on them are
+`k_col_button_white` (`0xEEEEEE`) - they are the only two buttons whose letter is not the
+page's black, because they are the only two whose cap is not the page's grey. On the white page
+the four knobs' 44 px circles and M's and R's 64 px circles take the cap face - the same two
+shadows: the knobs in `k_col_knob_cap` (much darker than the buttons' grey so a knob does not
+read as a button, and with no rim), M in black, R in its own red. M's and R's 4 px
+rim is `k_col_dome`'s grey, the drawer buttons' cap rim, so each cap reads as a disc let into
+it, and the knobs' own plate - `k_col_knob_rect` inside a `k_col_bg` border - is what makes
+them read as knobs rather than buttons. The knobs' crown and pointer keep the EQ inks. The block is hidden at rest, so the entry
+view is the full-scale cassette; the view shows it with the transport drawer, when the cassette
+is already at the 134/256 control pose. It slides in
 from the right edge over the same 260 ms as the drawer and slides back out when the drawer
 leaves.
 
@@ -410,24 +487,24 @@ fades: the meter, the title and the cassette are information, not tape. The mode
 reports `rewind_permille`, and `t10_cassette` tests both the reel arithmetic and the
 `tape_ink` ramp.
 
-## Parked: the Track picture and the Case
+## The Track picture and the Case
 
-The Artwork screen and its Label cover are removed. Their cover pipeline - the Track
-picture locator (`components/portable/artwork`'s `artwork_locate()`, `id3.c`, `flac.c`),
-the JPEG decode and fit, the Case backdrop and its buffers - is parked in
-`artwork_loader.c` and is not built. The cover sources stay in
-`components/portable/artwork` and the host test `t15_artwork` still builds and tests
-them. `assets/label_cover.bin` and `assets/cover.jpg` stay in the tree unembedded for
-when the screen comes back. The firmware no longer carries the TJpgDec include, the
-45 KB Case JPEG or the 464 KB cover buffer: the app image dropped by about 1.2 MB.
+The Track's picture is back, but not the old Artwork screen: the white page's cover uses
+it inside the cassette's frames. The locator and fit (`components/portable/artwork`'s
+`artwork_locate()`, `id3.c`, `flac.c`) and the TJpgDec decode in `artwork_loader.c` are
+built on the panel board. The loader owns one 603x385 RGB565 cover buffer (464,310 B) and
+starts it with the screen; the fit is still cover-style, centre-cropped, and the white
+page scales the result to frame 0's width at draw time.
 
-The peek keeps its text tags through `tags_loader.c`, which uses only
-`components/portable/artwork`'s `tags.c`; that is the part of the old loader still in the
-build.
+The old Case backdrop is still parked: `assets/labels/cover.jpg` (768,000 B decoded) and
+the Label cover's source (`assets/labels/k7logo.png`) stay in the tree unembedded, with the
+Label cover and Artwork screens. The cover needs neither: the cassette frames are the
+frame. The host tier still builds and tests the locators and the fit
+(`host/tests/t15_artwork.c`).
 
 ## Board-only properties
 
 A host pass cannot establish the JPEG decode time or the card contention; those belong
-to the parked Artwork pipeline, and its board measurements are in the git history. The
-host tier covers the locators and the fit (`host/tests/t15_artwork.c`) and the design
+to the artwork loader, and its board measurements are in the git history. The host tier
+covers the locators and the fit (`host/tests/t15_artwork.c`) and the design
 grid (`host/tests/t16_layout.c`).

@@ -35,6 +35,10 @@ static const char *TAG = "screen";
  * the design grid, pixel for pixel. */
 static cassette_pose_t s_pose = { CASSETTE_SCALE_NONE, 0, 0 };
 
+/* The white page's cover is printed on the body: frame[1]'s border follows the pill the
+ * cover's hole cuts, instead of the design's 16 px corner. The dark page keeps the 16. */
+static bool s_cover_print;
+
 #define SC(v)  cassette_len(s_pose, (v))             /* a design length, in pixels */
 #define SCX(x) cassette_x(s_pose, (x))               /* a design x, in screen pixels */
 #define SCY(y) cassette_y(s_pose, (y))               /* a design y, in screen pixels */
@@ -349,7 +353,8 @@ void cassette_tapes_place(cassette_pose_t pose)
     place_rect(s_frame[0], FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
     lv_obj_set_style_radius(s_frame[0], SC(FRAME_R), 0);
     place_rect(s_frame[1], 122, 122, 556, 168);
-    lv_obj_set_style_radius(s_frame[1], SC(16), 0);
+    int r1 = s_cover_print ? LV_MIN(SC(556), SC(168)) / 2 : SC(16);
+    lv_obj_set_style_radius(s_frame[1], r1, 0);
 
     for (int i = 0; i < 3; i++) {
         place_rect(s_chip[i], k_chip[i].x, k_chip[i].y, k_chip[i].w, k_chip[i].h);
@@ -393,6 +398,53 @@ void cassette_tapes_hub_anchor(int index, bool top, int *x, int *y)
     int r = SC(HUB_RING_D) / 2;
     *x = SCX(k_hub[index].x);
     *y = SCY(k_hub[index].y) + (top ? -r : r);
+}
+
+void cassette_tapes_frame_rect(int index, int *x, int *y, int *w, int *h, int *r)
+{
+    if (x) *x = 0;
+    if (y) *y = 0;
+    if (w) *w = 0;
+    if (h) *h = 0;
+    if (r) *r = 0;
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    if (index < 0 || index > 1 || !s_frame[index]) return;
+    if (x) *x = lv_obj_get_x(s_frame[index]);
+    if (y) *y = lv_obj_get_y(s_frame[index]);
+    if (w) *w = lv_obj_get_width(s_frame[index]);
+    if (h) *h = lv_obj_get_height(s_frame[index]);
+    if (r) *r = (int)lv_obj_get_style_radius(s_frame[index], 0);
+#else
+    (void)index;
+#endif
+}
+
+void cassette_tapes_set_cover_print(bool on)
+{
+    s_cover_print = on;
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    if (!s_frame[1]) return;
+    int r1 = s_cover_print ? LV_MIN(SC(556), SC(168)) / 2 : SC(16);
+    lv_obj_set_style_radius(s_frame[1], r1, 0);
+#endif
+}
+
+void cassette_tapes_raise_frames(void)
+{
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The frames are the first two children; the label was created after them, so this
+     * puts the two borders over the label while it is shown. */
+    if (s_frame[0]) lv_obj_move_foreground(s_frame[0]);
+    if (s_frame[1]) lv_obj_move_foreground(s_frame[1]);
+#endif
+}
+
+void cassette_tapes_lower_frames(void)
+{
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    if (s_frame[0]) lv_obj_move_to_index(s_frame[0], 0);
+    if (s_frame[1]) lv_obj_move_to_index(s_frame[1], 1);
+#endif
 }
 
 /* Push the tape's ink into the hub rims: the playing red at LV_OPA_COVER, the tape's own

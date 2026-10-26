@@ -17,7 +17,7 @@
  *    few pixels, out of phase, on one animation; their tethers stay fixed and the tag's
  *    own fill hides the end.
  *
- * The tag texts are the Track's ID3/FLAC tags, read by tags_loader on its own task
+ * The tag texts are the Track's ID3/FLAC tags, read by artwork_loader on its own task
  * and handed in here; until they arrive (or when a Track has none) the group falls
  * back to the first directory of the Track's path and the song to the cleaned
  * filename. The bar's clock comes from the cassette frame.

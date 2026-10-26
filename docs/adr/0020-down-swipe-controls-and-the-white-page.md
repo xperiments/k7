@@ -1,5 +1,9 @@
 # The down swipe brings the controls in, and the controls page is white
 
+**Amended by [ADR 0021](./0021-white-page-cover.md):** once the page is white, the next
+down swipe prints the Track's cover on the cassette's body and the up swipe takes it off
+before it closes the controls; every way off the page still hides it.
+
 The vertical swipes had one meaning each: the up swipe raised the peek and the down swipe
 put it away, and a down swipe with the peek down did nothing at all. The owner wants the
 down swipe to be the way into the transport drawer and the DJ block - the controls the

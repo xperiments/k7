@@ -562,9 +562,18 @@ left edge and shows the DJ block at the right; while they are out, either horizo
 slides them back out. The vertical swipes reach the same controls: a down swipe brings them
 in on a **white** page (`k_col_white` instead of the screen's near-black - the orange line
 art and the tape's window chips read as ink on paper), and an up swipe takes them away
-again. The white page is the down swipe's, not the controls': the horizontal swipes keep
+again. Once that page is white, the next down swipe turns the playing Track's cover on the
+cassette's body - the picture is scaled to the outer frame's width, top-aligned and masked
+to the frame minus the label window, the hole a pill whose ends are the two reels. The stack
+is **label on top, glow in the middle, cinta at the bottom**: the label covers the body
+inside the frame with a real transparent window, the glow lights the tape below it, and the
+tape exposed below the frame stays visible under the glow. The label fades in on the down
+and out on the up over 1 s; a page flip or a Track change cuts it (the loader reuses the
+one buffer). An up swipe fades the cover off
+before it takes the controls away. The white
+page is the down swipe's, not the controls': the horizontal swipes keep
 showing the same drawer and block on the dark screen, and any way out returns the page to
-dark. The page flips in one frame at the start of the drawer's slide. Two 2 px bands rounded
+dark and hides the cover. The page flips in one frame at the start of the drawer's slide. Two 2 px bands rounded
 by the buttons' 8 px close that screen top and bottom - 768x71 at (16,6), its bottom edge on
 the first button's and the first DJ cell's top line, and 768x115 at (16,359), its top edge
 on their bottom line - so the drawer, the block and the bands read as one frame. The bands
@@ -614,15 +623,16 @@ bobbing a few pixels out of phase. It cannot be raised while the transport drawe
 134/256 control pose; an open peek is closed by a down swipe - which only puts the peek
 away, and does not go on to open the controls on the same swipe - and an up swipe while it
 is up does nothing. The down swipe's other job, and the up swipe's when it has no peek to
-raise, are the controls: down shows them with the white page, up takes them away. The tag
-texts are the Track's ID3/FLAC tags, read by the tags loader on its own
+raise, are the controls: down shows them with the white page and turns the Track's cover
+on, and up turns the cover off before it takes the controls away. The tag
+texts are the Track's ID3/FLAC tags, read by the artwork loader on its own
 task; until they land the group is the artist directory and the song the cleaned filename.
 The two-finger swipe is the VU meter's toggle: a left shows it, a right hides it, and it
 starts hidden with a 220 ms fade. The view still latches the two-finger touch so the same
 touch
 cannot also trip the one-finger gesture. The Sunton build compiles this path; the board
 tier has not yet recorded a finger, so the rows above are unchanged. The removal and the
-parked cover pipeline are
+old cover screens are
 [`docs/adr/0019-remove-label-and-artwork-screens.md`](docs/adr/0019-remove-label-and-artwork-screens.md);
 the drawer and the horizontal swipes are
 [`docs/adr/0016-transport-drawer-and-horizontal-swipes.md`](docs/adr/0016-transport-drawer-and-horizontal-swipes.md);
@@ -633,16 +643,22 @@ the DJ block's ranges and the transport arrows (now the left drawer's) are
 the peek's bar, tags and tag reader are
 [`docs/adr/0017-peek-timeline-and-tags.md`](docs/adr/0017-peek-timeline-and-tags.md).
 
-**Track artwork is parked.** The Artwork Level - the cassette Case and the playing MP3's
-own cover in its window - is removed. Its pipeline stays in the tree for later: the
-locator in `components/portable/artwork` (the ID3v2.3/2.4 `APIC` frame, or a native FLAC
-`PICTURE` block), the TJpgDec decode and fit in `artwork_loader.c`, and the Case and label
-assets. None of it is in the firmware build: the app no longer carries the TJpgDec include,
-the 45 KB Case JPEG or the 464 KB cover buffer. The host tier still builds and tests the
-locator and the fit (`host/tests/t15_artwork.c`). The peek's tags are the one part of the
-old artwork loader still built, in `tags_loader.c`. The old decision is
+**Track artwork is the white page's cover, not a Level.** The old Artwork Level - the
+cassette Case and the playing MP3's own cover in its window - is still gone, but the
+picture is back inside the cassette: the white page's down swipe prints it on the
+outer frame, masked to frame minus the label window, with the tape exposed below the frame
+still visible. The pipeline is the one the Artwork
+screen used: the locator in `components/portable/artwork` (the ID3v2.3/2.4 `APIC` frame,
+or a native FLAC `PICTURE` block) and the TJpgDec decode and fit in `artwork_loader.c`.
+The panel board builds it and carries the 464,310 B cover buffer; the old Case backdrop
+(`assets/labels/cover.jpg`, 45 KB JPEG, 768,000 B decoded) and the Label cover's source
+(`assets/labels/k7logo.png`) stay in the tree unembedded.
+The loader also reads the peek's text tags, so there is no separate tag task. The host
+tier still builds and tests the locator and the fit (`host/tests/t15_artwork.c`). The old
+decision is
 [`docs/adr/0013-artwork-level-and-case-window.md`](docs/adr/0013-artwork-level-and-case-window.md),
-superseded by ADR 0019.
+superseded by ADR 0019 for the screens; the cover's new home is
+[`docs/adr/0021-white-page-cover.md`](docs/adr/0021-white-page-cover.md).
 
 **Backlight sleep.** GPIO 2 is now a 400 Hz, 8-bit LEDC duty instead of an on/off pin. The
 screen starts at full brightness, then fades to 60% after 2 minutes, 30% after 5
@@ -657,14 +673,15 @@ only dimming is lost. For a visual check, `APP_UI_BACKLIGHT_TEST=y` replaces the
 cassette with a white screen and steps the backlight through 100/80/60/40/20/0 every
 five seconds, printing the level in large type.
 
-The label cover and the Artwork decode are parked with the two screens: the label cover is
+The label cover and the Case are still parked with the two old screens: the label cover is
 `assets/labels/k7logo.png` (converted to RGB565A8, 1.1 MB, its black triangle and circle
 transparent so the reels showed through) and the Case is `assets/labels/cover.jpg`; neither
-is embedded now. The cover loader and its measurements (the first card track's 239x236
-`APIC` became the 603x385 window in 691 ms; 971,248 B of PSRAM before its 464,310 B cover
-buffer and 504,300 B after; the Case was a 768,000 B backdrop) stay in the parked
-`artwork_loader.c` and the git history. The app image is **1.65 MB** with **60%** of its
-4 MB partition free; re-check it after the next build.
+is embedded now. The Track picture does not need them - the cover uses the cassette's own
+frames. The loader's measurements (the first card track's 239x236 `APIC` became the
+603x385 window in 691 ms; 971,248 B of PSRAM before its 464,310 B cover buffer and
+504,300 B after, with the Case's 768,000 B backdrop also allocated) are the board's
+reference; without the Case the cover costs 464,310 B. The app image is **1.68 MB** with
+**60%** of its 4 MB partition free; re-check it after the next build.
 
 **Five faults that only the board could show**, each now fixed and each worth the
 tier on its own:
@@ -928,17 +945,16 @@ Three things make that true, and the second is the one that is easy to get wrong
    `heap_caps_malloc_prefer(PSRAM first)` makes the placement a decision.
 3. **The draw buffer is allocated from PSRAM explicitly**, and `LV_USE_ASSERT_MALLOC` is
    on so a genuine failure is a diagnostic rather than a null dereference later.
-4. **The Artwork cover buffer is parked.** The old Artwork path's 464 KB cover buffer and
-   768 KB Case are not allocated: the Label cover and Artwork screens are gone, and the
-   peek's tags loader is one small task with no picture buffer. The cover pipeline's
-   memory notes stay with the parked `artwork_loader.c`. The app's rodata and instructions
-   stay in PSRAM - the panel needs them there; moving either to flash brought the
-   glitches back - which is why only about 1.7 MB is free before the old cover; that
-   pressure is gone with the screens.
+4. **The cover costs one buffer, not two.** The white page's cover allocates the old
+   Artwork path's 464,310 B RGB565 buffer, but not the Case's 768,000 B backdrop: the
+   cassette's frames are the frame now. The loader is one task (it also reads the peek's
+   tags) and its stack starts in PSRAM. The app's rodata and instructions stay in PSRAM -
+   the panel needs them there; moving either to flash brought the glitches back - which is
+   why the boot log reports the PSRAM margin before and after the cover.
 
-The image is 1.65 MB without the label cover, the Case and the artwork path, so the app
-partition is 4 MB with 60 % free (`partitions.csv`) rather than the 1.5 MB single-app
-layout. LVGL is a fetched dependency pinned by
+The image is 1.68 MB with the cover loader and without the label cover or the Case, so
+the app partition is 4 MB with 60 % free (`partitions.csv`) rather than the 1.5 MB
+single-app layout. LVGL is a fetched dependency pinned by
 `components/app/screen_display/idf_component.yml` and `dependencies.lock`; the host tier
 compiles only the portable components and never sees it.
 

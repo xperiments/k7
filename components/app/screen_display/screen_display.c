@@ -31,7 +31,7 @@
 #include "screen_display.h"
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-#include "tags_loader.h"
+#include "artwork_loader.h"
 #include "backlight.h"
 #include "esp_lvgl_port.h"
 #include "panel_rgb.h"
@@ -387,13 +387,14 @@ esp_err_t screen_display_start(const char *music_dir)
     lvgl_port_unlock();
 
 #if !CONFIG_APP_UI_BACKLIGHT_TEST
-    /* The peek's tags, started after the view so a result can only arrive once there is
-     * a label to write. A failure is logged and the peek keeps its filename fallback:
-     * the screen is still the appliance's. */
-    esp_err_t tags_err = tags_loader_start(music_dir);
-    if (tags_err != ESP_OK) {
-        ESP_LOGW(TAG, "the tags loader did not start: %s; the peek uses its filename fallback",
-                 esp_err_to_name(tags_err));
+    /* The card side of the peek's tags and the white page's cover, started after the view
+     * so a result can only arrive once there is an object to hand it to. A failure is
+     * logged and the screen still runs: the peek falls back to its filename and the white
+     * page simply shows no cover. */
+    esp_err_t art_err = artwork_loader_start(music_dir);
+    if (art_err != ESP_OK) {
+        ESP_LOGW(TAG, "the artwork loader did not start: %s; no cover and tags from the card",
+                 esp_err_to_name(art_err));
     }
 #endif
 #endif

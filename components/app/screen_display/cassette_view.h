@@ -7,6 +7,7 @@
  *
  *   cassette_tapes    the packs, strands, rollers, run, hubs and the panel's frames
  *   cassette_meter    the VU meter
+ *   cassette_cover    the white page's Track picture, masked to the frames
  *   cassette_levels   the peek's host (the Label cover and Artwork screens are gone)
  *   cassette_peek     the up swipe's timeline bar and its two floating tags
  *   cassette_buttons  the transport drawer at the left edge
@@ -15,9 +16,9 @@
  *   cassette_layout   the design grid (portable), cassette_style the palette,
  *                     cassette_widgets the object helpers
  *
- * The panel board's tags loader reads a Track's text tags and hands them in under the
- * LVGL lock, so no part of the screen touches the card. The cover pipeline (the Artwork
- * screen's picture) is parked and not built.
+ * The panel board's artwork loader reads a Track's picture and text tags and hands them
+ * in under the LVGL lock, so no part of the screen touches the card or a decoder. The
+ * cover is the white page's; the peek's tags are its labels.
  */
 #include "lvgl.h"
 
@@ -42,6 +43,11 @@ void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms)
 void cassette_view_dim(bool dim);
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* The Track's picture for the white page's cover, or NULL when it has none (or while a
+ * new one is being decoded). The descriptor is the loader's one cover buffer and stays
+ * alive; the cover module copies nothing. */
+void cassette_view_set_cover(const lv_image_dsc_t *dsc);
+
 /* The Track's text tags for the peek's two labels, UTF-8. Empty strings mean the Track
  * carries none (or they are still being read), and the peek falls back to the path and
  * filename it already knows. */

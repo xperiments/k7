@@ -110,8 +110,10 @@ _Avoid_: UI, GUI, dashboard
 
 **Level**:
 *(Removed by ADR 0019: Bare is the only screen. An up swipe at Bare toggles the **Peek**;
-a down swipe does nothing. The Label cover and Artwork entries below are parked
-vocabulary for when those screens return.)*
+a down swipe shows the controls on the white page, and the next one turns the **Cover** on;
+an up swipe turns it off before it closes the controls.
+The Label cover and Artwork entries below are parked vocabulary for when those screens
+return.)*
 One of the three positions of the cassette screen, ordered by how much of it the
 **sheet** covers: Bare, Label cover and Artwork. A one-finger down swipe moves one
 towards Artwork, an up swipe one towards Bare, and the ends do not wrap. At Bare, a down
@@ -204,12 +206,22 @@ The rectangle of the **Case** where the **Track artwork** is drawn: (101,23) to
 _Avoid_: hole, cutout, slot, ventana
 
 **Track artwork**:
-*(Parked with the removed Artwork screen, ADR 0019; the locator and fit stay in the tree
-and the host test still builds them.)*
 The picture a Track carries in its own file: an ID3v2.3/2.4 `APIC` frame in an MP3, or
 a native FLAC `PICTURE` block, preferring the front cover. JPEG is decoded; a PNG is
-located but not drawn. A Track with no usable picture leaves the **Window** empty.
-_Avoid_: cover, embedded art, portada
+located but not drawn. A Track with no usable picture leaves the **Cover** empty. The
+locator and fit are built on the panel board and tested on the host; the old **Artwork**
+Level that showed it is still parked.
+_Avoid_: album art, portada
+
+**Cover**:
+What the white controls page's down swipe prints on the cassette: the Track artwork scaled
+to the outer frame's width, top-aligned, clipped to that frame and masked by the inner
+frame. It is the **label**, the top layer: cinta < glow < label. The label covers the body
+inside the outer frame and its window is a real transparent hole, so the glow and the tape
+show through; the tape exposed below the frame stays visible under the glow. The up swipe
+turns it off; every way off the white page hides it. Not a Level and not the removed Label
+cover.
+_Avoid_: artwork screen, Case, portada
 
 **Peek**:
 The overlay on **Bare** raised by an up swipe, and put away by the next up swipe. It has

@@ -1,5 +1,9 @@
 # The peek's bar becomes the timeline, and the names float on the cassette
 
+**Amended by [ADR 0021](./0021-white-page-cover.md):** the separate `tags_loader` is gone;
+the tags travel with the Track's picture in `artwork_loader`, still one request slot and
+still handed to the view under the LVGL lock.
+
 The Bare screen's up swipe put one cream bar on the screen and the bar carried the
 **Now playing** title. The product wants that bar to carry the track's clock instead -
 position, elapsed, total - and wants the group and the song as two separate rounded

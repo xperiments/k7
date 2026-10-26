@@ -1,17 +1,19 @@
 #pragma once
 /*
- * cassette_levels - the peek's host on the Cassette screen.
+ * cassette_levels - the peek and the white page's cover, hosted on the Cassette screen.
  *
  * The Label cover and Artwork screens, and the down/up Level gestures that reached them,
  * are removed: Bare is the only screen the cassette has. The up swipe at Bare has one
  * meaning left - raise or lower the peek, cassette_peek's timeline bar and two tags - and
- * the down swipe does nothing. There is no Level machine and no sheet; the peek asks the
- * cassette for room through the `room` callback, as it always did.
+ * the down swipe shows the controls, then turns the white page's cover on (the up swipe
+ * turns it off before it closes the controls). There
+ * is no Level machine and no sheet; the peek asks the cassette for room through the
+ * `room` callback, as it always did.
  *
- * The peek's group and song tags still come from a Track's container through tags_loader
- * (the tag half of the old artwork loader). The Artwork screen's cover pipeline - the
- * JPEG, the Case backdrop and their buffers - is parked in artwork_loader.c and is not
- * built. A Track without tags falls back to the path and filename, as before.
+ * The peek's group and song tags and the white page's picture both come from a Track's
+ * container through artwork_loader (the old Artwork loader, minus its Case). A Track
+ * without a picture shows no cover; a Track without tags falls back to the path and
+ * filename, as before.
  *
  * Private to screen_display.
  */

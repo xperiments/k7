@@ -7,7 +7,8 @@
  *
  *   cassette_tapes    the packs, strands, rollers, run, hubs and the panel's frames
  *   cassette_meter    the VU meter
- *   cassette_levels   the Level machine, the Label cover and the Artwork sheet
+ *   cassette_cover    the white page's Track picture, masked to the frames
+ *   cassette_levels   the peek's host
  *   cassette_buttons  the three-button transport drawer at the left edge
  *   cassette_eq       the DJ block at the right edge: GAIN, HI/MED/LOW and the < / > arrows
  *   cassette_header   the band that closes the controls screen across the top
@@ -26,7 +27,9 @@
  * It also owns the page. The cassette sits on the dark screen at rest; the down swipe
  * shows the controls on a white page, and the horizontal swipes keep showing the same
  * controls on the dark one. The page follows the gesture that opened the controls, and
- * the cassette's own page-ink parts turn with it.
+ * the cassette's own page-ink parts turn with it. Once the page is white, the next down
+ * swipe turns the Track's picture on the cassette's body; the up swipe turns it off again,
+ * and every way off the page takes it with them.
  *
  * Called under the LVGL lock, like everything else on the screen.
  */
@@ -51,6 +54,10 @@
 #include "mini_icecast.h"
 #include "screen_input.h"
 
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+#include "cassette_cover.h"
+#endif
+
 static const char *TAG = "screen";
 
 /* The entry view is the untouched full-scale cassette. The transport drawer asks for the
@@ -68,10 +75,10 @@ static const char *TAG = "screen";
  * the tape, with only EDGE_SIDES of its borders lit. The default lights the top and the left
  * - the edges opposite the dome's bottom-right shadow - and leaves the right and the bottom
  * transparent. EDGE_COL is any palette name or a raw colour. */
-#define EDGE_W         466
+#define EDGE_W         426
 #define EDGE_H         272
 #define EDGE_R         10          /* corner radius: the bands' and buttons' 8 px */
-#define EDGE_BORDER_W  2
+#define EDGE_BORDER_W  1
 #define EDGE_COL       k_col_glass
 #define EDGE_SIDES     (LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT)
 
@@ -80,7 +87,7 @@ static const char *TAG = "screen";
  * (0..255 of the way along the diagonal: 255 is the far corner; a smaller number stops the
  * fade early and leaves the rest empty). EDGE_GLOW_HEX is the glow's colour. */
 #define EDGE_GLOW_HEX       0xFFFFFF
-#define EDGE_GLOW_NEAR      60
+#define EDGE_GLOW_NEAR      90
 #define EDGE_GLOW_FAR       LV_OPA_TRANSP
 #define EDGE_GLOW_FAR_FRAC  255
 
@@ -151,7 +158,11 @@ static void levels_room_cb(bool shown, bool instant, void *ctx)
  * flip is one frame - a colour animation would repaint the whole 800x480 panel on every
  * step - and it runs as the drawer's slide starts, so the page and the chrome move together.
  * The flag keeps a repeated request from invalidating the whole panel for a colour that is
- * already there. */
+ * already there.
+ *
+ * The page also owns the cover: once it is white, the down swipe turns cassette_cover on
+ * and the up swipe off, and every flip back to dark hides it. The cover is the Track's
+ * picture, so it comes and goes with the Track loader, not with the page's paint. */
 static bool s_page_white;
 
 /* The glow's fades. The object's opacity multiplies its gradient's stop opacities and its
@@ -195,6 +206,11 @@ static void page_set(bool white)
 {
     if (white == s_page_white) return;
     s_page_white = white;
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The cover belongs to the white page: every flip takes it away, and the down swipe
+     * that the white page is for is the only way to ask for it again. */
+    cassette_cover_set_shown(false);
+#endif
     if (s_screen) lv_obj_set_style_bg_color(s_screen, white ? k_col_white : k_col_bg, 0);
     if (white) edge_reveal();
     else edge_hide();
@@ -249,6 +265,10 @@ static void hubs_apply(void)
 static void cassette_place(void)
 {
     cassette_tapes_place(s_pose);
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The frames are placed now, so the cover's mask follows this step of the pose. */
+    cassette_cover_place();
+#endif
     cassette_meter_place(s_pose);
     hubs_apply();
 }
@@ -340,19 +360,35 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
             /* Down is the ladder's way in: it shows the controls with the white page. An
              * open peek is put away first, and the same swipe does only that - the peek
              * and the controls never share the screen. If the controls are already out
-             * (from a horizontal swipe) the down swipe still asks for its page. */
+             * (from a horizontal swipe) the down swipe still asks for its page; once the
+             * page is white, the same swipe turns the Track's cover on. The label's mask is
+             * built at the controls pose, so the pose must have landed: a swipe during the
+             * shrink does nothing and the next one shows it. */
             if (s_peek_wants_room) cassette_levels_toggle_peek();
             else if (!s_buttons_want_room) controls_set_shown(true, true);
-            else page_set(true);
+            else if (s_page_white) {
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+                if (s_pose.scale == CASSETTE_SCALE_BUTTONS)
+                    cassette_cover_set_shown(true);
+#endif
+            } else page_set(true);
             break;
         case SCREEN_INTENT_UP:
-            /* Up is the way back out: it takes the controls away before it can mean the
-             * peek, and the page returns to the dark screen with them. With none out it
-             * raises the peek, and only from the 100% pose (256/256 with neither the drawer
-             * nor the peek asking for room); while the peek is already up it does
-             * nothing. */
+            /* Up is the way back out, one step at a time: with the cover up it takes the
+             * cover away and leaves the controls; with the controls out it takes them away.
+             * With none out it raises the peek, and only from the 100% pose (256/256 with
+             * neither the drawer nor the peek asking for room); while the peek is already
+             * up it does nothing. */
             if (s_buttons_want_room) {
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+                if (cassette_cover_is_shown()) {
+                    cassette_cover_set_shown(false);
+                } else {
+                    controls_set_shown(false, false);
+                }
+#else
                 controls_set_shown(false, false);
+#endif
             } else if (!s_peek_wants_room && s_pose.scale == CASSETTE_SCALE_NONE) {
                 cassette_levels_toggle_peek();
             }
@@ -401,20 +437,22 @@ void cassette_view_create(void)
     lv_obj_set_scrollable(s_cassette, false);
     lv_obj_set_clickable(s_cassette, false);
 
-    /* The tapes first, then the meter: the meter paints inside the right hub. The first
-     * paint is the entry view, the full-scale cassette. */
-    cassette_tapes_create(s_cassette);
-    cassette_meter_create(s_cassette);
-    cassette_place();
+    /* The cover goes down first, under everything. Then the white page's edge mark, inside
+     * the cassette as well, and then the tape body: the order is label < glow < cinta. The
+     * print never hides a tape, the glow washes the label but not the tape, and the peek,
+     * the drawer and the DJ block are screen children above the cassette. */
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    cassette_cover_create(s_cassette);
+#endif
 
     /* The white page's edge mark: an L of lit borders on an otherwise transparent rectangle,
-     * centred on the tape. It goes down after the cassette, so the glow lies over the tape's
-     * picture, and before the peek and the chrome, so they cover it. It is hidden until the
+     * centred on the tape. It is a child of the cassette, created after the cover and before
+     * the body, so the glow lies over the label and under the tapes. It is hidden until the
      * page turns white. */
     cassette_pose_t controls = cassette_pose(CASSETTE_SCALE_BUTTONS, CASSETTE_BUTTONS_DX,
                                              CASSETTE_BUTTONS_DY);
-    s_page_edge = cassette_border_box(scr,
-                                      cassette_x(controls, TAPE_CENTRE_X) - (EDGE_W / 2)+4,
+    s_page_edge = cassette_border_box(s_cassette,
+                                      cassette_x(controls, TAPE_CENTRE_X) - (EDGE_W / 2),
                                       cassette_y(controls, TAPE_CENTRE_Y) - EDGE_H / 2,
                                       EDGE_W, EDGE_H, EDGE_R,
                                       k_col_bg, LV_OPA_TRANSP, EDGE_COL, EDGE_BORDER_W);
@@ -433,6 +471,12 @@ void cassette_view_create(void)
     lv_obj_set_style_bg_grad(s_page_edge, &s_edge_grad, 0);
 
     lv_obj_set_hidden(s_page_edge, true);
+
+    /* The tapes, then the meter: the frames and the whole body are created after the glow,
+     * so every tape draws over it, and the meter paints inside the right hub. */
+    cassette_tapes_create(s_cassette);
+    cassette_meter_create(s_cassette);
+    cassette_place();
 
     /* The peek is the screen's child, above the cassette's container. It is the only
      * overlay left: the Label cover and Artwork sheets are gone. */
@@ -506,6 +550,11 @@ void cassette_view_update(const mini_icecast_status_t *st)
 /* ------------------------------------------------------------------ hand-off */
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
+void cassette_view_set_cover(const lv_image_dsc_t *dsc)
+{
+    cassette_cover_set_image(dsc);
+}
+
 void cassette_view_set_tags(const char *group, const char *song)
 {
     cassette_levels_set_tags(group, song);

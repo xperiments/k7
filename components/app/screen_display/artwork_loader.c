@@ -1,13 +1,6 @@
 /*
- * PARKED - the Artwork screen's cover pipeline. Not built.
- *
- * The Label cover and Artwork screens were removed; this loader is kept for when the
- * Artwork screen comes back. The peek's tags live in tags_loader.c now. Restore this file,
- * the cover assets, the artwork cover sources and the view's set_artwork()/set_case()
- * together; it does not compile against the current view.
- *
- * artwork_loader.c - the card, the JPEG decoder and the Artwork screen's cover, on
- * their own task.
+ * artwork_loader.c - the card, the JPEG decoder, the white page's cover and the peek's
+ * tags, on their own task.
  *
  * The picture is located by components/portable/artwork (an ID3v2.3/2.4 APIC frame
  * in an MP3, a native FLAC PICTURE block) and decoded by TJpgDec, which LVGL already
@@ -17,19 +10,20 @@
  * hundred bytes at a time, so the Track's JPEG is read from the card on demand and
  * never sits in PSRAM whole.
  *
- * The screen is the cassette case, assets/labels/cover.jpg: an opaque 800x480 JPEG
- * embedded in the image and decoded once at start into a PSRAM backdrop. The Track
- * artwork is fitted to the case's window, 603x385 at (101,23), and drawn over it.
+ * The picture is fitted, cover-style, to one 603x385 RGB565 buffer. That was the old
+ * Artwork screen's window; the white controls page now scales the same buffer to the
+ * cassette's outer frame, so the decode and the fit did not change when the screen did.
+ * The view hides the picture when a new Track is requested, so the decode writes the
+ * buffer while it is not drawn.
  *
  * Memory is the project's scarce resource: the app's rodata and instructions live in
  * PSRAM (moving them to flash brought the panel's glitches back), which leaves about
- * 1.7 MB free when the screen starts. The cover is therefore one 603x385 RGB565 buffer
- * (464 310 B); the view hides the picture when a new Track is requested, so the decode
- * writes it while it is not drawn. A JPEG whose crop is at least the window's size is
- * sampled from TJpgDec's MCU bands into that buffer, box-filtered to 603x385; a smaller
- * cover is decoded into a crop buffer no larger than the window and upscaled with the
- * portable fit. The band or the crop buffer is allocated per decode and freed; the Case
- * is the only other permanent buffer, 768 000 B.
+ * 1.7 MB free when the screen starts. The cover is therefore one 603x385 buffer
+ * (464 310 B). A JPEG whose crop is at least the window's size is sampled from TJpgDec's
+ * MCU bands into that buffer, box-filtered to 603x385; a smaller cover is decoded into a
+ * crop buffer no larger than the window and upscaled with the portable fit. The band or
+ * the crop buffer is allocated per decode and freed; the cover buffer is the only
+ * permanent picture buffer.
  *
  * The card is shared with the broadcast, so the read backs off while the stream is
  * behind (the same signal the download path uses) and yields every 16 KB: the VFS holds
@@ -37,6 +31,10 @@
  *
  * Only JPEG is decoded. A PNG picture is located and refused with a log line: it is
  * rare in an MP3, and the cover path does not need LodePNG's full-size buffer.
+ *
+ * The text tags share the task and the request slot with the picture: one Track costs
+ * one wake, and the tags - a few hundred bytes - are read first so the peek's labels
+ * settle while the picture is still decoding.
  */
 #include "artwork_loader.h"
 
@@ -56,7 +54,6 @@
 
 #include "artwork.h"
 #include "cassette_view.h"
-#include "cover_jpg.h"
 #include "mini_icecast.h"
 
 /* Vendored inside LVGL; its private include directory is named by CMakeLists.txt. */
@@ -64,7 +61,8 @@
 
 static const char *TAG = "artwork";
 
-/* The Case's window: the rectangle the Track artwork fills, (101,23) to (704,408). */
+/* The fitted picture's size. The white page scales it to the frame it is shown in; a
+ * decode at the frame's size would need a different buffer at every pose. */
 #define COVER_W 603
 #define COVER_H 385
 #define COVER_BYTES ((size_t)COVER_W * COVER_H * 2)
@@ -96,15 +94,11 @@ static uint32_t s_req_seq;
 static bool s_req_art;
 static bool s_req_tags;
 
-/* The cover: one 603x385 buffer, allocated once for the life of the process. The view
- * hides the picture when a new Track is requested, so the decode writes it while it is
- * not being drawn; a second buffer would cost 464 KB this board does not have. */
+/* The cover: one 603x385 buffer, allocated once for the life of the process. The white
+ * page hides the picture when a new Track is requested, so the decode writes it while it
+ * is not being drawn; a second buffer would cost 464 KB this board does not have. */
 static uint16_t *s_art_buf;
 static lv_image_dsc_t s_art_dsc;
-
-/* The Case backdrop: the embedded cover.jpg, decoded once at start. */
-static uint16_t *s_case;
-static lv_image_dsc_t s_case_dsc;
 
 /* ------------------------------------------------------------------ card access */
 
@@ -141,14 +135,9 @@ static void card_wait(void)
 
 typedef struct {
     /* A Track's JPEG is read from the card on demand: the decoder wants a few hundred
-     * bytes at a time, so the picture never has to sit in PSRAM whole. The Case is
-     * embedded in the image and read from that buffer. */
+     * bytes at a time, so the picture never has to sit in PSRAM whole. */
     FILE          *file;
     uint64_t       file_left;
-    const uint8_t *bytes;
-    size_t         n;
-    size_t         pos;
-    bool           from_file;
     uint32_t       read_bytes;   /* since the last yield */
 
     uint16_t      *dst;          /* the crop buffer, when the picture is smaller than the cover */
@@ -158,7 +147,6 @@ typedef struct {
 
     uint32_t       seq;          /* the request that started this decode */
     uint32_t       rects;        /* MCUs seen, for the supersede check */
-    bool           check_seq;    /* false for the Case: a Track request must not abort it */
 } jpeg_ctx_t;
 
 /* One decode at a time; the fit's workspace is about 10 KB, so BSS rather than the
@@ -174,33 +162,25 @@ static size_t jpeg_in(JDEC *jd, uint8_t *buff, size_t ndata)
 {
     jpeg_ctx_t *j = jd->device;
 
-    if (j->from_file) {
-        if (ndata > j->file_left) ndata = (size_t)j->file_left;
-        if (ndata == 0) return 0;
-        size_t got;
-        if (buff) {
-            got = fread(buff, 1, ndata, j->file);
-            if (got == 0) return 0;
-            j->read_bytes += (uint32_t)got;
-            /* The VFS serialises one fread at a time; 16 KB of them is a fair slice. */
-            if (j->read_bytes >= READ_CHUNK) {
-                j->read_bytes = 0;
-                if (mini_icecast_lag_ms() > 0) vTaskDelay(pdMS_TO_TICKS(10));
-                else vTaskDelay(1);
-            }
-        } else {
-            if (fseek(j->file, (long)ndata, SEEK_CUR) != 0) return 0;
-            got = ndata;
+    if (ndata > j->file_left) ndata = (size_t)j->file_left;
+    if (ndata == 0) return 0;
+    size_t got;
+    if (buff) {
+        got = fread(buff, 1, ndata, j->file);
+        if (got == 0) return 0;
+        j->read_bytes += (uint32_t)got;
+        /* The VFS serialises one fread at a time; 16 KB of them is a fair slice. */
+        if (j->read_bytes >= READ_CHUNK) {
+            j->read_bytes = 0;
+            if (mini_icecast_lag_ms() > 0) vTaskDelay(pdMS_TO_TICKS(10));
+            else vTaskDelay(1);
         }
-        j->file_left -= got;
-        return got;
+    } else {
+        if (fseek(j->file, (long)ndata, SEEK_CUR) != 0) return 0;
+        got = ndata;
     }
-
-    size_t left = j->n - j->pos;
-    if (ndata > left) ndata = left;
-    if (buff) memcpy(buff, j->bytes + j->pos, ndata);
-    j->pos += ndata;
-    return ndata;
+    j->file_left -= got;
+    return got;
 }
 
 /* TJpgDec hands back an MCU band at a time, RGB888: every column of 8 or 16 source
@@ -212,9 +192,8 @@ static int jpeg_out(JDEC *jd, void *bitmap, JRECT *r)
     const uint32_t w = (uint32_t)(r->right - r->left + 1);
 
     /* A newer Track abandons the decode; checking every 32 MCUs keeps the mutex out
-     * of the per-MCU path and still makes a skip responsive. The Case decode is not a
-     * Track request: a boot touch must not abort it. */
-    if (j->check_seq && ((++j->rects) & 31u) == 0 && j->seq != current_seq()) {
+     * of the per-MCU path and still makes a skip responsive. */
+    if (((++j->rects) & 31u) == 0 && j->seq != current_seq()) {
         j->failed = true;
         return 0;
     }
@@ -258,11 +237,9 @@ static bool decode_jpeg_file(FILE *f, uint64_t off, uint32_t size,
 
     jpeg_ctx_t *j = &s_jpeg;
     memset(j, 0, sizeof *j);
-    j->from_file = true;
     j->file = f;
     j->file_left = size;
     j->seq = seq;
-    j->check_seq = true;
 
     uint8_t *pool = heap_caps_malloc(JPEG_POOL_BYTES, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!pool) {
@@ -342,79 +319,6 @@ static bool decode_jpeg_file(FILE *f, uint64_t off, uint32_t size,
     return ok;
 }
 
-/* Decode the embedded Case backdrop once, into PSRAM, and hand it to the view. The
- * JPEG is the panel's own 800x480, so this is a straight 1:1 decode. */
-static bool decode_case(void)
-{
-    const size_t bytes = (size_t)COVER_JPG_W * COVER_JPG_H * 2;
-    s_case = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!s_case) {
-        ESP_LOGE(TAG, "no PSRAM for the %u B case backdrop", (unsigned)bytes);
-        return false;
-    }
-
-    jpeg_ctx_t *j = &s_jpeg;
-    memset(j, 0, sizeof *j);
-    j->bytes = cover_jpg_start;
-    j->n = (size_t)(cover_jpg_end - cover_jpg_start);
-    j->dst = s_case;
-
-    uint8_t *pool = heap_caps_malloc(JPEG_POOL_BYTES, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    if (!pool) {
-        ESP_LOGE(TAG, "no internal RAM for the case decoder pool");
-        heap_caps_free(s_case);
-        s_case = NULL;
-        return false;
-    }
-
-    JDEC jd;
-    JRESULT rc = jd_prepare(&jd, jpeg_in, pool, JPEG_POOL_BYTES, j);
-    if (rc != JDR_OK) {
-        ESP_LOGE(TAG, "case backdrop: jd_prepare failed (%d)", (int)rc);
-        heap_caps_free(pool);
-        heap_caps_free(s_case);
-        s_case = NULL;
-        return false;
-    }
-    if (jd.width != COVER_JPG_W || jd.height != COVER_JPG_H) {
-        ESP_LOGE(TAG, "case backdrop is %ux%u, expected %ux%u",
-                 (unsigned)jd.width, (unsigned)jd.height, COVER_JPG_W, COVER_JPG_H);
-        heap_caps_free(pool);
-        heap_caps_free(s_case);
-        s_case = NULL;
-        return false;
-    }
-
-    j->cover.cx = 0;
-    j->cover.cy = 0;
-    j->cover.cw = jd.width;
-    j->cover.ch = jd.height;
-    j->streaming = false;
-    rc = jd_decomp(&jd, jpeg_out, 0);
-    heap_caps_free(pool);
-    if (rc != JDR_OK || j->failed) {
-        ESP_LOGE(TAG, "case backdrop: jd_decomp failed (%d)", (int)rc);
-        heap_caps_free(s_case);
-        s_case = NULL;
-        return false;
-    }
-
-    memset(&s_case_dsc, 0, sizeof s_case_dsc);
-    s_case_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
-    s_case_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
-    s_case_dsc.header.w = COVER_JPG_W;
-    s_case_dsc.header.h = COVER_JPG_H;
-    s_case_dsc.header.stride = COVER_JPG_W * 2;
-    s_case_dsc.data_size = (uint32_t)bytes;
-    s_case_dsc.data = (const uint8_t *)s_case;
-
-    if (lvgl_port_lock(1000)) {
-        cassette_view_set_case(&s_case_dsc);
-        lvgl_port_unlock();
-    }
-    return true;
-}
-
 /* ------------------------------------------------------------------ the picture */
 
 static uint32_t current_seq(void)
@@ -428,12 +332,14 @@ static uint32_t current_seq(void)
 }
 
 /* Hand the single buffer to the view under the LVGL lock. The view hid the picture when
- * the request was made, so the decode wrote it while the panel was not drawing it. */
-static void apply_cover(bool have)
+ * the request was made, so the decode wrote it while the panel was not drawing it. The
+ * sequence is checked again under the lock: a newer Track may have arrived between the
+ * decode's last check and this hand-off, and the picture must not land against it. */
+static void apply_cover(uint32_t seq, bool have)
 {
     if (!s_art_buf) return;
     if (!lvgl_port_lock(1000)) return;
-    cassette_view_set_artwork(have ? &s_art_dsc : NULL);
+    if (seq == current_seq()) cassette_view_set_cover(have ? &s_art_dsc : NULL);
     lvgl_port_unlock();
 }
 
@@ -538,16 +444,17 @@ static void render_art(const char *track_path, mi_fmt_t fmt, uint32_t seq)
     }
 
     /* A newer request has replaced this one: throw the result away instead of showing
-     * a picture for a Track that is no longer playing. */
+     * a picture for a Track that is no longer playing. The hand-off repeats the check
+     * under the LVGL lock, so the log's verdict is this one and the view's is the last. */
     bool current = seq == current_seq();
-    if (current) apply_cover(ok);
+    apply_cover(seq, ok);
 
     ESP_LOGI(TAG, "%s: %s (wait %llu ms, open %llu ms, read+decode %llu ms, %s)",
              track_path[0] ? track_path : "(none)",
              ok ? "603x385 cover" : "no cover",
              (unsigned long long)wait_ms, (unsigned long long)open_ms,
              (unsigned long long)decode_ms,
-             current ? "shown" : "superseded");
+             current ? "current" : "superseded");
 }
 
 /* ------------------------------------------------------------------ the task */
@@ -593,12 +500,6 @@ esp_err_t artwork_loader_start(const char *music_dir)
         return ESP_ERR_NO_MEM;
     }
 
-    /* The Case backdrop first: one decode, and the Artwork screen is empty without it.
-     * The task is not running yet, so this can use the same decoder state. */
-    if (!decode_case()) {
-        ESP_LOGW(TAG, "the Case backdrop did not decode; the Artwork screen keeps its flat background");
-    }
-
     /* One cover buffer, not two: with the app's rodata in PSRAM (the panel needs it
      * there: moving it to flash brought the glitches back) the heap has about 1.7 MB
      * free at this point, and two 464 KB buffers plus a band did not fit. The view
@@ -610,7 +511,7 @@ esp_err_t artwork_loader_start(const char *music_dir)
     s_art_buf = heap_caps_malloc(COVER_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!s_art_buf) {
         ESP_LOGE(TAG, "no PSRAM for the %u B cover (free %u, largest %u); "
-                      "the Artwork screen will stay empty",
+                      "the white page will show no cover",
                  (unsigned)COVER_BYTES,
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT),
                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));

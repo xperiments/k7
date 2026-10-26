@@ -1,5 +1,9 @@
 # Remove the Label cover and Artwork screens; park the cover pipeline
 
+**Amended by [ADR 0021](./0021-white-page-cover.md):** the Track picture is back in the
+build as the white page's cover, inside the cassette's frames. The two cover screens and
+the Case backdrop stay removed and parked; the loader is no longer parked.
+
 The screen had three Levels - Bare, the K7 label cover and the Artwork Case with the
 Track's picture - reached by swiping down twice, and an up-swipe peek on Bare. The owner
 wants one screen: the cassette, its drawer, the DJ block and the peek. The two down

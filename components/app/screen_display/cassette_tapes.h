@@ -56,6 +56,23 @@ void cassette_tapes_set(const cassette_frame_t *frame);
  * (supply) hub. */
 void cassette_tapes_hub_anchor(int index, bool top, int *x, int *y);
 
+/* The current pixels of frame `index` - 0 the outer frame, 1 the label window - and its
+ * corner radius, in the cassette container's coordinates. The white page's cover uses
+ * them as its mask: frame 0 clips the picture and frame 1 is the hole in it. A board
+ * without the frames leaves every output at zero. */
+void cassette_tapes_frame_rect(int index, int *x, int *y, int *w, int *h, int *r);
+
+/* The label is the top layer, so its window's border follows the mask's largest radius - a
+ * pill whose ends are the hubs' circles - while it is up, and returns to the design's 16 px
+ * corner when it goes. The body itself is not re-ordered by this call. */
+void cassette_tapes_set_cover_print(bool on);
+
+/* The label is the top layer, so its two frame borders have to be above it while it is
+ * shown. These move only the frames: the body, the hubs and the meter do not move, so the
+ * cinta stays below the glow and the label. */
+void cassette_tapes_raise_frames(void);
+void cassette_tapes_lower_frames(void);
+
 #ifdef __cplusplus
 }
 #endif

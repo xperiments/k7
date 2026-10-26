@@ -1,26 +1,18 @@
 #pragma once
 /*
- * PARKED - the Artwork screen's cover pipeline. Not built.
- *
- * The Label cover and Artwork screens were removed; this loader and its cover request
- * are kept in the tree for when the Artwork screen comes back. The peek's tags moved to
- * tags_loader.h, which is the part still built. To restore the cover: add
- * artwork_loader.c to screen_display/CMakeLists.txt, restore the label_cover.bin and
- * cover.jpg embeds, put artwork.c/id3.c/flac.c back in components/portable/artwork, and
- * bring back cassette_view_set_artwork()/set_case() and the Artwork sheet.
- *
- * artwork_loader - the card side of the Artwork screen.
+ * artwork_loader - the card side of the white page's cover and the peek's tags.
  *
  * Locates a Track's own picture (components/portable/artwork), decodes it with TJpgDec
- * as the decoder reads the JPEG from the card on demand, and fits it to the Case's
- * window, 603x385 at (101,23). The Case itself (assets/labels/cover.jpg) is embedded as
- * a JPEG and decoded once at start. It also reads the Track's text tags - TPE1/TIT2 in
- * an MP3, ARTIST/TITLE in a FLAC Vorbis comment - for the group and song labels on
- * Bare's peek. Work happens on its own task, off the audio core and behind a one-slot
+ * as the decoder reads the JPEG from the card on demand, and fits it, cover-style, to
+ * one 603x385 RGB565 buffer. The white controls page scales that buffer to the
+ * cassette's outer frame; it is the old Artwork screen's window size, kept because the
+ * decode and the fit were already tested at it. It also reads the Track's text tags -
+ * TPE1/TIT2 in an MP3, ARTIST/TITLE in a FLAC Vorbis comment - for the peek's two
+ * labels. Work happens on its own task, off the audio core and behind a one-slot
  * request, so the view never touches the card or a decoder.
  *
  * Only JPEG is decoded. A PNG picture is located but refused with a log line: it is
- * rare in an MP3, and the case window does not need LodePNG's full-size buffer.
+ * rare in an MP3, and the cover path does not need LodePNG's full-size buffer.
  *
  * Private to screen_display. The panel board is the only build that starts it.
  */
@@ -32,14 +24,14 @@ extern "C" {
 #endif
 
 /* Allocate the cover buffer and start the decoder task. `music_dir` is the card
- * directory the Track paths are relative to. A failure leaves the screen working and
- * the Artwork screen empty; it is logged by the caller. */
+ * directory the Track paths are relative to. A failure leaves the screen working: the
+ * white page shows no cover and the peek falls back to its filename; it is logged by the
+ * caller. */
 esp_err_t artwork_loader_start(const char *music_dir);
 
-/* Ask for a Track's picture. The request replaces any pending one; a later request
- * for the same path and format is still allowed to re-render after a failure, but the
- * view dedupes while a Track does not change. An empty path, NULL or MI_FMT_NONE
- * clears the cover. */
+/* Ask for a Track's picture. The request replaces any pending one. An empty path, NULL
+ * or MI_FMT_NONE clears the cover. The view hides the old picture when the Track
+ * changes, so the decode never writes the buffer while it is drawn. */
 void artwork_loader_request(const char *track_path, mi_fmt_t format);
 
 /* Ask for a Track's text tags. A request for the same Track as a pending picture is
