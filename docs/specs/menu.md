@@ -44,7 +44,7 @@ The Menu draws inside the controls' existing frame; it adds no rectangle.
 | **Rows** | 112, 78 | 481x56 each | five of them, exactly filling the inner page |
 | Footer band | 16, 359 | 768x115 | now playing on the left, the band's position on the right |
 | Drawer buttons | 16, 76/170/264 | 96x96 each | P, `<`, `>` |
-| **Pad** | 594, 76 | 190x284 | the DJ block's footprint: six 96x96 cells at a 94 px pitch |
+| **Pad** | 594, 76 | 190x284 | one 0xFF00FF rectangle over the DJ block's footprint |
 
 Row internals, relative to the row:
 
@@ -116,9 +116,10 @@ MENU
 
 ## The Pad
 
-One touch plate at the block's footprint, drawn as six carcases with a padded vertical rule
-between the two columns; the cells never press. The view draws the plate itself and hides the
-DJ block, so the Pad owns no part of the block's object tree.
+One opaque rectangle filled **0xFF00FF** over the block's footprint - the owner's marker for
+the touch area - and the whole rectangle is the one surface. The six carcases it replaces are
+not drawn in the mode: the view draws this rectangle itself and hides the DJ block, so the Pad
+owns no part of the block's object tree.
 
 - A **vertical drag** ratchets the list. At rest, **56 px of travel is one row**; a step is
   instant and the list rests only on row boundaries. A fast drag multiplies the rows per 56 px in

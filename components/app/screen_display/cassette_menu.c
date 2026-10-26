@@ -53,22 +53,19 @@ static const char *TAG = "menu";
 #define MENU_ROW_DOT_X 364
 #define MENU_ROW_DOT_D 6
 
-/* The Pad takes the DJ block's footprint: six 96 px cells at a 94 px pitch, the first
- * column nudged 2 px right as the block's are, and a padded vertical rule between them. */
+/* The Pad owns the DJ block's footprint. It is one opaque 0xFF00FF rectangle - the owner's
+ * marker for the touch area - not a drawing of the block's six cells. */
 #define PAD_X 594
 #define PAD_Y 76
 #define PAD_W 190
 #define PAD_H 284
-#define PAD_CELL 96
-#define PAD_PITCH 94
-#define PAD_COL2_X (PAD_CELL - 2)   /* the second column, 94 px after the first */
+#define PAD_FILL 0xFF00FF
 
 /* A tap is a press that never travelled this far; the pad's ratchet owns everything else. */
 #define PAD_TAP_SLOP 8
 
 static lv_obj_t *s_page;             /* the five rows, inside the window */
 static lv_obj_t *s_pad;              /* the plate over the DJ block */
-static lv_obj_t *s_pad_cell[6];
 static lv_obj_t *s_row[MENU_ROWS];
 static lv_obj_t *s_band[MENU_ROWS];
 static lv_obj_t *s_icon[MENU_ROWS];
@@ -107,7 +104,6 @@ static int s_pad_moved;
 static lv_color_t page_ink(void) { return s_white ? k_col_bg : k_col_primary; }
 static lv_color_t band_fill(void) { return s_white ? k_col_bg : k_col_primary; }
 static lv_color_t band_ink(void) { return s_white ? k_col_button_white : k_col_bg; }
-static lv_color_t page_fill(void) { return s_white ? k_col_white : k_col_bg; }
 
 /* The icon font's glyph for a row's icon, its codepoint, and whether the font carries it:
  * folder, gear, sun, info and SD are not drawn yet, and a missing glyph is hidden rather
@@ -167,12 +163,6 @@ static menu_facts_t build_facts(void)
 }
 
 /* ------------------------------------------------------------------ drawing */
-
-static void pad_ink(void)
-{
-    lv_color_t fill = page_fill();
-    for (int i = 0; i < 6; i++) lv_obj_set_style_bg_color(s_pad_cell[i], fill, 0);
-}
 
 static void draw_rows(void)
 {
@@ -433,30 +423,21 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     }
     lv_obj_set_hidden(s_page, true);
 
-    /* The Pad: six carcases at the block's places, a padded vertical rule between the two
-     * columns, and the whole plate as the one clickable object. */
+    /* The Pad: one opaque magenta rectangle over the block's place. It marks the touch area
+     * the owner asked to see; the six carcases it replaces are not drawn in the mode. */
     s_pad = lv_obj_create(screen);
     lv_obj_remove_style_all(s_pad);
     lv_obj_set_pos(s_pad, PAD_X, PAD_Y);
     lv_obj_set_size(s_pad, PAD_W, PAD_H);
-    lv_obj_set_style_bg_opa(s_pad, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_color(s_pad, lv_color_hex(PAD_FILL), 0);
+    lv_obj_set_style_bg_opa(s_pad, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_pad, 0, 0);
+    lv_obj_set_style_radius(s_pad, 0, 0);
     lv_obj_set_style_pad_all(s_pad, 0, 0);
     lv_obj_set_scrollable(s_pad, false);
     lv_obj_set_clickable(s_pad, true);
     lv_obj_set_gesture_bubble(s_pad, false);
     lv_obj_add_event_cb(s_pad, pad_event_cb, LV_EVENT_ALL, NULL);
-
-    for (int i = 0; i < 6; i++) {
-        int col = i / 3;
-        int row = i % 3;
-        s_pad_cell[i] = cassette_border_box(s_pad,
-                                            (col ? PAD_COL2_X : 0), row * PAD_PITCH,
-                                            PAD_CELL, PAD_CELL, 8,
-                                            k_col_bg, LV_OPA_COVER, k_col_button_rect, 2);
-    }
-    /* The owner's padded rule: the two columns' shared line, inset 12 px top and bottom. */
-    cassette_box(s_pad, PAD_COL2_X, 12, 2, PAD_H - 24, 0, k_col_button_rect);
     lv_obj_set_hidden(s_pad, true);
 
     s_model = menu_new();
@@ -497,7 +478,6 @@ void cassette_menu_open(bool white)
     menu_update(s_model, s_lib, &s_facts, &s_status);
 
     cassette_window_set_menu_page(true, white);
-    pad_ink();
     cassette_buttons_set_menu_mode(true, menu_back_cb, menu_enter_cb, menu_close_cb, NULL);
     cassette_eq_set_covered(true);
     if (s_cassette) lv_obj_set_hidden(s_cassette, true);

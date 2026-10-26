@@ -1,10 +1,15 @@
 # The Menu is a Controls mode, and its pad is one plate that ratchets
 
+**Amended by the owner:** the Pad is one opaque 0xFF00FF rectangle over the block's footprint,
+a marker for the touch area, not a drawing of the block's six cells. The footprint, the
+ratchet and the tap are unchanged.
+
 The controls already close a frame around the cassette, and the owner wanted a menu reachable
 from the M cell without losing that frame. The decision is a **Menu mode of the Controls**,
 opened by M, that turns the cassette area into a five-row list and the DJ block into a
-**Pad** - one touch plate drawn as the block's six cells - that ratchets the list a row at a
-time and activates the band on a tap.
+**Pad** - one 0xFF00FF rectangle over the block's place - that ratchets the list a row at a
+time and activates the band on a tap. The rectangle is the owner's marker for the touch area,
+not the block's six cells.
 
 ## Decision
 
@@ -32,9 +37,9 @@ time and activates the band on a tap.
 - **The bands carry the location and the now playing.** The header band (768x71 at (16,6))
   carries the list's title and keeps the K7 mark; the footer band (768x115 at (16,359)) carries
   the now playing - song then group - and the band's position in the current list on the right.
-- **The Pad is one plate.** It fills the DJ block's footprint - six 96x96 cells at a 94 px
-  pitch, (594,76) to (784,360) - and is drawn as six carcases with a padded vertical rule
-  between the two columns, but the cells never press. A vertical drag ratchets the list: 56 px
+- **The Pad is one rectangle.** It fills the DJ block's footprint - (594,76) to (784,360) - with
+  opaque 0xFF00FF, the owner's marker for the touch area, and the whole rectangle is the one
+  surface; the block's six cells are not drawn in the mode. A vertical drag ratchets the list: 56 px
   of travel per row at rest, each step instant, and the list rests only on row boundaries. A
   fast drag multiplies the rows per 56 px in the stages the accelerated-scrolling patent
   describes (1x/2x/4x, with a speed threshold and a duration hysteresis); the constants are
