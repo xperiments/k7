@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" viewBox="0 0 800 480" role="img" aria-labelledby="full-title full-desc">
+  <title id="full-title">xtape cassette screen - Bare, full size</title>
+  <desc id="full-desc">The cassette at its resting 800x480 pose, with a representative playing frame: its two frames, the tape packs with their rings, the two strands, rollers and bottom run, the two hubs and the VU meter in the right hub. This is the Bare Level at scale 256.</desc>
+  <!--
+    Vector of the current cassette screen, drawn on the 800x480 design grid.
+    Source: cassette_layout.c, cassette_tapes.c, cassette_meter.c,
+    cassette_buttons.c and cassette_style.c. Sample playing frame:
+    position 350/1000 -> pack fills 678/402,
+    pack diameters 308/260 px,
+    hub frames 5/13 of 36, VU L/R 0.22/0.15.
+    Pose: scale 256/256, offset (0, 0).
+  -->
+  <rect width="800" height="480" fill="#111111"/>
+  <g id="cassette-frames">
+    <rect x="16.5" y="16.5" width="767" height="359" rx="15.5" fill="#111111" stroke="#301206" stroke-width="1"/>
+    <rect x="122.5" y="122.5" width="555" height="167" rx="15.5" fill="#111111" stroke="#301206" stroke-width="1"/>
+  </g>
+  <g id="cassette-packs">
+    <g id="cassette-pack-0">
+      <circle cx="210" cy="206" r="154" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="210" cy="206" r="146" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="210" cy="206" r="138" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="210" cy="206" r="130" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="210" cy="206" r="122" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="210" cy="206" r="114" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="210" cy="206" r="106" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="210" cy="206" r="98" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="210" cy="206" r="90" fill="none" stroke="#C0481B" stroke-width="1"/>
+    </g>
+    <g id="cassette-pack-1">
+      <circle cx="594" cy="206" r="130" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="594" cy="206" r="122" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="594" cy="206" r="114" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="594" cy="206" r="106" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="594" cy="206" r="98" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="594" cy="206" r="90" fill="none" stroke="#C0481B" stroke-width="1"/>
+    </g>
+  </g>
+  <g id="cassette-rollers">
+    <circle cx="39" cy="431" r="18.5" fill="none" stroke="#C0481B" stroke-width="1"/>
+    <circle cx="761" cy="431" r="18.5" fill="none" stroke="#C0481B" stroke-width="1"/>
+  </g>
+  <g id="cassette-run">
+    <line x1="39" y1="450" x2="761" y2="450" stroke="#C0481B" stroke-width="2" stroke-linecap="butt"/>
+  </g>
+  <g id="cassette-strands">
+    <polyline points="58,183 20,428 20,431 20,435 21,438 23,441 25,443 27,446 30,448 33,449 36,450 39,450" fill="none" stroke="#C0481B" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round"/>
+    <polyline points="721,176 779,427 780,430 780,433 779,437 778,440 776,443 774,445 771,447 768,449 764,450 761,450" fill="none" stroke="#C0481B" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round"/>
+  </g>
+  <g id="cassette-hubs">
+    <g id="cassette-hub-0">
+      <circle cx="210" cy="206" r="83" fill="#180903" stroke="#F15A22" stroke-width="2"/>
+      <line x1="252" y1="155" x2="256" y2="151" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
+      <line x1="168" y1="257" x2="164" y2="261" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
+    </g>
+    <g id="cassette-hub-1">
+      <circle cx="594" cy="206" r="83" fill="#180903" stroke="#F15A22" stroke-width="2"/>
+      <line x1="552" y1="155" x2="548" y2="151" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
+      <line x1="636" y1="257" x2="640" y2="261" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
+    </g>
+  </g>
+  <g id="cassette-meter" transform="translate(546 158)">
+    <rect x="0" y="47" width="96" height="1" fill="#7F2C18"/>
+    <rect x="18" y="22" width="28" height="4" rx="2" fill="#F15A22"/>
+    <rect x="18" y="70" width="28" height="4" rx="2" fill="#F15A22"/>
+    <rect x="50" y="22" width="26" height="4" rx="2" fill="#F15A22"/>
+    <rect x="50" y="70" width="26" height="4" rx="2" fill="#F15A22"/>
+    <circle cx="48" cy="48" r="47" fill="none" stroke="#F15A22" stroke-width="2"/>
+  </g>
+</svg>

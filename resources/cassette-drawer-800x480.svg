@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" viewBox="0 0 800 480" role="img" aria-labelledby="drawer-title drawer-desc">
+  <title id="drawer-title">xtape cassette screen - transport drawer open</title>
+  <desc id="drawer-desc">The same cassette and playing frame at the 160/256 pose the transport drawer asks for, with the 120 px left-edge drawer open and its three line-art buttons P, R and W.</desc>
+  <!--
+    Vector of the current cassette screen, drawn on the 800x480 design grid.
+    Source: cassette_layout.c, cassette_tapes.c, cassette_meter.c,
+    cassette_buttons.c and cassette_style.c. Sample playing frame:
+    position 350/1000 -> pack fills 678/402,
+    pack diameters 308/260 px,
+    hub frames 5/13 of 36, VU L/R 0.22/0.15.
+    Pose: scale 160/256, offset (0, 0).
+  -->
+  <rect width="800" height="480" fill="#111111"/>
+  <g id="cassette-frames">
+    <rect x="160.5" y="100.5" width="479" height="224" rx="9.5" fill="#111111" stroke="#301206" stroke-width="1"/>
+    <rect x="226.5" y="166.5" width="346" height="104" rx="9.5" fill="#111111" stroke="#301206" stroke-width="1"/>
+  </g>
+  <g id="cassette-packs">
+    <g id="cassette-pack-0">
+      <circle cx="281" cy="218" r="96" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="281" cy="218" r="91" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="281" cy="218" r="86" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="281" cy="218" r="81" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="281" cy="218" r="76" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="281" cy="218" r="71" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="281" cy="218" r="66" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="281" cy="218" r="61" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="281" cy="218" r="56" fill="none" stroke="#C0481B" stroke-width="1"/>
+    </g>
+    <g id="cassette-pack-1">
+      <circle cx="521" cy="218" r="81" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="521" cy="218" r="76" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="521" cy="218" r="71" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="521" cy="218" r="66" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="521" cy="218" r="61" fill="none" stroke="#C0481B" stroke-width="1"/>
+      <circle cx="521" cy="218" r="56" fill="none" stroke="#C0481B" stroke-width="1"/>
+    </g>
+  </g>
+  <g id="cassette-rollers">
+    <circle cx="174" cy="360" r="10.5" fill="none" stroke="#C0481B" stroke-width="1"/>
+    <circle cx="625" cy="360" r="10.5" fill="none" stroke="#C0481B" stroke-width="1"/>
+  </g>
+  <g id="cassette-run">
+    <line x1="174" y1="371" x2="625" y2="371" stroke="#C0481B" stroke-width="2" stroke-linecap="butt"/>
+  </g>
+  <g id="cassette-strands">
+    <polyline points="186,204 163,358 163,360 163,362 164,364 165,366 166,367 167,369 169,370 170,370 172,371 174,371" fill="none" stroke="#C0481B" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round"/>
+    <polyline points="600,200 636,358 636,360 636,361 635,363 635,365 634,367 632,368 631,369 629,370 627,371 625,371" fill="none" stroke="#C0481B" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round"/>
+  </g>
+  <g id="cassette-hubs">
+    <g id="cassette-hub-0">
+      <circle cx="281.5" cy="218.5" r="51.5" fill="#180903" stroke="#F15A22" stroke-width="2"/>
+      <line x1="307" y1="187" x2="310" y2="184" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
+      <line x1="255" y1="249" x2="252" y2="252" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
+    </g>
+    <g id="cassette-hub-1">
+      <circle cx="521.5" cy="218.5" r="51.5" fill="#180903" stroke="#F15A22" stroke-width="2"/>
+      <line x1="495" y1="187" x2="492" y2="184" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
+      <line x1="547" y1="249" x2="550" y2="252" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
+    </g>
+  </g>
+  <g id="cassette-meter" transform="translate(491 188)">
+    <rect x="0" y="29" width="60" height="1" fill="#7F2C18"/>
+    <rect x="11" y="13" width="17" height="2" rx="1" fill="#F15A22"/>
+    <rect x="11" y="43" width="17" height="2" rx="1" fill="#F15A22"/>
+    <rect x="31" y="13" width="16" height="2" rx="1" fill="#F15A22"/>
+    <rect x="31" y="43" width="16" height="2" rx="1" fill="#F15A22"/>
+    <circle cx="30" cy="30" r="29" fill="none" stroke="#F15A22" stroke-width="2"/>
+  </g>
+  <g id="drawer">
+    <g id="button-p">
+      <rect x="13" y="85" width="94" height="94" rx="7" fill="none" stroke="#F15A22" stroke-width="2"/>
+      <circle cx="60" cy="132" r="31" fill="none" stroke="#F15A22" stroke-width="2"/>
+      <path transform="translate(50.23 143.5)" d="M3.996 0Q3.24 0 3.24-0.756V-22.032Q3.24-22.788 3.996-22.788H12.42Q15.426-22.788 16.947-21.267Q18.468-19.746 18.468-16.74V-15.66Q18.468-12.672 16.947-11.142Q15.426-9.612 12.42-9.612H4.752V-0.756Q4.752 0 3.996 0ZM4.752-11.124H12.42Q14.778-11.124 15.867-12.222Q16.956-13.32 16.956-15.66V-16.74Q16.956-19.098 15.867-20.187Q14.778-21.276 12.42-21.276H4.752Z" fill="#F15A22"/>
+    </g>
+    <g id="button-r">
+      <rect x="13" y="193" width="94" height="94" rx="7" fill="none" stroke="#F15A22" stroke-width="2"/>
+      <circle cx="60" cy="240" r="31" fill="none" stroke="#F15A22" stroke-width="2"/>
+      <path transform="translate(49.52 251.5)" d="M18.936 0.036Q18.612 0.216 18.351 0.162Q18.09 0.108 17.892-0.18L11.88-9.612H4.752V-0.756Q4.752 0 3.996 0Q3.24 0 3.24-0.756V-22.032Q3.24-22.788 3.996-22.788H12.42Q15.426-22.788 16.947-21.267Q18.468-19.746 18.468-16.74V-15.66Q18.468-12.996 17.253-11.493Q16.038-9.99 13.644-9.684L19.152-1.008Q19.584-0.342 18.936 0.036ZM4.752-11.124H12.42Q14.778-11.124 15.867-12.222Q16.956-13.32 16.956-15.66V-16.74Q16.956-19.098 15.867-20.187Q14.778-21.276 12.42-21.276H4.752Z" fill="#F15A22"/>
+    </g>
+    <g id="button-w">
+      <rect x="13" y="301" width="94" height="94" rx="7" fill="none" stroke="#F15A22" stroke-width="2"/>
+      <circle cx="60" cy="348" r="31" fill="none" stroke="#F15A22" stroke-width="2"/>
+      <path transform="translate(44.87 359.5)" d="M8.118 0Q7.524 0 7.362-0.54L0.378-21.78Q0.27-22.104 0.468-22.446Q0.666-22.788 1.098-22.788Q1.368-22.788 1.557-22.653Q1.746-22.518 1.818-22.248L8.406-2.232H7.974L14.202-22.248Q14.292-22.554 14.553-22.689Q14.814-22.824 15.102-22.824Q15.408-22.824 15.669-22.689Q15.93-22.554 16.002-22.248L22.23-2.232H21.798L28.386-22.248Q28.476-22.518 28.656-22.653Q28.836-22.788 29.106-22.788Q29.646-22.788 29.79-22.446Q29.934-22.104 29.826-21.78L22.842-0.54Q22.68 0 22.05 0H21.978Q21.348 0 21.186-0.54L14.886-20.736H15.318L9.018-0.54Q8.91-0.162 8.676-0.081Q8.442 0 8.118 0Z" fill="#F15A22"/>
+    </g>
+  </g>
+</svg>
