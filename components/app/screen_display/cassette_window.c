@@ -15,11 +15,11 @@
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 
-/* The owner's geometry: 470x284 at (110,76). The top and bottom edges share the bands'
- * lines and the sides sit in the gaps either side of the scaled tape. */
+/* The owner's geometry: 478x284 at (110,76) - 38 px either side of the tape, whose centre
+ * is the window's. The top and bottom edges share the bands' lines. */
 #define WINDOW_X        110
 #define WINDOW_Y        76
-#define WINDOW_W        470
+#define WINDOW_W        478
 #define WINDOW_H        284
 
 /* The drawer buttons' corner and the carcases' 2 px stroke: the three rectangles and the

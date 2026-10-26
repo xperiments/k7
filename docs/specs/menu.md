@@ -40,8 +40,8 @@ The Menu draws inside the controls' existing frame; it adds no rectangle.
 | Screen | 0, 0 | 800x480 | the panel |
 | Back cover | 16, 16 | 768x448 | the dark ground under the white page's margin |
 | Header band | 16, 6 | 768x71 | carries the K7 mark and the list's title |
-| **Menu page** | 110, 76 | 470x284 | the existing window; 2 px border, 8 px corner; inner 466x280; its fill is the Page's colour while the Menu is up and `k_col_bg` otherwise |
-| **Rows** | 112, 78 | 466x56 each | five of them, exactly filling the inner page |
+| **Menu page** | 110, 76 | 478x284 | the existing window, 38 px either side of the tape; 2 px border, 8 px corner; inner 474x280; its fill is the Page's colour while the Menu is up and `k_col_bg` otherwise |
+| **Rows** | 112, 78 | 474x56 each | five of them, exactly filling the inner page |
 | Footer band | 16, 359 | 768x115 | now playing on the left, the band's position on the right |
 | Drawer buttons | 16, 76/170/264 | 96x96 each | P, `<`, `>` |
 | **Pad** | 593, 76 | 191x284 | the DJ block's footprint: six 96x96 cells at a 94 px pitch |
@@ -50,11 +50,11 @@ Row internals, relative to the row:
 
 | Part | x | notes |
 |---|---|---|
-| Band | 2 | inset 2 px on every side, 462x52, radius 8, the selected row's own fill |
+| Band | 2 | inset 2 px on every side, 470x52, radius 8, the selected row's own fill |
 | Icon | 16 | 24x24 from the icon font, vertically centred |
 | Label | 56 | Jura 28, vertically centred, at most 300 px (240 on a value row), ellipsized |
 | Playing dot | 364 | 6 px, centred vertically, the row's own ink |
-| Chevron or value | right, inset 16 | Jura 28; `>` for a list, the value for a setting (capped at 150 px), nothing for an action; the right edge is at 450 |
+| Chevron or value | right, inset 16 | Jura 28; `>` for a list, the value for a setting (capped at 150 px), nothing for an action; the right edge is at 458 |
 
 The header title is Jura 36 at x=104 (18 px clear of the 75 px K7 mark) and vertically centred.
 The footer's first line (the song) is Jura 28 at (24, 20), the second (the group) at (24, 54);
