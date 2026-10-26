@@ -1,15 +1,15 @@
 # The Menu is a Controls mode, and its pad is one plate that ratchets
 
-**Amended by the owner:** the Pad is one opaque 0xFF00FF rectangle over the block's footprint,
-a marker for the touch area, not a drawing of the block's six cells. The footprint, the
-ratchet and the tap are unchanged.
+**Amended by the owner:** the Pad is a white plate with a dark inner and three dotted guides
+inside it, not a drawing of the block's six cells; it began as one 0xFF00FF marker. The
+footprint, the ratchet and the tap are unchanged.
 
 The controls already close a frame around the cassette, and the owner wanted a menu reachable
 from the M cell without losing that frame. The decision is a **Menu mode of the Controls**,
 opened by M, that turns the cassette area into a five-row list and the DJ block into a
-**Pad** - one 0xFF00FF rectangle over the block's place - that ratchets the list a row at a
-time and activates the band on a tap. The rectangle is the owner's marker for the touch area,
-not the block's six cells.
+**Pad** - a white plate with a dark inner and dotted guides, over the block's place - that
+ratchets the list a row at a time and activates the band on a tap. The plate is the touch
+area; its inner and guides are decoration, not the block's six cells.
 
 ## Decision
 
@@ -29,17 +29,20 @@ not the block's six cells.
   hidden for the Menu's lifetime, so the 40 ms reel tick has nothing to invalidate and nothing
   redraws under the text. The Cover's wish is never touched: hiding the container is not a way
   off the page, so closing the Menu gives the Cover back exactly as it was.
-- **The frame is the existing window.** 485x284 at (110,76), its right edge tucked 1 px under the Pad's first cell, with a 2 px
-  border and 8 px corner, whose top and bottom edges are the bands' lines; its inner 481x280
-  holds five 56 px rows.
+- **The frame is the existing window.** 486x284 at (110,76), its right edge meeting the Pad at
+  596, with a 2 px border and an 8 px corner, whose top and bottom edges are the bands' lines;
+  its inner 482x280 holds five 56 px rows.
   No new rectangle is drawn; the window's own fill is recoloured to the page's while the Menu is
   up, because outside it the window is `k_col_bg` on both pages (the cassette stands on it).
 - **The bands carry the location and the now playing.** The header band (768x71 at (16,6))
   carries the list's title and keeps the K7 mark; the footer band (768x115 at (16,359)) carries
   the now playing - song then group - and the band's position in the current list on the right.
-- **The Pad is one rectangle.** It fills the DJ block's footprint - (594,76) to (784,360) - with
-  opaque 0xFF00FF and an 8 px corner, the owner's marker for the touch area, and the whole
-  rectangle is the one surface; the block's six cells are not drawn in the mode. A vertical drag ratchets the list: 56 px
+- **The Pad is one plate.** It sits inside the DJ block's place - (596,76) to (782,360) - as a
+  white plate with an 8 px corner, a dark inner inset 8 px with the same corner, and three
+  dotted guides inside the inner (two verticals 20 px either side of its centre, inset 20 px
+  from the top and bottom; one horizontal on its centre line, inset 20 px from the sides). The
+  whole plate is the one surface; the inner and the guides are decorative, and the block's six
+  cells are not drawn in the mode. A vertical drag ratchets the list: 56 px
   of travel per row at rest, each step instant, and the list rests only on row boundaries. A
   fast drag multiplies the rows per 56 px in the stages the accelerated-scrolling patent
   describes (1x/2x/4x, with a speed threshold and a duration hysteresis); the constants are

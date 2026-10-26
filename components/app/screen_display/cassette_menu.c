@@ -53,13 +53,35 @@ static const char *TAG = "menu";
 #define MENU_ROW_DOT_X 364
 #define MENU_ROW_DOT_D 6
 
-/* The Pad owns the DJ block's footprint. It is one opaque 0xFF00FF rectangle - the owner's
- * marker for the touch area - not a drawing of the block's six cells. */
+/* The Pad sits inside the DJ block's place: a white plate (k_col_white) with a dark inner
+ * (k_col_bg) inset 8 px, and three dotted guides inside the inner. Its left edge meets the
+ * window's right edge at x=596. */
 #define PAD_X 596
 #define PAD_Y 76
 #define PAD_W 186
 #define PAD_H 284
-#define PAD_FILL 0xFF00FF
+#define PAD_INSET 8
+
+/* The inner plate, and the guides: two dotted verticals 20 px either side of its centre,
+ * inset 20 px from its top and bottom, and one dotted horizontal on its centre line,
+ * inset 20 px from its sides. */
+#define PAD_INNER_W (PAD_W - 2 * PAD_INSET)
+#define PAD_INNER_H (PAD_H - 2 * PAD_INSET)
+#define PAD_GUIDE_INSET 20
+#define PAD_GUIDE_X0 (PAD_INNER_W / 2 - PAD_GUIDE_INSET)
+#define PAD_GUIDE_X1 (PAD_INNER_W / 2 + PAD_GUIDE_INSET)
+#define PAD_GUIDE_Y  (PAD_INNER_H / 2)
+#define PAD_GUIDE_TOP PAD_GUIDE_INSET
+#define PAD_GUIDE_BOT (PAD_INNER_H - PAD_GUIDE_INSET)
+#define PAD_GUIDE_LEFT PAD_GUIDE_INSET
+#define PAD_GUIDE_RIGHT (PAD_INNER_W - PAD_GUIDE_INSET)
+
+/* lv_line keeps the caller's points, so they are static and constant. */
+static const lv_point_precise_t k_pad_guides[3][2] = {
+    { { PAD_GUIDE_X0, PAD_GUIDE_TOP }, { PAD_GUIDE_X0, PAD_GUIDE_BOT } },
+    { { PAD_GUIDE_X1, PAD_GUIDE_TOP }, { PAD_GUIDE_X1, PAD_GUIDE_BOT } },
+    { { PAD_GUIDE_LEFT, PAD_GUIDE_Y }, { PAD_GUIDE_RIGHT, PAD_GUIDE_Y } },
+};
 
 /* A tap is a press that never travelled this far; the pad's ratchet owns everything else. */
 #define PAD_TAP_SLOP 8
@@ -423,14 +445,13 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     }
     lv_obj_set_hidden(s_page, true);
 
-    /* The Pad: one opaque magenta rectangle over the block's place, rounded by the chrome's
-     * 8 px. It marks the touch area the owner asked to see; the six carcases it replaces are
-     * not drawn in the mode. */
+    /* The Pad: the owner's white plate with a dark inner, over the block's place. The six
+     * carcases it replaces are not drawn in the mode. */
     s_pad = lv_obj_create(screen);
     lv_obj_remove_style_all(s_pad);
     lv_obj_set_pos(s_pad, PAD_X, PAD_Y);
     lv_obj_set_size(s_pad, PAD_W, PAD_H);
-    lv_obj_set_style_bg_color(s_pad, lv_color_hex(PAD_FILL), 0);
+    lv_obj_set_style_bg_color(s_pad, k_col_white, 0);
     lv_obj_set_style_bg_opa(s_pad, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_pad, 0, 0);
     lv_obj_set_style_radius(s_pad, 8, 0);
@@ -439,6 +460,35 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     lv_obj_set_clickable(s_pad, true);
     lv_obj_set_gesture_bubble(s_pad, false);
     lv_obj_add_event_cb(s_pad, pad_event_cb, LV_EVENT_ALL, NULL);
+
+    /* The inner plate: the dark ground the guides sit on. It is decorative, so a press on
+     * it (or on a guide) falls through to the Pad and ratchets the list. */
+    lv_obj_t *inner = lv_obj_create(s_pad);
+    lv_obj_remove_style_all(inner);
+    lv_obj_set_pos(inner, PAD_INSET, PAD_INSET);
+    lv_obj_set_size(inner, PAD_INNER_W, PAD_INNER_H);
+    lv_obj_set_style_bg_color(inner, k_col_bg, 0);
+    lv_obj_set_style_bg_opa(inner, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(inner, 0, 0);
+    lv_obj_set_style_radius(inner, PAD_INSET, 0);
+    lv_obj_set_style_pad_all(inner, 0, 0);
+    lv_obj_set_scrollable(inner, false);
+    lv_obj_set_clickable(inner, false);
+
+    /* The guides: dotted, light on the dark inner. */
+    for (int i = 0; i < 3; i++) {
+        lv_obj_t *line = lv_line_create(inner);
+        lv_obj_remove_style_all(line);
+        lv_obj_set_pos(line, 0, 0);
+        lv_obj_set_style_line_width(line, 2, 0);
+        lv_obj_set_style_line_color(line, k_col_white, 0);
+        lv_obj_set_style_line_opa(line, LV_OPA_COVER, 0);
+        lv_obj_set_style_line_rounded(line, true, 0);
+        lv_obj_set_style_line_dash_width(line, 2, 0);
+        lv_obj_set_style_line_dash_gap(line, 4, 0);
+        lv_obj_set_clickable(line, false);
+        lv_line_set_points(line, k_pad_guides[i], 2);
+    }
     lv_obj_set_hidden(s_pad, true);
 
     s_model = menu_new();

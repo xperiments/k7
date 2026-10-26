@@ -40,21 +40,21 @@ The Menu draws inside the controls' existing frame; it adds no rectangle.
 | Screen | 0, 0 | 800x480 | the panel |
 | Back cover | 16, 16 | 768x448 | the dark ground under the white page's margin |
 | Header band | 16, 6 | 768x71 | carries the K7 mark and the list's title |
-| **Menu page** | 110, 76 | 485x284 | the existing window; its right edge tucks 1 px under the Pad's first cell; 2 px border, 8 px corner; inner 481x280; its fill is the Page's colour while the Menu is up and `k_col_bg` otherwise |
-| **Rows** | 112, 78 | 481x56 each | five of them, exactly filling the inner page |
+| **Menu page** | 110, 76 | 486x284 | the existing window; its right edge meets the Pad at 596; 2 px border, 8 px corner; inner 482x280; its fill is the Page's colour while the Menu is up and `k_col_bg` otherwise |
+| **Rows** | 112, 78 | 482x56 each | five of them, exactly filling the inner page |
 | Footer band | 16, 359 | 768x115 | now playing on the left, the band's position on the right |
 | Drawer buttons | 16, 76/170/264 | 96x96 each | P, `<`, `>` |
-| **Pad** | 594, 76 | 190x284 | one 0xFF00FF rectangle, 8 px corner, over the DJ block's footprint |
+| **Pad** | 596, 76 | 186x284 | a white plate with a dark inner inset 8 px, and three dotted guides, inside the DJ block's place |
 
 Row internals, relative to the row:
 
 | Part | x | notes |
 |---|---|---|
-| Band | 2 | inset 2 px on every side, 477x52, radius 8, the selected row's own fill |
+| Band | 2 | inset 2 px on every side, 478x52, radius 8, the selected row's own fill |
 | Icon | 16 | 24x24 from the icon font, vertically centred |
 | Label | 56 | Jura 28, vertically centred, at most 300 px (240 on a value row), ellipsized |
 | Playing dot | 364 | 6 px, centred vertically, the row's own ink |
-| Chevron or value | right, inset 16 | Jura 28; `>` for a list, the value for a setting (capped at 150 px), nothing for an action; the right edge is at 465 |
+| Chevron or value | right, inset 16 | Jura 28; `>` for a list, the value for a setting (capped at 150 px), nothing for an action; the right edge is at 466 |
 
 The header title is Jura 36 at x=104 (18 px clear of the 75 px K7 mark) and vertically centred.
 The footer's first line (the song) is Jura 28 at (24, 20), the second (the group) at (24, 54);
@@ -116,10 +116,14 @@ MENU
 
 ## The Pad
 
-One opaque rectangle filled **0xFF00FF**, with the chrome's 8 px corner, over the block's
-footprint - the owner's marker for the touch area - and the whole rectangle is the one surface. The six carcases it replaces are
-not drawn in the mode: the view draws this rectangle itself and hides the DJ block, so the Pad
-owns no part of the block's object tree.
+A white plate (`k_col_white`, 8 px corner) over the block's place, with a dark inner
+(`k_col_bg`) inset 8 px and rounded by the same 8 px, and three dotted guides inside the inner:
+two verticals 20 px either side of its centre, inset 20 px from its top and bottom, and one
+horizontal on its centre line, inset 20 px from its sides. The guides are `lv_line` objects:
+2 px wide, a 2 px dash and a 4 px gap, rounded, in `k_col_white`. The whole plate is the one
+surface - the inner and the guides are decorative, so a press on them falls through to it - and
+the six carcases it replaces are not drawn in the mode: the view draws the plate and hides the
+DJ block, so the Pad owns no part of the block's object tree.
 
 - A **vertical drag** ratchets the list. At rest, **56 px of travel is one row**; a step is
   instant and the list rests only on row boundaries. A fast drag multiplies the rows per 56 px in

@@ -197,9 +197,10 @@ while it is up the other swipes and the two-finger gesture do nothing. Its **Men
 _Avoid_: screen, level, sheet, overlay, iPod menu
 
 **Pad**:
-The DJ block's footprint (190x284) as one touch surface while the **Menu** is up, drawn as one
-opaque 0xFF00FF rectangle with an 8 px corner - the owner's marker for the area - rather than
-the block's six cells.
+The DJ block's place (186x284, 2 px in from the block on each side) as one touch surface while
+the **Menu** is up: a white plate with a dark inner inset 8 px and three dotted guides inside
+it, rather than the block's six cells. The inner and the guides are decoration; the plate is
+the surface.
 A vertical drag ratchets the list one row per 56 px of travel and rests only on row boundaries;
 a tap that never became a drag activates the **Band**.
 _Avoid_: D-pad, keypad, touch buttons

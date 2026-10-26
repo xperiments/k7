@@ -3,7 +3,7 @@
  * cassette_window - the frame around the cassette on the controls screen.
  *
  * The header and the footer close the controls screen across the top and the bottom; this
- * is the window between the drawer and the DJ block: 485x284 at (110,76), its top and
+ * is the window between the drawer and the DJ block: 486x284 at (110,76), its top and
  * bottom edges on the same lines as the bands and its sides in the gaps either side of the
  * scaled tape, so the three rectangles make one frame around the picture.
  *
@@ -49,7 +49,7 @@ void cassette_window_set_shown(bool shown);
  * 2 px border, the 8 px corner and the fade/shown state are untouched. */
 void cassette_window_set_menu_page(bool on, bool white);
 
-/* The window's geometry in screen coordinates - (110,76) and 485x284 - so the Menu does
+/* The window's geometry in screen coordinates - (110,76) and 486x284 - so the Menu does
  * not keep a second copy of it. Any pointer may be NULL. */
 void cassette_window_rect(int *x, int *y, int *w, int *h);
 

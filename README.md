@@ -664,7 +664,7 @@ superseded by ADR 0019 for the screens; the cover's new home is
 **The Menu is the M cell's.** A tap on M, with the controls out, opens a mode of the
 controls on either page: the cassette area becomes the window's five-row page - Tracks,
 Browse, Shuffle and Settings, with Settings holding Backlight, Station, Library, Rescan and
-About - the block gives way to one Pad (a single 0xFF00FF rectangle, rounded by 8 px, marking the touch area)
+About - the block gives way to one Pad (a white plate with a dark inner and dotted guides, marking the touch area)
 and the drawer becomes Back/Enter/Close. A vertical drag
 on the Pad ratchets the band one row per 56 px, and a faster drag 2x or 4x; a tap that never
 became a drag activates it and the up swipe closes the mode. The cassette container is
