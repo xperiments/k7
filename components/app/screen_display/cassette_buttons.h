@@ -20,6 +20,13 @@
  * plus the button's action: < calls mini_icecast_prev(), > calls mini_icecast_skip(); P
  * is still a placeholder. These two are the transport's next/previous now.
  *
+ * Every button carries its own cap - the face and the letter of the disc on the white page -
+ * so the three can differ from each other; cassette_buttons_set_cap() changes one at a time,
+ * and the drawer starts all three in the palette's neutral grey and black. The dark page is
+ * not the caps': it is the palette's line art, the playing red ring and letter, the same for
+ * every button, and the rectangle keeps the palette's carcase ink on both pages. Both states
+ * of a button share its cap; only the ring's weight differs.
+ *
  * Private to screen_display, created above the peek in the child order. Every object
  * is built under the LVGL lock. The drawer and each button bubble gestures so a swipe
  * that starts on them still reaches screen_input's handler on the screen, and bubble
@@ -29,6 +36,8 @@
 #include <stdbool.h>
 
 #include "lvgl.h"
+
+#include "cassette_widgets.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,8 +52,18 @@ extern "C" {
  * drawer, or to give the cassette back to the peek. `ctx` is the value given to create(). */
 typedef void (*cassette_buttons_room_cb_t)(bool shown, void *ctx);
 
+/* The three buttons, in the order they are stacked in the drawer - the character each one
+ * shows, which is also the action it runs. */
+typedef enum {
+    CASSETTE_BUTTON_P = 0,
+    CASSETTE_BUTTON_PREV,
+    CASSETTE_BUTTON_SKIP,
+    CASSETTE_BUTTON_COUNT
+} cassette_button_id_t;
+
 /* Build the hidden drawer and its three buttons as children of `screen`, above whatever
- * exists when this is called. `room` is optional. */
+ * exists when this is called. `room` is optional. Every button starts with the palette's
+ * default cap: k_col_dome for the face and k_col_bg for the letter on it. */
 void cassette_buttons_create(lv_obj_t *screen, cassette_buttons_room_cb_t room, void *ctx);
 
 /* Slide the drawer in (true) or out (false). A call while the other slide is running
@@ -56,13 +75,21 @@ void cassette_buttons_set_shown(bool shown);
 bool cassette_buttons_is_shown(void);
 
 /* Paint the page's style into all three buttons (both states). On the dark page it is the
- * line art: the rectangle filled k_col_bg, the circle and its letter the playing red. On the
- * white page the rectangle is filled k_col_white, the letter is k_col_bg (black), and the
- * circle is a dome - a flat disc (no gradient) between a transparent wrapper that carries the
- * broad shadow and the disc's own tight one, falling on the rectangle as a bezel, with no ring
- * (LVGL shadows are outer-only and one per object; see cassette_circle_face()). The view
- * calls it from its page flip. */
+ * palette's line art and nothing else: the rectangle filled k_col_bg, the playing red ring and
+ * the playing red letter, whatever the caps say. On the white page the rectangle is filled
+ * k_col_white and the disc is the button's cap - a flat fill of its face (no gradient) between
+ * a transparent wrapper that carries the broad shadow and the disc's own tight one, falling on
+ * the rectangle as a bezel (LVGL shadows are outer-only and one per object; see
+ * cassette_circle_face()) - with the letter drawn on it in the cap's letter colour. The cap's
+ * rim is k_col_dome's original grey at CASSETTE_CAP_RIM_W, so a coloured cap reads as a disc
+ * let into it. The view calls it from its page flip. */
 void cassette_buttons_set_page(bool white);
+
+/* Give one button - both of its states - its own cap, and repaint it for the page the drawer
+ * is on. The two colours are independent: `face` is the white page's disc and `letter` the
+ * character on it. The dark page ignores them; it stays the palette's line art. A button that
+ * has not been built yet is left alone. */
+void cassette_buttons_set_cap(cassette_button_id_t id, cassette_cap_t cap);
 
 /* Put the drawer back on top of the screen's child order. The peek is the only sibling
  * it competes with; the view still calls this where it used to re-raise the drawer. */

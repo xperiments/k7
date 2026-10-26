@@ -5,7 +5,7 @@
 
 const lv_color_t k_col_bg         = COL_HEX(COL_BLACK);
 const lv_color_t k_col_white      = COL_HEX(COL_WHITE);
-const lv_color_t k_col_glass      = COL_DARKEN_HEX(COL_WHITE,64);
+const lv_color_t k_col_glass      = COL_DARKEN_HEX(COL_WHITE,96);
 const lv_color_t k_col_tape_dark  = COL_HEX(COL_PRIMARY);
 const lv_color_t k_col_tape       = COL_HEX(COL_PRIMARY);
 const lv_color_t k_col_hub_ring   = COL_DARKEN_HEX(COL_PRIMARY, 20);
@@ -30,3 +30,9 @@ const lv_color_t k_col_paper      = COL_HEX(COL_BLACK);
 const lv_color_t k_col_primary    = COL_HEX(COL_PRIMARY);
 const lv_color_t k_col_button_rect    = COL_DARKEN_HEX(COL_PRIMARY, 40);
 const lv_color_t k_col_button_circle    = COL_HEX(COL_PRIMARY);
+const lv_color_t k_col_button_letter    = COL_HEX(COL_PRIMARY);
+const lv_color_t k_col_button_r    = COL_HEX(0xAA2200);
+const lv_color_t k_col_dome        = COL_HEX(0x929292);
+const lv_color_t k_col_button_white  = COL_HEX(0xEEEEEE);
+const lv_color_t k_col_knob_cap       = COL_HEX(0x383838);
+const lv_color_t k_col_knob_rect      = COL_HEX(0x727272);

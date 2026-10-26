@@ -244,8 +244,10 @@ static void knob_build(lv_obj_t *cell, int slot)
 /* The M and R cells: the drawer's buttons, moved to the block. Each is the 64 px circle
  * and one letter in Jura 36 - the same circle, corner and inks as the left drawer - with the
  * drawer's two prebuilt states, a 2 px circle and a 3 px one, so a press costs a visibility
- * swap and no style write. The cell itself is the rectangle; its carcase is shared with the
- * block and does not thicken, so the pressed look is the circle's ring. Neither has an
+ * swap and no style write. Each carries its own cap like a drawer button: the dark page draws
+ * both in the palette's playing red like everything else there, and the white page gives M the
+ * black disc and R its own deeper red. The cell itself is the rectangle; its carcase is shared
+ * with the block and does not thicken, so the pressed look is the circle's ring. Neither has an
  * action yet: a click pulses the cell, as P does on the left. */
 #define TEXT_BUTTONS 2
 #define TEXT_RING_UNPRESSED 2
@@ -255,11 +257,14 @@ typedef struct {
     lv_obj_t *ambient[2];  /* the transparent circle carrying the broad shadow */
     lv_obj_t *circle[2];   /* 0 = unpressed, 1 = pressed */
     lv_obj_t *letter[2];
+    cassette_cap_t cap;    /* the white page's colours; the dark page is the palette's line art */
 } eq_text_button_t;
 
 static eq_text_button_t s_text[TEXT_BUTTONS];
+static bool s_white;   /* the page the block is painted for, so a re-ink can repaint it */
 
-/* One state: the circle at the cell's inset and the letter inside it. */
+/* One state: the circle at the cell's inset and the letter inside it, both in the palette's
+ * line art - the dark page the block is built on. */
 static void text_state_build(lv_obj_t *cell, const char *text, int ring_w, bool hidden,
                              lv_obj_t **ambient_out, lv_obj_t **circle_out,
                              lv_obj_t **letter_out)
@@ -271,7 +276,7 @@ static void text_state_build(lv_obj_t *cell, const char *text, int ring_w, bool 
                                            CIRCLE_D, CIRCLE_D, CIRCLE_R,
                                            k_col_bg, LV_OPA_TRANSP, k_col_button_circle,
                                            ring_w);
-    lv_obj_t *letter = cassette_text(circle, &jura_36, k_col_button_circle,
+    lv_obj_t *letter = cassette_text(circle, &jura_36, k_col_button_letter,
                                      LV_ALIGN_CENTER, 0, 0);
     lv_label_set_text(letter, text);
     lv_obj_set_hidden(ambient, hidden);
@@ -280,13 +285,39 @@ static void text_state_build(lv_obj_t *cell, const char *text, int ring_w, bool 
     *letter_out = letter;
 }
 
-static void text_button_build(lv_obj_t *cell, int slot, const char *text)
+static void text_button_build(lv_obj_t *cell, int slot, const char *text, cassette_cap_t cap)
 {
     eq_text_button_t *b = &s_text[slot - SLOT_M];
+    b->cap = cap;
     text_state_build(cell, text, TEXT_RING_UNPRESSED, false,
                      &b->ambient[0], &b->circle[0], &b->letter[0]);
     text_state_build(cell, text, TEXT_RING_PRESSED, true,
                      &b->ambient[1], &b->circle[1], &b->letter[1]);
+}
+
+/* Paint one text button - both of its states - for the page, as the drawer's buttons are
+ * painted: the dark page is the palette's line art - the playing red ring at the width that
+ * state was built with and the playing red letter, whatever the cap says; the white page is the
+ * button's cap, its rim the original grey at CASSETTE_CAP_RIM_W and the letter on it in the
+ * cap's colour. */
+static void text_button_page(eq_text_button_t *b, bool white)
+{
+    for (int k = 0; k < 2; k++) {
+        if (b->circle[k]) {
+            cassette_circle_face(b->ambient[k], b->circle[k], white, b->cap.face);
+            if (white) {
+                lv_obj_set_style_border_width(b->circle[k], CASSETTE_CAP_RIM_W, 0);
+                lv_obj_set_style_border_color(b->circle[k], k_col_dome, 0);
+            } else {
+                lv_obj_set_style_border_width(b->circle[k],
+                                              k ? TEXT_RING_PRESSED : TEXT_RING_UNPRESSED, 0);
+                lv_obj_set_style_border_color(b->circle[k], k_col_button_circle, 0);
+            }
+        }
+        if (b->letter[k])
+            lv_obj_set_style_text_color(b->letter[k],
+                                        white ? b->cap.letter : k_col_button_letter, 0);
+    }
 }
 
 /* Swap a text button's two states. */
@@ -666,16 +697,24 @@ void cassette_eq_create(lv_obj_t *parent)
     s_slide_offset = EQ_SLIDE_OFFSET;
     s_open_timer = NULL;
     s_reset_click = false;
+    s_white = false;
     s_value[SLOT_GAIN] = 50;   /* 0 dB, the same neutral as the three bands */
     s_value[SLOT_HI] = 50;
     s_value[SLOT_MED] = 50;
     s_value[SLOT_LOW] = 50;
 
+    /* M's and R's caps, built here because the k_col_* colours are objects, not constant
+     * expressions a file-scope initialiser could use. They are the white page's only - the dark
+     * page draws both in the palette's playing red, like the drawer's three. M's cap is the
+     * page's black and R's its own deeper red, and the letter on each is white. */
+    cassette_cap_t m_cap = { k_col_bg, k_col_button_white };
+    cassette_cap_t r_cap = { k_col_button_r, k_col_button_white };
+
     for (int slot = 0; slot < SLOT_COUNT; slot++) {
         lv_obj_t *cell = cell_create(parent, slot);
         if (slot < KNOB_SLOTS) knob_build(cell, slot);
-        else if (slot == SLOT_M) text_button_build(cell, slot, "M");
-        else text_button_build(cell, slot, "R");
+        else if (slot == SLOT_M) text_button_build(cell, slot, "M", m_cap);
+        else text_button_build(cell, slot, "R", r_cap);
         lv_obj_set_hidden(cell, true);
     }
     big_build(parent);
@@ -729,40 +768,46 @@ void cassette_eq_raise(void)
 }
 
 /* The white page paints the four knobs the way it paints the drawer's buttons: the 44 px
- * circle becomes the dome - a flat light-grey disc with a soft lower-right shadow, no ring -
- * while the crown, the stick and the carcases keep their inks. M and R take the same face,
- * as they have the same circles. */
+ * circle becomes the cap - a flat disc with a soft lower-right shadow, no rim - while the
+ * crown and the stick keep their inks, except the four knobs' cells: those are the knob plate
+ * here - filled k_col_knob_rect with a k_col_bg border, so no carcase line runs round a knob -
+ * where M's and R's keep the page's fill and the drawer's border. The knobs' cap is
+ * k_col_knob_cap, much darker than the buttons' k_col_dome, so a knob does not read as a
+ * button; M and R take their own caps. The dark page is the palette's line art throughout,
+ * every cell filled k_col_bg and bordered with the drawer's ink. */
 void cassette_eq_set_page(bool white)
 {
-    lv_color_t ink = white ? k_col_white : k_col_bg;
+    s_white = white;
+    lv_color_t page = white ? k_col_white : k_col_bg;
     for (int slot = 0; slot < SLOT_COUNT; slot++) {
-        if (s_cell[slot]) lv_obj_set_style_bg_color(s_cell[slot], ink, 0);
+        if (!s_cell[slot]) continue;
+        /* The four knobs' cells are the knob plate on the white page only: filled
+         * k_col_knob_rect and bordered k_col_bg, so no carcase line runs round a knob. M's and
+         * R's keep the page's fill and the drawer's border, and the dark page is the line art,
+         * every cell filled k_col_bg and bordered with the drawer's ink. */
+        bool plate = white && slot < KNOB_SLOTS;
+        lv_obj_set_style_bg_color(s_cell[slot], plate ? k_col_knob_rect : page, 0);
+        lv_obj_set_style_border_color(s_cell[slot],
+                                      plate ? k_col_bg : k_col_button_rect, 0);
     }
     for (int slot = 0; slot < KNOB_SLOTS; slot++) {
         if (!s_circle[slot]) continue;
-        cassette_circle_face(s_ambient[slot], s_circle[slot], white);
+        cassette_circle_face(s_ambient[slot], s_circle[slot], white, k_col_knob_cap);
         lv_obj_set_style_border_width(s_circle[slot], white ? 0 : 2, 0);
         if (!white) lv_obj_set_style_border_color(s_circle[slot], k_col_button_circle, 0);
     }
 
-    /* M and R: the dome and the black letter on the white page, the line art and the
-     * playing red on the dark one - the drawer buttons' treatment. Each state keeps its own
-     * ring width for the dark page. */
-    for (int i = 0; i < TEXT_BUTTONS; i++) {
-        for (int k = 0; k < 2; k++) {
-            lv_obj_t *circle = s_text[i].circle[k];
-            if (circle) {
-                cassette_circle_face(s_text[i].ambient[k], circle, white);
-                lv_obj_set_style_border_width(circle, white ? 0 : (k ? TEXT_RING_PRESSED
-                                                                    : TEXT_RING_UNPRESSED), 0);
-                if (!white)
-                    lv_obj_set_style_border_color(circle, k_col_button_circle, 0);
-            }
-            if (s_text[i].letter[k])
-                lv_obj_set_style_text_color(s_text[i].letter[k],
-                                            white ? k_col_bg : k_col_button_circle, 0);
-        }
-    }
+    /* M and R: the drawer buttons' treatment, from their own caps. */
+    for (int i = 0; i < TEXT_BUTTONS; i++) text_button_page(&s_text[i], white);
+}
+
+void cassette_eq_set_cap(cassette_eq_button_t id, cassette_cap_t cap)
+{
+    if ((unsigned)id >= CASSETTE_EQ_BUTTON_COUNT) return;
+    eq_text_button_t *b = &s_text[id];
+    if (!b->circle[0]) return;
+    b->cap = cap;
+    text_button_page(b, s_white);
 }
 
 bool cassette_eq_is_editing(void)

@@ -38,7 +38,6 @@ static const char *TAG = "screen";
 #define PANEL_H 480
 #define PANEL_HIDDEN_X (-PANEL_W)
 
-#define BUTTON_COUNT 3
 #define BUTTON_W 96
 #define BUTTON_H 96
 #define BUTTON_R 8
@@ -51,7 +50,7 @@ static const char *TAG = "screen";
 #define CIRCLE_R (CIRCLE_D / 2)
 #define CIRCLE_INSET ((BUTTON_W - CIRCLE_D) / 2)
 
-/* The rectangle and the circle have their own inks (k_col_button_rect and
+/* The rectangle and the disc keep the palette's inks on the dark page (k_col_button_rect and
  * k_col_button_circle); the pressed state keeps them with a heavier line. */
 #define BUTTON_BORDER_W 2
 #define BUTTON_BORDER_W_PRESSED 3
@@ -63,14 +62,15 @@ static const char *TAG = "screen";
 #define BUTTON_PULSE_MS 160
 
 /* One state of a button: the 96x96 wrapper that is shown or hidden, and the three parts the
- * page paints - the rectangle's opaque fill, the circle and its letter, which go black on
- * the white page. */
+ * page paints - the rectangle's opaque fill, the disc and its letter, which the dark page
+ * draws in the button's own inks. */
 typedef struct {
     lv_obj_t *state;
     lv_obj_t *fill;
     lv_obj_t *ambient;   /* the transparent circle that carries the broad shadow */
     lv_obj_t *circle;    /* the disc: fill, ring, contact shadow, and the letter */
     lv_obj_t *letter;
+    cassette_cap_t cap;   /* the white page's colours; the dark page is the palette's line art */
     int border_w;        /* the ring the dark page draws; the white page's dome has none */
 } cassette_button_state_t;
 
@@ -78,12 +78,13 @@ typedef struct {
     lv_obj_t *root;
     cassette_button_state_t unpressed;
     cassette_button_state_t pressed;
-    int action;      /* 0 = P (placeholder), 1 = prev, 2 = skip */
+    cassette_button_id_t id;   /* which button this is - the character, and the action it runs */
 } cassette_button_t;
 
 static lv_obj_t *s_panel;
-static cassette_button_t s_buttons[BUTTON_COUNT];
+static cassette_button_t s_buttons[CASSETTE_BUTTON_COUNT];
 static bool s_shown;
+static bool s_white;   /* the page the buttons are painted for, so a re-ink can repaint them */
 static cassette_buttons_room_cb_t s_room;
 static void *s_room_ctx;
 
@@ -157,18 +158,18 @@ static void button_clicked_cb(lv_event_t *e)
     lv_indev_t *indev = lv_indev_active();
     if (indev && (lv_indev_get_gesture_dir(indev) != LV_DIR_NONE ||
                   lv_indev_get_press_moved(indev))) return;
-    if (b->action == 1) mini_icecast_prev();
-    else if (b->action == 2) mini_icecast_skip();
+    if (b->id == CASSETTE_BUTTON_PREV) mini_icecast_prev();
+    else if (b->id == CASSETTE_BUTTON_SKIP) mini_icecast_skip();
     button_pulse(b->root);
 }
 
-/* One state: the rounded rectangle, the circle at its centre and the letter inside the
- * circle. Both states of a button are built by this function, so their geometry cannot
- * drift apart; the rectangle's ink and the circle's ink (which is also the letter's) are
- * separate arguments, and only the border weight and the initial visibility differ. */
+/* One state: the rounded rectangle, the disc at its centre and the letter inside the disc.
+ * Both states of a button are built by this function, so their geometry cannot drift apart;
+ * the line art is the palette's (built here, for the dark page it starts on), the cap is the
+ * button's own for the white page, and only the border weight and the initial visibility
+ * differ. */
 static void button_state_create(lv_obj_t *parent, cassette_button_state_t *out,
-                                const char *text, lv_color_t rect_ink, lv_color_t circle_ink,
-                                int border_w, bool hidden)
+                                const char *text, cassette_cap_t cap, int border_w, bool hidden)
 {
     lv_obj_t *state = lv_obj_create(parent);
     lv_obj_remove_style_all(state);
@@ -181,9 +182,10 @@ static void button_state_create(lv_obj_t *parent, cassette_button_state_t *out,
     lv_obj_set_clickable(state, false);
 
     out->state = state;
+    out->cap = cap;
     out->border_w = border_w;
     out->fill = cassette_border_box(state, 0, 0, BUTTON_W, BUTTON_H, BUTTON_R,
-                                    k_col_bg, LV_OPA_COVER, rect_ink, border_w);
+                                    k_col_bg, LV_OPA_COVER, k_col_button_rect, border_w);
     /* The dome is two circles: this transparent one carries the broad shadow, the one inside
      * it is the disc. On the dark page both are invisible and the disc is the line art. */
     out->ambient = cassette_border_box(state, CIRCLE_INSET, CIRCLE_INSET,
@@ -191,8 +193,10 @@ static void button_state_create(lv_obj_t *parent, cassette_button_state_t *out,
                                        k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
     lv_obj_t *circle = cassette_border_box(out->ambient, 0, 0,
                                            CIRCLE_D, CIRCLE_D, CIRCLE_R,
-                                           circle_ink, LV_OPA_TRANSP, circle_ink, border_w);
-    lv_obj_t *letter = cassette_text(circle, &jura_36, circle_ink, LV_ALIGN_CENTER, 0, 0);
+                                           k_col_button_circle, LV_OPA_TRANSP,
+                                           k_col_button_circle, border_w);
+    lv_obj_t *letter = cassette_text(circle, &jura_36, k_col_button_letter,
+                                     LV_ALIGN_CENTER, 0, 0);
     lv_label_set_text(letter, text);
     out->circle = circle;
     out->letter = letter;
@@ -200,9 +204,9 @@ static void button_state_create(lv_obj_t *parent, cassette_button_state_t *out,
     lv_obj_set_hidden(state, hidden);
 }
 
-static void button_create(lv_obj_t *parent, int index, const char *text, int y)
+static void button_create(lv_obj_t *parent, cassette_button_id_t id, const char *text, int y)
 {
-    cassette_button_t *b = &s_buttons[index];
+    cassette_button_t *b = &s_buttons[id];
     lv_obj_t *root = lv_obj_create(parent);
     lv_obj_remove_style_all(root);
     lv_obj_set_pos(root, BUTTON_X, y);
@@ -221,12 +225,15 @@ static void button_create(lv_obj_t *parent, int index, const char *text, int y)
     lv_obj_set_gesture_bubble(root, true);
     lv_obj_set_event_bubble(root, true);
 
+    /* The palette's default cap, given to both states; a caller may change a button's
+     * afterwards with cassette_buttons_set_cap(). Built here rather than as a file-scope
+     * constant because the k_col_* colours are objects, not constant expressions. */
+    cassette_cap_t cap = { k_col_dome, k_col_bg };
+
     b->root = root;
-    b->action = index;
-    button_state_create(root, &b->unpressed, text, k_col_button_rect, k_col_button_circle,
-                        BUTTON_BORDER_W, false);
-    button_state_create(root, &b->pressed, text, k_col_button_rect, k_col_button_circle,
-                        BUTTON_BORDER_W_PRESSED, true);
+    b->id = id;
+    button_state_create(root, &b->unpressed, text, cap, BUTTON_BORDER_W, false);
+    button_state_create(root, &b->pressed, text, cap, BUTTON_BORDER_W_PRESSED, true);
 
     lv_obj_add_event_cb(root, button_pressed_cb, LV_EVENT_PRESSED, b);
     lv_obj_add_event_cb(root, button_released_cb, LV_EVENT_RELEASED, b);
@@ -278,6 +285,7 @@ void cassette_buttons_create(lv_obj_t *screen, cassette_buttons_room_cb_t room, 
     s_room = room;
     s_room_ctx = ctx;
     s_shown = false;
+    s_white = false;
 
     s_panel = lv_obj_create(screen);
     lv_obj_remove_style_all(s_panel);
@@ -296,9 +304,10 @@ void cassette_buttons_create(lv_obj_t *screen, cassette_buttons_room_cb_t room, 
     lv_obj_set_event_bubble(s_panel, true);
     lv_obj_set_hidden(s_panel, true);
 
-    static const char *const labels[] = { "P", "<", ">" };
-    for (int i = 0; i < BUTTON_COUNT; i++)
-        button_create(s_panel, i, labels[i], BUTTON_TOP + i * (BUTTON_H + BUTTON_GAP));
+    static const char *const labels[CASSETTE_BUTTON_COUNT] = { "P", "<", ">" };
+    for (int i = 0; i < CASSETTE_BUTTON_COUNT; i++)
+        button_create(s_panel, (cassette_button_id_t)i, labels[i],
+                      BUTTON_TOP + i * (BUTTON_H + BUTTON_GAP));
 }
 
 void cassette_buttons_set_shown(bool shown)
@@ -310,28 +319,46 @@ void cassette_buttons_set_shown(bool shown)
     ESP_LOGI(TAG, "buttons %s", shown ? "shown" : "hidden");
 }
 
-/* One state's page inks: the rectangle's fill, the letter, and the circle's face. The white
- * page takes the circle to the dome (cassette_circle_face) with no ring and the letter to
- * black; the dark page keeps the line art, the playing red ring at the width this state was
- * built with, and the matching letter. */
+/* One state's page: the rectangle's fill, the disc's face and the letter's. The white page is
+ * the button's cap - the disc's face in the cap's colour, the rim the original dome grey at
+ * CASSETTE_CAP_RIM_W, the letter on it in the cap's letter colour. The dark page is the
+ * palette's line art and nothing else: the playing red ring at the width this state was built
+ * with and the playing red letter, the same for every button. */
 static void button_state_page(cassette_button_state_t *s, bool white)
 {
     if (s->fill) lv_obj_set_style_bg_color(s->fill, white ? k_col_white : k_col_bg, 0);
     if (s->letter)
-        lv_obj_set_style_text_color(s->letter, white ? k_col_bg : k_col_button_circle, 0);
+        lv_obj_set_style_text_color(s->letter, white ? s->cap.letter : k_col_button_letter, 0);
     if (!s->circle) return;
 
-    cassette_circle_face(s->ambient, s->circle, white);
-    lv_obj_set_style_border_width(s->circle, white ? 0 : s->border_w, 0);
-    if (!white) lv_obj_set_style_border_color(s->circle, k_col_button_circle, 0);
+    cassette_circle_face(s->ambient, s->circle, white, s->cap.face);
+    if (white) {
+        lv_obj_set_style_border_width(s->circle, CASSETTE_CAP_RIM_W, 0);
+        lv_obj_set_style_border_color(s->circle, k_col_dome, 0);
+    } else {
+        lv_obj_set_style_border_width(s->circle, s->border_w, 0);
+        lv_obj_set_style_border_color(s->circle, k_col_button_circle, 0);
+    }
 }
 
 void cassette_buttons_set_page(bool white)
 {
-    for (int i = 0; i < BUTTON_COUNT; i++) {
+    s_white = white;
+    for (int i = 0; i < CASSETTE_BUTTON_COUNT; i++) {
         button_state_page(&s_buttons[i].unpressed, white);
         button_state_page(&s_buttons[i].pressed, white);
     }
+}
+
+void cassette_buttons_set_cap(cassette_button_id_t id, cassette_cap_t cap)
+{
+    if ((unsigned)id >= CASSETTE_BUTTON_COUNT) return;
+    cassette_button_t *b = &s_buttons[id];
+    if (!b->root) return;
+    b->unpressed.cap = cap;
+    b->pressed.cap = cap;
+    button_state_page(&b->unpressed, s_white);
+    button_state_page(&b->pressed, s_white);
 }
 
 bool cassette_buttons_is_shown(void)

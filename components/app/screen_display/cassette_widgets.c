@@ -3,14 +3,13 @@
  */
 #include "cassette_widgets.h"
 
-/* The dome's ink and its two shadows. LVGL draws one shadow per object, so the face is a
- * pair: the broad ambient shadow on the transparent wrapper, the tight contact shadow on the
- * disc itself. The broad one is the owner's tuned 24 px at a 2/5 px offset, 60 %; the contact
- * one is 8 px at a 1/2 px offset, which darkens the edge with its whole blur inside the 96 px
- * bezel (it reaches x=85, y=86; the broad one reaches x=94, its faint tail a couple of px past
- * the bezel's bottom). Each has its own colour so a tinted second shadow is a one-line
- * change. */
-#define DOME_HEX        0x929292
+/* The dome's two shadows; its face is the caller's colour. LVGL draws one shadow per object,
+ * so the face is a pair: the broad ambient shadow on the transparent wrapper, the tight
+ * contact shadow on the disc itself. The broad one is the owner's tuned 24 px at a 2/5 px
+ * offset, 60 %; the contact one is 8 px at a 1/2 px offset, which darkens the edge with its
+ * whole blur inside the 96 px bezel (it reaches x=85, y=86; the broad one reaches x=94, its
+ * faint tail a couple of px past the bezel's bottom). Each has its own colour so a tinted
+ * second shadow is a one-line change. */
 #define AMBIENT_HEX     0x000000
 #define AMBIENT_W       24
 #define AMBIENT_DX      2
@@ -81,7 +80,7 @@ lv_obj_t *cassette_image(lv_obj_t *parent, const lv_image_dsc_t *src,
     return o;
 }
 
-void cassette_circle_face(lv_obj_t *ambient, lv_obj_t *dome, bool white)
+void cassette_circle_face(lv_obj_t *ambient, lv_obj_t *dome, bool white, lv_color_t face)
 {
     if (white) {
         if (ambient) {
@@ -94,7 +93,7 @@ void cassette_circle_face(lv_obj_t *ambient, lv_obj_t *dome, bool white)
         }
         if (dome) {
             lv_obj_set_style_bg_opa(dome, LV_OPA_COVER, 0);
-            lv_obj_set_style_bg_color(dome, lv_color_hex(DOME_HEX), 0);
+            lv_obj_set_style_bg_color(dome, face, 0);
             lv_obj_set_style_shadow_color(dome, lv_color_hex(CONTACT_HEX), 0);
             lv_obj_set_style_shadow_opa(dome, CONTACT_OPA, 0);
             lv_obj_set_style_shadow_width(dome, CONTACT_W, 0);

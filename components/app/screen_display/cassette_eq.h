@@ -5,7 +5,9 @@
  * Six 96 px cells in two touching columns, the same carcase as the left drawer's
  * buttons: the first column holds GAIN above M and R, the second the HI, MED and LOW
  * knobs. M and R are the drawer's buttons moved here - the same 64 px circle, Jura 36
- * letter, two pressed states and click pulse - with no action yet. Each knob is a 44 px
+ * letter, two pressed states and click pulse - with no action yet; each carries its own cap
+ * too, and R is the one button whose white-page disc is not a grey (`0xAA2200`). Each knob is
+ * a 44 px
  * circle (30% smaller), a 24-dot crown outside it at r=32, and a line from the centre
  * towards the rim (the owner's tuned 4 px width). 0 dB is at twelve o'clock, the right
  * side cuts and the left side boosts. The next/previous controls are the left drawer's
@@ -32,12 +34,23 @@
  */
 #include "lvgl.h"
 
+#include "cassette_widgets.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/* The block's two text buttons, in the order they sit: M above R. */
+typedef enum {
+    CASSETTE_EQ_BUTTON_M = 0,
+    CASSETTE_EQ_BUTTON_R,
+    CASSETTE_EQ_BUTTON_COUNT
+} cassette_eq_button_t;
+
 /* Build the block on `parent` (the screen), hidden. Call once, after the Levels and the
- * drawer. */
+ * drawer. On the dark page all of them - the four knobs and M and R - are the palette's playing
+ * red line art. On the white page M's cap is k_col_bg (black) and R's k_col_button_r
+ * (0xAA2200), and both letters on those caps are k_col_button_white. */
 void cassette_eq_create(lv_obj_t *parent);
 
 /* Show or hide the block with the transport drawer, sliding from the right edge. Hiding
@@ -50,10 +63,19 @@ void cassette_eq_raise(void);
 
 /* Paint the page's style into the block: the six cells' opaque fill (k_col_white or
  * k_col_bg, so the tape does not show through the block), and on the white page the four
- * knobs' and M's and R's circles as domes - a flat disc with the two shadows, no ring - by
- * way of cassette_circle_face(); their letters go k_col_bg (black). The dark page keeps the
- * line-art circles and the playing red. */
+ * knobs' and M's and R's circles as caps - a flat disc with the two shadows, by way of
+ * cassette_circle_face(): the knobs in k_col_knob_cap (much darker, so a knob does not read as
+ * a button, and with no rim), M in k_col_bg (black), R in its own red, with M's and R's 4 px
+ * rim in k_col_dome's original grey (CASSETTE_CAP_RIM_W) so each reads as a disc let into it.
+ * M's and R's letters on the white page are k_col_button_white, and the four knobs' cells are
+ * the knob plate here: filled k_col_knob_rect, bordered k_col_bg. The dark page is the palette's
+ * line art throughout - the playing red rings and letters, every cell filled k_col_bg and
+ * bordered with the drawer's ink - whatever the caps say. */
 void cassette_eq_set_page(bool white);
+
+/* Give M or R - both of its states - its own cap, like a drawer button's: the white page's
+ * disc and the letter on it. The dark page ignores it and stays the palette's line art. */
+void cassette_eq_set_cap(cassette_eq_button_t id, cassette_cap_t cap);
 
 /* True while a knob is in edit mode. The overlay owns the touch; the view must drop every
  * screen intent, including the two-finger VU the touch adapter reports directly. */

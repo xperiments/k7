@@ -72,7 +72,33 @@ extern const lv_color_t k_col_art_bg;
 extern const lv_color_t k_col_paper;
 extern const lv_color_t k_col_primary;
 
-/* The left drawer's line art: the carcase rectangle and the inner circle are coloured
- * separately. */
+/* The left drawer's line art: the carcase rectangle, the inner disc and the letter inside it
+ * are coloured separately, so a button's inks can be set one at a time
+ * (cassette_buttons_set_cap()). These two are the dark page's line art, the same for the
+ * drawer's three buttons and for the DJ block's M and R; the white page's cap defaults to
+ * k_col_dome and its letter to k_col_bg, further down. */
 extern const lv_color_t k_col_button_rect;
 extern const lv_color_t k_col_button_circle;
+extern const lv_color_t k_col_button_letter;
+
+/* The DJ block's R button, the one button whose white page disc is not a grey: its own deeper
+ * red, on the cap only. The dark page draws it in k_col_button_circle like every other. */
+extern const lv_color_t k_col_button_r;
+
+/* The cap the white page draws in the disc's place: the neutral grey every button starts in.
+ * It is also, always, the 4 px inset rim of that cap (CASSETTE_CAP_RIM_W), which is why a
+ * coloured cap still shows the original grey at its edge. */
+extern const lv_color_t k_col_dome;
+
+/* The light ink a letter takes when it sits on a coloured cap. k_col_white is 0x909090, which
+ * is the page's own white but reads as grey over a saturated face; this one reads white. */
+extern const lv_color_t k_col_button_white;
+
+/* The four EQ knobs' cap on the white page: much darker than the buttons' k_col_dome, so a
+ * knob does not read as a button. The knobs have no rim and no ink of their own. */
+extern const lv_color_t k_col_knob_cap;
+
+/* The four knobs' cell on the white page: the plate's fill, with k_col_bg for its border, so
+ * no carcase line runs round a knob. M's and R's cells keep the page's fill and the drawer's
+ * border. */
+extern const lv_color_t k_col_knob_rect;
