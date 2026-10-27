@@ -6,9 +6,9 @@
 
 #include "lvgl.h"
 
-#define HEADER_LOGO_W 75
-#define HEADER_LOGO_H 40
-#define HEADER_LOGO_STRIDE 76
+#define HEADER_LOGO_W 60
+#define HEADER_LOGO_H 32
+#define HEADER_LOGO_STRIDE 60
 #define HEADER_LOGO_BYTES (HEADER_LOGO_STRIDE * HEADER_LOGO_H)
 
 /* The K7 mark as an A8 mask: the firmware tints it with the page's ink and

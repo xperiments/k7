@@ -36,3 +36,4 @@ const lv_color_t k_col_dome        = COL_HEX(0x929292);
 const lv_color_t k_col_button_white  = COL_HEX(0xEEEEEE);
 const lv_color_t k_col_knob_cap       = COL_HEX(0x383838);
 const lv_color_t k_col_knob_rect      = COL_HEX(0x727272);
+const lv_color_t k_col_logo_back      = COL_DARKEN_HEX(COL_PRIMARY, 85);

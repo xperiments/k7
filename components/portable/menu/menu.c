@@ -21,10 +21,10 @@
 
 #define MENU_EM_DASH "\xe2\x80\x94" /* "nothing known", the same glyph About uses */
 
-/* The ratchet: 56 px per row at rest, then 2x and 4x while the finger is fast.
- * A stage is held for MENU_STAGE_HOLD_MS after the speed drops so a stutter mid-drag
- * does not drop the multiplier. */
-#define MENU_RATCHET_PX     56
+/* The ratchet: 54 px per row at rest - the rows are 53-54 px tall (docs/specs/menu.md) -
+ * then 2x and 4x while the finger is fast. A stage is held for MENU_STAGE_HOLD_MS after the
+ * speed drops so a stutter mid-drag does not drop the multiplier. */
+#define MENU_RATCHET_PX     54
 #define MENU_SPEED_STAGE2   1200u /* px/s */
 #define MENU_SPEED_STAGE4   2400u /* px/s */
 #define MENU_STAGE_HOLD_MS  150u

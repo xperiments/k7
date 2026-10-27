@@ -201,8 +201,10 @@ The DJ block's place (186x284, 2 px in from the block on each side) as one touch
 the **Menu** is up: a white plate with a dark inner inset 8 px and one dotted vertical guide
 inside it, rather than the block's six cells. The inner and the guides are decoration; the plate is
 the surface.
-A vertical drag ratchets the list one row per 56 px of travel and rests only on row boundaries;
-a tap that never became a drag activates the **Band**.
+A vertical drag ratchets the list one row per 54 px of travel and rests only on row boundaries;
+a tap that never became a drag activates the **Band**, and a leftward swipe as long as the
+screen's own gesture limit is Back: up one **Menu list**, and out of the Menu at the root. The
+press takes one axis, so a swipe never ratchets and a drag never goes Back.
 _Avoid_: D-pad, keypad, touch buttons
 
 **Band**:
@@ -221,7 +223,7 @@ _Avoid_: menu page, menu screen, level, sheet
 
 **Row**:
 One line of a **Menu list**: its icon, its label and, on the right, a chevron when it opens
-another list or a value when it shows a setting. Five rows fill the page between the bands. A
+another list or a value when it shows a setting. Five rows share the page's 6 px inset. A
 row is never a touch target: only the **Pad** activates the **Band**.
 _Avoid_: item, entry, cell
 

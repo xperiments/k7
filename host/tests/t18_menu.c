@@ -1111,7 +1111,7 @@ static void test_band_window(void)
     menu_free(m);
 }
 
-/* The ratchet's pinned constants: 56 px/row at rest, 2x at 1200 px/s, 4x at
+/* The ratchet's pinned constants: 54 px/row at rest, 2x at 1200 px/s, 4x at
  * 2400 px/s, and a 150 ms hold before the stage drops back. */
 static void test_ratchet(void)
 {
@@ -1119,41 +1119,41 @@ static void test_ratchet(void)
     menu_t *m = menu_open_with(g_many_lib, &facts);
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Tracks row pushes the Playlist");
 
-    /* One row per 56 px at rest, and only whole rows. menu_position() is the
+    /* One row per 54 px at rest, and only whole rows. menu_position() is the
      * absolute 1-based row, so it is what a ratchet assertion wants. */
-    menu_drag(m, 55, 200);
-    CHECK_EQ(menu_position(m), 1, "55 px is not yet a row");
+    menu_drag(m, 53, 200);
+    CHECK_EQ(menu_position(m), 1, "53 px is not yet a row");
     menu_drag(m, 1, 200);
-    CHECK_EQ(menu_position(m), 2, "the 56th pixel is a row");
-    menu_drag(m, 112, 1000);
-    CHECK_EQ(menu_position(m), 4, "a slow drag of 112 px is two rows");
+    CHECK_EQ(menu_position(m), 2, "the 54th pixel is a row");
+    menu_drag(m, 108, 1000);
+    CHECK_EQ(menu_position(m), 4, "a slow drag of 108 px is two rows");
 
     /* A direction change drops the partial row. */
     menu_drag(m, 40, 1000);
     CHECK_EQ(menu_position(m), 4, "40 px of travel is partial");
     menu_drag(m, -20, 1000);
     CHECK_EQ(menu_position(m), 4, "the direction change resets the partial travel");
-    menu_drag(m, -36, 1000);
-    CHECK_EQ(menu_position(m), 3, "-56 px from the reset is one row up");
+    menu_drag(m, -34, 1000);
+    CHECK_EQ(menu_position(m), 3, "-54 px from the reset is one row up");
 
     /* dt = 0 must not divide by zero, and still ratchets. */
-    menu_drag(m, 56, 0);
+    menu_drag(m, 54, 0);
     CHECK_EQ(menu_position(m), 4, "dt 0 still steps a whole row");
 
     /* 2x while fast. */
-    menu_drag(m, 112, 50); /* 2240 px/s */
-    CHECK_EQ(menu_position(m), 8, "2x is 28 px per row");
+    menu_drag(m, 108, 50); /* 2160 px/s */
+    CHECK_EQ(menu_position(m), 8, "2x is 27 px per row");
 
     /* 4x while faster. */
-    menu_drag(m, 112, 20); /* 5600 px/s */
-    CHECK_EQ(menu_position(m), 16, "4x is 14 px per row");
+    menu_drag(m, 104, 20); /* 5200 px/s */
+    CHECK_EQ(menu_position(m), 16, "4x is 13 px per row");
 
     /* The stage is held for 150 ms after the speed drops. */
-    menu_drag(m, 14, 100); /* 140 px/s, still 4x, 14 px = one row */
+    menu_drag(m, 13, 100); /* 130 px/s, still 4x, 13 px = one row */
     CHECK_EQ(menu_position(m), 17, "the 4x stage survives 100 ms of slow travel");
-    menu_drag(m, 14, 100); /* 200 ms of slow travel: the stage drops to 1x */
-    CHECK_EQ(menu_position(m), 17, "back at 1x, 14 px is not a row");
-    menu_drag(m, 42, 1000); /* 14 + 42 = 56 px at 1x */
+    menu_drag(m, 13, 100); /* 200 ms of slow travel: the stage drops to 1x */
+    CHECK_EQ(menu_position(m), 17, "back at 1x, 13 px is not a row");
+    menu_drag(m, 41, 1000); /* 13 + 41 = 54 px at 1x */
     CHECK_EQ(menu_position(m), 18, "the rest of the row completes at 1x");
 
     menu_free(m);
@@ -1303,7 +1303,7 @@ static void test_version(void)
     CHECK_EQ(menu_version(m), v1, "the same rows and title do not bump");
 
     /* A partial row moves nothing on screen. */
-    menu_drag(m, 55, 1000);
+    menu_drag(m, 53, 1000);
     CHECK_EQ(menu_version(m), v1, "a partial row does not bump");
 
     menu_drag(m, 1, 1000);

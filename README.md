@@ -582,10 +582,10 @@ while they slide over it - as are the drawer's buttons and the DJ block's cells 
 slide in with the rest of the chrome, the header down from above the panel and the footer up
 from below it, over the drawer's 260 ms ease-out and back out the same way. A third rectangle, the
 470x284 window at (110,76), frames the tape in the same ink and fades in and out over the
-same time. The header also carries the K7 mark (`assets/labels/k7b.png`, 75x40) above the P
-button, centred on the button column and on the band: it is an A8 mask tinted `COL_PRIMARY`
-on the dark page and black (`k_col_bg`) on the white one, so it flips with the page and
-slides with the header. The
+same time. The header also carries the K7 mark (`assets/labels/k7b.png`, 60x32) in a rounded
+96x71 badge at (16,6): the palette's primary with a light mark on the dark page, a white plate
+with `k_col_bg` border and mark on the white one, so it flips with the page and slides with the
+header. The
 cassette enters at full scale; while the controls are out it scales to 134/256 (148..550),
 so the 120 px drawer on the left and the 192 px DJ block on the right both have room. A
 left swipe restores the full view. The drawer's three line-art buttons (P, `<`, `>`) each
@@ -666,8 +666,9 @@ controls on either page: the cassette area becomes the window's five-row page - 
 Browse, Shuffle and Settings, with Settings holding Backlight, Station, Library, Rescan and
 About - the block gives way to one Pad (a white plate with a dark inner and a dotted vertical guide, marking the touch area)
 and the drawer becomes Back/Enter/Close. A vertical drag
-on the Pad ratchets the band one row per 56 px, and a faster drag 2x or 4x; a tap that never
-became a drag activates it and the up swipe closes the mode. The cassette container is
+on the Pad ratchets the band one row per 54 px, and a faster drag 2x or 4x; a tap that never
+became a drag activates it, a leftward swipe is the drawer's Back, and the up swipe closes the
+mode. The cassette container is
 hidden for the mode's lifetime, so the reel tick costs nothing and the Cover comes back
 untouched. The model is portable (`components/portable/menu`, host test `t18_menu`);
 `cassette_menu.c` draws it. Shuffle toggles the broadcast's shuffle mode (ADR 0023) and

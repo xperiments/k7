@@ -21,8 +21,9 @@ the acceleration thresholds, and the five icon glyphs that are not drawn yet.
   cassette has settled at the 134/256 pose, and not while a knob is in edit mode. On the white
   page and on the dark one alike.
 - **Modal**: while it is up, the only live inputs are the Pad and the drawer's three buttons; the
-  rows and the page take no touches. A down swipe or either horizontal swipe does nothing; the
-  two-finger VU gesture is ignored; the block's cells take no touches.
+  rows and the page take no touches. A down swipe or either horizontal swipe on the screen does
+  nothing - a leftward swipe on the Pad is its Back; the two-finger VU gesture is ignored; the
+  block's cells take no touches.
 - Closed by an **up swipe**, by **P** at any depth, or by **`<`** from the root. Its **Menu list**
   and **Band** are remembered until the app restarts, so the next M returns where it left.
 - Appears and disappears in **one frame**. The cassette container - tape, hubs, meter, glow and
@@ -39,9 +40,10 @@ The Menu draws inside the controls' existing frame; it adds no rectangle.
 |---|---|---|---|
 | Screen | 0, 0 | 800x480 | the panel |
 | Back cover | 16, 16 | 768x448 | the dark ground under the white page's margin |
-| Header band | 16, 6 | 768x71 | carries the K7 mark and the list's title |
-| **Menu page** | 110, 76 | 486x284 | the existing window; its right edge meets the Pad at 596; 2 px border, 8 px corner; inner 482x280; its fill is the Page's colour while the Menu is up and `k_col_bg` otherwise |
-| **Rows** | 112, 78 | 482x56 each | five of them, exactly filling the inner page |
+| **K7 badge** | 16, 6 | 96x71 | a rounded plate holding the K7 mark; its right border is the divider, so the band's left border tucks under it |
+| Header band | 110, 6 | 674x71 | the list's title |
+| **Menu page** | 110, 76 | 486x284 | the existing window; its right edge meets the Pad at 596; 2 px border, 8 px corner; inner 482x280 with a 6 px inset for the rows; its fill is the Page's colour while the Menu is up and `k_col_bg` otherwise |
+| **Rows** | 118, 84 | 470x53-54 each | five of them, inside the page's 6 px inset; they share its 268 px equally, so their edges round to whole pixels (54, 53, 54, 53, 54) |
 | Footer band | 16, 359 | 768x115 | now playing on the left, the band's position on the right |
 | Drawer buttons | 16, 76/170/264 | 96x96 each | P, `<`, `>` |
 | **Pad** | 596, 76 | 186x284 | a white plate with a dark inner inset 8 px, and one dotted vertical guide, inside the DJ block's place |
@@ -50,13 +52,13 @@ Row internals, relative to the row:
 
 | Part | x | notes |
 |---|---|---|
-| Band | 2 | inset 2 px on every side, 478x52, radius 8, the selected row's own fill |
+| Band | 2 | inset 2 px on every side, 466x50 (49 on a 53 px row), radius 8, the selected row's own fill |
 | Icon | 16 | 24x24 from the icon font, vertically centred |
 | Label | 56 | Jura 28, vertically centred, at most 400 px (340 on a value row), ellipsized |
 | Playing dot | 364 | 6 px, centred vertically, the row's own ink |
-| Chevron or value | right, inset 16 | Jura 28; `>` for a list, the value for a setting (capped at 150 px), nothing for an action; the right edge is at 466 |
+| Chevron or value | right, inset 16 | Jura 28; `>` for a list, the value for a setting (capped at 150 px), nothing for an action; the right edge is at 460 |
 
-The header title is Jura 36 at x=104 (18 px clear of the 75 px K7 mark) and vertically centred.
+The header title is Jura 36 at band x=104 and vertically centred.
 The footer's first line (the song) is Jura 28 at (24, 20), the second (the group) at (24, 54);
 the band's position, `3 / 1204`, is Jura 28 right-aligned at x=744 and vertically centred. With
 nothing playing both footer lines are empty.
@@ -124,13 +126,17 @@ surface - the inner and the guides are decorative, so a press on them falls thro
 the six carcases it replaces are not drawn in the mode: the view draws the plate and hides the
 DJ block, so the Pad owns no part of the block's object tree.
 
-- A **vertical drag** ratchets the list. At rest, **56 px of travel is one row**; a step is
-  instant and the list rests only on row boundaries. A fast drag multiplies the rows per 56 px in
-  **three stages, 1x / 2x / 4x**: 2x from 1200 px/s and 4x from 2400 px/s, holding a stage for
-  150 ms before dropping back to 1x; a fast sample can jump straight to 4x. The constants live in
-  the model and are tuned with a finger on the board.
+- A **vertical drag** ratchets the list. At rest, **54 px of travel is one row** (the rows are
+  53-54 px); a step is instant and the list rests only on row boundaries. A fast drag multiplies
+  the rows per 54 px in **three stages, 1x / 2x / 4x**: 2x from 1200 px/s and 4x from
+  2400 px/s, holding a stage for 150 ms before dropping back to 1x; a fast sample can jump
+  straight to 4x. The constants live in the model and are tuned with a finger on the board.
 - A **tap** that never became a drag (no move beyond the touch's drag limit) activates the
   **Band**.
+- A **leftward swipe** is the drawer's Back: up one Menu list, and out of the Menu at the root.
+  The press takes one axis, decided by its first 12 px of travel, so a swipe never ratchets and
+  a drag never goes Back; the swipe counts once it has travelled 50 px, the screen's own gesture
+  limit. The plate still bubbles no gesture, so the screen behind it never sees the swipe.
 - The **Band** starts on the first visible Row of a list (or the remembered Row) and moves one
   Row per step in the drag's direction. At the last visible Row, the next down step shifts the
   window one Row and the Band stays on that edge Row; symmetric at the top.
@@ -210,8 +216,8 @@ changes the page itself: the up swipe that closes it leaves the white or dark pa
   is set.
 - **`mini_icecast`** gains the shuffle mode and its order (ADR 0023).
 
-Repaint budget: a step that moves only the Band repaints two Rows - 2 x 482 x 56 x 2 = 107,968 B
-painted, 215,936 B with the direct-mode sync copy; a step that shifts the window repaints the page
+Repaint budget: a step that moves only the Band repaints two Rows - 2 x 470 x 54 x 2 = 101,520 B
+painted, 203,040 B with the direct-mode sync copy; a step that shifts the window repaints the page
 - 482 x 280 x 2 = 269,920 B painted. The cassette is hidden, so the 40 ms reel tick adds nothing
 while the Menu is up.
 
@@ -240,7 +246,7 @@ The five new glyphs are drawn in the same icomoon project and exported to
 `assets/fonts/xtape.ttf`; `package.json` grows a `font:xtape` script beside `font:jura` and
 `font:jura28`. It generates the same range at two sizes because one font is one pixel size:
 `font_xtape_24.c` (`--range 0xF000-0xF00D --size 24 --bpp 4`) for the Rows, where a 24 px glyph
-sits in a 56 px Row, and `font_xtape_36.c` at 36 px for the drawer's 64 px circles, where 24 px
+sits in a 53-54 px Row, and `font_xtape_36.c` at 36 px for the drawer's 64 px circles, where 24 px
 would read small against the Jura 36 letters they replace. Text is Jura 28 in the Rows and the
 footer and Jura 36 in the header; the submenu chevron is Jura's `>` at 28 px.
 

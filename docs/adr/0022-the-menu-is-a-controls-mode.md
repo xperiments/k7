@@ -20,9 +20,10 @@ area; its inner and guides are decoration, not the block's six cells.
   134/256 pose has landed, and not while a knob is in edit mode.
 - **Modal, and closed by the up swipe.** While it is up the only live inputs are the Pad and the
   Transport drawer's three buttons; the rows take no touches. An up swipe closes it, one rung
-  above the up that closes the Controls; down and both horizontal swipes do nothing, and the
-  two-finger VU gesture is ignored because the meter is behind the Menu. P closes it at any
-  depth, and `<` closes it from the root (below).
+  above the up that closes the Controls; down and both horizontal swipes on the screen do
+  nothing - a leftward one on the Pad is its Back (below) - and the two-finger VU gesture is
+  ignored because the meter is behind the Menu. P closes it at any depth, and `<` closes it from
+  the root (below).
 - **Cut in one frame, with the cassette hidden.** The Menu, the pad's labels, the header title
   and the footer appear together in the frame the M tap lands, as the page flip and the knob
   editor already cut. The cassette container - tape, hubs, meter, glow and the **Cover** - is
@@ -31,22 +32,26 @@ area; its inner and guides are decoration, not the block's six cells.
   off the page, so closing the Menu gives the Cover back exactly as it was.
 - **The frame is the existing window.** 486x284 at (110,76), its right edge meeting the Pad at
   596, with a 2 px border and an 8 px corner, whose top and bottom edges are the bands' lines;
-  its inner 482x280 holds five 56 px rows.
+  its inner 482x280 frames five 53-54 px rows with a 6 px inset.
   No new rectangle is drawn; the window's own fill is recoloured to the page's while the Menu is
   up, because outside it the window is `k_col_bg` on both pages (the cassette stands on it).
-- **The bands carry the location and the now playing.** The header band (768x71 at (16,6))
-  carries the list's title and keeps the K7 mark; the footer band (768x115 at (16,359)) carries
-  the now playing - song then group - and the band's position in the current list on the right.
+- **The bands carry the location and the now playing.** The header band (674x71 at (110,6),
+  with the K7 badge in its own 96x71 plate at (16,6)) carries the list's title; the footer band
+  (768x115 at (16,359)) carries the now playing - song then group - and the band's position in
+  the current list on the right.
 - **The Pad is one plate.** It sits inside the DJ block's place - (596,76) to (782,360) - as a
   white plate with an 8 px corner, a dark inner inset 8 px with the same corner, and one dotted
   vertical guide inside the inner (66 px left of its centre, inset 66 px from the top and
   bottom). The
   whole plate is the one surface; the inner and the guides are decorative, and the block's six
-  cells are not drawn in the mode. A vertical drag ratchets the list: 56 px
+  cells are not drawn in the mode. A vertical drag ratchets the list: 54 px
   of travel per row at rest, each step instant, and the list rests only on row boundaries. A
-  fast drag multiplies the rows per 56 px in the stages the accelerated-scrolling patent
+  fast drag multiplies the rows per 54 px in the stages the accelerated-scrolling patent
   describes (1x/2x/4x, with a speed threshold and a duration hysteresis); the constants are
-  tuned on the board. A tap that never became a drag activates the **Band**.
+  tuned on the board. A tap that never became a drag activates the **Band**. A leftward swipe
+  on the plate is the drawer's `<` - up one list, out of the Menu at the root - the press taking
+  one axis (decided by its first travel) so one touch never both ratchets and goes Back; the
+  plate still bubbles no gesture, so the screen-level swipes below are unchanged.
 - **A moving band, five fixed slots.** The band starts on the first visible row (or the row the
   list remembers) and moves one row per step in the drag's direction; when it reaches the last
   visible row the next step shifts the window one row and the band stays on that edge row. The
@@ -131,7 +136,7 @@ area; its inner and guides are decoration, not the block's six cells.
   **backlight hold** so the idle ladder does not overwrite a manual pick. R stays a placeholder;
   P means Close only while the Menu is up; M opens it.
 - Five row slots and one pad keep the object count independent of the library size. A step that
-  moves only the band repaints two rows - 2 x 482 x 56 x 2 = 107,968 B painted, 215,936 B with
+  moves only the band repaints two rows - 2 x 470 x 54 x 2 = 101,520 B painted, 203,040 B with
   the direct-mode sync copy - and a window shift repaints the page, 482 x 280 x 2 = 269,920 B
   painted; neither repaints the panel.
 - Memory: no scroll container, no spacers and no per-Track objects; the row text lives in five

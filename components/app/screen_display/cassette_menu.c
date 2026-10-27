@@ -1,10 +1,11 @@
 /*
  * cassette_menu.c - the Menu's view; see cassette_menu.h.
  *
- * The page is the controls' own window: the model's five rows are drawn inside it and the
- * window's fill takes the page's colour for the mode's lifetime. The Pad is a plate over
- * the DJ block's footprint, drawn as the block's six cells, and it is the only activator:
- * a vertical drag ratchets the model's band, a tap that never became a drag activates it.
+ * The page is the controls' own window: the model's five rows are drawn inside its 6 px
+ * padding and the window's fill takes the page's colour for the mode's lifetime. The Pad is
+ * a white plate over the DJ block's footprint, and it is the only activator: a vertical drag
+ * ratchets the model's band, a tap that never became a drag activates it, and a leftward
+ * swipe is the drawer's Back.
  *
  * The model (components/portable/menu) owns the tree, the band and the ratchet; this file
  * draws five row slots, executes the model's actions and owns the mode's lifecycle: hide
@@ -42,9 +43,10 @@ LV_FONT_DECLARE(jura_28);
 
 static const char *TAG = "menu";
 
-/* The page's inner rect is the window's minus its 2 px border; the rows are 56 px and five
- * of them fill its 280 px exactly (docs/specs/menu.md). */
-#define MENU_ROW_H 56
+/* The page's inner rect is the window's minus its 2 px border. A 6 px inset frames the five
+ * rows, which share the 268 px it leaves equally; their edges round to whole pixels, so the
+ * first and last sit exactly 6 px from the border (docs/specs/menu.md). */
+#define MENU_PAD 6
 #define MENU_ROW_LABEL_W 400
 #define MENU_ROW_LABEL_W_VALUE 340
 #define MENU_ROW_VALUE_W 150
@@ -76,8 +78,19 @@ static const lv_point_precise_t k_pad_guides[1][2] = {
     { { PAD_GUIDE_X, PAD_GUIDE_TOP }, { PAD_GUIDE_X, PAD_GUIDE_BOT } },
 };
 
-/* A tap is a press that never travelled this far; the pad's ratchet owns everything else. */
+/* A tap is a press that never travelled this far. A press takes one axis, decided by the
+ * first PAD_AXIS_SLOP of travel, so a horizontal swipe never ratchets and a vertical drag
+ * never goes back; PAD_SWIPE_MIN is the screen's own gesture limit
+ * (LV_INDEV_DEF_GESTURE_LIMIT), and a leftward swipe that far is Back. */
 #define PAD_TAP_SLOP 8
+#define PAD_AXIS_SLOP 12
+#define PAD_SWIPE_MIN 50
+
+typedef enum {
+    PAD_AXIS_UNDECIDED = 0, /* the press has not travelled far enough to be one */
+    PAD_AXIS_VERTICAL,      /* ratchets the band */
+    PAD_AXIS_HORIZONTAL,    /* never ratchets; a long enough leftward one is Back */
+} pad_axis_t;
 
 static lv_obj_t *s_page;             /* the five rows, inside the window */
 static lv_obj_t *s_pad;              /* the plate over the DJ block */
@@ -108,17 +121,30 @@ static char s_footer_group[128];
 static char s_footer_song[128];
 static char s_footer_pos[32];
 
-/* The pad's press tracking, for the tap/ratchet split. */
+/* The pad's press tracking, for the tap/ratchet/swipe split. */
 static bool s_pad_pressed;
+static pad_axis_t s_pad_axis;
+static int s_pad_last_x;
 static int s_pad_last_y;
+static uint32_t s_pad_press_t;
 static uint32_t s_pad_last_t;
-static int s_pad_moved;
+static int s_pad_dx;    /* travel since the press, right positive */
+static int s_pad_dy;    /* travel since the press, down positive */
+static int s_pad_moved; /* |dx| + |dy| since the press, for the tap */
 
 /* ------------------------------------------------------------------ helpers */
 
 static lv_color_t page_ink(void) { return s_white ? k_col_bg : k_col_primary; }
 static lv_color_t band_fill(void) { return s_white ? k_col_bg : k_col_primary; }
 static lv_color_t band_ink(void) { return s_white ? k_col_button_white : k_col_bg; }
+
+/* A row slot's top edge in the page's content area, and the next slot's: the five rows divide
+ * the padded height equally, so a slot is 53 or 54 px and the boundaries land on whole
+ * pixels. */
+static int slot_y(int slot, int content_h)
+{
+    return (slot * content_h + MENU_ROWS / 2) / MENU_ROWS;
+}
 
 /* The icon font's glyph for a row's icon, its codepoint, and whether the font carries it:
  * folder, gear, sun, info and SD are not drawn yet, and a missing glyph is hidden rather
@@ -339,8 +365,11 @@ static void menu_close_cb(void *ctx)
 }
 
 /* The Pad: one plate. A vertical drag ratchets the model's band; a press that never
- * travelled PAD_TAP_SLOP activates the band. The plate does not let its gestures bubble,
- * so a drag here can never close the Menu as an up swipe. */
+ * travelled PAD_TAP_SLOP activates the band; a leftward swipe as long as the screen's own
+ * gesture limit is the drawer's Back, so the Menu can be left from either thumb. The press
+ * takes one axis, decided once, so the same touch cannot both ratchet and go Back. The
+ * plate does not let its gestures bubble, so no swipe here can close the Menu as an up
+ * swipe on the screen behind it. */
 static void pad_event_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -354,30 +383,63 @@ static void pad_event_cb(lv_event_t *e)
             if (!indev) return;
             lv_indev_get_point(indev, &p);
             s_pad_pressed = true;
+            s_pad_axis = PAD_AXIS_UNDECIDED;
+            s_pad_last_x = p.x;
             s_pad_last_y = p.y;
-            s_pad_last_t = lv_tick_get();
+            s_pad_press_t = lv_tick_get();
+            s_pad_last_t = s_pad_press_t;
+            s_pad_dx = 0;
+            s_pad_dy = 0;
             s_pad_moved = 0;
             break;
         case LV_EVENT_PRESSING: {
             if (!indev || !s_pad_pressed) return;
             lv_indev_get_point(indev, &p);
+            int dx = p.x - s_pad_last_x;
             int dy = p.y - s_pad_last_y;
-            if (dy == 0) return;
+            if (dx == 0 && dy == 0) return;
+
             uint32_t now = lv_tick_get();
             uint32_t dt = now - s_pad_last_t;
+            s_pad_last_x = p.x;
             s_pad_last_y = p.y;
             s_pad_last_t = now;
-            s_pad_moved += dy < 0 ? -dy : dy;
+            s_pad_dx += dx;
+            s_pad_dy += dy;
+            s_pad_moved += (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+
+            if (s_pad_axis == PAD_AXIS_UNDECIDED) {
+                if (s_pad_moved < PAD_AXIS_SLOP) return;
+                int ax = s_pad_dx < 0 ? -s_pad_dx : s_pad_dx;
+                int ay = s_pad_dy < 0 ? -s_pad_dy : s_pad_dy;
+                s_pad_axis = ax > ay ? PAD_AXIS_HORIZONTAL : PAD_AXIS_VERTICAL;
+                /* The travel up to the decision reaches the ratchet as one sample, timed
+                 * from the press, so the first row is not lost to the undecided start. */
+                if (s_pad_axis == PAD_AXIS_VERTICAL) {
+                    menu_drag(s_model, s_pad_dy, now - s_pad_press_t);
+                    refresh();
+                }
+                return;
+            }
+            if (s_pad_axis == PAD_AXIS_HORIZONTAL) return;
             menu_drag(s_model, dy, dt);
             refresh();
             break;
         }
         case LV_EVENT_RELEASED:
-            if (s_pad_pressed && s_pad_moved < PAD_TAP_SLOP) activate();
+            if (s_pad_pressed) {
+                if (s_pad_axis == PAD_AXIS_HORIZONTAL && s_pad_dx <= -PAD_SWIPE_MIN) {
+                    menu_back_cb(NULL);
+                } else if (s_pad_moved < PAD_TAP_SLOP) {
+                    activate();
+                }
+            }
             s_pad_pressed = false;
+            s_pad_axis = PAD_AXIS_UNDECIDED;
             break;
         case LV_EVENT_PRESS_LOST:
             s_pad_pressed = false;
+            s_pad_axis = PAD_AXIS_UNDECIDED;
             break;
         default:
             break;
@@ -395,6 +457,8 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     int wx = 0, wy = 0, ww = 0, wh = 0;
     cassette_window_rect(&wx, &wy, &ww, &wh);
     int px = wx + 2, py = wy + 2, pw = ww - 4, ph = wh - 4;
+    int rw = pw - 2 * MENU_PAD;
+    int content_h = ph - 2 * MENU_PAD;
 
     s_page = lv_obj_create(screen);
     lv_obj_remove_style_all(s_page);
@@ -402,21 +466,24 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     lv_obj_set_size(s_page, pw, ph);
     lv_obj_set_style_bg_opa(s_page, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_page, 0, 0);
-    lv_obj_set_style_pad_all(s_page, 0, 0);
+    lv_obj_set_style_pad_all(s_page, MENU_PAD, 0);
     lv_obj_set_scrollable(s_page, false);
     lv_obj_set_clickable(s_page, false);
 
     for (int i = 0; i < MENU_ROWS; i++) {
+        int y = slot_y(i, content_h);
+        int h = slot_y(i + 1, content_h) - y;
+
         s_row[i] = lv_obj_create(s_page);
         lv_obj_remove_style_all(s_row[i]);
-        lv_obj_set_pos(s_row[i], 0, i * MENU_ROW_H);
-        lv_obj_set_size(s_row[i], pw, MENU_ROW_H);
+        lv_obj_set_pos(s_row[i], 0, y);
+        lv_obj_set_size(s_row[i], rw, h);
         lv_obj_set_style_bg_opa(s_row[i], LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(s_row[i], 0, 0);
         lv_obj_set_scrollable(s_row[i], false);
         lv_obj_set_clickable(s_row[i], false);
 
-        s_band[i] = cassette_border_box(s_row[i], 2, 2, pw - 4, MENU_ROW_H - 4, 8,
+        s_band[i] = cassette_border_box(s_row[i], 2, 2, rw - 4, h - 4, 8,
                                         k_col_bg, LV_OPA_COVER, k_col_bg, 0);
         lv_obj_set_hidden(s_band[i], true);
 
@@ -433,7 +500,7 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
         lv_obj_set_width(s_right[i], MENU_ROW_VALUE_W);
         lv_label_set_long_mode(s_right[i], LV_LABEL_LONG_DOT);
 
-        s_dot[i] = cassette_box(s_row[i], MENU_ROW_DOT_X, (MENU_ROW_H - MENU_ROW_DOT_D) / 2,
+        s_dot[i] = cassette_box(s_row[i], MENU_ROW_DOT_X, (h - MENU_ROW_DOT_D) / 2,
                                 MENU_ROW_DOT_D, MENU_ROW_DOT_D, MENU_ROW_DOT_D / 2, k_col_bg);
         lv_obj_set_hidden(s_dot[i], true);
     }

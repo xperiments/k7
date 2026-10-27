@@ -9,7 +9,7 @@
  *     the read-only lists (Station, Library, About);
  *   - the band: the row a tap on the pad activates, absolute in the list;
  *   - the window: the five rows the page shows, derived from the band;
- *   - the pad's ratchet: one row per 56 px of travel, in 1x/2x/4x stages;
+ *   - the pad's ratchet: one row per 54 px of travel, in 1x/2x/4x stages;
  *   - the row models: label, icon, value and state for the five visible rows;
  *   - the actions the view has to execute: play a Track, rescan, next backlight, toggle
  *     the shuffle mode, close.
@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 
-/* Five 56 px rows fill the page between the bands (docs/specs/menu.md). */
+/* Five rows share the page's 6 px inset (docs/specs/menu.md). */
 #define MENU_ROWS 5
 #define MENU_LABEL_MAX 96
 #define MENU_VALUE_MAX 32
@@ -131,7 +131,7 @@ int menu_count(const menu_t *m);
 int menu_position(const menu_t *m);
 
 /* The pad: `dy_px` since the previous call, positive downwards, and the milliseconds
- * since then. One row per 56 px at rest; faster drags step 2x/4x with a hysteresis.
+ * since then. One row per 54 px at rest; faster drags step 2x/4x with a hysteresis.
  * `menu_step()` moves whole rows (the host tests and a future keypad use it). */
 void menu_drag(menu_t *m, int dy_px, uint32_t dt_ms);
 void menu_step(menu_t *m, int rows);

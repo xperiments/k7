@@ -104,3 +104,5 @@ extern const lv_color_t k_col_knob_cap;
  * no carcase line runs round a knob. M's and R's cells keep the page's fill and the drawer's
  * border. */
 extern const lv_color_t k_col_knob_rect;
+
+extern const lv_color_t k_col_logo_back;
