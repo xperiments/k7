@@ -18,19 +18,20 @@ the acceleration thresholds.
 ## What it is
 
 - Opened by a tap on the **M cell** of the DJ block, only while the Controls are out and the
-  cassette has settled at the 134/256 pose, and not while a knob is in edit mode. On the white
-  page and on the dark one alike.
+  cassette has settled at the 134/256 pose, and not while a knob is in edit mode. On **Art**
+  (the dark page) and on **Real** (the white one, with the Cover) alike.
 - **Modal**: while it is up, the only live inputs are the Pad and the drawer's three buttons; the
-  rows and the page take no touches. A down swipe or either horizontal swipe on the screen does
-  nothing - a leftward swipe on the Pad is its Back; the two-finger VU gesture is ignored; the
-  block's cells take no touches.
+  rows and the page take no touches. A down swipe on the screen does nothing and the up swipe
+  closes the Menu rather than leaving the Level - a leftward swipe on the Pad is its Back; the
+  block's cells are gone, replaced by the plate.
 - Closed by an **up swipe**, by **P** at any depth, or by **`<`** from the root. Its **Menu list**
   and **Band** are remembered until the app restarts, so the next M returns where it left.
 - Appears and disappears in **one frame**. The cassette container - tape, hubs, meter, glow and
   the Cover - is hidden for the Menu's lifetime and shown again on close; the Cover's wish is
   never changed, so it returns exactly as it was.
-- Follows the **Page**: every ink below has a white-page and a dark-page form, like the drawer,
-  the block and the bands.
+- Follows the **Page**: the Menu's own inks - the rows, the band, the page fill - have a
+  white-page and a dark-page form, like the drawer, the block and the bands. The Pad's plate is
+  the exception: white on both pages.
 
 ## Geometry
 
@@ -40,11 +41,11 @@ The Menu draws inside the controls' existing frame; it adds no rectangle.
 |---|---|---|---|
 | Screen | 0, 0 | 800x480 | the panel |
 | Back cover | 16, 16 | 768x448 | the dark ground under the white page's margin |
-| **K7 badge** | 16, 6 | 96x71 | a rounded plate holding the K7 mark; its right border is the divider, so the band's left border tucks under it |
-| Header band | 110, 6 | 674x71 | the list's title |
+| **K7 badge** | 16, 6 | 96x72 | a rounded plate holding the K7 mark; its right border is the divider, so the band's left border tucks under it |
+| Header band | 110, 6 | 674x72 | the list's title |
 | **Menu page** | 110, 76 | 486x284 | the existing window; its right edge meets the Pad at 596; 2 px border, 8 px corner; inner 482x280 with a 6 px inset for the rows; its fill is the Page's colour while the Menu is up and `k_col_bg` otherwise |
 | **Rows** | 118, 84 | 470x53-54 each | five of them, inside the page's 6 px inset; they share its 268 px equally, so their edges round to whole pixels (54, 53, 54, 53, 54) |
-| Footer band | 16, 359 | 768x115 | now playing on the left, the band's position on the right |
+| Footer band | 16, 358 | 768x116 | now playing on the left, the band's position on the right |
 | Drawer buttons | 16, 76/170/264 | 96x96 each | P, `<`, `>` |
 | **Pad** | 596, 76 | 186x284 | a white plate with a dark inner inset 8 px, and one dotted vertical guide, inside the DJ block's place |
 
@@ -58,8 +59,8 @@ Row internals, relative to the row:
 | Playing dot | 364 | 6 px, centred vertically, the row's own ink |
 | Chevron or value | right, inset 16 | the `angle-right` glyph in the icon font's 24 px for a list, or the value for a setting in Jura 20 capitals (capped at 150 px); nothing for an action; the right edge is at 460 |
 
-The header title is Jura 36 at band x=104 and vertically centred.
-The footer's first line (the song) is Jura 28 at (24, 20), the second (the group) at (24, 54);
+The header title is Jura 36 at screen x=126 and vertically centred.
+The footer's first line (the song) is Jura 28 at (24, 21), the second (the group) at (24, 55);
 the band's position, `3 / 1204`, is Jura 28 right-aligned at x=744 and vertically centred. With
 nothing playing both footer lines are empty.
 
@@ -128,8 +129,12 @@ A white plate (`k_col_white`, 8 px corner) over the block's place, with a dark i
 inner, 66 px left of its centre and inset 66 px from its top and bottom. The guide is an
 `lv_line` object: 2 px wide, a 2 px dash and a 4 px gap, rounded, in `k_col_white`. The whole plate is the one
 surface - the inner and the guides are decorative, so a press on them falls through to it - and
-the six carcases it replaces are not drawn in the mode: the view draws the plate and hides the
-DJ block, so the Pad owns no part of the block's object tree.
+it is white on both pages, with no page ink of its own. It is the right bar's panel value, not
+a screen child of the Menu's: the bar builds the plate's carcase at the Pad's rect and deletes
+the EQ's five cells when `open()` installs it; M's carcase, the bar's chrome, stays under the
+plate and its tap is inert while the Menu is up. `close()` installs `cassette_eq_panel()`
+again; the EQ's knob values and its edit layer survive the swap, and an open edit ends with the
+panel, as any hidden cell's does.
 
 - A **vertical drag** ratchets the list. At rest, **54 px of travel is one row** (the rows are
   53-54 px); a step is instant and the list rests only on row boundaries. A fast drag multiplies
@@ -160,8 +165,8 @@ While the Menu is up the three buttons change meaning and label:
 | Button | Action | Label |
 |---|---|---|
 | P | Close the Menu, from any depth | `cassette-tape` |
-| `<` | Back: up one Menu list; closes the Menu at the root | `angle-circle-left` |
-| `>` | Enter: the same as a tap on the Pad | `angle-circle-right` |
+| `<` | Back: up one Menu list; closes the Menu at the root | `angle-left` |
+| `>` | Enter: the same as a tap on the Pad | `angle-right` |
 
 Transport prev/skip is suspended until the Menu closes. Back puts the Band on the Row that opened
 the list it returns to (the Settings Row, the directory Row), which is the one place the Band is
@@ -211,12 +216,15 @@ changes the page itself: the up swipe that closes it leaves the white or dark pa
   extension; the Peek's title keeps its dots). It returns actions (`play this relative path`, `rescan`,
   `next backlight`, `toggle shuffle`, `close`) and needs no LVGL. Host-tested in `host/tests/t18_menu.c`
   through a small Library fixture, as `cassette` and `cassette_layout` are.
-- **`screen_display/cassette_menu.c`** - the view: five Row slots, the band, the Pad, the header
-  and footer texts, the drawer's menu labels, and the executor for the model's actions. It calls
-  `cassette_eq`'s M hook, hides the block and the cassette, and gates `screen_input` while open.
-- **`cassette_eq`** gains the M click hook and the hidden state the Pad covers; **`cassette_buttons`**
-  gains the menu mode (the three actions and their icon labels); **`cassette_header`** and
-  **`cassette_footer`** gain their Menu texts.
+- **`screen_display/cassette_menu.c`** - the view: five Row slots, the band, the Pad's panel
+  value (its plate, inner and guide), the header and footer texts, the drawer's menu labels,
+  and the executor for the model's actions. It opens from the right bar's M cell
+  (`cassette_bars_set_menu_cb()`), installs the Pad on the right bar and hides the cassette,
+  and gates `screen_input` while open. On close it installs `cassette_eq_panel()` again.
+- **`cassette_bars`** carries the M cell and the panel swap: `cassette_bars_set_panel()` is what
+  puts the Pad up and the EQ panel back, and there is no covered state any more.
+  **`cassette_buttons`** gains the menu mode (the three actions and their icon labels);
+  **`cassette_header`** and **`cassette_footer`** gain their Menu texts.
 - **`backlight`** gains the hold: a manual percent is kept and the idle ladder is skipped while it
   is set.
 - **`mini_icecast`** gains the shuffle mode and its order (ADR 0023).

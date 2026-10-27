@@ -1,33 +1,21 @@
 /*
- * The transport drawer, its three line-art buttons and their two states; see
- * cassette_buttons.h.
+ * The Transport panel and its three buttons; see cassette_buttons.h.
  *
- * The drawer is one panel object moved by lv_obj_set_x(). Its buttons are static
- * objects: each button is a clickable root with two prebuilt state children, one
- * unpressed and one pressed, and only the visible one is drawn. The press/release
- * handlers swap which child is not hidden; the click handler runs a short scale pulse
- * on the root. Nothing is allocated or restyled at touch time beyond that one style
- * property.
+ * The panel is a value handed to the left bar: one column of three cells, each built into a
+ * carcase the bar made. This file is the buttons' table - the label, the cap and the action -
+ * and the Menu's mode, which rewrites the label and the action in place. The disc, the
+ * letter, the one pressed state, the pulse, the page ink and the tap guard are the shared
+ * cassette_button's.
  *
- * The button's root bubbles gestures to the panel, and the panel bubbles them to the
- * screen, so the same swipe that opens or closes the drawer works when it starts on a
- * button. The drawer itself is clickable so a tap on its margin is absorbed rather than
- * read as a screen gesture; it has no click handler.
- *
- * The Menu turns the drawer into Close / Back / Enter. The mode only swaps each state's
- * letter - font and text, on both the prebuilt states - and redirects the click to the
- * Menu's callbacks; the pressed look, the pulse, the caps and the page ink are the same
- * code for both modes.
+ * The bar moves the cells, dispatches the page and raises them; a swipe that starts on a
+ * button still reaches the screen because the bar bubbles the cells' gestures.
  *
  * Called under the LVGL lock, like everything else on the screen.
  */
 #include "cassette_buttons.h"
 
-#include <stdint.h>
-
-#include "esp_log.h"
-#include "lvgl.h"
-
+#include "cassette_bars.h"
+#include "cassette_button.h"
 #include "cassette_icons.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
@@ -35,380 +23,123 @@
 
 LV_FONT_DECLARE(jura_36);
 
-static const char *TAG = "screen";
-
-/* The drawer: a 120 px strip at the left edge, hidden by sliding its own width out.
- * The three 96x96 buttons start 76 px from the screen's top and share their borders
- * (a -2 px gap); the middle button (<) is therefore on y=218. */
-#define PANEL_W 120
-#define PANEL_H 480
-#define PANEL_HIDDEN_X (-PANEL_W)
-
-#define BUTTON_W 96
-#define BUTTON_H 96
-#define BUTTON_R 8
-#define BUTTON_GAP -2
-#define BUTTON_X 16
-#define BUTTON_TOP 64+12
-
-/* The circle is centred in the button: 16 px of line art on every side at 64 px. */
-#define CIRCLE_D 64
-#define CIRCLE_R (CIRCLE_D / 2)
-#define CIRCLE_INSET ((BUTTON_W - CIRCLE_D) / 2)
-
-/* The rectangle and the disc keep the palette's inks on the dark page (k_col_button_rect and
- * k_col_button_circle); the pressed state keeps them with a heavier line. */
-#define BUTTON_BORDER_W 2
-#define BUTTON_BORDER_W_PRESSED 3
-
-/* The click pulse: a linear 0..1024 animation whose scale is a triangle, 256 -> 232 ->
- * 256, so the button lands exactly where it started. */
-#define BUTTON_SCALE_NONE 256
-#define BUTTON_SCALE_PULSE 232
-#define BUTTON_PULSE_MS 160
-
-/* The three labels, in the id order: the Jura characters the drawer is built with and the
- * Menu's icons, both swapped into the same label on both of a button's states. */
+/* The three labels, in the id order: the Jura characters the panel is built with and the
+ * Menu's icons, both swapped into the one label by the mode. */
 static const char *const k_button_labels[CASSETTE_BUTTON_COUNT] = { "P", "<", ">" };
+/* The controls' identities, independent of the mode's glyphs and actions. */
+static const char *const k_button_names[CASSETTE_BUTTON_COUNT] = { "P", "PREV", "SKIP" };
 static const char *const k_button_icons[CASSETTE_BUTTON_COUNT] = {
     CASSETTE_ICON_TAPE, CASSETTE_ICON_LEFT, CASSETTE_ICON_RIGHT
 };
 
-/* One state of a button: the 96x96 wrapper that is shown or hidden, and the three parts the
- * page paints - the rectangle's opaque fill, the disc and its letter, which the dark page
- * draws in the button's own inks. */
-typedef struct {
-    lv_obj_t *state;
-    lv_obj_t *fill;
-    lv_obj_t *ambient;   /* the transparent circle that carries the broad shadow */
-    lv_obj_t *circle;    /* the disc: fill, ring, contact shadow, and the letter */
-    lv_obj_t *letter;
-    cassette_cap_t cap;   /* the white page's colours; the dark page is the palette's line art */
-    int border_w;        /* the ring the dark page draws; the white page's dome has none */
-} cassette_button_state_t;
+/* The transport outside the Menu: < is previous, > is next/previous's skip, and P is still a
+ * placeholder whose click is the pulse alone. */
+static void transport_prev(void *ctx)
+{
+    (void)ctx;
+    /* A tap on a cell that is still arriving is not a transport command; the same gate the
+     * EQ's cells apply to a moving knob. */
+    if (cassette_bars_is_sliding()) return;
+    mini_icecast_prev();
+}
 
-typedef struct {
-    lv_obj_t *root;
-    cassette_button_state_t unpressed;
-    cassette_button_state_t pressed;
-    cassette_button_id_t id;   /* which button this is - the character, and the action it runs */
-} cassette_button_t;
+static void transport_skip(void *ctx)
+{
+    (void)ctx;
+    if (cassette_bars_is_sliding()) return;
+    mini_icecast_skip();
+}
 
-static lv_obj_t *s_panel;
+static cassette_button_action_t const k_transport_action[CASSETTE_BUTTON_COUNT] = {
+    NULL, transport_prev, transport_skip
+};
+
 static cassette_button_t s_buttons[CASSETTE_BUTTON_COUNT];
-static bool s_shown;
-static bool s_white;   /* the page the buttons are painted for, so a re-ink can repaint them */
-static cassette_buttons_room_cb_t s_room;
-static void *s_room_ctx;
 static bool s_menu;    /* the Menu owns the three buttons: Close / Back / Enter */
 static cassette_buttons_cb_t s_menu_back;
 static cassette_buttons_cb_t s_menu_enter;
 static cassette_buttons_cb_t s_menu_close;
 static void *s_menu_ctx;
 
-/* --------------------------------------------------------------- the buttons */
-
-/* Show one of the two prebuilt states and hide the other. */
-static void button_state_show(cassette_button_t *b, bool pressed)
+/* The Menu's action for a button, in the panel's order. */
+static cassette_buttons_cb_t menu_action(int id)
 {
-    if (!b || !b->unpressed.state || !b->pressed.state) return;
-    lv_obj_set_hidden(b->unpressed.state, pressed);
-    lv_obj_set_hidden(b->pressed.state, !pressed);
-}
-
-/* One state's letter: the Jura character outside the Menu, the Menu's icon in it. The icon
- * font is 36 px, the same size as the Jura character it replaces, so the 64 px circle keeps
- * its proportions. Both states are written, so the swap is invisible whichever one is up. */
-static void button_state_label(cassette_button_state_t *s, cassette_button_id_t id, bool menu)
-{
-    if (!s->letter) return;
-    lv_obj_set_style_text_font(s->letter, menu ? &xtape_36 : &jura_36, 0);
-    lv_label_set_text(s->letter, menu ? k_button_icons[id] : k_button_labels[id]);
-}
-
-/* Put every built button's two states on the label the current mode asks for. */
-static void button_labels_apply(void)
-{
-    for (int i = 0; i < CASSETTE_BUTTON_COUNT; i++) {
-        cassette_button_t *b = &s_buttons[i];
-        if (!b->root) continue;
-        button_state_label(&b->unpressed, b->id, s_menu);
-        button_state_label(&b->pressed, b->id, s_menu);
+    switch (id) {
+    case CASSETTE_BUTTON_P: return s_menu_close;
+    case CASSETTE_BUTTON_PREV: return s_menu_back;
+    default: return s_menu_enter;
     }
 }
 
-/* The scale pulse, as a triangle over the animation's 0..1024 step. The completion
- * step lands on BUTTON_SCALE_NONE, so no restoring callback is needed. */
-static void button_pulse_cb(void *var, int32_t step)
+/* Put the three buttons on the current mode: the Menu's glyphs, font and callbacks, or the
+ * Jura characters and the transport. Only the label and the action move - the press look, the
+ * pulse, the caps and the page ink are the button's. */
+static void drawer_mode_apply(void)
 {
-    int32_t peak = step < 512 ? step : 1024 - step;
-    int32_t scale = BUTTON_SCALE_NONE -
-                    (BUTTON_SCALE_NONE - BUTTON_SCALE_PULSE) * peak / 512;
-    lv_obj_set_style_transform_scale((lv_obj_t *)var, scale, 0);
-}
-
-static void button_pulse(lv_obj_t *root)
-{
-    if (!root) return;
-    lv_anim_delete(root, button_pulse_cb);
-    lv_obj_set_style_transform_scale(root, BUTTON_SCALE_NONE, 0);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, root);
-    lv_anim_set_exec_cb(&a, button_pulse_cb);
-    lv_anim_set_values(&a, 0, 1024);
-    lv_anim_set_duration(&a, BUTTON_PULSE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_linear);
-    lv_anim_start(&a);
-}
-
-static void button_pressed_cb(lv_event_t *e)
-{
-    cassette_button_t *b = lv_event_get_user_data(e);
-    if (!b) return;
-    /* A new press replaces a pulse still in flight, at full size, before the pressed
-     * state is swapped in. */
-    lv_anim_delete(b->root, button_pulse_cb);
-    lv_obj_set_style_transform_scale(b->root, BUTTON_SCALE_NONE, 0);
-    button_state_show(b, true);
-}
-
-static void button_released_cb(lv_event_t *e)
-{
-    button_state_show(lv_event_get_user_data(e), false);
-}
-
-static void button_press_lost_cb(lv_event_t *e)
-{
-    button_state_show(lv_event_get_user_data(e), false);
-}
-
-/* A click runs the button's action and the scale pulse. Outside the Menu P is a placeholder
- * and `<` and `>` are next/previous; in it the three call the Menu's callbacks instead, and
- * the transport is suspended for the Menu's lifetime. A horizontal swipe that started here
- * is also a release and a click, so a touch with a gesture direction - or one that moved
- * past the press threshold - is not a tap and does neither. */
-static void button_clicked_cb(lv_event_t *e)
-{
-    cassette_button_t *b = lv_event_get_user_data(e);
-    if (!b) return;
-    button_state_show(b, false);
-
-    lv_indev_t *indev = lv_indev_active();
-    if (indev && (lv_indev_get_gesture_dir(indev) != LV_DIR_NONE ||
-                  lv_indev_get_press_moved(indev))) return;
-    if (s_menu) {
-        cassette_buttons_cb_t cb = NULL;
-        if (b->id == CASSETTE_BUTTON_P) cb = s_menu_close;
-        else if (b->id == CASSETTE_BUTTON_PREV) cb = s_menu_back;
-        else if (b->id == CASSETTE_BUTTON_SKIP) cb = s_menu_enter;
-        if (cb) cb(s_menu_ctx);
-    } else {
-        if (b->id == CASSETTE_BUTTON_PREV) mini_icecast_prev();
-        else if (b->id == CASSETTE_BUTTON_SKIP) mini_icecast_skip();
+    for (int id = 0; id < CASSETTE_BUTTON_COUNT; id++) {
+        cassette_button_t *b = &s_buttons[id];
+        if (!b->carcase) continue;
+        if (s_menu) {
+            cassette_button_set_label(b, k_button_icons[id], &xtape_36);
+            cassette_button_set_action(b, menu_action(id), s_menu_ctx);
+        } else {
+            cassette_button_set_label(b, k_button_labels[id], &jura_36);
+            cassette_button_set_action(b, k_transport_action[id], NULL);
+        }
     }
-    button_pulse(b->root);
 }
 
-/* One state: the rounded rectangle, the disc at its centre and the letter inside the disc.
- * Both states of a button are built by this function, so their geometry cannot drift apart;
- * the line art is the palette's (built here, for the dark page it starts on), the cap is the
- * button's own for the white page, and only the border weight and the initial visibility
- * differ. */
-static void button_state_create(lv_obj_t *parent, cassette_button_state_t *out,
-                                const char *text, cassette_cap_t cap, int border_w, bool hidden)
+/* One cell: the shared button inside the bar's carcase, on the current mode. The carcase's
+ * ring thickens on a press (2 -> 3) and the disc's does too on the dark page; on the white
+ * page the disc is the cap's fixed rim and the carcase's ring is the whole of the visible
+ * press. The cap is the palette's neutral grey for all three; the mode swaps only the label
+ * and the action, so a panel built while the Menu is up lands on its glyphs. */
+static void transport_build(lv_obj_t *cell, int col, int row, void *ctx)
 {
-    lv_obj_t *state = lv_obj_create(parent);
-    lv_obj_remove_style_all(state);
-    lv_obj_set_pos(state, 0, 0);
-    lv_obj_set_size(state, BUTTON_W, BUTTON_H);
-    lv_obj_set_style_bg_opa(state, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(state, 0, 0);
-    lv_obj_set_style_pad_all(state, 0, 0);
-    lv_obj_set_scrollable(state, false);
-    lv_obj_set_clickable(state, false);
+    (void)ctx;
+    if (col != 0 || row < 0 || row >= CASSETTE_BUTTON_COUNT) return;
+    int id = row;
 
-    out->state = state;
-    out->cap = cap;
-    out->border_w = border_w;
-    out->fill = cassette_border_box(state, 0, 0, BUTTON_W, BUTTON_H, BUTTON_R,
-                                    k_col_bg, LV_OPA_COVER, k_col_button_rect, border_w);
-    /* The dome is two circles: this transparent one carries the broad shadow, the one inside
-     * it is the disc. On the dark page both are invisible and the disc is the line art. */
-    out->ambient = cassette_border_box(state, CIRCLE_INSET, CIRCLE_INSET,
-                                       CIRCLE_D, CIRCLE_D, CIRCLE_R,
-                                       k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
-    lv_obj_t *circle = cassette_border_box(out->ambient, 0, 0,
-                                           CIRCLE_D, CIRCLE_D, CIRCLE_R,
-                                           k_col_button_circle, LV_OPA_TRANSP,
-                                           k_col_button_circle, border_w);
-    lv_obj_t *letter = cassette_text(circle, &jura_36, k_col_button_letter,
-                                     LV_ALIGN_CENTER, 0, 0);
-    lv_label_set_text(letter, text);
-    out->circle = circle;
-    out->letter = letter;
-
-    lv_obj_set_hidden(state, hidden);
-}
-
-static void button_create(lv_obj_t *parent, cassette_button_id_t id, const char *text, int y)
-{
-    cassette_button_t *b = &s_buttons[id];
-    lv_obj_t *root = lv_obj_create(parent);
-    lv_obj_remove_style_all(root);
-    lv_obj_set_pos(root, BUTTON_X, y);
-    lv_obj_set_size(root, BUTTON_W, BUTTON_H);
-    lv_obj_set_style_bg_opa(root, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(root, 0, 0);
-    lv_obj_set_style_pad_all(root, 0, 0);
-    lv_obj_set_scrollable(root, false);
-    lv_obj_set_clickable(root, true);
-    /* The scale pulse is centred on the button, not on its top-left corner. */
-    lv_obj_set_style_transform_pivot_x(root, BUTTON_W / 2, 0);
-    lv_obj_set_style_transform_pivot_y(root, BUTTON_H / 2, 0);
-    /* A swipe that starts on a button still reaches the screen's gesture handler, and
-     * the press reaches screen_input so it can clear the two-finger latch. A click also
-     * bubbles; the screen no longer gives a click a meaning. */
-    lv_obj_set_gesture_bubble(root, true);
-    lv_obj_set_event_bubble(root, true);
-
-    /* The palette's default cap, given to both states; a caller may change a button's
-     * afterwards with cassette_buttons_set_cap(). Built here rather than as a file-scope
-     * constant because the k_col_* colours are objects, not constant expressions. */
     cassette_cap_t cap = { k_col_dome, k_col_bg };
-
-    b->root = root;
-    b->id = id;
-    button_state_create(root, &b->unpressed, text, cap, BUTTON_BORDER_W, false);
-    button_state_create(root, &b->pressed, text, cap, BUTTON_BORDER_W_PRESSED, true);
-
-    lv_obj_add_event_cb(root, button_pressed_cb, LV_EVENT_PRESSED, b);
-    lv_obj_add_event_cb(root, button_released_cb, LV_EVENT_RELEASED, b);
-    lv_obj_add_event_cb(root, button_press_lost_cb, LV_EVENT_PRESS_LOST, b);
-    lv_obj_add_event_cb(root, button_clicked_cb, LV_EVENT_CLICKED, b);
+    cassette_button_spec_t spec = {
+        .name = k_button_names[id],
+        .text = s_menu ? k_button_icons[id] : k_button_labels[id],
+        .font = s_menu ? &xtape_36 : &jura_36,
+        .cap = cap,
+        .carcase_ring = { CASSETTE_BUTTON_RING_W, CASSETTE_BUTTON_RING_W_PRESSED },
+        .disc_ring = { CASSETTE_BUTTON_RING_W, CASSETTE_BUTTON_RING_W_PRESSED },
+        .on_click = s_menu ? menu_action(id) : k_transport_action[id],
+        .ctx = s_menu ? s_menu_ctx : NULL,
+    };
+    cassette_button_create(&s_buttons[id], cell, &spec);
 }
 
-/* ----------------------------------------------------------------- the drawer */
-
-static void panel_slide_cb(void *var, int32_t x)
+/* The panel's page ink: the bar has painted the carcases' default, this is the buttons' own
+ * cap and line art. */
+static void transport_set_page(bool white, void *ctx)
 {
-    lv_obj_set_x((lv_obj_t *)var, x);
+    (void)ctx;
+    for (int id = 0; id < CASSETTE_BUTTON_COUNT; id++)
+        cassette_button_set_page(&s_buttons[id], white);
 }
 
-/* The slide out is over: hide the drawer so it cannot take a touch off screen. A slide
- * in never reaches here hidden; if a reverse deleted this animation, it does not run. */
-static void panel_slide_done_cb(lv_anim_t *a)
+/* The transport drawer: one column of three, the cells the bar's. It bubbles gestures, so a
+ * swipe that starts on a button still opens or closes the drawer. It keeps no state when the
+ * bar comes and goes. */
+static const cassette_panel_t k_transport_panel = {
+    .columns = 1,
+    .rows = CASSETTE_BUTTON_COUNT,
+    .cell_rect = NULL,
+    .gesture_bubble = true,
+    .build = transport_build,
+    .set_page = transport_set_page,
+    .shown = NULL,
+    .ctx = NULL,
+};
+
+void cassette_buttons_create(void)
 {
-    lv_obj_t *panel = lv_anim_get_user_data(a);
-    if (panel && !s_shown) lv_obj_set_hidden(panel, true);
-}
-
-static void panel_slide(bool shown)
-{
-    if (!s_panel) return;
-    if (shown) {
-        lv_obj_set_hidden(s_panel, false);
-        /* Chrome above every sheet; a vertical swipe re-raises it too. */
-        lv_obj_move_foreground(s_panel);
-    }
-
-    lv_anim_delete(s_panel, panel_slide_cb);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_panel);
-    lv_anim_set_exec_cb(&a, panel_slide_cb);
-    lv_anim_set_values(&a, lv_obj_get_x(s_panel), shown ? 0 : PANEL_HIDDEN_X);
-    lv_anim_set_duration(&a, CASSETTE_BUTTONS_SLIDE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-    lv_anim_set_user_data(&a, s_panel);
-    if (!shown) lv_anim_set_completed_cb(&a, panel_slide_done_cb);
-    lv_anim_start(&a);
-}
-
-void cassette_buttons_create(lv_obj_t *screen, cassette_buttons_room_cb_t room, void *ctx)
-{
-    if (!screen || s_panel) return;
-    s_room = room;
-    s_room_ctx = ctx;
-    s_shown = false;
-    s_white = false;
-
-    s_panel = lv_obj_create(screen);
-    lv_obj_remove_style_all(s_panel);
-    lv_obj_set_pos(s_panel, PANEL_HIDDEN_X, 0);
-    lv_obj_set_size(s_panel, PANEL_W, PANEL_H);
-    lv_obj_set_style_bg_opa(s_panel, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(s_panel, 0, 0);
-    lv_obj_set_style_pad_all(s_panel, 0, 0);
-    lv_obj_set_scrollable(s_panel, false);
-    /* Clickable so the margins absorb a tap instead of letting it fall through to the
-     * screen's gesture handler; it has no click handler of its own. */
-    lv_obj_set_clickable(s_panel, true);
-    lv_obj_set_gesture_bubble(s_panel, true);
-    /* The panel's press reaches screen_input's latch-clearing handler; its click bubbles
-     * to the screen, which no longer gives a click a meaning. */
-    lv_obj_set_event_bubble(s_panel, true);
-    lv_obj_set_hidden(s_panel, true);
-
-    for (int i = 0; i < CASSETTE_BUTTON_COUNT; i++)
-        button_create(s_panel, (cassette_button_id_t)i, k_button_labels[i],
-                      BUTTON_TOP + i * (BUTTON_H + BUTTON_GAP));
-    /* A mode set before create() still lands: the buttons were built with the Jura
-     * characters, and this swaps both states to the Menu's icons. */
-    if (s_menu) button_labels_apply();
-}
-
-void cassette_buttons_set_shown(bool shown)
-{
-    if (!s_panel || shown == s_shown) return;
-    s_shown = shown;
-    if (s_room) s_room(shown, s_room_ctx);
-    panel_slide(shown);
-    ESP_LOGI(TAG, "buttons %s", shown ? "shown" : "hidden");
-}
-
-/* One state's page: the rectangle's fill, the disc's face and the letter's. The white page is
- * the button's cap - the disc's face in the cap's colour, the rim the original dome grey at
- * CASSETTE_CAP_RIM_W, the letter on it in the cap's letter colour. The dark page is the
- * palette's line art and nothing else: the playing red ring at the width this state was built
- * with and the playing red letter, the same for every button. */
-static void button_state_page(cassette_button_state_t *s, bool white)
-{
-    if (s->fill) lv_obj_set_style_bg_color(s->fill, white ? k_col_white : k_col_bg, 0);
-    if (s->letter)
-        lv_obj_set_style_text_color(s->letter, white ? s->cap.letter : k_col_button_letter, 0);
-    if (!s->circle) return;
-
-    cassette_circle_face(s->ambient, s->circle, white, s->cap.face);
-    if (white) {
-        lv_obj_set_style_border_width(s->circle, CASSETTE_CAP_RIM_W, 0);
-        lv_obj_set_style_border_color(s->circle, k_col_dome, 0);
-    } else {
-        lv_obj_set_style_border_width(s->circle, s->border_w, 0);
-        lv_obj_set_style_border_color(s->circle, k_col_button_circle, 0);
-    }
-}
-
-void cassette_buttons_set_page(bool white)
-{
-    s_white = white;
-    for (int i = 0; i < CASSETTE_BUTTON_COUNT; i++) {
-        button_state_page(&s_buttons[i].unpressed, white);
-        button_state_page(&s_buttons[i].pressed, white);
-    }
-}
-
-void cassette_buttons_set_cap(cassette_button_id_t id, cassette_cap_t cap)
-{
-    if ((unsigned)id >= CASSETTE_BUTTON_COUNT) return;
-    cassette_button_t *b = &s_buttons[id];
-    if (!b->root) return;
-    b->unpressed.cap = cap;
-    b->pressed.cap = cap;
-    button_state_page(&b->unpressed, s_white);
-    button_state_page(&b->pressed, s_white);
+    cassette_bars_set_panel(CASSETTE_BARS_LEFT, &k_transport_panel);
 }
 
 void cassette_buttons_set_menu_mode(bool on, cassette_buttons_cb_t back,
@@ -420,15 +151,5 @@ void cassette_buttons_set_menu_mode(bool on, cassette_buttons_cb_t back,
     s_menu_enter = enter;
     s_menu_close = close;
     s_menu_ctx = ctx;
-    button_labels_apply();
-}
-
-bool cassette_buttons_is_shown(void)
-{
-    return s_shown;
-}
-
-void cassette_buttons_raise(void)
-{
-    if (s_panel) lv_obj_move_foreground(s_panel);
+    drawer_mode_apply();
 }

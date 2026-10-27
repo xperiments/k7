@@ -11,6 +11,9 @@ meter starts hidden and fades in/out over 220 ms. The menu intent is gone.
 two-finger gesture's. It is the M cell's mode of the Controls, and the two-finger swipe stays the
 VU meter's (ADR 0020).
 
+**Amended by [ADR 0025](./0025-four-rungs-real-art-initial-peek.md):** the order is four
+fixed rungs - Real, Art, Initial, Peek - and each down or up swipe takes one of them.
+
 The cassette screen had four Levels - Bare, Label, Label cover and Artwork - and the
 one-finger down/up swipe moved through all of them. The Label level was a cream bar with
 the **Now playing** title, sitting between Bare and the K7 sticker. The product wants

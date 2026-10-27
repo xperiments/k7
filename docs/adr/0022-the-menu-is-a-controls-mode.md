@@ -4,6 +4,14 @@
 guide inside it, not a drawing of the block's six cells; it began as one 0xFF00FF marker. The
 footprint, the ratchet and the tap are unchanged.
 
+**Amended by the frame's 1 px join:** the bands are 72 and 116 tall so their 2 px borders land
+on the cells' top and bottom lines; the header is 674x72 at (110,6) with a 96x72 badge, and the
+footer is 768x116 at (16,358).
+
+**Amended by [ADR 0025](./0025-four-rungs-real-art-initial-peek.md):** "the Page it was opened
+on" is now Art (the dark Page) or Real (the white one, with the Track's picture); the Menu's
+footprint, its Pad and its gestures are unchanged.
+
 The controls already close a frame around the cassette, and the owner wanted a menu reachable
 from the M cell without losing that frame. The decision is a **Menu mode of the Controls**,
 opened by M, that turns the cassette area into a five-row list and the DJ block into a
@@ -35,9 +43,9 @@ area; its inner and guides are decoration, not the block's six cells.
   its inner 482x280 frames five 53-54 px rows with a 6 px inset.
   No new rectangle is drawn; the window's own fill is recoloured to the page's while the Menu is
   up, because outside it the window is `k_col_bg` on both pages (the cassette stands on it).
-- **The bands carry the location and the now playing.** The header band (674x71 at (110,6),
-  with the K7 badge in its own 96x71 plate at (16,6)) carries the list's title; the footer band
-  (768x115 at (16,359)) carries the now playing - song then group - and the band's position in
+- **The bands carry the location and the now playing.** The header band (674x72 at (110,6),
+  with the K7 badge in its own 96x72 plate at (16,6)) carries the list's title; the footer band
+  (768x116 at (16,358)) carries the now playing - song then group - and the band's position in
   the current list on the right.
 - **The Pad is one plate.** It sits inside the DJ block's place - (596,76) to (782,360) - as a
   white plate with an 8 px corner, a dark inner inset 8 px with the same corner, and one dotted
@@ -134,10 +142,11 @@ area; its inner and guides are decoration, not the block's six cells.
 ## Consequences
 
 - A portable `menu` component with `t18_menu`; `screen_display/cassette_menu.c`; the drawer
-  gains a menu mode with its three actions and the icon labels; `cassette_eq` gains the M hook
-  and the state the Pad covers; the header and footer gain their Menu texts; `font_xtape_24.c`
-  and `font_xtape_36.c` with their `package.json` script; the icon set in
-  `assets/fonts/xtape.ttf`, and `font_jura_20.c` for the Rows' right column.
+  gains a menu mode with its three actions and the icon labels; `cassette_eq` no longer carries
+  a covered state - the Menu swaps the right bar's panel instead - and the M hook it once held
+  is the right bar's chrome cell (`cassette_bars_set_menu_cb()`); the header and footer gain
+  their Menu texts; `font_xtape_24.c` and `font_xtape_36.c` with their `package.json` script;
+  the icon set in `assets/fonts/xtape.ttf`, and `font_jura_20.c` for the Rows' right column.
 - Two capabilities leave the screen: the **Shuffle mode** in `mini_icecast` (ADR 0023) and a
   **backlight hold** so the idle ladder does not overwrite a manual pick. R stays a placeholder;
   P means Close only while the Menu is up; M opens it.

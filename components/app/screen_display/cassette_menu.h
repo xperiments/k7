@@ -4,9 +4,9 @@
  * the footer's now playing. Panel board only.
  *
  * The view owns the drawing and the lifecycle of the mode: `open()` builds the rows for
- * the page that is up, hides the cassette container, covers the DJ block with the Pad,
+ * the page that is up, hides the cassette container, makes the Pad the right bar's panel,
  * turns the drawer into Back/Enter/Close and fills the window with the page's colour.
- * `close()` puts all of it back. The model is portable and lives in
+ * `close()` puts all of it back, the DJ block included. The model is portable and lives in
  * components/portable/menu; this module only executes its actions.
  *
  * `cassette_view` calls open() on the M cell's tap, close() on the up swipe, and update()
@@ -29,7 +29,7 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette);
  * already open. */
 void cassette_menu_open(bool white);
 
-/* Close and restore the controls: the cassette, the block, the drawer, the window, the
+/* Close and restore the controls: the cassette, the DJ block, the drawer, the window, the
  * bands' texts. No-op when closed. */
 void cassette_menu_close(void);
 

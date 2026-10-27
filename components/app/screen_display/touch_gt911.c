@@ -50,62 +50,13 @@ static const char *TAG = "touch";
 /* Two I2C transactions a read, often enough that a tap shorter than a frame is seen. */
 #define TOUCH_READ_MS 10
 
-/* How far the midpoint of two contacts has to travel before it is a two-finger swipe.
- * It is a little shorter than LVGL's 50 px one-finger threshold: two fingers are a
- * deliberate gesture and the midpoint averages them, so it moves less than either. */
-#define TOUCH_TWO_FINGER_PX 30
-
 static esp_lcd_touch_handle_t s_touch;
-static touch_two_finger_cb_t s_two_finger_cb;
-/* The midpoint of the first two contacts, from when they landed. A swipe is one
- * report per touch: after the callback the latch stays until the fingers lift. */
-static bool s_two_down;
-static bool s_two_sent;
-static int32_t s_two_x, s_two_y;
 
 /* The first press after the backlight dimmed only wakes the screen. The whole press
  * is withheld from LVGL until the finger lifts, so the wake cannot also skip a track,
  * open the cover, or slide the label: `s_wake_only` stays set for the press and is
  * cleared on the release. */
 static bool s_wake_only;
-
-void touch_gt911_set_two_finger_cb(touch_two_finger_cb_t cb)
-{
-    s_two_finger_cb = cb;
-}
-
-/* A two-finger swipe, from the two contacts themselves. The controller's track ids are
- * not part of it: the midpoint of the first two points is enough, and it does not care
- * which finger the controller numbers first. */
-static void touch_two_finger_check(const esp_lcd_touch_point_data_t *point, uint8_t points)
-{
-    if (points < 2) {
-        s_two_down = false;
-        s_two_sent = false;
-        return;
-    }
-
-    const int32_t mx = ((int32_t)point[0].x + point[1].x) / 2;
-    const int32_t my = ((int32_t)point[0].y + point[1].y) / 2;
-    if (!s_two_down) {
-        s_two_down = true;
-        s_two_sent = false;
-        s_two_x = mx;
-        s_two_y = my;
-        return;
-    }
-    if (s_two_sent) return;
-
-    const int32_t dx = mx - s_two_x;
-    const int32_t dy = my - s_two_y;
-    const int32_t ax = dx < 0 ? -dx : dx;
-    const int32_t ay = dy < 0 ? -dy : dy;
-    if (ax < TOUCH_TWO_FINGER_PX && ay < TOUCH_TWO_FINGER_PX) return;
-
-    s_two_sent = true;
-    ESP_LOGI(TAG, "two-finger swipe: midpoint moved %d,%d", (int)dx, (int)dy);
-    if (s_two_finger_cb) s_two_finger_cb((int)dx, (int)dy);
-}
 
 /*
  * What LVGL reads when it asks the pointer where it is.
@@ -116,9 +67,8 @@ static void touch_two_finger_check(const esp_lcd_touch_point_data_t *point, uint
  * that the controller answered, and the point on the release is the last one the
  * finger was at because the controller reports the release as the absence of a point.
  *
- * Two contacts are also the two-finger swipe, which the view uses for the VU meter. It
- * is detected here, from the midpoint of the two points, so it does not depend on the
- * controller's track ids or on LVGL's multi-touch recognizer.
+ * A second contact is not a gesture: the two-finger swipe that used to toggle the VU
+ * meter is gone (ADR 0025), so the pointer reports the first point and nothing else.
  */
 static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
 {
@@ -157,15 +107,6 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
         ESP_LOGI(TAG, "touch wakes the backlight; the press is not an action");
     }
     if (!have_point) s_wake_only = false;
-
-    if (wake_only) {
-        /* Keep the multi-touch detector out of this press too: two fingers on a dark
-         * screen are a wake, not a two-finger gesture. */
-        s_two_down = false;
-        s_two_sent = false;
-    } else {
-        touch_two_finger_check(point, points);
-    }
 
     if (have_point) {
         last_x = point[0].x;

@@ -44,10 +44,6 @@ void cassette_cover_set_image(const lv_image_dsc_t *dsc);
  * without a second swipe. */
 void cassette_cover_set_shown(bool shown);
 
-/* Cut the label now: a page flip or a Track change. Clears the wish and leaves the frames
- * under the body, with no fade. */
-void cassette_cover_hide_now(void);
-
 /* The white page's wish, whether or not a picture has landed. The down swipe sets it and
  * the up clears it, so the cover can be asked for while the decode is still running. */
 bool cassette_cover_is_shown(void);

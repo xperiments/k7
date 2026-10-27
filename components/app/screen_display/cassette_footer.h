@@ -2,8 +2,8 @@
 /*
  * cassette_footer - the band that closes the bottom of the controls screen.
  *
- * The header closes the top; this is its mirror: 768 px wide at (16,359), 6 px short of
- * the panel's bottom, so its top edge lands on the last drawer button's and the last DJ
+ * The header closes the top; this is its mirror: 768 px wide at (16,358), 6 px short of
+ * the panel's bottom, so its 2 px border lands on the last drawer button's and the last DJ
  * cell's bottom line and its sides sit on the cassette frame's 16 px inset, like the
  * header's.
  *
@@ -15,8 +15,8 @@
  * out, and back down, hidden at the end, when they go away. It is on the white page the down
  * swipe paints and on the dark page the horizontal swipes keep.
  *
- * The Menu puts the now playing here: the song on the first line at band (24,20) and the
- * group on the second at (24,54), both Jura 28 and ellipsized; the list's position, like
+ * The Menu puts the now playing here: the song on the first line at band (24,21) and the
+ * group on the second at (24,55), both Jura 28 and ellipsized; the list's position, like
  * `3 / 1204`, is Jura 28 right-aligned at band x=744 and vertically centred. The lines take
  * the page's label ink - k_col_bg on the white page, k_col_primary on the dark one - and
  * are empty and hidden outside the Menu.

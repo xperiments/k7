@@ -75,9 +75,9 @@ extern const lv_color_t k_col_paper;
 extern const lv_color_t k_col_primary;
 
 /* The left drawer's line art: the carcase rectangle, the inner disc and the letter inside it
- * are coloured separately, so a button's inks can be set one at a time
- * (cassette_buttons_set_cap()). These two are the dark page's line art, the same for the
- * drawer's three buttons and for the DJ block's M and R; the white page's cap defaults to
+ * are coloured separately, so a control's inks are its spec data (cassette_cap_t) and the
+ * page turns them. These two are the dark page's line art, the same for the Transport's
+ * three buttons and for the DJ block's M and R; the white page's cap defaults to
  * k_col_dome and its letter to k_col_bg, further down. */
 extern const lv_color_t k_col_button_rect;
 extern const lv_color_t k_col_button_circle;

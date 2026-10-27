@@ -8,6 +8,14 @@ before it closes the controls; every way off the page still hides it.
 opens the Menu on this controls page - the cassette area becomes a five-row list, the block
 becomes the Pad and the drawer becomes Back/Enter/Close - on either page.
 
+**Corrected:** `k_col_white` is 0x909090 (`cassette_style.h`), not 0xFFFFFF, and the tape's
+bottom chips are not page-ink: they are filled `k_col_bg` on both pages and the page flip does
+not repaint them (`cassette_tapes` has no `set_page()`).
+
+**Amended by [ADR 0025](./0025-four-rungs-real-art-initial-peek.md):** a down swipe from
+Initial now shows the controls on the **dark** Page (Art); the white Page is the next down, and
+it carries the Track's picture with it (Real).
+
 The vertical swipes had one meaning each: the up swipe raised the peek and the down swipe
 put it away, and a down swipe with the peek down did nothing at all. The owner wants the
 down swipe to be the way into the transport drawer and the DJ block - the controls the
@@ -83,8 +91,8 @@ horizontal swipes keep showing the same drawer and block on the dark screen they
   swipe). A down swipe while the controls are out leaves the drawer and the block where they
   are and only turns the page white, so the down swipe always means the white controls.
 - `page_set()` holds the page in a flag, so a request for the colour already on screen does
-  not invalidate the whole panel. The buttons' room callback no longer touches the page: it
-  reports the drawer's slide, and the page is the intent's.
+  not invalidate the whole panel. The Controls model owns the room now; the buttons no
+  longer report a slide for it, and the page is the intent's.
 - The white page costs one whole-screen invalidation per flip, in addition to the drawer's
   and the DJ block's slides. It is not animated and does not repeat while the controls are
   out.

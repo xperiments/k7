@@ -42,6 +42,8 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/cassette/include \
        -I$(ROOT)/components/portable/artwork/include \
        -I$(ROOT)/components/portable/menu/include \
+       -I$(ROOT)/components/portable/knob_model/include \
+       -I$(ROOT)/components/portable/controls/include \
        -I$(ROOT)/components/portable/app_services/include \
        -I$(ROOT)/components/portable/app_board/include \
        -I$(ROOT)/components/portable/dr_libs/include \
@@ -72,11 +74,15 @@ PROD_SRC := \
   $(ROOT)/components/portable/mini_files/mini_files.c \
   $(ROOT)/components/portable/cassette/cassette.c \
   $(ROOT)/components/portable/cassette/cassette_layout.c \
+  $(ROOT)/components/portable/cassette/cassette_button_rule.c \
   $(ROOT)/components/portable/artwork/artwork.c \
   $(ROOT)/components/portable/artwork/id3.c \
   $(ROOT)/components/portable/artwork/flac.c \
   $(ROOT)/components/portable/artwork/tags.c \
   $(ROOT)/components/portable/menu/menu.c \
+  $(ROOT)/components/portable/menu/pad.c \
+  $(ROOT)/components/portable/knob_model/knob.c \
+  $(ROOT)/components/portable/controls/controls.c \
   $(ROOT)/components/portable/mini_icecast/mi_shuffle.c \
   $(ROOT)/components/portable/app_services/app_services.c \
   $(SHINE_SRC)
@@ -92,6 +98,8 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/cassette \
           $(ROOT)/components/portable/artwork \
           $(ROOT)/components/portable/menu \
+          $(ROOT)/components/portable/knob_model \
+          $(ROOT)/components/portable/controls \
           $(ROOT)/components/portable/app_services \
           $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
@@ -117,7 +125,8 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t08_http_parse $(BIN)/t10_cassette $(BIN)/t11_ring \
          $(BIN)/t12_transport $(BIN)/t14_library $(BIN)/t15_artwork \
          $(BIN)/t16_layout $(BIN)/t17_tone_eq \
-         $(BIN)/t18_menu $(BIN)/t19_shuffle
+         $(BIN)/t18_menu $(BIN)/t19_shuffle \
+         $(BIN)/t21_button $(BIN)/t22_knob $(BIN)/t23_pad $(BIN)/t24_controls
 
 .PHONY: all test integration layering check tools fixtures bench control control-check clean help
 
@@ -222,6 +231,22 @@ $(BIN)/t18_menu: $(MENU_OBJ) $(CASSETTE_OBJ) $(OBJ)/library.o $(OBJ)/audio_forma
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t19_shuffle: $(OBJ)/mi_shuffle.o $(OBJ)/t19_shuffle.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t21_button: $(OBJ)/cassette_button_rule.o $(OBJ)/t21_button.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t22_knob: $(OBJ)/knob.o $(OBJ)/t22_knob.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t23_pad: $(OBJ)/pad.o $(OBJ)/t23_pad.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t24_controls: $(OBJ)/controls.o $(OBJ)/t24_controls.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

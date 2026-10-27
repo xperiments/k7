@@ -9,9 +9,9 @@
  *
  * The model (components/portable/menu) owns the tree, the band and the ratchet; this file
  * draws five row slots, executes the model's actions and owns the mode's lifecycle: hide
- * the cassette container (tape, meter, glow, cover), cover the block, turn the drawer into
- * Back/Enter/Close, and put all of it back on close. No per-Track object is created: five
- * slots are rebound whenever the model's version changes.
+ * the cassette container (tape, meter, glow, cover), swap the right bar's panel to the Pad,
+ * turn the drawer into Back/Enter/Close, and put all of it back on close. No per-Track
+ * object is created: five slots are rebound whenever the model's version changes.
  */
 #include "cassette_menu.h"
 
@@ -26,17 +26,20 @@
 #include "app_board.h"
 #include "app_services.h"
 #include "backlight.h"
+#include "cassette_bars.h"
 #include "cassette_buttons.h"
 #include "cassette.h"
 #include "cassette_eq.h"
 #include "cassette_footer.h"
 #include "cassette_header.h"
 #include "cassette_icons.h"
+#include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 #include "cassette_window.h"
 #include "library.h"
 #include "menu.h"
+#include "pad.h"
 #include "mini_icecast.h"
 
 LV_FONT_DECLARE(jura_20);
@@ -44,10 +47,10 @@ LV_FONT_DECLARE(jura_28);
 
 static const char *TAG = "menu";
 
-/* The page's inner rect is the window's minus its 2 px border. A 6 px inset frames the five
- * rows, which share the 268 px it leaves equally; their edges round to whole pixels, so the
- * first and last sit exactly 6 px from the border (docs/specs/menu.md). */
-#define MENU_PAD 6
+/* The page and its slots come from the layout: the window's inner 482x280, a 6 px inset
+ * framing five slots of 54/53/54/53/54 px (docs/specs/menu.md). The row contents below stay
+ * the Menu's own. */
+#define MENU_PAD CASSETTE_PAGE_INSET
 #define MENU_ROW_LABEL_W 400
 #define MENU_ROW_LABEL_W_VALUE 340
 #define MENU_ROW_VALUE_W 150
@@ -56,45 +59,23 @@ static const char *TAG = "menu";
 #define MENU_ROW_DOT_X 364
 #define MENU_ROW_DOT_D 6
 
-/* The Pad sits inside the DJ block's place: a white plate (k_col_white) with a dark inner
- * (k_col_bg) inset 8 px, and three dotted guides inside the inner. Its left edge meets the
- * window's right edge at x=596. */
-#define PAD_X 596
-#define PAD_Y 76
-#define PAD_W 186
-#define PAD_H 284
+/* The Pad is the right bar's one-cell panel: the layout's part is a white plate (k_col_white)
+ * over the block's place, with a dark inner (k_col_bg) inset 8 px and one dotted vertical
+ * guide inside it. Only the inner and the guide are the Pad's own numbers. */
 #define PAD_INSET 8
 
 /* The inner plate, and its guide: one dotted vertical, PAD_GUIDE_INSET left of the centre
  * and inset the same distance from its top and bottom. */
-#define PAD_INNER_W (PAD_W - 2 * PAD_INSET)
-#define PAD_INNER_H (PAD_H - 2 * PAD_INSET)
 #define PAD_GUIDE_INSET 66
-#define PAD_GUIDE_X (PAD_INNER_W / 2 - PAD_GUIDE_INSET)
-#define PAD_GUIDE_TOP PAD_GUIDE_INSET
-#define PAD_GUIDE_BOT (PAD_INNER_H - PAD_GUIDE_INSET)
 
-/* lv_line keeps the caller's points, so they are static and constant. */
-static const lv_point_precise_t k_pad_guides[1][2] = {
-    { { PAD_GUIDE_X, PAD_GUIDE_TOP }, { PAD_GUIDE_X, PAD_GUIDE_BOT } },
-};
+/* lv_line keeps the caller's points, so they outlive the call; pad_build() fills them from
+ * the layout's Pad each time the panel is installed. */
+static lv_point_precise_t s_pad_guides[1][2];
 
-/* A tap is a press that never travelled this far. A press takes one axis, decided by the
- * first PAD_AXIS_SLOP of travel, so a horizontal swipe never ratchets and a vertical drag
- * never goes back; PAD_SWIPE_MIN is the screen's own gesture limit
- * (LV_INDEV_DEF_GESTURE_LIMIT), and a leftward swipe that far is Back. */
-#define PAD_TAP_SLOP 8
-#define PAD_AXIS_SLOP 12
-#define PAD_SWIPE_MIN 50
 
-typedef enum {
-    PAD_AXIS_UNDECIDED = 0, /* the press has not travelled far enough to be one */
-    PAD_AXIS_VERTICAL,      /* ratchets the band */
-    PAD_AXIS_HORIZONTAL,    /* never ratchets; a long enough leftward one is Back */
-} pad_axis_t;
 
 static lv_obj_t *s_page;             /* the five rows, inside the window */
-static lv_obj_t *s_pad;              /* the plate over the DJ block */
+static lv_obj_t *s_pad_cell;         /* the bar's carcase the Pad's plate is built into */
 static lv_obj_t *s_row[MENU_ROWS];
 static lv_obj_t *s_band[MENU_ROWS];
 static lv_obj_t *s_icon[MENU_ROWS];
@@ -124,30 +105,14 @@ static char s_footer_pos[32];
 /* The right column's capitals, built per row per redraw. */
 static char s_value_upper[MENU_VALUE_MAX];
 
-/* The pad's press tracking, for the tap/ratchet/swipe split. */
-static bool s_pad_pressed;
-static pad_axis_t s_pad_axis;
-static int s_pad_last_x;
-static int s_pad_last_y;
-static uint32_t s_pad_press_t;
-static uint32_t s_pad_last_t;
-static int s_pad_dx;    /* travel since the press, right positive */
-static int s_pad_dy;    /* travel since the press, down positive */
-static int s_pad_moved; /* |dx| + |dy| since the press, for the tap */
+/* The pad's press classification, as a value; the ratchet itself stays the menu model's. */
+static pad_t s_pad_state;
 
 /* ------------------------------------------------------------------ helpers */
 
 static lv_color_t page_ink(void) { return s_white ? k_col_bg : k_col_primary; }
 static lv_color_t band_fill(void) { return s_white ? k_col_bg : k_col_primary; }
 static lv_color_t band_ink(void) { return s_white ? k_col_button_white : k_col_bg; }
-
-/* A row slot's top edge in the page's content area, and the next slot's: the five rows divide
- * the padded height equally, so a slot is 53 or 54 px and the boundaries land on whole
- * pixels. */
-static int slot_y(int slot, int content_h)
-{
-    return (slot * content_h + MENU_ROWS / 2) / MENU_ROWS;
-}
 
 /* The right column speaks in capitals: the model's values are prose ("Auto", "12 MB") and
  * the page is where its capitals belong. ASCII only, like every value the model writes. */
@@ -398,84 +363,181 @@ static void menu_close_cb(void *ctx)
 /* The Pad: one plate. A vertical drag ratchets the model's band; a press that never
  * travelled PAD_TAP_SLOP activates the band; a leftward swipe as long as the screen's own
  * gesture limit is the drawer's Back, so the Menu can be left from either thumb. The press
- * takes one axis, decided once, so the same touch cannot both ratchet and go Back. The
- * plate does not let its gestures bubble, so no swipe here can close the Menu as an up
- * swipe on the screen behind it. */
+ * takes one axis, decided once, so the same touch cannot both ratchet and go Back. The bar
+ * gives the plate no gesture bubbling, so no swipe here can close the Menu as an up swipe on
+ * the screen behind it. */
 static void pad_event_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (!s_open || !s_model) return;
 
-    lv_indev_t *indev = lv_indev_active();
-    lv_point_t p;
+    /* A gesture on the Pad is the Pad's: the bar's right cells keep their gestures local
+     * (the Pad is not the screen's), so the leftward one is read here - it is the Menu's
+     * Back/Close, at LVGL's 50 px threshold, whether or not the release also reaches the
+     * pad's 50 px rule. */
+    if (code == LV_EVENT_GESTURE) {
+        lv_indev_t *indev = lv_indev_active();
+        if (indev && lv_indev_get_gesture_dir(indev) == LV_DIR_LEFT) {
+            pad_reset(&s_pad_state);
+            menu_back_cb(NULL);
+        }
+        return;
+    }
 
+    pad_in_t in;
     switch (code) {
-        case LV_EVENT_PRESSED:
-            if (!indev) return;
-            lv_indev_get_point(indev, &p);
-            s_pad_pressed = true;
-            s_pad_axis = PAD_AXIS_UNDECIDED;
-            s_pad_last_x = p.x;
-            s_pad_last_y = p.y;
-            s_pad_press_t = lv_tick_get();
-            s_pad_last_t = s_pad_press_t;
-            s_pad_dx = 0;
-            s_pad_dy = 0;
-            s_pad_moved = 0;
-            break;
-        case LV_EVENT_PRESSING: {
-            if (!indev || !s_pad_pressed) return;
-            lv_indev_get_point(indev, &p);
-            int dx = p.x - s_pad_last_x;
-            int dy = p.y - s_pad_last_y;
-            if (dx == 0 && dy == 0) return;
+        case LV_EVENT_PRESSED: in = PAD_IN_PRESS; break;
+        case LV_EVENT_PRESSING: in = PAD_IN_MOVE; break;
+        case LV_EVENT_RELEASED: in = PAD_IN_RELEASE; break;
+        case LV_EVENT_PRESS_LOST: in = PAD_IN_LOST; break;
+        default: return;
+    }
 
-            uint32_t now = lv_tick_get();
-            uint32_t dt = now - s_pad_last_t;
-            s_pad_last_x = p.x;
-            s_pad_last_y = p.y;
-            s_pad_last_t = now;
-            s_pad_dx += dx;
-            s_pad_dy += dy;
-            s_pad_moved += (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+    lv_point_t p = { 0, 0 };
+    if (in != PAD_IN_LOST) {
+        lv_indev_t *indev = lv_indev_active();
+        if (!indev) return;
+        lv_indev_get_point(indev, &p);
+    }
 
-            if (s_pad_axis == PAD_AXIS_UNDECIDED) {
-                if (s_pad_moved < PAD_AXIS_SLOP) return;
-                int ax = s_pad_dx < 0 ? -s_pad_dx : s_pad_dx;
-                int ay = s_pad_dy < 0 ? -s_pad_dy : s_pad_dy;
-                s_pad_axis = ax > ay ? PAD_AXIS_HORIZONTAL : PAD_AXIS_VERTICAL;
-                /* The travel up to the decision reaches the ratchet as one sample, timed
-                 * from the press, so the first row is not lost to the undecided start. */
-                if (s_pad_axis == PAD_AXIS_VERTICAL) {
-                    menu_drag(s_model, s_pad_dy, now - s_pad_press_t);
-                    refresh();
-                }
-                return;
-            }
-            if (s_pad_axis == PAD_AXIS_HORIZONTAL) return;
-            menu_drag(s_model, dy, dt);
+    pad_ev_t ev = pad_feed(&s_pad_state, in, p.x, p.y, lv_tick_get());
+    switch (ev.kind) {
+        case PAD_EV_STEP:
+            menu_drag(s_model, ev.dy, ev.dt);
             refresh();
             break;
-        }
-        case LV_EVENT_RELEASED:
-            if (s_pad_pressed) {
-                if (s_pad_axis == PAD_AXIS_HORIZONTAL && s_pad_dx <= -PAD_SWIPE_MIN) {
-                    menu_back_cb(NULL);
-                } else if (s_pad_moved < PAD_TAP_SLOP) {
-                    activate();
-                }
-            }
-            s_pad_pressed = false;
-            s_pad_axis = PAD_AXIS_UNDECIDED;
+        case PAD_EV_TAP:
+            activate();
             break;
-        case LV_EVENT_PRESS_LOST:
-            s_pad_pressed = false;
-            s_pad_axis = PAD_AXIS_UNDECIDED;
+        case PAD_EV_BACK:
+            menu_back_cb(NULL);
             break;
         default:
             break;
     }
 }
+
+/* ------------------------------------------------------------------ the panel */
+
+/* The Pad is one plate, not a grid: the bar builds one carcase at the layout's Pad rect
+ * (596,76, 186x284) and build() turns it into the plate. It covers the DJ block's M cell as
+ * well as its five; M stays the bar's chrome and is inert while the Menu is open. */
+static cassette_rect_t pad_cell_rect(int col, int row)
+{
+    (void)col;
+    (void)row;
+    return cassette_part_rect(CASSETTE_PART_PAD);
+}
+
+/* The plate: white on both pages, no border of its own, the shared 8 px corner. The top and
+ * bottom rows are where the header's bottom line and the footer's top line cross the Pad; the
+ * bar is above the bands now, so those two rows are drawn as rules of their own. */
+static void pad_ink(lv_obj_t *cell)
+{
+    if (!cell) return;
+    lv_obj_set_style_bg_color(cell, k_col_white, 0);
+    lv_obj_set_style_border_width(cell, 0, 0);
+    lv_obj_set_style_radius(cell, CASSETTE_CORNER_R, 0);
+}
+
+/* One carcase, the bar's, turned into the Pad. The bar made it clickable and gave it the
+ * panel's hit rule; the pickable surface is the carcase itself, with the inner and the guide
+ * decorative so a press on them falls through to it. */
+static void pad_build(lv_obj_t *cell, int col, int row, void *ctx)
+{
+    (void)col;
+    (void)row;
+    (void)ctx;
+    if (!cell) return;
+
+    s_pad_cell = cell;
+    pad_ink(cell);
+
+    cassette_rect_t pad = cassette_part_rect(CASSETTE_PART_PAD);
+
+    /* The two frame rows the old screen-child Pad let the bands draw over it. */
+    for (int i = 0; i < 2; i++) {
+        lv_obj_t *rule = lv_obj_create(cell);
+        lv_obj_remove_style_all(rule);
+        lv_obj_set_pos(rule, 0, i == 0 ? 0 : pad.h - 2);
+        lv_obj_set_size(rule, pad.w, 2);
+        lv_obj_set_style_bg_color(rule, k_col_button_rect, 0);
+        lv_obj_set_style_bg_opa(rule, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(rule, 0, 0);
+        lv_obj_set_style_radius(rule, 0, 0);
+        lv_obj_set_clickable(rule, false);
+    }
+
+    int inner_w = pad.w - 2 * PAD_INSET;
+    int inner_h = pad.h - 2 * PAD_INSET;
+    int guide_x = inner_w / 2 - PAD_GUIDE_INSET;
+    s_pad_guides[0][0].x = guide_x;
+    s_pad_guides[0][0].y = PAD_GUIDE_INSET;
+    s_pad_guides[0][1].x = guide_x;
+    s_pad_guides[0][1].y = inner_h - PAD_GUIDE_INSET;
+
+    /* The inner plate: the dark ground the guide sits on. */
+    lv_obj_t *inner = lv_obj_create(cell);
+    lv_obj_remove_style_all(inner);
+    lv_obj_set_pos(inner, PAD_INSET, PAD_INSET);
+    lv_obj_set_size(inner, inner_w, inner_h);
+    lv_obj_set_style_bg_color(inner, k_col_bg, 0);
+    lv_obj_set_style_bg_opa(inner, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(inner, 0, 0);
+    lv_obj_set_style_radius(inner, PAD_INSET, 0);
+    lv_obj_set_style_pad_all(inner, 0, 0);
+    lv_obj_set_scrollable(inner, false);
+    lv_obj_set_clickable(inner, false);
+
+    /* The guide: dotted, light on the dark inner. */
+    lv_obj_t *line = lv_line_create(inner);
+    lv_obj_remove_style_all(line);
+    lv_obj_set_pos(line, 0, 0);
+    lv_obj_set_style_line_width(line, 2, 0);
+    lv_obj_set_style_line_color(line, k_col_white, 0);
+    lv_obj_set_style_line_opa(line, LV_OPA_COVER, 0);
+    lv_obj_set_style_line_rounded(line, true, 0);
+    lv_obj_set_style_line_dash_width(line, 2, 0);
+    lv_obj_set_style_line_dash_gap(line, 4, 0);
+    lv_obj_set_clickable(line, false);
+    lv_line_set_points(line, s_pad_guides[0], 2);
+
+    lv_obj_add_event_cb(cell, pad_event_cb, LV_EVENT_ALL, NULL);
+}
+
+/* The bar calls this last in set_panel() and again whenever the bar's visibility changes:
+ * after the carcase's default page ink, so the plate is put back white on both pages. A
+ * swap also resets the press in flight before the old carcase goes. */
+static void pad_shown(bool visible, void *ctx)
+{
+    (void)visible;
+    (void)ctx;
+    pad_reset(&s_pad_state);
+    pad_ink(s_pad_cell);
+}
+
+/* The Pad is white on both pages, so a page flip while the Menu is up must not let the
+ * bar's default dark fill through. The model drops every intent while the Menu is open
+ * today, but the hook costs nothing and makes the panel self-contained. */
+static void pad_page(bool white, void *ctx)
+{
+    (void)white;
+    (void)ctx;
+    pad_ink(s_pad_cell);
+}
+
+/* The Pad as the right bar's panel: one carcase at the layout's plate rect, white on both
+ * pages (no page ink of its own), with the pad's press machine inside it. */
+static const cassette_panel_t k_pad_panel = {
+    .columns = 1,
+    .rows = 1,
+    .cell_rect = pad_cell_rect,
+    .gesture_bubble = false,
+    .build = pad_build,
+    .set_page = pad_page,
+    .shown = pad_shown,
+    .ctx = NULL,
+};
 
 /* ------------------------------------------------------------------ lifecycle */
 
@@ -484,17 +546,15 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     if (!screen || s_model) return;
 
     s_cassette = cassette;
+    pad_reset(&s_pad_state);
 
-    int wx = 0, wy = 0, ww = 0, wh = 0;
-    cassette_window_rect(&wx, &wy, &ww, &wh);
-    int px = wx + 2, py = wy + 2, pw = ww - 4, ph = wh - 4;
-    int rw = pw - 2 * MENU_PAD;
-    int content_h = ph - 2 * MENU_PAD;
+    cassette_rect_t page = cassette_page_rect();
+    int rw = page.w - 2 * MENU_PAD;
 
     s_page = lv_obj_create(screen);
     lv_obj_remove_style_all(s_page);
-    lv_obj_set_pos(s_page, px, py);
-    lv_obj_set_size(s_page, pw, ph);
+    lv_obj_set_pos(s_page, page.x, page.y);
+    lv_obj_set_size(s_page, page.w, page.h);
     lv_obj_set_style_bg_opa(s_page, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_page, 0, 0);
     lv_obj_set_style_pad_all(s_page, MENU_PAD, 0);
@@ -502,8 +562,8 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     lv_obj_set_clickable(s_page, false);
 
     for (int i = 0; i < MENU_ROWS; i++) {
-        int y = slot_y(i, content_h);
-        int h = slot_y(i + 1, content_h) - y;
+        int y = cassette_page_slot_y(i);
+        int h = cassette_page_slot_h(i);
 
         s_row[i] = lv_obj_create(s_page);
         lv_obj_remove_style_all(s_row[i]);
@@ -514,7 +574,7 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
         lv_obj_set_scrollable(s_row[i], false);
         lv_obj_set_clickable(s_row[i], false);
 
-        s_band[i] = cassette_border_box(s_row[i], 2, 2, rw - 4, h - 4, 8,
+        s_band[i] = cassette_border_box(s_row[i], 2, 2, rw - 4, h - 4, CASSETTE_CORNER_R,
                                         k_col_bg, LV_OPA_COVER, k_col_bg, 0);
         lv_obj_set_hidden(s_band[i], true);
 
@@ -536,52 +596,6 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
         lv_obj_set_hidden(s_dot[i], true);
     }
     lv_obj_set_hidden(s_page, true);
-
-    /* The Pad: the owner's white plate with a dark inner, over the block's place. The six
-     * carcases it replaces are not drawn in the mode. */
-    s_pad = lv_obj_create(screen);
-    lv_obj_remove_style_all(s_pad);
-    lv_obj_set_pos(s_pad, PAD_X, PAD_Y);
-    lv_obj_set_size(s_pad, PAD_W, PAD_H);
-    lv_obj_set_style_bg_color(s_pad, k_col_white, 0);
-    lv_obj_set_style_bg_opa(s_pad, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(s_pad, 0, 0);
-    lv_obj_set_style_radius(s_pad, 8, 0);
-    lv_obj_set_style_pad_all(s_pad, 0, 0);
-    lv_obj_set_scrollable(s_pad, false);
-    lv_obj_set_clickable(s_pad, true);
-    lv_obj_set_gesture_bubble(s_pad, false);
-    lv_obj_add_event_cb(s_pad, pad_event_cb, LV_EVENT_ALL, NULL);
-
-    /* The inner plate: the dark ground the guides sit on. It is decorative, so a press on
-     * it (or on a guide) falls through to the Pad and ratchets the list. */
-    lv_obj_t *inner = lv_obj_create(s_pad);
-    lv_obj_remove_style_all(inner);
-    lv_obj_set_pos(inner, PAD_INSET, PAD_INSET);
-    lv_obj_set_size(inner, PAD_INNER_W, PAD_INNER_H);
-    lv_obj_set_style_bg_color(inner, k_col_bg, 0);
-    lv_obj_set_style_bg_opa(inner, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(inner, 0, 0);
-    lv_obj_set_style_radius(inner, PAD_INSET, 0);
-    lv_obj_set_style_pad_all(inner, 0, 0);
-    lv_obj_set_scrollable(inner, false);
-    lv_obj_set_clickable(inner, false);
-
-    /* The guides: dotted, light on the dark inner. */
-    for (int i = 0; i < 1; i++) {
-        lv_obj_t *line = lv_line_create(inner);
-        lv_obj_remove_style_all(line);
-        lv_obj_set_pos(line, 0, 0);
-        lv_obj_set_style_line_width(line, 2, 0);
-        lv_obj_set_style_line_color(line, k_col_white, 0);
-        lv_obj_set_style_line_opa(line, LV_OPA_COVER, 0);
-        lv_obj_set_style_line_rounded(line, true, 0);
-        lv_obj_set_style_line_dash_width(line, 2, 0);
-        lv_obj_set_style_line_dash_gap(line, 4, 0);
-        lv_obj_set_clickable(line, false);
-        lv_line_set_points(line, k_pad_guides[i], 2);
-    }
-    lv_obj_set_hidden(s_pad, true);
 
     s_model = menu_new();
     if (!s_model) {
@@ -610,6 +624,7 @@ void cassette_menu_open(bool white)
 
     s_open = true;
     s_white = white;
+    pad_reset(&s_pad_state);
     s_drawn = 0;
     mini_icecast_status(&s_status);
     s_lib = library_acquire();
@@ -622,11 +637,12 @@ void cassette_menu_open(bool white)
 
     cassette_window_set_menu_page(true, white);
     cassette_buttons_set_menu_mode(true, menu_back_cb, menu_enter_cb, menu_close_cb, NULL);
-    cassette_eq_set_covered(true);
+    /* The Pad takes the DJ block's place for the mode: the bar deletes the EQ's cells and
+     * builds the plate. The EQ's values and its edit layer stay with it. */
+    cassette_bars_set_panel(CASSETTE_BARS_RIGHT, &k_pad_panel);
     if (s_cassette) lv_obj_set_hidden(s_cassette, true);
 
     lv_obj_set_hidden(s_page, false);
-    lv_obj_set_hidden(s_pad, false);
     memset(s_footer_song, 0, sizeof s_footer_song);
     memset(s_footer_group, 0, sizeof s_footer_group);
     memset(s_footer_pos, 0, sizeof s_footer_pos);
@@ -640,13 +656,14 @@ void cassette_menu_close(void)
     s_open = false;
 
     lv_obj_set_hidden(s_page, true);
-    lv_obj_set_hidden(s_pad, true);
 
     cassette_window_set_menu_page(false, s_white);
     cassette_header_set_title(NULL);
     cassette_footer_set_playing(NULL, NULL, NULL);
     cassette_buttons_set_menu_mode(false, NULL, NULL, NULL, NULL);
-    cassette_eq_set_covered(false);
+    /* Back to the DJ block: the bar takes the plate down and rebuilds the EQ's five cells.
+     * The panel value carries the knobs' state, so the block returns as it was. */
+    cassette_bars_set_panel(CASSETTE_BARS_RIGHT, cassette_eq_panel());
     if (s_cassette) lv_obj_set_hidden(s_cassette, false);
 
     menu_close(s_model);
@@ -654,7 +671,7 @@ void cassette_menu_close(void)
         library_release(s_lib);
         s_lib = NULL;
     }
-    s_pad_pressed = false;
+    pad_reset(&s_pad_state);
     s_drawn = 0;
 }
 

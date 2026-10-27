@@ -182,9 +182,8 @@ void cassette_cover_place(void)
     }
 }
 
-/* The owner's fade: the label comes in and goes out over a full second.
- * A Track change and a page close cut instead - the loader is about to write the buffer,
- * and the pose is leaving the mask's size. */
+/* The owner's fade: the label comes in and goes out over a full second. A Track change
+ * cuts instead - the loader is about to write the buffer. */
 #define COVER_FADE_MS 1000
 
 static void cover_fade_cb(void *var, int32_t opa)
@@ -239,7 +238,7 @@ static void cover_show(bool fade)
 }
 
 /* The label goes out. A fade keeps it in the tree until the last transparent frame, then
- * lowers the frames; a cut (a page flip or Track change) does both at once. */
+ * lowers the frames; a cut (a Track change) does both at once. */
 static void cover_hide(bool fade)
 {
     if (!s_cover) return;
@@ -287,12 +286,6 @@ void cassette_cover_set_shown(bool shown)
     s_wanted = shown;
     if (shown) cover_show(true);
     else cover_hide(true);
-}
-
-void cassette_cover_hide_now(void)
-{
-    s_wanted = false;
-    cover_hide(false);
 }
 
 bool cassette_cover_is_shown(void)

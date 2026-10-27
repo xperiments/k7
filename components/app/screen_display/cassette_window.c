@@ -11,21 +11,10 @@
 
 #include "lvgl.h"
 
-#include "cassette_buttons.h"   /* the drawer's slide time */
+#include "cassette_bars.h"   /* the chrome's slide time */
+#include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
-
-/* The owner's geometry: 486x284 at (110,76). Its right edge meets the Pad at 596 and its
- * left edge tucks 2 px under the drawer's. The top and bottom edges share the bands' lines. */
-#define WINDOW_X        110
-#define WINDOW_Y        76
-#define WINDOW_W        486
-#define WINDOW_H        284
-
-/* The drawer buttons' corner and the carcases' 2 px stroke: the three rectangles and the
- * carcases are one frame. */
-#define WINDOW_R        8
-#define WINDOW_BORDER_W 2
 
 static lv_obj_t *s_window;
 static bool s_shown;
@@ -56,7 +45,7 @@ static void window_fade(bool shown)
     lv_anim_set_exec_cb(&a, window_fade_cb);
     lv_anim_set_values(&a, lv_obj_get_style_opa(s_window, 0),
                        shown ? LV_OPA_COVER : LV_OPA_TRANSP);
-    lv_anim_set_duration(&a, CASSETTE_BUTTONS_SLIDE_MS);
+    lv_anim_set_duration(&a, CASSETTE_BARS_SLIDE_MS);
     lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
     lv_anim_set_user_data(&a, s_window);
     if (!shown) lv_anim_set_completed_cb(&a, window_fade_done_cb);
@@ -67,9 +56,12 @@ void cassette_window_create(lv_obj_t *screen)
 {
     if (!screen || s_window) return;
 
-    s_window = cassette_border_box(screen, WINDOW_X, WINDOW_Y, WINDOW_W, WINDOW_H, WINDOW_R,
-                                   k_col_bg, LV_OPA_COVER, k_col_bg, 
-                                   WINDOW_BORDER_W);
+    /* The layout's window; the corner and the stroke are the frame's own, shared with
+     * the bands and the carcases. */
+    cassette_rect_t rect = cassette_part_rect(CASSETTE_PART_WINDOW);
+    s_window = cassette_border_box(screen, rect.x, rect.y, rect.w, rect.h,
+                                   CASSETTE_CORNER_R, k_col_bg, LV_OPA_COVER, k_col_bg,
+                                   CASSETTE_BORDER_W);
     lv_obj_set_style_opa(s_window, LV_OPA_TRANSP, 0);
     lv_obj_set_hidden(s_window, true);
 }
@@ -89,12 +81,4 @@ void cassette_window_set_menu_page(bool on, bool white)
      * Menu it is k_col_bg again, the ground the cassette stands on. The border, the corner
      * and the fade state belong to the cassette's window and are not touched. */
     lv_obj_set_style_bg_color(s_window, (on && white) ? k_col_white : k_col_bg, 0);
-}
-
-void cassette_window_rect(int *x, int *y, int *w, int *h)
-{
-    if (x) *x = WINDOW_X;
-    if (y) *y = WINDOW_Y;
-    if (w) *w = WINDOW_W;
-    if (h) *h = WINDOW_H;
 }

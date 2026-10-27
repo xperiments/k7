@@ -20,8 +20,8 @@
  * The Menu borrows the window as its page: while it is up the window's own fill is the
  * page's colour, because the Menu's Rows are drawn inside it, and set_menu_page(false)
  * puts the cassette's ground back. The border, the corner and the fade state are the
- * cassette's and are never written by the Menu. The rect is exposed so the Menu can place
- * its page without a second copy of the geometry.
+ * cassette's and are never written by the Menu. The rect itself lives in
+ * `cassette_layout`, so neither module keeps a copy of it.
  *
  * Private to screen_display; the view decides when the controls are out and calls
  * set_shown(). Built and written under the LVGL lock, like everything else on the screen.
@@ -48,10 +48,6 @@ void cassette_window_set_shown(bool shown);
  * `on` false restores k_col_bg, the cassette's own ground. Only the fill is written: the
  * 2 px border, the 8 px corner and the fade/shown state are untouched. */
 void cassette_window_set_menu_page(bool on, bool white);
-
-/* The window's geometry in screen coordinates - (110,76) and 486x284 - so the Menu does
- * not keep a second copy of it. Any pointer may be NULL. */
-void cassette_window_rect(int *x, int *y, int *w, int *h);
 
 #ifdef __cplusplus
 }

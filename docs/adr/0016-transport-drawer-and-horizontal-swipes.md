@@ -14,6 +14,23 @@ entry 100% pose, either brings them in.
 mode of the Controls. Two fingers stay the VU meter's, and the drawer's `<` and `>` mean Back and
 Enter while the Menu is up.
 
+**Amended by the shared button and the bars:** the five buttons - the drawer's P, `<` and
+`>` and the DJ block's M and R - are now one module, `cassette_button.c`. A button has one
+pressed state, restyled rather than a second prebuilt object: `LV_EVENT_PRESSED` writes the
+ring - the drawer's carcase, or the disc for M and R - and release or `LV_EVENT_PRESS_LOST`
+writes it back, with the white page's disc being the button's cap, whose rim is the same
+width pressed or not. A click is the portable `cassette_button_rule`'s 160 ms pulse
+(256 -> 232 -> 256) and the host's action, behind one tap guard for all five:
+`!moved && !gesturing && !reserved`, `reserved` being `screen_input_two_finger_seen()`. The
+drawer's 96 px column is built, slid and raised by the left **bar** (`cassette_bars.c`), not
+by `cassette_buttons.c`: `set_shown()`, `is_sliding()` and the internal raise are the bar's,
+the Transport panel's page ink is the bar's `set_page()`, and `cassette_buttons` keeps
+`create()` and `set_menu_mode()`. Both bars own the 260 ms entrance.
+
+**Amended by [ADR 0025](./0025-four-rungs-real-art-initial-peek.md):** the horizontal swipes
+are retired. The drawer and the DJ block are the Art level of the vertical ladder, reached by a
+down swipe from Initial; the only left swipe left in the build is the Menu's Back on the Pad.
+
 The cassette screen's tap and one-finger left/right swipe were the transport: a tap skipped
 to the next track and the swipes were next/previous. The product wants the transport
 visible at the left edge - three buttons, shown and hidden by the horizontal gestures. That
@@ -30,8 +47,9 @@ a drawer.
   line art only: a rectangle with 8 px corners, a 64 px circle at its centre, and one
   letter - **P**, **R**, **W** - centred in the circle in Jura 36.
 - Each button prebuilds two state objects, unpressed and pressed. A press swaps which one
-  is visible, and release or `LV_EVENT_PRESS_LOST` restores the other. A click is a short
-  scale pulse (256 -> 232 -> 256) and nothing else; the transport is not wired yet.
+  is visible, and release or `LV_EVENT_PRESS_LOST` restores the other (amended: one state,
+  see above). A click is a short scale pulse (256 -> 232 -> 256) and nothing else; the
+  transport is not wired yet.
 - While the drawer is out the cassette is scaled to 160/256. The 300 px-tall design box is
   then centred on y=240, the same line as R. The tape is 500 px wide, which leaves the
   120 px drawer clear, and its bottom edge clears the Label bar, so the Label's -60 px lift

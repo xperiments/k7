@@ -1,14 +1,12 @@
 #pragma once
 /*
- * cassette_levels - the peek and the white page's cover, hosted on the Cassette screen.
+ * cassette_levels - the peek and Real's cover, hosted on the Cassette screen.
  *
- * The Label cover and Artwork screens, and the down/up Level gestures that reached them,
- * are removed: Bare is the only screen the cassette has. The up swipe at Bare has one
- * meaning left - raise or lower the peek, cassette_peek's timeline bar and two tags - and
- * the down swipe shows the controls, then turns the white page's cover on (the up swipe
- * turns it off before it closes the controls). There
- * is no Level machine and no sheet; the peek asks the cassette for room through the
- * `room` callback, as it always did.
+ * The peek is the bottom rung of the four (ADR 0025): an up swipe at Initial raises it and
+ * a down swipe puts it away, cassette_peek's timeline bar and two tags. Real's picture is
+ * requested here as well - the down from Art shows it, the up takes it off with the Page.
+ * There is no screen machine and no sheet; the Controls model owns the room, so the peek
+ * asks nobody for it.
  *
  * The peek's group and song tags and the white page's picture both come from a Track's
  * container through artwork_loader (the old Artwork loader, minus its Case). A Track
@@ -28,15 +26,10 @@
 extern "C" {
 #endif
 
-/* The room the peek needs from the cassette. `shown` is whether the cassette should
- * give the overlay its room (true) or go back to its resting pose (false). `instant`
- * asks for that in one frame (ms = 0) rather than on the overlay's own slide. The view
- * owns the pose - the scale, the offset and the duration - because the cassette is its. */
-typedef void (*cassette_levels_room_cb_t)(bool shown, bool instant, void *ctx);
-
 /* Build the hidden peek on `screen`. On a board without the touch adapter there is no
- * peek, and this builds nothing. */
-void cassette_levels_create(lv_obj_t *screen, cassette_levels_room_cb_t room, void *ctx);
+ * peek, and this builds nothing. The room is the Controls model's now: the view animates the
+ * cassette when its ROOM bit changes, so the peek asks nobody for it. */
+void cassette_levels_create(lv_obj_t *screen);
 
 /* Apply a cassette frame to the peek: the clock, the fill and the filename fallback. */
 void cassette_levels_apply(const cassette_frame_t *frame);
@@ -45,9 +38,9 @@ void cassette_levels_apply(const cassette_frame_t *frame);
  * request is deduped here, so a 25 Hz update is a string compare. */
 void cassette_levels_update(const mini_icecast_status_t *status);
 
-/* The peek toggle. The view calls it to raise the peek from the entry 100% pose and to
- * put it away on the down swipe; an up swipe while it is up is ignored. */
-void cassette_levels_toggle_peek(void);
+/* Raise or put away the peek. The Controls model owns the ladder and the room; the view
+ * applies its PEEK bit with this. A call for the state already held does nothing. */
+void cassette_levels_set_peek(bool shown);
 
 /* The Track's text tags, UTF-8. Empty strings mean the Track carries none. */
 void cassette_levels_set_tags(const char *group, const char *song);

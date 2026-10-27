@@ -1,6 +1,6 @@
 #pragma once
 /*
- * cassette_peek - what the up swipe at Bare shows: the progress bar and the two
+ * cassette_peek - what the up swipe at Initial shows: the progress bar and the two
  * floating tags over the cassette.
  *
  * The overlay has two parts that move for different reasons:
@@ -22,13 +22,14 @@
  * back to the first directory of the Track's path and the song to the cleaned
  * filename. The bar's clock comes from the cassette frame.
  *
- * The overlay is an overlay on Bare, not a screen of its own: this module is born and
- * hidden by cassette_levels and asks the cassette for room through the `room` callback.
- * The view owns the pose, so the hub anchors are handed in on
- * every pose change and only the tether's lower endpoint moves with them.
+ * The peek is the ladder's bottom rung, not a screen of its own: this module is born and
+ * hidden by cassette_levels. The Controls model owns the room, so the peek asks nobody
+ * for it: the view applies the ROOM bit itself. The view owns the pose, so the hub
+ * anchors are handed in on every pose change and only the tether's lower endpoint moves
+ * with them.
  *
  * Private to screen_display, and built only on the touch board: the gestures that
- * reach Bare's peek are the panel's.
+ * reach Initial's peek are the panel's.
  */
 #include <stdbool.h>
 
@@ -40,13 +41,8 @@
 extern "C" {
 #endif
 
-/* Asks the view for the cassette's room: `shown` is whether the peek is up, `instant`
- * asks for the pose in one frame rather than over the slide. The view owns the scale,
- * the offset and the duration. */
-typedef void (*cassette_peek_room_cb_t)(bool shown, bool instant, void *ctx);
-
 /* Build the hidden bar and tags on `screen`, above whatever exists at call time. */
-void cassette_peek_create(lv_obj_t *screen, cassette_peek_room_cb_t room, void *ctx);
+void cassette_peek_create(lv_obj_t *screen);
 
 /* Apply a cassette frame: the clock, the fill and the filename fallback. Only what the
  * frame reports changed is rewritten. A NULL frame is a no-op. */
@@ -65,11 +61,9 @@ void cassette_peek_set_tags(const char *group, const char *song);
  * while its scale animates. */
 void cassette_peek_set_hubs(int x0, int y0, int x1, int y1);
 
-/* Show the overlay (with the room request and the slide) or put it away. hide_now()
- * is the one-frame form. */
+/* Show the overlay, sliding the bar up, or put it away with the same slide. */
 void cassette_peek_show(void);
 void cassette_peek_hide(void);
-void cassette_peek_hide_now(void);
 
 /* Whether the overlay is meant to be up, true while it is still sliding. */
 bool cassette_peek_is_shown(void);

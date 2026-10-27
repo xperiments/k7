@@ -1,28 +1,25 @@
 /*
  * The cassette screen's touch policy (see screen_input.h).
  *
- * This is the whole of the screen's input: the press, the one-finger gesture, and the
- * touch adapter's two-finger swipe. It decides which of those a touch is and keeps one
- * touch from being two of them, and hands the answer to the view's sink. What a swipe
- * means to the picture - whether the peek shows or hides, whether the drawer slides out -
- * is not decided here: the sink owns that, and this file calls nothing above itself. A
- * left/right swipe hides or shows the transport drawer. A down swipe is DOWN and an up
- * swipe is UP: the view runs the vertical ladder, because a down swipe asks for the
- * controls only when the peek is not up, and an up swipe takes the controls away only
- * when they are out - otherwise it raises the peek. Next and
- * previous belong to the DJ block's arrows, whose clicks are their own objects' and never
- * reach this module.
+ * This is the whole of the screen's input: the one-finger gesture. It decides which swipe
+ * the screen acts on and keeps a drag that belongs to a part - the Pad's ratchet, a knob's,
+ * the bars' cells - from also meaning a screen intent, and hands the answer to the view's
+ * sink. What a swipe means to the picture - which rung of the ladder it takes - is not
+ * decided here: the sink owns that, and this file calls nothing above itself.
  *
- * The log lines that are about the input itself - the swipe directions and the reserved
- * two-finger gesture - are kept here, with the view's tag, so the boot log reads as it did.
+ * The vertical pair is the ladder: an up swipe is UP and a down swipe is DOWN (ADR 0025).
+ * The horizontal pair is nothing: the drawer and the block are reached by the ladder now,
+ * and the only left swipe left in the build is the Pad's Back, which the bar keeps local.
+ * A two-finger swipe is nothing either; the VU meter's gesture is gone and the adapter no
+ * longer reports one. Next and previous belong to the DJ block's arrows, whose clicks are
+ * their own objects' and never reach this module.
+ *
+ * The log lines that are about the input itself - the swipe directions - are kept here, with
+ * the view's tag, so the boot log reads as it does for the gestures that remain.
  */
 #include "screen_input.h"
 
 #include "esp_log.h"
-
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-#include "touch_gt911.h"
-#endif
 
 /* The same tag the screen has always logged under: these messages sit in the view's log
  * stream, and moving them to a module must not change where they appear. */
@@ -32,84 +29,28 @@ static const char *TAG = "screen";
 static screen_intent_cb_t s_on_intent;
 static void *s_ctx;
 
-/* The screen the handlers are registered on, so a second attach() does not register them
- * again and report every intent twice. */
+/* The screen the handler is registered on, so a second attach() does not register it again
+ * and report every intent twice. */
 static lv_obj_t *s_screen;
-
-/*
- * Set by the touch adapter's two-finger callback and cleared by the next press: one bit for
- * the length of one touch. It is what stops a two-finger swipe from also being read as a
- * one-finger gesture: LVGL's recognizer still has the first contact. The adapter reports
- * the swipe before the gesture arrives, so the latch is already set when it does.
- *
- * Only the panel board can set it: a board without a controller has no two-finger callback,
- * and hears about a touch as a pointer only. The test is unconditional anyway, so the policy
- * reads the same on both boards instead of growing a second copy of itself.
- */
-static bool s_two_finger_seen;
 
 static void report(screen_intent_t intent)
 {
     if (s_on_intent) s_on_intent(intent, s_ctx);
 }
 
-/* A new touch clears the two-finger latch from the previous one. The drawer, its buttons
- * and the DJ block's cells bubble their presses here, so a touch that starts on a control
- * is a new touch too. */
-static void screen_pressed_cb(lv_event_t *e)
-{
-    (void)e;
-    s_two_finger_seen = false;
-}
-
-bool screen_input_two_finger_seen(void)
-{
-    return s_two_finger_seen;
-}
-
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
 /*
- * The two-finger swipe is the VU meter's toggle: left shows it, right hides it. The
- * callback also keeps the one-finger handler from acting on the same touch: a two-finger
- * gesture must not toggle the peek or open the drawer by accident. A vertical two-finger
- * swipe is not a toggle and only sets the latch. */
-static void screen_two_finger_cb(int dx, int dy)
-{
-    (void)dy;
-    s_two_finger_seen = true;
-    if (dx < 0) {
-        ESP_LOGI(TAG, "two-finger left: VU meter shown");
-        report(SCREEN_INTENT_VU_SHOW);
-    } else if (dx > 0) {
-        ESP_LOGI(TAG, "two-finger right: VU meter hidden");
-        report(SCREEN_INTENT_VU_HIDE);
-    }
-}
-#endif
-
-/*
- * The one-finger gestures: left/right ask to toggle the buttons at the left edge, and the
- * vertical pair is reported as the direction - DOWN and UP - for the sink to make the
- * controls' or the peek's. The direction is the whole of this handler's knowledge; the
- * peek's slide and the drawer's slide are the sink's. A two-finger swipe does not come
- * through here: the touch adapter reports it, and the latch keeps this handler from acting
- * on the same touch as well.
+ * The one-finger gesture: the vertical pair is reported as the direction - DOWN and UP - for
+ * the sink to take the rung. The direction is the whole of this handler's knowledge. A
+ * gesture on a part is not the screen's: the Pad's drag is the Pad's ratchet, a knob's is the
+ * knob's, and the bar's cells keep their gestures local, so this handler only runs for a
+ * gesture whose target is the screen itself.
  */
 static void screen_gesture_cb(lv_event_t *e)
 {
-    (void)e;
-    if (s_two_finger_seen) return;
+    if (lv_event_get_target(e) != s_screen) return;
     lv_indev_t *indev = lv_indev_active();
     if (!indev) return;
     switch (lv_indev_get_gesture_dir(indev)) {
-        case LV_DIR_LEFT:
-            report(SCREEN_INTENT_BUTTONS_HIDE);
-            ESP_LOGI(TAG, "swipe left: buttons toggle");
-            break;
-        case LV_DIR_RIGHT:
-            report(SCREEN_INTENT_BUTTONS_SHOW);
-            ESP_LOGI(TAG, "swipe right: buttons toggle");
-            break;
         case LV_DIR_TOP:
             report(SCREEN_INTENT_UP);
             break;
@@ -122,10 +63,10 @@ static void screen_gesture_cb(lv_event_t *e)
 }
 
 /*
- * A swipe is a release too, and LVGL sends CLICKED after the gesture. The screen no longer
- * gives a click a meaning: next and previous are the DJ block's own buttons, whose clicks
- * belong to their cells, and a tap on the cassette is not an action. The handler is
- * therefore gone; the gesture above and the latch are the whole screen policy.
+ * A swipe is a release too, and LVGL sends CLICKED after the gesture. The screen gives a
+ * click no meaning: next and previous are the DJ block's own buttons, whose clicks belong to
+ * their cells, and a tap on the cassette is not an action. There is therefore no click
+ * handler; the gesture above is the whole screen policy.
  */
 
 void screen_input_attach(lv_obj_t *screen, screen_intent_cb_t on_intent, void *ctx)
@@ -133,18 +74,11 @@ void screen_input_attach(lv_obj_t *screen, screen_intent_cb_t on_intent, void *c
     if (!screen) return;
 
     /* The sink is a value: a second attach on the same screen takes the new one, but the
-     * handlers stay registered once. */
+     * handler stays registered once. */
     s_on_intent = on_intent;
     s_ctx = ctx;
     if (screen == s_screen) return;
     s_screen = screen;
-    s_two_finger_seen = false;
 
-    lv_obj_add_event_cb(screen, screen_pressed_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_add_event_cb(screen, screen_gesture_cb, LV_EVENT_GESTURE, NULL);
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The touch adapter's two-finger swipe; it is called before the one-finger gesture for
-     * the same touch, so the latch is set when that one arrives. */
-    touch_gt911_set_two_finger_cb(screen_two_finger_cb);
-#endif
 }

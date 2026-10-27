@@ -27,12 +27,15 @@ extern "C" {
 
 /* Build the two rows, their L/R badges and the fourteen bars under `parent`, the
  * cassette's container. The panel is transparent and takes no press. The view creates it
- * after the tapes, so the meter paints inside the right hub. The meter starts hidden; a
- * two-finger swipe left shows it and a right hides it. */
+ * after the tapes, so the meter paints inside the right hub. The meter starts hidden, and
+ * it stays hidden: the two-finger gesture that used to show it is gone (ADR 0025), and the
+ * view no longer calls show(). The module is parked, whole, until the meter has its new
+ * home. */
 void cassette_meter_create(lv_obj_t *parent);
 
 /* Fade the whole meter in (show) or out (hide) over 220 ms. The meter is hidden at rest;
- * show/hide are idempotent, and a show during a hide reverses from the current opacity. */
+ * show/hide are idempotent, and a show during a hide reverses from the current opacity.
+ * Nothing calls them today - see the park note on create(). */
 void cassette_meter_show(void);
 void cassette_meter_hide(void);
 

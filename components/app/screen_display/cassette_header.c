@@ -9,11 +9,11 @@
  * is the distance.
  *
  * The mark is greyscale art kept as an A8 mask, tinted at draw time, inside a rounded badge
- * at the band's left: a primary plate with the light cap ink on the line-art page, a white
- * plate with the page's dark border and dark ink on the white one. The badge is the band's
- * sibling and slides with it.
+ * at the band's left: a k_col_bg plate with the primary border and mark on the line-art
+ * page, a k_col_logo_back plate with the page's dark border and mark on the white one. The
+ * badge is the band's sibling and slides with it.
  *
- * The Menu's list title is the band's other occupant: a Jura 36 label at band x=104,
+ * The Menu's list title is the band's other occupant: a Jura 36 label at screen x=126,
  * vertically centred and ellipsized at 648 px. It is empty and hidden while the Menu is
  * closed, and its ink is the page's own label ink - k_col_bg on the white page,
  * k_col_primary on the dark one - like a Row's.
@@ -24,39 +24,20 @@
 
 #include "lvgl.h"
 
-#include "cassette_buttons.h"   /* the drawer's slide time */
+#include "cassette_bars.h"   /* the chrome's slide time */
+#include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 #include "header_logo.h"
 
 LV_FONT_DECLARE(jura_36);
 
-/* The frame's top band and the badge beside it: both 71 px tall at y=6, on the first
- * button's and the first DJ cell's top line. The band starts HEADER_X px in, two pixels
- * inside the 96 px badge, so the badge's right border is the divider and no second line runs
- * beside it; the band's own right edge keeps the frame's 16 px inset. */
-#define HEADER_X        16+94
-#define HEADER_Y        6
-#define HEADER_W        768-94
-#define HEADER_H        71
-
-/* The drawer buttons' corner and the carcases' 2 px stroke, so the band reads as one of
- * them stretched across the screen. */
-#define HEADER_R        8
-#define HEADER_BORDER_W 2
-
-/* The badge at the band's left: a 96x71 rounded plate at (16, HEADER_Y) that holds the K7
- * mark. The band's own left edge starts two pixels inside it (HEADER_X), so the plate's
- * border is the whole divider between them and no second line runs beside it. */
-#define LOGO_BOX_X      16
-#define LOGO_BOX_W      96
-#define LOGO_BOX_R      HEADER_R
-
-/* The Menu's list title: Jura 36 at band x=104, vertically centred and ellipsized at 648 px.
- * The alignment box starts inside the band's 2 px border, so the offset is 102 for the band's
- * 104. */
+/* The band and the badge come from the layout: both 72 px tall at y=6, on the first
+ * button's and the first DJ cell's top line. The band starts at 110, two pixels inside the
+ * 96 px badge, so the badge's right border is the divider and no second line runs beside
+ * it; the band's own right edge is the frame's 784. */
 #define TITLE_X         16
-#define TITLE_ALIGN_X   (TITLE_X - HEADER_BORDER_W)
+#define TITLE_ALIGN_X   (TITLE_X - CASSETTE_BORDER_W)
 #define TITLE_W         648
 
 /* The title is copied because the caller's buffer may be reused. 648 px of Jura 36 holds
@@ -64,9 +45,7 @@ LV_FONT_DECLARE(jura_36);
  * label itself. */
 #define TITLE_MAX       128
 
-/* Where the slide starts and ends: out of sight above the panel, the band's bottom edge on
- * y=0, so the slide is exactly its height. */
-#define HEADER_HIDDEN_Y (-HEADER_H)
+/* Where the slide starts: out of sight above the panel, the band's bottom edge on y=0. */
 
 static lv_obj_t *s_header;
 static lv_obj_t *s_logo_box;
@@ -102,14 +81,15 @@ static void header_slide(bool shown)
         if (s_logo_box) lv_obj_set_hidden(s_logo_box, false);
     }
 
+    cassette_rect_t band = cassette_part_rect(CASSETTE_PART_HEADER);
     lv_anim_delete(s_header, header_slide_cb);
 
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, s_header);
     lv_anim_set_exec_cb(&a, header_slide_cb);
-    lv_anim_set_values(&a, lv_obj_get_y(s_header), shown ? HEADER_Y : HEADER_HIDDEN_Y);
-    lv_anim_set_duration(&a, CASSETTE_BUTTONS_SLIDE_MS);
+    lv_anim_set_values(&a, lv_obj_get_y(s_header), shown ? band.y : -band.h);
+    lv_anim_set_duration(&a, CASSETTE_BARS_SLIDE_MS);
     lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
     lv_anim_set_user_data(&a, s_header);
     if (!shown) lv_anim_set_completed_cb(&a, header_slide_done_cb);
@@ -143,23 +123,27 @@ void cassette_header_create(lv_obj_t *screen)
 {
     if (!screen || s_header) return;
 
-    s_header = cassette_border_box(screen, HEADER_X, HEADER_HIDDEN_Y, HEADER_W, HEADER_H,
-                                   HEADER_R, k_col_bg, LV_OPA_COVER, k_col_button_rect,
-                                   HEADER_BORDER_W);
+    cassette_rect_t band = cassette_part_rect(CASSETTE_PART_HEADER);
+    cassette_rect_t badge = cassette_part_rect(CASSETTE_PART_BADGE);
+    int hidden_y = -band.h;
+
+    s_header = cassette_border_box(screen, band.x, hidden_y, band.w, band.h,
+                                   CASSETTE_CORNER_R, k_col_bg, LV_OPA_COVER,
+                                   k_col_button_rect, CASSETTE_BORDER_W);
 
     /* The badge: a plate of its own at the band's left, a sibling above the band so its
      * border, not the band's, is the divider between them, and the mark centred inside it.
      * The image is the plate's child, so it is clipped by it and centred on its content. */
-    s_logo_box = cassette_border_box(screen, LOGO_BOX_X, HEADER_HIDDEN_Y, LOGO_BOX_W,
-                                     HEADER_H, LOGO_BOX_R, k_col_primary, LV_OPA_COVER,
-                                     k_col_primary, HEADER_BORDER_W);
+    s_logo_box = cassette_border_box(screen, badge.x, hidden_y, badge.w, badge.h,
+                                     CASSETTE_CORNER_R, k_col_primary, LV_OPA_COVER,
+                                     k_col_primary, CASSETTE_BORDER_W);
     s_logo = cassette_image(s_logo_box, &k_header_logo, 2, 0, HEADER_LOGO_W, HEADER_LOGO_H);
     lv_obj_align(s_logo, LV_ALIGN_CENTER, 0, 0);
     header_logo_page(false);
 
     /* The Menu's title, empty until the Menu gives it one. The width is the fixed box the
      * dots are cut in; the alignment (a style, so it follows the label's size) puts its
-     * left edge on the band's 104 and centres it vertically. */
+     * left edge 16 px inside the band's content box and centres it vertically. */
     s_title = cassette_text(s_header, &jura_36, k_col_primary, LV_ALIGN_LEFT_MID,
                             TITLE_ALIGN_X, 0);
     lv_obj_set_width(s_title, TITLE_W);

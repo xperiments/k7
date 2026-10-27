@@ -80,8 +80,9 @@ task already shares its core with the network.
   is. `t10_cassette` pins the clock.
 - `screen_display` gains `cassette_peek.c` (the bar, the tags, the tethers and the bob)
   and `font_jura_28.c` for the peek's text. `cassette_levels.c` is now the peek's host:
-  it creates the peek and passes the view's room callback through. The Label objects are
-  gone; the Label cover and Artwork sheets are removed by ADR 0019.
+  it creates the peek. The Controls model owns the room now, so the peek asks nobody for
+  it; the Label objects are gone and the Label cover and Artwork sheets are removed by
+  ADR 0019.
 - `tags_loader` carries the one request: a path, a format and a sequence, with a stale
   result dropped rather than shown against the wrong song. The tag read is one open per
   Track, on the loader task, behind the broadcast's lag wait. (ADR 0019 split this out of

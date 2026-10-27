@@ -1,63 +1,65 @@
 /*
- * The DJ block on the right; see cassette_eq.h.
+ * The EQ panel of the right bar; see cassette_eq.h.
  *
- * Six carcases, two touching columns of three, the same 96 px box as the transport
- * buttons. The first column is GAIN above M and R; the second is HI, MED and LOW. The four
- * knobs are a 30% smaller 44 px circle with the 24-dot crown outside it, and a line from
- * the centre towards the rim. M and R are the drawer's buttons moved to the block: the
- * same 64 px circle, letter, two states and click pulse, with no action yet. The
- * next/previous arrows are the left drawer's < and >.
+ * The panel fills five of the bar's six cells: GAIN, HI, MED, LOW and R. The first column's
+ * middle cell is M, the bar's chrome. The four knobs are a 30% smaller 44 px circle with the
+ * 24-dot crown outside it, and a line from the centre towards the rim. R is the shared
+ * cassette_button on the bar's cell, with the same 64 px circle, letter, one pressed state and
+ * click pulse as the Transport panel's; it has no action yet. The next/previous arrows are the
+ * Transport panel's < and >.
  *
- * The edit overlay is the whole input policy for the block: while a knob is active it is
- * the only clickable object on the screen, so M and R, the drawer and the peek cannot take
- * the same touch. The two-finger VU bypasses LVGL (the touch adapter calls
- * the view directly), which is why the view also checks is_editing().
+ * The bar builds the carcases and hands each one to eq_cell_build() through the panel value at
+ * the bottom of this file; this module creates no carcase and registers no root. The bar also
+ * slides them, dispatches the page and swaps the panel out when the Menu puts its Pad up; a
+ * swap back rebuilds the cells in place without touching this module's state.
  *
- * The block is hidden at rest, so the entry view is the untouched full-scale cassette; the
- * view shows it with the transport drawer and hides it again, leaving edit mode, when the
- * drawer slides away.
+ * The edit ordering is knob_edit_t's (knob_model): the tap that arms the delayed open, the
+ * double tap that disarms it and resets, the expiry that opens, and the close that ends a
+ * pending or an open edit. This file feeds those events in and applies the effects it gets
+ * back, so it owns only the 260 ms timer, the overlay, the blink and the gates.
  *
- * The Menu borrows two things from the block: M's click, through set_menu_cb(), and the
- * block's place, which the Menu's Pad covers. Covering hides the six cells at once and
- * takes the delayed open with it, so a timer cannot put the 3x knob over the Pad after the
- * Menu has opened; it leaves the slide state and the knob values alone, and uncovering puts
- * the cells back where the block's own state left them.
+ * The edit overlay is the whole input policy for the panel: while a knob is active it is the
+ * only clickable object on the screen, so M and R, the Transport panel and the peek cannot take
+ * the same touch. Every gesture is LVGL's now (the two-finger VU is gone, ADR 0025), so the
+ * overlay's clickability is the whole of the arbitration.
+ *
+ * The panel is hidden at rest, so the entry view is the untouched full-scale cassette; the bar
+ * shows it with the Transport panel, and losing it ends edit mode and the delayed open.
  */
 #include <math.h>
 
 #include "lvgl.h"
 
+#include "cassette_bars.h"
+#include "cassette_button.h"
 #include "cassette_eq.h"
+#include "cassette_layout.h"
+#include "knob.h"
 #include "cassette_style.h"
 #include "cassette_view.h"
 #include "cassette_widgets.h"
 #include "mini_icecast.h"
-#include "screen_input.h"
 
 LV_FONT_DECLARE(jura_36);
+LV_FONT_DECLARE(jura_28);
 
 /* The six cells: two 96 px columns touching at x=688, three rows at 76/170/264, so the
- * bottom of the block is 360. The 16 px is the inset of the 64 px circle inside each
- * 96 px carcase, not a gap: the carcases share their borders like the left drawer's. M and
- * R keep that 64 px circle; the four knobs use a 30% smaller one (44 px) and the dot crown
- * sits outside it, with the line running from the centre towards the rim. The
- * next/previous arrows are the left drawer's < and >.
+ * bottom of the bar is 360. The 16 px is the inset of the 64 px circle inside each
+ * 96 px carcase, not a gap: the carcases share their borders like the Transport panel's.
+ * R keeps that 64 px circle - and so does M, the bar's chrome cell in the first column's
+ * middle - while the four knobs use a 30% smaller one (44 px) and the dot crown sits outside
+ * it, with the line running from the centre towards the rim. The next/previous arrows are
+ * the Transport panel's < and >.
  *
  * The edit view is one knob at 3x, 284 px (96+94+94) at x=206 (206..490, over the cassette)
- * with its top on the GAIN button's top, so it spans the block's 76..360 band. Circle 132,
+ * with its top on the GAIN cell's top, so it spans the bar's 76..360 band. Circle 132,
  * crown at r=96 with 12 px dots, a line from the centre towards the rim. A click on the
  * ring sets the target angle; a click on the centre circle closes. The cassette cuts out
  * and the knob appears; on close the knob disappears and the cassette cuts back in. The
- * edit opens 550 ms after the first tap, so a double tap can reset to 0 dB first. */
-#define CELL_W       96
-#define CELL_H       96
-#define CELL_PITCH   94
-#define BLOCK_LEFT   592
-#define BLOCK_TOP    76
-#define CELL_R       8
-#define CIRCLE_D     64
-#define CIRCLE_R     32
-#define CIRCLE_INSET 16
+ * edit opens 260 ms after the first tap, so a double tap can reset to 0 dB first. */
+#define CELL_W       CASSETTE_CELL_W
+#define CELL_H       CASSETTE_CELL_H
+#define CELL_PITCH   CASSETTE_CELL_PITCH
 #define KNOB_D       44
 #define KNOB_R       (KNOB_D / 2)
 #define KNOB_INSET   ((CELL_W - KNOB_D) / 2)
@@ -67,82 +69,93 @@ LV_FONT_DECLARE(jura_36);
 #define STICK_W      4
 #define STICK_L      16   /* the owner's tuned line: 4 wide, 16 long */
 #define STICK_R      3
-#define BIG_D        284
-#define BIG_X        206   /* the owner's x: 206..490, over the cassette */
-#define BIG_Y        BLOCK_TOP   /* the GAIN button's top: 76..360, the block's band */
+/* The 3x knob is 90% of the 284 px it used to be (96+94+94): the dial's crown and the name
+ * pillow were touching, so the dial shrinks around the same centre and the pillow moves
+ * below it, inside the cell. */
+#define BIG_D        256
+#define BIG_X        220   /* 348 is still the centre: 220..476 */
+#define BIG_Y        90    /* 218 is still the centre: 90..346 */
 #define BIG_CX       (BIG_X + BIG_D / 2)
 #define BIG_CY       (BIG_Y + BIG_D / 2)
-#define BIG_R        24
+#define BIG_R        22
 #define BIG_BORDER   2   /* the same 2 px stroke as the small carcase and circle */
-#define BIG_INSET    76
-#define BIG_CIRCLE   132
-#define BIG_RADIUS   66
-#define BIG_DOT_R    96
-#define BIG_DOT_D    12
+#define BIG_INSET    69
+#define BIG_CIRCLE   118
+#define BIG_RADIUS   59
+#define BIG_DOT_R    86
+#define BIG_DOT_D    11
 #define BIG_STICK_W  4   /* the big line's width; the owner's tuned value */
-#define BIG_STICK_L  46
+#define BIG_STICK_L  41
 #define BIG_STICK_R  2
-/* A knob's edit opens after this delay so a second tap is read as LVGL's double click
- * and resets to 0 dB instead of opening the virtual knob. The touch adapter's window is
- * 500 ms, so wait a little past it. */
-#define EDIT_DELAY_MS 550
+/* The name pillow under the 3x knob: the knob's own name, GAIN / HI / MED / LOW, in the
+ * palette's primary with the light cap ink. Its top clears the six o'clock crown dot. */
+#define BIG_PILL_W   150
+#define BIG_PILL_H   32
+#define BIG_PILL_X   ((BIG_D - BIG_PILL_W) / 2)
+#define BIG_PILL_Y   (BIG_D - BIG_PILL_H - 2)
+/* The edit opens after this delay. It is shorter than LVGL's 500 ms double-click window on
+ * purpose: the second tap of a double tap lands on the 3x knob, whose double click is the
+ * same reset, so the reset gesture survives while a single tap feels immediate. */
+#define EDIT_DELAY_MS 260
 #define BLINK_MS     600
 #define BLINK_MIN_OPA 70
-/* The block enters and leaves with the transport drawer's 260 ms slide, from the right
- * edge: at +208 the block's left edge is the screen's, so it is fully off. */
-#define EQ_SLIDE_MS     260
-#define EQ_SLIDE_OFFSET (800 - BLOCK_LEFT)
 
 enum {
     SLOT_GAIN = 0,
     SLOT_HI   = 1,
     SLOT_MED  = 2,
     SLOT_LOW  = 3,
-    SLOT_M    = 4,   /* the M button; its function is TBD */
-    SLOT_R    = 5,   /* the R button; its function is TBD */
-    SLOT_COUNT = 6,
+    SLOT_R    = 4,   /* the R button; its function is TBD */
+    SLOT_COUNT = 5,
     KNOB_SLOTS = 4,
 };
 
 /* Which cell each slot occupies. The gain column is on the inside, next to the cassette;
- * the EQ column is the outer one. */
-static const int8_t k_slot_col[SLOT_COUNT] = { 0, 1, 1, 1, 0, 0 };
-static const int8_t k_slot_row[SLOT_COUNT] = { 0, 0, 1, 2, 1, 2 };
+ * the EQ column is the outer one. The first column's middle cell (0,1) is not here: it is
+ * the bar's chrome, the Menu's M. */
+static const int8_t k_slot_col[SLOT_COUNT] = { 0, 1, 1, 1, 0 };
+static const int8_t k_slot_row[SLOT_COUNT] = { 0, 0, 1, 2, 2 };
+
+/* The panel's slot at one bar cell, in the bar's (col,row) order. -1 is the bar's chrome,
+ * which no panel builds over. */
+static const int8_t k_cell_slot[2][3] = {
+    { SLOT_GAIN, -1, SLOT_R },
+    { SLOT_HI, SLOT_MED, SLOT_LOW },
+};
 
 /* Which audio band a knob drives: HI=2, MED=1, LOW=0. The gain is not a band. */
 static const int8_t k_slot_band[KNOB_SLOTS] = { -1, 2, 1, 0 };
 
-static lv_obj_t *s_cell[SLOT_COUNT];
+/* The controls' identities: what the 3x knob's pillow says, and what the mixer calls them. */
+static const char *const k_knob_name[KNOB_SLOTS] = { "GAIN", "HI", "MED", "LOW" };
+
+static lv_obj_t *s_cell[KNOB_SLOTS];   /* the four knob carcases, for the plate's page ink */
 static lv_obj_t *s_circle[KNOB_SLOTS];
 static lv_obj_t *s_ambient[KNOB_SLOTS];   /* the transparent circle carrying the broad shadow */
 static lv_obj_t *s_dot[KNOB_SLOTS][DOT_COUNT];
 static lv_obj_t *s_stick[KNOB_SLOTS];
-static int s_value[KNOB_SLOTS];       /* 0..100; 50 is 0 dB on every knob */
-static int s_active;                  /* -1, or the knob slot being edited */
-static bool s_shown;                  /* the block is out with the transport drawer */
-static bool s_sliding;                /* the show/hide slide is in flight */
-static int32_t s_slide_offset = EQ_SLIDE_OFFSET;  /* px right of the resting position */
+static knob_t s_knob[KNOB_SLOTS];     /* 0..100, 50 = 0 dB; the model owns the maths */
+static knob_edit_t s_edit;            /* the open knob, the pending one and the click owed */
+static bool s_shown;                  /* the panel is visible: the bar is out */
+static bool s_created;
 static lv_obj_t *s_overlay;
 static lv_obj_t *s_big_cell;          /* the 3x edit knob, centred */
 static lv_obj_t *s_big_circle;
 static lv_obj_t *s_big_dot[DOT_COUNT];
 static lv_obj_t *s_big_stick;
-static lv_timer_t *s_open_timer;      /* the delayed edit open, 550 ms */
-static int s_pending_slot;            /* which knob that timer will open */
-static bool s_reset_click;            /* the double click's second CLICKED is consumed */
-static bool s_covered;                /* the Menu's Pad covers the block's place */
-static void (*s_menu_cb)(void *ctx);  /* the Menu opens on M's click */
-static void *s_menu_ctx;
+static lv_obj_t *s_big_name;          /* the name pillow's label under the 3x knob */
+static lv_timer_t *s_open_timer;      /* the delayed edit open, 260 ms; s_edit names the knob */
 
 /* ------------------------------------------------------------------ geometry */
 
-static int cell_x(int slot)
+/* The right bar's cell at a slot, from the layout: the two columns share their 2 px
+ * border, so the drawn carcases overlap and the pitch separates them. */
+static cassette_rect_t cell_rect(int slot)
 {
-    int x = BLOCK_LEFT + k_slot_col[slot] * CELL_W;
-    /* The first column is nudged 2 px right; the second stays on BLOCK_LEFT + CELL_W. */
-    return k_slot_col[slot] == 0 ? x + 2 : x;
+    return cassette_cell_rect(CASSETTE_BAR_RIGHT, k_slot_col[slot], k_slot_row[slot]);
 }
-static int cell_y(int slot) { return BLOCK_TOP + k_slot_row[slot] * CELL_PITCH; }
+static int cell_x(int slot) { return cell_rect(slot).x; }
+static int cell_y(int slot) { return cell_rect(slot).y; }
 
 static int knob_at(int x, int y)
 {
@@ -157,19 +170,9 @@ static int knob_at(int x, int y)
 
 /* --------------------------------------------------------------------- audio */
 
-/* The DJ ranges: a trim of -12..+12 around 0 dB, and bands of -26..+6, so the cut side
- * is the coarse one. 50 on the knob is 0 dB; the mapping is linear on each side. */
-static float knob_db(int slot, int value)
-{
-    float v = (float)value - 50.0f;
-    if (slot == SLOT_GAIN) return v * (12.0f / 50.0f);
-    if (v >= 0.0f) return v * (6.0f / 50.0f);
-    return v * (26.0f / 50.0f);
-}
-
 static void knob_send(int slot)
 {
-    float db = knob_db(slot, s_value[slot]);
+    float db = knob_db(&s_knob[slot]);
     if (slot == SLOT_GAIN) mini_icecast_gain_set(db);
     else mini_icecast_eq_set(k_slot_band[slot], db);
 }
@@ -179,42 +182,40 @@ static void knob_send(int slot)
 /* Paint one crown. The arc starts at twelve o'clock and runs to the line on the side it
  * points: clockwise for a cut, counter-clockwise for a boost. The dot at twelve is always
  * the 0 dB tick. The small and the big knob share this. */
-static void paint_dots(lv_obj_t *dots[DOT_COUNT], int value)
+static void paint_dots(lv_obj_t *dots[DOT_COUNT], const knob_t *k)
 {
-    int span = (int)lroundf(fabsf((float)(value - 50)) / 50.0f * (float)(DOT_COUNT / 2));
-
     for (int i = 0; i < DOT_COUNT; i++) {
         lv_color_t c = k_col_eq_dim;
         if (i == 0) c = k_col_eq_tick;
-        else if (value < 50 && i <= span) c = k_col_eq_lit;
-        else if (value > 50 && i >= DOT_COUNT - span) c = k_col_eq_lit;
+        else if (knob_dot_lit(k, i, DOT_COUNT)) c = k_col_eq_lit;
         lv_obj_set_style_bg_color(dots[i], c, 0);
     }
 }
 
 static void knob_apply(int slot)
 {
-    int value = s_value[slot];
-    paint_dots(s_dot[slot], value);
-    float deg = (50.0f - (float)value) * 3.6f;   /* 180 degrees per 50 units */
-    lv_obj_set_style_transform_rotation(s_stick[slot], (int32_t)lroundf(deg * 10.0f), 0);
+    paint_dots(s_dot[slot], &s_knob[slot]);
+    lv_obj_set_style_transform_rotation(s_stick[slot], knob_angle_ddeg(&s_knob[slot]), 0);
 }
 
 /* The virtual knob shows the same value at 3x; its line is the owner's 4 px one. */
 static void big_apply(int slot)
 {
-    int value = s_value[slot];
-    paint_dots(s_big_dot, value);
-    float deg = (50.0f - (float)value) * 3.6f;
-    lv_obj_set_style_transform_rotation(s_big_stick, (int32_t)lroundf(deg * 10.0f), 0);
+    paint_dots(s_big_dot, &s_knob[slot]);
+    lv_obj_set_style_transform_rotation(s_big_stick, knob_angle_ddeg(&s_knob[slot]), 0);
+    if (s_big_name) {
+        const char *name = knob_name(&s_knob[slot]);
+        lv_label_set_text(s_big_name, name ? name : "");
+    }
 }
 
-/* Double-tapping a knob is the mixer's reset-to-centre: 0 dB, like its neutral. */
-static void knob_reset(int slot)
+/* Double-tapping a knob is the mixer's reset-to-centre: 0 dB, like its neutral. `on_big` is
+ * the 3x knob: it is painted only while it is the one showing, or about to be closed. */
+static void knob_reset_slot(int slot, bool on_big)
 {
-    s_value[slot] = 50;
+    if (!knob_reset(&s_knob[slot])) return;
     knob_apply(slot);
-    if (s_big_stick && s_active == slot) big_apply(slot);
+    if (s_big_stick && on_big) big_apply(slot);
     knob_send(slot);
 }
 
@@ -250,95 +251,28 @@ static void knob_build(lv_obj_t *cell, int slot)
     knob_apply(slot);
 }
 
-/* The M and R cells: the drawer's buttons, moved to the block. Each is the 64 px circle
- * and one letter in Jura 36 - the same circle, corner and inks as the left drawer - with the
- * drawer's two prebuilt states, a 2 px circle and a 3 px one, so a press costs a visibility
- * swap and no style write. Each carries its own cap like a drawer button: the dark page draws
- * both in the palette's playing red like everything else there, and the white page gives M the
- * black disc and R its own deeper red. The cell itself is the rectangle; its carcase is shared
- * with the block and does not thicken, so the pressed look is the circle's ring. Neither has an
- * action yet: a click pulses the cell, as P does on the left. */
-#define TEXT_BUTTONS 2
-#define TEXT_RING_UNPRESSED 2
-#define TEXT_RING_PRESSED   3
+/* R is the shared cassette_button on the bar's own cell. The cell's carcase is shared with
+ * the column and never thickens, so R's pressed look is the disc's ring on the dark page and
+ * the pulse alone on the white one, where the disc is the cap and its rim is fixed. R has no
+ * action, so its pulse is the whole of its click, as P's is on the left. M is the bar's
+ * chrome now and is not this panel's. */
+static cassette_button_t s_button_r;
 
-typedef struct {
-    lv_obj_t *ambient[2];  /* the transparent circle carrying the broad shadow */
-    lv_obj_t *circle[2];   /* 0 = unpressed, 1 = pressed */
-    lv_obj_t *letter[2];
-    cassette_cap_t cap;    /* the white page's colours; the dark page is the palette's line art */
-} eq_text_button_t;
-
-static eq_text_button_t s_text[TEXT_BUTTONS];
-static bool s_white;   /* the page the block is painted for, so a re-ink can repaint it */
-
-/* One state: the circle at the cell's inset and the letter inside it, both in the palette's
- * line art - the dark page the block is built on. */
-static void text_state_build(lv_obj_t *cell, const char *text, int ring_w, bool hidden,
-                             lv_obj_t **ambient_out, lv_obj_t **circle_out,
-                             lv_obj_t **letter_out)
+static void r_button_build(lv_obj_t *cell)
 {
-    lv_obj_t *ambient = cassette_border_box(cell, CIRCLE_INSET, CIRCLE_INSET,
-                                            CIRCLE_D, CIRCLE_D, CIRCLE_R,
-                                            k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
-    lv_obj_t *circle = cassette_border_box(ambient, 0, 0,
-                                           CIRCLE_D, CIRCLE_D, CIRCLE_R,
-                                           k_col_bg, LV_OPA_TRANSP, k_col_button_circle,
-                                           ring_w);
-    lv_obj_t *letter = cassette_text(circle, &jura_36, k_col_button_letter,
-                                     LV_ALIGN_CENTER, 0, 0);
-    lv_label_set_text(letter, text);
-    lv_obj_set_hidden(ambient, hidden);
-    *ambient_out = ambient;
-    *circle_out = circle;
-    *letter_out = letter;
-}
-
-static void text_button_build(lv_obj_t *cell, int slot, const char *text, cassette_cap_t cap)
-{
-    eq_text_button_t *b = &s_text[slot - SLOT_M];
-    b->cap = cap;
-    text_state_build(cell, text, TEXT_RING_UNPRESSED, false,
-                     &b->ambient[0], &b->circle[0], &b->letter[0]);
-    text_state_build(cell, text, TEXT_RING_PRESSED, true,
-                     &b->ambient[1], &b->circle[1], &b->letter[1]);
-}
-
-/* Paint one text button - both of its states - for the page, as the drawer's buttons are
- * painted: the dark page is the palette's line art - the playing red ring at the width that
- * state was built with and the playing red letter, whatever the cap says; the white page is the
- * button's cap, its rim the original grey at CASSETTE_CAP_RIM_W and the letter on it in the
- * cap's colour. */
-static void text_button_page(eq_text_button_t *b, bool white)
-{
-    for (int k = 0; k < 2; k++) {
-        if (b->circle[k]) {
-            cassette_circle_face(b->ambient[k], b->circle[k], white, b->cap.face);
-            if (white) {
-                lv_obj_set_style_border_width(b->circle[k], CASSETTE_CAP_RIM_W, 0);
-                lv_obj_set_style_border_color(b->circle[k], k_col_dome, 0);
-            } else {
-                lv_obj_set_style_border_width(b->circle[k],
-                                              k ? TEXT_RING_PRESSED : TEXT_RING_UNPRESSED, 0);
-                lv_obj_set_style_border_color(b->circle[k], k_col_button_circle, 0);
-            }
-        }
-        if (b->letter[k])
-            lv_obj_set_style_text_color(b->letter[k],
-                                        white ? b->cap.letter : k_col_button_letter, 0);
-    }
-}
-
-/* Swap a text button's two states. */
-static void text_button_show(int slot, bool pressed)
-{
-    if (slot < SLOT_M) return;
-    eq_text_button_t *b = &s_text[slot - SLOT_M];
-    if (!b->ambient[0] || !b->ambient[1]) return;
-    /* The wrapper is the state: it holds the disc and carries the broad shadow, so hiding it
-     * hides the letter too and leaves only one state's shadow on the white page. */
-    lv_obj_set_hidden(b->ambient[0], pressed);
-    lv_obj_set_hidden(b->ambient[1], !pressed);
+    cassette_cap_t cap = { k_col_button_r, k_col_button_white };
+    cassette_button_spec_t spec = {
+        .name = "REC",
+        .text = "R",
+        .font = &jura_36,
+        .cap = cap,
+        /* The bar's carcase is shared with the column and never thickens. */
+        .carcase_ring = { CASSETTE_BUTTON_RING_W, CASSETTE_BUTTON_RING_W },
+        .disc_ring = { CASSETTE_BUTTON_RING_W, CASSETTE_BUTTON_RING_W_PRESSED },
+        .on_click = NULL,
+        .ctx = NULL,
+    };
+    cassette_button_create(&s_button_r, cell, &spec);
 }
 
 /* The 3x knob, hidden until a knob is tapped. Its 284 px (96+94+94) hit area at x=206 is
@@ -368,6 +302,12 @@ static void big_build(lv_obj_t *parent)
                                BIG_STICK_R, k_col_eq_tick);
     lv_obj_set_style_transform_pivot_x(s_big_stick, BIG_STICK_W / 2, 0);
     lv_obj_set_style_transform_pivot_y(s_big_stick, BIG_STICK_L, 0);
+
+    /* The pillow: the knob's identity, under the dial and above the footer, in the
+     * palette's primary with the light cap ink. */
+    lv_obj_t *pill = cassette_box(s_big_cell, BIG_PILL_X, BIG_PILL_Y,
+                                  BIG_PILL_W, BIG_PILL_H, BIG_PILL_H / 2, k_col_primary);
+    s_big_name = cassette_text(pill, &jura_28, k_col_button_white, LV_ALIGN_CENTER, 0, 0);
 
     lv_obj_set_hidden(s_big_cell, true);
     big_apply(SLOT_GAIN);
@@ -414,24 +354,45 @@ static void blink_start(int slot)
 
 static void blink_stop(int slot)
 {
-    blink_off(s_circle[slot]);
+    if (slot >= 0 && slot < KNOB_SLOTS) blink_off(s_circle[slot]);
     blink_off(s_big_circle);
 }
 
 /* ----------------------------------------------------------------- edit mode */
 
-static void end_edit(void);
+static void apply_effect(knob_edit_effect_t fx);
+static void open_timer_cb(lv_timer_t *t);
 static void begin_edit(int slot);
-static void open_later(int slot);
-static void cancel_open(void);
+static void end_edit(int slot);
 
-/* The angle from the big knob's centre: 0 at twelve, positive clockwise, in degrees. */
-static float angle_at(lv_point_t p)
+/* The model is clock-free: it asks for the delayed open and for its disarm, and this file
+ * keeps the one-shot handle. */
+static void close_timer(void)
 {
-    float dx = (float)(p.x - BIG_CX);
-    float uy = (float)(BIG_CY - p.y);
-    if (dx == 0.0f && uy == 0.0f) return 0.0f;
-    return atan2f(dx, uy) * 180.0f / 3.14159265358979323846f;
+    if (s_open_timer) {
+        lv_timer_delete(s_open_timer);
+        s_open_timer = NULL;
+    }
+}
+
+static void arm_timer(void)
+{
+    close_timer();
+    s_open_timer = lv_timer_create(open_timer_cb, EDIT_DELAY_MS, NULL);
+    if (s_open_timer) lv_timer_set_repeat_count(s_open_timer, 1);
+}
+
+/* The model reports a set of instructions, because a double tap both disarms the delayed open
+ * and resets the knob. Reset comes before close: while the editor is open the reset must also
+ * paint the 3x knob, and the model has already forgotten the open id when its effect arrives,
+ * so the close flag is what says the 3x knob is the one showing. */
+static void apply_effect(knob_edit_effect_t fx)
+{
+    if (fx.cancel_timer) close_timer();
+    if (fx.arm_timer) arm_timer();
+    if (fx.reset_knob) knob_reset_slot(fx.id, fx.close_editor);
+    if (fx.open_editor) begin_edit(fx.id);
+    if (fx.close_editor) end_edit(fx.id);
 }
 
 /* A click in the centre circle closes. A click on the ring (the 284 px area outside that
@@ -441,7 +402,8 @@ static float angle_at(lv_point_t p)
 static void overlay_clicked_cb(lv_event_t *e)
 {
     (void)e;
-    if (s_active < 0) return;
+    int slot = knob_edit_open_id(&s_edit);
+    if (slot < 0) return;
     lv_indev_t *indev = lv_indev_active();
     if (!indev) return;
 
@@ -449,39 +411,37 @@ static void overlay_clicked_cb(lv_event_t *e)
     lv_indev_get_point(indev, &p);
     int dx = p.x - BIG_CX, dy = p.y - BIG_CY;
     if (dx * dx + dy * dy <= BIG_RADIUS * BIG_RADIUS) {
-        end_edit();
+        apply_effect(knob_edit_close(&s_edit));
         return;
     }
     if (p.x < BIG_X || p.x >= BIG_X + BIG_D ||
         p.y < BIG_Y || p.y >= BIG_Y + BIG_D) return;
+    /* The name pillow is a label, not a value target: a tap on it does nothing. */
+    if (p.y >= BIG_Y + BIG_PILL_Y) return;
 
-    int v = 50 - (int)lroundf(angle_at(p) * (50.0f / 180.0f));
-    if (v < 0) v = 0;
-    if (v > 100) v = 100;
-    if (v == s_value[s_active]) return;
-
-    s_value[s_active] = v;
-    knob_apply(s_active);
-    big_apply(s_active);
-    knob_send(s_active);
+    int v = knob_value_at(p.x - BIG_CX, p.y - BIG_CY);
+    if (!knob_set(&s_knob[slot], v)) return;
+    knob_apply(slot);
+    big_apply(slot);
+    knob_send(slot);
 }
 
 /* LVGL has already applied its own double-click rule (500 ms, 20 px on this touch
- * adapter): the second tap's short click is a DOUBLE_CLICKED on the overlay. Reset the
- * active knob and leave; the CLICKED that follows sees s_active == -1 and does nothing. */
+ * adapter): the second tap's short click is a DOUBLE_CLICKED on the overlay. The point maps
+ * back to the small cell it landed on - the overlay covers the bar too - and the model resets
+ * that knob and closes the editor while it is the open one. A double tap anywhere else is not
+ * that knob's, so it does nothing; the CLICKED that follows then reaches an idle editor. */
 static void overlay_double_clicked_cb(lv_event_t *e)
 {
     (void)e;
-    if (s_active < 0) return;
     lv_indev_t *indev = lv_indev_active();
     if (!indev) return;
 
     lv_point_t p;
     lv_indev_get_point(indev, &p);
     int slot = knob_at(p.x, p.y);
-    if (slot != s_active) return;
-    knob_reset(slot);
-    end_edit();
+    if (slot < 0) return;
+    apply_effect(knob_edit_double_tap(&s_edit, slot));
 }
 
 static void overlay_create(void)
@@ -501,11 +461,11 @@ static void overlay_create(void)
     lv_obj_move_foreground(s_overlay);
 }
 
+/* The model only reports an open when nothing is open and the delay has landed, so this is
+ * the whole of the entrance: the 3x knob, the dim and the blink. */
 static void begin_edit(int slot)
 {
-    if (s_active >= 0) return;
-    cancel_open();
-    s_active = slot;
+    if (slot < 0 || slot >= KNOB_SLOTS) return;
 
     overlay_create();
     if (s_big_cell) {
@@ -518,11 +478,10 @@ static void begin_edit(int slot)
     blink_start(slot);
 }
 
-static void end_edit(void)
+/* And the close: `slot` is the knob the model closed, which it has already forgotten. */
+static void end_edit(int slot)
 {
-    if (s_active < 0) return;
-    blink_stop(s_active);
-    s_active = -1;
+    blink_stop(slot);
     if (s_big_cell) lv_obj_set_hidden(s_big_cell, true);
     cassette_view_dim(false);
     if (s_overlay) {
@@ -534,332 +493,162 @@ static void end_edit(void)
 }
 
 /* The edit opens late: a second tap inside LVGL's 500 ms double-click window must win and
- * reset the knob to 0 dB, not open the virtual knob. A single tap starts a 550 ms one-shot;
- * the double click cancels it before it fires. */
+ * reset the knob to 0 dB, not open the virtual knob. A single tap arms a 260 ms one-shot; the
+ * double click disarms it before it fires. The timer has landed either way, so a gate that
+ * refuses the open tells the model its armed open is no longer wanted instead of leaving a
+ * pending knob behind. */
 static void open_timer_cb(lv_timer_t *t)
 {
     (void)t;
     s_open_timer = NULL;
-    if (!s_shown || s_sliding || s_active >= 0 || s_covered) return;
-    begin_edit(s_pending_slot);
-}
-
-static void cancel_open(void)
-{
-    if (s_open_timer) {
-        lv_timer_delete(s_open_timer);
-        s_open_timer = NULL;
+    if (!s_shown || cassette_bars_is_sliding()) {
+        apply_effect(knob_edit_close(&s_edit));
+        return;
     }
-}
-
-static void open_later(int slot)
-{
-    cancel_open();
-    s_pending_slot = slot;
-    s_open_timer = lv_timer_create(open_timer_cb, EDIT_DELAY_MS, NULL);
-    if (s_open_timer) lv_timer_set_repeat_count(s_open_timer, 1);
+    apply_effect(knob_edit_delay_expired(&s_edit));
 }
 
 /* ------------------------------------------------------------------- the cells */
 
-/* The click pulse, the drawer button's triangle: 256 -> 232 -> 256 over 160 ms. A text
- * button's cell pulses as a whole - carcase, circle and letter - like the left buttons. */
-#define PULSE_SCALE_NONE 256
-#define PULSE_SCALE      232
-#define PULSE_MS         160
-
-static void cell_pulse_cb(void *var, int32_t step)
+/* A knob's own tap guard: the same rule the buttons apply, because a swipe that starts on a
+ * knob is not the knob's click. The knob is not a button - it has no press look and no pulse
+ * - so it reads the portable rule directly. */
+static bool knob_click_is_tap(void)
 {
-    int32_t peak = step < 512 ? step : 1024 - step;
-    int32_t scale = PULSE_SCALE_NONE - (PULSE_SCALE_NONE - PULSE_SCALE) * peak / 512;
-    lv_obj_set_style_transform_scale((lv_obj_t *)var, scale, 0);
+    lv_indev_t *indev = lv_indev_active();
+    bool gesturing = indev && lv_indev_get_gesture_dir(indev) != LV_DIR_NONE;
+    bool moved = indev && lv_indev_get_press_moved(indev);
+    return cassette_button_is_tap(moved, gesturing);
 }
 
-static void text_button_pulse(lv_obj_t *cell)
-{
-    if (!cell) return;
-    lv_anim_delete(cell, cell_pulse_cb);
-    lv_obj_set_style_transform_scale(cell, PULSE_SCALE_NONE, 0);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, cell);
-    lv_anim_set_exec_cb(&a, cell_pulse_cb);
-    lv_anim_set_values(&a, 0, 1024);
-    lv_anim_set_duration(&a, PULSE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_linear);
-    lv_anim_start(&a);
-}
-
-/* The M and R cells swap their circle on a press and back on release or a lost press, like
- * the drawer's buttons. */
-static void cell_pressed_cb(lv_event_t *e)
-{
-    text_button_show((int)(intptr_t)lv_event_get_user_data(e) - 1, true);
-}
-
-static void cell_released_cb(lv_event_t *e)
-{
-    text_button_show((int)(intptr_t)lv_event_get_user_data(e) - 1, false);
-}
-
+/* A knob's click: the model arms the delayed open, or drops this click when a reset gesture
+ * still owes one, or ignores it because an editor is open. The overlay should own the touch
+ * while editing, so the guard comes first even though a click that reached a cell would also
+ * have to get past the hidden or sliding bar. R is the shared button's cell: its click
+ * handler is the button's, not this one. */
 static void cell_clicked_cb(lv_event_t *e)
 {
-    /* The overlay should own the touch while editing; the guard comes first so even a
-     * click that somehow reaches a cell cannot work M or R or enter edit. A hidden,
-     * covered or still-sliding block takes no click at all. */
-    if (s_active >= 0 || !s_shown || s_sliding || s_covered) return;
+    if (!s_shown || cassette_bars_is_sliding()) return;
 
-    int slot = (int)(intptr_t)lv_event_get_user_data(e) - 1;
-    /* The two-finger VU gesture is reserved: a gesture that starts on a cell must not also be
-     * the cell's click. The latch is cleared by the next press, which the cell bubbles. */
-    if (screen_input_two_finger_seen()) return;
-    lv_indev_t *indev = lv_indev_active();
-    if (indev && (lv_indev_get_gesture_dir(indev) != LV_DIR_NONE ||
-                  lv_indev_get_press_moved(indev))) return;
-
-    /* M and R have no transport action; the press state and this pulse are the whole of
-     * their click, as P's are on the left. M's click also opens the Menu when the view has
-     * given it that hook; R stays a placeholder. */
-    if (slot >= KNOB_SLOTS) {
-        text_button_pulse(s_cell[slot]);
-        if (slot == SLOT_M && s_menu_cb) s_menu_cb(s_menu_ctx);
-        return;
-    }
-
-    /* The second CLICKED of a double click: the DOUBLE_CLICKED handler already reset the
-     * knob and cancelled the pending open, so this click must not start a new one. */
-    if (s_reset_click) {
-        s_reset_click = false;
-        return;
-    }
-    open_later(slot);
-}
-
-/* A double click on a small knob is the reset gesture. It runs before the second CLICKED,
- * cancels the delayed open and leaves s_active alone: the virtual knob never appears. */
-static void cell_double_clicked_cb(lv_event_t *e)
-{
-    if (s_active >= 0 || !s_shown || s_sliding) return;
     int slot = (int)(intptr_t)lv_event_get_user_data(e) - 1;
     if (slot >= KNOB_SLOTS) return;
-    cancel_open();
-    knob_reset(slot);
-    s_reset_click = true;
+    if (!knob_click_is_tap()) return;
+
+    apply_effect(knob_edit_tap(&s_edit, slot));
 }
 
-static lv_obj_t *cell_create(lv_obj_t *parent, int slot)
+/* A double click on a small knob is the reset gesture. It runs before the second CLICKED, so
+ * the model disarms the delayed open, resets the knob and owes the click that follows; the
+ * virtual knob never appears. */
+static void cell_double_clicked_cb(lv_event_t *e)
 {
-    /* All six cells are buttons: the drawer's rectangle ink for the carcase. */
-    lv_obj_t *cell = cassette_border_box(parent, cell_x(slot), cell_y(slot),
-                                         CELL_W, CELL_H, CELL_R,
-                                         k_col_bg, LV_OPA_COVER, k_col_button_rect, 2);
-    lv_obj_set_clickable(cell, true);
-    /* The press bubbles so screen_input clears its two-finger latch; the gesture does not,
-     * so a swipe that starts on a cell is not a drawer or Level gesture. */
-    lv_obj_set_event_bubble(cell, true);
-    /* The pulse is centred on the cell, not on its top-left corner. */
-    lv_obj_set_style_transform_pivot_x(cell, CELL_W / 2, 0);
-    lv_obj_set_style_transform_pivot_y(cell, CELL_H / 2, 0);
-    /* Slot 0 is a valid user value, so the payload is slot + 1. */
-    lv_obj_add_event_cb(cell, cell_clicked_cb, LV_EVENT_CLICKED, (void *)(intptr_t)(slot + 1));
-    lv_obj_add_event_cb(cell, cell_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED,
-                        (void *)(intptr_t)(slot + 1));
-    lv_obj_add_event_cb(cell, cell_pressed_cb, LV_EVENT_PRESSED, (void *)(intptr_t)(slot + 1));
-    lv_obj_add_event_cb(cell, cell_released_cb, LV_EVENT_RELEASED, (void *)(intptr_t)(slot + 1));
-    lv_obj_add_event_cb(cell, cell_released_cb, LV_EVENT_PRESS_LOST,
-                        (void *)(intptr_t)(slot + 1));
-    s_cell[slot] = cell;
-    return cell;
+    if (!s_shown || cassette_bars_is_sliding()) return;
+    int slot = (int)(intptr_t)lv_event_get_user_data(e) - 1;
+    if (slot >= KNOB_SLOTS) return;
+    apply_effect(knob_edit_double_tap(&s_edit, slot));
+}
+
+/* One cell of the panel: the bar made the carcase and this fills it. A knob gets its circle,
+ * crown, stick and its two click handlers; R gets the shared button. The payload is the slot,
+ * plus one so a valid slot 0 is not NULL. */
+static void eq_cell_build(lv_obj_t *cell, int col, int row, void *ctx)
+{
+    (void)ctx;
+    if (!cell || col < 0 || col > 1 || row < 0 || row > 2) return;
+    int slot = k_cell_slot[col][row];
+    if (slot < 0) return;   /* the bar's chrome: M is not this panel's */
+
+    if (slot < KNOB_SLOTS) {
+        s_cell[slot] = cell;
+        knob_build(cell, slot);
+        lv_obj_add_event_cb(cell, cell_clicked_cb, LV_EVENT_CLICKED,
+                            (void *)(intptr_t)(slot + 1));
+        lv_obj_add_event_cb(cell, cell_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED,
+                            (void *)(intptr_t)(slot + 1));
+    } else {
+        r_button_build(cell);
+    }
 }
 
 /* ---------------------------------------------------------------------- public */
 
-/* The slide: move all six cells together, so the block enters from the right edge. The
- * animation's variable is cell 0 only so a new show/hide can replace the old one. */
-static void eq_slide_cb(void *var, int32_t v)
+/* The bar reports when the panel is visible: it is out. Losing it is a close: the model ends
+ * the editor or disarms the pending open, so neither the overlay nor the 3x knob can outlive
+ * the hidden cells. The bar owns the slide; the Menu owns the swap to its Pad. */
+static void eq_shown(bool visible, void *ctx)
 {
-    (void)var;
-    s_slide_offset = v;
-    for (int slot = 0; slot < SLOT_COUNT; slot++)
-        if (s_cell[slot]) lv_obj_set_x(s_cell[slot], cell_x(slot) + v);
+    (void)ctx;
+    s_shown = visible;
+    if (!visible) apply_effect(knob_edit_close(&s_edit));
 }
 
-static void eq_slide_done_cb(lv_anim_t *a)
+/* The white page paints the four knobs the way it paints a button: the 44 px circle becomes
+ * the cap - a flat disc with a soft lower-right shadow, no rim - while the crown and the stick
+ * keep their inks, except the four knobs' cells: those are the knob plate here - filled
+ * k_col_knob_rect with a k_col_bg border, so no carcase line runs round a knob. R's carcase
+ * keeps the page's fill and the drawer's border, inked by its own button. The dark page is the
+ * palette's line art throughout. The bar has already painted every cell's default. */
+static void eq_set_page(bool white, void *ctx)
 {
-    (void)a;
-    s_sliding = false;
-    s_slide_offset = s_shown ? 0 : EQ_SLIDE_OFFSET;
-    if (s_shown) {
-        cassette_eq_raise();
-        return;
-    }
-    for (int slot = 0; slot < SLOT_COUNT; slot++)
-        if (s_cell[slot]) lv_obj_set_hidden(s_cell[slot], true);
-}
-
-void cassette_eq_create(lv_obj_t *parent)
-{
-    if (!parent || s_cell[0]) return;
-
-    s_active = -1;
-    s_shown = false;
-    s_sliding = false;
-    s_slide_offset = EQ_SLIDE_OFFSET;
-    s_open_timer = NULL;
-    s_reset_click = false;
-    s_covered = false;
-    s_white = false;
-    s_value[SLOT_GAIN] = 50;   /* 0 dB, the same neutral as the three bands */
-    s_value[SLOT_HI] = 50;
-    s_value[SLOT_MED] = 50;
-    s_value[SLOT_LOW] = 50;
-
-    /* M's and R's caps, built here because the k_col_* colours are objects, not constant
-     * expressions a file-scope initialiser could use. They are the white page's only - the dark
-     * page draws both in the palette's playing red, like the drawer's three. M's cap is the
-     * page's black and R's its own deeper red, and the letter on each is white. */
-    cassette_cap_t m_cap = { k_col_bg, k_col_button_white };
-    cassette_cap_t r_cap = { k_col_button_r, k_col_button_white };
-
-    for (int slot = 0; slot < SLOT_COUNT; slot++) {
-        lv_obj_t *cell = cell_create(parent, slot);
-        if (slot < KNOB_SLOTS) knob_build(cell, slot);
-        else if (slot == SLOT_M) text_button_build(cell, slot, "M", m_cap);
-        else text_button_build(cell, slot, "R", r_cap);
-        lv_obj_set_hidden(cell, true);
-    }
-    big_build(parent);
-
-    /* The audio starts from the same values; this makes a rebuilt screen agree with it. */
-    for (int slot = 0; slot < KNOB_SLOTS; slot++) knob_send(slot);
-}
-
-void cassette_eq_set_shown(bool shown)
-{
-    if (!s_cell[0]) return;
-    if (shown == s_shown && !s_sliding) return;
-    s_shown = shown;
-    if (!shown) {
-        cancel_open();
-        s_reset_click = false;
-    }
-
-    /* A hidden block cannot own the edit overlay. The view gates the drawer's hide on edit
-     * mode, but keeping the rule here makes it true from any caller. */
-    if (!shown && s_active >= 0) end_edit();
-
-    lv_anim_delete(s_cell[0], eq_slide_cb);
-    s_sliding = true;
-    for (int slot = 0; slot < SLOT_COUNT; slot++) {
-        if (!s_cell[slot]) continue;
-        /* A covered block stays covered through the slide: the Menu is modal and the Pad
-         * covers this place. The x writes still run, so an uncover after the slide lands on
-         * the pose the block would have had. */
-        lv_obj_set_hidden(s_cell[slot], s_covered);
-        lv_obj_set_x(s_cell[slot], cell_x(slot) + s_slide_offset);
-    }
-    if (shown) cassette_eq_raise();
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_cell[0]);
-    lv_anim_set_exec_cb(&a, eq_slide_cb);
-    lv_anim_set_values(&a, s_slide_offset, shown ? 0 : EQ_SLIDE_OFFSET);
-    lv_anim_set_duration(&a, EQ_SLIDE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-    lv_anim_set_completed_cb(&a, eq_slide_done_cb);
-    lv_anim_start(&a);
-}
-
-void cassette_eq_raise(void)
-{
-    /* Raising the cells above the overlay would break the modal edit; the view does not
-     * ask while editing, but the guard keeps that true from any caller. A hidden block and
-     * a covered one have nothing to raise. */
-    if (!s_shown || s_active >= 0 || s_covered) return;
-    for (int slot = 0; slot < SLOT_COUNT; slot++)
-        if (s_cell[slot]) lv_obj_move_foreground(s_cell[slot]);
-}
-
-/* The white page paints the four knobs the way it paints the drawer's buttons: the 44 px
- * circle becomes the cap - a flat disc with a soft lower-right shadow, no rim - while the
- * crown and the stick keep their inks, except the four knobs' cells: those are the knob plate
- * here - filled k_col_knob_rect with a k_col_bg border, so no carcase line runs round a knob -
- * where M's and R's keep the page's fill and the drawer's border. The knobs' cap is
- * k_col_knob_cap, much darker than the buttons' k_col_dome, so a knob does not read as a
- * button; M and R take their own caps. The dark page is the palette's line art throughout,
- * every cell filled k_col_bg and bordered with the drawer's ink. */
-void cassette_eq_set_page(bool white)
-{
-    s_white = white;
-    lv_color_t page = white ? k_col_white : k_col_bg;
-    for (int slot = 0; slot < SLOT_COUNT; slot++) {
-        if (!s_cell[slot]) continue;
-        /* The four knobs' cells are the knob plate on the white page only: filled
-         * k_col_knob_rect and bordered k_col_bg, so no carcase line runs round a knob. M's and
-         * R's keep the page's fill and the drawer's border, and the dark page is the line art,
-         * every cell filled k_col_bg and bordered with the drawer's ink. */
-        bool plate = white && slot < KNOB_SLOTS;
-        lv_obj_set_style_bg_color(s_cell[slot], plate ? k_col_knob_rect : page, 0);
-        lv_obj_set_style_border_color(s_cell[slot],
-                                      plate ? k_col_bg : k_col_button_rect, 0);
-    }
+    (void)ctx;
     for (int slot = 0; slot < KNOB_SLOTS; slot++) {
+        if (!s_cell[slot]) continue;
+        lv_obj_set_style_bg_color(s_cell[slot], white ? k_col_knob_rect : k_col_bg, 0);
+        lv_obj_set_style_border_color(s_cell[slot],
+                                      white ? k_col_bg : k_col_button_rect, 0);
         if (!s_circle[slot]) continue;
         cassette_circle_face(s_ambient[slot], s_circle[slot], white, k_col_knob_cap);
         lv_obj_set_style_border_width(s_circle[slot], white ? 0 : 2, 0);
         if (!white) lv_obj_set_style_border_color(s_circle[slot], k_col_button_circle, 0);
     }
 
-    /* M and R: the drawer buttons' treatment, from their own caps. */
-    for (int i = 0; i < TEXT_BUTTONS; i++) text_button_page(&s_text[i], white);
+    /* R: the shared button inks its own carcase, disc and letter from its cap. */
+    cassette_button_set_page(&s_button_r, white);
 }
 
-void cassette_eq_set_cap(cassette_eq_button_t id, cassette_cap_t cap)
+/* The panel value the right bar fills: two columns of three, of which the bar keeps (0,1) for
+ * its chrome, M. The cells do not bubble gestures - a swipe that starts on a knob is not a
+ * drawer gesture - and the page ink is this panel's: the knobs' plate and R's cap. */
+static const cassette_panel_t k_eq_panel = {
+    .columns = 2,
+    .rows = 3,
+    .cell_rect = NULL,
+    .gesture_bubble = false,
+    .build = eq_cell_build,
+    .set_page = eq_set_page,
+    .shown = eq_shown,
+    .ctx = NULL,
+};
+
+void cassette_eq_create(lv_obj_t *parent)
 {
-    if ((unsigned)id >= CASSETTE_EQ_BUTTON_COUNT) return;
-    eq_text_button_t *b = &s_text[id];
-    if (!b->circle[0]) return;
-    b->cap = cap;
-    text_button_page(b, s_white);
+    if (!parent || s_created) return;
+    s_created = true;
+
+    s_shown = false;
+    s_open_timer = NULL;
+    knob_edit_init(&s_edit);
+    knob_init(&s_knob[SLOT_GAIN], KNOB_RANGE_GAIN);
+    for (int slot = 1; slot < KNOB_SLOTS; slot++) knob_init(&s_knob[slot], KNOB_RANGE_BAND);
+    for (int slot = 0; slot < KNOB_SLOTS; slot++) knob_set_name(&s_knob[slot], k_knob_name[slot]);
+
+    /* The bar builds the five cells and hands each to eq_cell_build(), and the panel value
+     * inks them for the page the bar is on. */
+    cassette_bars_set_panel(CASSETTE_BARS_RIGHT, &k_eq_panel);
+
+    /* The edit layer is a screen child above the cells, hidden until a knob is tapped. */
+    big_build(parent);
+
+    /* The audio starts from the same values; this makes a rebuilt screen agree with it. */
+    for (int slot = 0; slot < KNOB_SLOTS; slot++) knob_send(slot);
 }
 
-void cassette_eq_set_menu_cb(void (*cb)(void *ctx), void *ctx)
+const cassette_panel_t *cassette_eq_panel(void)
 {
-    s_menu_cb = cb;
-    s_menu_ctx = ctx;
-}
-
-/* Hiding the block's place for the Menu. The cells are the roots of everything the block
- * draws - the knobs' circles, crowns and sticks and M's and R's two states are children of
- * them - so six hides take the whole block off the frame with no slide and no style write.
- * The 3x knob and the edit overlay are screen children, outside the cells, and are dealt
- * with by the timer/edit rules above: a pending open is cancelled and an open edit ended, so
- * neither can draw or take a touch over the Pad. Uncovering is the same hide with the
- * block's own shown state, and it never shows the 3x knob: that belongs to edit mode. */
-void cassette_eq_set_covered(bool covered)
-{
-    if (!s_cell[0] || covered == s_covered) return;
-    s_covered = covered;
-
-    if (covered) {
-        cancel_open();
-        s_reset_click = false;
-        /* The view gates the M tap on edit mode, so this is a guard: an edit cannot be open
-         * when the Menu opens, and if it somehow is, ending it here keeps the overlay and
-         * the big knob from leaking past the cover. */
-        if (s_active >= 0) end_edit();
-    }
-
-    for (int slot = 0; slot < SLOT_COUNT; slot++) {
-        if (!s_cell[slot]) continue;
-        lv_obj_set_hidden(s_cell[slot], covered || !s_shown);
-    }
-    if (s_big_cell) lv_obj_set_hidden(s_big_cell, true);
+    return &k_eq_panel;
 }
 
 bool cassette_eq_is_editing(void)
 {
-    return s_active >= 0;
+    return knob_edit_is_editing(&s_edit);
 }

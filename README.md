@@ -557,98 +557,99 @@ because this board's INT line does not carry the touch (the reference project me
 idling through a press), and the last point the controller reported is latched so one
 press is one press rather than one per read. A tap on the screen is **not** an action: next
 and previous are the two arrows in the left drawer. A tap on the drawer
-itself is absorbed there. Either horizontal swipe slides the transport drawer in from the
-left edge and shows the DJ block at the right; while they are out, either horizontal swipe
-slides them back out. The vertical swipes reach the same controls: a down swipe brings them
-in on a **white** page (`k_col_white` instead of the screen's near-black - the orange line
-art and the tape's window chips read as ink on paper), and an up swipe takes them away
-again. Once that page is white, the next down swipe turns the playing Track's cover on the
-cassette's body - the picture is scaled to the outer frame's width, top-aligned and masked
+itself is absorbed there. The swipes are one vertical ladder now, and it is the only way to
+the controls (ADR 0025): a **down** swipe from the full cassette slides the transport drawer
+in from the left edge and shows the DJ block at the right, on the screen's near-black page
+(**Art**), and the next down turns that page **white** (`k_col_white` - the orange line art
+reads as ink on paper) and prints the playing Track's cover on the cassette's body
+(**Real**). An **up** swipe undoes one rung at a time; a down at Real and an up at the Peek
+do nothing. The picture is scaled to the outer frame's width, top-aligned and masked
 to the frame minus the label window, the hole a pill whose ends are the two reels. The stack
 is **label on top, glow in the middle, cinta at the bottom**: the label covers the body
 inside the frame with a real transparent window, the glow lights the tape below it, and the
-tape exposed below the frame stays visible under the glow. The label fades in on the down
-and out on the up over 1 s; a page flip or a Track change cuts it (the loader reuses the
-one buffer). An up swipe fades the cover off
-before it takes the controls away. The white
-page is the down swipe's, not the controls': the horizontal swipes keep
-showing the same drawer and block on the dark screen, and any way out returns the page to
-dark and hides the cover. The page flips in one frame at the start of the drawer's slide. Two 2 px bands rounded
-by the buttons' 8 px close that screen top and bottom - 768x71 at (16,6), its bottom edge on
-the first button's and the first DJ cell's top line, and 768x115 at (16,359), its top edge
+tape exposed below the frame stays visible under the glow. The label fades in with the page
+flip and out on the up over 1 s; a Track change cuts it (the loader reuses the
+one buffer). The page flips in one frame at the start of the step, under the picture's fade;
+a way off Real - the up swipe - flips it back to dark and fades the picture out over it. Two 2 px bands rounded
+by the buttons' 8 px close that screen top and bottom - 768x72 at (16,6), its bottom border on
+the first button's and the first DJ cell's top line, and 768x116 at (16,358), its top border
 on their bottom line - so the drawer, the block and the bands read as one frame. The bands
 are filled opaque in the page's colour (`k_col_bg` or `k_col_white`) so they cover the tape
 while they slide over it - as are the drawer's buttons and the DJ block's cells - and they
 slide in with the rest of the chrome, the header down from above the panel and the footer up
 from below it, over the drawer's 260 ms ease-out and back out the same way. A third rectangle, the
-470x284 window at (110,76), frames the tape in the same ink and fades in and out over the
+486x284 window at (110,76), frames the tape in the same ink and fades in and out over the
 same time. The header also carries the K7 mark (`assets/labels/k7b.png`, 60x32) in a rounded
-96x71 badge at (16,6): the palette's primary with a light mark on the dark page, a white plate
-with `k_col_bg` border and mark on the white one, so it flips with the page and slides with the
-header. The
+96x72 badge at (16,6): `k_col_bg` with a `k_col_primary` border and mark on the dark page, a
+`k_col_logo_back` plate with a `k_col_bg` border and mark on the white one, so it flips with the
+page and slides with the header. The
 cassette enters at full scale; while the controls are out it scales to 134/256 (148..550),
-so the 120 px drawer on the left and the 192 px DJ block on the right both have room. A
-left swipe restores the full view. The drawer's three line-art buttons (P, `<`, `>`) each
-prebuild a pressed and an unpressed state, swap them on press and release, and pulse their
-scale on a click; `<` and `>` call `mini_icecast_prev()` / `mini_icecast_skip()`, so they
-are the transport's next/previous now, while P stays a placeholder.
+so the drawer's 96 px column on the left and the 190 px DJ block on the right both have room. An
+up swipe restores the full view. The drawer's three line-art buttons (P, `<`, `>`) write the
+carcase's ring on a press and back on release, and pulse their scale on a click; `<` and `>`
+call `mini_icecast_prev()` / `mini_icecast_skip()`, so they are the transport's next/previous
+now, while P stays a placeholder.
 
 The DJ block is six 96 px carcases in two touching columns at x=594..784 (the first
 column is 2 px right of its nominal 592; the second stays at 688), rows at
 76/170/264: GAIN above M and R in the first column, HI, MED and LOW in the second. M and R
-are the drawer's buttons moved to the block - the same circle, letter, two states and pulse;
-M opens the Menu and R is still a placeholder. The four knobs are a 44 px circle (30% smaller than the
-placeholders'), a 24-dot crown outside it and a line from the centre towards the rim, 0 dB
-at twelve o'clock, right cuts and left boosts. The two freed cells keep the 64 px circle
-and show the owner's open folder and two-circle icons; M opens the Menu below and R's
-function is still TBD. A tap on a
-knob opens a modal edit mode
-after 550 ms: a 3x virtual knob (284 px at x=206, top on the GAIN button's top, no outer
-square, just the circle, the crown and the line) appears over the cassette, which cuts out;
-on close the knob disappears and the cassette cuts back in. Only its centre circle closes,
-and a click on the ring is the target point, so the knob jumps to that angle (clockwise
-cuts, counter-clockwise boosts). The delay lets a double tap on a small knob reset it to
-0 dB instead of opening the knob; both circles blink, and nothing else responds while the
+are the drawer's buttons moved to the block - the same circle, letter, one pressed state and
+pulse; M opens the Menu and R is still a placeholder. The four knobs are a 44 px circle (30%
+smaller than the placeholders'), a 24-dot crown outside it and a line from the centre towards
+the rim, 0 dB at twelve o'clock, right cuts and left boosts. While the Menu is up the same bar
+hosts the Pad in the block's place: one white 186x284 plate with a dark inner and a dotted
+guide, and the block returns when the Menu closes. A tap on a knob opens a modal edit mode
+after 260 ms: a 3x virtual knob (256 px at x=220, 90% of the length, top at y=90, no outer
+square, just the circle, the crown and the line) appears over the cassette, and under the
+dial a rounded primary pillow carries the knob's internal name (GAIN, HI, MED or LOW) in
+the light cap ink. The cassette
+cuts out; on close the knob disappears and the cassette cuts back in. Only its centre circle
+closes, and a click on the ring is the target point, so the knob jumps to that angle (clockwise
+cuts, counter-clockwise boosts). The short delay lets a double tap's second tap land on the 3x
+knob and reset it there; both circles blink, and nothing else responds while the
 overlay is up. The audio is
 `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell and a 4 kHz high shelf plus
 a trim before them, with the DJ ranges (GAIN -12..+12 dB, default 0; bands -26..+6 dB,
 default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder.
 
-The screen has one Level left: Bare, the cassette alone. The Label cover and Artwork
-screens below it, and the two down gestures that reached them, are removed. At the entry
-100% pose (256/256) an up swipe at Bare raises the peek: the timeline bar slides up with the
+The screen is four fixed rungs, top to bottom: **Real** (the controls on the white page,
+with the Track's picture), **Art** (the controls on the dark page, orange line art),
+**Initial** (the full cassette, nothing over it) and **Peek** (the timeline bar and the two
+tags). It boots at Initial. A down swipe takes one rung towards Real, an up swipe one towards
+the Peek, and the ends stop; that order, and the retired horizontal swipes, are
+[`docs/adr/0025-four-rungs-real-art-initial-peek.md`](docs/adr/0025-four-rungs-real-art-initial-peek.md).
+At the entry 100% pose (256/256) an up swipe at Initial raises the peek: the timeline bar slides up with the
 Track's elapsed, a growing fill
 and its total, and two rounded tags float over the cassette in the left hub's column - the
 song above the hub and the group below it, each hanging from that hub by a thin tether,
-bobbing a few pixels out of phase. It cannot be raised while the transport drawer holds the
-134/256 control pose; an open peek is closed by a down swipe - which only puts the peek
-away, and does not go on to open the controls on the same swipe - and an up swipe while it
-is up does nothing. The down swipe's other job, and the up swipe's when it has no peek to
-raise, are the controls: down shows them with the white page and turns the Track's cover
-on, and up turns the cover off before it takes the controls away. The tag
+bobbing a few pixels out of phase. It cannot be raised while the chrome holds the
+134/256 control pose, and a down swipe with the peek up only puts it
+away - it does not go on to Art on the same swipe - while an up swipe with it up does
+nothing. The down from Initial is Art and has no pose gate; the down from Art waits for the
+controls pose to land, because the picture's mask is built at that size, and a quick second
+down is refused rather than printed early. The tag
 texts are the Track's ID3/FLAC tags, read by the artwork loader on its own
 task; until they land the group is the artist directory and the song the cleaned filename.
-The two-finger swipe is the VU meter's toggle: a left shows it, a right hides it, and it
-starts hidden with a 220 ms fade. The view still latches the two-finger touch so the same
-touch
-cannot also trip the one-finger gesture. The Sunton build compiles this path; the board
+The two-finger VU gesture is gone and the meter is parked - built, placed and fed, never
+shown - until it has its new home. The only left swipe left in the build is the Menu's Back
+on the Pad. The Sunton build compiles this path; the board
 tier has not yet recorded a finger, so the rows above are unchanged. The removal and the
 old cover screens are
 [`docs/adr/0019-remove-label-and-artwork-screens.md`](docs/adr/0019-remove-label-and-artwork-screens.md);
-the drawer and the horizontal swipes are
+the drawer is
 [`docs/adr/0016-transport-drawer-and-horizontal-swipes.md`](docs/adr/0016-transport-drawer-and-horizontal-swipes.md);
-the vertical swipes and the white controls page are
+the white controls page is
 [`docs/adr/0020-down-swipe-controls-and-the-white-page.md`](docs/adr/0020-down-swipe-controls-and-the-white-page.md);
 the DJ block's ranges and the transport arrows (now the left drawer's) are
 [`docs/adr/0018-dj-eq-knobs-and-transport-arrows.md`](docs/adr/0018-dj-eq-knobs-and-transport-arrows.md);
 the peek's bar, tags and tag reader are
 [`docs/adr/0017-peek-timeline-and-tags.md`](docs/adr/0017-peek-timeline-and-tags.md).
 
-**Track artwork is the white page's cover, not a Level.** The old Artwork Level - the
+**Track artwork is Real's cover, not a screen of its own.** The old Artwork Level - the
 cassette Case and the playing MP3's own cover in its window - is still gone, but the
-picture is back inside the cassette: the white page's down swipe prints it on the
-outer frame, masked to frame minus the label window, with the tape exposed below the frame
-still visible. The pipeline is the one the Artwork
+picture is back inside the cassette: the down swipe from Art prints it on the
+outer frame, with the white page, masked to frame minus the label window, and with the tape
+exposed below the frame still visible. The pipeline is the one the Artwork
 screen used: the locator in `components/portable/artwork` (the ID3v2.3/2.4 `APIC` frame,
 or a native FLAC `PICTURE` block) and the TJpgDec decode and fit in `artwork_loader.c`.
 The panel board builds it and carries the 464,310 B cover buffer; the old Case backdrop
@@ -832,15 +833,18 @@ components/
     appliance/              the entry policy: station format, card retry, console
     board_esp32/            Wi-Fi, SPI card mount, hardware census; credentials live here
     screen_display/         panel and touch bring-up, LVGL's PSRAM allocator, the cassette
-                            composition and its parts (tapes, meter, levels, peek, eq, input)
+                            composition and its parts (bars, tapes, meter, levels, peek,
+                            buttons, eq, input)
 host/                       the host build: shim, board adapter, fixtures, tests, tools
 ```
 
-The cassette screen is the composition: `cassette_tapes`, `cassette_meter`,
-`cassette_levels`, `cassette_peek`, `cassette_buttons`, `cassette_eq` and `screen_input`
-are its parts, and the design grid is the portable `cassette_layout` the host tier pins
-with `t16`. The view keeps the pose, steps the model and maps intents to actions; no part
-reads another's state.
+The cassette screen is the composition: `cassette_bars` (the two edge strips' shared
+entrance, page and raise), `cassette_tapes`, `cassette_meter`, `cassette_levels`,
+`cassette_peek`, `cassette_buttons`, `cassette_eq` and `screen_input` are its parts. The
+overlay ladder is the portable `controls` model the host tier pins with `t24_controls`, and
+the design grid is the portable `cassette_layout` pinned with `t16`. The view keeps the
+pose, steps the model, maps intents into the Controls model and applies its changed-mask;
+no part reads another's state.
 
 The dependency direction is one-way and is checked by `make -C host layering`:
 `mini_files` and `mini_icecast` depend on `http_server`; only the application

@@ -4,8 +4,8 @@
  *
  * The controls screen is the transport drawer on the left and the DJ block on the right,
  * both of which start at y=76. This is the frame that closes the screen across the top:
- * 768x71 at (16,6), its bottom edge on the buttons' and the cells' top line and its 16 px
- * side margins on the cassette's outer frame inset.
+ * 768x72 at (16,6), its 2 px border landing on the buttons' and the cells' top line and its
+ * 16 px side margins on the cassette's outer frame inset.
  *
  * It is line art like the carcases it joins: a 2 px border rounded by 8 px - the drawer
  * buttons' corner - in the drawer's carcase ink, over an opaque fill in the page's colour
@@ -15,14 +15,13 @@
  * come out, and back up, hidden at the end, when they go away. It is on the white page the
  * down swipe paints and on the dark page the horizontal swipes keep.
  *
- * The band carries the K7 mark: assets/labels/k7b.png, a 75x40 A8 mask with its horizontal
- * centre on the drawer's button column (screen x=64) and its vertical centre on the band's,
- * so it sits at (27,21) above the P button. The mask is tinted with the page's ink -
+ * The band carries the K7 mark: assets/labels/k7b.png, a 60x32 A8 mask centred in the badge,
+ * so it sits at (34,26) on the screen. The mask is tinted with the page's ink -
  * k_col_primary on the dark page, k_col_bg on the white one - by the same set_page() call
  * that repaints the band, and it slides and hides with it.
  *
- * The Menu also puts the list's title here: Jura 36 at band x=104 - 18 px clear of the
- * mark - vertically centred and ellipsized at 648 px. It takes the page's label ink
+ * The Menu also puts the list's title here: Jura 36 at screen x=126 - 14 px clear of the
+ * badge - vertically centred and ellipsized at 648 px. It takes the page's label ink
  * (k_col_bg on the white page, k_col_primary on the dark one), is empty and hidden outside
  * the Menu, and its text is copied from the caller.
  *

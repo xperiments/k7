@@ -117,17 +117,14 @@ truth.
 _Avoid_: UI, GUI, dashboard
 
 **Level**:
-*(Removed by ADR 0019: Bare is the only screen. An up swipe at Bare toggles the **Peek**;
-a down swipe shows the controls on the white page, and the next one turns the **Cover** on;
-an up swipe turns it off before it closes the controls.
-The Label cover and Artwork entries below are parked vocabulary for when those screens
-return.)*
-One of the three positions of the cassette screen, ordered by how much of it the
-**sheet** covers: Bare, Label cover and Artwork. A one-finger down swipe moves one
-towards Artwork, an up swipe one towards Bare, and the ends do not wrap. At Bare, a down
-swipe dismisses the **Peek** first if it is up, and only the next one moves. The Level
-changes in one frame.
-_Avoid_: state, step, mode, page
+One of the four fixed screens the cassette screen shows, in a vertical stack: **Real** (the
+top), **Art**, **Initial** and **Peek** (the bottom). The screen boots at Initial; a down
+swipe takes one Level towards Real and an up swipe one towards the Peek, and the ends stop. A
+Level is the whole of the cassette's control state together with the **Menu**; the **Page**,
+the **Cover**, the **Peek** and the **Controls** are readings of it, not fields of their own
+(ADR 0025). The Label cover and Artwork entries below stay parked vocabulary for screens that
+have not returned.
+_Avoid_: state, step, mode, screen
 
 **Sheet**:
 *(Removed with the Label cover and Artwork screens, ADR 0019.)*
@@ -166,41 +163,68 @@ touching dim bars and one rounded lit fill that grows from the left and ends in 
 semicircle; the fill is a step dimmer than the badge and the track a dim red.
 Each row is driven over -48..0 dB, so it moves like a meter rather than a linear
 amplitude, and the peak-hold falls about 23 dB/s, so it follows a real drop instead of
-hanging. The meter starts hidden; a two-finger swipe left fades it in and a right fades it
-out and hides it, over 220 ms. It is chrome, not tape: the **reel change** does not touch
+hanging. The meter starts hidden and stays hidden: it is parked (ADR 0025) - the view builds, places
+and feeds it, and nothing shows it - until it has its new home. The two-finger gesture that
+used to fade it in and out is gone. It is chrome, not tape: the **reel change** does not touch
 it.
 _Avoid_: level bar, meter, peak meter
 
 **Controls**:
-What the swipes bring in over the cassette: the **Transport drawer**, the DJ block, the header
+What the ladder brings in over the cassette: the **Transport drawer**, the DJ block, the header
 and footer bands and the frame that closes around the tape, with the cassette posed to 134/256.
-The down swipe shows them on the white **page**; either horizontal swipe shows the same parts
-on the dark one. They never share the screen with the **Peek**.
+They are the **Art** and **Real** Levels: a down swipe from **Initial** shows them on the dark
+**Page** (Art), and the next down turns the Page white and prints the **Cover** (Real). They
+never share the screen with the **Peek**.
 _Avoid_: menu, overlay, chrome
 
 **Page**:
-The ink the **Controls** are drawn on: the white page the down swipe asks for, or the dark
-screen either horizontal swipe keeps. It follows the gesture that opened the Controls, and
-every part on it - the drawer, the block, the bands, the **Cover**, the **Menu** - turns with
-it. It is not a Level or a **Sheet**.
+The ink the **Controls** are drawn on: the dark screen at **Art**, or the white one at
+**Real**, which carries the **Cover** as well. The Page is a reading of the Level, not a choice
+of its own, and every part on it - the drawer, the block, the bands, the **Cover**, the
+**Menu** - turns with it. It is not a Level or a **Sheet**.
 _Avoid_: lineart view, dark mode, theme, skin
+
+**Bar**:
+One of the two vertical strips at the screen's edges: the left **Bar** hosts the **Transport
+drawer**, the right **Bar** hosts the **DJ block** and, while the Menu is up, the **Pad**. A
+Bar owns its **Cells** - it builds each cell's carcase and holds the control inside - the
+strip's 260 ms entrance, the **Page** ink dispatch and the hit rule, and it hosts one
+**Panel** at a time, as a value.
+_Avoid_: edge, rail, drawer (that is the panel)
+
+**Panel**:
+A **Bar**'s content, handed to it as one value: a grid of **Cells** - the Transport drawer's
+1x3, the DJ block's 2x3 - or one plate, the **Pad**. A panel builds a control into each cell
+the Bar hands it, and creates no carcase and no root of its own. One panel is up per bar;
+showing another is a cut, not a slide. The right bar's panels are the DJ block and the Pad; a
+future RGB panel would be a third.
+_Avoid_: page, sheet, mode
+
+**Cell**:
+One 96x96 carcase on a 94 px pitch inside a **Bar**, its 2 px border shared with its
+neighbours; a plate panel such as the Pad's is one cell at its own rect instead. The Bar
+builds either; a Cell hosts one control - a button, a knob, or the Pad's plate - which builds
+its disc, its crown or its plate inside and, for a button, inks the carcase's ring on a
+press.
+_Avoid_: button, tile, box
 
 **Menu**:
 A mode of the **Controls**, not a Level or a screen of its own: the cassette area gives way to
 a list of destinations and the DJ block gives way to the **Pad**, while the **Transport
-drawer**, the header and footer bands and the **Page** stay. The M cell opens it, on the white
-page or the dark one, and it turns with the page like every other part. The cassette is hidden
-behind it. The header says where you are and the footer what is playing; activating a row acts
-in place, so the Menu stays up. An up swipe closes it, as P does, and as `<` does from the root;
-while it is up the other swipes and the two-finger gesture do nothing. Its **Menu list** and
-**Band** are remembered until the app restarts.
+drawer**, the header and footer bands and the **Page** stay. The M cell opens it, on Art or on
+Real, and it turns with the Page like every other part. The cassette is hidden behind it. The
+header says where you are and the footer what is playing; activating a row acts in place, so
+the Menu stays up. An up swipe closes it, as P does, and as `<` does from the root; while it is
+up the other swipes do nothing. Its **Menu list** and **Band** are remembered until the app
+restarts.
 _Avoid_: screen, level, sheet, overlay, iPod menu
 
 **Pad**:
-The DJ block's place (186x284, 2 px in from the block on each side) as one touch surface while
-the **Menu** is up: a white plate with a dark inner inset 8 px and one dotted vertical guide
-inside it, rather than the block's six cells. The inner and the guides are decoration; the plate is
-the surface.
+The right **Bar**'s menu **Panel**, one plate at the DJ block's place - 186x284 at (596,76), 2 px
+in from the block on each side in x and flush in y - while the **Menu** is up: a white plate
+with a dark inner inset 8 px and one dotted vertical guide inside it, rather than the block's
+cells. The plate is white on both pages and carries no page ink of its own. The inner and the
+guides are decoration; the plate is the surface.
 A vertical drag ratchets the list one row per 54 px of travel and rests only on row boundaries;
 a tap that never became a drag activates the **Band**, and a leftward swipe as long as the
 screen's own gesture limit is Back: up one **Menu list**, and out of the Menu at the root. The
@@ -225,25 +249,30 @@ _Avoid_: menu page, menu screen, level, sheet
 One line of a **Menu list**: its icon, its label and, on the right, a chevron when it opens
 another list or a value when it shows a setting. Five rows share the page's 6 px inset. A
 row is never a touch target: only the **Pad** activates the **Band**.
-_Avoid_: item, entry, cell
+_Avoid_: item, entry (a **Cell** is a **Bar**'s carcase, not a row)
 
 **Transport drawer**:
-The three line-art buttons down the screen's left edge, P, `<` and `>`, hidden off-screen
-until a one-finger right swipe and put away by a left swipe. Each button is a 96x96
-rectangle rounded by 8 px with a 64 px circle at its centre and its character centred in
-the circle in Jura; each carries a prebuilt pressed and an unpressed state, swapped on
-press and release. A click is a scale pulse; `<` and `>` also call
-`mini_icecast_prev()` / `mini_icecast_skip()`, so they are the transport's next/previous,
-while P is still a placeholder. While the drawer is out the cassette screen scales to
-134/256 and moves left to x=148, so the 402x232 tape clears the panel; the three buttons
-start 64 px from the top so the middle `<` sits on y=220, and the cassette is centred to
-that same line. It is chrome, not the **Peek**.
+The left **Bar**'s panel: three line-art buttons, P, `<` and `>`, hidden off-screen until the
+screen's down swipe reaches **Art** and put away by the up swipe that leaves it. Each button is a 96x96 rectangle rounded
+by 8 px with a 64 px circle at its centre and its character centred in the circle in Jura; a
+press shows through the button's heavier ring, and a click is a short scale pulse. `<` and
+`>` also call `mini_icecast_prev()` / `mini_icecast_skip()`, so they are the transport's
+next/previous, while P is still a placeholder. While the drawer is out the cassette screen
+scales to 134/256 and moves left to x=148, so the 402x232 tape clears the panel; the three
+buttons start 76 px from the top so the middle `<` sits on y=218, and the cassette is centred
+to that same line. It is chrome, not the **Peek**.
 _Avoid_: menu, toolbar, controls
+
+**DJ block**:
+The right **Bar**'s EQ **Panel**: four knobs - GAIN, then HI, MED and LOW - and the R button,
+all in 96 px **Cells**, with the Menu's M in the bar's chrome. It gives way to the **Pad**
+while the **Menu** is up. R is a placeholder.
+_Avoid_: EQ block, right bar (that is the **Bar**)
 
 **Label cover**:
 *(Parked with the removed Label cover screen, ADR 0019; the asset is not embedded.)*
 The K7 sticker, `assets/labels/k7logo.png`, drawn full-bleed at 0,0 over the 800x480
-panel at the Label cover Level; one-finger down from Bare reaches it. It is 800x480, the
+panel at the Label cover Level; one-finger down from Initial reaches it. It is 800x480, the
 panel's own size, so it carries no margin. Its black triangle and circle are
 transparent and it is stored as RGB565A8, so the reels show through them. When the
 Level settles the screen background fades from the cassette's colour to the cover's own
@@ -278,19 +307,19 @@ Level that showed it is still parked.
 _Avoid_: album art, portada
 
 **Cover**:
-What the white controls page's down swipe prints on the cassette: the Track artwork scaled
+What the white page - the **Real** Level - prints on the cassette: the Track artwork scaled
 to the outer frame's width, top-aligned, clipped to that frame and masked by the inner
 frame. It is the **label**, the top layer: cinta < glow < label. The label covers the body
 inside the outer frame and its window is a real transparent hole, so the glow and the tape
 show through; the tape exposed below the frame stays visible under the glow. The up swipe
-turns it off; every way off the white page hides it. Not a Level and not the removed Label
-cover.
+turns it off with the Page; every way off Real hides it. It is part of Real, not a Level of
+its own and not the removed Label cover.
 _Avoid_: artwork screen, Case, portada
 
 **Peek**:
-The overlay on **Bare** raised by an up swipe, and put away by the next up swipe. It has
-the **Timeline bar** and the two **Now playing tag**s. There is no Level change to hide
-it now (ADR 0019). While it is up the cassette shrinks and lifts so the bar clears the
+The bottom **Level**: raised by an up swipe from **Initial**, and put away by a down swipe. It
+has the **Timeline bar** and the two **Now playing tag**s, and it can only be raised from the
+settled Initial pose. While it is up the cassette shrinks and lifts so the bar clears the
 tape, and the tags float over the cassette on their tethers to the hubs.
 _Avoid_: title bar, caption, marquee
 

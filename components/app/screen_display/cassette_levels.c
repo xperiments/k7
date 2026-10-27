@@ -1,11 +1,11 @@
 /*
- * cassette_levels.c - the peek and the white page's cover, hosted on the Cassette screen.
+ * cassette_levels.c - the peek and Real's cover, hosted on the Cassette screen.
  *
- * The Label cover and Artwork screens and the Level machine are removed. Bare is the
- * only screen: the up swipe raises the peek (the view does that only from the entry 100%
- * pose), the down swipe puts it away or turns the white page's cover on, and no
- * full-screen sheet exists. The peek itself is cassette_peek; this module only creates
- * it, feeds it the frame and the tags, and owns the Track request dedupe.
+ * The peek is the bottom rung of the four (ADR 0025): the up swipe at Initial raises it
+ * (the view does that only from the entry 100% pose) and the down swipe puts it away. The
+ * cover is the top rung's picture. No full-screen sheet exists. The peek itself is
+ * cassette_peek; this module only creates it, feeds it the frame and the tags, and owns the
+ * Track request dedupe.
  *
  * A new Track asks artwork_loader for its picture and its tags in one request slot, and
  * hides the previous picture before the loader reuses its buffer. The cover is the
@@ -62,12 +62,14 @@ static void track_request(void)
 }
 #endif
 
-void cassette_levels_toggle_peek(void)
+void cassette_levels_set_peek(bool shown)
 {
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    bool show = !cassette_peek_is_shown();
-    if (show) cassette_peek_show(); else cassette_peek_hide();
-    ESP_LOGI(TAG, "swipe up: peek %s", show ? "shown" : "hidden");
+    if (shown == cassette_peek_is_shown()) return;
+    if (shown) cassette_peek_show(); else cassette_peek_hide();
+    ESP_LOGI(TAG, "peek %s", shown ? "shown" : "hidden");
+#else
+    (void)shown;
 #endif
 }
 
@@ -93,14 +95,12 @@ void cassette_levels_update(const mini_icecast_status_t *status)
 #endif
 }
 
-void cassette_levels_create(lv_obj_t *screen, cassette_levels_room_cb_t room, void *ctx)
+void cassette_levels_create(lv_obj_t *screen)
 {
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    cassette_peek_create(screen, room, ctx);
+    cassette_peek_create(screen);
 #else
     (void)screen;
-    (void)room;
-    (void)ctx;
 #endif
 }
 

@@ -12,8 +12,9 @@
  * design grid and its children are offsets inside it, so a scale change re-places the
  * whole meter in one pass.
  *
- * It starts hidden. A two-finger swipe left shows it, a right hides it; show/hide fade the
- * panel's layered opacity over 220 ms, so the two rows and every child go together.
+ * It starts hidden and stays hidden: the two-finger gesture that used to toggle it is gone
+ * with the meter's old home (ADR 0025), and the view only creates, places and feeds it. The
+ * show/hide fade is kept with the module; it is parked whole.
  */
 #include <math.h>
 
@@ -58,7 +59,7 @@ static lv_obj_t *s_label[2];                       /* the letters inside the bad
 static lv_obj_t *s_bar[2][METER_BARS];             /* the dim track */
 static lv_obj_t *s_fill[2];                        /* the lit rounded fill */
 static int s_lit[2];                               /* bars lit per row, 0..METER_BARS */
-static bool s_shown;                               /* the two-finger VU toggle */
+static bool s_shown;                               /* the show/hide wish; false and stays so */
 
 /* The number of lit bars for a level. The scale is dB over -48..0. */
 static int meter_lit(float vu)
@@ -129,7 +130,7 @@ void cassette_meter_create(lv_obj_t *parent)
         s_lit[ch] = 0;
     }
 
-    /* The VU meter is hidden at rest; the two-finger swipe left raises it. The panel's
+    /* The VU meter is hidden at rest, and nothing raises it any more (ADR 0025). The panel's
      * layered opacity fades the two rows and every child as one. */
     lv_obj_set_style_opa_layered(s_meter, LV_OPA_TRANSP, 0);
     lv_obj_set_hidden(s_meter, true);

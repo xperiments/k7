@@ -1,5 +1,9 @@
 # The white page's down swipe prints the Track's picture on the cassette
 
+**Amended by [ADR 0025](./0025-four-rungs-real-art-initial-peek.md):** the cover is not a rung
+of its own any more. It is printed with the white Page as one level - Real - so a down from Art
+flips the paper and fades the picture in as a single step, and an up undoes both.
+
 The white controls page is the down swipe's, and the down swipe had nothing left to do
 once the page was white: the drawer and the DJ block were already out. The owner wants the
 playing Track's own picture there, on the cassette's body, revealed by that same swipe:

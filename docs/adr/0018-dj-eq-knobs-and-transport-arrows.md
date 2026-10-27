@@ -10,6 +10,12 @@ R is still a placeholder. While the Menu is up the block's six cells give way to
 The owner also moved the first column 1 px right: GAIN, M and R sit at 594..690, so the
 block is 190x284 and the Pad takes the same footprint.
 
+**Amended by the current geometry and [ADR 0024](./0024-the-bars-and-their-panels.md):** the
+block's drawn ink is 594..784, 190 wide, and its first column is nudged 2 px from the 592 base
+(the shared 2 px border), not 1; the decision text's 593..784 / 191 / 1 px is superseded. The
+six cells are the right bar's DJ panel; the strip, its entrance and its page ink belong to the
+bar.
+
 The owner wants the cassette screen to carry a DJ channel strip, not a spectrum analyser:
 HI, MED and LOW plus a GAIN, in the same line-art language as the left drawer's P/</>. The
 block has six cells because it sits on a 2x3 grid; the four cells the strip needs leave two,
@@ -36,13 +42,15 @@ every listener hears, and there is no local audio path to fight with. The PCM se
 - **The ranges are the DJ ones.** GAIN -12..+12 dB, default 0; bands -26..+6 dB, default
   0, at 200 Hz (low shelf), 1 kHz (bell, Q 0.7) and 4 kHz (high shelf). The trim is applied
   before the bands. The int16 clamp is the last stage.
-- **Edit mode is modal, on a 3x virtual knob.** A tap on a knob opens it after 550 ms, so a
-  second tap is read as the reset double click first. The 284 px (96+94+94) virtual knob
-  sits at x=206, its top on the GAIN button's top; there is no outer square, just the 132 px
+- **Edit mode is modal, on a 3x virtual knob.** A tap on a knob opens it after 260 ms; the
+  second tap of a double tap lands on the 3x knob and resets it there. The 256 px (90% of
+  96+94+94) virtual knob sits at x=220, its top at y=90; under the dial a rounded primary
+  pillow carries the knob's internal name (GAIN, HI, MED, LOW) in the light cap ink; there
+  is no outer square, just the 118 px
   circle with its 2 px stroke, the crown and the centre line. A transparent 800x480
   overlay owns the touch. The cassette cuts out and the knob appears; on close the knob
   disappears and the cassette cuts back in. Only the big knob's centre circle closes. A
-  click on the ring - the 284 px area around that circle - is the target point: the knob
+  click on the ring - the 256 px area around that circle - is the target point: the knob
   jumps to that angle, 0 dB at twelve, clockwise cutting and counter-clockwise boosting. A
   click outside does nothing; there is no drag and no relative rotation. A double tap on any
   small knob resets it to 0 dB and cancels the pending open, the mixer's centre-detent
@@ -55,13 +63,14 @@ every listener hears, and there is no local audio path to fight with. The PCM se
 - **Only the left drawer's `<` and `>` do next/previous on the screen.** The screen's tap
   no longer skips a track (`SCREEN_INTENT_TAP` is removed) and the BOOT button no longer
   skips either. The DJ block's two freed cells keep their carcases and become the
-  Filebrowser and Rec placeholders (the owner's open folder and two-circle icons; TBD); the
-  drawer's P remains a placeholder.
+  Filebrowser and Rec placeholders (amended: the two cells are M, the Menu's door and now
+  the right bar's chrome, and R, the EQ's record toggle; the Filebrowser/Rec placeholders
+  were dropped); the drawer's P remains a placeholder.
 - **The cassette enters at full scale; the controls get the 134/256 pose.** A right swipe
   brings the transport drawer and the DJ block in and scales the cassette to 134/256,
-  148..550, so both the 120 px drawer on the left and the block on the right have room. A
-  left swipe puts them away and restores the full entry view. The block is hidden at rest,
-  shown and hidden with the drawer, sliding in from the right edge over the same 260 ms,
+  148..550, so the drawer's 96 px column on the left and the block on the right both have
+  room. A left swipe puts them away and restores the full entry view. The block is hidden at
+  rest, shown and hidden with the drawer, sliding in from the right edge over the same 260 ms,
   and chrome above the Level sheets. The peek's 200/256 is the other room request and comes
   back when the drawer is away.
 

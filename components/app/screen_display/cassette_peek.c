@@ -109,8 +109,6 @@ static lv_obj_t *s_tag[2];
 static lv_obj_t *s_tag_text[2];
 static lv_obj_t *s_line[2];
 
-static cassette_peek_room_cb_t s_room;
-static void *s_room_ctx;
 static bool s_shown;
 
 /* The last frame's values, so a show can paint the current state without waiting for
@@ -147,11 +145,6 @@ static int s_bob[2];
 
 static void update_texts(void);
 static void update_lines(void);
-
-static void room_request(bool shown, bool instant)
-{
-    if (s_room) s_room(shown, instant, s_room_ctx);
-}
 
 static void format_time(char *buf, size_t n, uint32_t ms, bool known)
 {
@@ -395,7 +388,6 @@ void cassette_peek_show(void)
 {
     if (!s_bar || s_shown) return;
     s_shown = true;
-    room_request(true, false);
 
     /* Paint the current state now rather than on the next status poll. The tags appear
      * with the first frame; only the bar slides. */
@@ -419,7 +411,6 @@ void cassette_peek_hide(void)
 {
     if (!s_bar || !s_shown) return;
     s_shown = false;
-    room_request(false, false);
     bob_stop();
 
     for (int i = 0; i < 2; i++) {
@@ -430,26 +421,6 @@ void cassette_peek_hide(void)
     ESP_LOGI(TAG, "peek hidden");
 }
 
-void cassette_peek_hide_now(void)
-{
-    if (!s_bar) return;
-    bool was_shown = s_shown;
-    s_shown = false;
-    /* A Level change settles the pose and the overlay in one frame, whether or not a
-     * slide was in flight. */
-    room_request(false, true);
-    bob_stop();
-
-    lv_anim_delete(s_bar, bar_slide_cb);
-    lv_obj_set_y(s_bar, PEEK_BAR_HIDDEN_Y);
-    lv_obj_set_hidden(s_bar, true);
-    for (int i = 0; i < 2; i++) {
-        lv_obj_set_hidden(s_tag[i], true);
-        lv_obj_set_hidden(s_line[i], true);
-    }
-    if (was_shown) ESP_LOGI(TAG, "peek hidden at once");
-}
-
 bool cassette_peek_is_shown(void)
 {
     return s_shown;
@@ -457,11 +428,9 @@ bool cassette_peek_is_shown(void)
 
 /* ------------------------------------------------------------------ build */
 
-void cassette_peek_create(lv_obj_t *screen, cassette_peek_room_cb_t room, void *ctx)
+void cassette_peek_create(lv_obj_t *screen)
 {
     if (!screen) return;
-    s_room = room;
-    s_room_ctx = ctx;
     /* The view replaces these with the real anchors after create; the defaults are the
      * peek pose's. Both are the left hub: its top rim for the group, its bottom for the
      * song. */
