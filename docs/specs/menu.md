@@ -12,8 +12,8 @@ toggles. The vocabulary is in [CONTEXT.md](./CONTEXT.md): **Menu**, **Menu list*
 This document is the operational spec: geometry, the tree, the interaction rules, the data the
 lists read, and the split between the portable model and the LVGL view. It describes what is
 built - `components/portable/menu` with `t18_menu`, `cassette_menu.c`, the chrome hooks in the
-five modules, and the shuffle mode of ADR 0023. The board pass is still owed: the Pad's feel,
-the acceleration thresholds, and the five icon glyphs that are not drawn yet.
+five modules, and the shuffle mode of ADR 0023. The board pass is still owed: the Pad's feel and
+the acceleration thresholds.
 
 ## What it is
 
@@ -56,7 +56,7 @@ Row internals, relative to the row:
 | Icon | 16 | 24x24 from the icon font, vertically centred |
 | Label | 56 | Jura 28, vertically centred, at most 400 px (340 on a value row), ellipsized |
 | Playing dot | 364 | 6 px, centred vertically, the row's own ink |
-| Chevron or value | right, inset 16 | Jura 28; `>` for a list, the value for a setting (capped at 150 px), nothing for an action; the right edge is at 460 |
+| Chevron or value | right, inset 16 | the `angle-right` glyph in the icon font's 24 px for a list, or the value for a setting in Jura 20 capitals (capped at 150 px); nothing for an action; the right edge is at 460 |
 
 The header title is Jura 36 at band x=104 and vertically centred.
 The footer's first line (the song) is Jura 28 at (24, 20), the second (the group) at (24, 54);
@@ -67,15 +67,18 @@ nothing playing both footer lines are empty.
 
 ```
 MENU
-├─ Tracks        radio-waves    chevron   the Playlist, one Track per Row
-├─ Browse        folder         chevron   a directory of the Library tree
-├─ Shuffle       shuffle        Off / On  toggles Shuffle mode (ADR 0023)
-└─ Settings      gear           chevron
-   ├─ Backlight   sun           Auto / 100% / 60% / 30%
-   ├─ Station     radio-waves   chevron
-   ├─ Library     SD            chevron
-   ├─ Rescan      endless-loop  Rescan / Rescanning... (inert while running)
-   └─ About       info          chevron
+├─ Tracks        radio-waves     chevron   the Playlist, one Track per Row
+├─ Browse        books           chevron   a directory of the Library tree
+├─ Shuffle       toggle-off/on   OFF / ON  toggles Shuffle mode (ADR 0023)
+└─ Settings      settings        chevron
+   ├─ Backlight  brightness      AUTO / 100% / 60% / 30%
+   ├─ Station    radio-waves     chevron
+   ├─ Library    books           chevron
+   ├─ Rescan     endless-loop    RESCAN / RESCANNING... (inert while running)
+   └─ About      k7logo          chevron
+      ├─ Firmware   micro-chip       the app's version
+      ├─ Board      tablet-android   the board's short name
+      └─ Partition  disc             the app partition's size
 ```
 
 | List | Rows | Source | Title |
@@ -88,8 +91,8 @@ MENU
 | Library | State, Tracks, Directories, Size, Truncated | `library_*` | `Library` |
 | About | Firmware, Board, Partition | `esp_app_get_description()`, the board adapter, the partition table | `About` |
 
-- A **directory Row** wears `cassette-tape-` and opens the next Browse list; a **Track Row** wears
-  `radio-waves` and plays. Inside Browse, the title is the path from the root, ellipsized.
+- A **directory Row** wears `cassette-tape` and opens the next Browse list; a **Track Row** wears
+  `track` and plays. Inside Browse, the title is the path from the root, ellipsized.
 - The **playing Track's** Row carries a 6 px dot after its label, in the Row's own label ink (a
   shape, so it reads on both pages and on the band); activating the Row restarts the Track.
 - A **Track Row**'s label is the cleaned name: the library name without its extension,
@@ -98,7 +101,9 @@ MENU
 - Station's values: `MP3`, `44.1 kHz`, `192 kbps`, an em dash when the status is idle.
   Library's: the state's name, `1,204 tracks` (`1 track` in the singular), `38 dirs`, `12.4 GB`
   (binary units, one decimal), `No`/`Yes`. About's: the app's version, the board's short name
-  (`8048S050C`), the app partition's size (`4 MB`). A value row has no icon and no chevron.
+  (`8048S050C`), the app partition's size (`4 MB`). Station's and Library's value rows carry no
+  icon; About's three wear `micro-chip`, `tablet-android` and `disc`. Every right column is drawn
+  in capitals and in the smaller Jura 20, whatever the model writes.
 - **No card or no library**: Tracks and Browse are dimmed (40% opacity) and inert, and their
   lists hold one non-selectable Row that repeats the state - `No card` (no card, no library
   lease), `Library empty` (empty, or OK with zero Tracks), `Library error` (no directory or a
@@ -223,32 +228,36 @@ while the Menu is up.
 
 ## Icons and fonts
 
-`xtape.ttf` carries nine glyphs today; five more are needed. The mapping:
+`xtape.ttf` carries eighteen glyphs. The mapping:
 
 | Codepoint | Glyph | Used by |
 |---|---|---|
-| U+F000 | `cassette-tape-` | Browse directories; the drawer's Close |
-| U+F001 | `voicemail` | spare |
-| U+F002 | `radio-waves` | Tracks, Track Rows, Station |
-| U+F003 | `angle-circle-left` | the drawer's Back |
-| U+F004 | `angle-circle-down` | spare |
-| U+F005 | `angle-circle-up` | spare |
-| U+F006 | `angle-circle-right` | the drawer's Enter |
+| U+F000 | `cassette-tape` | Browse directories; the drawer's Close |
+| U+F001 | `voice-mail` | spare |
+| U+F002 | `radio-waves` | Tracks, Station |
+| U+F003 | `toggle-off` | the Shuffle Row while shuffle is off |
+| U+F004 | `toggle-on` | the Shuffle Row while shuffle is on |
+| U+F005 | `settings` | Settings |
+| U+F006 | `books` | Browse and Library |
 | U+F007 | `endless-loop` | Rescan |
-| U+F008 | `shuffle` | Shuffle |
-| U+F009 | `folder` | Browse |
-| U+F00A | `gear` | Settings |
-| U+F00B | `sun` | Backlight |
-| U+F00C | `info` | About |
-| U+F00D | `SD` | Library |
+| U+F008 | `shuffle` | spare |
+| U+F009 | `disc-drive` | About's Partition |
+| U+F00A | `tablet-android` | About's Board |
+| U+F00B | `brightness` | Backlight |
+| U+F00C | `fire-shield` | spare |
+| U+F00D | `angle-right` | the Row chevron; the drawer's Enter |
+| U+F00E | `angle-left` | the drawer's Back |
+| U+F00F | `k7logo` | About |
+| U+F010 | `track` | Track Rows |
+| U+F011 | `micro-chip` | About's Firmware |
 
-The five new glyphs are drawn in the same icomoon project and exported to
-`assets/fonts/xtape.ttf`; `package.json` grows a `font:xtape` script beside `font:jura` and
-`font:jura28`. It generates the same range at two sizes because one font is one pixel size:
-`font_xtape_24.c` (`--range 0xF000-0xF00D --size 24 --bpp 4`) for the Rows, where a 24 px glyph
-sits in a 53-54 px Row, and `font_xtape_36.c` at 36 px for the drawer's 64 px circles, where 24 px
-would read small against the Jura 36 letters they replace. Text is Jura 28 in the Rows and the
-footer and Jura 36 in the header; the submenu chevron is Jura's `>` at 28 px.
+`assets/fonts/xtape.ttf` is drawn in the icomoon project; `package.json` has a `font:xtape`
+script beside `font:jura`, `font:jura28` and `font:jura20`. It generates the same range at two
+sizes because one font is one pixel size: `font_xtape_24.c` (`--range 0xF000-0xF011 --size 24
+--bpp 4`) for the Rows and the chevron, where a 24 px glyph sits in a 53-54 px Row, and
+`font_xtape_36.c` at 36 px for the drawer's 64 px circles, where 24 px would read small against
+the Jura 36 letters they replace. Row labels are Jura 28 and their right column is Jura 20 in
+capitals; the footer is Jura 28 and the header Jura 36.
 
 ## Open items
 

@@ -675,9 +675,10 @@ untouched. The model is portable (`components/portable/menu`, host test `t18_men
 Backlight pins the panel with a hold until reboot. The page, tree and rules are
 [`docs/specs/menu.md`](docs/specs/menu.md), with ADRs
 [0022](docs/adr/0022-the-menu-is-a-controls-mode.md) and
-[0023](docs/adr/0023-shuffle-is-a-broadcast-mode.md). The icon font's folder, gear, sun,
-info and SD glyphs are not drawn yet, so those rows show no icon until the owner re-exports
-`assets/fonts/xtape.ttf` and re-runs `npm run font:xtape`.
+[0023](docs/adr/0023-shuffle-is-a-broadcast-mode.md). The icon set is drawn now - `books` for
+Browse and Library, `settings`, the two toggles for Shuffle, `brightness`, `k7logo` for About,
+`track`, the chip/tablet/disc of About's rows and the `angle-right` chevron - and the rows'
+right column is Jura 20 in capitals.
 
 **Backlight sleep.** GPIO 2 is now a 400 Hz, 8-bit LEDC duty instead of an on/off pin. The
 screen starts at full brightness, then fades to 60% after 2 minutes, 30% after 5

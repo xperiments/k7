@@ -50,6 +50,9 @@ typedef enum {
     MENU_ICON_LIBRARY,
     MENU_ICON_RESCAN,
     MENU_ICON_ABOUT,
+    MENU_ICON_FIRMWARE,  /* About's three value rows */
+    MENU_ICON_BOARD,
+    MENU_ICON_PARTITION,
 } menu_icon_t;
 
 typedef enum {

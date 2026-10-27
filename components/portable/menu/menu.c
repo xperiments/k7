@@ -481,9 +481,11 @@ static void build_library_row(const menu_t *m, int index, menu_row_t *r)
 static void build_about_row(const menu_t *m, int index, menu_row_t *r)
 {
     static const char *const labels[3] = {"Firmware", "Board", "Partition"};
+    static const menu_icon_t icons[3] = { MENU_ICON_FIRMWARE, MENU_ICON_BOARD,
+                                          MENU_ICON_PARTITION };
     if (index < 0 || index > 2) return;
     r->kind = MENU_ROW_VALUE;
-    r->icon = MENU_ICON_NONE;
+    r->icon = icons[index];
     r->enabled = true;
     r->chevron = false;
     snprintf(r->label, sizeof r->label, "%s", labels[index]);

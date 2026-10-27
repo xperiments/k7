@@ -39,6 +39,7 @@
 #include "menu.h"
 #include "mini_icecast.h"
 
+LV_FONT_DECLARE(jura_20);
 LV_FONT_DECLARE(jura_28);
 
 static const char *TAG = "menu";
@@ -120,6 +121,8 @@ static char s_tag_song[128];
 static char s_footer_group[128];
 static char s_footer_song[128];
 static char s_footer_pos[32];
+/* The right column's capitals, built per row per redraw. */
+static char s_value_upper[MENU_VALUE_MAX];
 
 /* The pad's press tracking, for the tap/ratchet/swipe split. */
 static bool s_pad_pressed;
@@ -146,37 +149,58 @@ static int slot_y(int slot, int content_h)
     return (slot * content_h + MENU_ROWS / 2) / MENU_ROWS;
 }
 
+/* The right column speaks in capitals: the model's values are prose ("Auto", "12 MB") and
+ * the page is where its capitals belong. ASCII only, like every value the model writes. */
+static void value_upper(const char *src, char *dst, size_t n)
+{
+    size_t i = 0;
+    for (; src[i] && i + 1 < n; i++) {
+        char c = src[i];
+        dst[i] = (c >= 'a' && c <= 'z') ? (char)(c - 32) : c;
+    }
+    dst[i] = '\0';
+}
+
 /* The icon font's glyph for a row's icon, its codepoint, and whether the font carries it:
- * folder, gear, sun, info and SD are not drawn yet, and a missing glyph is hidden rather
- * than shown as .notdef. */
+ * a missing glyph is hidden rather than shown as .notdef. The Shuffle row takes the toggle
+ * that matches the mode's state. */
 typedef struct {
     const char *glyph;
     uint32_t    cp;
 } icon_glyph_t;
 
-static icon_glyph_t icon_of(menu_icon_t icon)
+static icon_glyph_t icon_of(menu_icon_t icon, bool shuffle_on)
 {
     switch (icon) {
         case MENU_ICON_TRACKS:
-        case MENU_ICON_TRACK:
         case MENU_ICON_STATION:
             return (icon_glyph_t){ CASSETTE_ICON_RADIO, CASSETTE_ICON_RADIO_CP };
+        case MENU_ICON_TRACK:
+            return (icon_glyph_t){ CASSETTE_ICON_TRACK, CASSETTE_ICON_TRACK_CP };
         case MENU_ICON_BROWSE:
-            return (icon_glyph_t){ CASSETTE_ICON_FOLDER, CASSETTE_ICON_FOLDER_CP };
+            return (icon_glyph_t){ CASSETTE_ICON_BOOKS, CASSETTE_ICON_BOOKS_CP };
         case MENU_ICON_DIRECTORY:
             return (icon_glyph_t){ CASSETTE_ICON_TAPE, CASSETTE_ICON_TAPE_CP };
         case MENU_ICON_SHUFFLE:
-            return (icon_glyph_t){ CASSETTE_ICON_SHUFFLE, CASSETTE_ICON_SHUFFLE_CP };
+            return shuffle_on
+                       ? (icon_glyph_t){ CASSETTE_ICON_TOGGLE_ON, CASSETTE_ICON_TOGGLE_ON_CP }
+                       : (icon_glyph_t){ CASSETTE_ICON_TOGGLE_OFF, CASSETTE_ICON_TOGGLE_OFF_CP };
         case MENU_ICON_SETTINGS:
-            return (icon_glyph_t){ CASSETTE_ICON_GEAR, CASSETTE_ICON_GEAR_CP };
+            return (icon_glyph_t){ CASSETTE_ICON_SETTINGS, CASSETTE_ICON_SETTINGS_CP };
         case MENU_ICON_BACKLIGHT:
-            return (icon_glyph_t){ CASSETTE_ICON_SUN, CASSETTE_ICON_SUN_CP };
+            return (icon_glyph_t){ CASSETTE_ICON_BRIGHTNESS, CASSETTE_ICON_BRIGHTNESS_CP };
         case MENU_ICON_LIBRARY:
-            return (icon_glyph_t){ CASSETTE_ICON_SD, CASSETTE_ICON_SD_CP };
+            return (icon_glyph_t){ CASSETTE_ICON_BOOKS, CASSETTE_ICON_BOOKS_CP };
         case MENU_ICON_RESCAN:
             return (icon_glyph_t){ CASSETTE_ICON_LOOP, CASSETTE_ICON_LOOP_CP };
         case MENU_ICON_ABOUT:
-            return (icon_glyph_t){ CASSETTE_ICON_INFO, CASSETTE_ICON_INFO_CP };
+            return (icon_glyph_t){ CASSETTE_ICON_K7LOGO, CASSETTE_ICON_K7LOGO_CP };
+        case MENU_ICON_FIRMWARE:
+            return (icon_glyph_t){ CASSETTE_ICON_MICRO_CHIP, CASSETTE_ICON_MICRO_CHIP_CP };
+        case MENU_ICON_BOARD:
+            return (icon_glyph_t){ CASSETTE_ICON_TABLET, CASSETTE_ICON_TABLET_CP };
+        case MENU_ICON_PARTITION:
+            return (icon_glyph_t){ CASSETTE_ICON_DISC, CASSETTE_ICON_DISC_CP };
         case MENU_ICON_NONE:
         default:
             return (icon_glyph_t){ NULL, 0 };
@@ -221,7 +245,7 @@ static void draw_rows(void)
         lv_obj_set_hidden(s_band[i], !sel);
         if (sel) lv_obj_set_style_bg_color(s_band[i], band_fill(), 0);
 
-        icon_glyph_t g = icon_of(s_rows[i].icon);
+        icon_glyph_t g = icon_of(s_rows[i].icon, s_facts.shuffle_on);
         if (g.glyph && icon_available(g.cp)) {
             lv_label_set_text_static(s_icon[i], g.glyph);
             lv_obj_set_style_text_color(s_icon[i], ink, 0);
@@ -243,10 +267,17 @@ static void draw_rows(void)
         lv_obj_set_hidden(s_dot[i], !s_rows[i].playing);
         if (s_rows[i].playing) lv_obj_set_style_bg_color(s_dot[i], ink, 0);
 
-        const char *right = s_rows[i].value[0] ? s_rows[i].value
-                                               : (s_rows[i].chevron ? ">" : NULL);
-        if (right) {
-            lv_label_set_text(s_right[i], right);
+        /* The right column: the model's value in the page's capitals and the smaller Jura,
+         * or the chevron as the icon font's angle-right - an icon keeps the row's 24 px. */
+        if (s_rows[i].value[0]) {
+            value_upper(s_rows[i].value, s_value_upper, sizeof s_value_upper);
+            lv_label_set_text(s_right[i], s_value_upper);
+            lv_obj_set_style_text_font(s_right[i], &jura_20, 0);
+        } else if (s_rows[i].chevron) {
+            lv_label_set_text(s_right[i], CASSETTE_ICON_RIGHT);
+            lv_obj_set_style_text_font(s_right[i], &xtape_24, 0);
+        }
+        if (s_rows[i].value[0] || s_rows[i].chevron) {
             lv_obj_set_style_text_color(s_right[i], ink, 0);
             lv_obj_set_style_opa(s_right[i], dim, 0);
             lv_obj_set_hidden(s_right[i], false);

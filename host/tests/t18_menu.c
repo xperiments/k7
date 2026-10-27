@@ -633,6 +633,9 @@ static void test_about_rows(void)
     want_value(&r[1], "xtape-esp32s3", "About board is the board's name");
     want_label(&r[2], "Partition", "About row 2 label");
     want_value(&r[2], "1.68 MB of 4 MB", "About partition figures");
+    want_icon(&r[0], MENU_ICON_FIRMWARE, "About firmware wears the chip");
+    want_icon(&r[1], MENU_ICON_BOARD, "About board wears the tablet");
+    want_icon(&r[2], MENU_ICON_PARTITION, "About partition wears the disc");
     for (int i = 0; i < 3; i++) {
         want_kind(&r[i], MENU_ROW_VALUE, "About rows are read-only values");
         CHECK(!r[i].chevron, "an About row has no chevron");
