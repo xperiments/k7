@@ -27,8 +27,6 @@
  * The panel is hidden at rest, so the entry view is the untouched full-scale cassette; the bar
  * shows it with the Transport panel, and losing it ends edit mode and the delayed open.
  */
-#include <math.h>
-
 #include "lvgl.h"
 
 #include "cassette_bars.h"
@@ -40,28 +38,16 @@
 #include "cassette_meter.h"
 #include "cassette_widgets.h"
 #include "knob.h"
+#include "knob_cell.h"
 #include "knob_editor.h"
 #include "mini_icecast.h"
 
 LV_FONT_DECLARE(jura_36);
 
-/* The six cells: two 96 px columns touching at x=688, three rows at 76/170/264, so the
- * bottom of the bar is 360. The 16 px is the inset of the 64 px circle inside each 96 px
- * carcase, not a gap: the carcases share their borders. The Back cell keeps that 64 px circle
- * while the four knobs use a 30% smaller one (44 px) and the dot crown sits outside it, with the
- * line running from the centre towards the rim. */
+/* The six cells: two 96 px columns touching at x=688, three rows at 76/170/264, so the bottom
+ * of the bar is 360. The carcases share their borders; the knobs themselves are knob_cell's. */
 #define CELL_W       CASSETTE_CELL_W
-#define CELL_H       CASSETTE_CELL_H
 #define CELL_PITCH   CASSETTE_CELL_PITCH
-#define KNOB_D       44
-#define KNOB_R       (KNOB_D / 2)
-#define KNOB_INSET   ((CELL_W - KNOB_D) / 2)
-#define DOT_COUNT    24
-#define DOT_R        32   /* outside the knob circle, inside the carcase */
-#define DOT_D        4
-#define STICK_W      4
-#define STICK_L      16   /* the owner's tuned line: 4 wide, 16 long */
-#define STICK_R      3
 
 /* The knobs, in the bank's id order: the inside cell's gain, then the outer column's three
  * bands. The ids are contiguous because the editor indexes its bank by them. */
@@ -100,11 +86,7 @@ static const int8_t k_knob_band[KNOB_COUNT] = { -1, 2, 1, 0 };
 /* The controls' identities: what the 3x knob's pillow says, and what the mixer calls them. */
 static const char *const k_knob_name[KNOB_COUNT] = { "GAIN", "HI", "MED", "LOW" };
 
-static lv_obj_t *s_cell[KNOB_COUNT];   /* the four knob carcases, for the plate's page ink */
-static lv_obj_t *s_circle[KNOB_COUNT];
-static lv_obj_t *s_ambient[KNOB_COUNT];   /* the transparent circle carrying the broad shadow */
-static lv_obj_t *s_dot[KNOB_COUNT][DOT_COUNT];
-static lv_obj_t *s_stick[KNOB_COUNT];
+static knob_cell_t s_knob_cell[KNOB_COUNT];
 static knob_t s_knob[KNOB_COUNT];     /* 0..100, 50 = 0 dB; the model owns the maths */
 static cassette_button_t s_button_back;
 static void (*s_back_cb)(void *ctx);  /* the view's: the group goes back to Empty */
@@ -145,40 +127,12 @@ static void knob_send(int id)
 
 static void knob_apply(int id)
 {
-    knob_editor_crown_ink(s_dot[id], DOT_COUNT, &s_knob[id]);
-    lv_obj_set_style_transform_rotation(s_stick[id], knob_angle_ddeg(&s_knob[id]), 0);
+    knob_cell_apply(&s_knob_cell[id], &s_knob[id]);
 }
 
 static void knob_build(lv_obj_t *cell, int id)
 {
-    /* Two circles, like the buttons: the outer one carries the broad shadow and the inner one
-     * is the disc with the contact shadow and the ring. */
-    lv_obj_t *ambient = cassette_border_box(cell, KNOB_INSET, KNOB_INSET,
-                                            KNOB_D, KNOB_D, KNOB_R,
-                                            k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
-    lv_obj_t *circle = cassette_border_box(ambient, 0, 0,
-                                           KNOB_D, KNOB_D, KNOB_R,
-                                           k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 2);
-    s_ambient[id] = ambient;
-    s_circle[id] = circle;
-
-    int cx = CELL_W / 2, cy = CELL_H / 2;
-    for (int i = 0; i < DOT_COUNT; i++) {
-        float a = (float)i * 15.0f * 3.14159265358979323846f / 180.0f;
-        int x = cx + (int)lroundf((float)DOT_R * sinf(a));
-        int y = cy - (int)lroundf((float)DOT_R * cosf(a));
-        s_dot[id][i] = cassette_box(cell, x - DOT_D / 2, y - DOT_D / 2,
-                                      DOT_D, DOT_D, DOT_D / 2, k_col_eq_dim);
-    }
-
-    /* The stem is inside the circle: from its centre to the rim, its pivot at the
-     * centre, so it swings like the knob's line and stops at the circle's edge. */
-    s_stick[id] = cassette_box(cell, cx - STICK_W / 2, cy - STICK_L,
-                                 STICK_W, STICK_L, STICK_R, k_col_eq_tick);
-    lv_obj_set_style_transform_pivot_x(s_stick[id], STICK_W / 2, 0);
-    lv_obj_set_style_transform_pivot_y(s_stick[id], STICK_L, 0);
-
-    knob_apply(id);
+    if (knob_cell_create(&s_knob_cell[id], cell)) knob_apply(id);
 }
 
 /* The Back cell is the shared cassette_button with the icon font's left chevron. Its carcase is
@@ -232,7 +186,7 @@ static void bank_publish(int id, void *ctx)
 static lv_obj_t *bank_disc(int id, void *ctx)
 {
     (void)ctx;
-    return (id >= 0 && id < KNOB_COUNT) ? s_circle[id] : NULL;
+    return (id >= 0 && id < KNOB_COUNT) ? knob_cell_disc(&s_knob_cell[id]) : NULL;
 }
 
 static bool bank_open_allowed(void *ctx)
@@ -305,7 +259,6 @@ static void eq_cell_build(lv_obj_t *cell, int col, int row, void *ctx)
     } else if (kind == CELL_VU) {
         cassette_meter_create(cell);
     } else {
-        s_cell[kind] = cell;
         knob_build(cell, kind);
         lv_obj_add_event_cb(cell, cell_clicked_cb, LV_EVENT_CLICKED,
                             (void *)(intptr_t)(kind + 1));
@@ -336,16 +289,7 @@ static void eq_shown(bool visible, void *ctx)
 static void eq_set_page(bool white, void *ctx)
 {
     (void)ctx;
-    for (int id = 0; id < KNOB_COUNT; id++) {
-        if (!s_cell[id]) continue;
-        lv_obj_set_style_bg_color(s_cell[id], white ? k_col_knob_rect : k_col_bg, 0);
-        lv_obj_set_style_border_color(s_cell[id],
-                                      white ? k_col_bg : k_col_button_rect, 0);
-        if (!s_circle[id]) continue;
-        cassette_circle_face(s_ambient[id], s_circle[id], white, k_col_knob_cap);
-        lv_obj_set_style_border_width(s_circle[id], white ? 0 : 2, 0);
-        if (!white) lv_obj_set_style_border_color(s_circle[id], k_col_button_circle, 0);
-    }
+    for (int id = 0; id < KNOB_COUNT; id++) knob_cell_set_page(&s_knob_cell[id], white);
 
     /* Back: the shared button inks its own carcase, disc and letter from its cap. */
     cassette_button_set_page(&s_button_back, white);

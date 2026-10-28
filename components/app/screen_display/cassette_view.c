@@ -46,6 +46,7 @@
 #include "cassette_buttons.h"
 #include "cassette_empty.h"
 #include "cassette_eq.h"
+#include "cassette_rgb.h"
 #include "knob_editor.h"
 #include "cassette_footer.h"
 #include "cassette_header.h"
@@ -385,6 +386,7 @@ static void groups_install(void)
 #endif
     const cassette_panel_t *panel = cassette_empty_panel();
     if (groups_active(&s_groups) == GROUPS_ID_EQ) panel = cassette_eq_panel();
+    else if (groups_active(&s_groups) == GROUPS_ID_RGB) panel = cassette_rgb_panel();
     cassette_bars_set_panel(CASSETTE_BARS_RIGHT, panel);
 }
 
@@ -423,6 +425,12 @@ static void eq_group_cb(void *ctx)
 {
     (void)ctx;
     groups_apply(groups_handle(&s_groups, GROUPS_INTENT_TAP_EQ, chrome_shown_now()));
+}
+
+static void rgb_group_cb(void *ctx)
+{
+    (void)ctx;
+    groups_apply(groups_handle(&s_groups, GROUPS_INTENT_TAP_RGB, chrome_shown_now()));
 }
 
 /* A group panel's Back cell: the model turns it into Empty, never a ladder move. */
@@ -546,6 +554,7 @@ void cassette_view_create(void)
     cassette_buttons_create();
     cassette_buttons_set_cb(CASSETTE_MODE_TAPE, tape_cb, NULL);
     cassette_buttons_set_cb(CASSETTE_MODE_EQ, eq_group_cb, NULL);
+    cassette_buttons_set_cb(CASSETTE_MODE_RGB, rgb_group_cb, NULL);
 
     /* The one 3x dial and its overlay, shared by the right bar's knob panels (the EQ group
      * today, the RGB group next). It is a screen child above everything the panels build. */
@@ -555,6 +564,11 @@ void cassette_view_create(void)
      * peek, hidden with the mode bar. */
     cassette_eq_create(scr);
     cassette_eq_set_back_cb(group_back_cb, NULL);
+
+    /* The RGB group shares the editor, the dials and the Back idiom; it publishes the strip's
+     * state through cassette_rgb_set_publish(), which nothing installs yet. */
+    cassette_rgb_create();
+    cassette_rgb_set_back_cb(group_back_cb, NULL);
 
     /* The Empty group - the speaker grille - is the right bar's default, so it is installed
      * last and the screen opens on it. */
