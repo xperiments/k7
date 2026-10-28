@@ -1,7 +1,6 @@
 #pragma once
 /*
- * cassette_button - one button, built five times: the mode bar's cassette, sliders-v and led,
- * and each group panel's Back cell.
+ * cassette_button - one button, built three times: the mode bar's cassette, sliders-v and led.
  *
  * A button is a 64 px circle at the centre of a 96x96 carcase, one character inside it, a
  * press look, a 160 ms click pulse and an action. The carcase itself is the bar's: it builds
@@ -31,9 +30,8 @@
  * buttons.
  *
  * The action is a callback, not an id: a button knows nothing about the Menu, a group or the
- * audio. The mode bar maps its three to the Menu's toggle and the two group selectors, and
- * each group panel's Back cell to the view's "back to Empty". A NULL action is a button whose
- * click is the pulse alone.
+ * audio. The mode bar maps its three to the Menu's toggle and the two group selectors. A NULL
+ * action is a button whose click is the pulse alone.
  *
  * What is the bar's: the carcase object (its geometry, its clickability and its
  * gesture/event bubbling - the bar sets the bubbling per panel: the mode bar bubbles both,

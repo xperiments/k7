@@ -259,7 +259,7 @@ while the Menu is up.
 | U+F00B | `brightness` | Backlight |
 | U+F00C | `fire-shield` | spare |
 | U+F00D | `angle-right` | the Row chevron |
-| U+F00E | `angle-left` | a group panel's Back cell |
+| U+F00E | `angle-left` | spare (the groups have no Back cell) |
 | U+F00F | `k7logo` | About |
 | U+F010 | `track` | Track Rows |
 | U+F011 | `micro-chip` | About's Firmware |

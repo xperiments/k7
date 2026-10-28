@@ -436,13 +436,6 @@ static void rgb_group_cb(void *ctx)
     groups_apply(groups_handle(&s_groups, GROUPS_INTENT_TAP_RGB, chrome_shown_now()));
 }
 
-/* A group panel's Back cell: the model turns it into Empty, never a ladder move. */
-static void group_back_cb(void *ctx)
-{
-    (void)ctx;
-    groups_apply(groups_handle(&s_groups, GROUPS_INTENT_BACK, chrome_shown_now()));
-}
-
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 /* The Menu's own close (the Pad's Back swipe at the root) runs the same restore the view's
  * close does: the group's panel back and the latches re-read. The latch is the one thing the
@@ -607,12 +600,10 @@ void cassette_view_create(void)
     /* The EQ panel is chrome too, on the other edge; created last so it starts above the
      * peek, hidden with the mode bar. */
     cassette_eq_create(scr);
-    cassette_eq_set_back_cb(group_back_cb, NULL);
 
     /* The RGB group shares the editor, the dials and the Back idiom; it publishes the strip's
      * state through cassette_rgb_set_publish(), which nothing installs yet. */
     cassette_rgb_create();
-    cassette_rgb_set_back_cb(group_back_cb, NULL);
 
     /* The Empty group - the speaker grille - is the right bar's default, so it is installed
      * last and the screen opens on it. */

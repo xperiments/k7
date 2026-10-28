@@ -597,10 +597,12 @@ The right **group block** is six 96 px carcases in two touching columns at x=594
 column is 2 px right of its nominal 592; the second stays at 688), rows at 76/170/264, and it
 shows one group at a time. **Empty** is the default: one 186x284 plate at the Pad's footprint,
 filled with a staggered grid of 4 px dots - a speaker's front, and a picture, so it neither
-clicks nor swallows a swipe. **EQ** is Back, the VU meter and Gain inside, HI/MED/LOW outside;
-**RGB** is Back, the effect selector and Brightness inside, R/G/B outside. The groups live with
-the chrome: hiding the bars drops the active group, so the controls always open on the grille.
-A group's Back cell returns to Empty. The knobs are a 44 px circle (30% smaller than a button's),
+clicks nor swallows a swipe. **EQ** is the VU meter (one 96x190 plate over the inside column's top two cells) and Gain
+inside, HI/MED/LOW outside; **RGB** is the effect selector (the same plate, its dial above and
+the effect's name below) and Brightness inside, R/G/B outside. There is no Back cell: the
+group's own button on the mode bar is the toggle, and a tap on it puts the group away. The
+groups live with the chrome: hiding the bars drops the active group, so the controls always open
+on the grille. The knobs are a 44 px circle (30% smaller than a button's),
 a 24-dot crown outside it and a line from the centre towards the rim. The EQ's are bipolar - 0 dB
 at twelve o'clock, right cuts and left boosts - and the RGB's are level controls: 0 at 7:30, full
 at 4:30, the gap at the bottom, with the effect selector stepped along the same arc, its pillow

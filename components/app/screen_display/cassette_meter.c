@@ -13,18 +13,20 @@
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 
+/* The `[V]` cell is 96x190 - the group's inside column's top two cells, as one plate - so the
+ * two rows are 80 px tall and read as a meter rather than as two ticks. */
 #define METER_W           84
-#define METER_H           62   /* two 26 px rows, 10 px apart */
-#define METER_ROW_H       26
-#define METER_ROW_GAP     10
+#define METER_H          172   /* two 80 px rows, 12 px apart */
+#define METER_ROW_H       80
+#define METER_ROW_GAP     12
 #define METER_ROW_RADIUS  (METER_ROW_H / 2)
-#define METER_BADGE_W     18
+#define METER_BADGE_W     24
 #define METER_BADGE_RADIUS 4
-#define METER_GAP         10
+#define METER_GAP         4
 #define METER_BARS        7
 #define METER_BAR_W       8
 #define METER_X           ((CASSETTE_CELL_W - METER_W) / 2)
-#define METER_Y           ((CASSETTE_CELL_H - METER_H) / 2)
+#define METER_Y           9   /* centred in the 190 px plate */
 /* The track starts after the badge and the gap, and seven bars fill the rest exactly. */
 #define METER_TRACK_X     (METER_BADGE_W + METER_GAP)
 #define METER_DB_MIN      (-48.0f)

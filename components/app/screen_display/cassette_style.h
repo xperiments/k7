@@ -77,7 +77,7 @@ extern const lv_color_t k_col_primary;
 /* The left drawer's line art: the carcase rectangle, the inner disc and the letter inside it
  * are coloured separately, so a control's inks are its spec data (cassette_cap_t) and the
  * page turns them. These two are the dark page's line art, the same for the mode bar's
- * three buttons and every panel's Back cell; the white page's cap defaults to
+ * three buttons; the white page's cap defaults to
  * k_col_dome and its letter to k_col_bg, further down. */
 extern const lv_color_t k_col_button_rect;
 extern const lv_color_t k_col_button_circle;

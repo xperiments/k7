@@ -38,8 +38,12 @@ typedef struct {
 } knob_cell_t;
 
 /* Build the knob inside `cell` and paint it for `k`'s current value. False and nothing built if
- * `cell` is NULL. */
+ * `cell` is NULL. The dial is centred in the cell. */
 bool knob_cell_create(knob_cell_t *out, lv_obj_t *cell);
+
+/* The same, with the dial's centre given: a cell that is taller than it is wide - the effect
+ * selector's 96x190 plate - puts the dial in its upper part and leaves the rest for a name. */
+bool knob_cell_create_at(knob_cell_t *out, lv_obj_t *cell, int cx, int cy);
 
 /* Repaint the crown and the line after the value moved. */
 void knob_cell_apply(knob_cell_t *c, const knob_t *k);

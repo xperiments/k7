@@ -1,8 +1,8 @@
 /*
  * The RGB group's panel; see cassette_rgb.h.
  *
- * The EQ panel's twin, and deliberately thin: a table of cells, five knob values, a Back action
- * and the publish seam. Everything a knob *is* - the small dial, the 3x surface, the tapped-
+ * The EQ panel's twin, and deliberately thin: a table of cells, five knob values and the publish
+ * seam. There is no Back cell: the mode bar's led button is the toggle. Everything a knob *is* - the small dial, the 3x surface, the tapped-
  * open ordering - is knob_cell's, knob_editor's and knob_model's. Everything the strip *is* -
  * the channels, the brightness, the effects and their frames - is rgb.h's.
  *
@@ -10,15 +10,14 @@
  */
 #include "cassette_rgb.h"
 
-#include "cassette_button.h"
-#include "cassette_icons.h"
+#include "cassette_button_rule.h"
 #include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 #include "knob_cell.h"
 #include "knob_editor.h"
 
-LV_FONT_DECLARE(xtape_36);
+LV_FONT_DECLARE(jura_28);
 
 /* The knobs, in the bank's id order: the three channels, the strip's brightness, the effect. */
 enum {
@@ -30,21 +29,46 @@ enum {
     KNOB_COUNT
 };
 
-/* The cells that are not knobs, as negative kinds in the cell map. */
+/* The effect's plate covers the cells below it, so one of them is never built. */
 enum {
-    CELL_BACK = -1,
+    CELL_EFFECT = -1,
+    CELL_COVERED = -2,
 };
 
 /* The panel's control at one bar cell, in the bar's (col,row) order:
  *
- *   [Back  ] [Red  ]
+ *   [Effect] [Red  ]
  *   [Effect] [Green]
  *   [Bright] [Blue ]
  */
 static const int8_t k_cell_kind[2][3] = {
-    { CELL_BACK, KNOB_FX, KNOB_BRIGHT },   /* the inside column */
-    { KNOB_RED, KNOB_GREEN, KNOB_BLUE },   /* the outer column */
+    { CELL_EFFECT, CELL_COVERED, KNOB_BRIGHT },   /* the inside column */
+    { KNOB_RED, KNOB_GREEN, KNOB_BLUE },          /* the outer column */
 };
+
+/* The effect's plate: the top two cells of the inside column as one 96x190 surface, because the
+ * stepped knob has a name to show and a 96 px cell has no room for both. */
+static cassette_rect_t rgb_cell_rect(int col, int row)
+{
+    if (col == 0 && row == 0) {
+        cassette_rect_t a = cassette_cell_rect(CASSETTE_BAR_RIGHT, 0, 0);
+        cassette_rect_t b = cassette_cell_rect(CASSETTE_BAR_RIGHT, 0, 1);
+        cassette_rect_t plate = { a.x, a.y, a.w, b.y + b.h - a.y };
+        return plate;
+    }
+    if (col == 0 && row == 1) {
+        cassette_rect_t none = { 0, 0, 0, 0 };
+        return none;
+    }
+    return cassette_cell_rect(CASSETTE_BAR_RIGHT, col, row);
+}
+
+/* The diagonal of the effect dial inside its tall plate: the knob in the upper part, the
+ * effect's name in the room the second cell would have taken. */
+#define FX_CX   (CASSETTE_CELL_W / 2)
+#define FX_CY   52
+#define FX_NAME_Y 136
+
 
 /* Where each knob's cell is, for the overlay's point-to-knob mapping. */
 static const int8_t k_knob_col[KNOB_COUNT] = { 1, 1, 1, 0, 0 };
@@ -56,16 +80,22 @@ static const char *const k_knob_name[KNOB_COUNT] = { "RED", "GREEN", "BLUE", "BR
 
 static knob_cell_t s_knob_cell[KNOB_COUNT];
 static knob_t s_knob[KNOB_COUNT];
-static cassette_button_t s_button_back;
 static rgb_state_t s_state;           /* what the knobs last published */
-static void (*s_back_cb)(void *ctx);
-static void *s_back_ctx;
+static lv_obj_t *s_fx_name;           /* the effect's name on its plate */
 static cassette_rgb_publish_t s_publish;
 static void *s_publish_ctx;
 static bool s_shown;
 static bool s_created;
 
 /* --------------------------------------------------------------------- publish */
+
+/* The effect's name, on the plate under its dial and in the 3x pillow. */
+static void fx_name_apply(void)
+{
+    if (!s_fx_name) return;
+    const char *name = rgb_effect_name(rgb_effect_at(knob_step(&s_knob[KNOB_FX])));
+    lv_label_set_text(s_fx_name, name ? name : "");
+}
 
 /* The knobs are the truth; the state is a reading of them. */
 static void rgb_compose(void)
@@ -106,6 +136,7 @@ static int knob_at(int x, int y)
 static void knob_apply(int id)
 {
     knob_cell_apply(&s_knob_cell[id], &s_knob[id]);
+    if (id == KNOB_FX) fx_name_apply();
 }
 
 /* ---------------------------------------------------------------------- bank */
@@ -188,39 +219,26 @@ static void cell_double_clicked_cb(lv_event_t *e)
     knob_editor_double_tap(id);
 }
 
-static void back_clicked(void *ctx)
-{
-    (void)ctx;
-    if (!s_shown || cassette_bars_is_sliding()) return;
-    if (s_back_cb) s_back_cb(s_back_ctx);
-}
-
-static void back_build(lv_obj_t *cell)
-{
-    cassette_cap_t cap = { k_col_dome, k_col_bg };
-    cassette_button_spec_t spec = {
-        .name = "BACK",
-        .text = CASSETTE_ICON_LEFT,
-        .font = &xtape_36,
-        .cap = cap,
-        .carcase_ring = { CASSETTE_BUTTON_RING_W, CASSETTE_BUTTON_RING_W_PRESSED },
-        .disc_ring = { CASSETTE_BUTTON_RING_W, CASSETTE_BUTTON_RING_W_PRESSED },
-        .on_click = back_clicked,
-        .ctx = NULL,
-    };
-    cassette_button_create(&s_button_back, cell, &spec);
-}
-
 static void rgb_cell_build(lv_obj_t *cell, int col, int row, void *ctx)
 {
     (void)ctx;
     if (!cell || col < 0 || col > 1 || row < 0 || row > 2) return;
     int kind = k_cell_kind[col][row];
+    if (kind == CELL_COVERED) return;
 
-    if (kind == CELL_BACK) {
-        back_build(cell);
+    if (kind == CELL_EFFECT) {
+        /* The stepped knob sits in the plate's upper part; its value - the effect's name - goes
+         * below it, in the room the covered cell would have taken. */
+        knob_cell_create_at(&s_knob_cell[KNOB_FX], cell, FX_CX, FX_CY);
+        s_fx_name = cassette_text(cell, &jura_28, k_col_primary, LV_ALIGN_TOP_MID, 0, FX_NAME_Y);
+        knob_apply(KNOB_FX);
+        lv_obj_add_event_cb(cell, cell_clicked_cb, LV_EVENT_CLICKED,
+                            (void *)(intptr_t)(KNOB_FX + 1));
+        lv_obj_add_event_cb(cell, cell_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED,
+                            (void *)(intptr_t)(KNOB_FX + 1));
         return;
     }
+
     if (knob_cell_create(&s_knob_cell[kind], cell)) knob_apply(kind);
     lv_obj_add_event_cb(cell, cell_clicked_cb, LV_EVENT_CLICKED, (void *)(intptr_t)(kind + 1));
     lv_obj_add_event_cb(cell, cell_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED,
@@ -233,7 +251,8 @@ static void rgb_set_page(bool white, void *ctx)
 {
     (void)ctx;
     for (int id = 0; id < KNOB_COUNT; id++) knob_cell_set_page(&s_knob_cell[id], white);
-    cassette_button_set_page(&s_button_back, white);
+    if (s_fx_name)
+        lv_obj_set_style_text_color(s_fx_name, white ? k_col_bg : k_col_primary, 0);
 }
 
 /* ------------------------------------------------------------------- public */
@@ -248,7 +267,7 @@ static void rgb_shown(bool visible, void *ctx)
 static const cassette_panel_t k_rgb_panel = {
     .columns = 2,
     .rows = 3,
-    .cell_rect = NULL,
+    .cell_rect = rgb_cell_rect,
     .gesture_bubble = false,
     .inert = false,
     .build = rgb_cell_build,
@@ -263,8 +282,6 @@ void cassette_rgb_create(void)
     s_created = true;
 
     s_shown = false;
-    s_back_cb = NULL;
-    s_back_ctx = NULL;
     s_publish = NULL;
     s_publish_ctx = NULL;
 
@@ -280,12 +297,6 @@ void cassette_rgb_create(void)
     rgb_compose();
 
     cassette_bars_set_panel(CASSETTE_BARS_RIGHT, &k_rgb_panel);
-}
-
-void cassette_rgb_set_back_cb(void (*cb)(void *ctx), void *ctx)
-{
-    s_back_cb = cb;
-    s_back_ctx = ctx;
 }
 
 void cassette_rgb_set_publish(cassette_rgb_publish_t cb, void *ctx)

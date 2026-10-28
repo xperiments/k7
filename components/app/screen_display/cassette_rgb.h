@@ -4,13 +4,13 @@
  *
  * Six cells, the same 2x3 as the EQ group:
  *
- *     [Back  ] [Red  ]
+ *     [Effect] [Red  ]
  *     [Effect] [Green]
  *     [Bright] [Blue ]
  *
- * the inside column the group's chrome and the strip's two global controls, the outer column the
- * three channels. The five knobs are knob_cell's small dials on the shared 3x editor
- * (knob_editor); the Back cell is the shared cassette_button with the icon font's left chevron.
+ * the inside column the effect - one 96x190 plate, its dial above and its name below - and the
+ * brightness, the outer column the three channels. The five knobs are knob_cell's dials on the
+ * shared 3x editor (knob_editor). There is no Back cell: the mode bar's led button is the toggle.
  *
  * The three channels and the brightness are **level** knobs - the unipolar 270 degree sweep, 0 at
  * 7:30 and full at 4:30, neutral at full - and the effect is a **stepped** knob, one slot per
@@ -39,10 +39,6 @@ extern "C" {
 
 /* Build the panel's values and install it with the right bar. A second call is a no-op. */
 void cassette_rgb_create(void);
-
-/* The view's Back action, run by the Back cell's click after the tap guard and the pulse. The
- * panel does not know what Back means (Empty, in the groups model). */
-void cassette_rgb_set_back_cb(void (*cb)(void *ctx), void *ctx);
 
 /* Where the strip's state goes. `cb` is called with the whole state after every move, and once
  * when it is installed; NULL installs nothing (the default: there is no strip driver yet). */

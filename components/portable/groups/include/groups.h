@@ -10,8 +10,8 @@
  *
  * The rules, and nothing else:
  *   - a group button is a toggle: a tap selects its group, a tap on the one already up puts
- *     the Empty group back (one group at a time, never two)
- *   - a panel's Back cell returns to Empty; on Empty it is not there at all
+ *     the Empty group back (one group at a time, never two). That toggle is the only way back:
+ *     the panels have no Back cell, because the bar's button already is one
  *   - the groups live with the chrome: when the bars go away the active group is dropped, so
  *     the controls always open on the speaker (the "shows by default" rule)
  *
@@ -35,7 +35,6 @@ typedef enum {
     GROUPS_INTENT_NONE = 0,
     GROUPS_INTENT_TAP_EQ,    /* the left bar's sliders-v */
     GROUPS_INTENT_TAP_RGB,   /* the left bar's led */
-    GROUPS_INTENT_BACK,      /* a group panel's Back cell */
 } groups_intent_t;
 
 /* The changed-mask groups_handle() returns. */

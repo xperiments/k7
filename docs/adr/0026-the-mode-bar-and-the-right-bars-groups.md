@@ -5,7 +5,7 @@ transport drawer and became a **mode bar**: the cassette glyph opens and closes 
 sliders-v glyph selects the **EQ group**, the led glyph selects the **RGB group**. The right bar
 stopped being one DJ block with a Menu cell ("M") holding its door, and became a bar that hosts
 one **group** at a time - a speaker grille by default, the EQ, or the RGB panel - with every cell
-belonging to the group and a Back cell inside the EQ and RGB groups returning to the grille.
+belonging to the group.
 
 Three things were driven by the owner's own wording and are worth recording because they replaced
 older ADRs rather than extending them:
@@ -30,9 +30,10 @@ the RGB group, and the shared 3x editor.*
 - `cassette_empty` is the Empty group: one 186x284 plate at the Pad's footprint with a staggered
   dot grid, painted by one draw callback, and an **inert** panel - the bar leaves its carcase out
   of the hit test and bubbles gestures, so the default panel does not eat a ladder swipe.
-- The EQ group is `[Back][HI] / [VU][MED] / [Gain][LOW]`; `cassette_meter` moved from the
-  cassette's design grid into the VU cell (84x62, two rows) and lost its pose plumbing.
-- The RGB group is `[Back][Red] / [Effect][Green] / [Bright][Blue]`; `components/portable/rgb`
+- The EQ group is `[VU][HI] / [VU][MED] / [Gain][LOW]`; `cassette_meter` moved from the
+  cassette's design grid into the VU plate (one 96x190 surface over the inside column's top two
+  cells, two 84 px rows) and lost its pose plumbing.
+- The RGB group is `[Effect][Red] / [Effect][Green] / [Bright][Blue]`; `components/portable/rgb`
   owns the strip's state and `rgb_frame()`.
 - `knob_editor` was extracted from `cassette_eq` - the overlay, the 3x dial, the timer, the blink,
   the dim and the click-to-value map - and takes a **bank**: the knobs, the cell at a point, the
@@ -58,24 +59,24 @@ placeholder, and the parked meter on the cassette.
   `cassette_bars`'s sense, so a swap is a cut; every cell belongs to the group, and there is no
   chrome cell left. The Menu's Pad is not a group: it takes the bar for the mode and the group is
   reinstalled after.
-- **The groups live with the chrome, and Back means Empty.** Hiding the bars resets the group.
-  A group's Back cell returns to Empty; on Empty there is no Back cell, so Back can never move the
-  ladder.
+- **The groups live with the chrome, and the group's own button is the only way back.** Hiding
+  the bars resets the group. There is no Back cell in a panel - the mode bar's button toggles its
+  group off - so no control inside a group can move the ladder either.
 - **Empty is a picture, and it is the default.** One plate, one draw callback (~220 dots), no
   controls, gestures through. It is the surface the controls open on, so it must not block a
   swipe.
-- **The EQ group keeps its audio and moves its cells.** Gain moved to the inside column's bottom
-  cell, the meter took the middle one, Back took the top one, and the three bands stayed in the
-  outer column. The knobs' behaviour, ranges and the tone_eq path are unchanged.
+- **The EQ group keeps its audio and moves its cells.** Gain took the inside column's bottom cell,
+  the meter took the two above it as one plate, and the three bands stayed in the outer column. The knobs' behaviour, ranges and the tone_eq path are unchanged.
 - **The VU meter's home is the EQ group's `[V]` cell.** The parked instance is gone; the module
   builds into the cell, in cell coordinates, and is created and deleted with the panel's cells.
 - **The RGB group publishes a portable state.** `components/portable/rgb` owns three channels, a
   brightness applied **last** and one effect from a fixed list; `rgb_frame()` fills a pixel buffer
   from `(state, now_ms, level, n)` and is pure, so every effect is host-tested. The firmware has
   no strip driver yet, so `cassette_rgb_set_publish()` is the seam a driver will hang from.
-- **The effect selector is a stepped knob.** One slot per effect on the unipolar arc, neutral at
-  OFF, its 3x pillow naming the effect. Graphically it is the same crown and line as its
-  neighbours; the sector ring is the later refinement.
+- **The effect selector is a stepped knob on a tall plate.** One slot per effect on the unipolar
+  arc, neutral at OFF. Its cell spans the inside column's top two cells so the dial can sit above
+  the effect's name, which is written under it at 1x and in the 3x pillow. The sector ring is the
+  later refinement.
 - **One 3x editor, one overlay, panels as data.** `knob_editor` owns the modal surface and takes
   a bank from whichever panel is up; `knob_cell` owns the 1x dial. A new knob panel is a table of
   cells, a bank and its publish, not a copy of the EQ module.

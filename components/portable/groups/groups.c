@@ -1,9 +1,9 @@
 /*
  * Which group the right bar is showing; see groups.h.
  *
- * Three rules and one fact, no objects, no clock, no allocation. The model's whole job is to
- * keep "one group at a time", "Back means Empty" and "the groups live with the chrome" in one
- * place the host tier can pin.
+ * Two rules and one fact, no objects, no clock, no allocation. The model's whole job is to keep
+ * "one group at a time, and its own button is the toggle" and "the groups live with the chrome"
+ * in one place the host tier can pin.
  */
 #include "groups.h"
 
@@ -37,7 +37,6 @@ unsigned groups_handle(groups_t *g, groups_intent_t intent, bool chrome_shown)
     switch (intent) {
     case GROUPS_INTENT_TAP_EQ: g->active = toggled(g->active, GROUPS_ID_EQ); break;
     case GROUPS_INTENT_TAP_RGB: g->active = toggled(g->active, GROUPS_ID_RGB); break;
-    case GROUPS_INTENT_BACK: g->active = GROUPS_ID_EMPTY; break;
     case GROUPS_INTENT_NONE:
     default: break;
     }

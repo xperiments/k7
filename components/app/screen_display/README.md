@@ -29,7 +29,7 @@ and nothing else. Everything else is private:
   a gesture. No bar keeps a slide of its own, and there is no container: the cells are the
   strip.
 - `cassette_button.c` / `.h` — the shared button, built five times: the mode bar's cassette,
-  sliders-v and led, and each group panel's Back cell. It builds the two circles and the letter
+  sliders-v and led. It builds the two circles and the letter
   inside a carcase its host made and owns the one pressed state, the latched ink (`set_on()`: a
   k_col_primary disc with a k_col_bg glyph), the 160 ms pulse and the tap guard. The cap is spec
   data and the click is a callback, so the module knows nothing about the Menu or a group; the
@@ -39,8 +39,7 @@ and nothing else. Everything else is private:
   RGB. The view owns which one is on and relatches them; the buttons only carry the glyph, the
   callback and the latch.
 - `groups` (`components/portable/groups`) — which group the right bar is showing, as three rules
-  and one fact: a group button toggles, a panel's Back means Empty, and the group dies with the
-  chrome. `t26_groups` pins it; the view installs the panel and relatches the bar.
+  and one fact: a group button toggles, and the group dies with the chrome. `t26_groups` pins it; the view installs the panel and relatches the bar.
 - `cassette_empty.c` / `.h` — the Empty group: one 186x284 plate at the Pad's footprint filled
   with a staggered grid of 4 px dots, painted by one draw callback, and inert.
 - `knob_cell.c` / `.h` — one small knob inside a bar cell: the 44 px disc, the 24-dot crown, the
@@ -155,14 +154,14 @@ and nothing else. Everything else is private:
 - `cassette_empty.c` — the Empty group: the plate at the Pad's footprint, the staggered dot
   grid and its draw callback, the page ink, and the `inert` panel value.
 - `cassette_eq.c` — the EQ group: all six cells, `[Back][HI] / [VU][MED] / [Gain][LOW]`. It
-  builds the four knobs (`knob_cell.c`), the Back button and the meter into the carcases the
-  bar hands it and owns its values and the audio; it creates no carcase and no root. Its
-  interface is `create()`, `set_back_cb()` and `cassette_eq_panel()` - the value the view
-  installs when the group is selected. The knob values and the meter's place outlive a swap;
+  builds the four knobs (`knob_cell.c`) and the meter into the carcases the bar hands it and owns
+  its values and the audio; it creates no carcase and no root. Its interface is `create()` and
+  `cassette_eq_panel()` - the value the view installs when the group is selected. The knob values and the meter's place outlive a swap;
   an open edit ends with the panel, as it does whenever the panel goes.
 - `cassette_rgb.c` — the RGB group: the same six cells with Red, Green, Blue in the outer
-  column and Back, Effect, Brightness inside. Same interface, plus
-  `cassette_rgb_set_publish()` - where the strip's state goes.
+  column and Effect (a 96x190 plate, its dial above and the effect's name below) and Brightness
+  inside. Its interface is `create()`, `cassette_rgb_panel()` and `cassette_rgb_set_publish()` -
+  where the strip's state goes.
 - `cassette_window.c` — the window around the cassette on the controls screen: 486x284 at
   (110,76), its top and bottom edges on the bands' lines and its sides in the gaps either
   side of the scaled tape. Same 2 px border, 8 px corner and carcase ink as the bands. It
@@ -353,8 +352,7 @@ Each button is 96x96, rounded by 8 px, with a 64 px circle at its centre and one
 glyph centred in the circle in `xtape_36`. The carcase is the left bar's - the same 96x96 box
 as the groups' - filled opaque with the page's colour and bordered `k_col_button_rect`. Each
 button carries **its own cap** - `cassette_cap_t`, the spec data, and the white page's alone:
-the face of the disc there and the letter drawn on it - and the mode bar's three (and both
-groups' Back cells) start in `k_col_dome`'s neutral grey with the letter `k_col_bg` (black).
+the face of the disc there and the letter drawn on it - and the mode bar's three start in `k_col_dome`'s neutral grey with the letter `k_col_bg` (black).
 The cap is spec data at create: the panel never re-inks one afterwards. The dark page is not
 the caps': it is the palette's line art, the playing red ring and letter
 (`k_col_button_circle`, `k_col_button_letter`), the same for every button, whatever a cap
@@ -384,11 +382,9 @@ click pulse - and, in the drawer, through the carcase's ring widening from 2 to 
 click runs the 160 ms scale pulse (256 -> 232 -> 256) from the portable
 `cassette_button_rule`.
 
-All five buttons are that one module - the mode bar's three and each group panel's Back cell -
-and it is where the press, the pulse and the guard live: it builds the disc, the letter and the
+All three buttons are that one module, and it is where the press, the pulse and the guard live: it builds the disc, the letter and the
 page ink inside a carcase its host made, and hands a click to the host's callback. The mode bar
-maps its three to the Menu's toggle and the two groups; a panel's Back maps to the view's
-"back to Empty". The tap guard is one rule for all five: `!moved && !gesturing`. A click that carries a gesture direction or has moved past LVGL's
+maps its three to the Menu's toggle and the two groups. The tap guard is one rule for all five: `!moved && !gesturing`. A click that carries a gesture direction or has moved past LVGL's
 press limit is not a tap and does nothing at all - no pulse and no action. The guard used to
 carry a third term for the two-finger gesture; that gesture is gone (ADR 0025).
 
@@ -504,8 +500,9 @@ whichever `components/portable/groups` says is up:
   a swipe that starts on the grille still moves the ladder. The dots are one draw callback, not
   one object each - the same reason the tape's packs are - and the ink turns with the page
   (`k_col_button_rect` dots on the dark page, `k_col_bg` dots on the white one).
-- **EQ** — `cassette_eq.c`: `[Back][HI] / [VU][MED] / [Gain][LOW]`.
-- **RGB** — `cassette_rgb.c`: `[Back][Red] / [Effect][Green] / [Bright][Blue]`.
+- **EQ** — `cassette_eq.c`: `[VU][HI] / [VU][MED] / [Gain][LOW]`, the meter one 96x190 plate.
+- **RGB** — `cassette_rgb.c`: `[Effect][Red] / [Effect][Green] / [Bright][Blue]`, the effect one
+  plate with its dial above and its name below.
 
 Two touching 96 px columns at x=594..784 (the first column nudged 2 px right; the second stays at
 688), three rows at y=76/170/264, so the block is 190x284 and its right edge leaves 16 px to the
@@ -513,16 +510,15 @@ screen. The 16 px is the inset of the 64 px circle inside each carcase, not a ga
 share their borders like the mode bar's. All six cells are carcases over the page's opaque fill,
 so a group covers the tape it slides across: the bar's page fill, then the panel's own ink - the
 knob cells are the knob plate on the white page only, `k_col_knob_rect` filling them and
-`k_col_bg` for their border, so no carcase line runs round a knob. The Back cell keeps the page's
-fill and the palette's `k_col_button_rect` border and inks itself from its cap; the VU cell keeps
-the page's fill too, because the meter's rows are their own inks on both pages.
+`k_col_bg` for their border, so no carcase line runs round a knob. The meter's plate keeps the
+page's fill and border too, because its rows are their own inks on both pages.
 
 The bar is hidden at rest, so the entry view is the full-scale cassette; the model shows it with
 the mode bar, when the cassette is already at the 134/256 control pose. The right bar slides the
 cells in from the right edge over the same 260 ms as the mode bar and back out when it leaves. A
 group goes away when the bars go away - the groups model drops the selection on that edge - so
-the controls always open on the grille. A group's Back cell returns to Empty, and a chunk of the
-view's `groups_apply()` swaps the panel and relatches the mode bar.
+the controls always open on the grille. The group's own button on the mode bar is the only way
+back - a panel has no Back cell - and `groups_apply()` swaps the panel and relatches the bar.
 
 While the Menu is up the same bar hosts the Pad instead - one white 186x284 plate over the
 block's place - and the group is remembered across the mode and reinstalled when the Menu closes

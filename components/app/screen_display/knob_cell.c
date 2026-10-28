@@ -17,7 +17,6 @@
 
 #define KNOB_D       44
 #define KNOB_R       (KNOB_D / 2)
-#define KNOB_INSET   ((CASSETTE_CELL_W - KNOB_D) / 2)
 #define DOT_R        32   /* outside the knob circle, inside the carcase */
 #define DOT_D        4
 #define STICK_W      4
@@ -34,19 +33,23 @@ void knob_cell_apply(knob_cell_t *c, const knob_t *k)
 
 bool knob_cell_create(knob_cell_t *out, lv_obj_t *cell)
 {
+    return knob_cell_create_at(out, cell, CASSETTE_CELL_W / 2, CASSETTE_CELL_H / 2);
+}
+
+bool knob_cell_create_at(knob_cell_t *out, lv_obj_t *cell, int cx, int cy)
+{
     if (!out || !cell) return false;
     out->cell = cell;
 
     /* Two circles, like the buttons: the outer one carries the broad shadow and the inner one
      * is the disc with the contact shadow and the ring. */
-    out->ambient = cassette_border_box(cell, KNOB_INSET, KNOB_INSET,
+    out->ambient = cassette_border_box(cell, cx - KNOB_R, cy - KNOB_R,
                                        KNOB_D, KNOB_D, KNOB_R,
                                        k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
     out->disc = cassette_border_box(out->ambient, 0, 0,
                                     KNOB_D, KNOB_D, KNOB_R,
                                     k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 2);
 
-    int cx = CASSETTE_CELL_W / 2, cy = CASSETTE_CELL_H / 2;
     for (int i = 0; i < KNOB_CELL_DOTS; i++) {
         float a = (float)i * 15.0f * 3.14159265358979323846f / 180.0f;
         int x = cx + (int)lroundf((float)DOT_R * sinf(a));
