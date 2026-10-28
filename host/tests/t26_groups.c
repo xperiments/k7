@@ -1,11 +1,11 @@
 /*
  * Which group the right bar is showing, without LVGL.
  *
- * The three rules the owner asked for and the fact that bounds them: a group button is a
- * toggle (one group at a time, the same button again returns to the speaker), a panel's Back
- * cell returns to Empty, and the groups live with the chrome - hiding the bars drops the
- * active group, so the controls always open on the grille. The Menu's Pad is not a group and
- * the model is not stepped while it is open; the view reinstalls the group on close.
+ * The rules the owner asked for and the fact that bounds them: a group button is a toggle (one
+ * group at a time, the same button again returns to the speaker - the only way back, now that
+ * the panels have no Back cell), and the groups live with the chrome - hiding the bars drops
+ * the active group, so the controls always open on the grille. The Menu's Pad is not a group
+ * and the model is not stepped while it is open; the view reinstalls the group on close.
  */
 #include "test_util.h"
 
@@ -51,18 +51,6 @@ static void test_toggle(void)
     CHECK_EQ(groups_active(&g), GROUPS_ID_EQ, "without going through Empty first");
 }
 
-static void test_back(void)
-{
-    groups_t g = fresh();
-
-    groups_handle(&g, GROUPS_INTENT_TAP_EQ, true);
-    CHECK_EQ(groups_handle(&g, GROUPS_INTENT_BACK, true), GROUPS_CHANGED_ACTIVE,
-             "Back leaves the group");
-    CHECK_EQ(groups_active(&g), GROUPS_ID_EMPTY, "and means Empty, never the ladder");
-    CHECK_EQ(groups_handle(&g, GROUPS_INTENT_BACK, true), 0u,
-             "Back on Empty changes nothing");
-}
-
 static void test_chrome_reset(void)
 {
     groups_t g = fresh();
@@ -100,7 +88,6 @@ int main(void)
 {
     test_starts_empty();
     test_toggle();
-    test_back();
     test_chrome_reset();
     test_stable();
 
