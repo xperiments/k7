@@ -100,12 +100,10 @@ and nothing else. Everything else is private:
   current design) and drawn before every other part of the body. Its interface is
   `create(parent)`, `place(pose)` and `set(frame)`: the chips along the bottom are windows,
   filled with the background's `k_col_bg`, which is what is behind them on both pages.
-- `cassette_meter.c` — the VU meter, `create(parent)`, `place(pose)`, `set(frame)`,
-  `show()` and `hide()`. Two
-  100x24 rows centred on the right hub, L on top and R below; each row is a rounded
-  rectangle with an L/R badge, a 6 px gap and seven dim bars. One rounded lit fill grows
-  from the left and ends in a semicircle. The panel is transparent, so the hub shows
-  through.
+- `cassette_meter.c` — the VU meter, `create(cell)` and `set(frame)`. Two tall dot columns in the
+  EQ group's plate, L on the left and R on the right, each a 5x24 matrix lit from the bottom, with
+  a small L/R pill under it. One object and one draw callback per column; the plate is its
+  visibility and its lifetime.
 - `cassette_cover.c` — the white page's Track picture. `create(parent)` builds the clip
   box, the A8 mask and the fallback hole; `place()` follows the frames' current pixels;
   `set_image(dsc)` takes the loader's one buffer; `set_shown()` / `is_shown()` are the
@@ -579,17 +577,16 @@ after the tone EQ has run, so it is the level that goes on the wire.
 `components/portable/cassette` turns it into a peak-hold: `vu = max(level, vu * 0.90)`
 per 40 ms update, about -23 dB/s, so the peak follows a real drop instead of hanging.
 
-`cassette_meter.c` draws it in the EQ group's `[V]` cell, in cell coordinates: two 84x26 rows
-10 px apart, L on top and R below, centred in the 96x96 carcase. Each row is a rounded
-rectangle (radius 13, half its height) with an 18 px L/R badge, a 10 px gap and seven 8 px dim
-bars; the bars touch each other and the row's top and bottom. The lit level is one rounded fill
-over the first lit bars, one step dimmer than the badge, so its right end is a semicircle; the
-row's clip_corner rounds the track's right end too. The fill is mapped over -48..0 dB so the row
-moves like a meter rather than a linear amplitude. There is no panel behind it - the rows,
-badges, track and fill are the only things painted, so the cell's fill shows through. A level
-change only resizes the fill, and a row whose lit count has not changed is not touched.
+`cassette_meter.c` draws it in the EQ group's `[V]` plate, in cell coordinates: the plate is
+96x190 (the inside column's top two cells), and inside it sit two 30x148 columns 12 px apart,
+with a 30x14 L/R pill 6 px under each. A column is a 5x24 matrix of 4 px dots on a 6 px pitch,
+painted by one draw callback: the rows below the level in `k_col_meter_lit`, the rest in
+`k_col_meter_dim`, so the column fills from the bottom up. The scale is -48..0 dB, as it always
+was, and a change of level repaints only the column whose count moved. The pill is the channel's
+label - `k_col_meter_lit` with the letter in `k_col_bg` - which is the badges' successor: with
+vertical columns there is no left margin to hang an L/R badge from.
 
-The cell is the meter's life: the bar builds it with the EQ panel's cells and deletes it with
+The plate is the meter's life: the bar builds it with the EQ panel's cells and deletes it with
 them, and `cassette_meter_set()` is a no-op whenever there is no meter on screen. The delete
 event detaches the module, so a frame that arrives while another group is up cannot touch freed
 objects; both lit counts start at zero when the cells are rebuilt. The two-finger gesture that

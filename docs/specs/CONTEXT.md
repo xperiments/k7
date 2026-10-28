@@ -157,7 +157,7 @@ and nothing is playing while the tape winds back.
 _Avoid_: transition, animation, reel swap
 
 **VU meter**:
-The two rows inside the right hub, L on top and R below, showing the peak-hold of both
+The two columns in the EQ group's plate, L on the left and R on the right, showing the peak-hold of both
 channels. Each row is a rounded rectangle with an L/R badge on the left, a gap, seven
 touching dim bars and one rounded lit fill that grows from the left and ends in a
 semicircle; the fill is a step dimmer than the badge and the track a dim red.

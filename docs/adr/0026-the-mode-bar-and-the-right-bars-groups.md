@@ -32,7 +32,8 @@ the RGB group, and the shared 3x editor.*
   of the hit test and bubbles gestures, so the default panel does not eat a ladder swipe.
 - The EQ group is `[VU][HI] / [VU][MED] / [Gain][LOW]`; `cassette_meter` moved from the
   cassette's design grid into the VU plate (one 96x190 surface over the inside column's top two
-  cells, two 84 px rows) and lost its pose plumbing.
+  cells: two 30 px dot columns lit from the bottom, an L/R pill under each) and lost its pose
+  plumbing.
 - The RGB group is `[Effect][Red] / [Effect][Green] / [Bright][Blue]`; `components/portable/rgb`
   owns the strip's state and `rgb_frame()`.
 - `knob_editor` was extracted from `cassette_eq` - the overlay, the 3x dial, the timer, the blink,

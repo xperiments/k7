@@ -645,7 +645,8 @@ down is refused rather than printed early. The tag
 texts are the Track's ID3/FLAC tags, read by the artwork loader on its own
 task; until they land the group is the artist directory and the song the cleaned filename.
 The two-finger VU gesture is gone; the meter's home is the EQ group's `[V]` cell, where it
-shows the broadcast's two channels as two 84 px rows. The only left swipe left in the build is the Menu's Back
+shows the broadcast's two channels as two tall dot columns, lit from the bottom, with an L/R pill
+under each. The only left swipe left in the build is the Menu's Back
 on the Pad. The Sunton build compiles this path; the board
 tier has not yet recorded a finger, so the rows above are unchanged. The removal and the
 old cover screens are
