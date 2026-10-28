@@ -44,6 +44,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/menu/include \
        -I$(ROOT)/components/portable/knob_model/include \
        -I$(ROOT)/components/portable/controls/include \
+       -I$(ROOT)/components/portable/groups/include \
        -I$(ROOT)/components/portable/app_services/include \
        -I$(ROOT)/components/portable/app_board/include \
        -I$(ROOT)/components/portable/dr_libs/include \
@@ -83,6 +84,7 @@ PROD_SRC := \
   $(ROOT)/components/portable/menu/pad.c \
   $(ROOT)/components/portable/knob_model/knob.c \
   $(ROOT)/components/portable/controls/controls.c \
+  $(ROOT)/components/portable/groups/groups.c \
   $(ROOT)/components/portable/mini_icecast/mi_shuffle.c \
   $(ROOT)/components/portable/app_services/app_services.c \
   $(SHINE_SRC)
@@ -100,6 +102,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/menu \
           $(ROOT)/components/portable/knob_model \
           $(ROOT)/components/portable/controls \
+          $(ROOT)/components/portable/groups \
           $(ROOT)/components/portable/app_services \
           $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
@@ -126,7 +129,8 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t12_transport $(BIN)/t14_library $(BIN)/t15_artwork \
          $(BIN)/t16_layout $(BIN)/t17_tone_eq \
          $(BIN)/t18_menu $(BIN)/t19_shuffle \
-         $(BIN)/t21_button $(BIN)/t22_knob $(BIN)/t23_pad $(BIN)/t24_controls
+         $(BIN)/t21_button $(BIN)/t22_knob $(BIN)/t23_pad $(BIN)/t24_controls \
+         $(BIN)/t26_groups
 
 .PHONY: all test integration layering check tools fixtures bench control control-check clean help
 
@@ -247,6 +251,10 @@ $(BIN)/t23_pad: $(OBJ)/pad.o $(OBJ)/t23_pad.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t24_controls: $(OBJ)/controls.o $(OBJ)/t24_controls.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t26_groups: $(OBJ)/groups.o $(OBJ)/t26_groups.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

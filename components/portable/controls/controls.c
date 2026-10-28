@@ -116,9 +116,10 @@ controls_changed_t controls_handle(controls_t *c, controls_intent_t intent,
     if (f.editing) {
         /* The edit overlay is absolute: every intent is dropped. */
     } else if (f.menu_open) {
-        /* The Menu is modal, one rung above the ladder: up closes it, everything else
+        /* The Menu is modal, one rung above the ladder: up closes it, and so does another tap
+         * on the cassette's door, which is the same button that opened it. Everything else
          * waits. */
-        if (intent == CONTROLS_INTENT_UP) c->menu = false;
+        if (intent == CONTROLS_INTENT_UP || intent == CONTROLS_INTENT_MENU_TAP) c->menu = false;
     } else {
         apply(c, intent, &f);
     }

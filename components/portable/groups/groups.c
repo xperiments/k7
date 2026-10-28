@@ -1,0 +1,50 @@
+/*
+ * Which group the right bar is showing; see groups.h.
+ *
+ * Three rules and one fact, no objects, no clock, no allocation. The model's whole job is to
+ * keep "one group at a time", "Back means Empty" and "the groups live with the chrome" in one
+ * place the host tier can pin.
+ */
+#include "groups.h"
+
+#include <stddef.h>
+
+void groups_init(groups_t *g)
+{
+    if (!g) return;
+    g->active = GROUPS_ID_EMPTY;
+    g->chrome_shown = false;
+}
+
+groups_id_t groups_active(const groups_t *g)
+{
+    return g ? g->active : GROUPS_ID_EMPTY;
+}
+
+/* A group button's toggle: its group, or Empty when it is already the one up. */
+static groups_id_t toggled(groups_id_t active, groups_id_t which)
+{
+    return active == which ? GROUPS_ID_EMPTY : which;
+}
+
+unsigned groups_handle(groups_t *g, groups_intent_t intent, bool chrome_shown)
+{
+    if (!g) return 0;
+
+    groups_id_t was = g->active;
+    g->chrome_shown = chrome_shown;
+
+    switch (intent) {
+    case GROUPS_INTENT_TAP_EQ: g->active = toggled(g->active, GROUPS_ID_EQ); break;
+    case GROUPS_INTENT_TAP_RGB: g->active = toggled(g->active, GROUPS_ID_RGB); break;
+    case GROUPS_INTENT_BACK: g->active = GROUPS_ID_EMPTY; break;
+    case GROUPS_INTENT_NONE:
+    default: break;
+    }
+
+    /* The groups live with the chrome: hiding the bars drops whatever was selected, so the
+     * controls open on the speaker every time. This runs last so it wins. */
+    if (!chrome_shown) g->active = GROUPS_ID_EMPTY;
+
+    return g->active != was ? GROUPS_CHANGED_ACTIVE : 0u;
+}

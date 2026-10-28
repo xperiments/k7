@@ -35,7 +35,8 @@
  * a slide finds the fact false.
  *
  * The input is the screen's intents: screen_input.h reports the vertical direction and
- * cassette_view.c maps its enum to this one. A tap on the DJ block's M is the third intent.
+ * cassette_view.c maps its enum to this one. A tap on the mode bar's cassette is the third
+ * intent, and it toggles: it opens the Menu, and a second tap closes it.
  * Two modalities swallow intents before any rule runs. While a knob is being edited, every
  * intent is ignored (ADR 0018): the edit overlay owns the touch. While the Menu is up, UP
  * closes it and every other intent is ignored (ADR 0022).

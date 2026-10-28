@@ -42,7 +42,9 @@
 #include "cassette_widgets.h"
 #include "cassette_bars.h"
 #include "controls.h"
+#include "groups.h"
 #include "cassette_buttons.h"
+#include "cassette_empty.h"
 #include "cassette_eq.h"
 #include "knob_editor.h"
 #include "cassette_footer.h"
@@ -111,6 +113,7 @@ static cassette_pose_t s_pose = { CASSETTE_SCALE_ENTRY, 0, 0 };
 static cassette_pose_t s_pose_from;   /* the pose the change in flight started at */
 static cassette_pose_t s_pose_to;     /* and the one it is heading for */
 static controls_t *s_controls;        /* the ladder: the level and the Menu */
+static groups_t s_groups;             /* which of the right bar's panels is up */
 static controls_state_t s_ctl;        /* its latest snapshot */
 static bool s_painted_white;          /* the page the screen is painted for */
 
@@ -224,6 +227,11 @@ static void page_set(bool white)
      * cover on the white page. The Cover is the model's wish, applied after this by COVER. */
 }
 
+static bool chrome_shown_now(void);
+static void groups_install(void);
+static void groups_latch(void);
+static void groups_apply(unsigned changed);
+
 /* Apply only what the model says changed, in its order: PAGE, PEEK, SHOWN, MENU, ROOM. The
  * page is painted before the picture on the same bit - Real is the white Page and the Cover
  * as one rung, so the flip comes first and the picture fades over it; the peek is put away
@@ -249,17 +257,21 @@ static void controls_apply(controls_changed_t changed)
     }
 
     if (changed & CONTROLS_CHANGED_SHOWN) {
-        bool shown = s_ctl.level == CONTROLS_LEVEL_ART || s_ctl.level == CONTROLS_LEVEL_REAL;
+        bool shown = chrome_shown_now();
         cassette_header_set_shown(shown);
         cassette_footer_set_shown(shown);
         cassette_window_set_shown(shown);
         cassette_bars_set_shown(shown);
+        /* The groups live with the chrome: hiding the bars drops the active group, so the
+         * controls open on the grille every time. */
+        groups_apply(groups_handle(&s_groups, GROUPS_INTENT_NONE, shown));
     }
 
     if (changed & CONTROLS_CHANGED_MENU) {
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
         if (s_ctl.menu) cassette_menu_open(s_ctl.level == CONTROLS_LEVEL_REAL);
         else cassette_menu_close();
+        groups_latch();
 #endif
     }
 
@@ -357,15 +369,71 @@ static void apply_frame(const cassette_frame_t *f)
 
 /* ------------------------------------------------------------------ input */
 
+/* ---------------------------------------------------------------- the groups */
+
+static bool chrome_shown_now(void)
+{
+    return s_ctl.level == CONTROLS_LEVEL_ART || s_ctl.level == CONTROLS_LEVEL_REAL;
+}
+
+/* Put the active group's panel on the right bar. The Menu owns the bar while it is up, so the
+ * Pad stays until the Menu closes and the restore hook brings the group back. */
+static void groups_install(void)
+{
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-/* M's tap, from the right bar's chrome cell: the Controls model owns the Menu's guards - the
- * settled controls pose, a knob not editing, the Menu not already open - and its open state. */
-static void menu_cell_cb(void *ctx)
+    if (cassette_menu_is_open()) return;
+#endif
+    const cassette_panel_t *panel = cassette_empty_panel();
+    if (groups_active(&s_groups) == GROUPS_ID_EQ) panel = cassette_eq_panel();
+    cassette_bars_set_panel(CASSETTE_BARS_RIGHT, panel);
+}
+
+/* The latch on the left bar: the cassette lit while the Menu is open, the sliders or the led
+ * lit while its group is the active one. A plain footlight on the mode that is on. */
+static void groups_latch(void)
+{
+    bool menu = false;
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    menu = cassette_menu_is_open();
+#endif
+    cassette_buttons_set_on(CASSETTE_MODE_TAPE, menu);
+    cassette_buttons_set_on(CASSETTE_MODE_EQ, groups_active(&s_groups) == GROUPS_ID_EQ);
+    cassette_buttons_set_on(CASSETTE_MODE_RGB, groups_active(&s_groups) == GROUPS_ID_RGB);
+}
+
+/* Apply the model's mask: a moved group reinstalls the panel and is always relatched. */
+static void groups_apply(unsigned changed)
+{
+    if (changed & GROUPS_CHANGED_ACTIVE) groups_install();
+    groups_latch();
+}
+
+/* The cassette's door: the Controls model owns the Menu's guards - the settled controls pose,
+ * a knob not editing - and its open state, and its MENU_TAP toggles, so the same button closes
+ * the Menu it opened. */
+static void tape_cb(void *ctx)
 {
     (void)ctx;
     if (!s_controls) return;
     controls_facts_t facts = facts_now();
     controls_apply(controls_handle(s_controls, CONTROLS_INTENT_MENU_TAP, &facts));
+}
+
+static void eq_group_cb(void *ctx)
+{
+    (void)ctx;
+    groups_apply(groups_handle(&s_groups, GROUPS_INTENT_TAP_EQ, chrome_shown_now()));
+}
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+/* The Menu's own close (the Pad's Back swipe at the root) runs the same restore the view's
+ * close does: the group's panel back and the latches re-read. The latch is the one thing the
+ * Menu's self-close would otherwise leave stale. */
+static void menu_restored(void *ctx)
+{
+    (void)ctx;
+    groups_install();
+    groups_latch();
 }
 #endif
 
@@ -467,16 +535,27 @@ void cassette_view_create(void)
      * each panel installs its value below. The bars start off screen and hidden. */
     cassette_bars_create(scr);
 
-    /* The Transport panel is chrome, above the peek. */
+    /* The mode bar is chrome, above the peek: the Menu's door and the two group selectors. */
     cassette_buttons_create();
+    cassette_buttons_set_cb(CASSETTE_MODE_TAPE, tape_cb, NULL);
+    cassette_buttons_set_cb(CASSETTE_MODE_EQ, eq_group_cb, NULL);
 
     /* The one 3x dial and its overlay, shared by the right bar's knob panels (the EQ group
      * today, the RGB group next). It is a screen child above everything the panels build. */
     knob_editor_create(scr);
 
     /* The EQ panel is chrome too, on the other edge; created last so it starts above the
-     * peek, hidden with the Transport panel. */
+     * peek, hidden with the mode bar. */
     cassette_eq_create(scr);
+
+    /* The Empty group - the speaker grille - is the right bar's default, so it is installed
+     * last and the screen opens on it. */
+    cassette_empty_create();
+
+    /* The groups live with the chrome: nothing is selected until the bars are out, and the
+     * two latches start dark. */
+    groups_init(&s_groups);
+    groups_apply(GROUPS_CHANGED_ACTIVE);
 
     /* The Menu's page is drawn above the cassette; its Pad is the right bar's cell, built by
      * the bar when open installs the panel. The bars were created before this; the bands come
@@ -484,7 +563,7 @@ void cassette_view_create(void)
      * gated on the controls' settled pose by the model. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     cassette_menu_create(scr, s_cassette);
-    cassette_bars_set_menu_cb(menu_cell_cb, NULL);
+    cassette_menu_set_restore_cb(menu_restored, NULL);
 #endif
 
     /* The bands across the top and the bottom of the controls screen: the frame that closes

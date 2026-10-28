@@ -278,20 +278,20 @@ static const case_t k_from_real[] = {
     {CONTROLS_INTENT_MENU_TAP, &k_menu_real, M_MENU},
 };
 
-/* The Menu is modal: up closes it and leaves the level where it is; every other intent
- * waits (ADR 0022). */
+/* The Menu is modal: up closes it and leaves the level where it is, and so does the cassette's
+ * door - the button that opened it toggles it shut. The swipes wait (ADR 0022). */
 static const case_t k_from_menu_art[] = {
     {CONTROLS_INTENT_NONE,     &k_menu_art, M_NONE},
     {CONTROLS_INTENT_DOWN,     &k_menu_art, M_NONE},
     {CONTROLS_INTENT_UP,       &k_art,      M_MENU},
-    {CONTROLS_INTENT_MENU_TAP, &k_menu_art, M_NONE},
+    {CONTROLS_INTENT_MENU_TAP, &k_art,      M_MENU},
 };
 
 static const case_t k_from_menu_real[] = {
     {CONTROLS_INTENT_NONE,     &k_menu_real, M_NONE},
     {CONTROLS_INTENT_DOWN,     &k_menu_real, M_NONE},
     {CONTROLS_INTENT_UP,       &k_real,      M_MENU},
-    {CONTROLS_INTENT_MENU_TAP, &k_menu_real, M_NONE},
+    {CONTROLS_INTENT_MENU_TAP, &k_real,      M_MENU},
 };
 
 static void ladder_from(const expect_t *from, const case_t *cases, size_t n)
@@ -551,16 +551,16 @@ static void test_repeats(void)
     check_state(c, &k_initial, "UP at Real (second)");
     controls_free(c);
 
-    /* The Menu twice: the second tap needs the fact the view would report after the first
-     * one: an open Menu. */
+    /* The Menu twice: the cassette's door is a toggle, so the second tap needs the fact the
+     * view would report after the first one - an open Menu - and closes it. */
     c = model_in(&k_art);
     check_mask(controls_handle(c, CONTROLS_INTENT_MENU_TAP, &at_controls), M_MENU,
                "MENU_TAP twice (first)");
     check_state(c, &k_menu_art, "MENU_TAP twice (first)");
     controls_facts_t open = facts(false, true, false, true);
     mask = controls_handle(c, CONTROLS_INTENT_MENU_TAP, &open);
-    check_mask(mask, M_NONE, "MENU_TAP twice (second)");
-    check_state(c, &k_menu_art, "MENU_TAP twice (second)");
+    check_mask(mask, M_MENU, "MENU_TAP twice (second)");
+    check_state(c, &k_art, "MENU_TAP twice (second)");
     controls_free(c);
 }
 

@@ -87,6 +87,8 @@ static lv_obj_t *s_cassette;         /* hidden for the mode's lifetime */
 static menu_t *s_model;
 static const library_t *s_lib;       /* the lease while open */
 static bool s_open;
+static cassette_menu_cb_t s_restore_cb;   /* the view's: put the active group's panel back */
+static void *s_restore_ctx;
 static bool s_white;                 /* the page the Menu was opened on */
 static uint32_t s_drawn;             /* the model version on screen */
 static mini_icecast_status_t s_status;
@@ -348,18 +350,6 @@ static void menu_back_cb(void *ctx)
     else refresh();
 }
 
-static void menu_enter_cb(void *ctx)
-{
-    (void)ctx;
-    activate();
-}
-
-static void menu_close_cb(void *ctx)
-{
-    (void)ctx;
-    cassette_menu_close();
-}
-
 /* The Pad: one plate. A vertical drag ratchets the model's band; a press that never
  * travelled PAD_TAP_SLOP activates the band; a leftward swipe as long as the screen's own
  * gesture limit is the drawer's Back, so the Menu can be left from either thumb. The press
@@ -618,6 +608,12 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     memset(&s_status, 0, sizeof s_status);
 }
 
+void cassette_menu_set_restore_cb(cassette_menu_cb_t cb, void *ctx)
+{
+    s_restore_cb = cb;
+    s_restore_ctx = ctx;
+}
+
 void cassette_menu_open(bool white)
 {
     if (!s_model || s_open) return;
@@ -636,9 +632,8 @@ void cassette_menu_open(bool white)
     menu_update(s_model, s_lib, &s_facts, &s_status);
 
     cassette_window_set_menu_page(true, white);
-    cassette_buttons_set_menu_mode(true, menu_back_cb, menu_enter_cb, menu_close_cb, NULL);
-    /* The Pad takes the DJ block's place for the mode: the bar deletes the EQ's cells and
-     * builds the plate. The EQ's values and its edit layer stay with it. */
+    /* The Pad takes the active group's place for the mode: the bar deletes the group's cells
+     * and builds the plate. The group's values and its edit layer stay with it. */
     cassette_bars_set_panel(CASSETTE_BARS_RIGHT, &k_pad_panel);
     if (s_cassette) lv_obj_set_hidden(s_cassette, true);
 
@@ -660,10 +655,11 @@ void cassette_menu_close(void)
     cassette_window_set_menu_page(false, s_white);
     cassette_header_set_title(NULL);
     cassette_footer_set_playing(NULL, NULL, NULL);
-    cassette_buttons_set_menu_mode(false, NULL, NULL, NULL, NULL);
-    /* Back to the DJ block: the bar takes the plate down and rebuilds the EQ's five cells.
-     * The panel value carries the knobs' state, so the block returns as it was. */
-    cassette_bars_set_panel(CASSETTE_BARS_RIGHT, cassette_eq_panel());
+    /* Back to the group that was up: this module has no opinion about which one that is, so the
+     * view's restore hook puts the right bar's panel back (the Empty grille, or a group with its
+     * values and edit layer intact). It runs before the cassette returns, so the picture is
+     * whole in the same frame. */
+    if (s_restore_cb) s_restore_cb(s_restore_ctx);
     if (s_cassette) lv_obj_set_hidden(s_cassette, false);
 
     menu_close(s_model);

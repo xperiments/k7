@@ -10,16 +10,15 @@
  * no carcase and registers no root.
  *
  * A bar is a value, not an LVGL object: its cells are screen children at the layout's rects
- * and the bar slides them by an offset. The left bar is the Transport panel's one column of
- * three; the right bar is the EQ panel's five cells plus the Menu's M - a chrome cell that no
- * panel owns and that is present whatever panel is up, so no future panel can strand the
- * Menu. M is built here, with the shared cassette_button, and its click calls the Menu-tap
- * callback the view registers with set_menu_cb().
+ * and the bar slides them by an offset. The left bar is the mode bar's one column of three -
+ * the Menu's door and the two group selectors - and the right bar is whichever group panel is
+ * up: the Empty grille, the EQ's six cells or the RGB's. Every cell belongs to the panel; there
+ * is no chrome cell, because the Menu's door moved to the left bar and no panel can strand it.
  *
  * One panel per bar. set_panel() takes the value; a bar shows a different panel by taking
  * the old one's cells down and building the new one's, which is a cut rather than a slide.
- * The Menu's Pad is the right bar's other panel: 1x1, and its cell_rect() returns the
- * layout's Pad rect, one 186x284 plate instead of a lattice cell, with no page ink of its own.
+ * The Empty group and the Menu's Pad are plates: 1x1, and their cell_rect() returns the
+ * layout's Pad rect, one 186x284 surface instead of a lattice cell.
  *
  * The order the view uses: create() once, after the peek and before the bands; then each
  * panel installs its value (`cassette_buttons_create()`, `cassette_eq_create()`); then
@@ -57,9 +56,11 @@ typedef enum {
  *   cell_rect      where cell (col,row) is, or NULL for the bar's lattice cell. A plate
  *                  panel returns one rect for (0,0).
  *   gesture_bubble whether a swipe that starts on a cell still reaches the screen's gesture
- *                  handler: true for the Transport (ADR 0016: a swipe that starts on a
- *                  button still toggles the drawer), false for the EQ (a swipe on a knob is
- *                  not one) and for the Pad (menu.md).
+ *                  handler: true for the mode bar (a swipe that starts on a button still moves
+ *                  the ladder) and for the Empty grille (a picture must not eat a swipe), false
+ *                  for the EQ and RGB groups (a swipe on a knob is not one) and for the Pad.
+ *   inert          the panel is a picture, not a control surface: its carcases stay out of the
+ *                  hit test, so the touch falls through to the screen. The Empty grille sets it.
  *   build          one control inside one carcase, once per cell. The carcase is the bar's:
  *                  the panel sets no position, size, clickability or bubbling.
  *   set_page       the panel's page ink, after the bar has painted the cells' default: the
@@ -74,14 +75,15 @@ typedef struct {
     int rows;
     cassette_rect_t (*cell_rect)(int col, int row);
     bool gesture_bubble;
+    bool inert;
     void (*build)(lv_obj_t *cell, int col, int row, void *ctx);
     void (*set_page)(bool white, void *ctx);
     void (*shown)(bool visible, void *ctx);
     void *ctx;
 } cassette_panel_t;
 
-/* Build both bars' chrome, hidden, at the layout's hidden offset. The panels' cells are built
- * by set_panel(). A second create() is a no-op. */
+/* Build both bars, hidden, at the layout's hidden offset. Their cells are built by
+ * set_panel(). A second create() is a no-op. */
 void cassette_bars_create(lv_obj_t *screen);
 
 /* Make `panel` the bar's content: the old panel's cells are deleted, one carcase per cell of
@@ -89,7 +91,8 @@ void cassette_bars_create(lv_obj_t *screen);
  * the current page is painted into them and each is built into by panel->build(). A late
  * panel lands where the bar already is, hidden if the bar is hidden. The panel's shown hook
  * is called with the bar's state once its cells are up, so a restored panel knows it is
- * visible. A NULL panel or a bar that was never created is a no-op. */
+ * visible. A NULL panel or a bar that was never created is a no-op. Swapping is a cut; the
+ * caller decides which panel is up (the view, from the groups model). */
 void cassette_bars_set_panel(cassette_bar_side_t side, const cassette_panel_t *panel);
 
 /* Slide both bars in (true) or out (false), over one 260 ms ease-out. A call naming the state
@@ -104,10 +107,6 @@ bool cassette_bars_is_sliding(void);
 /* Paint both bars for the Page: the cells' default fill and border, then each panel's own
  * ink. Also the page a panel built later lands on. */
 void cassette_bars_set_page(bool white);
-
-/* The Menu's door: the chrome cell's click calls `cb` after the tap guard has passed. Called
- * by the view, once; a NULL callback makes M inert. */
-void cassette_bars_set_menu_cb(void (*cb)(void *ctx), void *ctx);
 
 #ifdef __cplusplus
 }
