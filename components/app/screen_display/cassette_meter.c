@@ -140,10 +140,14 @@ void cassette_meter_create(lv_obj_t *cell)
 
     /* The meter's own screen: 3 px inside the plate, so on the white page the grey reads as a
      * frame round a dark window rather than as the meter's background. On the dark page the
-     * window and the plate are the same ink, so it is simply not there. */
+     * window and the plate are the same ink, so it is simply not there. The plate is 96x190 - the
+     * inside column's top two cells - so its size is read from the cell, never from the 96 px
+     * lattice. */
+    int plate_w = lv_obj_get_width(cell);
+    int plate_h = lv_obj_get_height(cell);
     s_window = cassette_box(cell, METER_WINDOW_INSET, METER_WINDOW_INSET,
-                            CASSETTE_CELL_W - 2 * METER_WINDOW_INSET,
-                            CASSETTE_CELL_H - 2 * METER_WINDOW_INSET,
+                            plate_w - 2 * METER_WINDOW_INSET,
+                            plate_h - 2 * METER_WINDOW_INSET,
                             METER_WINDOW_R, k_col_meter_window);
 
     for (int ch = 0; ch < 2; ch++) column_build(cell, ch);
