@@ -41,9 +41,10 @@
  * and those are only filled by the first layout pass - at build time it reads 0. */
 #define METER_PLATE_W      CASSETTE_CELL_W
 #define METER_PLATE_H      (CASSETTE_CELL_H + CASSETTE_CELL_PITCH)
-/* The window behind the columns: 3 px in from the plate, rounded 4 so it sits inside the
- * plate's 8 px corner without a lip. */
-#define METER_WINDOW_INSET 3
+/* The window behind the columns: 4 px in from the plate - the owner's "3 px smaller than it was"
+ * on each axis, rounded to an even inset so the grey frame is the same width on all four sides -
+ * and rounded 4 so it sits inside the plate's 8 px corner without a lip. */
+#define METER_WINDOW_INSET 4
 #define METER_WINDOW_R     4
 
 #define METER_DB_MIN (-48.0f)
