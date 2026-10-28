@@ -586,11 +586,12 @@ was, and a change of level repaints only the column whose count moved. The pill 
 label - `k_col_meter_lit` with the letter in `k_col_bg` - which is the badges' successor: with
 vertical columns there is no left margin to hang an L/R badge from.
 
-The page turns the dots and the pills, not just the plate. On the white page the plate is the
-knobs' mid grey (`k_col_knob_rect`), where the playing red at full strength has no contrast, so
-the **unlit dots go black** (`k_col_bg`) and the lit ones take `k_col_meter_lit_white` - the red
-at 65% - with the L/R pills at 35% (`k_col_meter_pill_white`), a shade quieter than the bar they
-label. The dark page keeps the bright `k_col_meter_lit` and `k_col_meter_dim`.
+The meter's own screen is what makes it read on both pages: a `k_col_meter_window` (`k_col_bg`)
+rectangle 3 px inside the plate, radius 4, behind the columns. On the white page the plate is the
+knobs' mid grey (`k_col_knob_rect`), so that grey becomes a frame round a dark window instead of
+the meter's background, and the dots keep the dark page's inks - the bright `k_col_meter_lit`, the
+`k_col_meter_dim` track and the `k_col_meter_lit` pill with its `k_col_bg` letter. On the dark
+page the window and the plate are the same ink, so it is simply not there.
 
 The plate is the meter's life: the bar builds it with the EQ panel's cells and deletes it with
 them, and `cassette_meter_set()` is a no-op whenever there is no meter on screen. The delete

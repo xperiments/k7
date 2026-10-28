@@ -36,15 +36,20 @@
 #define MATRIX_W     ((BAR_COLS - 1) * DOT_PITCH + DOT)
 #define MATRIX_H     ((BAR_ROWS - 1) * DOT_PITCH + DOT)
 
+/* The window behind the columns: 3 px in from the plate, rounded 4 so it sits inside the
+ * plate's 8 px corner without a lip. */
+#define METER_WINDOW_INSET 3
+#define METER_WINDOW_R     4
+
 #define METER_DB_MIN (-48.0f)
 #define METER_DB_MAX 0.0f
 
 static lv_obj_t *s_cell;          /* the plate the meter is built into */
+static lv_obj_t *s_window;        /* the dark screen the columns stand on */
 static lv_obj_t *s_bar[2];        /* the two dot columns */
 static lv_obj_t *s_pill[2];       /* their L/R pills */
 static lv_obj_t *s_label[2];      /* the letters inside the pills */
 static int s_lit[2];              /* dots lit per column, 0..BAR_ROWS, from the bottom */
-static bool s_white;              /* the page the dots are drawn for */
 
 /* The number of lit rows for a level. The scale is dB over -48..0, as it always was. */
 static int meter_lit(float vu)
@@ -66,11 +71,6 @@ static void bar_draw_cb(lv_event_t *e)
     lv_area_t area;
     lv_obj_get_coords(bar, &area);
 
-    /* The white page's plate is the knobs' mid grey: there the unlit dots go black and the lit
-     * ones a darker red, so the level reads against the dots rather than against the plate. */
-    lv_color_t lit_ink = s_white ? k_col_meter_lit_white : k_col_meter_lit;
-    lv_color_t dim_ink = s_white ? k_col_bg : k_col_meter_dim;
-
     lv_draw_rect_dsc_t dsc;
     lv_draw_rect_dsc_init(&dsc);
     dsc.bg_opa = LV_OPA_COVER;
@@ -82,7 +82,7 @@ static void bar_draw_cb(lv_event_t *e)
     for (int row = 0; row < BAR_ROWS; row++) {
         /* Row 0 is the top of the column, so the level fills from the bottom up. */
         bool lit = (BAR_ROWS - 1 - row) < s_lit[ch];
-        dsc.bg_color = lit ? lit_ink : dim_ink;
+        dsc.bg_color = lit ? k_col_meter_lit : k_col_meter_dim;
         for (int col = 0; col < BAR_COLS; col++) {
             lv_area_t dot;
             dot.x1 = area.x1 + x0 + col * DOT_PITCH;
@@ -108,6 +108,7 @@ static void meter_deleted_cb(lv_event_t *e)
 {
     if (lv_event_get_target(e) != s_cell) return;
     s_cell = NULL;
+    s_window = NULL;
     s_bar[0] = s_bar[1] = NULL;
     s_pill[0] = s_pill[1] = NULL;
     s_label[0] = s_label[1] = NULL;
@@ -137,27 +138,22 @@ void cassette_meter_create(lv_obj_t *cell)
     s_cell = cell;
     lv_obj_add_event_cb(cell, meter_deleted_cb, LV_EVENT_DELETE, NULL);
 
+    /* The meter's own screen: 3 px inside the plate, so on the white page the grey reads as a
+     * frame round a dark window rather than as the meter's background. On the dark page the
+     * window and the plate are the same ink, so it is simply not there. */
+    s_window = cassette_box(cell, METER_WINDOW_INSET, METER_WINDOW_INSET,
+                            CASSETTE_CELL_W - 2 * METER_WINDOW_INSET,
+                            CASSETTE_CELL_H - 2 * METER_WINDOW_INSET,
+                            METER_WINDOW_R, k_col_meter_window);
+
     for (int ch = 0; ch < 2; ch++) column_build(cell, ch);
 }
 
 void cassette_meter_set_page(bool white)
 {
-    bool changed = white != s_white;
-    s_white = white;
     if (!s_cell) return;
-
     lv_obj_set_style_bg_color(s_cell, white ? k_col_knob_rect : k_col_bg, 0);
     lv_obj_set_style_border_color(s_cell, white ? k_col_bg : k_col_button_rect, 0);
-
-    for (int ch = 0; ch < 2; ch++) {
-        if (s_pill[ch])
-            lv_obj_set_style_bg_color(s_pill[ch],
-                                      white ? k_col_meter_pill_white : k_col_meter_lit, 0);
-        if (s_label[ch])
-            lv_obj_set_style_text_color(s_label[ch], white ? k_col_white : k_col_bg, 0);
-        /* The dots' inks are the draw callback's, so the column has to be repainted. */
-        if (changed && s_bar[ch]) lv_obj_invalidate(s_bar[ch]);
-    }
 }
 
 void cassette_meter_set(const cassette_frame_t *frame)

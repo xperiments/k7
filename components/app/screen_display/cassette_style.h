@@ -53,12 +53,10 @@ extern const lv_color_t k_col_meter_bar;
 extern const lv_color_t k_col_meter_lit;
 extern const lv_color_t k_col_meter_back;
 
-/* The meter on the white page. Its plate there is the knobs' mid grey, where the playing red at
- * full strength vibrates, so the unlit dots go black (k_col_bg) and give the lit ones something
- * dark to read against; the lit dots then take the red at 65% and the L/R pills at 35%, so a pill
- * stays quieter than the bar it labels. */
-extern const lv_color_t k_col_meter_lit_white;
-extern const lv_color_t k_col_meter_pill_white;
+/* The meter's own screen on the white page: a k_col_bg rectangle inset 3 px inside its plate, so
+ * the dots read on the dark page's inks whatever the plate is. There is no second set of meter
+ * colours - the window is the ink. */
+extern const lv_color_t k_col_meter_window;
 
 /* The knobs on the right: the unlit crown, the lit arc and the stick, hub and 0 dB
  * tick. The carcase and the circle reuse the primary red. */
