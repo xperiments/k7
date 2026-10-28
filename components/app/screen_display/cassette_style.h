@@ -53,6 +53,11 @@ extern const lv_color_t k_col_meter_bar;
 extern const lv_color_t k_col_meter_lit;
 extern const lv_color_t k_col_meter_back;
 
+/* The meter on the white page: its plate there is the knobs' mid grey, and the playing red at
+ * full strength vibrates against it, so the lit dots and the L/R pill take the red at 35% - a
+ * deep burnt orange - while the dim dots become the page's own light grey, a ghost on the plate. */
+extern const lv_color_t k_col_meter_ink;
+
 /* The knobs on the right: the unlit crown, the lit arc and the stick, hub and 0 dB
  * tick. The carcase and the circle reuse the primary red. */
 extern const lv_color_t k_col_eq_dim;

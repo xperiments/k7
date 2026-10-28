@@ -41,7 +41,10 @@
 
 static lv_obj_t *s_cell;          /* the plate the meter is built into */
 static lv_obj_t *s_bar[2];        /* the two dot columns */
+static lv_obj_t *s_pill[2];       /* their L/R pills */
+static lv_obj_t *s_label[2];      /* the letters inside the pills */
 static int s_lit[2];              /* dots lit per column, 0..BAR_ROWS, from the bottom */
+static bool s_white;              /* the page the dots are drawn for */
 
 /* The number of lit rows for a level. The scale is dB over -48..0, as it always was. */
 static int meter_lit(float vu)
@@ -63,6 +66,11 @@ static void bar_draw_cb(lv_event_t *e)
     lv_area_t area;
     lv_obj_get_coords(bar, &area);
 
+    /* The white page's plate is the knobs' mid grey, so the dots go much darker there and the
+     * unlit ones pale: the playing red at full strength has no contrast against it. */
+    lv_color_t lit_ink = s_white ? k_col_meter_ink : k_col_meter_lit;
+    lv_color_t dim_ink = s_white ? k_col_white : k_col_meter_dim;
+
     lv_draw_rect_dsc_t dsc;
     lv_draw_rect_dsc_init(&dsc);
     dsc.bg_opa = LV_OPA_COVER;
@@ -74,7 +82,7 @@ static void bar_draw_cb(lv_event_t *e)
     for (int row = 0; row < BAR_ROWS; row++) {
         /* Row 0 is the top of the column, so the level fills from the bottom up. */
         bool lit = (BAR_ROWS - 1 - row) < s_lit[ch];
-        dsc.bg_color = lit ? k_col_meter_lit : k_col_meter_dim;
+        dsc.bg_color = lit ? lit_ink : dim_ink;
         for (int col = 0; col < BAR_COLS; col++) {
             lv_area_t dot;
             dot.x1 = area.x1 + x0 + col * DOT_PITCH;
@@ -101,6 +109,8 @@ static void meter_deleted_cb(lv_event_t *e)
     if (lv_event_get_target(e) != s_cell) return;
     s_cell = NULL;
     s_bar[0] = s_bar[1] = NULL;
+    s_pill[0] = s_pill[1] = NULL;
+    s_label[0] = s_label[1] = NULL;
     s_lit[0] = s_lit[1] = 0;
 }
 
@@ -114,11 +124,10 @@ static void column_build(lv_obj_t *cell, int ch)
                                     k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
     lv_obj_add_event_cb(s_bar[ch], bar_draw_cb, LV_EVENT_DRAW_MAIN_END, (void *)(intptr_t)ch);
 
-    lv_obj_t *pill = cassette_box(cell, x, PILL_Y, PILL_W, PILL_H, PILL_H / 2,
-                                  k_col_meter_lit);
-    lv_obj_t *label = cassette_text(pill, &lv_font_montserrat_14, k_col_bg,
-                                    LV_ALIGN_CENTER, 0, 0);
-    lv_label_set_text(label, ch ? "R" : "L");
+    s_pill[ch] = cassette_box(cell, x, PILL_Y, PILL_W, PILL_H, PILL_H / 2, k_col_meter_lit);
+    s_label[ch] = cassette_text(s_pill[ch], &lv_font_montserrat_14, k_col_bg,
+                                LV_ALIGN_CENTER, 0, 0);
+    lv_label_set_text(s_label[ch], ch ? "R" : "L");
     s_lit[ch] = 0;
 }
 
@@ -133,9 +142,21 @@ void cassette_meter_create(lv_obj_t *cell)
 
 void cassette_meter_set_page(bool white)
 {
+    bool changed = white != s_white;
+    s_white = white;
     if (!s_cell) return;
+
     lv_obj_set_style_bg_color(s_cell, white ? k_col_knob_rect : k_col_bg, 0);
     lv_obj_set_style_border_color(s_cell, white ? k_col_bg : k_col_button_rect, 0);
+
+    for (int ch = 0; ch < 2; ch++) {
+        if (s_pill[ch])
+            lv_obj_set_style_bg_color(s_pill[ch], white ? k_col_meter_ink : k_col_meter_lit, 0);
+        if (s_label[ch])
+            lv_obj_set_style_text_color(s_label[ch], white ? k_col_white : k_col_bg, 0);
+        /* The dots' inks are the draw callback's, so the column has to be repainted. */
+        if (changed && s_bar[ch]) lv_obj_invalidate(s_bar[ch]);
+    }
 }
 
 void cassette_meter_set(const cassette_frame_t *frame)
