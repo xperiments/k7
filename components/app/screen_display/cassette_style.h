@@ -53,10 +53,12 @@ extern const lv_color_t k_col_meter_bar;
 extern const lv_color_t k_col_meter_lit;
 extern const lv_color_t k_col_meter_back;
 
-/* The meter on the white page: its plate there is the knobs' mid grey, and the playing red at
- * full strength vibrates against it, so the lit dots and the L/R pill take the red at 35% - a
- * deep burnt orange - while the dim dots become the page's own light grey, a ghost on the plate. */
-extern const lv_color_t k_col_meter_ink;
+/* The meter on the white page. Its plate there is the knobs' mid grey, where the playing red at
+ * full strength vibrates, so the unlit dots go black (k_col_bg) and give the lit ones something
+ * dark to read against; the lit dots then take the red at 65% and the L/R pills at 35%, so a pill
+ * stays quieter than the bar it labels. */
+extern const lv_color_t k_col_meter_lit_white;
+extern const lv_color_t k_col_meter_pill_white;
 
 /* The knobs on the right: the unlit crown, the lit arc and the stick, hub and 0 dB
  * tick. The carcase and the circle reuse the primary red. */

@@ -66,10 +66,10 @@ static void bar_draw_cb(lv_event_t *e)
     lv_area_t area;
     lv_obj_get_coords(bar, &area);
 
-    /* The white page's plate is the knobs' mid grey, so the dots go much darker there and the
-     * unlit ones pale: the playing red at full strength has no contrast against it. */
-    lv_color_t lit_ink = s_white ? k_col_meter_ink : k_col_meter_lit;
-    lv_color_t dim_ink = s_white ? k_col_white : k_col_meter_dim;
+    /* The white page's plate is the knobs' mid grey: there the unlit dots go black and the lit
+     * ones a darker red, so the level reads against the dots rather than against the plate. */
+    lv_color_t lit_ink = s_white ? k_col_meter_lit_white : k_col_meter_lit;
+    lv_color_t dim_ink = s_white ? k_col_bg : k_col_meter_dim;
 
     lv_draw_rect_dsc_t dsc;
     lv_draw_rect_dsc_init(&dsc);
@@ -151,7 +151,8 @@ void cassette_meter_set_page(bool white)
 
     for (int ch = 0; ch < 2; ch++) {
         if (s_pill[ch])
-            lv_obj_set_style_bg_color(s_pill[ch], white ? k_col_meter_ink : k_col_meter_lit, 0);
+            lv_obj_set_style_bg_color(s_pill[ch],
+                                      white ? k_col_meter_pill_white : k_col_meter_lit, 0);
         if (s_label[ch])
             lv_obj_set_style_text_color(s_label[ch], white ? k_col_white : k_col_bg, 0);
         /* The dots' inks are the draw callback's, so the column has to be repainted. */
