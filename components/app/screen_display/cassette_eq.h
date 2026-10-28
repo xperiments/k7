@@ -20,19 +20,12 @@
  * one pressed state and click pulse - still a placeholder, with its own red cap on the white
  * page. The next/previous controls are the Transport panel's < and >.
  *
- * A tap on a knob opens edit mode after a 260 ms delay; the second tap of a double tap lands
- * on the 3x knob and resets it there, so the reset gesture survives the short delay. A 3x
- * virtual knob (256 px at x=220, 90% of the 96+94+94 length, its top at y=90) takes the
- * cassette's centre, with no outer square - just the circle, the crown and the line; under
- * the dial, a rounded primary pillow carries the knob's name (GAIN, HI, MED or LOW). The
- * cassette cuts out and the knob appears; on close the knob disappears and the cassette cuts
- * back in. Only the knob's centre circle closes. A click on
- * the ring - the 256 px area around that circle - is the target point: the knob jumps to that
- * angle, 0 dB at twelve, clockwise cutting and counter-clockwise boosting. A click outside
- * does nothing; there is no drag and no relative rotation. A double tap on any small knob
- * resets it to 0 dB and cancels the pending open, like a mixer's centre detent, so the virtual
- * knob never appears. While edit mode is on, the view ignores every screen intent, because the
- * touch adapter's two-finger VU arrives directly.
+ * The modal half is knob_editor's, shared with the RGB panel: a tap on a knob opens the 3x
+ * dial after a 260 ms delay, the second tap of a double tap resets the knob to 0 dB in place
+ * (so the reset gesture survives the short delay), a click on the dial's centre circle closes,
+ * and a click on its ring sets the angle. This file supplies the bank - the four knobs, the
+ * cell at a point, the pillow's text, the repaint, the audio call and the shown gate - and
+ * nothing of the overlay.
  *
  * The bar shows the panel with the Transport one, when the cassette is already at the 134/256
  * control pose that leaves the right column room. The bar tells the panel when it becomes
@@ -58,10 +51,6 @@ extern "C" {
  * page all five cells are the palette's playing red line art; on the white page the four
  * knobs' cells are the knob plate and R's cap is k_col_button_r with a light letter. */
 void cassette_eq_create(lv_obj_t *parent);
-
-/* True while a knob is in edit mode. The overlay owns the touch; the view must drop every
- * screen intent, including the two-finger VU the touch adapter reports directly. */
-bool cassette_eq_is_editing(void);
 
 /* The panel's value, for the Menu to install again after its Pad. Handing it back does not
  * rebuild anything: the bar rebuilds the cells and the panel's own edit layer, its knob

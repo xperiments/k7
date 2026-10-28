@@ -21,7 +21,7 @@
  *   the Peek    up exactly at Peek
  *
  * The facts it cannot own, handed in on every step:
- *   editing            a knob's 3x overlay owns the touch (cassette_eq_is_editing())
+ *   editing            a knob's 3x overlay owns the touch (knob_editor_is_editing())
  *   menu_open          the Menu is up (cassette_menu_is_open()); it also closes itself
  *                      from three places inside cassette_menu.c, so the model pulls and
  *                      adopts it rather than being pushed to

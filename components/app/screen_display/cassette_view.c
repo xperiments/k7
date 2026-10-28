@@ -44,6 +44,7 @@
 #include "controls.h"
 #include "cassette_buttons.h"
 #include "cassette_eq.h"
+#include "knob_editor.h"
 #include "cassette_footer.h"
 #include "cassette_header.h"
 #include "cassette_window.h"
@@ -140,7 +141,7 @@ static void room_apply(controls_room_t room)
 static controls_facts_t facts_now(void)
 {
     controls_facts_t facts;
-    facts.editing = cassette_eq_is_editing();
+    facts.editing = knob_editor_is_editing();
     facts.menu_open = false;
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     facts.menu_open = cassette_menu_is_open();
@@ -468,6 +469,10 @@ void cassette_view_create(void)
 
     /* The Transport panel is chrome, above the peek. */
     cassette_buttons_create();
+
+    /* The one 3x dial and its overlay, shared by the right bar's knob panels (the EQ group
+     * today, the RGB group next). It is a screen child above everything the panels build. */
+    knob_editor_create(scr);
 
     /* The EQ panel is chrome too, on the other edge; created last so it starts above the
      * peek, hidden with the Transport panel. */
