@@ -1,5 +1,13 @@
 # The bars are one module, and their panels are data
 
+**Amended by [ADR 0026](./0026-the-mode-bar-and-the-right-bars-groups.md):** the right bar's
+chrome cell - M - is gone, and `cassette_bars_set_menu_cb()` with it: the Menu's door moved to the
+left bar, so no panel can strand it and no bar holds a cell back. A panel value gained `inert`,
+for the Empty group's grille, whose cells stay out of the hit test so a swipe falls through to the
+ladder. The right bar now hosts one of three group panels plus the Menu's Pad; the left bar is
+the mode bar. The panel value, the cell lattice, the plate exception, the entrance and the page
+dispatch are unchanged.
+
 The Transport drawer and the DJ block are the same strip built twice: each slides in from its
 edge over 260 ms, paints for the **Page**, raises itself and hosts a column of 96 px carcases.
 The owner wants them as components - a left bar and a right bar - with a cell's control easy to

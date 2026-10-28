@@ -211,7 +211,8 @@ _Avoid_: button, tile, box
 **Menu**:
 A mode of the **Controls**, not a Level or a screen of its own: the cassette area gives way to
 a list of destinations and the DJ block gives way to the **Pad**, while the **Transport
-drawer**, the header and footer bands and the **Page** stay. The M cell opens it, on Art or on
+drawer**, the header and footer bands and the **Page** stay. The mode bar's cassette button
+opens it, on Art or on
 Real, and it turns with the Page like every other part. The cassette is hidden behind it. The
 header says where you are and the footer what is playing; activating a row acts in place, so
 the Menu stays up. An up swipe closes it, as P does, and as `<` does from the root; while it is

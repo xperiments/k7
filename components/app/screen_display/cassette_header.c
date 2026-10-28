@@ -2,7 +2,7 @@
  * The band across the top of the controls screen; see cassette_header.h.
  *
  * The band, the K7 badge and the Menu's title are built once with their styles at the band's
- * hidden position. They arrive the way the drawer and the DJ block do - one 260 ms
+ * hidden position. They arrive the way the two bars do - one 260 ms
  * ease-out slide, hidden again when it finishes leaving - so the whole frame of the
  * controls screen lands together. A full-width band has no direction to come in from
  * sideways, so its slide is vertical: it drops from just above the panel, and its height

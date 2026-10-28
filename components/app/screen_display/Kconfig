@@ -25,6 +25,20 @@ config APP_UI_DUMP_STRIDE
         second pixel in both directions makes it 400x240 and about twenty seconds,
         which is enough to check a layout and quick enough to iterate on.
 
+config APP_UI_DUMP_SCENE
+    int "Scene the dump is taken in (0 = entry, 1 = Art/Empty, 2 = Art/EQ, 3 = Art/RGB, 4 = Art/Menu, 5 = Real/EQ)"
+    depends on APP_UI_SERIAL_DUMP
+    range 0 5
+    default 0
+    help
+        The dump is taken at whatever the screen is showing four seconds after boot,
+        which at rest is the entry view with no chrome at all. This forces the controls
+        up first - and a group, or the Menu - so a captured log is a picture of the new
+        chrome rather than of the cassette. 0 leaves the screen at the entry view.
+
+        The Menu is the panel board's own module, so scene 4 only draws on that board;
+        the headless build compiles its scenes 1..3 and 5.
+
 # The backlight is the panel's pin and the idle ladder is measured on the touch
 # clock, so the whole group is a panel-board property. One dependency here, not one
 # per symbol below.

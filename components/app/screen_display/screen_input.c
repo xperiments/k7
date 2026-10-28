@@ -11,8 +11,8 @@
  * The horizontal pair is nothing: the drawer and the block are reached by the ladder now,
  * and the only left swipe left in the build is the Pad's Back, which the bar keeps local.
  * A two-finger swipe is nothing either; the VU meter's gesture is gone and the adapter no
- * longer reports one. Next and previous belong to the DJ block's arrows, whose clicks are
- * their own objects' and never reach this module.
+ * longer reports one. There is no transport on the chrome at all: next and previous belong
+ * to the control API.
  *
  * The log lines that are about the input itself - the swipe directions - are kept here, with
  * the view's tag, so the boot log reads as it does for the gestures that remain.
@@ -64,8 +64,8 @@ static void screen_gesture_cb(lv_event_t *e)
 
 /*
  * A swipe is a release too, and LVGL sends CLICKED after the gesture. The screen gives a
- * click no meaning: next and previous are the DJ block's own buttons, whose clicks belong to
- * their cells, and a tap on the cassette is not an action. There is therefore no click
+ * click no meaning: the chrome's buttons own their clicks, and a tap on the cassette is not an
+ * action. There is therefore no click
  * handler; the gesture above is the whole screen policy.
  */
 

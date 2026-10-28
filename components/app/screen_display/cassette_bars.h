@@ -2,7 +2,7 @@
 /*
  * cassette_bars - the two edge strips: their cells, their entrance and their page ink.
  *
- * The Transport bar at the left edge and the DJ bar at the right are one mechanism. Each is
+ * The mode bar at the left edge and the group bar at the right are one mechanism. Each is
  * a column of 96x96 carcases on the layout's 94 px pitch that slides in from its edge over
  * 260 ms, paints for the Page, raises itself and is hidden at rest. This module owns the
  * carcases, the entrance, the page dispatch, the raise and the hit rule. A **panel** - a

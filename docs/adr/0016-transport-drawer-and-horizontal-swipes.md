@@ -4,6 +4,12 @@
 swipes against are gone. The up swipe opens the peek and the down swipe closes it; the
 drawer's left/right swipes, the 134/256 control pose and its arbitration are unchanged.
 
+**Amended by [ADR 0026](./0026-the-mode-bar-and-the-right-bars-groups.md):** the left strip is
+the **mode bar** now - the cassette glyph (the Menu's door), sliders-v (the EQ group) and led (the
+RGB group) - and its P, `<` and `>` are gone, with the transport actions they ran. The strip
+itself is unchanged: 96 px carcases at x=16, the 260 ms slide from the left edge, the 120 px of
+travel and the swipe rules that bring it in and out.
+
 **Amended again:** the drawer's three buttons are P, `<` and `>`; the `<` and `>` call
 `mini_icecast_prev()` / `mini_icecast_skip()` and are the transport's next/previous, while
 P stays a placeholder. The DJ block's freed cells are the Filebrowser and Rec placeholders.

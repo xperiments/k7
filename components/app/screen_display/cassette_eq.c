@@ -25,7 +25,7 @@
  * audio.
  *
  * The panel is hidden at rest, so the entry view is the untouched full-scale cassette; the bar
- * shows it with the Transport panel, and losing it ends edit mode and the delayed open.
+ * shows it with the mode bar, and losing it ends edit mode and the delayed open.
  */
 #include "lvgl.h"
 

@@ -3,7 +3,7 @@
  * cassette_footer - the band that closes the bottom of the controls screen.
  *
  * The header closes the top; this is its mirror: 768 px wide at (16,358), 6 px short of
- * the panel's bottom, so its 2 px border lands on the last drawer button's and the last DJ
+ * the panel's bottom, so its 2 px border lands on the last mode bar button's and the last
  * cell's bottom line and its sides sit on the cassette frame's 16 px inset, like the
  * header's.
  *

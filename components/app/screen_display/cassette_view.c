@@ -10,8 +10,11 @@
  *   cassette_cover    Real's Track picture, masked to the frames
  *   cassette_levels   the peek's host
  *   cassette_bars     the two edge bars: their cells, their entrance and their page ink
- *   cassette_buttons  the Transport panel of the left bar: P, < and >
- *   cassette_eq       the DJ block: the right bar's EQ panel, GAIN, HI/MED/LOW and R
+ *   cassette_buttons  the mode bar of the left bar: the Menu's door, the EQ and the RGB
+ *   cassette_empty    the right bar's Empty group: the speaker grille
+ *   cassette_eq       the right bar's EQ group: Back, the VU meter, Gain, HI/MED/LOW
+ *   cassette_rgb      the right bar's RGB group: Back, Effect, Brightness, Red/Green/Blue
+ *   knob_editor       the one 3x dial, overlay and edit session those two share
  *   cassette_header   the band that closes the controls screen across the top
  *   cassette_footer   and the one that closes it across the bottom
  *   cassette_window   the frame around the cassette between them
@@ -69,9 +72,9 @@
 
 static const char *TAG = "screen";
 
-/* The entry view is the untouched full-scale cassette. The transport drawer asks for the
+/* The entry view is the untouched full-scale cassette. The mode bar asks for the
  * control pose: 134/256 puts the tape's 402 px box at 148..550, which clears the drawer's
- * 96 px column on the left and leaves room for the 190 px DJ block at 594..784 on the right. The
+ * 96 px column on the left and leaves room for the 190 px group block at 594..784 on the right.
  * view shows the block with the drawer, and the pose runs over the drawer's 260 ms slide.
  * The peek has its own 200/256 and -60 px lift; the drawer wins while it is out. */
 #define CASSETTE_ROOM_MS       CASSETTE_BARS_SLIDE_MS
@@ -166,7 +169,7 @@ static controls_intent_t controls_intent(screen_intent_t intent)
 
 /* --------------------------------------------------------------- the page */
 
-/* Art and Real are the controls' two faces: the same drawer, block and bands, on the dark
+/* Art and Real are the controls' two faces: the same two bars and bands, on the dark
  * Page at Art and on the white one at Real, where the Track's picture is printed on the
  * cassette as well. The page is the model's wish (the level is Real); this file only paints
  * it, and the cover follows the same bit.
@@ -338,7 +341,7 @@ void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms)
     lv_anim_set_exec_cb(&a, pose_anim_cb);
     lv_anim_set_values(&a, 0, 1024);
     lv_anim_set_duration(&a, ms);
-    /* The peek's bar and the transport drawer drive this, so the ease is theirs: the
+    /* The peek's bar and the mode bar drive this, so the ease is theirs: the
      * picture and the thing that asked for room arrive as one. */
     lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
     lv_anim_start(&a);
@@ -462,6 +465,47 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
     controls_apply(controls_handle(s_controls, controls_intent(intent), &facts));
 }
 
+/* --------------------------------------------------------------- the dump scene */
+
+/* A diagnostic build's scene driver: it walks the ladder and picks a group (or the Menu) with
+ * the intents a finger would send, so the framebuffer dump is a picture of the new chrome
+ * instead of the entry view. It steps only from poses that have settled, which is what the
+ * ladder's own gates ask for. CONFIG_APP_UI_SERIAL_DUMP && CONFIG_APP_UI_DUMP_SCENE; zero in
+ * every normal build. */
+#if CONFIG_APP_UI_DUMP_SCENE > 0
+static int s_scene_step;
+
+static void scene_tick(void)
+{
+    if (!s_controls) return;
+
+    switch (s_scene_step) {
+    case 0:
+        if (!pose_is(s_pose, cassette_pose_entry())) break;
+        s_scene_step = 1;
+        screen_intent_cb(SCREEN_INTENT_DOWN, NULL);      /* Initial -> Art */
+        break;
+
+    case 1:
+        if (!pose_is(s_pose, cassette_pose_controls())) break;
+        s_scene_step = 2;
+        if (CONFIG_APP_UI_DUMP_SCENE == 2) eq_group_cb(NULL);
+        else if (CONFIG_APP_UI_DUMP_SCENE == 3) rgb_group_cb(NULL);
+        else if (CONFIG_APP_UI_DUMP_SCENE == 4) tape_cb(NULL);
+        break;
+
+    case 2:
+        if (CONFIG_APP_UI_DUMP_SCENE != 5) break;
+        s_scene_step = 3;
+        screen_intent_cb(SCREEN_INTENT_DOWN, NULL);      /* Art -> Real */
+        break;
+
+    default:
+        break;
+    }
+}
+#endif
+
 /* ------------------------------------------------------------------- build */
 
 void cassette_view_create(void)
@@ -503,7 +547,7 @@ void cassette_view_create(void)
     /* The cover goes down first, under everything. Then the white page's edge mark, inside
      * the cassette as well, and then the tape body: the order is label < glow < cinta. The
      * print never hides a tape, the glow washes the label but not the tape, and the peek,
-     * the drawer and the DJ block are screen children above the cassette. */
+     * the two bars are screen children above the cassette. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     cassette_cover_create(s_cassette);
 #endif
@@ -615,6 +659,9 @@ void cassette_view_create(void)
 
 void cassette_view_update(const mini_icecast_status_t *st)
 {
+#if CONFIG_APP_UI_DUMP_SCENE > 0
+    scene_tick();
+#endif
     if (!s_model) return;
     const cassette_frame_t *f = cassette_step(s_model, st, lv_tick_get());
     apply_frame(f);

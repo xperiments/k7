@@ -2,8 +2,8 @@
 
 The Menu is the screen's way into everything that is not the cassette: the Playlist, the card's
 directories, the shuffle mode and the settings. It is a **mode of the Controls**, not a Level or
-a screen: the cassette area becomes a five-row list, the DJ block becomes the **Pad**, and the
-drawer's three buttons become Back, Enter and Close.
+a screen: the cassette area becomes a five-row list, the right bar's group gives way to the
+**Pad**, and the mode bar's cassette button is the way in and out.
 [ADR 0022](../adr/0022-the-menu-is-a-controls-mode.md) records why;
 [ADR 0023](../adr/0023-shuffle-is-a-broadcast-mode.md) records the shuffle mode the root row
 toggles. The vocabulary is in [CONTEXT.md](./CONTEXT.md): **Menu**, **Menu list**, **Row**,
@@ -17,15 +17,17 @@ the acceleration thresholds.
 
 ## What it is
 
-- Opened by a tap on the **M cell** of the DJ block, only while the Controls are out and the
-  cassette has settled at the 134/256 pose, and not while a knob is in edit mode. On **Art**
+- Opened by a tap on the **cassette button** of the mode bar, only while the Controls are out and
+  the cassette has settled at the 134/256 pose, and not while a knob is in edit mode. On **Art**
   (the dark page) and on **Real** (the white one, with the Cover) alike.
-- **Modal**: while it is up, the only live inputs are the Pad and the drawer's three buttons; the
-  rows and the page take no touches. A down swipe on the screen does nothing and the up swipe
-  closes the Menu rather than leaving the Level - a leftward swipe on the Pad is its Back; the
-  block's cells are gone, replaced by the plate.
-- Closed by an **up swipe**, by **P** at any depth, or by **`<`** from the root. Its **Menu list**
-  and **Band** are remembered until the app restarts, so the next M returns where it left.
+- **Modal**: while it is up, the only live inputs are the Pad and the rows; the mode bar's buttons
+  are inert. A down swipe on the screen does nothing and the up swipe closes the Menu rather than
+  leaving the Level - a leftward swipe on the Pad is its Back; the group's cells are gone,
+  replaced by the plate.
+- Closed by an **up swipe**, by **the cassette button** again at any depth, or by the Pad's
+  leftward swipe from the root. Its **Menu list** and **Band** are remembered until the app
+  restarts, so the next tap returns where it left; the group it covered is remembered across the
+  mode and reinstalled on close.
 - Appears and disappears in **one frame**. The cassette container - tape, hubs, meter, glow and
   the Cover - is hidden for the Menu's lifetime and shown again on close; the Cover's wish is
   never changed, so it returns exactly as it was.
@@ -131,10 +133,9 @@ inner, 66 px left of its centre and inset 66 px from its top and bottom. The gui
 surface - the inner and the guides are decorative, so a press on them falls through to it - and
 it is white on both pages, with no page ink of its own. It is the right bar's panel value, not
 a screen child of the Menu's: the bar builds the plate's carcase at the Pad's rect and deletes
-the EQ's five cells when `open()` installs it; M's carcase, the bar's chrome, stays under the
-plate and its tap is inert while the Menu is up. `close()` installs `cassette_eq_panel()`
-again; the EQ's knob values and its edit layer survive the swap, and an open edit ends with the
-panel, as any hidden cell's does.
+the group's six cells when `open()` installs it. `close()` calls the view's restore hook, which
+reinstalls the active group's panel (ADR 0026); the group's knob values, its meter and its edit
+layer survive the swap, and an open edit ends with the panel, as any hidden cell's does.
 
 - A **vertical drag** ratchets the list. At rest, **54 px of travel is one row** (the rows are
   53-54 px); a step is instant and the list rests only on row boundaries. A fast drag multiplies
@@ -143,7 +144,7 @@ panel, as any hidden cell's does.
   straight to 4x. The constants live in the model and are tuned with a finger on the board.
 - A **tap** that never became a drag (no move beyond the touch's drag limit) activates the
   **Band**.
-- A **leftward swipe** is the drawer's Back: up one Menu list, and out of the Menu at the root.
+- A **leftward swipe** is the Menu's Back: up one Menu list, and out of the Menu at the root.
   The press takes one axis, decided by its first 12 px of travel, so a swipe never ratchets and
   a drag never goes Back; the swipe counts once it has travelled 50 px, the screen's own gesture
   limit. The plate still bubbles no gesture, so the screen behind it never sees the swipe.
@@ -158,19 +159,23 @@ panel, as any hidden cell's does.
 - A **short list** (fewer Rows than the page) leaves blank space below its last Row; the Band
   cannot leave the list and the window never shifts.
 
-## The drawer
+## The door, and the mode bar
 
-While the Menu is up the three buttons change meaning and label:
+The Menu opens from the mode bar's **cassette** button, the left bar's top cell, and that button
+**toggles**: a second tap closes the Menu from any depth, exactly as the up swipe does. Its disc is
+lit while the Menu is open.
 
-| Button | Action | Label |
-|---|---|---|
-| P | Close the Menu, from any depth | `cassette-tape` |
-| `<` | Back: up one Menu list; closes the Menu at the root | `angle-left` |
-| `>` | Enter: the same as a tap on the Pad | `angle-right` |
+| Input | Action |
+|---|---|
+| the cassette button | open the Menu; tapped again, close it |
+| a leftward swipe on the Pad | Back: up one Menu list; closes the Menu at the root |
+| a tap on a Row, or a tap on the Pad's band | Enter |
+| an up swipe | close the Menu |
 
-Transport prev/skip is suspended until the Menu closes. Back puts the Band on the Row that opened
-the list it returns to (the Settings Row, the directory Row), which is the one place the Band is
-set rather than remembered.
+The mode bar keeps its group meanings while the Menu is up and its group buttons are inert for the
+mode's lifetime: the left bar never changes mode (ADR 0026). Back puts the Band on the Row that
+opened the list it returns to (the Settings Row, the directory Row), which is the one place the
+Band is set rather than remembered.
 
 ## Ink
 
@@ -217,14 +222,14 @@ changes the page itself: the up swipe that closes it leaves the white or dark pa
   `next backlight`, `toggle shuffle`, `close`) and needs no LVGL. Host-tested in `host/tests/t18_menu.c`
   through a small Library fixture, as `cassette` and `cassette_layout` are.
 - **`screen_display/cassette_menu.c`** - the view: five Row slots, the band, the Pad's panel
-  value (its plate, inner and guide), the header and footer texts, the drawer's menu labels,
-  and the executor for the model's actions. It opens from the right bar's M cell
-  (`cassette_bars_set_menu_cb()`), installs the Pad on the right bar and hides the cassette,
-  and gates `screen_input` while open. On close it installs `cassette_eq_panel()` again.
-- **`cassette_bars`** carries the M cell and the panel swap: `cassette_bars_set_panel()` is what
-  puts the Pad up and the EQ panel back, and there is no covered state any more.
-  **`cassette_buttons`** gains the menu mode (the three actions and their icon labels);
-  **`cassette_header`** and **`cassette_footer`** gain their Menu texts.
+  value (its plate, inner and guide), the header and footer texts, and the executor for the
+  model's actions. It installs the Pad on the right bar and hides the cassette, and gates
+  `screen_input` while open. On close it calls the view's restore hook, which reinstalls the
+  active group's panel (ADR 0026).
+- **`cassette_bars`** carries the panel swap: `cassette_bars_set_panel()` is what puts the Pad up
+  and a group back, and there is no covered state any more. **`cassette_buttons`** is the mode
+  bar (the Menu's toggle and the two group selectors); **`cassette_header`** and
+  **`cassette_footer`** gain their Menu texts.
 - **`backlight`** gains the hold: a manual percent is kept and the idle ladder is skipped while it
   is set.
 - **`mini_icecast`** gains the shuffle mode and its order (ADR 0023).
@@ -236,11 +241,11 @@ while the Menu is up.
 
 ## Icons and fonts
 
-`xtape.ttf` carries eighteen glyphs. The mapping:
+`xtape.ttf` carries twenty glyphs. The mapping:
 
 | Codepoint | Glyph | Used by |
 |---|---|---|
-| U+F000 | `cassette-tape` | Browse directories; the drawer's Close |
+| U+F000 | `cassette-tape` | Browse directories; the mode bar's Menu door |
 | U+F001 | `voice-mail` | spare |
 | U+F002 | `radio-waves` | Tracks, Station |
 | U+F003 | `toggle-off` | the Shuffle Row while shuffle is off |
@@ -253,18 +258,20 @@ while the Menu is up.
 | U+F00A | `tablet-android` | About's Board |
 | U+F00B | `brightness` | Backlight |
 | U+F00C | `fire-shield` | spare |
-| U+F00D | `angle-right` | the Row chevron; the drawer's Enter |
-| U+F00E | `angle-left` | the drawer's Back |
+| U+F00D | `angle-right` | the Row chevron |
+| U+F00E | `angle-left` | a group panel's Back cell |
 | U+F00F | `k7logo` | About |
 | U+F010 | `track` | Track Rows |
 | U+F011 | `micro-chip` | About's Firmware |
+| U+F012 | `sliders-v` | the mode bar's EQ group |
+| U+F013 | `led` | the mode bar's RGB group |
 
 `assets/fonts/xtape.ttf` is drawn in the icomoon project; `package.json` has a `font:xtape`
 script beside `font:jura`, `font:jura28` and `font:jura20`. It generates the same range at two
-sizes because one font is one pixel size: `font_xtape_24.c` (`--range 0xF000-0xF011 --size 24
+sizes because one font is one pixel size: `font_xtape_24.c` (`--range 0xF000-0xF013 --size 24
 --bpp 4`) for the Rows and the chevron, where a 24 px glyph sits in a 53-54 px Row, and
-`font_xtape_36.c` at 36 px for the drawer's 64 px circles, where 24 px would read small against
-the Jura 36 letters they replace. Row labels are Jura 28 and their right column is Jura 20 in
+`font_xtape_36.c` at 36 px for the mode bar's and the groups' 64 px circles, where 24 px would
+read small against the Jura 36 letters they replace. Row labels are Jura 28 and their right column is Jura 20 in
 capitals; the footer is Jura 28 and the header Jura 36.
 
 ## Open items

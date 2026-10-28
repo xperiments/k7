@@ -1,6 +1,6 @@
 #pragma once
 /*
- * cassette_eq - the DJ block: the EQ panel of the screen's right bar.
+ * cassette_eq - the EQ group: the screen's right bar, one of its three panels.
  *
  * The panel fills the right **bar**'s six cells, two columns of three:
  *
@@ -29,7 +29,7 @@
  * cell at a point, the pillow's text, the repaint, the audio call and the shown gate - and
  * nothing of the overlay.
  *
- * The bar shows the panel with the Transport one, when the cassette is already at the 134/256
+ * The bar shows the panel with the mode bar, when the cassette is already at the 134/256
  * control pose that leaves the right column room. The bar tells the panel when it becomes
  * visible and when it is taken away: leaving ends edit mode and cancels a pending open, so
  * neither the overlay nor the 3x knob can outlive the hidden cells. The four knob values are
@@ -50,8 +50,8 @@ extern "C" {
 
 /* Install the EQ panel in the right bar and build the edit layer - the 3x knob and its lazy
  * overlay - on `parent` (the screen). Call once, after cassette_bars_create(). On the dark
- * page all five cells are the palette's playing red line art; on the white page the four
- * knobs' cells are the knob plate and R's cap is k_col_button_r with a light letter. */
+ * page the group is the palette's playing red line art; on the white page the four knobs'
+ * cells are the knob plate and the Back cell's cap is the neutral grey. */
 void cassette_eq_create(lv_obj_t *parent);
 
 /* The view's Back action, run by the Back cell's click after the tap guard and the pulse. The

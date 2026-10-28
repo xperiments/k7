@@ -1,5 +1,12 @@
 # The Menu is a Controls mode, and its pad is one plate that ratchets
 
+**Amended by [ADR 0026](./0026-the-mode-bar-and-the-right-bars-groups.md):** the Menu's door is
+the mode bar's cassette button, and it toggles - the same button closes the Menu. The drawer is
+no longer turned into Close/Back/Enter: Back is the Pad's leftward swipe (which it already was)
+and Enter is a row tap, while the mode bar's buttons keep their group meanings and are inert
+for the mode's lifetime. The Pad still takes the right bar; what it takes it from is now a
+group, which is remembered across the mode and reinstalled when it closes.
+
 **Amended by the owner:** the Pad is a white plate with a dark inner and one dotted vertical
 guide inside it, not a drawing of the block's six cells; it began as one 0xFF00FF marker. The
 footprint, the ratchet and the tap are unchanged.

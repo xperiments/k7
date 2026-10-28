@@ -2,7 +2,7 @@
 /*
  * cassette_header - the band across the top of the controls screen.
  *
- * The controls screen is the transport drawer on the left and the DJ block on the right,
+ * The controls screen is the mode bar on the left and a group on the right,
  * both of which start at y=76. This is the frame that closes the screen across the top:
  * 768x72 at (16,6), its 2 px border landing on the buttons' and the cells' top line and its
  * 16 px side margins on the cassette's outer frame inset.

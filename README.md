@@ -164,8 +164,8 @@ tolerate it.
 Two costs, stated rather than discovered later:
 
 1. **GPIO0 is a strapping pin.** Holding it while resetting enters download mode, which
-   is exactly how you flash. It has no runtime action: next and previous are the
-   left drawer's two arrows.
+   is exactly how you flash. It has no runtime action: the chrome has no transport on it,
+   and next and previous belong to the control API (the MCP).
 2. **A card that will not mount is still the most likely fault**, and a card that
    mounts but has no `/music` directory looks the same from outside. The firmware
    logs both distinctly, and the device is built to survive either: see below.
@@ -254,7 +254,7 @@ curl -O http://192.168.1.42:8000/music/track.flac
 cmp track.flac /Volumes/YOURCARD/music/track.flac
 
 # Previous / next track
-#   tap the < or > arrow in the DJ block at the right edge
+#   the control API only: the screen's chrome has no transport buttons
 ```
 
 ### Station format
@@ -555,9 +555,8 @@ stand.
 SCL 20, INT 18, RST 38, read every 10 ms. It is polled rather than interrupt-driven
 because this board's INT line does not carry the touch (the reference project measured it
 idling through a press), and the last point the controller reported is latched so one
-press is one press rather than one per read. A tap on the screen is **not** an action: next
-and previous are the two arrows in the left drawer. A tap on the drawer
-itself is absorbed there. The swipes are one vertical ladder now, and it is the only way to
+press is one press rather than one per read. A tap on the screen is **not** an action; the
+chrome's buttons are. A tap on the mode bar itself is absorbed there. The swipes are one vertical ladder now, and it is the only way to
 the controls (ADR 0025): a **down** swipe from the full cassette slides the transport drawer
 in from the left edge and shows the DJ block at the right, on the screen's near-black page
 (**Art**), and the next down turns that page **white** (`k_col_white` - the orange line art
@@ -584,33 +583,46 @@ same time. The header also carries the K7 mark (`assets/labels/k7b.png`, 60x32) 
 `k_col_logo_back` plate with a `k_col_bg` border and mark on the white one, so it flips with the
 page and slides with the header. The
 cassette enters at full scale; while the controls are out it scales to 134/256 (148..550),
-so the drawer's 96 px column on the left and the 190 px DJ block on the right both have room. An
-up swipe restores the full view. The drawer's three line-art buttons (P, `<`, `>`) write the
-carcase's ring on a press and back on release, and pulse their scale on a click; `<` and `>`
-call `mini_icecast_prev()` / `mini_icecast_skip()`, so they are the transport's next/previous
-now, while P stays a placeholder.
+so the mode bar's 96 px column on the left and the 190 px group block on the right both have
+room. An up swipe restores the full view.
 
-The DJ block is six 96 px carcases in two touching columns at x=594..784 (the first
-column is 2 px right of its nominal 592; the second stays at 688), rows at
-76/170/264: GAIN above M and R in the first column, HI, MED and LOW in the second. M and R
-are the drawer's buttons moved to the block - the same circle, letter, one pressed state and
-pulse; M opens the Menu and R is still a placeholder. The four knobs are a 44 px circle (30%
-smaller than the placeholders'), a 24-dot crown outside it and a line from the centre towards
-the rim, 0 dB at twelve o'clock, right cuts and left boosts. While the Menu is up the same bar
-hosts the Pad in the block's place: one white 186x284 plate with a dark inner and a dotted
-guide, and the block returns when the Menu closes. A tap on a knob opens a modal edit mode
+The left **mode bar** is three 96 px carcases at x=16, rows 76/170/264: the cassette glyph
+opens and closes the Menu, the sliders-v glyph selects the EQ group and the led glyph the RGB
+group. Each is a 64 px disc with one glyph from the icon font, and each is a toggle: a group's
+button again puts the Empty group back. The button that is "on" - the cassette while the Menu is
+open, a group while it is up - fills its disc `k_col_primary` with a `k_col_bg` glyph, so the bar
+reads as a mode bar at a glance.
+
+The right **group block** is six 96 px carcases in two touching columns at x=594..784 (the first
+column is 2 px right of its nominal 592; the second stays at 688), rows at 76/170/264, and it
+shows one group at a time. **Empty** is the default: one 186x284 plate at the Pad's footprint,
+filled with a staggered grid of 4 px dots - a speaker's front, and a picture, so it neither
+clicks nor swallows a swipe. **EQ** is Back, the VU meter and Gain inside, HI/MED/LOW outside;
+**RGB** is Back, the effect selector and Brightness inside, R/G/B outside. The groups live with
+the chrome: hiding the bars drops the active group, so the controls always open on the grille.
+A group's Back cell returns to Empty. The knobs are a 44 px circle (30% smaller than a button's),
+a 24-dot crown outside it and a line from the centre towards the rim. The EQ's are bipolar - 0 dB
+at twelve o'clock, right cuts and left boosts - and the RGB's are level controls: 0 at 7:30, full
+at 4:30, the gap at the bottom, with the effect selector stepped along the same arc, its pillow
+naming the effect (OFF, SOLID, BREATHE, RAINBOW, CHASE, LEVEL). While the Menu is up the same bar
+hosts the Pad in the block's place: one white 186x284 plate with a dark inner and a dotted guide,
+and the group returns when the Menu closes. A tap on a knob opens a modal edit mode
 after 260 ms: a 3x virtual knob (256 px at x=220, 90% of the length, top at y=90, no outer
 square, just the circle, the crown and the line) appears over the cassette, and under the
-dial a rounded primary pillow carries the knob's internal name (GAIN, HI, MED or LOW) in
+dial a rounded primary pillow carries the knob's name (GAIN, HI, MED, LOW, or an effect's) in
 the light cap ink. The cassette
 cuts out; on close the knob disappears and the cassette cuts back in. Only its centre circle
 closes, and a click on the ring is the target point, so the knob jumps to that angle (clockwise
 cuts, counter-clockwise boosts). The short delay lets a double tap's second tap land on the 3x
-knob and reset it there; both circles blink, and nothing else responds while the
-overlay is up. The audio is
+knob and reset it there - the knob's own neutral, 0 dB for a band and full for a channel; both
+circles blink, and nothing else responds while the
+overlay is up. The EQ's audio is
 `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell and a 4 kHz high shelf plus
 a trim before them, with the DJ ranges (GAIN -12..+12 dB, default 0; bands -26..+6 dB,
-default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder.
+default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder. The RGB group
+publishes `components/portable/rgb`'s state (three channels, a brightness applied last, an
+effect); there is no strip driver in the firmware yet, so the publish seam
+(`cassette_rgb_set_publish()`) is what a driver will hang from.
 
 The screen is four fixed rungs, top to bottom: **Real** (the controls on the white page,
 with the Track's picture), **Art** (the controls on the dark page, orange line art),
@@ -630,8 +642,8 @@ controls pose to land, because the picture's mask is built at that size, and a q
 down is refused rather than printed early. The tag
 texts are the Track's ID3/FLAC tags, read by the artwork loader on its own
 task; until they land the group is the artist directory and the song the cleaned filename.
-The two-finger VU gesture is gone and the meter is parked - built, placed and fed, never
-shown - until it has its new home. The only left swipe left in the build is the Menu's Back
+The two-finger VU gesture is gone; the meter's home is the EQ group's `[V]` cell, where it
+shows the broadcast's two channels as two 84 px rows. The only left swipe left in the build is the Menu's Back
 on the Pad. The Sunton build compiles this path; the board
 tier has not yet recorded a finger, so the rows above are unchanged. The removal and the
 old cover screens are
@@ -640,6 +652,8 @@ the drawer is
 [`docs/adr/0016-transport-drawer-and-horizontal-swipes.md`](docs/adr/0016-transport-drawer-and-horizontal-swipes.md);
 the white controls page is
 [`docs/adr/0020-down-swipe-controls-and-the-white-page.md`](docs/adr/0020-down-swipe-controls-and-the-white-page.md);
+the mode bar, the right bar's groups and the RGB model are
+[`docs/adr/0026-the-mode-bar-and-the-right-bars-groups.md`](docs/adr/0026-the-mode-bar-and-the-right-bars-groups.md);
 the DJ block's ranges and the transport arrows (now the left drawer's) are
 [`docs/adr/0018-dj-eq-knobs-and-transport-arrows.md`](docs/adr/0018-dj-eq-knobs-and-transport-arrows.md);
 the peek's bar, tags and tag reader are
@@ -662,14 +676,14 @@ decision is
 superseded by ADR 0019 for the screens; the cover's new home is
 [`docs/adr/0021-white-page-cover.md`](docs/adr/0021-white-page-cover.md).
 
-**The Menu is the M cell's.** A tap on M, with the controls out, opens a mode of the
-controls on either page: the cassette area becomes the window's five-row page - Tracks,
+**The Menu is the cassette button's.** A tap on the mode bar's cassette, with the controls
+out, opens a mode of the controls on either page; a second tap on it closes the Menu again: the cassette area becomes the window's five-row page - Tracks,
 Browse, Shuffle and Settings, with Settings holding Backlight, Station, Library, Rescan and
 About - the block gives way to one Pad (a white plate with a dark inner and a dotted vertical guide, marking the touch area)
-and the drawer becomes Back/Enter/Close. A vertical drag
+and the mode bar stays what it is. A vertical drag
 on the Pad ratchets the band one row per 54 px, and a faster drag 2x or 4x; a tap that never
-became a drag activates it, a leftward swipe is the drawer's Back, and the up swipe closes the
-mode. The cassette container is
+became a drag activates it, a leftward swipe on the Pad is the Menu's Back, and the up swipe
+closes the mode. The cassette container is
 hidden for the mode's lifetime, so the reel tick costs nothing and the Cover comes back
 untouched. The model is portable (`components/portable/menu`, host test `t18_menu`);
 `cassette_menu.c` draws it. Shuffle toggles the broadcast's shuffle mode (ADR 0023) and

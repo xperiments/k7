@@ -1,5 +1,12 @@
 # The DJ block: three bands, a trim, and the only transport arrows
 
+**Amended by [ADR 0026](./0026-the-mode-bar-and-the-right-bars-groups.md):** the block is the
+**EQ group** now, and it shares the right bar with the Empty grille and the RGB group. Its six
+cells are `[Back][HI] / [VU][MED] / [Gain][LOW]`: the M cell is Back, the R placeholder's cell is
+the VU meter, Gain moved down to the inside column's bottom cell, and the transport arrows and
+R are deleted. The knobs' circle, crown, line, ranges, edit gesture and tone_eq path are
+unchanged.
+
 **Amended by the control move:** the left drawer's `<` and `>` are the transport arrows
 now; the DJ block's two freed cells keep their carcases and become the Filebrowser and Rec
 placeholders (the owner's open folder and two-circle icons; TBD). The EQ knobs and their

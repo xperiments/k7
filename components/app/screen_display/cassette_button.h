@@ -1,11 +1,11 @@
 #pragma once
 /*
- * cassette_button - one button, built five times: the transport drawer's P, < and >, and the
- * DJ block's M and R.
+ * cassette_button - one button, built five times: the mode bar's cassette, sliders-v and led,
+ * and each group panel's Back cell.
  *
  * A button is a 64 px circle at the centre of a 96x96 carcase, one character inside it, a
  * press look, a 160 ms click pulse and an action. The carcase itself is the bar's: it builds
- * the 96x96 cell and hands it here (the Transport's three, the DJ block's six). This module
+ * the 96x96 cell and hands it here (the mode bar's three, the groups' six). This module
  * builds the two circles (the transparent ambient one that carries the broad shadow, and the
  * disc), the letter, and the press and the page ink inside that box; it creates no second
  * carcase, so the bar's cell and the disc inside it remain one rectangle each.
@@ -30,14 +30,14 @@
  * pulse. The rule is cassette_button_is_tap(moved, gesturing); one rule for all five
  * buttons.
  *
- * The action is a callback, not an id: a button knows nothing about the transport or the
- * Menu. The Transport panel maps its three buttons to mini_icecast or to one of the Menu's
- * three callbacks; the bar's chrome M calls the Menu tap and R has none. A NULL action is a
- * button whose click is the pulse alone.
+ * The action is a callback, not an id: a button knows nothing about the Menu, a group or the
+ * audio. The mode bar maps its three to the Menu's toggle and the two group selectors, and
+ * each group panel's Back cell to the view's "back to Empty". A NULL action is a button whose
+ * click is the pulse alone.
  *
  * What is the bar's: the carcase object (its geometry, its clickability and its
- * gesture/event bubbling - the bar sets the bubbling per panel: the Transport bubbles both,
- * the EQ events only), the lattice, the visibility and the page. What is the module's: the
+ * gesture/event bubbling - the bar sets the bubbling per panel: the mode bar bubbles both,
+ * the groups events only), the lattice, the visibility and the page. What is the module's: the
  * disc, the letter, the ring tables, the pulse and its pivot, and the page ink.
  *
  * Ordering: create once, then set_page() from the bar's page flip and set_label() /

@@ -1,7 +1,7 @@
 /*
  * One small knob inside a bar cell; see knob_cell.h.
  *
- * The same numbers the DJ block has always used: a 44 px disc inset 26 px in the cell, the crown
+ * The same numbers the block has always used: a 44 px disc inset 26 px in the cell, the crown
  * 32 px from the centre with 4 px dots, and the owner's 4x16 line whose pivot is the disc's
  * centre. Nothing here allocates after create, and a value move writes only the dots' colours and
  * one rotation.

@@ -1,0 +1,9 @@
+# A diagnostic build for tools/decode_screen_dump.py: the devkit's headless framebuffer is
+# dumped over the console four seconds after boot, and the scene is forced so the picture is
+# of the chrome and not of the entry view. Combine with sdkconfig.defaults:
+#
+#   idf.py -B build_dump -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.dump" build
+#
+# CONFIG_APP_UI_DUMP_SCENE: 0 entry, 1 Art/Empty, 2 Art/EQ, 3 Art/RGB, 4 Art/Menu, 5 Real/EQ.
+CONFIG_APP_UI_SERIAL_DUMP=y
+CONFIG_APP_UI_DUMP_SCENE=3

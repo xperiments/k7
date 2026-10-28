@@ -3,7 +3,7 @@
  *
  * The page is the controls' own window: the model's five rows are drawn inside its 6 px
  * padding and the window's fill takes the page's colour for the mode's lifetime. The Pad is
- * a white plate over the DJ block's footprint, and it is the only activator: a vertical drag
+ * a white plate over the group's footprint, and it is the only activator: a vertical drag
  * ratchets the model's band, a tap that never became a drag activates it, and a leftward
  * swipe is the drawer's Back.
  *
@@ -410,8 +410,8 @@ static void pad_event_cb(lv_event_t *e)
 /* ------------------------------------------------------------------ the panel */
 
 /* The Pad is one plate, not a grid: the bar builds one carcase at the layout's Pad rect
- * (596,76, 186x284) and build() turns it into the plate. It covers the DJ block's M cell as
- * well as its five; M stays the bar's chrome and is inert while the Menu is open. */
+ * (596,76, 186x284) and build() turns it into the plate. It covers the whole group, so the
+ * group's six cells go away for the mode and come back when it closes. */
 static cassette_rect_t pad_cell_rect(int col, int row)
 {
     (void)col;

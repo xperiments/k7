@@ -30,7 +30,7 @@
 extern const lv_color_t k_col_bg;
 
 /* The controls view's page: the whole backdrop, and the fills that read as holes in the
- * cassette, turn white while the transport drawer and the DJ block are out. The line art
+ * cassette, turn white while the two bars are out. The line art
  * keeps its inks on top of it. */
 extern const lv_color_t k_col_white;
 
@@ -53,7 +53,7 @@ extern const lv_color_t k_col_meter_bar;
 extern const lv_color_t k_col_meter_lit;
 extern const lv_color_t k_col_meter_back;
 
-/* The DJ block on the right: the unlit crown, the lit arc and the stick, hub and 0 dB
+/* The knobs on the right: the unlit crown, the lit arc and the stick, hub and 0 dB
  * tick. The carcase and the circle reuse the primary red. */
 extern const lv_color_t k_col_eq_dim;
 extern const lv_color_t k_col_eq_lit;
@@ -76,16 +76,12 @@ extern const lv_color_t k_col_primary;
 
 /* The left drawer's line art: the carcase rectangle, the inner disc and the letter inside it
  * are coloured separately, so a control's inks are its spec data (cassette_cap_t) and the
- * page turns them. These two are the dark page's line art, the same for the Transport's
- * three buttons and for the DJ block's M and R; the white page's cap defaults to
+ * page turns them. These two are the dark page's line art, the same for the mode bar's
+ * three buttons and every panel's Back cell; the white page's cap defaults to
  * k_col_dome and its letter to k_col_bg, further down. */
 extern const lv_color_t k_col_button_rect;
 extern const lv_color_t k_col_button_circle;
 extern const lv_color_t k_col_button_letter;
-
-/* The DJ block's R button, the one button whose white page disc is not a grey: its own deeper
- * red, on the cap only. The dark page draws it in k_col_button_circle like every other. */
-extern const lv_color_t k_col_button_r;
 
 /* The cap the white page draws in the disc's place: the neutral grey every button starts in.
  * It is also, always, the 4 px inset rim of that cap (CASSETTE_CAP_RIM_W), which is why a

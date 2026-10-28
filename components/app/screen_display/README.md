@@ -21,18 +21,34 @@ and nothing else. Everything else is private:
   each to the panel that is up; `set_panel(side, panel)` installs a panel value (a grid of
   cells, or one plate), `set_shown()` slides the cells over 260 ms, reverses from wherever
   they are and hides them at the end, and `set_page()` paints the Page. Swapping the panel is
-  a cut, which is how the Menu's Pad takes the DJ block's place and gives it back with
-  `cassette_eq_panel()`. The right bar's M is chrome the module builds itself, so the Menu's
-  door outlives every panel; the Left bar's Transport panel and the right bar's EQ panel fill
-  the other cells and own none of the strip, and the right bar hosts the Pad's one plate while
-  the Menu is up. No bar keeps a slide of its own, and there is no container: the cells are
-  the strip.
-- `cassette_button.c` / `.h` — the shared button, built five times: the drawer's P, `<` and
-  `>` and the right bar's M and R. It builds the two circles and the letter inside a carcase
-  its host made and owns the one pressed state (the carcase's ring for the drawer, the disc's
-  for M and R), the 160 ms pulse and the tap guard. The cap is spec data and the click is a
-  callback, so the module knows nothing about the transport or the Menu; the spec's internal
-  name (P/PREV/SKIP/MENU/REC) is carried but never drawn by the module.
+  a cut, which is how the right bar changes group and how the Menu's Pad takes the bar and
+  gives it back. There is no chrome cell: the Menu's door is the left bar's cassette button, so
+  no panel can strand it. The left bar holds the **mode bar** (the Menu's toggle and the two
+  group selectors) and the right bar one **group** - the Empty grille, the EQ or the RGB panel -
+  or the Menu's Pad. An `inert` panel's cells stay out of the hit test, so a picture does not eat
+  a gesture. No bar keeps a slide of its own, and there is no container: the cells are the
+  strip.
+- `cassette_button.c` / `.h` — the shared button, built five times: the mode bar's cassette,
+  sliders-v and led, and each group panel's Back cell. It builds the two circles and the letter
+  inside a carcase its host made and owns the one pressed state, the latched ink (`set_on()`: a
+  k_col_primary disc with a k_col_bg glyph), the 160 ms pulse and the tap guard. The cap is spec
+  data and the click is a callback, so the module knows nothing about the Menu or a group; the
+  spec's internal name (MENU/EQ/RGB/BACK) is carried but never drawn by the module.
+- `cassette_buttons.c` / `.h` — the **mode bar**, the left bar's panel value: the cassette glyph
+  that toggles the Menu, the sliders-v that selects the EQ group and the led that selects the
+  RGB. The view owns which one is on and relatches them; the buttons only carry the glyph, the
+  callback and the latch.
+- `groups` (`components/portable/groups`) — which group the right bar is showing, as three rules
+  and one fact: a group button toggles, a panel's Back means Empty, and the group dies with the
+  chrome. `t26_groups` pins it; the view installs the panel and relatches the bar.
+- `cassette_empty.c` / `.h` — the Empty group: one 186x284 plate at the Pad's footprint filled
+  with a staggered grid of 4 px dots, painted by one draw callback, and inert.
+- `knob_cell.c` / `.h` — one small knob inside a bar cell: the 44 px disc, the 24-dot crown, the
+  4 px line, and the plate/cap inks of the two pages. Both knob panels build their cells with it.
+- `knob_editor.c` / `.h` — the one 3x dial, the overlay, the 260 ms delayed open, the blink, the
+  cassette's cut-out and the edit ordering's effects, shared by the EQ and RGB panels through a
+  **bank**: the knobs, the cell at a point, the pillow's text, the repaint, the publish, the disc
+  to blink and the shown gate.
 - `cassette_layout` (`components/portable/cassette`) — the design grid the screen is
   written on: the 800x480 grid, the scale (256 = pixel for pixel), the centring, the
   offset, the even-diameter rounding and the animation's interpolation; and the Controls'
@@ -46,15 +62,22 @@ and nothing else. Everything else is private:
   cassette asks for. The Page, the Cover, the Peek and the chrome are readings of the rung, not
   fields. One `controls_handle(intent, facts)` returns a changed-mask; the view applies it in
   the model's order. `t24_controls` pins the ladder.
-- `knob_model` (`components/portable/knob_model`) — the knob's arithmetic: value 0..100, dB,
-  angle, click-to-value, the crown's lit span and the edit ordering, with the dB ranges read
-  from `tone_eq`. `t22_knob` pins it; the view keeps the timer, the overlay and the blink.
+- `knob_model` (`components/portable/knob_model`) — the knob's arithmetic: value 0..100, dB or a
+  unit fraction, three sweeps (bipolar with a twelve o'clock detent, unipolar 270 degrees, and
+  stepped), the angle and click-to-value of each, the crown's lit span, the per-knob neutral and
+  the edit ordering, with the dB ranges read from `tone_eq`. `t22_knob` pins it; `knob_editor`
+  keeps the timer, the overlay and the blink.
+- `rgb` (`components/portable/rgb`) — the addressable strip's state (three channels, a brightness
+  applied last, one effect) and `rgb_frame()`, which fills a pixel buffer from
+  `(state, now_ms, level, n)` for OFF/SOLID/BREATHE/RAINBOW/CHASE/LEVEL. `t25_rgb` pins every
+  effect. `cassette_rgb.c` is the panel and the publish seam; the firmware has no strip driver
+  yet.
 - `pad.c` (`components/portable/menu`) — the Pad's press classification: samples to STEP,
   TAP or BACK; the ratchet itself stays the Menu model's. `t23_pad` pins the edges.
 - `cassette_button_rule` (`components/portable/cassette`) — the one tap guard, the ring
   widths and the pulse curve the button module uses. `t21_button` pins it.
 - `cassette_style.h` / `cassette_style.c` — the palette, one definition per colour, read
-  by the view, the tapes, the meter, the peek, the transport drawer and the DJ block.
+  by the view, the tapes, the meter, the peek, the mode bar and the groups.
 - `cassette_widgets.h` / `cassette_widgets.c` — the LVGL object helpers (`box`,
   `border_box`, `text`, `image`) and `cassette_circle_face()`, which gives a circle the
   white page's dome - its face the colour the caller passes - or the dark page's line-art
@@ -64,8 +87,8 @@ and nothing else. Everything else is private:
   white-page cap carries (see the drawer below).
   Every object they build is decorative, so a press
   reaches the screen rather than a painted box. The bars opt the cell carcases into
-  hit-testing and set each panel's bubbling with it: the Transport drawer's cells bubble
-  gestures back to the screen, the EQ panel's do not.
+  hit-testing and set each panel's bubbling with it: the mode bar's cells and the Empty grille
+  bubble gestures back to the screen, the EQ's and RGB's do not.
 - `cassette_tapes.c` — the tape body: the two packs, the two strands, the rollers, the
   run, the two hubs and, on the panel board, the two border frames. Its interface is
   `create(parent)`, `place(pose)`, `set(frame)`. A pack is one object whose draw callback
@@ -123,26 +146,23 @@ and nothing else. Everything else is private:
   the group below it, each tethered to it. The texts come from ID3/FLAC tags read
   by the loader, with the artist directory and the filename as the fallback. One
   animation bobs both tags; each tether is a static line whose lower end follows the hub.
-- `cassette_buttons.c` — the Transport panel of the left bar: the panel value the bar fills
-  (one column of three), and the table of the buttons' labels, caps and actions. The bar
-  builds the three 96x96 carcases and slides them; the buttons themselves are the shared
-  `cassette_button.c` - the same module as the EQ panel's R and the bar's M - which owns the
-  one pressed state, the 160 ms pulse and the tap guard. The panel's own interface is
-  `create()` (which hands the value to the bar) and `set_menu_mode()`. `<`/`>` call
-  `mini_icecast_prev()` / `mini_icecast_skip()` and P is still a placeholder; the Menu swaps
-  in the three icons and Close / Back / Enter.
-- `cassette_eq.c` — the EQ panel of the right bar: five of the bar's six cells, in two
-  touching columns (the first one's middle cell is the bar's chrome, M). The panel builds the
-  knobs and R into the carcases the bar hands it and owns only its edit state; it creates no
-  carcase and no root. The panel is GAIN, HI, MED, LOW and R; R is the Transport panel's
-  button moved here - the same 64 px circle, Jura 36 letter, one pressed state, click pulse
-  and four inks, with no action yet. Each knob is a 44 px circle with a 24-dot crown outside
-  it and a line from the centre towards the rim; a tap opens a 3x virtual knob and a click on
-  its ring sets the target angle. The next/previous controls are the Transport panel's `<`
-  and `>`. Its interface is `create(screen)`, which installs the panel value in the bar and
-  builds the edit layer, plus `is_editing()` and `cassette_eq_panel()` - the value the Menu
-  installs again after its Pad. The knob values and the edit layer outlive the swap; an open
-  edit ends with the panel, as it does whenever the panel goes. The Menu is its only caller.
+- `cassette_buttons.c` — the **mode bar**, the left bar's panel value (one column of three):
+  the table of the buttons' glyphs, names and callbacks, and the two states the view drives -
+  the callback and the latch. The bar builds the three 96x96 carcases and slides them; the
+  buttons themselves are the shared `cassette_button.c`, which owns the pressed state, the
+  latched ink, the 160 ms pulse and the tap guard. Its interface is `create()`,
+  `set_cb(mode, cb, ctx)` and `set_on(mode, on)`.
+- `cassette_empty.c` — the Empty group: the plate at the Pad's footprint, the staggered dot
+  grid and its draw callback, the page ink, and the `inert` panel value.
+- `cassette_eq.c` — the EQ group: all six cells, `[Back][HI] / [VU][MED] / [Gain][LOW]`. It
+  builds the four knobs (`knob_cell.c`), the Back button and the meter into the carcases the
+  bar hands it and owns its values and the audio; it creates no carcase and no root. Its
+  interface is `create()`, `set_back_cb()` and `cassette_eq_panel()` - the value the view
+  installs when the group is selected. The knob values and the meter's place outlive a swap;
+  an open edit ends with the panel, as it does whenever the panel goes.
+- `cassette_rgb.c` — the RGB group: the same six cells with Red, Green, Blue in the outer
+  column and Back, Effect, Brightness inside. Same interface, plus
+  `cassette_rgb_set_publish()` - where the strip's state goes.
 - `cassette_window.c` — the window around the cassette on the controls screen: 486x284 at
   (110,76), its top and bottom edges on the bands' lines and its sides in the gaps either
   side of the scaled tape. Same 2 px border, 8 px corner and carcase ink as the bands. It
@@ -311,14 +331,15 @@ static between pose changes. The peek's room request is the view's 200/256 pose 
 -60 px lift; the tags appear with the first frame, the bar runs its 260 ms slide, and the
 next up swipe puts everything away.
 
-## The transport drawer
+## The mode bar
 
 The three buttons at the left edge are the shared `cassette_button.c`; `cassette_buttons.c`
-is their table and the panel value the bar fills. The drawer is three 96 px cells with no panel
-object around them, hidden off-screen at rest; the left bar (`cassette_bars.c`) builds and
-slides them over 260 ms and the Controls model decides when from the ladder. A down swipe from
-Initial slides it in as Art; an up swipe slides it out. There is no sideways route to it any
-more (ADR 0025). The entry view is the untouched full-scale cassette; while the
+is their table and the panel value the bar fills. They are the screen's **modes**, top to
+bottom: the cassette glyph toggles the Menu, the sliders-v glyph selects the EQ group and the
+led glyph the RGB group. The bar is three 96 px cells with no panel object around them, hidden
+off-screen at rest; the left bar (`cassette_bars.c`) builds and slides them over 260 ms and the
+Controls model decides when from the ladder. A down swipe from Initial slides it in as Art; an
+up swipe slides it out. There is no sideways route to it any more (ADR 0025). The entry view is the untouched full-scale cassette; while the
 drawer is out the model puts the cassette at 134/256 (`CASSETTE_SCALE_CONTROLS`), which
 brings the tape's box to 402x232 px at x=148..550: the drawer's 96 px column at x=16 is clear
 on the left and the 190 px DJ block at 594..784 has room on the right. The DJ block is shown
@@ -328,17 +349,19 @@ puts the cassette's centre near that line.
 The drawer wins over the peek while it is out; when it slides away the peek's 200/256 and
 -60 px lift come back.
 
-Each button is 96x96, rounded by 8 px, with a 64 px circle at its centre and P, `<` or `>`
-centred in the circle in Jura 36. The carcase is the left bar's - the same 96x96 box as the
-DJ block's - filled opaque with the page's colour and bordered `k_col_button_rect`. Each
-button carries **its own cap** - `cassette_cap_t`, the spec data the DJ block's M and R carry
-too, and the white page's alone: the face of the disc there and the letter drawn on it. The
-drawer's three start in `k_col_dome`'s neutral grey with the letter `k_col_bg` (black); M's
-cap is `k_col_bg` and R's `k_col_button_r`, both lettered `k_col_button_white` (see the DJ
-block below). The cap is spec data at create: the panel never re-inks one afterwards. The
-dark page is not the caps': it is the palette's line art,
-the playing red ring and letter (`k_col_button_circle`, `k_col_button_letter`), the same for
-every button, whatever a cap says.
+Each button is 96x96, rounded by 8 px, with a 64 px circle at its centre and one icon font
+glyph centred in the circle in `xtape_36`. The carcase is the left bar's - the same 96x96 box
+as the groups' - filled opaque with the page's colour and bordered `k_col_button_rect`. Each
+button carries **its own cap** - `cassette_cap_t`, the spec data, and the white page's alone:
+the face of the disc there and the letter drawn on it - and the mode bar's three (and both
+groups' Back cells) start in `k_col_dome`'s neutral grey with the letter `k_col_bg` (black).
+The cap is spec data at create: the panel never re-inks one afterwards. The dark page is not
+the caps': it is the palette's line art, the playing red ring and letter
+(`k_col_button_circle`, `k_col_button_letter`), the same for every button, whatever a cap
+says. What *is* the button's own ink is the **latch**: `set_on()` fills the disc
+`k_col_primary` with a `k_col_bg` glyph on both pages, the idle look inverted, and the white
+page keeps its 4 px `k_col_dome` rim so the coloured disc is still a disc let into the cap. The
+view latches the cassette while the Menu is open and a group's button while its group is up.
 
 On the white page the circle becomes a **dome**: a flat disc (one colour - no gradient) with
 **two** outer shadows, because LVGL draws one per object. A transparent circle exactly under
@@ -359,15 +382,13 @@ The dome is the pressed state's too: on this page the disc is the cap, and its
 click pulse - and, in the drawer, through the carcase's ring widening from 2 to 3 px.
 `LV_EVENT_PRESSED` writes that ring and release or `LV_EVENT_PRESS_LOST` writes it back. A
 click runs the 160 ms scale pulse (256 -> 232 -> 256) from the portable
-`cassette_button_rule`; `<` and `>` also call `mini_icecast_prev()` /
-`mini_icecast_skip()`. P is still a placeholder; the transport's next/previous are these
-two arrows now.
+`cassette_button_rule`.
 
-All five buttons are that one module, and it is where the press, the pulse and the guard
-live: it builds the disc, the letter and the page ink inside a carcase its host made, and
-hands a click to the host's callback - the drawer maps its three to the transport or the
-Menu, M opens the Menu and R has none. The tap guard is one rule for all five:
-`!moved && !gesturing`. A click that carries a gesture direction or has moved past LVGL's
+All five buttons are that one module - the mode bar's three and each group panel's Back cell -
+and it is where the press, the pulse and the guard live: it builds the disc, the letter and the
+page ink inside a carcase its host made, and hands a click to the host's callback. The mode bar
+maps its three to the Menu's toggle and the two groups; a panel's Back maps to the view's
+"back to Empty". The tap guard is one rule for all five: `!moved && !gesturing`. A click that carries a gesture direction or has moved past LVGL's
 press limit is not a tap and does nothing at all - no pulse and no action. The guard used to
 carry a third term for the two-finger gesture; that gesture is gone (ADR 0025).
 
@@ -397,7 +418,7 @@ either side of the scaled tape. It has no edge to come in from - sweeping a wind
 tape would read as a mistake - so it fades in and out over the same 260 ms, from whatever
 opacity it holds if it is reversed, and hides at the end of the fade out.
 
-The drawer is chrome above the peek. The bars are created after `cassette_levels`; the left
+The mode bar is chrome above the peek. The bars are created after `cassette_levels`; the left
 bar's three carcases and the buttons inside them bubble events, and the cells bubble gestures
 where a panel asks them to, so a swipe that starts on the chrome still reaches
 `screen_input`. A button press cannot fall through as a tap: a click on a child is the
@@ -470,65 +491,73 @@ The chips along the tape's bottom are windows on whatever is behind the cassette
 `k_col_bg` on both pages - the dark screen at rest, and the back cover on the white page - so
 they are filled with `k_col_bg` and the page flip does not touch them.
 
-## The DJ block
+## The right bar's groups
 
 The six cells at the right edge are the right bar's (`cassette_bars.c`), which builds them,
-slides them and paints them; `cassette_eq.c` is the EQ panel that fills five of them, and M
-is the bar's chrome. The Controls model shows them with the Transport panel. While the Menu is
-up the same bar hosts the Pad instead - one white 186x284 plate over the block's place - and
-the EQ panel comes back on close. Two touching 96 px columns at x=594..784 (the first column
-nudged 2 px right; the second stays at 688), three rows at y=76/170/264, so the block is 190x284
-and its right edge leaves 16 px to the screen. The 16 px is the inset of the 64 px circle
-inside each carcase, not a gap: the carcases share their borders like the Transport panel's.
-The first column is GAIN above M and R; the second is HI, MED and LOW. All six cells are
-carcases over the page's opaque fill, so the block covers the tape it slides across: the bar's
-page fill, then the EQ panel's own ink - the four knobs' cells are the knob plate on the white
-page only - `k_col_knob_rect` filling them and `k_col_bg` for their border, so no carcase line
-runs round a knob. M's and R's cells keep the page's fill and the drawer's `k_col_button_rect`
-border, and so does every cell on the dark page. M and R carry their own caps, like the
-drawer's buttons, and those are the white page's alone: on the dark page both are the
-palette's playing red line art like
-everything else there; on the white page M's cap is `k_col_bg` (black) and R's
-`k_col_button_r`, and both letters on them are
-`k_col_button_white` (`0xEEEEEE`) - they are the only two buttons whose letter is not the
-page's black, because they are the only two whose cap is not the page's grey. On the white page
-the four knobs' 44 px circles and M's and R's 64 px circles take the cap face - the same two
-shadows: the knobs in `k_col_knob_cap` (much darker than the buttons' grey so a knob does not
-read as a button, and with no rim), M in black, R in its own red. M's and R's 4 px
-rim is `k_col_dome`'s grey, the drawer buttons' cap rim, so each cap reads as a disc let into
-it, and the knobs' own plate - `k_col_knob_rect` inside a `k_col_bg` border - is what makes
-them read as knobs rather than buttons. The knobs' crown and pointer keep the EQ inks. The
-block is hidden at rest, so the entry view is the full-scale cassette; the model shows it with
-the transport drawer, when the cassette is already at the 134/256 control pose. The right bar
-slides the cells in from the right edge over the same 260 ms as the drawer and back out when
-the drawer leaves.
+slides them and paints them; one **group** fills all six. There are three, and the view installs
+whichever `components/portable/groups` says is up:
 
-Each knob is a 44 px circle - 30% smaller than M's and R's 64 px one - with a 24-dot
-crown at r=32 outside it and a line from the centre towards the rim (the owner's tuned
-4 px width). 0 dB is at twelve
-o'clock; the right side cuts and the left side boosts, and the arc lights from twelve to
-the line on the side it points.
+- **Empty** — `cassette_empty.c`: one 186x284 plate at the Pad's footprint (596x76), the shared
+  8 px corner and 2 px stroke, filled with a staggered grid of 4 px dots on a 14 px pitch,
+  alternate rows offset by half a pitch, at least 12 px clear of the stroke. It is a picture: the
+  panel value's `inert` flag keeps its carcase out of the hit test and its gestures bubbling, so
+  a swipe that starts on the grille still moves the ladder. The dots are one draw callback, not
+  one object each - the same reason the tape's packs are - and the ink turns with the page
+  (`k_col_button_rect` dots on the dark page, `k_col_bg` dots on the white one).
+- **EQ** — `cassette_eq.c`: `[Back][HI] / [VU][MED] / [Gain][LOW]`.
+- **RGB** — `cassette_rgb.c`: `[Back][Red] / [Effect][Green] / [Bright][Blue]`.
 
-A tap on a knob opens edit mode after a 260 ms delay: a 3x virtual knob (256 px at x=220,
-90% of the 96+94+94 length, its top at y=90, a 2 px circle stroke and a centre line, with no
-outer square - only the circle, the crown and the line) appears over the cassette, and under
-the dial a rounded `k_col_primary` pillow carries the knob's internal name (GAIN, HI, MED or
-LOW) in the light cap ink, while a transparent 800x480 overlay owns the touch. The cassette cuts out and
-the knob appears; on close the knob disappears and the cassette cuts back in. The delay is
-there so a second tap is read as the reset double click instead of opening the knob. Only
-the big knob's centre circle closes. A click on the ring - the 256 px area around that
-circle - is the target point: the knob jumps to that angle, 0 dB at twelve, clockwise
-cutting and counter-clockwise boosting. A click outside does nothing; there is no drag. A
-double tap on any small knob resets it to 0 dB and cancels the pending open, so the virtual
-knob never appears. While the overlay is up nothing else responds - the placeholders, the
-drawer and the peek are all behind it - and the view's sink drops every screen intent too,
-because editing is a fact of the Controls model. Both the small
-active circle and the big one blink their border 100% -> 27% -> 100%, 600 ms each way.
-The left drawer's `<` and `>` are the next/previous controls and call
-`mini_icecast_prev()` / `mini_icecast_skip()`; the screen's tap and the BOOT button no
-longer do either.
+Two touching 96 px columns at x=594..784 (the first column nudged 2 px right; the second stays at
+688), three rows at y=76/170/264, so the block is 190x284 and its right edge leaves 16 px to the
+screen. The 16 px is the inset of the 64 px circle inside each carcase, not a gap: the carcases
+share their borders like the mode bar's. All six cells are carcases over the page's opaque fill,
+so a group covers the tape it slides across: the bar's page fill, then the panel's own ink - the
+knob cells are the knob plate on the white page only, `k_col_knob_rect` filling them and
+`k_col_bg` for their border, so no carcase line runs round a knob. The Back cell keeps the page's
+fill and the palette's `k_col_button_rect` border and inks itself from its cap; the VU cell keeps
+the page's fill too, because the meter's rows are their own inks on both pages.
 
-The audio side is `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell (Q 0.7)
+The bar is hidden at rest, so the entry view is the full-scale cassette; the model shows it with
+the mode bar, when the cassette is already at the 134/256 control pose. The right bar slides the
+cells in from the right edge over the same 260 ms as the mode bar and back out when it leaves. A
+group goes away when the bars go away - the groups model drops the selection on that edge - so
+the controls always open on the grille. A group's Back cell returns to Empty, and a chunk of the
+view's `groups_apply()` swaps the panel and relatches the mode bar.
+
+While the Menu is up the same bar hosts the Pad instead - one white 186x284 plate over the
+block's place - and the group is remembered across the mode and reinstalled when the Menu closes
+(`cassette_menu_set_restore_cb()`).
+
+Each knob is a 44 px circle - 30% smaller than the buttons' 64 px one - with a 24-dot crown at
+r=32 outside it and a line from the centre towards the rim (the owner's tuned 4 px width), built
+by `knob_cell.c`. The EQ's four are **bipolar**: 0 dB at twelve o'clock, the right side cuts and
+the left side boosts, and the arc lights from twelve to the line on the side it points. The RGB's
+four are **level** knobs on the unipolar 270 degree sweep - 0 at 7:30, full at 4:30, the gap at
+the bottom, the arc lit from the min end - and its effect selector is **stepped** along the same
+arc, one slot per effect, its 3x pillow naming the effect instead of a number.
+
+A tap on a knob opens edit mode after a 260 ms delay: a 3x virtual knob (256 px at x=220, 90% of
+the 96+94+94 length, its top at y=90, a 2 px circle stroke and a centre line, with no outer
+square - only the circle, the crown and the line) appears over the cassette, and under the dial
+a rounded `k_col_primary` pillow carries the knob's name (GAIN, HI, MED, LOW, or an effect's) in
+the light cap ink, while a transparent 800x480 overlay owns the touch. The cassette cuts out and
+the knob appears; on close the knob disappears and the cassette cuts back in. The delay is there
+so a second tap is read as the reset double click instead of opening the knob. Only the big
+knob's centre circle closes. A click on the ring - the 256 px area around that circle - is the
+target point: the knob jumps to that angle. A click outside does nothing; there is no drag. A
+double tap on any small knob resets it to its **neutral** and cancels the pending open, so the
+virtual knob never appears: 0 dB for a band, full for a colour channel or the brightness, OFF for
+the effect. While the overlay is up nothing else responds - the mode bar and the peek are behind
+it - and the view's sink drops every screen intent too, because editing is a fact of the Controls
+model. Both the small active circle and the big one blink their border 100% -> 27% -> 100%, 600
+ms each way.
+
+The whole modal half is `knob_editor.c`: one overlay, one dial, one timer per screen, shared by
+the two panels through a **bank** (the knobs, the cell at a point, the pillow's text, the
+repaint, the publish, the disc to blink and the shown gate). The panels keep their cells, their
+values and what a value publishes.
+
+The EQ's audio side is `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell (Q 0.7)
 and a 4 kHz high shelf, plus a trim applied before them. The knobs map to the DJ ranges:
 GAIN -12..+12 dB (default 0) and the bands -26..+6 dB (default 0). The targets are
 published by `mini_icecast_eq_set()` / `mini_icecast_gain_set()`, read by the broadcast
@@ -538,6 +567,14 @@ partial tail in `flush_pipeline()` before `measure_level()`, so the VU is the le
 goes out and a track's last 23 ms is shaped too. The int16 clamp is the last stage; a hot
 trim and a boosted band can reach it, like a mixer.
 
+The RGB group's side is `components/portable/rgb`: three channels 0..100, a brightness 0..100
+and one effect from OFF/SOLID/BREATHE/RAINBOW/CHASE/LEVEL. Brightness is applied **last**, to
+whatever the effect produced, so turning the strip down keeps its hues. `rgb_frame()` fills a
+pixel buffer from `(state, now_ms, level, n)` and is pure, so every effect is pinned by
+`host/tests/t25_rgb`. The firmware has no strip driver yet - no pin, chipset or count is
+decided - so `cassette_rgb_set_publish()` is the seam: the panel hands the whole state to
+whatever the board installs, and a hook installed late is called once with the current values.
+
 ## The VU meter
 
 The status carries the RMS of the 1024-frame chunk the encoder is about to take
@@ -546,20 +583,22 @@ after the tone EQ has run, so it is the level that goes on the wire.
 `components/portable/cassette` turns it into a peak-hold: `vu = max(level, vu * 0.90)`
 per 40 ms update, about -23 dB/s, so the peak follows a real drop instead of hanging.
 
-`cassette_meter.c` draws it inside the right hub: two 100x24 rows, 8 px apart, L on top
-and R below. Each row is a rounded rectangle (radius 12, half its height) with a 24 px L/R
-badge, a 6 px gap and seven 10 px dim bars; the bars touch each other and the row's top and
-bottom. The lit level is one rounded fill over the first lit bars, one step dimmer than the
-badge, so its right end is a semicircle; the row's clip_corner rounds the track's right end
-too. The fill is mapped over -48..0 dB so the row moves like a meter rather than a linear
-amplitude. There is no panel behind it - the rows, badges, track and fill are the only
-things painted, so the hub shows through. A level change only resizes the fill, and a row
-whose lit count has not changed is not touched.
+`cassette_meter.c` draws it in the EQ group's `[V]` cell, in cell coordinates: two 84x26 rows
+10 px apart, L on top and R below, centred in the 96x96 carcase. Each row is a rounded
+rectangle (radius 13, half its height) with an 18 px L/R badge, a 10 px gap and seven 8 px dim
+bars; the bars touch each other and the row's top and bottom. The lit level is one rounded fill
+over the first lit bars, one step dimmer than the badge, so its right end is a semicircle; the
+row's clip_corner rounds the track's right end too. The fill is mapped over -48..0 dB so the row
+moves like a meter rather than a linear amplitude. There is no panel behind it - the rows,
+badges, track and fill are the only things painted, so the cell's fill shows through. A level
+change only resizes the fill, and a row whose lit count has not changed is not touched.
 
-The meter starts hidden and stays hidden. It is **parked** (ADR 0025): the view still
-creates it, places it with the pose and feeds it every frame, and nothing calls `show()`.
-The two-finger gesture that used to fade it in and out is gone, and so is the latch it used
-to set; the 220 ms layered fade is kept with the module, for its new home.
+The cell is the meter's life: the bar builds it with the EQ panel's cells and deletes it with
+them, and `cassette_meter_set()` is a no-op whenever there is no meter on screen. The delete
+event detaches the module, so a frame that arrives while another group is up cannot touch freed
+objects; both lit counts start at zero when the cells are rebuilt. The two-finger gesture that
+used to fade the meter in and out is gone (ADR 0025); the module has no show/hide and no pose any
+more.
 
 ## The reel change
 
