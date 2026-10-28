@@ -266,8 +266,8 @@ static void eq_shown(bool visible, void *ctx)
 /* The white page paints the four knobs the way it paints a button: the 44 px circle becomes
  * the cap - a flat disc with a soft lower-right shadow, no rim - while the crown and the stick
  * keep their inks, except the four knobs' cells: those are the knob plate here - filled
- * k_col_knob_rect with a k_col_bg border, so no carcase line runs round a knob. The meter's
- * plate keeps the page's own fill and border: its rows are their own inks on both pages. The
+ * k_col_knob_rect with a k_col_bg border, so no carcase line runs round a knob. The meter's plate
+ * takes the same ink, so the block reads as one surface; the columns' own inks do not turn. The
  * dark page is the palette's line art throughout. The bar has already painted every cell's
  * default. */
 static void eq_set_page(bool white, void *ctx)
@@ -275,6 +275,9 @@ static void eq_set_page(bool white, void *ctx)
     (void)ctx;
     for (int id = 0; id < KNOB_COUNT; id++) knob_cell_set_page(&s_knob_cell[id], white);
 
+    /* The meter's plate takes the same ink as a knob's: on the white page it is the knob plate, so
+     * the block reads as one surface and not as four dials beside a button. */
+    cassette_meter_set_page(white);
 }
 
 /* The panel value the right bar fills: two columns of three, the inside column's top two cells

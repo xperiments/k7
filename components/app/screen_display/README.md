@@ -508,8 +508,8 @@ screen. The 16 px is the inset of the 64 px circle inside each carcase, not a ga
 share their borders like the mode bar's. All six cells are carcases over the page's opaque fill,
 so a group covers the tape it slides across: the bar's page fill, then the panel's own ink - the
 knob cells are the knob plate on the white page only, `k_col_knob_rect` filling them and
-`k_col_bg` for their border, so no carcase line runs round a knob. The meter's plate keeps the
-page's fill and border too, because its rows are their own inks on both pages.
+`k_col_bg` for their border, so no carcase line runs round a knob. The meter's plate takes the same
+ink, so the block reads as one surface; the columns' own inks do not turn.
 
 The bar is hidden at rest, so the entry view is the full-scale cassette; the model shows it with
 the mode bar, when the cassette is already at the 134/256 control pose. The right bar slides the

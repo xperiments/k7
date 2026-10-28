@@ -33,6 +33,12 @@ void cassette_meter_create(lv_obj_t *cell);
  * frame with no meter on screen; a column whose lit count has not changed is not touched. */
 void cassette_meter_set(const cassette_frame_t *frame);
 
+/* The plate's ink for the Page: the white page paints it exactly like a knob - k_col_knob_rect
+ * filled, k_col_bg border, so the meter reads as a dial's surface rather than a button's - and the
+ * dark page keeps the bar's k_col_bg fill and k_col_button_rect border. The columns' own inks do
+ * not turn. A call with no meter on screen is a no-op. */
+void cassette_meter_set_page(bool white);
+
 #ifdef __cplusplus
 }
 #endif

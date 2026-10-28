@@ -131,6 +131,13 @@ void cassette_meter_create(lv_obj_t *cell)
     for (int ch = 0; ch < 2; ch++) column_build(cell, ch);
 }
 
+void cassette_meter_set_page(bool white)
+{
+    if (!s_cell) return;
+    lv_obj_set_style_bg_color(s_cell, white ? k_col_knob_rect : k_col_bg, 0);
+    lv_obj_set_style_border_color(s_cell, white ? k_col_bg : k_col_button_rect, 0);
+}
+
 void cassette_meter_set(const cassette_frame_t *frame)
 {
     if (!frame) return;
