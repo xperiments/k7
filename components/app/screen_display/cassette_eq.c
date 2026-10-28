@@ -179,14 +179,15 @@ static void knob_send(int slot)
 
 /* ---------------------------------------------------------------------- draw */
 
-/* Paint one crown. The arc starts at twelve o'clock and runs to the line on the side it
- * points: clockwise for a cut, counter-clockwise for a boost. The dot at twelve is always
- * the 0 dB tick. The small and the big knob share this. */
+/* Paint one crown. The model owns the span: a bipolar band lights from twelve towards the
+ * line - clockwise for a cut, counter-clockwise for a boost - with the dot at twelve as the
+ * 0 dB tick; a level or stepped knob lights from 7:30 to its line and marks both ends of the
+ * arc. The small and the big knob share this. */
 static void paint_dots(lv_obj_t *dots[DOT_COUNT], const knob_t *k)
 {
     for (int i = 0; i < DOT_COUNT; i++) {
         lv_color_t c = k_col_eq_dim;
-        if (i == 0) c = k_col_eq_tick;
+        if (knob_dot_tick(k, i, DOT_COUNT)) c = k_col_eq_tick;
         else if (knob_dot_lit(k, i, DOT_COUNT)) c = k_col_eq_lit;
         lv_obj_set_style_bg_color(dots[i], c, 0);
     }
@@ -419,7 +420,7 @@ static void overlay_clicked_cb(lv_event_t *e)
     /* The name pillow is a label, not a value target: a tap on it does nothing. */
     if (p.y >= BIG_Y + BIG_PILL_Y) return;
 
-    int v = knob_value_at(p.x - BIG_CX, p.y - BIG_CY);
+    int v = knob_value_at(&s_knob[slot], p.x - BIG_CX, p.y - BIG_CY);
     if (!knob_set(&s_knob[slot], v)) return;
     knob_apply(slot);
     big_apply(slot);

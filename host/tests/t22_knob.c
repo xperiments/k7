@@ -162,12 +162,14 @@ static void test_angle(void)
 static void test_click_round_trip(void)
 {
     static const int radii[] = { 16, 66, 142 };
+    knob_t k;
+    knob_init(&k, KNOB_RANGE_GAIN);
 
     for (size_t r = 0; r < sizeof(radii) / sizeof(radii[0]); r++) {
         for (int v = 1; v < 100; v++) {
             int dx, dy;
             point_at(v, radii[r], &dx, &dy);
-            int got = knob_value_at(dx, dy);
+            int got = knob_value_at(&k, dx, dy);
             CHECK(got == v, "round trip at r=%d, value %d: point (%d,%d) gave %d", radii[r], v,
                   dx, dy, got);
         }
@@ -178,33 +180,42 @@ static void test_click_seam(void)
 {
     /* The dial is 180 degrees per half, so the bottom is a seam: exactly six o'clock is
      * the full cut, and one pixel either side is the full boost or the full cut. */
-    CHECK_EQ(knob_value_at(0, 100), 0, "the bottom is the full cut");
-    CHECK_EQ(knob_value_at(-1, 100), 100, "a hair counter-clockwise is the full boost");
-    CHECK_EQ(knob_value_at(1, 100), 0, "a hair clockwise is the full cut");
+    knob_t k;
+    knob_init(&k, KNOB_RANGE_GAIN);
+
+    CHECK_EQ(knob_value_at(&k, 0, 100), 0, "the bottom is the full cut");
+    CHECK_EQ(knob_value_at(&k, -1, 100), 100, "a hair counter-clockwise is the full boost");
+    CHECK_EQ(knob_value_at(&k, 1, 100), 0, "a hair clockwise is the full cut");
 }
 
 static void test_compass(void)
 {
-    CHECK_EQ(knob_value_at(0, -100), 50, "twelve o'clock is the detent");
-    CHECK_EQ(knob_value_at(100, 0), 25, "three o'clock is a quarter cut");
-    CHECK_EQ(knob_value_at(-100, 0), 75, "nine o'clock is a quarter boost");
-    CHECK_EQ(knob_value_at(0, 100), 0, "six o'clock is the full cut");
+    knob_t k;
+    knob_init(&k, KNOB_RANGE_GAIN);
+
+    CHECK_EQ(knob_value_at(&k, 0, -100), 50, "twelve o'clock is the detent");
+    CHECK_EQ(knob_value_at(&k, 100, 0), 25, "three o'clock is a quarter cut");
+    CHECK_EQ(knob_value_at(&k, -100, 0), 75, "nine o'clock is a quarter boost");
+    CHECK_EQ(knob_value_at(&k, 0, 100), 0, "six o'clock is the full cut");
 
     /* The diagonals round to the nearest value with lroundf, which is what the view's
      * click always did: 37.5 -> 38, so 135 degrees is value 12, not 13. */
-    CHECK_EQ(knob_value_at(100, 100), 12, "the lower-right diagonal");
-    CHECK_EQ(knob_value_at(-100, 100), 88, "the lower-left diagonal");
-    CHECK_EQ(knob_value_at(100, -100), 37, "the upper-right diagonal");
-    CHECK_EQ(knob_value_at(-100, -100), 63, "the upper-left diagonal");
+    CHECK_EQ(knob_value_at(&k, 100, 100), 12, "the lower-right diagonal");
+    CHECK_EQ(knob_value_at(&k, -100, 100), 88, "the lower-left diagonal");
+    CHECK_EQ(knob_value_at(&k, 100, -100), 37, "the upper-right diagonal");
+    CHECK_EQ(knob_value_at(&k, -100, -100), 63, "the upper-left diagonal");
 }
 
 static void test_click_degenerate(void)
 {
-    CHECK_EQ(knob_value_at(0, 0), KNOB_DETENT, "a zero-length point reads as the detent");
+    knob_t k;
+    knob_init(&k, KNOB_RANGE_GAIN);
+
+    CHECK_EQ(knob_value_at(&k, 0, 0), KNOB_DETENT, "a zero-length point reads as the detent");
 
     /* Any distance gives the same value: the inverse only uses the angle. */
-    CHECK_EQ(knob_value_at(0, -1), knob_value_at(0, -100), "r does not change the answer");
-    CHECK_EQ(knob_value_at(1, -1), knob_value_at(100, -100), "on a diagonal either");
+    CHECK_EQ(knob_value_at(&k, 0, -1), knob_value_at(&k, 0, -100), "r does not change the answer");
+    CHECK_EQ(knob_value_at(&k, 1, -1), knob_value_at(&k, 100, -100), "on a diagonal either");
 }
 
 static void test_dot_span(void)
@@ -271,6 +282,103 @@ static void test_reset_and_clamp(void)
     CHECK_EQ(knob_value(&k), KNOB_DETENT, "to the detent");
     CHECK(knob_db(&k) == 0.0f, "which is exactly 0 dB, got %g", (double)knob_db(&k));
     CHECK(!knob_reset(&k), "a reset at the detent reports no move");
+}
+
+static int count_lit(const knob_t *k, int dot_count)
+{
+    int n = 0;
+    for (int i = 0; i < dot_count; i++)
+        if (knob_dot_lit(k, i, dot_count)) n++;
+    return n;
+}
+
+/* The level sweep: 270 degrees, min at 7:30, max at 4:30, the gap at the bottom. The RGB
+ * channels and the strip's brightness ride this one. */
+static void test_level_sweep(void)
+{
+    static const int radii[] = { 16, 66, 142 };
+    knob_t k;
+
+    knob_init_unit(&k);
+    CHECK_EQ(knob_value(&k), KNOB_MAX, "a level knob starts full");
+    CHECK(knob_unit(&k) == 1.0f, "which is 1.0, got %g", (double)knob_unit(&k));
+    CHECK_EQ(knob_angle_ddeg(&k), 1350, "full is 4:30");
+    CHECK(knob_set(&k, 0), "off moves");
+    CHECK(knob_unit(&k) == 0.0f, "off is 0.0, got %g", (double)knob_unit(&k));
+    CHECK_EQ(knob_angle_ddeg(&k), -1350, "off is 7:30");
+
+    knob_set(&k, 50);
+    CHECK_EQ(knob_angle_ddeg(&k), 0, "half is twelve o'clock");
+    knob_set(&k, 51);
+    CHECK_EQ(knob_angle_ddeg(&k), 27, "one step is 27 tenths of a degree");
+    CHECK(knob_set(&k, 50), "and back to twelve is a move");
+
+    /* The click is the angle's inverse across the whole arc: 3.7 degrees per value. */
+    for (int v = 1; v < 100; v++) {
+        int dx, dy;
+        float rad = (float)((v - 50) * 27) / 10.0f * TEST_PI / 180.0f;
+        dx = (int)lroundf(100.0f * sinf(rad));
+        dy = -(int)lroundf(100.0f * cosf(rad));
+        int got = knob_value_at(&k, dx, dy);
+        CHECK(got == v, "level round trip at value %d gave %d", v, got);
+    }
+
+    CHECK_EQ(knob_value_at(&k, 0, -100), 50, "twelve is half");
+    CHECK_EQ(knob_value_at(&k, 100, 0), 83, "three o'clock is along the arc");
+    CHECK_EQ(knob_value_at(&k, 71, 71), 100, "4:30 is full");
+    CHECK_EQ(knob_value_at(&k, -71, 71), 0, "7:30 is off");
+    CHECK_EQ(knob_value_at(&k, 10, 100), 100, "the bottom gap's clockwise side takes the max");
+    CHECK_EQ(knob_value_at(&k, -10, 100), 0, "and its other side takes the min");
+    CHECK_EQ(knob_value_at(&k, 0, 0), knob_value(&k), "the centre is the knob's own value");
+
+    /* The crown lights from the min end clockwise; the 90 degree gap never lights. */
+    knob_set(&k, 0);
+    CHECK_EQ(count_lit(&k, 24), 1, "off lights the min end alone");
+    knob_set(&k, 100);
+    CHECK_EQ(count_lit(&k, 24), 19, "full lights the whole arc");
+    CHECK(knob_dot_tick(&k, 15, 24), "7:30 is a tick");
+    CHECK(knob_dot_tick(&k, 9, 24), "4:30 is a tick");
+    CHECK(!knob_dot_tick(&k, 0, 24), "and twelve is not");
+    CHECK(!knob_dot_lit(&k, 12, 24), "six o'clock is in the gap, never lit");
+    CHECK(!knob_dot_lit(&k, 10, 24), "so is 5:00");
+}
+
+/* The stepped sweep: the same arc, cut into equal detents. The effect selector. */
+static void test_steps(void)
+{
+    knob_t k;
+
+    knob_init_steps(&k, 6, 0);
+    CHECK_EQ(knob_value(&k), 0, "a stepped knob starts on its neutral's slot");
+    CHECK_EQ(knob_step(&k), 0, "slot 0");
+    CHECK_EQ(knob_angle_ddeg(&k), -1350, "at the min end");
+
+    CHECK(knob_set(&k, 23), "23 moves");
+    CHECK_EQ(knob_value(&k), 20, "and quantises to the nearest slot");
+    CHECK_EQ(knob_step(&k), 1, "which is slot 1");
+    CHECK(!knob_set(&k, 24), "another value in the same slot does not move");
+
+    CHECK(knob_set_step(&k, 5), "the last slot moves");
+    CHECK_EQ(knob_value(&k), 100, "and is full");
+    CHECK_EQ(knob_angle_ddeg(&k), 1350, "at 4:30");
+    CHECK(!knob_set_step(&k, 5), "the same slot does not move");
+
+    CHECK(knob_reset(&k), "a reset from full moves");
+    CHECK_EQ(knob_value(&k), 0, "to the neutral, OFF");
+    CHECK(!knob_reset(&k), "and a reset at the neutral does not");
+
+    CHECK_EQ(knob_value_at(&k, 0, -100), 60, "twelve quantises to the middle slot");
+    CHECK_EQ(knob_value_at(&k, 71, 71), 100, "4:30 is the last slot");
+    CHECK_EQ(knob_value_at(&k, -71, 71), 0, "7:30 is the first");
+    CHECK_EQ(knob_value_at(&k, -10, 100), 0, "and the gap takes the nearer end");
+
+    knob_set_step(&k, 2);
+    CHECK_EQ(count_lit(&k, 24), 8, "slot 2 of 5 lights 8 of 24 dots");
+
+    /* A continuous knob has no slots at all. */
+    knob_init_unit(&k);
+    CHECK_EQ(knob_step(&k), -1, "a level knob has no step");
+    CHECK(!knob_set_step(&k, 2), "and cannot be stepped");
 }
 
 static void test_name(void)
@@ -389,6 +497,8 @@ int main(void)
     test_compass();
     test_click_degenerate();
     test_dot_span();
+    test_level_sweep();
+    test_steps();
     test_reset_and_clamp();
     test_name();
     test_edit_ordering();
