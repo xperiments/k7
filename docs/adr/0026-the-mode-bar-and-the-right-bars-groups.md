@@ -61,7 +61,7 @@ placeholder, and the parked meter on the cassette.
 - **The groups live with the chrome, and Back means Empty.** Hiding the bars resets the group.
   A group's Back cell returns to Empty; on Empty there is no Back cell, so Back can never move the
   ladder.
-- **Empty is a picture, and it is the default.** One plate, one draw callback (~198 dots), no
+- **Empty is a picture, and it is the default.** One plate, one draw callback (~220 dots), no
   controls, gestures through. It is the surface the controls open on, so it must not block a
   swipe.
 - **The EQ group keeps its audio and moves its cells.** Gain moved to the inside column's bottom
