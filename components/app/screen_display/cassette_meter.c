@@ -17,12 +17,19 @@
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 
-/* The two columns: 30 wide, 148 tall, 12 apart, centred in the 96 px plate; the pills below
- * them, and 14 px of air under those. */
+/* The plate the meter draws on: the inside column's top two cells, one 96x190 surface. Its
+ * **content** box is 92x186, because a child of a carcase is laid out inside the carcase's 2 px
+ * border - every number below is in that content space, which is why the plate's own size enters
+ * these constants net of CASSETTE_BORDER_W. */
+#define PLATE_W      (CASSETTE_CELL_W - 2 * CASSETTE_BORDER_W)
+#define PLATE_H      (CASSETTE_CELL_H + CASSETTE_CELL_PITCH - 2 * CASSETTE_BORDER_W)
+
+/* The two columns: 30 wide, 148 tall, 8 apart, centred in the content box; the pills below them,
+ * and the window under the lot. */
 #define BAR_W        30
 #define BAR_H        148
-#define BAR_GAP      12
-#define BAR_X0       ((CASSETTE_CELL_W - (2 * BAR_W + BAR_GAP)) / 2)
+#define BAR_GAP      8
+#define BAR_X0       ((PLATE_W - (2 * BAR_W + BAR_GAP)) / 2)
 #define BAR_Y        8
 #define PILL_W       BAR_W
 #define PILL_H       14
@@ -36,15 +43,11 @@
 #define MATRIX_W     ((BAR_COLS - 1) * DOT_PITCH + DOT)
 #define MATRIX_H     ((BAR_ROWS - 1) * DOT_PITCH + DOT)
 
-/* The plate this draws into: the EQ group's inside column's top two cells, as one surface. It is
- * written here rather than read from the cell, because `lv_obj_get_width()` returns `obj->coords`
- * and those are only filled by the first layout pass - at build time it reads 0. */
-#define METER_PLATE_W      CASSETTE_CELL_W
-#define METER_PLATE_H      (CASSETTE_CELL_H + CASSETTE_CELL_PITCH)
-/* The window behind the columns: 4 px in from the plate - the owner's "3 px smaller than it was"
- * on each axis, rounded to an even inset so the grey frame is the same width on all four sides -
- * and rounded 4 so it sits inside the plate's 8 px corner without a lip. */
+/* The window behind the columns: 4 px in from the content box on every side - an even, symmetric
+ * grey frame round it - and rounded 4 so it sits inside the plate's 8 px corner without a lip. */
 #define METER_WINDOW_INSET 4
+#define METER_WINDOW_W     (PLATE_W - 2 * METER_WINDOW_INSET)
+#define METER_WINDOW_H     (PLATE_H - 2 * METER_WINDOW_INSET)
 #define METER_WINDOW_R     4
 
 #define METER_DB_MIN (-48.0f)
@@ -148,8 +151,7 @@ void cassette_meter_create(lv_obj_t *cell)
      * frame round a dark window rather than as the meter's background. On the dark page the
      * window and the plate are the same ink, so it is simply not there. */
     s_window = cassette_box(cell, METER_WINDOW_INSET, METER_WINDOW_INSET,
-                            METER_PLATE_W - 2 * METER_WINDOW_INSET,
-                            METER_PLATE_H - 2 * METER_WINDOW_INSET,
+                            METER_WINDOW_W, METER_WINDOW_H,
                             METER_WINDOW_R, k_col_meter_window);
 
     for (int ch = 0; ch < 2; ch++) column_build(cell, ch);
