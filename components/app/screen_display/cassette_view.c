@@ -6,7 +6,7 @@
  * own children. The parts are private modules:
  *
  *   cassette_tapes    the packs, strands, rollers, run, hubs and the panel's frames
- *   cassette_meter    the VU meter, parked: built and fed, never shown (ADR 0025)
+ *   cassette_meter    the VU meter, in the EQ group's VU cell
  *   cassette_cover    Real's Track picture, masked to the frames
  *   cassette_levels   the peek's host
  *   cassette_bars     the two edge bars: their cells, their entrance and their page ink
@@ -299,7 +299,6 @@ static void cassette_place(void)
     /* The frames are placed now, so the cover's mask follows this step of the pose. */
     cassette_cover_place();
 #endif
-    cassette_meter_place(s_pose);
     hubs_apply();
 }
 
@@ -363,6 +362,7 @@ static void apply_frame(const cassette_frame_t *f)
 {
     if (!f) return;
     cassette_tapes_set(f);
+    /* The meter is only alive while the EQ group is up; its module ignores a frame otherwise. */
     cassette_meter_set(f);
     cassette_levels_apply(f);
 }
@@ -423,6 +423,13 @@ static void eq_group_cb(void *ctx)
 {
     (void)ctx;
     groups_apply(groups_handle(&s_groups, GROUPS_INTENT_TAP_EQ, chrome_shown_now()));
+}
+
+/* A group panel's Back cell: the model turns it into Empty, never a ladder move. */
+static void group_back_cb(void *ctx)
+{
+    (void)ctx;
+    groups_apply(groups_handle(&s_groups, GROUPS_INTENT_BACK, chrome_shown_now()));
 }
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -519,10 +526,10 @@ void cassette_view_create(void)
 
     lv_obj_set_hidden(s_page_edge, true);
 
-    /* The tapes, then the meter: the frames and the whole body are created after the glow,
-     * so every tape draws over it, and the meter paints inside the right hub. */
+    /* The tapes: the frames and the whole body are created after the glow, so every tape draws
+     * over it. The VU meter is no longer part of the cassette picture - it lives in the EQ
+     * group's cell, built and deleted with that panel. */
     cassette_tapes_create(s_cassette);
-    cassette_meter_create(s_cassette);
     cassette_place();
 
     /* The peek is the screen's child, above the cassette's container. It is the only
@@ -547,6 +554,7 @@ void cassette_view_create(void)
     /* The EQ panel is chrome too, on the other edge; created last so it starts above the
      * peek, hidden with the mode bar. */
     cassette_eq_create(scr);
+    cassette_eq_set_back_cb(group_back_cb, NULL);
 
     /* The Empty group - the speaker grille - is the right bar's default, so it is installed
      * last and the screen opens on it. */

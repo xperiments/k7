@@ -2,23 +2,25 @@
 /*
  * cassette_eq - the DJ block: the EQ panel of the screen's right bar.
  *
- * The panel fills five of the right **bar**'s six cells: the four knobs GAIN, HI, MED and LOW
- * and R. The first column's middle cell is M, which is the bar's chrome and never the
- * panel's - it is the Menu's door whatever panel is up (cassette_bars). The bar builds the
- * carcases, slides them in and out over 260 ms and paints the page into them; this module
- * builds the knobs and R inside them and owns its edit layer: the 260 ms timer, the overlay,
- * the blink and the dim. The edit's ordering - which knob is pending, which is open, the reset
- * gesture and its owed click, the close - is `knob_edit_t`'s in knob_model, which is
- * clock-free; this module feeds it the events and applies the effects it returns. The six
- * carcases are the same 96x96 box as the Transport panel's, two touching columns three rows
- * deep.
+ * The panel fills the right **bar**'s six cells, two columns of three:
+ *
+ *     [Back] [HI ]
+ *     [VU  ] [MED]
+ *     [Gain] [LOW]
+ *
+ * the inside column the group's chrome and the outer column its three bands. The bar builds the
+ * carcases, slides them in and out over 260 ms and paints the page into them; this module builds
+ * the knobs, the Back button and the VU cell inside them, and owns the knobs' values and the
+ * audio. The edit's ordering - which knob is pending, which is open, the reset gesture and its
+ * owed click, the close - is knob_model's `knob_edit_t`; the modal surface itself is
+ * knob_editor's. The six carcases are the same 96x96 box as the mode bar's, two touching columns
+ * three rows deep.
  *
  * Each knob is a 44 px circle (30% smaller than a button's), a 24-dot crown outside it at
  * r=32, and a line from the centre towards the rim (the owner's tuned 4 px width). 0 dB is at
- * twelve o'clock, the right side cuts and the left side boosts. R is the drawer's button moved
- * here - the shared cassette_button on the bar's cell: the same 64 px circle, Jura 36 letter,
- * one pressed state and click pulse - still a placeholder, with its own red cap on the white
- * page. The next/previous controls are the Transport panel's < and >.
+ * twelve o'clock, the right side cuts and the left side boosts. The Back cell is the shared
+ * cassette_button with the icon font's left chevron, and its click is the view's: the group goes
+ * back to Empty. The VU cell is the meter, two 84 px rows, fed by the cassette frames.
  *
  * The modal half is knob_editor's, shared with the RGB panel: a tap on a knob opens the 3x
  * dial after a 260 ms delay, the second tap of a double tap resets the knob to 0 dB in place
@@ -52,9 +54,14 @@ extern "C" {
  * knobs' cells are the knob plate and R's cap is k_col_button_r with a light letter. */
 void cassette_eq_create(lv_obj_t *parent);
 
-/* The panel's value, for the Menu to install again after its Pad. Handing it back does not
- * rebuild anything: the bar rebuilds the cells and the panel's own edit layer, its knob
- * values and its audio calls are the ones it already had. */
+/* The view's Back action, run by the Back cell's click after the tap guard and the pulse. The
+ * panel does not know what Back means (Empty, in the groups model); a NULL callback makes the
+ * cell a pulse. */
+void cassette_eq_set_back_cb(void (*cb)(void *ctx), void *ctx);
+
+/* The panel's value, for the view to install again when the EQ group is selected. Handing it
+ * back does not rebuild anything: the bar rebuilds the cells and the panel's knob values, its
+ * meter and its audio calls are the ones it already had. */
 const cassette_panel_t *cassette_eq_panel(void);
 
 #ifdef __cplusplus
