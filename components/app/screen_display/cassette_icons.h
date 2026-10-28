@@ -57,6 +57,10 @@ LV_FONT_DECLARE(xtape_36);
 #define CASSETTE_ICON_TRACK     "\xEF\x80\x90" /* U+F010 track */
 #define CASSETTE_ICON_MICRO_CHIP_CP 0xF011u
 #define CASSETTE_ICON_MICRO_CHIP "\xEF\x80\x91" /* U+F011 micro-chip */
+#define CASSETTE_ICON_SLIDERS_CP 0xF012u
+#define CASSETTE_ICON_SLIDERS    "\xEF\x80\x92" /* U+F012 sliders-v */
+#define CASSETTE_ICON_LED_CP 0xF013u
+#define CASSETTE_ICON_LED        "\xEF\x80\x93" /* U+F013 led */
 
 #ifdef __cplusplus
 }

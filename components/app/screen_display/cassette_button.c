@@ -29,11 +29,11 @@ LV_FONT_DECLARE(jura_36);
  * period is one run of the 0..1024 triangle. */
 #define PULSE_MS 160
 
-/* The ring widths and the letter's ink for the current page and press state. The carcase's
- * ring is always the table's: the drawer's thickens (2 -> 3), M's and R's does not (2 -> 2).
- * The disc's ring is the table's on the dark page only; on the white page the disc is the
- * cap and its rim is CASSETTE_CAP_RIM_W whatever the state, which is why M's and R's pressed
- * look on that page is the pulse alone. */
+/* The ring widths for the current page and press state. The carcase's ring is always the
+ * table's: the drawer's thickens (2 -> 3), M's and R's does not (2 -> 2). The disc's ring is
+ * the table's on the dark page only; on the white page the disc is the cap and its rim is
+ * CASSETTE_CAP_RIM_W whatever the state, which is why M's and R's pressed look on that page is
+ * the pulse alone. This is the whole of a press, so it writes borders and nothing else. */
 static void button_ring_apply(cassette_button_t *b)
 {
     if (!b) return;
@@ -50,6 +50,50 @@ static void button_ring_apply(cassette_button_t *b)
         lv_obj_set_style_border_width(b->disc, cassette_button_ring_w(b->disc_ring, b->pressed), 0);
         lv_obj_set_style_border_color(b->disc, k_col_button_circle, 0);
     }
+}
+
+/* The latch, not the press: a latched button is a filled k_col_primary disc with the dark
+ * page's own near-black glyph, on both pages. It is the idle look inverted - the dark page's
+ * idle disc is a red ring with a red glyph and no face, the white page's is a grey cap with a
+ * near-black glyph - so "on" reads the same way on either page. The white page keeps the cap's
+ * 4 px k_col_dome rim, which is what stops a coloured disc dissolving into its own carcase.
+ *
+ * This is the page's ink and the latch's, so it runs on set_page() and set_on(), never on a
+ * press: a press is button_ring_apply() alone. */
+static void button_ink_apply(cassette_button_t *b)
+{
+    if (!b || !b->carcase) return;
+
+    /* The carcase keeps the drawer's line on both pages; only its fill follows the page. */
+    lv_obj_set_style_bg_color(b->carcase, b->white ? k_col_white : k_col_bg, 0);
+    lv_obj_set_style_border_color(b->carcase, k_col_button_rect, 0);
+
+    if (b->disc) {
+        if (b->white) {
+            cassette_circle_face(b->ambient, b->disc, true, b->on ? k_col_primary : b->cap.face);
+            lv_obj_set_style_border_width(b->disc, CASSETTE_CAP_RIM_W, 0);
+            lv_obj_set_style_border_color(b->disc, k_col_dome, 0);
+        } else if (b->on) {
+            /* The dark page's line art grows a face; it keeps the palette's ring. */
+            cassette_circle_face(b->ambient, b->disc, false, k_col_primary);
+            lv_obj_set_style_bg_opa(b->disc, LV_OPA_COVER, 0);
+            lv_obj_set_style_bg_color(b->disc, k_col_primary, 0);
+            lv_obj_set_style_border_width(
+                b->disc, cassette_button_ring_w(b->disc_ring, b->pressed), 0);
+            lv_obj_set_style_border_color(b->disc, k_col_button_circle, 0);
+        } else {
+            cassette_circle_face(b->ambient, b->disc, false, b->cap.face);
+            lv_obj_set_style_border_width(
+                b->disc, cassette_button_ring_w(b->disc_ring, b->pressed), 0);
+            lv_obj_set_style_border_color(b->disc, k_col_button_circle, 0);
+        }
+    }
+
+    if (b->letter)
+        lv_obj_set_style_text_color(
+            b->letter, b->on ? k_col_bg : (b->white ? b->cap.letter : k_col_button_letter), 0);
+
+    button_ring_apply(b);
 }
 
 /* The pulse's triangle lives in the portable rule; this is only where the step is applied.
@@ -147,6 +191,7 @@ bool cassette_button_create(cassette_button_t *out, lv_obj_t *carcase,
     out->ctx = spec->ctx;
     out->white = false;
     out->pressed = false;
+    out->on = false;
 
     /* The page is the module's ink on the host's carcase: the fill under the disc and the
      * carcase's line. The ring's width is the released table's, whatever the host built. */
@@ -170,7 +215,7 @@ bool cassette_button_create(cassette_button_t *out, lv_obj_t *carcase,
     lv_obj_set_style_transform_pivot_x(carcase, CASSETTE_CELL_W / 2, 0);
     lv_obj_set_style_transform_pivot_y(carcase, CASSETTE_CELL_H / 2, 0);
 
-    button_ring_apply(out);
+    button_ink_apply(out);
 
     lv_obj_add_event_cb(carcase, button_pressed_cb, LV_EVENT_PRESSED, out);
     lv_obj_add_event_cb(carcase, button_released_cb, LV_EVENT_RELEASED, out);
@@ -183,18 +228,14 @@ void cassette_button_set_page(cassette_button_t *b, bool white)
 {
     if (!b || !b->carcase) return;
     b->white = white;
+    button_ink_apply(b);
+}
 
-    /* The carcase keeps the drawer's line on both pages; only its fill follows the page. */
-    lv_obj_set_style_bg_color(b->carcase, white ? k_col_white : k_col_bg, 0);
-    lv_obj_set_style_border_color(b->carcase, k_col_button_rect, 0);
-
-    if (b->letter)
-        lv_obj_set_style_text_color(b->letter, white ? b->cap.letter : k_col_button_letter, 0);
-
-    /* The disc: the cap's face and its two shadows on the white page, the line art on the
-     * dark one. The ring that goes with it is button_ring_apply()'s. */
-    if (b->ambient && b->disc) cassette_circle_face(b->ambient, b->disc, white, b->cap.face);
-    button_ring_apply(b);
+void cassette_button_set_on(cassette_button_t *b, bool on)
+{
+    if (!b || !b->carcase || b->on == on) return;
+    b->on = on;
+    button_ink_apply(b);
 }
 
 const char *cassette_button_name(const cassette_button_t *b)

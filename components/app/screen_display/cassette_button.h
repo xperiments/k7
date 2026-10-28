@@ -10,11 +10,13 @@
  * disc), the letter, and the press and the page ink inside that box; it creates no second
  * carcase, so the bar's cell and the disc inside it remain one rectangle each.
  *
- * One pressed state, not two. A press writes the ring widths - the carcase's ring, which is
- * the drawer's visible press, and the disc's ring, which is M's and R's - and RELEASED or
- * PRESS_LOST writes them back. The ring tables are spec data: see cassette_button_ring_t
- * and cassette_button_ring_w() in the portable cassette_button_rule. Nothing is hidden or
- * prebuilt, so a button is four objects rather than eleven.
+ * One pressed state, not two, and one latch beside it. A press writes the ring widths - the
+ * carcase's ring, which is the drawer's visible press, and the disc's ring, which is M's and
+ * R's - and RELEASED or PRESS_LOST writes them back. The latch is not a press state: it is
+ * what the button *is* while its mode is on, a filled k_col_primary disc with a k_col_bg
+ * glyph, and set_on() repaints the whole disc's ink. The ring tables are spec data: see
+ * cassette_button_ring_t and cassette_button_ring_w() in the portable cassette_button_rule.
+ * Nothing is hidden or prebuilt, so a button is four objects rather than eleven.
  *
  * The page is the only ink the module owns. On the dark page the carcase is filled k_col_bg
  * and bordered k_col_button_rect, the disc is the palette's line art - a k_col_button_circle
@@ -89,6 +91,7 @@ typedef struct {
     void *ctx;
     bool white;                           /* the page to repaint a press on */
     bool pressed;
+    bool on;                              /* latched: a filled k_col_primary disc, k_col_bg glyph */
 } cassette_button_t;
 
 /* Build one button inside `carcase`, a host-made 96x96 opaque box. Creates the two circles
@@ -104,6 +107,13 @@ bool cassette_button_create(cassette_button_t *out, lv_obj_t *carcase,
  * palette's ring and letter, k_col_bg carcase), with the current press ring applied on top.
  * A button built while the page is dark looks dark until the view's flip calls this. */
 void cassette_button_set_page(cassette_button_t *b, bool white);
+
+/* Latch the button on or off, for a button that is a mode and not a moment: the left bar's
+ * three group selectors, and the cassette's door while the Menu is up. A latched button is a
+ * filled k_col_primary disc with a k_col_bg glyph on both pages - the idle look inverted -
+ * keeping the white page's 4 px k_col_dome rim. The pressed ring still runs on top. A call for
+ * the state already held does nothing; a handle that was never built is a no-op. */
+void cassette_button_set_on(cassette_button_t *b, bool on);
 
 /* The label and its font, changed together: the Menu's glyphs and &xtape_36 replace the
  * drawer's Jura characters. NULL text leaves the label alone. Never touches the ink. */
