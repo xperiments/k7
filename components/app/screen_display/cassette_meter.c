@@ -36,6 +36,11 @@
 #define MATRIX_W     ((BAR_COLS - 1) * DOT_PITCH + DOT)
 #define MATRIX_H     ((BAR_ROWS - 1) * DOT_PITCH + DOT)
 
+/* The plate this draws into: the EQ group's inside column's top two cells, as one surface. It is
+ * written here rather than read from the cell, because `lv_obj_get_width()` returns `obj->coords`
+ * and those are only filled by the first layout pass - at build time it reads 0. */
+#define METER_PLATE_W      CASSETTE_CELL_W
+#define METER_PLATE_H      (CASSETTE_CELL_H + CASSETTE_CELL_PITCH)
 /* The window behind the columns: 3 px in from the plate, rounded 4 so it sits inside the
  * plate's 8 px corner without a lip. */
 #define METER_WINDOW_INSET 3
@@ -140,14 +145,10 @@ void cassette_meter_create(lv_obj_t *cell)
 
     /* The meter's own screen: 3 px inside the plate, so on the white page the grey reads as a
      * frame round a dark window rather than as the meter's background. On the dark page the
-     * window and the plate are the same ink, so it is simply not there. The plate is 96x190 - the
-     * inside column's top two cells - so its size is read from the cell, never from the 96 px
-     * lattice. */
-    int plate_w = lv_obj_get_width(cell);
-    int plate_h = lv_obj_get_height(cell);
+     * window and the plate are the same ink, so it is simply not there. */
     s_window = cassette_box(cell, METER_WINDOW_INSET, METER_WINDOW_INSET,
-                            plate_w - 2 * METER_WINDOW_INSET,
-                            plate_h - 2 * METER_WINDOW_INSET,
+                            METER_PLATE_W - 2 * METER_WINDOW_INSET,
+                            METER_PLATE_H - 2 * METER_WINDOW_INSET,
                             METER_WINDOW_R, k_col_meter_window);
 
     for (int ch = 0; ch < 2; ch++) column_build(cell, ch);
