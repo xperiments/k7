@@ -129,7 +129,7 @@ and nothing else. Everything else is private:
   and nowhere else. The picture sits at +12,+20 in a 402x188 clip box, frame 0 with its radius plus 2 px
   and `clip_corner`, scaled to frame 0's width and top-aligned, so its height follows from
   its aspect and the box clips the rest. A pose that is not the controls pose does not show
-  it, and the 1 s `opa_layered` fade lands on the print alone, never on the Card.
+  it; the print is cut in and out, never faded, so it lands with the page flip.
 - `cassette_menu.c` / `.h` — the Menu's view. `create(screen, cassette)` builds five row
   slots inside the window and the Pad's panel value; `open(white)`, `close()`,
   `update(status)` and `set_tags(group, song)` are the view's calls, and the right bar's M
@@ -488,11 +488,10 @@ follow the pose, and its picture is scaled at draw time, so the buffer stays the
 size; the controls pose scales it down, not up. The Card exists only at that pose, which is why the model refuses the down
 from Art until it has landed - the same two downs can arrive faster than the shrink.
 
-The down fades the print in and the up fades it out over 1 s
-(`lv_anim_path_ease_in_out`), on the container's `opa_layered`, so the mask and the picture
-go together; the Card does not fade - it arrives with the page flip. A page flip or a Track
-change cuts the print instead: the loader reuses the one cover buffer, so there is nothing to
-fade over.
+The print is cut in and out, never faded: the down brings it with the page flip and the up takes
+it with the page, in one frame. A Track change cuts it too - the loader reuses the one cover
+buffer, so there is nothing to fade over, and a Track with no picture cuts to the drawn label
+just as plainly.
 
 The Card's ink is a cut, never an animation, and it is not read from anything: `k_col_cassette[]`
 is the palette, one row per cassette - a plastic and the ink of the label printed on it - and the

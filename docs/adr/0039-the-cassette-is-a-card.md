@@ -11,7 +11,7 @@ ink of the label printed on it - and the Track's path only picks the row. Everyt
 Card, the window and the mask below stands; only where the colour comes from changed.
 
 ADR 0021 gave the white page a picture: a print on the cassette's body, a glow washing it, and
-the cinta below. That page is good and it stays - the print, the tape, the paper, the fade and
+the cinta below. That page is good and it stays - the print, the tape, the paper and
 the pose are all unchanged. What it never had was a **cassette**: at the Controls pose the label
 and the outer frame are the same rectangle (402x188 at 148,102), the frame's border is 1 px and
 is lifted over the print, and the only other shell pixels are three chips in a 44 px band under
@@ -42,9 +42,9 @@ at all.
   only if they share a centre. The Card and the print container both sit at (136,82), centre
   (349,218), so one buffer serves both. The Cover's own 402x188 mask - 75,952 B, the number
   ADR 0021 chose - is deleted.
-- **The print still fades alone.** The print container keeps the 1 s `opa_layered` fade, so the
-  Card does not fade with it: show and hide are the print's, and the Card arrives with the page
-  flip.
+- **The print is cut in and out** (amended: ADR 0039 first had it fade over 1 s). The Card
+  arrives with the page flip and the print arrives with it, in the same frame, so there is no
+  fade to land on either of them.
 - **The window is at (55,55) in the print and (67,75) in the Card.** Both are the same 291x87
   stadium on the panel at (203,157), which is the window the frame already drew: frame[1]'s
   interior, `trunc(106x134/256) = 55` in from the print's corner. It is not centred in the

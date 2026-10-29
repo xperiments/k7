@@ -41,7 +41,7 @@ All values are panel pixels at the Controls pose and are half-open - the right e
 |---|---|---|---|
 | Screen | 0, 0 | 800x480 | the panel |
 | **Card** | **136, 82** | **426x272** | radius 12, one ink, A8-masked |
-| **Print container** | 136, 82 | 426x272 | the same mask; carries the 1 s fade |
+| **Print container** | 136, 82 | 426x272 | the same mask; shown and hidden by a cut |
 | **Print** (cover or label) | **148, 102** | **402x188** | the container's **+12,+20**; radius 10; `clip_corner` |
 | **Window** | **203, 157** | **291x87** | radius 43; zeroed in the mask |
 | Window in the print | 55, 55 | 291x87 | 55 left, 55 top, 56 right, 46 bottom |
@@ -77,7 +77,7 @@ One buffer, one descriptor, two objects.
   objects can share one only if their centres coincide.
 - The print's own 402x188 mask is **deleted**; the Cover's container grows to 426x272 and its
   picture stays at 402 wide inside a `+12,+20` clip box, so the window lands at (55,55) and the
-  1 s `opa_layered` fade still lands on the print alone, not on the Card.
+  print is cut in and out, never faded.
 
 ## The drawn label
 
@@ -161,8 +161,7 @@ separate colour: the frame and the body are one material, only the print is anot
 
 - **`cassette_cover.c`** - the container becomes 426x272 at the Card's rect and the print is
   clipped at +12,+20. It stops reading `cassette_tapes_frame_rect()` for its geometry and stops
-  building its own mask; it asks the Card for the descriptor and hides with its own fade as
-  before.
+  building its own mask; it asks the Card for the descriptor and shows and hides by a cut.
 - **`cassette_tapes.c`** - `pack_place()` gains the clamp; `raise_frames()` and
   `set_cover_print()` go, since the Cover only ever shows on this page and the frames are under
   the Card.

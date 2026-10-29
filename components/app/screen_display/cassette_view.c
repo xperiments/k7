@@ -31,7 +31,7 @@
  * It also owns the page. The screen is four rungs (ADR 0025): the full cassette at Initial,
  * the chrome on the dark Page at Art, the chrome on the white Page with the Track's picture
  * printed on the cassette at Real - and the Peek below them all. The cassette's own page-ink
- * parts turn with the page, the picture fades over it, and every way off Real takes the
+ * parts turn with the page, the picture cuts in over it, and every way off Real takes the
  * picture with it.
  *
  * Called under the LVGL lock, like everything else on the screen.
@@ -153,7 +153,7 @@ static controls_intent_t controls_intent(screen_intent_t intent)
  * The white page is the screen's whole backdrop. The line art keeps its inks on white, so the
  * picture reads as ink on paper. The flip is one frame - a colour animation would repaint the
  * whole 800x480 panel on every step - and it runs as the rung is taken, under the cover's own
- * 1 s fade. The flag keeps a repeated request from invalidating the whole panel for a colour
+ * one frame. The flag keeps a repeated request from invalidating the whole panel for a colour
  * that is already there. */
 
 static void page_set(bool white)
@@ -180,7 +180,7 @@ static void groups_apply(unsigned changed);
 
 /* Apply only what the model says changed, in its order: PAGE, PEEK, SHOWN, MENU, ROOM. The
  * page is painted before the picture on the same bit - Real is the white Page and the Cover
- * as one rung, so the flip comes first and the picture fades over it; the peek is put away
+ * as one rung, so the flip comes first and the picture cuts in over it; the peek is put away
  * before the chrome arrives; the menu opens with the chrome already in place; the room
  * starts the last animation. */
 static void controls_apply(controls_changed_t changed)

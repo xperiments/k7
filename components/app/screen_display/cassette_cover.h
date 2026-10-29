@@ -8,8 +8,8 @@
  * 402x188 box at +12,+20 - frame[0]'s rect at the controls pose, radius 10, `clip_corner` - is
  * the print proper: the width the picture is scaled to and the corner it is clipped by. The
  * window is at (55,55) in that box, which is where the mask's stadium falls once the print's
- * offset is taken off the Card's. The 1 s `opa_layered` fade is the container's, so the picture
- * and the mask go together and the Card does not fade with them.
+ * offset is taken off the Card's. The print is cut in and out, never faded: a page flip, a Track
+ * change and a Track with no picture all land in one frame.
  *
  * The mask is cassette_card.c's, not this module's, and the Card is built after this module -
  * the Cover is the cassette's bottom layer - so the descriptor is applied lazily, the first time
@@ -42,16 +42,15 @@ extern "C" {
 void cassette_cover_create(lv_obj_t *parent);
 
 /* The Track's picture, or NULL when there is none. The descriptor must stay alive; the loader's
- * one cover buffer is reused, so NULL cuts the label at once (no fade over a buffer being
- * written) and the wish stays, so the new picture fades in when it lands.
+ * one cover buffer is reused, so NULL cuts the print at once and the wish stays, so the new
+ * picture appears when it lands.
  *
  * A picture with pixels to read also sets the Card's ink, from its dominant hue; with no
  * picture, or no hue to find, the Card keeps whatever ink the view gave it. */
 void cassette_cover_set_image(const lv_image_dsc_t *dsc);
 
-/* The white page's wish: show the picture if there is one, hide otherwise, with a 1 s fade in or
- * out. The wish is remembered, so a picture that lands after the down appears without a second
- * swipe. */
+/* The white page's wish: show the print if there is one, hide otherwise, in one frame. The wish
+ * is remembered, so a picture that lands after the down appears without a second swipe. */
 void cassette_cover_set_shown(bool shown);
 
 /* Whether a picture has landed for the current Track: the print is the Cover, not the drawn

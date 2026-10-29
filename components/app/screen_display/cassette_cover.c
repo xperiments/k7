@@ -42,7 +42,7 @@ static bool s_wanted;              /* the white page asked for the cover */
 static lv_obj_t *s_label;          /* the drawn label: the print when there is no picture */
 static bool s_pending;             /* a picture is on its way, so the label stays down */
 
-static void cover_hide(bool fade);
+static void cover_hide(void);
 
 /* The drawn label is ink on the Card - no fill - so the plastic's own colour is its paper, and
  * its ink is the table's, picked with the plastic it sits on (ADR 0040). Only the top band is
@@ -77,7 +77,7 @@ void cassette_cover_set_pending(void)
     s_pending = true;
     s_dsc = NULL;
     label_apply();
-    cover_hide(false);
+    cover_hide();
 }
 
 static void cassette_cover_place(void)
@@ -106,76 +106,21 @@ static void cassette_cover_place(void)
     lv_image_set_inner_align(s_img, LV_IMAGE_ALIGN_STRETCH);
 }
 
-/* The owner's fade: the label comes in and goes out over a full second. A Track change
- * cuts instead - the loader is about to write the buffer. */
-#define COVER_FADE_MS 1000
-
-static void cover_fade_cb(void *var, int32_t opa)
-{
-    lv_obj_set_style_opa_layered((lv_obj_t *)var, (lv_opa_t)opa, 0);
-}
-
-/* A hide fade is over: the label leaves the draw tree. A show in flight would have deleted
- * this animation, so s_wanted is the guard. */
-static void cover_hide_done_cb(lv_anim_t *a)
-{
-    (void)a;
-    if (!s_masked || s_wanted) return;
-    lv_obj_set_hidden(s_masked, true);
-    lv_obj_set_style_opa_layered(s_masked, LV_OPA_TRANSP, 0);
-}
-
-/* The label comes in. Nothing is raised: the print is created after the Card, so it is over it
- * by construction, and the window's rim is created after the print. */
-static void cover_show(bool fade)
+/* The print is cut in and out, never faded. A page flip, a Track change and a Track with no
+ * picture all land in one frame: the drawn label is what fills the print when there is nothing
+ * to blit, so a fade would only draw attention to a hole that is already filled. */
+static void cover_show(void)
 {
     if (!s_masked || !s_wanted) return;
-
     label_apply();
-    bool visible = !lv_obj_is_hidden(s_masked);
-    lv_opa_t from = lv_obj_get_style_opa_layered(s_masked, 0);
-
     cassette_cover_place();
     lv_obj_set_hidden(s_masked, false);
-    lv_anim_delete(s_masked, cover_fade_cb);
-
-    if (!fade || (visible && from == LV_OPA_COVER)) {
-        lv_obj_set_style_opa_layered(s_masked, LV_OPA_COVER, 0);
-        return;
-    }
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_masked);
-    lv_anim_set_exec_cb(&a, cover_fade_cb);
-    lv_anim_set_values(&a, from, LV_OPA_COVER);
-    lv_anim_set_duration(&a, COVER_FADE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
-    lv_anim_start(&a);
 }
 
-/* The label goes out. A fade keeps it in the tree until the last transparent frame; a cut
- * (a Track change) hides it at once. */
-static void cover_hide(bool fade)
+static void cover_hide(void)
 {
     if (!s_masked) return;
-    lv_anim_delete(s_masked, cover_fade_cb);
-
-    if (!fade || lv_obj_is_hidden(s_masked)) {
-        lv_obj_set_hidden(s_masked, true);
-        lv_obj_set_style_opa_layered(s_masked, LV_OPA_TRANSP, 0);
-        return;
-    }
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_masked);
-    lv_anim_set_exec_cb(&a, cover_fade_cb);
-    lv_anim_set_values(&a, lv_obj_get_style_opa_layered(s_masked, 0), LV_OPA_TRANSP);
-    lv_anim_set_duration(&a, COVER_FADE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
-    lv_anim_set_completed_cb(&a, cover_hide_done_cb);
-    lv_anim_start(&a);
+    lv_obj_set_hidden(s_masked, true);
 }
 
 void cassette_cover_set_image(const lv_image_dsc_t *dsc)
@@ -191,29 +136,24 @@ void cassette_cover_set_image(const lv_image_dsc_t *dsc)
     label_apply();
 
     if (!dsc) {
-        /* The loader's verdict for this Track: no picture. The drawn label is the print
-         * then, cut in rather than faded - a Track change never fades anything. */
-        if (s_wanted) cover_show(false);
-        else cover_hide(false);
+        /* The loader's verdict for this Track: no picture. The drawn label is the print. */
+        if (s_wanted) cover_show();
+        else cover_hide();
         return;
     }
 
-    if (s_wanted) cover_show(true);
+    if (s_wanted) cover_show();
 }
 
 void cassette_cover_set_shown(bool shown)
 {
     /* The window's rim is the Card's, not the print's: it is up whenever Real is, picture or
-     * no picture, and it goes with the page in one frame. */
+     * no picture, and it goes with the page in one frame. The print is a cut either way. */
     if (s_rim) lv_obj_set_hidden(s_rim, !shown);
 
-    if (shown == s_wanted) {
-        if (shown) cover_show(true);
-        return;
-    }
     s_wanted = shown;
-    if (shown) cover_show(true);
-    else cover_hide(true);
+    if (shown) cover_show();
+    else cover_hide();
 }
 
 bool cassette_cover_has_picture(void)
@@ -299,13 +239,12 @@ void cassette_cover_create(lv_obj_t *parent)
      * after the print, it also covers the mask's last row of antialiasing, which is what makes
      * the cut edge read as a moulded rim instead of a soft one. */
     s_rim = cassette_border_box(parent,
-                                CASSETTE_CARD_X + CASSETTE_CARD_WINDOW_DX-3,
-                                CASSETTE_CARD_Y + CASSETTE_CARD_WINDOW_DY-3,
-                                CASSETTE_CARD_WINDOW_W+10, CASSETTE_CARD_WINDOW_RIM_H+6,
+                                CASSETTE_CARD_X + CASSETTE_CARD_WINDOW_DX,
+                                CASSETTE_CARD_Y + CASSETTE_CARD_WINDOW_DY,
+                                CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_RIM_H,
                                 CASSETTE_CARD_WINDOW_R, k_col_bg, LV_OPA_TRANSP,
                                 k_col_cassette[0].plastic, CASSETTE_CARD_WINDOW_RIM_W);
     lv_obj_set_hidden(s_rim, true);
 
-    lv_obj_set_style_opa_layered(s_masked, LV_OPA_TRANSP, 0);
     lv_obj_set_hidden(s_masked, true);
 }
