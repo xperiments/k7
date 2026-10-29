@@ -312,7 +312,10 @@ static void apply_frame(const cassette_frame_t *f)
      * plastic and the label's ink together (ADR 0040). Nothing is read off the picture. */
     if (f->ink_changed) {
         const uint32_t n = (uint32_t)k_col_cassette_count;
-        const cassette_ink_t *ink = &k_col_cassette[n ? (f->ink_seed % n) : 0];
+        const uint32_t row = n ? (f->ink_seed % n) : 0;
+        const cassette_ink_t *ink = &k_col_cassette[row];
+        ESP_LOGI(TAG, "cassette %u of %u: %s", (unsigned)row, (unsigned)n,
+                 f->title[0] ? f->title : "(no track)");
         cassette_card_set_ink(ink->plastic);
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
         /* The print is the same row's: a label ink chosen against its own plastic, and the

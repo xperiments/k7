@@ -17,9 +17,10 @@ that the look is data and two Tracks can be given two exact cassettes.
   `{ plastic, label }` - the Card's fill and the ink of the drawn print. `k_col_cassette_count`
   is the row count, so adding a cassette is adding a row. Five to start with, one row per shell
   colour with a label that reads against it.
-- **The Track's path picks the row**: `ink_seed % k_col_cassette_count`, unchanged from ADR
-  0039 in how it chooses and changed in what it chooses from. A Track with no Cover still
-  changes the cassette, and the choice survives a pause and a rebuilt Playlist.
+- **The Track's file name picks the row**: `ink_seed % k_col_cassette_count`, where the seed is
+  an FNV-1a hash of the status's `file` (its path stands in only when there is no name). The
+  song, not its place in the card, owns the cassette: a folder rename keeps it and two folders
+  holding the same name share one. The row still survives a pause and a rebuilt Playlist.
 - **Both inks land together, as a cut.** The view sets the Card's plastic and the label's ink
   from the same row when the frame's `ink_changed` says the Track moved. No colour animation -
   a colour animation would repaint the panel on every step.

@@ -299,9 +299,9 @@ void cassette_cover_create(lv_obj_t *parent)
      * after the print, it also covers the mask's last row of antialiasing, which is what makes
      * the cut edge read as a moulded rim instead of a soft one. */
     s_rim = cassette_border_box(parent,
-                                CASSETTE_CARD_X + CASSETTE_CARD_WINDOW_DX,
-                                CASSETTE_CARD_Y + CASSETTE_CARD_WINDOW_DY,
-                                CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_RIM_H,
+                                CASSETTE_CARD_X + CASSETTE_CARD_WINDOW_DX-3,
+                                CASSETTE_CARD_Y + CASSETTE_CARD_WINDOW_DY-3,
+                                CASSETTE_CARD_WINDOW_W+10, CASSETTE_CARD_WINDOW_RIM_H+6,
                                 CASSETTE_CARD_WINDOW_R, k_col_bg, LV_OPA_TRANSP,
                                 k_col_cassette[0].plastic, CASSETTE_CARD_WINDOW_RIM_W);
     lv_obj_set_hidden(s_rim, true);

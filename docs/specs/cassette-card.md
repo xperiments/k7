@@ -111,9 +111,11 @@ row - nothing else changes, and nothing is derived.
 { COL_HEX(0x2E2E33), COL_HEX(0xE6E6E0) },   /* graphite, off-white */
 ```
 
-- **The Track's path picks the row**: `ink_seed % k_col_cassette_count`, where `ink_seed` is an
-  FNV-1a hash of the Track's path computed in the model. A Track with no Cover still changes the
-  cassette, and the choice survives a pause and a rebuilt Playlist.
+- **The Track's file name picks the row**: `ink_seed % k_col_cassette_count`, where `ink_seed`
+  is an FNV-1a hash of the status's `file` - the path stands in only when a Track has no name -
+  computed in the model. So a song keeps its cassette across a folder rename, two folders holding
+  the same name share one, and a Track with no Cover still gets its own shell. The view logs
+  `cassette N of M: <title>` when the row changes, which is how you see the mapping on a flash.
 - **Both inks land together, as a cut.** The view sets the Card's plastic and the label's ink
   from the same row on `ink_changed`; a colour animation would repaint the panel on every step.
 - **Nothing is read off a picture.** `cassette_cover_set_image()` uses the loader's buffer for

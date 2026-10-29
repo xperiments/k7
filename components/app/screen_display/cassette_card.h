@@ -57,7 +57,7 @@ enum {
      * 291x88 box - the window's 87 plus the row its bottom stroke lands on. It is drawn over
      * the print's cut edge, so it hides the mask's last row of antialiasing and reads as the
      * shell's moulding rather than as a line. */
-    CASSETTE_CARD_WINDOW_RIM_W = 3,
+    CASSETTE_CARD_WINDOW_RIM_W = 7,
     CASSETTE_CARD_WINDOW_RIM_H = 88,
 };
 

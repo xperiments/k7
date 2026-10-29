@@ -28,11 +28,13 @@ const lv_color_t k_col_frame      = COL_HEX(COL_BLACK);
  * per shell colour, each with a label that reads against it - and adding one is adding a row
  * (ADR 0040). The Track's path picks the row; nothing else decides. */
 const cassette_ink_t k_col_cassette[] = {
-    { COL_HEX(0x2F5E7A), COL_HEX(0xF2E8D5) },   /* petrol, cream */
-    { COL_HEX(0x8A3A2A), COL_HEX(0xEFDCC0) },   /* rust, warm cream */
-    { COL_HEX(0x4C6B39), COL_HEX(0xE8EAD8) },   /* olive, pale sage */
-    { COL_HEX(0x67457A), COL_HEX(0xF0DFE4) },   /* plum, pale rose */
-    { COL_HEX(0x2E2E33), COL_HEX(0xE6E6E0) },   /* graphite, off-white */
+    { COL_HEX(0xCC0000), COL_HEX(0xF5F5F5) },   /* solid red, white */
+    { COL_HEX(0x39FF14), COL_HEX(0x363636) },   /* fluorescent lime, charcoal */
+    { COL_HEX(0x002366), COL_HEX(0xF5F5F5) },   /* royal blue, white */
+    { COL_HEX(0x0F52BA), COL_HEX(0xF5F5F5) },   /* sapphire blue, white */
+    { COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* tinted smoke, white */
+    { COL_HEX(0xF5F5F5), COL_HEX(0x363636) },   /* solid white, charcoal */
+    { COL_HEX(0xDCD0BA), COL_HEX(0x363636) },   /* vintage beige, charcoal */
 };
 
 const int k_col_cassette_count = (int)(sizeof k_col_cassette / sizeof k_col_cassette[0]);

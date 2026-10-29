@@ -68,11 +68,13 @@ struct cassette {
 };
 
 /* FNV-1a, 32 bits. Any hash would do; this one is four lines, has no state and spreads a
- * directory of Track names across five buckets evenly enough to look arbitrary. */
-static uint32_t path_seed(const char *path)
+ * directory of Track names across a handful of buckets evenly enough to look arbitrary. It
+ * runs on the Track's **file name**, so a Track keeps its cassette if its folder is renamed
+ * and two folders holding the same name share one. */
+static uint32_t name_seed(const char *name)
 {
     uint32_t h = 2166136261u;
-    for (const unsigned char *p = (const unsigned char *)path; p && *p; p++) {
+    for (const unsigned char *p = (const unsigned char *)name; p && *p; p++) {
         h ^= *p;
         h *= 16777619u;
     }
@@ -297,10 +299,12 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
         c->have_title = true;
     }
 
-    /* The Card's table ink: which of the five cassettes sits under the print. It follows
-     * the Track's path, so a Track with no Cover still gets its own shell, and a Track
-     * that has one starts from the same place before its hue takes over. */
-    uint32_t seed = path_seed(c->have_status ? c->status.path : "");
+    /* The Card's table ink: which cassette sits under the print. It follows the Track's file
+     * name - the song's identity, not its place in the card - so a Track always gets the same
+     * shell, whether or not it carries a Cover. */
+    const char *name = c->have_status ? c->status.file : "";
+    if (!name[0] && c->have_status) name = c->status.path;
+    uint32_t seed = name_seed(name);
     c->frame.ink_seed = seed;
     c->frame.ink_changed = !c->have_ink || seed != c->shown_ink_seed;
     if (c->frame.ink_changed) {

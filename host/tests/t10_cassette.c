@@ -536,10 +536,10 @@ static void test_times(void)
     cassette_free(c);
 }
 
-/* The Card's table ink: the Track's path decides which of the five cassettes sits under
- * the print, so a Track with no Cover still changes the shell. The frame names it once per
- * Track - a repeat of the same path must not re-ink, or the Card would be repainted every
- * step - and a reset asks for it again, as it does for the label. */
+/* The Card's table ink: the Track's file name hashes to a row of the cassette table, so each
+ * song keeps its own shell - a folder rename does not change it, and two folders holding the
+ * same name share one. The frame names the row once per Track (a repeat must not re-ink, or the
+ * Card would be repainted every step) and a reset asks for it again, as it does for the label. */
 static void test_ink_seed(void)
 {
     cassette_t *c = cassette_new(20, 1000);
@@ -548,19 +548,34 @@ static void test_ink_seed(void)
 
     const cassette_frame_t *f = cassette_step(c, &st, 0);
     CHECK(f->ink_changed, "the first frame names an ink");
-    uint32_t first = f->ink_seed;
+    const uint32_t first = f->ink_seed;
 
     f = cassette_step(c, &st, 40);
     CHECK(!f->ink_changed, "the same Track does not re-ink on the next step");
     CHECK_EQ(f->ink_seed, first, "and keeps the seed it had");
 
-    snprintf(st.path, sizeof st.path, "Albums/Two/other.mp3");
+    /* The same name in another folder is the same song's cassette: the hash is the name's. */
+    snprintf(st.path, sizeof st.path, "Albums/Two/song.mp3");
     f = cassette_step(c, &st, 80);
-    CHECK(f->ink_changed, "a different Track re-inks");
-    CHECK(f->ink_seed != first, "and its path hashes somewhere else");
+    CHECK(!f->ink_changed, "moving the Track to another folder keeps its cassette");
+    CHECK_EQ(f->ink_seed, first, "which is the same seed");
+
+    /* A different name is a different cassette, even in the same folder. */
+    st = mkstatus("Other", "other.mp3", 0, 180000, 0.1f);
+    snprintf(st.path, sizeof st.path, "Albums/One/other.mp3");
+    f = cassette_step(c, &st, 120);
+    CHECK(f->ink_changed, "a different file name re-inks");
+    CHECK(f->ink_seed != first, "and hashes somewhere else");
+
+    /* A status with no file name at all still gets an ink: the path stands in. */
+    st = mkstatus("Pathonly", "", 0, 180000, 0.1f);
+    snprintf(st.path, sizeof st.path, "Albums/One/pathonly.mp3");
+    f = cassette_step(c, &st, 160);
+    CHECK(f->ink_changed, "a Track with no file name still names an ink");
+    CHECK(f->ink_seed != 0, "from its path");
 
     cassette_reset(c);
-    f = cassette_step(c, NULL, 120);
+    f = cassette_step(c, NULL, 200);
     CHECK(f->ink_changed, "a reset asks for the ink again, so the adapter redraws it");
     cassette_free(c);
 }

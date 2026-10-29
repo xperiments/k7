@@ -496,7 +496,7 @@ fade over.
 
 The Card's ink is a cut, never an animation, and it is not read from anything: `k_col_cassette[]`
 is the palette, one row per cassette - a plastic and the ink of the label printed on it - and the
-Track's path picks the row (`ink_seed % k_col_cassette_count`). Both inks land together, so a
+Track's file name picks the row (`ink_seed % k_col_cassette_count`, logged as `cassette N of M`). Both inks land together, so a
 cassette is one row and nothing is derived from the picture (ADR 0040). The table is where the
 screen's colour is tuned: fill a row and a cassette exists.
 

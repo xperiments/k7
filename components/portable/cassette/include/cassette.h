@@ -76,7 +76,7 @@ extern "C" {
 typedef struct {
     char     title[CASSETTE_TITLE_MAX]; /* the label text, cleaned; empty = nothing to play */
     bool     title_changed;             /* the adapter only rewrites the label when true */
-    uint32_t ink_seed;                  /* the Card's table ink: the Track's path, hashed */
+    uint32_t ink_seed;                  /* the Card's table ink: the Track's file name, hashed */
     bool     ink_changed;               /* the adapter only re-inks the Card when true */
     uint32_t permille;                  /* position through the track, 0..1000 */
     bool     permille_changed;          /* the adapter only moves the bar when true */
