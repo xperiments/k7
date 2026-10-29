@@ -34,7 +34,7 @@ extern const lv_color_t k_col_bg;
  * keeps its inks on top of it. */
 extern const lv_color_t k_col_white;
 
-/* A muted glass tone, 40 % of white: the controls page's edge mark is drawn with it. */
+/* A muted glass tone, 40 % of white: the footer's frame is drawn with it on the white page. */
 extern const lv_color_t k_col_glass;
 
 /* The playing red: the hub's ring and divider, and the peek's ink. */

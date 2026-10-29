@@ -4,6 +4,12 @@
 of its own any more. It is printed with the white Page as one level - Real - so a down from Art
 flips the paper and fades the picture in as a single step, and an up undoes both.
 
+**Further amended by [ADR 0039](./0039-the-cassette-is-a-card.md):** the glow is retired and the
+stack is no longer label/glow/cinta. On the white page the cassette itself is a tinted **Card**,
+the picture is printed on it, and the pill window is cut by one A8 mask that the Card and the
+print share. The mask is no longer `frame[0] - frame[1]`, and the frames are no longer raised
+over the print.
+
 The white controls page is the down swipe's, and the down swipe had nothing left to do
 once the page was white: the drawer and the DJ block were already out. The owner wants the
 playing Track's own picture there, on the cassette's body, revealed by that same swipe:

@@ -155,6 +155,10 @@ invalidate anything the Card would have to re-render.
 
 ## Still open
 
-- The five table inks' actual values, and the fixed saturation/value pair for derived hues.
 - Whether the drawn label needs more than one design per ink pair, now that it costs code rather
   than bytes.
+- The five table inks are **petrol 0x2F5E7A, rust 0x8A3A2A, olive 0x4C6B39, plum 0x67457A,
+  graphite 0x2E2E33** (`k_col_card` in `cassette_style.c`) at **62 % saturation, 74 % value**
+  (`CASSETTE_INK_SAT`/`VAL` in `cassette_ink.h`). The values are the first cut, not a measurement:
+  they are what a 426x272 mat looks like on the white page, and they are the thing most likely to
+  want tuning on the panel.
