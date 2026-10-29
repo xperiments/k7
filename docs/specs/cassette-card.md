@@ -24,9 +24,9 @@ reachable once the drawer has settled there. Like the glow it replaces, the Card
 - The print sits at **+12,+20** - (148,102) 402x188 - so the Card reads as a **12 px mat at the
   sides, 20 px above and 64 px below** the picture.
 - Radius **12**: rounder than the print's 10 and than frame[0]'s 8, so the Card reads as a
-  moulded shell around a loose label rather than as a second border.
+  moulded Card around a loose label rather than as a second border.
 - Both the Card and the print's container are masked by **one A8 buffer** 426x272 whose window
-  is zeroed at (67,75). The print's hole is therefore at (55,55).
+  is zeroed at (67,75). The window is therefore at (55,55) in the print.
 - The mechanics are hidden by the Card except through the window; what shows is the two Ø86
   hub rims and a horizontal slice of each pack.
 
@@ -61,7 +61,7 @@ One buffer, one descriptor, two objects.
 - **426x272, A8, stride 428** (`MASK_SIZE(w) = (w + 3) & ~3`), so **116,416 B**. It is 255
   everywhere and 0 in the stadium. It is built once, at the Card's only size; there is no
   per-step mask.
-- The stadium takes the **largest radius the rectangle allows**, `min(291, 87) / 2 = 43` in
+- The window takes the **largest radius the rectangle allows**, `min(291, 87) / 2 = 43` in
   integer arithmetic: a 205 px straight middle and two r43 semicircular ends, zeroed with
   pixel-centre sampling (`y + 0.5`, `ceilf`/`floorf`) so the caps agree with the frame's pill.
 - `frame[1]` keeps its design radius and sits under the Card, invisible. The pill it used
@@ -73,7 +73,7 @@ One buffer, one descriptor, two objects.
   (`lv_draw_sw_img.c:1019` and the `side_area` clears). A mask must cover its object, and two
   objects can share one only if their centres coincide.
 - The print's own 402x188 mask is **deleted**; the Cover's container grows to 426x272 and its
-  picture stays at 402 wide inside a `+12,+20` clip box, so the hole appears at (55,55) and the
+  picture stays at 402 wide inside a `+12,+20` clip box, so the window lands at (55,55) and the
   1 s `opa_layered` fade still lands on the print alone, not on the Card.
 
 ## The drawn label
@@ -83,7 +83,7 @@ Card's **complement**, in the print's **top band** - (12,10), 378 px wide - beca
 the print's middle and leaves only 55 px above it. No fill: the Card's own colour is the label's
 paper, which is what makes the complement read as ink on it. `LV_LABEL_LONG_DOT` from Track names
 that outrun the band. It is cut by the mask like anything else in the print, so the window is the
-mask's hole, not the label's.
+mask's window, not the label's.
 
 The label is not a placeholder for a picture that is still decoding: `cassette_view_set_cover_pending()`
 (what `cassette_levels` calls when it asks the loader for a Track) leaves the print empty until the
@@ -100,11 +100,13 @@ loader answers with a picture or with NULL, so no Track flashes a name before it
   the decoded 603x385 RGB565 buffer - the one moment every pixel is in hand. Saturation and
   value are the UI's, so a photo's mud or a near-white album cannot dissolve the Card into the
   paper or turn it grey; only the hue is the Track's.
-- `hue_rgb()` in `components/portable/rgb/rgb.c` builds the colour from the hue.
+- `cassette_ink_from_hue()` in `components/portable/cassette/cassette_ink.c` builds the
+  colour from the hue; `rgb.c` keeps its own full-value `hue_rgb()` for the strip's rainbow,
+  which is a different colour from the same hue.
 - **Cut, not faded.** A colour animation would repaint the panel on every step, so the ink lands
   with the page flip and with the Track change, like the Page itself.
 - The label's ink contrasts with the Card **on purpose** - the complement at the same
-  saturation and value - so a drawn label never blends into the shell it is printed on.
+  saturation and value - so a drawn label never blends into the Card it is printed on.
 
 ## The reel tick
 

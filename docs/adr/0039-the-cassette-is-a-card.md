@@ -40,13 +40,13 @@ at all.
 - **The print still fades alone.** The print container keeps the 1 s `opa_layered` fade, so the
   Card does not fade with it: show and hide are the print's, and the Card arrives with the page
   flip.
-- **The hole is at (55,55) in the print and (67,75) in the Card.** Both are the same 291x87
+- **The window is at (55,55) in the print and (67,75) in the Card.** Both are the same 291x87
   stadium on the panel at (203,157), which is the window the frame already drew: frame[1]'s
   interior, `trunc(106x134/256) = 55` in from the print's corner. It is not centred in the
   print - 55 left, 55 top, 56 right, 46 bottom - and must not be centred by hand.
 - **The labels with no cover are LVGL-drawn, in the print box, and their ink is the
   complement.** Nothing is blitted: `cassette_box`, `cassette_border_box` and `cassette_text`
-  already draw everything a label needs, and a drawn label has no alpha, so the hole is the
+  already draw everything a label needs, and a drawn label has no alpha, so the window is the
   mask's, exactly as the Cover's is. The first label is the Track's name in Jura 28 in the print's
   top band - the window is the print's middle, so 55 px is all the room there is - and it stays
   down while a picture is decoding, or every Track would flash its name before its cover.

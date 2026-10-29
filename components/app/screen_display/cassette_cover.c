@@ -33,10 +33,10 @@
 
 LV_FONT_DECLARE(jura_28);
 
-static lv_obj_t *s_cover;          /* the Card's rect: the object the shared mask is sized to */
+static lv_obj_t *s_masked;          /* the Card's rect: the object the shared mask is sized to */
 static lv_obj_t *s_print;          /* the print proper: 402x188 at +12,+20 */
 static lv_obj_t *s_img;            /* the Track picture, at the print's top-left */
-static lv_obj_t *s_hole;           /* opaque fallback while the shared mask is not there */
+static lv_obj_t *s_fallback;           /* opaque fallback while the shared mask is not there */
 static const lv_image_dsc_t *s_dsc;
 static bool s_wanted;              /* the white page asked for the cover */
 static lv_obj_t *s_label;          /* the drawn label: the print when there is no picture */
@@ -44,10 +44,10 @@ static bool s_pending;             /* a picture is on its way, so the label stay
 
 static void cover_hide(bool fade);
 
-/* The drawn label is ink on the Card - no fill - so the shell's own colour is its paper, and
- * its ink is that colour's complement: on purpose, so a label never blends into the shell it
+/* The drawn label is ink on the Card - no fill - so the Card's own colour is its paper, and
+ * its ink is that colour's complement: on purpose, so a label never blends into the Card it
  * is printed on (ADR 0039). Only the top band is free: the window is the print's middle, 55 px
- * down, so that is where the words go. It has no alpha, so the window cuts it like anything
+ * down, so that is where the words go. It has no alpha, so the mask cuts it like anything
  * else in the print - the mask does that, not the label. */
 void cassette_cover_refresh_ink(void)
 {
@@ -81,16 +81,16 @@ void cassette_cover_set_pending(void)
     cover_hide(false);
 }
 
-void cassette_cover_place(void)
+static void cassette_cover_place(void)
 {
-    if (!s_cover) return;
+    if (!s_masked) return;
 
     /* Lazy by necessity, not by taste: the Card - and with it the one A8 buffer both its
      * objects are masked by - is created after this module, so the descriptor cannot be
      * applied in create(). place() is where the print is about to be looked at. */
     const lv_image_dsc_t *mask = cassette_card_mask();
-    lv_obj_set_style_bitmap_mask_src(s_cover, mask, 0);
-    lv_obj_set_hidden(s_hole, mask != NULL);
+    lv_obj_set_style_bitmap_mask_src(s_masked, mask, 0);
+    lv_obj_set_hidden(s_fallback, mask != NULL);
 
     if (!s_wanted || !s_dsc) return;
 
@@ -121,9 +121,9 @@ static void cover_fade_cb(void *var, int32_t opa)
 static void cover_hide_done_cb(lv_anim_t *a)
 {
     (void)a;
-    if (!s_cover || s_wanted) return;
-    lv_obj_set_hidden(s_cover, true);
-    lv_obj_set_style_opa_layered(s_cover, LV_OPA_TRANSP, 0);
+    if (!s_masked || s_wanted) return;
+    lv_obj_set_hidden(s_masked, true);
+    lv_obj_set_style_opa_layered(s_masked, LV_OPA_TRANSP, 0);
 }
 
 /* The label comes in. The Cover is the cassette's bottom layer and the Card is built over
@@ -131,25 +131,25 @@ static void cover_hide_done_cb(lv_anim_t *a)
  * window and would hide the picture otherwise. */
 static void cover_show(bool fade)
 {
-    if (!s_cover || !s_wanted) return;
+    if (!s_masked || !s_wanted) return;
 
     label_apply();
-    bool visible = !lv_obj_is_hidden(s_cover);
-    lv_opa_t from = lv_obj_get_style_opa_layered(s_cover, 0);
+    bool visible = !lv_obj_is_hidden(s_masked);
+    lv_opa_t from = lv_obj_get_style_opa_layered(s_masked, 0);
 
-    lv_obj_move_foreground(s_cover);
+    lv_obj_move_foreground(s_masked);
     cassette_cover_place();
-    lv_obj_set_hidden(s_cover, false);
-    lv_anim_delete(s_cover, cover_fade_cb);
+    lv_obj_set_hidden(s_masked, false);
+    lv_anim_delete(s_masked, cover_fade_cb);
 
     if (!fade || (visible && from == LV_OPA_COVER)) {
-        lv_obj_set_style_opa_layered(s_cover, LV_OPA_COVER, 0);
+        lv_obj_set_style_opa_layered(s_masked, LV_OPA_COVER, 0);
         return;
     }
 
     lv_anim_t a;
     lv_anim_init(&a);
-    lv_anim_set_var(&a, s_cover);
+    lv_anim_set_var(&a, s_masked);
     lv_anim_set_exec_cb(&a, cover_fade_cb);
     lv_anim_set_values(&a, from, LV_OPA_COVER);
     lv_anim_set_duration(&a, COVER_FADE_MS);
@@ -161,20 +161,20 @@ static void cover_show(bool fade)
  * (a Track change) hides it at once. */
 static void cover_hide(bool fade)
 {
-    if (!s_cover) return;
-    lv_anim_delete(s_cover, cover_fade_cb);
+    if (!s_masked) return;
+    lv_anim_delete(s_masked, cover_fade_cb);
 
-    if (!fade || lv_obj_is_hidden(s_cover)) {
-        lv_obj_set_hidden(s_cover, true);
-        lv_obj_set_style_opa_layered(s_cover, LV_OPA_TRANSP, 0);
+    if (!fade || lv_obj_is_hidden(s_masked)) {
+        lv_obj_set_hidden(s_masked, true);
+        lv_obj_set_style_opa_layered(s_masked, LV_OPA_TRANSP, 0);
         return;
     }
 
     lv_anim_t a;
     lv_anim_init(&a);
-    lv_anim_set_var(&a, s_cover);
+    lv_anim_set_var(&a, s_masked);
     lv_anim_set_exec_cb(&a, cover_fade_cb);
-    lv_anim_set_values(&a, lv_obj_get_style_opa_layered(s_cover, 0), LV_OPA_TRANSP);
+    lv_anim_set_values(&a, lv_obj_get_style_opa_layered(s_masked, 0), LV_OPA_TRANSP);
     lv_anim_set_duration(&a, COVER_FADE_MS);
     lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
     lv_anim_set_completed_cb(&a, cover_hide_done_cb);
@@ -207,10 +207,7 @@ void cassette_cover_set_image(const lv_image_dsc_t *dsc)
         int hue = cassette_ink_dominant_hue(dsc->data, dsc->header.w, dsc->header.h,
                                             stride, 4);
         if (hue >= 0) {
-            cassette_rgb_t ink = cassette_ink_from_hue(hue);
-            lv_color_t col = COL_HEX(((uint32_t)ink.r << 16) | ((uint32_t)ink.g << 8) |
-                                     (uint32_t)ink.b);
-            cassette_card_set_ink(col);
+            cassette_card_set_hue(hue);
             cassette_cover_refresh_ink();
         }
     }
@@ -236,31 +233,31 @@ bool cassette_cover_is_shown(void)
 
 void cassette_cover_create(lv_obj_t *parent)
 {
-    if (!parent || s_cover) return;
+    if (!parent || s_masked) return;
 
     /* The Card's rect, not the print's: LVGL aligns a bitmap mask to the centre of the
      * object's area, so the two objects that share one buffer have to share a centre
      * (ADR 0039). Nothing here rounds or clips - the window is the mask's and the corners
      * are the print's. */
-    s_cover = lv_obj_create(parent);
-    lv_obj_remove_style_all(s_cover);
-    lv_obj_set_style_bg_opa(s_cover, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(s_cover, 0, 0);
-    lv_obj_set_style_pad_all(s_cover, 0, 0);
-    lv_obj_set_scrollable(s_cover, false);
-    lv_obj_set_clickable(s_cover, false);
-    lv_obj_set_pos(s_cover, CASSETTE_CARD_X, CASSETTE_CARD_Y);
-    lv_obj_set_size(s_cover, CASSETTE_CARD_W, CASSETTE_CARD_H);
+    s_masked = lv_obj_create(parent);
+    lv_obj_remove_style_all(s_masked);
+    lv_obj_set_style_bg_opa(s_masked, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_masked, 0, 0);
+    lv_obj_set_style_pad_all(s_masked, 0, 0);
+    lv_obj_set_scrollable(s_masked, false);
+    lv_obj_set_clickable(s_masked, false);
+    lv_obj_set_pos(s_masked, CASSETTE_CARD_X, CASSETTE_CARD_Y);
+    lv_obj_set_size(s_masked, CASSETTE_CARD_W, CASSETTE_CARD_H);
 
     /* The print: frame[0]'s rect at the controls pose. Its corner is the owner's 2 px over
-     * the frame's, so the picture reads as a loose label on the shell. The fade stays on the
-     * container, so the picture and the mask go together and the shell does not fade. */
-    s_print = lv_obj_create(s_cover);
+     * the frame's, so the picture reads as a loose label on the Card. The fade stays on the
+     * container, so the picture and the mask go together and the Card does not fade. */
+    s_print = lv_obj_create(s_masked);
     lv_obj_remove_style_all(s_print);
     lv_obj_set_style_bg_opa(s_print, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_print, 0, 0);
     lv_obj_set_style_pad_all(s_print, 0, 0);
-    lv_obj_set_style_radius(s_print, 10, 0);
+    lv_obj_set_style_radius(s_print, CASSETTE_CARD_PRINT_R, 0);
     /* The picture's rounded corners are this clip, not the image's own radius: an image
      * cannot round its own draw. */
     lv_obj_set_style_clip_corner(s_print, true, 0);
@@ -292,16 +289,15 @@ void cassette_cover_create(lv_obj_t *parent)
     /* The fallback window: opaque, and hidden as soon as place() finds the shared mask. It is
      * the mask's stadium re-based on the print - the mask has it at (67,75) in the Card - so
      * the two are the same pill on the panel. */
-    s_hole = cassette_box(s_print,
+    s_fallback = cassette_box(s_print,
                           CASSETTE_CARD_WINDOW_DX - CASSETTE_CARD_PRINT_DX,
                           CASSETTE_CARD_WINDOW_DY - CASSETTE_CARD_PRINT_DY,
                           CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H,
-                          LV_MIN(CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H) / 2,
-                          k_col_bg);
-    lv_obj_set_hidden(s_hole, true);
+                          CASSETTE_CARD_WINDOW_R, k_col_bg);
+    lv_obj_set_hidden(s_fallback, true);
 
     cassette_cover_refresh_ink();
 
-    lv_obj_set_style_opa_layered(s_cover, LV_OPA_TRANSP, 0);
-    lv_obj_set_hidden(s_cover, true);
+    lv_obj_set_style_opa_layered(s_masked, LV_OPA_TRANSP, 0);
+    lv_obj_set_hidden(s_masked, true);
 }

@@ -314,13 +314,12 @@ static void apply_frame(const cassette_frame_t *f)
     if (f->ink_changed) {
         const uint32_t n = (uint32_t)(sizeof k_col_card / sizeof k_col_card[0]);
         cassette_card_set_ink(k_col_card[f->ink_seed % n]);
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-        /* A drawn label is inked against the Card, so it follows the shell's colour. */
-        cassette_cover_refresh_ink();
-#endif
     }
+    /* What the print needs from the frame, in one place: the drawn label is inked against the
+     * Card, so it follows a new ink, and it carries the Track's name. Only the touch board has
+     * a print at all. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The print's words: the drawn label names the Track when there is no picture to show. */
+    if (f->ink_changed) cassette_cover_refresh_ink();
     if (f->title_changed) cassette_cover_set_title(f->title);
 #endif
     cassette_tapes_set(f);

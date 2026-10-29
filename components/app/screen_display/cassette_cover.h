@@ -12,8 +12,8 @@
  * and the mask go together and the Card does not fade with them.
  *
  * The mask is cassette_card.c's, not this module's, and the Card is built after this module -
- * the Cover is the cassette's bottom layer - so the descriptor is applied lazily from
- * cassette_cover_place(). Until it exists (or if its allocation failed) an opaque pill under the
+ * the Cover is the cassette's bottom layer - so the descriptor is applied lazily, the first time
+ * the print is looked at. Until it exists (or if its allocation failed) an opaque pill under the
  * picture stands in for the window. The Cover is raised over the Card when it shows, because the
  * Card is opaque outside the window and would otherwise hide the print.
  *
@@ -21,7 +21,7 @@
  * source's aspect and the print clips whatever runs past its bottom.
  *
  * The Card's ink is derived here too: cassette_cover_set_image() reads the Track's dominant hue
- * out of the decoded cover and hands it to cassette_card_set_ink().
+ * out of the decoded cover and hands it to cassette_card_set_hue().
  *
  * The view owns when the Cover is up - the white page's down swipe turns it on, the up swipe
  * turns it off - and the panel board is the only build with the pictures.
@@ -40,12 +40,6 @@ extern "C" {
  * fixed rect, so it is built once: the masked container, the print inside it, and the fallback
  * pill. It has no picture until cassette_cover_set_image() hands it one. */
 void cassette_cover_create(lv_obj_t *parent);
-
-/* Size the picture to the print and apply the Card's shared mask. The geometry is the Card's
- * fixed rect and no longer follows the pose, so that is all there is to it. The view calls it
- * after the tape body has been placed; cover_show() calls it before every fade, which is how
- * the mask the Card builds later gets attached. */
-void cassette_cover_place(void);
 
 /* The Track's picture, or NULL when there is none. The descriptor must stay alive; the loader's
  * one cover buffer is reused, so NULL cuts the label at once (no fade over a buffer being

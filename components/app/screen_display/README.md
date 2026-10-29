@@ -119,13 +119,15 @@ and nothing else. Everything else is private:
   Page in one frame, so on Real the tape shows only through the window; `set_ink()` is a cut,
   never a colour animation. The mask is 426x272 and 116,416 B, built once at create - there
   is no per-pose mask.
-- `cassette_cover.c` — the white page's print. `create(parent)` builds the container and
-  the clip box; `place()` follows the frames' current pixels; `set_image(dsc)` takes the
-  loader's one buffer; `set_shown()` / `is_shown()` are the page's wish. The print is the
-  top layer: the stack is cinta < Card < label. The container is the Card's 426x272 box at
-  (136,82), so it shares the Card's one A8 mask, whose 291x87 window is a real transparent
-  hole (a pill whose ends are the hubs' circles) - the tape shows through it and nowhere
-  else. The picture sits at +12,+20 in a 402x188 clip box, frame 0 with its radius plus 2 px
+- `cassette_cover.c` — the white page's print. `create(parent)` builds the container, the
+  clip box and the drawn label; a private `place()` applies the Card's shared mask and sizes
+  the picture the first time the print is shown; `set_image(dsc)` takes the loader's one
+  buffer and derives the Card's ink from its hue; `set_title()` / `refresh_ink()` keep the
+  drawn label's words and its contrast; `set_shown()` / `is_shown()` are the page's wish. The
+  print is the top layer: the stack is cinta < Card < label. The container is the Card's
+  426x272 box at (136,82), so it shares the Card's one A8 mask, whose 291x87 window is a real
+  transparent opening (a pill whose ends are the hubs' circles) - the tape shows through it
+  and nowhere else. The picture sits at +12,+20 in a 402x188 clip box, frame 0 with its radius plus 2 px
   and `clip_corner`, scaled to frame 0's width and top-aligned, so its height follows from
   its aspect and the box clips the rest. A pose that is not the controls pose does not show
   it, and the 1 s `opa_layered` fade lands on the print alone, never on the Card.
@@ -477,9 +479,9 @@ The print's container is a child of the cassette container, created after the ta
 after the Card, so the stack is **cinta < Card < label**. It covers the body inside the outer
 frame, and it hides the mechanics with it: the two frame rings, the three chips, both
 rollers, the run and the two strands are all inside 426x272 and under the Card, and only the
-hub rims turn behind the window. The print is re-placed on every pose step, and its picture
-is scaled at draw time, so the buffer stays the loader's one size; the controls pose scales
-it down, not up. The Card exists only at that pose, which is why the model refuses the down
+hub rims turn behind the window. The print's box is fixed in screen pixels and does not
+follow the pose, and its picture is scaled at draw time, so the buffer stays the loader's one
+size; the controls pose scales it down, not up. The Card exists only at that pose, which is why the model refuses the down
 from Art until it has landed - the same two downs can arrive faster than the shrink.
 
 The down fades the print in and the up fades it out over 1 s

@@ -28,8 +28,9 @@
 extern "C" {
 #endif
 
-/* The Card's geometry, in panel pixels at the Controls pose. The window is expressed
- * from the Card's corner; on the panel it is (203,157). */
+/* The Card's geometry, in panel pixels at the Controls pose. The window - the one opening
+ * through which the tape shows - is expressed from the Card's corner; on the panel it is
+ * (203,157). */
 enum {
     CASSETTE_CARD_X  = 136,
     CASSETTE_CARD_Y  = 82,
@@ -43,12 +44,14 @@ enum {
     CASSETTE_CARD_PRINT_DY = 20,
     CASSETTE_CARD_PRINT_W  = 402,
     CASSETTE_CARD_PRINT_H  = 188,
+    CASSETTE_CARD_PRINT_R  = 10,   /* the frame's 8 px corner, plus the owner's 2 */
 
     /* The window: frame[1]'s interior, the largest pill the print's height allows. */
     CASSETTE_CARD_WINDOW_DX = 67,
     CASSETTE_CARD_WINDOW_DY = 75,
     CASSETTE_CARD_WINDOW_W  = 291,
     CASSETTE_CARD_WINDOW_H  = 87,
+    CASSETTE_CARD_WINDOW_R  = 43,  /* min(W, H) / 2: the largest pill the box allows */
 };
 
 /* Build the Card and its mask under `parent`, hidden. Parent is the cassette's
@@ -61,6 +64,11 @@ void cassette_card_set_shown(bool shown);
 /* The Card's ink: the Album's hue, or one of the table's five. It is a cut, never a
  * colour animation - a colour animation would repaint the panel on every step. */
 void cassette_card_set_ink(lv_color_t ink);
+
+/* The ink straight from a hue in degrees, at the page's saturation and value: what a Cover
+ * with pixels to read hands over. -1 leaves the ink alone, so a monochrome album keeps the
+ * table's choice. */
+void cassette_card_set_hue(int hue_deg);
 
 /* The ink it is wearing now: what a drawn label takes its complement of. */
 lv_color_t cassette_card_ink(void);

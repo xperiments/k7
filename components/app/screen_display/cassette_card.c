@@ -18,6 +18,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "cassette_ink.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 
@@ -36,9 +37,10 @@ static uint8_t *s_mask;
  * semicircular ends whose radius is half the shorter side. The ends are sampled at the
  * pixel centres (y + 0.5), which is what keeps them on the same pixel grid as a rounded
  * LVGL box of the same radius. */
-static void mask_zero_stadium(int w, int h, int stride, int hx, int hy, int hw, int hh)
+static void mask_zero_stadium(int w, int h, int stride, int hx, int hy, int hw, int hh,
+                              int radius)
 {
-    int r = LV_MIN(hw, hh) / 2;
+    int r = radius;
     if (r <= 0) return;
 
     float rf = (float)r;
@@ -83,7 +85,8 @@ static void mask_build(void)
 
     memset(s_mask, 0xFF, (size_t)stride * h);
     mask_zero_stadium(w, h, stride, CASSETTE_CARD_WINDOW_DX, CASSETTE_CARD_WINDOW_DY,
-                      CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H);
+                      CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H,
+                      CASSETTE_CARD_WINDOW_R);
 
     memset(&s_mask_dsc, 0, sizeof s_mask_dsc);
     s_mask_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
@@ -99,6 +102,12 @@ void cassette_card_create(lv_obj_t *parent)
 {
     if (!parent || s_card) return;
 
+#if !CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The white page is the touch board's only (screen_display/CMakeLists.txt), so the other
+     * board never mounts a Card and never spends the mask's 116,416 B on one. */
+    return;
+#endif
+
     mask_build();
 
     s_card = cassette_box(parent, CASSETTE_CARD_X, CASSETTE_CARD_Y, CASSETTE_CARD_W,
@@ -111,6 +120,14 @@ void cassette_card_set_shown(bool shown)
 {
     if (!s_card) return;
     lv_obj_set_hidden(s_card, !shown);
+}
+
+void cassette_card_set_hue(int hue_deg)
+{
+    if (hue_deg < 0) return;
+    cassette_rgb_t c = cassette_ink_from_hue(hue_deg);
+    lv_color_t ink = lv_color_make(c.r, c.g, c.b);
+    cassette_card_set_ink(ink);
 }
 
 void cassette_card_set_ink(lv_color_t ink)
