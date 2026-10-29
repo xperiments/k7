@@ -150,6 +150,17 @@ void appliance_run(void)
         .max_conns = 4,
     };
 
+#if CONFIG_APP_UI_SCREEN_HTTP
+    /* The screen's diagnostic routes are the front door's to serve, and the listener starts
+     * inside app_services_start(), so they are registered before it. The screen itself comes
+     * up later; its handlers answer 503 until it does. A failure here costs the picture, not
+     * the appliance. */
+    esp_err_t http_err = screen_display_http_start();
+    if (http_err != ESP_OK)
+        ESP_LOGW(TAG, "the screen's HTTP diagnostics did not register: %s; the screen still runs",
+                 esp_err_to_name(http_err));
+#endif
+
     /* The services resolve the station first (arithmetic only), then bring up the
      * network before the broadcast takes its internal RAM, then the file surface,
      * the broadcast and the listener. The order and its reasons are in

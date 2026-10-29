@@ -45,6 +45,18 @@ void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms)
  * stay. The EQ's edit mode uses it: the cassette goes and the virtual knob appears. */
 void cassette_view_dim(bool dim);
 
+#if CONFIG_APP_UI_SERIAL_DUMP || CONFIG_APP_UI_SCREEN_HTTP
+/* Aim the diagnostic scene driver at scene 0..7 (the numbers are CONFIG_APP_UI_DUMP_SCENE's:
+ * 0 the entry view, 1 Art/Empty, 2 Art/EQ, 3 Art/RGB, 4 the Menu, 5 Real/EQ, 6 the EQ's 3x
+ * dial, 7 the RGB effect's). It walks home to the entry view first, then pushes the chrome
+ * up with the intents a finger would send, one step a frame, only from settled poses - so
+ * the picture is there a few hundred ms after the call, not immediately.
+ *
+ * A scene set from another task must be called under the LVGL lock; the driver itself runs
+ * on the screen's own update. Out-of-range values are ignored. */
+void cassette_view_scene_set(int scene);
+#endif
+
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
 /* The Track's picture for the white page's cover, or NULL when it has none (or while a
  * new one is being decoded). The descriptor is the loader's one cover buffer and stays

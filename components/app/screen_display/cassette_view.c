@@ -457,20 +457,78 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
 /* --------------------------------------------------------------- the dump scene */
 
 /* A diagnostic build's scene driver: it walks the ladder and picks a group (or the Menu) with
- * the intents a finger would send, so the framebuffer dump is a picture of the new chrome
- * instead of the entry view. It steps only from poses that have settled, which is what the
- * ladder's own gates ask for. CONFIG_APP_UI_SERIAL_DUMP && CONFIG_APP_UI_DUMP_SCENE; zero in
- * every normal build. */
+ * the intents a finger would send, so the captured picture is one of the new chrome instead of
+ * the entry view. It steps only from poses that have settled, which is what the ladder's own
+ * gates ask for.
+ *
+ * The scene is a **target**, not a fixed step. CONFIG_APP_UI_DUMP_SCENE is where the device
+ * starts, and with CONFIG_APP_UI_SCREEN_HTTP a POST to /api/scene re-aims it while the device
+ * runs, so one build photographs every scene. A scene set while the chrome is up walks home
+ * to the entry view first: the ladder only goes forward from a settled pose, and reaching
+ * Initial by luck would photograph whatever the previous scene left.
+ *
+ * CONFIG_APP_UI_SERIAL_DUMP || CONFIG_APP_UI_SCREEN_HTTP; zero in every normal build. */
+#if CONFIG_APP_UI_SERIAL_DUMP || CONFIG_APP_UI_SCREEN_HTTP
 #if CONFIG_APP_UI_DUMP_SCENE > 0
-static int s_scene_step;
+#define SCENE_BOOT CONFIG_APP_UI_DUMP_SCENE
+#else
+#define SCENE_BOOT 0
+#endif
+
+static int s_scene = SCENE_BOOT;   /* where the picture should end up */
+static int s_scene_step;           /* progress through that scene's script */
+static bool s_scene_returning;     /* walking back to the entry view first */
+
+void cassette_view_scene_set(int scene)
+{
+    if (scene < 0 || scene > 7) return;
+    s_scene = scene;
+    s_scene_step = 0;
+    s_scene_returning = true;
+    ESP_LOGI(TAG, "scene -> %d", scene);
+}
+
+/* One intent a tick, and the mode decides which one: the Menu closes on an up swipe, a knob's
+ * dial on its own close, and the level is a reading, so it says which rung to take next. */
+static bool scene_return_to_initial(void)
+{
+    controls_facts_t facts = facts_now();
+    if (facts.editing) {
+        knob_editor_close();
+        return false;
+    }
+    if (facts.menu_open) {
+        screen_intent_cb(SCREEN_INTENT_UP, NULL);       /* closes the Menu and nothing else */
+        return false;
+    }
+    if (s_ctl.level == CONTROLS_LEVEL_PEEK) {
+        screen_intent_cb(SCREEN_INTENT_DOWN, NULL);     /* Peek -> Initial */
+        return false;
+    }
+    if (s_ctl.level != CONTROLS_LEVEL_INITIAL) {
+        screen_intent_cb(SCREEN_INTENT_UP, NULL);       /* Real -> Art -> Initial */
+        return false;
+    }
+    return true;
+}
 
 static void scene_tick(void)
 {
     if (!s_controls) return;
 
+    if (s_scene_returning) {
+        if (!scene_return_to_initial()) return;
+        s_scene_returning = false;
+        s_scene_step = 0;
+    }
+
     switch (s_scene_step) {
     case 0:
         if (!pose_is(s_pose, cassette_pose_entry())) break;
+        if (s_scene == 0) {
+            s_scene_step = 99;                          /* the entry view: nothing to add */
+            break;
+        }
         s_scene_step = 1;
         screen_intent_cb(SCREEN_INTENT_DOWN, NULL);      /* Initial -> Art */
         break;
@@ -478,32 +536,27 @@ static void scene_tick(void)
     case 1:
         if (!pose_is(s_pose, cassette_pose_controls())) break;
         s_scene_step = 2;
-        if (CONFIG_APP_UI_DUMP_SCENE == 2) eq_group_cb(NULL);
-        else if (CONFIG_APP_UI_DUMP_SCENE == 3) rgb_group_cb(NULL);
-        else if (CONFIG_APP_UI_DUMP_SCENE == 4) tape_cb(NULL);
-        else if (CONFIG_APP_UI_DUMP_SCENE == 5) {
-            /* Real and the EQ group: the one scene where the panels are painted on the white
-             * page, which is the only way to photograph their page ink. The swipe to Real is
-             * the next step, once this install has been latched. */
+        if (s_scene == 1) break;                        /* Art, the Empty grille */
+        if (s_scene == 2) eq_group_cb(NULL);
+        else if (s_scene == 3) rgb_group_cb(NULL);
+        else if (s_scene == 4) tape_cb(NULL);
+        else if (s_scene == 5) eq_group_cb(NULL);
+        else if (s_scene == 6) {
+            /* The 3x dial is a tap away and a capture has no finger: with the EQ group up,
+             * arm the gain knob's delayed open. The dial lands 260 ms later. */
             eq_group_cb(NULL);
-        }
-        else if (CONFIG_APP_UI_DUMP_SCENE == 6) {
-            /* The 3x dial is a tap away and a dump has no finger: with the EQ group up, arm
-             * the gain knob's delayed open. It lands 260 ms later, well before the dump, so
-             * the scene's picture is the dial, its pillow and its plaques. */
-            eq_group_cb(NULL);
-            knob_editor_tap(0);                          /* 0 is the EQ bank's gain */
-        }
-        else if (CONFIG_APP_UI_DUMP_SCENE == 7) {
-            /* The same for the RGB group's effect selector: its dial is the one with a plaque
-             * per position and no title pillow. */
+            knob_editor_tap(0);
+        } else if (s_scene == 7) {
+            /* The same for the RGB group's effect selector: the dial with a plaque per
+             * position and no title pillow. */
             rgb_group_cb(NULL);
-            knob_editor_tap(4);                          /* 4 is the RGB bank's effect */
+            knob_editor_tap(4);
         }
         break;
 
     case 2:
-        if (CONFIG_APP_UI_DUMP_SCENE != 5) break;
+        if (s_scene != 5) break;
+        if (s_ctl.level != CONTROLS_LEVEL_ART) break;
         s_scene_step = 3;
         screen_intent_cb(SCREEN_INTENT_DOWN, NULL);      /* Art -> Real */
         break;
@@ -639,10 +692,10 @@ void cassette_view_create(void)
 
 void cassette_view_update(const mini_icecast_status_t *st)
 {
-#if CONFIG_APP_UI_DUMP_SCENE > 0
+    if (!s_model) return;
+#if CONFIG_APP_UI_SERIAL_DUMP || CONFIG_APP_UI_SCREEN_HTTP
     scene_tick();
 #endif
-    if (!s_model) return;
     const cassette_frame_t *f = cassette_step(s_model, st, lv_tick_get());
     apply_frame(f);
 

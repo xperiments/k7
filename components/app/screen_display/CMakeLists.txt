@@ -24,6 +24,14 @@ if(CONFIG_APP_BOARD_SUNTON_8048S050C)
         message(FATAL_ERROR "the LVGL TJpgDec header is not where the cover loader expects it: ${lvgl_libs}")
     endif()
     list(APPEND screen_priv "${lvgl_libs}/tjpgd")
+
+    # The screen over HTTP is a diagnostic, and only this board has a picture worth serving:
+    # its frame is LVGL's own direct-mode buffer, readable in PSRAM. Nothing in a normal
+    # build compiles it, and the front door's route table is sized for the two routes.
+    if(CONFIG_APP_UI_SCREEN_HTTP)
+        list(APPEND screen_srcs "screen_frame.c")
+        list(APPEND screen_reqs http_server)
+    endif()
 endif()
 
 idf_component_register(SRCS ${screen_srcs}

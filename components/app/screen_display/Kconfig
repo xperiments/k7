@@ -10,8 +10,10 @@ config APP_UI_SERIAL_DUMP
         boot, and tools/decode_screen_dump.py turns a captured log into a PNG. Off by
         default: it is a diagnostic, and it slows the boot it is enabled on.
 
-        Only the headless path keeps a framebuffer to dump; the panel's is scanned out
-        by the RGB peripheral, so this is not offered on that board.
+        Only the headless path keeps a framebuffer of its own to dump. The panel board
+        serves the frame the RGB peripheral is scanning instead
+        (CONFIG_APP_UI_SCREEN_HTTP): those buffers are LVGL's own draw targets in direct
+        mode, so they are readable.
 
         See docs/research/radio-player-memory-and-lvgl.md.
 
@@ -25,9 +27,25 @@ config APP_UI_DUMP_STRIDE
         second pixel in both directions makes it 400x240 and about twenty seconds,
         which is enough to check a layout and quick enough to iterate on.
 
+config APP_UI_SCREEN_HTTP
+    bool "Serve the rendered screen as /api/screen.bmp, and re-aim the scene over HTTP"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default n
+    help
+        The panel board's way to be looked at. This board runs LVGL in direct mode over
+        the RGB panel's own two PSRAM framebuffers, so a complete 800x480 frame can be
+        read back and served: GET /api/screen.bmp is a 24-bit BMP that opens in any
+        viewer, and POST /api/scene?n=0..7 re-aims the scene driver while the device
+        runs, so one build photographs every scene.
+
+        Off by default: it is a diagnostic, it adds two routes, and a request copies
+        768 KB into PSRAM before it streams. The console dump
+        (CONFIG_APP_UI_SERIAL_DUMP) stays the headless board's; on this board the
+        picture was never unavailable, it just had no way out.
+
 config APP_UI_DUMP_SCENE
     int "Scene the dump is taken in (0 = entry, 1 = Art/Empty, 2 = Art/EQ, 3 = Art/RGB, 4 = Art/Menu, 5 = Real/EQ, 6 = Art/EQ with the 3x dial open, 7 = Art/RGB with the effect dial open)"
-    depends on APP_UI_SERIAL_DUMP
+    depends on APP_UI_SERIAL_DUMP || APP_UI_SCREEN_HTTP
     range 0 7
     default 0
     help

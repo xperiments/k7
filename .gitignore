@@ -27,3 +27,4 @@ host/build/
 sdkconfig.backlight-test
 
 .scratch/
+sdkconfig.verify

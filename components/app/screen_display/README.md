@@ -7,6 +7,20 @@ and nothing else. Everything else is private:
 
 - `screen_display.c` — start-up, the draw buffer, the serial dump and the task that keeps
   the cassette current.
+- `screen_frame.c` — the panel board's diagnostics over HTTP, with
+  `CONFIG_APP_UI_SCREEN_HTTP` on (off by default, and compiled only for that board):
+  `GET /api/screen.bmp` is the frame LVGL has drawn, as a 24-bit bottom-up BMP in one
+  response, and `POST /api/scene?n=0..7` re-aims the scene driver the console dump uses, so
+  one build photographs every scene. The frame is not a copy of the panel's scan-out: this
+  board runs the port in direct mode over the RGB panel's own two PSRAM framebuffers, so
+  `esp_lcd_rgb_panel_get_frame_buffer()` hands over the picture. Two full refreshes before
+  the read leave both buffers current - the headless boot does the same - and the 768 KB it
+  copies under the LVGL lock is streamed after the lock is released, so a capture neither
+  tears on the reels nor freezes the screen for the length of a Wi-Fi send.
+  `screen_display_http_start()` registers the two routes and is called by the appliance
+  **before** `http_server_start()`; the screen comes up later, and the handlers answer 503
+  until it does. The console dump stays the headless board's: this one has no `s_fb`, and
+  the picture it was told it could not have was in PSRAM all along.
 - `lvgl_mem.c` — the `LV_USE_CUSTOM_MALLOC` backend, PSRAM first (ADR 0004).
 - `cassette_view.c` — the composition: the container under the screen root, the pose and
   its animation, and the applier of the Controls model's changed-mask (the page, the two

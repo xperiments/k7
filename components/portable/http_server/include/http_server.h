@@ -34,7 +34,7 @@ extern "C" {
 #define HTTP_BODY_MAX 8192 /* a POST body larger than this is 413 */
 #define HTTP_QUERY_MAX 256 /* raw (percent-encoded) query string, without the ? */
 #define HTTP_HEADER_MAX 1024
-#define HTTP_MAX_ROUTES 10
+#define HTTP_MAX_ROUTES 12 /* the appliance's ten, plus the screen's two diagnostics */
 #define HTTP_LISTEN_BACKLOG 16
 #define HTTP_MAX_CONNS 6
 

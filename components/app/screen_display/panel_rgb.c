@@ -137,3 +137,22 @@ lv_display_t *panel_rgb_start(void)
                  esp_err_to_name(bl_err));
     return disp;
 }
+
+bool panel_rgb_frame(const uint16_t **px, int *w, int *h)
+{
+    if (!s_panel || !px || !w || !h) return false;
+
+    /* The port configured two framebuffers in PSRAM and LVGL draws into them in direct
+     * mode, so they are ordinary readable memory; the peripheral scans them, it does not
+     * own them. A caller that wants a whole picture refreshes the screen twice first, and
+     * then neither index can be the stale one. */
+    void *fb0 = NULL;
+    void *fb1 = NULL;
+    if (esp_lcd_rgb_panel_get_frame_buffer(s_panel, 2, &fb0, &fb1) != ESP_OK || !fb0)
+        return false;
+
+    *px = (const uint16_t *)fb0;
+    *w = PANEL_W;
+    *h = PANEL_H;
+    return true;
+}
