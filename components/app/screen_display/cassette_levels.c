@@ -35,11 +35,24 @@ static bool s_have_status;
 static char s_track_path[LIB_PATH_MAX];
 static mi_fmt_t s_track_fmt;
 static bool s_track_requested;
+static bool s_peek_visible;
+static bool s_cover_visible;
 
 /* The text tags and the cover follow every Track: the peek's labels and the white page's
  * cover are both one request away. A new Track drops the previous picture at once - the
  * loader decodes into the one buffer, so it must not be drawn while it is written - and
  * then asks for the new tags and picture together. */
+/* The cover is Real's, not the cassette's: ask only while the white page is up. The
+ * label fill shows at once and the picture cuts in over it when the decode finishes;
+ * an empty frame for the whole read was worse than the label. */
+static void request_cover(void)
+{
+    if (!s_have_status || !s_status.path[0] || s_status.format == MI_FMT_NONE) return;
+    if (artwork_loader_cover_answered(s_status.path, s_status.format)) return;
+    cassette_view_set_cover(NULL);
+    artwork_loader_request(s_status.path, s_status.format);
+}
+
 static void track_request(void)
 {
     if (!s_have_status) return;
@@ -54,14 +67,13 @@ static void track_request(void)
         return;
     }
     ESP_LOGI(TAG, "track request: %s (fmt %d)", s_status.path, (int)s_status.format);
-    /* The requests bump the sequence before the hide: the loader's hand-off re-checks it,
-     * so a picture for the old Track cannot land after this hide. */
-    artwork_loader_request_tags(s_status.path, s_status.format);
-    artwork_loader_request(s_status.path, s_status.format);
-    /* Not set_cover(NULL): this Track may well have a picture, so the print waits empty
-     * rather than flashing the drawn label for the length of the decode. The loader's own
-     * answer - a picture, or NULL when the Track has none - is what fills it. */
-    cassette_view_set_cover_pending();
+    /* The new Track's names are not the old Track's: clear them so the peek falls back to
+     * the path/filename until the loader answers. */
+    cassette_view_set_tags("", "");
+    /* Each level asks for what it shows, and only when it is up. The loader remembers
+     * its answer, so closing and reopening a level does not read the card again. */
+    if (s_peek_visible) artwork_loader_request_tags(s_status.path, s_status.format);
+    if (s_cover_visible) request_cover();
 }
 #endif
 
@@ -69,8 +81,23 @@ void cassette_levels_set_peek(bool shown)
 {
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     if (shown == cassette_peek_is_shown()) return;
+    s_peek_visible = shown;
     if (shown) cassette_peek_show(); else cassette_peek_hide();
+    if (shown && s_have_status && s_status.path[0] && s_status.format != MI_FMT_NONE &&
+        !artwork_loader_tags_answered(s_status.path, s_status.format))
+        artwork_loader_request_tags(s_status.path, s_status.format);
     ESP_LOGI(TAG, "peek %s", shown ? "shown" : "hidden");
+#else
+    (void)shown;
+#endif
+}
+
+void cassette_levels_set_cover_visible(bool shown)
+{
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    if (shown == s_cover_visible) return;
+    s_cover_visible = shown;
+    if (shown) request_cover();
 #else
     (void)shown;
 #endif

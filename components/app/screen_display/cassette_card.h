@@ -4,7 +4,7 @@
  *
  * On the Real Level the cassette is one tinted rounded rectangle, 426x272 at (136,82),
  * with a 291x87 pill window at (203,157) through which the tape shows: the Card
- * (ADR 0039). The Track's picture, or the drawn label, is printed on it at +12,+20 by
+ * (ADR 0039). The Track's picture, or the row's label fill, is printed on it at +12,+20 by
  * cassette_cover.c, which shares this module's mask.
  *
  * The Card places itself in screen pixels and never scales: it exists only at the
@@ -38,7 +38,7 @@ enum {
     CASSETTE_CARD_H  = 272,
     CASSETTE_CARD_R  = 12,
 
-    /* Where the print - and the drawn label - sits inside the Card. It is frame[0]'s
+    /* Where the print - and the label fill - sits inside the Card. It is frame[0]'s
      * rect at the Controls pose: 402x188 at (148,102). */
     CASSETTE_CARD_PRINT_DX = 12,
     CASSETTE_CARD_PRINT_DY = 20,

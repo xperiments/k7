@@ -72,6 +72,14 @@ A fixed-size parcel of decoded audio the server produces internally on its way t
 It is an implementation quantity of the broadcast, invisible to listeners.
 _Avoid_: buffer, block, window
 
+**Decoded source**:
+The module that turns a **Track**'s **Original bytes** into stereo frames at the Track's own
+rate: it owns the decoder, the card reads and the decode, on its own task on core 0. Its
+interface to the broadcast is a ring of decoded frames; the broadcast keeps the **Track**
+lifecycle, the resampling, the tone and the encoder. It exists so the card and the codec do not
+sit on the encoder's core.
+_Avoid_: decoder task, audio thread, producer
+
 **Metadata block**:
 The announcement that names the currently playing track, interleaved into the live stream at
 fixed intervals for clients that asked for it. Meaningful only because the stream is MP3.
@@ -310,8 +318,9 @@ _Avoid_: album art, portada
 **Card**:
 The white page's cassette: one tinted rounded rectangle, 426x272 at (136,82), radius 12, drawn
 above the tape and under the **Cover**, which it carries at +12,+20. It has no picture of its
-own; its ink is a row of the palette table - a plastic and the ink of the label printed on it -
-picked from the Track's path. Nothing is read off a picture (ADR 0040). It and the Cover's container share one A8 mask, whose 291x87 pill
+own; its colours are a row of the palette table - a plastic, the label's fill and the ink it
+would print in - picked from the Track's path. Nothing is read off a picture (ADR 0040). The
+label is wordless: with no Cover, the print is the row's label fill. It and the Cover's container share one A8 mask, whose 291x87 pill
 window at (203,157) is the only place the tape shows through. Shown and hidden with the
 **Page**; it exists at the Controls pose and nowhere else. It is the body the screen never had:
 the label and the outer frame are the same rectangle, so there was nothing to colour.

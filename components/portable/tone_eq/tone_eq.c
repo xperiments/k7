@@ -6,6 +6,7 @@
  * plain linear gain before them, so a hot trim and a boosted band can reach the clamp.
  */
 #include <math.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "tone_eq.h"
@@ -178,6 +179,22 @@ static int16_t clamp16(float x)
 void tone_eq_process(tone_eq_t *eq, int16_t *pcm, size_t frames)
 {
     if (!eq || !pcm || frames == 0) return;
+
+    /* Neutral is the default and the common case: four knobs at 0 dB. Running
+     * three biquads per channel for that costs about 1.4 % of a core, so the
+     * whole stage is bypassed while both the targets and the slewed values are
+     * neutral. The filter state is cleared so that turning a band up starts from
+     * rest rather than from a frozen history. */
+    bool neutral = eq->gain_target == 0.0f && eq->gain_db == 0.0f;
+    for (int b = 0; b < TONE_EQ_BANDS && neutral; b++)
+        if (eq->band_target[b] != 0.0f || eq->band_db[b] != 0.0f) neutral = false;
+    if (neutral) {
+        for (int b = 0; b < TONE_EQ_BANDS; b++) {
+            eq->sec[b].z1[0] = eq->sec[b].z2[0] = 0.0f;
+            eq->sec[b].z1[1] = eq->sec[b].z2[1] = 0.0f;
+        }
+        return;
+    }
     slew(eq);
 
     const float g = eq->gain_lin;

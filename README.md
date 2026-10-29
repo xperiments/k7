@@ -567,7 +567,8 @@ radius 12, with the picture printed on it at +12,+20, scaled to the outer frame'
 top-aligned. The stack is **cinta < Card < label**: the print is the top layer, the Card
 covers the tape, and the window - 291x87 at (203,157), a pill whose ends are the two reels -
 is a real hole in both, cut by the one A8 mask the Card and the print's container share. The
-Card's ink is a row of `k_col_cassette[]` - a plastic and the ink of the label printed on it -
+Card's ink is a row of `k_col_cassette[]` - a plastic, the label's fill and the ink it would
+print in -
 picked from the Track's path;
 [ADR 0039](docs/adr/0039-the-cassette-is-a-card.md) and
 [ADR 0040](docs/adr/0040-the-cassettes-are-a-table.md) record the decisions and
@@ -857,7 +858,8 @@ components/
       mi_burst.c/.h         the burst on connect, as whole encoded frames
       mi_icy.c/.h           the metadata interval and its 16-byte blocks
       mi_ring.c/.h          the per-client send ring: the audio task never writes a socket
-      mini_icecast.c/.h     pacing, client list, station status
+      mini_icecast.c/.h     the decoded source (ice_decode, core 0), pacing, client list,
+                            station status
     tone_eq/                the stream's three-band DJ EQ and trim, before the encoder
     library/                the immutable tree, arena, JSON, Playlist and lookup
     library_http/           GET /api/library[.bin] from the prebuilt views
@@ -1045,8 +1047,19 @@ Two things about a real library that synthetic fixtures never exercise, both han
   even though the pages are declared UTF-8. The card's own long-name support is
   unchanged; this only decides the encoding the filesystem hands back.
 * **Cover art shows up when it is a JPEG.** An MP3's ID3 `APIC` (or a FLAC `PICTURE`) is
-  read only when the Artwork level is opened; it fills the Case's 603x385 window and is
-  centre-cropped, never squeezed. A PNG picture is skipped.
+  read only when Real's white page is opened - not at boot - and the Peek's tags are read
+  when the Peek is raised; the loader remembers its answer, so reopening a level does not
+  read the card again. The picture fills the Case's 603x385 window and is centre-cropped,
+  never squeezed. A PNG picture is skipped.
+* **A 24-bit / 192 kHz FLAC is source-rate-bound on this board.** The card is on a
+  20 MHz SPI bus and the source alone needs about 0.9 of one core, before the screen,
+  Wi-Fi and the encoder. A 192 kHz FLAC therefore plays slower than real time and the
+  live stream rebases; `docs/research/audio-decode-cost.md` has the measured split.
+  The broadcast therefore **skips a Track whose source rate is above 96 kHz** with a
+  named log (`MINI_ICECAST_MAX_SOURCE_HZ`); the Track stays in the index and its
+  original bytes stay downloadable. Transcode such files to 44.1 kHz / 16-bit (or
+  96 kHz) on the card to play them. 16-bit / 44.1 kHz FLAC measures 101.3 % of real
+  time with zero rebases, and MP3 is above it; they are unaffected.
 
 The board tier's index check runs in `--superset` mode: on the host it still insists the
 index lists *exactly* the fixture corpus, but against the board it requires every fixture

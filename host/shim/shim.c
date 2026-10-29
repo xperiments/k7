@@ -132,6 +132,7 @@ static void *task_trampoline(void *p)
 {
     struct host_task *t = p;
     t->fn(t->arg);
+    free(t);
     return NULL;
 }
 
@@ -182,7 +183,12 @@ void vTaskDelay(TickType_t ticks)
 
 void vTaskDelete(TaskHandle_t task)
 {
-    (void)task; /* every host task is detached, and only ever deletes itself */
+    /* NULL is the firmware idiom for "delete the calling task", and pthread_exit
+     * is the host's equivalent. A non-NULL handle asks to delete *another* task;
+     * host tasks are detached and return on their own, so there is nothing left
+     * to do - and exiting the caller here would silently kill the broadcast task,
+     * which is exactly what it did the first time the audio source used it. */
+    if (task != NULL) return;
     pthread_exit(NULL);
 }
 

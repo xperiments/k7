@@ -21,6 +21,9 @@
  * The picture is top-aligned and its width is the print's: its height follows from the
  * source's aspect and the print clips the rest. The image object is stretched to the exact
  * size that follows, so no separate pivot arithmetic is needed.
+ *
+ * A Track without a picture prints the row's label colour as a plain fill. There are no
+ * words on it: the label's ink column is carried by the palette but nothing prints it.
  */
 #include "cassette_cover.h"
 
@@ -30,54 +33,30 @@
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 
-LV_FONT_DECLARE(jura_28);
-
 static lv_obj_t *s_masked;          /* the Card's rect: the object the shared mask is sized to */
 static lv_obj_t *s_print;          /* the print proper: 402x188 at +12,+20 */
 static lv_obj_t *s_img;            /* the Track picture, at the print's top-left */
 static lv_obj_t *s_fallback;       /* opaque fallback while the shared mask is not there */
-static lv_obj_t *s_rim;            /* the window's 1 px pill, over the print's cut edge */
+static lv_obj_t *s_rim;            /* the window's pill, over the print's cut edge */
 static const lv_image_dsc_t *s_dsc;
 static bool s_wanted;              /* the white page asked for the cover */
-static lv_obj_t *s_label;          /* the drawn label: the print when there is no picture */
-static bool s_pending;             /* a picture is on its way, so the label stays down */
 
 static void cover_hide(void);
 
-/* The drawn label is ink on the Card - no fill - so the plastic's own colour is its paper, and
- * its ink is the table's, picked with the plastic it sits on (ADR 0040). Only the top band is
- * free: the window is the print's middle, 55 px down, so that is where the words go. It has no
- * alpha, so the mask cuts it like anything else in the print - the mask does that, not the
- * label. */
-void cassette_cover_set_inks(lv_color_t plastic, lv_color_t label)
+/* The label is the print's paper: the row's `label` fill, cut by the same mask as a picture.
+ * The row's `ink` is the colour a word would use; the label is wordless, so it is not read
+ * here. The fill is opaque and the mask does the shaping, like the picture. */
+void cassette_cover_set_inks(lv_color_t plastic, lv_color_t ink, lv_color_t label)
 {
-    if (s_label) lv_obj_set_style_text_color(s_label, label, 0);
+    (void)ink; /* the palette carries it; the label has no words to print it with */
+    if (s_print) {
+        lv_obj_set_style_bg_color(s_print, label, 0);
+        lv_obj_set_style_bg_opa(s_print, LV_OPA_COVER, 0);
+    }
+    if (s_fallback) lv_obj_set_style_bg_color(s_fallback, label, 0);
     /* The window's rim is the Card's own plastic: the cassette is moulded around its window,
      * so the frame and the body are one material and only the print is another. */
     if (s_rim) lv_obj_set_style_border_color(s_rim, plastic, 0);
-}
-
-/* The label is the print only when there is no picture to print: not while one is decoding -
- * the loader clears its buffer then, and a label that appeared for those 200 ms would flash
- * before every Track - and not under a picture that has landed. */
-static void label_apply(void)
-{
-    if (!s_label) return;
-    lv_obj_set_hidden(s_label, s_pending || s_dsc != NULL);
-}
-
-void cassette_cover_set_title(const char *title)
-{
-    if (!s_label) return;
-    lv_label_set_text(s_label, title ? title : "");
-}
-
-void cassette_cover_set_pending(void)
-{
-    s_pending = true;
-    s_dsc = NULL;
-    label_apply();
-    cover_hide();
 }
 
 static void cassette_cover_place(void)
@@ -107,12 +86,11 @@ static void cassette_cover_place(void)
 }
 
 /* The print is cut in and out, never faded. A page flip, a Track change and a Track with no
- * picture all land in one frame: the drawn label is what fills the print when there is nothing
- * to blit, so a fade would only draw attention to a hole that is already filled. */
+ * picture all land in one frame: the label fill is what shows when there is nothing to blit,
+ * so a fade would only draw attention to a hole that is already filled. */
 static void cover_show(void)
 {
     if (!s_masked || !s_wanted) return;
-    label_apply();
     cassette_cover_place();
     lv_obj_set_hidden(s_masked, false);
 }
@@ -125,18 +103,15 @@ static void cover_hide(void)
 
 void cassette_cover_set_image(const lv_image_dsc_t *dsc)
 {
-    s_pending = false;
     s_dsc = dsc;
     if (s_img) {
         if (dsc) lv_image_set_src(s_img, dsc);
         /* Hidden rather than cleared: the loader's last descriptor stays put, and a print
-         * with no picture must not keep drawing it behind the drawn label. */
+         * with no picture must not keep drawing it. */
         lv_obj_set_hidden(s_img, dsc == NULL);
     }
-    label_apply();
-
     if (!dsc) {
-        /* The loader's verdict for this Track: no picture. The drawn label is the print. */
+        /* The loader's verdict for this Track: no picture. The label fill is the print. */
         if (s_wanted) cover_show();
         else cover_hide();
         return;
@@ -189,7 +164,8 @@ void cassette_cover_create(lv_obj_t *parent)
      * container, so the picture and the mask go together and the Card does not fade. */
     s_print = lv_obj_create(s_masked);
     lv_obj_remove_style_all(s_print);
-    lv_obj_set_style_bg_opa(s_print, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_color(s_print, k_col_cassette[0].label, 0);
+    lv_obj_set_style_bg_opa(s_print, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_print, 0, 0);
     lv_obj_set_style_pad_all(s_print, 0, 0);
     lv_obj_set_style_radius(s_print, CASSETTE_CARD_PRINT_R, 0);
@@ -213,16 +189,6 @@ void cassette_cover_create(lv_obj_t *parent)
     lv_obj_set_size(s_img, 1, 1);
     lv_obj_set_hidden(s_img, true);
 
-    /* The drawn label: the print when the Track carries no picture. It sits above the image
-     * (which is empty then) and under the fallback pill. Jura 28 in the print's top band, the
-     * only room the window leaves: 55 px. */
-    s_label = cassette_text(s_print, &jura_28, k_col_cassette[0].label, LV_ALIGN_TOP_LEFT,
-                            12, 10);
-    lv_obj_set_width(s_label, CASSETTE_CARD_PRINT_W - 24);
-    lv_label_set_long_mode(s_label, LV_LABEL_LONG_DOT);
-    lv_obj_set_style_text_align(s_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_hidden(s_label, true);
-
     /* The fallback window: opaque, and hidden as soon as place() finds the shared mask. It is
      * the mask's stadium re-based on the print - the mask has it at (67,75) in the Card - so
      * the two are the same pill on the panel. */
@@ -230,7 +196,7 @@ void cassette_cover_create(lv_obj_t *parent)
                           CASSETTE_CARD_WINDOW_DX - CASSETTE_CARD_PRINT_DX,
                           CASSETTE_CARD_WINDOW_DY - CASSETTE_CARD_PRINT_DY,
                           CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H,
-                          CASSETTE_CARD_WINDOW_R, k_col_bg);
+                          CASSETTE_CARD_WINDOW_R, k_col_cassette[0].label);
     lv_obj_set_hidden(s_fallback, true);
 
     /* The window's rim, last: 3 px of the Card's plastic on a 291x88 box with the window's

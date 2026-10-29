@@ -15,4 +15,8 @@ typedef void (*mi_rs_emit_t)(const int16_t *stereo, size_t frames, void *ctx);
  * kernel row. `err`, when non-NULL, receives that diagnostic. */
 mi_rs_t *mi_rs_new(uint32_t in_hz, uint32_t out_hz, char *err, size_t err_size);
 void     mi_rs_process(mi_rs_t *r, const int16_t *stereo_in, size_t frames, mi_rs_emit_t emit, void *ctx);
+/* CPU time this resampler has spent on its own arithmetic, excluding the emit
+ * callback (which is the encoder and the pacing sleep). Stage-cost telemetry reads
+ * this before and after mi_rs_process(). */
+uint64_t mi_rs_cpu_us(const mi_rs_t *r);
 void     mi_rs_free(mi_rs_t *r);

@@ -39,6 +39,12 @@ void artwork_loader_request(const char *track_path, mi_fmt_t format);
  * handed to the view under the LVGL lock; empty tags mean the Track carries none. */
 void artwork_loader_request_tags(const char *track_path, mi_fmt_t format);
 
+/* True when the loader has already answered for this Track — a picture, no
+ * picture, tags or no tags. The view uses it to avoid reading the card again
+ * when Real or the Peek is opened a second time. */
+bool artwork_loader_cover_answered(const char *track_path, mi_fmt_t format);
+bool artwork_loader_tags_answered(const char *track_path, mi_fmt_t format);
+
 #ifdef __cplusplus
 }
 #endif

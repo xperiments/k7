@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "esp_timer.h"
+
 #define DR_MP3_IMPLEMENTATION
 #define DR_MP3_NO_STDIO
 #define DR_MP3_ONLY_MP3
@@ -12,6 +14,12 @@
 #define DR_FLAC_NO_STDIO
 #define DR_FLAC_NO_OGG
 #define DR_FLAC_NO_CRC /* skip CRC checks: cheaper, and the SD is not a noisy channel */
+/* 16 KB, not dr_flac's 4 KB default: the card is on SPI and a 24-bit 192 kHz FLAC
+ * needs ~700 KB/s, so a bigger L2 cache cuts the number of callbacks and card
+ * transactions. It is copied into drflac_init_info on the caller's stack during
+ * drflac_open(), so the opening task must leave room for it (the decoded source
+ * task in mini_icecast.c does). Must be a multiple of 8. */
+#define DR_FLAC_BUFFER_SIZE 16384
 #include "dr_flac.h"
 #define DR_WAV_IMPLEMENTATION
 #define DR_WAV_NO_STDIO
@@ -22,6 +30,7 @@ struct mi_dec {
     FILE    *f;
     uint32_t hz;
     int      ch;
+    uint64_t io_us; /* wall time blocked in fread(), so decode CPU can be separated */
     int16_t *tmp; /* native-channel scratch */
     union {
         drmp3   mp3;
@@ -30,7 +39,16 @@ struct mi_dec {
     } u;
 };
 
-static size_t cb_read(void *ud, void *out, size_t n) { return fread(out, 1, n, ((mi_dec_t *)ud)->f); }
+static size_t cb_read(void *ud, void *out, size_t n)
+{
+    mi_dec_t *d = (mi_dec_t *)ud;
+    int64_t t0 = esp_timer_get_time();
+    size_t got = fread(out, 1, n, d->f);
+    d->io_us += (uint64_t)(esp_timer_get_time() - t0);
+    return got;
+}
+
+uint64_t mi_dec_io_us(const mi_dec_t *d) { return d->io_us; }
 
 /* The three libraries share the same shape for these callbacks but use different enums. */
 static int do_seek(void *ud, int off, int whence) { return fseek(((mi_dec_t *)ud)->f, off, whence) == 0; }
@@ -54,7 +72,7 @@ mi_dec_t *mi_dec_open(const char *path)
     bool ok = false;
     d->f = fopen(path, "rb");
     if (!d->f) goto out;
-    setvbuf(d->f, NULL, _IOFBF, 8192); /* fewer, larger SD reads */
+    setvbuf(d->f, NULL, _IOFBF, 32768); /* fewer, larger card reads */
 
     switch (d->kind) {
     case MI_FMT_MP3:
@@ -77,7 +95,9 @@ mi_dec_t *mi_dec_open(const char *path)
         goto out;
     }
     ok = d->hz > 0 && d->ch > 0;
-    if (ok) {
+    if (ok && d->ch != 2) {
+        /* Stereo decodes straight into the caller's buffer; only mono and
+         * more-than-stereo need the native-channel scratch. */
         d->tmp = malloc(sizeof(int16_t) * MI_READ_FRAMES * d->ch);
         ok = d->tmp != NULL;
     }
@@ -109,6 +129,18 @@ size_t mi_dec_read(mi_dec_t *d, int16_t *out, size_t max_frames)
 {
     if (max_frames > MI_READ_FRAMES) max_frames = MI_READ_FRAMES;
     size_t n = 0;
+    if (d->ch == 2) {
+        /* The stereo corpus is everything this appliance plays in practice; decode
+         * straight into the caller's interleaved buffer instead of writing the
+         * decoder's scratch and copying it. */
+        switch (d->kind) {
+        case MI_FMT_MP3:  n = (size_t)drmp3_read_pcm_frames_s16(&d->u.mp3, max_frames, out); break;
+        case MI_FMT_FLAC: n = (size_t)drflac_read_pcm_frames_s16(d->u.flac, max_frames, out); break;
+        case MI_FMT_WAV:  n = (size_t)drwav_read_pcm_frames_s16(&d->u.wav, max_frames, out); break;
+        default: break;
+        }
+        return n;
+    }
     switch (d->kind) {
     case MI_FMT_MP3:  n = (size_t)drmp3_read_pcm_frames_s16(&d->u.mp3, max_frames, d->tmp); break;
     case MI_FMT_FLAC: n = (size_t)drflac_read_pcm_frames_s16(d->u.flac, max_frames, d->tmp); break;

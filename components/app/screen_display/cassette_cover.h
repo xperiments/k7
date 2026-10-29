@@ -61,19 +61,11 @@ bool cassette_cover_has_picture(void);
  * clears it, so the cover can be asked for while the decode is still running. */
 bool cassette_cover_is_shown(void);
 
-/* A picture is on its way: the loader is about to overwrite its one buffer, so the print goes
- * empty and the drawn label stays down until the picture lands or the loader reports that this
- * Track has none. Without it the label would flash for the length of every decode. */
-void cassette_cover_set_pending(void);
-
-/* The Track's name, printed on the drawn label. The label is what the print shows when there is
- * no picture, so it is the one place a blitted Cover could never be: the Track's own words. */
-void cassette_cover_set_title(const char *title);
-
-/* The print's two inks, from the row the plastic came from: the drawn label's, and the plastic
- * itself, which the window's rim is drawn in - the cassette is moulded around its window, so
- * the frame and the body are one material (ADR 0040). The view sets them together. */
-void cassette_cover_set_inks(lv_color_t plastic, lv_color_t label);
+/* The print's colours, from the row the plastic came from: the label's fill (the print when the
+ * Track has no picture), the ink a word would use (the label is wordless), and the plastic the
+ * window's rim is drawn in - the cassette is moulded around its window, so the frame and the
+ * body are one material (ADR 0040). The view sets them together. */
+void cassette_cover_set_inks(lv_color_t plastic, lv_color_t ink, lv_color_t label);
 
 
 #ifdef __cplusplus

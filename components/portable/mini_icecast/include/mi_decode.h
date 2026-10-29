@@ -20,4 +20,8 @@ uint32_t  mi_dec_hz(const mi_dec_t *d);
  * the honest answer, since that is how much audio the file holds. */
 uint32_t  mi_dec_duration_ms(const mi_dec_t *d);
 size_t    mi_dec_read(mi_dec_t *d, int16_t *stereo, size_t max_frames); /* <= MI_READ_FRAMES; 0 = end */
+/* Wall time this decoder has spent blocked in fread() since it was opened. The
+ * difference from the time spent in mi_dec_read() is the decoder's own CPU, which
+ * is what a stage-cost log wants; the I/O share is the card's, not the codec's. */
+uint64_t  mi_dec_io_us(const mi_dec_t *d);
 void      mi_dec_close(mi_dec_t *d);

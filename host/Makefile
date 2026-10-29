@@ -110,8 +110,8 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
 
-CORE_OBJ := $(OBJ)/audio_format.o $(OBJ)/library.o $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(OBJ)/tone_eq.o $(SHINE_OBJ) $(OBJ)/shim.o
-BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o $(OBJ)/mi_ring.o
+CORE_OBJ := $(OBJ)/audio_format.o $(OBJ)/library.o $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_ring.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(OBJ)/tone_eq.o $(SHINE_OBJ) $(OBJ)/shim.o
+BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
@@ -170,7 +170,7 @@ $(BIN)/mi_encode_file: $(CORE_OBJ) $(OBJ)/mi_encode_file.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/mi_frames: $(OBJ)/audio_format.o $(OBJ)/mi_decode.o $(OBJ)/shim.o $(SHINE_OBJ) $(OBJ)/mi_frames.o
+$(BIN)/mi_frames: $(OBJ)/audio_format.o $(OBJ)/mi_decode.o $(OBJ)/mi_ring.o $(OBJ)/shim.o $(SHINE_OBJ) $(OBJ)/mi_frames.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
@@ -209,7 +209,7 @@ $(BIN)/t10_cassette: $(CORE_OBJ) $(CASSETTE_OBJ) $(OBJ)/t10_cassette.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t11_ring: $(CORE_OBJ) $(OBJ)/mi_ring.o $(OBJ)/t11_ring.o
+$(BIN)/t11_ring: $(CORE_OBJ) $(OBJ)/t11_ring.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

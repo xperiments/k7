@@ -193,6 +193,8 @@ static void controls_apply(controls_changed_t changed)
         page_set(real);
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
         cassette_cover_set_shown(real);
+        /* The picture is Real's: ask for it now, not at boot. */
+        cassette_levels_set_cover_visible(real);
 #endif
     }
 
@@ -318,14 +320,12 @@ static void apply_frame(const cassette_frame_t *f)
                  f->title[0] ? f->title : "(no track)");
         cassette_card_set_ink(ink->plastic);
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-        /* The print is the same row's: a label ink chosen against its own plastic, and the
-         * window's rim in that plastic. */
-        cassette_cover_set_inks(ink->plastic, ink->label);
+        /* The print is the same row's: the label fill, the ink it would print in, and the
+         * window's rim in the row's plastic. */
+        cassette_cover_set_inks(ink->plastic, ink->ink, ink->label);
 #endif
     }
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The drawn label's words, when the Track carries no picture and the cover is not there. */
-    if (f->title_changed) cassette_cover_set_title(f->title);
     /* The hubs are white while the Cover is what the page shows: the spools read as plain
      * plastic and the artwork has the page's colour to itself. Asked every frame, because the
      * picture lands from the loader between frames; the setter ignores a repeated value. */
@@ -692,11 +692,6 @@ void cassette_view_update(const mini_icecast_status_t *st)
 void cassette_view_set_cover(const lv_image_dsc_t *dsc)
 {
     cassette_cover_set_image(dsc);
-}
-
-void cassette_view_set_cover_pending(void)
-{
-    cassette_cover_set_pending();
 }
 
 void cassette_view_set_tags(const char *group, const char *song)

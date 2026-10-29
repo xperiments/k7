@@ -28,13 +28,13 @@ const lv_color_t k_col_frame      = COL_HEX(COL_BLACK);
  * per shell colour, each with a label that reads against it - and adding one is adding a row
  * (ADR 0040). The Track's path picks the row; nothing else decides. */
 const cassette_ink_t k_col_cassette[] = {
-    { COL_HEX(0xCC0000), COL_HEX(0xF5F5F5) },   /* solid red, white */
-    { COL_HEX(0x39FF14), COL_HEX(0x363636) },   /* fluorescent lime, charcoal */
-    { COL_HEX(0x002366), COL_HEX(0xF5F5F5) },   /* royal blue, white */
-    { COL_HEX(0x0F52BA), COL_HEX(0xF5F5F5) },   /* sapphire blue, white */
-    { COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* tinted smoke, white */
-    { COL_HEX(0xF5F5F5), COL_HEX(0x363636) },   /* solid white, charcoal */
-    { COL_HEX(0xDCD0BA), COL_HEX(0x363636) },   /* vintage beige, charcoal */
+    { COL_HEX(0xCC0000), COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* red, charcoal ink, white label */
+    { COL_HEX(0x39FF14), COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* lime, charcoal ink, white label */
+    { COL_HEX(0x002366), COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* royal blue, charcoal ink, white label */
+    { COL_HEX(0x0F52BA), COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* sapphire, charcoal ink, white label */
+    { COL_HEX(0x363636), COL_HEX(0x363636), COL_HEX(0xDCD0BA) },   /* smoke, charcoal ink, beige label */
+    { COL_HEX(0xF5F5F5), COL_HEX(0x363636), COL_HEX(0xDCD0BA) },   /* white, charcoal ink, beige label */
+    { COL_HEX(0xDCD0BA), COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* beige, charcoal ink, white label */
 };
 
 const int k_col_cassette_count = (int)(sizeof k_col_cassette / sizeof k_col_cassette[0]);

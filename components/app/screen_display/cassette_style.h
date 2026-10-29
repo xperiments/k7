@@ -76,17 +76,19 @@ extern const lv_color_t k_col_frame;
 
 /* The cassettes, as a table you fill in by hand (ADR 0040).
  *
- * One row is one cassette: `plastic` is the Card - the 426x272 mat the print sits on - and
- * `label` is the ink of the drawn print, the one that shows when the Track carries no Cover.
- * The two are a pair on purpose: no colour is derived from anything, so a row is exactly what
- * you see, and a Track picks its row from its own path (`ink_seed % k_col_cassette_count`).
+ * One row is one cassette: `plastic` is the Card - the 426x272 mat the print sits on -
+ * `label` is the fill of the print that shows when the Track carries no Cover, and `ink`
+ * is the colour a word printed on that label would use. The label is wordless now, so
+ * nothing reads `ink`; the column stays because a row is data, not a derivation, and a
+ * future print needs it.
  *
- * Fill a row and it exists. Keep the label ink light against a dark plastic and dark against a
- * light one - nothing checks that for you - and keep the plastics far enough apart that two
- * Tracks in a row do not look like the same cassette. */
+ * Fill a row and it exists. The label fill is the print when there is no Cover, so keep it
+ * distinct from the plastic, and keep the plastics far enough apart that two Tracks in a
+ * row do not look like the same cassette. */
 typedef struct {
     lv_color_t plastic;   /* the Card: the cassette's body */
-    lv_color_t label;     /* the drawn print's ink, against that body */
+    lv_color_t ink;       /* the label's print colour; the label is wordless for now */
+    lv_color_t label;     /* the label's fill: the print when the Track has no Cover */
 } cassette_ink_t;
 
 extern const cassette_ink_t k_col_cassette[];

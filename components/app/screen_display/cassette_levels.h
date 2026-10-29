@@ -39,8 +39,15 @@ void cassette_levels_apply(const cassette_frame_t *frame);
 void cassette_levels_update(const mini_icecast_status_t *status);
 
 /* Raise or put away the peek. The Controls model owns the ladder and the room; the view
- * applies its PEEK bit with this. A call for the state already held does nothing. */
+ * applies its PEEK bit with this. A call for the state already held does nothing. The
+ * Track's tags are requested only when the peek is raised: they are the peek's labels and
+ * nothing on the Initial screen reads them, so boot does not pay for them. */
 void cassette_levels_set_peek(bool shown);
+
+/* Tell the levels that Real's white page is on screen. The Track's picture is requested
+ * only then: the cover is Real's, and reading and decoding a 603x385 JPEG at boot was
+ * costing the first Track tens of seconds of card contention. */
+void cassette_levels_set_cover_visible(bool shown);
 
 /* The Track's text tags, UTF-8. Empty strings mean the Track carries none. */
 void cassette_levels_set_tags(const char *group, const char *song);

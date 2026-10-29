@@ -1,11 +1,11 @@
 # The cassettes are a table, and nothing is read off the Cover
 
 **Amends [ADR 0039](./0039-the-cassette-is-a-card.md):** the Card's ink is no longer the Cover's
-dominant hue. A cassette is a **row of a table you fill in** - a plastic and the ink of the label
-printed on it - and the Track's path only picks the row.
+dominant hue. A cassette is a **row of a table you fill in** - a plastic, the label's fill and the
+ink it would print in - and the Track's path only picks the row.
 
 ADR 0039 made the shell a reading of the artwork: the dominant hue of the decoded cover, at a
-fixed saturation and value, with the drawn label in its complement. That put the palette in the
+fixed saturation and value, with the label in its complement. That put the palette in the
 pixels, and it cost a module - a 24-bucket histogram with chroma and value culls, an HSV
 conversion, a complement, and a luminance fallback for neutral plastics whose complement is
 itself. The owner wants the opposite: a fixed set of colour combinations, filled in by hand, so
@@ -14,9 +14,10 @@ that the look is data and two Tracks can be given two exact cassettes.
 ## Decision
 
 - **`k_col_cassette[]` in `cassette_style.c` is the palette.** One row per cassette:
-  `{ plastic, label }` - the Card's fill and the ink of the drawn print. `k_col_cassette_count`
-  is the row count, so adding a cassette is adding a row. Five to start with, one row per shell
-  colour with a label that reads against it.
+  `{ plastic, ink, label }` - the Card's fill, the ink a word would print in, and the label's
+  fill. The label is wordless: with no Cover the print is the fill, and the ink column is
+  carried for a print that does not exist yet. `k_col_cassette_count` is the row count, so
+  adding a cassette is adding a row.
 - **The Track's file name picks the row**: `ink_seed % k_col_cassette_count`, where the seed is
   an FNV-1a hash of the status's `file` (its path stands in only when there is no name). The
   song, not its place in the card, owns the cassette: a folder rename keeps it and two folders
@@ -27,8 +28,9 @@ that the look is data and two Tracks can be given two exact cassettes.
 - **Nothing is derived from a picture.** `cassette_cover_set_image()` uses the loader's buffer
   for the picture and nothing else. The `cassette_ink` module, its host test, and the Card's
   hue entry points (`cassette_card_set_hue()`, `cassette_card_ink()`) are deleted.
-- **The pair is the filler's judgement.** Nothing checks that a label reads against its
-  plastic; the table says light-on-dark or dark-on-light, and the panel says whether it worked.
+- **The row is the filler's judgement.** Nothing checks that a label reads against its
+  plastic; the table holds the plastic, the fill and the ink, and the panel says whether it
+  worked.
 
 ## Consequences
 

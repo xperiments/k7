@@ -24,6 +24,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/idf_additions.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "http_server.h"
@@ -42,7 +43,7 @@
 #define TITLE_MAX       120
 #define CHUNK_FRAMES    MINI_ICECAST_CHUNK_FRAMES
 #define CHUNK_BYTES     (CHUNK_FRAMES * 4)
-#define BROADCAST_TASK_STACK (24 * 1024) /* the FLAC/MP3 decoder scratch is the big one */
+#define BROADCAST_TASK_STACK (16 * 1024) /* decode moved to ice_decode; this is resample + encode */
 #define TELEMETRY_TASK_STACK 4096        /* %f formatting on newlib is stack-hungry */
 #define TELEMETRY_PERIOD_MS 60000
 #define QUIET_PASSES    30 /* log "no playable files" once a minute, not once a loop */
@@ -123,6 +124,12 @@ static struct {
     volatile int64_t   park_until;
     int                park_refs;     /* download and rescan can park together */
     uint64_t           idle_frames; /* frames of bed, kept out of the track position */
+    /* Per-stage cost since the last telemetry line, in milliseconds. Written by the
+     * broadcast task and reset by the telemetry task, which is why they are plain
+     * 32-bit cells: the reset may lose a tick, never a correct attribution. They
+     * exist because the encoder's cost alone does not say which stage starves a
+     * hi-res FLAC, and the board's log is the only place that split is visible. */
+    volatile uint32_t  dec_ms, dec_io_ms, rs_ms, eq_ms;
     mi_burst_t        *burst;         /* history for a client connecting mid-track */
     TaskHandle_t       broadcast_handle; /* for the stack-headroom telemetry */
     mi_enc_t          *enc;
@@ -662,7 +669,9 @@ static void tone_apply(size_t frames)
     for (int b = 0; b < TONE_EQ_BANDS; b++)
         tone_eq_set_band(&S.eq, b, S.eq_db[b]);
     tone_eq_set_gain(&S.eq, S.eq_gain_db);
+    int64_t t0 = esp_timer_get_time();
     tone_eq_process(&S.eq, S.chunk, frames);
+    S.eq_ms += (uint32_t)((esp_timer_get_time() - t0) / 1000);
 }
 
 static void emit_chunk(void)
@@ -730,42 +739,188 @@ static void flush_pipeline(void)
     if (desync) ESP_LOGW(TAG, "encoder re-framing skipped %u bytes (expected 0)", (unsigned)desync);
 }
 
-static void stream_file(const char *path)
+/* ------------------------------------------------------- the decoded source */
+
+/* The broadcast task used to read the card, decode, resample and encode in one
+ * loop. Those stages have very different bottlenecks: the card is a blocking SPI
+ * transfer, the decoder is CPU, and the encoder is the only stage that must run
+ * at real time. Serialised, a 24-bit 192 kHz FLAC spent 26 % of its audio time
+ * waiting for the card and 30 % decoding, which left less than half of one core
+ * for the encoder and starved the stream.
+ *
+ * The source is now its own task on core 0: it opens the track, decodes at the
+ * file's rate and fills a ring of decoded stereo frames, while the broadcast task
+ * on core 1 only resamples and encodes. The hand-off is that ring, so the card and
+ * the decoder stop being on the encoder's critical path, and the station's pacing
+ * is unchanged.
+ *
+ * The ring holds whole stereo frames at the source rate. 384 KB is half a second
+ * of 192 kHz audio and two seconds of 44.1 kHz: enough that a card stall shows up
+ * as the producer waiting, never as the encoder running dry.
+ */
+#define SRC_FIFO_BYTES (384 * 1024)
+#define SRC_TASK_STACK (32 * 1024) /* dr_flac's open keeps 16 KB of stream state */
+#define SRC_PRIO       3           /* below the LVGL port (4) and Wi-Fi on core 0 */
+
+typedef struct {
+    mi_dec_t         *dec;
+    mi_ring_t        *fifo;
+    SemaphoreHandle_t data, space, ready, done;
+    TaskHandle_t      task;
+    volatile bool     stop, eof, ok;
+    uint32_t          hz, duration_ms;
+    char              path[LIB_PATH_MAX];
+} src_job_t;
+
+static void src_task(void *arg)
 {
-    mi_dec_t *d = mi_dec_open(path);
-    if (!d) {
-        ESP_LOGW(TAG, "cannot decode %s (unsupported or corrupt): skipping", path);
+    src_job_t *j = arg;
+    j->dec = mi_dec_open(j->path);
+    if (j->dec) {
+        j->hz = mi_dec_hz(j->dec);
+        j->duration_ms = mi_dec_duration_ms(j->dec);
+        j->ok = j->hz != 0;
+    }
+    xSemaphoreGive(j->ready);
+    if (!j->ok) {
+        xSemaphoreGive(j->done);
+        vTaskDeleteWithCaps(NULL); /* owns its external stack; only it may free it */
         return;
     }
+    int16_t pcm[MI_READ_FRAMES * 2];
+    while (!j->stop) {
+        if (parked()) { vTaskDelay(pdMS_TO_TICKS(20)); continue; }
+        int64_t t0 = esp_timer_get_time();
+        uint64_t io0 = mi_dec_io_us(j->dec);
+        size_t n = mi_dec_read(j->dec, pcm, MI_READ_FRAMES);
+        uint64_t io1 = mi_dec_io_us(j->dec);
+        S.dec_ms += (uint32_t)((esp_timer_get_time() - t0) / 1000);
+        S.dec_io_ms += (uint32_t)((io1 - io0) / 1000);
+        if (n == 0) break;
+        const uint8_t *p = (const uint8_t *)pcm;
+        size_t bytes = n * 4;
+        while (bytes && !j->stop) {
+            size_t k = mi_ring_put(j->fifo, p, bytes);
+            if (k) {
+                p += k;
+                bytes -= k;
+                xSemaphoreGive(j->data);
+            }
+            if (bytes) {
+                if (xSemaphoreTake(j->space, pdMS_TO_TICKS(50)) == pdTRUE &&
+                    mi_ring_used(j->fifo) == mi_ring_capacity(j->fifo))
+                    vTaskDelay(1); /* stale hint: yield, do not spin */
+            }
+        }
+    }
+    j->eof = true;
+    xSemaphoreGive(j->data); /* wake the consumer so it sees the end */
+    if (j->dec) mi_dec_close(j->dec);
+    j->dec = NULL;
+    xSemaphoreGive(j->done);
+    vTaskDeleteWithCaps(NULL); /* owns its external stack; only it may free it */
+}
+
+static void src_job_free(src_job_t *j)
+{
+    if (j->fifo) mi_ring_free(j->fifo);
+    if (j->data) vSemaphoreDelete(j->data);
+    if (j->space) vSemaphoreDelete(j->space);
+    if (j->ready) vSemaphoreDelete(j->ready);
+    if (j->done) vSemaphoreDelete(j->done);
+    j->fifo = NULL;
+    j->data = j->space = j->ready = j->done = NULL;
+}
+
+static void stream_file(const char *path)
+{
+    src_job_t j;
+    memset(&j, 0, sizeof j);
+    snprintf(j.path, sizeof j.path, "%s", path);
+
+    j.fifo = mi_ring_new(SRC_FIFO_BYTES, true);
+    j.data = xSemaphoreCreateBinary();
+    j.space = xSemaphoreCreateBinary();
+    j.ready = xSemaphoreCreateBinary();
+    j.done = xSemaphoreCreateBinary();
+    if (!j.fifo || !j.data || !j.space || !j.ready || !j.done) {
+        ESP_LOGE(TAG, "no memory for the decoded-audio ring; skipping %s", path);
+        src_job_free(&j);
+        return;
+    }
+
+    /* The stack is external: dr_flac's open keeps 32 KB of stream state, which must
+     * not take internal RAM from Wi-Fi, and this task is mostly blocked on the
+     * card. There is no same-task fallback, because that 32 KB would not fit the
+     * broadcast task's 16 KB stack; a failed allocation skips the track instead. */
+    if (xTaskCreatePinnedToCoreWithCaps(src_task, "ice_decode", SRC_TASK_STACK, &j, SRC_PRIO,
+                                       &j.task, 0, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+        ESP_LOGE(TAG, "no memory for the decode task; skipping %s", path);
+        src_job_free(&j);
+        return;
+    }
+    xSemaphoreTake(j.ready, portMAX_DELAY);
+    if (!j.ok) {
+        ESP_LOGW(TAG, "cannot decode %s (unsupported or corrupt): skipping", path);
+        xSemaphoreTake(j.done, portMAX_DELAY);
+        src_job_free(&j);
+        return;
+    }
+    /* A source above the budget would not starve this Track alone: it would starve the
+     * live stream for every listener until the Track ended. The decoder is already open
+     * because only it knows the source rate; stop it and let the Playlist advance. The
+     * Track stays in the Library and its original bytes stay downloadable. */
+    if (!mini_icecast_source_rate_ok(j.hz)) {
+        ESP_LOGW(TAG, "skipping %s: %u Hz source is above the %u Hz playback budget "
+                      "(transcode it on the card to play it)",
+                 path, (unsigned)j.hz, (unsigned)MINI_ICECAST_MAX_SOURCE_HZ);
+        j.stop = true;
+        xSemaphoreGive(j.space);
+        xSemaphoreTake(j.done, portMAX_DELAY);
+        src_job_free(&j);
+        return;
+    }
+
     char rs_err[160];
-    mi_rs_t *rs = mi_rs_new(mi_dec_hz(d), S.station.out_hz, rs_err, sizeof rs_err);
+    mi_rs_t *rs = mi_rs_new(j.hz, S.station.out_hz, rs_err, sizeof rs_err);
     if (!rs) {
         ESP_LOGE(TAG, "cannot resample %s: %s", path, rs_err);
-        mi_dec_close(d);
+        j.stop = true;
+        xSemaphoreGive(j.space);
+        xSemaphoreTake(j.done, portMAX_DELAY);
+        src_job_free(&j);
         return;
     }
     xSemaphoreTake(S.lock, portMAX_DELAY);
-    S.cur_src_hz = mi_dec_hz(d);
-    S.cur_total_ms = mi_dec_duration_ms(d);
+    S.cur_src_hz = j.hz;
+    S.cur_total_ms = j.duration_ms;
     xSemaphoreGive(S.lock);
-    ESP_LOGI(TAG, "now playing: %s (%u Hz -> %u Hz, %u ms)", S.title, (unsigned)mi_dec_hz(d),
-             (unsigned)S.station.out_hz, (unsigned)S.cur_total_ms);
+    ESP_LOGI(TAG, "now playing: %s (%u Hz -> %u Hz, %u ms, source on core 0)", S.title,
+             (unsigned)j.hz, (unsigned)S.station.out_hz, (unsigned)j.duration_ms);
 
     static int16_t in[MI_READ_FRAMES * 2];
-    size_t n;
-    /* `prev` leaves the loop the same way `skip` does: the transport below decides
-     * which entry to play next. */
     for (;;) {
         if (S.skip || S.prev || S.play_pending) break;
         if (parked()) { idle_pump(); continue; }   /* a download owns the card */
-        n = mi_dec_read(d, in, MI_READ_FRAMES);
-        if (n == 0) break;
-        mi_rs_process(rs, in, n, chunk_append, NULL);
+        size_t got = mi_ring_get(j.fifo, in, sizeof in);
+        if (got == 0) {
+            if (j.eof) break;
+            (void)xSemaphoreTake(j.data, pdMS_TO_TICKS(20));
+            vTaskDelay(1); /* a stale hint must not spin the broadcast task */
+            continue;
+        }
+        xSemaphoreGive(j.space);
+        uint64_t rs_cpu0 = mi_rs_cpu_us(rs);
+        mi_rs_process(rs, in, got / 4, chunk_append, NULL);
+        S.rs_ms += (uint32_t)((mi_rs_cpu_us(rs) - rs_cpu0) / 1000);
     }
 
+    j.stop = true;
+    xSemaphoreGive(j.space); /* unblock the producer if the ring filled */
+    xSemaphoreTake(j.done, portMAX_DELAY); /* the task deletes itself after this */
     flush_pipeline();
     mi_rs_free(rs);
-    mi_dec_close(d);
+    src_job_free(&j);
 }
 
 static bool take_pending(const library_t *lib, uint32_t generation, uint32_t *index)
@@ -1102,6 +1257,21 @@ static void telemetry_task(void *arg)
         double frame_us = 1000000.0 * (double)mi_enc_samples_per_frame(S.enc) / (double)S.station.out_hz;
         ESP_LOGI(TAG, "encoder: %" PRIu64 " frames, %.0f us/frame = %.1f%% of one core",
                  frames, per_frame, frame_us > 0 ? 100.0 * per_frame / frame_us : 0.0);
+        /* The decoder and resampler's share of the same window. Reading and then
+         * clearing each cell is not a transaction with the broadcast task: a tick
+         * that lands between the read and the clear is dropped, which biases one
+         * line low by less than a millisecond, never attributes it to the wrong
+         * stage. */
+        uint32_t dec = S.dec_ms, io = S.dec_io_ms, rs = S.rs_ms, eq = S.eq_ms;
+        S.dec_ms = 0;
+        S.dec_io_ms = 0;
+        S.rs_ms = 0;
+        S.eq_ms = 0;
+        ESP_LOGI(TAG, "decode %" PRIu32 " ms (of which SD %" PRIu32 " ms), resample %" PRIu32
+                      " ms, tone %" PRIu32 " ms = %.1f%% / %.1f%% / %.1f%% of one core",
+                 dec, io, rs, eq, 100.0 * (double)(dec - (io < dec ? io : dec)) / TELEMETRY_PERIOD_MS,
+                 100.0 * (double)rs / TELEMETRY_PERIOD_MS,
+                 100.0 * (double)eq / TELEMETRY_PERIOD_MS);
         /* The largest single free block is reported next to the free total because
          * it is the number that actually constrains this firmware: esp_wifi_init()
          * needs roughly 25 KB of contiguous DMA-capable internal RAM, and a

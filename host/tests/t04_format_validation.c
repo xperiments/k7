@@ -70,6 +70,15 @@ int main(void)
     CHECK_EQ(MINI_ICECAST_BITRATE_DEFAULT, 128, "the documented bit rate");
     CHECK_EQ(MINI_ICECAST_MAX_CLIENTS, 4, "the documented client-table size");
 
+    /* The broadcast's source-rate budget: the Station rate and CD/96 kHz hi-res are
+     * played; 176.4/192 kHz are skipped by name rather than starving the stream. */
+    CHECK(mini_icecast_source_rate_ok(44100), "44.1 kHz sources are played");
+    CHECK(mini_icecast_source_rate_ok(48000), "48 kHz sources are played");
+    CHECK(mini_icecast_source_rate_ok(96000), "96 kHz sources are played");
+    CHECK(!mini_icecast_source_rate_ok(176400), "176.4 kHz is above the budget");
+    CHECK(!mini_icecast_source_rate_ok(192000), "192 kHz is above the budget");
+    CHECK(!mini_icecast_source_rate_ok(0), "an unknown rate is not played");
+
     /* Ticket 12: one interpretation of the configuration. Every station field
      * zero means "the documented default", and the resolved station says so. */
     mini_icecast_cfg_t cfg = {0};

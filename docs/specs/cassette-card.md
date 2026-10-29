@@ -36,7 +36,7 @@ reachable once the drawer has settled there. Like the glow it replaces, the Card
   hub rims and a horizontal slice of each pack. **While a Cover is printed, the hubs' lines are
   white** (`k_col_hub_white`): the rim's border and both spokes, while the rim's face keeps the
   playing red - the white is the hub's drawing, not the spool. The rewind's ink fade leaves the
-  border alone while it is on. With a drawn label the hub keeps the tape's inks.
+  border alone while it is on. With the label fill the hub keeps the tape's inks.
 
 ## Geometry
 
@@ -84,36 +84,37 @@ One buffer, one descriptor, two objects.
   picture stays at 402 wide inside a `+12,+20` clip box, so the window lands at (55,55) and the
   print is cut in and out, never faded.
 
-## The drawn label
+## The label
 
-When the Track carries no picture, the print is **drawn**: the Track's name in **Jura 28**, in the
-row's **label** ink, in the print's **top band** - (12,10), 378 px wide - because the window is the
-print's middle and leaves only 55 px above it. No fill: the Card's plastic is the label's paper,
-which is what makes the label ink read as ink on it. `LV_LABEL_LONG_DOT` from Track names
-that outrun the band. It is cut by the mask like anything else in the print, so the window is the
-mask's window, not the label's.
+When the Track carries no picture, the print is the row's **label fill**: one plain, opaque
+colour on the same 402x188 box, cut by the same A8 mask as a picture, so the window is still the
+mask's window and the tape still shows through it. There are no words on it. The row's **ink** is
+the colour a word would use; the column stays in the table, but nothing prints it.
 
-The label is not a placeholder for a picture that is still decoding: `cassette_view_set_cover_pending()`
-(what `cassette_levels` calls when it asks the loader for a Track) leaves the print empty until the
-loader answers with a picture or with NULL, so no Track flashes a name before its cover.
+The label is not the Card's plastic. It is its own rectangle at the print's box, so a light label
+on a dark shell reads as a label rather than as bare plastic; the 12/20/64 px mat around it is
+the plastic.
 
 ## The ink
 
 | | |
 |---|---|
 | Card ink | the row's **plastic** |
-| Label ink | the same row's **label** |
+| Label fill | the row's **label** |
+| Label ink | the row's **ink** - carried, not printed |
 
 `k_col_cassette[]` in `cassette_style.c` is the whole palette (ADR 0040): one row per cassette,
-`{ plastic, label }`, with `k_col_cassette_count` as its length. Adding a cassette is adding a
-row - nothing else changes, and nothing is derived.
+`{ plastic, ink, label }`, with `k_col_cassette_count` as its length. Adding a cassette is adding
+a row - nothing else changes, and nothing is derived.
 
 ```
-{ COL_HEX(0x2F5E7A), COL_HEX(0xF2E8D5) },   /* petrol, cream */
-{ COL_HEX(0x8A3A2A), COL_HEX(0xEFDCC0) },   /* rust, warm cream */
-{ COL_HEX(0x4C6B39), COL_HEX(0xE8EAD8) },   /* olive, pale sage */
-{ COL_HEX(0x67457A), COL_HEX(0xF0DFE4) },   /* plum, pale rose */
-{ COL_HEX(0x2E2E33), COL_HEX(0xE6E6E0) },   /* graphite, off-white */
+{ COL_HEX(0xCC0000), COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* red, charcoal ink, white label */
+{ COL_HEX(0x39FF14), COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* lime, charcoal ink, white label */
+{ COL_HEX(0x002366), COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* royal blue, charcoal ink, white label */
+{ COL_HEX(0x0F52BA), COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* sapphire, charcoal ink, white label */
+{ COL_HEX(0x363636), COL_HEX(0x363636), COL_HEX(0xDCD0BA) },   /* smoke, charcoal ink, beige label */
+{ COL_HEX(0xF5F5F5), COL_HEX(0x363636), COL_HEX(0xDCD0BA) },   /* white, charcoal ink, beige label */
+{ COL_HEX(0xDCD0BA), COL_HEX(0x363636), COL_HEX(0xF5F5F5) },   /* beige, charcoal ink, white label */
 ```
 
 - **The Track's file name picks the row**: `ink_seed % k_col_cassette_count`, where `ink_seed`
@@ -188,7 +189,7 @@ separate colour: the frame and the body are one material, only the print is anot
 
 ## Still open
 
-- Whether the drawn label needs more than one design per ink pair, now that it costs code rather
-  than bytes.
+- Whether the label's ink column earns its place before a word is printed on it. It is carried
+  in every row, and nothing reads it.
 - The five rows are a first cut, not a measurement: they are what a 426x272 mat and a cream
   label look like on the white page, and they are the thing most likely to want tuning there.

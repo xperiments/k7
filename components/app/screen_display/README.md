@@ -122,9 +122,9 @@ after the tape body and shown and hidden with the
   never a colour animation. The mask is 426x272 and 116,416 B, built once at create - there
   is no per-pose mask.
 - `cassette_cover.c` — the white page's print. `create(parent)` builds the container, the
-  clip box and the drawn label; a private `place()` applies the Card's shared mask and sizes
+  clip box and the label fill; a private `place()` applies the Card's shared mask and sizes
   the picture the first time the print is shown; `set_image(dsc)` takes the loader's one
-  buffer; `set_title()` / `set_inks()` give the drawn label its words and the row's inks; `set_shown()` / `is_shown()` are the page's wish. The
+  buffer; `set_inks()` gives the print the row's label fill and the rim its plastic; `set_shown()` / `is_shown()` are the page's wish. The
   print is the top layer: the stack is cinta < Card < label. The container is the Card's
   426x272 box at (136,82), so it shares the Card's one A8 mask, whose 291x87 window is a real
   transparent opening (a pill whose ends are the hubs' circles) - the tape shows through it
@@ -458,8 +458,8 @@ The white is a margin: the flip also reveals `s_screen_back_cover`, a square-cor
 768x448 `k_col_bg` box at (16,16) that is the screen's first child, so on the white page the
 picture keeps its dark ground and the white reads as the 16 px ring around everything.
 
-The same page carries the **print** - the Track's cover when it has one, a drawn label when
-it has not - on the **Card**: one tinted 426x272 rectangle at (136,82), radius 12, with a
+The same page carries the **print** - the Track's cover when it has one, the row's label fill
+when it has not - on the **Card**: one tinted 426x272 rectangle at (136,82), radius 12, with a
 291x87 pill window at (203,157) that the Card and the print's container share as one A8 mask,
 so the tape shows through it and nowhere else. The mask is 426x272 and 116,416 B, built once
 at create; there is no per-pose mask.
@@ -467,7 +467,7 @@ at create; there is no per-pose mask.
 [ADR 0040](../../../docs/adr/0040-the-cassettes-are-a-table.md) why the colours are a table, and
 [`docs/specs/cassette-card.md`](../../../docs/specs/cassette-card.md) has the rectangles. A
 Track without a picture still has Real: the page turns white, the Card takes its row's plastic
-and the print shows the drawn label in that row's ink. Every flip back to dark hides the Card and the
+and the print is the row's label fill. Every flip back to dark hides the Card and the
 print with it.
 
 The picture is the loader's one 603x385 buffer, drawn by `cassette_cover.c` into a 402x188
@@ -485,18 +485,19 @@ frame, and it hides the mechanics with it: the two frame rings, the three chips,
 rollers, the run and the two strands are all inside 426x272 and under the Card, and only the
 hub rims turn behind the window - their lines white while a Cover is printed
 (`k_col_hub_white`: the rim's border and the spokes; its face stays the playing red), the tape's
-own inks when the print is the drawn label. The print's box is fixed in screen pixels and does not
+own inks when the print is the label fill. The print's box is fixed in screen pixels and does not
 follow the pose, and its picture is scaled at draw time, so the buffer stays the loader's one
 size; the controls pose scales it down, not up. The Card exists only at that pose, which is why the model refuses the down
 from Art until it has landed - the same two downs can arrive faster than the shrink.
 
 The print is cut in and out, never faded: the down brings it with the page flip and the up takes
 it with the page, in one frame. A Track change cuts it too - the loader reuses the one cover
-buffer, so there is nothing to fade over, and a Track with no picture cuts to the drawn label
+buffer, so there is nothing to fade over, and a Track with no picture cuts to the label fill
 just as plainly.
 
 The Card's ink is a cut, never an animation, and it is not read from anything: `k_col_cassette[]`
-is the palette, one row per cassette - a plastic and the ink of the label printed on it - and the
+is the palette, one row per cassette - a plastic, the label's fill and the ink it would print
+in - and the
 Track's file name picks the row (`ink_seed % k_col_cassette_count`, logged as `cassette N of M`). Both inks land together, so a
 cassette is one row and nothing is derived from the picture (ADR 0040). The table is where the
 screen's colour is tuned: fill a row and a cassette exists.

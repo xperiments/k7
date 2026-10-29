@@ -100,9 +100,41 @@ static bool s_req_tags;
 static uint16_t *s_art_buf;
 static lv_image_dsc_t s_art_dsc;
 
+/* The last answer, so opening Real or the Peek twice does not read the card twice.
+ * "Answered" includes "this Track has no picture/tags": that is a real answer, and
+ * asking again would only pay the card cost a second time. */
+static char s_cover_path[LIB_PATH_MAX];
+static mi_fmt_t s_cover_fmt;
+static bool s_cover_answered;
+static char s_tags_path[LIB_PATH_MAX];
+static mi_fmt_t s_tags_fmt;
+static bool s_tags_answered;
+
 /* ------------------------------------------------------------------ card access */
 
 static uint32_t current_seq(void); /* the request counter, below */
+
+/* Remember what the loader last answered, under the request lock. The UI asks
+ * artwork_loader_*_answered() before it asks for a Track again. */
+static void remember(char *dst, mi_fmt_t *fmt, bool *flag, const char *path, mi_fmt_t f)
+{
+    if (!s_lock) return;
+    if (xSemaphoreTake(s_lock, portMAX_DELAY) != pdTRUE) return;
+    snprintf(dst, LIB_PATH_MAX, "%s", path);
+    *fmt = f;
+    *flag = true;
+    xSemaphoreGive(s_lock);
+}
+
+static bool answered(const char *have_path, mi_fmt_t have_fmt, bool flag,
+                     const char *path, mi_fmt_t fmt)
+{
+    if (!s_lock || !path || !path[0]) return false;
+    if (xSemaphoreTake(s_lock, portMAX_DELAY) != pdTRUE) return false;
+    bool r = flag && have_fmt == fmt && strcmp(have_path, path) == 0;
+    xSemaphoreGive(s_lock);
+    return r;
+}
 
 static uint64_t file_size(FILE *f)
 {
@@ -394,6 +426,7 @@ static void render_tags(const char *track_path, mi_fmt_t fmt, uint32_t seq)
         return;
     }
 
+    remember(s_tags_path, &s_tags_fmt, &s_tags_answered, track_path, fmt);
     apply_tags(&tags);
     ESP_LOGI(TAG, "%s: tags %s (group '%s', song '%s'; open %llu ms, read %llu ms)",
              track_path[0] ? track_path : "(none)", ok ? "read" : "empty",
@@ -447,6 +480,7 @@ static void render_art(const char *track_path, mi_fmt_t fmt, uint32_t seq)
      * a picture for a Track that is no longer playing. The hand-off repeats the check
      * under the LVGL lock, so the log's verdict is this one and the view's is the last. */
     bool current = seq == current_seq();
+    if (current) remember(s_cover_path, &s_cover_fmt, &s_cover_answered, track_path, fmt);
     apply_cover(seq, ok);
 
     ESP_LOGI(TAG, "%s: %s (wait %llu ms, open %llu ms, read+decode %llu ms, %s)",
@@ -577,7 +611,7 @@ static void request(const char *track_path, mi_fmt_t format, bool art, bool tags
     if (art && !s_started) {
         /* There is no loader to answer with: its buffer did not fit, so no decoder will ever
          * report on this Track. Say so now - no picture - or the white page would wait on one
-         * that cannot come and hold its print empty instead of printing the drawn label. */
+         * that cannot come and hold its print empty instead of printing the label fill. */
         if (lvgl_port_lock(1000)) {
             if (seq == current_seq()) cassette_view_set_cover(NULL);
             lvgl_port_unlock();
@@ -596,4 +630,14 @@ void artwork_loader_request(const char *track_path, mi_fmt_t format)
 void artwork_loader_request_tags(const char *track_path, mi_fmt_t format)
 {
     request(track_path, format, false, true);
+}
+
+bool artwork_loader_cover_answered(const char *track_path, mi_fmt_t format)
+{
+    return answered(s_cover_path, s_cover_fmt, s_cover_answered, track_path, format);
+}
+
+bool artwork_loader_tags_answered(const char *track_path, mi_fmt_t format)
+{
+    return answered(s_tags_path, s_tags_fmt, s_tags_answered, track_path, format);
 }

@@ -186,7 +186,11 @@ static esp_err_t sd_mount(const char *music_dir, char *err, size_t err_size)
             .sclk_io_num = SD_CLK,
             .quadwp_io_num = -1,
             .quadhd_io_num = -1,
-            .max_transfer_sz = 4000,
+            /* 32 KB, not 4 KB: the decoder reads 32 KB at a time, and a 24-bit
+             * 192 kHz FLAC needs ~700 KB/s. At 4 KB the SPI driver split each
+             * read across two transactions and the card spent more time in
+             * command overhead than in data. */
+            .max_transfer_sz = 32768,
         };
         esp_err_t e = spi_bus_initialize(host.slot, &bus, SDSPI_DEFAULT_DMA);
         if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) {

@@ -32,6 +32,21 @@ extern "C" {
 #endif
 
 #define MINI_ICECAST_CHUNK_FRAMES 1024
+
+/* The highest source sample rate the broadcast puts on air. Above it the card and
+ * decoder cost more than this board can carry at the Station rate — a 24-bit 192 kHz
+ * FLAC needs ~700 KB/s and ~0.9 of a core before the encoder — so the Track is skipped
+ * with a log instead of starving every listener. 96 kHz keeps 88.2/96 kHz hi-res;
+ * 176.4/192 kHz files must be transcoded on the card (the index and downloads still
+ * serve them). Override at build time to widen or narrow the budget. */
+#ifndef MINI_ICECAST_MAX_SOURCE_HZ
+#define MINI_ICECAST_MAX_SOURCE_HZ 96000
+#endif
+
+static inline bool mini_icecast_source_rate_ok(uint32_t hz)
+{
+    return hz > 0 && hz <= MINI_ICECAST_MAX_SOURCE_HZ;
+}
 #define MINI_ICECAST_MAX_CLIENTS 4  /* the client table size; max_clients must fit in it */
 #define MINI_ICECAST_BITRATE_DEFAULT 128 /* kbps */
 /* Encoded bytes between metadata blocks. A byte count rather than a time, so
