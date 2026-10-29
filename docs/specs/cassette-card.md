@@ -94,19 +94,24 @@ loader answers with a picture or with NULL, so no Track flashes a name before it
 | | with a Cover | with no cover |
 |---|---|---|
 | Card ink | the Cover's dominant hue at a fixed saturation and value | one of five table inks in `cassette_style`, indexed from the Track's path |
-| Label ink | - | the complement: `hue + 180`, same saturation and value |
+| Label ink | - | the contrast rule: the complement, or paper-white / ink-black when the Card is neutral |
 
 - The dominant hue is computed **once per Track**, inside `cassette_cover_set_image()`, over
-  the decoded 603x385 RGB565 buffer - the one moment every pixel is in hand. Saturation and
-  value are the UI's, so a photo's mud or a near-white album cannot dissolve the Card into the
-  paper or turn it grey; only the hue is the Track's.
+  the decoded 603x385 RGB565 buffer - the one moment every pixel is in hand. It is a histogram
+  of **24 buckets (15 degrees each)**, counting only pixels with chroma over 12 % and value over
+  10 %, and it comes back as a bucket's first degree: the ink is therefore **within 7 degrees**
+  of the album's own, which is what keeps it from shimmering when a cover's pixels drift.
+  Saturation and value are the UI's - **62 % and 74 %** - so a photo's mud or a near-white album
+  cannot dissolve the Card into the paper or turn it grey; only the hue is the Track's.
 - `cassette_ink_from_hue()` in `components/portable/cassette/cassette_ink.c` builds the
   colour from the hue; `rgb.c` keeps its own full-value `hue_rgb()` for the strip's rainbow,
   which is a different colour from the same hue.
 - **Cut, not faded.** A colour animation would repaint the panel on every step, so the ink lands
   with the page flip and with the Track change, like the Page itself.
-- The label's ink contrasts with the Card **on purpose** - the complement at the same
-  saturation and value - so a drawn label never blends into the Card it is printed on.
+- The label's ink contrasts with the Card **on purpose**: the complement at the same saturation
+  and value. A **neutral** Card has no hue to turn - graphite's complement is itself - so a Card
+  whose complement has under 24 of chroma gets a plain near-white label on a dark shell or a
+  near-black one on a light shell, chosen by luminance (`cassette_ink_label()`).
 
 ## The reel tick
 
@@ -155,12 +160,12 @@ invalidate anything the Card would have to re-render.
 | layers | the Card and the print each draw into a banded ARGB layer; `CONFIG_LV_DRAW_LAYER_SIMPLE_BUF_SIZE = 24576` gives about 14 rows at 426 px, so ~24 KB transient |
 | tick | the invalidated area drops to ≤ 25,317 px, and nothing outside the window is repainted |
 
+The table is **petrol 0x2F5E7A, rust 0x8A3A2A, olive 0x4C6B39, plum 0x67457A, graphite
+0x2E2E33** (`k_col_card`), picked by `ink_seed % 5`.
+
 ## Still open
 
 - Whether the drawn label needs more than one design per ink pair, now that it costs code rather
   than bytes.
-- The five table inks are **petrol 0x2F5E7A, rust 0x8A3A2A, olive 0x4C6B39, plum 0x67457A,
-  graphite 0x2E2E33** (`k_col_card` in `cassette_style.c`) at **62 % saturation, 74 % value**
-  (`CASSETTE_INK_SAT`/`VAL` in `cassette_ink.h`). The values are the first cut, not a measurement:
-  they are what a 426x272 mat looks like on the white page, and they are the thing most likely to
-  want tuning on the panel.
+- The five table inks are the first cut, not a measurement: they are what a 426x272 mat looks
+  like on the white page, and they are the thing most likely to want tuning on the panel.

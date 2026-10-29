@@ -54,7 +54,7 @@ void cassette_cover_refresh_ink(void)
     if (!s_label) return;
     lv_color_t c = cassette_card_ink();
     cassette_rgb_t ink = { c.red, c.green, c.blue };
-    cassette_rgb_t comp = cassette_ink_complement(ink);
+    cassette_rgb_t comp = cassette_ink_label(ink);
     lv_obj_set_style_text_color(s_label, lv_color_make(comp.r, comp.g, comp.b), 0);
 }
 
@@ -185,7 +185,12 @@ void cassette_cover_set_image(const lv_image_dsc_t *dsc)
 {
     s_pending = false;
     s_dsc = dsc;
-    if (s_img && dsc) lv_image_set_src(s_img, dsc);
+    if (s_img) {
+        if (dsc) lv_image_set_src(s_img, dsc);
+        /* Hidden rather than cleared: the loader's last descriptor stays put, and a print
+         * with no picture must not keep drawing it behind the drawn label. */
+        lv_obj_set_hidden(s_img, dsc == NULL);
+    }
     label_apply();
 
     if (!dsc) {
@@ -276,6 +281,7 @@ void cassette_cover_create(lv_obj_t *parent)
     lv_image_set_antialias(s_img, true);
     lv_obj_set_pos(s_img, 0, 0);
     lv_obj_set_size(s_img, 1, 1);
+    lv_obj_set_hidden(s_img, true);
 
     /* The drawn label: the print when the Track carries no picture. It sits above the image
      * (which is empty then) and under the fallback pill. Jura 28 in the print's top band, the

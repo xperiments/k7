@@ -124,6 +124,35 @@ cassette_rgb_t cassette_ink_complement(cassette_rgb_t c)
     return hue_rgb(hue + DEGREES / 2, chroma, base);
 }
 
+/* How far apart a colour's brightest and dimmest channels are: the saturation that an ink
+ * needs before turning its hue is worth anything. */
+static int chroma_of(cassette_rgb_t c)
+{
+    int hi = c.r > c.g ? c.r : c.g;
+    if (c.b > hi) hi = c.b;
+    int lo = c.r < c.g ? c.r : c.g;
+    if (c.b < lo) lo = c.b;
+    return hi - lo;
+}
+
+/* Rec. 601's weights, in whole numbers: enough to choose black or white, which is all this
+ * is for. */
+static int luma_of(cassette_rgb_t c)
+{
+    return (299 * c.r + 587 * c.g + 114 * c.b) / 1000;
+}
+
+cassette_rgb_t cassette_ink_label(cassette_rgb_t card)
+{
+    cassette_rgb_t comp = cassette_ink_complement(card);
+    if (chroma_of(comp) >= CASSETTE_INK_MIN_CHROMA) return comp;
+
+    /* A neutral Card: the label is paper-white on a dark shell and ink-black on a light one. */
+    const uint8_t v = luma_of(card) >= 128 ? CASSETTE_INK_DARK : CASSETTE_INK_LIGHT;
+    cassette_rgb_t flat = { v, v, v };
+    return flat;
+}
+
 /* ---------------------------------------------------------- the cover's reading */
 
 /* RGB565's 5 and 6 bit channels expand by replication, so full scale stays full: 31 becomes

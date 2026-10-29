@@ -55,9 +55,21 @@ cassette_rgb_t cassette_ink_from_hue(int hue_deg);
  * (r == g == b). */
 int cassette_ink_hue(cassette_rgb_t c);
 
-/* The complement: the colour's hue turned 180 degrees at its own saturation and value.
- * This is what a drawn label is inked in, against the Card. */
+/* The complement: the colour's hue turned 180 degrees at its own saturation and value. */
 cassette_rgb_t cassette_ink_complement(cassette_rgb_t c);
+
+/* The complement, or a plain light or dark ink when the complement has nothing to give.
+ *
+ * The drawn label is inked against the Card, and a complement is the rule: turn the hue and
+ * the label reads. But a neutral Card - graphite, or any ink whose chroma is under
+ * CASSETTE_INK_MIN_CHROMA - has no hue to turn, so its complement is itself and the label
+ * would vanish into it. For those the label is near-white on a dark Card and near-black on a
+ * light one, chosen by the Card's luminance. */
+#define CASSETTE_INK_MIN_CHROMA 24
+#define CASSETTE_INK_LIGHT 0xEE
+#define CASSETTE_INK_DARK  0x11
+
+cassette_rgb_t cassette_ink_label(cassette_rgb_t card);
 
 /* The dominant hue of an RGB565 buffer, w x h pixels on `stride` bytes per row, sampled
  * every `step` pixels on both axes.

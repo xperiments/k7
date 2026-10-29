@@ -305,6 +305,42 @@ static void test_dominant_guards(void)
     CHECK_EQ(cassette_ink_dominant_hue(b.px, b.w, b.h, b.stride, 0), NO_HUE, "no step");
 }
 
+/* The drawn label's ink: the complement where a complement can read, and a plain light or dark
+ * ink where the Card has no hue to turn. The graphite cassette is why the rule exists - its
+ * chroma is 5, so its complement is itself and the label would vanish into the shell. */
+static void test_label_ink(void)
+{
+    const cassette_rgb_t red = { 188, 72, 72 };
+    cassette_rgb_t c = cassette_ink_label(red);
+    CHECK(c.r == 72 && c.g == 188 && c.b == 188, "a red Card inks its label cyan");
+
+    const cassette_rgb_t hued[] = {
+        { 0x2F, 0x5E, 0x7A }, { 0x8A, 0x3A, 0x2A }, { 0x4C, 0x6B, 0x39 }, { 0x67, 0x45, 0x7A },
+    };
+    for (unsigned i = 0; i < sizeof hued / sizeof hued[0]; i++) {
+        c = cassette_ink_label(hued[i]);
+        int hi = c.r > c.g ? c.r : c.g;
+        if (c.b > hi) hi = c.b;
+        int lo = c.r < c.g ? c.r : c.g;
+        if (c.b < lo) lo = c.b;
+        CHECK(hi - lo >= CASSETTE_INK_MIN_CHROMA, "a hued Card gets a label with chroma to spare");
+    }
+
+    const cassette_rgb_t graphite = { 0x2E, 0x2E, 0x33 };
+    c = cassette_ink_label(graphite);
+    CHECK(c.r == CASSETTE_INK_LIGHT && c.g == CASSETTE_INK_LIGHT && c.b == CASSETTE_INK_LIGHT,
+          "the graphite Card inks its label paper-white");
+
+    const cassette_rgb_t light = { 0xEE, 0xEE, 0xEE };
+    c = cassette_ink_label(light);
+    CHECK(c.r == CASSETTE_INK_DARK && c.g == CASSETTE_INK_DARK && c.b == CASSETTE_INK_DARK,
+          "a light neutral Card inks its label near-black");
+
+    const cassette_rgb_t mid = { 0x80, 0x80, 0x80 };
+    c = cassette_ink_label(mid);
+    CHECK(c.r == CASSETTE_INK_DARK, "a mid grey Card is light enough for a dark label");
+}
+
 int main(void)
 {
     test_from_hue();
@@ -322,6 +358,7 @@ int main(void)
     test_dominant_step();
     test_dominant_stride();
     test_dominant_guards();
+    test_label_ink();
 
     TEST_END();
 }

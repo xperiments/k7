@@ -571,7 +571,20 @@ static void request(const char *track_path, mi_fmt_t format, bool art, bool tags
     }
     if (art) s_req_art = true;
     if (tags) s_req_tags = true;
+    const uint32_t seq = s_req_seq;
     xSemaphoreGive(s_lock);
+
+    if (art && !s_started) {
+        /* There is no loader to answer with: its buffer did not fit, so no decoder will ever
+         * report on this Track. Say so now - no picture - or the white page would wait on one
+         * that cannot come and hold its print empty instead of printing the drawn label. */
+        if (lvgl_port_lock(1000)) {
+            if (seq == current_seq()) cassette_view_set_cover(NULL);
+            lvgl_port_unlock();
+        }
+        return;
+    }
+
     if (s_wake) xSemaphoreGive(s_wake);
 }
 
