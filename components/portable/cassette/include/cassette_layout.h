@@ -104,7 +104,7 @@ cassette_rect_t cassette_part_rect(cassette_part_t part);
  * Peek's bar, at the Peek's rect, with the Peek's insets. */
 enum {
     CASSETTE_TIMELINE_X        = 116,   /* the bar, centred in the panel */
-    CASSETTE_TIMELINE_Y        = 424,
+    CASSETTE_TIMELINE_Y        = 416,
     CASSETTE_TIMELINE_HIDDEN_Y = 488,   /* where its slide in begins, below the panel */
     CASSETTE_TIMELINE_W        = 568,
     CASSETTE_TIMELINE_H        = 52,

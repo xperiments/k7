@@ -265,7 +265,7 @@ to that same line. It is chrome, not the **Peek**.
 _Avoid_: menu, toolbar, controls
 
 **DJ block**:
-The right **Bar**'s EQ **Panel**: four knobs - GAIN, then HI, MED and LOW - and the R button,
+The right **Bar**'s EQ **Panel**: four knobs - GAIN, then HI, MID and LOW - and the R button,
 all in 96 px **Cells**, with the Menu's M in the bar's chrome. It gives way to the **Pad**
 while the **Menu** is up. R is a placeholder.
 _Avoid_: EQ block, right bar (that is the **Bar**)
@@ -325,7 +325,7 @@ tape, and the tags float over the cassette on their tethers to the hubs.
 _Avoid_: title bar, caption, marquee
 
 **Timeline bar**:
-The 568x52 strip at the bottom of the **Peek**, at (116,424). The Track's elapsed time on
+The 568x52 strip at the bottom of the **Peek**, at (116,416). The Track's elapsed time on
 the left, its total on the right, and a 288x6 rounded track between them whose lit fill
 follows the position. With nothing playing it shows the screen's idle sentence instead.
 It replaced the old title bar: the names are on the **Now playing tag**s.

@@ -70,7 +70,11 @@ static void button_ink_apply(cassette_button_t *b)
 
     if (b->disc) {
         if (b->white) {
-            cassette_circle_face(b->ambient, b->disc, true, b->on ? k_col_primary : b->cap.face);
+            /* On paper the latch is a lighter grey cap, not the primary face the line art uses:
+             * the idle cap is the spec's (the mode bar's k_col_dome) and a selected mode is
+             * k_col_button_cap (ADR 0038). */
+            cassette_circle_face(b->ambient, b->disc, true,
+                                 b->on ? k_col_button_cap : b->cap.face);
             lv_obj_set_style_border_width(b->disc, CASSETTE_CAP_RIM_W, 0);
             lv_obj_set_style_border_color(b->disc, k_col_dome, 0);
         } else if (b->on) {

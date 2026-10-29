@@ -85,12 +85,18 @@ extern const lv_color_t k_col_primary;
  * three buttons; the white page's cap defaults to
  * k_col_dome and its letter to k_col_bg, further down. */
 extern const lv_color_t k_col_button_rect;
+
+/* The selected mode button's cap on the white page, 0xBBBBBB: the idle cap is k_col_dome, so a
+ * lit mode reads as a lighter disc on paper. The dark page's latch is k_col_primary instead - it
+ * draws no cap, only a filled line-art disc. */
+extern const lv_color_t k_col_button_cap;
+
 extern const lv_color_t k_col_button_circle;
 extern const lv_color_t k_col_button_letter;
 
-/* The cap the white page draws in the disc's place: the neutral grey every button starts in.
- * It is also, always, the 4 px inset rim of that cap (CASSETTE_CAP_RIM_W), which is why a
- * coloured cap still shows the original grey at its edge. */
+/* The white page's idle cap: the neutral grey every button starts in. It is also, always, the
+ * 4 px inset rim of that cap (CASSETTE_CAP_RIM_W), which is why a selected cap still shows the
+ * original grey at its edge. */
 extern const lv_color_t k_col_dome;
 
 /* The light ink a letter takes when it sits on a coloured cap. k_col_white is 0x909090, which

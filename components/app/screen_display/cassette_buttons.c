@@ -58,6 +58,8 @@ static void mode_build(lv_obj_t *cell, int col, int row, void *ctx)
     if (col != 0 || row < 0 || row >= CASSETTE_MODE_COUNT) return;
     int id = row;
 
+    /* The white page's idle disc: the palette's neutral cap, as it always was. A selected mode
+     * takes k_col_button_cap on that page (cassette_button's latch ink, ADR 0038). */
     cassette_cap_t cap = { k_col_dome, k_col_bg };
     cassette_button_spec_t spec = {
         .name = k_mode_name[id],

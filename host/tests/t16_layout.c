@@ -179,7 +179,7 @@ static void test_frame(void)
 static void test_timeline(void)
 {
     CHECK_EQ(CASSETTE_TIMELINE_X, 116, "the bar's left");
-    CHECK_EQ(CASSETTE_TIMELINE_Y, 424, "the bar's top at rest");
+    CHECK_EQ(CASSETTE_TIMELINE_Y, 416, "the bar's top at rest");
     CHECK_EQ(CASSETTE_TIMELINE_HIDDEN_Y, 488, "and where its slide begins");
     CHECK_EQ(CASSETTE_TIMELINE_W, 568, "the bar is centred in the 800 px panel");
     CHECK_EQ(CASSETTE_TIMELINE_H, 52, "the bar's height");

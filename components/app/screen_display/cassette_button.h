@@ -20,9 +20,11 @@
  * The page is the only ink the module owns. On the dark page the carcase is filled k_col_bg
  * and bordered k_col_button_rect, the disc is the palette's line art - a k_col_button_circle
  * ring and no face - and the letter is k_col_button_letter. On the white page the disc is the
- * button's cap: a cassette_circle_face() disc of cap.face with CASSETTE_CAP_RIM_W of
- * k_col_dome as its rim, the letter in cap.letter, the carcase filled k_col_white and
- * bordered k_col_button_rect. The cap is spec data; the dark page ignores it.
+ * button's cap: a cassette_circle_face() disc of cap.face when idle - the mode bar's is
+ * k_col_dome - and of k_col_button_cap (0xBBBBBB) when the mode is on, with CASSETTE_CAP_RIM_W of
+ * k_col_dome as its rim, the letter in cap.letter, and the carcase filled k_col_white and
+ * bordered k_col_button_rect. The idle cap is spec data; the latch's ink is the module's, and the
+ * dark page ignores the cap entirely.
  *
  * The tap guard is the module's and runs before the action and the pulse. A click whose touch
  * had a gesture direction or moved past LVGL's press limit is not a tap: no action and no

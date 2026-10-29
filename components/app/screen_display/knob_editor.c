@@ -492,8 +492,10 @@ static bool click_after_drag(void)
 }
 
 /* The Pad, while the dial is up: the ratchet moves the value, a tap cycles the knob's stops
- * and a left swipe closes. That is the whole of the interaction - the dial takes no touch at
- * all, which is why there is no overlay and no hit test here any more (ADR 0028). */
+ * and a left swipe closes. The dial itself takes no touch at all, which is why there is no
+ * overlay and no hit test here any more (ADR 0028). The other way out - a tap on the mode bar,
+ * which the dial leaves uncovered - is the view's, since the bar is: it calls close() and runs
+ * nothing else (ADR 0034). */
 
 /* Where the current Pad gesture began, so a ratchet is measured from the value it started on
  * and not from whatever the value has become. */

@@ -9,7 +9,7 @@ while a drag is in progress; the two ends are printed as plaques at their own an
 
 **Amended by [ADR 0026](./0026-the-mode-bar-and-the-right-bars-groups.md):** the block is the
 **EQ group** now, and it shares the right bar with the Empty grille and the RGB group. Its six
-cells are `[Back][HI] / [VU][MED] / [Gain][LOW]`: the M cell is Back, the R placeholder's cell is
+cells are `[Back][HI] / [VU][MID] / [Gain][LOW]`: the M cell is Back, the R placeholder's cell is
 the VU meter, Gain moved down to the inside column's bottom cell, and the transport arrows and
 R are deleted. The knobs' circle, crown, line, ranges, edit gesture and tone_eq path are
 unchanged.
@@ -31,7 +31,7 @@ six cells are the right bar's DJ panel; the strip, its entrance and its page ink
 bar.
 
 The owner wants the cassette screen to carry a DJ channel strip, not a spectrum analyser:
-HI, MED and LOW plus a GAIN, in the same line-art language as the left drawer's P/</>. The
+HI, MID and LOW plus a GAIN, in the same line-art language as the left drawer's P/</>. The
 block has six cells because it sits on a 2x3 grid; the four cells the strip needs leave two,
 and those become the previous/next arrows. The screen's tap and the BOOT button stop
 skipping tracks: next and previous belong to those two arrows (and to the MCP, which is a
@@ -47,7 +47,7 @@ every listener hears, and there is no local audio path to fight with. The PCM se
   x=593..784 (the first column nudged 1 px right, the second stays at 688), three rows at
   y=76/170/264, so the block is 191x284 and leaves 16 px to the
   screen. The 16 px is the inset of the 64 px circle inside each carcase, not a gap. The
-  left column is GAIN above the `<` and `>` arrows; the right column is HI, MED and LOW.
+  left column is GAIN above the `<` and `>` arrows; the right column is HI, MID and LOW.
 - **The knobs are a small circle, an outside crown and a centre line.** The arrows keep
   the buttons' 64 px circle; the knobs use 44 px (30% smaller). The 24-dot crown is at
   r=32, outside that circle, and a line runs from the circle's centre towards its rim.
@@ -59,7 +59,7 @@ every listener hears, and there is no local audio path to fight with. The PCM se
 - **Edit mode is modal, on a 3x virtual knob.** A tap on a knob opens it after 260 ms; the
   second tap of a double tap lands on the 3x knob and resets it there. The 256 px (90% of
   96+94+94) virtual knob sits at x=220, its top at y=90; under the dial a rounded primary
-  pillow carries the knob's internal name (GAIN, HI, MED, LOW) in the light cap ink; there
+  pillow carries the knob's internal name (GAIN, HI, MID, LOW) in the light cap ink; there
   is no outer square, just the 118 px
   circle with its 2 px stroke, the crown and the centre line. A transparent 800x480
   overlay owns the touch. The cassette cuts out and the knob appears; on close the knob
@@ -93,7 +93,7 @@ every listener hears, and there is no local audio path to fight with. The PCM se
 - **A 5-8 band graphic EQ.** Rejected: at 96 px per cell, eight columns are 12 px each, and
   the spectrum analysis (or six biquads) costs more than the DJ strip; the owner wanted the
   DJ vocabulary.
-- **Six bands instead of three plus a trim.** Rejected: the owner asked for HI/MED/LOW and a
+- **Six bands instead of three plus a trim.** Rejected: the owner asked for HI/MID/LOW and a
   GAIN, the DJ channel strip.
 - **A literal `lv_spinner`.** Rejected: it is an indefinite animation with no value. The
   arc/crown gives the same visual language and a value that can be set.

@@ -155,10 +155,13 @@ and nothing else. Everything else is private:
   the callback and the latch. The bar builds the three 96x96 carcases and slides them; the
   buttons themselves are the shared `cassette_button.c`, which owns the pressed state, the
   latched ink, the 160 ms pulse and the tap guard. Its interface is `create()`,
-  `set_cb(mode, cb, ctx)` and `set_on(mode, on)`.
+  `set_cb(mode, cb, ctx)` and `set_on(mode, on)`. A button's page ink: the carcase's fill
+  (`k_col_white` on paper, `k_col_bg` on the dark page) and its ring (`k_col_button_rect` on
+  both); on paper only, the disc's cap - `k_col_dome` when idle and `k_col_button_cap` (0xBBBBBB)
+  when the mode is selected, with `k_col_dome` as its 4 px rim (ADR 0038).
 - `cassette_empty.c` — the Empty group: the plate at the Pad's footprint, the staggered dot
   grid and its draw callback, the page ink, and the `inert` panel value.
-- `cassette_eq.c` — the EQ group: all six cells, `[Back][HI] / [VU][MED] / [Gain][LOW]`. It
+- `cassette_eq.c` — the EQ group: all six cells, `[Back][HI] / [VU][MID] / [Gain][LOW]`. It
   builds the four knobs (`knob_cell.c`) and the meter into the carcases the bar hands it and owns
   its values and the audio; it creates no carcase and no root. Its interface is `create()` and
   `cassette_eq_panel()` - the value the view installs when the group is selected. The knob values and the meter's place outlive a swap;
@@ -236,7 +239,9 @@ and nothing else. Everything else is private:
 **The Menu.** A tap on the DJ block's M opens a mode of the controls: the cassette area
 becomes the window's five-row page, the right bar swaps its EQ panel for the Pad, the drawer
 becomes Back/Enter/Close, the header carries the list's title and the footer carries the broadcast's
-**timeline** - elapsed, total and the Peek's own 6 px track and fill, no strings (ADR 0032).
+**timeline** - elapsed, total and the Peek's own 6 px track and fill, no strings (ADR 0032) - and
+its frame is page ink: primary on Art, `k_col_glass` on Real, while the times, the title and the
+track keep the playing ink (ADR 0037).
 The model is portable - `components/portable/menu`, host test `t18_menu` - and owns the tree,
 the band, the window and the ratchet; `cassette_menu.c` draws five row slots, executes its
 actions, installs the Pad on the right bar and hides the cassette container for the mode's
@@ -506,7 +511,7 @@ whichever `components/portable/groups` says is up:
   a swipe that starts on the grille still moves the ladder. The dots are one draw callback, not
   one object each - the same reason the tape's packs are - and the ink turns with the page
   (`k_col_button_rect` dots on the dark page, `k_col_bg` dots on the white one).
-- **EQ** — `cassette_eq.c`: `[VU][HI] / [VU][MED] / [Gain][LOW]`, the meter one 96x190 plate.
+- **EQ** — `cassette_eq.c`: `[VU][HI] / [VU][MID] / [Gain][LOW]`, the meter one 96x190 plate.
 - **RGB** — `cassette_rgb.c`: `[Effect][Red] / [Effect][Green] / [Bright][Blue]`, the effect one
   plate with its dial above and its name below.
 
@@ -533,7 +538,12 @@ block's place - and the group is remembered across the mode and reinstalled when
 Each knob is a 44 px cap - 30% smaller than the buttons' 64 px one - with a ring of short lines
 outside it at r=32 and a line from the centre towards the rim (the owner's tuned 4 px width), built
 by `knob_cell.c`. There are no dots: the ring prints the two ends and the detent, and one brighter,
-longer line marks the value (ADR 0027). Every knob rides **one 270 degree arc** - the min end at
+thicker line marks the value (ADR 0027, ADR 0036). The cell names its knob in a 14 px round pillow inset 10 px
+into its top-left corner, with the short label the panel passes - `G`/`H`/`M`/`L` for the EQ, a
+letter or an abbreviation for the RGB group - in the meter's `lv_font_montserrat_14`:
+`k_col_primary` with `k_col_bg` on the Art page and `k_col_bg` with `k_col_button_white` on Real.
+The dial's box starts 10 px low (`KNOB_CELL_DIAL_Y`) so the pillow has its row (ADR 0035). Every
+knob rides **one 270 degree arc** - the min end at
 7:30, the max at 4:30, a dead gap at the bottom - so the EQ's four are bipolar with 0 dB at twelve
 o'clock, **-26 dB to the left and +6 dB to the right** (a boost turns clockwise), and the RGB's
 four are level knobs from 0 at 7:30 to full at 4:30, with its effect selector **stepped** along the
@@ -545,7 +555,7 @@ live publish on every step. A **tap** opens edit mode after a 260 ms delay: a 3x
 x=220, 90% of the 96+94+94 length, its top at y=90, a 2 px cap stroke and a centre line, with no
 outer square - only the cap, the ring and the line, plus graduations every 22.5 degrees) appears
 over the cassette, and the right bar gives its cells up to the **Pad**. **Above** the dial a rounded
-`k_col_primary` pillow carries the knob's label (GAIN, HI, MED, LOW, or an effect's) in the light
+`k_col_primary` pillow carries the knob's label (GAIN, HI, MID, LOW, or an effect's) in the light
 cap ink, and takes the live value - `+3.5`, `0.0`, `73%`, or a selected effect's name - while the
 Pad ratchets, going back to the label a second after the finger lifts. At each labelled position
 the dial prints a **plaque** (-26 and +6 for the bands, -12 and +12 for the trim), an outline until
@@ -556,8 +566,10 @@ return.
 **The dial takes no touch.** While it is up the Pad stands where the group was and does everything
 (ADR 0028): its **ratchet** moves the value at 4 px a step, its **tap cycles the knob's stops**
 (`knob_cycle()`: -12 -> 0 dB -> +12, -26 -> 0 dB -> +6, or a selector's slots one at a time) and its
-**left swipe closes**. The mode bar's three buttons are inert then, and the view's sink drops every
-screen swipe, because editing is a fact of the Controls model. A double tap on any small knob resets
+**left swipe closes**. The mode bar's three buttons close it too and run nothing else - the dial
+leaves them uncovered, and a tap there is the dismiss, so it cannot also open the Menu or drop the
+group (ADR 0034) - and the view's sink drops every screen swipe, because editing is a fact of the
+Controls model. A double tap on any small knob resets
 it to its **neutral** and cancels the pending open, so the 3x dial never appears: 0 dB for a band,
 full for a colour channel or the brightness, OFF for the effect. Nothing blinks (ADR 0029): the
 dial's cap is a reading, and the Pad is what the finger is on. A stepped knob also keeps its

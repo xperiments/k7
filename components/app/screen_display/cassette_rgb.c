@@ -24,9 +24,10 @@
 #include "knob_editor.h"
 
 /* The dial's box inside the effect's tall plate: the knob in the upper part, the selected
- * effect in the pillow below it. The box's top-left, so the cap lands at (48, 52). */
+ * effect in the pillow below it. The box's top-left, so the cap lands at (48, 55); its y is the
+ * cell dial's own, because the plate carries the same name pillow in its top-left corner. */
 #define FX_DIAL_X 0
-#define FX_DIAL_Y 4
+#define FX_DIAL_Y KNOB_CELL_DIAL_Y
 #define FX_PILL_Y 136
 
 _Static_assert(RGB_EFFECT_COUNT <= KNOB_MARKS_MAX, "the marks array has a slot per effect");
@@ -78,6 +79,10 @@ static cassette_rect_t rgb_cell_rect(int col, int row)
 /* The controls' identities, which is what the 3x dial's pillow says. The effect's own name is
  * not a name but a marked position: it rides knob_label() instead. */
 static const char *const k_knob_name[KNOB_COUNT] = { "RED", "GREEN", "BLUE", "BRIGHT", "EFFECT" };
+
+/* What the cell's name pillow prints: the channels are their letters and the two long names
+ * shorten, because the pillow is a badge on a 96 px cell (ADR 0035). */
+static const char *const k_knob_short[KNOB_COUNT] = { "R", "G", "B", "BRI", "FX" };
 
 static knob_cell_t s_knob_cell[KNOB_COUNT];
 static knob_t s_knob[KNOB_COUNT];
@@ -220,13 +225,17 @@ static void rgb_cell_build(lv_obj_t *cell, int col, int row, void *ctx)
          * name - goes below it, in the room the covered cell would have taken. */
         knob_cell_create_at(&s_knob_cell[KNOB_FX], cell, &k_knob_dial_cell, FX_DIAL_X,
                             FX_DIAL_Y);
+        knob_cell_add_name_pill(&s_knob_cell[KNOB_FX], k_knob_short[KNOB_FX]);
         knob_cell_add_value_pill(&s_knob_cell[KNOB_FX], CASSETTE_CELL_W / 2, FX_PILL_Y);
         knob_apply(KNOB_FX);
         knob_handlers(cell, KNOB_FX);
         return;
     }
 
-    if (knob_cell_create(&s_knob_cell[kind], cell)) knob_apply(kind);
+    if (!knob_cell_create(&s_knob_cell[kind], cell)) return;
+    /* The cell names its control in the pillow over the dial (ADR 0035). */
+    knob_cell_add_name_pill(&s_knob_cell[kind], k_knob_short[kind]);
+    knob_apply(kind);
     knob_handlers(cell, kind);
 }
 

@@ -12,9 +12,10 @@
  * small cell (2 px a step). A tap on that cell opens the dial, and from then on the right bar
  * shows the **Pad** where the group's cells were: its ratchet drives the knob at 4 px a step,
  * its tap cycles the knob's stops (knob_cycle()), and its left swipe closes the dial
- * (ADR 0028). Nothing on the dial itself takes a touch - not its ring, not its plaques, not
- * its centre - so the surfaces that act are the two the screen already teaches: the group's
- * cells, and the Pad.
+ * (ADR 0028). A tap on any of the mode bar's three buttons closes it as well, and runs
+ * nothing else (ADR 0034). Nothing on the dial itself takes a touch - not its ring, not its
+ * plaques, not its centre - so the surfaces that act are the two the screen already teaches:
+ * the group's cells, and the Pad.
  *
  * While a drag is in progress the pillow shows the live value; a second after the finger
  * lifts it goes back to knob_label(). Every line on the dial - the marks, the graduations,
@@ -73,8 +74,9 @@ void knob_editor_set_bank(const knob_editor_bank_t *bank);
 /* True while a knob is in edit mode. The view drops every screen intent then. */
 bool knob_editor_is_editing(void);
 
-/* The panel is going away (its bar slid out, or its cells were swapped): end the edit or
- * disarm the pending open, so neither the Pad nor the dial can outlive the cells. */
+/* End the edit, or disarm the pending open: whatever takes the dial away - its bar sliding out,
+ * its cells being swapped, the left bar's tap (ADR 0034) - so neither the Pad nor the dial can
+ * outlive them. All-false when there is nothing to end. */
 void knob_editor_close(void);
 
 /* A small knob's CLICKED and DOUBLE_CLICKED: the tap that arms the delayed open, and the

@@ -591,20 +591,26 @@ opens and closes the Menu, the sliders-v glyph selects the EQ group and the led 
 group. Each is a 64 px disc with one glyph from the icon font, and each is a toggle: a group's
 button again puts the Empty group back. The button that is "on" - the cassette while the Menu is
 open, a group while it is up - fills its disc `k_col_primary` with a `k_col_bg` glyph, so the bar
-reads as a mode bar at a glance.
+reads as a mode bar at a glance. On the white page it takes the lighter `k_col_button_cap`
+(0xBBBBBB) instead, over the idle `k_col_dome` disc, with `k_col_dome` kept as its 4 px rim; the
+carcase's ring does not change (ADR 0038).
 
 The right **group block** is six 96 px carcases in two touching columns at x=594..784 (the first
 column is 2 px right of its nominal 592; the second stays at 688), rows at 76/170/264, and it
 shows one group at a time. **Empty** is the default: one 186x284 plate at the Pad's footprint,
 filled with a staggered grid of 4 px dots - a speaker's front, and a picture, so it neither
 clicks nor swallows a swipe. **EQ** is the VU meter (one 96x190 plate over the inside column's top two cells) and Gain
-inside, HI/MED/LOW outside; **RGB** is the effect selector (the same plate, its dial above and
+inside, HI/MID/LOW outside; **RGB** is the effect selector (the same plate, its dial above and
 the effect's name below) and Brightness inside, R/G/B outside. There is no Back cell: the
 group's own button on the mode bar is the toggle, and a tap on it puts the group away. The
 groups live with the chrome: hiding the bars drops the active group, so the controls always open
 on the grille. The knobs are a 44 px cap with a ring of short lines outside it - no dots - and a line from the
 centre towards the rim; the ring prints the two ends and 0 dB at twelve, and a brighter, thicker
-line points at the value. Every knob rides one 270 degree arc: a channel runs 0 at 7:30 to full at
+line points at the value. Each cell says which knob it is in a 14 px round pillow inset 10 px into
+its top-left corner - one letter each (G, H, M, L; R, G, B, BRI, FX for the RGB group), in the VU
+meter's L/R font, primary with near-black text on the Art page and black with the light ink on Real
+- and the dial starts 10 px down so the pillow has its own row (ADR 0035). Every knob rides one
+270 degree arc: a channel runs 0 at 7:30 to full at
 4:30, a band -26 dB at 7:30 to +6 dB at 4:30 with 0 dB at twelve, so a boost turns clockwise and a
 cut counter-clockwise, and the effect selector is stepped along the same arc, its six names
 printed in a box either side of the dial (OFF, SOLID, BREATHE on the left; RAINBOW, CHASE, LEVEL on
@@ -613,7 +619,7 @@ and down - 6 px of dead zone, 2 px a step, a magnet that holds its neutral and i
 positions - and a drag never opens anything: the click that ends one is dropped. A tap opens a
 modal edit mode after 260 ms: a 3x dial (256 px at x=220, 90% of the length, top at y=90, no outer
 square, just the cap, the ring and the line, plus graduations every 22.5 degrees) appears over the
-cassette, with a rounded primary pillow above it carrying the knob's name (GAIN, HI, MED, LOW) in
+cassette, with a rounded primary pillow above it carrying the knob's name (GAIN, HI, MID, LOW) in
 the light cap ink - a selector has no such pillow: its names are the labels, up to seven in a box
 of three per side and one above - and a plaque at each labelled position - -26 and +6 for the
 bands, -12 and +12 for the trim - which fills as the knob reaches it. The cassette cuts out and on
@@ -623,9 +629,10 @@ same one the Menu ratchets - and the Pad does every action: its ratchet moves th
 step, its tap cycles the knob's stops (-12 -> 0 dB -> +12, -26 -> 0 dB -> +6, or a selector's slots
 one at a time) and its left swipe closes. The short delay lets a double tap's second tap land on
 the small knob and reset it in place - the knob's own neutral, 0 dB for a band and full for a
-channel - so the dial never appears; nothing blinks, the mode bar's buttons are inert while the
-dial is up, and the view drops every screen swipe, because editing is a fact of the Controls
-model. The EQ's audio is
+channel - so the dial never appears; nothing blinks, and the view drops every screen swipe,
+because editing is a fact of the Controls model. The mode bar is the way out: the dial leaves it
+uncovered, so a tap on any of its three buttons puts the dial away - and runs nothing else, so the
+tap that dismisses cannot also open the Menu or drop the group (ADR 0034). The EQ's audio is
 `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell and a 4 kHz high shelf plus
 a trim before them, with the DJ ranges (GAIN -12..+12 dB, default 0; bands -26..+6 dB,
 default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder. The RGB group

@@ -35,7 +35,7 @@ the RGB group, and the shared 3x editor.*
 - `cassette_empty` is the Empty group: one 186x284 plate at the Pad's footprint with a staggered
   dot grid, painted by one draw callback, and an **inert** panel - the bar leaves its carcase out
   of the hit test and bubbles gestures, so the default panel does not eat a ladder swipe.
-- The EQ group is `[VU][HI] / [VU][MED] / [Gain][LOW]`; `cassette_meter` moved from the
+- The EQ group is `[VU][HI] / [VU][MID] / [Gain][LOW]`; `cassette_meter` moved from the
   cassette's design grid into the VU plate (one 96x190 surface over the inside column's top two
   cells: two 30 px dot columns lit from the bottom, an L/R pill under each) and lost its pose
   plumbing.

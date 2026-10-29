@@ -252,6 +252,13 @@ void cassette_footer_set_page(bool white)
 {
     if (!s_footer) return;
     lv_obj_set_style_bg_color(s_footer, white ? k_col_white : k_col_bg, 0);
+
+    /* The timeline's frame is page ink, its contents are not. On paper the Peek's primary ring
+     * reads as a second, louder border than the chrome's own dark lines, so it drops to the
+     * page's grey; the playing ink inside - the times, the title, the track - stays primary,
+     * which is the one colour the white page keeps (ADR 0037). */
+    if (s_bar)
+        lv_obj_set_style_border_color(s_bar, white ? k_col_glass : k_col_primary, 0);
 }
 
 void cassette_footer_set_playing(bool playing, uint32_t elapsed_ms, uint32_t duration_ms,

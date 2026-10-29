@@ -12,7 +12,7 @@
  *   cassette_bars     the two edge bars: their cells, their entrance and their page ink
  *   cassette_buttons  the mode bar of the left bar: the Menu's door, the EQ and the RGB
  *   cassette_empty    the right bar's Empty group: the speaker grille
- *   cassette_eq       the right bar's EQ group: Back, the VU meter, Gain, HI/MED/LOW
+ *   cassette_eq       the right bar's EQ group: Back, the VU meter, Gain, HI/MID/LOW
  *   cassette_rgb      the right bar's RGB group: Back, Effect, Brightness, Red/Green/Blue
  *   knob_editor       the one 3x dial, overlay and edit session those two share
  *   cassette_header   the band that closes the controls screen across the top
@@ -418,13 +418,24 @@ static void groups_apply(unsigned changed)
     groups_latch();
 }
 
+/* The left bar is the one piece of chrome a dial leaves a finger, so a tap there is how the
+ * mode is put away: it ends the edit and runs nothing else (ADR 0034). The click is consumed -
+ * a tap that dismisses the dial must not also open the Menu or drop the group on its way - and
+ * the tap that follows is the mode's own. */
+static bool left_bar_dismiss(void)
+{
+    if (!knob_editor_is_editing()) return false;
+    knob_editor_close();
+    return true;
+}
+
 /* The cassette's door: the Controls model owns the Menu's guards - the settled controls pose,
  * a knob not editing - and its open state, and its MENU_TAP toggles, so the same button closes
  * the Menu it opened. */
 static void tape_cb(void *ctx)
 {
     (void)ctx;
-    if (knob_editor_is_editing()) return;   /* the Pad owns the touch while a dial is up */
+    if (left_bar_dismiss()) return;
     if (!s_controls) return;
     controls_facts_t facts = facts_now();
     controls_apply(controls_handle(s_controls, CONTROLS_INTENT_MENU_TAP, &facts));
@@ -433,14 +444,14 @@ static void tape_cb(void *ctx)
 static void eq_group_cb(void *ctx)
 {
     (void)ctx;
-    if (knob_editor_is_editing()) return;
+    if (left_bar_dismiss()) return;
     groups_apply(groups_handle(&s_groups, GROUPS_INTENT_TAP_EQ, chrome_shown_now()));
 }
 
 static void rgb_group_cb(void *ctx)
 {
     (void)ctx;
-    if (knob_editor_is_editing()) return;
+    if (left_bar_dismiss()) return;
     groups_apply(groups_handle(&s_groups, GROUPS_INTENT_TAP_RGB, chrome_shown_now()));
 }
 
@@ -508,6 +519,12 @@ static void scene_tick(void)
         if (CONFIG_APP_UI_DUMP_SCENE == 2) eq_group_cb(NULL);
         else if (CONFIG_APP_UI_DUMP_SCENE == 3) rgb_group_cb(NULL);
         else if (CONFIG_APP_UI_DUMP_SCENE == 4) tape_cb(NULL);
+        else if (CONFIG_APP_UI_DUMP_SCENE == 5) {
+            /* Real and the EQ group: the one scene where the panels are painted on the white
+             * page, which is the only way to photograph their page ink. The swipe to Real is
+             * the next step, once this install has been latched. */
+            eq_group_cb(NULL);
+        }
         else if (CONFIG_APP_UI_DUMP_SCENE == 6) {
             /* The 3x dial is a tap away and a dump has no finger: with the EQ group up, arm
              * the gain knob's delayed open. It lands 260 ms later, well before the dump, so

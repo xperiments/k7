@@ -5,7 +5,7 @@
  * The panel fills the right **bar**'s six cells, two columns of three:
  *
  *     [VU  ] [HI ]
- *     [VU  ] [MED]
+ *     [VU  ] [MID]
  *     [Gain] [LOW]
  *
  * the inside column the meter - one 96x190 plate over its top two cells - and the gain, and the
@@ -20,7 +20,7 @@
  *
  * Each knob is a 44 px cap (30 % smaller than a button's) with a ring of short lines outside it
  * at r=32 - the two ends and 0 dB's twelve o'clock - and the 4 px line from the centre to the
- * rim (the owner's tuned width). The value marker is the brighter, longer line that points at
+ * rim (the owner's tuned width). The value marker is the brightest, thickest line that points at
  * the value. The arc is 270 degrees: -26 dB at 7:30 on the left, +6 dB at 4:30 on the right, 0 dB
  * at twelve, so a boost turns clockwise (ADR 0027, which reverses ADR 0018's "the right side
  * cuts"). The meter's plate is cassette_meter's, two 84 px rows fed by the cassette frames.

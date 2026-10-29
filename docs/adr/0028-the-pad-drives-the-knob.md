@@ -1,8 +1,15 @@
 # The Pad drives the knob; the dial only shows it
 
+**Amended by [ADR 0036](./0036-the-value-marker-is-half-its-length.md):** the value marker's
+sizes are 4 x 6 at 1x and 5 x 9 at 3x; it is no longer the longest line on the dial.
+
 **Amended by [ADR 0029](./0029-the-dial-is-quiet.md):** the blink this record left in place is
 gone, with its two targets and the bank's `cell_disc` hook; the dial sits 20 px below the pillow's
 row; and a stepped knob prints one plaque per position instead of a title pillow.
+
+**Amended by [ADR 0034](./0034-the-mode-bar-puts-the-dial-away.md):** the mode bar is no longer
+inert while a dial is up. A tap on any of its three buttons ends the edit and runs nothing else, so
+the Pad's leftward swipe is no longer the only way out.
 
 **Amends [ADR 0027](./0027-the-knobs-are-dragged.md).** That record made the dial a control: a
 drag on the 3x surface trimmed the value, a tap on the centre closed it, a tap on a plaque jumped

@@ -12,7 +12,7 @@
  *   cassette_peek     the up swipe's timeline bar and its two floating tags
  *   cassette_bars     the two edge strips: their 260 ms entrance, page and raise
  *   cassette_buttons  the transport drawer at the left edge
- *   cassette_eq       the DJ block at the right edge: GAIN, HI/MED/LOW and R (M is the bar's chrome)
+ *   cassette_eq       the DJ block at the right edge: GAIN, HI/MID/LOW and R (M is the bar's chrome)
  *   controls          the portable Controls model (the four-rung ladder and the Menu)
  *   screen_input      what a touch means, as intents
  *   cassette_layout   the design grid (portable), cassette_style the palette,

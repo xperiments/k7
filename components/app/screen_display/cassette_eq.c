@@ -4,7 +4,7 @@
  * The panel fills all six of the bar's cells, two columns of three:
  *
  *   [VU  ] [HI]
- *   [VU  ] [MED]
+ *   [VU  ] [MID]
  *   [Gain] [LOW]
  *
  * The inside column is the VU meter - one 96x190 plate over the top two cells - and the gain,
@@ -54,7 +54,7 @@
 enum {
     KNOB_GAIN = 0,
     KNOB_HI,
-    KNOB_MED,
+    KNOB_MID,
     KNOB_LOW,
     KNOB_COUNT
 };
@@ -69,12 +69,12 @@ enum {
 /* The panel's control at one bar cell, in the bar's (col,row) order:
  *
  *   [VU  ] [HI ]
- *   [VU  ] [MED]
+ *   [VU  ] [MID]
  *   [Gain] [LOW]
  */
 static const int8_t k_cell_kind[2][3] = {
     { CELL_METER, CELL_COVERED, KNOB_GAIN },
-    { KNOB_HI, KNOB_MED, KNOB_LOW },
+    { KNOB_HI, KNOB_MID, KNOB_LOW },
 };
 
 /* The meter's plate: the top two cells of the inside column as one 96x190 surface, and nothing
@@ -94,11 +94,15 @@ static cassette_rect_t eq_cell_rect(int col, int row)
     return cassette_cell_rect(CASSETTE_BAR_RIGHT, col, row);
 }
 
-/* Which audio band a knob drives: HI=2, MED=1, LOW=0. The gain is not a band. */
+/* Which audio band a knob drives: HI=2, MID=1, LOW=0. The gain is not a band. */
 static const int8_t k_knob_band[KNOB_COUNT] = { -1, 2, 1, 0 };
 
 /* The controls' identities: what the 3x dial's pillow says, and what the mixer calls them. */
-static const char *const k_knob_name[KNOB_COUNT] = { "GAIN", "HI", "MED", "LOW" };
+static const char *const k_knob_name[KNOB_COUNT] = { "GAIN", "HI", "MID", "LOW" };
+
+/* What the cell's name pillow prints, one letter each: the pillow is a badge on a 96 px cell,
+ * and the 3x dial is where the names are spelled out (ADR 0035). */
+static const char *const k_knob_short[KNOB_COUNT] = { "G", "H", "M", "L" };
 
 /* The two ends of each knob, printed on the 3x dial at their own angles: the bands cut to
  * -26 and boost to +6, the trim is symmetric. knob_label() reads these back when the knob
@@ -137,7 +141,11 @@ static void knob_apply(int id)
 
 static void knob_build(lv_obj_t *cell, int id)
 {
-    if (knob_cell_create(&s_knob_cell[id], cell)) knob_apply(id);
+    if (!knob_cell_create(&s_knob_cell[id], cell)) return;
+    /* The cell names its control in the pillow over the dial, so the 3x surface only has to
+     * say where the value is (ADR 0035). */
+    knob_cell_add_name_pill(&s_knob_cell[id], k_knob_short[id]);
+    knob_apply(id);
 }
 
 /* ------------------------------------------------------------------- the bank */

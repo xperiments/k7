@@ -1,7 +1,7 @@
 /*
  * cassette_peek.c - the up swipe's overlay: the timeline bar and the two floating tags.
  *
- * The bar is the old title bar's paper strip, 568x52 at (116,424), with the title replaced
+ * The bar is the old title bar's paper strip, 568x52 at (116,416), with the title replaced
  * by the Track's clock: elapsed on the left, a 6 px track and its lit fill in the
  * middle, total on the right. The tags are two 504x44 pills centred on the cassette:
  * x=148..651, which leaves 61 px of cassette on each side and puts the two hubs about

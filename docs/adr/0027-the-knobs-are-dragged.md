@@ -1,5 +1,13 @@
 # The knobs are dragged, and the dial says what its ends mean
 
+**Amended by [ADR 0035](./0035-the-cell-names-its-knob.md):** the 1x cell does carry text now - a
+14 px name pillow at its top-left, in the meter's L/R font - so "the 1x cell has no room for text"
+holds of the *number* only, and the dial's box starts 10 px lower to give the pillow its row.
+
+**Amended by [ADR 0036](./0036-the-value-marker-is-half-its-length.md):** the line that marks the
+value is half its length - 6 px at 1x, 9 at 3x - so it is the same tick length as a printed mark
+and is told apart by its width and its round cap.
+
 **Amended by [ADR 0028](./0028-the-pad-drives-the-knob.md):** the 3x dial takes no touch. The drag,
 the plaque tap and the centre-circle close are gone from it; the right bar shows the **Pad** while
 a knob is open, and the Pad ratchets the value, cycles the knob's stops on a tap and closes on a

@@ -1,5 +1,12 @@
 # The Menu's footer shows the timeline, not the song
 
+**Amended by the owner's tuning:** the bar's rest y is 416, not 424, in `cassette_layout` - one
+number, so the Peek's strip moved with the footer's.
+
+**Amended by [ADR 0037](./0037-the-footers-frame-is-page-ink.md):** the bar's border is page ink.
+It is the Peek's primary on the dark page and `k_col_glass` on the white one; the times, the title
+and the track keep the playing ink on both.
+
 **Amended by [ADR 0033](./0033-the-timeline-turns-three-faces.md):** the bar is up whenever the
 chrome is, not only in the Menu, and it turns three faces - the times, the artist, the song - every
 four seconds.

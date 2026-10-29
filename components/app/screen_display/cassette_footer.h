@@ -44,9 +44,11 @@ void cassette_footer_create(lv_obj_t *screen);
  * nothing. The band is hidden once its slide out completes. */
 void cassette_footer_set_shown(bool shown);
 
-/* Paint the opaque fill for the page behind the band: k_col_white while the controls hold
- * the white page, k_col_bg on the dark screen. The view calls it from its page flip. The
- * Menu's now playing, if it has one, is repainted with the page's ink in the same call. */
+/* Paint the page's ink: the band's opaque fill - k_col_white while the controls hold the white
+ * page, k_col_bg on the dark screen - and the timeline's frame, which is primary on the dark page
+ * and the page's grey on paper. The contents of the bar keep their playing ink on both. The view
+ * calls it from its page flip. The Menu's now playing, if it has one, is repainted with the
+ * page's ink in the same call. */
 void cassette_footer_set_page(bool white);
 
 /* What the timeline says: whether anything is playing, its elapsed and total milliseconds, and
