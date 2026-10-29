@@ -79,9 +79,9 @@ One buffer, one descriptor, two objects.
 ## The drawn label
 
 When the Track carries no picture, the print is **drawn**: the Track's name in **Jura 28**, in the
-Card's **complement**, in the print's **top band** - (12,10), 378 px wide - because the window is
-the print's middle and leaves only 55 px above it. No fill: the Card's own colour is the label's
-paper, which is what makes the complement read as ink on it. `LV_LABEL_LONG_DOT` from Track names
+row's **label** ink, in the print's **top band** - (12,10), 378 px wide - because the window is the
+print's middle and leaves only 55 px above it. No fill: the Card's plastic is the label's paper,
+which is what makes the label ink read as ink on it. `LV_LABEL_LONG_DOT` from Track names
 that outrun the band. It is cut by the mask like anything else in the print, so the window is the
 mask's window, not the label's.
 
@@ -91,27 +91,34 @@ loader answers with a picture or with NULL, so no Track flashes a name before it
 
 ## The ink
 
-| | with a Cover | with no cover |
-|---|---|---|
-| Card ink | the Cover's dominant hue at a fixed saturation and value | one of five table inks in `cassette_style`, indexed from the Track's path |
-| Label ink | - | the contrast rule: the complement, or paper-white / ink-black when the Card is neutral |
+| | |
+|---|---|
+| Card ink | the row's **plastic** |
+| Label ink | the same row's **label** |
 
-- The dominant hue is computed **once per Track**, inside `cassette_cover_set_image()`, over
-  the decoded 603x385 RGB565 buffer - the one moment every pixel is in hand. It is a histogram
-  of **24 buckets (15 degrees each)**, counting only pixels with chroma over 12 % and value over
-  10 %, and it comes back as a bucket's first degree: the ink is therefore **within 7 degrees**
-  of the album's own, which is what keeps it from shimmering when a cover's pixels drift.
-  Saturation and value are the UI's - **62 % and 74 %** - so a photo's mud or a near-white album
-  cannot dissolve the Card into the paper or turn it grey; only the hue is the Track's.
-- `cassette_ink_from_hue()` in `components/portable/cassette/cassette_ink.c` builds the
-  colour from the hue; `rgb.c` keeps its own full-value `hue_rgb()` for the strip's rainbow,
-  which is a different colour from the same hue.
-- **Cut, not faded.** A colour animation would repaint the panel on every step, so the ink lands
-  with the page flip and with the Track change, like the Page itself.
-- The label's ink contrasts with the Card **on purpose**: the complement at the same saturation
-  and value. A **neutral** Card has no hue to turn - graphite's complement is itself - so a Card
-  whose complement has under 24 of chroma gets a plain near-white label on a dark shell or a
-  near-black one on a light shell, chosen by luminance (`cassette_ink_label()`).
+`k_col_cassette[]` in `cassette_style.c` is the whole palette (ADR 0040): one row per cassette,
+`{ plastic, label }`, with `k_col_cassette_count` as its length. Adding a cassette is adding a
+row - nothing else changes, and nothing is derived.
+
+```
+{ COL_HEX(0x2F5E7A), COL_HEX(0xF2E8D5) },   /* petrol, cream */
+{ COL_HEX(0x8A3A2A), COL_HEX(0xEFDCC0) },   /* rust, warm cream */
+{ COL_HEX(0x4C6B39), COL_HEX(0xE8EAD8) },   /* olive, pale sage */
+{ COL_HEX(0x67457A), COL_HEX(0xF0DFE4) },   /* plum, pale rose */
+{ COL_HEX(0x2E2E33), COL_HEX(0xE6E6E0) },   /* graphite, off-white */
+```
+
+- **The Track's path picks the row**: `ink_seed % k_col_cassette_count`, where `ink_seed` is an
+  FNV-1a hash of the Track's path computed in the model. A Track with no Cover still changes the
+  cassette, and the choice survives a pause and a rebuilt Playlist.
+- **Both inks land together, as a cut.** The view sets the Card's plastic and the label's ink
+  from the same row on `ink_changed`; a colour animation would repaint the panel on every step.
+- **Nothing is read off a picture.** `cassette_cover_set_image()` uses the loader's buffer for
+  the picture alone, and there is no ink module: the histogram, the HSV conversion, the
+  complement and its luminance fallback are deleted with ADR 0040.
+- **The pair is the filler's judgement.** Nothing checks that a label reads against its plastic
+  - keep the label light on a dark shell and dark on a light one, and keep the plastics far
+  enough apart that two Tracks in a row do not look like the same cassette.
 
 ## The reel tick
 
@@ -160,12 +167,9 @@ invalidate anything the Card would have to re-render.
 | layers | the Card and the print each draw into a banded ARGB layer; `CONFIG_LV_DRAW_LAYER_SIMPLE_BUF_SIZE = 24576` gives about 14 rows at 426 px, so ~24 KB transient |
 | tick | the invalidated area drops to ≤ 25,317 px, and nothing outside the window is repainted |
 
-The table is **petrol 0x2F5E7A, rust 0x8A3A2A, olive 0x4C6B39, plum 0x67457A, graphite
-0x2E2E33** (`k_col_card`), picked by `ink_seed % 5`.
-
 ## Still open
 
 - Whether the drawn label needs more than one design per ink pair, now that it costs code rather
   than bytes.
-- The five table inks are the first cut, not a measurement: they are what a 426x272 mat looks
-  like on the white page, and they are the thing most likely to want tuning on the panel.
+- The five rows are a first cut, not a measurement: they are what a 426x272 mat and a cream
+  label look like on the white page, and they are the thing most likely to want tuning there.

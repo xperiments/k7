@@ -122,8 +122,7 @@ and nothing else. Everything else is private:
 - `cassette_cover.c` — the white page's print. `create(parent)` builds the container, the
   clip box and the drawn label; a private `place()` applies the Card's shared mask and sizes
   the picture the first time the print is shown; `set_image(dsc)` takes the loader's one
-  buffer and derives the Card's ink from its hue; `set_title()` / `refresh_ink()` keep the
-  drawn label's words and its contrast; `set_shown()` / `is_shown()` are the page's wish. The
+  buffer; `set_title()` / `set_label_ink()` give the drawn label its words and the row's ink; `set_shown()` / `is_shown()` are the page's wish. The
   print is the top layer: the stack is cinta < Card < label. The container is the Card's
   426x272 box at (136,82), so it shares the Card's one A8 mask, whose 291x87 window is a real
   transparent opening (a pill whose ends are the hubs' circles) - the tape shows through it
@@ -462,10 +461,11 @@ it has not - on the **Card**: one tinted 426x272 rectangle at (136,82), radius 1
 291x87 pill window at (203,157) that the Card and the print's container share as one A8 mask,
 so the tape shows through it and nowhere else. The mask is 426x272 and 116,416 B, built once
 at create; there is no per-pose mask.
-[ADR 0039](../../../docs/adr/0039-the-cassette-is-a-card.md) records why the glow is gone and
+[ADR 0039](../../../docs/adr/0039-the-cassette-is-a-card.md) records why the glow is gone,
+[ADR 0040](../../../docs/adr/0040-the-cassettes-are-a-table.md) why the colours are a table, and
 [`docs/specs/cassette-card.md`](../../../docs/specs/cassette-card.md) has the rectangles. A
-Track without a picture still has Real: the page turns white and the Card takes one of the
-five table inks, with a drawn label on it. Every flip back to dark hides the Card and the
+Track without a picture still has Real: the page turns white, the Card takes its row's plastic
+and the print shows the drawn label in that row's ink. Every flip back to dark hides the Card and the
 print with it.
 
 The picture is the loader's one 603x385 buffer, drawn by `cassette_cover.c` into a 402x188
@@ -490,13 +490,11 @@ go together; the Card does not fade - it arrives with the page flip. A page flip
 change cuts the print instead: the loader reuses the one cover buffer, so there is nothing to
 fade over.
 
-The Card's ink is a cut, never an animation. The cover's dominant hue is computed once, when
-`cassette_cover_set_image()` takes the loader's buffer, and applied at a fixed saturation and
-value; with no cover the ink is one of `cassette_style`'s five table inks, indexed from the
-Track's path, and the drawn label takes the complement (`hue + 180`, same saturation and
-value) so it contrasts on purpose. Only the hue is the Track's - the saturation and the value
-are the UI's - so a photograph's mud or a near-white album cannot dissolve the Card into the
-page or turn it grey.
+The Card's ink is a cut, never an animation, and it is not read from anything: `k_col_cassette[]`
+is the palette, one row per cassette - a plastic and the ink of the label printed on it - and the
+Track's path picks the row (`ink_seed % k_col_cassette_count`). Both inks land together, so a
+cassette is one row and nothing is derived from the picture (ADR 0040). The table is where the
+screen's colour is tuned: fill a row and a cassette exists.
 
 The hub tick is the one thing that must not repaint the Card. While it is up `pack_place()`
 clamps each pack's box to the window, (203,157) 291x87: the rings are drawn from the hub's own

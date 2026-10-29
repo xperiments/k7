@@ -23,16 +23,18 @@ const lv_color_t k_col_eq_tick = COL_HEX(0xFF8A3D);
 
 const lv_color_t k_col_frame      = COL_HEX(COL_BLACK);
 
-/* The five cassettes. One ink per cassette, not per pixel: the Card is one fill, so the
- * table is the whole of the no-Cover variety. They are mid-dark and far apart in hue so
- * the drawn label's complement always has somewhere to go. */
-const lv_color_t k_col_card[5] = {
-    COL_HEX(0x2F5E7A),   /* petrol */
-    COL_HEX(0x8A3A2A),   /* rust */
-    COL_HEX(0x4C6B39),   /* olive */
-    COL_HEX(0x67457A),   /* plum */
-    COL_HEX(0x2E2E33),   /* graphite */
+/* The cassettes: plastic, then the ink of the label printed on it. Five to start with - a row
+ * per shell colour, each with a label that reads against it - and adding one is adding a row
+ * (ADR 0040). The Track's path picks the row; nothing else decides. */
+const cassette_ink_t k_col_cassette[] = {
+    { COL_HEX(0x2F5E7A), COL_HEX(0xF2E8D5) },   /* petrol, cream */
+    { COL_HEX(0x8A3A2A), COL_HEX(0xEFDCC0) },   /* rust, warm cream */
+    { COL_HEX(0x4C6B39), COL_HEX(0xE8EAD8) },   /* olive, pale sage */
+    { COL_HEX(0x67457A), COL_HEX(0xF0DFE4) },   /* plum, pale rose */
+    { COL_HEX(0x2E2E33), COL_HEX(0xE6E6E0) },   /* graphite, off-white */
 };
+
+const int k_col_cassette_count = (int)(sizeof k_col_cassette / sizeof k_col_cassette[0]);
 
 const lv_color_t k_col_back       = COL_DARKEN_HEX(COL_PRIMARY, 40);
 const lv_color_t k_col_cover_bg   = COL_HEX(0xB48744);

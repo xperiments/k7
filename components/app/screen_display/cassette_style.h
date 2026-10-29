@@ -68,11 +68,23 @@ extern const lv_color_t k_col_eq_tick;
  * frames. */
 extern const lv_color_t k_col_frame;
 
-/* The five cassettes: the Card's ink for a Track with no Cover, chosen from the Track's
- * own path (ADR 0039). Mid-dark tones that read as a mat on the white page and stay
- * distinct from the print, and from each other, at 426x272. A drawn label takes each
- * one's complement. */
-extern const lv_color_t k_col_card[5];
+/* The cassettes, as a table you fill in by hand (ADR 0040).
+ *
+ * One row is one cassette: `plastic` is the Card - the 426x272 mat the print sits on - and
+ * `label` is the ink of the drawn print, the one that shows when the Track carries no Cover.
+ * The two are a pair on purpose: no colour is derived from anything, so a row is exactly what
+ * you see, and a Track picks its row from its own path (`ink_seed % k_col_cassette_count`).
+ *
+ * Fill a row and it exists. Keep the label ink light against a dark plastic and dark against a
+ * light one - nothing checks that for you - and keep the plastics far enough apart that two
+ * Tracks in a row do not look like the same cassette. */
+typedef struct {
+    lv_color_t plastic;   /* the Card: the cassette's body */
+    lv_color_t label;     /* the drawn print's ink, against that body */
+} cassette_ink_t;
+
+extern const cassette_ink_t k_col_cassette[];
+extern const int k_col_cassette_count;
 
 /* The touch board's own Levels: its cover, its Label and the Artwork backdrop. They
  * are defined for both boards; a board without those Levels never reads them, except

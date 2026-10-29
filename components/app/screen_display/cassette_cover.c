@@ -27,7 +27,6 @@
 #include "lvgl.h"
 
 #include "cassette_card.h"
-#include "cassette_ink.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 
@@ -44,18 +43,15 @@ static bool s_pending;             /* a picture is on its way, so the label stay
 
 static void cover_hide(bool fade);
 
-/* The drawn label is ink on the Card - no fill - so the Card's own colour is its paper, and
- * its ink is that colour's complement: on purpose, so a label never blends into the Card it
- * is printed on (ADR 0039). Only the top band is free: the window is the print's middle, 55 px
- * down, so that is where the words go. It has no alpha, so the mask cuts it like anything
- * else in the print - the mask does that, not the label. */
-void cassette_cover_refresh_ink(void)
+/* The drawn label is ink on the Card - no fill - so the plastic's own colour is its paper, and
+ * its ink is the table's, picked with the plastic it sits on (ADR 0040). Only the top band is
+ * free: the window is the print's middle, 55 px down, so that is where the words go. It has no
+ * alpha, so the mask cuts it like anything else in the print - the mask does that, not the
+ * label. */
+void cassette_cover_set_label_ink(lv_color_t ink)
 {
     if (!s_label) return;
-    lv_color_t c = cassette_card_ink();
-    cassette_rgb_t ink = { c.red, c.green, c.blue };
-    cassette_rgb_t comp = cassette_ink_label(ink);
-    lv_obj_set_style_text_color(s_label, lv_color_make(comp.r, comp.g, comp.b), 0);
+    lv_obj_set_style_text_color(s_label, ink, 0);
 }
 
 /* The label is the print only when there is no picture to print: not while one is decoding -
@@ -201,22 +197,6 @@ void cassette_cover_set_image(const lv_image_dsc_t *dsc)
         return;
     }
 
-    /* The Card's ink is this Track's, and this is the one place it is read: every pixel of
-     * the cover is in hand here, once per Track, on the loader's thread and not on the draw
-     * path. Fifteen thousand samples over 603x385 at step 4 is a handful of milliseconds, and
-     * it buys the whole page its colour. A cover with no hue - a monochrome album - leaves
-     * the ink alone, so the Card keeps the table ink the view gave it. */
-    if (dsc->header.cf == LV_COLOR_FORMAT_RGB565) {
-        int stride = (int)((dsc->header.stride != 0) ? dsc->header.stride
-                                                     : (size_t)dsc->header.w * 2);
-        int hue = cassette_ink_dominant_hue(dsc->data, dsc->header.w, dsc->header.h,
-                                            stride, 4);
-        if (hue >= 0) {
-            cassette_card_set_hue(hue);
-            cassette_cover_refresh_ink();
-        }
-    }
-
     if (s_wanted) cover_show(true);
 }
 
@@ -286,7 +266,8 @@ void cassette_cover_create(lv_obj_t *parent)
     /* The drawn label: the print when the Track carries no picture. It sits above the image
      * (which is empty then) and under the fallback pill. Jura 28 in the print's top band, the
      * only room the window leaves: 55 px. */
-    s_label = cassette_text(s_print, &jura_28, k_col_card[0], LV_ALIGN_TOP_LEFT, 12, 10);
+    s_label = cassette_text(s_print, &jura_28, k_col_cassette[0].label, LV_ALIGN_TOP_LEFT,
+                            12, 10);
     lv_obj_set_width(s_label, CASSETTE_CARD_PRINT_W - 24);
     lv_label_set_long_mode(s_label, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_align(s_label, LV_TEXT_ALIGN_LEFT, 0);
@@ -301,8 +282,6 @@ void cassette_cover_create(lv_obj_t *parent)
                           CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H,
                           CASSETTE_CARD_WINDOW_R, k_col_bg);
     lv_obj_set_hidden(s_fallback, true);
-
-    cassette_cover_refresh_ink();
 
     lv_obj_set_style_opa_layered(s_masked, LV_OPA_TRANSP, 0);
     lv_obj_set_hidden(s_masked, true);

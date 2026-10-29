@@ -18,7 +18,6 @@
 #include <math.h>
 #include <string.h>
 
-#include "cassette_ink.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 
@@ -111,7 +110,7 @@ void cassette_card_create(lv_obj_t *parent)
     mask_build();
 
     s_card = cassette_box(parent, CASSETTE_CARD_X, CASSETTE_CARD_Y, CASSETTE_CARD_W,
-                          CASSETTE_CARD_H, CASSETTE_CARD_R, k_col_card[0]);
+                          CASSETTE_CARD_H, CASSETTE_CARD_R, k_col_cassette[0].plastic);
     if (s_mask) lv_obj_set_style_bitmap_mask_src(s_card, &s_mask_dsc, 0);
     lv_obj_set_hidden(s_card, true);
 }
@@ -122,26 +121,12 @@ void cassette_card_set_shown(bool shown)
     lv_obj_set_hidden(s_card, !shown);
 }
 
-void cassette_card_set_hue(int hue_deg)
-{
-    if (hue_deg < 0) return;
-    cassette_rgb_t c = cassette_ink_from_hue(hue_deg);
-    lv_color_t ink = lv_color_make(c.r, c.g, c.b);
-    cassette_card_set_ink(ink);
-}
-
 void cassette_card_set_ink(lv_color_t ink)
 {
     if (!s_card) return;
     /* A cut, not a colour animation: a colour animation would repaint the panel on every
      * step, and the Card is 426x272 of it. */
     lv_obj_set_style_bg_color(s_card, ink, 0);
-}
-
-lv_color_t cassette_card_ink(void)
-{
-    if (!s_card) return k_col_card[0];
-    return lv_obj_get_style_bg_color(s_card, 0);
 }
 
 const lv_image_dsc_t *cassette_card_mask(void)

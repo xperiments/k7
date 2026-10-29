@@ -20,8 +20,8 @@
  * The picture is scaled to the print's width and pinned to its top; its height follows from the
  * source's aspect and the print clips whatever runs past its bottom.
  *
- * The Card's ink is derived here too: cassette_cover_set_image() reads the Track's dominant hue
- * out of the decoded cover and hands it to cassette_card_set_hue().
+ * The Card's ink is not read from the picture: it is the table's plastic, and the label's ink is
+ * the same row's (ADR 0040). The view hands both over when the Track changes.
  *
  * The view owns when the Cover is up - the white page's down swipe turns it on, the up swipe
  * turns it off - and the panel board is the only build with the pictures.
@@ -67,10 +67,9 @@ void cassette_cover_set_pending(void);
  * no picture, so it is the one place a blitted Cover could never be: the Track's own words. */
 void cassette_cover_set_title(const char *title);
 
-/* Re-ink the drawn label in the complement of the Card's current ink, so the print never blends
- * into the shell it sits on. The view calls it when the table ink lands and set_image() calls it
- * when a Track's hue does. */
-void cassette_cover_refresh_ink(void);
+/* The drawn label's ink: the row's label colour, from the table the plastic came from. The view
+ * sets both together, so a cassette is one row and nothing is derived (ADR 0040). */
+void cassette_cover_set_label_ink(lv_color_t ink);
 
 
 #ifdef __cplusplus

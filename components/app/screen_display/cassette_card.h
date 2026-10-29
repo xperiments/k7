@@ -65,13 +65,7 @@ void cassette_card_set_shown(bool shown);
  * colour animation - a colour animation would repaint the panel on every step. */
 void cassette_card_set_ink(lv_color_t ink);
 
-/* The ink straight from a hue in degrees, at the page's saturation and value: what a Cover
- * with pixels to read hands over. -1 leaves the ink alone, so a monochrome album keeps the
- * table's choice. */
-void cassette_card_set_hue(int hue_deg);
 
-/* The ink it is wearing now: what a drawn label takes its complement of. */
-lv_color_t cassette_card_ink(void);
 
 /* The one A8 descriptor the Card and the print's container share, or NULL before
  * create() has built it. */

@@ -567,9 +567,11 @@ radius 12, with the picture printed on it at +12,+20, scaled to the outer frame'
 top-aligned. The stack is **cinta < Card < label**: the print is the top layer, the Card
 covers the tape, and the window - 291x87 at (203,157), a pill whose ends are the two reels -
 is a real hole in both, cut by the one A8 mask the Card and the print's container share. The
-Card's ink is the cover's dominant hue at a fixed saturation and value, or one of five table
-inks when there is no cover; [ADR 0039](docs/adr/0039-the-cassette-is-a-card.md) records the
-decision and [`docs/specs/cassette-card.md`](docs/specs/cassette-card.md) has the rectangles.
+Card's ink is a row of `k_col_cassette[]` - a plastic and the ink of the label printed on it -
+picked from the Track's path;
+[ADR 0039](docs/adr/0039-the-cassette-is-a-card.md) and
+[ADR 0040](docs/adr/0040-the-cassettes-are-a-table.md) record the decisions and
+[`docs/specs/cassette-card.md`](docs/specs/cassette-card.md) has the rectangles.
 The Card arrives with the page flip; the print fades in over 1 s and out on the up, and a
 Track change cuts it (the loader reuses the one buffer). The page flips in one frame at the
 start of the step, under the picture's fade;

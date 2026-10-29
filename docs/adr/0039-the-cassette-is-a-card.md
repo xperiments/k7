@@ -5,6 +5,11 @@ longer the top of a stack whose middle is a light wash. On the white page the ca
 is one tinted rectangle - the **Card** - the Cover is printed on it, and the tape shows through
 a pill window that the Card and the print share.
 
+**Amended by [ADR 0040](./0040-the-cassettes-are-a-table.md):** the Card's ink is not the
+Cover's dominant hue any more. A cassette is a row of `k_col_cassette[]` - a plastic and the
+ink of the label printed on it - and the Track's path only picks the row. Everything about the
+Card, the window and the mask below stands; only where the colour comes from changed.
+
 ADR 0021 gave the white page a picture: a print on the cassette's body, a glow washing it, and
 the cinta below. That page is good and it stays - the print, the tape, the paper, the fade and
 the pose are all unchanged. What it never had was a **cassette**: at the Controls pose the label

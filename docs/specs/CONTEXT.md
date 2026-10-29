@@ -310,8 +310,8 @@ _Avoid_: album art, portada
 **Card**:
 The white page's cassette: one tinted rounded rectangle, 426x272 at (136,82), radius 12, drawn
 above the tape and under the **Cover**, which it carries at +12,+20. It has no picture of its
-own; its ink is the Cover's dominant hue at a fixed saturation and value, or one of five table
-inks when there is no cover. It and the Cover's container share one A8 mask, whose 291x87 pill
+own; its ink is a row of the palette table - a plastic and the ink of the label printed on it -
+picked from the Track's path. Nothing is read off a picture (ADR 0040). It and the Cover's container share one A8 mask, whose 291x87 pill
 window at (203,157) is the only place the tape shows through. Shown and hidden with the
 **Page**; it exists at the Controls pose and nowhere else. It is the body the screen never had:
 the label and the outer frame are the same rectangle, so there was nothing to colour.

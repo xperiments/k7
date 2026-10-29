@@ -308,18 +308,19 @@ void cassette_view_dim(bool dim)
 static void apply_frame(const cassette_frame_t *f)
 {
     if (!f) return;
-    /* The Card's table ink: the shell follows the Track, so a Track with no Cover still
-     * changes the cassette. A Cover that lands overrides it with its own hue
-     * (cassette_cover_set_image), and the next Track's path puts the table back. */
+    /* The cassette follows the Track: its path picks a row of the table, and the row is the
+     * plastic and the label's ink together (ADR 0040). Nothing is read off the picture. */
     if (f->ink_changed) {
-        const uint32_t n = (uint32_t)(sizeof k_col_card / sizeof k_col_card[0]);
-        cassette_card_set_ink(k_col_card[f->ink_seed % n]);
-    }
-    /* What the print needs from the frame, in one place: the drawn label is inked against the
-     * Card, so it follows a new ink, and it carries the Track's name. Only the touch board has
-     * a print at all. */
+        const uint32_t n = (uint32_t)k_col_cassette_count;
+        const cassette_ink_t *ink = &k_col_cassette[n ? (f->ink_seed % n) : 0];
+        cassette_card_set_ink(ink->plastic);
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    if (f->ink_changed) cassette_cover_refresh_ink();
+        /* The print is the same row's: an ink chosen against its own plastic. */
+        cassette_cover_set_label_ink(ink->label);
+#endif
+    }
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The drawn label's words, when the Track carries no picture and the cover is not there. */
     if (f->title_changed) cassette_cover_set_title(f->title);
 #endif
     cassette_tapes_set(f);
