@@ -59,7 +59,25 @@ struct cassette {
 
     char     shown_title[CASSETTE_TITLE_MAX];
     bool     have_title;
+
+    /* The Card's table ink. It is the Track's path, hashed, because the shell is part of
+     * the Track's identity: a Track with no Cover still changes the cassette, and the
+     * choice survives a pause and a rebuilt Playlist. */
+    uint32_t shown_ink_seed;
+    bool     have_ink;
 };
+
+/* FNV-1a, 32 bits. Any hash would do; this one is four lines, has no state and spreads a
+ * directory of Track names across five buckets evenly enough to look arbitrary. */
+static uint32_t path_seed(const char *path)
+{
+    uint32_t h = 2166136261u;
+    for (const unsigned char *p = (const unsigned char *)path; p && *p; p++) {
+        h ^= *p;
+        h *= 16777619u;
+    }
+    return h;
+}
 
 /* ----------------------------------------------------------------- rewind */
 
@@ -250,11 +268,14 @@ void cassette_reset(cassette_t *c)
     c->have_time = false;
     c->shown_title[0] = 0;
     c->have_title = false;
+    c->shown_ink_seed = 0;
+    c->have_ink = false;
     /* The adapter drew something; the next frame must say what to replace it
      * with, even when it is the same empty screen. */
     c->frame.title_changed = true;
     c->frame.permille_changed = true;
     c->frame.time_changed = true;
+    c->frame.ink_changed = true;
     c->frame.tape_ink = 1.0f;
 }
 
@@ -274,6 +295,17 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
     if (c->frame.title_changed) {
         snprintf(c->shown_title, sizeof c->shown_title, "%s", clean);
         c->have_title = true;
+    }
+
+    /* The Card's table ink: which of the five cassettes sits under the print. It follows
+     * the Track's path, so a Track with no Cover still gets its own shell, and a Track
+     * that has one starts from the same place before its hue takes over. */
+    uint32_t seed = path_seed(c->have_status ? c->status.path : "");
+    c->frame.ink_seed = seed;
+    c->frame.ink_changed = !c->have_ink || seed != c->shown_ink_seed;
+    if (c->frame.ink_changed) {
+        c->shown_ink_seed = seed;
+        c->have_ink = true;
     }
 
     c->frame.playing = c->have_status && c->status.file[0] && c->status.format != MI_FMT_NONE;

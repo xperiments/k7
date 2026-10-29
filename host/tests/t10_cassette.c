@@ -536,6 +536,35 @@ static void test_times(void)
     cassette_free(c);
 }
 
+/* The Card's table ink: the Track's path decides which of the five cassettes sits under
+ * the print, so a Track with no Cover still changes the shell. The frame names it once per
+ * Track - a repeat of the same path must not re-ink, or the Card would be repainted every
+ * step - and a reset asks for it again, as it does for the label. */
+static void test_ink_seed(void)
+{
+    cassette_t *c = cassette_new(20, 1000);
+    mini_icecast_status_t st = mkstatus("Song", "song.mp3", 0, 180000, 0.1f);
+    snprintf(st.path, sizeof st.path, "Albums/One/song.mp3");
+
+    const cassette_frame_t *f = cassette_step(c, &st, 0);
+    CHECK(f->ink_changed, "the first frame names an ink");
+    uint32_t first = f->ink_seed;
+
+    f = cassette_step(c, &st, 40);
+    CHECK(!f->ink_changed, "the same Track does not re-ink on the next step");
+    CHECK_EQ(f->ink_seed, first, "and keeps the seed it had");
+
+    snprintf(st.path, sizeof st.path, "Albums/Two/other.mp3");
+    f = cassette_step(c, &st, 80);
+    CHECK(f->ink_changed, "a different Track re-inks");
+    CHECK(f->ink_seed != first, "and its path hashes somewhere else");
+
+    cassette_reset(c);
+    f = cassette_step(c, NULL, 120);
+    CHECK(f->ink_changed, "a reset asks for the ink again, so the adapter redraws it");
+    cassette_free(c);
+}
+
 int main(void)
 {
     test_initial_and_progress();
@@ -546,6 +575,7 @@ int main(void)
     test_rewind();
     test_rewind_tape_ink();
     test_times();
+    test_ink_seed();
 
     CHECK(cassette_new(0, 1000) == NULL, "no frames means no reel");
 

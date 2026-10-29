@@ -58,7 +58,10 @@ static void track_request(void)
      * so a picture for the old Track cannot land after this hide. */
     artwork_loader_request_tags(s_status.path, s_status.format);
     artwork_loader_request(s_status.path, s_status.format);
-    cassette_view_set_cover(NULL);
+    /* Not set_cover(NULL): this Track may well have a picture, so the print waits empty
+     * rather than flashing the drawn label for the length of the decode. The loader's own
+     * answer - a picture, or NULL when the Track has none - is what fills it. */
+    cassette_view_set_cover_pending();
 }
 #endif
 

@@ -1,0 +1,160 @@
+# The Card
+
+On the white page - the **Real** Level - the cassette is a **Card**: one tinted rounded
+rectangle at 426x272, the Track's picture (the **Cover**) or a drawn **label** printed on it at
++12,+20, and the tape visible through a 291x87 pill window the two share. It is the white page's
+body, and it is where the cassette's colour lives.
+[ADR 0039](../adr/0039-the-cassette-is-a-card.md) records why the glow is gone and why the
+cassette is painted rather than blitted; this document is the operational spec - the rectangles,
+the mask, the ink, the tick. The vocabulary is in [CONTEXT.md](./CONTEXT.md): **Card**,
+**Cover**, **Page**, **Controls**, **Level**.
+
+It draws at the **Controls pose only** (134/256, panel origin 140,94), because Real is only
+reachable once the drawer has settled there. Like the glow it replaces, the Card is placed in
+**screen pixels** and does not scale with the pose.
+
+## What it is
+
+- A rounded rectangle, **426x272 at (136,82), radius 12**, filled with one ink, created after
+  the tape body so it sits **above the mechanics and below the print**, and shown and hidden
+  with the Page in one frame. It is a reading of the Page, not a Level of its own.
+- The box is the tape's ink (402x232 at 148,102) grown by **12 px** at the sides and **20 px**
+  at the top and bottom: 426 = 402 + 24, 272 = 232 + 40. It is the box the white page's glow
+  used to occupy, and it is the only box on the panel that lies entirely outside the print.
+- The print sits at **+12,+20** - (148,102) 402x188 - so the Card reads as a **12 px mat at the
+  sides, 20 px above and 64 px below** the picture.
+- Radius **12**: rounder than the print's 10 and than frame[0]'s 8, so the Card reads as a
+  moulded shell around a loose label rather than as a second border.
+- Both the Card and the print's container are masked by **one A8 buffer** 426x272 whose window
+  is zeroed at (67,75). The print's hole is therefore at (55,55).
+- The mechanics are hidden by the Card except through the window; what shows is the two Ø86
+  hub rims and a horizontal slice of each pack.
+
+## Geometry
+
+All values are panel pixels at the Controls pose and are half-open - the right edge is x + w.
+
+| Part | x, y | size | notes |
+|---|---|---|---|
+| Screen | 0, 0 | 800x480 | the panel |
+| **Card** | **136, 82** | **426x272** | radius 12, one ink, A8-masked |
+| **Print container** | 136, 82 | 426x272 | the same mask; carries the 1 s fade |
+| **Print** (cover or label) | **148, 102** | **402x188** | the container's **+12,+20**; radius 10; `clip_corner` |
+| **Window** | **203, 157** | **291x87** | radius 43; zeroed in the mask |
+| Window in the print | 55, 55 | 291x87 | 55 left, 55 top, 56 right, 46 bottom |
+| Window in the Card | 67, 75 | 291x87 | |
+| Mechanics (tape ink) | 148, 102 | 402x232 | design 768x444; untouched |
+| Hub rims | 249, 200 and 451, 200 | Ø86 | design 168, `cassette_len_even` |
+| Packs | the same centres | Ø86 … Ø186 | PACK_MIN_D 168, PACK_MAX_D 356 |
+
+The window is **not** centred in the print: 55 px from the left and the top, 56 from the
+right, 46 from the bottom - it sits 4.5 px below the print's centre line. Its ends are the two
+hub circles: the rims are 86x86 boxes at (206,157) and (408,157), so the window is exactly their
+envelope - flush on the right and the top, 3 px of slack on the left, 1 px at the bottom. Do not
+centre it by eye and do not derive it from the print; it is frame[1]'s interior,
+`trunc(106 x 134/256) = 55` in from frame[0]'s corner.
+
+## The mask
+
+One buffer, one descriptor, two objects.
+
+- **426x272, A8, stride 428** (`MASK_SIZE(w) = (w + 3) & ~3`), so **116,416 B**. It is 255
+  everywhere and 0 in the stadium. It is built once, at the Card's only size; there is no
+  per-step mask.
+- The stadium takes the **largest radius the rectangle allows**, `min(291, 87) / 2 = 43` in
+  integer arithmetic: a 205 px straight middle and two r43 semicircular ends, zeroed with
+  pixel-centre sampling (`y + 0.5`, `ceilf`/`floorf`) so the caps agree with the frame's pill.
+- `frame[1]` keeps its design radius and sits under the Card, invisible. The pill it used
+  to take while a cover was up, and the raise that kept the frames over the print, are
+  deleted with `cassette_tapes_set_cover_print()` and `cassette_tapes_raise_frames()`.
+- Both masked objects sit at (136,82) and therefore share a centre, **(349,218)**, which is the
+  only reason one buffer serves both: LVGL aligns a bitmap mask to the centre of the object's
+  area and clears everything outside the mask's rectangle
+  (`lv_draw_sw_img.c:1019` and the `side_area` clears). A mask must cover its object, and two
+  objects can share one only if their centres coincide.
+- The print's own 402x188 mask is **deleted**; the Cover's container grows to 426x272 and its
+  picture stays at 402 wide inside a `+12,+20` clip box, so the hole appears at (55,55) and the
+  1 s `opa_layered` fade still lands on the print alone, not on the Card.
+
+## The drawn label
+
+When the Track carries no picture, the print is **drawn**: the Track's name in **Jura 28**, in the
+Card's **complement**, in the print's **top band** - (12,10), 378 px wide - because the window is
+the print's middle and leaves only 55 px above it. No fill: the Card's own colour is the label's
+paper, which is what makes the complement read as ink on it. `LV_LABEL_LONG_DOT` from Track names
+that outrun the band. It is cut by the mask like anything else in the print, so the window is the
+mask's hole, not the label's.
+
+The label is not a placeholder for a picture that is still decoding: `cassette_view_set_cover_pending()`
+(what `cassette_levels` calls when it asks the loader for a Track) leaves the print empty until the
+loader answers with a picture or with NULL, so no Track flashes a name before its cover.
+
+## The ink
+
+| | with a Cover | with no cover |
+|---|---|---|
+| Card ink | the Cover's dominant hue at a fixed saturation and value | one of five table inks in `cassette_style`, indexed from the Track's path |
+| Label ink | - | the complement: `hue + 180`, same saturation and value |
+
+- The dominant hue is computed **once per Track**, inside `cassette_cover_set_image()`, over
+  the decoded 603x385 RGB565 buffer - the one moment every pixel is in hand. Saturation and
+  value are the UI's, so a photo's mud or a near-white album cannot dissolve the Card into the
+  paper or turn it grey; only the hue is the Track's.
+- `hue_rgb()` in `components/portable/rgb/rgb.c` builds the colour from the hue.
+- **Cut, not faded.** A colour animation would repaint the panel on every step, so the ink lands
+  with the page flip and with the Track change, like the Page itself.
+- The label's ink contrasts with the Card **on purpose** - the complement at the same
+  saturation and value - so a drawn label never blends into the shell it is printed on.
+
+## The reel tick
+
+The hubs animate at 25 Hz and the Card is a masked layer over them, so the tick must not
+invalidate anything the Card would have to re-render.
+
+- `pack_place()` **clamps each pack's box to the window** - (203,157) 291x87 - whenever the Card
+  is up. Nothing moves: `pack_draw_cb` draws its rings from `SCX/SCY(k_hub[i])`, the hub's
+  screen centre, not from the object's box, and `lv_obj_redraw()` truncates the layer to the
+  object's box before `LV_EVENT_DRAW_MAIN_END` (`lv_refr.c:131`), so the rings are clipped to
+  the window for free.
+- The union of the two pack boxes falls from **72,168 px** - 388x186, the union of two 186x186
+  boxes at the packs' centres (PACK_MAX_D 356, `L(356) = 186`) - to the window's **25,317 px**,
+  and the Card is re-composited over that alone.
+- The rims (86x86 boxes at y 157) and their spokes are already inside the window; the strands
+  move only on a **fill** update - a few times a second, not every tick - so they keep their
+  full boxes.
+
+## The tree
+
+- **`components/app/screen_display/cassette_card.c` / `.h`** - new, and the one place the
+  numbers live: the Card's rect, the print's offset, the window's offset and size, the mask
+  builder, the Card object, `cassette_card_set_ink()`, and `cassette_card_mask()` for the print
+  container. It takes the glow's slot in `cassette_view.c`: created after `cassette_tapes_create()`
+  and before the print is raised.
+- **`cassette_cover.c`** - the container becomes 426x272 at the Card's rect and the print is
+  clipped at +12,+20. It stops reading `cassette_tapes_frame_rect()` for its geometry and stops
+  building its own mask; it asks the Card for the descriptor and hides with its own fade as
+  before.
+- **`cassette_tapes.c`** - `pack_place()` gains the clamp; `raise_frames()` and
+  `set_cover_print()` go, since the Cover only ever shows on this page and the frames are under
+  the Card.
+- **Deleted on the white page**: the glow (`s_page_edge`, `EDGE_W`/`EDGE_H`/`EDGE_R`,
+  `EDGE_GLOW_*`, the 200 ms fade) and the frame raise with its pill. The frame rings, the three
+  chips, both rollers, the run and both strands are still drawn - they are simply under the
+  Card.
+- **Untouched**: the dark page, the Initial 256/256 cassette, the Peek, the artwork loader, the
+  cover picture's fitting, the 291x87 window's shape.
+
+## Costs
+
+| | |
+|---|---|
+| PSRAM | mask **116,416 B**, replacing 75,952 B → **+40,464 B** |
+| flash | **0 B** - no art is embedded; the fifteen-label, 1.13 MB idea is gone |
+| layers | the Card and the print each draw into a banded ARGB layer; `CONFIG_LV_DRAW_LAYER_SIMPLE_BUF_SIZE = 24576` gives about 14 rows at 426 px, so ~24 KB transient |
+| tick | the invalidated area drops to ≤ 25,317 px, and nothing outside the window is repainted |
+
+## Still open
+
+- The five table inks' actual values, and the fixed saturation/value pair for derived hues.
+- Whether the drawn label needs more than one design per ink pair, now that it costs code rather
+  than bytes.

@@ -19,6 +19,12 @@
  * The objects are children of the parent the caller hands in - the cassette's container
  * in the view - and they are decorative: a press reaches the screen, not a painted box.
  *
+ * On the white page all of it is under the Card (cassette_card.h). The frames, the
+ * rollers, the run, the strands and the chips are still built and placed; the Card covers
+ * them, and only the two rims and a slice of the packs show through its 291x87 window.
+ * cassette_tapes_set_window() is what that costs: the packs' boxes clamp to the window so
+ * the reel tick never invalidates the Card outside it.
+ *
  * Called under the LVGL lock, like everything else on the screen.
  */
 #include "lvgl.h"
@@ -45,6 +51,14 @@ void cassette_tapes_create(lv_obj_t *parent);
  * packs, the rollers, the strands, the run, the rims and the spokes. */
 void cassette_tapes_place(cassette_pose_t pose);
 
+/* While the white page's Card is up, the packs' boxes clamp to this rect so the reel
+ * tick never invalidates outside the Card's window. (0,0,0,0) means no clamp.
+ *
+ * It is panel pixels, like the Card, and a call re-places both packs at once: the clamp
+ * is a box change and not a geometry one, so no ring moves. A page that hides the Card
+ * clears it with a zero rect. */
+void cassette_tapes_set_window(cassette_rect_t window);
+
 /* Apply a model frame: the hub phase, the pack fills, and the playing indication in the
  * two rim borders, which is the frame's tape_ink (1 = the playing red, 0 = the tape's own
  * colour). Only what changed is written. A NULL frame is a no-op. */
@@ -55,23 +69,6 @@ void cassette_tapes_set(const cassette_frame_t *frame);
  * rather than drawing across the hub's ink and the VU meter. Index 0 is the left
  * (supply) hub. */
 void cassette_tapes_hub_anchor(int index, bool top, int *x, int *y);
-
-/* The current pixels of frame `index` - 0 the outer frame, 1 the label window - and its
- * corner radius, in the cassette container's coordinates. The white page's cover uses
- * them as its mask: frame 0 clips the picture and frame 1 is the hole in it. A board
- * without the frames leaves every output at zero. */
-void cassette_tapes_frame_rect(int index, int *x, int *y, int *w, int *h, int *r);
-
-/* The label is the top layer, so its window's border follows the mask's largest radius - a
- * pill whose ends are the hubs' circles - while it is up, and returns to the design's 16 px
- * corner when it goes. The body itself is not re-ordered by this call. */
-void cassette_tapes_set_cover_print(bool on);
-
-/* The label is the top layer, so its two frame borders have to be above it while it is
- * shown. These move only the frames: the body, the hubs and the meter do not move, so the
- * cinta stays below the glow and the label. */
-void cassette_tapes_raise_frames(void);
-void cassette_tapes_lower_frames(void);
 
 #ifdef __cplusplus
 }

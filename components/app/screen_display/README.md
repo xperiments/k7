@@ -111,17 +111,24 @@ and nothing else. Everything else is private:
   EQ group's plate, L on the left and R on the right, each a 5x24 matrix lit from the bottom, with
   a small L/R pill under it. One object and one draw callback per column; the plate is its
   visibility and its lifetime.
-- `cassette_cover.c` — the white page's Track picture. `create(parent)` builds the clip
-  box, the A8 mask and the fallback hole; `place()` follows the frames' current pixels;
-  `set_image(dsc)` takes the loader's one buffer; `set_shown()` / `is_shown()` are the
-  page's wish. The label is the top layer: the stack is cinta < glow < label. The clip box
-  is frame 0 with its radius plus 2 px and `clip_corner`; the window is a real transparent
-  hole cut by an A8 bitmap mask (`min(width, height) / 2`, a pill whose ends are the hubs'
-  circles), so the glow and the cinta below show through. The frame[1] border takes the same
-  pill while the label is up (`cassette_tapes_set_cover_print()`), and the two frames are
-  raised over it (`cassette_tapes_raise_frames()`). The picture is scaled to frame 0's width
-  and top-aligned, so its height follows from its aspect and the frame clips the rest. A
-  pose that is not the controls pose does not show it: the mask is built at 402x188.
+- `cassette_card.c` / `.h` — the white page's cassette: one tinted 426x272 rectangle at
+  (136,82), radius 12, and its 291x87 pill window at (203,157), with the one A8 mask the
+  Card and the print's container share (ADR 0039). Its interface is `create(parent)`,
+  `set_shown(shown)`, `set_ink(ink)`, `cassette_card_ink()`, `cassette_card_mask()` and
+  `cassette_card_window()`. It is created after the tape body and shown and hidden with the
+  Page in one frame, so on Real the tape shows only through the window; `set_ink()` is a cut,
+  never a colour animation. The mask is 426x272 and 116,416 B, built once at create - there
+  is no per-pose mask.
+- `cassette_cover.c` — the white page's print. `create(parent)` builds the container and
+  the clip box; `place()` follows the frames' current pixels; `set_image(dsc)` takes the
+  loader's one buffer; `set_shown()` / `is_shown()` are the page's wish. The print is the
+  top layer: the stack is cinta < Card < label. The container is the Card's 426x272 box at
+  (136,82), so it shares the Card's one A8 mask, whose 291x87 window is a real transparent
+  hole (a pill whose ends are the hubs' circles) - the tape shows through it and nowhere
+  else. The picture sits at +12,+20 in a 402x188 clip box, frame 0 with its radius plus 2 px
+  and `clip_corner`, scaled to frame 0's width and top-aligned, so its height follows from
+  its aspect and the box clips the rest. A pose that is not the controls pose does not show
+  it, and the 1 s `opa_layered` fade lands on the print alone, never on the Card.
 - `cassette_menu.c` / `.h` — the Menu's view. `create(screen, cassette)` builds five row
   slots inside the window and the Pad's panel value; `open(white)`, `close()`,
   `update(status)` and `set_tags(group, song)` are the view's calls, and the right bar's M
@@ -448,55 +455,57 @@ The white is a margin: the flip also reveals `s_screen_back_cover`, a square-cor
 768x448 `k_col_bg` box at (16,16) that is the screen's first child, so on the white page the
 picture keeps its dark ground and the white reads as the 16 px ring around everything.
 
-The same page carries the **cover** when the Track has one; a Track without a picture still
-has Real, just a plain white page. Every flip back to dark hides the picture with it.
-The picture is the loader's one 603x385 buffer, drawn by `cassette_cover.c` into the
-cassette's outer frame: its width is frame 0's, it is top-aligned, and it is clipped to the
-frame's radius plus 2 px, so the print's corners sit a little inside the shell's border. The
-label window - frame 1 - is a real transparent hole, cut by an A8 bitmap mask on the label's
-container, so the glow and the cinta below show through. The hole takes the largest radius
-the rectangle allows - `min(width, height) / 2`, a pill whose ends are the hubs' circles - and
-the label window's border follows the same pill while the label is up
-(`cassette_tapes_set_cover_print()`).
+The same page carries the **print** - the Track's cover when it has one, a drawn label when
+it has not - on the **Card**: one tinted 426x272 rectangle at (136,82), radius 12, with a
+291x87 pill window at (203,157) that the Card and the print's container share as one A8 mask,
+so the tape shows through it and nowhere else. The mask is 426x272 and 116,416 B, built once
+at create; there is no per-pose mask.
+[ADR 0039](../../../docs/adr/0039-the-cassette-is-a-card.md) records why the glow is gone and
+[`docs/specs/cassette-card.md`](../../../docs/specs/cassette-card.md) has the rectangles. A
+Track without a picture still has Real: the page turns white and the Card takes one of the
+five table inks, with a drawn label on it. Every flip back to dark hides the Card and the
+print with it.
 
-The label is a child of the cassette container, created after the tape body and after the
-glow, so the stack is **cinta < glow < label**. It covers the body inside the outer frame;
-the tape exposed below the frame stays visible. The two frames are lifted over the label
-while it is up (`cassette_tapes_raise_frames()`) and put back at the bottom when it goes, so
-their borders stay crisp without moving the cinta. The label is re-placed on every pose step,
-and its picture is scaled at draw time, so the buffer stays the loader's one size; the
-controls pose scales it down, not up. The mask is built once at that pose (402x188), which is
-why the model refuses the down from Art until the pose has landed - the same two downs can
-arrive faster than the shrink.
+The picture is the loader's one 603x385 buffer, drawn by `cassette_cover.c` into a 402x188
+clip box at +12,+20 - frame 0's rect, with its radius plus 2 px and `clip_corner`, so the
+print's corners sit a little inside the shell's border. Its width is frame 0's and it is
+top-aligned, so its height follows from its aspect and the box clips the rest. The window is
+zeroed in the same mask at (55,55): the largest radius the rectangle allows,
+`min(width, height) / 2`, a pill whose ends are the hubs' circles.
 
-The down fades the label in and the up fades it out over 1 s
+The print's container is a child of the cassette container, created after the tape body and
+after the Card, so the stack is **cinta < Card < label**. It covers the body inside the outer
+frame, and it hides the mechanics with it: the two frame rings, the three chips, both
+rollers, the run and the two strands are all inside 426x272 and under the Card, and only the
+hub rims turn behind the window. The print is re-placed on every pose step, and its picture
+is scaled at draw time, so the buffer stays the loader's one size; the controls pose scales
+it down, not up. The Card exists only at that pose, which is why the model refuses the down
+from Art until it has landed - the same two downs can arrive faster than the shrink.
+
+The down fades the print in and the up fades it out over 1 s
 (`lv_anim_path_ease_in_out`), on the container's `opa_layered`, so the mask and the picture
-go together. A page flip or a Track change cuts it instead: the loader reuses the one cover
-buffer and the pose leaves the mask's size, so there is nothing to fade over.
+go together; the Card does not fade - it arrives with the page flip. A page flip or a Track
+change cuts the print instead: the loader reuses the one cover buffer, so there is nothing to
+fade over.
 
-One more thing belongs to that page, and only to it: the **edge mark**, a child of the
-cassette created after the meter and before the label, so it sits between the cinta and the
-label. It is a 426x272 rectangle centred on the tape at the controls pose (via `cassette_x/y`),
-and it has two parts. Its border is an L - top and left lit in `k_col_glass`, right and bottom
-transparent (`EDGE_SIDES`). Its interior is a **linear gradient at 135 degrees**, white at the
-top-left corner fading to transparent at the bottom-right, with the two stops carrying the
-opacity. That gradient needs `CONFIG_LV_USE_DRAW_SW_COMPLEX_GRADIENTS`, which `sdkconfig.defaults`
-now turns on: LVGL ignores `LV_GRAD_DIR_LINEAR` without it. All of the mark's numbers are
-`EDGE_*` and `EDGE_GLOW_*` at the top of `cassette_view.c`.
+The Card's ink is a cut, never an animation. The cover's dominant hue is computed once, when
+`cassette_cover_set_image()` takes the loader's buffer, and applied at a fixed saturation and
+value; with no cover the ink is one of `cassette_style`'s five table inks, indexed from the
+Track's path, and the drawn label takes the complement (`hue + 180`, same saturation and
+value) so it contrasts on purpose. Only the hue is the Track's - the saturation and the value
+are the UI's - so a photograph's mud or a near-white album cannot dissolve the Card into the
+page or turn it grey.
 
-Being the middle layer, the mark lights the cinta (including the tape exposed below the
-frame) and is covered by the label inside the outer frame; the label's window lets it show
-through. The peek and the chrome are screen children above the cassette.
-
-The mark fades in over `EDGE_GLOW_FADE_MS` from nothing - its object opacity multiplying the
-gradient's stops and the border together - so it never pops. It used to wait for the chrome's
-260 ms entrance first; since ADR 0025 the white page is only reached from Art, where that
-entrance has long landed, so only the fade is left. A page flip back to dark cancels it and
-hides the mark at once.
+The hub tick is the one thing that must not repaint the Card. While it is up `pack_place()`
+clamps each pack's box to the window, (203,157) 291x87: the rings are drawn from the hub's own
+screen centre, not from the box, so they do not move and are clipped to the window, and the
+tick's invalidated area falls from the union of the two 186x186 boxes (72,168 px) to the
+window's 25,317 px. The strands move only on a fill update, so they keep their full boxes.
 
 The chips along the tape's bottom are windows on whatever is behind the cassette. That is
 `k_col_bg` on both pages - the dark screen at rest, and the back cover on the white page - so
-they are filled with `k_col_bg` and the page flip does not touch them.
+they are filled with `k_col_bg` and the page flip does not touch them. On the white page the
+Card covers them, so they read only on the dark one.
 
 ## The right bar's groups
 

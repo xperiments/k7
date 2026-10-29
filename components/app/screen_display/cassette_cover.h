@@ -1,19 +1,30 @@
 #pragma once
 /*
- * cassette_cover - the Track's picture on the white controls page.
+ * cassette_cover - the Track's picture printed on the white page's Card.
  *
- * The label is the top layer of the cassette: the stack is cinta < glow < label. The
- * picture is scaled to the outer frame's width and pinned to its top, clipped to that
- * frame's rounded corners plus 2 px. The label window is a real, transparent hole, not an
- * opaque fill: an A8 bitmap mask on the label cuts the inner frame's pill (radius = half
- * its shorter side), so the glow and the tape below show through. The frame[1] border takes
- * the same pill while the label is up (`cassette_tapes_set_cover_print()`), and the two
- * frames are raised over the label (`cassette_tapes_raise_frames()`).
+ * The Cover is the Card's print (ADR 0039). Its container is the Card's own rectangle, 426x272
+ * at (136,82), carrying the one A8 mask the Card and the print share: the picture is cut at the
+ * 291x87 pill window at (203,157) and the tape below shows through it. Inside that container a
+ * 402x188 box at +12,+20 - frame[0]'s rect at the controls pose, radius 10, `clip_corner` - is
+ * the print proper: the width the picture is scaled to and the corner it is clipped by. The
+ * window is at (55,55) in that box, which is where the mask's stadium falls once the print's
+ * offset is taken off the Card's. The 1 s `opa_layered` fade is the container's, so the picture
+ * and the mask go together and the Card does not fade with them.
  *
- * The label is created after the tape body and after the glow, so it covers the body inside
- * the outer frame; the tape exposed below the frame stays visible. The view owns when it is
- * up - the white controls page's down swipe turns it on, the up swipe turns it off - and the
- * panel board is the only build with the frames to mask against.
+ * The mask is cassette_card.c's, not this module's, and the Card is built after this module -
+ * the Cover is the cassette's bottom layer - so the descriptor is applied lazily from
+ * cassette_cover_place(). Until it exists (or if its allocation failed) an opaque pill under the
+ * picture stands in for the window. The Cover is raised over the Card when it shows, because the
+ * Card is opaque outside the window and would otherwise hide the print.
+ *
+ * The picture is scaled to the print's width and pinned to its top; its height follows from the
+ * source's aspect and the print clips whatever runs past its bottom.
+ *
+ * The Card's ink is derived here too: cassette_cover_set_image() reads the Track's dominant hue
+ * out of the decoded cover and hands it to cassette_card_set_ink().
+ *
+ * The view owns when the Cover is up - the white page's down swipe turns it on, the up swipe
+ * turns it off - and the panel board is the only build with the pictures.
  *
  * Called under the LVGL lock, like the rest of the screen.
  */
@@ -25,28 +36,47 @@
 extern "C" {
 #endif
 
-/* Build the cover under `parent` (the cassette's container), hidden. It has no picture
- * until cassette_cover_set_image() hands it one. */
+/* Build the cover under `parent` (the cassette's container), hidden. Its geometry is the Card's
+ * fixed rect, so it is built once: the masked container, the print inside it, and the fallback
+ * pill. It has no picture until cassette_cover_set_image() hands it one. */
 void cassette_cover_create(lv_obj_t *parent);
 
-/* Re-place the clip box, the picture and the hole at the frames' current pixels. The
- * view calls this after the tape body has been placed, so the cover follows every step
- * of a pose change. */
+/* Size the picture to the print and apply the Card's shared mask. The geometry is the Card's
+ * fixed rect and no longer follows the pose, so that is all there is to it. The view calls it
+ * after the tape body has been placed; cover_show() calls it before every fade, which is how
+ * the mask the Card builds later gets attached. */
 void cassette_cover_place(void);
 
-/* The Track's picture, or NULL when there is none. The descriptor must stay alive; the
- * loader's one cover buffer is reused, so NULL cuts the label at once (no fade over a buffer
- * being written) and the wish stays, so the new picture fades in when it lands. */
+/* The Track's picture, or NULL when there is none. The descriptor must stay alive; the loader's
+ * one cover buffer is reused, so NULL cuts the label at once (no fade over a buffer being
+ * written) and the wish stays, so the new picture fades in when it lands.
+ *
+ * A picture with pixels to read also sets the Card's ink, from its dominant hue; with no
+ * picture, or no hue to find, the Card keeps whatever ink the view gave it. */
 void cassette_cover_set_image(const lv_image_dsc_t *dsc);
 
-/* The white page's wish: show the picture if there is one, hide otherwise, with a 1 s fade
- * in or out. The wish is remembered, so a picture that lands after the down appears
- * without a second swipe. */
+/* The white page's wish: show the picture if there is one, hide otherwise, with a 1 s fade in or
+ * out. The wish is remembered, so a picture that lands after the down appears without a second
+ * swipe. */
 void cassette_cover_set_shown(bool shown);
 
-/* The white page's wish, whether or not a picture has landed. The down swipe sets it and
- * the up clears it, so the cover can be asked for while the decode is still running. */
+/* The white page's wish, whether or not a picture has landed. The down swipe sets it and the up
+ * clears it, so the cover can be asked for while the decode is still running. */
 bool cassette_cover_is_shown(void);
+
+/* A picture is on its way: the loader is about to overwrite its one buffer, so the print goes
+ * empty and the drawn label stays down until the picture lands or the loader reports that this
+ * Track has none. Without it the label would flash for the length of every decode. */
+void cassette_cover_set_pending(void);
+
+/* The Track's name, printed on the drawn label. The label is what the print shows when there is
+ * no picture, so it is the one place a blitted Cover could never be: the Track's own words. */
+void cassette_cover_set_title(const char *title);
+
+/* Re-ink the drawn label in the complement of the Card's current ink, so the print never blends
+ * into the shell it sits on. The view calls it when the table ink lands and set_image() calls it
+ * when a Track's hue does. */
+void cassette_cover_refresh_ink(void);
 
 
 #ifdef __cplusplus

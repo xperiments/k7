@@ -39,8 +39,8 @@ static controls_room_t room_of(controls_level_t level)
 }
 
 /* One rung towards Real. Real's down is the end, and Art's down waits for the settled
- * controls pose: the Cover's mask is built at that size (ADR 0021), so a swipe during the
- * shrink is refused rather than printed at the wrong one. */
+ * controls pose: the Card and its print exist at that pose only (ADR 0039), so a swipe during
+ * the shrink is refused rather than bringing up a page that is not laid out yet. */
 static controls_level_t lower(controls_level_t level, const controls_facts_t *facts)
 {
     if (level >= CONTROLS_LEVEL_REAL) return level;

@@ -47,6 +47,7 @@
 #include "controls.h"
 #include "groups.h"
 #include "cassette_buttons.h"
+#include "cassette_card.h"
 #include "cassette_empty.h"
 #include "cassette_eq.h"
 #include "cassette_rgb.h"
@@ -80,39 +81,13 @@ static const char *TAG = "screen";
  * The peek has its own 200/256 and -60 px lift; the drawer wins while it is out. */
 #define CASSETTE_ROOM_MS       CASSETTE_BARS_SLIDE_MS
 
-/* The white page's edge mark, all of it tunable by hand: a transparent rectangle centred on
- * the tape, with only EDGE_SIDES of its borders lit. The default lights the top and the left
- * - the edges opposite the dome's bottom-right shadow - and leaves the right and the bottom
- * transparent. EDGE_COL is any palette name or a raw colour. */
-#define EDGE_W         426
-#define EDGE_H         272
-#define EDGE_R         10          /* the mark's own corner, not the frame's 8 px */
-#define EDGE_BORDER_W  1
-#define EDGE_COL       k_col_glass
-#define EDGE_SIDES     (LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT)
-
-/* The mark's inner glow: a linear gradient at 135 degrees, EDGE_GLOW_NEAR at the top-left
- * corner fading to EDGE_GLOW_FAR at the bottom-right, reaching it at EDGE_GLOW_FAR_FRAC
- * (0..255 of the way along the diagonal: 255 is the far corner; a smaller number stops the
- * fade early and leaves the rest empty). EDGE_GLOW_HEX is the glow's colour. */
-#define EDGE_GLOW_HEX       0xFFFFFF
-#define EDGE_GLOW_NEAR      90
-#define EDGE_GLOW_FAR       LV_OPA_TRANSP
-#define EDGE_GLOW_FAR_FRAC  255
-
-/* The glow fades in over EDGE_GLOW_FADE_MS from nothing, so it never pops. It used to wait
- * for the drawer's, the block's, the bands' and the window's 260 ms entrance first; since
- * ADR 0025 the white page is only reached from Art, where that entrance has long landed, so
- * the wait is gone and only a fade of 0 would leave it a cut. */
-#define EDGE_GLOW_FADE_MS   200
+/* The white page's cassette is the Card: one tinted rectangle with a pill window, above
+ * the tape and under the print (ADR 0039). cassette_card.c owns its geometry and the mask
+ * it shares with the print; this file only shows it with the page and inks it per Track. */
 
 static cassette_t *s_model;
 static lv_obj_t *s_screen;     /* the root: its backdrop is the page */
 static lv_obj_t *s_screen_back_cover; 
-static lv_obj_t *s_page_edge;  /* the white page's two-sided edge mark */
-/* The edge mark's gradient. LVGL's style keeps a pointer to the descriptor, so it outlives
- * the object here and is filled once, before the object is built. */
-static lv_grad_dsc_t s_edge_grad;
 static lv_obj_t *s_cassette;   /* the container everything the body draws hangs off */
 static cassette_pose_t s_pose = { CASSETTE_SCALE_ENTRY, 0, 0 };
 static cassette_pose_t s_pose_from;   /* the pose the change in flight started at */
@@ -181,49 +156,15 @@ static controls_intent_t controls_intent(screen_intent_t intent)
  * 1 s fade. The flag keeps a repeated request from invalidating the whole panel for a colour
  * that is already there. */
 
-/* The glow's fades. The object's opacity multiplies its gradient's stop opacities and its
- * border, so one animation covers the whole mark. */
-static void edge_fade_cb(void *var, int32_t opa)
-{
-    lv_obj_set_style_opa((lv_obj_t *)var, (lv_opa_t)opa, 0);
-}
-
-/* The white page: wait for the entrance, then fade the mark in from nothing. Starting from
- * transparent keeps a re-entry from flashing a mark that is already at full. */
-static void edge_reveal(void)
-{
-    if (!s_page_edge) return;
-    lv_anim_delete(s_page_edge, edge_fade_cb);
-    lv_obj_set_style_opa(s_page_edge, LV_OPA_TRANSP, 0);
-    lv_obj_set_hidden(s_page_edge, false);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_page_edge);
-    lv_anim_set_exec_cb(&a, edge_fade_cb);
-    lv_anim_set_values(&a, LV_OPA_TRANSP, LV_OPA_COVER);
-    lv_anim_set_duration(&a, EDGE_GLOW_FADE_MS);
-    /* Ease in: it starts softly out of nothing rather than popping at the first step. */
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_in);
-    lv_anim_start(&a);
-}
-
-/* The dark page, or a close before the fade ran out: cancel and hide, no fade out - the
- * page has already flipped. */
-static void edge_hide(void)
-{
-    if (!s_page_edge) return;
-    lv_anim_delete(s_page_edge, edge_fade_cb);
-    lv_obj_set_hidden(s_page_edge, true);
-}
-
 static void page_set(bool white)
 {
     if (white == s_painted_white) return;
     s_painted_white = white;
     if (s_screen) lv_obj_set_style_bg_color(s_screen, white ? k_col_white : k_col_bg, 0);
-    if (white) edge_reveal();
-    else edge_hide();
+    /* The Card is the page's body: it arrives with the flip, in one frame, and with it the
+     * packs' clamp, so the reel tick never invalidates anything the Card would re-render. */
+    cassette_card_set_shown(white);
+    cassette_tapes_set_window(white ? cassette_card_window() : (cassette_rect_t){ 0, 0, 0, 0 });
     cassette_header_set_page(white);
     cassette_footer_set_page(white);
     cassette_bars_set_page(white);
@@ -303,10 +244,8 @@ static void hubs_apply(void)
 static void cassette_place(void)
 {
     cassette_tapes_place(s_pose);
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The frames are placed now, so the cover's mask follows this step of the pose. */
-    cassette_cover_place();
-#endif
+    /* The print does not follow the pose any more: its box is the Card's, fixed in screen
+     * pixels, and it only ever shows at the Controls pose. It places itself when it shows. */
     hubs_apply();
 }
 
@@ -369,6 +308,21 @@ void cassette_view_dim(bool dim)
 static void apply_frame(const cassette_frame_t *f)
 {
     if (!f) return;
+    /* The Card's table ink: the shell follows the Track, so a Track with no Cover still
+     * changes the cassette. A Cover that lands overrides it with its own hue
+     * (cassette_cover_set_image), and the next Track's path puts the table back. */
+    if (f->ink_changed) {
+        const uint32_t n = (uint32_t)(sizeof k_col_card / sizeof k_col_card[0]);
+        cassette_card_set_ink(k_col_card[f->ink_seed % n]);
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+        /* A drawn label is inked against the Card, so it follows the shell's colour. */
+        cassette_cover_refresh_ink();
+#endif
+    }
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The print's words: the drawn label names the Track when there is no picture to show. */
+    if (f->title_changed) cassette_cover_set_title(f->title);
+#endif
     cassette_tapes_set(f);
     /* The meter is only alive while the EQ group is up; its module ignores a frame otherwise. */
     cassette_meter_set(f);
@@ -590,44 +544,21 @@ void cassette_view_create(void)
     lv_obj_set_scrollable(s_cassette, false);
     lv_obj_set_clickable(s_cassette, false);
 
-    /* The cover goes down first, under everything. Then the white page's edge mark, inside
-     * the cassette as well, and then the tape body: the order is label < glow < cinta. The
-     * print never hides a tape, the glow washes the label but not the tape, and the peek,
-     * the two bars are screen children above the cassette. */
+    /* The cover goes down first, under everything, then the tape body, then the Card: the
+     * order is print < Card < cinta, and the print is raised to the front while it shows.
+     * The peek and the two bars are screen children above the cassette. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     cassette_cover_create(s_cassette);
 #endif
 
-    /* The white page's edge mark: an L of lit borders on an otherwise transparent rectangle,
-     * centred on the tape. It is a child of the cassette, created after the cover and before
-     * the body, so the glow lies over the label and under the tapes. It is hidden until the
-     * page turns white. */
-    cassette_pose_t controls = cassette_pose_controls();
-    s_page_edge = cassette_border_box(s_cassette,
-                                      cassette_x(controls, cassette_tape_centre_x()) - (EDGE_W / 2),
-                                      cassette_y(controls, cassette_tape_centre_y()) - EDGE_H / 2,
-                                      EDGE_W, EDGE_H, EDGE_R,
-                                      k_col_bg, LV_OPA_TRANSP, EDGE_COL, EDGE_BORDER_W);
-    lv_obj_set_style_border_side(s_page_edge, EDGE_SIDES, 0);
-
-    /* The inner glow: a static descriptor of two stops on a top-left -> bottom-right line.
-     * The stops carry the opacity, so the far corner is really transparent; the object's own
-     * bg_opa has to be COVER or LVGL skips the background (and the gradient) entirely. */
-    static const lv_color_t glow_cols[2] = { COL_HEX(EDGE_GLOW_HEX), COL_HEX(EDGE_GLOW_HEX) };
-    static const lv_opa_t glow_opa[2] = { EDGE_GLOW_NEAR, EDGE_GLOW_FAR };
-    static const uint8_t glow_frac[2] = { 0, EDGE_GLOW_FAR_FRAC };
-    lv_grad_init_stops(&s_edge_grad, glow_cols, glow_opa, glow_frac, 2);
-    lv_grad_linear_init(&s_edge_grad, LV_GRAD_LEFT, LV_GRAD_TOP,
-                        LV_GRAD_RIGHT, LV_GRAD_BOTTOM, LV_GRAD_EXTEND_PAD);
-    lv_obj_set_style_bg_opa(s_page_edge, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_grad(s_page_edge, &s_edge_grad, 0);
-
-    lv_obj_set_hidden(s_page_edge, true);
-
-    /* The tapes: the frames and the whole body are created after the glow, so every tape draws
-     * over it. The VU meter is no longer part of the cassette picture - it lives in the EQ
-     * group's cell, built and deleted with that panel. */
+    /* The tapes: the frames and the whole body. The VU meter is no longer part of the
+     * cassette picture - it lives in the EQ group's cell, built and deleted with that
+     * panel. */
     cassette_tapes_create(s_cassette);
+
+    /* The Card: the white page's cassette, created after the body so it draws over it and
+     * under the print (which is the bottom layer and is raised when it shows). */
+    cassette_card_create(s_cassette);
     cassette_place();
 
     /* The peek is the screen's child, above the cassette's container. It is the only
@@ -757,6 +688,11 @@ void cassette_view_update(const mini_icecast_status_t *st)
 void cassette_view_set_cover(const lv_image_dsc_t *dsc)
 {
     cassette_cover_set_image(dsc);
+}
+
+void cassette_view_set_cover_pending(void)
+{
+    cassette_cover_set_pending();
 }
 
 void cassette_view_set_tags(const char *group, const char *song)

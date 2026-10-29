@@ -562,13 +562,17 @@ in from the left edge and shows the DJ block at the right, on the screen's near-
 (**Art**), and the next down turns that page **white** (`k_col_white` - the orange line art
 reads as ink on paper) and prints the playing Track's cover on the cassette's body
 (**Real**). An **up** swipe undoes one rung at a time; a down at Real and an up at the Peek
-do nothing. The picture is scaled to the outer frame's width, top-aligned and masked
-to the frame minus the label window, the hole a pill whose ends are the two reels. The stack
-is **label on top, glow in the middle, cinta at the bottom**: the label covers the body
-inside the frame with a real transparent window, the glow lights the tape below it, and the
-tape exposed below the frame stays visible under the glow. The label fades in with the page
-flip and out on the up over 1 s; a Track change cuts it (the loader reuses the
-one buffer). The page flips in one frame at the start of the step, under the picture's fade;
+do nothing. The cassette on that page is a **Card**: one tinted 426x272 rectangle at (136,82),
+radius 12, with the picture printed on it at +12,+20, scaled to the outer frame's width and
+top-aligned. The stack is **cinta < Card < label**: the print is the top layer, the Card
+covers the tape, and the window - 291x87 at (203,157), a pill whose ends are the two reels -
+is a real hole in both, cut by the one A8 mask the Card and the print's container share. The
+Card's ink is the cover's dominant hue at a fixed saturation and value, or one of five table
+inks when there is no cover; [ADR 0039](docs/adr/0039-the-cassette-is-a-card.md) records the
+decision and [`docs/specs/cassette-card.md`](docs/specs/cassette-card.md) has the rectangles.
+The Card arrives with the page flip; the print fades in over 1 s and out on the up, and a
+Track change cuts it (the loader reuses the one buffer). The page flips in one frame at the
+start of the step, under the picture's fade;
 a way off Real - the up swipe - flips it back to dark and fades the picture out over it. Two 2 px bands rounded
 by the buttons' 8 px close that screen top and bottom - 768x72 at (16,6), its bottom border on
 the first button's and the first DJ cell's top line, and 768x116 at (16,358), its top border
@@ -654,7 +658,7 @@ bobbing a few pixels out of phase. It cannot be raised while the chrome holds th
 134/256 control pose, and a down swipe with the peek up only puts it
 away - it does not go on to Art on the same swipe - while an up swipe with it up does
 nothing. The down from Initial is Art and has no pose gate; the down from Art waits for the
-controls pose to land, because the picture's mask is built at that size, and a quick second
+controls pose to land, because the Card is only drawn at that pose, and a quick second
 down is refused rather than printed early. The tag
 texts are the Track's ID3/FLAC tags, read by the artwork loader on its own
 task; until they land the group is the artist directory and the song the cleaned filename.
@@ -678,9 +682,9 @@ the peek's bar, tags and tag reader are
 
 **Track artwork is Real's cover, not a screen of its own.** The old Artwork Level - the
 cassette Case and the playing MP3's own cover in its window - is still gone, but the
-picture is back inside the cassette: the down swipe from Art prints it on the
-outer frame, with the white page, masked to frame minus the label window, and with the tape
-exposed below the frame still visible. The pipeline is the one the Artwork
+picture is back inside the cassette: the down swipe from Art prints it on the white
+page's Card - the outer frame's rect at +12,+20 - with the tape showing only through the
+label window. The pipeline is the one the Artwork
 screen used: the locator in `components/portable/artwork` (the ID3v2.3/2.4 `APIC` frame,
 or a native FLAC `PICTURE` block) and the TJpgDec decode and fit in `artwork_loader.c`.
 The panel board builds it and carries the 464,310 B cover buffer; the old Case backdrop
@@ -691,7 +695,8 @@ tier still builds and tests the locator and the fit (`host/tests/t15_artwork.c`)
 decision is
 [`docs/adr/0013-artwork-level-and-case-window.md`](docs/adr/0013-artwork-level-and-case-window.md),
 superseded by ADR 0019 for the screens; the cover's new home is
-[`docs/adr/0021-white-page-cover.md`](docs/adr/0021-white-page-cover.md).
+[`docs/adr/0021-white-page-cover.md`](docs/adr/0021-white-page-cover.md), amended by ADR 0039
+when the cassette became a Card.
 
 **The Menu is the cassette button's.** A tap on the mode bar's cassette, with the controls
 out, opens a mode of the controls on either page; a second tap on it closes the Menu again: the cassette area becomes the window's five-row page - Tracks,

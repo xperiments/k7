@@ -51,6 +51,11 @@ void cassette_view_dim(bool dim);
  * alive; the cover module copies nothing. */
 void cassette_view_set_cover(const lv_image_dsc_t *dsc);
 
+/* A picture is on its way: the loader is about to reuse its buffer, so the print goes empty and
+ * stays empty - the drawn label does not stand in for a picture that is still decoding. The
+ * loader's own answer (set_cover with NULL) is what brings the label out. */
+void cassette_view_set_cover_pending(void);
+
 /* The Track's text tags for the peek's two labels, UTF-8. Empty strings mean the Track
  * carries none (or they are still being read), and the peek falls back to the path and
  * filename it already knows. */

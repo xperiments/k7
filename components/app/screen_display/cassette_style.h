@@ -68,6 +68,12 @@ extern const lv_color_t k_col_eq_tick;
  * frames. */
 extern const lv_color_t k_col_frame;
 
+/* The five cassettes: the Card's ink for a Track with no Cover, chosen from the Track's
+ * own path (ADR 0039). Mid-dark tones that read as a mat on the white page and stay
+ * distinct from the print, and from each other, at 426x272. A drawn label takes each
+ * one's complement. */
+extern const lv_color_t k_col_card[5];
+
 /* The touch board's own Levels: its cover, its Label and the Artwork backdrop. They
  * are defined for both boards; a board without those Levels never reads them, except
  * k_col_primary, which the header's K7 mark uses as its dark-page ink too. */

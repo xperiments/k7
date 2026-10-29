@@ -23,6 +23,17 @@ const lv_color_t k_col_eq_tick = COL_HEX(0xFF8A3D);
 
 const lv_color_t k_col_frame      = COL_HEX(COL_BLACK);
 
+/* The five cassettes. One ink per cassette, not per pixel: the Card is one fill, so the
+ * table is the whole of the no-Cover variety. They are mid-dark and far apart in hue so
+ * the drawn label's complement always has somewhere to go. */
+const lv_color_t k_col_card[5] = {
+    COL_HEX(0x2F5E7A),   /* petrol */
+    COL_HEX(0x8A3A2A),   /* rust */
+    COL_HEX(0x4C6B39),   /* olive */
+    COL_HEX(0x67457A),   /* plum */
+    COL_HEX(0x2E2E33),   /* graphite */
+};
+
 const lv_color_t k_col_back       = COL_DARKEN_HEX(COL_PRIMARY, 40);
 const lv_color_t k_col_cover_bg   = COL_HEX(0xB48744);
 const lv_color_t k_col_cover_ink  = COL_HEX(0xEEEEEE);

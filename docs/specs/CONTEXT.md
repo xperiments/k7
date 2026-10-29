@@ -307,14 +307,22 @@ locator and fit are built on the panel board and tested on the host; the old **A
 Level that showed it is still parked.
 _Avoid_: album art, portada
 
+**Card**:
+The white page's cassette: one tinted rounded rectangle, 426x272 at (136,82), radius 12, drawn
+above the tape and under the **Cover**, which it carries at +12,+20. It has no picture of its
+own; its ink is the Cover's dominant hue at a fixed saturation and value, or one of five table
+inks when there is no cover. It and the Cover's container share one A8 mask, whose 291x87 pill
+window at (203,157) is the only place the tape shows through. Shown and hidden with the
+**Page**; it exists at the Controls pose and nowhere else. It is the body the screen never had:
+the label and the outer frame are the same rectangle, so there was nothing to colour.
+_Avoid_: plate, carcase
+
 **Cover**:
-What the white page - the **Real** Level - prints on the cassette: the Track artwork scaled
-to the outer frame's width, top-aligned, clipped to that frame and masked by the inner
-frame. It is the **label**, the top layer: cinta < glow < label. The label covers the body
-inside the outer frame and its window is a real transparent hole, so the glow and the tape
-show through; the tape exposed below the frame stays visible under the glow. The up swipe
-turns it off with the Page; every way off Real hides it. It is part of Real, not a Level of
-its own and not the removed Label cover.
+What the white page - the **Real** Level - prints on the **Card**: the Track artwork scaled to
+the outer frame's width, top-aligned, clipped to that frame and masked by the inner one. It is
+the **label**, above the Card: cinta < Card < label. The window is a real transparent hole in
+both, so the tape shows through it. The up swipe turns it off with the Page; every way off Real
+hides it. It is part of Real, not a Level of its own and not the removed Label cover.
 _Avoid_: artwork screen, Case, portada
 
 **Peek**:

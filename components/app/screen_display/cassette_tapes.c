@@ -35,9 +35,9 @@ static const char *TAG = "screen";
  * the design grid, pixel for pixel. */
 static cassette_pose_t s_pose = { CASSETTE_SCALE_NONE, 0, 0 };
 
-/* The white page's cover is printed on the body: frame[1]'s border follows the pill the
- * cover's hole cuts, instead of the design's 16 px corner. The dark page keeps the 16. */
-static bool s_cover_print;
+/* The window the packs' boxes clamp to while the white page's Card is up, in panel
+ * pixels. (0,0,0,0) is no clamp; pack_place() has the why. */
+static cassette_rect_t s_window;
 
 #define SC(v)  cassette_len(s_pose, (v))             /* a design length, in pixels */
 #define SCX(x) cassette_x(s_pose, (x))               /* a design x, in screen pixels */
@@ -294,12 +294,46 @@ static void pack_draw_cb(lv_event_t *e)
 }
 
 /* Where the pack sits and how big it is, for the diameter the fill last gave it. It is
- * split from pack_set() so a scale change can re-place a pack whose fill has not moved. */
+ * split from pack_set() so a scale change can re-place a pack whose fill has not moved.
+ *
+ * While the white page's Card is up the box is intersected with its window, and that is
+ * an invalidation change only, not a geometry one: pack_draw_cb draws the rings from
+ * SCX/SCY(k_hub[i]), the hub's screen centre, not from the object's box, and
+ * lv_obj_redraw() truncates the layer to the object's box before LV_EVENT_DRAW_MAIN_END
+ * (lv_refr.c:131). So a clamped box clips the rings to the window and moves none of them.
+ * Do not "fix" this by drawing the rings relative to the box: the 25 Hz reel tick would
+ * then invalidate the whole pack area, and the Card would be re-composited over it every
+ * frame - which is the one cost the window exists to remove. */
 static void pack_place(int i)
 {
     int sd = SC(s_pack_d[i]);
-    lv_obj_set_size(s_pack[i], sd, sd);
-    lv_obj_set_pos(s_pack[i], SCX(k_hub[i].x) - sd / 2, SCY(k_hub[i].y) - sd / 2);
+    int x = SCX(k_hub[i].x) - sd / 2, y = SCY(k_hub[i].y) - sd / 2;
+    int w = sd, h = sd;
+
+    if (s_window.w > 0 && s_window.h > 0) {
+        int x1 = LV_MAX(x, s_window.x), y1 = LV_MAX(y, s_window.y);
+        int x2 = LV_MIN(x + w, s_window.x + s_window.w);
+        int y2 = LV_MIN(y + h, s_window.y + s_window.h);
+
+        if (x2 > x1 && y2 > y1) {
+            x = x1;
+            y = y1;
+            w = x2 - x1;
+            h = y2 - y1;
+        } else {
+            /* No overlap: keep a 1x1 box rather than a zero-size one, which LVGL does not
+             * place reliably, and park it inside the window so even a pose the Card never
+             * draws at cannot invalidate outside it. Nothing shows either way: the box is
+             * the disc's bounding box, so a pack whose box misses the window has no ring
+             * in the window to draw. */
+            x = LV_MIN(LV_MAX(x, s_window.x), s_window.x + s_window.w - 1);
+            y = LV_MIN(LV_MAX(y, s_window.y), s_window.y + s_window.h - 1);
+            w = h = 1;
+        }
+    }
+
+    lv_obj_set_size(s_pack[i], w, h);
+    lv_obj_set_pos(s_pack[i], x, y);
 }
 
 /* The pack's fill is the outer radius, and the rings are drawn from it in
@@ -353,8 +387,9 @@ void cassette_tapes_place(cassette_pose_t pose)
     place_rect(s_frame[0], FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
     lv_obj_set_style_radius(s_frame[0], SC(FRAME_R), 0);
     place_rect(s_frame[1], 122, 122, 556, 168);
-    int r1 = s_cover_print ? LV_MIN(SC(556), SC(168)) / 2 : SC(16);
-    lv_obj_set_style_radius(s_frame[1], r1, 0);
+    /* The design's 16 px corner is all frame[1] has now: on the white page the Card covers
+     * it, so nothing prints the cover's pill on it any more. */
+    lv_obj_set_style_radius(s_frame[1], SC(16), 0);
 
     for (int i = 0; i < 3; i++) {
         place_rect(s_chip[i], k_chip[i].x, k_chip[i].y, k_chip[i].w, k_chip[i].h);
@@ -400,51 +435,15 @@ void cassette_tapes_hub_anchor(int index, bool top, int *x, int *y)
     *y = SCY(k_hub[index].y) + (top ? -r : r);
 }
 
-void cassette_tapes_frame_rect(int index, int *x, int *y, int *w, int *h, int *r)
+void cassette_tapes_set_window(cassette_rect_t window)
 {
-    if (x) *x = 0;
-    if (y) *y = 0;
-    if (w) *w = 0;
-    if (h) *h = 0;
-    if (r) *r = 0;
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    if (index < 0 || index > 1 || !s_frame[index]) return;
-    if (x) *x = lv_obj_get_x(s_frame[index]);
-    if (y) *y = lv_obj_get_y(s_frame[index]);
-    if (w) *w = lv_obj_get_width(s_frame[index]);
-    if (h) *h = lv_obj_get_height(s_frame[index]);
-    if (r) *r = (int)lv_obj_get_style_radius(s_frame[index], 0);
-#else
-    (void)index;
-#endif
-}
+    s_window = window;
 
-void cassette_tapes_set_cover_print(bool on)
-{
-    s_cover_print = on;
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    if (!s_frame[1]) return;
-    int r1 = s_cover_print ? LV_MIN(SC(556), SC(168)) / 2 : SC(16);
-    lv_obj_set_style_radius(s_frame[1], r1, 0);
-#endif
-}
-
-void cassette_tapes_raise_frames(void)
-{
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The frames are the first two children; the label was created after them, so this
-     * puts the two borders over the label while it is shown. */
-    if (s_frame[0]) lv_obj_move_foreground(s_frame[0]);
-    if (s_frame[1]) lv_obj_move_foreground(s_frame[1]);
-#endif
-}
-
-void cassette_tapes_lower_frames(void)
-{
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    if (s_frame[0]) lv_obj_move_to_index(s_frame[0], 0);
-    if (s_frame[1]) lv_obj_move_to_index(s_frame[1], 1);
-#endif
+    /* The clamp is a box change and nothing else, so it lands at once rather than on the
+     * next reel tick: the Card comes up with the page. Before create() there is no pack to
+     * re-place, and create()'s own place() applies the window that is already held. */
+    for (int i = 0; i < 2; i++)
+        if (s_pack[i]) pack_place(i);
 }
 
 /* Push the tape's ink into the hub rims: the playing red at LV_OPA_COVER, the tape's own

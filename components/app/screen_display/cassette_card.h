@@ -1,0 +1,78 @@
+#pragma once
+/*
+ * cassette_card - the white page's cassette.
+ *
+ * On the Real Level the cassette is one tinted rounded rectangle, 426x272 at (136,82),
+ * with a 291x87 pill window at (203,157) through which the tape shows: the Card
+ * (ADR 0039). The Track's picture, or the drawn label, is printed on it at +12,+20 by
+ * cassette_cover.c, which shares this module's mask.
+ *
+ * The Card places itself in screen pixels and never scales: it exists only at the
+ * Controls pose, which is the only place the white page can be reached, so the pose's
+ * animation never resizes it.
+ *
+ * The mask is the one thing here with a cost: an A8 bitmap of the Card's own size,
+ * 116,416 B, built once. Two objects share it - the Card and the print's container -
+ * because LVGL aligns a bitmap mask to the centre of its object's area and clears
+ * everything outside the mask's rectangle, so a mask must cover its object and two
+ * objects can share one only if their centres coincide. That is why they are both
+ * 426x272 at (136,82).
+ */
+#include <stdbool.h>
+
+#include "lvgl.h"
+
+#include "cassette_layout.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* The Card's geometry, in panel pixels at the Controls pose. The window is expressed
+ * from the Card's corner; on the panel it is (203,157). */
+enum {
+    CASSETTE_CARD_X  = 136,
+    CASSETTE_CARD_Y  = 82,
+    CASSETTE_CARD_W  = 426,
+    CASSETTE_CARD_H  = 272,
+    CASSETTE_CARD_R  = 12,
+
+    /* Where the print - and the drawn label - sits inside the Card. It is frame[0]'s
+     * rect at the Controls pose: 402x188 at (148,102). */
+    CASSETTE_CARD_PRINT_DX = 12,
+    CASSETTE_CARD_PRINT_DY = 20,
+    CASSETTE_CARD_PRINT_W  = 402,
+    CASSETTE_CARD_PRINT_H  = 188,
+
+    /* The window: frame[1]'s interior, the largest pill the print's height allows. */
+    CASSETTE_CARD_WINDOW_DX = 67,
+    CASSETTE_CARD_WINDOW_DY = 75,
+    CASSETTE_CARD_WINDOW_W  = 291,
+    CASSETTE_CARD_WINDOW_H  = 87,
+};
+
+/* Build the Card and its mask under `parent`, hidden. Parent is the cassette's
+ * container, and this must be called after the tape body so the Card draws over it. */
+void cassette_card_create(lv_obj_t *parent);
+
+/* Show or hide it with the Page, in one frame. Hidden until the first call. */
+void cassette_card_set_shown(bool shown);
+
+/* The Card's ink: the Album's hue, or one of the table's five. It is a cut, never a
+ * colour animation - a colour animation would repaint the panel on every step. */
+void cassette_card_set_ink(lv_color_t ink);
+
+/* The ink it is wearing now: what a drawn label takes its complement of. */
+lv_color_t cassette_card_ink(void);
+
+/* The one A8 descriptor the Card and the print's container share, or NULL before
+ * create() has built it. */
+const lv_image_dsc_t *cassette_card_mask(void);
+
+/* The window's rect on the panel, (203,157) 291x87: what the packs clamp their boxes to
+ * while the Card is up, so the reel tick never invalidates outside it. */
+cassette_rect_t cassette_card_window(void);
+
+#ifdef __cplusplus
+}
+#endif
