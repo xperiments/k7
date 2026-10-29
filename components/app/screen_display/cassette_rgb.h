@@ -25,8 +25,8 @@
  * installs a hook (or does not), and every move hands it the whole state. A hook installed late is
  * called once with the values that are already there.
  *
- * Private to screen_display. create() installs the panel value with the right bar, after
- * cassette_bars_create() and knob_editor_create().
+ * Private to screen_display. create() builds the knobs' values and nothing else; the panel value
+ * is installed by the composition, which is also what decides when the group is up.
  */
 #include <stdbool.h>
 
@@ -39,7 +39,8 @@
 extern "C" {
 #endif
 
-/* Build the panel's values and install it with the right bar. A second call is a no-op. */
+/* Build the panel's values - the five knobs, the effect's slots and names, the state they read
+ * from. A second call is a no-op. It creates no object: the cells are the bar's. */
 void cassette_rgb_create(void);
 
 /* Where the strip's state goes. `cb` is called with the whole state after every move, and once

@@ -22,9 +22,13 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "esp_log.h"
+
 #include "cassette_button.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
+
+static const char *TAG = "screen";
 
 /* A bar can hold a full 2x3 panel: six on the right, three on the left. */
 #define BARS_MAX_ROOTS   6
@@ -213,7 +217,15 @@ void cassette_bars_create(lv_obj_t *screen)
 
 void cassette_bars_set_panel(cassette_bar_side_t side, const cassette_panel_t *panel)
 {
-    if (!s_created || !panel || (unsigned)side >= CASSETTE_BARS_COUNT) return;
+    /* A Bar that was never built cannot host a Panel, and refusing silently is how the old
+     * order-dependent install failed: the module's own create() had already marked it built, so
+     * the retry was refused for the life of the process and the Bar came out empty. Say so. */
+    if (!s_created) {
+        ESP_LOGE(TAG, "panel installed before the bars exist (side %d): the composition installs "
+                      "after every module is built", (int)side);
+        return;
+    }
+    if (!panel || (unsigned)side >= CASSETTE_BARS_COUNT) return;
     bar_t *b = &s_bars[side];
     if (b->panel == panel) return;
 

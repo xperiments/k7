@@ -22,13 +22,16 @@
  * Every button carries the palette's neutral cap for the white page and the palette's line art
  * on the dark one; the latch is the only thing that colours a disc.
  *
- * Private to screen_display. create() installs the panel value with the left bar, so it runs
- * after cassette_bars_create() and before the first set_shown(). Every object is built under
- * the LVGL lock.
+ * Private to screen_display. The module builds no object of its own: it hands the left bar one
+ * panel value, and the bar builds a button into each carcase it makes. The view installs that
+ * value with cassette_bars_set_panel() - the bar is not this module's to install - and calls
+ * set_on() to relatch afterwards. Every object is built under the LVGL lock.
  */
 #include <stdbool.h>
 
 #include "lvgl.h"
+
+#include "cassette_bars.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,12 +49,13 @@ typedef enum {
  * lock, after the tap guard and the pulse. A NULL callback makes the button a pulse. */
 typedef void (*cassette_buttons_cb_t)(void *ctx);
 
-/* Give the left bar its mode panel: three cells, one button each, built into the carcases the
- * bar makes. A second call is a no-op. */
-void cassette_buttons_create(void);
+/* The left bar's content, for the composition to install: one column of three cells, one
+ * button each, built into the carcases the bar makes. */
+const cassette_panel_t *cassette_buttons_panel(void);
 
 /* The action a mode's click runs, replaced as a pair. The mode is remembered if this is called
- * before create(); create() applies it to the cells it fills. */
+ * before the panel is installed; a click reads the table when it happens, so the order does not
+ * matter. */
 void cassette_buttons_set_cb(cassette_mode_t which, cassette_buttons_cb_t cb, void *ctx);
 
 /* The latched ink: the mode's disc lit k_col_primary with a k_col_bg glyph, or back to the

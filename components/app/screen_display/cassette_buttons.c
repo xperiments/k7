@@ -33,7 +33,6 @@ static cassette_button_t s_buttons[CASSETTE_MODE_COUNT];
 static cassette_buttons_cb_t s_cb[CASSETTE_MODE_COUNT];
 static void *s_ctx[CASSETTE_MODE_COUNT];
 static bool s_on[CASSETTE_MODE_COUNT];   /* the latch, which may lead the cells */
-static bool s_created;
 
 static bool mode_valid(cassette_mode_t which)
 {
@@ -98,11 +97,9 @@ static const cassette_panel_t k_mode_panel = {
     .ctx = NULL,
 };
 
-void cassette_buttons_create(void)
+const cassette_panel_t *cassette_buttons_panel(void)
 {
-    if (s_created) return;
-    s_created = true;
-    cassette_bars_set_panel(CASSETTE_BARS_LEFT, &k_mode_panel);
+    return &k_mode_panel;
 }
 
 void cassette_buttons_set_cb(cassette_mode_t which, cassette_buttons_cb_t cb, void *ctx)

@@ -302,8 +302,6 @@ void cassette_rgb_create(void)
     knob_reset(&s_knob[KNOB_FX]);   /* the slot walk left it on the last one */
 
     rgb_compose();
-
-    cassette_bars_set_panel(CASSETTE_BARS_RIGHT, &k_rgb_panel);
 }
 
 void cassette_rgb_set_publish(cassette_rgb_publish_t cb, void *ctx)

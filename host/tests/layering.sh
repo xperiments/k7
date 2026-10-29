@@ -204,6 +204,25 @@ else
     printf '  ok    the GPL-3.0 encoder port appears nowhere\n'
 fi
 
+printf '\nA1  a panel builds its values and never installs itself\n'
+# The screen's two Bars are filled by the composition, in one place: a module's create() that
+# calls cassette_bars_set_panel() is the order-dependent install this rule exists to prevent - a
+# panel that installs before the Bars exist is refused, and the Bar comes out empty. The Set is
+# closed: the implementation, the composition, and the Menu, which owns the right Bar while it is
+# up. A fourth name here should be a deliberate decision, not a new module's convenience.
+for f in "$ROOT"/components/app/screen_display/*.c; do
+    name=$(basename "$f")
+    case "$name" in
+    cassette_bars.c|cassette_view.c|cassette_menu.c) continue ;;
+    esac
+    if grep -q 'cassette_bars_set_panel' "$f" 2>/dev/null; then
+        printf '  FAIL  %s installs a panel itself; the composition installs it\n' "$name"
+        fail=1
+    else
+        printf '  ok    %s builds without installing\n' "$name"
+    fi
+done
+
 if [ "$fail" -eq 0 ]; then
     printf '\nlayering: all checks passed\n'
 else

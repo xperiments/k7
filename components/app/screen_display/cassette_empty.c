@@ -16,7 +16,6 @@
 
 static lv_obj_t *s_plate;
 static bool s_white;
-static bool s_created;
 
 /* The plate as the bar's cell: the Pad's footprint, so the Empty group and the Menu's Pad are
  * the same surface and swapping between them does not move a pixel. */
@@ -96,14 +95,6 @@ static const cassette_panel_t k_empty_panel = {
     .shown = NULL,
     .ctx = NULL,
 };
-
-void cassette_empty_create(void)
-{
-    if (s_created) return;
-    s_created = true;
-    s_white = false;
-    cassette_bars_set_panel(CASSETTE_BARS_RIGHT, &k_empty_panel);
-}
 
 const cassette_panel_t *cassette_empty_panel(void)
 {

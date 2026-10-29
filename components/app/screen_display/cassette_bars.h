@@ -20,10 +20,12 @@
  * The Empty group and the Menu's Pad are plates: 1x1, and their cell_rect() returns the
  * layout's Pad rect, one 186x284 surface instead of a lattice cell.
  *
- * The order the view uses: create() once, after the peek and before the bands; then each
- * panel installs its value (`cassette_buttons_create()`, `cassette_eq_create()`); then
- * set_shown() and set_page() follow the Controls model. Everything is called under the LVGL
- * lock, like the rest of the screen.
+ * The order the composition uses: create() once, after the peek and before the bands; then every
+ * panel's module is built - a panel's create() builds values, never cells - and the composition
+ * installs one panel per bar with set_panel(): the left bar's mode panel, then the right bar's
+ * active group. Only then set_shown() and set_page(), driven by the Controls model. No module
+ * installs itself, and a set_panel() before the bars exist is refused with a log line instead of
+ * being dropped. Everything is called under the LVGL lock, like the rest of the screen.
  *
  * The 260 ms is the chrome's: the bands and the window slide over the same time and the
  * cassette's pose runs with them. It is the one clock the chrome shares.

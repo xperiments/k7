@@ -632,12 +632,12 @@ void cassette_view_create(void)
     /* The peek exists now, so give it the resting pose's hub anchors. */
     hubs_apply();
 
-    /* The bars own the cells: create() builds the right bar's M and the cells are built when
-     * each panel installs its value below. The bars start off screen and hidden. */
+    /* The bars own the cells, and nothing is in them until the composition installs a panel -
+     * below, once every panel exists. The bars start off screen and hidden. */
     cassette_bars_create(scr);
 
-    /* The mode bar is chrome, above the peek: the Menu's door and the two group selectors. */
-    cassette_buttons_create();
+    /* The mode bar is chrome, above the peek: the Menu's door and the two group selectors. It has
+     * no cell until install_panels() hands the left bar its value. */
     cassette_buttons_set_cb(CASSETTE_MODE_TAPE, tape_cb, NULL);
     cassette_buttons_set_cb(CASSETTE_MODE_EQ, eq_group_cb, NULL);
     cassette_buttons_set_cb(CASSETTE_MODE_RGB, rgb_group_cb, NULL);
@@ -647,22 +647,21 @@ void cassette_view_create(void)
     knob_editor_create(scr);
     knob_editor_set_bar(knob_bar_claim, knob_bar_release, NULL);
 
-    /* The EQ panel is chrome too, on the other edge; created last so it starts above the
-     * peek, hidden with the mode bar. */
-    cassette_eq_create(scr);
-
-    /* The RGB group shares the editor, the dials and the Back idiom; it publishes the strip's
-     * state through cassette_rgb_set_publish(), which nothing installs yet. */
+    /* The two knob panels' values. They build no object; their cells are the bar's, built when
+     * their value is installed. */
+    cassette_eq_create();
     cassette_rgb_create();
-
-    /* The Empty group - the speaker grille - is the right bar's default, so it is installed
-     * last and the screen opens on it. */
-    cassette_empty_create();
 
     /* The groups live with the chrome: nothing is selected until the bars are out, and the
      * two latches start dark. */
     groups_init(&s_groups);
-    groups_apply(GROUPS_CHANGED_ACTIVE);
+
+    /* Build, then install: every module above has built what it owns, and these three calls are
+     * the only places a bar is given content. Left first, then the right bar's default group -
+     * the Empty grille - and the latches, which read that group. */
+    cassette_bars_set_panel(CASSETTE_BARS_LEFT, cassette_buttons_panel());
+    groups_install();
+    groups_latch();
 
     /* The Menu's page is drawn above the cassette; its Pad is the right bar's cell, built by
      * the bar when open installs the panel. The bars were created before this; the bands come

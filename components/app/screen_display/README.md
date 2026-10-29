@@ -34,7 +34,16 @@ and nothing else. Everything else is private:
   their page ink. The bar builds one 96x96 carcase per cell at the layout's rect and hands
   each to the panel that is up; `set_panel(side, panel)` installs a panel value (a grid of
   cells, or one plate), `set_shown()` slides the cells over 260 ms, reverses from wherever
-  they are and hides them at the end, and `set_page()` paints the Page. Swapping the panel is
+  they are and hides them at the end, and `set_page()` paints the Page. **Building and
+  installing are separate calls, and the composition makes the second one.** A panel's
+  `create()` builds its values - knobs, marks, names, a strip's state - and creates no
+  object; `cassette_view_create()` installs the left bar's mode panel and then the right
+  bar's group, and nothing else calls `set_panel()` except the Menu, which owns the right
+  bar while it is up. A `set_panel()` before the bars exist is a `ESP_LOGE` and a refusal,
+  not the silent drop it used to be (`cassette_bars.c`: a panel's `create()` installed
+  itself, so a mistaken order left the bar empty for the life of the process), and
+  `host/tests/layering.sh` A1 keeps the exception list closed.
+  Swapping the panel is
   a cut, which is how the right bar changes group and how the Menu's Pad takes the bar and
   gives it back. There is no chrome cell: the Menu's door is the left bar's cassette button, so
   no panel can strand it. The left bar holds the **mode bar** (the Menu's toggle and the two

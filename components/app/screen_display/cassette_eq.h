@@ -56,11 +56,12 @@
 extern "C" {
 #endif
 
-/* Install the EQ panel in the right bar and build the edit layer - the 3x knob and its lazy
- * dial and the Pad's seam - on `parent` (the screen). Call once, after cassette_bars_create(). On the dark
- * page the group is the palette's playing red line art; on the white page the four knobs'
- * knobs' cells are the knob plate. */
-void cassette_eq_create(lv_obj_t *parent);
+/* Build the panel's values - the four knobs, their marks, their names and the audio they start
+ * from. It creates no object: the cells are the bar's, built when the composition installs the
+ * value, and the edit layer is knob_editor's. Call once, after cassette_bars_create() and
+ * knob_editor_create(). On the dark page the group is the palette's playing red line art; on the
+ * white page the four knobs' cells are the knob plate. */
+void cassette_eq_create(void);
 
 /* The panel's value, for the view to install again when the EQ group is selected. Handing it
  * back does not rebuild anything: the bar rebuilds the cells and the panel's knob values, its

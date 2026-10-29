@@ -17,8 +17,8 @@
  * `k_col_bg` dots on the white page's plate. The plate's fill and stroke are the bar's; this
  * module only paints the dots.
  *
- * Private to screen_display. create() installs the panel value with the right bar, so it runs
- * after cassette_bars_create(); the view installs it as the default group.
+ * Private to screen_display. The module builds no object of its own: the grille appears when the
+ * view installs this panel value with the right bar, and the bar builds the plate's carcase.
  */
 #include "lvgl.h"
 
@@ -28,12 +28,8 @@
 extern "C" {
 #endif
 
-/* Build the grille's objects (none until the panel is installed) and install this panel with
- * the right bar. A second call is a no-op. */
-void cassette_empty_create(void);
-
-/* The panel's value, for the view to install again when the Empty group is selected after
- * another group or the Menu. Installing it does not rebuild the grille's values - it has none. */
+/* The panel's value, for the view to install when the Empty group is selected: the default at
+ * boot, and what a second tap on the group's button returns to. */
 const cassette_panel_t *cassette_empty_panel(void);
 
 #ifdef __cplusplus

@@ -315,9 +315,8 @@ static const cassette_panel_t k_eq_panel = {
     .ctx = NULL,
 };
 
-void cassette_eq_create(lv_obj_t *parent)
+void cassette_eq_create(void)
 {
-    (void)parent;                 /* the 3x dial is knob_editor's, on the screen */
     if (s_created) return;
     s_created = true;
 
@@ -329,10 +328,6 @@ void cassette_eq_create(lv_obj_t *parent)
         knob_set_marks(&s_knob[id], k_band_marks, 2);
     }
     for (int id = 0; id < KNOB_COUNT; id++) knob_set_name(&s_knob[id], k_knob_name[id]);
-
-    /* The bar builds the five cells and hands each to eq_cell_build(), and the panel value
-     * inks them for the page the bar is on. */
-    cassette_bars_set_panel(CASSETTE_BARS_RIGHT, &k_eq_panel);
 
     /* The audio starts from the same values; this makes a rebuilt screen agree with it. */
     for (int id = 0; id < KNOB_COUNT; id++) knob_send(id);
