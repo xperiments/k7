@@ -71,12 +71,6 @@ void cassette_tapes_set_hubs_white(bool white);
  * colour). Only what changed is written. A NULL frame is a no-op. */
 void cassette_tapes_set(const cassette_frame_t *frame);
 
-/* The point where a tether meets a hub, in screen pixels at the pose the module holds:
- * the top of the rim when `top` is true, its bottom when false. A line stops at the rim
- * rather than drawing across the hub's ink and the VU meter. Index 0 is the left
- * (supply) hub. */
-void cassette_tapes_hub_anchor(int index, bool top, int *x, int *y);
-
 #ifdef __cplusplus
 }
 #endif

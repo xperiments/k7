@@ -19,6 +19,7 @@
  * border: the badge's right edge is the header's left edge plus 2, the window's
  * right edge is the Pad's left edge, the bands' inner edges are the window's.
  */
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -181,6 +182,24 @@ int cassette_tape_centre_y(void);
 /* A design-space rect at a pose, in screen pixels. The edges are converted first
  * and the size derived from them, so a scaled rect tiles without a 1 px seam. */
 cassette_rect_t cassette_screen_rect(cassette_pose_t pose, cassette_rect_t design);
+
+/* The two hubs, on the design grid, and the rim's diameter. The tape body draws its packs,
+ * its rims and its spokes from these numbers; the Peek's tethers end on them. */
+enum {
+    CASSETTE_HUB_X0     = 210,   /* the supply hub: 216 - 6 */
+    CASSETTE_HUB_X1     = 594,   /* the take-up one: 600 - 8 + 2 */
+    CASSETTE_HUB_Y      = 206,
+    CASSETTE_HUB_RING_D = 168,
+};
+
+/* Where a tether meets a hub at `pose`, in screen pixels: the top of the rim when `top`, its
+ * bottom otherwise. Index 0 is the left (supply) hub.
+ *
+ * This is the one thing two parts both need: the tape body draws the rim, and the Peek puts a
+ * line on it. It is layout arithmetic on the pose, so it is here rather than in either of
+ * them - a part that is handed the pose can work out where the hub is without being pushed a
+ * pair of coordinates on every animation step, and t16 pins it like the rest of the grid. */
+void cassette_hub_anchor(cassette_pose_t pose, int index, bool top, int *x, int *y);
 
 #ifdef __cplusplus
 }

@@ -20,6 +20,7 @@
 #include "lvgl.h"
 
 #include "cassette.h"
+#include "cassette_layout.h"
 #include "mini_icecast.h"
 
 #ifdef __cplusplus
@@ -52,8 +53,10 @@ void cassette_levels_set_cover_visible(bool shown);
 /* The Track's text tags, UTF-8. Empty strings mean the Track carries none. */
 void cassette_levels_set_tags(const char *group, const char *song);
 
-/* The two hub anchors in screen pixels, for the peek's tethers. */
-void cassette_levels_set_hubs(int x0, int y0, int x1, int y1);
+/* The cassette's pose, for the peek's two tethers: they end on the left hub's rim, which is
+ * layout arithmetic on the pose (cassette_hub_anchor), so the peek is told the pose and works
+ * the points out itself. */
+void cassette_levels_set_pose(cassette_pose_t pose);
 
 #ifdef __cplusplus
 }

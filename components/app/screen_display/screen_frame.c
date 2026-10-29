@@ -191,8 +191,8 @@ static http_result_t scene_route(int fd, const http_request_t *req, void *ctx)
     const char *q = strstr(req->query, "n=");
     char *end = NULL;
     long n = q ? strtol(q + 2, &end, 10) : -1;
-    if (!q || !end || end == q + 2 || n < 0 || n > 7) {
-        http_send_error(fd, 400, "n must be 0..7");
+    if (!q || !end || end == q + 2 || n < 0 || n > CASSETTE_SCENE_MAX) {
+        http_send_error(fd, 400, "n must be 0..8");
         return HTTP_HANDLED;
     }
 

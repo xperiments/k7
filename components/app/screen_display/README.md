@@ -170,15 +170,16 @@ after the tape body and shown and hidden with the
   `angle-right` glyph in `xtape_24`.
 - `cassette_levels.c` — the peek's host and the Track request. Its interface is
   `create(screen)`, `apply(frame)`, `update(status)`, `set_peek(shown)`, `set_tags()` and
-  `set_hubs()`. The Label cover and Artwork screens and the old Level machine are gone; the
+  `set_pose(pose)`. The Label cover and Artwork screens and the old Level machine are gone; the
   peek is the bottom rung of the four (ADR 0025). There is no room callback: the Controls
   model owns the room and the view applies its ROOM bit. The peek still needs room from the cassette (the view shrinks and
-  lifts it so the bar clears the tape) and its tethers need the hub anchors, which the view
-  hands in on every pose step. On a new Track it hides the old picture and asks
+  lifts it so the bar clears the tape) and its tethers hang from a hub, so the view hands the
+  peek the pose on every step and the anchor is `cassette_layout`'s arithmetic - not a pair of
+  coordinates pushed in from the tape. On a new Track it hides the old picture and asks
   `artwork_loader` for the new tags and cover in one request slot.
 - `cassette_peek.c` — the up swipe's overlay: the timeline bar and the two floating tags.
   Its interface is `create(screen)`, `apply(frame)`, `set_path()`, `set_tags()`,
-  `set_hubs()`, `show()` / `hide()` and `is_shown()`. The bar carries the
+  `set_pose()`, `show()` / `hide()` and `is_shown()`. The bar carries the
   Track's elapsed, a rounded fill and its total; the tags carry the song above the hub and
   the group below it, each tethered to it. The texts come from ID3/FLAC tags read
   by the loader, with the artist directory and the filename as the fallback. One
@@ -361,10 +362,11 @@ Each tether is a two-point `lv_line` from 14 px inside its pill to the left hub'
 rim: the upper label from its bottom to the top rim, the lower one from its top to the
 bottom rim.
 The line's upper end is under the pill's opaque fill, so the tag's bob uncovers a little
-more or less of it without a line redraw; the lower end is the hub anchor the view hands
-in from `cassette_tapes_hub_anchor()` on every pose step, so the tethers follow the
-cassette while it shrinks and lifts. The line object is placed on its own bounding box,
-so an invalidation is the line and not the screen from 0,0.
+more or less of it without a line redraw; the lower end is the left hub's rim at the current
+pose, which the peek works out from `cassette_layout`'s `cassette_hub_anchor()` - the tape
+body draws its rim from the same numbers - so the tethers follow the cassette while it
+shrinks and lifts, and `t16_layout` pins the anchor at all three poses. The line object is
+placed on its own bounding box, so an invalidation is the line and not the screen from 0,0.
 
 The movement is one `lv_anim` over both tags: a five-second sine, +/-6 px, the two tags
 in opposite phase. Its callback rounds the offset to a whole pixel and writes `y` only

@@ -24,9 +24,10 @@
  *
  * The peek is the ladder's bottom rung, not a screen of its own: this module is born and
  * hidden by cassette_levels. The Controls model owns the room, so the peek asks nobody
- * for it: the view applies the ROOM bit itself. The view owns the pose, so the hub
- * anchors are handed in on every pose change and only the tether's lower endpoint moves
- * with them.
+ * for it: the view applies the ROOM bit itself. The view owns the pose and hands it in on
+ * every pose step; the module works the two anchors out itself, from cassette_layout's
+ * `cassette_hub_anchor()`, so only the tether's lower endpoint moves with the cassette and
+ * nothing has to push it a pair of coordinates.
  *
  * Private to screen_display, and built only on the touch board: the gestures that
  * reach Initial's peek are the panel's.
@@ -36,6 +37,7 @@
 #include "lvgl.h"
 
 #include "cassette.h"
+#include "cassette_layout.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -56,10 +58,10 @@ void cassette_peek_set_path(const char *track_path);
 /* The Track's tags, UTF-8, or empty strings when it has none. */
 void cassette_peek_set_tags(const char *group, const char *song);
 
-/* The two hub anchors in screen pixels: where each tether meets its hub. The view
- * calls this on creation and on every pose step, so the tethers follow the cassette
- * while its scale animates. */
-void cassette_peek_set_hubs(int x0, int y0, int x1, int y1);
+/* The cassette's pose: the two tethers' lower ends are the left hub's rims at this pose, so
+ * the lines follow the cassette while its scale animates. The view calls this on creation
+ * and on every pose step; only the tether's lower endpoint moves with it. */
+void cassette_peek_set_pose(cassette_pose_t pose);
 
 /* Show the overlay, sliding the bar up, or put it away with the same slide. */
 void cassette_peek_show(void);

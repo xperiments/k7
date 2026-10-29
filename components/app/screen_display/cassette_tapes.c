@@ -49,8 +49,12 @@ static cassette_rect_t s_window;
  * circle sits PACK_RING_GAP px inside the one before it. Only the circles outside the rim
  * are drawn - the rim covers what is under it - so an empty pack, whose radius is the
  * rim's, draws none, and a full one draws the lot. */
-static const struct { int x, y; } k_hub[2] = { { 216-6, 206 }, { 600-8+2, 206 } };
-#define HUB_RING_D 168
+/* The hubs' design coordinates and the rim's diameter are cassette_layout's: the Peek puts a
+ * tether on the same circle, and two parts reading one number is what keeps the line on the
+ * rim. */
+#define HUB_X(i)    ((i) ? CASSETTE_HUB_X1 : CASSETTE_HUB_X0)
+#define HUB_Y       CASSETTE_HUB_Y
+#define HUB_RING_D  CASSETTE_HUB_RING_D
 #define PACK_MIN_D 168
 #define PACK_MAX_D 356
 #define PACK_RING_GAP 10
@@ -151,7 +155,7 @@ static int strand_points(int i, lv_point_precise_t *pts)
 {
     /* The path is scaled before the arithmetic, so the tangent and the wrap below read the
      * same at any scale. */
-    double cx = SCX(k_hub[i].x), cy = SCY(k_hub[i].y), R = (double)SC(s_pack_d[i]) / 2.0;
+    double cx = SCX(HUB_X(i)), cy = SCY(HUB_Y), R = (double)SC(s_pack_d[i]) / 2.0;
     double gx = SCX(i ? STRAND_GUIDE_X_R : STRAND_GUIDE_X_L), gy = CASSETTE_GUIDE_Y;
     double gr = CASSETTE_GUIDE_R;
     double dx = gx - cx, dy = gy - cy;
@@ -262,7 +266,7 @@ static void hub_frame_set(int i, uint8_t frame)
     double a = -(double)frame * k_hub_step;   /* the reels turn counter-clockwise */
 
     for (int k = 0; k < 2; k++)
-        spoke_set(&s_hub_spoke[i][k], SCX(k_hub[i].x), SCY(k_hub[i].y),
+        spoke_set(&s_hub_spoke[i][k], SCX(HUB_X(i)), SCY(HUB_Y),
                   a + (k ? HUB_HALF_TURN : 0.0));
 }
 
@@ -282,8 +286,8 @@ static void pack_draw_cb(lv_event_t *e)
     dsc.color = k_col_tape;
     dsc.width = PACK_RING_W;
     dsc.opa = LV_OPA_COVER;
-    dsc.center.x = SCX(k_hub[i].x);
-    dsc.center.y = SCY(k_hub[i].y);
+    dsc.center.x = SCX(HUB_X(i));
+    dsc.center.y = SCY(HUB_Y);
     dsc.start_angle = 0;
     dsc.end_angle = 360;
 
@@ -303,7 +307,7 @@ static void pack_draw_cb(lv_event_t *e)
  *
  * While the white page's Card is up the box is intersected with its window, and that is
  * an invalidation change only, not a geometry one: pack_draw_cb draws the rings from
- * SCX/SCY(k_hub[i]), the hub's screen centre, not from the object's box, and
+ * SCX/SCY(HUB_X(i), HUB_Y), the hub's screen centre, not from the object's box, and
  * lv_obj_redraw() truncates the layer to the object's box before LV_EVENT_DRAW_MAIN_END
  * (lv_refr.c:131). So a clamped box clips the rings to the window and moves none of them.
  * Do not "fix" this by drawing the rings relative to the box: the 25 Hz reel tick would
@@ -312,7 +316,7 @@ static void pack_draw_cb(lv_event_t *e)
 static void pack_place(int i)
 {
     int sd = SC(s_pack_d[i]);
-    int x = SCX(k_hub[i].x) - sd / 2, y = SCY(k_hub[i].y) - sd / 2;
+    int x = SCX(HUB_X(i)) - sd / 2, y = SCY(HUB_Y) - sd / 2;
     int w = sd, h = sd;
 
     if (s_window.w > 0 && s_window.h > 0) {
@@ -424,21 +428,12 @@ void cassette_tapes_place(cassette_pose_t pose)
     lv_line_set_points(s_run, s_run_pts, 2);
 
     for (int i = 0; i < 2; i++) {
-        place_disc(s_rim[i], k_hub[i].x, k_hub[i].y, HUB_RING_D);
+        place_disc(s_rim[i], HUB_X(i), HUB_Y, HUB_RING_D);
         hub_frame_set(i, s_shown_hub[i]);
     }
 }
 
 /* ------------------------------------------------------- the model's frame */
-
-void cassette_tapes_hub_anchor(int index, bool top, int *x, int *y)
-{
-    if (!x || !y) return;
-    if (index < 0 || index > 1) index = 0;
-    int r = SC(HUB_RING_D) / 2;
-    *x = SCX(k_hub[index].x);
-    *y = SCY(k_hub[index].y) + (top ? -r : r);
-}
 
 void cassette_tapes_set_window(cassette_rect_t window)
 {

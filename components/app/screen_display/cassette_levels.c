@@ -144,14 +144,11 @@ void cassette_levels_set_tags(const char *group, const char *song)
 #endif
 }
 
-void cassette_levels_set_hubs(int x0, int y0, int x1, int y1)
+void cassette_levels_set_pose(cassette_pose_t pose)
 {
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    cassette_peek_set_hubs(x0, y0, x1, y1);
+    cassette_peek_set_pose(pose);
 #else
-    (void)x0;
-    (void)y0;
-    (void)x1;
-    (void)y1;
+    (void)pose;
 #endif
 }

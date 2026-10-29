@@ -233,22 +233,14 @@ static void controls_apply(controls_changed_t changed)
  * draw callbacks (the pack rings, the lattice) follow without a second pass. The peek's
  * two tethers both end on the left hub, so its screen points move with it: the group is
  * above the hub and meets the top rim, the song is below it and meets the bottom one. */
-static void hubs_apply(void)
-{
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
-    cassette_tapes_hub_anchor(0, true, &x0, &y0);
-    cassette_tapes_hub_anchor(0, false, &x1, &y1);
-    cassette_levels_set_hubs(x0, y0, x1, y1);
-#endif
-}
-
 static void cassette_place(void)
 {
     cassette_tapes_place(s_pose);
     /* The print does not follow the pose any more: its box is the Card's, fixed in screen
      * pixels, and it only ever shows at the Controls pose. It places itself when it shows. */
-    hubs_apply();
+    /* The Peek's tethers end on the left hub's rim, and where that is, is arithmetic on the
+     * pose - so the peek is told the pose, not where the tape happened to put the rim. */
+    cassette_levels_set_pose(s_pose);
 }
 
 static void pose_anim_cb(void *var, int32_t step)
@@ -481,7 +473,7 @@ static bool s_scene_returning;     /* walking back to the entry view first */
 
 void cassette_view_scene_set(int scene)
 {
-    if (scene < 0 || scene > 7) return;
+    if (scene < 0 || scene > CASSETTE_SCENE_MAX) return;
     s_scene = scene;
     s_scene_step = 0;
     s_scene_returning = true;
@@ -527,6 +519,14 @@ static void scene_tick(void)
         if (!pose_is(s_pose, cassette_pose_entry())) break;
         if (s_scene == 0) {
             s_scene_step = 99;                          /* the entry view: nothing to add */
+            break;
+        }
+        if (s_scene == 8) {
+            /* The Peek: the one rung that is not the chrome, raised from the entry pose. It
+             * is the only way to photograph the two tethers, whose lower ends are the hub's
+             * rim. */
+            s_scene_step = 99;
+            screen_intent_cb(SCREEN_INTENT_UP, NULL);    /* Initial -> Peek */
             break;
         }
         s_scene_step = 1;
@@ -629,8 +629,8 @@ void cassette_view_create(void)
     /* The peek is the screen's child, above the cassette's container. It is the only
      * overlay left: the Label cover and Artwork sheets are gone. */
     cassette_levels_create(scr);
-    /* The peek exists now, so give it the resting pose's hub anchors. */
-    hubs_apply();
+    /* The peek exists now, so give it the pose the tethers hang from. */
+    cassette_levels_set_pose(s_pose);
 
     /* The bars own the cells, and nothing is in them until the composition installs a panel -
      * below, once every panel exists. The bars start off screen and hidden. */

@@ -44,9 +44,9 @@ config APP_UI_SCREEN_HTTP
         picture was never unavailable, it just had no way out.
 
 config APP_UI_DUMP_SCENE
-    int "Scene the dump is taken in (0 = entry, 1 = Art/Empty, 2 = Art/EQ, 3 = Art/RGB, 4 = Art/Menu, 5 = Real/EQ, 6 = Art/EQ with the 3x dial open, 7 = Art/RGB with the effect dial open)"
+    int "Scene the dump is taken in (0 = entry, 1 = Art/Empty, 2 = Art/EQ, 3 = Art/RGB, 4 = Art/Menu, 5 = Real/EQ, 6 = Art/EQ with the 3x dial open, 7 = Art/RGB with the effect dial open, 8 = the Peek)"
     depends on APP_UI_SERIAL_DUMP || APP_UI_SCREEN_HTTP
-    range 0 7
+    range 0 8
     default 0
     help
         The dump is taken at whatever the screen is showing four seconds after boot,

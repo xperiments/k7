@@ -228,3 +228,12 @@ cassette_rect_t cassette_screen_rect(cassette_pose_t pose, cassette_rect_t desig
     rect.h = cassette_y(pose, design.y + design.h) - rect.y;
     return rect;
 }
+
+void cassette_hub_anchor(cassette_pose_t pose, int index, bool top, int *x, int *y)
+{
+    if (!x || !y) return;
+    if (index < 0 || index > 1) index = 0;
+    int r = cassette_len(pose, CASSETTE_HUB_RING_D) / 2;
+    *x = cassette_x(pose, index ? CASSETTE_HUB_X1 : CASSETTE_HUB_X0);
+    *y = cassette_y(pose, CASSETTE_HUB_Y) + (top ? -r : r);
+}

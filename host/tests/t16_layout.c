@@ -306,6 +306,43 @@ static void test_screen_rect(void)
              "at entry the design box is pixel for pixel");
 }
 
+/* Where the Peek's two tethers end: the left hub's rim, top and bottom. The numbers are the
+ * ones the Peek used to be handed as literals at the peek pose, plus the two other poses the
+ * screen uses - this is the arithmetic that took their place. */
+static void test_hub_anchor(void)
+{
+    int x = 0;
+    int y = 0;
+
+    cassette_pose_t entry = cassette_pose_entry();
+    cassette_hub_anchor(entry, 0, true, &x, &y);
+    CHECK_EQ(x, 210, "at rest the supply hub is on its design column");
+    CHECK_EQ(y, 122, "and the top of its 168 px rim is 84 px up from y=206");
+    cassette_hub_anchor(entry, 0, false, &x, &y);
+    CHECK_EQ(y, 290, "the bottom rim is 84 px the other way");
+    cassette_hub_anchor(entry, 1, true, &x, &y);
+    CHECK_EQ(x, 594, "the take-up hub is its own column");
+
+    cassette_pose_t peek = cassette_pose_peek();
+    cassette_hub_anchor(peek, 0, true, &x, &y);
+    CHECK_EQ(x, 251, "at the peek pose the hub's column is 251");
+    CHECK_EQ(y, 87, "the top rim is where the song's tether ends");
+    cassette_hub_anchor(peek, 0, false, &x, &y);
+    CHECK_EQ(y, 217, "the bottom rim is where the group's ends");
+
+    cassette_pose_t controls = cassette_pose_controls();
+    cassette_hub_anchor(controls, 0, true, &x, &y);
+    CHECK_EQ(x, 249, "at the controls pose the same hub scales to 249");
+    CHECK_EQ(y, 158, "top");
+    cassette_hub_anchor(controls, 0, false, &x, &y);
+    CHECK_EQ(y, 244, "bottom");
+    cassette_hub_anchor(controls, 1, true, &x, &y);
+    CHECK_EQ(x, 450, "and the take-up hub to 450");
+
+    cassette_hub_anchor(controls, 7, true, &x, &y);
+    CHECK_EQ(x, 249, "an index off the two hubs reads as the first");
+}
+
 static void test_tape(void)
 {
     cassette_rect_t box = cassette_tape_box();
@@ -338,6 +375,7 @@ int main(void)
     test_screen_rect();
     test_timeline();
     test_tape();
+    test_hub_anchor();
 
     TEST_END();
 }

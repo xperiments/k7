@@ -126,10 +126,10 @@ static char s_fallback_song[PEEK_TEXT_MAX];
 static char s_shown_top[PEEK_TEXT_MAX];    /* the label above the hub */
 static char s_shown_bottom[PEEK_TEXT_MAX]; /* the one below it */
 
-/* The hub anchors, in screen pixels: [0] the left hub's top rim (the upper label's tether),
- * [1] the left hub's bottom rim (the lower one's). The view fills them from the tape
- * geometry. */
-static lv_point_precise_t s_hub[2];
+/* The pose the cassette is drawn at. Both tethers end on the left hub's rim, and where that
+ * rim is comes from cassette_layout's cassette_hub_anchor() - so the peek follows the
+ * cassette by being told the pose, not by being handed two points. */
+static cassette_pose_t s_pose;
 
 /* lv_line keeps the pointer it is given, so each tether's two points live here rather
  * than in update_lines()'s frame. */
@@ -236,15 +236,18 @@ static void line_set(int i, int ax, int ay, int bx, int by)
     lv_line_set_points(s_line[i], s_line_pts[i], 2);
 }
 
-/* The tether's upper end stays inside the pill; its lower end is the hub anchor. */
+/* The tether's upper end stays inside the pill; its lower end is the left hub's rim at the
+ * current pose - the top rim for the song above, the bottom one for the group below. */
 static void update_lines(void)
 {
     if (!s_line[0] || !s_line[1]) return;
 
-    line_set(0, PEEK_LINE0_X, PEEK_LINE0_TOP,
-             (int)s_hub[0].x, (int)s_hub[0].y);
-    line_set(1, PEEK_LINE1_X, PEEK_LINE1_TOP,
-             (int)s_hub[1].x, (int)s_hub[1].y);
+    int x = 0;
+    int y = 0;
+    cassette_hub_anchor(s_pose, 0, true, &x, &y);
+    line_set(0, PEEK_LINE0_X, PEEK_LINE0_TOP, x, y);
+    cassette_hub_anchor(s_pose, 0, false, &x, &y);
+    line_set(1, PEEK_LINE1_X, PEEK_LINE1_TOP, x, y);
 }
 
 /* ------------------------------------------------------------------ the slide */
@@ -345,12 +348,9 @@ void cassette_peek_set_tags(const char *group, const char *song)
     update_texts();
 }
 
-void cassette_peek_set_hubs(int x0, int y0, int x1, int y1)
+void cassette_peek_set_pose(cassette_pose_t pose)
 {
-    s_hub[0].x = (lv_value_precise_t)x0;
-    s_hub[0].y = (lv_value_precise_t)y0;
-    s_hub[1].x = (lv_value_precise_t)x1;
-    s_hub[1].y = (lv_value_precise_t)y1;
+    s_pose = pose;
     update_lines();
 }
 
@@ -429,11 +429,9 @@ bool cassette_peek_is_shown(void)
 void cassette_peek_create(lv_obj_t *screen)
 {
     if (!screen) return;
-    /* The view replaces these with the real anchors after create; the defaults are the
-     * peek pose's. Both are the left hub: its top rim for the group, its bottom for the
-     * song. */
-    s_hub[0] = (lv_point_precise_t){ 251, 87 };
-    s_hub[1] = (lv_point_precise_t){ 251, 217 };
+    /* The view hands in the real pose straight after create; the entry view is what the
+     * first frame would be drawn at if it did not. */
+    s_pose = cassette_pose_entry();
 
     /* The bar: the old title strip, now the timeline. The four parts of its middle are
      * children of the bar, so it slides as one object. */
