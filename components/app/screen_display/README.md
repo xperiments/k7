@@ -115,7 +115,9 @@ and nothing else. Everything else is private:
   (136,82), radius 12, and its 291x87 pill window at (203,157), with the one A8 mask the
   Card and the print's container share (ADR 0039). Its interface is `create(parent)`,
   `set_shown(shown)`, `set_ink(ink)`, `cassette_card_ink()`, `cassette_card_mask()` and
-  `cassette_card_window()`. It is created after the tape body and shown and hidden with the
+  `cassette_card_window()`. Below the print it carries the shell's front plate: a trapezoid filled
+30 % darker than the plastic, drawn as two triangles from one transparent object. It is created
+after the tape body and shown and hidden with the
   Page in one frame, so on Real the tape shows only through the window; `set_ink()` is a cut,
   never a colour animation. The mask is 426x272 and 116,416 B, built once at create - there
   is no per-pose mask.

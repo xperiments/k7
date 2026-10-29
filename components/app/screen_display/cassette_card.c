@@ -29,6 +29,8 @@ _Static_assert(CASSETTE_CARD_WINDOW_W >= CASSETTE_CARD_WINDOW_H,
                "the Card's mask only cuts a stadium wider than it is tall");
 
 static lv_obj_t *s_card;
+static lv_obj_t *s_plate;          /* the shell's trapezoid, drawn from one transparent object */
+static lv_color_t s_plate_ink;     /* its fill: the Card's ink, 30 % darker */
 static lv_image_dsc_t s_mask_dsc;
 static uint8_t *s_mask;
 
@@ -97,6 +99,37 @@ static void mask_build(void)
     s_mask_dsc.data = s_mask;
 }
 
+/* The front plate: a trapezoid, its top edge inset and its bottom edge the Card's own. LVGL has
+ * no polygon, so it is two triangles drawn from one transparent object - the same trick the
+ * packs use for their rings. The points are the Card's, the ink follows the plastic. */
+static void plate_draw_cb(lv_event_t *e)
+{
+    lv_obj_t *obj = lv_event_get_target(e);
+    lv_layer_t *layer = lv_event_get_layer(e);
+    lv_area_t a;
+    lv_obj_get_coords(obj, &a);
+
+    const int top_l = a.x1 + CASSETTE_CARD_PLATE_INSET;
+    const int top_r = a.x2 - CASSETTE_CARD_PLATE_INSET;
+    const int bot_l = a.x1;
+    const int bot_r = a.x2;
+
+    lv_draw_triangle_dsc_t dsc;
+    lv_draw_triangle_dsc_init(&dsc);
+    dsc.color = s_plate_ink;
+    dsc.opa = LV_OPA_COVER;
+
+    dsc.p[0].x = top_l; dsc.p[0].y = a.y1;
+    dsc.p[1].x = top_r; dsc.p[1].y = a.y1;
+    dsc.p[2].x = bot_r; dsc.p[2].y = a.y2;
+    lv_draw_triangle(layer, &dsc);
+
+    dsc.p[0].x = top_l; dsc.p[0].y = a.y1;
+    dsc.p[1].x = bot_r; dsc.p[1].y = a.y2;
+    dsc.p[2].x = bot_l; dsc.p[2].y = a.y2;
+    lv_draw_triangle(layer, &dsc);
+}
+
 void cassette_card_create(lv_obj_t *parent)
 {
     if (!parent || s_card) return;
@@ -112,6 +145,21 @@ void cassette_card_create(lv_obj_t *parent)
     s_card = cassette_box(parent, CASSETTE_CARD_X, CASSETTE_CARD_Y, CASSETTE_CARD_W,
                           CASSETTE_CARD_H, CASSETTE_CARD_R, k_col_cassette[0].plastic);
     if (s_mask) lv_obj_set_style_bitmap_mask_src(s_card, &s_mask_dsc, 0);
+
+    /* The plate: a child of the Card, below the print's bottom edge and inside the mask's
+     * window, so it is neither clipped nor covered. */
+    s_plate_ink = lv_color_darken(k_col_cassette[0].plastic, CASSETTE_CARD_PLATE_DARKEN);
+    s_plate = lv_obj_create(s_card);
+    lv_obj_remove_style_all(s_plate);
+    lv_obj_set_style_bg_opa(s_plate, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_plate, 0, 0);
+    lv_obj_set_style_pad_all(s_plate, 0, 0);
+    lv_obj_set_scrollable(s_plate, false);
+    lv_obj_set_clickable(s_plate, false);
+    lv_obj_set_pos(s_plate, CASSETTE_CARD_PLATE_DX, CASSETTE_CARD_PLATE_DY);
+    lv_obj_set_size(s_plate, CASSETTE_CARD_PLATE_W, CASSETTE_CARD_PLATE_H);
+    lv_obj_add_event_cb(s_plate, plate_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+
     lv_obj_set_hidden(s_card, true);
 }
 
@@ -124,6 +172,9 @@ void cassette_card_set_shown(bool shown)
 void cassette_card_set_ink(lv_color_t ink)
 {
     if (!s_card) return;
+    /* The plate is cut into the same plastic, so it moves with it: 30 % towards black. */
+    s_plate_ink = lv_color_darken(ink, CASSETTE_CARD_PLATE_DARKEN);
+    if (s_plate) lv_obj_invalidate(s_plate);
     /* A cut, not a colour animation: a colour animation would repaint the panel on every
      * step, and the Card is 426x272 of it. */
     lv_obj_set_style_bg_color(s_card, ink, 0);

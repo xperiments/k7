@@ -53,12 +53,23 @@ enum {
     CASSETTE_CARD_WINDOW_H  = 87,
     CASSETTE_CARD_WINDOW_R  = 43,  /* min(W, H) / 2: the largest pill the box allows */
 
-    /* The rim around the window: 3 px of the Card's own plastic, the same 43 px radius, on a
+    /* The rim around the window: 7 px of the Card's own plastic, the same 43 px radius, on a
      * 291x88 box - the window's 87 plus the row its bottom stroke lands on. It is drawn over
      * the print's cut edge, so it hides the mask's last row of antialiasing and reads as the
      * shell's moulding rather than as a line. */
     CASSETTE_CARD_WINDOW_RIM_W = 7,
     CASSETTE_CARD_WINDOW_RIM_H = 88,
+
+    /* The shell's front plate: a trapezoid cut into the plastic below the print, filled 30 %
+     * darker than it. Its bottom edge is the Card's own and its top edge is inset by
+     * PLATE_INSET on each side. The numbers are the reference cassette's, measured against the
+     * Card's box; there is no outline, only the fill. */
+    CASSETTE_CARD_PLATE_DX  = 69,
+    CASSETTE_CARD_PLATE_DY  = 216,
+    CASSETTE_CARD_PLATE_W   = 288,
+    CASSETTE_CARD_PLATE_H   = 56,
+    CASSETTE_CARD_PLATE_INSET = 20,
+    CASSETTE_CARD_PLATE_DARKEN = LV_OPA_30,
 };
 
 /* Build the Card and its mask under `parent`, hidden. Parent is the cassette's

@@ -27,6 +27,11 @@ reachable once the drawer has settled there. Like the glow it replaces, the Card
   moulded Card around a loose label rather than as a second border.
 - Both the Card and the print's container are masked by **one A8 buffer** 426x272 whose window
   is zeroed at (67,75). The window is therefore at (55,55) in the print.
+- The shell has a **front plate**: a trapezoid cut into the plastic below the print, filled
+  **30 % darker than the plastic** (`CASSETTE_CARD_PLATE_*`, (69,216) 288x56 in Card pixels, its
+  top edge inset 20 px each side and its bottom edge the Card's own). No outline - the fill is
+  the shape. It is one transparent object drawing two triangles, because LVGL has no polygon; it
+  needs no fill of its own and follows the ink when the Track changes.
 - The mechanics are hidden by the Card except through the window; what shows is the two Ø86
   hub rims and a horizontal slice of each pack. **While a Cover is printed, the hubs' lines are
   white** (`k_col_hub_white`): the rim's border and both spokes, while the rim's face keeps the
