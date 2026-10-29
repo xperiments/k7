@@ -541,24 +541,32 @@ static void scene_tick(void)
         else if (s_scene == 3) rgb_group_cb(NULL);
         else if (s_scene == 4) tape_cb(NULL);
         else if (s_scene == 5) eq_group_cb(NULL);
-        else if (s_scene == 6) {
-            /* The 3x dial is a tap away and a capture has no finger: with the EQ group up,
-             * arm the gain knob's delayed open. The dial lands 260 ms later. */
-            eq_group_cb(NULL);
-            knob_editor_tap(0);
-        } else if (s_scene == 7) {
-            /* The same for the RGB group's effect selector: the dial with a plaque per
-             * position and no title pillow. */
-            rgb_group_cb(NULL);
-            knob_editor_tap(4);
-        }
+        else if (s_scene == 6) eq_group_cb(NULL);
+        else if (s_scene == 7) rgb_group_cb(NULL);
         break;
 
     case 2:
-        if (s_scene != 5) break;
-        if (s_ctl.level != CONTROLS_LEVEL_ART) break;
+        /* Real/EQ: one more rung, once the group is installed. */
+        if (s_scene == 5) {
+            if (s_ctl.level != CONTROLS_LEVEL_ART) break;
+            s_scene_step = 3;
+            screen_intent_cb(SCREEN_INTENT_DOWN, NULL);  /* Art -> Real */
+            break;
+        }
+
+        /* The dial scenes. The 3x dial is a tap away and a capture has no finger, so the
+         * scene arms the knob's delayed open itself - but only once the bar has settled,
+         * because the open is refused while it is sliding and a refused arm never lands.
+         * That is a real 20 ms race: the pose settles a tick or two before the slide ends,
+         * and the tap used to fire on the earlier of the two. */
+        if (s_scene != 6 && s_scene != 7) break;
+        if (knob_editor_is_editing()) {
+            s_scene_step = 3;
+            break;
+        }
+        if (cassette_bars_is_sliding()) break;
+        knob_editor_tap(s_scene == 6 ? 0 : 4);           /* the EQ's gain; the RGB effect */
         s_scene_step = 3;
-        screen_intent_cb(SCREEN_INTENT_DOWN, NULL);      /* Art -> Real */
         break;
 
     default:
