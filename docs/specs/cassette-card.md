@@ -28,7 +28,7 @@ reachable once the drawer has settled there. Like the glow it replaces, the Card
 - Both the Card and the print's container are masked by **one A8 buffer** 426x272 whose window
   is zeroed at (67,75). The window is therefore at (55,55) in the print.
 - The shell has a **front plate**: a trapezoid cut into the plastic below the print, filled
-  **30 % darker than the plastic** (`CASSETTE_CARD_PLATE_*`, (69,216) 288x56 in Card pixels, its
+  **30 % darker than the plastic** (`CASSETTE_CARD_PLATE_*`, (54,216) 318x56 in Card pixels, its
   top edge inset 20 px each side and its bottom edge the Card's own). No outline - the fill is
   the shape. It is one transparent object drawing two triangles, because LVGL has no polygon; it
   needs no fill of its own and follows the ink when the Track changes.

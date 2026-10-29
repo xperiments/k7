@@ -64,9 +64,9 @@ enum {
      * darker than it. Its bottom edge is the Card's own and its top edge is inset by
      * PLATE_INSET on each side. The numbers are the reference cassette's, measured against the
      * Card's box; there is no outline, only the fill. */
-    CASSETTE_CARD_PLATE_DX  = 69,
+    CASSETTE_CARD_PLATE_DX  = 54,
     CASSETTE_CARD_PLATE_DY  = 216,
-    CASSETTE_CARD_PLATE_W   = 288,
+    CASSETTE_CARD_PLATE_W   = 318,
     CASSETTE_CARD_PLATE_H   = 56,
     CASSETTE_CARD_PLATE_INSET = 20,
     CASSETTE_CARD_PLATE_DARKEN = LV_OPA_30,
