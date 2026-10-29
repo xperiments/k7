@@ -49,6 +49,12 @@ void cassette_header_set_shown(bool shown);
  * Menu's title, if it has one, is repainted with the page's ink in the same call. */
 void cassette_header_set_page(bool white);
 
+/* Put the K7 badge back on top. The left bar's first cell starts 2 px above the badge's bottom
+ * edge, and a bar that has just been slid in (or had a panel installed into it) is the newest
+ * child on the screen, so its carcase line crosses the badge's border. The view calls this
+ * after it touches the bars. */
+void cassette_header_raise_badge(void);
+
 /* The Menu's list title, or NULL to hide it. The text is copied - the caller's buffer may
  * be reused - into a fixed buffer and ellipsized at the band's 648 px. It is empty and
  * hidden outside the Menu. A call before the band is built is ignored. */

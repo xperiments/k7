@@ -18,22 +18,29 @@
  * knob_editor's. The six carcases are the same 96x96 box as the mode bar's, two touching columns
  * three rows deep.
  *
- * Each knob is a 44 px circle (30% smaller than a button's), a 24-dot crown outside it at
- * r=32, and a line from the centre towards the rim (the owner's tuned 4 px width). 0 dB is at
- * twelve o'clock, the right side cuts and the left side boosts. The meter's plate is
- * cassette_meter's, two 84 px rows fed by the cassette frames.
+ * Each knob is a 44 px cap (30 % smaller than a button's) with a ring of short lines outside it
+ * at r=32 - the two ends and 0 dB's twelve o'clock - and the 4 px line from the centre to the
+ * rim (the owner's tuned width). The value marker is the brighter, longer line that points at
+ * the value. The arc is 270 degrees: -26 dB at 7:30 on the left, +6 dB at 4:30 on the right, 0 dB
+ * at twelve, so a boost turns clockwise (ADR 0027, which reverses ADR 0018's "the right side
+ * cuts"). The meter's plate is cassette_meter's, two 84 px rows fed by the cassette frames.
  *
- * The modal half is knob_editor's, shared with the RGB panel: a tap on a knob opens the 3x
- * dial after a 260 ms delay, the second tap of a double tap resets the knob to 0 dB in place
- * (so the reset gesture survives the short delay), a click on the dial's centre circle closes,
- * and a click on its ring sets the angle. This file supplies the bank - the four knobs, the
- * cell at a point, the pillow's text, the repaint, the audio call and the shown gate - and
- * nothing of the overlay.
+ * A knob is dragged, not aimed: a press and a vertical drag on the cell moves the value (2 px a
+ * step, a 6 px dead zone, a magnet at 0 dB), and a tap opens the 3x dial after a 260 ms delay.
+ * The dial only reads: its pillow carries the knob's name at rest and the live dB while it is
+ * being moved, and the two ends are printed as plaques at their own angles. The moving is the
+ * Pad's - it takes this panel's cells while the dial is up, and its ratchet, tap-to-cycle and
+ * left-swipe-to-close are the whole interaction (ADR 0028). A double tap on a small knob still
+ * resets it to 0 dB in place, so the reset gesture survives the short delay. This file supplies
+ * the bank - the four knobs, the cell at a point, the repaint, the audio call and the shown gate
+ * - and nothing of the Pad.
  *
  * The bar shows the panel with the mode bar, when the cassette is already at the 134/256
  * control pose that leaves the right column room. The bar tells the panel when it becomes
  * visible and when it is taken away: leaving ends edit mode and cancels a pending open, so
- * neither the overlay nor the 3x knob can outlive the hidden cells. The four knob values are
+ * neither the Pad nor the 3x dial can outlive the hidden cells. A swap the *editor* makes keeps
+ * the bank and leaves these cells absent for a while, which is why every hook checks s_shown. The
+ * four knob values are
  * the panel's and survive both; the panel is also where the audio is set.
  *
  * The Menu's Pad is the right bar's other panel: open() installs it with
@@ -50,7 +57,7 @@ extern "C" {
 #endif
 
 /* Install the EQ panel in the right bar and build the edit layer - the 3x knob and its lazy
- * overlay - on `parent` (the screen). Call once, after cassette_bars_create(). On the dark
+ * dial and the Pad's seam - on `parent` (the screen). Call once, after cassette_bars_create(). On the dark
  * page the group is the palette's playing red line art; on the white page the four knobs'
  * knobs' cells are the knob plate. */
 void cassette_eq_create(lv_obj_t *parent);

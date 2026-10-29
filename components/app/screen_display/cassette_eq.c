@@ -9,20 +9,25 @@
  *
  * The inside column is the VU meter - one 96x190 plate over the top two cells - and the gain,
  * and the outer column is the three bands. There is no Back cell: the mode bar's sliders button
- * is the toggle, so a tap on it puts the group away. The four knobs are a 30% smaller 44 px
- * circle with the 24-dot crown outside it, and a line from the centre towards the rim. The VU
- * plate is cassette_meter's, two 84 px rows.
+ * is the toggle, so a tap on it puts the group away. The four knobs are a 30% smaller 44 px cap
+ * with a ring of marks outside it - no dots - and a line from the centre towards the rim; the
+ * marks are the two ends and 0 dB's twelve o'clock, and the value marker is the brighter one
+ * that points at the value. The VU plate is cassette_meter's, two 84 px rows.
  *
- * The bar builds the carcases and hands each one to eq_cell_build() through the panel value at
- * the bottom of this file; this module creates no carcase and registers no root. The bar also
- * slides them, dispatches the page and swaps the panel out when the Menu puts its Pad up; a
- * swap back rebuilds the cells in place without touching this module's state.
+ * A knob's value moves by dragging it up and down - 2 px a step, with a magnet at 0 dB - and a
+ * tap on it opens the 3x dial, which prints the two ends (-26 and +6, or -12 and +12), the
+ * graduations, and the live value in its pillow. The bar builds the carcases and hands each one
+ * to eq_cell_build() through the panel value at the bottom of this file; this module creates no
+ * carcase and registers no root. The bar also slides them, dispatches the page and swaps the
+ * panel out when the Menu puts its Pad up; a swap back rebuilds the cells in place without
+ * touching this module's state.
  *
- * The modal half - the 3x dial, the overlay, the 260 ms delayed open, the blink and the
- * cassette's cut-out - is knob_editor's, shared with the RGB panel. This file hands it a bank:
- * the four knobs, the cell at a point, the pillow's text, the repaint after a value moves, the
- * audio call, the disc to blink and the shown gate. It keeps only the cells, the values and the
- * audio.
+ * The modal half - the 3x dial, the 260 ms delayed open and the cassette's cut-out -
+ * is knob_editor's, shared with the RGB panel, and the moving is the Pad's: while the dial is up
+ * the editor takes these cells away and the site of them is the Pad's ratchet, tap and left
+ * swipe. This file hands the editor a bank: the four knobs, the cell at a point, the repaint
+ * after a value moves, the audio call and the shown gate. It keeps only the
+ * cells, the values, the marks and the audio.
  *
  * The panel is hidden at rest, so the entry view is the untouched full-scale cassette; the bar
  * shows it with the mode bar, and losing it ends edit mode and the delayed open.
@@ -89,15 +94,23 @@ static cassette_rect_t eq_cell_rect(int col, int row)
     return cassette_cell_rect(CASSETTE_BAR_RIGHT, col, row);
 }
 
-/* Where each knob's cell is, for the overlay's point-to-knob mapping. */
-static const int8_t k_knob_col[KNOB_COUNT] = { 0, 1, 1, 1 };
-static const int8_t k_knob_row[KNOB_COUNT] = { 2, 0, 1, 2 };
-
 /* Which audio band a knob drives: HI=2, MED=1, LOW=0. The gain is not a band. */
 static const int8_t k_knob_band[KNOB_COUNT] = { -1, 2, 1, 0 };
 
-/* The controls' identities: what the 3x knob's pillow says, and what the mixer calls them. */
+/* The controls' identities: what the 3x dial's pillow says, and what the mixer calls them. */
 static const char *const k_knob_name[KNOB_COUNT] = { "GAIN", "HI", "MED", "LOW" };
+
+/* The two ends of each knob, printed on the 3x dial at their own angles: the bands cut to
+ * -26 and boost to +6, the trim is symmetric. knob_label() reads these back when the knob
+ * sits on one, so it is a marked position as well as a plaque. */
+static const knob_mark_t k_band_marks[] = {
+    { 0, "-26", true },
+    { 100, "+6", true },
+};
+static const knob_mark_t k_gain_marks[] = {
+    { 0, "-12", true },
+    { 100, "+12", true },
+};
 
 static knob_cell_t s_knob_cell[KNOB_COUNT];
 static knob_t s_knob[KNOB_COUNT];     /* 0..100, 50 = 0 dB; the model owns the maths */
@@ -105,24 +118,6 @@ static bool s_shown;                  /* the panel is visible: the bar is out */
 static bool s_created;
 
 /* ------------------------------------------------------------------ geometry */
-
-/* The right bar's cell at a point, from the layout: the two columns share their 2 px border, so
- * the drawn carcases overlap and the pitch separates them. */
-static cassette_rect_t knob_cell(int id)
-{
-    return cassette_cell_rect(CASSETTE_BAR_RIGHT, k_knob_col[id], k_knob_row[id]);
-}
-
-static int knob_at(int x, int y)
-{
-    for (int id = 0; id < KNOB_COUNT; id++) {
-        cassette_rect_t r = knob_cell(id);
-        /* The carcases share a 2 px border (CELL_PITCH 94); the tap target stops at the
-         * shared edge so a point on the border cannot belong to the knob above it. */
-        if (x >= r.x && x < r.x + CELL_W && y >= r.y && y < r.y + CELL_PITCH) return id;
-    }
-    return -1;
-}
 
 /* --------------------------------------------------------------------- audio */
 
@@ -147,17 +142,11 @@ static void knob_build(lv_obj_t *cell, int id)
 
 /* ------------------------------------------------------------------- the bank */
 
-/* The knob whose cell is at a point. The overlay covers the bar too, so the second tap of a
- * double click maps back this way. */
-static int bank_id_at(int x, int y, void *ctx)
-{
-    (void)ctx;
-    return knob_at(x, y);
-}
-
 static void bank_repaint(int id, void *ctx)
 {
     (void)ctx;
+    /* Nothing to paint while the editor owns the bar: the Pad has taken these cells. */
+    if (!s_shown) return;
     if (id >= 0 && id < KNOB_COUNT) knob_apply(id);
 }
 
@@ -165,12 +154,6 @@ static void bank_publish(int id, void *ctx)
 {
     (void)ctx;
     if (id >= 0 && id < KNOB_COUNT) knob_send(id);
-}
-
-static lv_obj_t *bank_disc(int id, void *ctx)
-{
-    (void)ctx;
-    return (id >= 0 && id < KNOB_COUNT) ? knob_cell_disc(&s_knob_cell[id]) : NULL;
 }
 
 static bool bank_open_allowed(void *ctx)
@@ -182,11 +165,8 @@ static bool bank_open_allowed(void *ctx)
 static const knob_editor_bank_t k_eq_bank = {
     .knobs = s_knob,
     .count = KNOB_COUNT,
-    .id_at = bank_id_at,
-    .label = NULL,            /* the knob's own name */
     .repaint = bank_repaint,
     .publish = bank_publish,
-    .cell_disc = bank_disc,
     .open_allowed = bank_open_allowed,
     .ctx = NULL,
 };
@@ -204,9 +184,33 @@ static bool knob_click_is_tap(void)
     return cassette_button_is_tap(moved, gesturing);
 }
 
-/* A knob's click arms the editor's delayed open; the editor drops it when a reset gesture
- * still owes one, or ignores it because an editor is open. The Back and VU cells have no
- * handler of their own: Back's is the shared button's, the meter is a picture. */
+/* The knob's value is the drag's, and the drag is the only way it moves (ADR 0027). The press
+ * at 1x runs at 2 px a step; the same finger on the 3x dial would be four times as coarse, so
+ * that one is the editor's.
+ */
+static void cell_pressed_cb(lv_event_t *e)
+{
+    if (!s_shown || cassette_bars_is_sliding()) return;
+    int id = (int)(intptr_t)lv_event_get_user_data(e) - 1;
+    if (id < 0 || id >= KNOB_COUNT) return;
+    knob_editor_drag_begin(id);
+}
+
+static void cell_pressing_cb(lv_event_t *e)
+{
+    (void)e;
+    knob_editor_drag_update();
+}
+
+static void cell_released_cb(lv_event_t *e)
+{
+    (void)e;
+    knob_editor_drag_end();
+}
+
+/* A short tap arms the editor's delayed open; the editor drops it when a reset gesture still
+ * owes one, or ignores it because an editor is open. The Back and VU cells have no handler of
+ * their own: Back's is the shared button's, the meter is a picture. */
 static void cell_clicked_cb(lv_event_t *e)
 {
     if (!s_shown || cassette_bars_is_sliding()) return;
@@ -229,9 +233,10 @@ static void cell_double_clicked_cb(lv_event_t *e)
     knob_editor_double_tap(id);
 }
 
-/* One cell of the panel: the bar made the carcase and this fills it. A knob gets its circle,
- * crown, stick and its two click handlers; the meter's plate gets the meter. The click payload is
- * the knob's id plus one, so a valid id 0 is not NULL. */
+/* One cell of the panel: the bar made the carcase and this fills it. A knob gets its dial and
+ * the five handlers that make it one - press, move and release for the drag, click and double
+ * click for the editor; the meter's plate gets the meter. The payload is the knob's id plus
+ * one, so a valid id 0 is not NULL. */
 static void eq_cell_build(lv_obj_t *cell, int col, int row, void *ctx)
 {
     (void)ctx;
@@ -244,6 +249,10 @@ static void eq_cell_build(lv_obj_t *cell, int col, int row, void *ctx)
         return;   /* the meter's plate already covers this cell */
     } else {
         knob_build(cell, kind);
+        lv_obj_add_event_cb(cell, cell_pressed_cb, LV_EVENT_PRESSED,
+                            (void *)(intptr_t)(kind + 1));
+        lv_obj_add_event_cb(cell, cell_pressing_cb, LV_EVENT_PRESSING, NULL);
+        lv_obj_add_event_cb(cell, cell_released_cb, LV_EVENT_RELEASED, NULL);
         lv_obj_add_event_cb(cell, cell_clicked_cb, LV_EVENT_CLICKED,
                             (void *)(intptr_t)(kind + 1));
         lv_obj_add_event_cb(cell, cell_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED,
@@ -260,16 +269,20 @@ static void eq_shown(bool visible, void *ctx)
 {
     (void)ctx;
     s_shown = visible;
+    /* Losing the panel ends the editor - unless the editor is the one that took the bar: it
+     * puts its Pad where these cells were, and the values it is editing are these, so the
+     * bank has to survive that swap. The cells themselves are gone meanwhile, which is why
+     * every hook above checks s_shown. */
+    if (!visible && knob_editor_is_editing()) return;
     knob_editor_set_bank(visible ? &k_eq_bank : NULL);
 }
 
-/* The white page paints the four knobs the way it paints a button: the 44 px circle becomes
- * the cap - a flat disc with a soft lower-right shadow, no rim - while the crown and the stick
- * keep their inks, except the four knobs' cells: those are the knob plate here - filled
- * k_col_knob_rect with a k_col_bg border, so no carcase line runs round a knob. The meter's plate
- * takes the same ink, so the block reads as one surface; the columns' own inks do not turn. The
- * dark page is the palette's line art throughout. The bar has already painted every cell's
- * default. */
+/* The white page paints the four knobs the way it paints a button: the 44 px cap becomes a flat
+ * disc with a soft lower-right shadow, no rim - while the ring and the stick keep their inks,
+ * except the four knobs' cells: those are the knob plate here - filled k_col_knob_rect with a
+ * k_col_bg border, so no carcase line runs round a knob. The meter's plate takes the same ink, so
+ * the block reads as one surface; the columns' own inks do not turn. The dark page is the
+ * palette's line art throughout. The bar has already painted every cell's default. */
 static void eq_set_page(bool white, void *ctx)
 {
     (void)ctx;
@@ -302,7 +315,11 @@ void cassette_eq_create(lv_obj_t *parent)
 
     s_shown = false;
     knob_init(&s_knob[KNOB_GAIN], KNOB_RANGE_GAIN);
-    for (int id = 1; id < KNOB_COUNT; id++) knob_init(&s_knob[id], KNOB_RANGE_BAND);
+    knob_set_marks(&s_knob[KNOB_GAIN], k_gain_marks, 2);
+    for (int id = 1; id < KNOB_COUNT; id++) {
+        knob_init(&s_knob[id], KNOB_RANGE_BAND);
+        knob_set_marks(&s_knob[id], k_band_marks, 2);
+    }
     for (int id = 0; id < KNOB_COUNT; id++) knob_set_name(&s_knob[id], k_knob_name[id]);
 
     /* The bar builds the five cells and hands each to eq_cell_build(), and the panel value

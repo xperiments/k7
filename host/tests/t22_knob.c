@@ -1,12 +1,15 @@
 /*
- * The DJ block's knob, without LVGL.
+ * The knobs' dial, without LVGL.
  *
- * The view used to keep the dB law, the angle, its inverse, the crown's span and the
- * reset as file statics in cassette_eq.c, which the host tier may not compile. This pins
- * the moved arithmetic - the two dB curves and their anchors, the angle in tenths of a
- * degree and its sign, the ring's inverse and the bottom seam, the crown's lit run, the
- * clamps and the reset - and the edit session's ordering: the delayed open, the reset
- * gesture's swallowed click, and a close that ends both a pending open and an open one.
+ * The view used to keep the dB law, the angle, the crown's span and the reset as file
+ * statics in cassette_eq.c, which the host tier may not compile. This pins the moved
+ * arithmetic - the two dB curves and their anchors, the one 270 degree arc and its sign, the
+ * labelled positions and their magnet, the drag, the clamps and the reset - and the edit
+ * session's ordering: the delayed open, the reset gesture's swallowed click, and a close
+ * that ends both a pending open and an open one.
+ *
+ * ADR 0027 is the arc these assert: no seam, cut at 7:30 and boost at 4:30, a drag for the
+ * value and no angle to aim at.
  */
 #include "test_util.h"
 
@@ -14,8 +17,6 @@
 #include <string.h>
 
 #include "knob.h"
-
-#define TEST_PI 3.14159265358979323846f
 
 /* ---------------------------------------------------------------------- helpers */
 
@@ -42,39 +43,23 @@ static int angle_at(int value)
     return knob_angle_ddeg(&k);
 }
 
-static void point_at(int value, int r, int *dx, int *dy)
+/* A gain knob with its two ends labelled, the way cassette_eq builds one. */
+static const knob_mark_t k_gain_marks[] = {
+    { 0, "-12", true },
+    { 100, "+12", true },
+};
+
+/* The RGB group's six effects, unplaqued: their names live in the dial's pillow. */
+static const knob_mark_t k_fx_marks[] = {
+    { 0, "OFF", false },     { 20, "SOLID", false }, { 40, "BREATHE", false },
+    { 60, "RAINBOW", false }, { 80, "CHASE", false }, { 100, "LEVEL", false },
+};
+
+static void gain_knob(knob_t *k)
 {
-    float rad = (float)angle_at(value) / 10.0f * TEST_PI / 180.0f;
-    *dx = (int)lroundf((float)r * sinf(rad));
-    *dy = -(int)lroundf((float)r * cosf(rad));
-}
-
-static int lit_count(int value, int dot_count)
-{
-    knob_t k;
-    knob_init(&k, KNOB_RANGE_BAND);
-    knob_set(&k, value);
-
-    int n = 0;
-    for (int i = 0; i < dot_count; i++)
-        if (knob_dot_lit(&k, i, dot_count)) n++;
-    return n;
-}
-
-/* The first and last lit index, or -1/-1 when nothing is lit. */
-static void lit_run(int value, int dot_count, int *first, int *last)
-{
-    knob_t k;
-    knob_init(&k, KNOB_RANGE_BAND);
-    knob_set(&k, value);
-
-    *first = -1;
-    *last = -1;
-    for (int i = 0; i < dot_count; i++) {
-        if (!knob_dot_lit(&k, i, dot_count)) continue;
-        if (*first < 0) *first = i;
-        *last = i;
-    }
+    knob_init(k, KNOB_RANGE_GAIN);
+    knob_set_name(k, "GAIN");
+    knob_set_marks(k, k_gain_marks, 2);
 }
 
 static bool effect_is_none(knob_edit_effect_t e)
@@ -146,123 +131,227 @@ static void test_db_law(void)
     }
 }
 
+/* One arc for every sweep: 270 degrees, min at 7:30, max at 4:30, twelve o'clock at 50. */
 static void test_angle(void)
 {
-    CHECK_EQ(angle_at(0), 1800, "0 is half a turn clockwise (180.0 degrees)");
-    CHECK_EQ(angle_at(25), 900, "25 is a quarter turn clockwise");
+    CHECK_EQ(angle_at(0), -1350, "0 is 7:30, and the cut side is on the left");
+    CHECK_EQ(angle_at(25), -675, "25 is halfway down the cut side");
     CHECK_EQ(angle_at(50), 0, "the detent is twelve o'clock");
-    CHECK_EQ(angle_at(75), -900, "75 is a quarter turn counter-clockwise");
-    CHECK_EQ(angle_at(100), -1800, "100 is half a turn counter-clockwise");
+    CHECK_EQ(angle_at(75), 675, "75 is halfway up the boost side");
+    CHECK_EQ(angle_at(100), 1350, "100 is 4:30");
 
-    /* 3.6 degrees per unit, clockwise as the value drops. */
-    CHECK_EQ(angle_at(49) - angle_at(50), 36, "one step is 36 tenths of a degree");
-    CHECK_EQ(angle_at(50) - angle_at(51), 36, "and it is signed clockwise-positive");
-}
+    /* 2.7 degrees per unit, against the value. */
+    CHECK_EQ(angle_at(51) - angle_at(50), 27, "one step is 27 tenths of a degree");
+    CHECK_EQ(angle_at(50) - angle_at(49), 27, "and it is signed clockwise-positive");
 
-static void test_click_round_trip(void)
-{
-    static const int radii[] = { 16, 66, 142 };
+    /* Both ends are places, not one seam: the sweep covers the 270 degree arc. */
+    CHECK_EQ(angle_at(100) - angle_at(0), 2700, "the arc is 270 degrees end to end");
+
+    CHECK_EQ(knob_angle_for_value(-5), -1350, "a value below the floor clamps to 7:30");
+    CHECK_EQ(knob_angle_for_value(200), 1350, "a value above the ceiling clamps to 4:30");
+
+    /* A level knob rides the same arc, so the two only differ in what the value means. */
     knob_t k;
-    knob_init(&k, KNOB_RANGE_GAIN);
-
-    for (size_t r = 0; r < sizeof(radii) / sizeof(radii[0]); r++) {
-        for (int v = 1; v < 100; v++) {
-            int dx, dy;
-            point_at(v, radii[r], &dx, &dy);
-            int got = knob_value_at(&k, dx, dy);
-            CHECK(got == v, "round trip at r=%d, value %d: point (%d,%d) gave %d", radii[r], v,
-                  dx, dy, got);
-        }
-    }
-}
-
-static void test_click_seam(void)
-{
-    /* The dial is 180 degrees per half, so the bottom is a seam: exactly six o'clock is
-     * the full cut, and one pixel either side is the full boost or the full cut. */
-    knob_t k;
-    knob_init(&k, KNOB_RANGE_GAIN);
-
-    CHECK_EQ(knob_value_at(&k, 0, 100), 0, "the bottom is the full cut");
-    CHECK_EQ(knob_value_at(&k, -1, 100), 100, "a hair counter-clockwise is the full boost");
-    CHECK_EQ(knob_value_at(&k, 1, 100), 0, "a hair clockwise is the full cut");
-}
-
-static void test_compass(void)
-{
-    knob_t k;
-    knob_init(&k, KNOB_RANGE_GAIN);
-
-    CHECK_EQ(knob_value_at(&k, 0, -100), 50, "twelve o'clock is the detent");
-    CHECK_EQ(knob_value_at(&k, 100, 0), 25, "three o'clock is a quarter cut");
-    CHECK_EQ(knob_value_at(&k, -100, 0), 75, "nine o'clock is a quarter boost");
-    CHECK_EQ(knob_value_at(&k, 0, 100), 0, "six o'clock is the full cut");
-
-    /* The diagonals round to the nearest value with lroundf, which is what the view's
-     * click always did: 37.5 -> 38, so 135 degrees is value 12, not 13. */
-    CHECK_EQ(knob_value_at(&k, 100, 100), 12, "the lower-right diagonal");
-    CHECK_EQ(knob_value_at(&k, -100, 100), 88, "the lower-left diagonal");
-    CHECK_EQ(knob_value_at(&k, 100, -100), 37, "the upper-right diagonal");
-    CHECK_EQ(knob_value_at(&k, -100, -100), 63, "the upper-left diagonal");
-}
-
-static void test_click_degenerate(void)
-{
-    knob_t k;
-    knob_init(&k, KNOB_RANGE_GAIN);
-
-    CHECK_EQ(knob_value_at(&k, 0, 0), KNOB_DETENT, "a zero-length point reads as the detent");
-
-    /* Any distance gives the same value: the inverse only uses the angle. */
-    CHECK_EQ(knob_value_at(&k, 0, -1), knob_value_at(&k, 0, -100), "r does not change the answer");
-    CHECK_EQ(knob_value_at(&k, 1, -1), knob_value_at(&k, 100, -100), "on a diagonal either");
-}
-
-static void test_dot_span(void)
-{
-    int first, last;
-    knob_t k;
-
-    CHECK_EQ(lit_count(50, 24), 0, "the detent lights nothing");
-    lit_run(50, 24, &first, &last);
-    CHECK(first == -1 && last == -1, "and no index is lit");
-
-    CHECK_EQ(lit_count(0, 24), 12, "the full cut lights half the crown");
-    lit_run(0, 24, &first, &last);
-    CHECK_EQ(first, 1, "from the dot after the tick");
-    CHECK_EQ(last, 12, "clockwise to six o'clock");
-
-    CHECK_EQ(lit_count(25, 24), 6, "a quarter cut lights six dots");
-    lit_run(25, 24, &first, &last);
-    CHECK_EQ(first, 1, "on the clockwise side");
-    CHECK_EQ(last, 6, "ending at a quarter turn");
-
-    CHECK_EQ(lit_count(100, 24), 12, "the full boost lights the other half");
-    lit_run(100, 24, &first, &last);
-    CHECK_EQ(first, 12, "starting at six o'clock counter-clockwise");
-    CHECK_EQ(last, 23, "ending before the tick");
-
-    CHECK_EQ(lit_count(75, 24), 6, "a quarter boost lights six dots");
-    lit_run(75, 24, &first, &last);
-    CHECK_EQ(first, 18, "on the counter-clockwise side");
-    CHECK_EQ(last, 23, "ending before the tick");
-
-    /* Dot 0 is the 0 dB tick in the view's inks, never a lit value dot. */
-    knob_init(&k, KNOB_RANGE_GAIN);
-    for (int v = KNOB_MIN; v <= KNOB_MAX; v++) {
-        knob_set(&k, v);
-        CHECK(!knob_dot_lit(&k, 0, 24), "dot 0 is not lit at value %d", v);
-    }
-
-    /* The span scales with the crown: a 12-dot crown at the full cut lights 6. */
-    CHECK_EQ(lit_count(0, 12), 6, "a 12-dot crown lights half at the full cut");
-    CHECK_EQ(lit_count(25, 12), 3, "and a quarter at a quarter cut");
-
-    knob_init(&k, KNOB_RANGE_GAIN);
+    knob_init_unit(&k);
+    CHECK_EQ(knob_angle_ddeg(&k), 1350, "a level knob starts at 4:30");
     knob_set(&k, 0);
-    CHECK(!knob_dot_lit(&k, -1, 24), "a negative index is not lit");
-    CHECK(!knob_dot_lit(&k, 24, 24), "an index past the crown is not lit");
-    CHECK(!knob_dot_lit(&k, 1, 0), "a crown with no dots has nothing lit");
+    CHECK_EQ(knob_angle_ddeg(&k), -1350, "and off is 7:30");
+}
+
+/* The labelled positions: what the dial's pillow says, and which of them the dial prints. */
+static void test_marks(void)
+{
+    knob_t k;
+    gain_knob(&k);
+
+    CHECK_EQ(knob_mark_count(&k), 2, "two labelled ends");
+    CHECK(knob_mark_at(&k, 0) && knob_mark_at(&k, 0)->value == 0, "the first is the cut end");
+    CHECK(strcmp(knob_mark_at(&k, 0)->text, "-12") == 0, "and it says -12");
+    CHECK(knob_mark_at(&k, 0)->plaque, "which the dial prints");
+    CHECK(knob_mark_at(&k, 2) == NULL, "past the end there is no mark");
+    CHECK(knob_mark_at(&k, -1) == NULL, "and neither before it");
+
+    CHECK(strcmp(knob_label(&k), "GAIN") == 0, "at rest the pillow says the knob's name");
+    knob_set(&k, 0);
+    CHECK(strcmp(knob_label(&k), "-12") == 0, "at the cut end it says that end's value");
+    knob_set(&k, 100);
+    CHECK(strcmp(knob_label(&k), "+12") == 0, "and at the boost end its value");
+    knob_set(&k, 37);
+    CHECK(strcmp(knob_label(&k), "GAIN") == 0, "anywhere between, the name again");
+
+    /* Clearing and clamping. Too many marks is a bug, not a crash. */
+    knob_set_marks(&k, NULL, 4);
+    CHECK_EQ(knob_mark_count(&k), 0, "NULL clears the marks");
+    knob_set_marks(&k, k_fx_marks, 6);
+    CHECK_EQ(knob_mark_count(&k), 6, "six fit");
+    knob_set_marks(&k, k_fx_marks, 1);
+    CHECK_EQ(knob_mark_count(&k), 1, "so does a subset");
+
+    /* A stepped knob's marked slots make the pillow the selected value. */
+    knob_t fx;
+    knob_init_steps(&fx, 6, 0);
+    knob_set_name(&fx, "EFFECT");
+    knob_set_marks(&fx, k_fx_marks, 6);
+    CHECK(knob_set_step(&fx, 3), "slot 3 moves");
+    CHECK(strcmp(knob_label(&fx), "RAINBOW") == 0, "and the pillow says RAINBOW");
+    CHECK(!knob_mark_at(&fx, 0)->plaque, "whose names are not printed round the dial");
+
+    /* A knob with no name and no marks has nothing to say, and says it without crashing. */
+    knob_t bare;
+    knob_init(&bare, KNOB_RANGE_GAIN);
+    CHECK(knob_label(&bare) == NULL, "an unnamed, unmarked knob has no label");
+}
+
+/* The magnet: a detent holds on, takes a push to leave, and pulls a value that lands near. */
+static void test_snap(void)
+{
+    knob_t k;
+    gain_knob(&k);
+
+    /* Sitting on the detent, anything within the release band is pulled back onto it. */
+    CHECK_EQ(knob_snap(&k, 50), 50, "the detent is its own place");
+    CHECK_EQ(knob_snap(&k, 48), 50, "two away is pulled in");
+    CHECK_EQ(knob_snap(&k, 45), 50, "five away still is, while the knob is on it");
+    CHECK_EQ(knob_snap(&k, 44), 44, "six away is not: that is the escape");
+
+    /* Away from it, only the narrower stick band pulls. */
+    knob_set(&k, 44);
+    CHECK_EQ(knob_snap(&k, 46), 46, "four away does not pull, off the detent");
+    CHECK_EQ(knob_snap(&k, 52), 50, "two away does");
+
+    /* The knob's own positions are magnets too: the marks, and its neutral. */
+    knob_set(&k, 90);
+    CHECK_EQ(knob_snap(&k, 98), 100, "the boost end pulls a value two away");
+    knob_set(&k, 10);
+    CHECK_EQ(knob_snap(&k, 2), 0, "and so does the cut end");
+    CHECK_EQ(knob_snap(&k, 6), 6, "but not one five away");
+
+    /* A level knob's home is full, and that is its detent. */
+    knob_t lvl;
+    knob_init_unit(&lvl);
+    CHECK_EQ(knob_snap(&lvl, 98), 100, "a level knob sticks at full");
+    knob_set(&lvl, 60);
+    CHECK_EQ(knob_snap(&lvl, 57), 57, "and off it, thirty away is nobody's magnet");
+
+    /* Every slot of a stepped knob is a place it can sit. */
+    knob_t fx;
+    knob_init_steps(&fx, 6, 0);
+    knob_set(&fx, 40);
+    CHECK_EQ(knob_snap(&fx, 39), 40, "a stepped knob pulls to its slot");
+    CHECK_EQ(knob_snap(&fx, 61), 60, "and to the next one up");
+
+    /* A knob with no neutral of its own beyond the detent still has one magnet. */
+    knob_t bare;
+    knob_init(&bare, KNOB_RANGE_BAND);
+    CHECK_EQ(knob_snap(&bare, 52), 50, "the neutral is a magnet with no marks at all");
+}
+
+/* The drag: pixels of travel up boost the value, and a drag cannot land next to a detent. */
+static void test_drag(void)
+{
+    knob_t k;
+    gain_knob(&k);
+
+    /* 2 px per step at 1x: ten pixels is five steps, which is inside the detent's release
+     * band, so the knob stays home. */
+    CHECK_EQ(knob_drag_value(&k, 50, 10, 2), 50, "a five-step drag does not escape the detent");
+    CHECK_EQ(knob_drag_value(&k, 50, 12, 2), 56, "seven steps does");
+    CHECK_EQ(knob_drag_value(&k, 50, -12, 2), 44, "and down is the cut side");
+
+    /* While the knob is off the detent, a drag that lands near it is pulled exactly onto it,
+     * and one that lands four steps out stays where it landed. */
+    knob_set(&k, 40);
+    CHECK_EQ(knob_drag_value(&k, 40, 24, 2), 50, "a drag to two past the detent is pulled in");
+    knob_set(&k, 40);
+    CHECK_EQ(knob_drag_value(&k, 40, 28, 2), 54, "four past it is not");
+
+    /* The rails are walls, whatever the travel. */
+    knob_set(&k, 100);
+    CHECK_EQ(knob_drag_value(&k, 100, 40, 2), 100, "a drag past the top stops at full");
+    knob_set(&k, 0);
+    CHECK_EQ(knob_drag_value(&k, 0, -40, 2), 0, "and past the bottom at the floor");
+
+    /* 4 px per step at 3x is the same drag at half the speed. */
+    knob_set(&k, 50);
+    CHECK_EQ(knob_drag_value(&k, 50, 24, 4), 56, "twenty-four pixels is six steps at 4 px");
+    knob_set(&k, 50);
+    CHECK_EQ(knob_drag_value(&k, 50, 60, 4), 65, "and sixty is fifteen");
+
+    /* A nonsensical resolution is one step per pixel, not a division by zero. */
+    knob_set(&k, 50);
+    CHECK_EQ(knob_drag_value(&k, 50, 0, 0), 50, "no travel is no move");
+    CHECK_EQ(knob_drag_value(&k, 50, 20, 0), 70, "and a zero resolution is a pixel a step");
+
+    /* A stepped knob quantises on the way: a drag lands on slots, never between them. */
+    knob_t fx;
+    knob_init_steps(&fx, 6, 0);
+    knob_set(&fx, 0);
+    CHECK_EQ(knob_drag_value(&fx, 0, 42, 2), 20, "the drag quantises onto the next slot");
+    knob_set(&fx, 0);
+    CHECK_EQ(knob_drag_value(&fx, 0, 44, 2), 20, "and the next value up is still that slot");
+
+    /* The band knob's own ends are labelled: dragging to the bottom lands on -26. */
+    knob_t band;
+    knob_init(&band, KNOB_RANGE_BAND);
+    static const knob_mark_t band_marks[] = { { 0, "-26", true }, { 100, "+6", true } };
+    knob_set_marks(&band, band_marks, 2);
+    knob_set(&band, 30);
+    CHECK_EQ(knob_drag_value(&band, 30, -58, 2), 0, "a long drag down reaches the floor");
+    knob_set(&band, 30);
+    CHECK_EQ(knob_drag_value(&band, 30, -50, 2), 5, "a shorter one stops short of it");
+}
+
+/* The tap's cycle: the stops a knob means to visit - its neutral, its marks, and every slot of
+ * a stepped knob - in value order, wrapping at the top. The Pad's tap is what calls this. */
+static void test_cycle(void)
+{
+    knob_t k;
+    gain_knob(&k);
+
+    /* -12, 0 dB, +12, and round again. */
+    knob_set(&k, 0);
+    CHECK_EQ(knob_cycle(&k), 50, "from the cut end the cycle goes to the detent");
+    knob_set(&k, 50);
+    CHECK_EQ(knob_cycle(&k), 100, "from the detent to the boost end");
+    knob_set(&k, 100);
+    CHECK_EQ(knob_cycle(&k), 0, "and off the boost end wraps to the cut end");
+
+    /* Anywhere else it goes to the next stop above, not the nearest. */
+    knob_set(&k, 30);
+    CHECK_EQ(knob_cycle(&k), 50, "a value below the detent goes to it");
+    knob_set(&k, 70);
+    CHECK_EQ(knob_cycle(&k), 100, "and one above it goes to the boost end");
+    knob_set(&k, 1);
+    CHECK_EQ(knob_cycle(&k), 50, "just above the floor, the next stop is the detent");
+
+    /* The band's marks are its own: -26 and +6 with 0 dB between them. */
+    knob_t band;
+    knob_init(&band, KNOB_RANGE_BAND);
+    static const knob_mark_t band_marks[] = { { 0, "-26", true }, { 100, "+6", true } };
+    knob_set_marks(&band, band_marks, 2);
+    knob_set(&band, 0);
+    CHECK_EQ(knob_cycle(&band), 50, "the band's first stop is its detent");
+    knob_set(&band, 50);
+    CHECK_EQ(knob_cycle(&band), 100, "then +6");
+
+    /* A stepped knob walks its slots, one tap each, and wraps. */
+    knob_t fx;
+    knob_init_steps(&fx, 6, 0);
+    knob_set_marks(&fx, k_fx_marks, 6);
+    for (int slot = 0; slot < 5; slot++) {
+        knob_set_step(&fx, slot);
+        CHECK(knob_value(&fx) == slot * 20, "slot %d", slot);
+        CHECK(knob_cycle(&fx) == (slot + 1) * 20, "a tap walks from slot %d to the next", slot);
+    }
+    CHECK(knob_set_step(&fx, 5), "the last slot");
+    CHECK_EQ(knob_cycle(&fx), 0, "wraps to OFF");
+
+    /* A knob with one stop only jumps home. */
+    knob_t lvl;
+    knob_init_unit(&lvl);
+    knob_set(&lvl, 40);
+    CHECK_EQ(knob_cycle(&lvl), 100, "a level knob's only stop is full");
+    CHECK_EQ(knob_cycle(&lvl), 100, "and it stays there");
 }
 
 static void test_reset_and_clamp(void)
@@ -284,19 +373,10 @@ static void test_reset_and_clamp(void)
     CHECK(!knob_reset(&k), "a reset at the detent reports no move");
 }
 
-static int count_lit(const knob_t *k, int dot_count)
-{
-    int n = 0;
-    for (int i = 0; i < dot_count; i++)
-        if (knob_dot_lit(k, i, dot_count)) n++;
-    return n;
-}
-
-/* The level sweep: 270 degrees, min at 7:30, max at 4:30, the gap at the bottom. The RGB
+/* The level sweep: the same arc, min 0 at 7:30 and max 100 at 4:30, home at full. The RGB
  * channels and the strip's brightness ride this one. */
 static void test_level_sweep(void)
 {
-    static const int radii[] = { 16, 66, 142 };
     knob_t k;
 
     knob_init_unit(&k);
@@ -309,38 +389,11 @@ static void test_level_sweep(void)
 
     knob_set(&k, 50);
     CHECK_EQ(knob_angle_ddeg(&k), 0, "half is twelve o'clock");
-    knob_set(&k, 51);
-    CHECK_EQ(knob_angle_ddeg(&k), 27, "one step is 27 tenths of a degree");
-    CHECK(knob_set(&k, 50), "and back to twelve is a move");
 
-    /* The click is the angle's inverse across the whole arc: 3.7 degrees per value. */
-    for (int v = 1; v < 100; v++) {
-        int dx, dy;
-        float rad = (float)((v - 50) * 27) / 10.0f * TEST_PI / 180.0f;
-        dx = (int)lroundf(100.0f * sinf(rad));
-        dy = -(int)lroundf(100.0f * cosf(rad));
-        int got = knob_value_at(&k, dx, dy);
-        CHECK(got == v, "level round trip at value %d gave %d", v, got);
-    }
-
-    CHECK_EQ(knob_value_at(&k, 0, -100), 50, "twelve is half");
-    CHECK_EQ(knob_value_at(&k, 100, 0), 83, "three o'clock is along the arc");
-    CHECK_EQ(knob_value_at(&k, 71, 71), 100, "4:30 is full");
-    CHECK_EQ(knob_value_at(&k, -71, 71), 0, "7:30 is off");
-    CHECK_EQ(knob_value_at(&k, 10, 100), 100, "the bottom gap's clockwise side takes the max");
-    CHECK_EQ(knob_value_at(&k, -10, 100), 0, "and its other side takes the min");
-    CHECK_EQ(knob_value_at(&k, 0, 0), knob_value(&k), "the centre is the knob's own value");
-
-    /* The crown lights from the min end clockwise; the 90 degree gap never lights. */
-    knob_set(&k, 0);
-    CHECK_EQ(count_lit(&k, 24), 1, "off lights the min end alone");
-    knob_set(&k, 100);
-    CHECK_EQ(count_lit(&k, 24), 19, "full lights the whole arc");
-    CHECK(knob_dot_tick(&k, 15, 24), "7:30 is a tick");
-    CHECK(knob_dot_tick(&k, 9, 24), "4:30 is a tick");
-    CHECK(!knob_dot_tick(&k, 0, 24), "and twelve is not");
-    CHECK(!knob_dot_lit(&k, 12, 24), "six o'clock is in the gap, never lit");
-    CHECK(!knob_dot_lit(&k, 10, 24), "so is 5:00");
+    CHECK_EQ(knob_step(&k), -1, "a level knob has no step");
+    CHECK(!knob_set_step(&k, 2), "and cannot be stepped");
+    CHECK(knob_reset(&k), "a reset moves");
+    CHECK_EQ(knob_value(&k), KNOB_MAX, "to full, its home");
 }
 
 /* The stepped sweep: the same arc, cut into equal detents. The effect selector. */
@@ -367,18 +420,9 @@ static void test_steps(void)
     CHECK_EQ(knob_value(&k), 0, "to the neutral, OFF");
     CHECK(!knob_reset(&k), "and a reset at the neutral does not");
 
-    CHECK_EQ(knob_value_at(&k, 0, -100), 60, "twelve quantises to the middle slot");
-    CHECK_EQ(knob_value_at(&k, 71, 71), 100, "4:30 is the last slot");
-    CHECK_EQ(knob_value_at(&k, -71, 71), 0, "7:30 is the first");
-    CHECK_EQ(knob_value_at(&k, -10, 100), 0, "and the gap takes the nearer end");
-
-    knob_set_step(&k, 2);
-    CHECK_EQ(count_lit(&k, 24), 8, "slot 2 of 5 lights 8 of 24 dots");
-
-    /* A continuous knob has no slots at all. */
-    knob_init_unit(&k);
-    CHECK_EQ(knob_step(&k), -1, "a level knob has no step");
-    CHECK(!knob_set_step(&k, 2), "and cannot be stepped");
+    /* A slot outside the range clamps to the ends rather than vanishing. */
+    CHECK(knob_set_step(&k, 99), "a slot past the end moves");
+    CHECK_EQ(knob_value(&k), 100, "to full");
 }
 
 static void test_name(void)
@@ -492,14 +536,13 @@ int main(void)
     test_db_anchors();
     test_db_law();
     test_angle();
-    test_click_round_trip();
-    test_click_seam();
-    test_compass();
-    test_click_degenerate();
-    test_dot_span();
+    test_marks();
+    test_snap();
+    test_drag();
+    test_cycle();
+    test_reset_and_clamp();
     test_level_sweep();
     test_steps();
-    test_reset_and_clamp();
     test_name();
     test_edit_ordering();
     test_edit_reset_swallow();

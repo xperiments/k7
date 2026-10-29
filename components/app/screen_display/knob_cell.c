@@ -1,10 +1,11 @@
 /*
- * One small knob inside a bar cell; see knob_cell.h.
+ * One dial, at 1x or 3x; see knob_cell.h.
  *
- * The same numbers the block has always used: a 44 px disc inset 26 px in the cell, the crown
- * 32 px from the centre with 4 px dots, and the owner's 4x16 line whose pivot is the disc's
- * centre. Nothing here allocates after create, and a value move writes only the dots' colours and
- * one rotation.
+ * The ring is one object and one draw callback: three printed marks, the value marker and -
+ * on the big dial - thirteen graduations, all drawn as short lines pointing at the centre.
+ * That is why there is no dot array here any more: a value move invalidates one object and
+ * writes one rotation, where it used to write twenty-four colours. The geometry is the
+ * knob_dial_t the caller passed, so the 44 px cell and the 256 px dial are the same code.
  */
 #include "knob_cell.h"
 
@@ -13,77 +14,213 @@
 #include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
-#include "knob_editor.h"
 
-#define KNOB_D       44
-#define KNOB_R       (KNOB_D / 2)
-#define DOT_R        32   /* outside the knob circle, inside the carcase */
-#define DOT_D        4
-#define STICK_W      4
-#define STICK_L      16   /* the owner's tuned line: 4 wide, 16 long */
-#define STICK_R      3
+LV_FONT_DECLARE(jura_20);
+
+#define PI_F 3.14159265358979323846f
+
+/* The value pillow: a stepped knob's selected slot, under the dial, black on the primary fill
+ * like every pillow the knobs print. Sized for the effect selector's longest name (BREATHE,
+ * RAINBOW) at the 20 px font. */
+#define PILL_W 84
+#define PILL_H 24
+
+/* The graduations over the 270 degree arc. A continuous knob gets one every 22.5 degrees, both
+ * ends included, so thirteen. A stepped knob gets one per **slot**, because a tick that does not
+ * sit on a position is a tick that lies: six steps are six ticks 54 degrees apart, and the value
+ * marker lands on one of them every time (ADR 0031). */
+#define GRAD_STEP_DDEG 225
+#define GRAD_COUNT     13
+#define ARC_DDEG       2700
+
+const knob_dial_t k_knob_dial_cell = {
+    .box = CASSETTE_CELL_W,
+    .disc_d = 44,
+    .disc_inset = 26,
+    .border = 2,
+    .ring_r = 32,
+    .mark_len = 6,
+    .mark_w = 2,
+    .value_len = 11,
+    .value_w = 4,
+    .grad_len = 0,
+    .grad_w = 0,
+    .stick_len = 16,
+    .stick_w = 4,
+};
+
+const knob_dial_t k_knob_dial_big = {
+    .box = 256,
+    .disc_d = 118,
+    .disc_inset = 69,
+    .border = 2,
+    .ring_r = 86,
+    .mark_len = 8,
+    .mark_w = 2,
+    .value_len = 18,
+    .value_w = 5,
+    .grad_len = 6,
+    .grad_w = 2,
+    .stick_len = 41,
+    .stick_w = 4,
+};
+
+/* ---------------------------------------------------------------------- the ring */
+
+/* One radial line: from `r0` to `r1` at `angle` tenths of a degree clockwise from twelve. */
+static void radial(lv_layer_t *layer, int cx, int cy, int r0, int r1, int angle, int w,
+                   lv_color_t colour, bool round)
+{
+    float rad = (float)angle / 10.0f * PI_F / 180.0f;
+    float s = sinf(rad);
+    float c = cosf(rad);
+
+    lv_point_precise_t pts[2];
+    pts[0].x = cx + (int)lroundf((float)r0 * s);
+    pts[0].y = cy - (int)lroundf((float)r0 * c);
+    pts[1].x = cx + (int)lroundf((float)r1 * s);
+    pts[1].y = cy - (int)lroundf((float)r1 * c);
+
+    lv_draw_line_dsc_t dsc;
+    lv_draw_line_dsc_init(&dsc);
+    dsc.color = colour;
+    dsc.width = w;
+    dsc.opa = LV_OPA_COVER;
+    dsc.points = pts;
+    dsc.point_cnt = 2;
+    dsc.round_start = round;
+    dsc.round_end = round;
+    lv_draw_line(layer, &dsc);
+}
+
+static void ring_draw_cb(lv_event_t *e)
+{
+    knob_cell_t *c = lv_event_get_user_data(e);
+    if (!c || !c->k) return;
+
+    lv_layer_t *layer = lv_event_get_layer(e);
+    lv_area_t area;
+    lv_obj_get_coords(c->ring, &area);
+
+    const knob_dial_t *d = &c->dial;
+    int cx = area.x1 + d->box / 2;
+    int cy = area.y1 + d->box / 2;
+
+    if (d->grad_len > 0) {
+        int count = GRAD_COUNT;
+        int step = GRAD_STEP_DDEG;
+        if (c->k->sweep == KNOB_SWEEP_STEPPED && c->k->steps >= 2) {
+            count = c->k->steps;
+            step = ARC_DDEG / (count - 1);
+        }
+        for (int i = 0; i < count; i++) {
+            radial(layer, cx, cy, d->ring_r - d->grad_len, d->ring_r,
+                   knob_angle_for_value(KNOB_MIN) + i * step, d->grad_w, k_col_eq_lit, false);
+        }
+    }
+
+    /* Both ends, and the detent only where 0 dB lives: a level knob's twelve o'clock is
+     * nobody's home, and a stepped knob's is one slot among several. */
+    radial(layer, cx, cy, d->ring_r - d->mark_len, d->ring_r, knob_angle_for_value(KNOB_MIN),
+           d->mark_w, k_col_eq_tick, false);
+    radial(layer, cx, cy, d->ring_r - d->mark_len, d->ring_r, knob_angle_for_value(KNOB_MAX),
+           d->mark_w, k_col_eq_tick, false);
+    if (c->k->sweep == KNOB_SWEEP_BIPOLAR) {
+        radial(layer, cx, cy, d->ring_r - d->mark_len, d->ring_r,
+               knob_angle_for_value(KNOB_DETENT), d->mark_w, k_col_eq_tick, false);
+    }
+
+    /* The value marker last, in the tick's own ink: the ends and the detent are printed in it
+     * too, so what makes this line the value is that it is the longer, thicker one. Drawn on
+     * top, which is also why a knob resting on a mark reads as one heavier stroke there. */
+    radial(layer, cx, cy, d->ring_r - d->value_len, d->ring_r, knob_angle_ddeg(c->k),
+           d->value_w, k_col_eq_tick, true);
+}
+
+/* ------------------------------------------------------------------ construction */
+
+bool knob_cell_create(knob_cell_t *out, lv_obj_t *cell)
+{
+    return knob_cell_create_at(out, cell, &k_knob_dial_cell, 0, 0);
+}
+
+bool knob_cell_create_at(knob_cell_t *out, lv_obj_t *parent, const knob_dial_t *dial,
+                         int x, int y)
+{
+    if (!out || !parent || !dial) return false;
+
+    out->cell = parent;
+    out->k = NULL;
+    out->value_pill = NULL;
+    out->value_text = NULL;
+    out->dial = *dial;
+
+    const knob_dial_t *d = &out->dial;
+    int cx = x + d->box / 2;
+    int cy = y + d->box / 2;
+
+    /* Two circles, like the buttons: the outer one carries the broad shadow and the inner
+     * one is the cap with the contact shadow and the ring. */
+    out->ambient = cassette_border_box(parent, cx - d->disc_d / 2, cy - d->disc_d / 2,
+                                       d->disc_d, d->disc_d, d->disc_d / 2,
+                                       k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
+    out->disc = cassette_border_box(out->ambient, 0, 0, d->disc_d, d->disc_d,
+                                    d->disc_d / 2, k_col_bg, LV_OPA_TRANSP,
+                                    k_col_button_circle, d->border);
+
+    /* The ring is its own object, the box's size, so one invalidation repaints it all. */
+    out->ring = cassette_border_box(parent, x, y, d->box, d->box, 0,
+                                    k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
+    lv_obj_add_event_cb(out->ring, ring_draw_cb, LV_EVENT_DRAW_MAIN_END, out);
+
+    /* The line is inside the cap: from its centre to the rim, its pivot at the centre, so it
+     * swings like a knob's line and stops at the circle's edge. */
+    out->stick = cassette_box(parent, cx - d->stick_w / 2, cy - d->stick_len,
+                              d->stick_w, d->stick_len, d->stick_w / 2, k_col_eq_tick);
+    lv_obj_set_style_transform_pivot_x(out->stick, d->stick_w / 2, 0);
+    lv_obj_set_style_transform_pivot_y(out->stick, d->stick_len, 0);
+
+    return true;
+}
 
 void knob_cell_apply(knob_cell_t *c, const knob_t *k)
 {
     if (!c || !c->disc || !k) return;
-    knob_editor_crown_ink(c->dot, KNOB_CELL_DOTS, k);
-    if (c->stick)
-        lv_obj_set_style_transform_rotation(c->stick, knob_angle_ddeg(k), 0);
-}
-
-bool knob_cell_create(knob_cell_t *out, lv_obj_t *cell)
-{
-    return knob_cell_create_at(out, cell, CASSETTE_CELL_W / 2, CASSETTE_CELL_H / 2);
-}
-
-bool knob_cell_create_at(knob_cell_t *out, lv_obj_t *cell, int cx, int cy)
-{
-    if (!out || !cell) return false;
-    out->cell = cell;
-
-    /* Two circles, like the buttons: the outer one carries the broad shadow and the inner one
-     * is the disc with the contact shadow and the ring. */
-    out->ambient = cassette_border_box(cell, cx - KNOB_R, cy - KNOB_R,
-                                       KNOB_D, KNOB_D, KNOB_R,
-                                       k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
-    out->disc = cassette_border_box(out->ambient, 0, 0,
-                                    KNOB_D, KNOB_D, KNOB_R,
-                                    k_col_bg, LV_OPA_TRANSP, k_col_button_circle, 2);
-
-    for (int i = 0; i < KNOB_CELL_DOTS; i++) {
-        float a = (float)i * 15.0f * 3.14159265358979323846f / 180.0f;
-        int x = cx + (int)lroundf((float)DOT_R * sinf(a));
-        int y = cy - (int)lroundf((float)DOT_R * cosf(a));
-        out->dot[i] = cassette_box(cell, x - DOT_D / 2, y - DOT_D / 2,
-                                   DOT_D, DOT_D, DOT_D / 2, k_col_eq_dim);
-    }
-
-    /* The line is inside the disc: from its centre to the rim, its pivot at the centre, so it
-     * swings like a knob's line and stops at the circle's edge. */
-    out->stick = cassette_box(cell, cx - STICK_W / 2, cy - STICK_L,
-                              STICK_W, STICK_L, STICK_R, k_col_eq_tick);
-    lv_obj_set_style_transform_pivot_x(out->stick, STICK_W / 2, 0);
-    lv_obj_set_style_transform_pivot_y(out->stick, STICK_L, 0);
-
-    return true;
+    c->k = k;
+    if (c->stick) lv_obj_set_style_transform_rotation(c->stick, knob_angle_ddeg(k), 0);
+    if (c->ring) lv_obj_invalidate(c->ring);
 }
 
 void knob_cell_set_page(knob_cell_t *c, bool white)
 {
     if (!c || !c->cell) return;
 
-    /* The cell becomes the plate on the white page: a fill and a dark border, so the carcase's
-     * line does not run round the knob. */
+    /* The cell becomes the plate on the white page: a fill and a dark border, so the
+     * carcase's line does not run round the knob. */
     lv_obj_set_style_bg_color(c->cell, white ? k_col_knob_rect : k_col_bg, 0);
     lv_obj_set_style_border_color(c->cell, white ? k_col_bg : k_col_button_rect, 0);
     if (!c->disc) return;
 
     cassette_circle_face(c->ambient, c->disc, white, k_col_knob_cap);
-    lv_obj_set_style_border_width(c->disc, white ? 0 : 2, 0);
+    lv_obj_set_style_border_width(c->disc, white ? 0 : c->dial.border, 0);
     if (!white) lv_obj_set_style_border_color(c->disc, k_col_button_circle, 0);
 }
 
-lv_obj_t *knob_cell_disc(const knob_cell_t *c)
+/* ---------------------------------------------------------------- the value pillow */
+
+void knob_cell_add_value_pill(knob_cell_t *c, int cx, int y)
 {
-    return c ? c->disc : NULL;
+    if (!c || !c->cell || c->value_pill) return;
+    c->value_pill = cassette_box(c->cell, cx - PILL_W / 2, y, PILL_W, PILL_H, PILL_H / 2,
+                                 k_col_primary);
+    c->value_text = cassette_text(c->value_pill, &jura_20, k_col_bg,
+                                  LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_hidden(c->value_pill, true);
+}
+
+void knob_cell_set_value(knob_cell_t *c, const char *text)
+{
+    if (!c || !c->value_pill) return;
+    lv_obj_set_hidden(c->value_pill, !text);
+    if (text) lv_label_set_text(c->value_text, text);
 }

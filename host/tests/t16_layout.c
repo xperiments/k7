@@ -174,6 +174,34 @@ static void test_frame(void)
     CHECK_EQ(cassette_part_rect(CASSETTE_PART_COUNT).w, 0, "an unknown part is empty");
 }
 
+/* The timeline is one instrument drawn in two places - the Peek's bar and the Menu's footer - so
+ * its numbers are shared and pinned here: a drifting copy is the whole thing this prevents. */
+static void test_timeline(void)
+{
+    CHECK_EQ(CASSETTE_TIMELINE_X, 116, "the bar's left");
+    CHECK_EQ(CASSETTE_TIMELINE_Y, 424, "the bar's top at rest");
+    CHECK_EQ(CASSETTE_TIMELINE_HIDDEN_Y, 488, "and where its slide begins");
+    CHECK_EQ(CASSETTE_TIMELINE_W, 568, "the bar is centred in the 800 px panel");
+    CHECK_EQ(CASSETTE_TIMELINE_H, 52, "the bar's height");
+    CHECK_EQ(CASSETTE_TIMELINE_X + CASSETTE_TIMELINE_W, 684, "and its right edge");
+
+    CHECK_EQ(CASSETTE_TIMELINE_PAD, 20, "the time boxes' inset");
+    CHECK_EQ(CASSETTE_TIMELINE_TIME_W, 110, "their width");
+    CHECK_EQ(CASSETTE_TIMELINE_GAP, 10, "the gap to the track");
+    CHECK_EQ(CASSETTE_TIMELINE_TRACK_X, 140, "so the track starts 140 in");
+    CHECK_EQ(CASSETTE_TIMELINE_TRACK_W, 288, "and is 288 wide, symmetric in the bar");
+    CHECK_EQ(CASSETTE_TIMELINE_TRACK_X * 2 + CASSETTE_TIMELINE_TRACK_W,
+             CASSETTE_TIMELINE_W, "the two insets and the track fill the bar");
+    CHECK_EQ(CASSETTE_TIMELINE_TRACK_H, 6, "the track's height");
+
+    /* The bar sits inside the footer band, near its bottom edge, which is why the footer draws it
+     * as a screen child and not inside the band: 2 px of the bar hang below the band. */
+    cassette_rect_t band = cassette_part_rect(CASSETTE_PART_FOOTER);
+    CHECK(CASSETTE_TIMELINE_Y >= band.y, "the bar is inside the band's top");
+    CHECK(CASSETTE_TIMELINE_Y + CASSETTE_TIMELINE_H <= CASSETTE_DESIGN_H,
+          "and its bottom is on the panel");
+}
+
 static void test_cells(void)
 {
     const cassette_bar_geometry_t *left = cassette_bar_geometry(CASSETTE_BAR_LEFT);
@@ -308,6 +336,7 @@ int main(void)
     test_page();
     test_named_poses();
     test_screen_rect();
+    test_timeline();
     test_tape();
 
     TEST_END();

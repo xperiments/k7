@@ -98,6 +98,26 @@ typedef enum {
 /* A part's rect in screen pixels. Fixed: the frame never scales with a pose. */
 cassette_rect_t cassette_part_rect(cassette_part_t part);
 
+/* The timeline: the elapsed time, the track's length and the 6 px track between them. It is one
+ * instrument drawn in two places - the Peek's floating bar and the Menu's footer - so its numbers
+ * live here and both read them. That is what makes the second copy a copy: the footer's is the
+ * Peek's bar, at the Peek's rect, with the Peek's insets. */
+enum {
+    CASSETTE_TIMELINE_X        = 116,   /* the bar, centred in the panel */
+    CASSETTE_TIMELINE_Y        = 424,
+    CASSETTE_TIMELINE_HIDDEN_Y = 488,   /* where its slide in begins, below the panel */
+    CASSETTE_TIMELINE_W        = 568,
+    CASSETTE_TIMELINE_H        = 52,
+    CASSETTE_TIMELINE_R        = 12,
+    CASSETTE_TIMELINE_PAD      = 20,    /* the time boxes' inset, inside the bar's border */
+    CASSETTE_TIMELINE_TIME_W   = 110,
+    CASSETTE_TIMELINE_GAP      = 10,    /* a time box to the track */
+    CASSETTE_TIMELINE_TRACK_X  = CASSETTE_TIMELINE_PAD + CASSETTE_TIMELINE_TIME_W +
+                                 CASSETTE_TIMELINE_GAP,
+    CASSETTE_TIMELINE_TRACK_W  = CASSETTE_TIMELINE_W - 2 * CASSETTE_TIMELINE_TRACK_X,
+    CASSETTE_TIMELINE_TRACK_H  = 6,
+};
+
 /* The two edge bars. The left bar is the Transport drawer's column; the right one
  * is the DJ block's two columns. */
 typedef enum {

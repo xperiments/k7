@@ -1,5 +1,12 @@
 # The DJ block: three bands, a trim, and the only transport arrows
 
+**Amended by [ADR 0027](./0027-the-knobs-are-dragged.md):** the dial's crown is gone - a ring of
+short lines, no dots - and every knob rides one 270 degree arc with the cut at 7:30 and the boost
+at 4:30, which reverses this record's "the right side cuts and the left side boosts". A knob's
+value moves by a vertical drag, so there is no click-to-angle and the ring is not a target. The
+pillow moved from under the 3x dial to above it and carries the knob's label, or the live value
+while a drag is in progress; the two ends are printed as plaques at their own angles.
+
 **Amended by [ADR 0026](./0026-the-mode-bar-and-the-right-bars-groups.md):** the block is the
 **EQ group** now, and it shares the right bar with the Empty grille and the RGB group. Its six
 cells are `[Back][HI] / [VU][MED] / [Gain][LOW]`: the M cell is Back, the R placeholder's cell is

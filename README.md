@@ -602,23 +602,30 @@ inside, HI/MED/LOW outside; **RGB** is the effect selector (the same plate, its 
 the effect's name below) and Brightness inside, R/G/B outside. There is no Back cell: the
 group's own button on the mode bar is the toggle, and a tap on it puts the group away. The
 groups live with the chrome: hiding the bars drops the active group, so the controls always open
-on the grille. The knobs are a 44 px circle (30% smaller than a button's),
-a 24-dot crown outside it and a line from the centre towards the rim. The EQ's are bipolar - 0 dB
-at twelve o'clock, right cuts and left boosts - and the RGB's are level controls: 0 at 7:30, full
-at 4:30, the gap at the bottom, with the effect selector stepped along the same arc, its pillow
-naming the effect (OFF, SOLID, BREATHE, RAINBOW, CHASE, LEVEL). While the Menu is up the same bar
-hosts the Pad in the block's place: one white 186x284 plate with a dark inner and a dotted guide,
-and the group returns when the Menu closes. A tap on a knob opens a modal edit mode
-after 260 ms: a 3x virtual knob (256 px at x=220, 90% of the length, top at y=90, no outer
-square, just the circle, the crown and the line) appears over the cassette, and under the
-dial a rounded primary pillow carries the knob's name (GAIN, HI, MED, LOW, or an effect's) in
-the light cap ink. The cassette
-cuts out; on close the knob disappears and the cassette cuts back in. Only its centre circle
-closes, and a click on the ring is the target point, so the knob jumps to that angle (clockwise
-cuts, counter-clockwise boosts). The short delay lets a double tap's second tap land on the 3x
-knob and reset it there - the knob's own neutral, 0 dB for a band and full for a channel; both
-circles blink, and nothing else responds while the
-overlay is up. The EQ's audio is
+on the grille. The knobs are a 44 px cap with a ring of short lines outside it - no dots - and a line from the
+centre towards the rim; the ring prints the two ends and 0 dB at twelve, and a brighter, thicker
+line points at the value. Every knob rides one 270 degree arc: a channel runs 0 at 7:30 to full at
+4:30, a band -26 dB at 7:30 to +6 dB at 4:30 with 0 dB at twelve, so a boost turns clockwise and a
+cut counter-clockwise, and the effect selector is stepped along the same arc, its six names
+printed in a box either side of the dial (OFF, SOLID, BREATHE on the left; RAINBOW, CHASE, LEVEL on
+the right). A knob's value moves by dragging it up
+and down - 6 px of dead zone, 2 px a step, a magnet that holds its neutral and its labelled
+positions - and a drag never opens anything: the click that ends one is dropped. A tap opens a
+modal edit mode after 260 ms: a 3x dial (256 px at x=220, 90% of the length, top at y=90, no outer
+square, just the cap, the ring and the line, plus graduations every 22.5 degrees) appears over the
+cassette, with a rounded primary pillow above it carrying the knob's name (GAIN, HI, MED, LOW) in
+the light cap ink - a selector has no such pillow: its names are the labels, up to seven in a box
+of three per side and one above - and a plaque at each labelled position - -26 and +6 for the
+bands, -12 and +12 for the trim - which fills as the knob reaches it. The cassette cuts out and on
+close it cuts back in. The dial takes no touch at all: while it is up the right bar gives the
+group's cells to the **Pad** - one white 186x284 plate with a dark inner and a dotted guide, the
+same one the Menu ratchets - and the Pad does every action: its ratchet moves the value at 4 px a
+step, its tap cycles the knob's stops (-12 -> 0 dB -> +12, -26 -> 0 dB -> +6, or a selector's slots
+one at a time) and its left swipe closes. The short delay lets a double tap's second tap land on
+the small knob and reset it in place - the knob's own neutral, 0 dB for a band and full for a
+channel - so the dial never appears; nothing blinks, the mode bar's buttons are inert while the
+dial is up, and the view drops every screen swipe, because editing is a fact of the Controls
+model. The EQ's audio is
 `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell and a 4 kHz high shelf plus
 a trim before them, with the DJ ranges (GAIN -12..+12 dB, default 0; bands -26..+6 dB,
 default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder. The RGB group

@@ -14,9 +14,11 @@
  *
  * The three channels and the brightness are **level** knobs - the unipolar 270 degree sweep, 0 at
  * 7:30 and full at 4:30, neutral at full - and the effect is a **stepped** knob, one slot per
- * effect in rgb.h's list (OFF, SOLID, BREATHE, RAINBOW, CHASE, LEVEL), neutral at OFF. Its 3x
- * pillow shows the effect's name instead of a number; the small cell shows only the crown's lit
- * run, like every other knob.
+ * effect in rgb.h's list (OFF, SOLID, BREATHE, RAINBOW, CHASE, LEVEL), neutral at OFF. Each slot is
+ * a marked position carrying the effect's own name, so the 3x dial's pillow says RAINBOW instead of
+ * EFFECT, and the 1x plate shows that name in a bottom pillow under its dial. None of those marks
+ * is plaqued round the dial: the pillow is the selector's text. The group's own look is still owed
+ * a rework; this panel only carries the new knob vocabulary (ADR 0027).
  *
  * The knobs' values are this panel's and survive a swap; what they *publish* is rgb.h's state.
  * There is no strip in the firmware yet, so the seam is `cassette_rgb_set_publish()`: the board

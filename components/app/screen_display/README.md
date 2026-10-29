@@ -42,12 +42,19 @@ and nothing else. Everything else is private:
   and one fact: a group button toggles, and the group dies with the chrome. `t26_groups` pins it; the view installs the panel and relatches the bar.
 - `cassette_empty.c` / `.h` — the Empty group: one 186x284 plate at the Pad's footprint filled
   with a staggered grid of 4 px dots, painted by one draw callback, and inert.
-- `knob_cell.c` / `.h` — one small knob inside a bar cell: the 44 px disc, the 24-dot crown, the
-  4 px line, and the plate/cap inks of the two pages. Both knob panels build their cells with it.
-- `knob_editor.c` / `.h` — the one 3x dial, the overlay, the 260 ms delayed open, the blink, the
-  cassette's cut-out and the edit ordering's effects, shared by the EQ and RGB panels through a
-  **bank**: the knobs, the cell at a point, the pillow's text, the repaint, the publish, the disc
-  to blink and the shown gate.
+- `knob_cell.c` / `.h` — one dial at either size: the 44 px cell's cap and the 256 px 3x cap, the
+  ring of marks and the value marker (one object, one draw callback), the 4 px line, a stepped
+  knob's value pillow, and the plate/cap inks of the two pages. Both knob panels build their cells
+  with it, and `knob_editor` builds the 3x dial with the same code.
+- `cassette_pad.c` / `.h` — the right bar's Pad: one white plate at the layout's Pad rect with a
+  dark inner and a dotted guide, the portable press machine (`pad.h`: a press becomes STEP, TAP or
+  BACK, one axis per press) and a **target** the owner installs. The Menu ratchets its bands with
+  it; a knob's editor drives the dial with it (ADR 0028).
+- `knob_editor.c` / `.h` — the one 3x dial, the 260 ms delayed open, the cassette's
+  cut-out and the edit ordering's effects, shared by the EQ and RGB panels through a **bank**: the
+  knobs, the repaint, the publish and the shown gate. The
+  dial's text is the knob's own - its label and its plaques - and the dial takes no touch: the Pad
+  in the bar is what moves it.
 - `cassette_layout` (`components/portable/cassette`) — the design grid the screen is
   written on: the 800x480 grid, the scale (256 = pixel for pixel), the centring, the
   offset, the even-diameter rounding and the animation's interpolation; and the Controls'
@@ -62,10 +69,10 @@ and nothing else. Everything else is private:
   fields. One `controls_handle(intent, facts)` returns a changed-mask; the view applies it in
   the model's order. `t24_controls` pins the ladder.
 - `knob_model` (`components/portable/knob_model`) — the knob's arithmetic: value 0..100, dB or a
-  unit fraction, three sweeps (bipolar with a twelve o'clock detent, unipolar 270 degrees, and
-  stepped), the angle and click-to-value of each, the crown's lit span, the per-knob neutral and
-  the edit ordering, with the dB ranges read from `tone_eq`. `t22_knob` pins it; `knob_editor`
-  keeps the timer, the overlay and the blink.
+  unit fraction, three sweeps on one 270 degree arc (bipolar with a twelve o'clock detent,
+  unipolar, stepped), the angle of any value, the labelled positions and what the dial says
+  (`knob_label`), the magnet and the drag, the per-knob neutral and the edit ordering, with the dB
+  ranges read from `tone_eq`. `t22_knob` pins it; `knob_editor` keeps the timer.
 - `rgb` (`components/portable/rgb`) — the addressable strip's state (three channels, a brightness
   applied last, one effect) and `rgb_frame()`, which fills a pixel buffer from
   `(state, now_ms, level, n)` for OFF/SOLID/BREATHE/RAINBOW/CHASE/LEVEL. `t25_rgb` pins every
@@ -228,7 +235,8 @@ and nothing else. Everything else is private:
 
 **The Menu.** A tap on the DJ block's M opens a mode of the controls: the cassette area
 becomes the window's five-row page, the right bar swaps its EQ panel for the Pad, the drawer
-becomes Back/Enter/Close, and the header and footer carry the list's title and what is playing.
+becomes Back/Enter/Close, the header carries the list's title and the footer carries the broadcast's
+**timeline** - elapsed, total and the Peek's own 6 px track and fill, no strings (ADR 0032).
 The model is portable - `components/portable/menu`, host test `t18_menu` - and owns the tree,
 the band, the window and the ratchet; `cassette_menu.c` draws five row slots, executes its
 actions, installs the Pad on the right bar and hides the cassette container for the mode's
@@ -522,34 +530,55 @@ While the Menu is up the same bar hosts the Pad instead - one white 186x284 plat
 block's place - and the group is remembered across the mode and reinstalled when the Menu closes
 (`cassette_menu_set_restore_cb()`).
 
-Each knob is a 44 px circle - 30% smaller than the buttons' 64 px one - with a 24-dot crown at
-r=32 outside it and a line from the centre towards the rim (the owner's tuned 4 px width), built
-by `knob_cell.c`. The EQ's four are **bipolar**: 0 dB at twelve o'clock, the right side cuts and
-the left side boosts, and the arc lights from twelve to the line on the side it points. The RGB's
-four are **level** knobs on the unipolar 270 degree sweep - 0 at 7:30, full at 4:30, the gap at
-the bottom, the arc lit from the min end - and its effect selector is **stepped** along the same
-arc, one slot per effect, its 3x pillow naming the effect instead of a number.
+Each knob is a 44 px cap - 30% smaller than the buttons' 64 px one - with a ring of short lines
+outside it at r=32 and a line from the centre towards the rim (the owner's tuned 4 px width), built
+by `knob_cell.c`. There are no dots: the ring prints the two ends and the detent, and one brighter,
+longer line marks the value (ADR 0027). Every knob rides **one 270 degree arc** - the min end at
+7:30, the max at 4:30, a dead gap at the bottom - so the EQ's four are bipolar with 0 dB at twelve
+o'clock, **-26 dB to the left and +6 dB to the right** (a boost turns clockwise), and the RGB's
+four are level knobs from 0 at 7:30 to full at 4:30, with its effect selector **stepped** along the
+same arc, one slot per effect.
 
-A tap on a knob opens edit mode after a 260 ms delay: a 3x virtual knob (256 px at x=220, 90% of
-the 96+94+94 length, its top at y=90, a 2 px circle stroke and a centre line, with no outer
-square - only the circle, the crown and the line) appears over the cassette, and under the dial
-a rounded `k_col_primary` pillow carries the knob's name (GAIN, HI, MED, LOW, or an effect's) in
-the light cap ink, while a transparent 800x480 overlay owns the touch. The cassette cuts out and
-the knob appears; on close the knob disappears and the cassette cuts back in. The delay is there
-so a second tap is read as the reset double click instead of opening the knob. Only the big
-knob's centre circle closes. A click on the ring - the 256 px area around that circle - is the
-target point: the knob jumps to that angle. A click outside does nothing; there is no drag. A
-double tap on any small knob resets it to its **neutral** and cancels the pending open, so the
-virtual knob never appears: 0 dB for a band, full for a colour channel or the brightness, OFF for
-the effect. While the overlay is up nothing else responds - the mode bar and the peek are behind
-it - and the view's sink drops every screen intent too, because editing is a fact of the Controls
-model. Both the small active circle and the big one blink their border 100% -> 27% -> 100%, 600
-ms each way.
+A knob's value moves by **dragging it up and down**: 6 px of dead zone, 2 px a step, a magnet
+that holds the knob's neutral and its labelled positions (3 values of stick, 5 of release), and a
+live publish on every step. A **tap** opens edit mode after a 260 ms delay: a 3x dial (256 px at
+x=220, 90% of the 96+94+94 length, its top at y=90, a 2 px cap stroke and a centre line, with no
+outer square - only the cap, the ring and the line, plus graduations every 22.5 degrees) appears
+over the cassette, and the right bar gives its cells up to the **Pad**. **Above** the dial a rounded
+`k_col_primary` pillow carries the knob's label (GAIN, HI, MED, LOW, or an effect's) in the light
+cap ink, and takes the live value - `+3.5`, `0.0`, `73%`, or a selected effect's name - while the
+Pad ratchets, going back to the label a second after the finger lifts. At each labelled position
+the dial prints a **plaque** (-26 and +6 for the bands, -12 and +12 for the trim), an outline until
+the knob reaches it and filled when it is there - a reading, not a target. The cassette cuts out
+and the dial appears; on close the dial disappears, the cassette cuts back in and the group's cells
+return.
 
-The whole modal half is `knob_editor.c`: one overlay, one dial, one timer per screen, shared by
-the two panels through a **bank** (the knobs, the cell at a point, the pillow's text, the
-repaint, the publish, the disc to blink and the shown gate). The panels keep their cells, their
-values and what a value publishes.
+**The dial takes no touch.** While it is up the Pad stands where the group was and does everything
+(ADR 0028): its **ratchet** moves the value at 4 px a step, its **tap cycles the knob's stops**
+(`knob_cycle()`: -12 -> 0 dB -> +12, -26 -> 0 dB -> +6, or a selector's slots one at a time) and its
+**left swipe closes**. The mode bar's three buttons are inert then, and the view's sink drops every
+screen swipe, because editing is a fact of the Controls model. A double tap on any small knob resets
+it to its **neutral** and cancels the pending open, so the 3x dial never appears: 0 dB for a band,
+full for a colour channel or the brightness, OFF for the effect. Nothing blinks (ADR 0029): the
+dial's cap is a reading, and the Pad is what the finger is on. A stepped knob also keeps its
+selected value in a small bottom pillow under its 1x cell (`knob_cell_add_value_pill()`), which is
+how the effect's name reads on the RGB plate.
+
+**A selector is named by its positions.** A stepped knob prints one label per slot **in a box** -
+three stacked on the left, one above the dial, three stacked on the right, three to six values - and has
+**no title pillow**: the filled label says which one is on, so a centre word would be the same
+sentence twice. The columns hug the dial and share an edge; the values keep the arc's order across
+the screen (ADR 0030). A range knob's two ends keep the ring, at 7:30 and 4:30. A continuous knob
+keeps its pillow (it carries the knob's name, `GAIN`), because a number has no name of its own. The
+dial also sits 20 px below the pillow's row, so the twelve o'clock marker is not read as part of
+it.
+
+The whole modal half is `knob_editor.c`: one dial, one timer per screen, shared by the two panels
+through a **bank** (the knobs, the repaint, the publish and the shown gate). The panels keep their cells, their values and what a value publishes; the dial's
+text is the knob's own, so the bank has no label hook. The editor borrows the bar through
+`knob_editor_set_bar()` - the view's claim installs `cassette_pad_panel()` and its release calls
+`groups_install()` - so a bank's hooks must tolerate their cells being gone: both panels guard on
+their own `s_shown`.
 
 The EQ's audio side is `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell (Q 0.7)
 and a 4 kHz high shelf, plus a trim applied before them. The knobs map to the DJ ranges:

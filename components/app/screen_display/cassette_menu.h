@@ -1,11 +1,12 @@
 #pragma once
 /*
- * cassette_menu - the Menu's view: the five-row page, the Pad, the header's location and
- * the footer's now playing. Panel board only.
+ * cassette_menu - the Menu's view: the five-row page, the header's location and the footer's
+ * now playing. Panel board only.
  *
  * The view owns the drawing and the lifecycle of the mode: `open()` builds the rows for
- * the page that is up, hides the cassette container, makes the Pad the right bar's panel and
- * fills the window with the page's colour. `close()` puts all of it back and asks the view's
+ * the page that is up, hides the cassette container, aims the Pad (`cassette_pad`) at this
+ * menu's ratchet and makes it the right bar's panel, and fills the window with the page's
+ * colour. `close()` puts all of it back and asks the view's
  * restore hook for the right bar's panel. The model is portable and lives in
  * components/portable/menu; this module only executes its actions.
  *
@@ -45,10 +46,6 @@ bool cassette_menu_is_open(void);
 /* Feed the broadcast's status (footer, the playing row's marker). Called from the view's
  * 25 Hz update while the Menu is open; cheap when nothing changed. */
 void cassette_menu_update(const mini_icecast_status_t *status);
-
-/* The same group/song pair the Peek's tags carry, for the footer. Empty strings fall back
- * to the path's first directory and the cleaned title. */
-void cassette_menu_set_tags(const char *group, const char *song);
 
 #ifdef __cplusplus
 }

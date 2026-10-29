@@ -15,11 +15,15 @@
  * out, and back down, hidden at the end, when they go away. It is on the white page the down
  * swipe paints and on the dark page the horizontal swipes keep.
  *
- * The Menu puts the now playing here: the song on the first line at band (24,21) and the
- * group on the second at (24,55), both Jura 28 and ellipsized; the list's position, like
- * `3 / 1204`, is Jura 28 right-aligned at band x=744 and vertically centred. The lines take
- * the page's label ink - k_col_bg on the white page, k_col_primary on the dark one - and
- * are empty and hidden outside the Menu.
+ * The footer shows the broadcast's **timeline**, and it is the Peek's, not a likeness of it: the
+ * same 568x52 bar at the same (116,424), the same 20 px insets and time boxes, the same 6 px
+ * track - all of it read from cassette_layout, so the two cannot drift - and it slides in the way
+ * the Peek's bar slides. It is up whenever the chrome is, on both pages, not only in the Menu.
+ *
+ * The bar has three faces and turns them over every four seconds: where the broadcast is (the
+ * times and the track), who it is (the artist - the Track's first directory), and what it is (the
+ * song - the title, cleaned). A face with no words is skipped; with nothing playing the bar stays
+ * on the times and prints --:-- (ADR 0033).
  *
  * Private to screen_display; the view decides when the controls are out and calls
  * set_shown(). Built and written under the LVGL lock, like everything else on the screen.
@@ -45,11 +49,14 @@ void cassette_footer_set_shown(bool shown);
  * Menu's now playing, if it has one, is repainted with the page's ink in the same call. */
 void cassette_footer_set_page(bool white);
 
-/* The Menu's now playing: the song on the first line, the group on the second and the
- * list's position on the right. A NULL or empty string hides its line. The texts are copied
- * - the caller's buffers may be reused - into fixed buffers; anything longer is truncated
- * and ellipsized. A call before the band is built is ignored. */
-void cassette_footer_set_playing(const char *song, const char *group, const char *position);
+/* What the timeline says: whether anything is playing, its elapsed and total milliseconds, and
+ * the Track's title and path - the artist is the path's first directory and the song is the
+ * cleaned title. `duration_ms` of 0 prints "--:--" and leaves the fill empty, which is what a
+ * Track of unknown length looks like; the fill's fraction is computed here, so the caller does
+ * not have to agree with this band about rounding. Call it every frame: it is a pair of
+ * snprintfs until a value moves. A call before the band is built is ignored. */
+void cassette_footer_set_playing(bool playing, uint32_t elapsed_ms, uint32_t duration_ms,
+                                 const char *title, const char *path);
 
 #ifdef __cplusplus
 }

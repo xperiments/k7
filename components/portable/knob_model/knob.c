@@ -1,26 +1,19 @@
 /*
  * The DJ block's knob model; see knob.h.
  *
- * The arithmetic is the whole point: one piecewise-linear dB law for both ranges, one
- * angle law per sweep and its inverse, and the crown's span. The edit session above it is only
- * ordering - which knob is pending, which is open, and what a tap, a double tap, the
- * delayed open and a close report. Nothing here knows LVGL, the panel, a timer or the
- * broadcast.
+ * The arithmetic is the whole point: one piecewise-linear dB law for both ranges, one arc
+ * for every sweep, the magnet that holds a detent, and the drag that moves the value. The
+ * edit session above it is only ordering - which knob is pending, which is open, and what a
+ * tap, a double tap, the delayed open and a close report. Nothing here knows LVGL, the
+ * panel, a timer or the broadcast.
  */
 #include "knob.h"
 
 #include <math.h>
 
-#define PI_F 3.14159265358979323846f
-
-/* ------------------------------------------------------------------------ value */
-
-/* Tenths of a degree per value step: 180 degrees over half the dial for the mixer's bipolar
- * sweep, 270 degrees over the whole dial for a level control's unipolar one. */
-#define DEG10_PER_UNIT 36
-#define DEG10_PER_UNIT_LEVEL 27
-/* The unipolar sweep's half-span: min at 7:30 is -135 degrees, max at 4:30 is +135. */
-#define LEVEL_HALF_DEG 135.0f
+/* Tenths of a degree per value step over the one 270 degree arc: 135 degrees per side of
+ * twelve o'clock, 50 steps per side, 2.7 degrees each. */
+#define DEG10_PER_UNIT 27
 
 static int clamp_value(int value)
 {
@@ -67,6 +60,7 @@ void knob_init(knob_t *k, knob_range_t range)
     k->steps = 0;
     k->neutral = KNOB_DETENT;
     k->name = NULL;
+    k->mark_count = 0;
 }
 
 void knob_init_unit(knob_t *k)
@@ -78,6 +72,7 @@ void knob_init_unit(knob_t *k)
     k->steps = 0;
     k->neutral = KNOB_MAX;
     k->name = NULL;
+    k->mark_count = 0;
 }
 
 void knob_init_steps(knob_t *k, int steps, int neutral)
@@ -92,6 +87,7 @@ void knob_init_steps(knob_t *k, int steps, int neutral)
     /* The neutral lands on the nearest slot, so a fresh stepped knob is already valid. */
     k->value = quantise(k, k->neutral);
     k->name = NULL;
+    k->mark_count = 0;
 }
 
 void knob_set_name(knob_t *k, const char *name)
@@ -102,6 +98,36 @@ void knob_set_name(knob_t *k, const char *name)
 const char *knob_name(const knob_t *k)
 {
     return k ? k->name : NULL;
+}
+
+void knob_set_marks(knob_t *k, const knob_mark_t *marks, int count)
+{
+    if (!k) return;
+    if (!marks || count < 0) count = 0;
+    if (count > KNOB_MARKS_MAX) count = KNOB_MARKS_MAX;
+    for (int i = 0; i < count; i++) k->mark[i] = marks[i];
+    k->mark_count = count;
+}
+
+int knob_mark_count(const knob_t *k)
+{
+    return k ? k->mark_count : 0;
+}
+
+const knob_mark_t *knob_mark_at(const knob_t *k, int index)
+{
+    if (!k || index < 0 || index >= k->mark_count) return NULL;
+    return &k->mark[index];
+}
+
+/* The panel's strings are identity, not layout: the model only says which one is current. */
+const char *knob_label(const knob_t *k)
+{
+    if (!k) return NULL;
+    for (int i = 0; i < k->mark_count; i++) {
+        if (k->mark[i].value == k->value) return k->mark[i].text;
+    }
+    return k->name;
 }
 
 int knob_value(const knob_t *k)
@@ -159,88 +185,81 @@ float knob_unit(const knob_t *k)
 
 /* ----------------------------------------------------------------------- drawing */
 
-/* The fraction of the sweep the value covers, 0..1, whatever the sweep. */
-static float sweep_fraction(const knob_t *k)
+int knob_angle_for_value(int value)
 {
-    int count = step_count(k);
-    if (count >= 2) return (float)knob_step(k) / (float)(count - 1);
-    return (float)k->value / (float)KNOB_MAX;
+    return (clamp_value(value) - KNOB_DETENT) * DEG10_PER_UNIT;
 }
 
-/* Bipolar: 0 dB at twelve, positive clockwise (the cut side), 180 degrees per half.
- * Unipolar and stepped: the level arc, -135 degrees at the min end, +135 at the max. */
 int knob_angle_ddeg(const knob_t *k)
 {
-    if (!k) return 0;
-    if (k->sweep == KNOB_SWEEP_BIPOLAR) return (KNOB_DETENT - k->value) * DEG10_PER_UNIT;
-    return (k->value - KNOB_DETENT) * DEG10_PER_UNIT_LEVEL;
+    return knob_angle_for_value(knob_value(k));
 }
 
-/* The inverse of the angle. The bipolar sweep keeps the bottom seam a 180-degree-per-half
- * dial always has: atan2f(dx, -dy) is 0 at twelve and positive clockwise, and the division
- * by 36 is the same lroundf the view has always used. The unipolar sweep's bottom gap has no
- * value of its own, so a click in it takes whichever end is nearer; a stepped knob then
- * rounds to its nearest slot. */
-int knob_value_at(const knob_t *k, int dx, int dy)
+/* ------------------------------------------------------------------- the magnet */
+
+/* One candidate: the nearer of the value itself and `anchor`, if it is inside the band its
+ * own stickiness gives it. `best`/`best_d` are the running winner. */
+static void mark_candidate(const knob_t *k, int anchor, int value, int *best, int *best_d)
+{
+    int band = (k->value == anchor) ? KNOB_SNAP_RELEASE : KNOB_SNAP_STICK;
+    int d = (anchor > value) ? anchor - value : value - anchor;
+    if (d > band || d >= *best_d) return;
+    *best = anchor;
+    *best_d = d;
+}
+
+int knob_snap(const knob_t *k, int value)
+{
+    if (!k) return value;
+    int best = value;
+    /* Wider than any distance on the dial, so the first candidate inside its band always
+     * wins and every later one has to be nearer. */
+    int best_d = KNOB_MAX + 1;
+
+    mark_candidate(k, k->neutral, value, &best, &best_d);
+    for (int i = 0; i < k->mark_count; i++)
+        mark_candidate(k, k->mark[i].value, value, &best, &best_d);
+
+    /* A stepped knob's every slot is a place it can sit, so every slot is a detent. */
+    int count = step_count(k);
+    for (int i = 0; i < count; i++)
+        mark_candidate(k, step_value(k, i), value, &best, &best_d);
+
+    return best;
+}
+
+int knob_drag_value(const knob_t *k, int start, int dy, int px_per_value)
+{
+    if (!k) return start;
+    if (px_per_value < 1) px_per_value = 1;
+    int value = quantise(k, clamp_value(start + dy / px_per_value));
+    return knob_snap(k, value);
+}
+
+/* One candidate stop: the lowest of all of them, and the lowest one above `value`. Duplicates
+ * (a mark on the neutral, a slot on a mark) cost nothing: they only fail to be smaller. */
+static void consider_stop(int stop, int value, int *next, int *lowest)
+{
+    if (*lowest < 0 || stop < *lowest) *lowest = stop;
+    if (stop > value && (*next < 0 || stop < *next)) *next = stop;
+}
+
+int knob_cycle(const knob_t *k)
 {
     if (!k) return KNOB_DETENT;
-    /* The dead centre is the knob's own value: a click there is not a move. */
-    if (dx == 0 && dy == 0) return k->sweep == KNOB_SWEEP_BIPOLAR ? KNOB_DETENT : k->value;
 
-    float deg = atan2f((float)dx, -(float)dy) * 180.0f / PI_F;
+    int next = -1;
+    int lowest = -1;
+    consider_stop(k->neutral, k->value, &next, &lowest);
+    for (int i = 0; i < k->mark_count; i++)
+        consider_stop(k->mark[i].value, k->value, &next, &lowest);
 
-    if (k->sweep == KNOB_SWEEP_BIPOLAR) {
-        int value = KNOB_DETENT - (int)lroundf(deg * ((float)KNOB_DETENT / 180.0f));
-        return clamp_value(value);
-    }
+    int count = step_count(k);
+    for (int i = 0; i < count; i++)
+        consider_stop(step_value(k, i), k->value, &next, &lowest);
 
-    if (deg < -LEVEL_HALF_DEG) deg = -LEVEL_HALF_DEG;
-    if (deg > LEVEL_HALF_DEG) deg = LEVEL_HALF_DEG;
-    int value = KNOB_DETENT + (int)lroundf(deg * ((float)KNOB_DETENT / LEVEL_HALF_DEG));
-    return quantise(k, clamp_value(value));
-}
-
-/* The crown. Bipolar: dot 0 is the 0 dB tick, a cut lights indices 1..span clockwise and a
- * boost the span dots counter-clockwise from twelve. Unipolar and stepped: the arc starts at
- * 7:30 (index 21 of 24) and runs clockwise, every dot up to the line is lit, and the dots in
- * the bottom gap stay dark. */
-bool knob_dot_lit(const knob_t *k, int index, int dot_count)
-{
-    if (!k || dot_count <= 0 || index < 0 || index >= dot_count) return false;
-
-    if (k->sweep == KNOB_SWEEP_BIPOLAR) {
-        if (index == 0) return false;
-        int delta = k->value - KNOB_DETENT;
-        if (delta == 0) return false;
-
-        int half = dot_count / 2;
-        int span = (int)lroundf(fabsf((float)delta) / (float)KNOB_DETENT * (float)half);
-        if (span > half) span = half;
-        if (delta < 0) return index <= span;
-        return index >= dot_count - span;
-    }
-
-    /* Where the dot sits along the 270 degree arc, in degrees clockwise from the min end
-     * (7:30 is 225 degrees clockwise from twelve). */
-    float dot_deg = (float)index * 360.0f / (float)dot_count;
-    float along = dot_deg - 225.0f;
-    if (along < 0.0f) along += 360.0f;
-    if (along > 270.0f) return false;
-
-    float progress = sweep_fraction(k) * 270.0f;
-    return along <= progress;
-}
-
-/* The ends of the sweep, which the view paints in the tick's ink: twelve o'clock for a
- * bipolar knob, and both ends of the arc (7:30 and 4:30) for a level one. */
-bool knob_dot_tick(const knob_t *k, int index, int dot_count)
-{
-    if (!k || dot_count <= 0 || index < 0 || index >= dot_count) return false;
-    if (k->sweep == KNOB_SWEEP_BIPOLAR) return index == 0;
-
-    int min_index = (225 * dot_count + 180) / 360 % dot_count;
-    int max_index = (135 * dot_count + 180) / 360 % dot_count;
-    return index == min_index || index == max_index;
+    if (next >= 0) return next;
+    return lowest >= 0 ? lowest : k->value;
 }
 
 /* ------------------------------------------------------------------ edit session */

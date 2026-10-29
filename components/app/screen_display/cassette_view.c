@@ -50,6 +50,7 @@
 #include "cassette_empty.h"
 #include "cassette_eq.h"
 #include "cassette_rgb.h"
+#include "cassette_pad.h"
 #include "knob_editor.h"
 #include "cassette_footer.h"
 #include "cassette_header.h"
@@ -266,6 +267,9 @@ static void controls_apply(controls_changed_t changed)
         cassette_footer_set_shown(shown);
         cassette_window_set_shown(shown);
         cassette_bars_set_shown(shown);
+        /* The bar's cells are raised when they slide in, and its first one reaches 2 px past the
+         * badge's bottom edge: the case's mark goes back on top. */
+        cassette_header_raise_badge();
         /* The groups live with the chrome: hiding the bars drops the active group, so the
          * controls open on the grille every time. */
         groups_apply(groups_handle(&s_groups, GROUPS_INTENT_NONE, shown));
@@ -391,6 +395,7 @@ static void groups_install(void)
     if (groups_active(&s_groups) == GROUPS_ID_EQ) panel = cassette_eq_panel();
     else if (groups_active(&s_groups) == GROUPS_ID_RGB) panel = cassette_rgb_panel();
     cassette_bars_set_panel(CASSETTE_BARS_RIGHT, panel);
+    cassette_header_raise_badge();
 }
 
 /* The latch on the left bar: the cassette lit while the Menu is open, the sliders or the led
@@ -419,6 +424,7 @@ static void groups_apply(unsigned changed)
 static void tape_cb(void *ctx)
 {
     (void)ctx;
+    if (knob_editor_is_editing()) return;   /* the Pad owns the touch while a dial is up */
     if (!s_controls) return;
     controls_facts_t facts = facts_now();
     controls_apply(controls_handle(s_controls, CONTROLS_INTENT_MENU_TAP, &facts));
@@ -427,12 +433,14 @@ static void tape_cb(void *ctx)
 static void eq_group_cb(void *ctx)
 {
     (void)ctx;
+    if (knob_editor_is_editing()) return;
     groups_apply(groups_handle(&s_groups, GROUPS_INTENT_TAP_EQ, chrome_shown_now()));
 }
 
 static void rgb_group_cb(void *ctx)
 {
     (void)ctx;
+    if (knob_editor_is_editing()) return;
     groups_apply(groups_handle(&s_groups, GROUPS_INTENT_TAP_RGB, chrome_shown_now()));
 }
 
@@ -447,6 +455,21 @@ static void menu_restored(void *ctx)
     groups_latch();
 }
 #endif
+
+/* A knob's editor borrows the right bar while the dial is up: the Pad takes the active
+ * group's place, and the group comes back when the editor closes (ADR 0028). The editor never
+ * sees a panel value - the bar and the groups belong to this file. */
+static void knob_bar_claim(void *ctx)
+{
+    (void)ctx;
+    cassette_bars_set_panel(CASSETTE_BARS_RIGHT, cassette_pad_panel());
+}
+
+static void knob_bar_release(void *ctx)
+{
+    (void)ctx;
+    groups_install();
+}
 
 /* What a touch means is screen_input's; the Controls model says what it does, and this
  * applies only what changed. The edit and Menu gates are inside the model. */
@@ -485,6 +508,19 @@ static void scene_tick(void)
         if (CONFIG_APP_UI_DUMP_SCENE == 2) eq_group_cb(NULL);
         else if (CONFIG_APP_UI_DUMP_SCENE == 3) rgb_group_cb(NULL);
         else if (CONFIG_APP_UI_DUMP_SCENE == 4) tape_cb(NULL);
+        else if (CONFIG_APP_UI_DUMP_SCENE == 6) {
+            /* The 3x dial is a tap away and a dump has no finger: with the EQ group up, arm
+             * the gain knob's delayed open. It lands 260 ms later, well before the dump, so
+             * the scene's picture is the dial, its pillow and its plaques. */
+            eq_group_cb(NULL);
+            knob_editor_tap(0);                          /* 0 is the EQ bank's gain */
+        }
+        else if (CONFIG_APP_UI_DUMP_SCENE == 7) {
+            /* The same for the RGB group's effect selector: its dial is the one with a plaque
+             * per position and no title pillow. */
+            rgb_group_cb(NULL);
+            knob_editor_tap(4);                          /* 4 is the RGB bank's effect */
+        }
         break;
 
     case 2:
@@ -596,6 +632,7 @@ void cassette_view_create(void)
     /* The one 3x dial and its overlay, shared by the right bar's knob panels (the EQ group
      * today, the RGB group next). It is a screen child above everything the panels build. */
     knob_editor_create(scr);
+    knob_editor_set_bar(knob_bar_claim, knob_bar_release, NULL);
 
     /* The EQ panel is chrome too, on the other edge; created last so it starts above the
      * peek, hidden with the mode bar. */
@@ -660,8 +697,14 @@ void cassette_view_update(const mini_icecast_status_t *st)
     /* The peek's host keeps the status for the tag request and makes it itself; this
      * is a string compare on the frames that do not change it. */
     cassette_levels_update(st);
+
+    /* The bands' timeline is the Peek's bar and it is up whenever the chrome is, so it follows
+     * the broadcast on both pages and inside the Menu alike. */
+    cassette_footer_set_playing(st && st->format != MI_FMT_NONE,
+                                st ? st->elapsed_ms : 0u, st ? st->duration_ms : 0u,
+                                st ? st->title : NULL, st ? st->path : NULL);
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The Menu's footer and its playing marker follow the same status. */
+    /* The Menu's rows and its playing marker follow the same status. */
     if (cassette_menu_is_open()) cassette_menu_update(st);
 #endif
 
@@ -702,6 +745,5 @@ void cassette_view_set_cover(const lv_image_dsc_t *dsc)
 void cassette_view_set_tags(const char *group, const char *song)
 {
     cassette_levels_set_tags(group, song);
-    cassette_menu_set_tags(group, song);
 }
 #endif

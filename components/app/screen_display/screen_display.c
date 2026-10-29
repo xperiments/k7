@@ -335,18 +335,31 @@ esp_err_t screen_display_start(const char *music_dir)
      * anything internal RAM could hold, and because the production board's buffers are
      * there too - the point is to exercise the same arrangement. */
     size_t strip = (size_t)UI_W * UI_DRAW_LINES * 2;
+#if CONFIG_APP_UI_SERIAL_DUMP
+    /* The dump reads a whole frame, and a strip buffer only ever holds the last strip drawn
+     * - which is why a dump of it was a picture of uninitialised PSRAM. So the diagnostic
+     * build draws whole frames into a buffer of its own instead: one display, one buffer,
+     * and the screen task is what fills it before the dump reads it. */
+    (void)strip;
+    s_fb = heap_caps_malloc(UI_FB_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_fb) {
+        ESP_LOGE(TAG, "no PSRAM for the %u KB screen dump buffer",
+                 (unsigned)(UI_FB_BYTES / 1024));
+        return ESP_ERR_NO_MEM;
+    }
+    uint8_t *fb = s_fb;
+    size_t fb_bytes = UI_FB_BYTES;
+    lv_display_render_mode_t fb_mode = LV_DISPLAY_RENDER_MODE_FULL;
+#else
     uint8_t *fb = heap_caps_malloc(strip, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!fb) {
         ESP_LOGE(TAG, "no PSRAM for a %u B draw buffer", (unsigned)strip);
         return ESP_ERR_NO_MEM;
     }
-#if CONFIG_APP_UI_SERIAL_DUMP
-    /* The dump needs a whole screen to read; with a strip draw buffer there is no such
-     * buffer, so the dump allocates its own and renders one full refresh into it. */
-    s_fb = heap_caps_malloc(UI_FB_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!s_fb) ESP_LOGW(TAG, "no PSRAM for the screen dump; it will be skipped");
+    size_t fb_bytes = strip;
+    lv_display_render_mode_t fb_mode = LV_DISPLAY_RENDER_MODE_PARTIAL;
 #endif
-    lv_display_set_buffers(disp, fb, NULL, strip, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_buffers(disp, fb, NULL, fb_bytes, fb_mode);
     lv_display_set_flush_cb(disp, ui_flush_cb);
     lv_timer_t *refr = lv_display_get_refr_timer(disp);
     if (refr) lv_timer_set_period(refr, UI_FRAME_MS);

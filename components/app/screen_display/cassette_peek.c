@@ -35,6 +35,7 @@
 #include "lvgl.h"
 
 #include "cassette.h"
+#include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 
@@ -44,22 +45,19 @@ static const char *TAG = "screen";
 
 /* ------------------------------------------------------------------ geometry */
 
-/* The bar: the same strip the old title bar used, at the same place. */
-#define PEEK_X        116
-#define PEEK_W        568
-#define PEEK_BAR_Y    424
-#define PEEK_BAR_H    52
-#define PEEK_BAR_R    12
-#define PEEK_BAR_HIDDEN_Y 488
-
-/* The time boxes and the track between them: 20 + 110 + 10 = 140 from each side, so
- * the track is 288 px and the two boxes keep the bar's 20 px inset. */
-#define PEEK_TIME_W   110
-#define PEEK_TIME_PAD 20
-#define PEEK_TRACK_GAP 10
-#define PEEK_TRACK_X  (PEEK_TIME_PAD + PEEK_TIME_W + PEEK_TRACK_GAP)
-#define PEEK_TRACK_W  (PEEK_W - 2 * PEEK_TRACK_X)
-#define PEEK_TRACK_H  6
+/* The bar and its timeline come from cassette_layout: the Menu's footer draws the same
+ * instrument at the same rect, and the numbers may not be copied. */
+#define PEEK_X        CASSETTE_TIMELINE_X
+#define PEEK_W        CASSETTE_TIMELINE_W
+#define PEEK_BAR_Y    CASSETTE_TIMELINE_Y
+#define PEEK_BAR_H    CASSETTE_TIMELINE_H
+#define PEEK_BAR_R    CASSETTE_TIMELINE_R
+#define PEEK_BAR_HIDDEN_Y CASSETTE_TIMELINE_HIDDEN_Y
+#define PEEK_TIME_W   CASSETTE_TIMELINE_TIME_W
+#define PEEK_TIME_PAD CASSETTE_TIMELINE_PAD
+#define PEEK_TRACK_X  CASSETTE_TIMELINE_TRACK_X
+#define PEEK_TRACK_W  CASSETTE_TIMELINE_TRACK_W
+#define PEEK_TRACK_H  CASSETTE_TIMELINE_TRACK_H
 
 /* The two tags, both on the left hub's column: the song above it, the group below it,
  * their centres the same distance from the hub's centre. Sixteen px of inset leaves

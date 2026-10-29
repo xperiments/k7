@@ -2,9 +2,15 @@
  * The RGB group's panel; see cassette_rgb.h.
  *
  * The EQ panel's twin, and deliberately thin: a table of cells, five knob values and the publish
- * seam. There is no Back cell: the mode bar's led button is the toggle. Everything a knob *is* - the small dial, the 3x surface, the tapped-
- * open ordering - is knob_cell's, knob_editor's and knob_model's. Everything the strip *is* -
- * the channels, the brightness, the effects and their frames - is rgb.h's.
+ * seam. There is no Back cell: the mode bar's led button is the toggle. Everything a knob *is* -
+ * the dial, the drag, the 3x surface, the tapped-open ordering - is knob_cell's, knob_editor's
+ * and knob_model's. Everything the strip *is* - the channels, the brightness, the effects and
+ * their frames - is rgb.h's.
+ *
+ * The effect selector is the one stepped knob: its six slots are marked positions carrying the
+ * effect's own name, so the 3x dial's pillow says RAINBOW rather than EFFECT, and the 1x plate
+ * shows the same name in a bottom pillow under the dial. The group's look is due a rework; this
+ * module only carries the new knob vocabulary (ADR 0027).
  *
  * Called under the LVGL lock, like everything else on the screen.
  */
@@ -17,7 +23,13 @@
 #include "knob_cell.h"
 #include "knob_editor.h"
 
-LV_FONT_DECLARE(jura_28);
+/* The dial's box inside the effect's tall plate: the knob in the upper part, the selected
+ * effect in the pillow below it. The box's top-left, so the cap lands at (48, 52). */
+#define FX_DIAL_X 0
+#define FX_DIAL_Y 4
+#define FX_PILL_Y 136
+
+_Static_assert(RGB_EFFECT_COUNT <= KNOB_MARKS_MAX, "the marks array has a slot per effect");
 
 /* The knobs, in the bank's id order: the three channels, the strip's brightness, the effect. */
 enum {
@@ -63,39 +75,20 @@ static cassette_rect_t rgb_cell_rect(int col, int row)
     return cassette_cell_rect(CASSETTE_BAR_RIGHT, col, row);
 }
 
-/* The diagonal of the effect dial inside its tall plate: the knob in the upper part, the
- * effect's name in the room the second cell would have taken. */
-#define FX_CX   (CASSETTE_CELL_W / 2)
-#define FX_CY   52
-#define FX_NAME_Y 136
-
-
-/* Where each knob's cell is, for the overlay's point-to-knob mapping. */
-static const int8_t k_knob_col[KNOB_COUNT] = { 1, 1, 1, 0, 0 };
-static const int8_t k_knob_row[KNOB_COUNT] = { 0, 1, 2, 2, 1 };
-
-/* The controls' identities: what the 3x knob's pillow says. The effect's pillow is the effect's
- * own name (the bank's label hook), not this one. */
+/* The controls' identities, which is what the 3x dial's pillow says. The effect's own name is
+ * not a name but a marked position: it rides knob_label() instead. */
 static const char *const k_knob_name[KNOB_COUNT] = { "RED", "GREEN", "BLUE", "BRIGHT", "EFFECT" };
 
 static knob_cell_t s_knob_cell[KNOB_COUNT];
 static knob_t s_knob[KNOB_COUNT];
 static rgb_state_t s_state;           /* what the knobs last published */
-static lv_obj_t *s_fx_name;           /* the effect's name on its plate */
+static knob_mark_t s_fx_marks[RGB_EFFECT_COUNT];   /* one per effect, at its slot */
 static cassette_rgb_publish_t s_publish;
 static void *s_publish_ctx;
 static bool s_shown;
 static bool s_created;
 
 /* --------------------------------------------------------------------- publish */
-
-/* The effect's name, on the plate under its dial and in the 3x pillow. */
-static void fx_name_apply(void)
-{
-    if (!s_fx_name) return;
-    const char *name = rgb_effect_name(rgb_effect_at(knob_step(&s_knob[KNOB_FX])));
-    lv_label_set_text(s_fx_name, name ? name : "");
-}
 
 /* The knobs are the truth; the state is a reading of them. */
 static void rgb_compose(void)
@@ -115,49 +108,23 @@ static void rgb_publish(void)
 
 /* ------------------------------------------------------------------ geometry */
 
-static cassette_rect_t knob_cell_rect(int id)
-{
-    return cassette_cell_rect(CASSETTE_BAR_RIGHT, k_knob_col[id], k_knob_row[id]);
-}
-
-static int knob_at(int x, int y)
-{
-    for (int id = 0; id < KNOB_COUNT; id++) {
-        cassette_rect_t r = knob_cell_rect(id);
-        /* The carcases share their 2 px border; the tap target stops at the shared edge. */
-        if (x >= r.x && x < r.x + CASSETTE_CELL_W &&
-            y >= r.y && y < r.y + CASSETTE_CELL_PITCH) return id;
-    }
-    return -1;
-}
-
 /* ---------------------------------------------------------------------- draw */
 
 static void knob_apply(int id)
 {
     knob_cell_apply(&s_knob_cell[id], &s_knob[id]);
-    if (id == KNOB_FX) fx_name_apply();
+    /* A stepped knob's selected value is a value, not a range: it reads on the dial's bottom
+     * pillow (ADR 0027), which is the only text a 96 px cell has room for. */
+    if (id == KNOB_FX) knob_cell_set_value(&s_knob_cell[id], knob_label(&s_knob[id]));
 }
 
 /* ---------------------------------------------------------------------- bank */
 
-static int bank_id_at(int x, int y, void *ctx)
-{
-    (void)ctx;
-    return knob_at(x, y);
-}
-
-/* The effect knob's pillow says the effect's name; every other knob its own. */
-static const char *bank_label(int id, void *ctx)
-{
-    (void)ctx;
-    if (id != KNOB_FX) return NULL;
-    return rgb_effect_name(rgb_effect_at(knob_step(&s_knob[KNOB_FX])));
-}
-
 static void bank_repaint(int id, void *ctx)
 {
     (void)ctx;
+    /* Nothing to paint while the editor owns the bar: the Pad has taken these cells. */
+    if (!s_shown) return;
     if (id >= 0 && id < KNOB_COUNT) knob_apply(id);
 }
 
@@ -166,12 +133,6 @@ static void bank_publish(int id, void *ctx)
     (void)ctx;
     (void)id;
     rgb_publish();
-}
-
-static lv_obj_t *bank_disc(int id, void *ctx)
-{
-    (void)ctx;
-    return (id >= 0 && id < KNOB_COUNT) ? knob_cell_disc(&s_knob_cell[id]) : NULL;
 }
 
 static bool bank_open_allowed(void *ctx)
@@ -183,11 +144,8 @@ static bool bank_open_allowed(void *ctx)
 static const knob_editor_bank_t k_rgb_bank = {
     .knobs = s_knob,
     .count = KNOB_COUNT,
-    .id_at = bank_id_at,
-    .label = bank_label,
     .repaint = bank_repaint,
     .publish = bank_publish,
-    .cell_disc = bank_disc,
     .open_allowed = bank_open_allowed,
     .ctx = NULL,
 };
@@ -200,6 +158,26 @@ static bool knob_click_is_tap(void)
     bool gesturing = indev && lv_indev_get_gesture_dir(indev) != LV_DIR_NONE;
     bool moved = indev && lv_indev_get_press_moved(indev);
     return cassette_button_is_tap(moved, gesturing);
+}
+
+static void cell_pressed_cb(lv_event_t *e)
+{
+    if (!s_shown || cassette_bars_is_sliding()) return;
+    int id = (int)(intptr_t)lv_event_get_user_data(e) - 1;
+    if (id < 0 || id >= KNOB_COUNT) return;
+    knob_editor_drag_begin(id);
+}
+
+static void cell_pressing_cb(lv_event_t *e)
+{
+    (void)e;
+    knob_editor_drag_update();
+}
+
+static void cell_released_cb(lv_event_t *e)
+{
+    (void)e;
+    knob_editor_drag_end();
 }
 
 static void cell_clicked_cb(lv_event_t *e)
@@ -219,6 +197,17 @@ static void cell_double_clicked_cb(lv_event_t *e)
     knob_editor_double_tap(id);
 }
 
+/* A knob's five handlers: the drag's three and the editor's two. */
+static void knob_handlers(lv_obj_t *cell, int id)
+{
+    lv_obj_add_event_cb(cell, cell_pressed_cb, LV_EVENT_PRESSED, (void *)(intptr_t)(id + 1));
+    lv_obj_add_event_cb(cell, cell_pressing_cb, LV_EVENT_PRESSING, NULL);
+    lv_obj_add_event_cb(cell, cell_released_cb, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(cell, cell_clicked_cb, LV_EVENT_CLICKED, (void *)(intptr_t)(id + 1));
+    lv_obj_add_event_cb(cell, cell_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED,
+                        (void *)(intptr_t)(id + 1));
+}
+
 static void rgb_cell_build(lv_obj_t *cell, int col, int row, void *ctx)
 {
     (void)ctx;
@@ -227,22 +216,18 @@ static void rgb_cell_build(lv_obj_t *cell, int col, int row, void *ctx)
     if (kind == CELL_COVERED) return;
 
     if (kind == CELL_EFFECT) {
-        /* The stepped knob sits in the plate's upper part; its value - the effect's name - goes
-         * below it, in the room the covered cell would have taken. */
-        knob_cell_create_at(&s_knob_cell[KNOB_FX], cell, FX_CX, FX_CY);
-        s_fx_name = cassette_text(cell, &jura_28, k_col_primary, LV_ALIGN_TOP_MID, 0, FX_NAME_Y);
+        /* The stepped knob sits in the plate's upper part; its selected value - the effect's
+         * name - goes below it, in the room the covered cell would have taken. */
+        knob_cell_create_at(&s_knob_cell[KNOB_FX], cell, &k_knob_dial_cell, FX_DIAL_X,
+                            FX_DIAL_Y);
+        knob_cell_add_value_pill(&s_knob_cell[KNOB_FX], CASSETTE_CELL_W / 2, FX_PILL_Y);
         knob_apply(KNOB_FX);
-        lv_obj_add_event_cb(cell, cell_clicked_cb, LV_EVENT_CLICKED,
-                            (void *)(intptr_t)(KNOB_FX + 1));
-        lv_obj_add_event_cb(cell, cell_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED,
-                            (void *)(intptr_t)(KNOB_FX + 1));
+        knob_handlers(cell, KNOB_FX);
         return;
     }
 
     if (knob_cell_create(&s_knob_cell[kind], cell)) knob_apply(kind);
-    lv_obj_add_event_cb(cell, cell_clicked_cb, LV_EVENT_CLICKED, (void *)(intptr_t)(kind + 1));
-    lv_obj_add_event_cb(cell, cell_double_clicked_cb, LV_EVENT_DOUBLE_CLICKED,
-                        (void *)(intptr_t)(kind + 1));
+    knob_handlers(cell, kind);
 }
 
 /* ---------------------------------------------------------------------- ink */
@@ -251,8 +236,6 @@ static void rgb_set_page(bool white, void *ctx)
 {
     (void)ctx;
     for (int id = 0; id < KNOB_COUNT; id++) knob_cell_set_page(&s_knob_cell[id], white);
-    if (s_fx_name)
-        lv_obj_set_style_text_color(s_fx_name, white ? k_col_bg : k_col_primary, 0);
 }
 
 /* ------------------------------------------------------------------- public */
@@ -261,6 +244,9 @@ static void rgb_shown(bool visible, void *ctx)
 {
     (void)ctx;
     s_shown = visible;
+    /* See cassette_eq's eq_shown: the editor's own swap keeps the bank, and the cells are
+     * gone until it hands the bar back. */
+    if (!visible && knob_editor_is_editing()) return;
     knob_editor_set_bank(visible ? &k_rgb_bank : NULL);
 }
 
@@ -293,6 +279,18 @@ void cassette_rgb_create(void)
     knob_init_unit(&s_knob[KNOB_BRIGHT]);
     knob_init_steps(&s_knob[KNOB_FX], rgb_effect_count(), (int)RGB_EFFECT_OFF);
     for (int id = 0; id < KNOB_COUNT; id++) knob_set_name(&s_knob[id], k_knob_name[id]);
+
+    /* Every slot of the selector is a marked position carrying the effect's own name, printed
+     * as a plaque beside its position. That is the whole of the dial's text: a selector has no
+     * title pillow, because the filled plaque already says which one is on (ADR 0029). */
+    for (int slot = 0; slot < RGB_EFFECT_COUNT; slot++) {
+        knob_set_step(&s_knob[KNOB_FX], slot);
+        s_fx_marks[slot].value = knob_value(&s_knob[KNOB_FX]);
+        s_fx_marks[slot].text = rgb_effect_name(rgb_effect_at(slot));
+        s_fx_marks[slot].plaque = true;
+    }
+    knob_set_marks(&s_knob[KNOB_FX], s_fx_marks, RGB_EFFECT_COUNT);
+    knob_reset(&s_knob[KNOB_FX]);   /* the slot walk left it on the last one */
 
     rgb_compose();
 

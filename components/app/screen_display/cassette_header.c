@@ -163,6 +163,11 @@ void cassette_header_set_shown(bool shown)
     header_slide(shown);
 }
 
+void cassette_header_raise_badge(void)
+{
+    if (s_logo_box) lv_obj_move_foreground(s_logo_box);
+}
+
 void cassette_header_set_page(bool white)
 {
     if (!s_header) return;

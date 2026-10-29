@@ -204,7 +204,7 @@ _Avoid_: page, sheet, mode
 One 96x96 carcase on a 94 px pitch inside a **Bar**, its 2 px border shared with its
 neighbours; a plate panel such as the Pad's is one cell at its own rect instead. The Bar
 builds either; a Cell hosts one control - a button, a knob, or the Pad's plate - which builds
-its disc, its crown or its plate inside and, for a button, inks the carcase's ring on a
+its disc, its ring or its plate inside and, for a button, inks the carcase's ring on a
 press.
 _Avoid_: button, tile, box
 

@@ -1,5 +1,10 @@
 # The mode bar, and the right bar's groups
 
+**Amended by [ADR 0027](./0027-the-knobs-are-dragged.md):** the shared editor no longer takes a
+pillow label from the bank - a knob's text is its own `name` and its marked positions, read through
+`knob_label()` - and both panels' knobs are dragged rather than aimed: the per-knob sweep grew into
+one 270 degree arc, a magnet and a drag, and `knob_value_at()` is gone.
+
 The owner moved the left and right bars' contents in one go. The left bar stopped being the
 transport drawer and became a **mode bar**: the cassette glyph opens and closes the Menu, the
 sliders-v glyph selects the **EQ group**, the led glyph selects the **RGB group**. The right bar
