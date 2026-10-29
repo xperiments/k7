@@ -122,7 +122,7 @@ and nothing else. Everything else is private:
 - `cassette_cover.c` — the white page's print. `create(parent)` builds the container, the
   clip box and the drawn label; a private `place()` applies the Card's shared mask and sizes
   the picture the first time the print is shown; `set_image(dsc)` takes the loader's one
-  buffer; `set_title()` / `set_label_ink()` give the drawn label its words and the row's ink; `set_shown()` / `is_shown()` are the page's wish. The
+  buffer; `set_title()` / `set_inks()` give the drawn label its words and the row's inks; `set_shown()` / `is_shown()` are the page's wish. The
   print is the top layer: the stack is cinta < Card < label. The container is the Card's
   426x272 box at (136,82), so it shares the Card's one A8 mask, whose 291x87 window is a real
   transparent opening (a pill whose ends are the hubs' circles) - the tape shows through it
@@ -476,7 +476,9 @@ zeroed in the same mask at (55,55): the largest radius the rectangle allows,
 `min(width, height) / 2`, a pill whose ends are the hubs' circles.
 
 The print's container is a child of the cassette container, created after the tape body and
-after the Card, so the stack is **cinta < Card < label**. It covers the body inside the outer
+after the Card - so nothing is raised at runtime - and the window's rim is created after it, so
+the stack is **cinta < Card < label < rim**. The rim is 3 px of the Card's own plastic on a
+291x88 box with the window's radius: the shell moulded around the window, not a line. It covers the body inside the outer
 frame, and it hides the mechanics with it: the two frame rings, the three chips, both
 rollers, the run and the two strands are all inside 426x272 and under the Card, and only the
 hub rims turn behind the window - their lines white while a Cover is printed

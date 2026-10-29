@@ -51,6 +51,7 @@ extern const lv_color_t k_col_hub_ink;
  * k_col_hub_ring. */
 extern const lv_color_t k_col_hub_white;
 
+
 /* The VU meter: the lit fill (85% of the playing red), the playing red of the L/R badge,
  * the dim track, and the row background behind them. There is no panel behind them. */
 extern const lv_color_t k_col_meter_dim;

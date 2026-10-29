@@ -143,10 +143,20 @@ invalidate anything the Card would have to re-render.
 ## The tree
 
 - **`components/app/screen_display/cassette_card.c` / `.h`** - new, and the one place the
-  numbers live: the Card's rect, the print's offset, the window's offset and size, the mask
+  numbers live: the Card's rect, the print's offset, the window's offset, size and rim, the mask
   builder, the Card object, `cassette_card_set_ink()`, and `cassette_card_mask()` for the print
-  container. It takes the glow's slot in `cassette_view.c`: created after `cassette_tapes_create()`
-  and before the print is raised.
+  container. It takes the glow's slot in `cassette_view.c`, created after `cassette_tapes_create()`.
+
+The four objects are created in the order they stack, so **nothing is raised at runtime**: the
+tape body, then the Card, then the print (the Cover's masked container), then the window's rim.
+The rim is a child of the cassette container rather than of the print, because the print is
+masked to the window and the rim's bottom row lies on the Card just outside it. It is **3 px of
+the Card's own plastic** - `CASSETTE_CARD_WINDOW_RIM_W` - on a **291x88** box with the window's
+43 px radius, drawn over the print's cut edge, so it covers the mask's last row of antialiasing
+and the window reads as the shell moulded around it rather than as a soft cut. It is up whenever
+Real is, picture or no picture, and it takes the row's plastic with the Card (there is no
+separate colour: the frame and the body are one material, only the print is another).
+
 - **`cassette_cover.c`** - the container becomes 426x272 at the Card's rect and the print is
   clipped at +12,+20. It stops reading `cassette_tapes_frame_rect()` for its geometry and stops
   building its own mask; it asks the Card for the descriptor and hides with its own fade as

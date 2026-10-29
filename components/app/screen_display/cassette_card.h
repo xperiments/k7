@@ -52,6 +52,13 @@ enum {
     CASSETTE_CARD_WINDOW_W  = 291,
     CASSETTE_CARD_WINDOW_H  = 87,
     CASSETTE_CARD_WINDOW_R  = 43,  /* min(W, H) / 2: the largest pill the box allows */
+
+    /* The rim around the window: 3 px of the Card's own plastic, the same 43 px radius, on a
+     * 291x88 box - the window's 87 plus the row its bottom stroke lands on. It is drawn over
+     * the print's cut edge, so it hides the mask's last row of antialiasing and reads as the
+     * shell's moulding rather than as a line. */
+    CASSETTE_CARD_WINDOW_RIM_W = 3,
+    CASSETTE_CARD_WINDOW_RIM_H = 88,
 };
 
 /* Build the Card and its mask under `parent`, hidden. Parent is the cassette's

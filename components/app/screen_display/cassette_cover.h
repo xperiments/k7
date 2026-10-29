@@ -71,9 +71,10 @@ void cassette_cover_set_pending(void);
  * no picture, so it is the one place a blitted Cover could never be: the Track's own words. */
 void cassette_cover_set_title(const char *title);
 
-/* The drawn label's ink: the row's label colour, from the table the plastic came from. The view
- * sets both together, so a cassette is one row and nothing is derived (ADR 0040). */
-void cassette_cover_set_label_ink(lv_color_t ink);
+/* The print's two inks, from the row the plastic came from: the drawn label's, and the plastic
+ * itself, which the window's rim is drawn in - the cassette is moulded around its window, so
+ * the frame and the body are one material (ADR 0040). The view sets them together. */
+void cassette_cover_set_inks(lv_color_t plastic, lv_color_t label);
 
 
 #ifdef __cplusplus

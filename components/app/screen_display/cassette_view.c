@@ -315,8 +315,9 @@ static void apply_frame(const cassette_frame_t *f)
         const cassette_ink_t *ink = &k_col_cassette[n ? (f->ink_seed % n) : 0];
         cassette_card_set_ink(ink->plastic);
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-        /* The print is the same row's: an ink chosen against its own plastic. */
-        cassette_cover_set_label_ink(ink->label);
+        /* The print is the same row's: a label ink chosen against its own plastic, and the
+         * window's rim in that plastic. */
+        cassette_cover_set_inks(ink->plastic, ink->label);
 #endif
     }
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -548,21 +549,17 @@ void cassette_view_create(void)
     lv_obj_set_scrollable(s_cassette, false);
     lv_obj_set_clickable(s_cassette, false);
 
-    /* The cover goes down first, under everything, then the tape body, then the Card: the
-     * order is print < Card < cinta, and the print is raised to the front while it shows.
-     * The peek and the two bars are screen children above the cassette. */
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    cassette_cover_create(s_cassette);
-#endif
-
-    /* The tapes: the frames and the whole body. The VU meter is no longer part of the
-     * cassette picture - it lives in the EQ group's cell, built and deleted with that
-     * panel. */
+    /* The stack, bottom to top: the tape body, the Card, the print, the window's rim. Each is
+     * created after the one below it, so nothing is raised at runtime. The peek and the two
+     * bars are screen children above the cassette. */
     cassette_tapes_create(s_cassette);
 
-    /* The Card: the white page's cassette, created after the body so it draws over it and
-     * under the print (which is the bottom layer and is raised when it shows). */
     cassette_card_create(s_cassette);
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The cover owns the print and the rim around its window, and both go above the Card. */
+    cassette_cover_create(s_cassette);
+#endif
     cassette_place();
 
     /* The peek is the screen's child, above the cassette's container. It is the only

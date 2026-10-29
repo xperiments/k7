@@ -35,7 +35,8 @@ LV_FONT_DECLARE(jura_28);
 static lv_obj_t *s_masked;          /* the Card's rect: the object the shared mask is sized to */
 static lv_obj_t *s_print;          /* the print proper: 402x188 at +12,+20 */
 static lv_obj_t *s_img;            /* the Track picture, at the print's top-left */
-static lv_obj_t *s_fallback;           /* opaque fallback while the shared mask is not there */
+static lv_obj_t *s_fallback;       /* opaque fallback while the shared mask is not there */
+static lv_obj_t *s_rim;            /* the window's 1 px pill, over the print's cut edge */
 static const lv_image_dsc_t *s_dsc;
 static bool s_wanted;              /* the white page asked for the cover */
 static lv_obj_t *s_label;          /* the drawn label: the print when there is no picture */
@@ -48,10 +49,12 @@ static void cover_hide(bool fade);
  * free: the window is the print's middle, 55 px down, so that is where the words go. It has no
  * alpha, so the mask cuts it like anything else in the print - the mask does that, not the
  * label. */
-void cassette_cover_set_label_ink(lv_color_t ink)
+void cassette_cover_set_inks(lv_color_t plastic, lv_color_t label)
 {
-    if (!s_label) return;
-    lv_obj_set_style_text_color(s_label, ink, 0);
+    if (s_label) lv_obj_set_style_text_color(s_label, label, 0);
+    /* The window's rim is the Card's own plastic: the cassette is moulded around its window,
+     * so the frame and the body are one material and only the print is another. */
+    if (s_rim) lv_obj_set_style_border_color(s_rim, plastic, 0);
 }
 
 /* The label is the print only when there is no picture to print: not while one is decoding -
@@ -122,9 +125,8 @@ static void cover_hide_done_cb(lv_anim_t *a)
     lv_obj_set_style_opa_layered(s_masked, LV_OPA_TRANSP, 0);
 }
 
-/* The label comes in. The Cover is the cassette's bottom layer and the Card is built over
- * it, so the print is raised before the first faded frame - the Card is opaque outside the
- * window and would hide the picture otherwise. */
+/* The label comes in. Nothing is raised: the print is created after the Card, so it is over it
+ * by construction, and the window's rim is created after the print. */
 static void cover_show(bool fade)
 {
     if (!s_masked || !s_wanted) return;
@@ -133,7 +135,6 @@ static void cover_show(bool fade)
     bool visible = !lv_obj_is_hidden(s_masked);
     lv_opa_t from = lv_obj_get_style_opa_layered(s_masked, 0);
 
-    lv_obj_move_foreground(s_masked);
     cassette_cover_place();
     lv_obj_set_hidden(s_masked, false);
     lv_anim_delete(s_masked, cover_fade_cb);
@@ -202,6 +203,10 @@ void cassette_cover_set_image(const lv_image_dsc_t *dsc)
 
 void cassette_cover_set_shown(bool shown)
 {
+    /* The window's rim is the Card's, not the print's: it is up whenever Real is, picture or
+     * no picture, and it goes with the page in one frame. */
+    if (s_rim) lv_obj_set_hidden(s_rim, !shown);
+
     if (shown == s_wanted) {
         if (shown) cover_show(true);
         return;
@@ -287,6 +292,19 @@ void cassette_cover_create(lv_obj_t *parent)
                           CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H,
                           CASSETTE_CARD_WINDOW_R, k_col_bg);
     lv_obj_set_hidden(s_fallback, true);
+
+    /* The window's rim, last: 3 px of the Card's plastic on a 291x88 box with the window's
+     * radius, a child of the cassette container rather than of the print, because the print is
+     * masked to the window and the rim's bottom row lies on the Card just outside it. Drawn
+     * after the print, it also covers the mask's last row of antialiasing, which is what makes
+     * the cut edge read as a moulded rim instead of a soft one. */
+    s_rim = cassette_border_box(parent,
+                                CASSETTE_CARD_X + CASSETTE_CARD_WINDOW_DX,
+                                CASSETTE_CARD_Y + CASSETTE_CARD_WINDOW_DY,
+                                CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_RIM_H,
+                                CASSETTE_CARD_WINDOW_R, k_col_bg, LV_OPA_TRANSP,
+                                k_col_cassette[0].plastic, CASSETTE_CARD_WINDOW_RIM_W);
+    lv_obj_set_hidden(s_rim, true);
 
     lv_obj_set_style_opa_layered(s_masked, LV_OPA_TRANSP, 0);
     lv_obj_set_hidden(s_masked, true);
