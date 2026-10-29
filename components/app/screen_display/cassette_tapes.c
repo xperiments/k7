@@ -134,6 +134,11 @@ static uint8_t  s_shown_hub[2];   /* the animation frame currently on screen */
  * does not have.) */
 static lv_opa_t s_tape_ink = LV_OPA_COVER;
 
+/* The hubs' lines are white while a Track's picture is printed on the Card - the rim's border
+ * and the spokes - and the tape's own inks otherwise. The flag is the Cover's, the ink is this
+ * module's. */
+static bool s_hubs_white;
+
 /* ------------------------------------------------------------------ helpers */
 
 /* Lay the tape path for side `i` as one polyline: the external tangent from the pack to
@@ -452,10 +457,33 @@ void cassette_tapes_set_window(cassette_rect_t window)
 static void tape_ink_apply(lv_opa_t ink)
 {
     s_tape_ink = ink;
+    if (s_hubs_white) return;   /* the printed Cover owns the hubs' ink while it is up */
     for (int i = 0; i < 2; i++) {
         if (!s_rim[i]) continue;
         lv_obj_set_style_border_color(s_rim[i],
                                       lv_color_mix(k_col_tape_dark, k_col_tape, ink), 0);
+    }
+}
+
+/* White hub lines, or the tape's inks back: the rim's border and both spokes, which are the
+ * hub's drawing. Its face keeps the playing red - the white is the turn, not the spool. */
+void cassette_tapes_set_hubs_white(bool white)
+{
+    if (white == s_hubs_white) return;
+    s_hubs_white = white;
+
+    for (int i = 0; i < 2; i++) {
+        if (s_rim[i]) {
+            lv_obj_set_style_border_color(s_rim[i],
+                                          white ? k_col_hub_white
+                                                : lv_color_mix(k_col_tape_dark, k_col_tape,
+                                                               s_tape_ink), 0);
+        }
+        for (int k = 0; k < 2; k++) {
+            if (s_hub_spoke[i][k].obj)
+                lv_obj_set_style_line_color(s_hub_spoke[i][k].obj,
+                                            white ? k_col_hub_white : k_col_hub_ink, 0);
+        }
     }
 }
 

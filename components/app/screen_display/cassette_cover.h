@@ -54,6 +54,10 @@ void cassette_cover_set_image(const lv_image_dsc_t *dsc);
  * swipe. */
 void cassette_cover_set_shown(bool shown);
 
+/* Whether a picture has landed for the current Track: the print is the Cover, not the drawn
+ * label. The view asks so the hubs can go white while the artwork is what the page shows. */
+bool cassette_cover_has_picture(void);
+
 /* The white page's wish, whether or not a picture has landed. The down swipe sets it and the up
  * clears it, so the cover can be asked for while the decode is still running. */
 bool cassette_cover_is_shown(void);

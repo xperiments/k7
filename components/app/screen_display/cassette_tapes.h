@@ -59,6 +59,13 @@ void cassette_tapes_place(cassette_pose_t pose);
  * clears it with a zero rect. */
 void cassette_tapes_set_window(cassette_rect_t window);
 
+/* White hub lines while a Track's picture is printed on the Card, the tape's own inks
+ * otherwise. The rim's border and both spokes go white; the rim's face keeps the playing red,
+ * so the hub still reads as a spool and only its drawing changes. The rewind's ink fade leaves
+ * the border alone while it is on, and the view asks for it from the Cover's state, once a
+ * frame. */
+void cassette_tapes_set_hubs_white(bool white);
+
 /* Apply a model frame: the hub phase, the pack fills, and the playing indication in the
  * two rim borders, which is the frame's tape_ink (1 = the playing red, 0 = the tape's own
  * colour). Only what changed is written. A NULL frame is a no-op. */

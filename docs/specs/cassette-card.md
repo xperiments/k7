@@ -28,7 +28,10 @@ reachable once the drawer has settled there. Like the glow it replaces, the Card
 - Both the Card and the print's container are masked by **one A8 buffer** 426x272 whose window
   is zeroed at (67,75). The window is therefore at (55,55) in the print.
 - The mechanics are hidden by the Card except through the window; what shows is the two Ø86
-  hub rims and a horizontal slice of each pack.
+  hub rims and a horizontal slice of each pack. **While a Cover is printed, the hubs' lines are
+  white** (`k_col_hub_white`): the rim's border and both spokes, while the rim's face keeps the
+  playing red - the white is the hub's drawing, not the spool. The rewind's ink fade leaves the
+  border alone while it is on. With a drawn label the hub keeps the tape's inks.
 
 ## Geometry
 

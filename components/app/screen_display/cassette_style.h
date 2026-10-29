@@ -46,6 +46,11 @@ extern const lv_color_t k_col_tape;
 extern const lv_color_t k_col_hub_ring;
 extern const lv_color_t k_col_hub_ink;
 
+/* The hubs' lines - the rim's border and the spokes - while a Track's picture is printed on the
+ * Card: white, so the artwork has the window's colour to itself. The rim's face is still
+ * k_col_hub_ring. */
+extern const lv_color_t k_col_hub_white;
+
 /* The VU meter: the lit fill (85% of the playing red), the playing red of the L/R badge,
  * the dim track, and the row background behind them. There is no panel behind them. */
 extern const lv_color_t k_col_meter_dim;

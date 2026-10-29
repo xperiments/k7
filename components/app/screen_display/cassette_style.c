@@ -9,6 +9,7 @@ const lv_color_t k_col_glass      = COL_DARKEN_HEX(COL_WHITE,96);
 const lv_color_t k_col_tape_dark  = COL_HEX(COL_PRIMARY);
 const lv_color_t k_col_tape       = COL_HEX(COL_PRIMARY);
 const lv_color_t k_col_hub_ring   = COL_DARKEN_HEX(COL_PRIMARY, 20);
+const lv_color_t k_col_hub_white  = COL_HEX(0xEEEEEE);
 const lv_color_t k_col_hub_ink    = COL_DARKEN_HEX(COL_PRIMARY, 80);
 
 const lv_color_t k_col_meter_dim  = COL_HEX(0x7F2C18);

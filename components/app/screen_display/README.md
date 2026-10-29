@@ -479,7 +479,9 @@ The print's container is a child of the cassette container, created after the ta
 after the Card, so the stack is **cinta < Card < label**. It covers the body inside the outer
 frame, and it hides the mechanics with it: the two frame rings, the three chips, both
 rollers, the run and the two strands are all inside 426x272 and under the Card, and only the
-hub rims turn behind the window. The print's box is fixed in screen pixels and does not
+hub rims turn behind the window - their lines white while a Cover is printed
+(`k_col_hub_white`: the rim's border and the spokes; its face stays the playing red), the tape's
+own inks when the print is the drawn label. The print's box is fixed in screen pixels and does not
 follow the pose, and its picture is scaled at draw time, so the buffer stays the loader's one
 size; the controls pose scales it down, not up. The Card exists only at that pose, which is why the model refuses the down
 from Art until it has landed - the same two downs can arrive faster than the shrink.

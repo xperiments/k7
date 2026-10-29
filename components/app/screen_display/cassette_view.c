@@ -322,6 +322,10 @@ static void apply_frame(const cassette_frame_t *f)
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     /* The drawn label's words, when the Track carries no picture and the cover is not there. */
     if (f->title_changed) cassette_cover_set_title(f->title);
+    /* The hubs are white while the Cover is what the page shows: the spools read as plain
+     * plastic and the artwork has the page's colour to itself. Asked every frame, because the
+     * picture lands from the loader between frames; the setter ignores a repeated value. */
+    cassette_tapes_set_hubs_white(cassette_cover_is_shown() && cassette_cover_has_picture());
 #endif
     cassette_tapes_set(f);
     /* The meter is only alive while the EQ group is up; its module ignores a frame otherwise. */

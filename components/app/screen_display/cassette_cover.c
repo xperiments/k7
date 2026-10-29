@@ -211,6 +211,11 @@ void cassette_cover_set_shown(bool shown)
     else cover_hide(true);
 }
 
+bool cassette_cover_has_picture(void)
+{
+    return s_dsc != NULL;
+}
+
 bool cassette_cover_is_shown(void)
 {
     return s_wanted;
