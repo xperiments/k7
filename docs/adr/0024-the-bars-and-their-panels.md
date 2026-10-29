@@ -1,5 +1,10 @@
 # The bars are one module, and their panels are data
 
+**Amended by [ADR 0042](./0042-the-screen-is-built-then-installed.md):** a **Panel**'s
+`create()` no longer installs it. It builds its values, and the composition calls
+`cassette_bars_set_panel()` — once for each bar — with a late install refused with a log line.
+The bar, the panel value, the cells, the entrance and the Menu's swap are unchanged.
+
 **Amended by [ADR 0026](./0026-the-mode-bar-and-the-right-bars-groups.md):** the right bar's
 chrome cell - M - is gone, and `cassette_bars_set_menu_cb()` with it: the Menu's door moved to the
 left bar, so no panel can strand it and no bar holds a cell back. A panel value gained `inert`,

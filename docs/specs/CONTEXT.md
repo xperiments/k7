@@ -201,12 +201,29 @@ strip's 260 ms entrance, the **Page** ink dispatch and the hit rule, and it host
 _Avoid_: edge, rail, drawer (that is the panel)
 
 **Panel**:
-A **Bar**'s content, handed to it as one value: a grid of **Cells** - the Transport drawer's
-1x3, the DJ block's 2x3 - or one plate, the **Pad**. A panel builds a control into each cell
+A **Bar**'s content, handed to it as one value: a grid of **Cells** - the mode bar's 1x3, the
+EQ or RGB panel's 2x3 - or one plate, the **Pad**. A panel builds a control into each cell
 the Bar hands it, and creates no carcase and no root of its own. One panel is up per bar;
-showing another is a cut, not a slide. The right bar's panels are the DJ block and the Pad; a
-future RGB panel would be a third.
+showing another is a cut, not a slide. The right bar's panels are the three **Groups** and
+the Pad.
 _Avoid_: page, sheet, mode
+
+**Group**:
+The **Panel** the right **Bar** is showing: the Empty grille by default, the EQ panel, or the
+RGB panel. One at a time, and never two: the mode bar's group button toggles its Group on and
+a second tap puts the Empty grille back, and the Group dies with the chrome, so the Controls
+always open on the grille (ADR 0026). The Pad is not a Group - it takes the Bar while the
+Menu or a knob's dial owns the touch, and the Group comes back afterwards.
+_Avoid_: tab, page, screen, mode (the mode bar selects a Group; the Group is what is shown)
+
+**Install**:
+The second half of putting a **Panel** on screen. A panel's module **builds** its values -
+knobs, marks, names, a strip's state - and creates no object; the composition then installs
+it with the right **Bar**. No module installs itself, and an install that arrives before the
+Bars exist is refused with a log line rather than dropped (ADR 0042). The Peek's anchors are
+the same shape: a part that is given the pose works its own geometry out instead of being
+pushed coordinates.
+_Avoid_: attach, mount, register, add
 
 **Cell**:
 One 96x96 carcase on a 94 px pitch inside a **Bar**, its 2 px border shared with its
