@@ -61,7 +61,6 @@ void cassette_view_dim(bool dim);
 void cassette_view_scene_set(int scene);
 #endif
 
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
 /* The Track's picture for the white page's cover, or NULL when it has none (or while a
  * new one is being decoded). The descriptor is the loader's one cover buffer and stays
  * alive; the cover module copies nothing. */
@@ -75,4 +74,3 @@ void cassette_view_set_cover(const lv_image_dsc_t *dsc);
  * carries none (or they are still being read), and the peek falls back to the path and
  * filename it already knows. */
 void cassette_view_set_tags(const char *group, const char *song);
-#endif

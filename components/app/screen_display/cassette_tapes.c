@@ -25,6 +25,8 @@
 #include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_tapes.h"
+
+#include "screen_caps.h"
 #include "cassette_widgets.h"
 
 static const char *TAG = "screen";
@@ -117,9 +119,11 @@ static lv_obj_t *s_roller[2];               /* the two rollers under the tape */
 static lv_obj_t *s_run;                    /* the horizontal run between the rollers */
 static lv_point_precise_t s_run_pts[2];
 static lv_obj_t *s_rim[2];                  /* the 168 px hub circle the rewind dims */
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-static lv_obj_t *s_frame[2];        /* the cassette's two borders; the board's only */
-/* The three small rounded boxes along the bottom; the board's only, like the frames. */
+/* The cassette's two border frames and the three chips along the bottom: the body is drawn on
+ * them, and they exist where the panel's RGB path needs them - `k_col_frame` (FF00FF) masks its
+ * overscan. On a diagnostic framebuffer they would be magenta lines round a cassette, so the
+ * build asks screen_caps()->panel_borders and builds none. */
+static lv_obj_t *s_frame[2];
 static const struct { int x, y, w, h; } k_chip[3] = {
     { 120, 440, 50, 20 },
     { 360, 430, 80, 30 },
@@ -127,7 +131,6 @@ static const struct { int x, y, w, h; } k_chip[3] = {
 };
 #define CHIP_R 8
 static lv_obj_t *s_chip[3];
-#endif
 static int      s_pack_d[2];      /* px, so a redraw happens only when it changes */
 static uint8_t  s_shown_hub[2];   /* the animation frame currently on screen */
 /* The ink currently on the rims, at the resolution the border mix takes: tape_ink 1 is
@@ -368,15 +371,13 @@ static int pack_diameter(uint16_t fill)
 
 /* ------------------------------------------------------------------ layout */
 
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-/* Put a widget at a design position and size. The frames are the board's, so this helper
- * is too: a board without them has no rectangle of its own to place. */
+/* Put a widget at a design position and size. Only the border frames and the chips use it, and
+ * they are built only where the panel needs them. */
 static void place_rect(lv_obj_t *o, int x, int y, int w, int h)
 {
     lv_obj_set_pos(o, SCX(x), SCY(y));
     lv_obj_set_size(o, SC(w), SC(h));
 }
-#endif
 
 /* Put a circle of a design diameter on a design centre. The object carries the circle
  * radius; only its box changes with the scale. */
@@ -392,19 +393,19 @@ void cassette_tapes_place(cassette_pose_t pose)
 
     if (!s_run) return;   /* nothing has been built yet */
 
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    place_rect(s_frame[0], FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
-    lv_obj_set_style_radius(s_frame[0], SC(FRAME_R), 0);
-    place_rect(s_frame[1], 122, 122, 556, 168);
-    /* The design's 16 px corner is all frame[1] has now: on the white page the Card covers
-     * it, so nothing prints the cover's pill on it any more. */
-    lv_obj_set_style_radius(s_frame[1], SC(16), 0);
+    if (screen_caps()->panel_borders) {
+        place_rect(s_frame[0], FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
+        lv_obj_set_style_radius(s_frame[0], SC(FRAME_R), 0);
+        place_rect(s_frame[1], 122, 122, 556, 168);
+        /* The design's 16 px corner is all frame[1] has now: on the white page the Card covers
+         * it, so nothing prints the cover's pill on it any more. */
+        lv_obj_set_style_radius(s_frame[1], SC(16), 0);
 
-    for (int i = 0; i < 3; i++) {
-        place_rect(s_chip[i], k_chip[i].x, k_chip[i].y, k_chip[i].w, k_chip[i].h);
-        lv_obj_set_style_radius(s_chip[i], SC(CHIP_R), 0);
+        for (int i = 0; i < 3; i++) {
+            place_rect(s_chip[i], k_chip[i].x, k_chip[i].y, k_chip[i].w, k_chip[i].h);
+            lv_obj_set_style_radius(s_chip[i], SC(CHIP_R), 0);
+        }
     }
-#endif
 
     for (int i = 0; i < 2; i++) {
         pack_place(i);
@@ -519,17 +520,17 @@ void cassette_tapes_create(lv_obj_t *parent)
     /* Every part is created with its styles and no geometry: cassette_tapes_place() is
      * the one place that knows where the scale puts it, and it runs once the body is
      * complete. */
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The two rounded rectangles the body is drawn on. */
-    s_frame[0] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 0, k_col_back, 1);
-    s_frame[1] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 0, k_col_back, 1);
+    if (screen_caps()->panel_borders) {
+        /* The two rounded rectangles the body is drawn on. */
+        s_frame[0] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 0, k_col_back, 1);
+        s_frame[1] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 0, k_col_back, 1);
 
-    /* The three small boxes along the bottom are objects too, placed by the pose in
-     * cassette_tapes_place(); a fixed position here would not scale with the cassette. */
-    for (int i = 0; i < 3; i++)
-        s_chip[i] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 255,
-                                        k_col_tape_dark, 1);
-#endif
+        /* The three small boxes along the bottom are objects too, placed by the pose in
+         * cassette_tapes_place(); a fixed position here would not scale with the cassette. */
+        for (int i = 0; i < 3; i++)
+            s_chip[i] = cassette_border_box(parent, 0, 0, 1, 1, 0, k_col_frame, 255,
+                                            k_col_tape_dark, 1);
+    }
     /* The tape: two packs, two bottom rollers, the run between them and the two side
      * paths. A pack's box is transparent and carries no border; its rings are the draw
      * callback's and nothing else, which is also why it is created here and then updated

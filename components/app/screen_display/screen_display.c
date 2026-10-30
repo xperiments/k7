@@ -25,14 +25,15 @@
 #include "freertos/task.h"
 #include "lvgl.h"
 
+#include "artwork_loader.h"
 #include "cassette_view.h"
 #include "lvgl_mem.h"
 #include "screen_capture.h"
+#include "screen_caps.h"
 #include "mini_icecast.h"
 #include "screen_display.h"
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-#include "artwork_loader.h"
 #include "backlight.h"
 #include "esp_lvgl_port.h"
 #include "panel_rgb.h"
@@ -447,18 +448,21 @@ esp_err_t screen_display_start(const char *music_dir)
 #endif
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     lvgl_port_unlock();
+#endif
 
 #if !CONFIG_APP_UI_BACKLIGHT_TEST
-    /* The card side of the peek's tags and the white page's cover, started after the view
-     * so a result can only arrive once there is an object to hand it to. A failure is
-     * logged and the screen still runs: the peek falls back to its filename and the white
-     * page simply shows no cover. */
-    esp_err_t art_err = artwork_loader_start(music_dir);
-    if (art_err != ESP_OK) {
-        ESP_LOGW(TAG, "the artwork loader did not start: %s; no cover and tags from the card",
-                 esp_err_to_name(art_err));
+    /* The card side of the peek's tags and the white page's cover, started after the view so a
+     * result can only arrive once there is an object to hand it to. A board without the Cover
+     * capability has no white page to print on and no loader to run; a board with it logs and
+     * carries on if the loader refuses, because the peek has a filename fallback and the page
+     * simply shows no cover. */
+    if (screen_caps()->cover) {
+        esp_err_t art_err = artwork_loader_start(music_dir);
+        if (art_err != ESP_OK) {
+            ESP_LOGW(TAG, "the artwork loader did not start: %s; no cover and tags from the card",
+                     esp_err_to_name(art_err));
+        }
     }
-#endif
 #endif
 
     ESP_LOGI(TAG, "screen %dx%d, framebuffer %u KB in PSRAM, LVGL holds %u B",

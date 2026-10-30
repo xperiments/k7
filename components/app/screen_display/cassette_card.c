@@ -15,6 +15,8 @@
  */
 #include "cassette_card.h"
 
+#include "screen_caps.h"
+
 #include <math.h>
 #include <string.h>
 
@@ -134,11 +136,10 @@ void cassette_card_create(lv_obj_t *parent)
 {
     if (!parent || s_card) return;
 
-#if !CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The white page is the touch board's only (screen_display/CMakeLists.txt), so the other
-     * board never mounts a Card and never spends the mask's 116,416 B on one. */
-    return;
-#endif
+    /* The Card is the white page's body, and the white page is a capability: a board with no
+     * touch and no card-side loader never reaches it, so it never spends the mask's 116,416 B
+     * on one. Asked, not compiled out (screen_caps.h). */
+    if (!screen_caps()->cover) return;
 
     mask_build();
 

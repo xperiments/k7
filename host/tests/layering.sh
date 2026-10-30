@@ -179,6 +179,27 @@ else
     fail=1
 fi
 
+printf '\nA2  only the adapters name the board, and the capabilities answer for it\n'
+# The screen display is one component with two boards behind it. It used to be two builds of
+# the same files, with CONFIG_APP_BOARD_SUNTON_... deciding in every module whether the Cover,
+# the Peek, the Menu, the Card or the body's border frames existed - so the composition could
+# not be written once. screen_caps() is the asking (screen_caps.h), and screen_display.c is the
+# file that selects the adapters. Any other module naming the board symbol is a capability that
+# has not been named yet.
+app_ok=0
+for f in "$ROOT"/components/app/screen_display/*.c "$ROOT"/components/app/screen_display/*.h; do
+    name=$(basename "$f")
+    case "$name" in
+    screen_display.c|screen_caps.c) continue ;;
+    esac
+    if grep -qE '^[[:space:]]*#[[:space:]]*(if|ifdef|elif).*CONFIG_APP_BOARD_' "$f" 2>/dev/null; then
+        printf '  FAIL  %s decides on the board; ask screen_caps() instead\n' "$name"
+        fail=1
+        app_ok=1
+    fi
+done
+[ "$app_ok" -eq 0 ] && printf '  ok    only screen_display.c (the adapter selector) and screen_caps.c name the board\n'
+
 printf '\nL1  the vendored encoder is unmodified\n'
 if [ -f "$ROOT/components/portable/shine/COPYING" ] && [ -f "$ROOT/LICENSES/LGPL-2.0.txt" ]; then
     if cmp -s "$ROOT/components/portable/shine/COPYING" "$ROOT/LICENSES/LGPL-2.0.txt"; then

@@ -1,30 +1,30 @@
-# The panel and touch drivers only exist on the board that has them. This is a
-# build-time choice inside the screen display, not a target check: the RGB panel and
-# the headless framebuffer are two adapters behind the same public interface, and the
-# GT911 is the panel board's input adapter. The peek, the white page's cover and the
-# Track loader belong to that input.
-#
-# The cover loader (TJpgDec and the 603x385 cover buffer) is the board's: the white page
-# and the peek are the touch board's overlays, and the headless board has neither. The
-# old Artwork screen's Case backdrop is not part of this build.
-set(screen_srcs "screen_display.c" "cassette_view.c" "cassette_tapes.c" "cassette_meter.c" "cassette_levels.c" "cassette_bars.c" "cassette_buttons.c" "cassette_eq.c" "cassette_header.c" "cassette_footer.c" "cassette_window.c" "cassette_style.c" "cassette_widgets.c" "screen_input.c" "lvgl_mem.c" "font_jura_36.c" "font_jura_28.c" "font_jura_20.c" "font_xtape_24.c" "font_xtape_36.c" "cassette_button.c" "cassette_pad.c" "knob_editor.c" "knob_panel.c" "chrome_entrance.c" "cassette_empty.c" "cassette_rgb.c" "knob_cell.c" "cassette_card.c")
+# The screen display is one composition with two boards behind it. Everything above the
+# hardware compiles on both - the Peek, the white page's Cover, the Menu, the artwork loader,
+# the Card - and asks screen_caps() whether this build has them (screen_caps.h). What is
+# selected here is only the hardware: the RGB panel, its GT911, and the pin its backlight
+# hangs from (with a no-op adapter on the board that has none).
+set(screen_srcs "screen_display.c" "cassette_view.c" "cassette_tapes.c" "cassette_meter.c" "cassette_levels.c" "cassette_bars.c" "cassette_buttons.c" "cassette_eq.c" "cassette_header.c" "cassette_footer.c" "cassette_window.c" "cassette_style.c" "cassette_widgets.c" "screen_input.c" "lvgl_mem.c" "font_jura_36.c" "font_jura_28.c" "font_jura_20.c" "font_xtape_24.c" "font_xtape_36.c" "cassette_button.c" "cassette_pad.c" "knob_editor.c" "knob_panel.c" "chrome_entrance.c" "cassette_empty.c" "cassette_rgb.c" "knob_cell.c" "cassette_card.c" "screen_caps.c" "cassette_peek.c" "cassette_cover.c" "cassette_menu.c" "artwork_loader.c")
 set(screen_reqs mini_icecast cassette knob_model controls groups rgb artwork menu app_services app_board library esp_timer esp_lcd esp_driver_gpio esp_driver_ledc app_update esp_app_format)
 set(screen_priv ".")
+# LVGL vendors TJpgDec but does not export its header. The loader calls it directly: LVGL's
+# image decoder wants a file or the memfs driver, and its band-at-a-time interface does not
+# produce the single fitted buffer the cover needs. CMAKE_SOURCE_DIR is the build directory
+# during the component-requirements pass, so the project root is reached from this file
+# instead. The loader compiles on both boards now, so the header is on both paths.
+set(lvgl_libs "${CMAKE_CURRENT_LIST_DIR}/../../../managed_components/lvgl__lvgl/src/libs")
+if(NOT EXISTS "${lvgl_libs}/tjpgd/tjpgd.h")
+    message(FATAL_ERROR "the LVGL TJpgDec header is not where the cover loader expects it: ${lvgl_libs}")
+endif()
+list(APPEND screen_priv "${lvgl_libs}/tjpgd")
+
+# What is left of the board difference is the hardware itself: the RGB panel, its touch
+# controller, and the pin its backlight hangs from. Everything above them compiles on both
+# boards and asks screen_caps() what it has.
 if(CONFIG_APP_BOARD_SUNTON_8048S050C)
-    list(APPEND screen_srcs "panel_rgb.c" "touch_gt911.c" "backlight.c" "artwork_loader.c" "cassette_peek.c" "cassette_cover.c" "cassette_menu.c")
+    list(APPEND screen_srcs "panel_rgb.c" "touch_gt911.c" "backlight.c")
     list(APPEND screen_reqs esp_lcd_touch esp_lcd_touch_gt911 esp_driver_i2c lvgl__lvgl)
-
-    # LVGL vendors TJpgDec but does not export its header. The loader calls it directly:
-    # LVGL's image decoder wants a file or the memfs driver, and its band-at-a-time
-    # interface does not produce the single fitted buffer the cover needs. CMAKE_SOURCE_DIR
-    # is the build directory during the component-requirements pass, so the project root
-    # is reached from this file instead.
-    set(lvgl_libs "${CMAKE_CURRENT_LIST_DIR}/../../../managed_components/lvgl__lvgl/src/libs")
-    if(NOT EXISTS "${lvgl_libs}/tjpgd/tjpgd.h")
-        message(FATAL_ERROR "the LVGL TJpgDec header is not where the cover loader expects it: ${lvgl_libs}")
-    endif()
-    list(APPEND screen_priv "${lvgl_libs}/tjpgd")
-
+else()
+    list(APPEND screen_srcs "backlight_none.c")
 endif()
 
 # The screen over HTTP is a diagnostic, and it is built on either board: the panel serves the

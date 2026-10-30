@@ -322,11 +322,17 @@ table that the parts call (ADR 0043):
   (`CONTROLS_INTENT_MENU_CLOSE`), so no fact is adopted, no latch is patched, and the 40 ms
   poll that noticed a self-close is gone.
 
-The panel and the headless path are two adapters behind the same interface, selected by
-`CONFIG_APP_BOARD_SUNTON_8048S050C` in this component's CMake. The touch adapter and the
-artwork loader are a second, input-side pair under the same selection: a board without a
-controller simply has no pointer and no peek. A third panel promotes that selection to a
-`display_port` seam without changing `screen_display_start()`.
+What is left of the board difference is the hardware: the RGB panel, its GT911, and the pin
+the backlight hangs from, selected by `CONFIG_APP_BOARD_SUNTON_8048S050C` in this component's
+CMake (with a `backlight_none.c` adapter on the board that has none). Everything above them -
+the Peek, the white page's Cover, the Menu, the artwork loader, the Card, the body's border
+frames - compiles on both boards and asks `screen_caps()` what this build has (ADR 0044).
+`cover` is the loader, the print and the Card's mask; `panel_borders` is the two `k_col_frame`
+rectangles the panel's RGB path uses to mask its overscan. A board with neither renders the
+white page with no print, which is what "no Cover" means. The console dump stays the headless
+board's and the HTTP diagnostics work on both. A third board adds a `screen_caps_t` and its
+adapters, not a conditional: only `screen_display.c` and `screen_caps.c` name the board symbol,
+and `host/tests/layering.sh` A2 keeps it that way.
 
 ## The four rungs and the peek
 

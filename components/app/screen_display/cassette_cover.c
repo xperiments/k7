@@ -27,6 +27,8 @@
  */
 #include "cassette_cover.h"
 
+#include "screen_caps.h"
+
 #include "lvgl.h"
 
 #include "cassette_card.h"
@@ -144,6 +146,12 @@ bool cassette_cover_is_shown(void)
 void cassette_cover_create(lv_obj_t *parent)
 {
     if (!parent || s_masked) return;
+
+    /* The print is the Cover capability's: a board with no card-side loader and no white page
+     * to print on builds none of it. Asked here rather than gated in the composition, because
+     * "show the cover" is a request the part is allowed to answer with nothing - and a print
+     * with no Card behind it is not a picture of anything. */
+    if (!screen_caps()->cover) return;
 
     /* The Card's rect, not the print's: LVGL aligns a bitmap mask to the centre of the
      * object's area, so the two objects that share one buffer have to share a centre

@@ -25,7 +25,6 @@
 #include "artwork_loader.h"
 #include "mini_icecast.h"
 
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
 static const char *TAG = "screen";
 
 /* The status is what the Track requests are made from, so it is kept here rather than in
@@ -75,11 +74,9 @@ static void track_request(void)
     if (s_peek_visible) artwork_loader_request_tags(s_status.path, s_status.format);
     if (s_cover_visible) request_cover();
 }
-#endif
 
 void cassette_levels_set_peek(bool shown)
 {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
     if (shown == cassette_peek_is_shown()) return;
     s_peek_visible = shown;
     if (shown) cassette_peek_show(); else cassette_peek_hide();
@@ -87,68 +84,40 @@ void cassette_levels_set_peek(bool shown)
         !artwork_loader_tags_answered(s_status.path, s_status.format))
         artwork_loader_request_tags(s_status.path, s_status.format);
     ESP_LOGI(TAG, "peek %s", shown ? "shown" : "hidden");
-#else
-    (void)shown;
-#endif
 }
 
 void cassette_levels_set_cover_visible(bool shown)
 {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
     if (shown == s_cover_visible) return;
     s_cover_visible = shown;
     if (shown) request_cover();
-#else
-    (void)shown;
-#endif
 }
 
 void cassette_levels_apply(const cassette_frame_t *frame)
 {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
     cassette_peek_apply(frame);
-#else
-    (void)frame;
-#endif
 }
 
 void cassette_levels_update(const mini_icecast_status_t *status)
 {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
     if (status) {
         s_status = *status;
         s_have_status = true;
     }
     track_request();
-#else
-    (void)status;
-#endif
 }
 
 void cassette_levels_create(lv_obj_t *screen)
 {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
     cassette_peek_create(screen);
-#else
-    (void)screen;
-#endif
 }
 
 void cassette_levels_set_tags(const char *group, const char *song)
 {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
     cassette_peek_set_tags(group, song);
-#else
-    (void)group;
-    (void)song;
-#endif
 }
 
 void cassette_levels_set_pose(cassette_pose_t pose)
 {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
     cassette_peek_set_pose(pose);
-#else
-    (void)pose;
-#endif
 }

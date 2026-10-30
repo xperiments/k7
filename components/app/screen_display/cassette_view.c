@@ -65,12 +65,8 @@
 #include "mini_icecast.h"
 #include "screen_input.h"
 
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
 #include "cassette_cover.h"
-#endif
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
 #include "cassette_menu.h"
-#endif
 
 static const char *TAG = "screen";
 
@@ -188,17 +184,13 @@ static void controls_apply(controls_changed_t changed)
     if (changed & CONTROLS_CHANGED_PAGE) {
         const bool real = s_ctl.level == CONTROLS_LEVEL_REAL;
         page_set(real);
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
         cassette_cover_set_shown(real);
         /* The picture is Real's: ask for it now, not at boot. */
         cassette_levels_set_cover_visible(real);
-#endif
     }
 
     if (changed & CONTROLS_CHANGED_PEEK) {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
         cassette_levels_set_peek(s_ctl.level == CONTROLS_LEVEL_PEEK);
-#endif
     }
 
     if (changed & CONTROLS_CHANGED_SHOWN) {
@@ -216,7 +208,6 @@ static void controls_apply(controls_changed_t changed)
     }
 
     if (changed & CONTROLS_CHANGED_MENU) {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
         if (s_ctl.menu) {
             cassette_menu_open(s_ctl.level == CONTROLS_LEVEL_REAL);
         } else {
@@ -226,7 +217,6 @@ static void controls_apply(controls_changed_t changed)
             groups_install();
         }
         groups_latch();
-#endif
     }
 
     if (changed & CONTROLS_CHANGED_ROOM) room_apply(s_ctl.room);
@@ -314,18 +304,14 @@ static void apply_frame(const cassette_frame_t *f)
         ESP_LOGI(TAG, "cassette %u of %u: %s", (unsigned)row, (unsigned)n,
                  f->title[0] ? f->title : "(no track)");
         cassette_card_set_ink(ink->plastic);
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
         /* The print is the same row's: the label fill, the ink it would print in, and the
          * window's rim in the row's plastic. */
         cassette_cover_set_inks(ink->plastic, ink->ink, ink->label);
-#endif
     }
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
     /* The hubs are white while the Cover is what the page shows: the spools read as plain
      * plastic and the artwork has the page's colour to itself. Asked every frame, because the
      * picture lands from the loader between frames; the setter ignores a repeated value. */
     cassette_tapes_set_hubs_white(cassette_cover_is_shown() && cassette_cover_has_picture());
-#endif
     cassette_tapes_set(f);
     /* The meter is only alive while the EQ group is up; its module ignores a frame otherwise. */
     cassette_meter_set(f);
@@ -619,10 +605,8 @@ void cassette_view_create(void)
 
     cassette_card_create(s_cassette);
 
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
     /* The cover owns the print and the rim around its window, and both go above the Card. */
     cassette_cover_create(s_cassette);
-#endif
     cassette_place();
 
     /* The peek is the screen's child, above the cassette's container. It is the only
@@ -666,10 +650,8 @@ void cassette_view_create(void)
      * the bar when open installs the panel. The bars were created before this; the bands come
      * after, so the frame stays above the rows. M - the right bar's chrome cell - opens it,
      * gated on the controls' settled pose by the model. */
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
     cassette_menu_create(scr, s_cassette);
     cassette_menu_set_close_cb(menu_close_intent, NULL);
-#endif
 
     /* The bands across the top and the bottom of the controls screen: the frame that closes
      * the drawer and the block on their top and bottom lines. They are chrome, hidden with
@@ -714,11 +696,9 @@ void cassette_view_update(const mini_icecast_status_t *st)
     cassette_footer_set_playing(st && st->format != MI_FMT_NONE,
                                 st ? st->elapsed_ms : 0u, st ? st->duration_ms : 0u,
                                 st ? st->title : NULL, st ? st->path : NULL);
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
     /* The Menu's rows and its playing marker follow the same status. The Menu's own state is
      * the model's, but this is a drawing call: the overlay draws only while it is up. */
     if (cassette_menu_is_open()) cassette_menu_update(st);
-#endif
 
     /* No polling step here: the model changes only when an intent arrives, and every intent is
      * applied by the callback that sent it. The 40 ms CONTROLS_INTENT_NONE that used to run here
@@ -745,7 +725,6 @@ void cassette_view_update(const mini_icecast_status_t *st)
 
 /* ------------------------------------------------------------------ hand-off */
 
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
 void cassette_view_set_cover(const lv_image_dsc_t *dsc)
 {
     cassette_cover_set_image(dsc);
@@ -755,4 +734,3 @@ void cassette_view_set_tags(const char *group, const char *song)
 {
     cassette_levels_set_tags(group, song);
 }
-#endif
