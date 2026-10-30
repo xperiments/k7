@@ -1,0 +1,19 @@
+# The screen capture, on either board: GET /api/screen.bmp serves the finished frame and
+# POST /api/scene aims the diagnostic scene driver, so tools/screen_over_http.py can photograph
+# the interface and diff two runs. Layered on top of a board's own defaults:
+#
+#   # the panel board
+#   idf.py -B build_http -D SDKCONFIG=sdkconfig.verify \
+#          -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.sunton;sdkconfig.defaults.capture" build
+#
+#   # the headless path - the same chip with no panel driver
+#   idf.py -B build_headless -D SDKCONFIG=sdkconfig.headless \
+#          -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.capture" build
+#
+#   python3 tools/screen_over_http.py capture --host <board>:8000 --out DIR
+#
+# On the panel the frame is LVGL's own direct-mode buffer; on the headless path it is the
+# full-frame buffer the console dump already needs, kept for the life of the process while this
+# is on - which is why it is a diagnostic and not the default. The two diagnostics are
+# independent; CONFIG_APP_UI_DUMP_SCENE aims whichever one the build has.
+CONFIG_APP_UI_SCREEN_HTTP=y

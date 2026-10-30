@@ -801,6 +801,25 @@ Then the same assertions that pass on the host run against the device. The devic
 own serial log is the second input: the PSRAM, heap and encoder figures only exist
 there, and `SERIAL_LOG` is what lets the script check them.
 
+Looking at the screen without a serial console: the panel board serves its frame over HTTP
+(`CONFIG_APP_UI_SCREEN_HTTP`), and so does the headless path, which is the same chip with no
+panel driver — the same tool photographs both.
+
+```bash
+# the panel build, with the capture on
+idf.py -B build_http -D SDKCONFIG=sdkconfig.verify \
+       -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.sunton;sdkconfig.defaults.capture" build
+# the headless build, with the capture on
+idf.py -B build_headless -D SDKCONFIG=sdkconfig.headless \
+       -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.capture" build
+
+python3 tools/screen_over_http.py capture --host <board>:8000 --out /tmp/before
+python3 tools/screen_over_http.py compare /tmp/before /tmp/after   # 0 px outside the parts that move
+```
+
+The console dump is the other way and still the one for a board with no network
+(`sdkconfig.defaults.dump`, then `tools/decode_screen_dump.py`).
+
 ```bash
 PY=~/.espressif/python_env/idf6.1_py3.12_env/bin/python     # any python with pyserial
 $PY host/tests/serial_log.py -s 20 -o /tmp/board.log        # boot log, resets the board
