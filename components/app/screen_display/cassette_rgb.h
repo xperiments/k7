@@ -25,8 +25,11 @@
  * installs a hook (or does not), and every move hands it the whole state. A hook installed late is
  * called once with the values that are already there.
  *
- * Private to screen_display. create() builds the knobs' values and nothing else; the panel value
- * is installed by the composition, which is also what decides when the group is up.
+ * Private to screen_display. The grid, the dials, the handlers and the editor's bank are
+ * knob_panel's, shared with the EQ group; what is here is this group's table - its cell map, its
+ * five names, the effect's six marked slots - and its publish seam. create() builds the knobs'
+ * values and nothing else; the panel value is installed by the composition, which is also what
+ * decides when the group is up.
  */
 #include <stdbool.h>
 

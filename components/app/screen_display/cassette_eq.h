@@ -11,12 +11,13 @@
  * the inside column the meter - one 96x190 plate over its top two cells - and the gain, and the
  * outer column its three bands. There is no Back cell: the mode bar's sliders button is the
  * toggle, so a tap on it puts the group away. The bar builds the
- * carcases, slides them in and out over 260 ms and paints the page into them; this module builds
- * the knobs and the meter inside them, and owns the knobs' values and the
- * audio. The edit's ordering - which knob is pending, which is open, the reset gesture and its
- * owed click, the close - is knob_model's `knob_edit_t`; the modal surface itself is
- * knob_editor's. The six carcases are the same 96x96 box as the mode bar's, two touching columns
- * three rows deep.
+ * carcases, slides them in and out over 260 ms and paints the page into them; this module says
+ * which knob is in which cell, supplies the meter that fills the plate, and owns the knobs'
+ * values and the audio. The grid, the dials, the handlers and the editor's bank are
+ * knob_panel's, shared with the RGB group. The edit's ordering - which knob is pending, which is
+ * open, the reset gesture and its owed click, the close - is knob_model's `knob_edit_t`; the
+ * modal surface itself is knob_editor's. The six carcases are the same 96x96 box as the mode
+ * bar's, two touching columns three rows deep.
  *
  * Each knob is a 44 px cap (30 % smaller than a button's) with a ring of short lines outside it
  * at r=32 - the two ends and 0 dB's twelve o'clock - and the 4 px line from the centre to the
@@ -31,17 +32,16 @@
  * being moved, and the two ends are printed as plaques at their own angles. The moving is the
  * Pad's - it takes this panel's cells while the dial is up, and its ratchet, tap-to-cycle and
  * left-swipe-to-close are the whole interaction (ADR 0028). A double tap on a small knob still
- * resets it to 0 dB in place, so the reset gesture survives the short delay. This file supplies
- * the bank - the four knobs, the cell at a point, the repaint, the audio call and the shown gate
- * - and nothing of the Pad.
+ * resets it to 0 dB in place, so the reset gesture survives the short delay. The bank is
+ * knob_panel's - the four knobs, the shown gate and the repaint - and this file supplies what a
+ * value publishes (the audio) and the plate (the meter); nothing of the Pad is here.
  *
  * The bar shows the panel with the mode bar, when the cassette is already at the 134/256
  * control pose that leaves the right column room. The bar tells the panel when it becomes
- * visible and when it is taken away: leaving ends edit mode and cancels a pending open, so
- * neither the Pad nor the 3x dial can outlive the hidden cells. A swap the *editor* makes keeps
- * the bank and leaves these cells absent for a while, which is why every hook checks s_shown. The
- * four knob values are
- * the panel's and survive both; the panel is also where the audio is set.
+ * visible and when it is taken away, and knob_panel owns that gate: leaving ends edit mode and
+ * cancels a pending open, and a swap the *editor* makes keeps the bank while these cells are
+ * absent. The four knob values are the panel's and survive both; the panel is also where the
+ * audio is set.
  *
  * The Menu's Pad is the right bar's other panel: open() installs it with
  * cassette_bars_set_panel() and close() restores this one through cassette_eq_panel(). The
