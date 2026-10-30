@@ -187,6 +187,16 @@ const lv_image_dsc_t *cassette_card_mask(void)
 
 cassette_rect_t cassette_card_window(void)
 {
+    /* No Card, no window. The headless board mounts no Card (create() returns before the mask's
+     * 116 KB is spent), and a window with nothing behind it is not a place the tape stops: the
+     * view clamps the packs' boxes to this rect while the white page is up, so returning the
+     * numbers anyway clipped the reels to a hole that did not exist. A live leak of the board
+     * seam, found by a review rather than by a person looking at that build. */
+    if (!s_card) {
+        cassette_rect_t none = { 0, 0, 0, 0 };
+        return none;
+    }
+
     cassette_rect_t r = { CASSETTE_CARD_X + CASSETTE_CARD_WINDOW_DX,
                           CASSETTE_CARD_Y + CASSETTE_CARD_WINDOW_DY,
                           CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H };

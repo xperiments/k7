@@ -294,6 +294,27 @@ view hides a glyph the font does not carry. The tree and rules are in
 [0022](../../../docs/adr/0022-the-menu-is-a-controls-mode.md) and
 [0023](../../../docs/adr/0023-shuffle-is-a-broadcast-mode.md).
 
+### The rules the modules share
+
+Four things this screen does were written out once per part, and each is now a value or a
+table that the parts call (ADR 0043):
+
+- **The timeline's arithmetic** - `components/portable/cassette/timeline.c`: the `m:ss` /
+  `--:--` clock, the permille from elapsed and duration, the fill width from a permille. The
+  model, the footer band and the Peek all read it; `t27_timeline` pins the edges. The two
+  hosts still own their objects, their idle presentation and their caches - ADR 0032's
+  rejection of shared objects stands.
+- **The chrome's entrance** - `components/portable/cassette/entrance.c` for the rule (a
+  repeat is not a restart, a reversal starts at the pixel reached, a piece is hideable only
+  when it has left) and `chrome_entrance.c` for the animation. Every moving piece is one
+  `chrome_entrance_t`, two small callbacks and an init line; `t28_entrance` pins the rule.
+- **A knob Group is a table** - `knob_panel.c` owns the 2x3 shell: cell map, plate rect, five
+  handlers, the tap guard, the editor's bank, the shown gate and the panel value. The EQ and
+  RGB files are tables of names, ranges, marks and a publish hook. A third Group is a table.
+- **The Menu's open state is the Controls model's** - closing is an intent
+  (`CONTROLS_INTENT_MENU_CLOSE`), so no fact is adopted, no latch is patched, and the 40 ms
+  poll that noticed a self-close is gone.
+
 The panel and the headless path are two adapters behind the same interface, selected by
 `CONFIG_APP_BOARD_SUNTON_8048S050C` in this component's CMake. The touch adapter and the
 artwork loader are a second, input-side pair under the same selection: a board without a
