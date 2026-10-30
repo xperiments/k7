@@ -12,44 +12,28 @@
 #include "lvgl.h"
 
 #include "cassette_bars.h"   /* the chrome's slide time */
+#include "chrome_entrance.h"
 #include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 
 static lv_obj_t *s_window;
-static bool s_shown;
 
-static void window_fade_cb(void *var, int32_t opa)
+/* The window has no edge to come in from, so its arrival is an opacity rather than a slide.
+ * The rule is the same one the bands use: 0 is away, 255 is here. */
+static chrome_entrance_t s_fade;
+
+static void fade_write(int32_t opa, void *ctx)
 {
-    lv_obj_set_style_opa((lv_obj_t *)var, (lv_opa_t)opa, 0);
+    (void)ctx;
+    lv_obj_set_style_opa(s_window, (lv_opa_t)opa, 0);
+    lv_obj_set_hidden(s_window, false);
 }
 
-/* The fade out is over: hide the window so it is not in the draw tree. A fade in never
- * reaches here hidden; if a reverse deleted this animation, it does not run. */
-static void window_fade_done_cb(lv_anim_t *a)
+static void fade_hide(void *ctx)
 {
-    lv_obj_t *w = lv_anim_get_user_data(a);
-    if (w && !s_shown) lv_obj_set_hidden(w, true);
-}
-
-static void window_fade(bool shown)
-{
-    if (!s_window) return;
-    if (shown) lv_obj_set_hidden(s_window, false);
-
-    lv_anim_delete(s_window, window_fade_cb);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_window);
-    lv_anim_set_exec_cb(&a, window_fade_cb);
-    lv_anim_set_values(&a, lv_obj_get_style_opa(s_window, 0),
-                       shown ? LV_OPA_COVER : LV_OPA_TRANSP);
-    lv_anim_set_duration(&a, CASSETTE_BARS_SLIDE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-    lv_anim_set_user_data(&a, s_window);
-    if (!shown) lv_anim_set_completed_cb(&a, window_fade_done_cb);
-    lv_anim_start(&a);
+    (void)ctx;
+    if (s_window) lv_obj_set_hidden(s_window, true);
 }
 
 void cassette_window_create(lv_obj_t *screen)
@@ -64,13 +48,14 @@ void cassette_window_create(lv_obj_t *screen)
                                    CASSETTE_BORDER_W);
     lv_obj_set_style_opa(s_window, LV_OPA_TRANSP, 0);
     lv_obj_set_hidden(s_window, true);
+
+    chrome_entrance_init(&s_fade, LV_OPA_TRANSP, LV_OPA_COVER, fade_write, fade_hide, NULL);
 }
 
 void cassette_window_set_shown(bool shown)
 {
-    if (!s_window || shown == s_shown) return;
-    s_shown = shown;
-    window_fade(shown);
+    if (!s_window) return;
+    chrome_entrance_set(&s_fade, shown);
 }
 
 void cassette_window_set_menu_page(bool on, bool white)

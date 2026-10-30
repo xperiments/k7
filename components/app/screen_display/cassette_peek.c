@@ -36,6 +36,7 @@
 
 #include "cassette.h"
 #include "cassette_layout.h"
+#include "chrome_entrance.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 #include "timeline.h"        /* the Timeline bar's arithmetic: shared with the footer band */
@@ -246,35 +247,23 @@ static void update_lines(void)
 
 /* ------------------------------------------------------------------ the slide */
 
-static void bar_slide_cb(void *var, int32_t value)
+/* The bar's arrival, on the chrome's clock: it comes up from below the panel and hides when it
+ * has gone. The tags are not part of it - they appear with the first frame, above and below
+ * the hub - so only the bar is in this entrance. */
+static chrome_entrance_t s_bar_entrance;
+
+static void bar_write(int32_t y, void *ctx)
 {
-    lv_obj_set_y((lv_obj_t *)var, value);
+    (void)ctx;
+    if (!s_bar) return;
+    lv_obj_set_y(s_bar, y);
+    lv_obj_set_hidden(s_bar, false);
 }
 
-static void bar_hidden_cb(lv_anim_t *a)
+static void bar_hide(void *ctx)
 {
-    (void)a;
-    if (!s_shown) lv_obj_set_hidden(s_bar, true);
-}
-
-static void bar_slide_to(int to)
-{
-    int from = lv_obj_get_y(s_bar);
-    lv_anim_delete(s_bar, bar_slide_cb);
-    if (from == to) {
-        lv_obj_set_y(s_bar, to);
-        if (!s_shown) lv_obj_set_hidden(s_bar, true);
-        return;
-    }
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_bar);
-    lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)bar_slide_cb);
-    lv_anim_set_values(&a, from, to);
-    lv_anim_set_duration(&a, PEEK_SLIDE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-    if (!s_shown) lv_anim_set_completed_cb(&a, bar_hidden_cb);
-    lv_anim_start(&a);
+    (void)ctx;
+    if (s_bar) lv_obj_set_hidden(s_bar, true);
 }
 
 /* ------------------------------------------------------------------ the bob */
@@ -388,13 +377,12 @@ void cassette_peek_show(void)
     update_times();
     update_fill();
 
-    lv_obj_set_hidden(s_bar, false);
     lv_obj_move_foreground(s_line[0]);
     lv_obj_move_foreground(s_line[1]);
     lv_obj_move_foreground(s_tag[0]);
     lv_obj_move_foreground(s_tag[1]);
     lv_obj_move_foreground(s_bar);
-    bar_slide_to(PEEK_BAR_Y);
+    chrome_entrance_set(&s_bar_entrance, true);
     bob_start();
     ESP_LOGI(TAG, "peek shown");
 }
@@ -409,7 +397,7 @@ void cassette_peek_hide(void)
         lv_obj_set_hidden(s_tag[i], true);
         lv_obj_set_hidden(s_line[i], true);
     }
-    bar_slide_to(PEEK_BAR_HIDDEN_Y);
+    chrome_entrance_set(&s_bar_entrance, false);
     ESP_LOGI(TAG, "peek hidden");
 }
 
@@ -491,4 +479,6 @@ void cassette_peek_create(lv_obj_t *screen)
     update_times();
     update_fill();
     update_lines();
+
+    chrome_entrance_init(&s_bar_entrance, PEEK_BAR_HIDDEN_Y, PEEK_BAR_Y, bar_write, bar_hide, NULL);
 }

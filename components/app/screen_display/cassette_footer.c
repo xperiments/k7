@@ -22,6 +22,7 @@
 
 #include "cassette.h"        /* cassette_path_group: the artist is the Track's first directory */
 #include "cassette_bars.h"   /* the chrome's slide time */
+#include "chrome_entrance.h"
 #include "menu.h"            /* menu_clean_name: the song is the title, cleaned */
 #include "cassette_layout.h"
 #include "cassette_style.h"
@@ -37,10 +38,6 @@ LV_FONT_DECLARE(jura_28);
 /* Where the band's slide starts and ends: out of sight below the panel, its top edge on the
  * screen's bottom edge. */
 #define FOOTER_HIDDEN_Y 480
-
-/* The timeline's slide, which is the Peek's duration: the two bars are one instrument and they
- * move alike. */
-#define TIMELINE_SLIDE_MS 260
 
 /* How long each face is up before the next: the times, the artist, the song. */
 #define CYCLE_MS 4000
@@ -65,81 +62,42 @@ static lv_obj_t *s_text;       /* the artist or the song, centred on the bar */
 static lv_timer_t *s_cycle_timer;
 static uint32_t s_fill_w;
 static int s_cycle;            /* which face is up */
-static bool s_shown;
 static bool s_playing;
 static char s_artist[TEXT_MAX];
 static char s_song[TEXT_MAX];
 
-static void footer_slide_cb(void *var, int32_t y)
+/* Two pieces arrive here: the band and the timeline bar it carries. Both slide up from below
+ * the panel, both hide when they have left, and both start away. */
+static chrome_entrance_t s_band;
+static chrome_entrance_t s_timeline;
+
+static void band_write(int32_t y, void *ctx)
 {
-    lv_obj_set_y((lv_obj_t *)var, y);
+    (void)ctx;
+    lv_obj_set_y(s_footer, y);
+    lv_obj_set_hidden(s_footer, false);
 }
 
-/* The slide out is over: hide the band so it is not in the draw tree. A slide in never
- * reaches here hidden; if a reverse deleted this animation, it does not run. */
-static void footer_slide_done_cb(lv_anim_t *a)
+static void band_hide(void *ctx)
 {
-    lv_obj_t *band = lv_anim_get_user_data(a);
-    if (band && !s_shown) lv_obj_set_hidden(band, true);
-}
-
-static void footer_slide(bool shown)
-{
-    if (!s_footer) return;
-    if (shown) lv_obj_set_hidden(s_footer, false);
-
-    cassette_rect_t band = cassette_part_rect(CASSETTE_PART_FOOTER);
-    lv_anim_delete(s_footer, footer_slide_cb);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_footer);
-    lv_anim_set_exec_cb(&a, footer_slide_cb);
-    lv_anim_set_values(&a, lv_obj_get_y(s_footer), shown ? band.y : FOOTER_HIDDEN_Y);
-    lv_anim_set_duration(&a, CASSETTE_BARS_SLIDE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-    lv_anim_set_user_data(&a, s_footer);
-    if (!shown) lv_anim_set_completed_cb(&a, footer_slide_done_cb);
-    lv_anim_start(&a);
+    (void)ctx;
+    if (s_footer) lv_obj_set_hidden(s_footer, true);
 }
 
 /* ------------------------------------------------------------------ the timeline */
 
-static void bar_slide_cb(void *var, int32_t y)
+static void timeline_write(int32_t y, void *ctx)
 {
-    lv_obj_set_y((lv_obj_t *)var, y);
-}
-
-static void bar_hidden_cb(lv_anim_t *a)
-{
-    (void)a;
-    if (!s_shown) lv_obj_set_hidden(s_bar, true);
-}
-
-static void bar_slide_to(bool shown)
-{
+    (void)ctx;
     if (!s_bar) return;
+    lv_obj_set_y(s_bar, y);
+    lv_obj_set_hidden(s_bar, false);
+}
 
-    int to = shown ? CASSETTE_TIMELINE_Y : CASSETTE_TIMELINE_HIDDEN_Y;
-    int from = lv_obj_get_y(s_bar);
-    if (shown) lv_obj_set_hidden(s_bar, false);
-
-    lv_anim_delete(s_bar, bar_slide_cb);
-    if (from == to) {
-        lv_obj_set_y(s_bar, to);
-        if (!shown) lv_obj_set_hidden(s_bar, true);
-        return;
-    }
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_bar);
-    lv_anim_set_exec_cb(&a, bar_slide_cb);
-    lv_anim_set_values(&a, from, to);
-    lv_anim_set_duration(&a, TIMELINE_SLIDE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-    if (!shown) lv_anim_set_completed_cb(&a, bar_hidden_cb);
-    lv_anim_start(&a);
+static void timeline_hide(void *ctx)
+{
+    (void)ctx;
+    if (s_bar) lv_obj_set_hidden(s_bar, true);
 }
 
 /* A face with nothing to say is skipped: the rotation never sits on an empty word. */
@@ -227,15 +185,18 @@ void cassette_footer_create(lv_obj_t *screen)
     faces_apply();
     lv_obj_set_hidden(s_bar, true);
     lv_obj_set_hidden(s_footer, true);
+
+    chrome_entrance_init(&s_band, FOOTER_HIDDEN_Y, band.y, band_write, band_hide, NULL);
+    chrome_entrance_init(&s_timeline, CASSETTE_TIMELINE_HIDDEN_Y, CASSETTE_TIMELINE_Y,
+                         timeline_write, timeline_hide, NULL);
 }
 
 void cassette_footer_set_shown(bool shown)
 {
-    if (!s_footer || shown == s_shown) return;
-    s_shown = shown;
-    footer_slide(shown);
-    /* The timeline is the Menu's, so it comes and goes with the band. */
-    bar_slide_to(shown);
+    if (!s_footer) return;
+    chrome_entrance_set(&s_band, shown);
+    /* The timeline is the Menu's, so it comes and goes with the band - on the same clock. */
+    chrome_entrance_set(&s_timeline, shown);
 }
 
 void cassette_footer_set_page(bool white)

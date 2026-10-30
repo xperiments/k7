@@ -25,6 +25,7 @@
 #include "lvgl.h"
 
 #include "cassette_bars.h"   /* the chrome's slide time */
+#include "chrome_entrance.h"
 #include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
@@ -52,48 +53,28 @@ static lv_obj_t *s_logo_box;
 static lv_obj_t *s_logo;
 static lv_obj_t *s_title;
 static char s_title_text[TITLE_MAX];
-static bool s_shown;
 
-static void header_slide_cb(void *var, int32_t y)
+/* The band's arrival: its y, from out of sight above the panel to the layout's line. The badge
+ * rides it as a sibling - the band's border is tucked under it - and both are hidden once the
+ * motion out has finished. */
+static chrome_entrance_t s_band;
+
+static void band_write(int32_t y, void *ctx)
 {
-    lv_obj_set_y((lv_obj_t *)var, y);
-    /* The badge is a sibling, not a child: the band's border is tucked under it, and it
-     * rides the same slide at the band's y. */
+    (void)ctx;
+    lv_obj_set_y(s_header, y);
     if (s_logo_box) lv_obj_set_y(s_logo_box, y);
+    /* A piece that is coming back is still hidden from its last exit; writing brings it into
+     * the tree. Writing the value it already has is harmless. */
+    lv_obj_set_hidden(s_header, false);
+    if (s_logo_box) lv_obj_set_hidden(s_logo_box, false);
 }
 
-/* The slide out is over: hide the band so it is not in the draw tree. A slide in never
- * reaches here hidden; if a reverse deleted this animation, it does not run. */
-static void header_slide_done_cb(lv_anim_t *a)
+static void band_hide(void *ctx)
 {
-    lv_obj_t *band = lv_anim_get_user_data(a);
-    if (!s_shown) {
-        if (band) lv_obj_set_hidden(band, true);
-        if (s_logo_box) lv_obj_set_hidden(s_logo_box, true);
-    }
-}
-
-static void header_slide(bool shown)
-{
-    if (!s_header) return;
-    if (shown) {
-        lv_obj_set_hidden(s_header, false);
-        if (s_logo_box) lv_obj_set_hidden(s_logo_box, false);
-    }
-
-    cassette_rect_t band = cassette_part_rect(CASSETTE_PART_HEADER);
-    lv_anim_delete(s_header, header_slide_cb);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_header);
-    lv_anim_set_exec_cb(&a, header_slide_cb);
-    lv_anim_set_values(&a, lv_obj_get_y(s_header), shown ? band.y : -band.h);
-    lv_anim_set_duration(&a, CASSETTE_BARS_SLIDE_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-    lv_anim_set_user_data(&a, s_header);
-    if (!shown) lv_anim_set_completed_cb(&a, header_slide_done_cb);
-    lv_anim_start(&a);
+    (void)ctx;
+    if (s_header) lv_obj_set_hidden(s_header, true);
+    if (s_logo_box) lv_obj_set_hidden(s_logo_box, true);
 }
 
 /* The badge and the mark's ink. On the line-art page the plate is the palette's primary,
@@ -154,13 +135,14 @@ void cassette_header_create(lv_obj_t *screen)
 
     lv_obj_set_hidden(s_header, true);
     lv_obj_set_hidden(s_logo_box, true);
+
+    chrome_entrance_init(&s_band, hidden_y, band.y, band_write, band_hide, NULL);
 }
 
 void cassette_header_set_shown(bool shown)
 {
-    if (!s_header || shown == s_shown) return;
-    s_shown = shown;
-    header_slide(shown);
+    if (!s_header) return;
+    chrome_entrance_set(&s_band, shown);
 }
 
 void cassette_header_raise_badge(void)

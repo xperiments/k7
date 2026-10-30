@@ -78,6 +78,7 @@ PROD_SRC := \
   $(ROOT)/components/portable/cassette/cassette_layout.c \
   $(ROOT)/components/portable/cassette/cassette_button_rule.c \
   $(ROOT)/components/portable/cassette/timeline.c \
+  $(ROOT)/components/portable/cassette/entrance.c \
   $(ROOT)/components/portable/artwork/artwork.c \
   $(ROOT)/components/portable/artwork/id3.c \
   $(ROOT)/components/portable/artwork/flac.c \
@@ -134,7 +135,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t16_layout $(BIN)/t17_tone_eq \
          $(BIN)/t18_menu $(BIN)/t19_shuffle \
          $(BIN)/t21_button $(BIN)/t22_knob $(BIN)/t23_pad $(BIN)/t24_controls \
-         $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline
+         $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline $(BIN)/t28_entrance
 
 .PHONY: all test integration layering check tools fixtures bench control control-check clean help
 
@@ -267,6 +268,10 @@ $(BIN)/t26_groups: $(OBJ)/groups.o $(OBJ)/t26_groups.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t27_timeline: $(OBJ)/timeline.o $(OBJ)/t27_timeline.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t28_entrance: $(OBJ)/entrance.o $(OBJ)/t28_entrance.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
