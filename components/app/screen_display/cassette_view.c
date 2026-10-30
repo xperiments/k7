@@ -119,16 +119,13 @@ static void room_apply(controls_room_t room)
     cassette_view_set_scale(pose.scale, pose.dx, pose.dy, CASSETTE_ROOM_MS);
 }
 
-/* The three facts the Controls cannot own: the two modalities and the settled pose. The
- * pose is the one on screen, so a swipe during a slide finds neither settled fact true. */
+/* The three facts the Controls cannot own: the edit session and the two settled poses. The
+ * pose is the one on screen, so a swipe during a slide finds neither settled fact true. The
+ * Menu is not one of them: the model owns it, and a close is an intent (menu_close_intent). */
 static controls_facts_t facts_now(void)
 {
     controls_facts_t facts;
     facts.editing = knob_editor_is_editing();
-    facts.menu_open = false;
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    facts.menu_open = cassette_menu_is_open();
-#endif
     facts.at_entry_pose = pose_is(s_pose, cassette_pose_entry());
     facts.at_controls_pose = pose_is(s_pose, cassette_pose_controls());
     return facts;
@@ -220,8 +217,14 @@ static void controls_apply(controls_changed_t changed)
 
     if (changed & CONTROLS_CHANGED_MENU) {
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-        if (s_ctl.menu) cassette_menu_open(s_ctl.level == CONTROLS_LEVEL_REAL);
-        else cassette_menu_close();
+        if (s_ctl.menu) {
+            cassette_menu_open(s_ctl.level == CONTROLS_LEVEL_REAL);
+        } else {
+            cassette_menu_close();
+            /* The Menu had taken the right bar for the Pad; the group that was up comes back on
+             * the same bit that closed the page, values and edit layer intact. */
+            groups_install();
+        }
         groups_latch();
 #endif
     }
@@ -338,13 +341,11 @@ static bool chrome_shown_now(void)
     return s_ctl.level == CONTROLS_LEVEL_ART || s_ctl.level == CONTROLS_LEVEL_REAL;
 }
 
-/* Put the active group's panel on the right bar. The Menu owns the bar while it is up, so the
- * Pad stays until the Menu closes and the restore hook brings the group back. */
+/* Put the active group's panel on the right bar. The Menu owns the bar while it is up - the
+ * model says so - and the MENU bit that closes it brings the group back. */
 static void groups_install(void)
 {
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    if (cassette_menu_is_open()) return;
-#endif
+    if (s_ctl.menu) return;
     const cassette_panel_t *panel = cassette_empty_panel();
     if (groups_active(&s_groups) == GROUPS_ID_EQ) panel = cassette_eq_panel();
     else if (groups_active(&s_groups) == GROUPS_ID_RGB) panel = cassette_rgb_panel();
@@ -353,14 +354,11 @@ static void groups_install(void)
 }
 
 /* The latch on the left bar: the cassette lit while the Menu is open, the sliders or the led
- * lit while its group is the active one. A plain footlight on the mode that is on. */
+ * lit while its group is the active one. A plain footlight on the mode that is on. Both
+ * readings are the models': the Controls' menu and the groups' active group. */
 static void groups_latch(void)
 {
-    bool menu = false;
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    menu = cassette_menu_is_open();
-#endif
-    cassette_buttons_set_on(CASSETTE_MODE_TAPE, menu);
+    cassette_buttons_set_on(CASSETTE_MODE_TAPE, s_ctl.menu);
     cassette_buttons_set_on(CASSETTE_MODE_EQ, groups_active(&s_groups) == GROUPS_ID_EQ);
     cassette_buttons_set_on(CASSETTE_MODE_RGB, groups_active(&s_groups) == GROUPS_ID_RGB);
 }
@@ -409,17 +407,18 @@ static void rgb_group_cb(void *ctx)
     groups_apply(groups_handle(&s_groups, GROUPS_INTENT_TAP_RGB, chrome_shown_now()));
 }
 
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-/* The Menu's own close (the Pad's Back swipe at the root) runs the same restore the view's
- * close does: the group's panel back and the latches re-read. The latch is the one thing the
- * Menu's self-close would otherwise leave stale. */
-static void menu_restored(void *ctx)
+/* The Menu's close, through the model. Its own input asks for it - a row's Close, the Pad's
+ * Back at the root, and the diagnostic scene driver walking home - and the request is an
+ * intent like any other: one step, the MENU bit, and apply() closes the page and brings the
+ * right bar's group and the latch back. Nothing here needs to know whether the Menu was open;
+ * a close with no Menu is a step that changes nothing. */
+static void menu_close_intent(void *ctx)
 {
     (void)ctx;
-    groups_install();
-    groups_latch();
+    if (!s_controls) return;
+    controls_facts_t facts = facts_now();
+    controls_apply(controls_handle(s_controls, CONTROLS_INTENT_MENU_CLOSE, &facts));
 }
-#endif
 
 /* A knob's editor borrows the right bar while the dial is up: the Pad takes the active
  * group's place, and the group comes back when the editor closes (ADR 0028). The editor never
@@ -480,8 +479,8 @@ void cassette_view_scene_set(int scene)
     ESP_LOGI(TAG, "scene -> %d", scene);
 }
 
-/* One intent a tick, and the mode decides which one: the Menu closes on an up swipe, a knob's
- * dial on its own close, and the level is a reading, so it says which rung to take next. */
+/* One intent a tick, and the mode decides which one: the Menu closes on its close intent, a
+ * knob's dial on its own close, and the level is a reading, so it says which rung to take next. */
 static bool scene_return_to_initial(void)
 {
     controls_facts_t facts = facts_now();
@@ -489,8 +488,8 @@ static bool scene_return_to_initial(void)
         knob_editor_close();
         return false;
     }
-    if (facts.menu_open) {
-        screen_intent_cb(SCREEN_INTENT_UP, NULL);       /* closes the Menu and nothing else */
+    if (s_ctl.menu) {
+        menu_close_intent(NULL);                       /* closes the Menu and nothing else */
         return false;
     }
     if (s_ctl.level == CONTROLS_LEVEL_PEEK) {
@@ -669,7 +668,7 @@ void cassette_view_create(void)
      * gated on the controls' settled pose by the model. */
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     cassette_menu_create(scr, s_cassette);
-    cassette_menu_set_restore_cb(menu_restored, NULL);
+    cassette_menu_set_close_cb(menu_close_intent, NULL);
 #endif
 
     /* The bands across the top and the bottom of the controls screen: the frame that closes
@@ -716,16 +715,14 @@ void cassette_view_update(const mini_icecast_status_t *st)
                                 st ? st->elapsed_ms : 0u, st ? st->duration_ms : 0u,
                                 st ? st->title : NULL, st ? st->path : NULL);
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The Menu's rows and its playing marker follow the same status. */
+    /* The Menu's rows and its playing marker follow the same status. The Menu's own state is
+     * the model's, but this is a drawing call: the overlay draws only while it is up. */
     if (cassette_menu_is_open()) cassette_menu_update(st);
 #endif
 
-    /* Adopt the facts a part can change on its own - the Menu closes itself from P, < or
-     * Close - and apply whatever the model says changed. Identical facts report nothing. */
-    if (s_controls) {
-        controls_facts_t facts = facts_now();
-        controls_apply(controls_handle(s_controls, CONTROLS_INTENT_NONE, &facts));
-    }
+    /* No polling step here: the model changes only when an intent arrives, and every intent is
+     * applied by the callback that sent it. The 40 ms CONTROLS_INTENT_NONE that used to run here
+     * existed to adopt the Menu's self-close, and there is no self-close now. */
 
 #if CONFIG_APP_UI_SERIAL_DUMP
     /* A still image cannot show that the hubs turn, so a diagnostic build says it. */

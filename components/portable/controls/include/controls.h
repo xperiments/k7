@@ -11,7 +11,10 @@
  *
  * The state it owns:
  *   level       one of the four screens, never two: Initial, Peek, Art or Real
- *   menu        the Menu's open state; adopted from the facts on every step
+ *   menu        the Menu's open state. Opened by the cassette's door over the settled
+ *               Controls pose, and closed by an intent: the Menu's own Close, the Pad's Back
+ *               at the root, an up swipe, or the same door again. It is state, not a fact:
+ *               nothing outside the model reports it.
  *
  * Everything else is derived, because it is one thing on screen:
  *   the Page    white exactly at Real, dark at the other three
@@ -22,9 +25,6 @@
  *
  * The facts it cannot own, handed in on every step:
  *   editing            a knob's 3x overlay owns the touch (knob_editor_is_editing())
- *   menu_open          the Menu is up (cassette_menu_is_open()); it also closes itself
- *                      from three places inside cassette_menu.c, so the model pulls and
- *                      adopts it rather than being pushed to
  *   at_entry_pose      the pose on screen is cassette_pose_entry()
  *   at_controls_pose   and cassette_pose_controls()
  *
@@ -35,11 +35,14 @@
  * a slide finds the fact false.
  *
  * The input is the screen's intents: screen_input.h reports the vertical direction and
- * cassette_view.c maps its enum to this one. A tap on the mode bar's cassette is the third
- * intent, and it toggles: it opens the Menu, and a second tap closes it.
+ * cassette_view.c maps its enum to this one. A tap on the mode bar's cassette toggles the
+ * Menu: it opens it, and a second tap closes it. The Menu's own input - its Close row, the
+ * Pad's Back at the root - is the MENU_CLOSE intent, which the view sends on the Menu's behalf
+ * rather than closing it: that is what makes the flag the model's and the MENU bit the view's
+ * only instruction.
  * Two modalities swallow intents before any rule runs. While a knob is being edited, every
- * intent is ignored (ADR 0018): the edit overlay owns the touch. While the Menu is up, UP
- * closes it and every other intent is ignored (ADR 0022).
+ * intent is ignored (ADR 0018): the edit overlay owns the touch. While the Menu is up, UP,
+ * MENU_TAP and MENU_CLOSE close it and every other intent is ignored (ADR 0022).
  *
  * The stack, from the top of the screen to the bottom:
  *
@@ -69,19 +72,16 @@
  *
  * The state satisfies, after every step:
  *   - the level is exactly one of the four values;
- *   - the menu is out only at Art or Real;
+ *   - the menu is out only at Art or Real, and always closes with the chrome;
  *   - the room is a function of the level alone: the Peek's 200/0/-60, Initial's 256/0/0,
  *     and the Controls' 134/-51/-20 for Art and Real (they share it, so moving between them
  *     moves no pose);
- *   - a step that changes nothing reports CONTROLS_CHANGED_NONE and leaves the state as it
- *     was, with the one exception below;
+ *   - a step that changes nothing reports CONTROLS_CHANGED_NONE and leaves the state as it was;
  *   - the same (state, intent, facts) always produces the same mask and the same state.
  *
- * The exception is the Menu. A Menu that closed itself (P, `<` at the root, a row's Close)
- * is a fact, not an effect of the intent that follows it, so the model adopts menu_open at
- * the top of every step and reports no bit for it: the Menu has already done what the bit
- * would ask the view to do. A self-close noticed on a later step therefore moves the
- * model's `menu` with CONTROLS_CHANGED_NONE.
+ * A Menu is only ever over the chrome. The modality above already makes that true through the
+ * intents - nothing moves the level while the Menu is up - and the step repairs it anyway, so
+ * the invariant lives with the state it constrains instead of with the caller's discipline.
  *
  * The adapter applies the changed groups in this order, which keeps today's before/after
  * relationships: PAGE, PEEK, SHOWN, MENU, ROOM. PAGE before the rest because the Page flip
@@ -104,14 +104,16 @@
 extern "C" {
 #endif
 
-/* The touch's meaning, as screen_input.h reports it, plus the M tap. A direction, not a
- * screen: the model knows which rung the direction takes. The two horizontal swipes that
- * used to be here are gone with the drawer's sideways toggle (ADR 0025). */
+/* The touch's meaning, as screen_input.h reports it, plus the two the screen's chrome adds: the
+ * cassette's door and the Menu's own close. A direction, not a screen: the model knows which
+ * rung the direction takes. The two horizontal swipes that used to be here are gone with the
+ * drawer's sideways toggle (ADR 0025). */
 typedef enum {
-    CONTROLS_INTENT_NONE = 0,     /* the zero value: adopts the facts and runs no rule */
+    CONTROLS_INTENT_NONE = 0,     /* the zero value: runs no rule */
     CONTROLS_INTENT_DOWN,         /* one rung towards Real */
-    CONTROLS_INTENT_UP,           /* and one towards the Peek */
-    CONTROLS_INTENT_MENU_TAP,     /* the DJ block's M: the Menu's way in (ADR 0022) */
+    CONTROLS_INTENT_UP,           /* and one towards the Peek; closes the Menu if it is up */
+    CONTROLS_INTENT_MENU_TAP,     /* the mode bar's cassette: the Menu's door, a toggle */
+    CONTROLS_INTENT_MENU_CLOSE,   /* the Menu's own close: its Close row, the Pad's Back */
 } controls_intent_t;
 
 /* The four screens, in the stack's order from the bottom: each value's successor is the
@@ -134,12 +136,11 @@ typedef enum {
     CONTROLS_ROOM_CONTROLS,    /* cassette_pose_controls(): 134/-51/-20 */
 } controls_room_t;
 
-/* What the view knows and the model cannot: a knob's edit session, the Menu's own mode and
- * the poses that have landed. A zero struct is "nothing modal, neither named pose on
- * screen", which is what every guarded rung refuses. */
+/* What the view knows and the model cannot: a knob's edit session and the poses that have
+ * landed. A zero struct is "nothing modal, neither named pose on screen", which is what every
+ * guarded rung refuses. The Menu is not here: it is the model's. */
 typedef struct {
     bool editing;          /* a knob's 3x overlay owns the touch */
-    bool menu_open;        /* the Menu is up */
     bool at_entry_pose;    /* the pose on screen equals cassette_pose_entry() */
     bool at_controls_pose; /* and cassette_pose_controls() */
 } controls_facts_t;
@@ -161,7 +162,9 @@ typedef struct {
  *   PEEK    the Peek raised or put away: the level entered or left the Peek
  *   SHOWN   the chrome shown or hidden: the strips, the drawer, the block, the bands, the
  *           window and the white Page's edge mark
- *   MENU    the Menu opened or closed
+ *   MENU    the Menu opened or closed. Every close is this bit now - the door, an up swipe,
+ *           the Menu's own Close - so the view applies one thing: open() or close(), then the
+ *           latch
  *   ROOM    the room changed: animate the cassette to the pose `room` names. Art and Real
  *           share the Controls' room, so moving between them is not a ROOM change
  */

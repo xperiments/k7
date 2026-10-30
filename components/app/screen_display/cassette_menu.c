@@ -13,6 +13,11 @@
  * the cassette container (tape, meter, glow, cover), aim and install the right bar's Pad,
  * and put all of it back on close. No per-Track
  * object is created: five slots are rebound whenever the model's version changes.
+ *
+ * The open state is not this file's. A Close - the row's action, or the Pad's Back at the root -
+ * is a **request** to the owner through the close hook; the owner sends the Controls model's
+ * MENU_CLOSE and the MENU bit it gets back calls close() here. So the latch on the mode bar and
+ * the group on the right bar come back on the same bit that closed the page.
  */
 #include "cassette_menu.h"
 
@@ -72,8 +77,8 @@ static lv_obj_t *s_cassette;         /* hidden for the mode's lifetime */
 static menu_t *s_model;
 static const library_t *s_lib;       /* the lease while open */
 static bool s_open;
-static cassette_menu_cb_t s_restore_cb;   /* the view's: put the active group's panel back */
-static void *s_restore_ctx;
+static cassette_menu_close_t s_close_cb;   /* the owner's: send the close intent */
+static void *s_close_ctx;
 static bool s_white;                 /* the page the Menu was opened on */
 static uint32_t s_drawn;             /* the model version on screen */
 static mini_icecast_status_t s_status;
@@ -258,6 +263,18 @@ static void refresh(void)
 
 /* ------------------------------------------------------------------ actions */
 
+/* Ask the owner to close: the Controls model owns the open state, so a Close is an intent,
+ * not a local decision. Without an owner the row would do nothing and the Menu would be a
+ * trap, so a missing hook is logged rather than passed over. */
+static void request_close(void)
+{
+    if (s_close_cb) {
+        s_close_cb(s_close_ctx);
+        return;
+    }
+    ESP_LOGE(TAG, "no close hook installed: the Menu cannot close");
+}
+
 static void activate(void)
 {
     if (!s_open) return;
@@ -282,7 +299,7 @@ static void activate(void)
             mini_icecast_shuffle_set(!mini_icecast_shuffle_enabled());
             break;
         case MENU_ACTION_CLOSE:
-            cassette_menu_close();
+            request_close();
             return;
         default:
             break;
@@ -294,7 +311,7 @@ static void menu_back_cb(void *ctx)
 {
     (void)ctx;
     if (!s_open) return;
-    if (menu_back(s_model)) cassette_menu_close();
+    if (menu_back(s_model)) request_close();
     else refresh();
 }
 
@@ -408,10 +425,10 @@ void cassette_menu_create(lv_obj_t *screen, lv_obj_t *cassette)
     memset(&s_status, 0, sizeof s_status);
 }
 
-void cassette_menu_set_restore_cb(cassette_menu_cb_t cb, void *ctx)
+void cassette_menu_set_close_cb(cassette_menu_close_t cb, void *ctx)
 {
-    s_restore_cb = cb;
-    s_restore_ctx = ctx;
+    s_close_cb = cb;
+    s_close_ctx = ctx;
 }
 
 void cassette_menu_open(bool white)
@@ -451,11 +468,6 @@ void cassette_menu_close(void)
 
     cassette_window_set_menu_page(false, s_white);
     cassette_header_set_title(NULL);
-    /* Back to the group that was up: this module has no opinion about which one that is, so the
-     * view's restore hook puts the right bar's panel back (the Empty grille, or a group with its
-     * values and edit layer intact). It runs before the cassette returns, so the picture is
-     * whole in the same frame. */
-    if (s_restore_cb) s_restore_cb(s_restore_ctx);
     if (s_cassette) lv_obj_set_hidden(s_cassette, false);
 
     menu_close(s_model);

@@ -1,7 +1,6 @@
 /*
  * controls - the Cassette screen's Controls model, portable: the level ladder, the Page, the
- * Cover, the one-overlay rule and the Menu's adoption. No LVGL, no clock, no collaborators
- * (controls.h).
+ * Cover, the one-overlay rule and the Menu. No LVGL, no clock, no collaborators (controls.h).
  *
  * One step is (state, intent, facts) -> the groups that changed. The rules are ADR 0025's
  * four-rung stack, rung for rung as cassette_view.c applies them; the comments below name
@@ -58,8 +57,9 @@ static controls_level_t raise_level(controls_level_t level, const controls_facts
 }
 
 /* One rung of the ladder, or nothing. Runs only when neither modality swallowed the intent.
- * There is no invariant to repair afterwards: the Page, the Cover, the Peek and the chrome
- * are all readings of the level, so moving the level moves them together. */
+ * The Page, the Cover, the Peek and the chrome are all readings of the level, so moving the
+ * level moves them together and no rung has anything of its own to repair. The one repair the
+ * step does make - a Menu cannot outlive the chrome - is in controls_handle, after the rungs. */
 static void apply(controls_t *c, controls_intent_t intent, const controls_facts_t *facts)
 {
     switch (intent) {
@@ -72,9 +72,14 @@ static void apply(controls_t *c, controls_intent_t intent, const controls_facts_
             break;
 
         case CONTROLS_INTENT_MENU_TAP:
-            /* The M tap: the Menu opens from the settled controls pose, which is both Art
+            /* The door: the Menu opens from the settled controls pose, which is both Art
              * and Real. The edit session and an open Menu were refused before this ran. */
             if (chrome_out(c->level) && facts->at_controls_pose) c->menu = true;
+            break;
+
+        case CONTROLS_INTENT_MENU_CLOSE:
+            /* Nothing to close: a close is only meaningful while the Menu is up, and the
+             * modality above is the one place it can land. */
             break;
 
         case CONTROLS_INTENT_NONE:
@@ -100,29 +105,32 @@ controls_changed_t controls_handle(controls_t *c, controls_intent_t intent,
 {
     if (!c) return CONTROLS_CHANGED_NONE;
 
-    const controls_facts_t zero = { false, false, false, false };
+    const controls_facts_t zero = { false, false, false };
     const controls_facts_t f = facts ? *facts : zero;
-
-    /* Pull-and-adopt (ADR 0022): the Menu opens through this model and closes itself from
-     * three places inside cassette_menu.c, so its bit is a fact read before the step, not
-     * a rule's output. Adopting it before the diff is what keeps a self-close silent: the
-     * Menu has already done what a MENU bit would ask the view to do. A Menu can only exist
-     * over the chrome, so a fact that says otherwise is not adopted. */
-    c->menu = f.menu_open && chrome_out(c->level);
 
     const controls_level_t was_level = c->level;
     const bool was_menu = c->menu;
 
     if (f.editing) {
         /* The edit overlay is absolute: every intent is dropped. */
-    } else if (f.menu_open) {
-        /* The Menu is modal, one rung above the ladder: up closes it, and so does another tap
-         * on the cassette's door, which is the same button that opened it. Everything else
-         * waits. */
-        if (intent == CONTROLS_INTENT_UP || intent == CONTROLS_INTENT_MENU_TAP) c->menu = false;
+    } else if (c->menu) {
+        /* The Menu is modal, one rung above the ladder. It closes on an up swipe, on another
+         * tap on the cassette's door - the same button that opened it - and on the close its
+         * own input asks for: its Close row, the Pad's Back at the root. Everything else waits
+         * (ADR 0022). */
+        if (intent == CONTROLS_INTENT_UP || intent == CONTROLS_INTENT_MENU_TAP ||
+            intent == CONTROLS_INTENT_MENU_CLOSE) {
+            c->menu = false;
+        }
     } else {
         apply(c, intent, &f);
     }
+
+    /* A Menu is only ever over the chrome. Through the intents that is already true - the
+     * modality above swallows every rung while the Menu is up - so this repairs an invariant
+     * rather than expressing a rule a caller can reach. It is here so the invariant holds
+     * wherever the level is written, instead of in the caller's discipline. */
+    if (!chrome_out(c->level)) c->menu = false;
 
     uint32_t mask = 0;
     if ((c->level == CONTROLS_LEVEL_REAL) != (was_level == CONTROLS_LEVEL_REAL)) {

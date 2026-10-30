@@ -1,7 +1,7 @@
 /*
  * T24: the Controls model, host tier.
  *
- * The model is driven through controls.h only: one instance, four intents, a facts struct
+ * The model is driven through controls.h only: one instance, five intents, a facts struct
  * the test owns. No LVGL, no fixtures, no mocks - the model has no collaborators, which is
  * the point of extracting it.
  *
@@ -9,13 +9,15 @@
  *   - the whole ladder: every intent from every reachable state, with the exact mask;
  *   - the stack's order: down is one rung towards Real, up one towards the Peek, and the
  *     ends stop - the enum's own ordering, so the walk is a +1/-1 walk;
- *   - the two modalities: a knob's edit swallows everything and the Menu swallows
- *     everything but UP;
+ *   - the two modalities: a knob's edit swallows everything, and the Menu swallows every rung
+ *     while it is up - only UP, MENU_TAP and MENU_CLOSE close it;
  *   - the two settled gates, each rung reading the pose it is supposed to read;
  *   - the Page and the Cover as one rung: the bit that flips the paper prints the picture,
  *     and there is no state with one and not the other;
  *   - Art and Real share the Controls' room, so moving between them is never a ROOM change;
- *   - the Menu's pull-and-adopt close, and that a self-close is silent;
+ *   - the Menu as the model's own state: it opens on the door over the chrome, every close is
+ *     a step that reports MENU - the door again, an up swipe, and the close intent the Menu's
+ *     own input sends - a second close is free, and no state has a Menu off the chrome;
  *   - the repeat that changes nothing: the same intent twice, NONE the second time;
  *   - the invariants after every step, over a sweep of states x intents x facts.
  *
@@ -63,12 +65,10 @@ static const expect_t *const k_states[] = {
     &k_initial, &k_peek, &k_art, &k_real, &k_menu_art, &k_menu_real,
 };
 
-static controls_facts_t facts(bool editing, bool menu_open, bool at_entry_pose,
-                              bool at_controls_pose)
+static controls_facts_t facts(bool editing, bool at_entry_pose, bool at_controls_pose)
 {
     controls_facts_t f = {
         .editing = editing,
-        .menu_open = menu_open,
         .at_entry_pose = at_entry_pose,
         .at_controls_pose = at_controls_pose,
     };
@@ -79,7 +79,7 @@ static controls_facts_t facts(bool editing, bool menu_open, bool at_entry_pose,
  * the state's own room names, so the settled fact that matters is true. */
 static controls_facts_t facts_for(const expect_t *w)
 {
-    return facts(false, w->menu, w->level == CONTROLS_LEVEL_INITIAL,
+    return facts(false, w->level == CONTROLS_LEVEL_INITIAL,
                  w->level == CONTROLS_LEVEL_ART || w->level == CONTROLS_LEVEL_REAL);
 }
 
@@ -106,9 +106,9 @@ static controls_t *model_in(const expect_t *w)
         exit(1);
     }
 
-    const controls_facts_t rest = facts(false, false, true, false);   /* at the entry pose */
-    const controls_facts_t controls = facts(false, false, false, true);
-    const controls_facts_t anywhere = facts(false, false, false, false);
+    const controls_facts_t rest = facts(false, true, false);   /* at the entry pose */
+    const controls_facts_t controls = facts(false, false, true);
+    const controls_facts_t anywhere = facts(false, false, false);
 
     switch (w->level) {
         case CONTROLS_LEVEL_PEEK:
@@ -137,6 +137,7 @@ static const char *intent_name(controls_intent_t intent)
         case CONTROLS_INTENT_DOWN: return "DOWN";
         case CONTROLS_INTENT_UP: return "UP";
         case CONTROLS_INTENT_MENU_TAP: return "MENU_TAP";
+        case CONTROLS_INTENT_MENU_CLOSE: return "MENU_CLOSE";
         default: return "?";
     }
 }
@@ -211,7 +212,7 @@ static void test_zero(void)
     CHECK(s.level == CONTROLS_LEVEL_INITIAL && s.room == CONTROLS_ROOM_ENTRY && !s.menu,
           "a NULL model snapshots as Initial");
 
-    controls_facts_t anywhere = facts(false, false, false, false);
+    controls_facts_t anywhere = facts(false, false, false);
     CHECK(controls_handle(c, (controls_intent_t)42, &anywhere) == CONTROLS_CHANGED_NONE,
           "an intent the model does not know changes nothing");
     check_state(c, &k_initial, "an unknown intent");
@@ -244,54 +245,64 @@ typedef struct {
 
 /* Initial: the way in from nothing. UP raises the Peek from the settled entry pose; DOWN
  * shows the chrome on the dark Page with no gate, because the chrome cuts in while the
- * cassette is still shrinking. */
+ * cassette is still shrinking. A close off the chrome is nothing: there is no Menu, and the
+ * intent is the page's, not the ladder's. */
 static const case_t k_from_initial[] = {
-    {CONTROLS_INTENT_NONE,     &k_initial, M_NONE},
-    {CONTROLS_INTENT_DOWN,     &k_art,     M_SHOWN | M_ROOM},
-    {CONTROLS_INTENT_UP,       &k_peek,    M_PEEK | M_ROOM},
-    {CONTROLS_INTENT_MENU_TAP, &k_initial, M_NONE},
+    {CONTROLS_INTENT_NONE,       &k_initial, M_NONE},
+    {CONTROLS_INTENT_DOWN,       &k_art,     M_SHOWN | M_ROOM},
+    {CONTROLS_INTENT_UP,         &k_peek,    M_PEEK | M_ROOM},
+    {CONTROLS_INTENT_MENU_TAP,   &k_initial, M_NONE},
+    {CONTROLS_INTENT_MENU_CLOSE, &k_initial, M_NONE},
 };
 
-/* The Peek: down puts it away, up does nothing, and M has no chrome to open a Menu over. */
+/* The Peek: down puts it away, up does nothing, and the door has no chrome to open a Menu
+ * over. */
 static const case_t k_from_peek[] = {
-    {CONTROLS_INTENT_NONE,     &k_peek,    M_NONE},
-    {CONTROLS_INTENT_DOWN,     &k_initial, M_PEEK | M_ROOM},
-    {CONTROLS_INTENT_UP,       &k_peek,    M_NONE},
-    {CONTROLS_INTENT_MENU_TAP, &k_peek,    M_NONE},
+    {CONTROLS_INTENT_NONE,       &k_peek,    M_NONE},
+    {CONTROLS_INTENT_DOWN,       &k_initial, M_PEEK | M_ROOM},
+    {CONTROLS_INTENT_UP,         &k_peek,    M_NONE},
+    {CONTROLS_INTENT_MENU_TAP,   &k_peek,    M_NONE},
+    {CONTROLS_INTENT_MENU_CLOSE, &k_peek,    M_NONE},
 };
 
 /* Art: down flips the paper and prints the picture as one rung; up closes the chrome and
- * returns to Initial; M opens the Menu on the dark Page. */
+ * returns to Initial; the door opens the Menu on the dark Page. A close here has no Menu to
+ * close, so it is nothing - and it must not be mistaken for a rung. */
 static const case_t k_from_art[] = {
-    {CONTROLS_INTENT_NONE,     &k_art,      M_NONE},
-    {CONTROLS_INTENT_DOWN,     &k_real,     M_PAGE},
-    {CONTROLS_INTENT_UP,       &k_initial,  M_SHOWN | M_ROOM},
-    {CONTROLS_INTENT_MENU_TAP, &k_menu_art, M_MENU},
+    {CONTROLS_INTENT_NONE,       &k_art,      M_NONE},
+    {CONTROLS_INTENT_DOWN,       &k_real,     M_PAGE},
+    {CONTROLS_INTENT_UP,         &k_initial,  M_SHOWN | M_ROOM},
+    {CONTROLS_INTENT_MENU_TAP,   &k_menu_art, M_MENU},
+    {CONTROLS_INTENT_MENU_CLOSE, &k_art,      M_NONE},
 };
 
 /* Real: the top of the stack, so down is nothing; up takes the Page and the picture back
- * with it; M opens the Menu on the white Page. */
+ * with it; the door opens the Menu on the white Page, and a close with no Menu is nothing. */
 static const case_t k_from_real[] = {
-    {CONTROLS_INTENT_NONE,     &k_real,      M_NONE},
-    {CONTROLS_INTENT_DOWN,     &k_real,      M_NONE},
-    {CONTROLS_INTENT_UP,       &k_art,       M_PAGE},
-    {CONTROLS_INTENT_MENU_TAP, &k_menu_real, M_MENU},
+    {CONTROLS_INTENT_NONE,       &k_real,      M_NONE},
+    {CONTROLS_INTENT_DOWN,       &k_real,      M_NONE},
+    {CONTROLS_INTENT_UP,         &k_art,       M_PAGE},
+    {CONTROLS_INTENT_MENU_TAP,   &k_menu_real, M_MENU},
+    {CONTROLS_INTENT_MENU_CLOSE, &k_real,      M_NONE},
 };
 
-/* The Menu is modal: up closes it and leaves the level where it is, and so does the cassette's
- * door - the button that opened it toggles it shut. The swipes wait (ADR 0022). */
+/* The Menu is modal: up closes it and leaves the level where it is, the cassette's door - the
+ * button that opened it - toggles it shut, and the Menu's own Close is the third way out. All
+ * three report MENU and none of them moves the rung; the swipes wait (ADR 0022). */
 static const case_t k_from_menu_art[] = {
-    {CONTROLS_INTENT_NONE,     &k_menu_art, M_NONE},
-    {CONTROLS_INTENT_DOWN,     &k_menu_art, M_NONE},
-    {CONTROLS_INTENT_UP,       &k_art,      M_MENU},
-    {CONTROLS_INTENT_MENU_TAP, &k_art,      M_MENU},
+    {CONTROLS_INTENT_NONE,       &k_menu_art, M_NONE},
+    {CONTROLS_INTENT_DOWN,       &k_menu_art, M_NONE},
+    {CONTROLS_INTENT_UP,         &k_art,      M_MENU},
+    {CONTROLS_INTENT_MENU_TAP,   &k_art,      M_MENU},
+    {CONTROLS_INTENT_MENU_CLOSE, &k_art,      M_MENU},
 };
 
 static const case_t k_from_menu_real[] = {
-    {CONTROLS_INTENT_NONE,     &k_menu_real, M_NONE},
-    {CONTROLS_INTENT_DOWN,     &k_menu_real, M_NONE},
-    {CONTROLS_INTENT_UP,       &k_real,      M_MENU},
-    {CONTROLS_INTENT_MENU_TAP, &k_real,      M_MENU},
+    {CONTROLS_INTENT_NONE,       &k_menu_real, M_NONE},
+    {CONTROLS_INTENT_DOWN,       &k_menu_real, M_NONE},
+    {CONTROLS_INTENT_UP,         &k_real,      M_MENU},
+    {CONTROLS_INTENT_MENU_TAP,   &k_real,      M_MENU},
+    {CONTROLS_INTENT_MENU_CLOSE, &k_real,      M_MENU},
 };
 
 static void ladder_from(const expect_t *from, const case_t *cases, size_t n)
@@ -325,7 +336,7 @@ static void test_ladder(void)
  * view can never do at once but the walk needs to pass both gates. */
 static void test_stack_order(void)
 {
-    const controls_facts_t settled = facts(false, false, true, true);
+    const controls_facts_t settled = facts(false, true, true);
     controls_t *c = model_in(&k_peek);
 
     static const controls_level_t down[] = {
@@ -361,14 +372,15 @@ static void test_stack_order(void)
 
 /* ---------------------------------------------------------------- the gates */
 
-/* The edit overlay is absolute: every intent is dropped from every state. The Menu fact
- * stays as the state had it, so this also pins that editing is checked first: an up swipe
- * while editing does not close the Menu. */
+/* The edit overlay is absolute: every intent is dropped from every state, MENU_CLOSE
+ * included. The Menu stays as the state had it, so this also pins that editing is checked
+ * first: neither an up swipe nor a close while editing takes the Menu away. */
 static void test_editing(void)
 {
     static const controls_intent_t intents[] = {
-        CONTROLS_INTENT_NONE, CONTROLS_INTENT_DOWN,
-        CONTROLS_INTENT_UP,   CONTROLS_INTENT_MENU_TAP,
+        CONTROLS_INTENT_NONE,     CONTROLS_INTENT_DOWN,
+        CONTROLS_INTENT_UP,       CONTROLS_INTENT_MENU_TAP,
+        CONTROLS_INTENT_MENU_CLOSE,
     };
 
     for (size_t i = 0; i < COUNT(k_states); i++) {
@@ -396,7 +408,7 @@ static void test_settled_gates(void)
 
     /* UP's peek rung reads the entry pose, not the controls pose. */
     c = model_in(&k_initial);
-    controls_facts_t at_controls = facts(false, false, false, true);
+    controls_facts_t at_controls = facts(false, false, true);
     check_mask(controls_handle(c, CONTROLS_INTENT_UP, &at_controls), M_NONE,
                "UP from Initial, at the controls pose");
     check_state(c, &k_initial, "UP from Initial, at the controls pose");
@@ -404,13 +416,13 @@ static void test_settled_gates(void)
 
     /* DOWN's Real rung reads the controls pose, not the entry pose. */
     c = model_in(&k_art);
-    controls_facts_t at_entry = facts(false, false, true, false);
+    controls_facts_t at_entry = facts(false, true, false);
     check_mask(controls_handle(c, CONTROLS_INTENT_DOWN, &at_entry), M_NONE,
                "DOWN from Art, at the entry pose");
     check_state(c, &k_art, "DOWN from Art, at the entry pose");
     controls_free(c);
 
-    /* The M tap reads the controls pose. */
+    /* The door reads the controls pose. */
     c = model_in(&k_art);
     check_mask(controls_handle(c, CONTROLS_INTENT_MENU_TAP, &at_entry), M_NONE,
                "MENU_TAP at the entry pose");
@@ -419,7 +431,7 @@ static void test_settled_gates(void)
 
     /* The down into Art has no pose gate: the chrome and the shrink cut in together. */
     c = model_in(&k_initial);
-    controls_facts_t nowhere = facts(false, false, false, false);
+    controls_facts_t nowhere = facts(false, false, false);
     check_mask(controls_handle(c, CONTROLS_INTENT_DOWN, &nowhere), M_SHOWN | M_ROOM,
                "DOWN from Initial, no pose settled");
     check_state(c, &k_art, "DOWN from Initial, no pose settled");
@@ -438,53 +450,71 @@ static void test_settled_gates(void)
 
 /* --------------------------------------------------------------- the Menu */
 
-/* The Menu closes itself from three places inside cassette_menu.c. The model pulls the fact
- * and adopts it, and the adoption is silent: the Menu has already done the work. */
-static void test_menu_adoption(void)
+/* The Menu is the model's own state, not a fact. It opens on the cassette's door over the
+ * settled Controls pose, and every way it closes is a step that reports MENU: the door again,
+ * an up swipe, and the close intent the Menu's own input sends - its Close row, the Pad's Back
+ * at the root. Nothing outside the model reports it and there is nothing for the model to
+ * adopt, so a close is a bit the view applies rather than a change it has to notice. */
+static void test_menu_close(void)
 {
-    controls_facts_t closed = facts(false, false, false, true);
+    controls_facts_t controls = facts(false, false, true);
 
-    /* A Menu that closed itself is noticed without any bit, and the level is untouched. */
-    controls_t *c = model_in(&k_menu_real);
-    check_mask(controls_handle(c, CONTROLS_INTENT_NONE, &closed), M_NONE,
-               "the Menu closed itself");
-    check_fields(c, CONTROLS_LEVEL_REAL, false, "the Menu closed itself");
-
-    /* And the next UP is the ladder's again. */
-    check_mask(controls_handle(c, CONTROLS_INTENT_UP, &closed), M_PAGE,
-               "UP after the Menu closed itself");
-    check_state(c, &k_art, "UP after the Menu closed itself");
+    /* The close the Menu's own input asks for: one bit, the level untouched, and the next UP
+     * is the ladder's again. */
+    controls_t *c = model_in(&k_menu_art);
+    check_mask(controls_handle(c, CONTROLS_INTENT_MENU_CLOSE, &controls), M_MENU,
+               "MENU_CLOSE on Art");
+    check_fields(c, CONTROLS_LEVEL_ART, false, "MENU_CLOSE on Art");
+    check_mask(controls_handle(c, CONTROLS_INTENT_UP, &controls), M_SHOWN | M_ROOM,
+               "UP after MENU_CLOSE");
+    check_state(c, &k_initial, "UP after MENU_CLOSE");
     controls_free(c);
 
-    /* The same call adopts and runs: the fact is read before the rule, so a DOWN that
-     * arrives on the step the Menu closed is not swallowed. */
-    c = model_in(&k_menu_art);
-    check_mask(controls_handle(c, CONTROLS_INTENT_DOWN, &closed), M_PAGE,
-               "DOWN on the step the Menu closed");
-    check_fields(c, CONTROLS_LEVEL_REAL, false, "DOWN on the step the Menu closed");
-    controls_free(c);
-
-    /* While the fact says open, the Menu still swallows everything but UP. */
-    controls_facts_t open = facts(false, true, false, true);
+    /* On Real, closing takes no Page with it: the Menu is above the rung, not beside it. */
     c = model_in(&k_menu_real);
-    check_mask(controls_handle(c, CONTROLS_INTENT_DOWN, &open), M_NONE,
+    check_mask(controls_handle(c, CONTROLS_INTENT_MENU_CLOSE, &controls), M_MENU,
+               "MENU_CLOSE on Real");
+    check_state(c, &k_real, "MENU_CLOSE on Real");
+    controls_free(c);
+
+    /* A close with nothing open is nothing: no bit and no movement. This is the second of two
+     * requests in one press, and it costs the view no call at all. */
+    static const expect_t *const chromeless[] = { &k_initial, &k_peek, &k_art, &k_real };
+    for (size_t i = 0; i < COUNT(chromeless); i++) {
+        char ctx[96];
+        snprintf(ctx, sizeof ctx, "MENU_CLOSE with no Menu from %s", chromeless[i]->name);
+        c = model_in(chromeless[i]);
+        check_mask(controls_handle(c, CONTROLS_INTENT_MENU_CLOSE, &controls), M_NONE, ctx);
+        check_state(c, chromeless[i], ctx);
+        controls_free(c);
+    }
+
+    /* While the Menu is up the swipes wait, but the close is not a rung: it lands on the same
+     * step the rung is refused on. */
+    c = model_in(&k_menu_real);
+    check_mask(controls_handle(c, CONTROLS_INTENT_DOWN, &controls), M_NONE,
                "DOWN with the Menu open");
     check_state(c, &k_menu_real, "DOWN with the Menu open");
-    check_mask(controls_handle(c, CONTROLS_INTENT_UP, &open), M_MENU, "UP with the Menu open");
-    check_state(c, &k_real, "UP with the Menu open");
+    check_mask(controls_handle(c, CONTROLS_INTENT_MENU_CLOSE, &controls), M_MENU,
+               "MENU_CLOSE on the step after a refused swipe");
+    check_state(c, &k_real, "MENU_CLOSE on the step after a refused swipe");
     controls_free(c);
 
-    /* A Menu reported open while the model is at Initial is not adopted - there is no
-     * chrome for it to open over - and the intents wait on the fact all the same, so the UP
-     * that would raise the Peek is refused. */
-    c = model_in(&k_initial);
-    controls_facts_t open_anywhere = facts(false, true, true, false);
-    check_mask(controls_handle(c, CONTROLS_INTENT_DOWN, &open_anywhere), M_NONE,
-               "DOWN while a Menu is reported open over Initial");
-    check_state(c, &k_initial, "DOWN while a Menu is reported open over Initial");
-    check_mask(controls_handle(c, CONTROLS_INTENT_UP, &open_anywhere), M_NONE,
-               "UP while a Menu is reported open over Initial");
-    check_state(c, &k_initial, "UP while a Menu is reported open over Initial");
+    /* The door is still a toggle, and it takes no fact to say which way it goes: the model
+     * knows the Menu is open. */
+    c = model_in(&k_menu_art);
+    check_mask(controls_handle(c, CONTROLS_INTENT_MENU_TAP, &controls), M_MENU,
+               "the door, with the Menu open");
+    check_state(c, &k_art, "the door, with the Menu open");
+    controls_free(c);
+
+    /* A Menu is only ever over the chrome, and the close is how it leaves: from every Menu
+     * state, an up swipe closes it before it can take a rung. */
+    c = model_in(&k_menu_real);
+    check_mask(controls_handle(c, CONTROLS_INTENT_UP, &controls), M_MENU, "UP on Real's Menu");
+    check_state(c, &k_real, "UP on Real's Menu");
+    check_mask(controls_handle(c, CONTROLS_INTENT_UP, &controls), M_PAGE, "UP after the Menu");
+    check_state(c, &k_art, "UP after the Menu");
     controls_free(c);
 }
 
@@ -501,7 +531,7 @@ static void test_repeats(void)
 
     /* DOWN from Initial: the chrome once, then nothing while the pose has not landed. */
     c = model_in(&k_initial);
-    controls_facts_t no_pose = facts(false, false, false, false);
+    controls_facts_t no_pose = facts(false, false, false);
     check_mask(controls_handle(c, CONTROLS_INTENT_DOWN, &no_pose), M_SHOWN | M_ROOM,
                "DOWN from Initial, twice (first)");
     check_mask(controls_handle(c, CONTROLS_INTENT_DOWN, &no_pose), M_NONE,
@@ -511,7 +541,7 @@ static void test_repeats(void)
 
     /* DOWN at Real is the end, twice. */
     c = model_in(&k_real);
-    controls_facts_t at_controls = facts(false, false, false, true);
+    controls_facts_t at_controls = facts(false, false, true);
     check_mask(controls_handle(c, CONTROLS_INTENT_DOWN, &at_controls), M_NONE,
                "DOWN at Real, twice (first)");
     check_mask(controls_handle(c, CONTROLS_INTENT_DOWN, &at_controls), M_NONE,
@@ -522,7 +552,7 @@ static void test_repeats(void)
     /* UP from Initial at the entry pose: the Peek once, then nothing - UP does not lower
      * it. */
     c = model_in(&k_initial);
-    controls_facts_t at_entry = facts(false, false, true, false);
+    controls_facts_t at_entry = facts(false, true, false);
     check_mask(controls_handle(c, CONTROLS_INTENT_UP, &at_entry), M_PEEK | M_ROOM,
                "UP from Initial, twice (first)");
     check_mask(controls_handle(c, CONTROLS_INTENT_UP, &at_entry), M_NONE,
@@ -551,29 +581,39 @@ static void test_repeats(void)
     check_state(c, &k_initial, "UP at Real (second)");
     controls_free(c);
 
-    /* The Menu twice: the cassette's door is a toggle, so the second tap needs the fact the
-     * view would report after the first one - an open Menu - and closes it. */
+    /* The Menu twice: the cassette's door is a toggle, and the second tap reads the model's
+     * own state - nothing has to hand it in. */
     c = model_in(&k_art);
     check_mask(controls_handle(c, CONTROLS_INTENT_MENU_TAP, &at_controls), M_MENU,
                "MENU_TAP twice (first)");
     check_state(c, &k_menu_art, "MENU_TAP twice (first)");
-    controls_facts_t open = facts(false, true, false, true);
-    mask = controls_handle(c, CONTROLS_INTENT_MENU_TAP, &open);
+    mask = controls_handle(c, CONTROLS_INTENT_MENU_TAP, &at_controls);
     check_mask(mask, M_MENU, "MENU_TAP twice (second)");
     check_state(c, &k_art, "MENU_TAP twice (second)");
+    controls_free(c);
+
+    /* A close twice: the second is free, which is what makes two close paths in one press -
+     * a row's Close and the Pad's Back on the same frame - harmless. */
+    c = model_in(&k_menu_art);
+    check_mask(controls_handle(c, CONTROLS_INTENT_MENU_CLOSE, &at_controls), M_MENU,
+               "MENU_CLOSE twice (first)");
+    check_mask(controls_handle(c, CONTROLS_INTENT_MENU_CLOSE, &at_controls), M_NONE,
+               "MENU_CLOSE twice (second)");
+    check_state(c, &k_art, "MENU_CLOSE twice");
     controls_free(c);
 }
 
 /* -------------------------------------------------------------- the invariants */
 
-/* Every legal state x every intent x editing x the Menu fact x the three possible pose
- * facts, checked after every step: the mask is exactly the diff, the state keeps its
- * invariants, and the same step on a second instance gives the same answer. */
+/* Every legal state x every intent x editing x the three possible pose facts, checked after
+ * every step: the mask is exactly the diff, the state keeps its invariants, and the same step
+ * on a second instance gives the same answer. */
 static void test_invariants(void)
 {
     static const controls_intent_t intents[] = {
-        CONTROLS_INTENT_NONE, CONTROLS_INTENT_DOWN,
-        CONTROLS_INTENT_UP,   CONTROLS_INTENT_MENU_TAP,
+        CONTROLS_INTENT_NONE,     CONTROLS_INTENT_DOWN,
+        CONTROLS_INTENT_UP,       CONTROLS_INTENT_MENU_TAP,
+        CONTROLS_INTENT_MENU_CLOSE,
     };
     /* A pose cannot be both poses at once, so the two "settled" facts are three cases. */
     static const bool settled[][2] = {{false, false}, {true, false}, {false, true}};
@@ -582,81 +622,73 @@ static void test_invariants(void)
         const expect_t *w = k_states[i];
         for (size_t j = 0; j < COUNT(intents); j++) {
             for (int editing = 0; editing <= 1; editing++) {
-                for (int menu = 0; menu <= 1; menu++) {
-                    for (size_t k = 0; k < COUNT(settled); k++) {
-                        controls_facts_t f = facts(editing != 0, menu != 0, settled[k][0],
-                                                   settled[k][1]);
-                        char ctx[192];
-                        snprintf(ctx, sizeof ctx, "%s, %s, editing %d, menu %d, poses %d/%d",
-                                 w->name, intent_name(intents[j]), editing, menu,
-                                 (int)settled[k][0], (int)settled[k][1]);
+                for (size_t k = 0; k < COUNT(settled); k++) {
+                    controls_facts_t f = facts(editing != 0, settled[k][0], settled[k][1]);
+                    char ctx[192];
+                    snprintf(ctx, sizeof ctx, "%s, %s, editing %d, poses %d/%d",
+                             w->name, intent_name(intents[j]), editing,
+                             (int)settled[k][0], (int)settled[k][1]);
 
-                        controls_t *a = model_in(w);
-                        controls_t *b = model_in(w);
+                    controls_t *a = model_in(w);
+                    controls_t *b = model_in(w);
 
-                        /* Adopt the facts first, so the step measured is the rule's and an
-                         * empty mask means a byte-identical state. */
-                        controls_handle(a, CONTROLS_INTENT_NONE, &f);
-                        controls_handle(b, CONTROLS_INTENT_NONE, &f);
+                    controls_state_t before, after_a, after_b;
+                    controls_snapshot(a, &before);
+                    controls_changed_t ma = controls_handle(a, intents[j], &f);
+                    controls_changed_t mb = controls_handle(b, intents[j], &f);
+                    controls_snapshot(a, &after_a);
+                    controls_snapshot(b, &after_b);
 
-                        controls_state_t before, after_a, after_b;
-                        controls_snapshot(a, &before);
-                        controls_changed_t ma = controls_handle(a, intents[j], &f);
-                        controls_changed_t mb = controls_handle(b, intents[j], &f);
-                        controls_snapshot(a, &after_a);
-                        controls_snapshot(b, &after_b);
+                    /* The same step twice, on two instances, is the same answer. */
+                    CHECK(ma == mb, "%s: the mask is not deterministic", ctx);
+                    CHECK(same_state(&after_a, &after_b),
+                          "%s: the state is not deterministic", ctx);
 
-                        /* The same step twice, on two instances, is the same answer. */
-                        CHECK(ma == mb, "%s: the mask is not deterministic", ctx);
-                        CHECK(same_state(&after_a, &after_b),
-                              "%s: the state is not deterministic", ctx);
-
-                        /* The mask is the diff: every bit is a reading that moved, and every
-                         * reading that moved has its bit. The Page and the Cover are one
-                         * reading - Real - so one bit. */
-                        unsigned want = M_NONE;
-                        if ((after_a.level == CONTROLS_LEVEL_REAL) !=
-                            (before.level == CONTROLS_LEVEL_REAL)) {
-                            want |= M_PAGE;
-                        }
-                        if ((after_a.level == CONTROLS_LEVEL_PEEK) !=
-                            (before.level == CONTROLS_LEVEL_PEEK)) {
-                            want |= M_PEEK;
-                        }
-                        const bool was_chrome = before.level == CONTROLS_LEVEL_ART ||
-                                                before.level == CONTROLS_LEVEL_REAL;
-                        const bool is_chrome = after_a.level == CONTROLS_LEVEL_ART ||
-                                               after_a.level == CONTROLS_LEVEL_REAL;
-                        if (was_chrome != is_chrome) want |= M_SHOWN;
-                        if (after_a.menu != before.menu) want |= M_MENU;
-                        if (after_a.room != before.room) want |= M_ROOM;
-                        CHECK((unsigned)ma == want, "%s: mask 0x%02x, want 0x%02x", ctx,
-                              (unsigned)ma, want);
-
-                        /* The invariants, after every step. */
-                        CHECK(after_a.level >= CONTROLS_LEVEL_PEEK &&
-                                  after_a.level <= CONTROLS_LEVEL_REAL,
-                              "%s: the level is not one of the four", ctx);
-                        CHECK(after_a.room == room_of(after_a.level),
-                              "%s: the room does not follow the level", ctx);
-                        CHECK(!after_a.menu || is_chrome, "%s: a Menu without the chrome", ctx);
-
-                        /* An empty mask leaves the state alone, and so does its repeat. */
-                        if (ma == CONTROLS_CHANGED_NONE) {
-                            CHECK(same_state(&before, &after_a),
-                                  "%s: CONTROLS_CHANGED_NONE moved the state", ctx);
-                            controls_changed_t again = controls_handle(a, intents[j], &f);
-                            controls_state_t after_again;
-                            controls_snapshot(a, &after_again);
-                            CHECK(again == CONTROLS_CHANGED_NONE,
-                                  "%s: a NONE step repeated is not NONE", ctx);
-                            CHECK(same_state(&after_a, &after_again),
-                                  "%s: a NONE step repeated moved the state", ctx);
-                        }
-
-                        controls_free(a);
-                        controls_free(b);
+                    /* The mask is the diff: every bit is a reading that moved, and every
+                     * reading that moved has its bit. The Page and the Cover are one
+                     * reading - Real - so one bit. */
+                    unsigned want = M_NONE;
+                    if ((after_a.level == CONTROLS_LEVEL_REAL) !=
+                        (before.level == CONTROLS_LEVEL_REAL)) {
+                        want |= M_PAGE;
                     }
+                    if ((after_a.level == CONTROLS_LEVEL_PEEK) !=
+                        (before.level == CONTROLS_LEVEL_PEEK)) {
+                        want |= M_PEEK;
+                    }
+                    const bool was_chrome = before.level == CONTROLS_LEVEL_ART ||
+                                            before.level == CONTROLS_LEVEL_REAL;
+                    const bool is_chrome = after_a.level == CONTROLS_LEVEL_ART ||
+                                           after_a.level == CONTROLS_LEVEL_REAL;
+                    if (was_chrome != is_chrome) want |= M_SHOWN;
+                    if (after_a.menu != before.menu) want |= M_MENU;
+                    if (after_a.room != before.room) want |= M_ROOM;
+                    CHECK((unsigned)ma == want, "%s: mask 0x%02x, want 0x%02x", ctx,
+                          (unsigned)ma, want);
+
+                    /* The invariants, after every step. */
+                    CHECK(after_a.level >= CONTROLS_LEVEL_PEEK &&
+                              after_a.level <= CONTROLS_LEVEL_REAL,
+                          "%s: the level is not one of the four", ctx);
+                    CHECK(after_a.room == room_of(after_a.level),
+                          "%s: the room does not follow the level", ctx);
+                    CHECK(!after_a.menu || is_chrome, "%s: a Menu without the chrome", ctx);
+
+                    /* An empty mask leaves the state alone, and so does its repeat. */
+                    if (ma == CONTROLS_CHANGED_NONE) {
+                        CHECK(same_state(&before, &after_a),
+                              "%s: CONTROLS_CHANGED_NONE moved the state", ctx);
+                        controls_changed_t again = controls_handle(a, intents[j], &f);
+                        controls_state_t after_again;
+                        controls_snapshot(a, &after_again);
+                        CHECK(again == CONTROLS_CHANGED_NONE,
+                              "%s: a NONE step repeated is not NONE", ctx);
+                        CHECK(same_state(&after_a, &after_again),
+                              "%s: a NONE step repeated moved the state", ctx);
+                    }
+
+                    controls_free(a);
+                    controls_free(b);
                 }
             }
         }
@@ -671,7 +703,7 @@ int main(void)
     test_stack_order();
     test_editing();
     test_settled_gates();
-    test_menu_adoption();
+    test_menu_close();
     test_repeats();
     test_invariants();
 
