@@ -27,6 +27,7 @@
 
 #include "cassette_view.h"
 #include "lvgl_mem.h"
+#include "screen_capture.h"
 #include "mini_icecast.h"
 #include "screen_display.h"
 
@@ -64,8 +65,20 @@ static const char *TAG = "screen";
  * before it drew anything again. */
 #define UI_REST_MAX_MS 500
 
-#if CONFIG_APP_UI_SERIAL_DUMP
-static uint8_t *s_fb;         /* only kept when it has to be dumped */
+/* A whole frame of our own, on the board with no panel: the console dump reads it, and so
+ * does the HTTP capture, so it is kept whenever either diagnostic is compiled in. */
+#if !CONFIG_APP_BOARD_SUNTON_8048S050C && \
+    (CONFIG_APP_UI_SERIAL_DUMP || CONFIG_APP_UI_SCREEN_HTTP)
+static uint8_t *s_fb;
+#endif
+
+#if !CONFIG_APP_BOARD_SUNTON_8048S050C
+/* This board has no LVGL port and so no port lock, but it does have two tasks once a
+ * diagnostic asks for a frame: the screen task draws whole frames into s_fb every 40 ms, and
+ * the HTTP task copies one. Whole-frame rendering is not an atomic write, so without a lock a
+ * capture catches half a frame - which reads as "the scene never settles" rather than as a
+ * torn picture. The panel board gets the same guarantee from lvgl_port_lock(). */
+static SemaphoreHandle_t s_ui_lock;
 #endif
 
 /* --------------------------------------------------------------- the display */
@@ -116,14 +129,32 @@ static void dump_row(unsigned row, const uint8_t *px, size_t bytes)
 static void dump_screen(void)
 {
     static uint8_t row[DUMP_W * 2];
+
+    /* The frame is copied under the lock and printed without it. The print is tens of seconds
+     * of console - far longer than the 40 ms the screen task waits between frames - so holding
+     * the lock across it would freeze the interface and starve every other reader (the HTTP
+     * capture answers 503 while it waits). The lock covers the copy, which is the part that
+     * has to be atomic. */
+    uint8_t *frame = NULL;
+    if (screen_capture_lock()) {
+        frame = heap_caps_malloc(UI_FB_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (frame) memcpy(frame, s_fb, UI_FB_BYTES);
+        screen_capture_unlock();
+    }
+    if (!frame) {
+        ESP_LOGE(TAG, "no PSRAM for the dump's copy of the frame");
+        return;
+    }
+
     ESP_LOGW(TAG, "dumping the screen at 1/%d scale: %ux%u, %u rows; decode with tools/decode_screen_dump.py",
              DUMP_STRIDE, DUMP_W, DUMP_H, DUMP_H);
     for (unsigned y = 0; y < DUMP_H; y++) {
-        const uint8_t *src = s_fb + (size_t)(y * DUMP_STRIDE) * UI_W * 2;
+        const uint8_t *src = frame + (size_t)(y * DUMP_STRIDE) * UI_W * 2;
         for (unsigned x = 0; x < DUMP_W; x++)
             memcpy(&row[x * 2], src + (size_t)(x * DUMP_STRIDE) * 2, 2);
         dump_row(y, row, sizeof row);
     }
+    free(frame);
     ESP_LOGW(TAG, "framebuffer dump complete");
 }
 #endif
@@ -259,13 +290,14 @@ static void screen_task(void *arg)
          * step for the transition it asked for; this keeps a running fade moving. */
         backlight_tick();
 #else
-        cassette_view_update(&st);
+        if (xSemaphoreTake(s_ui_lock, portMAX_DELAY) == pdTRUE) {
+            cassette_view_update(&st);
+            lv_timer_handler();
+            xSemaphoreGive(s_ui_lock);
+        }
 #endif
 
         int64_t t0 = esp_timer_get_time();
-#if !CONFIG_APP_BOARD_SUNTON_8048S050C
-        lv_timer_handler();
-#endif
         int frame_ms = (int)((esp_timer_get_time() - t0) / 1000);
         /* What a frame costs decides the cadence below, and the first one also draws the
          * whole screen - the cassette image included - which decides whether the
@@ -335,15 +367,15 @@ esp_err_t screen_display_start(const char *music_dir)
      * anything internal RAM could hold, and because the production board's buffers are
      * there too - the point is to exercise the same arrangement. */
     size_t strip = (size_t)UI_W * UI_DRAW_LINES * 2;
-#if CONFIG_APP_UI_SERIAL_DUMP
-    /* The dump reads a whole frame, and a strip buffer only ever holds the last strip drawn
-     * - which is why a dump of it was a picture of uninitialised PSRAM. So the diagnostic
-     * build draws whole frames into a buffer of its own instead: one display, one buffer,
-     * and the screen task is what fills it before the dump reads it. */
+#if CONFIG_APP_UI_SERIAL_DUMP || CONFIG_APP_UI_SCREEN_HTTP
+    /* Both diagnostics read a whole frame, and a strip buffer only ever holds the last strip
+     * drawn - which is why a dump of it was a picture of uninitialised PSRAM. So a diagnostic
+     * build draws whole frames into a buffer of its own instead: one display, one buffer, and
+     * the screen task is what fills it before the dump or the capture reads it. */
     (void)strip;
     s_fb = heap_caps_malloc(UI_FB_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!s_fb) {
-        ESP_LOGE(TAG, "no PSRAM for the %u KB screen dump buffer",
+        ESP_LOGE(TAG, "no PSRAM for the %u KB screen frame buffer",
                  (unsigned)(UI_FB_BYTES / 1024));
         return ESP_ERR_NO_MEM;
     }
@@ -361,6 +393,11 @@ esp_err_t screen_display_start(const char *music_dir)
 #endif
     lv_display_set_buffers(disp, fb, NULL, fb_bytes, fb_mode);
     lv_display_set_flush_cb(disp, ui_flush_cb);
+    s_ui_lock = xSemaphoreCreateMutex();
+    if (!s_ui_lock) {
+        ESP_LOGE(TAG, "no mutex for the screen: a capture would tear");
+        return ESP_ERR_NO_MEM;
+    }
     lv_timer_t *refr = lv_display_get_refr_timer(disp);
     if (refr) lv_timer_set_period(refr, UI_FRAME_MS);
 #endif
@@ -461,3 +498,83 @@ esp_err_t screen_display_start(const char *music_dir)
 
     return ESP_OK;
 }
+
+/* --------------------------------------------------------- the screen's lock */
+
+bool screen_capture_lock(void)
+{
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    return lvgl_port_lock(1000);
+#else
+    return s_ui_lock && xSemaphoreTake(s_ui_lock, pdMS_TO_TICKS(1000)) == pdTRUE;
+#endif
+}
+
+void screen_capture_unlock(void)
+{
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    lvgl_port_unlock();
+#else
+    if (s_ui_lock) xSemaphoreGive(s_ui_lock);
+#endif
+}
+
+#if CONFIG_APP_UI_SCREEN_HTTP
+/* ------------------------------------------------------- the diagnostics' picture */
+
+static uint16_t *copy_out(const uint16_t *px, int w, int h)
+{
+    if (!px || w <= 0 || h <= 0) return NULL;
+    size_t bytes = (size_t)w * (size_t)h * 2u;
+    uint16_t *copy = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!copy) {
+        ESP_LOGE(TAG, "no PSRAM for the %u KB screen capture", (unsigned)(bytes / 1024));
+        return NULL;
+    }
+    memcpy(copy, px, bytes);
+    return copy;
+}
+
+uint16_t *screen_capture_frame(int *w, int *h)
+{
+    if (w) *w = 0;
+    if (h) *h = 0;
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    lv_display_t *disp = lv_display_get_default();
+    if (!disp || !lvgl_port_lock(1000)) return NULL;
+
+    /* Two full refreshes: the port owns two framebuffers and LVGL alternates between them, so
+     * one refresh leaves only one of them holding the current picture. */
+    for (int i = 0; i < 2; i++) {
+        lv_obj_invalidate(lv_screen_active());
+        lv_refr_now(disp);
+    }
+
+    const uint16_t *px = NULL;
+    int fw = 0;
+    int fh = 0;
+    uint16_t *copy = panel_rgb_frame(&px, &fw, &fh) ? copy_out(px, fw, fh) : NULL;
+    lvgl_port_unlock();
+
+    if (copy) {
+        if (w) *w = fw;
+        if (h) *h = fh;
+    }
+    return copy;
+
+#else
+    /* No panel: the whole frame is s_fb, which the screen task draws every 40 ms. The lock is
+     * what keeps a capture from reading it half-drawn - a whole-frame render is not atomic,
+     * and a torn frame is indistinguishable from a scene with its own motion. */
+    if (!screen_capture_lock()) return NULL;
+    uint16_t *copy = copy_out((const uint16_t *)s_fb, UI_W, UI_H);
+    screen_capture_unlock();
+    if (copy) {
+        if (w) *w = UI_W;
+        if (h) *h = UI_H;
+    }
+    return copy;
+#endif
+}
+#endif

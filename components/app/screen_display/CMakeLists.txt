@@ -25,13 +25,16 @@ if(CONFIG_APP_BOARD_SUNTON_8048S050C)
     endif()
     list(APPEND screen_priv "${lvgl_libs}/tjpgd")
 
-    # The screen over HTTP is a diagnostic, and only this board has a picture worth serving:
-    # its frame is LVGL's own direct-mode buffer, readable in PSRAM. Nothing in a normal
-    # build compiles it, and the front door's route table is sized for the two routes.
-    if(CONFIG_APP_UI_SCREEN_HTTP)
-        list(APPEND screen_srcs "screen_frame.c")
-        list(APPEND screen_reqs http_server)
-    endif()
+endif()
+
+# The screen over HTTP is a diagnostic, and it is built on either board: the panel serves the
+# frame LVGL draws into the panel's own buffers, the headless path serves the full frame it
+# keeps for the console dump. Which of those to read is screen_display.c's question, not the
+# build's. Nothing in a normal build compiles it, and the front door's route table is sized for
+# the two routes it adds.
+if(CONFIG_APP_UI_SCREEN_HTTP)
+    list(APPEND screen_srcs "screen_frame.c")
+    list(APPEND screen_reqs http_server)
 endif()
 
 idf_component_register(SRCS ${screen_srcs}

@@ -29,19 +29,17 @@ config APP_UI_DUMP_STRIDE
 
 config APP_UI_SCREEN_HTTP
     bool "Serve the rendered screen as /api/screen.bmp, and re-aim the scene over HTTP"
-    depends on APP_BOARD_SUNTON_8048S050C
     default n
     help
-        The panel board's way to be looked at. This board runs LVGL in direct mode over
-        the RGB panel's own two PSRAM framebuffers, so a complete 800x480 frame can be
-        read back and served: GET /api/screen.bmp is a 24-bit BMP that opens in any
-        viewer, and POST /api/scene?n=0..7 re-aims the scene driver while the device
-        runs, so one build photographs every scene.
+        A way to look at the screen from a shell, on either board. On the panel board the
+        frame is LVGL's own direct-mode buffer in PSRAM; on the headless one it is the
+        full-frame buffer the console dump already needs, kept for the life of the process
+        while this is on. GET /api/screen.bmp is a 24-bit BMP that opens in any viewer, and
+        POST /api/scene?n=0..8 re-aims the scene driver while the device runs, so one
+        build photographs every scene.
 
-        Off by default: it is a diagnostic, it adds two routes, and a request copies
-        768 KB into PSRAM before it streams. The console dump
-        (CONFIG_APP_UI_SERIAL_DUMP) stays the headless board's; on this board the
-        picture was never unavailable, it just had no way out.
+        Off by default: it is a diagnostic for capture runs, it adds two routes, and a
+        request copies 768 KB into PSRAM before it streams.
 
 config APP_UI_DUMP_SCENE
     int "Scene the dump is taken in (0 = entry, 1 = Art/Empty, 2 = Art/EQ, 3 = Art/RGB, 4 = Art/Menu, 5 = Real/EQ, 6 = Art/EQ with the 3x dial open, 7 = Art/RGB with the effect dial open, 8 = the Peek)"

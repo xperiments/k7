@@ -7,8 +7,8 @@ and nothing else. Everything else is private:
 
 - `screen_display.c` — start-up, the draw buffer, the serial dump and the task that keeps
   the cassette current.
-- `screen_frame.c` — the panel board's diagnostics over HTTP, with
-  `CONFIG_APP_UI_SCREEN_HTTP` on (off by default, and compiled only for that board):
+- `screen_frame.c` — the diagnostics over HTTP, with `CONFIG_APP_UI_SCREEN_HTTP` on (off by
+  default, and compiled for both boards):
   `GET /api/screen.bmp` is the frame LVGL has drawn, as a 24-bit bottom-up BMP in one
   response, and `POST /api/scene?n=0..7` re-aims the scene driver the console dump uses, so
   one build photographs every scene. The frame is not a copy of the panel's scan-out: this
@@ -17,10 +17,17 @@ and nothing else. Everything else is private:
   the read leave both buffers current - the headless boot does the same - and the 768 KB it
   copies under the LVGL lock is streamed after the lock is released, so a capture neither
   tears on the reels nor freezes the screen for the length of a Wi-Fi send.
+  `screen_capture_frame()` is where the boards differ and is the only place they do: the
+  panel's frame comes from the RGB panel's buffer, the headless one from the full-frame
+  `s_fb` it keeps for the console dump, and the capture takes whichever lock the board has -
+  the port's on one, a mutex the screen task takes around its render on the other, because a
+  whole-frame render is not atomic and a torn frame looks exactly like a scene with its own
+  motion.
   `screen_display_http_start()` registers the two routes and is called by the appliance
   **before** `http_server_start()`; the screen comes up later, and the handlers answer 503
-  until it does. The console dump stays the headless board's: this one has no `s_fb`, and
-  the picture it was told it could not have was in PSRAM all along.
+  until it does. The console dump still exists for a board with no network, and it now copies
+  the frame under that same lock and prints outside it - the print is tens of seconds, far
+  longer than a frame, so it cannot hold the lock.
 - `lvgl_mem.c` — the `LV_USE_CUSTOM_MALLOC` backend, PSRAM first (ADR 0004).
 - `cassette_view.c` — the composition: the container under the screen root, the pose and
   its animation, and the applier of the Controls model's changed-mask (the page, the two

@@ -28,3 +28,4 @@ sdkconfig.backlight-test
 
 .scratch/
 sdkconfig.verify
+sdkconfig.headless

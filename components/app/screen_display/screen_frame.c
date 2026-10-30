@@ -26,7 +26,8 @@
  *   - **Copy under the lock.** 768 KB is copied into PSRAM while the LVGL lock is held and
  *     the bytes are streamed after it is released. Holding the lock across a Wi-Fi send
  *     would freeze the screen for seconds; reading the panel's buffer without a copy would
- *     let the reels tear the rows mid-transfer.
+ *     let the reels tear the rows mid-transfer. The copy itself is screen_display.c's - it is
+ *     the file that knows where each board keeps its picture - and this one only streams it.
  *
  * Called from the appliance before http_server_start(); the screen comes up later, so a
  * request that arrives before it answers 503.
@@ -36,14 +37,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "esp_heap_caps.h"
 #include "esp_log.h"
-#include "esp_lvgl_port.h"
-#include "lvgl.h"
 
 #include "cassette_view.h"
 #include "http_server.h"
-#include "panel_rgb.h"
+#include "screen_capture.h"
 #include "screen_display.h"
 
 static const char *TAG = "screen";
@@ -52,39 +50,12 @@ static const char *TAG = "screen";
 
 /* ------------------------------------------------------------------ the frame */
 
-/* A complete, current copy of the panel's picture, in PSRAM, owned by the caller. NULL
- * when the screen is not up or PSRAM is short. */
+/* One complete frame, wherever this board keeps it. The capture - the lock, the refreshes and
+ * the PSRAM copy - is screen_display.c's, because the board selection is; this file only turns
+ * it into a BMP and a route. */
 static uint16_t *frame_grab(int *w, int *h)
 {
-    *w = 0;
-    *h = 0;
-
-    lv_display_t *disp = lv_display_get_default();
-    if (!disp || !lvgl_port_lock(1000)) return NULL;
-
-    for (int i = 0; i < 2; i++) {
-        lv_obj_invalidate(lv_screen_active());
-        lv_refr_now(disp);
-    }
-
-    const uint16_t *px = NULL;
-    int fw = 0;
-    int fh = 0;
-    bool ok = panel_rgb_frame(&px, &fw, &fh);
-    uint16_t *copy = NULL;
-    if (ok && fw > 0 && fh > 0) {
-        size_t bytes = (size_t)fw * (size_t)fh * 2u;
-        copy = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (copy) {
-            memcpy(copy, px, bytes);
-            *w = fw;
-            *h = fh;
-        } else {
-            ESP_LOGE(TAG, "no PSRAM for the %u KB screen copy", (unsigned)(bytes / 1024));
-        }
-    }
-    lvgl_port_unlock();
-    return copy;
+    return screen_capture_frame(w, h);
 }
 
 /* -------------------------------------------------------------------- the BMP */
@@ -196,12 +167,12 @@ static http_result_t scene_route(int fd, const http_request_t *req, void *ctx)
         return HTTP_HANDLED;
     }
 
-    if (!lvgl_port_lock(1000)) {
+    if (!screen_capture_lock()) {
         http_send_error(fd, 503, "the screen did not give its lock");
         return HTTP_HANDLED;
     }
     cassette_view_scene_set((int)n);
-    lvgl_port_unlock();
+    screen_capture_unlock();
 
     char body[24];
     int len = snprintf(body, sizeof body, "scene %ld\n", n);

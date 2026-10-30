@@ -125,14 +125,20 @@ NOT_COMPARED = {
 #   TIMELINE   The bar the footer draws its faces in: CASSETTE_TIMELINE_X/Y/W/H =
 #              (116,416,568,52): (116,416)-(684,468). The times, the artist and the song are all
 #              inside it, and the fill grows with the broadcast.
+#   PERF       LVGL's own performance monitor, in the top-right corner, on the builds that
+#              enable it (the headless diagnostic config does, the panel's does not). It
+#              rewrites an FPS and a CPU figure every frame, so no headless scene can ever
+#              settle while it is on screen - masking it also keeps this tool from demanding a
+#              config change from a build whose whole purpose is to measure that.
 #
 # Checked against the frames themselves: two captures of the same scene half a second apart
-# differ by 0 pixels outside these three rects for every chrome scene (1..7), which is what says
+# differ by 0 pixels outside these rects for every chrome scene (1..7), which is what says
 # the mask is neither too small nor guessed.
 ANIMATED = (
     (120, 76, 576, 360),
     (594, 76, 690, 266),
     (116, 416, 684, 468),
+    (660, 0, 800, 40),
 )
 
 
