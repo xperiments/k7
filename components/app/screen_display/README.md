@@ -15,8 +15,11 @@ mounted and scanned by then). Everything else is private:
 - `screen_frame.c` — the diagnostics over HTTP, with `CONFIG_APP_UI_SCREEN_HTTP` on (off by
   default, and compiled for both boards):
   `GET /api/screen.bmp` is the frame LVGL has drawn, as a 24-bit bottom-up BMP in one
-  response, and `POST /api/scene?n=0..7` re-aims the scene driver the console dump uses, so
-  one build photographs every scene. The frame is not a copy of the panel's scan-out: this
+  response, and `POST /api/scene?n=0..9` re-aims the scene driver the console dump uses, so
+  one build photographs every scene. The route answers only once the scene's script has landed
+  (`cassette_view_scene_ready()`: the bars have stopped, the Menu is open, the Real rung or the
+  dial is up), because a tool that posted and photographed immediately caught the middle of the
+  260 ms walk to it. The frame is not a copy of the panel's scan-out: this
   board runs the port in direct mode over the RGB panel's own two PSRAM framebuffers, so
   `esp_lcd_rgb_panel_get_frame_buffer()` hands over the picture. Two full refreshes before
   the read leave both buffers current - the headless boot does the same - and the 768 KB it

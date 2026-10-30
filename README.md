@@ -817,6 +817,20 @@ python3 tools/screen_over_http.py capture --host <board>:8000 --out /tmp/before
 python3 tools/screen_over_http.py compare /tmp/before /tmp/after   # 0 px outside the parts that move
 ```
 
+The catalogue the docs use is the same ten scenes, photographed as PNGs into
+`docs/images/screens/` with a contact sheet beside them:
+
+```bash
+npm run screens                                   # xtape.local:8000 -> docs/images/screens/
+npm run screens -- --host 192.168.1.69:8000       # or a literal address
+```
+
+`tools/capture_screens.py` is the re-runnable catalogue (scene 0 entry view, 1 Art/Empty, 2
+Art/EQ, 3 Art/RGB, 4 Menu, 5 Real/EQ, 6 the EQ dial, 7 the RGB dial, 8 the Peek, 9 Real/RGB);
+each scene is photographed once the device says its script has landed, and scene 4 is the Menu
+at its root - the Menu's depth is not captured. The BMP capture/compare above stays the
+regression workflow; the catalogue writes what a reader opens.
+
 The console dump is the other way and still the one for a board with no network
 (`sdkconfig.defaults.dump`, then `tools/decode_screen_dump.py`).
 

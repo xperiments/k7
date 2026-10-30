@@ -36,7 +36,7 @@ esp_err_t screen_display_start(const char *music_dir);
 
 #if CONFIG_APP_UI_SCREEN_HTTP
 /* Register the screen's HTTP diagnostics with the front door: GET /api/screen.bmp, the
- * rendered 800x480 frame as a 24-bit BMP, and POST /api/scene?n=0..7, which re-aims the
+ * rendered 800x480 frame as a 24-bit BMP, and POST /api/scene?n=0..9, which re-aims the
  * scene driver the console dump uses (CONFIG_APP_UI_DUMP_SCENE's scenes).
  *
  * Call BEFORE http_server_start(): the routes are the server's to serve. The screen

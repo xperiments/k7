@@ -20,6 +20,7 @@
     "flash:backlight-test": "bash -c 'source ~/esp/esp-idf-6.1/export.sh; lsof -t /dev/cu.usbserial-8330 | xargs kill; idf.py -B build_backlight_test -p /dev/cu.usbserial-8330 flash monitor'",
     "monitor": "bash -c 'source ~/esp/esp-idf-6.1/export.sh; lsof -t /dev/cu.usbserial-8330 | xargs kill; idf.py -B build_sunton -p /dev/cu.usbserial-8330 monitor'",
     "assets": "python3 tools/convert_cassette_assets.py",
+    "screens": "python3 tools/capture_screens.py",
     "reconfigure": "bash -c 'source ~/esp/esp-idf-6.1/export.sh; idf.py reconfigure'"
   }
 }

@@ -47,9 +47,9 @@ void cassette_view_dim(bool dim);
 
 #if CONFIG_APP_UI_SERIAL_DUMP || CONFIG_APP_UI_SCREEN_HTTP
 /* The highest scene number the driver knows: 0 the entry view, 1 Art/Empty, 2 Art/EQ, 3
- * Art/RGB, 4 the Menu, 5 Real/EQ, 6 the EQ's 3x dial, 7 the RGB effect's, 8 the Peek. The
- * HTTP route validates against this, so the two cannot disagree. */
-#define CASSETTE_SCENE_MAX 8
+ * Art/RGB, 4 the Menu, 5 Real/EQ, 6 the EQ's 3x dial, 7 the RGB effect's, 8 the Peek, 9
+ * Real/RGB. The HTTP route validates against this, so the two cannot disagree. */
+#define CASSETTE_SCENE_MAX 9
 
 /* Aim the diagnostic scene driver at scene 0..CASSETTE_SCENE_MAX. It walks home to the entry
  * view first, then pushes the chrome up with the intents a finger would send, one step a
@@ -59,6 +59,13 @@ void cassette_view_dim(bool dim);
  * A scene set from another task must be called under the LVGL lock; the driver itself runs
  * on the screen's own update. Out-of-range values are ignored. */
 void cassette_view_scene_set(int scene);
+
+/* Whether the current scene's script has reached the picture it asked for - the bars have
+ * stopped sliding, the Menu is open, the Real rung has landed, the dial is up, the Peek's bar
+ * is up. The HTTP route waits on this before answering, so a capture tool photographs the
+ * scene and not the middle of the walk to it. Written by the screen task; safe to read from
+ * another one. */
+bool cassette_view_scene_ready(void);
 #endif
 
 /* The Track's picture for the white page's cover, or NULL when it has none (or while a

@@ -10,7 +10,7 @@
  *                           (800 x 3 is already a multiple of four). It opens in any
  *                           viewer, so the check is `curl > scene.bmp && open scene.bmp`
  *                           instead of several minutes of base64 over a 115200 baud line.
- *   POST /api/scene?n=0..7  re-aim the scene driver the console dump uses, while the
+ *   POST /api/scene?n=0..9  re-aim the scene driver the console dump uses, while the
  *                           device runs. One build photographs every scene.
  *
  * Both compile only with CONFIG_APP_UI_SCREEN_HTTP (and only on the panel board, whose
@@ -38,6 +38,8 @@
 #include <string.h>
 
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "cassette_view.h"
 #include "http_server.h"
@@ -163,7 +165,7 @@ static http_result_t scene_route(int fd, const http_request_t *req, void *ctx)
     char *end = NULL;
     long n = q ? strtol(q + 2, &end, 10) : -1;
     if (!q || !end || end == q + 2 || n < 0 || n > CASSETTE_SCENE_MAX) {
-        http_send_error(fd, 400, "n must be 0..8");
+        http_send_error(fd, 400, "n must be 0..9");
         return HTTP_HANDLED;
     }
 
@@ -174,8 +176,17 @@ static http_result_t scene_route(int fd, const http_request_t *req, void *ctx)
     cassette_view_scene_set((int)n);
     screen_capture_unlock();
 
-    char body[24];
-    int len = snprintf(body, sizeof body, "scene %ld\n", n);
+    /* The script runs on the screen's task, so answer only once it has landed. Two seconds is
+     * the walk home (three rungs of 260 ms) plus the scene's own move and the delayed dial
+     * open, with room; a scene that misses it says so in the body and the tool retries. */
+    bool ready = false;
+    for (int waited = 0; waited < 2000 && !ready; waited += 20) {
+        ready = cassette_view_scene_ready();
+        if (!ready) vTaskDelay(pdMS_TO_TICKS(20));
+    }
+
+    char body[40];
+    int len = snprintf(body, sizeof body, "scene %ld%s\n", n, ready ? " ready" : " not ready");
     if (len < 0) len = 0;
     if (http_send_headers(fd, 200, "text/plain; charset=utf-8", (size_t)len, NULL) != ESP_OK ||
         !http_send_all(fd, body, (size_t)len))
@@ -191,6 +202,7 @@ esp_err_t screen_display_http_start(void)
     if (err != ESP_OK) return err;
     err = http_server_register_route_method("/api/scene", "POST", scene_route, NULL);
     if (err != ESP_OK) return err;
-    ESP_LOGI(TAG, "screen diagnostics on /api/screen.bmp and POST /api/scene?n=0..7");
+    ESP_LOGI(TAG, "screen diagnostics on /api/screen.bmp and POST /api/scene?n=0..%d",
+             CASSETTE_SCENE_MAX);
     return ESP_OK;
 }

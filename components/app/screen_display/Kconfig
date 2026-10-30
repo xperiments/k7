@@ -42,9 +42,9 @@ config APP_UI_SCREEN_HTTP
         request copies 768 KB into PSRAM before it streams.
 
 config APP_UI_DUMP_SCENE
-    int "Scene the dump is taken in (0 = entry, 1 = Art/Empty, 2 = Art/EQ, 3 = Art/RGB, 4 = Art/Menu, 5 = Real/EQ, 6 = Art/EQ with the 3x dial open, 7 = Art/RGB with the effect dial open, 8 = the Peek)"
+    int "Scene the dump is taken in (0 = entry, 1 = Art/Empty, 2 = Art/EQ, 3 = Art/RGB, 4 = Art/Menu, 5 = Real/EQ, 6 = Art/EQ with the 3x dial open, 7 = Art/RGB with the effect dial open, 8 = the Peek, 9 = Real/RGB)"
     depends on APP_UI_SERIAL_DUMP || APP_UI_SCREEN_HTTP
-    range 0 8
+    range 0 9
     default 0
     help
         The dump is taken at whatever the screen is showing four seconds after boot,

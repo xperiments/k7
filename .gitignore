@@ -20,6 +20,10 @@ managed_components/
 # Host build output
 host/build/
 
+# Python caches from the tools that import a sibling module
+__pycache__/
+*.pyc
+
 # macOS
 .DS_Store
 

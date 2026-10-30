@@ -452,9 +452,12 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
 #define SCENE_BOOT 0
 #endif
 
+/* The step a scene's script stops at once the picture is the one it asked for. */
+#define SCENE_DONE 99
+
 static int s_scene = SCENE_BOOT;   /* where the picture should end up */
-static int s_scene_step;           /* progress through that scene's script */
-static bool s_scene_returning;     /* walking back to the entry view first */
+static volatile int s_scene_step;          /* progress through that scene's script */
+static volatile bool s_scene_returning;    /* walking back to the entry view first */
 
 void cassette_view_scene_set(int scene)
 {
@@ -463,6 +466,13 @@ void cassette_view_scene_set(int scene)
     s_scene_step = 0;
     s_scene_returning = true;
     ESP_LOGI(TAG, "scene -> %d", scene);
+}
+
+bool cassette_view_scene_ready(void)
+{
+    /* Read from the HTTP task, written by the screen task. Two aligned words, one writer:
+     * the same arrangement the model's flags use. */
+    return !s_scene_returning && s_scene_step >= SCENE_DONE;
 }
 
 /* One intent a tick, and the mode decides which one: the Menu closes on its close intent, a
@@ -503,14 +513,14 @@ static void scene_tick(void)
     case 0:
         if (!pose_is(s_pose, cassette_pose_entry())) break;
         if (s_scene == 0) {
-            s_scene_step = 99;                          /* the entry view: nothing to add */
+            s_scene_step = SCENE_DONE;                  /* the entry view: nothing to add */
             break;
         }
         if (s_scene == 8) {
             /* The Peek: the one rung that is not the chrome, raised from the entry pose. It
              * is the only way to photograph the two tethers, whose lower ends are the hub's
-             * rim. */
-            s_scene_step = 99;
+             * rim. Its own step waits for the pose, so `ready` means the bar is up. */
+            s_scene_step = 4;
             screen_intent_cb(SCREEN_INTENT_UP, NULL);    /* Initial -> Peek */
             break;
         }
@@ -528,11 +538,12 @@ static void scene_tick(void)
         else if (s_scene == 5) eq_group_cb(NULL);
         else if (s_scene == 6) eq_group_cb(NULL);
         else if (s_scene == 7) rgb_group_cb(NULL);
+        else if (s_scene == 9) rgb_group_cb(NULL);
         break;
 
     case 2:
-        /* Real/EQ: one more rung, once the group is installed. */
-        if (s_scene == 5) {
+        /* Real/EQ and Real/RGB: one more rung, once the group is installed. */
+        if (s_scene == 5 || s_scene == 9) {
             if (s_ctl.level != CONTROLS_LEVEL_ART) break;
             s_scene_step = 3;
             screen_intent_cb(SCREEN_INTENT_DOWN, NULL);  /* Art -> Real */
@@ -543,15 +554,37 @@ static void scene_tick(void)
          * scene arms the knob's delayed open itself - but only once the bar has settled,
          * because the open is refused while it is sliding and a refused arm never lands.
          * That is a real 20 ms race: the pose settles a tick or two before the slide ends,
-         * and the tap used to fire on the earlier of the two. */
-        if (s_scene != 6 && s_scene != 7) break;
-        if (knob_editor_is_editing()) {
+         * and the tap used to fire on the earlier of the two. Step 3 waits for the open. */
+        if (s_scene == 6 || s_scene == 7) {
+            if (knob_editor_is_editing()) {
+                s_scene_step = SCENE_DONE;
+                break;
+            }
+            if (cassette_bars_is_sliding()) break;
+            knob_editor_tap(s_scene == 6 ? 0 : 4);       /* the EQ's gain; the RGB effect */
             s_scene_step = 3;
             break;
         }
+
+        /* The chrome scenes: the picture is what was asked for once the bars have stopped
+         * sliding and, for the Menu, once it is open. The `ready` answer waits on this. */
         if (cassette_bars_is_sliding()) break;
-        knob_editor_tap(s_scene == 6 ? 0 : 4);           /* the EQ's gain; the RGB effect */
-        s_scene_step = 3;
+        if (s_scene == 4 && !cassette_menu_is_open()) break;
+        s_scene_step = SCENE_DONE;
+        break;
+
+    case 3:
+        if (s_scene == 5 || s_scene == 9) {
+            if (s_ctl.level != CONTROLS_LEVEL_REAL) break;
+            s_scene_step = SCENE_DONE;
+            break;
+        }
+        if (knob_editor_is_editing()) s_scene_step = SCENE_DONE;
+        break;
+
+    case 4:
+        if (!pose_is(s_pose, cassette_pose_peek())) break;   /* the Peek's slide has landed */
+        s_scene_step = SCENE_DONE;
         break;
 
     default:
