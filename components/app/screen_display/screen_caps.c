@@ -6,6 +6,12 @@
  */
 #include "screen_caps.h"
 
+/* Explicit, and load-bearing: this file tests a CONFIG_ symbol, and a translation unit that
+ * relies on stdbool alone reads it as 0. That is exactly how this shipped once - both
+ * capabilities read false on the panel, so the Card never mounted, the border frames were
+ * never built and the artwork loader was never started. */
+#include "sdkconfig.h"
+
 static const screen_caps_t k_caps = {
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     .cover = true,

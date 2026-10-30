@@ -1,5 +1,19 @@
 # The screen asks what it has
 
+**Amended the same day.** `screen_caps.c` did not include `sdkconfig.h`, so it read
+`CONFIG_APP_BOARD_SUNTON_8048S050C` as undefined and answered *both capabilities false* - on
+the panel board it was written for. No Card, no border frames, and the artwork loader never
+started: the owner opened the white page and found no covers. It is fixed with an include and
+a comment that says why it is load-bearing.
+
+The seven-scene pixel comparison did not catch it, and that is the part worth keeping. The
+cover is decoded lazily, tens of seconds after Real is first opened (ADR 0041), and every
+capture in the comparison was taken about two seconds after its scene change. Both sides
+showed the label fill, so "0 px" was true and meaningless for that scene. **A picture that
+arrives late cannot be verified by a diff that samples early.** What proved it was the boot
+log - the loader's own lines, absent - and one capture taken fifty seconds after opening Real,
+which shows the Track's artwork on the Card.
+
 The screen display is one composition with two boards behind it, and until now the difference
 was a preprocessor symbol threaded through every module. `CONFIG_APP_BOARD_SUNTON_8048S050C`
 decided whether the white page's **Cover** existed, whether the **Peek** and the **Menu** were
