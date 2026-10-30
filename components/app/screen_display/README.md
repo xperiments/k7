@@ -2,11 +2,16 @@
 
 The screen: the panel (or the headless framebuffer), LVGL's PSRAM allocator, the
 cassette screen and, on the panel board, its touch controller and the card-side artwork
-loader. The public interface is `include/screen_display.h` — `screen_display_start()`
-and nothing else. Everything else is private:
+loader. The public interface is `include/screen_display.h` — two calls and nothing else:
+`screen_display_boot()` puts the boot mark up before the services (the panel's framebuffers
+are uninitialised PSRAM, so the light is only lit once something is painted), and
+`screen_display_start()` replaces it with the cassette after them (the card has been
+mounted and scanned by then). Everything else is private:
 
-- `screen_display.c` — start-up, the draw buffer, the serial dump and the task that keeps
-  the cassette current.
+- `screen_display.c` — the two boot phases, the draw buffer, the serial dump and the task
+  that keeps the cassette current.
+- `splash.c` — the boot mark: the icon font's K7 glyph at 128 px tall in the palette's primary,
+  centred on the palette's black. It is a glyph, not a bitmap, and it owns no geometry.
 - `screen_frame.c` — the diagnostics over HTTP, with `CONFIG_APP_UI_SCREEN_HTTP` on (off by
   default, and compiled for both boards):
   `GET /api/screen.bmp` is the frame LVGL has drawn, as a 24-bit bottom-up BMP in one
@@ -249,7 +254,12 @@ after the tape body and shown and hidden with the
   same task reads the text tags (TPE1/TIT2, ARTIST/TITLE). Results are handed to the view
   under the LVGL lock. The request is one slot, replaced rather than queued, and the read
   backs off while the broadcast is behind. Compiled and started only on the panel board.
-- `panel_rgb.c` — the Sunton panel adapter, compiled only for that board.
+- `panel_rgb.c` — the Sunton panel adapter, compiled only for that board. It holds the
+  backlight off (`backlight_hold_off()`, which gives the pin to LEDC at duty 0) before the
+  peripheral exists and leaves it off when it returns: the panel scans two uninitialised PSRAM
+  framebuffers from the moment it is initialised, and those read as white.
+  `panel_rgb_clear()` fills both black, and the screen lights the panel only after the boot
+  mark is in both buffers.
 - `backlight.c` — the Sunton backlight on GPIO 2, now a 400 Hz, 8-bit LEDC duty rather than
   an on/off pin. It starts at `APP_UI_BACKLIGHT_AWAKE_PCT` (100% by default), then
   fades to 60% after 2 minutes, 30% after 5, and 0% after 10 with no touch, each step

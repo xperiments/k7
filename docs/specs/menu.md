@@ -271,8 +271,10 @@ script beside `font:jura`, `font:jura28` and `font:jura20`. It generates the sam
 sizes because one font is one pixel size: `font_xtape_24.c` (`--range 0xF000-0xF013 --size 24
 --bpp 4`) for the Rows and the chevron, where a 24 px glyph sits in a 53-54 px Row, and
 `font_xtape_36.c` at 36 px for the mode bar's and the groups' 64 px circles, where 24 px would
-read small against the Jura 36 letters they replace. Row labels are Jura 28 and their right column is Jura 20 in
-capitals; the footer is Jura 28 and the header Jura 36.
+read small against the Jura 36 letters they replace. A third cut, `font_xtape_logo_128.c`,
+carries U+F00F alone, sized so the ink is 128 px tall, for the boot screen's mark (ADR 0045);
+no Menu Row uses it. Row labels are Jura 28 and their right column is Jura 20 in capitals; the
+footer is Jura 28 and the header Jura 36.
 
 ## Open items
 

@@ -36,6 +36,8 @@ static const char *TAG = "backlight";
 #define BACKLIGHT_MAX_DUTY      ((1u << 8) - 1)
 
 static bool s_pwm;
+/* LEDC refused the pin and it is being driven as a plain output instead. */
+static bool s_plain;
 /* The duty actually written, and the level the current fade is heading to. */
 static int  s_current_pct = -1;
 static int  s_target_pct = -1;
@@ -55,18 +57,70 @@ static int  s_hold_pct;
 static StaticSemaphore_t s_lock_buf;
 static SemaphoreHandle_t s_lock;
 
-/* The old adapter drove the pin as a plain output. That is still the right failure
- * path: if LEDC refuses the timer or the channel, hold the pin high so the panel is
- * lit, and let only the dimming go missing. */
-static void backlight_fallback(void)
+/* The old adapter drove the pin as a plain output. That is still the right failure path:
+ * if LEDC refuses the timer or the channel, hold the pin at the level asked for and let
+ * only the dimming go missing. `level` is 0 for dark and 1 for lit. */
+static esp_err_t backlight_plain(int level)
 {
     gpio_config_t bl = { .pin_bit_mask = 1ULL << BACKLIGHT_GPIO, .mode = GPIO_MODE_OUTPUT };
     esp_err_t err = gpio_config(&bl);
-    if (err == ESP_OK) err = gpio_set_level(BACKLIGHT_GPIO, 1);
-    if (err != ESP_OK)
-        ESP_LOGE(TAG, "the backlight has no PWM and no plain output: %s", esp_err_to_name(err));
-    else
-        ESP_LOGW(TAG, "backlight on GPIO %d held high; brightness control is off", BACKLIGHT_GPIO);
+    if (err == ESP_OK) err = gpio_set_level(BACKLIGHT_GPIO, level);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "the backlight GPIO %d cannot be driven: %s",
+                 BACKLIGHT_GPIO, esp_err_to_name(err));
+        return err;
+    }
+    s_plain = true;
+    ESP_LOGW(TAG, "backlight on GPIO %d held %s; brightness control is off",
+             BACKLIGHT_GPIO, level ? "high" : "off by a plain output");
+    return ESP_OK;
+}
+
+/* The timer, the channel, the lock - at duty 0, with no fallback. Idempotent, and the only
+ * place LEDC is claimed. backlight_hold_off() runs it before the panel exists, so the pin is
+ * LEDC's from the start and nobody else has to drive it; backlight_start() runs it when it
+ * is the first caller. */
+static esp_err_t backlight_pwm_start(void)
+{
+    if (s_pwm) return ESP_OK;
+
+    const ledc_timer_config_t timer = {
+        .speed_mode = BACKLIGHT_LEDC_MODE,
+        .duty_resolution = BACKLIGHT_PWM_RES,
+        .timer_num = BACKLIGHT_LEDC_TIMER,
+        .freq_hz = BACKLIGHT_PWM_HZ,
+        .clk_cfg = LEDC_AUTO_CLK,
+    };
+    esp_err_t err = ledc_timer_config(&timer);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "LEDC timer refused: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    const ledc_channel_config_t channel = {
+        .gpio_num = BACKLIGHT_GPIO,
+        .speed_mode = BACKLIGHT_LEDC_MODE,
+        .channel = BACKLIGHT_LEDC_CHANNEL,
+        .timer_sel = BACKLIGHT_LEDC_TIMER,
+        .duty = 0,
+        .hpoint = 0,
+        /* A light-sleep entry should not leave the backlight glowing; the screen is
+         * not being refreshed then anyway. */
+        .sleep_mode = LEDC_SLEEP_MODE_NO_ALIVE_NO_PD,
+    };
+    err = ledc_channel_config(&channel);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "LEDC channel refused GPIO %d: %s", BACKLIGHT_GPIO, esp_err_to_name(err));
+        return err;
+    }
+
+    s_pwm = true;
+    s_lock = xSemaphoreCreateMutexStatic(&s_lock_buf);
+    s_current_pct = 0;
+    s_target_pct = 0;
+    s_fade_from_pct = 0;
+    s_fade_ms = 0;
+    return ESP_OK;
 }
 
 /* The caller holds s_lock. */
@@ -126,42 +180,36 @@ static void backlight_fade_locked(int percent)
     backlight_step_locked();
 }
 
+void backlight_hold_off(void)
+{
+    if (s_pwm || s_plain) return;
+
+    /* LEDC takes the pin here, at duty 0, before the panel exists. That is what keeps the
+     * light off - the pin is an input until someone claims it and this board's backlight is
+     * on when it floats high - and it is also why it is LEDC that claims it rather than a
+     * plain GPIO write: a GPIO claim would make the channel's later pin routing report a
+     * conflict. */
+    if (backlight_pwm_start() != ESP_OK)
+        backlight_plain(0);
+}
+
 esp_err_t backlight_start(void)
 {
-    const ledc_timer_config_t timer = {
-        .speed_mode = BACKLIGHT_LEDC_MODE,
-        .duty_resolution = BACKLIGHT_PWM_RES,
-        .timer_num = BACKLIGHT_LEDC_TIMER,
-        .freq_hz = BACKLIGHT_PWM_HZ,
-        .clk_cfg = LEDC_AUTO_CLK,
-    };
-    esp_err_t err = ledc_timer_config(&timer);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "LEDC timer refused: %s", esp_err_to_name(err));
-        backlight_fallback();
-        return err;
+    if (!s_pwm && !s_plain) {
+        esp_err_t err = backlight_pwm_start();
+        if (err != ESP_OK) {
+            /* No PWM at all: hold the pin high so the panel is lit and only the dimming is
+             * lost, which is the old adapter's failure path. */
+            backlight_plain(1);
+            return err;
+        }
     }
 
-    const ledc_channel_config_t channel = {
-        .gpio_num = BACKLIGHT_GPIO,
-        .speed_mode = BACKLIGHT_LEDC_MODE,
-        .channel = BACKLIGHT_LEDC_CHANNEL,
-        .timer_sel = BACKLIGHT_LEDC_TIMER,
-        .duty = 0,
-        .hpoint = 0,
-        /* A light-sleep entry should not leave the backlight glowing; the screen is
-         * not being refreshed then anyway. */
-        .sleep_mode = LEDC_SLEEP_MODE_NO_ALIVE_NO_PD,
-    };
-    err = ledc_channel_config(&channel);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "LEDC channel refused GPIO %d: %s", BACKLIGHT_GPIO, esp_err_to_name(err));
-        backlight_fallback();
-        return err;
+    if (s_plain) {
+        /* LEDC refused while the light was held off. The only choice left is a lit pin. */
+        backlight_plain(1);
+        return ESP_OK;
     }
-
-    s_pwm = true;
-    s_lock = xSemaphoreCreateMutexStatic(&s_lock_buf);
 
     /* Boot at the awake level without a fade: the panel is about to show its first
      * frame, and a visible ramp from uninitialised content is not wanted. */

@@ -3,9 +3,15 @@
  *
  * The ordering the appliance depends on is in app_services: the station is resolved
  * before anything allocates, the network comes up before the encoder takes its internal
- * RAM, and the listener starts last. The appliance adds what is above that: NVS, the
- * station format this product ships, the card retry after a missing card, and the console
- * line. The transport is the screen's, not a physical button's.
+ * RAM, and the listener starts last. The appliance adds what is above that: NVS, the boot
+ * screen, the station format this product ships, the card retry after a missing card, and
+ * the console line. The transport is the screen's, not a physical button's.
+ *
+ * The screen is the one thing that comes first rather than last. Its panel powers up
+ * scanning uninitialised PSRAM, so the boot mark has to be painted before the backlight is
+ * lit and has to stay up while the card is scanned - and the scan is inside
+ * app_services_start(). So the appliance calls screen_display_boot() before the services
+ * and screen_display_start() after them.
  */
 #include "appliance.h"
 
@@ -161,6 +167,22 @@ void appliance_run(void)
                  esp_err_to_name(http_err));
 #endif
 
+    /* The screen comes first, before the services, for one reason: the panel's
+     * framebuffers are uninitialised PSRAM and the backlight used to be lit over them, so
+     * boot opened on a white flash. screen_display_boot() paints the K7 mark on the black
+     * page and only then lights the panel; the mark stays up through the network coming up
+     * and the card being mounted and scanned, which is what app_services_start() does.
+     *
+     * The cost of that order is internal RAM: the panel's LVGL port task takes a 16 KB
+     * internal stack before esp_wifi_init() asks for its contiguous DMA buffers, where the
+     * rule used to be the other way round (ADR 0004). LVGL's own allocations are PSRAM by
+     * policy, so what moves is that one block, and the line the boot screen logs after the
+     * panel is up is the margin left for Wi-Fi - check it there rather than guess. */
+    esp_err_t boot_err = screen_display_boot();
+    if (boot_err != ESP_OK)
+        ESP_LOGE(TAG, "the screen did not come up: %s; the device still serves",
+                 esp_err_to_name(boot_err));
+
     /* The services resolve the station first (arithmetic only), then bring up the
      * network before the broadcast takes its internal RAM, then the file surface,
      * the broadcast and the listener. The order and its reasons are in
@@ -186,12 +208,15 @@ void appliance_run(void)
      * Menu's row toggles. */
     mini_icecast_shuffle_seed((uint32_t)esp_random());
 
-    /* The screen comes last, once there is something to show and a status to read.
+    /* The card is mounted and scanned by now - or refused, and the retry task below owns
+     * it - so the mark has waited long enough: replace it with the cassette.
      * MUSIC_DIR is also the root the Artwork level reads a Track's own picture from. */
-    esp_err_t screen_err = screen_display_start(MUSIC_DIR);
-    if (screen_err != ESP_OK) {
-        ESP_LOGE(TAG, "the screen did not start: %s; the device still serves",
-                 esp_err_to_name(screen_err));
+    if (boot_err == ESP_OK) {
+        esp_err_t screen_err = screen_display_start(MUSIC_DIR);
+        if (screen_err != ESP_OK) {
+            ESP_LOGE(TAG, "the screen did not start: %s; the device still serves",
+                     esp_err_to_name(screen_err));
+        }
     }
 
     /* A card that failed to mount at boot is retried; the index reports the state

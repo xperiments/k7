@@ -1,13 +1,25 @@
 /*
- * The screen display: its memory, its display, and the loop that keeps the cassette
- * current.
+ * The screen display: its memory, its display, the boot mark and the loop that keeps the
+ * cassette current.
+ *
+ * The screen comes up in two calls, and the split is a hardware fact rather than a taste.
+ * On the panel board the RGB peripheral starts scanning two PSRAM framebuffers the moment
+ * the driver is initialised, and PSRAM powers up reading white; lighting the backlight
+ * before LVGL has painted anything was the white flash on boot. So stage one
+ * (screen_display_boot) brings the panel up with its light off, fills both buffers black,
+ * paints the K7 mark into both and only then calls backlight_start(); stage two
+ * (screen_display_start) builds the cassette over the mark and takes it down. The appliance
+ * calls the first before the services and the second after them, which is what keeps the
+ * mark on the panel for the card's mount and scan.
  *
  * Memory placement is deliberate rather than inherited (ADR 0004): LVGL allocates
  * through heap_caps_malloc_prefer(PSRAM first) because the default path prefers
  * internal memory for anything below SPIRAM_MALLOC_ALWAYSINTERNAL and falls through to
  * PSRAM only when internal runs out - silently, spending the margin Wi-Fi needs for
  * its contiguous DMA buffers. The allocator in lvgl_mem.c counts what it holds, and the
- * boot log reports it so the claim stays checkable.
+ * boot log reports it so the claim stays checkable. Stage one is the only part of this
+ * file that runs before the network, so the internal-RAM line it logs is where the
+ * remaining margin for esp_wifi_init() is visible.
  *
  * The screen itself is a physical 800x480 RGB panel on the Sunton board and nothing at
  * all on the development board, where it is rendered headless into a PSRAM framebuffer. CONFIG_APP_UI_SERIAL_DUMP makes that framebuffer readable over the
@@ -30,6 +42,7 @@
 #include "lvgl_mem.h"
 #include "screen_capture.h"
 #include "screen_caps.h"
+#include "splash.h"
 #include "mini_icecast.h"
 #include "screen_display.h"
 
@@ -41,6 +54,10 @@
 #endif
 
 static const char *TAG = "screen";
+
+/* The display the boot screen created: one per process, and the second phase of the
+ * screen (the cassette) is built on it. NULL until screen_display_boot(). */
+static lv_display_t *s_disp;
 
 /* The panel, and the framebuffer when there is no panel to scan it out. */
 #define UI_W 800
@@ -343,24 +360,24 @@ static void screen_task(void *arg)
     }
 }
 
-esp_err_t screen_display_start(const char *music_dir)
+esp_err_t screen_display_boot(void)
 {
-    (void)music_dir;
     size_t internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     size_t largest_before = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* lvgl_port_init() calls lv_init() itself, and ticks come from the port's own task. */
-    lv_display_t *disp = panel_rgb_start();
-    if (!disp) {
+    /* lvgl_port_init() calls lv_init() itself, and ticks come from the port's own task. The
+     * panel is brought up with its light off (panel_rgb_start), so nothing is lit yet. */
+    s_disp = panel_rgb_start();
+    if (!s_disp) {
         ESP_LOGE(TAG, "the panel path did not come up; the screen will stay dark");
         return ESP_FAIL;
     }
 #else
     lv_init();
     lv_tick_set_cb(tick_ms);
-    lv_display_t *disp = lv_display_create(UI_W, UI_H);
-    if (!disp) {
+    s_disp = lv_display_create(UI_W, UI_H);
+    if (!s_disp) {
         ESP_LOGE(TAG, "no LVGL display for the headless path");
         return ESP_ERR_NO_MEM;
     }
@@ -392,34 +409,86 @@ esp_err_t screen_display_start(const char *music_dir)
     size_t fb_bytes = strip;
     lv_display_render_mode_t fb_mode = LV_DISPLAY_RENDER_MODE_PARTIAL;
 #endif
-    lv_display_set_buffers(disp, fb, NULL, fb_bytes, fb_mode);
-    lv_display_set_flush_cb(disp, ui_flush_cb);
+    lv_display_set_buffers(s_disp, fb, NULL, fb_bytes, fb_mode);
+    lv_display_set_flush_cb(s_disp, ui_flush_cb);
     s_ui_lock = xSemaphoreCreateMutex();
     if (!s_ui_lock) {
         ESP_LOGE(TAG, "no mutex for the screen: a capture would tear");
         return ESP_ERR_NO_MEM;
     }
-    lv_timer_t *refr = lv_display_get_refr_timer(disp);
+    /* The reel's fastest case is the empty hub: 36 frames in 1.45 s is 24.8 fps. */
+    lv_timer_t *refr = lv_display_get_refr_timer(s_disp);
     if (refr) lv_timer_set_period(refr, UI_FRAME_MS);
 #endif
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* The port's task is already running lv_timer_handler() by now, so building the screen
-     * outside its lock is two tasks inside LVGL at once - which draws the interface twice,
-     * at different offsets, into a buffer the panel is scanning. Everything LVGL-related in
-     * this function happens under the lock. */
+    /* The port's task is already running lv_timer_handler() by now, so everything LVGL-related
+     * in this function happens under its lock: two tasks inside LVGL at once draw the
+     * interface twice, at different offsets, into a buffer the panel is scanning. */
+    if (!lvgl_port_lock(1000)) {
+        ESP_LOGE(TAG, "the LVGL port did not give its lock; no boot screen");
+        return ESP_ERR_TIMEOUT;
+    }
+    /* Nothing has painted these buffers yet. They are uninitialised PSRAM - which reads as
+     * white - and the peripheral has been scanning them since panel_rgb_start(). */
+    panel_rgb_clear();
+#endif
+
+#if !CONFIG_APP_UI_BACKLIGHT_TEST
+    /* The mark goes up here and stays up until the appliance has scanned the card. The
+     * backlight test owns the whole screen with its own white page, so it gets none. */
+    splash_create();
+#endif
+
+    /* Two full refreshes: the port owns two framebuffers and LVGL alternates between them,
+     * so one refresh leaves the other holding whatever was there before - and the light is
+     * about to come on over both. */
+    lv_obj_invalidate(lv_screen_active());
+    lv_refr_now(s_disp);
+    lv_obj_invalidate(lv_screen_active());
+    lv_refr_now(s_disp);
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    lvgl_port_unlock();
+
+    /* Only now, with a painted picture in both buffers, does the light come on. Lighting it
+     * any earlier is the white flash this function exists to stop. */
+    esp_err_t bl_err = backlight_start();
+    if (bl_err != ESP_OK)
+        ESP_LOGW(TAG, "the backlight started without brightness control: %s",
+                 esp_err_to_name(bl_err));
+#endif
+
+    ESP_LOGI(TAG, "boot screen %dx%d up: the mark on the black page, held until the card is scanned",
+             UI_W, UI_H);
+    ESP_LOGI(TAG, "screen memory: internal free %u B (largest %u B) before, %u B (largest %u B) after bringing the panel up",
+             (unsigned)internal_before, (unsigned)largest_before,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    return ESP_OK;
+}
+
+esp_err_t screen_display_start(const char *music_dir)
+{
+    (void)music_dir;
+    if (!s_disp) {
+        ESP_LOGE(TAG, "the screen was not booted; there is nothing to replace the mark with");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
     if (!lvgl_port_lock(1000)) {
         ESP_LOGE(TAG, "the LVGL port did not give its lock; no screen");
         return ESP_ERR_TIMEOUT;
     }
-    /* The reel's fastest case is the empty hub: 36 frames in 1.45 s is 24.8 fps. */
-    lv_timer_t *refr = lv_display_get_refr_timer(disp);
-    if (refr) lv_timer_set_period(refr, UI_FRAME_MS);
 #endif
 #if CONFIG_APP_UI_BACKLIGHT_TEST
     backlight_test_create();
 #else
+    /* Build the picture first, then take the mark down: the cut is from the mark to the
+     * finished cassette, never through an empty screen. */
     cassette_view_create();
+    splash_destroy();
 #endif
 #if CONFIG_APP_BOARD_SUNTON_8048S050C && !CONFIG_APP_UI_BACKLIGHT_TEST
     /* The view is built before the pointer is bound, so the first tap lands on the
@@ -428,23 +497,19 @@ esp_err_t screen_display_start(const char *music_dir)
      * is for, and the log names the layer that did not come up. The visual backlight
      * test needs no pointer, and a touch during it would wake the level and spoil the
      * comparison. */
-    esp_err_t touch_err = touch_gt911_start(disp);
+    esp_err_t touch_err = touch_gt911_start(s_disp);
     if (touch_err != ESP_OK) {
         ESP_LOGW(TAG, "the touch controller did not start: %s; the screen still runs",
                  esp_err_to_name(touch_err));
     }
 #endif
 #if !CONFIG_APP_BOARD_SUNTON_8048S050C
-    /* Without a port there is no task to draw for us, so this one frame is forced here:
-     * the screen must not be left showing uninitialised memory. With the port this must
-     * NOT be done - forcing a refresh bypasses the port's framebuffer switch, and the
-     * picture lands in a buffer the panel never scans. That is exactly why the panel kept
-     * showing the old contents while the cassette was drawn out of sight. */
+    /* Without a port there is no task to draw for us, so this frame is forced here: the
+     * screen must not be left showing the mark under a picture nothing has flushed. */
     int64_t t_boot = esp_timer_get_time();
-    lv_refr_now(disp);
     lv_obj_invalidate(lv_screen_active());
-    lv_refr_now(disp);
-    ESP_LOGI(TAG, "both framebuffers filled in %d ms", (int)((esp_timer_get_time() - t_boot) / 1000));
+    lv_refr_now(s_disp);
+    ESP_LOGI(TAG, "the first full frame drawn in %d ms", (int)((esp_timer_get_time() - t_boot) / 1000));
 #endif
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     lvgl_port_unlock();
@@ -467,10 +532,6 @@ esp_err_t screen_display_start(const char *music_dir)
 
     ESP_LOGI(TAG, "screen %dx%d, framebuffer %u KB in PSRAM, LVGL holds %u B",
              UI_W, UI_H, (unsigned)(UI_FB_BYTES / 1024), (unsigned)screen_display_lvgl_held());
-    ESP_LOGI(TAG, "screen memory: internal free %u B (largest %u B) before, %u B (largest %u B) after building the screen",
-             (unsigned)internal_before, (unsigned)largest_before,
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 
     /* A task rather than lv_timer_handler() in the app's idle loop: the display the
      * panel will need has its own cadence, and this keeps the screen off the audio core. */
@@ -487,7 +548,7 @@ esp_err_t screen_display_start(const char *music_dir)
         return ESP_ERR_NO_MEM;
     }
 #else
-    if (xTaskCreatePinnedToCore(screen_task, "screen", 16 * 1024, disp, 3, NULL, 0) != pdPASS) {
+    if (xTaskCreatePinnedToCore(screen_task, "screen", 16 * 1024, s_disp, 3, NULL, 0) != pdPASS) {
         ESP_LOGE(TAG, "no memory for the screen task: the screen will not update");
         return ESP_ERR_NO_MEM;
     }

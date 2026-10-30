@@ -53,6 +53,11 @@ static const lvgl_port_cfg_t k_port = {
 
 lv_display_t *panel_rgb_start(void)
 {
+    /* The light goes off before the panel exists. The peripheral starts scanning the two
+     * PSRAM framebuffers the moment it is initialised, and they read as white until
+     * something paints them; a pin left floating lights the panel over exactly that. */
+    backlight_hold_off();
+
     esp_lcd_rgb_panel_config_t cfg = {
         .clk_src = LCD_CLK_SRC_DEFAULT,
         .timings = {
@@ -129,13 +134,35 @@ lv_display_t *panel_rgb_start(void)
     ESP_LOGI(TAG, "panel up through esp_lvgl_port: %dx%d, two framebuffers in PSRAM, pclk %u Hz",
              PANEL_W, PANEL_H, (unsigned)PCLK_HZ);
 
-    /* Something visible before anything above this layer is trusted to work. The
-     * backlight is PWM now so the screen can dim itself; start it at the awake level. */
-    esp_err_t bl_err = backlight_start();
-    if (bl_err != ESP_OK)
-        ESP_LOGW(TAG, "the backlight started without brightness control: %s",
-                 esp_err_to_name(bl_err));
+    /* The light stays off on purpose. The panel is dark until whoever brought it up has
+     * painted something worth lighting - the boot mark - and only then calls
+     * backlight_start(). Lighting it here showed the uninitialised framebuffers. */
     return disp;
+}
+
+esp_err_t panel_rgb_clear(void)
+{
+    return panel_rgb_fill(0x0000);
+}
+
+esp_err_t panel_rgb_fill(uint16_t color)
+{
+    if (!s_panel) return ESP_ERR_INVALID_STATE;
+
+    void *fb[2] = { NULL, NULL };
+    if (esp_lcd_rgb_panel_get_frame_buffer(s_panel, 2, &fb[0], &fb[1]) != ESP_OK || !fb[0])
+        return ESP_FAIL;
+
+    /* PSRAM powers up reading white, and the peripheral starts scanning both buffers at
+     * driver init, so a panel that is lit before LVGL has drawn anything shows exactly
+     * that. Filling both with a known colour is what makes "the first frame is the boot
+     * mark" true rather than likely. */
+    for (int i = 0; i < 2; i++) {
+        if (!fb[i]) continue;
+        uint16_t *px = (uint16_t *)fb[i];
+        for (size_t n = 0; n < (size_t)PANEL_W * PANEL_H; n++) px[n] = color;
+    }
+    return ESP_OK;
 }
 
 bool panel_rgb_frame(const uint16_t **px, int *w, int *h)

@@ -85,6 +85,11 @@ CONFIG_LV_FONT_MONTSERRAT_18=y
 CONFIG_LV_FONT_MONTSERRAT_22=y
 CONFIG_LV_FONT_MONTSERRAT_48=y
 CONFIG_LV_DRAW_SW_COMPLEX=y
+# The boot mark's font is generated at a 314 px em (the size at which the K7 emblem's ink is
+# 128 px tall), and the standard glyph descriptor stores the advance in 12 bits - 255.9 px.
+# Without this the boot mark's cut refuses to compile, with the reason in its own #error.
+# It costs a few bytes per glyph across every fmt_txt font; flash is measured in ADR 0045.
+CONFIG_LV_FONT_FMT_TXT_LARGE=y
 
 
 # LVGL's own performance monitor: CPU and FPS in a label on the system layer, top

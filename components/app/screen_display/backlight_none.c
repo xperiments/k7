@@ -11,6 +11,11 @@
  */
 #include "backlight.h"
 
+void backlight_hold_off(void)
+{
+    /* There is no light to hold off. */
+}
+
 esp_err_t backlight_start(void)
 {
     return ESP_OK;

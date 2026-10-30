@@ -14,6 +14,14 @@
 extern "C" {
 #endif
 
+/* Hold the light off before the panel is brought up: take the pin with LEDC at duty 0. Until
+ * then it is not configured at all and floats high on this board, so the panel lights while
+ * its PSRAM framebuffers still hold what they powered up with - the white flash at boot. The
+ * panel calls this first; backlight_start() lights the panel once there is a picture. LEDC is
+ * claimed here rather than by a plain GPIO write so the channel's pin routing does not later
+ * report a conflict. If LEDC refuses the pin, a plain output holds it low instead. */
+void backlight_hold_off(void);
+
 /* Bring the backlight up at CONFIG_APP_UI_BACKLIGHT_AWAKE_PCT. On a board whose
  * LEDC will not take the pin, falls back to a plain output held high: the panel stays
  * lit at full brightness and only dimming is lost. */

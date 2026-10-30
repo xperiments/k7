@@ -1,8 +1,15 @@
 #pragma once
 /*
  * The icon font's contract: the glyphs `assets/fonts/xtape.ttf` carries, the codepoints
- * the screen uses, and the two generated LVGL fonts (24 px for the Menu's rows and the row
- * chevron, 36 px for the drawer's 64 px circles). See docs/specs/menu.md.
+ * the screen uses, and the three generated LVGL fonts (24 px for the Menu's rows and the row
+ * chevron, 36 px for the drawer's 64 px circles, and the boot mark). See docs/specs/menu.md.
+ *
+ * The boot mark's cut (`xtape_logo_128`) carries **one glyph**, the K7 logo, and is generated
+ * at `--size 314` rather than 128. That is not a mistake: an icon font's `--size` is its em
+ * box, and this emblem's ink fills about 42 % of it, so a 128 px em would draw a 100x53 mark.
+ * 314 px is the em at which the ink is 238x128 - the 128 px the owner asked the logo to be.
+ * The other nineteen glyphs would cost far more flash for a size no part asks for, so the
+ * range in package.json's `font:xtape` is where a second one goes when a part does.
  *
  * The font is Private Use Area, so a label must be given the icon font explicitly; the
  * Jura text fonts have no glyph there. The view still checks lv_font_get_glyph_dsc() and
@@ -19,6 +26,8 @@ extern "C" {
 
 LV_FONT_DECLARE(xtape_24);
 LV_FONT_DECLARE(xtape_36);
+/* The boot mark: the K7 logo, 238x128 px of ink (this file's note explains the size). */
+LV_FONT_DECLARE(xtape_logo_128);
 
 /* UTF-8 for U+F000..U+F011, in the icomoon project's order. */
 #define CASSETTE_ICON_TAPE_CP 0xF000u
@@ -52,7 +61,7 @@ LV_FONT_DECLARE(xtape_36);
 #define CASSETTE_ICON_LEFT_CP 0xF00Eu
 #define CASSETTE_ICON_LEFT      "\xEF\x80\x8E" /* U+F00E angle-left */
 #define CASSETTE_ICON_K7LOGO_CP 0xF00Fu
-#define CASSETTE_ICON_K7LOGO    "\xEF\x80\x8F" /* U+F00F k7logo */
+#define CASSETTE_ICON_K7LOGO    "\xEF\x80\x8F" /* U+F00F k7logo: the Menu's About row, and the boot mark */
 #define CASSETTE_ICON_TRACK_CP 0xF010u
 #define CASSETTE_ICON_TRACK     "\xEF\x80\x90" /* U+F010 track */
 #define CASSETTE_ICON_MICRO_CHIP_CP 0xF011u

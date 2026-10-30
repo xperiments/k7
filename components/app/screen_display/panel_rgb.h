@@ -1,13 +1,26 @@
 /* The panel, when the board has one. */
 #pragma once
 
+#include "esp_err.h"
 #include "esp_lcd_panel_ops.h"
 #include "lvgl.h"
 
 /* Bring the panel up through esp_lvgl_port and hand back the display it created, or NULL
  * if the panel or the port refused. The port owns the framebuffer and vsync handshake
- * from there on; LVGL calls made from other tasks must take lvgl_port_lock(). */
+ * from there on; LVGL calls made from other tasks must take lvgl_port_lock().
+ *
+ * **The backlight is left off.** The peripheral starts scanning two PSRAM framebuffers the
+ * moment it is initialised, and until something paints them they hold whatever PSRAM
+ * powered up with - white - so lighting the panel here is the white flash at boot. The
+ * caller paints its first frame and then calls backlight_start(). */
 lv_display_t *panel_rgb_start(void);
+
+/* Fill both framebuffers with one RGB565 colour - panel_rgb_clear() fills them black.
+ * Call under lvgl_port_lock() and before the backlight is lit; the first frame LVGL
+ * renders covers only the area it invalidates, so a buffer nobody filled can still show
+ * through. False when the panel is not up or the buffers cannot be read. */
+esp_err_t panel_rgb_fill(uint16_t color);
+esp_err_t panel_rgb_clear(void);
 
 /* The frame the panel is scanning, as the RGB565 buffer LVGL draws into - the panel board
  * runs the port in direct mode, so this is not a copy. False when the panel is not up.
