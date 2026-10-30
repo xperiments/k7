@@ -38,6 +38,7 @@
 #include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
+#include "timeline.h"        /* the Timeline bar's arithmetic: shared with the footer band */
 
 LV_FONT_DECLARE(jura_28);
 
@@ -144,32 +145,25 @@ static int s_bob[2];
 static void update_texts(void);
 static void update_lines(void);
 
-static void format_time(char *buf, size_t n, uint32_t ms, bool known)
-{
-    if (!known) {
-        snprintf(buf, n, "--:--");
-        return;
-    }
-    uint32_t s = ms / 1000u;
-    snprintf(buf, n, "%u:%02u", (unsigned)(s / 60u), (unsigned)(s % 60u));
-}
-
 static void update_times(void)
 {
     if (!s_elapsed || !s_total) return;
     char text[16];
-    format_time(text, sizeof text, s_elapsed_ms, s_playing);
+    timeline_clock(text, sizeof text, s_elapsed_ms, s_playing);
     lv_label_set_text(s_elapsed, text);
     /* `s_elapsed_ms` is clamped to the duration by the model; the total is unknown for
      * a Track whose length the decoder did not report. */
-    format_time(text, sizeof text, s_duration_ms, s_playing && s_duration_ms != 0);
+    timeline_clock(text, sizeof text, s_duration_ms, s_playing && s_duration_ms != 0);
     lv_label_set_text(s_total, text);
 }
 
 static void update_fill(void)
 {
     if (!s_fill) return;
-    uint32_t w = (uint32_t)((uint64_t)PEEK_TRACK_W * s_permille / 1000u);
+    /* The frame's permille, not one worked out here: the cassette model owns the position, and
+     * the Peek only draws it. The width is the shared rule, so this bar and the footer band
+     * round alike. */
+    uint32_t w = (uint32_t)timeline_fill_w(PEEK_TRACK_W, s_permille);
     if (w == s_fill_w) return;
     s_fill_w = w;
     lv_obj_set_width(s_fill, (int32_t)w);

@@ -26,6 +26,7 @@
 #include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
+#include "timeline.h"        /* the Timeline bar's arithmetic: shared with the Peek */
 
 LV_FONT_DECLARE(jura_28);
 
@@ -139,17 +140,6 @@ static void bar_slide_to(bool shown)
     lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
     if (!shown) lv_anim_set_completed_cb(&a, bar_hidden_cb);
     lv_anim_start(&a);
-}
-
-/* "m:ss", or "--:--" when the length is not known - the Peek's own format. */
-static void format_time(char *buf, size_t n, uint32_t ms, bool known)
-{
-    if (!known) {
-        snprintf(buf, n, "--:--");
-        return;
-    }
-    uint32_t s = ms / 1000u;
-    snprintf(buf, n, "%u:%02u", (unsigned)(s / 60u), (unsigned)(s % 60u));
 }
 
 /* A face with nothing to say is skipped: the rotation never sits on an empty word. */
@@ -274,18 +264,16 @@ void cassette_footer_set_playing(bool playing, uint32_t elapsed_ms, uint32_t dur
     menu_clean_name(title, s_song, sizeof s_song);
 
     char text[16];
-    format_time(text, sizeof text, elapsed_ms, s_playing);
+    timeline_clock(text, sizeof text, elapsed_ms, s_playing);
     lv_label_set_text(s_elapsed, text);
     /* The total is unknown for a Track whose length the decoder did not report. */
-    format_time(text, sizeof text, duration_ms, s_playing && duration_ms != 0);
+    timeline_clock(text, sizeof text, duration_ms, s_playing && duration_ms != 0);
     lv_label_set_text(s_total, text);
 
-    uint32_t permille = 0;
-    if (s_playing && duration_ms > 0) {
-        permille = (uint32_t)((uint64_t)elapsed_ms * 1000u / duration_ms);
-        if (permille > 1000u) permille = 1000u;
-    }
-    uint32_t w = (uint32_t)((uint64_t)CASSETTE_TIMELINE_TRACK_W * permille / 1000u);
+    /* The band follows the broadcast's own clock, not the cassette model's frame: these two
+     * numbers are what it has, and timeline_permille() is what rounds them. */
+    uint32_t permille = s_playing ? timeline_permille(elapsed_ms, duration_ms) : 0;
+    uint32_t w = (uint32_t)timeline_fill_w(CASSETTE_TIMELINE_TRACK_W, permille);
     if (w != s_fill_w) {
         s_fill_w = w;
         lv_obj_set_width(s_fill, (int32_t)w);

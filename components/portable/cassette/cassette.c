@@ -17,6 +17,8 @@
  */
 #include "cassette.h"
 
+#include "timeline.h"
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -335,10 +337,7 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
      * at once rather than at the next bar step. */
     uint32_t elapsed = c->have_status ? c->status.elapsed_ms : 0;
     uint32_t duration = c->have_status ? c->status.duration_ms : 0;
-    uint32_t permille = 0;
-    if (c->have_status && duration)
-        permille = (uint32_t)((uint64_t)elapsed * 1000ULL / duration);
-    if (permille > 1000) permille = 1000;
+    uint32_t permille = timeline_permille(elapsed, duration);
 
     bool due = !c->have_shown || now_ms - c->last_bar_ms >= c->bar_period_ms;
     if (due) {

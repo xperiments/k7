@@ -54,8 +54,9 @@ void cassette_footer_set_page(bool white);
 /* What the timeline says: whether anything is playing, its elapsed and total milliseconds, and
  * the Track's title and path - the artist is the path's first directory and the song is the
  * cleaned title. `duration_ms` of 0 prints "--:--" and leaves the fill empty, which is what a
- * Track of unknown length looks like; the fill's fraction is computed here, so the caller does
- * not have to agree with this band about rounding. Call it every frame: it is a pair of
+ * Track of unknown length looks like; the fill's fraction is computed here, through
+ * `timeline.h`, so the caller does not have to agree with this band - or with the Peek, which
+ * draws the same bar - about rounding. Call it every frame: it is a pair of
  * snprintfs until a value moves. A call before the band is built is ignored. */
 void cassette_footer_set_playing(bool playing, uint32_t elapsed_ms, uint32_t duration_ms,
                                  const char *title, const char *path);
