@@ -99,8 +99,14 @@ static void host_without_port(const char *host, char *out, size_t out_size)
     out[n] = 0;
 }
 
-/* 301 to the same path on HTTPS (front door R2: port 80 carries the stream and
- * nothing else, and no TLS ever).
+/* 307 to the same path on HTTPS (front door R2: port 80 carries the stream, the trust
+ * page, and no TLS ever).
+ *
+ * Temporary, not permanent: a device is reflashed, and its rules change with the firmware.
+ * A 301 is cached by browsers indefinitely - one that sent `/` to the app before the trust
+ * page existed keeps sending it there long after the device stopped saying so - and no
+ * Cache-Control on a redirect is read the same way. The method is preserved too, so a POST
+ * that arrives on 80 is retried rather than quietly turned into a GET.
  *
  * Written here rather than through http_send_headers because a Location can be
  * as long as the request target it came from (511 path + 255 query + a host),
@@ -146,14 +152,14 @@ static void send_https_redirect(int fd, const http_request_t *req)
 
     char h[1100];
     int m = snprintf(h, sizeof h,
-                     "HTTP/1.0 301 %s\r\nLocation: %s\r\nContent-Length: 0\r\n"
-                     "Connection: close\r\n\r\n",
-                     http_reason_phrase(301), location);
+                     "HTTP/1.0 307 %s\r\nLocation: %s\r\nContent-Length: 0\r\n"
+                     "Cache-Control: no-store\r\nConnection: close\r\n\r\n",
+                     http_reason_phrase(307), location);
     if (m < 0 || (size_t)m >= sizeof h) {
         http_send_error(fd, 500, "the redirect response is too large");
         return;
     }
-    ESP_LOGI(TAG, "%s %s -> 301 https", req->method, req->path);
+    ESP_LOGI(TAG, "%s %s -> 307 https", req->method, req->path);
     http_send_all(fd, h, (size_t)m);
 }
 
