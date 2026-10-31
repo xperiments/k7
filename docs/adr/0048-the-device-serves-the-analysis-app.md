@@ -22,11 +22,13 @@ plain HTTP would load a page that fails on its first file.
   partition at `0x610000` holds `web/dist` minus `models/` and `ort/` — 0.47 MB. Essentia,
   TagLib, ONNX Runtime and the models come from jsDelivr at a pinned tag, verified against the
   manifest's `sha256` before use, and cached by a service worker.
-- **HTTPS on 443, with a certificate from a private CA.** `mkcert` issues for `xtape.local`;
-  the certificate and key are compiled in from a gitignored header, the way
-  `wifi_credentials.h` is. The device needs no clock — the browser checks the dates. Port **80
-  stays plain** for `/stream`, because a car head unit will never trust a private CA; every
-  other path on 80 redirects to HTTPS.
+- **HTTPS on 443, with one certificate shipped in every image.** Every player is `xtape.local`,
+  so one leaf serves every device: it is signed once, by a CA whose key stays off the build
+  machines, and the certificate and key are compiled in from a checked-in pair under `tls/`.
+  Nobody creates a certificate to use the product; they trust the one that shipped, once. The
+  device needs no clock — the browser checks the dates. Port **80 stays plain** for `/stream`,
+  because a car head unit will never trust a private certificate; every other path on 80
+  redirects to HTTPS.
 - **`esp_https_server` on the device, behind the existing `http_server.h`.** TLS, keep-alive and
   chunked bodies come from IDF; the handle-based route table, the handler code and the 102
   integration checks stay where they are. The host tier keeps the hand-written loop as the
@@ -59,6 +61,25 @@ otherwise be frozen into flash is checked *on every cold load*, which is stricte
 shipping it. ONNX Runtime and the models take `ArrayBuffer`s and are checked the same way
 before they reach the runtime.
 
+## Why the certificate is shipped rather than made
+
+An operator-created CA — `mkcert`, a script, a key generated per installation — is better
+cryptography and worse product: it makes "flash it" into "flash it, then generate a CA, then
+trust it, then rebuild the firmware". The owner's requirement is that anyone can install the
+firmware and use it.
+
+Shipping one pair inverts the cost. The leaf's private key is then in every binary, so it must
+be treated as public: an attacker who has it can impersonate `xtape.local` to a client that
+trusts it. That is the price, and it is bounded by what the trust is for — a local appliance, on
+a network its owner controls. What must **not** be shipped is the CA's own key: it signs once and
+stays offline, so a leaked leaf cannot mint a certificate for any other name.
+
+Whether the client should trust the **leaf** directly (one certificate, no CA-wide trust at all)
+or the CA that signed it is an experiment, not an assumption: macOS accepts a directly-trusted
+leaf, and Chrome's treatment of one is the thing to measure before the trust step is documented.
+The leaf-only path is preferred if it works, because it shrinks what the user's machine agrees to
+trust from "anything this CA signs" to "this one name".
+
 ## Considered options
 
 - **A thin front door, analyser stays on the Mac.** The least work and no certificate. Rejected
@@ -84,9 +105,13 @@ before they reach the runtime.
   the boundary is the partition, not the binary.
 - **Two listeners, two route tables.** `http_server.h` grows a notion of which listener a route
   belongs to; the broadcast's stream route lives on the plain one, the app and MCP on TLS.
-- **The certificate is a per-client install.** Any machine that will open the page needs the
-  CA. That is the price of a secure origin on a LAN appliance, and the alternative is a real
-  domain and a public certificate.
+- **The certificate is a per-client install, and it is the only setup step.** Any machine that
+  will open the page must trust the shipped certificate — one command, nothing created. It cannot
+  be removed by sharing more, because trusting an origin is an operating-system decision, not a
+  certificate one.
+- **The leaf's private key is public by construction.** It is in every firmware image, so it is
+  in the repository. The CA key is not: it signs once and stays offline, so the trust the user
+  grants is bounded to the name they granted it for.
 - **The firmware build depends on `npm run build`.** `spiffs_create_partition_image` packs
   `web/dist`; a stale image is a stale page, so the build says which commit of the app it
   packed.
