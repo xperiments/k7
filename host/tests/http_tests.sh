@@ -99,7 +99,7 @@ run_expect_refusal() { # description log port [args...]
 
 group "starting the server against the fixture corpus"
 if [ -n "$BOARD_URL" ]; then
-    if ! curl -s -o /dev/null --max-time 8 "$BASE/"; then
+    if ! curl -s -o /dev/null --max-time 8 "$BASE/library"; then
         printf 'the board at %s is not answering\n' "$BASE"
         exit 1
     fi
@@ -176,8 +176,8 @@ group "T4  a client that says nothing cannot stall the next one (D1)"
 $PY "$HOST_DIR/tests/silent_client.py" "$SRV_HOST" "$SRV_PORT" 4 &
 silent=$!
 sleep 0.6
-code=$(curl -s -o /dev/null --max-time 5 -w '%{http_code}' "$BASE/")
-ttfb=$(curl -s -o /dev/null --max-time 5 -w '%{time_total}' "$BASE/")
+code=$(curl -s -o /dev/null --max-time 5 -w '%{http_code}' "$BASE/library")
+ttfb=$(curl -s -o /dev/null --max-time 5 -w '%{time_total}' "$BASE/library")
 check_eq "the second client is served" "$code" "200"
 check_lt "and served at once (${ttfb}s, not after a timeout)" "$ttfb" "2.0"
 stream_ttfb=$(curl -s -o /dev/null --max-time 3 -w '%{time_starttransfer}' "$BASE/stream")
@@ -188,7 +188,7 @@ kill "$silent" 2>/dev/null
 # superset of the fixtures there and exactly on the host.
 if [ -n "$BOARD_URL" ]; then INDEX_MODE=--superset; else INDEX_MODE=; fi
 group "T6  the index lists the library"
-curl -s "$BASE/" >"$TMP/index.html"
+curl -s "$BASE/library" >"$TMP/index.html"
 if $PY "$HOST_DIR/tests/check_index.py" "$TMP/index.html" "$FIX" $INDEX_MODE >"$TMP/index.out" 2>&1; then
     ok "$(cat "$TMP/index.out")"
 else
@@ -196,7 +196,7 @@ else
 fi
 check_match "the page says what is playing" "$(cat "$TMP/index.html")" 'Now playing:'
 check_match "and links the live stream" "$(cat "$TMP/index.html")" 'href="/stream"'
-check_match "and serves a content type a browser can render" "$(curl -s -D - -o /dev/null "$BASE/")" 'Content-Type: text/html; charset=utf-8'
+check_match "and serves a content type a browser can render" "$(curl -s -D - -o /dev/null "$BASE/library")" 'Content-Type: text/html; charset=utf-8'
 
 group "T14  the prebuilt library is served without the card"
 curl -s -D "$TMP/libhdr" -o "$TMP/lib.json" "$BASE/api/library"
@@ -276,7 +276,7 @@ if [ -z "$BOARD_URL" ]; then
         check_eq "and its Content-Length still matches the body" \
             "$(tr -d '\r' <"$TMP/frozenhdr" | sed -n 's/^Content-Length: //p')" \
             "$(wc -c <"$TMP/frozen.json" | tr -d ' ')"
-        curl -s -o "$TMP/frozen.html" "http://127.0.0.1:18101/"
+        curl -s -o "$TMP/frozen.html" "http://127.0.0.1:18101/library"
         check_match "the index still lists the deleted file from the tree" "$(cat "$TMP/frozen.html")" 'tone-44100\.flac'
     fi
 
@@ -294,7 +294,7 @@ if [ -z "$BOARD_URL" ]; then
             bad "nested tree: $(cat "$TMP/nested.out")"
         fi
         check_match "and its paths use the tree, not the flat directory" "$(cat "$TMP/nested.json")" '"path":"Album/01 - Song.flac"'
-        curl -s -o "$TMP/nested.html" "http://127.0.0.1:18106/"
+        curl -s -o "$TMP/nested.html" "http://127.0.0.1:18106/library"
         if $PY "$HOST_DIR/tests/check_index.py" "$TMP/nested.html" "$TMP/nested" >"$TMP/nestedindex.out" 2>&1; then
             ok "$(cat "$TMP/nestedindex.out")"
         else
@@ -322,7 +322,7 @@ if [ -z "$BOARD_URL" ]; then
             bad "no card state: $(cat "$TMP/nocard.out")"
         fi
         check_match "and the boot log names it" "$(cat "$TMP/nocard.log")" 'library: state=no_card '
-        curl -s -o "$TMP/nocard.html" "http://127.0.0.1:18102/"
+        curl -s -o "$TMP/nocard.html" "http://127.0.0.1:18102/library"
         check_match "the index says no card" "$(cat "$TMP/nocard.html")" 'No card mounted'
         curl -s -o "$TMP/nocard.bin" "http://127.0.0.1:18102/api/library.bin"
         if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/nocard.bin" "$FIX" --state no_card >"$TMP/nocardbin.out" 2>&1; then
@@ -340,7 +340,7 @@ if [ -z "$BOARD_URL" ]; then
         else
             bad "missing directory state: $(cat "$TMP/nodir.out")"
         fi
-        curl -s -o "$TMP/nodir.html" "http://127.0.0.1:18103/"
+        curl -s -o "$TMP/nodir.html" "http://127.0.0.1:18103/library"
         check_match "the index says the music directory is missing" "$(cat "$TMP/nodir.html")" 'No music directory'
         curl -s -o "$TMP/nodir.bin" "http://127.0.0.1:18103/api/library.bin"
         if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/nodir.bin" "$TMP/no-music-parent/missing" --state no_dir >"$TMP/nodirbin.out" 2>&1; then
@@ -358,7 +358,7 @@ if [ -z "$BOARD_URL" ]; then
         else
             bad "empty state: $(cat "$TMP/empty.out")"
         fi
-        curl -s -o "$TMP/empty.html" "http://127.0.0.1:18104/"
+        curl -s -o "$TMP/empty.html" "http://127.0.0.1:18104/library"
         check_match "the index says there are no tracks" "$(cat "$TMP/empty.html")" 'contains no tracks'
         curl -s -o "$TMP/empty.bin" "http://127.0.0.1:18104/api/library.bin"
         if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/empty.bin" "$TMP/empty" --state empty >"$TMP/emptybin.out" 2>&1; then
@@ -376,7 +376,7 @@ if [ -z "$BOARD_URL" ]; then
             bad "truncated view: $(cat "$TMP/trunc.out")"
         fi
         check_match "and the body says truncated" "$(cat "$TMP/trunc.json")" '"truncated":true'
-        curl -s -o "$TMP/trunc.html" "http://127.0.0.1:18105/"
+        curl -s -o "$TMP/trunc.html" "http://127.0.0.1:18105/library"
         check_match "the index notes the truncation" "$(cat "$TMP/trunc.html")" 'truncated at 1 tracks'
         curl -s -o "$TMP/trunc.bin" "http://127.0.0.1:18105/api/library.bin"
         if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/trunc.bin" "$FIX" --state ok --truncated --subset >"$TMP/truncbin.out" 2>&1; then
@@ -409,7 +409,7 @@ PYX
             cat "$TMP/play.out"
             bad "POST /api/play wire cases failed"
         fi
-        curl -s -o "$TMP/playing.html" "http://127.0.0.1:18107/"
+        curl -s -o "$TMP/playing.html" "http://127.0.0.1:18107/library"
         check_match "the index now names the selected Track" "$(cat "$TMP/playing.html")" 'Now playing: <strong>two</strong>'
         check_eq "a POST to a GET-only route is a 405" \
             "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' "http://127.0.0.1:18107/api/library")" "405"
@@ -462,7 +462,7 @@ sleep 1
 check_match "and its new generation is still no_card" \
     "$(curl -s "http://127.0.0.1:$((PORT + 3))/api/library")" '"generation":2.*"state":"no_card"'
 check_match "the card-less index stays diagnosable" \
-    "$(curl -s "http://127.0.0.1:$((PORT + 3))/")" "No card mounted"
+    "$(curl -s "http://127.0.0.1:$((PORT + 3))/library")" "No card mounted"
 
 group "the device serves no Track and accepts no Track upload"
 # The global premise (docs/specs/CONTEXT.md): there is no per-Track route, and no
@@ -477,7 +477,7 @@ check_eq "an upload to /music/ is refused" \
 check_eq "an upload anywhere is refused" \
     "$(curl -s -o /dev/null -w '%{http_code}' -X PUT --data-binary x "$BASE/upload/new.mp3")" "404"
 check_eq "the index still lists the Track" \
-    "$(curl -s "$BASE/" | grep -c 'tone-44100\.flac')" "1"
+    "$(curl -s "$BASE/library" | grep -c 'tone-44100\.flac')" "1"
 # Not a Track: the computed library view keeps its attachment framing.
 check_eq "the library view is still fetchable" \
     "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/library.bin")" "200"
@@ -488,8 +488,8 @@ check_match "and still framed as an attachment" \
 group "routing and rejected setup"
 check_eq "an unknown path is a 404, not the stream" "$(curl -s -o /dev/null -w '%{http_code}' --path-as-is "$BASE/nope")" "404"
 check_eq "so is a file-ish path" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/index.html")" "404"
-check_eq "a non-GET method is refused" "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d x "$BASE/")" "405"
-check_eq "the root is served" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/")" "200"
+check_eq "a non-GET method is refused" "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d x "$BASE/library")" "405"
+check_eq "the index is served" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/library")" "200"
 
 if [ -n "$BOARD_URL" ]; then
     printf '  skip  descriptor leak check on the board (160 rejected connections exercised only the host build)\n'

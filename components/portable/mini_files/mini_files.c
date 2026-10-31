@@ -130,7 +130,7 @@ static const library_t *files_acquire(bool *owned)
 
 static http_result_t index_with_lib(int fd, const http_request_t *req, const library_t *lib)
 {
-    if (strcmp(req->path, "/") != 0) {
+    if (strcmp(req->path, "/library") != 0) {
         ESP_LOGI(TAG, "GET %s -> 404", req->path);
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
@@ -141,13 +141,13 @@ static http_result_t index_with_lib(int fd, const http_request_t *req, const lib
         char err[sizeof F.err];
         snapshot_card(&card_mounted, err, sizeof err);
         if (card_mounted) {
-            ESP_LOGI(TAG, "GET / -> card mounted, library generation is still the boot one");
+            ESP_LOGI(TAG, "GET /library -> card mounted, library generation is still the boot one");
             send_library_problem(fd, "Library not rebuilt",
                                  "A card is mounted, but the Library generation is still the "
                                  "boot-time no-card one. The rescan path replaces it.");
         } else {
             if (!err[0]) snprintf(err, sizeof err, "%s", library_error(lib));
-            ESP_LOGI(TAG, "GET / -> no card (%s)", err[0] ? err : "not mounted");
+            ESP_LOGI(TAG, "GET /library -> no card (%s)", err[0] ? err : "not mounted");
             send_library_problem(fd, "No card mounted",
                                  err[0] ? err : "No card is mounted, so there is no audio library.");
         }
@@ -202,7 +202,7 @@ static http_result_t index_with_lib(int fd, const http_request_t *req, const lib
     w_puts(&w, "</ul>");
     if (!listed) w_puts(&w, "<p>The music directory contains no tracks.</p>");
     w_flush(&w);
-    ESP_LOGI(TAG, "GET / -> %u track(s)", (unsigned)listed);
+    ESP_LOGI(TAG, "GET /library -> %u track(s)", (unsigned)listed);
     return HTTP_HANDLED;
 }
 
@@ -255,7 +255,7 @@ esp_err_t mini_files_start(const mini_files_cfg_t *cfg)
 
     /* The index is the only route: the device serves no Track and accepts no
      * upload (the global premise in docs/specs/CONTEXT.md). */
-    esp_err_t err = http_server_register_route("/", index_route, NULL);
+    esp_err_t err = http_server_register_route("/library", index_route, NULL);
     if (err != ESP_OK) ESP_LOGE(TAG, "cannot register the index route: %s", esp_err_to_name(err));
     return err;
 }

@@ -41,6 +41,9 @@ typedef struct {
     uint32_t    library_max_bytes;  /* 0 = the library's default (4 MiB) */
     uint32_t    library_max_tracks; /* 0 = the library's default (20000) */
     const char *server_name;  /* HTTP Server: header; NULL = the server's default */
+    /* The directory the front door's page is served from - the SPIFFS mount on the
+     * device, `web/dist` on the host. NULL means this firmware carries no page. */
+    const char *web_root;
 } app_services_cfg_t;
 
 typedef struct {

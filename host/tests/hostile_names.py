@@ -110,7 +110,7 @@ def main():
     try:
         for _ in range(60):
             try:
-                urllib.request.urlopen(BASE + "/", timeout=1).read()
+                urllib.request.urlopen(BASE + "/library", timeout=1).read()
                 break
             except Exception:
                 time.sleep(0.25)
@@ -118,7 +118,7 @@ def main():
             print("FATAL: the server did not come up")
             return 1
 
-        page = urllib.request.urlopen(BASE + "/", timeout=5).read().decode("utf-8")
+        page = urllib.request.urlopen(BASE + "/library", timeout=5).read().decode("utf-8")
         # The row text is HTML-escaped, so the page has to be unescaped before a name
         # can be looked for in it.
         text = html.unescape(page)

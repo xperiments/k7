@@ -47,6 +47,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/groups/include \
        -I$(ROOT)/components/portable/rgb/include \
        -I$(ROOT)/components/portable/snapshot/include \
+       -I$(ROOT)/components/portable/front_door/include \
        -I$(ROOT)/components/portable/app_services/include \
        -I$(ROOT)/components/portable/app_board/include \
        -I$(ROOT)/components/portable/dr_libs/include \
@@ -92,6 +93,7 @@ PROD_SRC := \
   $(ROOT)/components/portable/rgb/rgb.c \
   $(ROOT)/components/portable/mini_icecast/mi_shuffle.c \
   $(ROOT)/components/portable/snapshot/snapshot.c \
+  $(ROOT)/components/portable/front_door/front_door.c \
   $(ROOT)/components/portable/app_services/app_services.c \
   $(SHINE_SRC)
 
@@ -111,6 +113,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/groups \
           $(ROOT)/components/portable/rgb \
           $(ROOT)/components/portable/snapshot \
+          $(ROOT)/components/portable/front_door \
           $(ROOT)/components/portable/app_services \
           $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
@@ -120,7 +123,7 @@ BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
-SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o
+SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o
@@ -296,6 +299,8 @@ integration: $(SERVER)
 	@$(PYTHON) $(HERE)/tests/hostile_names.py $(SERVER) $(HERE)/fixtures/tone-44100.flac
 	@echo "--- the snapshot over MCP"
 	@$(PYTHON) $(HERE)/tests/snapshot_tests.py $(SERVER) $(HERE)/fixtures
+	@echo "--- the front door"
+	@$(PYTHON) $(HERE)/tests/front_door_tests.py $(SERVER) $(HERE)/fixtures
 
 layering:
 	@ROOT=$(ROOT) sh $(HERE)/tests/layering.sh

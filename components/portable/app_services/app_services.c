@@ -26,6 +26,7 @@
 #include "mini_files.h"
 #include "mini_icecast.h"
 #include "snapshot.h"
+#include "front_door.h"
 
 static const char *TAG = "app";
 
@@ -136,6 +137,14 @@ static http_result_t rescan_route(int fd, const http_request_t *req, void *ctx)
 }
 
 bool app_services_card_present(void) { return s_card_present; }
+
+/* The front door asks the question through a callback so it need not depend on this
+ * module - the composition depends on both, and the arrow stays one-way. */
+static bool front_door_card_present(void *ctx)
+{
+    (void)ctx;
+    return s_card_present;
+}
 
 void app_services_card_state(bool present, const char *mount_error)
 {
@@ -351,6 +360,16 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     e = mini_files_start(&files);
     if (e != ESP_OK) return fail(report, e, "file surface");
     if (report) report->files_up = true;
+
+    /* 5b. The page at `/`, and the card state it hangs from. A firmware with no page
+     * still registers the route: `/` says so, and `/library` keeps working. */
+    front_door_cfg_t door = {
+        .root = cfg->web_root,
+        .card_present = front_door_card_present,
+        .ctx = NULL,
+    };
+    e = front_door_start(&door);
+    if (e != ESP_OK) return fail(report, e, "front door");
 
     /* 6. The library endpoint. Registration only; the listener is still ahead. */
     e = library_http_start(NULL);
