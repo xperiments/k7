@@ -1,0 +1,51 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { sendSnapshot, UploadError } from '../src/device/upload';
+
+const reply = (status: number, body: string) =>
+  new Response(body, { status, headers: { 'Content-Type': 'application/json' } });
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('sending the snapshot to the player', () => {
+  it('posts the image as bytes the player can tell apart from a form', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(reply(200, '{"applied":true,"bytes":12}'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await sendSnapshot(new Uint8Array([1, 2, 3]));
+
+    expect(result).toEqual({ bytes: 12 });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/snapshot');
+    expect(init.method).toBe('POST');
+    expect(init.headers['Content-Type']).toBe('application/octet-stream');
+  });
+
+  it('says why the player refused the image', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        reply(400, '{"applied":false,"error":"image is not its stated length"}'),
+      ),
+    );
+
+    await expect(sendSnapshot(new Uint8Array([1]))).rejects.toMatchObject({
+      name: 'UploadError',
+      status: 400,
+      message: 'image is not its stated length',
+    });
+  });
+
+  it('is an UploadError, not a network exception, when the player is absent', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('failed to fetch')));
+
+    await expect(sendSnapshot(new Uint8Array([1]))).rejects.toBeInstanceOf(UploadError);
+  });
+
+  it('treats a 200 without applied:true as a refusal', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(reply(200, '{"applied":false}')));
+
+    await expect(sendSnapshot(new Uint8Array([1]))).rejects.toThrow(/refused it \(200\)/);
+  });
+});

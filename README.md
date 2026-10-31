@@ -23,8 +23,8 @@ rate and encoded to MP3 for the stream.
 > ## Read this before you deploy it
 >
 > **This firmware serves a live stream, an analysis web app, the index, the
-> library API and a read-only MCP endpoint to anyone who can reach it — the app
-> on 443, the stream on 80 — and its Wi-Fi credentials are compiled into the
+> library API and a read-only MCP endpoint to anyone who can reach it, all on
+> port 80 over plain HTTP, and its Wi-Fi credentials are compiled into the
 > binary.** There is no authentication
 > anywhere: not on the index, not on the stream, and not on `/api/play` or
 > `/mcp`. (`/stream` deliberately stays open even if auth is ever
@@ -124,8 +124,8 @@ one line, and the error message names the component.
 * The index uses that Playlist order; the live stream plays it in order, looping
   forever.
 
-The MCP endpoint is also advertised over mDNS as `xtape.local` (`_mcp._tcp`, port 443,
-TXT `path=/mcp`, `endpoint=https://xtape.local/mcp`, `device_type=mcp:device`). The
+The MCP endpoint is also advertised over mDNS as `xtape.local` (`_mcp._tcp`, port 80,
+TXT `path=/mcp`, `endpoint=http://xtape.local/mcp`, `device_type=mcp:device`). The
 hostname is fixed: **one xtape per LAN**. Discover it with `dns-sd -B _mcp._tcp` (macOS) or
 `avahi-browse -rt _mcp._tcp` (Linux).
 
@@ -215,8 +215,7 @@ I (1223) icecast: station format: 44100 Hz, 256 kbps CBR, joint stereo, MPEG-1
 I (1576) icecast: encoder: 102408 B of internal RAM taken (the encoder's own state; near zero means it landed in external memory)
 I (1576) icecast: encoder: 1152 samples/frame (26.1 ms), 95880 B of state inside the vendored library, staging buffers in external memory
 I (1588) icecast: burst ring: 20098 B (~500 ms of audio) in external memory, sends at most 2 clients
-I (2415) esp_https_server: Server listening on port 443
-I (2396) icecast: GET /stream is ready on the plain listener (port 80); the app is on 443
+I (2396) icecast: GET /stream is ready on port 80, beside the app
 ```
 
 Note the encoder figure: **95 880 B**, not the 95 896 B that a 64-bit host measures.

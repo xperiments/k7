@@ -502,9 +502,10 @@ _Avoid_: unauthenticated, public, insecure
 ### The front door
 
 **Front door**:
-The page the device serves at `https://xtape.local`: the analysis app, with the **Player view**
-when a card is in the player and the **Prepare view** when it is not. It is the network's way in,
-as the **Cassette screen** is the panel's.
+The page the device serves at `http://xtape.local`, its only address and port: the analysis
+app, with the **Player view** when a card is in the player and the **Prepare view** when it is
+not. It is the network's way in, as the **Cassette screen** is the panel's. Plain HTTP, with
+no certificate and no trust step (ADR 0049).
 _Avoid_: web UI, dashboard, admin page
 
 **Card state**:
@@ -516,9 +517,15 @@ _Avoid_: card flag, insertion status
 The front door with a card in the player: what the broadcast is doing. TBD.
 _Avoid_: main screen, player mode
 
+**Snapshot upload**:
+`POST /api/snapshot`: how a **Snapshot** reaches the device when the card is in the computer.
+The image is validated before anything is erased and the device restarts afterwards. It is the
+one write the device accepts, and it carries measurements, never a **Track**.
+_Avoid_: file upload, flash endpoint
+
 **Prepare view**:
-The front door with no card in the player: the analysis app that measures a card and writes its
-**Snapshot** back. This is the view an analyser runs in.
+The front door with no card in the player: the analysis app that measures a card in the
+computer and sends the **Snapshot** to the player. This is the view an analyser runs in.
 _Avoid_: analyser mode, setup screen
 
 **Shell**:

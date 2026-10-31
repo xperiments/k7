@@ -1,5 +1,8 @@
 import type { DecodedAudio } from './analyzer';
 import type { TrackFormat } from '../domain/analysis';
+import { sha256Hex } from '../lib/sha256';
+
+export { sha256Hex };
 
 export function trackFormat(file: File): TrackFormat | null {
   const name = file.name.toLowerCase();
@@ -8,12 +11,6 @@ export function trackFormat(file: File): TrackFormat | null {
   return null;
 }
 
-export async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', buffer);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
 
 function mono(buffer: AudioBuffer): Float32Array {
   const channels = buffer.numberOfChannels;

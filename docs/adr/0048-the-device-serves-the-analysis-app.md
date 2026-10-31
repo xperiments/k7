@@ -1,5 +1,11 @@
 # The device serves the analysis app, and the weights come from elsewhere
 
+> **Amended by [ADR 0049](0049-the-front-door-is-plain-http.md).** The shell, the partition, the
+> weights from the CDN and the two views stand. The TLS listener, the shipped certificate and the
+> trust step do not: the front door is plain HTTP, and `xtape.db` is posted to the device instead
+> of written to the card through a picker. Read this document for the origin and the size
+> problem, and 0049 for what the device actually does.
+
 The owner asked for one address: `xtape.local` should be the thing you open, and it should
 know whether the card is in the player. Card in → the player view. Card out → the analysis
 page that measures the card and writes `xtape.db` back to it.

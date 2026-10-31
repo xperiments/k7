@@ -62,10 +62,6 @@ function shellOutputs(shell: boolean): Plugin {
           resolve(root, 'public/ort/ort-wasm-simd-threaded.mjs'),
           resolve(outDir, 'ort/ort-wasm-simd-threaded.mjs'),
         );
-        /* The plain listener's page: the certificate to trust and how, for the three
-         * systems that open this app. Served over HTTP, so it has to work before trust. */
-        await copyFile(resolve(root, 'public/setup.html'), resolve(outDir, 'setup.html'));
-        await copyFile(resolve(root, '..', 'tls', 'ca.pem'), resolve(outDir, 'ca.pem'));
       }
 
       const lock = await readFile(resolve(root, 'weights.lock.json'));

@@ -11,6 +11,7 @@ import {
   type ModelManifest,
 } from '../domain/analysis';
 import { snapshotPath } from '../domain/snapshot';
+import { sendSnapshot } from '../device/upload';
 import { SOURCE_URL, cacheKey } from '../config';
 import { clearCache, getCached, putCached } from '../storage/cache';
 import { WEIGHTS_MODE } from '../weights/config';
@@ -305,6 +306,30 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
     }
   }, [buildImage, cardHandle, savingSnapshot]);
 
+  /* The card stays in the computer; the measurements go to the player over the network.
+   * The player validates the image before it writes a byte of flash and restarts itself
+   * afterwards, so the honest thing to say here is "it is restarting". */
+  const sendToPlayer = useCallback(async () => {
+    if (savingSnapshot) return;
+    setSavingSnapshot(true);
+    try {
+      const result = await buildImage();
+      if (!result) return;
+      const sent = await sendSnapshot(result.bytes);
+      setNotice(
+        `Sent ${plural(result.tracks, 'track')} to the player (${sent.bytes} bytes).` +
+          leftovers(result.skipped) +
+          ' It is restarting to pick up the new measurements.',
+      );
+    } catch (error) {
+      setNotice(
+        `Could not send to the player: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setSavingSnapshot(false);
+    }
+  }, [buildImage, savingSnapshot]);
+
   const saveSnapshotFile = useCallback(async () => {
     if (savingSnapshot) return;
     setSavingSnapshot(true);
@@ -427,6 +452,15 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
               {savingSnapshot ? 'Writing…' : 'Save to card'}
             </button>
           )}
+          <button
+            type="button"
+            className="primary"
+            onClick={() => void sendToPlayer()}
+            disabled={!canSave || savingSnapshot}
+            title="Post the measurements to the player over the network; it writes them to its own flash."
+          >
+            {savingSnapshot ? 'Sending…' : 'Send to player'}
+          </button>
           <button
             type="button"
             className="ghost"
