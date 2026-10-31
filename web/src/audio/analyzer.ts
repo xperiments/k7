@@ -55,11 +55,30 @@ const EFFNET_HOP = 62;
 const MUSICNN_PATCH = 187;
 const MUSICNN_HOP = 93;
 
-/** The 60 s window starting a quarter of the way in, clamped to the track. */
-export function moodWindow(duration: number): { start: number; duration: number } {
-  const length = Math.min(60, Math.max(0, duration));
+/** Where in a track the measurements are taken: a quarter in, clamped so the window fits. */
+function windowAt(duration: number, seconds: number): { start: number; duration: number } {
+  const length = Math.min(seconds, Math.max(0, duration));
   const start = duration > length ? Math.min(duration * 0.25, duration - length) : 0;
   return { start, duration: length };
+}
+
+/**
+ * The span the mood models hear. Thirty seconds is ten 3-second patches, which is enough for
+ * an average to settle: the models were trained on single segments, and more of them buys
+ * noise reduction, not information.
+ */
+export function moodWindow(duration: number): { start: number; duration: number } {
+  return windowAt(duration, 30);
+}
+
+/**
+ * The span tempo and key are measured over. Two minutes, not the whole track: a beat tracker
+ * over a ten-minute file is the most expensive thing in this pipeline, and tempo rarely
+ * changes and key rarely modulates. The excerpt is anchored where the mood window is, so all
+ * three measurements describe the same part of the track.
+ */
+export function analysisWindow(duration: number): { start: number; duration: number } {
+  return windowAt(duration, 120);
 }
 
 /** Pads very short tracks by repeating their last frame, so one patch exists. */
@@ -198,7 +217,10 @@ export class Analyzer {
     if (!decoded.pcm44k) {
       throw new Error('44.1 kHz audio is required for deep tempo analysis');
     }
-    const vec44 = this.essentia.arrayToVector(decoded.pcm44k);
+    const span = analysisWindow(decoded.duration);
+    const from = Math.floor(span.start * 44_100);
+    const to = Math.min(decoded.pcm44k.length, Math.floor((span.start + span.duration) * 44_100));
+    const vec44 = this.essentia.arrayToVector(decoded.pcm44k.subarray(from, to));
     const deep = this.deepTempo(vec44, 0);
     return {
       bpm: foldTempo(deep.rawBpm),
@@ -261,12 +283,20 @@ export class Analyzer {
       };
     }
 
+    /* Tempo and key see two minutes, not the whole file: the decode is unavoidable but the
+     * analysis is not, and the Essentia calls over a ten-minute track were what made a run
+     * take minutes. Sliced once, before either of them. */
     let vector44: ReturnType<Essentia['arrayToVector']> | null = null;
     const vec44 = () => {
       if (!decoded.pcm44k) {
         throw new Error('44.1 kHz audio is required to measure tempo or key');
       }
-      vector44 ??= this.essentia.arrayToVector(decoded.pcm44k);
+      if (!vector44) {
+        const span = analysisWindow(decoded.duration);
+        const from = Math.floor(span.start * 44_100);
+        const to = Math.min(decoded.pcm44k.length, Math.floor((span.start + span.duration) * 44_100));
+        vector44 = this.essentia.arrayToVector(decoded.pcm44k.subarray(from, to));
+      }
       return vector44;
     };
 

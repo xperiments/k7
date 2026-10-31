@@ -73,7 +73,9 @@ Then open the printed URL, drop files or a folder, and wait for the cards.
    models. Duration comes from the decoded samples, so MP3 encoder padding is handled.
 5. A single worker runs Essentia.js (WASM) for Degara beats and `KeyExtractor` (when they are
    not tagged), then, if confidence is below 0.6, Essentia's multifeature tracker.
-6. Mood uses a 60 s window starting a quarter of the way in. The log-mel front-end is
+6. Mood uses a 30 s window starting a quarter of the way in, and tempo/key use 120 s from
+   the same point — the whole track is decoded, but only the excerpt is analysed, because an
+   Essentia pass over a ten-minute file is what made a run take minutes. The log-mel front-end is
    implemented in TypeScript (`src/audio/mel.ts`) and verified against Essentia's WASM
    implementation in `tests/mel.test.ts` (max band difference ≈3e-5). EffNet supplies the six
    tag heads when mood is not tagged; MusiCNN supplies the DEAM valence/arousal head when
@@ -137,7 +139,7 @@ These are measurements, not ground truth for your library:
   large library takes minutes.
 - Saving produces a download, not an in-place update; and saving one card at a time is the
   only batch story for now.
-- One 60 s mood window; tracks shorter than that use the whole track.
+- One 30 s mood window and one 120 s tempo/key window; shorter tracks use all of it.
 - Local use only. `SOURCE_URL` in `src/config.ts` must be set before deploying publicly, so
   the AGPL source offer is reachable.
 - Browser support is Chromium/Firefox-first (FLAC in `decodeAudioData` varies in Safari).
