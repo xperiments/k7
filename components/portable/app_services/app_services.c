@@ -55,9 +55,9 @@ static void rescan_task(void *arg)
     int64_t t0 = esp_timer_get_time();
     uint32_t psram_before = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
 
-    /* One card user at a time: a download may already own the same lock. The
-     * rescan waits for it before parking the broadcast, so the two never walk
-     * FATFS concurrently (and a download cannot unpark the scan). */
+    /* One card user at a time: the lock is the card's, so the rescan waits for
+     * any other owner before parking the broadcast and never walks FATFS
+     * concurrently. */
     while (!mini_files_card_lock(1000))
         vTaskDelay(pdMS_TO_TICKS(1000));
 

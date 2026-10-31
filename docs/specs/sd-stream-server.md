@@ -1,9 +1,13 @@
 # SD stream server: specification
 
 **Goal.** An ESP32-S3 devkit, flashed with this firmware, joins Wi-Fi with hardcoded
-credentials, reads an audio library off a microSD card, and serves it over HTTP: one
-continuous live MP3 stream plus a browsable index from which the original files can be
-downloaded.
+credentials, reads an audio library off a microSD card, and broadcasts it over HTTP: one
+continuous live MP3 stream plus an index that lists the library.
+
+> **Amended 2026-10-31 by the global premise.** `docs/specs/CONTEXT.md` now states that this
+> device never serves or accepts a Track: all SD content processing happens outside it. R7 (the `/music/<path>` download), D5, D6 and tests T7, T8, T9, T9b and
+> T13 are therefore **withdrawn**, and the route and its code are removed. The reasoning behind
+> ADR 0001 is kept as history. Everything else in this specification stands.
 
 **Relationship to `docs/research/server/s12-mp3-only-plan.md`.** That plan is the research
 input. This document is the buildable specification derived from it, and it **supersedes**
@@ -30,21 +34,28 @@ flagged so they can be disproved on hardware.
 | R4 | Resample everything to one station rate and encode to **MP3** |
 | R5 | Broadcast one continuous ICY stream at `GET /stream` on port 8000 |
 | R6 | Serve an HTML index of the Library tree at `GET /` |
-| R7 | Serve the **original, untranscoded bytes** of a Track at `GET /music/<relative path>` |
+| R7 | **Withdrawn 2026-10-31.** Serve the original bytes at `GET /music/<relative path>`. The device serves no Track (global premise, `docs/specs/CONTEXT.md`); the route and its code are gone |
 | R8 | Degrade rather than abort when the card is absent or unreadable |
 
 ### Out of scope, explicitly
 
 Opus, Vorbis, Ogg, WebM, Matroska, AAC — the plan's §1 removes all of them and this
 specification reinstates none. Also excluded: TLS, HTTP authentication, transcode-on-demand,
-range/seek support, OTA updates, and any runtime mechanism for changing Wi-Fi credentials.
-(mDNS advertisement of `_mcp._tcp` is part of the MCP surface, not general service discovery.) The last one is a deliberate deferral, recorded in §11.
+range/seek support, OTA updates, and any runtime mechanism for changing Wi-Fi credentials (a
+deliberate deferral, recorded in §11). By the global premise, every Track-serving or
+Track-upload surface is excluded too: per-Track GET, a WebDAV/SMB/FTP mount, PUT and
+multipart. (mDNS advertisement of `_mcp._tcp` is part of the MCP surface, not general service
+discovery.)
 
 ### Non-goals worth stating
 
-This is **not** a general-purpose file server. R7 exists so a phone or laptop on the same
-LAN can retrieve the source files; it is not an endpoint intended for internet exposure, and
-§7 explains the consequences of that stance.
+This never serves or accepts a **Track**. No per-Track endpoint, no WebDAV/SMB/FTP mount,
+no upload path: audio leaves only as the live stream. The index names the Tracks so a person
+can see what the card holds; it does not hand them out. The firmware's own views
+(`/api/library`, `/api/library.bin`, the opt-in `/api/screen.bmp`) are not Tracks, so
+`/api/library.bin` may still be offered as an attachment — it is the index, not a song.
+`docs/specs/CONTEXT.md` states this as a global premise, and §7 explains the access
+consequences.
 
 ---
 
@@ -149,8 +160,8 @@ touching anything else.
 ## 3. Firmware structure
 
 The existing `resources/` is a single component that both produces audio and speaks HTTP.
-The index and download surface (R6, R7) is a second HTTP consumer, and §5 defect 1 shows the
-current accept loop already blocks on one slow client. Extraction is therefore a
+The index surface (R6) is a second HTTP consumer, and §5 defect 1 shows the current accept
+loop already blocks on one slow client. Extraction is therefore a
 prerequisite, not a refactor for its own sake.
 
 ```
@@ -163,7 +174,7 @@ components/
     mini_icecast.c/.h
   library/                boot-built tree, arena, JSON, Playlist and lookup  (new)
   library_http/           GET /api/library[.bin] from the prebuilt views    (new)
-  mini_files/             GET / index, GET /music/<relative path> download  (new)
+  mini_files/             GET / index: a listing, not a file browser       (new)
   shine/                  vendored, unmodified, separate licence             (new)
 ```
 
@@ -173,8 +184,8 @@ short-lived task that reads and parses the request header and routes it:
 - `GET /stream` → hand the fd to `mini_icecast` for registration (under the broadcast lock,
   burst included, exactly as `handle_new()` does today at `mini_icecast.c:237-246`), then the
   routing task exits.
-- `GET /` and `GET /music/<relative path>` → served entirely inside the routing task by
-  `mini_files`, reading the Library generation.
+- `GET /` → served entirely inside the routing task by `mini_files`, reading the Library
+  generation. There is no second file route.
 - Anything else → `404`.
 
 **Requirement S2.** A connection limit caps concurrently-parsing tasks, and `listen()`'s
@@ -327,16 +338,16 @@ promise needs to stop overstating itself.
 ## 5. Defects to fix
 
 These are independent of the encoder. Four come from the plan's §5 and are **re-verified here
-against the code**; two are new, introduced by R6/R7.
+against the code**; two were new, introduced by R7, and are withdrawn with it.
 
 | # | Defect | Evidence | Requirement |
 |---|---|---|---|
-| D1 | `accept_task` calls `handle_new(fd)` inline (`mini_icecast.c:274`), and `handle_new` does a blocking header read with a **2 s** `SO_RCVTIMEO` (`:195-197`). One silent client stalls every new connection. | **[read]** | Fixed structurally by S1/S2. This is a prerequisite for R6/R7, not a cleanup: a slow download would otherwise stall all connects. |
+| D1 | `accept_task` calls `handle_new(fd)` inline (`mini_icecast.c:274`), and `handle_new` does a blocking header read with a **2 s** `SO_RCVTIMEO` (`:195-197`). One silent client stalls every new connection. | **[read]** | Fixed structurally by S1/S2. This is a prerequisite for R6, not a cleanup: one slow client would otherwise stall all connects. |
 | D2 | `"icy-name: %s\r\n"` has a space after the colon (`mini_icecast.c:225`); real Icecast emits none. | **[read]** | Emit `icy-name:` with no space. Low stakes against permissive parsers, but this server is the natural loopback fixture for a client-side parser, so canonical headers matter. |
 | D3 | `max_clients` is documented `1..4` (`mini_icecast.h:22`) but silently coerced to 2 (`mini_icecast.c:395`) while `clients[]` is sized `MAX_CLIENTS 4` (`:32`). | **[read]** | Honour the value across the full 1..4 range, and reject out-of-range with a diagnostic log instead of silent coercion. |
 | D4 | Resampler stack overflow at extreme downsampling: `double row[256]` at `mi_resample.c:47` is indexed by `T`; `T = 2 * ceil(ZERO_X / fc)` with `fc = 0.95 * out/in` for downsampling. `48000 → 3000` gives `T ≈ 540`, `44100 → 1000` gives `T ≈ 1486`. | **[read, arithmetic re-derived]** | Not reachable at a 44.1/48 kHz station, but `out_hz` is user-configurable, so clamp or assert `T <= 256` at construction and fail `mi_rs_new()` with a diagnostic rather than overflowing the radio task's stack. |
-| D5 | **New.** Path handling for R7. Nothing sanitizes a filename from a request today because nothing accepted one. | **[read]** | Decode one path segment at a time; reject an empty segment, `.`/`..`, a leading `.`, a NUL, a `/` or `\` inside a segment, and a non-audio node. Resolve only through the Library tree, then open `root + relative path`; never join a request path directly. |
-| D6 | **New.** SDMMC contention between the decoder and downloads. | **[read]** | Serialize downloads behind a mutex; exactly **one** download at a time (R7), returning `503` to a second requester rather than queueing it. A 40 MB FLAC download is the worst case for card arbitration, and the radio must never starve. Also raise `max_files` above `main.c:79`'s `4` only if measurement demands it — with one download plus one decoder, 4 is ample. |
+| D5 | **Withdrawn 2026-10-31.** Path handling for R7: nothing sanitizes a filename from a request because nothing accepts one. | **[read]** | Moot: there is no route that joins a request path to the card. Kept so the reasoning is not rediscovered as a pending defect. |
+| D6 | **Withdrawn 2026-10-31.** SDMMC contention between the decoder and downloads. | **[read]** | Moot for downloads. The remaining card contention is the rescan, which parks the broadcast and takes the card lock. `max_files` is 8, with headroom. |
 
 ---
 
@@ -346,7 +357,6 @@ against the code**; two are new, introduced by R6/R7.
 |---|---|---|
 | `GET /stream` | `audio/mpeg` | Live Playlist broadcast, ICY metadata optional |
 | `GET /` | HTML | Index in Playlist order; diagnostic page without a card |
-| `GET /music/<relative path>` | original bytes | Nested download, one at a time |
 | `GET /api/library` | `application/json` | Prebuilt tree, generation, state, truncation |
 | `GET /api/library.bin` | `application/octet-stream` | Versioned arena, CRC and generation |
 | `POST /api/play` | `application/json` | `{"path":"..."}`; next-chunk switch |
@@ -382,8 +392,8 @@ The stream consumes the Library Playlist: depth-first, name-sorted, no per-pass
 ### 6.2 `GET /` — the index
 
 **Requirement I1.** One HTML page listing every Track in the Library tree in Playlist order,
-each row showing the relative path, its size, and a link to
-`/music/<url-encoded-relative-path>`. The tree may be nested; there is no pagination.
+each row showing the relative path and its size. The tree may be nested; there is no
+pagination. **A row is text, not a link**: the device hands out no Track.
 
 **Requirement I2.** The page also shows the current title via `mini_icecast_now_playing()`
 (`mini_icecast.c:415`), and a link to `/stream`.
@@ -392,27 +402,17 @@ each row showing the relative path, its size, and a link to
 stating that no card is present and quoting the mount error — not a 500, and not a connection
 refusal. The index is the diagnostic surface.
 
-Filenames are url-encoded in links and url-decoded on receipt. FATFS LFN is configured for
-128 chars (`sdkconfig.defaults`, `CONFIG_FATFS_MAX_LFN=128`), but the **path** buffer is
-`LIB_PATH_MAX = FILENAME_MAX + 1` (1025 bytes on this build), not 128: the decoded relative path
-may be up to `FILENAME_MAX` bytes. `HTTP_PATH_MAX` (512 raw bytes) bounds what a URL can address;
-the MCP `player_play` body can name a longer path. Decode one segment at a time and reject an
-overflow rather than truncating it.
+Filenames are HTML-escaped in the listing. FATFS LFN is configured for 128 chars
+(`sdkconfig.defaults`, `CONFIG_FATFS_MAX_LFN=128`), but the **path** buffer is
+`LIB_PATH_MAX = FILENAME_MAX + 1` (1025 bytes on this build), not 128: a relative path from the
+card may be up to `FILENAME_MAX` bytes, and the MCP `player_play` body can name one that long.
+`HTTP_PATH_MAX` (512 raw bytes) bounds a request target.
 
-### 6.3 `GET /music/<relative path>` — download
+### 6.3 `GET /music/<relative path>` — withdrawn
 
-**Requirement R7a.** Serve the file's **original bytes**, untranscoded, with a
-`Content-Length` from `stat()` and a `Content-Type` chosen by extension (`.mp3` →
-`audio/mpeg`, `.flac` → `audio/flac`, `.wav` → `audio/wav`). No transcoding: see ADR 0002 for
-why raw bytes beat normalising everything to MP3.
-
-**Requirement R7b.** Apply D5's path guard before any filesystem call.
-
-**Requirement R7c.** Hold D6's mutex for the duration; `503` a second concurrent download.
-
-**Requirement R7d.** Read in bounded chunks (8–16 KB) and honour a send timeout so a client
-that stops reading cannot pin the card forever. Use the same `CLIENT_STALL_MS` discipline the
-stream path already has (`mini_icecast.c:36`, `:198`).
+**Withdrawn 2026-10-31.** This section specified a byte-exact download of a Track. The global
+premise in `docs/specs/CONTEXT.md` forbids serving a Track, so the route, its path guard, its
+single-download mutex and its paced buffer are removed. Requirements R7a–R7d no longer exist.
 
 ### 6.4 `POST /api/play` — control
 
@@ -432,7 +432,7 @@ blocking readers; one scan at a time; `202` when started and `409` when one is r
 old arena/JSON until they finish, and only the last release frees it. The broadcast resumes its
 current Track on the old lease, then starts the new generation at its next pass. The scan
 parks the broadcast on the idle bed (and resumes the Track) to keep the 5.4.4 VFS readdir/stat
-cache safe; parking is reference-counted so a concurrent download cannot unpark the scan.
+cache safe; parking is reference-counted, so one owner's unpark cannot release another's.
 
 **Requirement G2.** A card that arrives after boot is mounted by the retry task, which starts
 a rescan; both the index and the broadcast recover without a reboot. A boot without a card
@@ -469,17 +469,17 @@ A request without `Origin` is accepted even with a different `Host`.
 
 ## 7. Access model and its consequences
 
-`GET /` and `GET /music/<relative path>` are **open to anyone who can reach port 8000**. There is no
-authentication, by decision and not by omission.
+`GET /`, `/stream`, the control endpoints and the MCP endpoint are **open to anyone who can
+reach port 8000**. There is no authentication, by decision and not by omission.
 
 The reasoning: the card holds audio you own, the device is intended for your own LAN, and any
 auth scheme needs a credential store that contradicts R1's "hardcoded for now" deferral. The
 cost is stated rather than hidden:
 
 **Requirement A1.** The README must state, in the deployment section and not in a footnote,
-that this firmware serves both a live stream and an unauthenticated file index, that the Wi-Fi
-credentials are compiled into the binary, and that it must not be placed on an untrusted
-network or port-forwarded.
+that this firmware serves a live stream, an unauthenticated index listing and unauthenticated
+control endpoints, that the Wi-Fi credentials are compiled into the binary, and that it must
+not be placed on an untrusted network or port-forwarded.
 
 **Requirement A2.** `/stream` stays open even if auth is added later. Hardware players, car
 head units and VLC cannot supply Basic credentials in a stream URL, and closing it would
@@ -528,19 +528,20 @@ host result transfers.
 | T4 | Accept loop (D1) | Open a TCP connection to the port and send nothing; then immediately connect a real client | **both** | Second client receives headers within 2 s; no 2 s stall |
 | T5 | ICY metadata | `curl -s -H 'Icy-MetaData: 1' http://<addr>:8000/stream \| head -c 40000` and inspect | **both** | `icy-metaint: 16000` present; a `StreamTitle='...';` block appears at byte offset 16 000 of the body |
 | T6 | Index | `curl -s http://<addr>:8000/` | **both** | Lists exactly the `.mp3/.flac/.wav` Tracks in the Library tree, in Playlist order, with sizes matching `ls -l` (host) / the FATFS listing (board) |
-| T7 | Download | `curl -s -o out.flac http://<addr>:8000/music/<relative-path>.flac && cmp out.flac <path>` | **both** | Byte-identical, at any depth |
-| T8 | Path guard (D5) | `curl -s -o /dev/null -w '%{http_code}' 'http://<addr>:8000/music/..%2f..%2fetc%2fpasswd'` and variants | **both** | `400` or `404`; never file contents |
-| T9 | Download concurrency (D6) | Start two downloads of a large FLAC simultaneously | **both** | One streams, the other gets `503`; `/stream` audio does not glitch |
-| T9b | Decoder/download contention | Download a large FLAC repeatedly while `/stream` is being probed | **board only** | Zero starvation rebases logged; `ffprobe` never reports a discontinuity |
+| T7 | **Withdrawn** | (was the byte-exact download; route removed) | — | — |
+| T8 | **Withdrawn** | (was the download path guard; route removed) | — | — |
+| T8b | No Track transfer (premise) | `GET /music/<path>` and `PUT /music/<path>` on the host build; `GET /api/library.bin` | **both** | The Track requests are `404`; the index still lists it as text; the library blob is still `200` with `Content-Disposition: attachment` |
+| T9 | **Withdrawn** | (was download concurrency; route removed) | — | — |
+| T9b | **Withdrawn** | (was decoder/download contention; route removed) | — | — |
 | T10 | Card absent (R8) | Boot with the card removed | **board only** | Wi-Fi associates, `GET /` returns a diagnostic page, log shows the mount error; card inserted later is picked up by the background retry |
 | T11 | CPU and memory (F4) | 1-hour soak with one client on `/stream` | **board only** | Encoder < 35 % of one core; free heap stable over the hour; zero starvation rebases logged. The host analogue is T11h below |
 | T11h | Encoder cost, host baseline | Time the encode loop with `clock_gettime(CLOCK_MONOTONIC)` over ≥ 1 M frames on the host | **host only** | Recorded as a baseline for scaling, **not** as a pass/fail. Host MHz tells you nothing about S3 MHz (see §10.7) |
 | T12 | Format validation (F1/F2) | Start the server with `out_hz = 44101`, and with `out_hz = 8000, bitrate = 64` | **both** | First fails loudly; second starts and logs MPEG-2.5 (`shine_check_config` returned 0, accepted per E1) |
-| T13 | Case sensitivity (bonus) | Request `/music/<NAME>.MP3` in the wrong case | **board only** | Documented behaviour, whichever way FATFS resolves it. **Not** a host test — macOS APFS/HFS+ is case-insensitive by default, so the host would give a falsely reassuring result. This is the one place the host is *weaker* than the board, which is why it is called out |
+| T13 | Case sensitivity (bonus) | **Withdrawn** (it requested a Track by path) | — | — |
 | T15 | POST play control | Raw `POST /api/play` with a nested path, split/one-packet bodies, 411/413/415 and an unknown path | **both** | Accepted body changes the Track at the next chunk; errors do not interrupt the stream; `Accept` is ignored |
 | T16 | MCP read-only surface | `initialize` in three legacy revisions, notifications, `tools/list`, all five tools and the error table | **host** | Version echo/fallback, 202 notifications, 411/413/415 JSON-RPC, no session header, `Accept` ignored |
 | T17 | Rescan generations | A slow `/api/library` reader, a rescan with one added Track, a second simultaneous rescan and a card-less rescan | **host** | Old JSON completes; generation advances; broadcast sees the new count; one 202 and one 409; `no_card` stays diagnosable |
-| T18 | Board Library tree and soak | A real card (64 tracks), a temporary three-level fixture, mDNS/MCP through `xtape.local`, and a 10-minute stream + download + rescan soak | **board** | Boot logs scan/arena/JSON/PSRAM/truncated; nested JSON/blob/download/play agree; `dns-sd` sees `_mcp._tcp`; 0 rebases/faults over 10 min; synchronous scan stays |
+| T18 | Board Library tree and soak | A real card (64 tracks), a temporary three-level fixture, mDNS/MCP through `xtape.local`, and a 10-minute stream + rescan soak | **board** | Boot logs scan/arena/JSON/PSRAM/truncated; nested JSON/blob/play agree; `dns-sd` sees `_mcp._tcp`; 0 rebases/faults over 10 min; synchronous scan stays |
 
 ---
 
@@ -570,7 +571,8 @@ Four things are board-only, and no amount of host testing substitutes for them:
 
 1. **CPU headroom.** Encoder cost at 240 MHz Xtensa with Wi-Fi active. T11.
 2. **Memory fit.** Internal DRAM and PSRAM pressure with lwIP, Wi-Fi and the decoder live.
-3. **microSD contention and timing.** T9b. A macOS file read has no bearing on the SDMMC bus.
+3. **microSD contention and timing.** A rescan parks the broadcast and takes the card; a macOS
+   file read has no bearing on the SDMMC bus.
 4. **FATFS behaviour.** Case sensitivity, LFN limits, and the `._foo.mp3` AppleDouble filter at
    `mini_icecast.c:378` all behave differently on FATFS than on APFS.
 
@@ -653,13 +655,9 @@ curl -s --max-time 5 -H 'Icy-MetaData: 1' http://127.0.0.1:18000/stream \
 exec 3<>/dev/tcp/127.0.0.1/18000        # connect, send nothing
 curl -s --max-time 3 -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18000/
 
-# T6/T7: index and byte-exact download
-curl -s http://127.0.0.1:18000/ | grep -o 'href="[^"]*"'
-curl -s -o /tmp/out.flac http://127.0.0.1:18000/music/tone.flac
-cmp /tmp/out.flac ./host/fixtures/tone.flac && echo BYTE-IDENTICAL
-
-# T8: path guard
-curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:18000/music/..%2f..%2fetc%2fpasswd'
+# T6/T8b: the index lists the Tracks, and no Track route exists
+curl -s http://127.0.0.1:18000/ | grep -c 'tone\.flac'
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18000/music/tone.flac   # 404
 ```
 
 **Requirement H4.** Every command above must succeed on the host with no board attached and no
@@ -734,9 +732,9 @@ Three corrections, all from measurement rather than opinion:
 2. **`shine_check_config()` returning 0 means success.** The plan says to "log the result" but
    the return value is an `enum mpeg_versions` where `MPEG_25 = 0` **[measured]**. A
    truthiness test rejects every MPEG-2.5 configuration. See E1.
-3. **The plan's §5 defect list is missing the two defects this specification's own R6/R7
-   introduce**: unsanitized filenames (D5) and decoder/download SDMMC contention (D6). Both
-   are consequences of the index decision, which the plan does not cover at all.
+3. **The plan did not cover a file surface at all**, and the two defects this specification's
+   own R7 introduced — unsanitized filenames (D5) and decoder/download SDMMC contention (D6) —
+   are withdrawn with that route. Recorded so the history shows why they existed.
 
 Everything else in the plan's §1, §2, §3 (edits 1 and 2), §4 and §6 is confirmed and carried
 forward. The plan's §5 D1–D4 are confirmed against the code, including the arithmetic behind
@@ -829,7 +827,7 @@ committed host test rather than depending on them.
 | `docs/research/server/s0-server-code-review.md` | The original review behind defects D1–D4 |
 | `docs/research/server/s11-licensing-verified-and-packaging.md` | `idf_component.yml` shape: `version`, `description`, `license`, `targets: [esp32s3]`, `dependencies.idf: ">=5.4"` |
 | `docs/research/07-esp32s3-hardware-verified.md` | SoC memory map, no DAC, `SOC_SPIRAM_SUPPORTED` |
-| `docs/adr/0001-serve-original-bytes-not-transcoded.md` | Why downloads are not MP3 (§6.3) |
+| `docs/adr/0001-serve-original-bytes-not-transcoded.md` | Superseded: why downloads were not MP3 (§6.3, withdrawn) |
 | `docs/adr/0002-vendor-shine-as-separate-lgpl-component.md` | Why `shine` is a separate component (§8) |
 | `docs/adr/0003-extract-http-server-from-mini-icecast.md` | Why the HTTP layer is extracted (§3) |
 | `docs/adr/0012-boot-built-library-arena.md` | The boot-built Library tree that replaced the flat Music-directory model in §6.2/§6.3 |

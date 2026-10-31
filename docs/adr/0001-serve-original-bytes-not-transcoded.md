@@ -1,5 +1,9 @@
 # Serve original file bytes, not transcoded MP3
 
+> **Superseded 2026-10-31.** The download route this ADR reasons about is withdrawn: the
+> device never serves a Track (the global premise in `docs/specs/CONTEXT.md`). Kept as the
+> record of why the route, while it existed, served originals rather than MP3.
+
 The live stream is MP3-only, so the obvious symmetry would be for `GET /music/<name>` to
 return MP3 too. We decided it returns the **original, untranscoded bytes** instead: the
 stream's job is reachability and universal client support, while the download's job is

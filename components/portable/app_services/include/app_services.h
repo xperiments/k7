@@ -9,7 +9,7 @@
  *   2. board network               (Wi-Fi's DMA buffers win the internal-RAM race)
  *   3. card mount                  (a missing card is reported, not fatal)
  *   4. library                     (the boot-built tree, arena and JSON)
- *   5. file surface                (the index and downloads)
+ *   5. file surface                (the index: a listing, not a file browser)
  *   6. library endpoint            (GET /api/library from the prebuilt JSON)
  *   7. broadcast                   (the encoder takes its internal RAM last)
  *   8. HTTP listener               (starts serving what is already registered)

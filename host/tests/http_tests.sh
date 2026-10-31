@@ -221,7 +221,7 @@ check_eq "GET /api/library.bin is a 200" "$(printf '%s' "$BIN_HDR" | head -1 | a
 check_match "and is typed application/octet-stream" "$BIN_HDR" '^Content-Type: application/octet-stream$'
 check_match "and carries a real Content-Length ($BIN_BYTES B)" "$BIN_HDR" "^Content-Length: $BIN_BYTES$"
 check_eq "and shares the JSON generation" "$(printf '%s\n' "$BIN_HDR" | sed -n 's/^ETag: //p')" "$LIB_ETAG"
-check_match "and is offered as a download" "$BIN_HDR" '^Content-Disposition: attachment; filename="library.bin"$'
+check_match "and is offered as an attachment" "$BIN_HDR" '^Content-Disposition: attachment; filename="library.bin"$'
 if [ -n "$BOARD_URL" ]; then
     if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/lib.bin" / --header-only >"$TMP/bin.out" 2>&1; then
         ok "$(cat "$TMP/bin.out")"
@@ -276,8 +276,6 @@ if [ -z "$BOARD_URL" ]; then
         check_eq "and its Content-Length still matches the body" \
             "$(tr -d '\r' <"$TMP/frozenhdr" | sed -n 's/^Content-Length: //p')" \
             "$(wc -c <"$TMP/frozen.json" | tr -d ' ')"
-        check_eq "GET /music for the deleted file is now a 404" \
-            "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18101/music/tone-44100.flac")" "404"
         curl -s -o "$TMP/frozen.html" "http://127.0.0.1:18101/"
         check_match "the index still lists the deleted file from the tree" "$(cat "$TMP/frozen.html")" 'tone-44100\.flac'
     fi
@@ -302,28 +300,6 @@ if [ -z "$BOARD_URL" ]; then
         else
             bad "nested index: $(cat "$TMP/nestedindex.out")"
         fi
-        for rel in "Album/01 - Song.flac" "Album/Deep/02 - Song.wav" "loose.mp3"; do
-            enc=$(printf '%s' "$rel" | sed 's/ /%20/g')
-            curl -s -D "$TMP/ndhdr" -o "$TMP/nd.bin" "http://127.0.0.1:18106/music/$enc"
-            if cmp -s "$TMP/nd.bin" "$TMP/nested/$rel"; then
-                ok "nested download is byte-identical: $rel"
-            else
-                bad "nested download differs: $rel"
-            fi
-            check_eq "nested length: $rel" \
-                "$(tr -d '\r' <"$TMP/ndhdr" | sed -n 's/^Content-Length: //p')" \
-                "$(wc -c <"$TMP/nested/$rel" | tr -d ' ')"
-            case "$rel" in
-            *.flac) want_type=audio/flac ;;
-            *.wav)  want_type=audio/wav ;;
-            *)      want_type=audio/mpeg ;;
-            esac
-            check_match "nested type: $rel" "$(tr -d '\r' <"$TMP/ndhdr")" "^Content-Type: $want_type$"
-        done
-        check_eq "an encoded slash is refused" \
-            "$(curl -s -o /dev/null -w '%{http_code}' --path-as-is "http://127.0.0.1:18106/music/Album%2F01%20-%20Song.flac")" "400"
-        check_eq "a parent segment is refused" \
-            "$(curl -s -o /dev/null -w '%{http_code}' --path-as-is "http://127.0.0.1:18106/music/Album/../loose.mp3")" "400"
         curl -s -o "$TMP/mcpnested.json" -X POST -H 'Content-Type: application/json' \
             --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"library_track","arguments":{"path":"Album/Deep/02 - Song.wav"}}}' \
             "http://127.0.0.1:18106/mcp"
@@ -488,58 +464,32 @@ check_match "and its new generation is still no_card" \
 check_match "the card-less index stays diagnosable" \
     "$(curl -s "http://127.0.0.1:$((PORT + 3))/")" "No card mounted"
 
-group "T7  downloads are the original bytes, sized and typed"
-for f in "$FIX"/*; do
-    name=$(basename "$f")
-    case "$name" in
-    *.mp3 | *.flac | *.wav) ;;
-    *) continue ;;
-    esac
-    curl -s -o "$TMP/dl" "$BASE/music/$name"
-    if cmp -s "$TMP/dl" "$f"; then ok "byte-identical: $name"; else bad "download differs: $name"; fi
-    hdr=$(curl -s -D - -o /dev/null "$BASE/music/$name" | tr -d '\r')
-    want_size=$(wc -c <"$f" | tr -d ' ')
-    check_match "length reported for $name" "$hdr" "^Content-Length: $want_size$"
-done
-check_match "flac is typed audio/flac" "$(curl -s -D - -o /dev/null "$BASE/music/tone-44100.flac")" 'Content-Type: audio/flac'
-check_match "wav is typed audio/wav" "$(curl -s -D - -o /dev/null "$BASE/music/tone-44100.wav")" 'Content-Type: audio/wav'
-check_match "mp3 is typed audio/mpeg" "$(curl -s -D - -o /dev/null "$BASE/music/tone-44100.mp3")" 'Content-Type: audio/mpeg'
-
-group "T8  the path guard refuses anything that is not a track name (D5)"
-for p in \
-    '/music/..%2f..%2fetc%2fpasswd' \
-    '/music/../../etc/passwd' \
-    '/music/%2e%2e%2fetc%2fpasswd' \
-    '/music/....//etc/passwd' \
-    '/music/.hidden.mp3' \
-    '/music/.%2e/secret.mp3' \
-    '/music/sub%2fdir%2ftrack.mp3' \
-    '/music/a%00b.mp3' \
-    '/music/' \
-    '/music/notes.txt' \
-    '/music/tone-44100.flac%00.txt'; do
-    code=$(curl -s --path-as-is -o "$TMP/guard.out" -w '%{http_code}' "$BASE$p")
-    case "$code" in
-    400 | 404) ok "refused ($code): $p" ;;
-    *) bad "not refused ($code): $p -> $(head -c 60 "$TMP/guard.out")" ;;
-    esac
-    check_no_match "no file contents leaked for $p" "$(head -c 200 "$TMP/guard.out")" 'root:.*:0:0:'
-done
+group "the device serves no Track and accepts no Track upload"
+# The global premise (docs/specs/CONTEXT.md): there is no per-Track route, and no
+# method that writes one. The index still lists the Track; it just does not hand
+# it out. The library view is the firmware's own summary, so it stays fetchable.
+check_eq "GET /music/<path> is gone" \
+    "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/music/tone-44100.flac")" "404"
+check_eq "so is a nested path" \
+    "$(curl -s -o /dev/null -w '%{http_code}' --path-as-is "$BASE/music/Album/01-Song.flac")" "404"
+check_eq "an upload to /music/ is refused" \
+    "$(curl -s -o /dev/null -w '%{http_code}' -X PUT --data-binary x "$BASE/music/new.mp3")" "404"
+check_eq "an upload anywhere is refused" \
+    "$(curl -s -o /dev/null -w '%{http_code}' -X PUT --data-binary x "$BASE/upload/new.mp3")" "404"
+check_eq "the index still lists the Track" \
+    "$(curl -s "$BASE/" | grep -c 'tone-44100\.flac')" "1"
+# Not a Track: the computed library view keeps its attachment framing.
+check_eq "the library view is still fetchable" \
+    "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/library.bin")" "200"
+check_match "and still framed as an attachment" \
+    "$(curl -s -D - -o /dev/null "$BASE/api/library.bin" | tr -d '\r')" \
+    '^Content-Disposition: attachment; filename="library.bin"$'
 
 group "routing and rejected setup"
 check_eq "an unknown path is a 404, not the stream" "$(curl -s -o /dev/null -w '%{http_code}' --path-as-is "$BASE/nope")" "404"
 check_eq "so is a file-ish path" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/index.html")" "404"
 check_eq "a non-GET method is refused" "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d x "$BASE/")" "405"
 check_eq "the root is served" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/")" "200"
-
-if [ -n "$BOARD_URL" ]; then
-    # T13: FATFS case sensitivity. Deliberately a note, not an assertion - the
-    # specification asks for the behaviour to be documented, whichever way the
-    # filesystem resolves it, and this is board-only by construction because macOS
-    # is case-insensitive and would give a falsely reassuring answer.
-    code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/music/TONE-44100.FLAC")
-    printf '  note  T13 wrong-case request for TONE-44100.FLAC -> %s\n' "$code"
-fi
 
 if [ -n "$BOARD_URL" ]; then
     printf '  skip  descriptor leak check on the board (160 rejected connections exercised only the host build)\n'
@@ -550,7 +500,7 @@ elif command -v lsof >/dev/null 2>&1; then
         i=0
         while [ "$i" -lt 80 ]; do
             curl -s -o /dev/null --path-as-is "$BASE/rejected-$i" 2>/dev/null
-            curl -s -o /dev/null -X POST -d x "$BASE/music/nope.mp3" 2>/dev/null
+            curl -s -o /dev/null -X POST -d x "$BASE/nope.mp3" 2>/dev/null
             i=$((i + 1))
         done
         sleep 1
@@ -565,45 +515,6 @@ elif command -v lsof >/dev/null 2>&1; then
     fi
 else
     printf '  skip  descriptor leak check (no lsof)\n'
-fi
-
-group "T9  one download at a time, and the first one survives (D6)"
-if [ -n "$BOARD_URL" ]; then
-    pick=$($PY "$HOST_DIR/tests/biggest_track.py" "$BASE" 50000)
-    if [ -z "$pick" ]; then
-        printf '  skip  no track on the card is large enough for the slow-reader test (>50 KB)\n'
-    else
-        name=${pick%% *}
-        curl -s -o "$TMP/ref.bin" "$BASE/music/$name"
-        if $PY "$HOST_DIR/tests/two_downloads.py" "$(printf '%s' "$BASE" | sed -e 's#http://##' -e 's#:.*##')" \
-                "$(printf '%s' "$BASE" | sed -e 's#.*:##')" "$name" "$TMP/ref.bin" 0.2 >"$TMP/two.out" 2>&1; then
-            ok "$(cat "$TMP/two.out")"
-        else
-            bad "concurrent downloads: $(cat "$TMP/two.out")"
-        fi
-        if [ -n "$SERIAL_LOG" ] && grep -q 'starved' "$SERIAL_LOG"; then
-            bad "the live stream starved during a download"
-        else
-            ok "no starvation rebase logged while a download was running"
-        fi
-    fi
-fi
-if [ -z "$BOARD_URL" ]; then
-mkdir -p "$TMP/lib"
-cp "$FIX/tone-44100.flac" "$TMP/lib/tone-44100.flac"
-dd if=/dev/zero of="$TMP/lib/big.wav" bs=1048576 count=8 2>/dev/null
-if start_server "$TMP/lib" "$PORT2" "$TMP/srv2.log"; then
-    if $PY "$HOST_DIR/tests/two_downloads.py" 127.0.0.1 "$PORT2" big.wav "$TMP/lib/big.wav" >"$TMP/two.out" 2>&1; then
-        ok "$(cat "$TMP/two.out")"
-    else
-        bad "concurrent downloads: $(cat "$TMP/two.out")"
-    fi
-    if grep -q 'starved' "$TMP/srv2.log"; then
-        bad "the live stream starved during a download"
-    else
-        ok "no starvation rebase logged while a download was running"
-    fi
-fi
 fi
 
 group "T12  the station format is validated before anything is served (F1, F2)"

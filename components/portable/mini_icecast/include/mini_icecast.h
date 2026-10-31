@@ -37,8 +37,7 @@ extern "C" {
  * decoder cost more than this board can carry at the Station rate — a 24-bit 192 kHz
  * FLAC needs ~700 KB/s and ~0.9 of a core before the encoder — so the Track is skipped
  * with a log instead of starving every listener. 96 kHz keeps 88.2/96 kHz hi-res;
- * 176.4/192 kHz files must be transcoded on the card (the index and downloads still
- * serve them). Override at build time to widen or narrow the budget. */
+ * 176.4/192 kHz files must be transcoded on the card (the index still lists them). Override at build time to widen or narrow the budget. */
 #ifndef MINI_ICECAST_MAX_SOURCE_HZ
 #define MINI_ICECAST_MAX_SOURCE_HZ 96000
 #endif
@@ -127,16 +126,15 @@ typedef struct {
 /* How far behind real time the broadcast is, in milliseconds, or 0 when it is
  * keeping up. Written by the pacing loop and read without the lock like the
  * status fields. A lower-priority consumer of the same microSD card - the
- * download path - uses it to back off when the stream is starving, instead of
- * taking the bus for a fixed slice whether it is needed or not. */
+ * display's artwork loader - uses it to back off when the stream is starving,
+ * instead of taking the bus for a fixed slice whether it is needed or not. */
 uint32_t  mini_icecast_lag_ms(void);
 
 void      mini_icecast_status(mini_icecast_status_t *out);
 
 /* Park the broadcast's card access: the station stops reading the SD and plays a
- * quiet noise bed instead, so a download can have the whole bus. Measured on this
- * board, a download sharing the card with the broadcast manages 55 KB/s and still
- * makes it miss deadlines; alone it gets 250 KB/s.
+ * quiet noise bed instead, so a rescan can have the whole bus. Parking is also
+ * how the scan avoids the IDF 5.4 VFS readdir/stat cache race.
  *
  * The track is not skipped: when the park ends, playback continues from where it
  * stopped, so a listener hears the music resume mid-phrase after the break. The

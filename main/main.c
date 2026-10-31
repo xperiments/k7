@@ -8,8 +8,8 @@
  *
  * Two things this firmware does that a deployer must know (README, deployment):
  *   - the Wi-Fi credentials are compiled into the binary;
- *   - the root address and /music/<name> are open to anyone who can reach the
- *     port, with no authentication.
+ *   - the root address, the stream and the control endpoints are open to anyone
+ *     who can reach the port, with no authentication.
  * Do not put it on an untrusted network or forward its port.
  */
 #include "appliance.h"

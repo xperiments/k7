@@ -50,9 +50,9 @@ int main(void)
     CHECK_EQ(parse("GET /a?b=c&d=e HTTP/1.0\r\n\r\n", &req), 0, "a query string parses");
     CHECK(strcmp(req.path, "/a") == 0, "the query is stripped from the path");
 
-    CHECK_EQ(parse("GET http://host:8000/music/x%20y.mp3 HTTP/1.0\r\n\r\n", &req), 0,
+    CHECK_EQ(parse("GET http://host:8000/api/x%20y.mp3 HTTP/1.0\r\n\r\n", &req), 0,
              "an absolute-form target parses");
-    CHECK(strcmp(req.path, "/music/x%20y.mp3") == 0,
+    CHECK(strcmp(req.path, "/api/x%20y.mp3") == 0,
           "the path is extracted and left percent-encoded: '%s'", req.path);
 
     CHECK_EQ(parse("GET http://host:8000 HTTP/1.0\r\n\r\n", &req), 400,
@@ -111,11 +111,11 @@ int main(void)
     /* Routing: the longest prefix wins, and "/" is the catch-all. */
     http_route_t routes[3] = {
         {.prefix = "/", .plen = 1, .fn = dummy},
-        {.prefix = "/music/", .plen = 7, .fn = dummy},
+        {.prefix = "/api/", .plen = 5, .fn = dummy},
         {.prefix = "/stream", .plen = 7, .fn = dummy},
     };
-    const http_route_t *r = http_route_match(routes, 3, "/music/x.flac");
-    CHECK(r == &routes[1], "a download matches /music/, not /");
+    const http_route_t *r = http_route_match(routes, 3, "/api/x.flac");
+    CHECK(r == &routes[1], "a nested prefix matches /api/, not /");
     r = http_route_match(routes, 3, "/stream");
     CHECK(r == &routes[2], "the stream matches /stream");
     r = http_route_match(routes, 3, "/streaming");

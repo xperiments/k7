@@ -1,5 +1,5 @@
 version: "1.0.0"
-description: "The index of the music directory and byte-exact downloads of the original files, with the card-absent diagnostic page."
+description: "The index of the music directory - a listing, not a file browser - with the card-absent diagnostic page."
 license: "MIT"
 targets:
   - esp32s3

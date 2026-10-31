@@ -1,29 +1,27 @@
 #!/bin/sh
-# Board soak: T9b (download contention) and T11 (encoder cost and memory over time).
+# Board soak: T11 (encoder cost and memory over time), optionally under a scan.
 #
-#   sh host/tests/board_soak.sh <base-url> <serial-port> <minutes> [stream|downloads]
+#   sh host/tests/board_soak.sh <base-url> <serial-port> <minutes>
 #
 # Set RESCAN=1 to POST /api/rescan once a minute during the soak. That is the
-# ticket-13 path: a scan and a download sharing the card and the broadcast.
+# ticket-13 path: a scan sharing the card with the broadcast.
 #
 # It resets the board, captures its serial log for the whole run, attaches one
-# client to the live stream, and (with `downloads`) keeps pulling the largest
-# track off the card at the same time. Then it reads the device's own telemetry
-# and decides:
+# client to the live stream, and optionally keeps rescanning at the same time.
+# Then it reads the device's own telemetry and decides:
 #
 #   * encoder cost below MAX_COST (default 35 %, the specification's F4 target)
-#   * no starvation rebase                                      (T11, T9b)
+#   * no starvation rebase                                      (T11)
 #   * free memory in both classes stable across the run         (T11)
-#   * no assert, stack overflow or reboot                       (T9b, T11)
+#   * no assert, stack overflow or reboot                       (T11)
 #
 # All judgement comes from the device's log, which is the only place these numbers
 # exist: the host cannot measure a 240 MHz Xtensa with Wi-Fi running.
 set -u
 
-BASE=${1:?usage: board_soak.sh <base-url> <serial-port> <minutes> [stream|downloads]}
+BASE=${1:?usage: board_soak.sh <base-url> <serial-port> <minutes>}
 SERIAL_PORT=${2:?}
 MINUTES=${3:-60}
-LOAD=${4:-stream}
 # The bound the encoder's cost is held to. The specification proposes 35% (F4); a
 # configuration chosen for quality rather than headroom can be held to its own
 # bound instead, and says so on the command line rather than being silently
@@ -50,15 +48,15 @@ SECS=$((MINUTES * 60))
 LOG=$(mktemp "${TMPDIR:-/tmp}/board-soak.XXXXXX")
 FAIL=0
 
-echo "soaking $BASE for $MINUTES minute(s) with load: $LOAD (encoder bound ${MAX_COST}%)"
+echo "soaking $BASE for $MINUTES minute(s) (encoder bound ${MAX_COST}%)"
 echo "serial: $SERIAL_PORT -> $LOG"
 
 # Capture first: it resets the board, so the run covers a clean boot.
 "$PY" "$HERE/serial_log.py" -p "$SERIAL_PORT" -s "$SECS" -o "$LOG" &
 CAP=$!
 # The capture resets the board, and boot plus Wi-Fi takes about five seconds.
-# Asking for the library before that is a race, and it silently turns a download
-# soak into a stream-only one.
+# Asking for the library before that is a race, and it silently starts a scan
+# load late.
 n=0
 while [ "$n" -lt 100 ]; do
     curl -s -o /dev/null --max-time 1 "$BASE/" && break
@@ -67,8 +65,8 @@ while [ "$n" -lt 100 ]; do
 done
 sleep 1
 
-# One client on the live stream for the whole run: T11 asks for that, and T9b
-# wants the broadcast busy while the card is under download pressure.
+# One client on the live stream for the whole run: T11 asks for that, and a
+# rescan wants the broadcast busy while the card is under scan pressure.
 curl -s -o /dev/null --max-time "$SECS" "$BASE/stream" &
 STREAM=$!
 
@@ -83,24 +81,8 @@ if [ "$RESCAN" = 1 ]; then
     SCAN=$!
 fi
 
-if [ "$LOAD" = downloads ]; then
-    name=$("$PY" "$HERE/biggest_track.py" "$BASE" 50000 | cut -d' ' -f1)
-    if [ -z "$name" ]; then
-        echo "no track large enough to download; using the stream load only"
-    else
-        echo "downloading $name repeatedly while the stream plays"
-        end=$(( $(date +%s) + SECS ))
-        n=0
-        while [ "$(date +%s)" -lt "$end" ]; do
-            curl -s -o /dev/null --max-time 60 "$BASE/music/$name" && n=$((n + 1))
-        done &
-        DL=$!
-    fi
-fi
-
 wait $CAP
 kill "$STREAM" 2>/dev/null
-[ -n "${DL:-}" ] && kill "$DL" 2>/dev/null
 [ -n "${SCAN:-}" ] && kill "$SCAN" 2>/dev/null
 sleep 1
 

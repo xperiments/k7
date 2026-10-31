@@ -56,9 +56,9 @@ static const char *TAG = "icecast";
 static bool parked(void);
 
 #define SENDER_TASK_STACK      4096
-/* How much audio a client's ring can hold. This is the jitter budget: a download
- * on the same Wi-Fi has been measured stalling the stream for seconds, and the
- * ring is what lets the connection survive that instead of being dropped. Ten
+/* How much audio a client's ring can hold. This is the jitter budget: a Wi-Fi
+ * stall has been measured lasting seconds, and the ring is what lets the
+ * connection survive that instead of being dropped. Ten
  * seconds at the station rate, so it scales down with a lower-bit-rate station. */
 #define CLIENT_RING_MS         10000
 #define CLIENT_SEND_TIMEOUT_MS 10000       /* one send may wait this long for the network */
@@ -118,11 +118,11 @@ static struct {
     int64_t            played_frames; /* encoded frames broadcast since t0 */
     int16_t            chunk[CHUNK_FRAMES * 2]; /* output chunker, persists across tracks */
     size_t             chunk_n;
-    /* While a download owns the card the broadcast plays a noise bed instead of
+    /* While the card is parked the broadcast plays a noise bed instead of
      * reading the SD. park_until is a deadline in esp_timer microseconds, so a
      * caller that dies cannot park the station forever. */
     volatile int64_t   park_until;
-    int                park_refs;     /* download and rescan can park together */
+    int                park_refs;     /* reference-counted: two owners may park */
     uint64_t           idle_frames; /* frames of bed, kept out of the track position */
     /* Per-stage cost since the last telemetry line, in milliseconds. Written by the
      * broadcast task and reset by the telemetry task, which is why they are plain
@@ -135,7 +135,7 @@ static struct {
     mi_enc_t          *enc;
     uint32_t           rebases;       /* starvation rebases: 0 over a healthy soak */
     /* How far behind real time the last pacing call found the broadcast. Read by
-     * the download path to decide when to yield the card; a 32-bit store/load is
+     * the artwork loader to decide when to yield the card; a 32-bit store/load is
      * atomic on this core, so it needs no lock. */
     volatile uint32_t  lag_ms;
     /* The shuffle mode (docs/adr/0023). The Menu only flips `shuffle_on`; the
@@ -152,8 +152,8 @@ static struct {
 /* ------------------------------------------------------------- clients */
 
 /* What the station is playing, as a listener and the index should read it. While
- * a download owns the card the broadcast plays its bed, so announcing the track
- * would be a lie for however long the transfer takes. */
+ * the card is parked the broadcast plays its bed, so announcing the track would
+ * be a lie for however long the scan takes. */
 static const char *live_title(void)
 {
     return parked() ? "Processing" : S.title;
@@ -625,9 +625,9 @@ static bool parked(void)
 
 void mini_icecast_park_card(uint32_t max_ms)
 {
-    /* Two independent owners can need the card: a download and a rescan. A
-     * reference count means the second unpark cannot release the first owner's
-     * park. The deadline still protects against a caller that dies outright. */
+    /* More than one owner can need the card. A reference count means the second
+     * unpark cannot release the first owner's park. The deadline still protects
+     * against a caller that dies outright. */
     xSemaphoreTake(S.lock, portMAX_DELAY);
     int64_t now = esp_timer_get_time();
     if (S.park_until == 0 || now >= S.park_until) S.park_refs = 0; /* expired owner */
@@ -702,7 +702,7 @@ static void chunk_append(const int16_t *s, size_t frames, void *ctx)
     }
 }
 
-/* What the station plays while a download owns the card: a quiet noise bed, so the
+/* What the station plays while the card is parked: a quiet noise bed, so the
  * stream keeps flowing and a listener hears "busy" rather than dead air.
  * IDLE_BED_DBFS is its peak level. */
 #define IDLE_BED_DBFS (-40.0f)                      /* 10^(-40/20) = 0.01 full scale */
@@ -869,7 +869,7 @@ static void stream_file(const char *path)
     /* A source above the budget would not starve this Track alone: it would starve the
      * live stream for every listener until the Track ended. The decoder is already open
      * because only it knows the source rate; stop it and let the Playlist advance. The
-     * Track stays in the Library and its original bytes stay downloadable. */
+     * Track stays in the Library and is skipped, not deleted. */
     if (!mini_icecast_source_rate_ok(j.hz)) {
         ESP_LOGW(TAG, "skipping %s: %u Hz source is above the %u Hz playback budget "
                       "(transcode it on the card to play it)",
@@ -901,7 +901,7 @@ static void stream_file(const char *path)
     static int16_t in[MI_READ_FRAMES * 2];
     for (;;) {
         if (S.skip || S.prev || S.play_pending) break;
-        if (parked()) { idle_pump(); continue; }   /* a download owns the card */
+        if (parked()) { idle_pump(); continue; }   /* a scan owns the card */
         size_t got = mi_ring_get(j.fifo, in, sizeof in);
         if (got == 0) {
             if (j.eof) break;

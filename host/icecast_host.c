@@ -99,8 +99,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    printf("listening on http://127.0.0.1:%u/  (library: /api/library, stream: /stream, "
-           "downloads: /music/<name>)\n", port);
+    printf("listening on http://127.0.0.1:%u/  (library: /api/library, stream: /stream; "
+           "no Track routes)\n", port);
     fflush(stdout);
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(5000));

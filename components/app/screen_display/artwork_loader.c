@@ -26,8 +26,8 @@
  * permanent picture buffer.
  *
  * The card is shared with the broadcast, so the read backs off while the stream is
- * behind (the same signal the download path uses) and yields every 16 KB: the VFS holds
- * the volume lock for each fread.
+ * behind (mini_icecast_lag_ms()) and yields every 16 KB: the VFS holds the volume
+ * lock for each fread.
  *
  * Only JPEG is decoded. A PNG picture is located and refused with a log line: it is
  * rare in an MP3, and the cover path does not need LodePNG's full-size buffer.

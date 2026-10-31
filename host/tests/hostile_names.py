@@ -4,12 +4,11 @@
 This is the part of "test with real files" that can be checked without a card: names
 with spaces, accents, apostrophes, percent signs, semicolons and dashes, plus the
 macOS `._` sidecar files that appear on a card written from a Mac. It runs the server
-over such a library and checks the three places a name travels:
+over such a library and checks the two places a name travels:
 
-  1. the index - listed, and percent-encoded so a browser requests the right thing,
-  2. the download route - the encoded name is decoded back to the file and its bytes
-     match the original exactly,
-  3. the live stream's ICY metadata - the title is a well-formed metadata block, which
+  1. the index - listed, HTML-escaped as text, and never turned into a link (the
+     device serves no Track, so there is no `/music/` href to break),
+  2. the live stream's ICY metadata - the title is a well-formed metadata block, which
      is what an apostrophe or semicolon in a name can break.
 
     python3 host/tests/hostile_names.py ./host/build/bin/icecast_host /tmp/hostile
@@ -24,6 +23,7 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -119,25 +119,24 @@ def main():
             return 1
 
         page = urllib.request.urlopen(BASE + "/", timeout=5).read().decode("utf-8")
-        hrefs = re.findall(r'href="/music/([^"]+)"', page)
-        # The href is percent-encoded and the link text HTML-escaped, so the page has to
-        # be unescaped before a name can be looked for in it.
+        # The row text is HTML-escaped, so the page has to be unescaped before a name
+        # can be looked for in it.
         text = html.unescape(page)
 
         for name in NAMES:
             check(name in text, f"the index lists {name!r}")
         for name in IGNORED:
             check(name not in text, f"the index ignores {name!r} (macOS sidecar)")
-
-        # The download must return exactly the bytes, reached through the index's own href.
-        original = open(os.path.join(music, NAMES[0]), "rb").read()
-        for href in hrefs:
-            name = urllib.parse.unquote(href)
-            if name not in NAMES:
-                check(False, f"the index lists something unknown: {name!r}")
-                continue
-            data = urllib.request.urlopen(f"{BASE}/music/{href}", timeout=10).read()
-            check(data == original, f"downloading {name!r} (via {href}) returns the file's bytes")
+        check("/music/" not in page,
+              "the index links no Track: there is no /music/ href (the device serves no Track)")
+        for name in NAMES:
+            status = 404
+            try:
+                urllib.request.urlopen(BASE + "/music/" + urllib.parse.quote(name), timeout=5)
+                status = 200
+            except urllib.error.HTTPError as e:
+                status = e.code
+            check(status == 404, f"requesting {name!r} by path is a 404")
 
         # The announced title is the file's name without its extension, with apostrophes
         # replaced by spaces: an ICY metadata block is delimited by apostrophes and

@@ -22,8 +22,8 @@
 extern "C" {
 #endif
 
-/* A client that cannot take data for this long is dropped. Shared by the
- * stream and the download path so both apply the same stall discipline. */
+/* A client that cannot take data for this long is dropped. Every route that
+ * writes a body applies it, so one stall rule covers the whole surface. */
 #define HTTP_CLIENT_STALL_MS 400
 
 /* A connection that has not finished sending its request header in this long is
@@ -75,7 +75,7 @@ typedef struct {
 
 /* Register a route. `prefix` is matched against the start of the raw request
  * path and the longest matching prefix wins; "/" therefore acts as the catch-all
- * and "/music/" takes precedence over it. Must be called before
+ * and "/api/" takes precedence over it. Must be called before
  * http_server_start(), which is when main() should call it. */
 esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void *ctx);
 /* Register a route for one method. The GET wrapper above is the common case.

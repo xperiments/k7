@@ -4,10 +4,10 @@
 #   sh host/tests/board_library.sh http://192.168.0.44:8000 /dev/cu.usbserial-XXXX
 #
 # Captures a clean boot, checks the Library scan log, compares the JSON and the
-# binary view, downloads a nested Track if the card has one, exercises the MCP
-# endpoint through xtape.local, and prints the card-arrival limitation.
-# The ten-minute soak is separate:
-#   RESCAN=1 sh host/tests/board_soak.sh <base> <serial> 10 downloads
+# binary view, proves a nested Track is playable and that no Track route exists,
+# exercises the MCP endpoint through xtape.local, and prints the card-arrival
+# limitation. The ten-minute soak is separate:
+#   RESCAN=1 sh host/tests/board_soak.sh <base> <serial> 10
 set -u
 BASE=${1:?usage: board_library.sh <base-url> <serial-port>}
 SERIAL=${2:?}
@@ -89,10 +89,9 @@ import sys, urllib.parse
 print(urllib.parse.quote(sys.argv[1], safe="/"))
 PY
 )
-    code=$(curl -s -o "$LOG.nested" -w '%{http_code}' "$BASE/music/$enc")
-    [ "$code" = 200 ] && ok "nested download is 200: $nested" || bad "nested download is $code"
-    size=$(wc -c <"$LOG.nested" | tr -d ' ')
-    [ "$size" -gt 0 ] && ok "nested download has $size bytes" || bad "nested download is empty"
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/music/$enc")
+    [ "$code" = 404 ] && ok "the nested Track has no Track route (404): $nested" \
+        || bad "GET /music for the nested Track is $code, expected 404"
     code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
         --data "{\"path\":\"$nested\"}" "$BASE/api/play")
     [ "$code" = 200 ] && ok "POST /api/play accepts the nested Track" || bad "POST /api/play is $code"
@@ -103,5 +102,5 @@ fi
 echo
 echo "card removal is not hot-detected: a pulled card leaves the Library stale until"
 echo "POST /api/rescan or a reboot (README limitation)."
-rm -f "$LOG" "$LOG.json" "$LOG.bin" "$LOG.nested" "$LOG.dnssd" "$LOG.avahi"
+rm -f "$LOG" "$LOG.json" "$LOG.bin" "$LOG.dnssd" "$LOG.avahi"
 [ "$FAIL" -eq 0 ]

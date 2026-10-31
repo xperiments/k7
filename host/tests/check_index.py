@@ -18,7 +18,6 @@ import html
 import os
 import re
 import sys
-from urllib.parse import unquote
 
 ap = argparse.ArgumentParser()
 ap.add_argument("index")
@@ -69,11 +68,12 @@ def expected_tracks(root):
 
 
 page = open(index_path, "r", encoding="utf-8").read()
-rows = re.findall(r'<a href="/music/([^"]+)">(.*?)</a>\s*<span class="n">(\d+) B</span>', page, re.S)
-# href is percent-encoded; the label is HTML-escaped. Both name the same path.
+# A row names the Track and its size. There is no href: the device serves no
+# files (the global premise in docs/specs/CONTEXT.md), so the index is a listing.
+rows = re.findall(r'<li>(.*?) <span class="n">(\d+) B</span></li>', page, re.S)
 listed = [
-    (unquote(href), html.unescape(label), int(size))
-    for href, label, size in rows
+    (html.unescape(label), html.unescape(label), int(size))
+    for label, size in rows
 ]
 
 

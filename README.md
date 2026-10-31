@@ -1,27 +1,32 @@
 # SD stream server
 
-An ESP32-S3 devkit with a microSD card in it joins your Wi-Fi and serves the card's
+An ESP32-S3 devkit with a microSD card in it joins your Wi-Fi and broadcasts the card's
 music over HTTP:
 
 * **one continuous live MP3 stream** at `http://<device>:8000/stream` — every
   client hears the same track at the same moment, and any player works, because
   the stream format never changes;
-* **a browsable index** at `/`, listing the tracks on the card with their sizes
-  and what is playing now;
-* **byte-exact downloads** at `/music/<relative path>` — the original `.mp3`, `.flac` or
-  `.wav` exactly as it sits on the card, not a transcode.
+* **an index** at `/`, listing the tracks on the card with their sizes and what
+  is playing now.
+
+It never **serves or accepts a Track**: there is no per-track endpoint, no WebDAV
+or SMB mount, and no way to write music to the card over the network — putting
+music on the card is done with the card in a reader, on a computer. Audio leaves
+only as the live stream. The index and the library views (`/api/library`,
+`/api/library.bin`, and the opt-in `/api/screen.bmp`) are computed by the
+firmware and are not Tracks; `/api/library.bin` is still offered as a file
+attachment, because it is a photograph of the index rather than a song.
 
 Anything the card holds at any sample rate is decoded, resampled to one station
-rate and encoded to MP3 for the stream. The stream is the universal-compatibility
-path; downloads are the fidelity path.
+rate and encoded to MP3 for the stream.
 
 > ## Read this before you deploy it
 >
-> **This firmware serves a live stream, the file index, the library API and a
+> **This firmware serves a live stream, the index, the library API and a
 > read-only MCP endpoint to anyone who can reach port 8000, and its Wi-Fi
 > credentials are compiled into the binary.** There is no authentication
-> anywhere: not on the index, not on the downloads, not on the stream, and not on
-> `/api/play` or `/mcp`. (`/stream` deliberately stays open even if auth is ever
+> anywhere: not on the index, not on the stream, and not on `/api/play` or
+> `/mcp`. (`/stream` deliberately stays open even if auth is ever
 > added — car head units and hardware players cannot send credentials in a stream
 > URL.)
 >
@@ -114,8 +119,8 @@ one line, and the error message names the component.
   index/JSON say so; it does not reboot. A 64-track, 2.28 GB card measured
   `scan=96 ms arena=6285 B json=12343 B`; a forced one-track cap logged
   `truncated=1`. The boot scan is synchronous, with a 16 KB main-task stack.
-* The index and downloads use that Playlist order; the live stream plays it in
-  order, looping forever.
+* The index uses that Playlist order; the live stream plays it in order, looping
+  forever.
 
 The MCP endpoint is also advertised over mDNS as `xtape.local` (`_mcp._tcp`, port 8000,
 TXT `path=/mcp`, `endpoint=http://xtape.local:8000/mcp`, `device_type=mcp:device`). The
@@ -208,7 +213,6 @@ I (1223) icecast: station format: 44100 Hz, 256 kbps CBR, joint stereo, MPEG-1
 I (1576) icecast: encoder: 102408 B of internal RAM taken (the encoder's own state; near zero means it landed in external memory)
 I (1576) icecast: encoder: 1152 samples/frame (26.1 ms), 95880 B of state inside the vendored library, staging buffers in external memory
 I (1588) icecast: burst ring: 20098 B (~500 ms of audio) in external memory, sends at most 2 clients
-I (1605) files: download buffer: 16384 B in external memory
 I (1613) http: listening on :8000 (backlog 16, max 4 at once)
 ```
 
@@ -231,9 +235,8 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 
 | URL | What it does |
 |---|---|
-| `GET /` | The index: every Track in the Library tree, in Playlist order, with its size, what is playing now, and a link to the stream. Also the device's diagnostic page when no card is mounted. |
+| `GET /` | The index: every Track in the Library tree, in Playlist order, with its size, what is playing now, and a link to the stream. It is a listing, not a file browser: there is no link to a track's bytes. Also the device's diagnostic page when no card is mounted. |
 | `GET /stream` | The live stream: continuous `audio/mpeg` at the station rate and bit rate. Ask with `Icy-MetaData: 1` and the current track is interleaved every 16 000 encoded bytes. |
-| `GET /music/<url-encoded-relative-path>` | The original, untranscoded bytes at any depth, with `Content-Length` and a media type from the extension. One download at a time; a second gets `503`. |
 | `GET /api/library` | The prebuilt Library JSON, with `state`, counts and a generation ETag. |
 | `GET /api/library.bin` | The same generation as an arena: versioned header, nodes, edges, track index and CRC. |
 | `POST /api/play` | `{"path":"Album/song.mp3"}` selects any Track at the next chunk boundary. A bad path is a 404 and leaves the stream alone. |
@@ -249,9 +252,8 @@ mpv http://192.168.1.42:8000/stream
 # Check it really is MPEG audio, at the station format
 curl -s --max-time 5 http://192.168.1.42:8000/stream | ffprobe -
 
-# Download the original file and check it is untouched
-curl -O http://192.168.1.42:8000/music/track.flac
-cmp track.flac /Volumes/YOURCARD/music/track.flac
+# A track's bytes are not reachable over HTTP, by design
+curl -s -o /dev/null -w '%{http_code}\n' http://192.168.1.42:8000/music/track.flac   # 404
 
 # Previous / next track
 #   the control API only: the screen's chrome has no transport buttons
@@ -381,7 +383,7 @@ host's own adapter is `host/board_host.c`.
 make -C host                # build the runnable server
 make -C host test           # unit tests: encoder, pipeline, resampler, format, stream, status,
                             # request parsing, burst/ICY, music directory, cassette model
-make -C host integration    # T3-T9 and T12 against the real server over HTTP
+make -C host integration    # T3-T6, T8b and T12 against the real server over HTTP
 make -C host layering       # architectural rules: no sockets in the broadcast, no audio in the HTTP layer
 make -C host check          # all three
 make -C host fixtures       # regenerate the corpus with ffmpeg
@@ -475,7 +477,7 @@ chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1*
 |---|---|
 | Builds and flashes from a clean checkout | `idf.py build && idf.py -p PORT flash`: the current app is `0x2fa490` (3.12 MB) in the 4 MB factory partition, 26 % free |
 | 8 MB PSRAM in octal mode at 80 MHz | `esp_psram: Found 8MB PSRAM device`, `Speed: 80MHz`, `SPI SRAM memory test OK` |
-| Every allocation this project makes takes the external-memory path (P2/P3) | `staging buffers in external memory`, `burst ring: 20098 B (~500 ms of audio) in external memory`, `download buffer: 16384 B in external memory` |
+| Every allocation this project makes takes the external-memory path (P2/P3) | `staging buffers in external memory`, `burst ring: 20098 B (~500 ms of audio) in external memory` |
 | The encoder's state is measured, not assumed | `102408 B of internal RAM taken (the encoder's own state)`, and `95880 B of state inside the vendored library` - 16 B less than the host's 95896, because the struct holds three pointers |
 | Free memory in both classes is reported at startup and every minute (P2) | `heap at startup: internal 277183 B free, external 8386156 B free` |
 | Station format validated and logged (F1-F3) | `station format: 44100 Hz, 256 kbps CBR, joint stereo, MPEG-1` |
@@ -485,21 +487,15 @@ chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1*
 | No card: the device degrades instead of aborting (R8/T10) | `no card mounted: ESP_ERR_TIMEOUT (0x107)` then `the device will still serve on the network` |
 | Card retries are paced, not a tight loop (T10) | `still no card: ...; retrying in 5 s`, one line per attempt |
 | A wrong SSID is diagnosable rather than silent | `Wi-Fi: cannot join ... (reason 201), attempt 1; check components/app/board_esp32/wifi_credentials.h` |
-| The HTTP surface, end to end (T3-T9) | `BOARD_URL=http://192.168.0.44:8000 sh host/tests/http_tests.sh`: **80 passed, 0 failed**, three runs in a row with no reboot in between |
+| The HTTP surface, end to end | `BOARD_URL=http://192.168.0.44:8000 sh host/tests/http_tests.sh`: **80 passed, 0 failed** in the run recorded here, three runs in a row with no reboot in between; the download checks in that run were withdrawn with the route |
 | ICY metadata at the advertised interval (T5) | `metadata block at exactly 16000: StreamTitle='...' (2 blocks, 32 bytes)` |
-| Downloads are the card's bytes (T7) | all eleven fixtures `byte-identical`, with `Content-Length` and media type checked |
-| One download at a time (T9/D6) | slow reader keeps its download byte-intact while the second request gets `503` |
-| Download contention does not starve the stream (T9b) | 2-minute soak with repeated downloads: `0 starvation rebases`, memory unchanged, no faults |
 | A refused station format serves nothing (T12) | with `out_hz = 44101`: `station format refused: station rate 44101 Hz is not one the encoder accepts; use one of ...`, then `not serving: ESP_ERR_INVALID_ARG`, and no listener, no Wi-Fi, no reboot |
-| FATFS case sensitivity is documented (T13) | a wrong-case request (`TONE-44100.FLAC`) returns `200` on this card: FATFS resolves names case-insensitively |
 | The encoder's cost, starvation and memory over an hour (T11) | one client on `/stream` for 59 minutes: `encoder: 135795 frames, 10811 us/frame = 41.4% of one core`, `starvation rebases 0`, `asserts/overflows/reboots 0`, internal free at the start and end of the run both 18 751 B |
 | The padded end-of-track frame survives on the device (T2c) | a 16 s capture carried `tail-44100` - 34 266 frames, deliberately not a multiple of 1152 - three times, and all 530 808 bytes decode with zero errors |
-| Download contention does not starve the stream (T9b) | repeated downloads of the largest track with a listener attached: `starvation rebases 0`, `asserts/overflows/reboots 0` |
-
-| Library tree on a real nested card (ticket 13) | a temporary three-level fixture made `tracks=65 dirs=2 scan=137 ms arena=6430 B json=12631 B`; JSON, binary CRC/parentage, the 88 244 B nested download and `POST /api/play` all agreed, and `player_status` showed `zz-xtape-nested/Deep/one-second.wav` |
+| Library tree on a real nested card (ticket 13) | a temporary three-level fixture made `tracks=65 dirs=2 scan=137 ms arena=6430 B json=12631 B`; JSON, binary CRC/parentage and `POST /api/play` all agreed, and `player_status` showed `zz-xtape-nested/Deep/one-second.wav` |
 | Full card scan at boot (ticket 13) | 64 tracks / 2.28 GB: `state=ok tracks=64 dirs=0 bytes=2277100658 scan=96 ms arena=6285 B json=12343 B psram=5295632 -> 5275936 B truncated=0`; synchronous scan stays |
 | MCP through mDNS (ticket 13) | `initialize` and `tools/list` over `http://xtape.local:8000/mcp`, `MCP-Protocol-Version: 2025-11-25`, five read-only tools; `dns-sd` listed `_mcp._tcp`; control tools were absent from the default build |
-| Ten-minute rescan/download soak (ticket 13) | 10 min with a listener, repeated 46 MB downloads and four rescans: `starvation rebases: 0`, `asserts/overflows/reboots: 0`, encoder 52.9 %, internal minimum 66 043 -> 57 855 B, external 2 039 048 -> 2 079 160 B |
+| Ten-minute rescan soak under stream load (ticket 13; historical, run before the download route was withdrawn) | 10 min with a listener, four rescans and repeated downloads: `starvation rebases: 0`, `asserts/overflows/reboots: 0`, encoder 52.9 %, internal minimum 66 043 -> 57 855 B, external 2 039 048 -> 2 079 160 B |
 | Main-task stack at the full card (ticket 13) | the first full scan overflowed the 6 144 B main stack; `CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384` fixed it and the same card then booted in 96 ms |
 | Library cap diagnostic (ticket 13) | a temporary `max_tracks=1` build logged `tracks=1 ... scan=7 ms arena=228 B json=424 B ... truncated=1`, so truncation is visible at the cap as well as under it |
 
@@ -521,30 +517,24 @@ changes flashed.
 | Check | Result |
 |---|---|
 | Boot | panel up through the port, card mounted, Wi-Fi at `192.168.0.44`, station 44100 Hz / 256 kbps |
-| HTTP surface (`BOARD_URL` run) | 54 passed, 0 failed among the checks that do not name a fixture; the 26 failures are `tone-*` / `tail-*` 404s, because the card holds a real library |
-| Index and downloads from the card's own library | 4 tracks, labels and sizes self-consistent; every download's length, media type and container magic match; traversal 400; non-audio 404; a wrong-case name resolves (FATFS) |
-| One download at a time (D6) | second request 503; the lock is free again about 4 s after an aborted client |
+| HTTP surface (`BOARD_URL` run, historical) | 54 passed, 0 failed among the checks that do not name a fixture; the 26 failures were `tone-*` / `tail-*` paths absent from the card |
+| Index from the card's own library | 4 tracks, each label and size self-consistent; non-audio 404 |
 | A refused station format (F1) | `out_hz = 44101`: refuses, names the rate and the accepted set, brings up no Wi-Fi, no card and no listener, and does not reboot |
-| 3-minute idle (no listener, no downloads) | encoder 58.8 %, **0 starvation rebases** |
+| 3-minute idle (no listener) | encoder 58.8 %, **0 starvation rebases** |
 | 5-minute stream-only soak | encoder 59.9 %, **0 starvation rebases**, 0 faults |
-| 10-minute soak with repeated downloads | encoder 68.9 %, **17 starvation rebases** (bursty), 0 faults; **the listener stayed connected for the whole run** |
+| 10-minute soak with repeated downloads (historical, before the route was withdrawn) | encoder 68.9 %, **17 starvation rebases** (bursty), 0 faults; **the listener stayed connected for the whole run** |
 
-The download path has to share one SD bus and one radio with the broadcast, and a fixed
-1 ms yield per 16 KB was measured helping and then not - the contention arrives in bursts.
-The download now starts gently and backs off for two seconds whenever
-`mini_icecast_lag_ms()` reports the broadcast behind; that took the download soak from
-about fifty starvation rebases in twelve minutes to **zero in ten**, with the encoder at
-62.3 %. The station rate was not the fix: before the backoff, 32 kHz / 96 kbps still
-produced forty rebases in five minutes (61.3 %), so the encoder's frame rate was never the
-only bottleneck.
+The soak above exercised the download path that has since been withdrawn. What it proved
+about the radio still stands: sharing one SD bus with a second bulk reader cost the broadcast
+deadlines in bursts, and no fixed per-chunk yield fixed it — which is part of why the device
+no longer reads the card on anyone else's behalf. A rescan now parks the broadcast and takes
+the card lock, so the contention the soak measured cannot be created over the network.
 
-The listener now survives the download. The audio task never writes a socket: each client has
-a 10-second send ring in PSRAM and its own permanent sender task, and the download is paced at
-about 1.3 MB/s rather than arriving in bursts. Before this, a synchronous send on the audio
-task with lwIP's 5.7 KB buffer was dropped in 10-30 s. The same soak still reports 17
-starvation rebases, bursty, so the broadcast can still fall a second behind under the
-worst-case download; the connection and the audio continue and the pacing clock rebases.
-That residual is the open part of ticket 19. The external-memory heuristic in the soak flags a
+The listener survives a stalled client. The audio task never writes a socket: each client has
+a 10-second send ring in PSRAM and its own permanent sender task. Before this, a synchronous
+send on the audio task with lwIP's 5.7 KB buffer was dropped in 10-30 s. Under a bursty
+second reader the broadcast could still fall a second behind; the connection and the audio
+continue and the pacing clock rebases. The external-memory heuristic in the soak flags a
 small drop; the 60 s samples oscillate by more than that and return, so it is allocation
 churn, not a leak.
 
@@ -839,31 +829,27 @@ PY=~/.espressif/python_env/idf6.1_py3.12_env/bin/python     # any python with py
 $PY host/tests/serial_log.py -s 20 -o /tmp/board.log        # boot log, resets the board
 
 BOARD_URL=http://<board-address>:8000 SERIAL_LOG=/tmp/board.log \
-  HOST_DIR=host sh host/tests/http_tests.sh                 # T3-T9, 80 assertions
+  HOST_DIR=host sh host/tests/http_tests.sh                 # T3-T6, T8b
 ```
 
 The long-running checks have their own script. It resets the board, captures for
-the whole run, attaches one stream client and (optionally) downloads the largest
-track repeatedly, then reads the device's telemetry and decides for itself:
+the whole run, attaches one stream client and (with `RESCAN=1`) keeps rescanning,
+then reads the device's telemetry and decides for itself:
 
 ```bash
-sh host/tests/board_soak.sh http://<board-address>:8000 /dev/cu.usbserial-XXXX 60 stream
-sh host/tests/board_soak.sh http://<board-address>:8000 /dev/cu.usbserial-XXXX 2 downloads   # T9b
-MAX_COST=70 sh host/tests/board_soak.sh ... 60 stream    # when quality, not headroom, is the goal
+sh host/tests/board_soak.sh http://<board-address>:8000 /dev/cu.usbserial-XXXX 60
+RESCAN=1 sh host/tests/board_soak.sh http://<board-address>:8000 /dev/cu.usbserial-XXXX 10
+MAX_COST=70 sh host/tests/board_soak.sh ... 60    # when quality, not headroom, is the goal
 ```
 
 `MAX_COST` defaults to the specification's 35 %; a configuration chosen for quality
 is held to its own bound explicitly rather than quietly exempted.
 
-Two acceptance tests are not scripts:
+One acceptance test is not a script:
 
 * **T12 on the board** — set `out_hz` to a rate the encoder does not accept (44101,
   say), flash, and watch it refuse to serve: it names the offending rate and stops
   before the listener comes up.
-* **T13 (FATFS case sensitivity)** — the suite prints the status code it gets for a
-  wrong-case name rather than asserting one, because the specification asks for the
-  behaviour to be documented, whichever way the filesystem resolves it. macOS is
-  case-insensitive, so this one is board-only by construction.
 
 The host/board digest comparison is in `host/tests/digest.sh`:
 
@@ -896,7 +882,7 @@ components/
     tone_eq/                the stream's three-band DJ EQ and trim, before the encoder
     library/                the immutable tree, arena, JSON, Playlist and lookup
     library_http/           GET /api/library[.bin] from the prebuilt views
-    mini_files/             GET / index, GET /music/<relative path> download
+    mini_files/             GET / index: a listing, not a file browser
     cassette/               what the screen shows: reel phases, pack fills, tape ink, title
     artwork/                a Track's picture and text tags: ID3 APIC/TPE1/TIT2, FLAC
                             PICTURE/Vorbis, the cover fit
@@ -1070,10 +1056,10 @@ cp ~/Music/*.mp3 ~/Music/*.flac /Volumes/YOURCARD/music/
 Two things about a real library that synthetic fixtures never exercise, both handled:
 
 * **Awkward names work.** Spaces, accents, apostrophes, percent signs and semicolons are
-  percent-encoded in the index's links, HTML-escaped in the link text, and decoded back on
-  download. `host/tests/hostile_names.py` builds a library of exactly those names and
-  checks all three places a name travels - index, download, and the stream's ICY metadata -
-  because an apostrophe or a semicolon in a name is what breaks a metadata block.
+  HTML-escaped in the index, and never turned into links. `host/tests/hostile_names.py`
+  builds a library of exactly those names and checks the two places a name travels - the
+  index and the stream's ICY metadata - because an apostrophe or a semicolon in a name is
+  what breaks a metadata block.
 * **Filenames are read as UTF-8** (`CONFIG_FATFS_API_ENCODING_UTF_8`). With the default
   ANSI/OEM setting FatFS transcodes long names through the OEM code page, which cannot
   represent `é` or `ú`, so a library with accents in its titles would show mangled names
@@ -1089,8 +1075,8 @@ Two things about a real library that synthetic fixtures never exercise, both han
   Wi-Fi and the encoder. A 192 kHz FLAC therefore plays slower than real time and the
   live stream rebases; `docs/research/audio-decode-cost.md` has the measured split.
   The broadcast therefore **skips a Track whose source rate is above 96 kHz** with a
-  named log (`MINI_ICECAST_MAX_SOURCE_HZ`); the Track stays in the index and its
-  original bytes stay downloadable. Transcode such files to 44.1 kHz / 16-bit (or
+  named log (`MINI_ICECAST_MAX_SOURCE_HZ`); the Track stays in the index and is
+  skipped, not deleted. Transcode such files to 44.1 kHz / 16-bit (or
   96 kHz) on the card to play them. 16-bit / 44.1 kHz FLAC measures 101.3 % of real
   time with zero rebases, and MP3 is above it; they are unaffected.
 
@@ -1139,15 +1125,15 @@ to PSRAM and takes internal free from 35 327 B to **154 643 B** (largest block 1
 * **No authentication anywhere** (see the warning at the top) and **no TLS**.
 * **No Opus, Vorbis, Ogg, AAC** — MP3 only, for reach and because a fixed-point MP3
   encoder is the only one that fits this power budget.
-* **No seek, no range requests, no transcoding on download.** Downloads are the
-  original bytes.
+* **No Track transfer at all.** There is no per-track endpoint, no range request, no
+  WebDAV/SMB mount and no upload path; see the premise at the top. Music goes onto the
+  card with the card in a reader. The index views are still fetchable — they are the
+  device's own summary, not a song.
 * **No Wi-Fi provisioning UI** and no OTA updates; discovery is the fixed
   `xtape.local`, so two devices on one LAN collide. Credentials are compiled in.
 * **Card removal is not hot-detected.** If the card is pulled after boot, reads start
   failing, the broadcast skips the Track, and the Library stays stale until you rescan
   (`POST /api/rescan`) or reboot.
-* **One download at a time.** A second concurrent download is declined with `503`
-  rather than queued, so a 40 MB FLAC cannot starve the broadcast behind it.
 * **Track artwork is JPEG only.** A PNG picture in an `APIC` or `PICTURE` block is
   located and reported but not drawn; the case window does not carry LodePNG. A track
   with no usable picture leaves the Case's window empty.

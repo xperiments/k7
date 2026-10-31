@@ -4,7 +4,7 @@
  *
  * The broadcast produces encoded bytes and must never wait for a socket: a slow
  * or stalled listener used to block the audio task in send(), which is exactly
- * how a download on the same Wi-Fi could starve the stream. This ring is the
+ * how a slow reader on the same Wi-Fi could starve the stream. This ring is the
  * hand-off. The producer writes whole ICY-framed spans and never blocks; the
  * sender thread reads at the network's pace. When the ring is full the client is
  * too slow and is dropped, rather than slowing the broadcast.

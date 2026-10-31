@@ -2,8 +2,7 @@
 /*
  * audio_format - the one authority on the source formats the server accepts.
  *
- * The decoder, the broadcast's library scan, the download surface and the index
- * all ask this function. It is only a name test: a leading dot (macOS AppleDouble
+ * The decoder, the broadcast's library scan and the index all ask this function. It is only a name test: a leading dot (macOS AppleDouble
  * files) and everything else about a name is the caller's business. Keeping the
  * extension -> enum rule here means it cannot drift between surfaces; adding a
  * format still touches the decoder dispatch and the MIME map, but not the

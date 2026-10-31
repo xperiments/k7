@@ -1,8 +1,50 @@
 # Stream server
 
-An ESP32-S3 that owns a music library on a microSD card and serves it over HTTP. This context
-covers the **origin** side: the device that produces a stream and hands out files. The
-consumer side is a separate context — see [`CONTEXT-MAP.md`](../../CONTEXT-MAP.md).
+An ESP32-S3 that owns a music library on a microSD card and broadcasts it over HTTP. This
+context covers the **origin** side: the device that produces a stream. The consumer side is a
+separate context — see [`CONTEXT-MAP.md`](../../CONTEXT-MAP.md).
+
+## The global premise
+
+**The ESP32-S3 never serves a Track and never accepts a Track upload. All SD content
+processing happens outside the device.**
+
+This outranks every requirement, proposal and road-map item written here or in any other
+document in this repository. It is a premise, not a preference: work that violates it is
+refused at review, not queued behind other work.
+
+- **No Track download.** The device never hands out a Track as a file — neither the stored
+  bytes nor a whole re-encoded copy. There is no per-Track endpoint — the `/music/<path>`
+  route is gone — and no
+  WebDAV, SMB, AFP, FTP or other mount that would expose the card's Tracks, individually or
+  as a tree. The WebDAV research in `docs/research/server/s15-webdav.md` is a rejected
+  option, kept for its evidence, not as a plan. Audio leaves only as the live stream, at the
+  station format.
+- **No Track upload.** No `PUT`, no multipart body, no body that becomes a Track, no
+  upload-and-scan. The POST bodies that exist (`/api/play`, `/api/rescan`, `/mcp`) are
+  commands: bounded, parsed, then discarded. There is no write path to the card at all.
+- **The card is prepared outside.** Adding, removing, renaming or retagging music is a host
+  operation — the card in a reader, or a host tool. The device's only SD access is the
+  read-only access the broadcast itself needs: mount the card, scan it to build the Library,
+  read a Track to encode it, read artwork for the display.
+
+**What the premise does not forbid**, because the distinction is the point:
+
+- **The live stream** (`/stream`). It carries the station's continuously encoded MP3, not any
+  stored Track's bytes.
+- **The device's own views.** `/api/library`, `/api/library.bin` and the opt-in
+  `/api/screen.bmp` are computed by the firmware, not read out of the card. `/api/library.bin`
+  is still sent with `Content-Disposition: attachment`, and that is fine: it is a photograph
+  of the index, not a Track. "Attachment" describes how a response is framed; the premise
+  bans what the bytes *are*, and these are not a Track.
+- **The Index**, as a listing: names and sizes in Playlist order, with no links to bytes. It
+  survives because it is the device's diagnostic surface when the card is missing.
+
+Read literally, "all SD processing outside" would forbid the broadcast itself. It does not
+mean that. **SD processing** in the premise means operating on the card's content on someone
+else's behalf: adding, removing, renaming, rewriting, or shipping a Track out. Reading a Track
+to put it on air is the appliance's own job, and it is what the Library scan and the decoder
+do. Nothing else may read the card, and nothing may write it.
 
 ## Language
 
@@ -33,8 +75,8 @@ the server sends.
 _Avoid_: input codec, file type
 
 **Original bytes**:
-A track as stored, unmodified. What a download returns, as distinct from what the stream
-carries.
+A track as stored, unmodified. What the broadcast reads and re-encodes; never what it sends,
+because nothing hands the stored bytes out.
 _Avoid_: raw file, raw audio
 
 ### The broadcast
@@ -405,14 +447,15 @@ the server does not track listeners as identities.
 _Avoid_: listener, subscriber, user
 
 **Index**:
-The browsable listing of the music directory, and the device's diagnostic surface when the
-card is missing.
+The listing of the Library in Playlist order, and the device's diagnostic surface when the
+card is missing. It names Tracks and their sizes; it does not hand them out.
 _Avoid_: directory listing, browse page, file browser
 
-**Download**:
-Retrieval of one track's original bytes over HTTP. A separate act from listening to the live
-stream, and mutually exclusive with other downloads.
-_Avoid_: fetch, transfer, file request
+**Track transfer**:
+Handing a stored Track's bytes out over HTTP, or taking a Track in over HTTP. The appliance
+does neither; the phrase names the act the global premise forbids. Fetching
+`/api/library.bin` is not a Track transfer — it is the index, and the index is not a Track.
+_Avoid_: download, upload, file transfer, share, NAS
 
 **Open**:
 The access posture of this device: no authentication anywhere, reachable by anyone who can
