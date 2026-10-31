@@ -1,6 +1,6 @@
 idf_component_register(SRCS "board_esp32.c"
                        INCLUDE_DIRS "."
-                       REQUIRES app_board esp_driver_sdmmc esp_driver_sdspi esp_driver_spi fatfs
+                       REQUIRES app_board snapshot esp_driver_sdmmc esp_driver_sdspi esp_driver_spi fatfs
                                 esp_wifi esp_netif esp_event spi_flash esp_psram mdns)
 
 # The credentials are reached with __has_include(), which does not appear in the
