@@ -7,10 +7,19 @@ import {
   type SnapshotTrack,
 } from '../domain/snapshot';
 
+export interface SnapshotTags {
+  title: string;
+  artist: string;
+  album: string;
+  genre: string;
+}
+
 /** One analysed Track, as the queue holds it: the File, for its tags, and the analysis. */
 export interface SnapshotItem {
   file: File;
   analysis: Analysis | null;
+  /** Tags the page already read into its own cache; the file is only read when absent. */
+  tags?: SnapshotTags;
 }
 
 export interface SnapshotExport {
@@ -53,19 +62,22 @@ export async function buildSnapshotExport(
     }
 
     /* Tags are a display and search convenience, never a reason to fail a run: a file
-     * with none still gets its measurements. */
-    let title = '';
-    let artist = '';
-    let album = '';
-    let genre = '';
-    try {
-      const { common } = await parseBlob(item.file, { duration: false, skipCovers: true });
-      title = common.title ?? '';
-      artist = common.artist ?? '';
-      album = common.album ?? '';
-      genre = common.genre?.[0] ?? '';
-    } catch {
-      /* unreadable tags: the row keeps its measurements and empty strings */
+     * with none still gets its measurements. The page read them at analysis time and keeps
+     * them beside the cover, so this only parses when the cache has nothing. */
+    let title = item.tags?.title ?? '';
+    let artist = item.tags?.artist ?? '';
+    let album = item.tags?.album ?? '';
+    let genre = item.tags?.genre ?? '';
+    if (!item.tags) {
+      try {
+        const { common } = await parseBlob(item.file, { duration: false, skipCovers: true });
+        title = common.title ?? '';
+        artist = common.artist ?? '';
+        album = common.album ?? '';
+        genre = common.genre?.[0] ?? '';
+      } catch {
+        /* unreadable tags: the row keeps its measurements and empty strings */
+      }
     }
 
     tracks.push({

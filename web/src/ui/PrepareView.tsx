@@ -13,6 +13,7 @@ import {
 import { snapshotPath } from '../domain/snapshot';
 import { sendSnapshot } from '../device/upload';
 import { newId } from '../lib/id';
+import { allMedia, countMedia, putMedia } from '../storage/media';
 import {
   clearSnapshot,
   loadSnapshot,
@@ -27,7 +28,7 @@ import { isWeightError } from '../weights/errors';
 import { DropZone } from './DropZone';
 import type { FoundFile } from './files';
 import { formatBytes, plural, shortHash } from './format';
-import { extractCovers } from './covers';
+
 import { QueueList } from './QueueList';
 import { buildSnapshotExport } from './snapshotExport';
 import { writeSnapshotToCard, type SnapshotDirectory } from './cardWriter';
@@ -47,7 +48,7 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
   const [tagsOnly, setTagsOnly] = useState(true);
   const [compact, setCompact] = useState(true);
   const [lastSnapshot, setLastSnapshot] = useState<StoredSnapshot | null>(null);
-  const [covers, setCovers] = useState<string | null>(null);
+  const [mediaCount, setMediaCount] = useState(0);
   /* The card the user opened read-write, when they opened one: the snapshot goes back
    * there without asking again. A dropped folder leaves this null. */
   const [cardHandle, setCardHandle] = useState<SnapshotDirectory | null>(null);
@@ -73,6 +74,7 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
    * page can lose its origin for a second and still have the run to send again. */
   useEffect(() => {
     let cancelled = false;
+    void countMedia().then(setMediaCount).catch(() => {});
     loadSnapshot()
       .then((stored) => {
         if (!cancelled && stored) setLastSnapshot(stored);
@@ -99,6 +101,34 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  /* The card is in the computer exactly once, and the browser is the only place a cover can
+   * be kept: the player serves paths and measurements, never a picture. So every track that
+   * settles leaves its tags and its art here, keyed by the Snapshot's own path, and a library
+   * view built later joins the two by that key. */
+  const rememberMedia = useCallback(async (item: QueueItem) => {
+    const path = snapshotPath(item.path);
+    if (!path) return;
+    try {
+      const { parseBlob } = await import('music-metadata');
+      const parsed = await parseBlob(item.file, { duration: false, skipCovers: false });
+      const picture = parsed.common.picture?.[0];
+      await putMedia({
+        path,
+        title: parsed.common.title ?? '',
+        artist: parsed.common.artist ?? '',
+        album: parsed.common.album ?? '',
+        genre: parsed.common.genre?.[0] ?? '',
+        cover: picture
+          ? { bytes: new Uint8Array(picture.data), format: picture.format }
+          : undefined,
+        at: new Date().toISOString(),
+      });
+      void countMedia().then((n) => setMediaCount(n));
+    } catch {
+      /* Tags and art are a convenience: a file without them is measured like any other. */
+    }
   }, []);
 
   const update = useCallback((id: string, patch: Partial<QueueItem>) => {
@@ -145,6 +175,7 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
           );
           await putCached(key, analysis);
           update(item.id, { status: 'tagged', analysis, stage: undefined });
+          void rememberMedia(item);
           return;
         }
 
@@ -165,6 +196,7 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
         );
         await putCached(key, analysis);
         update(item.id, { status: 'done', analysis, stage: undefined });
+        void rememberMedia(item);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (isWeightError(error)) setWeightError(message);
@@ -324,8 +356,13 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
    * reported rather than silently dropped. */
   const buildImage = useCallback(async () => {
     if (!manifest) return null;
+    const media = await allMedia();
     const result = await buildSnapshotExport(
-      items.map((item) => ({ file: item.file, analysis: item.analysis ?? null })),
+      items.map((item) => ({
+        file: item.file,
+        analysis: item.analysis ?? null,
+        tags: media.get(snapshotPath(item.path) ?? ''),
+      })),
       manifest,
     );
     if (result.tracks === 0) {
@@ -476,42 +513,6 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
     setLastSnapshot(null);
   }, []);
 
-  /* Every cover the files carry, in one archive laid out like the card. It reads each file
-   * again — the analysis path skips covers on purpose, because most runs do not need them. */
-  const downloadCovers = useCallback(async () => {
-    if (items.length === 0) return;
-    setCovers('Reading covers…');
-    try {
-      const result = await extractCovers(
-        items.map((item) => ({ file: item.file, path: item.path })),
-        (progress) => {
-          if (progress.name) setCovers(`Reading covers… ${progress.done}/${progress.total}`);
-        },
-      );
-      if (result.covers === 0) {
-        setCovers('No file carried album art.');
-        return;
-      }
-      const blob = new Blob([result.archive], { type: 'application/zip' });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = 'xtape-covers.zip';
-      anchor.click();
-      URL.revokeObjectURL(url);
-      setCovers(
-        `${plural(result.covers, 'cover')} in xtape-covers.zip` +
-          (result.missing.length
-            ? `, ${result.missing.length} file${result.missing.length === 1 ? '' : 's'} without art`
-            : ''),
-      );
-    } catch (error) {
-      setCovers(
-        `Could not read the covers: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }, [items]);
-
   const clearAll = async () => {
     setItems([]);
     setNotice(null);
@@ -612,15 +613,6 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
           <button type="button" className="ghost" onClick={exportJson} disabled={done === 0}>
             Download JSON
           </button>
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => void downloadCovers()}
-            disabled={items.length === 0 || savingSnapshot}
-            title="Every album cover the files carry, in one zip laid out like the card"
-          >
-            Download covers
-          </button>
           {cardHandle && (
             <button
               type="button"
@@ -661,7 +653,11 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
         </div>
       </div>
 
-      {covers && <p className="muted small">{covers}</p>}
+      {mediaCount > 0 && (
+        <p className="muted small">
+          {plural(mediaCount, 'cover and tag')} kept in this browser, for the library view
+        </p>
+      )}
 
       {lastSnapshot && (
         <div className="last-snapshot">
