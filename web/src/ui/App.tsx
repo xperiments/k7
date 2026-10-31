@@ -18,6 +18,7 @@ import type { FoundFile } from './files';
 import { plural, shortHash } from './format';
 import { QueueList } from './QueueList';
 import { buildSnapshotExport } from './snapshotExport';
+import { cardPicker, pickCardDirectory, writeSnapshotToCard } from './cardWriter';
 import type { QueueItem } from './queue';
 
 export function App() {
@@ -235,21 +236,70 @@ export function App() {
    * file, at the card's root, that the device flashes and deletes. A Track outside a
    * `music` directory is measured and shown but has no place in it, so the count is
    * reported rather than silently dropped. */
-  const saveSnapshot = useCallback(async () => {
-    if (!manifest || savingSnapshot) return;
+  const buildImage = useCallback(async () => {
+    if (!manifest) return null;
+    const result = await buildSnapshotExport(
+      items.map((item) => ({ file: item.file, analysis: item.analysis ?? null })),
+      manifest,
+    );
+    if (result.tracks === 0) {
+      setNotice(
+        'Nothing to write: drop the card root (or its music folder) so the tracks have a ' +
+          'path below music/.',
+      );
+      return null;
+    }
+    return result;
+  }, [items, manifest]);
+
+  const leftovers = (skipped: number) =>
+    skipped > 0 ? ` ${plural(skipped, 'analysed file')} outside music/ left out.` : '';
+
+  /* The picker has to be opened inside the click: the gesture that allows it does not
+   * survive the second it takes to read every Track's tags. So the folder is chosen
+   * first, then the image is built, then it is written. */
+  const saveToCard = useCallback(async () => {
+    if (savingSnapshot) return;
+    let picked: Awaited<ReturnType<typeof pickCardDirectory>>;
+    try {
+      picked = await pickCardDirectory(cardPicker());
+    } catch (error) {
+      setNotice(
+        `Could not open the card: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    if (picked.kind === 'unsupported') {
+      setNotice('This browser cannot write to a folder; download the file and move it instead.');
+      return;
+    }
+    if (picked.kind === 'cancelled') return;
+
     setSavingSnapshot(true);
     try {
-      const result = await buildSnapshotExport(
-        items.map((item) => ({ file: item.file, analysis: item.analysis ?? null })),
-        manifest,
+      const result = await buildImage();
+      if (!result) return;
+      await writeSnapshotToCard(picked.directory, result.bytes);
+      setNotice(
+        `Wrote xtape.db for ${plural(result.tracks, 'track')} to the card.` +
+          leftovers(result.skipped) +
+          ' Put the card back in the player.',
       );
-      if (result.tracks === 0) {
-        setNotice(
-          'Nothing to write: drop the card root (or its music folder) so the tracks have a ' +
-            'path below music/.',
-        );
-        return;
-      }
+    } catch (error) {
+      setNotice(
+        `Could not write to the card: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setSavingSnapshot(false);
+    }
+  }, [buildImage, savingSnapshot]);
+
+  const saveSnapshotFile = useCallback(async () => {
+    if (savingSnapshot) return;
+    setSavingSnapshot(true);
+    try {
+      const result = await buildImage();
+      if (!result) return;
       const blob = new Blob([result.bytes], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -259,10 +309,8 @@ export function App() {
       URL.revokeObjectURL(url);
       setNotice(
         `Saved xtape.db for ${plural(result.tracks, 'track')}.` +
-          (result.skipped > 0
-            ? ` ${plural(result.skipped, 'analysed file')} outside music/ left out.`
-            : '') +
-          ' Put it at the card\'s root and put the card back.',
+          leftovers(result.skipped) +
+          " Put it at the card's root and put the card back.",
       );
     } catch (error) {
       setNotice(
@@ -271,7 +319,7 @@ export function App() {
     } finally {
       setSavingSnapshot(false);
     }
-  }, [items, manifest, savingSnapshot]);
+  }, [buildImage, savingSnapshot]);
 
   const clearAll = async () => {
     setItems([]);
@@ -280,6 +328,9 @@ export function App() {
   };
 
   const done = items.filter((item) => item.analysis).length;
+  const canSave = items.some(
+    (item) => item.analysis && snapshotPath(item.analysis.track.path) !== null,
+  );
 
   return (
     <div className="app">
@@ -333,17 +384,25 @@ export function App() {
           <button type="button" className="ghost" onClick={exportJson} disabled={done === 0}>
             Download JSON
           </button>
+          {cardPicker() && (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void saveToCard()}
+              disabled={!canSave || savingSnapshot}
+              title="Choose the card's root and write xtape.db there. A dropped folder is read-only, so the browser asks once."
+            >
+              {savingSnapshot ? 'Writing…' : 'Save to card'}
+            </button>
+          )}
           <button
             type="button"
-            className="primary"
-            onClick={() => void saveSnapshot()}
-            disabled={
-              savingSnapshot ||
-              !items.some((item) => item.analysis && snapshotPath(item.analysis.track.path))
-            }
-            title="Write xtape.db for the player: BPM, key, mood, energy and names, for a card whose music folder was what you dropped"
+            className="ghost"
+            onClick={() => void saveSnapshotFile()}
+            disabled={!canSave || savingSnapshot}
+            title="Download xtape.db and move it to the card's root yourself"
           >
-            {savingSnapshot ? 'Writing…' : 'Save snapshot'}
+            Download .db
           </button>
           <button
             type="button"
