@@ -231,6 +231,16 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         if (!img) {
             s_snapshot_state = (snapshot_result_t)board_state;
             snprintf(s_snapshot_reason, sizeof s_snapshot_reason, "%s", why ? why : "");
+            /* A missing Snapshot is normal (a device that has never been given one,
+             * or a build without the partition); an invalid one is not. Either way it
+             * is a state worth one line, because "no measurements" is otherwise
+             * indistinguishable from "measurements that did not load". */
+            if (s_snapshot_state == SNAPSHOT_INVALID)
+                ESP_LOGE(TAG, "snapshot: %s; queries answer without measurements",
+                         s_snapshot_reason);
+            else
+                ESP_LOGI(TAG, "snapshot: %s; queries answer without measurements",
+                         s_snapshot_reason);
         } else {
             char open_why[96] = {0};
             s_snapshot_state = snapshot_open_why(img, snap_size, &s_snapshot, open_why,
