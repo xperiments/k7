@@ -13,6 +13,12 @@ import {
 import { snapshotPath } from '../domain/snapshot';
 import { sendSnapshot } from '../device/upload';
 import { newId } from '../lib/id';
+import {
+  clearSnapshot,
+  loadSnapshot,
+  saveSnapshot,
+  type StoredSnapshot,
+} from '../storage/snapshots';
 import { needsMeasurement, tagAnalysis } from '../domain/tagAnalysis';
 import { SOURCE_URL, cacheKey } from '../config';
 import { clearCache, getCached, putCached } from '../storage/cache';
@@ -20,7 +26,8 @@ import { WEIGHTS_MODE } from '../weights/config';
 import { isWeightError } from '../weights/errors';
 import { DropZone } from './DropZone';
 import type { FoundFile } from './files';
-import { plural, shortHash } from './format';
+import { formatBytes, plural, shortHash } from './format';
+import { extractCovers } from './covers';
 import { QueueList } from './QueueList';
 import { buildSnapshotExport } from './snapshotExport';
 import { writeSnapshotToCard, type SnapshotDirectory } from './cardWriter';
@@ -39,6 +46,8 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [tagsOnly, setTagsOnly] = useState(true);
   const [compact, setCompact] = useState(true);
+  const [lastSnapshot, setLastSnapshot] = useState<StoredSnapshot | null>(null);
+  const [covers, setCovers] = useState<string | null>(null);
   /* The card the user opened read-write, when they opened one: the snapshot goes back
    * there without asking again. A dropped folder leaves this null. */
   const [cardHandle, setCardHandle] = useState<SnapshotDirectory | null>(null);
@@ -59,6 +68,22 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
   useEffect(() => {
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
+
+  /* The last image survives a reload, which is what makes the player's restart cheap: the
+   * page can lose its origin for a second and still have the run to send again. */
+  useEffect(() => {
+    let cancelled = false;
+    loadSnapshot()
+      .then((stored) => {
+        if (!cancelled && stored) setLastSnapshot(stored);
+      })
+      .catch(() => {
+        /* A store that cannot be read is not a reason to fail the page. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -350,7 +375,17 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
     try {
       const result = await buildImage();
       if (!result) return;
+      const stored: StoredSnapshot = {
+        bytes: result.bytes,
+        tracks: result.tracks,
+        skipped: result.skipped,
+        at: new Date().toISOString(),
+      };
+      await saveSnapshot(stored);
       const sent = await sendSnapshot(result.bytes);
+      const accepted: StoredSnapshot = { ...stored, sentAt: new Date().toISOString() };
+      await saveSnapshot(accepted);
+      setLastSnapshot(accepted);
       setNotice(
         `Sent ${plural(result.tracks, 'track')} to the player (${sent.bytes} bytes).` +
           leftovers(result.skipped) +
@@ -358,7 +393,8 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
       );
     } catch (error) {
       setNotice(
-        `Could not send to the player: ${error instanceof Error ? error.message : String(error)}`,
+        `Could not send to the player: ${error instanceof Error ? error.message : String(error)}. ` +
+          'The image is kept — send it again when the player is back.',
       );
     } finally {
       setSavingSnapshot(false);
@@ -371,6 +407,14 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
     try {
       const result = await buildImage();
       if (!result) return;
+      const stored: StoredSnapshot = {
+        bytes: result.bytes,
+        tracks: result.tracks,
+        skipped: result.skipped,
+        at: new Date().toISOString(),
+      };
+      await saveSnapshot(stored);
+      setLastSnapshot(stored);
       const blob = new Blob([result.bytes], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -391,6 +435,82 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
       setSavingSnapshot(false);
     }
   }, [buildImage, savingSnapshot]);
+
+  /* Sending again is the whole point of keeping the image: the player restarts after it
+   * accepts one, and a page that had to re-measure the card to try again would punish the
+   * one moment it cannot avoid. */
+  const resendLast = useCallback(async () => {
+    if (!lastSnapshot || savingSnapshot) return;
+    setSavingSnapshot(true);
+    try {
+      const sent = await sendSnapshot(lastSnapshot.bytes);
+      const accepted = { ...lastSnapshot, sentAt: new Date().toISOString() };
+      await saveSnapshot(accepted);
+      setLastSnapshot(accepted);
+      setNotice(
+        `Sent ${plural(lastSnapshot.tracks, 'track')} to the player (${sent.bytes} bytes). ` +
+          'It is restarting to pick up the new measurements.',
+      );
+    } catch (error) {
+      setNotice(
+        `Could not send to the player: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setSavingSnapshot(false);
+    }
+  }, [lastSnapshot, savingSnapshot]);
+
+  const downloadLast = useCallback(() => {
+    if (!lastSnapshot) return;
+    const blob = new Blob([lastSnapshot.bytes], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'xtape.db';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, [lastSnapshot]);
+
+  const discardLast = useCallback(async () => {
+    await clearSnapshot();
+    setLastSnapshot(null);
+  }, []);
+
+  /* Every cover the files carry, in one archive laid out like the card. It reads each file
+   * again — the analysis path skips covers on purpose, because most runs do not need them. */
+  const downloadCovers = useCallback(async () => {
+    if (items.length === 0) return;
+    setCovers('Reading covers…');
+    try {
+      const result = await extractCovers(
+        items.map((item) => ({ file: item.file, path: item.path })),
+        (progress) => {
+          if (progress.name) setCovers(`Reading covers… ${progress.done}/${progress.total}`);
+        },
+      );
+      if (result.covers === 0) {
+        setCovers('No file carried album art.');
+        return;
+      }
+      const blob = new Blob([result.archive], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'xtape-covers.zip';
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setCovers(
+        `${plural(result.covers, 'cover')} in xtape-covers.zip` +
+          (result.missing.length
+            ? `, ${result.missing.length} file${result.missing.length === 1 ? '' : 's'} without art`
+            : ''),
+      );
+    } catch (error) {
+      setCovers(
+        `Could not read the covers: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }, [items]);
 
   const clearAll = async () => {
     setItems([]);
@@ -492,6 +612,15 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
           <button type="button" className="ghost" onClick={exportJson} disabled={done === 0}>
             Download JSON
           </button>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => void downloadCovers()}
+            disabled={items.length === 0 || savingSnapshot}
+            title="Every album cover the files carry, in one zip laid out like the card"
+          >
+            Download covers
+          </button>
           {cardHandle && (
             <button
               type="button"
@@ -531,6 +660,37 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
           </button>
         </div>
       </div>
+
+      {covers && <p className="muted small">{covers}</p>}
+
+      {lastSnapshot && (
+        <div className="last-snapshot">
+          <span className="muted small">
+            Last snapshot: {plural(lastSnapshot.tracks, 'track')} ·{' '}
+            {formatBytes(lastSnapshot.bytes.length)} ·{' '}
+            {lastSnapshot.sentAt
+              ? `accepted ${new Date(lastSnapshot.sentAt).toLocaleTimeString()}`
+              : `built ${new Date(lastSnapshot.at).toLocaleTimeString()}`}
+          </span>
+          <div className="actions">
+            <button
+              type="button"
+              className="ghost small"
+              onClick={() => void resendLast()}
+              disabled={savingSnapshot}
+              title="Send the same image again, without measuring anything"
+            >
+              Send to player
+            </button>
+            <button type="button" className="ghost small" onClick={downloadLast}>
+              Download
+            </button>
+            <button type="button" className="ghost small" onClick={() => void discardLast()}>
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
 
       <QueueList
         items={items}
