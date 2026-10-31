@@ -12,6 +12,7 @@ import {
 } from '../domain/analysis';
 import { snapshotPath } from '../domain/snapshot';
 import { sendSnapshot } from '../device/upload';
+import { newId } from '../lib/id';
 import { SOURCE_URL, cacheKey } from '../config';
 import { clearCache, getCached, putCached } from '../storage/cache';
 import { WEIGHTS_MODE } from '../weights/config';
@@ -155,7 +156,7 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
         continue;
       }
       accepted.push({
-        id: crypto.randomUUID(),
+        id: newId(),
         file,
         name: file.name,
         path,
