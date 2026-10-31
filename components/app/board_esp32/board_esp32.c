@@ -90,7 +90,7 @@ static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *e = data;
         snprintf(s_local_ip, sizeof s_local_ip, IPSTR, IP2STR(&e->ip_info.ip));
-        ESP_LOGI(TAG, "stream: http://" IPSTR ":%u/stream  library: http://" IPSTR ":%u/",
+        ESP_LOGI(TAG, "stream: http://" IPSTR ":%u/stream  index: http://" IPSTR ":%u/library",
                  IP2STR(&e->ip_info.ip), (unsigned)s_http_port,
                  IP2STR(&e->ip_info.ip), (unsigned)s_http_port);
         xEventGroupSetBits(wifi_ev, 1);

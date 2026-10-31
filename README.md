@@ -6,7 +6,7 @@ music over HTTP:
 * **one continuous live MP3 stream** at `http://<device>:8000/stream` — every
   client hears the same track at the same moment, and any player works, because
   the stream format never changes;
-* **an index** at `/`, listing the tracks on the card with their sizes and what
+* **an index** at `/library`, listing the tracks on the card with their sizes and what
   is playing now.
 
 It never **serves or accepts a Track**: there is no per-track endpoint, no WebDAV
@@ -91,7 +91,7 @@ result afterwards. If you change `sdkconfig.defaults`, delete `sdkconfig` (or ru
 After flashing, the log prints the two URLs once the device gets an address:
 
 ```
-I (radio) stream: http://192.168.1.42:8000/stream  library: http://192.168.1.42:8000/
+I (radio) stream: http://192.168.1.42:8000/stream  index: http://192.168.1.42:8000/library
 ```
 
 ### If the build fails on a component name
@@ -236,7 +236,7 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 
 | URL | What it does |
 |---|---|
-| `GET /` | The index: every Track in the Library tree, in Playlist order, with its size, what is playing now, and a link to the stream. It is a listing, not a file browser: there is no link to a track's bytes. Also the device's diagnostic page when no card is mounted. |
+| `GET /library` | The index: every Track in the Library tree, in Playlist order, with its size, what is playing now, and a link to the stream. It is a listing, not a file browser: there is no link to a track's bytes. Also the device's diagnostic page when no card is mounted. `GET /` is the front door's page, and says so (503) in a firmware that carries none. |
 | `GET /stream` | The live stream: continuous `audio/mpeg` at the station rate and bit rate. Ask with `Icy-MetaData: 1` and the current track is interleaved every 16 000 encoded bytes. |
 | `GET /api/library` | The prebuilt Library JSON, with `state`, counts and a generation ETag. |
 | `GET /api/library.bin` | The same generation as an arena: versioned header, nodes, edges, track index and CRC. |
