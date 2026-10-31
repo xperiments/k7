@@ -11,7 +11,8 @@ export interface Session {
 }
 
 export interface Runtime {
-  createSession(uri: string): Promise<Session>;
+  /** The caller has already fetched and verified the model bytes. */
+  createSession(model: Uint8Array): Promise<Session>;
 }
 
 export function embeddingOutput(session: Session): string {

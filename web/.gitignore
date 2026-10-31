@@ -1,8 +1,10 @@
 node_modules/
 dist/
+dist-shell/
 .vite/
 public/models/
 public/ort/
+public/weights/
 *.local
 .DS_Store
 

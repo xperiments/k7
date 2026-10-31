@@ -1,6 +1,8 @@
 import type { TagLib } from 'taglib-wasm';
 import type { Analysis, TrackFormat } from '../domain/analysis';
 import { analysisTags } from '../domain/storedAnalysis';
+import { loadWeightBytes } from '../weights/loader';
+import { TAGLIB_WASM } from '../weights/manifest';
 
 let taglibPromise: Promise<TagLib> | null = null;
 
@@ -8,8 +10,18 @@ function loadTaglib(): Promise<TagLib> {
   if (!taglibPromise) {
     taglibPromise = (async () => {
       const { TagLib } = await import('taglib-wasm');
-      return TagLib.initialize();
-    })();
+
+      // The Node tier has no page origin to fetch a weight from; the package resolves its
+      // own wasm there. In the browser the binary is a verified weight, and handing it
+      // over keeps TagLib from fetching a second, unchecked copy from beside its module.
+      if (typeof window === 'undefined') return TagLib.initialize();
+
+      const wasmBinary = await loadWeightBytes(TAGLIB_WASM);
+      return TagLib.initialize({ wasmBinary });
+    })().catch((error: unknown) => {
+      taglibPromise = null;
+      throw error;
+    });
   }
   return taglibPromise;
 }

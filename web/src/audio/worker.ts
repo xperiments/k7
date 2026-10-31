@@ -1,3 +1,6 @@
+import { loadEssentia } from '../weights/essentia';
+import { WeightError } from '../weights/errors';
+import { loadModelBytes } from '../weights/manifest';
 import { Analyzer } from './analyzer';
 import { browserRuntime } from './browser-runtime';
 import { loadManifest } from './models';
@@ -11,11 +14,14 @@ let analyzerPromise: Promise<Analyzer> | null = null;
 function getAnalyzer(): Promise<Analyzer> {
   if (!analyzerPromise) {
     analyzerPromise = (async () => {
-      const manifest = await loadManifest('/models');
-      const analyzer = new Analyzer(browserRuntime, manifest);
+      const manifest = await loadManifest();
+      const analyzer = new Analyzer(browserRuntime, manifest, loadModelBytes, loadEssentia);
       await analyzer.init();
       return analyzer;
-    })();
+    })().catch((error: unknown) => {
+      analyzerPromise = null;
+      throw error;
+    });
   }
   return analyzerPromise;
 }
@@ -46,6 +52,7 @@ self.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
         type: 'error',
         id: message.id,
         message: error instanceof Error ? error.message : String(error),
+        weight: error instanceof WeightError,
       });
     }
   })();

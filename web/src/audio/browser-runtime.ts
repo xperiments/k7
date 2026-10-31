@@ -1,17 +1,36 @@
 import * as ort from 'onnxruntime-web/wasm';
+import { loadWeightBytes } from '../weights/loader';
+import { ORT_WASM } from '../weights/manifest';
 import type { Runtime, Session, TensorData } from './runtime';
 
-// ORT's loader is served from public/ort as a static asset. The absolute URL is
-// deliberate: a bare "/ort/..." is resolved by Vite as a source import in dev and
-// is rejected because public files cannot be imported from source.
-ort.env.wasm.wasmPaths = new URL('/ort/', self.location.origin).href;
-ort.env.wasm.numThreads = self.crossOriginIsolated
-  ? Math.min(4, navigator.hardwareConcurrency || 1)
-  : 1;
+// The loader's JavaScript glue is part of the shell; the 14 MB WebAssembly binary is a
+// weight. ORT takes the buffer directly, so the verified bytes never become a URL that a
+// second fetch could replace.
+let prepared: Promise<void> | null = null;
+
+function prepare(): Promise<void> {
+  if (!prepared) {
+    prepared = (async () => {
+      const wasmBinary = await loadWeightBytes(ORT_WASM);
+      ort.env.wasm.wasmPaths = {
+        mjs: new URL('/ort/ort-wasm-simd-threaded.mjs', self.location.origin).href,
+      };
+      ort.env.wasm.wasmBinary = wasmBinary;
+      ort.env.wasm.numThreads = self.crossOriginIsolated
+        ? Math.min(4, navigator.hardwareConcurrency || 1)
+        : 1;
+    })().catch((error: unknown) => {
+      prepared = null;
+      throw error;
+    });
+  }
+  return prepared;
+}
 
 export const browserRuntime: Runtime = {
-  async createSession(uri: string): Promise<Session> {
-    const session = await ort.InferenceSession.create(uri, {
+  async createSession(model: Uint8Array): Promise<Session> {
+    await prepare();
+    const session = await ort.InferenceSession.create(model, {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
     });

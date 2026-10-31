@@ -7,11 +7,13 @@
   "scripts": {
     "dev": "npm run assets && vite",
     "build": "npm run assets && tsc --noEmit && vite build",
+    "build:shell": "npm run assets && tsc --noEmit && vite build --mode shell",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "models": "node scripts/fetch-models.mjs",
-    "assets": "node scripts/prepare-assets.mjs"
+    "assets": "node scripts/prepare-assets.mjs",
+    "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
     "essentia.js": "0.1.3",

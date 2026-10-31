@@ -511,6 +511,41 @@ button:disabled {
   color: var(--teal);
 }
 
+/* The two views. The Prepare view stays mounted while hidden, so its queue keeps running. */
+.view[hidden] {
+  display: none;
+}
+
+.switch-app {
+  padding-bottom: 0;
+}
+
+.switch-app .banner {
+  margin-bottom: 0;
+}
+
+.player-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.player-link {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 8px 14px;
+  text-decoration: none;
+}
+
+.player-link:hover,
+.player-link:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
 @media (max-width: 720px) {
   .primary-grid {
     grid-template-columns: 1fr 1fr;

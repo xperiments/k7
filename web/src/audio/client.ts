@@ -73,7 +73,11 @@ export class AnalysisClient {
 
     this.pending.delete(message.id);
     if (message.type === 'error') {
-      pending.reject(new Error(message.message));
+      const error = new Error(message.message);
+      // The class does not survive postMessage; the name carries the distinction the
+      // Prepare view needs, and the message remains the text shown on the page.
+      if (message.weight) error.name = 'WeightError';
+      pending.reject(error);
     } else if (message.type === 'result') {
       pending.resolve(message.analysis);
     } else {

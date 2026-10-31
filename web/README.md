@@ -44,7 +44,7 @@ Then open the printed URL, drop files or a folder, and wait for the cards.
 `dev` also copies ONNX Runtime's WASM loader into `public/ort/`.
 
 `npm run models` fetches from `essentia.upf.edu` and verifies every SHA-256 against
-`scripts/fetch-models.mjs`; a mismatch fails the command rather than loading different weights.
+`weights.lock.json`; a mismatch fails the command rather than loading different weights.
 > If `npm` on this machine cannot write `~/.npm` (a permissions issue seen during
 > development), add `--cache .npm-cache` to the install command. That directory is ignored.
 
@@ -53,11 +53,13 @@ Then open the printed URL, drop files or a folder, and wait for the cards.
 | Command | What it does |
 |---|---|
 | `npm run dev` | Vite dev server with cross-origin isolation headers |
-| `npm run build` | Typechecks and builds the static app into `dist/` |
+| `npm run build` | Typechecks and builds the local app into `dist/` |
+| `npm run build:shell` | Builds `dist-shell/`, the device shell with no weights or model files |
 | `npm run preview` | Serves the production build with the same headers |
 | `npm test` | Vitest: domain logic, mel parity, real-model pipeline |
 | `npm run models` | Fetches and verifies the ONNX model set |
-| `npm run assets` | Copies ORT's WASM loader to `public/ort/` |
+| `npm run assets` | Copies the local runtime files to `public/ort/` and `public/weights/` |
+| `npm run icons` | Regenerates the 192 and 512 PNG icons |
 
 ## How it works
 
@@ -85,9 +87,32 @@ Then open the printed URL, drop files or a folder, and wait for the cards.
 
 The worker loads ONNX Runtime's WASM loader from `public/ort/` by absolute URL, so Vite
 never treats it as a source import (public files cannot be imported from source in dev); the
-models come from `public/models/`. Nothing is fetched cross-origin. The dev and preview
-servers set COOP/COEP so ORT can use multiple threads; without those headers it falls back
-to one thread.
+models come from `public/models/`. The dev and preview servers set COOP/COEP so ORT can use
+multiple threads; without those headers it falls back to one thread.
+
+### The device shell and the weights
+
+`npm run build:shell` produces `dist-shell/`, the files packed into the device's 1 MB
+partition. It contains our code only: `index.html`, the app bundle, the worker, the ORT
+loader glue, the TagLib adapter, `sw.js`, the manifest, the icons and `weights.lock.json`.
+It contains no models and no `.wasm` binary — that build is under 1 MB.
+
+Everything else is a **weight**, loaded through `src/weights/`:
+
+1. `weights.lock.json` (imported into the app) lists every file, its URL source and its
+   sha256. The models are fetched from the repository at the pinned tag; Essentia, ONNX
+   Runtime and TagLib come from jsDelivr at their published versions.
+   The weights are licence-bound and are not committed in every checkout, so a release tag
+   has to be created from a tree that includes `web/public/models/`; otherwise the first
+   analysis is refused by the hash check, which is the correct failure.
+2. A weight is fetched, hashed and only then handed to its runtime. A mismatch is refused
+   and named. Essentia's JavaScript is imported from a blob URL after the check.
+3. Verified bytes are cached in IndexedDB by URL and hash, and the service worker keeps a
+   second cache under a name carrying the app version and the manifest hash.
+
+`npm run dev` and `npm run build` use the same code with `WEIGHTS_MODE=local`: the weights
+come from `public/models/`, `public/ort/` and `public/weights/`, so development needs no
+network. A local build that has not run `npm run models` says so instead of analysing.
 
 ## Accuracy caveats
 

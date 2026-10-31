@@ -1,4 +1,4 @@
-import type { ModelManifest } from '../domain/analysis';
+export { loadManifest, MODELS_MISSING_MESSAGE } from '../weights/manifest';
 
 export const MODEL_FILES = {
   effnet: 'discogs-effnet-bsdynamic-1.onnx',
@@ -13,12 +13,3 @@ export const MODEL_FILES = {
     danceable: 'danceability-discogs-effnet-1.onnx',
   },
 } as const;
-
-export const MODELS_MISSING_MESSAGE =
-  'The ONNX models are missing. Run `npm run models` in web/ and reload.';
-
-export async function loadManifest(baseUrl = '/models'): Promise<ModelManifest> {
-  const response = await fetch(`${baseUrl}/manifest.json`, { cache: 'no-store' });
-  if (!response.ok) throw new Error(MODELS_MISSING_MESSAGE);
-  return (await response.json()) as ModelManifest;
-}

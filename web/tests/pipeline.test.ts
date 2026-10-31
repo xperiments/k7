@@ -1,20 +1,24 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import * as ort from 'onnxruntime-node';
 import { describe, expect, it } from 'vitest';
 import { Analyzer } from '../src/audio/analyzer';
 import type { Runtime, TensorData } from '../src/audio/runtime';
 import type { ModelManifest } from '../src/domain/analysis';
 import { toStoredAnalysis } from '../src/domain/storedAnalysis';
+import type { EssentiaModules } from '../src/weights/essentia';
+
+const require = createRequire(import.meta.url);
+const { Essentia, EssentiaWASM } = require('essentia.js');
 
 const modelsDir = join(process.cwd(), 'public', 'models');
 const hasModels = existsSync(join(modelsDir, 'manifest.json'));
 
 const runtime: Runtime = {
-  async createSession(uri: string) {
-    const path = join(modelsDir, basename(uri));
-    const session = await ort.InferenceSession.create(path, { intraOpNumThreads: 2 });
+  async createSession(model: Uint8Array) {
+    const session = await ort.InferenceSession.create(model, { intraOpNumThreads: 2 });
     return {
       inputNames: session.inputNames,
       outputNames: session.outputNames,
@@ -36,6 +40,11 @@ const runtime: Runtime = {
     };
   },
 };
+
+const loadModel = async (file: string) =>
+  new Uint8Array(await readFile(join(modelsDir, file)));
+
+const importEssentia = async (): Promise<EssentiaModules> => ({ Essentia, EssentiaWASM });
 
 /** A 120 BPM click over an A-minor pad, so tempo and key have something to find. */
 function clickTrack(sampleRate: number, seconds = 8): Float32Array {
@@ -65,7 +74,7 @@ describe.skipIf(!hasModels)('analysis pipeline', () => {
       await readFile(join(modelsDir, 'manifest.json'), 'utf8'),
     ) as ModelManifest;
 
-    const analyzer = new Analyzer(runtime, manifest);
+    const analyzer = new Analyzer(runtime, manifest, loadModel, importEssentia);
     await analyzer.init();
 
     const duration = 8;

@@ -1,5 +1,3 @@
-import Essentia from 'essentia.js/dist/essentia.js-core.es.js';
-import { EssentiaWASM } from 'essentia.js/dist/essentia-wasm.es.js';
 import {
   ANALYSIS_SCHEMA,
   MOOD_TAGS,
@@ -18,6 +16,7 @@ import {
   tempoConfidence,
 } from '../domain/tempo';
 import { ANALYZER_VERSION } from '../domain/version';
+import type { Essentia, EssentiaModules } from '../weights/essentia';
 import { logMelFrames, N_BANDS, toPatches } from './mel';
 import { MODEL_FILES } from './models';
 import type { TrackMetadata } from './metadata';
@@ -87,10 +86,14 @@ export class Analyzer {
   constructor(
     private readonly runtime: Runtime,
     private readonly manifest: ModelManifest,
-    private readonly baseUrl = '/models',
+    /** Loads a model's bytes; the caller has verified them against the manifest. */
+    private readonly loadModel: (file: string) => Promise<Uint8Array>,
+    /** Loads Essentia's JS module and wasm; kept out of the shell bundle. */
+    private readonly importEssentia: () => Promise<EssentiaModules>,
   ) {}
 
   async init(): Promise<void> {
+    const { Essentia, EssentiaWASM } = await this.importEssentia();
     this.essentia = new Essentia(EssentiaWASM);
   }
 
@@ -98,7 +101,13 @@ export class Analyzer {
   private session(file: string): Promise<Session> {
     let session = this.sessions.get(file);
     if (!session) {
-      session = this.runtime.createSession(`${this.baseUrl}/${file}`);
+      session = this.loadModel(file)
+        .then((bytes) => this.runtime.createSession(bytes))
+        .catch((error: unknown) => {
+          // A failed download is retried on the next track rather than cached as a failure.
+          this.sessions.delete(file);
+          throw error;
+        });
       this.sessions.set(file, session);
     }
     return session;
