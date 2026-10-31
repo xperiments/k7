@@ -37,8 +37,9 @@ function parsePlaying(value: unknown): PlayingStatus | null {
   const playing: PlayingStatus = {};
   if (typeof value.title === 'string') playing.title = value.title;
   if (typeof value.path === 'string') playing.path = value.path;
-  const elapsed = finiteNumber(value.elapsed);
-  const duration = finiteNumber(value.duration);
+  /* The wire says `_ms`, because the device reports milliseconds; the view formats them. */
+  const elapsed = finiteNumber(value.elapsed_ms);
+  const duration = finiteNumber(value.duration_ms);
   if (elapsed !== undefined) playing.elapsed = elapsed;
   if (duration !== undefined) playing.duration = duration;
   return playing;

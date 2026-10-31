@@ -2,7 +2,10 @@
 /*
  * http_transport - the seam between the front door and the wire.
  *
- * http_server.c holds everything that does not depend on how the bytes travel:
+ * http_server.c holds what the replies mean - the route table, the body rules, the status
+ * codes, the page's bytes - while the transport owns the socket: the accept loop, reading a
+ * request, and writing a reply. The split is not "no socket code in http_server.c"; it is
+ * that every rule lives once and both transports ask it.:
  * the route table, the reply rules (one Cache-Control, the Server header, the
  * POST body rules), and the public API. This header is where that front meets a
  * transport, and the build picks the transport by picking a file:

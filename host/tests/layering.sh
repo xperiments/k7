@@ -105,6 +105,20 @@ for src in "$ROOT"/components/portable/*/*.c; do
         fail=1
     fi
 done
+printf '\nH3b  a source below a portable component is either host-compiled or under idf/\n'
+for src in $(find "$ROOT/components/portable" -mindepth 3 -name '*.c' 2>/dev/null); do
+    case "$src" in
+    */shine/*) continue ;; # vendored: its own tree, wildcard-built
+    */idf/*)
+        printf '  ok    %s is device-only and says so\n' "$(basename "$src")"
+        ;;
+    *)
+        printf '  FAIL  %s is below a portable component and neither host-compiled nor under idf/\n' "$src"
+        fail=1
+        ;;
+    esac
+done
+
 app_srcs=$(find "$ROOT/components/app" -name '*.c' 2>/dev/null || true)
 if [ -n "$app_srcs" ]; then
     for src in $app_srcs; do

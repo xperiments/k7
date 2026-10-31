@@ -6,8 +6,8 @@ page that measures the card and writes `xtape.db` back to it.
 
 The analysis page is `web/`, and it does not fit. Built, it is **43 MB**: 24 MB of ONNX
 models, 14 MB of ONNX Runtime, 1.4 MB of TagLib, 2.56 MB of Essentia with its wasm inlined as
-base64 — and **0.47 MB that is ours** (`index.html`, the app bundle, the WASI adapter, the ORT
-module glue). The device has **9.9 MB** of free flash. What looked like a weight problem was
+base64 — and **a few hundred kilobytes that are ours** (`index.html`, the app bundle, the WASI
+adapter, the ORT module glue). The device has **9.9 MB** of free flash. What looked like a weight problem was
 two problems: the weights, and an origin.
 
 The origin one is fatal if ignored. `http://xtape.local` is not a **secure context**, and the
@@ -19,7 +19,8 @@ plain HTTP would load a page that fails on its first file.
 ## Decision
 
 - **The device serves the app's own code; the weights are fetched and cached.** A 1 MB SPIFFS
-  partition at `0x610000` holds `web/dist` minus `models/` and `ort/` — 0.47 MB. Essentia,
+  partition at `0x610000` holds `web/dist-shell` — 816 KiB once Essentia was moved out of the
+  worker. Essentia,
   TagLib, ONNX Runtime and the models come from jsDelivr at a pinned tag, verified against the
   manifest's `sha256` before use, and cached by a service worker.
 - **HTTPS on 443, with one certificate shipped in every image.** Every player is `xtape.local`,
@@ -46,8 +47,8 @@ plain HTTP would load a page that fails on its first file.
 ## Why the weights are not in flash
 
 Even if the models were the only thing to place, 24 MB does not fit beside a 4 MB app and a
-2 MB snapshot on a 16 MB part. Shrinking the shell is worth doing on its own terms — 0.47 MB
-instead of 4.6 MB, because the worker's 2.6 MB is `essentia-wasm.es.js` with the wasm inlined,
+2 MB snapshot on a 16 MB part. Shrinking the shell is worth doing on its own terms — 816 KiB
+instead of 4.6 MB, because the worker's 2.6 MB was `essentia-wasm.es.js` with the wasm inlined,
 not our code — but it is the models that force the network.
 
 The cost is honest and named: **a cold cache without internet means no analysis.** The shell
@@ -94,7 +95,7 @@ trust from "anything this CA signs" to "this one name".
 - **Embed the shell in the app image.** Fits, and every web tweak re-flashes the 4 MB app; no
   cache headers by filename, and the app grows for a page it only serves.
 - **A custom mmap'd pack instead of SPIFFS.** Faster and smaller, for a bespoke format, a
-  packer, and a reader to get wrong — over 0.47 MB.
+  packer, and a reader to get wrong — over 816 KiB.
 - **Keep a service worker out of it and cache in IndexedDB.** Works, and loses the offline
   shell that a PWA gives for the same effort.
 

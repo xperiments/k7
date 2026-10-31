@@ -67,7 +67,9 @@ export function PlayerView({
         </p>
 
         <div className="player-actions">
-          <a className="player-link" href="/stream">
+          {/* The stream is plain HTTP on 80, the page is HTTPS on 443: a different origin,
+              so the href is absolute and the link leaves the app rather than fetching it. */}
+          <a className="player-link" href={`http://${location.hostname}/stream`}>
             Open the live stream
           </a>
         </div>

@@ -9,6 +9,21 @@ const valid = {
   playing: {
     title: 'A track',
     path: 'music/Artist/a.mp3',
+    elapsed_ms: 12.5,
+    duration_ms: 203,
+  },
+};
+
+/* What the wire carries, and what the page parses it into: the device reports
+ * milliseconds, the view formats them. */
+const parsed = {
+  card: true,
+  tracks: 12,
+  generation: 3,
+  library: 'sha256:abc',
+  playing: {
+    title: 'A track',
+    path: 'music/Artist/a.mp3',
     elapsed: 12.5,
     duration: 203,
   },
@@ -16,18 +31,7 @@ const valid = {
 
 describe('the device status contract', () => {
   it('reads the card state, the library and what is playing', () => {
-    expect(parseStatus(valid)).toEqual({
-      card: true,
-      tracks: 12,
-      generation: 3,
-      library: 'sha256:abc',
-      playing: {
-        title: 'A track',
-        path: 'music/Artist/a.mp3',
-        elapsed: 12.5,
-        duration: 203,
-      },
-    });
+    expect(parseStatus(valid)).toEqual(parsed);
   });
 
   it('accepts a card that is out with nothing playing', () => {
@@ -44,11 +48,11 @@ describe('the device status contract', () => {
 
   it('treats an unrecognised playing value as nothing playing', () => {
     expect(parseStatus({ ...valid, playing: 'a string' })?.playing).toBeNull();
-    expect(parseStatus({ ...valid, playing: { elapsed: 'soon' } })?.playing).toEqual({});
+    expect(parseStatus({ ...valid, playing: { elapsed_ms: 'soon' } })?.playing).toEqual({});
   });
 
   it('ignores fields the page does not know', () => {
-    expect(parseStatus({ ...valid, future: true })).toEqual(valid);
+    expect(parseStatus({ ...valid, future: true })).toEqual(parsed);
   });
 
   it('rejects a response without a boolean card state', () => {
@@ -74,6 +78,6 @@ describe('the device status contract', () => {
   it('rejects text that is not JSON and text that is not this contract', () => {
     expect(parseStatusText('<html></html>')).toBeNull();
     expect(parseStatusText('{"card":true}')).toBeNull();
-    expect(parseStatusText(JSON.stringify(valid))).toEqual(valid);
+    expect(parseStatusText(JSON.stringify(valid))).toEqual(parsed);
   });
 });

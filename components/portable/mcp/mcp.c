@@ -1318,13 +1318,13 @@ static bool origin_ok(const http_request_t *req)
     if (!*auth || strpbrk(auth, "/?#@")) return false;
     if (strcasecmp(auth, req->host) != 0) return false;
 
-    static const char *const names[2] = {"xtape.local", "localhost"};
     char local[32] = {0};
     if (L_local_ip) L_local_ip(local, sizeof local);
 
+    const char *const names[3] = {"xtape.local", "localhost", local};
     for (int i = 0; i < 3; i++) {
-        const char *name = i < 2 ? names[i] : local;
-        if (!name || !name[0]) continue;
+        const char *name = names[i];
+        if (!name[0]) continue;
         if (strcasecmp(auth, name) == 0) return true;
         char pinned[80];
         snprintf(pinned, sizeof pinned, "%s:443", name);

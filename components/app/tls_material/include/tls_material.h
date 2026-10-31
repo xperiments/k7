@@ -25,9 +25,6 @@ const uint8_t *tls_material_cert(size_t *len);
 /* Its private key, PEM. Never logged, never written anywhere at runtime. */
 const uint8_t *tls_material_key(size_t *len);
 
-/* True when this build carries both halves. */
-bool tls_material_available(void);
-
 #ifdef __cplusplus
 }
 #endif

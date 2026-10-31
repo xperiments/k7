@@ -3,7 +3,7 @@
 An ESP32-S3 devkit with a microSD card in it joins your Wi-Fi and broadcasts the card's
 music over HTTP:
 
-* **one continuous live MP3 stream** at `http://<device>:8000/stream` — every
+* **one continuous live MP3 stream** at `http://<device>/stream` — every
   client hears the same track at the same moment, and any player works, because
   the stream format never changes;
 * **an index** at `/library`, listing the tracks on the card with their sizes and what
@@ -22,9 +22,10 @@ rate and encoded to MP3 for the stream.
 
 > ## Read this before you deploy it
 >
-> **This firmware serves a live stream, the index, the library API and a
-> read-only MCP endpoint to anyone who can reach port 8000, and its Wi-Fi
-> credentials are compiled into the binary.** There is no authentication
+> **This firmware serves a live stream, an analysis web app, the index, the
+> library API and a read-only MCP endpoint to anyone who can reach it — the app
+> on 443, the stream on 80 — and its Wi-Fi credentials are compiled into the
+> binary.** There is no authentication
 > anywhere: not on the index, not on the stream, and not on `/api/play` or
 > `/mcp`. (`/stream` deliberately stays open even if auth is ever
 > added — car head units and hardware players cannot send credentials in a stream
@@ -91,7 +92,7 @@ result afterwards. If you change `sdkconfig.defaults`, delete `sdkconfig` (or ru
 After flashing, the log prints the two URLs once the device gets an address:
 
 ```
-I (radio) stream: http://192.168.1.42:8000/stream  index: http://192.168.1.42:8000/library
+I (radio) stream: http://192.168.1.42/stream  app: https://192.168.1.42/
 ```
 
 ### If the build fails on a component name
@@ -123,8 +124,8 @@ one line, and the error message names the component.
 * The index uses that Playlist order; the live stream plays it in order, looping
   forever.
 
-The MCP endpoint is also advertised over mDNS as `xtape.local` (`_mcp._tcp`, port 8000,
-TXT `path=/mcp`, `endpoint=http://xtape.local:8000/mcp`, `device_type=mcp:device`). The
+The MCP endpoint is also advertised over mDNS as `xtape.local` (`_mcp._tcp`, port 443,
+TXT `path=/mcp`, `endpoint=https://xtape.local/mcp`, `device_type=mcp:device`). The
 hostname is fixed: **one xtape per LAN**. Discover it with `dns-sd -B _mcp._tcp` (macOS) or
 `avahi-browse -rt _mcp._tcp` (Linux).
 
@@ -214,7 +215,8 @@ I (1223) icecast: station format: 44100 Hz, 256 kbps CBR, joint stereo, MPEG-1
 I (1576) icecast: encoder: 102408 B of internal RAM taken (the encoder's own state; near zero means it landed in external memory)
 I (1576) icecast: encoder: 1152 samples/frame (26.1 ms), 95880 B of state inside the vendored library, staging buffers in external memory
 I (1588) icecast: burst ring: 20098 B (~500 ms of audio) in external memory, sends at most 2 clients
-I (1613) http: listening on :8000 (backlog 16, max 4 at once)
+I (2415) esp_https_server: Server listening on port 443
+I (2396) icecast: GET /stream is ready on the plain listener (port 80); the app is on 443
 ```
 
 Note the encoder figure: **95 880 B**, not the 95 896 B that a 64-bit host measures.
@@ -247,14 +249,14 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 
 ```bash
 # Listen on the desktop
-ffplay http://192.168.1.42:8000/stream
-mpv http://192.168.1.42:8000/stream
+ffplay http://192.168.1.42/stream
+mpv http://192.168.1.42/stream
 
 # Check it really is MPEG audio, at the station format
-curl -s --max-time 5 http://192.168.1.42:8000/stream | ffprobe -
+curl -s --max-time 5 http://192.168.1.42/stream | ffprobe -
 
 # A track's bytes are not reachable over HTTP, by design
-curl -s -o /dev/null -w '%{http_code}\n' http://192.168.1.42:8000/music/track.flac   # 404
+curl -s -o /dev/null -w '%{http_code}\n' http://192.168.1.42/music/track.flac   # 404
 
 # Previous / next track
 #   the control API only: the screen's chrome has no transport buttons

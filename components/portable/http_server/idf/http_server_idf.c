@@ -274,7 +274,7 @@ static esp_err_t tls_dispatch(httpd_req_t *r)
     }
 
     http_route_find_t how;
-    const http_route_t *route = http_find_route(false, HTTP_LISTENER_TLS, req.path, req.method, &how);
+    const http_route_t *route = http_find_route(true, HTTP_LISTENER_TLS, req.path, req.method, &how);
     if (!route) {
         int status = how == HTTP_ROUTE_WRONG_METHOD ? 405 : 404;
         ESP_LOGI(TAG, "%s %s -> %d", req.method, req.path, status);

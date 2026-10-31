@@ -43,12 +43,6 @@ const uint8_t *tls_material_key(size_t *len)
     return xtape_local_key_start;
 }
 
-bool tls_material_available(void)
-{
-    return embedded_len(xtape_local_pem_start, xtape_local_pem_end) > 1 &&
-           embedded_len(xtape_local_key_start, xtape_local_key_end) > 1;
-}
-
 #else /* no pair in this image: the device serves the stream and says why */
 
 const uint8_t *tls_material_cert(size_t *len)
@@ -62,7 +56,5 @@ const uint8_t *tls_material_key(size_t *len)
     if (len) *len = 0;
     return NULL;
 }
-
-bool tls_material_available(void) { return false; }
 
 #endif

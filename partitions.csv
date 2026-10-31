@@ -14,7 +14,7 @@ snapshot, data, 0x40,    0x410000, 2M,
 # the manifest and the worker), served at `/` and mounted read-only at /frontdoor
 # (ADR 0048). One size and one place: `spiffs_create_partition_image()` in the root
 # CMakeLists.txt reads the size from this table, so there is no second number to
-# drift. 1 MB because the page measures ~0.47 MB - it is half empty on purpose, not
+# drift. 1 MB because the page measures ~816 KiB - it is a fifth empty on purpose, not
 # sized to the byte. The flash is 16 MB and 9.9 MB is free after snapshot (this
 # partition then leaves ~8.9 MB), so growing it later costs nothing but a line.
 frontdoor, data, spiffs, 0x610000, 1M,
