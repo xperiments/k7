@@ -53,6 +53,7 @@ export function tagAnalysis(track: TaggedTrack, metadata: TrackMetadata): Analys
       confidence: null,
       engine: null,
       escalated: false,
+      suggestEscalation: false,
       source: 'metadata',
     },
     key: {

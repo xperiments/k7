@@ -1,5 +1,12 @@
 # Fast tempo by default, accurate tempo on demand
 
+> **Amended.** The escalation is no longer automatic. It was measured at 3.6 s for a 120 s
+> excerpt against 0.67 s for the beat tracker and key extractor together, so a track with low
+> confidence paid five times for its tempo — the slowest tracks were the ones that cost most.
+> `shouldEscalate` now only *says* when the multifeature tracker would be worth it
+> (`tempo.suggestEscalation`, shown as a "low confidence" badge); running it is the button.
+> The 2019-era numbers below are kept because the 5:1 ratio is what the decision was based on.
+
 Essentia offers two useful tempo trackers with a large speed gap. Measured in the WASM build
 on a four-minute track: `BeatTrackerDegara` 1.1 s, `RhythmExtractor2013(multifeature)` 7.5 s.
 The accurate one is also the only one with a documented confidence calibration — Essentia

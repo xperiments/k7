@@ -42,6 +42,7 @@ export function ResultCard({
           {tempo.engine === 'deep' && <span className="badge badge-deep">deep tempo</span>}
           {tempo.escalated && <span className="badge">auto-escalated</span>}
           {tempo.engine === 'fast' && <span className="badge">fast tempo</span>}
+          {tempo.suggestEscalation && <span className="badge">low confidence</span>}
           {key.source === 'metadata' && <span className="badge badge-tag">tagged key</span>}
           {mood.source === 'metadata' && <span className="badge badge-tag">tagged mood</span>}
           {energySource === 'metadata' && <span className="badge badge-tag">tagged energy</span>}

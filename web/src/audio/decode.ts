@@ -32,19 +32,41 @@ async function decodeAt(bytes: ArrayBuffer, sampleRate: number): Promise<Float32
   return mono(buffer);
 }
 
+/** Resamples in memory: a rendered pass, not a second decode of the compressed file. */
+async function resample(
+  pcm: Float32Array,
+  from: number,
+  to: number,
+): Promise<Float32Array> {
+  const context = new OfflineAudioContext(1, Math.ceil((pcm.length * to) / from), to);
+  const buffer = context.createBuffer(1, pcm.length, from);
+  buffer.copyToChannel(new Float32Array(pcm), 0);
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(context.destination);
+  source.start();
+  const rendered = await context.startRendering();
+  return rendered.getChannelData(0).slice();
+}
+
 /**
- * Decodes to mono at both rates the pipeline needs. `duration` comes from the
- * decoded samples, so an MP3's encoder padding and Xing header are honoured.
+ * Decodes to mono at both rates the pipeline needs. `duration` comes from the decoded
+ * samples, so an MP3's encoder padding and Xing header are honoured.
+ *
+ * The file is decoded **once**. It used to be decoded twice - once per rate - because each
+ * `OfflineAudioContext.decodeAudioData` decodes and resamples the compressed bytes from
+ * scratch, so the 16 kHz copy cost as much as the 44.1 kHz one. Now the 16 kHz signal is a
+ * rendered resample of the 44.1 kHz decode: one decode of the file, one cheap pass.
  */
 export async function decodeFile(
   buffer: ArrayBuffer,
   need44k = true,
 ): Promise<DecodedAudio> {
-  const [pcm16k, pcm44k] = await Promise.all([
-    decodeAt(buffer.slice(0), 16_000),
-    need44k ? decodeAt(buffer.slice(0), 44_100) : Promise.resolve(null),
-  ]);
-  const rate = pcm44k ? 44_100 : 16_000;
-  const samples = pcm44k ?? pcm16k;
-  return { pcm44k, pcm16k, duration: samples.length / rate };
+  if (!need44k) {
+    const pcm16k = await decodeAt(buffer, 16_000);
+    return { pcm44k: null, pcm16k, duration: pcm16k.length / 16_000 };
+  }
+  const pcm44k = await decodeAt(buffer, 44_100);
+  const pcm16k = await resample(pcm44k, 44_100, 16_000);
+  return { pcm44k, pcm16k, duration: pcm44k.length / 44_100 };
 }

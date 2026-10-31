@@ -228,6 +228,7 @@ export class Analyzer {
       confidence: deep.confidence,
       engine: 'deep',
       escalated: false,
+      suggestEscalation: false,
       source: 'measured',
     };
   }
@@ -256,6 +257,7 @@ export class Analyzer {
           confidence: null,
           engine: null,
           escalated: false,
+          suggestEscalation: false,
           source: 'metadata',
         },
         key: {
@@ -308,6 +310,7 @@ export class Analyzer {
         confidence: null,
         engine: null,
         escalated: false,
+        suggestEscalation: false,
         source: 'metadata',
       };
     } else {
@@ -315,19 +318,16 @@ export class Analyzer {
       const beats = this.essentia.vectorToArray(
         this.essentia.BeatTrackerDegara(vec44()).ticks,
       );
-      let rawBpm = bpmFromBeats(beats);
-      let confidence = tempoConfidence(beats);
-      let engine: TempoEngine = 'fast';
-      let escalated = false;
-
-      if (shouldEscalate(confidence, beats.length)) {
-        onStage?.('deep');
-        const deep = this.deepTempo(vec44(), rawBpm);
-        rawBpm = deep.rawBpm;
-        confidence = deep.confidence;
-        engine = 'deep';
-        escalated = true;
-      }
+      const rawBpm = bpmFromBeats(beats);
+      const confidence = tempoConfidence(beats);
+      /* The multifeature tracker is 5x the beat tracker and 20x the key extractor, and it used
+       * to run automatically whenever confidence came out low - so the slowest tracks were
+       * exactly the ones that paid for it twice. It is now a decision: `shouldEscalate` still
+       * says when it would be worth it, the card says so, and the button runs it. The field
+       * records that the fast path was taken, not that the tempo is certain. */
+      const engine: TempoEngine = 'fast';
+      const escalated = false;
+      const suggestEscalation = shouldEscalate(confidence, beats.length);
 
       tempo = {
         bpm: foldTempo(rawBpm),
@@ -335,6 +335,7 @@ export class Analyzer {
         confidence,
         engine,
         escalated,
+        suggestEscalation,
         source: 'measured',
       };
     }

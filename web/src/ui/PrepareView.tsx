@@ -45,8 +45,16 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
   const [setupError, setSetupError] = useState<string | null>(null);
   const [weightError, setWeightError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [client] = useState(() => new AnalysisClient());
-  const started = useRef(false);
+  /* Three workers, not one. Measuring is CPU-bound and a worker is a thread, so the queue
+   * used to leave every other core idle; the pool is what turns a whole card from a sequence
+   * into a few parallel lanes. Each worker loads its own model sessions, which is the price
+   * of the parallelism and the reason the pool is small. */
+  const [clients] = useState(() =>
+    Array.from({ length: 3 }, () => new AnalysisClient()),
+  );
+  const nextClient = useRef(0);
+  const inFlight = useRef(0);
+  const claimed = useRef(new Set<string>());
 
   useEffect(() => {
     onBusyChange?.(busy);
@@ -75,9 +83,8 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
   }, []);
 
   const processItem = useCallback(
-    async (item: QueueItem) => {
+    async (item: QueueItem, client: AnalysisClient) => {
       if (!modelSet) return;
-      setBusy(true);
       try {
         update(item.id, { status: 'hashing', error: undefined });
         const buffer = await item.file.arrayBuffer();
@@ -138,20 +145,33 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
         if (isWeightError(error)) setWeightError(message);
         update(item.id, { status: 'error', error: message });
       } finally {
-        started.current = false;
-        setBusy(false);
+        claimed.current.delete(item.id);
       }
     },
-    [client, modelSet, update, tagsOnly],
+    [modelSet, update, tagsOnly],
   );
 
+  /* Keep every lane busy: claim as many queued items as there are free workers, hand each to
+   * a different client, and let them finish in any order. The claim set exists because the
+   * effect re-runs on every status change and would otherwise hand the same item out twice. */
   useEffect(() => {
-    if (!modelSet || busy || started.current) return;
-    const next = items.find((item) => item.status === 'queued');
-    if (!next) return;
-    started.current = true;
-    void processItem(next);
-  }, [items, busy, modelSet, processItem]);
+    if (!modelSet) return;
+    for (;;) {
+      if (inFlight.current >= clients.length) break;
+      const next = items.find(
+        (item) => item.status === 'queued' && !claimed.current.has(item.id),
+      );
+      if (!next) break;
+      claimed.current.add(next.id);
+      const client = clients[nextClient.current++ % clients.length];
+      inFlight.current += 1;
+      setBusy(true);
+      void processItem(next, client).finally(() => {
+        inFlight.current -= 1;
+        if (inFlight.current === 0) setBusy(false);
+      });
+    }
+  }, [items, modelSet, processItem, clients]);
 
   /* The card arrived through the picker, so it is writable: remember the handle, and take
    * the files the same way a drop delivers them. */
@@ -211,12 +231,11 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
     async (item: QueueItem) => {
       if (!item.analysis || !modelSet || busy) return;
       setBusy(true);
-      started.current = true;
       try {
         update(item.id, { status: 'analysing', stage: 'deep' });
         const buffer = await item.file.arrayBuffer();
         const audio = await decodeFile(buffer);
-        const tempo = await client.deep(audio);
+        const tempo = await clients[0].deep(audio);
         const analysis = { ...item.analysis, tempo };
         await putCached(cacheKey(item.analysis.track.hash, modelSet), analysis);
         update(item.id, { status: 'done', analysis, stage: undefined, cached: false });
@@ -226,11 +245,10 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
         setNotice(`Deep analysis failed: ${message}`);
         update(item.id, { status: 'done', stage: undefined });
       } finally {
-        started.current = false;
         setBusy(false);
       }
     },
-    [busy, client, modelSet, update],
+    [busy, clients, modelSet, update],
   );
 
   const saveTags = useCallback(

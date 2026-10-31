@@ -16,6 +16,7 @@ export const sampleAnalysis: Analysis = {
     confidence: 0.9,
     engine: 'fast',
     escalated: false,
+    suggestEscalation: false,
     source: 'measured',
   },
   key: {

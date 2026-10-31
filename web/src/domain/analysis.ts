@@ -36,6 +36,8 @@ export interface Analysis {
     /** Null when the value came from a tag. */
     engine: TempoEngine | null;
     escalated: boolean;
+    /** Whether the multifeature tracker would be worth running; the button is the decision. */
+    suggestEscalation: boolean;
     source: MeasurementSource;
   };
   key: {

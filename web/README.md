@@ -69,10 +69,14 @@ Then open the printed URL, drop files or a folder, and wait for the cards.
 3. On a miss it reads embedded tags with `music-metadata`. Each tagged field skips its own
    model: BPM, key, mood (EffNet heads) and energy (DEAM). If both BPM and key are tagged the
    44.1 kHz decode is skipped; if mood and energy are tagged too, no model runs at all.
-4. Decoding uses `OfflineAudioContext` — mono 44.1 kHz for tempo/key, mono 16 kHz for the
-   models. Duration comes from the decoded samples, so MP3 encoder padding is handled.
-5. A single worker runs Essentia.js (WASM) for Degara beats and `KeyExtractor` (when they are
-   not tagged), then, if confidence is below 0.6, Essentia's multifeature tracker.
+4. Decoding uses `OfflineAudioContext` once: mono 44.1 kHz for tempo/key, resampled in memory
+   to 16 kHz for the models. Duration comes from the decoded samples, so MP3 encoder padding
+   is handled.
+5. Three workers run in parallel, one track each, so the queue keeps the cores busy. A worker
+   runs Essentia.js (WASM) for Degara beats and `KeyExtractor` (when they are not tagged).
+   The multifeature tracker is not automatic any more: it costs 3.6 s against 0.67 s for the
+   two, so it runs only when the user asks, and `tempo.suggestEscalation` says when that is
+   worth doing.
 6. Mood uses a 30 s window starting a quarter of the way in, and tempo/key use 120 s from
    the same point — the whole track is decoded, but only the excerpt is analysed, because an
    Essentia pass over a ten-minute file is what made a run take minutes. The log-mel front-end is
