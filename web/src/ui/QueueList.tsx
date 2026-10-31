@@ -2,6 +2,8 @@ import type { Stage } from '../audio/analyzer';
 import { formatBytes } from './format';
 import type { QueueItem } from './queue';
 import { ResultCard } from './ResultCard';
+import { SourceChip } from './SourceChip';
+import { sourcesOf } from './sources';
 
 const STAGE_TEXT: Record<Stage, string> = {
   tempo: 'Finding tempo…',
@@ -35,7 +37,7 @@ export function QueueList({ items, busy, compact, onDeep, onRetry, onSave }: Que
       {items.map((item) => {
         if (compact && item.analysis) {
           const { analysis } = item;
-          const tempo = analysis.tempo.source === 'metadata' ? 'tagged' : 'measured';
+          const sources = sourcesOf(analysis);
           return (
             <div className="queue-row compact" key={item.id}>
               <div className="queue-file">
@@ -44,9 +46,19 @@ export function QueueList({ items, busy, compact, onDeep, onRetry, onSave }: Que
                   <span className="muted small queue-path">{item.path}</span>
                 )}
               </div>
-              <div className="queue-state">
-                <span className="muted small">
-                  {analysis.tempo.bpm || '—'} BPM · {analysis.key.camelot || '—'} · {tempo}
+              <div className="queue-state compact-values">
+                <span className="value">
+                  {analysis.tempo.bpm ? analysis.tempo.bpm.toFixed(1) : '—'}
+                  <small> BPM</small> <SourceChip source={sources.tempo} />
+                </span>
+                <span className="value">
+                  {analysis.key.camelot || '—'} <SourceChip source={sources.key} />
+                </span>
+                <span className="value">
+                  mood <SourceChip source={sources.mood} />
+                </span>
+                <span className="value">
+                  energy <SourceChip source={sources.energy} />
                 </span>
                 <button type="button" className="ghost small" onClick={() => onDeep(item)} disabled={busy}>
                   Details

@@ -1,6 +1,7 @@
 import type { Analysis } from '../domain/analysis';
 import { formatBytes, formatDuration, formatPercent, shortHash } from './format';
 import { Meter } from './Meter';
+import { SourceChip } from './SourceChip';
 import { MoodPanel } from './MoodPanel';
 
 interface ResultCardProps {
@@ -51,8 +52,7 @@ export function ResultCard({
       <div className="primary-grid">
         <section className="metric">
           <span className="metric-label">
-            Tempo
-            {tempo.source === 'metadata' && <em className="tag">tagged</em>}
+            Tempo <SourceChip source={tempo.source} />
           </span>
           <div className="metric-value">
             {tempo.bpm.toFixed(1)}
@@ -76,8 +76,7 @@ export function ResultCard({
 
         <section className="metric">
           <span className="metric-label">
-            Key
-            {key.source === 'metadata' && <em className="tag">tagged</em>}
+            Key <SourceChip source={key.source} />
           </span>
           <div className="metric-value">
             {key.tonic} <small>{key.mode}</small>
@@ -92,8 +91,7 @@ export function ResultCard({
 
         <section className="metric">
           <span className="metric-label">
-            Energy
-            {energySource === 'metadata' && <em className="tag">tagged</em>}
+            Energy <SourceChip source={energySource} />
           </span>
           <div className="metric-value">{energy !== null ? energy.toFixed(2) : '—'}</div>
           {energy !== null && <Meter value={energy} label="Energy" />}

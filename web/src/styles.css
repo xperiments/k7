@@ -226,6 +226,44 @@ button:disabled {
   cursor: pointer;
 }
 
+.chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+.chip-tag {
+  background: rgba(240, 160, 60, 0.18);
+  color: #f0a03c;
+}
+
+.chip-measured {
+  background: rgba(255, 255, 255, 0.08);
+  color: #c9c9c9;
+}
+
+.chip-none {
+  background: transparent;
+  color: #6a6a6a;
+  border: 1px solid #333;
+}
+
+.compact-values {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.compact-values .value {
+  font-variant-numeric: tabular-nums;
+}
+
 .queue-row.compact {
   padding-block: 8px;
 }

@@ -1,4 +1,5 @@
 import { MOOD_TAGS, type Analysis, type MoodTag } from '../domain/analysis';
+import { SourceChip } from './SourceChip';
 
 const LABELS: Record<MoodTag, string> = {
   happy: 'happy',
@@ -29,14 +30,22 @@ export function MoodPanel({ mood }: { mood: Analysis['mood'] }) {
             </div>
           ))}
         </div>
+      ) : mood.label !== null ? (
+        <div className="tagged-mood">
+          <span className="metric-label">
+            Mood <SourceChip source={mood.source} />
+          </span>
+          <p className="tagged-label">{mood.label}</p>
+          <p className="muted small">from file tags, not measured</p>
+        </div>
       ) : (
         <div className="tagged-mood">
           <span className="metric-label">
-            Mood
-            <em className="tag">tagged</em>
+            Mood <SourceChip source={null} />
           </span>
-          <p className="tagged-label">{mood.label ?? '—'}</p>
-          <p className="muted small">from file tags, not measured</p>
+          <p className="muted small">
+            The file carried no mood tag and no mood model ran for this track.
+          </p>
         </div>
       )}
 
