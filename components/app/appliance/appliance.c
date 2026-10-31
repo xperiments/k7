@@ -38,58 +38,8 @@
 
 /* A card that will not mount is the most likely fault this hardware has, so a
  * failed mount is not fatal: the device stays on the network and retries. */
-#define CARD_RETRY_MS 5000
-#define CARD_TASK_STACK 6144 /* FATFS mount and the card-print formatting are not shallow */
 
 static const char *TAG = "app";
-
-/* ------------------------------------------------------------ card retry */
-
-/* Retries are paced, and the log line is one per attempt: a device with no card
- * neither tight-loops nor floods the console. */
-static void card_task(void *arg)
-{
-    (void)arg;
-    int attempt = 0;
-    for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(CARD_RETRY_MS));
-        app_board_card_t card = app_board_card_mount(MUSIC_DIR);
-        if (card.music_dir) {
-            /* A card that arrives after boot may carry a Snapshot update. Applying one
-             * means a flash write, which needs the window before the panel and the
-             * broadcast exist, so the device reboots once and applies it there rather
-             * than freezing a running appliance (snapshot.md U5). */
-            struct stat st;
-            if (stat("/sdcard/xtape.db", &st) == 0) {
-                ESP_LOGI(TAG, "an update file arrived with the card; rebooting to apply it");
-                esp_restart();
-            }
-            mini_files_set_card(card.music_dir, NULL);
-            app_services_card_state(true, NULL);
-            for (;;) {
-                esp_err_t e = app_services_rescan();
-                if (e == ESP_OK) {
-                    ESP_LOGI(TAG, "card mounted after %d retries: %s; rescan started",
-                             attempt + 1, MUSIC_DIR);
-                    vTaskDelete(NULL);
-                    return;
-                }
-                if (e == ESP_ERR_INVALID_STATE) {
-                    vTaskDelay(pdMS_TO_TICKS(1000));
-                    continue;
-                }
-                ESP_LOGE(TAG, "card mounted but the rescan cannot start: %s; retrying",
-                         esp_err_to_name(e));
-                vTaskDelay(pdMS_TO_TICKS(CARD_RETRY_MS));
-            }
-        }
-        mini_files_set_card(NULL, card.mount_error);
-        app_services_card_state(false, card.mount_error);
-        ESP_LOGW(TAG, "still no card: %s; retrying in %d s",
-                 card.mount_error ? card.mount_error : "unknown error", CARD_RETRY_MS / 1000);
-        attempt++;
-    }
-}
 
 /* At most `max` bytes of `s`, ending on a UTF-8 character boundary. Titles come off
  * the card with multi-byte characters in them, and a byte cut through one leaves the
@@ -239,10 +189,9 @@ void appliance_run(void)
         }
     }
 
-    /* A card that failed to mount at boot is retried; the index reports the state
-     * until it succeeds (R8). */
-    if (!report.card_present)
-        xTaskCreate(card_task, "card_retry", CARD_TASK_STACK, NULL, 4, NULL);
+    /* A card that failed to mount at boot, a card pulled while running and a card put
+     * back are all one story now: app_services watches the mount point and reports each
+     * transition, so the appliance keeps no retry of its own (R8, snapshot.md U5). */
 
     app_board_wait_online();
 
@@ -256,6 +205,14 @@ void appliance_run(void)
      * the BOOT pin is left as the strapping input it is at reset. The status line below
      * is the only thing this loop still does. */
     for (;;) {
+        /* A card that arrives carrying an Update file is not applied here: the write needs
+         * the boot window, before the panel and the broadcast, so the device reboots once
+         * and does it there. Nothing else in the loop can start that reboot. */
+        if (app_board_snapshot_pending()) {
+            ESP_LOGI(TAG, "an update file arrived with the card; rebooting to apply it");
+            vTaskDelay(pdMS_TO_TICKS(100)); /* let the log line reach the wire */
+            esp_restart();
+        }
         char shown[41];
         mini_icecast_status_t st;
         mini_icecast_status(&st);

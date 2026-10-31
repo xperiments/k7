@@ -247,10 +247,32 @@ app_board_card_t app_board_card_mount(const char *expected_music_dir)
     return card;
 }
 
-/* ------------------------------------------------------------- snapshot */
-
 #define SNAPSHOT_UPDATE_FILE MOUNT_POINT "/xtape.db"
 #define SNAPSHOT_UPDATE_PART 0x40
+
+bool app_board_card_present(void)
+{
+    struct stat st;
+    return s_card != NULL && stat(MOUNT_POINT "/music", &st) == 0;
+}
+
+void app_board_card_forget(void)
+{
+    if (!s_card) return;
+    esp_err_t e = esp_vfs_fat_sdcard_unmount(MOUNT_POINT, s_card);
+    if (e != ESP_OK)
+        ESP_LOGW(TAG, "the card's volume did not unmount (%s); a reinsert may need a reboot",
+                 esp_err_to_name(e));
+    s_card = NULL;
+}
+
+bool app_board_snapshot_pending(void)
+{
+    struct stat st;
+    return stat(SNAPSHOT_UPDATE_FILE, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+/* ------------------------------------------------------------- snapshot */
 
 /* --- the image, mapped ------------------------------------------------- */
 

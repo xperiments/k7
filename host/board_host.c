@@ -50,6 +50,12 @@ void app_board_log_hardware(void) { }
 /* The host has no partition, so the Snapshot is a file: XTAPE_SNAPSHOT names it and
  * the integration test points it at a generated image. Absent is the normal host
  * state, not an error. */
+/* The host card is a path that never goes away, and it never carries an update file: the
+ * host exercises the snapshot through XTAPE_SNAPSHOT, not through the card. */
+bool app_board_card_present(void) { return getenv("XTAPE_HOST_NO_CARD") == NULL; }
+void app_board_card_forget(void) { }
+bool app_board_snapshot_pending(void) { return false; }
+
 const uint8_t *app_board_snapshot_image(size_t *size, const char **why, int *state)
 {
     static uint8_t *image;

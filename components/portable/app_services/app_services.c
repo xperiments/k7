@@ -34,7 +34,7 @@ static const char *TAG = "app";
 static app_services_cfg_t s_cfg;
 static atomic_bool s_rescan_running;
 static pthread_mutex_t s_card_lock = PTHREAD_MUTEX_INITIALIZER;
-static bool s_card_present;
+static volatile bool s_card_present;
 static snapshot_t *s_snapshot;
 static snapshot_result_t s_snapshot_state = SNAPSHOT_NO_PARTITION;
 static char s_snapshot_reason[96];
@@ -135,6 +135,8 @@ static http_result_t rescan_route(int fd, const http_request_t *req, void *ctx)
     return HTTP_HANDLED;
 }
 
+bool app_services_card_present(void) { return s_card_present; }
+
 void app_services_card_state(bool present, const char *mount_error)
 {
     pthread_mutex_lock(&s_card_lock);
@@ -178,6 +180,45 @@ esp_err_t app_services_check(const app_services_cfg_t *cfg, char *err, size_t er
         .burst_ms = cfg->burst_ms,
     };
     return mi_station_resolve(&ice, NULL, err, err_size);
+}
+
+/* A card is pulled by hand while the device is running, and put back the same way. The
+ * boot mount only covers the first one, so a card that goes and returns would otherwise
+ * leave the device serving a library whose bytes are gone, with no way back but a reboot.
+ *
+ * This polls the board twice a second - a stat of the mount point, which the FAT layer
+ * answers without touching the card - and does on every transition what the boot does:
+ * forget the volume, publish the no-card generation, and on the way back mount, tell the
+ * file surface and rescan. The update file is not its business: the appliance reboots for
+ * that, because applying one needs the window before the panel. */
+#define CARD_WATCH_MS 2000
+
+static void card_watch_task(void *arg)
+{
+    (void)arg;
+    unsigned removals = 0;
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(CARD_WATCH_MS));
+        bool now = app_board_card_present();
+        if (now == s_card_present) continue;
+
+        if (now) {
+            app_board_card_t card = app_board_card_mount(s_cfg.music_dir);
+            if (!card.music_dir) continue; /* it will be tried again next tick */
+            app_services_card_state(true, NULL);
+            mini_files_set_card(card.music_dir, NULL);
+            ESP_LOGI(TAG, "card inserted: %s; rescanning", card.music_dir);
+            removals = 0;
+            app_services_rescan();
+        } else {
+            if (removals++ == 0)
+                ESP_LOGW(TAG, "the card was removed; the index will say so until it returns");
+            app_services_card_state(false, "the card was removed");
+            mini_files_set_card(NULL, "the card was removed");
+            app_board_card_forget();
+            app_services_rescan();
+        }
+    }
 }
 
 esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_t *report)
@@ -359,6 +400,10 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     e = http_server_start(&http);
     if (e != ESP_OK) return fail(report, e, "HTTP server");
     if (report) report->http_up = true;
+
+    /* One watcher, whichever way the card went at boot: it covers the card that was
+     * missing then arriving now, and the card that leaves later. */
+    xTaskCreatePinnedToCore(card_watch_task, "card_watch", 4096, NULL, 2, NULL, 0);
 
     return ESP_OK;
 }

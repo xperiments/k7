@@ -34,6 +34,11 @@ LV_FONT_DECLARE(xtape_24);
 LV_FONT_DECLARE(xtape_36);
 /* The boot mark: the K7 logo, 238x128 px of ink (this file's note explains the size). */
 LV_FONT_DECLARE(xtape_logo_128);
+/* The SD mark, one glyph at 95x126 px of ink: the same height as the boot mark, which
+ * is what the cardless screen shows. It has its own cut because the boot mark's is
+ * generated at a 314 px em and this glyph fills its em box, so sharing it would draw a
+ * 321 px card. */
+LV_FONT_DECLARE(xtape_sd_128);
 
 /* UTF-8 for U+F000..U+F017, in the icomoon project's order. */
 #define CASSETTE_ICON_TAPE_CP 0xF000u
@@ -84,6 +89,10 @@ LV_FONT_DECLARE(xtape_logo_128);
 #define CASSETTE_ICON_PLAY       "\xEF\x80\x96" /* U+F016 play: the Home group's key 1 */
 #define CASSETTE_ICON_MIC_CP 0xF017u
 #define CASSETTE_ICON_MIC        "\xEF\x80\x97" /* U+F017 mic: the Home group's key 4 */
+#define CASSETTE_ICON_PAUSE_CP 0xF018u
+#define CASSETTE_ICON_PAUSE      "\xEF\x80\x98" /* U+F018 pause: drawn by no part yet */
+#define CASSETTE_ICON_SD_CP 0xF019u
+#define CASSETTE_ICON_SD         "\xEF\x80\x99" /* U+F019 sd: the cardless screen */
 
 #ifdef __cplusplus
 }

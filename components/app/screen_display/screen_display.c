@@ -38,7 +38,9 @@
 #include "lvgl.h"
 
 #include "artwork_loader.h"
+#include "card_mark.h"
 #include "cassette_view.h"
+#include "app_services.h"
 #include "lvgl_mem.h"
 #include "screen_capture.h"
 #include "screen_caps.h"
@@ -253,6 +255,30 @@ static void backlight_test_task(void *arg)
 }
 #endif
 
+/* The card's presence, drawn rather than reported: the SD mark over the cassette when
+ * there is none. Polled at about 2 Hz - a card is pulled by hand, and the FAT and USB
+ * stacks already know within a second whether it answers.
+ *
+ * It changes nothing else on the screen. The level is the Controls model's, and a removal
+ * does not overrule a swipe the owner made; the mark is enough to say why nothing plays. */
+static void card_poll(void)
+{
+    static bool known;
+    static bool present;
+    static unsigned ticks;
+
+    if (known && (ticks++ % 20u) != 0) return;
+    bool now = app_services_card_present();
+    if (known && now == present) return;
+    known = true;
+    present = now;
+    card_mark_set(!now);
+    if (now)
+        ESP_LOGI(TAG, "card inserted: the cassette is back");
+    else
+        ESP_LOGW(TAG, "no card: showing the SD mark");
+}
+
 static void screen_task(void *arg)
 {
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -302,6 +328,7 @@ static void screen_task(void *arg)
                              target, (unsigned)(idle_ms / 1000u));
             }
             cassette_view_update(&st);
+            card_poll();
             lvgl_port_unlock();
         }
         /* One fade step per pass. backlight_set_percent() has already taken the first
@@ -310,6 +337,7 @@ static void screen_task(void *arg)
 #else
         if (xSemaphoreTake(s_ui_lock, portMAX_DELAY) == pdTRUE) {
             cassette_view_update(&st);
+            card_poll();
             lv_timer_handler();
             xSemaphoreGive(s_ui_lock);
         }
@@ -488,6 +516,7 @@ esp_err_t screen_display_start(const char *music_dir)
     /* Build the picture first, then take the mark down: the cut is from the mark to the
      * finished cassette, never through an empty screen. */
     cassette_view_create();
+    card_mark_create(lv_screen_active());
     splash_destroy();
 #endif
 #if CONFIG_APP_BOARD_SUNTON_8048S050C && !CONFIG_APP_UI_BACKLIGHT_TEST

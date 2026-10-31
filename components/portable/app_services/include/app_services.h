@@ -78,6 +78,10 @@ bool app_services_rescan_running(void);
  * diagnostic instead of turning into a filesystem error. */
 void app_services_card_state(bool present, const char *mount_error);
 
+/* Whether the card answers right now. The screen draws its SD mark from this, and every
+ * rescan reads it, so one flag answers "is there a library" for both. */
+bool app_services_card_present(void);
+
 #ifdef __cplusplus
 }
 #endif

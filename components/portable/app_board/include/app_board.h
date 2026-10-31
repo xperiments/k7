@@ -59,6 +59,19 @@ esp_err_t app_board_mdns_start(const char *hostname, uint16_t port, const char *
 const uint8_t *app_board_snapshot_image(size_t *size, const char **why,
                                         int *state); /* state: snapshot_result_t */
 
+/* Whether the card answers right now. A stat of the mount point: the card is pulled by
+ * hand, and this is the cheapest question the FAT layer can answer. */
+bool app_board_card_present(void);
+
+/* Give up the mount after the card has gone, so a reinsert can mount again. Best-effort:
+ * a card that was pulled mid-write may leave the volume unable to unmount, and a reboot
+ * is the only repair. */
+void app_board_card_forget(void);
+
+/* Whether the card currently holds an Update file. The appliance reboots on this, because
+ * applying it needs the boot window, not a running panel. */
+bool app_board_snapshot_pending(void);
+
 typedef enum {
     APP_BOARD_UPDATE_NONE = 0, /* no card, or no update file: nothing to do */
     APP_BOARD_UPDATE_APPLIED,  /* flashed, verified, and the file deleted */
