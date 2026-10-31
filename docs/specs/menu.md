@@ -241,7 +241,7 @@ while the Menu is up.
 
 ## Icons and fonts
 
-`xtape.ttf` carries twenty glyphs. The mapping:
+`xtape.ttf` carries twenty-five glyphs. The mapping:
 
 | Codepoint | Glyph | Used by |
 |---|---|---|
@@ -265,13 +265,19 @@ while the Menu is up.
 | U+F011 | `micro-chip` | About's Firmware |
 | U+F012 | `sliders-v` | the mode bar's EQ group |
 | U+F013 | `led` | the mode bar's RGB group |
+| U+F014 | `prev` | the Home group's key 2 |
+| U+F015 | `next` | the Home group's key 3 |
+| U+F016 | `play` | the Home group's key 1 |
+| U+F017 | `mic` | the Home group's key 4 |
+| U+F018 | `pause` | spare: in the font, in no cut |
 
 `assets/fonts/xtape.ttf` is drawn in the icomoon project; `package.json` has a `font:xtape`
-script beside `font:jura`, `font:jura28` and `font:jura20`. It generates the same range at two
-sizes because one font is one pixel size: `font_xtape_24.c` (`--range 0xF000-0xF013 --size 24
---bpp 4`) for the Rows and the chevron, where a 24 px glyph sits in a 53-54 px Row, and
-`font_xtape_36.c` at 36 px for the mode bar's and the groups' 64 px circles, where 24 px would
-read small against the Jura 36 letters they replace. A third cut, `font_xtape_logo_128.c`,
+script beside `font:jura`, `font:jura28` and `font:jura20`. It generates each cut at its own
+range, because one font is one pixel size and flash is what a glyph costs: `font_xtape_24.c`
+(`--range 0xF000-0xF013 --size 24 --bpp 4`) for the Rows and the chevron, where a 24 px glyph
+sits in a 53-54 px Row, and `font_xtape_36.c` (`--range 0xF000-0xF017 --size 36 --bpp 4`) for
+the mode bar's and the groups' 64 px circles - the Home group's four among them - where 24 px
+would read small against the Jura 36 letters they replace. A third cut, `font_xtape_logo_128.c`,
 carries U+F00F alone, sized so the ink is 128 px tall, for the boot screen's mark (ADR 0045);
 no Menu Row uses it. Row labels are Jura 28 and their right column is Jura 20 in capitals; the
 footer is Jura 28 and the header Jura 36.

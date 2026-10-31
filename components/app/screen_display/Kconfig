@@ -60,6 +60,36 @@ config APP_UI_DUMP_SCENE
         Combine with APP_UI_DUMP_STRIDE=1 when the ink matters and not only the layout:
         two-pixel marks alias badly at every second pixel.
 
+# The RGB panel has no reset line on this board, so what happens between power-on and
+# its first clock is a hardware behaviour worth a knob.
+menu "Panel"
+    depends on APP_BOARD_SUNTON_8048S050C
+
+config APP_UI_PANEL_SETTLE_MS
+    int "Wait for the panel's supply before the RGB peripheral starts (ms)"
+    default 250
+    range 0 2000
+    help
+        The panel has no reset line: the RGB panel driver sends it no commands at all
+        (esp_lcd_panel_reset() and esp_lcd_panel_init() are no-ops for the RGB
+        peripheral), and the board profile wires no display-enable pin either. Its own
+        power-on reset is the only one it gets, so a signal that arrives while it is
+        still starting up can leave it in a state that reads as a shifted or wrapped
+        picture until the next power cycle.
+
+        This waits, with the backlight already held off, before the peripheral is
+        created - so before the first clock, the first data line and the first frame
+        reach the panel. The cost is exactly this much boot latency, paid before the
+        boot mark appears; 0 disables it.
+
+        Tune it against a COLD start - pull power, let the bulk capacitors drain, boot -
+        and not against a warm reboot, where the rail never left and the panel never
+        reset. If a cold start still lands displaced with a large value here, the supply
+        is not the cause; the panel is locking onto a frame the peripheral started
+        mid-scan, and the lever is the driver's own restart, not a delay.
+
+endmenu
+
 # The backlight is the panel's pin and the idle ladder is measured on the touch
 # clock, so the whole group is a panel-board property. One dependency here, not one
 # per symbol below.

@@ -274,7 +274,6 @@ void knob_panel_init(knob_panel_t *panel, const knob_panel_spec_t *spec, knob_t 
         .rows = spec->rows,
         .cell_rect = panel_cell_rect,
         .gesture_bubble = false,
-        .inert = false,
         .build = panel_build,
         .set_page = panel_set_page,
         .shown = panel_shown,

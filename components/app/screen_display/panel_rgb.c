@@ -58,6 +58,16 @@ lv_display_t *panel_rgb_start(void)
      * something paints them; a pin left floating lights the panel over exactly that. */
     backlight_hold_off();
 
+    /* Then the panel's supply gets its time before the first clock. This board gives the panel
+     * no reset line - the RGB driver sends it no commands, and the profile wires no
+     * display-enable pin - so its power-on reset is the only one it gets. The wait is behind the
+     * light, where it costs boot latency and nothing visible. */
+    if (CONFIG_APP_UI_PANEL_SETTLE_MS > 0) {
+        ESP_LOGI(TAG, "waiting %d ms for the panel's supply before its first clock",
+                 CONFIG_APP_UI_PANEL_SETTLE_MS);
+        vTaskDelay(pdMS_TO_TICKS(CONFIG_APP_UI_PANEL_SETTLE_MS));
+    }
+
     esp_lcd_rgb_panel_config_t cfg = {
         .clk_src = LCD_CLK_SRC_DEFAULT,
         .timings = {

@@ -1,5 +1,15 @@
 # The boot mark holds until the card is scanned
 
+**Amended (a panel bring-up wait, not a delay to hide a frame):** stage one now holds for
+`APP_UI_PANEL_SETTLE_MS` (250 ms by default) between `backlight_hold_off()` and the peripheral's
+creation, because this panel has no reset line - the RGB driver's `reset()` and `init()` send it
+no commands and the profile wires no display-enable pin - so its own power-on reset is the only
+one it gets, and the first clock must not arrive while it is still starting up. This does not
+contradict "the fix is the order, not a delay" below: that rejected a delay used to hide an
+unpainted buffer, which no amount of waiting fixes because the buffer stays unpainted. This waits
+for the panel's supply before the panel exists at all, with the light already off. The measured
+boot times below move by the configured settle.
+
 Boot opened on a white flash that turned black. Neither frame was intended, and the two had
 different causes.
 
@@ -91,6 +101,12 @@ until the card has been scanned.
   scan reports `psram=5149008 -> 5130064 B` free with an 82-track card (146 ms), essentially
   the 5.2 MB the earlier boot measured - comfortably above the 4 MiB `library_max_bytes`
   ceiling, and the same arrangement a rescan has always had.
+- **The boot is `APP_UI_PANEL_SETTLE_MS` longer before anything is drawn.** The `panel up` line
+  in the log below (1226 ms) moves by the configured value, 250 ms by default, and nothing after
+  it changes. The knob exists because the panel's power-on reset is the only reset it gets; the
+  failure it is aimed at is a cold start landing on a shifted picture, which a warm reboot never
+  shows because the panel never lost power. If a cold start still lands displaced with a large
+  value set, the supply is not the cause and the lever is the driver's frame restart instead.
 - **The screen's HTTP diagnostics have a picture from boot.** `/api/screen.bmp` used to
   answer 503 until the cassette existed; it now serves the mark. Nothing else about the route
   changes.

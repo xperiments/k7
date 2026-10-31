@@ -1,13 +1,17 @@
 #pragma once
 /*
- * cassette_button - one button, built three times: the mode bar's cassette, sliders-v and led.
+ * cassette_button - one button, built seven times: the mode bar's cassette, sliders-v and led,
+ * and the Home group's four keys.
  *
- * A button is a 64 px circle at the centre of a 96x96 carcase, one character inside it, a
- * press look, a 160 ms click pulse and an action. The carcase itself is the bar's: it builds
- * the 96x96 cell and hands it here (the mode bar's three, the groups' six). This module
+ * A button is a 64 px circle in a 96x96 carcase - at its centre, or 16 px in from its right edge
+ * when the carcase is two cells merged (`disc_right`) - one character inside it, a press look, a
+ * 160 ms click pulse and an action. A `bare` key has no circle at all: the plate and the glyph,
+ * the glyph standing at the same 64 px cell's centre, with no ring, cap or shadow on either
+ * page. The carcase itself is the bar's: it builds the 96x96 cell and hands it here. This module
  * builds the two circles (the transparent ambient one that carries the broad shadow, and the
- * disc), the letter, and the press and the page ink inside that box; it creates no second
- * carcase, so the bar's cell and the disc inside it remain one rectangle each.
+ * disc), or a bare key's letter alone, and the press and the page ink inside that box; it
+ * creates no second carcase, so the bar's cell and the disc inside it remain one rectangle
+ * each.
  *
  * One pressed state, not two, and one latch beside it. A press writes the ring widths - the
  * carcase's ring, which is the drawer's visible press, and the disc's ring, which is M's and
@@ -28,12 +32,12 @@
  *
  * The tap guard is the module's and runs before the action and the pulse. A click whose touch
  * had a gesture direction or moved past LVGL's press limit is not a tap: no action and no
- * pulse. The rule is cassette_button_is_tap(moved, gesturing); one rule for all five
- * buttons.
+ * pulse. The rule is cassette_button_is_tap(moved, gesturing); one rule for every button.
  *
  * The action is a callback, not an id: a button knows nothing about the Menu, a group or the
- * audio. The mode bar maps its three to the Menu's toggle and the two group selectors. A NULL
- * action is a button whose click is the pulse alone.
+ * audio. The mode bar maps its three to the Menu's toggle and the two group selectors; the
+ * Home group's four pass none until their actions land. A NULL action is a button whose click
+ * is the pulse alone.
  *
  * What is the bar's: the carcase object (its geometry, its clickability and its
  * gesture/event bubbling - the bar sets the bubbling per panel: the mode bar bubbles both,
@@ -70,7 +74,11 @@ typedef struct {
     const lv_font_t *font;                /* NULL: &jura_36. An icon glyph passes &xtape_36 */
     cassette_cap_t cap;                   /* the white page's face and letter; unused on the dark page */
     cassette_button_ring_t carcase_ring;  /* the host's rectangle: drawer {2,3}, M and R {2,2} */
-    cassette_button_ring_t disc_ring;     /* the 64 px disc: {2,3} for all five */
+    cassette_button_ring_t disc_ring;     /* the 64 px disc: {2,3} for all of them */
+    bool disc_right;                      /* the carcase is two cells merged: the ink hugs its
+                                           * right edge and the pulse pivots on the ink */
+    bool bare;                            /* no dome: no ambient circle, no disc, no cap and no
+                                           * shadow - the plate and the glyph alone */
     cassette_button_action_t on_click;    /* NULL: the pulse is the whole of the click */
     void *ctx;
 } cassette_button_spec_t;
@@ -111,7 +119,8 @@ void cassette_button_set_page(cassette_button_t *b, bool white);
 /* Latch the button on or off, for a button that is a mode and not a moment: the left bar's
  * three group selectors, and the cassette's door while the Menu is up. A latched button is a
  * filled k_col_primary disc with a k_col_bg glyph on both pages - the idle look inverted -
- * keeping the white page's 4 px k_col_dome rim. The pressed ring still runs on top. A call for
+ * keeping the white page's 4 px k_col_dome rim. A bare key has no disc to fill, so a latch on
+ * one is its glyph's ink and nothing else. The pressed ring still runs on top. A call for
  * the state already held does nothing; a handle that was never built is a no-op. */
 void cassette_button_set_on(cassette_button_t *b, bool on);
 

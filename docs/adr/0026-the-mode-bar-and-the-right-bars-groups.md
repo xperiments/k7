@@ -1,5 +1,13 @@
 # The mode bar, and the right bar's groups
 
+**Amended by [ADR 0046](./0046-the-home-group-is-four-keys.md):** the Empty group is not a
+picture any more. It is the **Home** group - `GROUPS_ID_HOME`, `cassette_home.c` - four keys on
+the bar's lattice, its top and bottom ones 190x96 cells spanning both columns, and the grille, its
+draw callback and the `inert` panel flag are deleted. The group's rules are unchanged: still the
+default, still the way back, still dropped with the chrome. Two of this record's bullets are
+reversed by that one: "Empty is a picture, and it is the default", and the gesture-through reason
+behind it - the Home keys do not bubble gestures, so a swipe that starts on them stops there.
+
 **Amended by [ADR 0027](./0027-the-knobs-are-dragged.md):** the shared editor no longer takes a
 pillow label from the bank - a knob's text is its own `name` and its marked positions, read through
 `knob_label()` - and both panels' knobs are dragged rather than aimed: the per-knob sweep grew into

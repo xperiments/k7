@@ -12,19 +12,19 @@
 void groups_init(groups_t *g)
 {
     if (!g) return;
-    g->active = GROUPS_ID_EMPTY;
+    g->active = GROUPS_ID_HOME;
     g->chrome_shown = false;
 }
 
 groups_id_t groups_active(const groups_t *g)
 {
-    return g ? g->active : GROUPS_ID_EMPTY;
+    return g ? g->active : GROUPS_ID_HOME;
 }
 
-/* A group button's toggle: its group, or Empty when it is already the one up. */
+/* A group button's toggle: its group, or Home when it is already the one up. */
 static groups_id_t toggled(groups_id_t active, groups_id_t which)
 {
-    return active == which ? GROUPS_ID_EMPTY : which;
+    return active == which ? GROUPS_ID_HOME : which;
 }
 
 unsigned groups_handle(groups_t *g, groups_intent_t intent, bool chrome_shown)
@@ -42,8 +42,8 @@ unsigned groups_handle(groups_t *g, groups_intent_t intent, bool chrome_shown)
     }
 
     /* The groups live with the chrome: hiding the bars drops whatever was selected, so the
-     * controls open on the speaker every time. This runs last so it wins. */
-    if (!chrome_shown) g->active = GROUPS_ID_EMPTY;
+     * controls open on Home every time. This runs last so it wins. */
+    if (!chrome_shown) g->active = GROUPS_ID_HOME;
 
     return g->active != was ? GROUPS_CHANGED_ACTIVE : 0u;
 }

@@ -2,14 +2,20 @@
 /*
  * The icon font's contract: the glyphs `assets/fonts/xtape.ttf` carries, the codepoints
  * the screen uses, and the three generated LVGL fonts (24 px for the Menu's rows and the row
- * chevron, 36 px for the drawer's 64 px circles, and the boot mark). See docs/specs/menu.md.
+ * chevron, 36 px for the 64 px circles - the mode bar's three and the Home group's four - and
+ * the boot mark). See docs/specs/menu.md.
+ *
+ * Each cut carries what its own parts draw, because flash is what a glyph costs: the logo's one
+ * glyph, the Menu's U+F000..U+F013, and the circles' U+F000..U+F017 (ADR 0046). The font also
+ * carries `pause` at U+F018, which no part draws yet and no cut carries; a part that needs it -
+ * or any glyph at a size its cut lacks - extends the range in package.json's `font:xtape` and
+ * re-runs it, which regenerates all three cuts in one go.
  *
  * The boot mark's cut (`xtape_logo_128`) carries **one glyph**, the K7 logo, and is generated
  * at `--size 314` rather than 128. That is not a mistake: an icon font's `--size` is its em
  * box, and this emblem's ink fills about 42 % of it, so a 128 px em would draw a 100x53 mark.
  * 314 px is the em at which the ink is 238x128 - the 128 px the owner asked the logo to be.
- * The other nineteen glyphs would cost far more flash for a size no part asks for, so the
- * range in package.json's `font:xtape` is where a second one goes when a part does.
+ * The other glyphs would cost far more flash for a size no part asks for.
  *
  * The font is Private Use Area, so a label must be given the icon font explicitly; the
  * Jura text fonts have no glyph there. The view still checks lv_font_get_glyph_dsc() and
@@ -29,7 +35,7 @@ LV_FONT_DECLARE(xtape_36);
 /* The boot mark: the K7 logo, 238x128 px of ink (this file's note explains the size). */
 LV_FONT_DECLARE(xtape_logo_128);
 
-/* UTF-8 for U+F000..U+F011, in the icomoon project's order. */
+/* UTF-8 for U+F000..U+F017, in the icomoon project's order. */
 #define CASSETTE_ICON_TAPE_CP 0xF000u
 #define CASSETTE_ICON_TAPE      "\xEF\x80\x80" /* U+F000 cassette-tape */
 #define CASSETTE_ICON_VOICEMAIL_CP 0xF001u
@@ -70,6 +76,14 @@ LV_FONT_DECLARE(xtape_logo_128);
 #define CASSETTE_ICON_SLIDERS    "\xEF\x80\x92" /* U+F012 sliders-v */
 #define CASSETTE_ICON_LED_CP 0xF013u
 #define CASSETTE_ICON_LED        "\xEF\x80\x93" /* U+F013 led */
+#define CASSETTE_ICON_PREV_CP 0xF014u
+#define CASSETTE_ICON_PREV       "\xEF\x80\x94" /* U+F014 prev: the Home group's key 2 */
+#define CASSETTE_ICON_NEXT_CP 0xF015u
+#define CASSETTE_ICON_NEXT       "\xEF\x80\x95" /* U+F015 next: the Home group's key 3 */
+#define CASSETTE_ICON_PLAY_CP 0xF016u
+#define CASSETTE_ICON_PLAY       "\xEF\x80\x96" /* U+F016 play: the Home group's key 1 */
+#define CASSETTE_ICON_MIC_CP 0xF017u
+#define CASSETTE_ICON_MIC        "\xEF\x80\x97" /* U+F017 mic: the Home group's key 4 */
 
 #ifdef __cplusplus
 }

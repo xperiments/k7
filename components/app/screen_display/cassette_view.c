@@ -11,7 +11,7 @@
  *   cassette_levels   the peek's host
  *   cassette_bars     the two edge bars: their cells, their entrance and their page ink
  *   cassette_buttons  the mode bar of the left bar: the Menu's door, the EQ and the RGB
- *   cassette_empty    the right bar's Empty group: the speaker grille
+ *   cassette_home     the right bar's Home group: its four keys
  *   cassette_eq       the right bar's EQ group: Back, the VU meter, Gain, HI/MID/LOW
  *   cassette_rgb      the right bar's RGB group: Back, Effect, Brightness, Red/Green/Blue
  *   knob_editor       the one 3x dial, overlay and edit session those two share
@@ -48,7 +48,7 @@
 #include "groups.h"
 #include "cassette_buttons.h"
 #include "cassette_card.h"
-#include "cassette_empty.h"
+#include "cassette_home.h"
 #include "cassette_eq.h"
 #include "cassette_rgb.h"
 #include "cassette_pad.h"
@@ -203,7 +203,7 @@ static void controls_apply(controls_changed_t changed)
          * badge's bottom edge: the case's mark goes back on top. */
         cassette_header_raise_badge();
         /* The groups live with the chrome: hiding the bars drops the active group, so the
-         * controls open on the grille every time. */
+         * controls open on Home every time. */
         groups_apply(groups_handle(&s_groups, GROUPS_INTENT_NONE, shown));
     }
 
@@ -332,7 +332,7 @@ static bool chrome_shown_now(void)
 static void groups_install(void)
 {
     if (s_ctl.menu) return;
-    const cassette_panel_t *panel = cassette_empty_panel();
+    const cassette_panel_t *panel = cassette_home_panel();
     if (groups_active(&s_groups) == GROUPS_ID_EQ) panel = cassette_eq_panel();
     else if (groups_active(&s_groups) == GROUPS_ID_RGB) panel = cassette_rgb_panel();
     cassette_bars_set_panel(CASSETTE_BARS_RIGHT, panel);
@@ -531,7 +531,7 @@ static void scene_tick(void)
     case 1:
         if (!pose_is(s_pose, cassette_pose_controls())) break;
         s_scene_step = 2;
-        if (s_scene == 1) break;                        /* Art, the Empty grille */
+        if (s_scene == 1) break;                        /* Art, the Home keys */
         if (s_scene == 2) eq_group_cb(NULL);
         else if (s_scene == 3) rgb_group_cb(NULL);
         else if (s_scene == 4) tape_cb(NULL);
@@ -663,10 +663,11 @@ void cassette_view_create(void)
     knob_editor_create(scr);
     knob_editor_set_bar(knob_bar_claim, knob_bar_release, NULL);
 
-    /* The two knob panels' values. They build no object; their cells are the bar's, built when
-     * their value is installed. */
+    /* The three groups' panel values. They build no object; their cells are the bar's, built
+     * when a value is installed. */
     cassette_eq_create();
     cassette_rgb_create();
+    cassette_home_create();
 
     /* The groups live with the chrome: nothing is selected until the bars are out, and the
      * two latches start dark. */
@@ -674,7 +675,7 @@ void cassette_view_create(void)
 
     /* Build, then install: every module above has built what it owns, and these three calls are
      * the only places a bar is given content. Left first, then the right bar's default group -
-     * the Empty grille - and the latches, which read that group. */
+     * the Home keys - and the latches, which read that group. */
     cassette_bars_set_panel(CASSETTE_BARS_LEFT, cassette_buttons_panel());
     groups_install();
     groups_latch();

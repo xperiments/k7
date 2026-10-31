@@ -68,17 +68,17 @@ static bool s_page_white;
 /* ---------------------------------------------------------------- the cells */
 
 /* One carcase, the bar's own: the layout's rect on the current page, with the shared corner,
- * border and hit. The panel builds its control inside it and never moves it. An inert panel is
- * a picture, so its carcase stays out of the hit test and the touch falls through to the
- * screen's gesture handler. */
-static lv_obj_t *bar_cell_new(bar_t *b, cassette_rect_t rect, bool gesture_bubble, bool clickable)
+ * border and hit. The panel builds its control inside it and never moves it. Every carcase is
+ * clickable: a panel that is up is a control surface, and a panel that is not there has no
+ * carcase to swallow a touch. */
+static lv_obj_t *bar_cell_new(bar_t *b, cassette_rect_t rect, bool gesture_bubble)
 {
     lv_obj_t *cell = cassette_border_box(s_screen, rect.x + b->entrance.rule.value, rect.y,
                                          rect.w, rect.h,
                                          CASSETTE_CORNER_R,
                                          s_page_white ? k_col_white : k_col_bg, LV_OPA_COVER,
                                          k_col_button_rect, CASSETTE_BORDER_W);
-    lv_obj_set_clickable(cell, clickable);
+    lv_obj_set_clickable(cell, true);
     /* The press bubbles so a part's press is still a press the screen sees; the gesture only
      * where the panel says a swipe that starts on a cell is still the screen's. */
     lv_obj_set_event_bubble(cell, true);
@@ -122,7 +122,7 @@ static void bar_apply_visibility(bar_t *b)
 }
 
 /* The page ink: the cells' default first, then the panel's exceptions - the knob plate, the
- * discs, a button's cap, the grille's dots. */
+ * discs, a button's cap and its glyph. */
 static void bar_ink(bar_t *b)
 {
     for (int i = 0; i < b->count; i++) {
@@ -224,7 +224,7 @@ void cassette_bars_set_panel(cassette_bar_side_t side, const cassette_panel_t *p
                                                     : cassette_cell_rect(k_spec[side].layout, col, row);
             if (rect.w <= 0 || rect.h <= 0) continue;
 
-            lv_obj_t *cell = bar_cell_new(b, rect, panel->gesture_bubble, !panel->inert);
+            lv_obj_t *cell = bar_cell_new(b, rect, panel->gesture_bubble);
             bar_root_add(b, cell, rect.x);
             if (panel->build) panel->build(cell, col, row, panel->ctx);
         }

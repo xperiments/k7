@@ -62,24 +62,29 @@ mounted and scanned by then). Everything else is private:
   a cut, which is how the right bar changes group and how the Menu's Pad takes the bar and
   gives it back. There is no chrome cell: the Menu's door is the left bar's cassette button, so
   no panel can strand it. The left bar holds the **mode bar** (the Menu's toggle and the two
-  group selectors) and the right bar one **group** - the Empty grille, the EQ or the RGB panel -
-  or the Menu's Pad. An `inert` panel's cells stay out of the hit test, so a picture does not eat
-  a gesture. No bar keeps a slide of its own, and there is no container: the cells are the
-  strip.
-- `cassette_button.c` / `.h` — the shared button, built five times: the mode bar's cassette,
-  sliders-v and led. It builds the two circles and the letter
-  inside a carcase its host made and owns the one pressed state, the latched ink (`set_on()`: a
-  k_col_primary disc with a k_col_bg glyph), the 160 ms pulse and the tap guard. The cap is spec
-  data and the click is a callback, so the module knows nothing about the Menu or a group; the
-  spec's internal name (MENU/EQ/RGB/BACK) is carried but never drawn by the module.
+  group selectors) and the right bar one **group** - the Home keys, the EQ or the RGB panel -
+  or the Menu's Pad. Every cell's carcase is clickable, and a panel's `gesture_bubble` alone
+  decides whether a swipe that starts on one is still the ladder's. No bar keeps a slide of its
+  own, and there is no container: the cells are the strip.
+- `cassette_button.c` / `.h` — the shared button, built seven times: the mode bar's cassette,
+  sliders-v and led, and the Home group's four keys. A carcase two cells wide says so with
+  `disc_right` (its ink takes the outer column) and, for a key with no dome at all, `bare`: then
+  it builds the letter alone, 16 px in from the right edge, and the pulse pivots on the glyph.
+  It builds the two circles and the letter inside a carcase its host made and owns the one
+  pressed state, the latched ink (`set_on()`: a k_col_primary disc with a k_col_bg glyph), the
+  160 ms pulse and the tap guard. The cap is spec data and the click is a callback, so the module
+  knows nothing about the Menu or a group; the spec's internal name (MENU/EQ/RGB/BACK) is carried
+  but never drawn by the module.
 - `cassette_buttons.c` / `.h` — the **mode bar**, the left bar's panel value: the cassette glyph
   that toggles the Menu, the sliders-v that selects the EQ group and the led that selects the
   RGB. The view owns which one is on and relatches them; the buttons only carry the glyph, the
   callback and the latch.
 - `groups` (`components/portable/groups`) — which group the right bar is showing, as three rules
   and one fact: a group button toggles, and the group dies with the chrome. `t26_groups` pins it; the view installs the panel and relatches the bar.
-- `cassette_empty.c` / `.h` — the Empty group: one 186x284 plate at the Pad's footprint filled
-  with a staggered grid of 4 px dots, painted by one draw callback, and inert.
+- `cassette_home.c` / `.h` — the Home group: four keys on the bar's lattice, the top and bottom
+  ones 190x96 carcases spanning both columns. The wide two are bare - plate and glyph, no dome,
+  no shadow - and the middle pair are the shared button's ordinary domed cells. Their actions
+  are not wired: a click is the pulse alone.
 - `knob_cell.c` / `.h` — one dial at either size: the 44 px cell's cap and the 256 px 3x cap, the
   ring of marks and the value marker (one object, one draw callback), the 4 px line, a stepped
   knob's value pillow, and the plate/cap inks of the two pages. Both knob panels build their cells
@@ -131,8 +136,8 @@ mounted and scanned by then). Everything else is private:
   white-page cap carries (see the drawer below).
   Every object they build is decorative, so a press
   reaches the screen rather than a painted box. The bars opt the cell carcases into
-  hit-testing and set each panel's bubbling with it: the mode bar's cells and the Empty grille
-  bubble gestures back to the screen, the EQ's and RGB's do not.
+  hit-testing and set each panel's bubbling with it: the mode bar's cells bubble gestures back
+  to the screen, the Home group's, the EQ's and the RGB's do not.
 - `cassette_tapes.c` — the tape body: the two packs, the two strands, the rollers, the
   run, the two hubs and, on the panel board, the two border frames. Its interface is
   `create(parent)`, `place(pose)`, `set(frame)`. A pack is one object whose draw callback
@@ -208,8 +213,9 @@ after the tape body and shown and hidden with the
   (`k_col_white` on paper, `k_col_bg` on the dark page) and its ring (`k_col_button_rect` on
   both); on paper only, the disc's cap - `k_col_dome` when idle and `k_col_button_cap` (0xBBBBBB)
   when the mode is selected, with `k_col_dome` as its 4 px rim (ADR 0038).
-- `cassette_empty.c` — the Empty group: the plate at the Pad's footprint, the staggered dot
-  grid and its draw callback, the page ink, and the `inert` panel value.
+- `cassette_home.c` — the Home group: the four keys' carcases (two of them two columns merged),
+  their icon-font glyphs (`play`, `prev`, `next`, `mic`), the page ink, and the handles the
+  actions will hang from.
 - `cassette_eq.c` — the EQ group: all six cells, `[Back][HI] / [VU][MID] / [Gain][LOW]`. It
   builds the four knobs (`knob_cell.c`) and the meter into the carcases the bar hands it and owns
   its values and the audio; it creates no carcase and no root. Its interface is `create()` and
@@ -260,9 +266,12 @@ after the tape body and shown and hidden with the
 - `panel_rgb.c` — the Sunton panel adapter, compiled only for that board. It holds the
   backlight off (`backlight_hold_off()`, which gives the pin to LEDC at duty 0) before the
   peripheral exists and leaves it off when it returns: the panel scans two uninitialised PSRAM
-  framebuffers from the moment it is initialised, and those read as white.
-  `panel_rgb_clear()` fills both black, and the screen lights the panel only after the boot
-  mark is in both buffers.
+  framebuffers from the moment it is initialised, and those read as white. Then it waits
+  `APP_UI_PANEL_SETTLE_MS` (250 ms) before creating the peripheral, because this panel has no
+  reset line - the RGB driver sends it no commands and the profile wires no display-enable pin -
+  so its own power-on reset is the only one it gets, and the first clock must not arrive while it
+  is still starting up. `panel_rgb_clear()` fills both black, and the screen lights the panel
+  only after the boot mark is in both buffers.
 - `backlight.c` — the Sunton backlight on GPIO 2, now a 400 Hz, 8-bit LEDC duty rather than
   an on/off pin. It starts at `APP_UI_BACKLIGHT_AWAKE_PCT` (100% by default), then
   fades to 60% after 2 minutes, 30% after 5, and 0% after 10 with no touch, each step
@@ -588,16 +597,27 @@ Card covers them, so they read only on the dark one.
 ## The right bar's groups
 
 The six cells at the right edge are the right bar's (`cassette_bars.c`), which builds them,
-slides them and paints them; one **group** fills all six. There are three, and the view installs
+slides them and paints them; one **group** fills them. There are three, and the view installs
 whichever `components/portable/groups` says is up:
 
-- **Empty** — `cassette_empty.c`: one 186x284 plate at the Pad's footprint (596x76), the shared
-  8 px corner and 2 px stroke, filled with a staggered grid of 4 px dots on a 14 px pitch,
-  alternate rows offset by half a pitch, at least 12 px clear of the stroke. It is a picture: the
-  panel value's `inert` flag keeps its carcase out of the hit test and its gestures bubbling, so
-  a swipe that starts on the grille still moves the ladder. The dots are one draw callback, not
-  one object each - the same reason the tape's packs are - and the ink turns with the page
-  (`k_col_button_rect` dots on the dark page, `k_col_bg` dots on the white one).
+- **Home** — `cassette_home.c`:
+  ```
+  [      1      ]
+  [  2  ] [  3  ]
+  [      4      ]
+  ```
+  Four keys, and the ends are two of the bar's columns merged: the top and bottom keys are one
+  190x96 carcase. A merged cell is not a bigger button - it is one key and a spare - and the wide
+  pair carry **no dome**: `bare` gives them the plate and the glyph, the glyph 16 px in from the
+  carcase's right edge, exactly where a domed key in the outer column would have put it, and the
+  94 px left over is empty plate. So the wide keys have no ring on the Art page and no cap, rim
+  or shadow on the Controls page; the middle pair are the ordinary domed buttons. The merge is the
+  panel's own `cell_rect()`: the merged rect for the inside column and an empty one for the cell
+  it covers, which is how the bar is told to build nothing there - `cassette_bars.c` needs no
+  change for a span. The keys are a control surface, not a picture: no latch, no group of their
+  own, a swipe that starts on one stops there, and their actions are not wired yet, so a click
+  is the pulse alone. The domes carry `play` on the top key, `prev` and `next` on the middle pair
+  and `mic` on the bottom, from the icon font's 36 px cut.
 - **EQ** — `cassette_eq.c`: `[VU][HI] / [VU][MID] / [Gain][LOW]`, the meter one 96x190 plate.
 - **RGB** — `cassette_rgb.c`: `[Effect][Red] / [Effect][Green] / [Bright][Blue]`, the effect one
   plate with its dial above and its name below.
@@ -615,7 +635,7 @@ The bar is hidden at rest, so the entry view is the full-scale cassette; the mod
 the mode bar, when the cassette is already at the 134/256 control pose. The right bar slides the
 cells in from the right edge over the same 260 ms as the mode bar and back out when it leaves. A
 group goes away when the bars go away - the groups model drops the selection on that edge - so
-the controls always open on the grille. The group's own button on the mode bar is the only way
+the controls always open on Home. The group's own button on the mode bar is the only way
 back - a panel has no Back cell - and `groups_apply()` swaps the panel and relatches the bar.
 
 While the Menu is up the same bar hosts the Pad instead - one white 186x284 plate over the

@@ -90,7 +90,6 @@ static const cassette_panel_t k_mode_panel = {
     .rows = CASSETTE_MODE_COUNT,
     .cell_rect = NULL,
     .gesture_bubble = true,
-    .inert = false,
     .build = mode_build,
     .set_page = mode_set_page,
     .shown = NULL,

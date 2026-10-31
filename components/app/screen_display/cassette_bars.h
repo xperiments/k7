@@ -12,13 +12,16 @@
  * A bar is a value, not an LVGL object: its cells are screen children at the layout's rects
  * and the bar slides them by an offset. The left bar is the mode bar's one column of three -
  * the Menu's door and the two group selectors - and the right bar is whichever group panel is
- * up: the Empty grille, the EQ's six cells or the RGB's. Every cell belongs to the panel; there
- * is no chrome cell, because the Menu's door moved to the left bar and no panel can strand it.
+ * up: the Home group's four keys, the EQ's six cells or the RGB's. Every cell belongs to the
+ * panel; there is no chrome cell, because the Menu's door moved to the left bar and no panel can
+ * strand it.
  *
  * One panel per bar. set_panel() takes the value; a bar shows a different panel by taking
  * the old one's cells down and building the new one's, which is a cut rather than a slide.
- * The Empty group and the Menu's Pad are plates: 1x1, and their cell_rect() returns the
- * layout's Pad rect, one 186x284 surface instead of a lattice cell.
+ * A panel may also span cells - the Home group's top and bottom keys are two columns merged - by
+ * returning one rect for the first cell and an empty one for the cell it covers.
+ * The Menu's Pad is a plate: 1x1, and its cell_rect() returns the layout's Pad rect, one 186x284
+ * surface instead of a lattice cell.
  *
  * The order the composition uses: create() once, after the peek and before the bands; then every
  * panel's module is built - a panel's create() builds values, never cells - and the composition
@@ -59,10 +62,8 @@ typedef enum {
  *                  panel returns one rect for (0,0).
  *   gesture_bubble whether a swipe that starts on a cell still reaches the screen's gesture
  *                  handler: true for the mode bar (a swipe that starts on a button still moves
- *                  the ladder) and for the Empty grille (a picture must not eat a swipe), false
- *                  for the EQ and RGB groups (a swipe on a knob is not one) and for the Pad.
- *   inert          the panel is a picture, not a control surface: its carcases stay out of the
- *                  hit test, so the touch falls through to the screen. The Empty grille sets it.
+ *                  the ladder), false for the Home keys, the EQ and RGB groups (a swipe on a
+ *                  control is not one) and for the Pad.
  *   build          one control inside one carcase, once per cell. The carcase is the bar's:
  *                  the panel sets no position, size, clickability or bubbling.
  *   set_page       the panel's page ink, after the bar has painted the cells' default: the
@@ -70,6 +71,9 @@ typedef enum {
  *                  turn with the Page (the Pad).
  *   shown          the panel is visible (true) or being taken off screen (false): where it
  *                  ends an edit and cancels a pending open. NULL for a panel with no state.
+ *                  It reports the bar's **wish**, not the cells' lifetime: a panel installed
+ *                  while the bars are still away gets false once with its cells built, alive
+ *                  and clickable, so the hook must not drop the pointers to them.
  *   ctx            the panel's, passed to every hook.
  */
 typedef struct {
@@ -77,7 +81,6 @@ typedef struct {
     int rows;
     cassette_rect_t (*cell_rect)(int col, int row);
     bool gesture_bubble;
-    bool inert;
     void (*build)(lv_obj_t *cell, int col, int row, void *ctx);
     void (*set_page)(bool white, void *ctx);
     void (*shown)(bool visible, void *ctx);

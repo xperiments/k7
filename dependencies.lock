@@ -89,6 +89,6 @@ direct_dependencies:
 - espressif/mdns
 - idf
 - lvgl/lvgl
-manifest_hash: d047ab765c3ddb07ba7047500a6758a76dfc0b5009ae2ec90a70ab6fb123e0c9
+manifest_hash: 0784a9a3d609cd737ac86222c9ed5a14c18bfc085ffee3690f73e87470af9070
 target: esp32s3
 version: 3.0.0

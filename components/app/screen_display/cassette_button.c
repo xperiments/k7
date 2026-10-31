@@ -20,10 +20,31 @@
 LV_FONT_DECLARE(jura_36);
 
 /* The disc: 64 px centred in the host's 96 px carcase, so 16 px of line art on every side.
- * The 96 is the cell the lattice gives both hosts; the 64 and its inset are the button's. */
+ * The 96 is the cell the lattice gives both hosts; the 64 and its inset are the button's.
+ *
+ * A carcase wider than one cell is two cells merged, and it is not a bigger button: it is one
+ * button and a spare. So its ink keeps the 16 px inset and takes it from the carcase's *right*
+ * edge, landing exactly where a key in the last column would have put it, and the pulse pivots
+ * there rather than on the plate's middle. The extra width is the host's to leave empty, and
+ * `disc_right` changes nothing else: the ink, the rings and the guard are one button's.
+ *
+ * A `bare` key has no dome at all: no ambient circle, no disc, so no ring, no cap and no shadow
+ * on either page. What is left is the plate and the glyph, standing at the dome's centre - which
+ * is why the anchor above is the dome's and not the disc's: the two cases share it. */
 #define CIRCLE_D     64
 #define CIRCLE_R     (CIRCLE_D / 2)
 #define CIRCLE_INSET ((CASSETTE_CELL_W - CIRCLE_D) / 2)
+
+/* The dome's left edge inside the carcase: centred, or CIRCLE_INSET from the right edge. A
+ * carcase too narrow for the second keeps the centred inset, so a host that builds before it
+ * sizes gets a visible button rather than a clipped one. A bare key's glyph stands at the same
+ * point, so a domed key and a bare one beside it read on one line. */
+static int ink_x(const cassette_button_spec_t *spec, int carcase_w)
+{
+    if (!spec->disc_right) return CIRCLE_INSET;
+    int x = carcase_w - CIRCLE_INSET - CIRCLE_D;
+    return x > 0 ? x : CIRCLE_INSET;
+}
 
 /* The click pulse's clock. The shape is the portable rule's; 160 ms is the feel's, and one
  * period is one run of the 0..1024 triangle. */
@@ -203,21 +224,33 @@ bool cassette_button_create(cassette_button_t *out, lv_obj_t *carcase,
     lv_obj_set_style_border_color(carcase, k_col_button_rect, 0);
 
     /* The dome is two circles: this transparent one carries the broad shadow, the one inside
-     * it is the disc. Both are invisible on the dark page, where the disc is line art. */
-    out->ambient = cassette_border_box(carcase, CIRCLE_INSET, CIRCLE_INSET,
-                                       CIRCLE_D, CIRCLE_D, CIRCLE_R,
-                                       k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
-    out->disc = cassette_border_box(out->ambient, 0, 0,
-                                    CIRCLE_D, CIRCLE_D, CIRCLE_R,
-                                    k_col_bg, LV_OPA_TRANSP, k_col_button_circle,
-                                    cassette_button_ring_w(spec->disc_ring, false));
-    out->letter = cassette_text(out->disc, spec->font ? spec->font : &jura_36,
-                                k_col_button_letter, LV_ALIGN_CENTER, 0, 0);
+     * it is the disc. Both are invisible on the dark page, where the disc is line art. Ink on a
+     * wide carcase sits CIRCLE_INSET from its right edge, so the spare width stays empty on the
+     * left; a bare key builds no circles at all, and its glyph is parented to the carcase at the
+     * point the dome's centre would have been. */
+    const int width = lv_obj_get_width(carcase);
+    const int x = ink_x(spec, width);
+    const lv_font_t *font = spec->font ? spec->font : &jura_36;
+    if (spec->bare) {
+        out->letter = cassette_text(carcase, font, k_col_button_letter, LV_ALIGN_CENTER,
+                                    x + CIRCLE_R - width / 2, 0);
+    } else {
+        out->ambient = cassette_border_box(carcase, x, CIRCLE_INSET,
+                                           CIRCLE_D, CIRCLE_D, CIRCLE_R,
+                                           k_col_bg, LV_OPA_TRANSP, k_col_bg, 0);
+        out->disc = cassette_border_box(out->ambient, 0, 0,
+                                        CIRCLE_D, CIRCLE_D, CIRCLE_R,
+                                        k_col_bg, LV_OPA_TRANSP, k_col_button_circle,
+                                        cassette_button_ring_w(spec->disc_ring, false));
+        out->letter = cassette_text(out->disc, font, k_col_button_letter, LV_ALIGN_CENTER, 0, 0);
+    }
     lv_label_set_text(out->letter, spec->text ? spec->text : "");
 
-    /* The pulse is centred on the carcase, not on its top-left corner. */
-    lv_obj_set_style_transform_pivot_x(carcase, CASSETTE_CELL_W / 2, 0);
-    lv_obj_set_style_transform_pivot_y(carcase, CASSETTE_CELL_H / 2, 0);
+    /* The pulse pivots on the ink, not on the carcase's top-left corner and not on its middle:
+     * on a wide cell those are different points, and a plate that shrank away from its own glyph
+     * would read as two things moving. */
+    lv_obj_set_style_transform_pivot_x(carcase, x + CIRCLE_R, 0);
+    lv_obj_set_style_transform_pivot_y(carcase, CIRCLE_INSET + CIRCLE_R, 0);
 
     button_ink_apply(out);
 

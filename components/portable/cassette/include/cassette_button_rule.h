@@ -2,8 +2,8 @@
 /*
  * cassette_button_rule - the three parts of a Cassette button that are arithmetic, not LVGL.
  *
- * The five buttons - the transport drawer's P, < and >, and the DJ block's M and R - are one
- * widget (components/app/screen_display/cassette_button.c). Three parts of it are values:
+ * The buttons - the mode bar's three and the Home group's four - are one widget
+ * (components/app/screen_display/cassette_button.c). Three parts of it are values:
  * when a click is a tap, how wide the ring is while pressed, and the shape of the click
  * pulse. They are the parts the two copies drifted on, so they live here, where the host
  * tier compiles them and t21 pins them. Nothing here draws, allocates, logs or reads a
@@ -40,11 +40,11 @@ bool cassette_button_is_tap(bool moved, bool gesturing);
 
 /* The ring's two widths, the released one and the pressed one. A button carries the table
  * for its disc (on the dark page) and for its carcase (on either page). The disc's table is
- * {2, 3} for all five and the drawer's carcase is {2, 3} too; M and R share the DJ block's
- * carcase, which does not thicken, so their carcase is {2, 2} and a press reads there as the
- * disc's ring alone. On the white page the disc is the button's cap and its rim is
- * CASSETTE_CAP_RIM_W (cassette_widgets.h) whatever the state, so the table reaches the disc
- * only on the dark page. */
+ * {2, 3} everywhere and so is the carcase's: every button the screen has now sits in a bar
+ * cell that thickens with it, so a press reads on the rectangle and on the dome together. On
+ * the white page the disc is the button's cap and its rim is CASSETTE_CAP_RIM_W
+ * (cassette_widgets.h) whatever the state, so the table reaches the disc only on the dark
+ * page. */
 typedef struct {
     uint8_t released;
     uint8_t pressed;

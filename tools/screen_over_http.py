@@ -100,7 +100,7 @@ MAX_SCENE = 9
 
 SCENE_NAMES = {
     0: "entry view",
-    1: "Art/Empty",
+    1: "Art/Home",
     2: "Art/EQ",
     3: "Art/RGB",
     4: "Menu",

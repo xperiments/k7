@@ -2,10 +2,10 @@
  * Which group the right bar is showing, without LVGL.
  *
  * The rules the owner asked for and the fact that bounds them: a group button is a toggle (one
- * group at a time, the same button again returns to the speaker - the only way back, now that
- * the panels have no Back cell), and the groups live with the chrome - hiding the bars drops
- * the active group, so the controls always open on the grille. The Menu's Pad is not a group
- * and the model is not stepped while it is open; the view reinstalls the group on close.
+ * group at a time, the same button again returns to Home - the only way back, now that the
+ * panels have no Back cell), and the groups live with the chrome - hiding the bars drops the
+ * active group, so the controls always open on Home. The Menu's Pad is not a group and the
+ * model is not stepped while it is open; the view reinstalls the group on close.
  */
 #include "test_util.h"
 
@@ -20,10 +20,10 @@ static groups_t fresh(void)
     return g;
 }
 
-static void test_starts_empty(void)
+static void test_starts_home(void)
 {
     groups_t g = fresh();
-    CHECK_EQ(groups_active(&g), GROUPS_ID_EMPTY, "a new model has no group selected");
+    CHECK_EQ(groups_active(&g), GROUPS_ID_HOME, "a new model opens on Home");
     CHECK_EQ(groups_handle(&g, GROUPS_INTENT_NONE, false), 0u,
              "a step with the chrome away and nothing selected changes nothing");
     CHECK_EQ(groups_handle(&g, GROUPS_INTENT_NONE, true), 0u,
@@ -40,7 +40,7 @@ static void test_toggle(void)
 
     CHECK_EQ(groups_handle(&g, GROUPS_INTENT_TAP_EQ, true), GROUPS_CHANGED_ACTIVE,
              "the same button again moves the group");
-    CHECK_EQ(groups_active(&g), GROUPS_ID_EMPTY, "back to the speaker, not to a second group");
+    CHECK_EQ(groups_active(&g), GROUPS_ID_HOME, "back to Home, not to a second group");
 
     CHECK_EQ(groups_handle(&g, GROUPS_INTENT_TAP_RGB, true), GROUPS_CHANGED_ACTIVE,
              "and the led selects the RGB group");
@@ -48,7 +48,7 @@ static void test_toggle(void)
 
     CHECK_EQ(groups_handle(&g, GROUPS_INTENT_TAP_EQ, true), GROUPS_CHANGED_ACTIVE,
              "the other group's button switches straight across");
-    CHECK_EQ(groups_active(&g), GROUPS_ID_EQ, "without going through Empty first");
+    CHECK_EQ(groups_active(&g), GROUPS_ID_EQ, "without going through Home first");
 }
 
 static void test_chrome_reset(void)
@@ -60,13 +60,13 @@ static void test_chrome_reset(void)
 
     CHECK_EQ(groups_handle(&g, GROUPS_INTENT_NONE, false), GROUPS_CHANGED_ACTIVE,
              "hiding the chrome drops it");
-    CHECK_EQ(groups_active(&g), GROUPS_ID_EMPTY, "so the controls open on the speaker");
+    CHECK_EQ(groups_active(&g), GROUPS_ID_HOME, "so the controls open on Home");
 
     /* A tap and a hide in the same step: the hide wins. */
     groups_handle(&g, GROUPS_INTENT_TAP_EQ, true);
     CHECK_EQ(groups_handle(&g, GROUPS_INTENT_TAP_RGB, false), GROUPS_CHANGED_ACTIVE,
              "a tap that arrives with the chrome gone still moves");
-    CHECK_EQ(groups_active(&g), GROUPS_ID_EMPTY, "but cannot leave a group up");
+    CHECK_EQ(groups_active(&g), GROUPS_ID_HOME, "but cannot leave a group up");
 }
 
 static void test_stable(void)
@@ -81,12 +81,12 @@ static void test_stable(void)
 
     /* NULL is not a state the screen has, but the model refuses it rather than crashing. */
     CHECK_EQ(groups_handle(NULL, GROUPS_INTENT_TAP_EQ, true), 0u, "a NULL model reports nothing");
-    CHECK_EQ(groups_active(NULL), GROUPS_ID_EMPTY, "and reads as Empty");
+    CHECK_EQ(groups_active(NULL), GROUPS_ID_HOME, "and reads as Home");
 }
 
 int main(void)
 {
-    test_starts_empty();
+    test_starts_home();
     test_toggle();
     test_chrome_reset();
     test_stable();

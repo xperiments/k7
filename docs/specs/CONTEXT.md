@@ -251,11 +251,11 @@ the Pad.
 _Avoid_: page, sheet, mode
 
 **Group**:
-The **Panel** the right **Bar** is showing: the Empty grille by default, the EQ panel, or the
+The **Panel** the right **Bar** is showing: the Home keys by default, the EQ panel, or the
 RGB panel. One at a time, and never two: the mode bar's group button toggles its Group on and
-a second tap puts the Empty grille back, and the Group dies with the chrome, so the Controls
-always open on the grille (ADR 0026). The Pad is not a Group - it takes the Bar while the
-Menu or a knob's dial owns the touch, and the Group comes back afterwards.
+a second tap puts the Home keys back, and the Group dies with the chrome, so the Controls
+always open on the Home keys (ADR 0026, amended by ADR 0046). The Pad is not a Group - it takes
+the Bar while the Menu or a knob's dial owns the touch, and the Group comes back afterwards.
 _Avoid_: tab, page, screen, mode (the mode bar selects a Group; the Group is what is shown)
 
 **Install**:

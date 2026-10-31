@@ -10,7 +10,7 @@
  * The three are the screen's modes, top to bottom: the **cassette** opens and closes the Menu,
  * the **sliders-v** is the EQ group and the **led** is the RGB group. Each is a 64 px disc with
  * one glyph from the icon font in `xtape_36`, and each is a **toggle**: the group buttons
- * select their group or, tapped again, put the Empty group back; the cassette's disc is lit
+ * select their group or, tapped again, put the Home group back; the cassette's disc is lit
  * while the Menu is open. All three carry the shared button's latched ink, a k_col_primary disc
  * with a k_col_bg glyph.
  *

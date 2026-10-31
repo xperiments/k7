@@ -68,7 +68,7 @@ def _use_an_interpreter_with_pillow():
 
 
 def slug(name):
-    """`Art/Empty` -> `art-empty`: a file name that survives every filesystem."""
+    """`Art/Home` -> `art-home`: a file name that survives every filesystem."""
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 

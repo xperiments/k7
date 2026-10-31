@@ -46,7 +46,7 @@ void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms)
 void cassette_view_dim(bool dim);
 
 #if CONFIG_APP_UI_SERIAL_DUMP || CONFIG_APP_UI_SCREEN_HTTP
-/* The highest scene number the driver knows: 0 the entry view, 1 Art/Empty, 2 Art/EQ, 3
+/* The highest scene number the driver knows: 0 the entry view, 1 Art/Home, 2 Art/EQ, 3
  * Art/RGB, 4 the Menu, 5 Real/EQ, 6 the EQ's 3x dial, 7 the RGB effect's, 8 the Peek, 9
  * Real/RGB. The HTTP route validates against this, so the two cannot disagree. */
 #define CASSETTE_SCENE_MAX 9
