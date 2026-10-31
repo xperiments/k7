@@ -18,3 +18,8 @@ export function formatPercent(value: number): string {
 export function shortHash(hash: string): string {
   return hash.replace(/^sha256:/, '').slice(0, 8);
 }
+
+/** "1 track", "2 tracks" - the sentence reads the same wherever the count comes from. */
+export function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? '' : 's'}`;
+}

@@ -235,7 +235,7 @@ function toRow(track: SnapshotTrack, encoder: TextEncoder): SnapshotRow {
   };
 }
 
-export function buildSnapshot(input: SnapshotInput): Uint8Array {
+export function buildSnapshot(input: SnapshotInput): Uint8Array<ArrayBuffer> {
   const encoder = new TextEncoder();
   const rows = input.tracks.map((track) => toRow(track, encoder));
 
@@ -304,4 +304,17 @@ export function buildSnapshot(input: SnapshotInput): Uint8Array {
   // The CRC covers the rows and the pool, never the header that carries it.
   view.setUint32(36, crc32(image.subarray(HEADER_SIZE, totalSize)), true);
   return image;
+}
+
+/**
+ * The producer's identity for a model set: FNV-1a 64 over the sorted `name:sha256`
+ * descriptors, newline-joined. The device reports it in `library_stats` and never
+ * interprets it, so it only has to be stable for a given set of weights.
+ */
+export function modelSetId(models: readonly { name: string; sha256: string }[]): bigint {
+  const text = models
+    .map((model) => `${model.name}:${model.sha256}`)
+    .sort()
+    .join('\n');
+  return fnv1a64(new TextEncoder().encode(text));
 }

@@ -4,19 +4,28 @@ import { decodeFile, sha256Hex, trackFormat } from '../audio/decode';
 import { loadManifest } from '../audio/models';
 import { readTrackMetadata } from '../audio/metadata';
 import { downloadTaggedCopy, writeAnalysisTags } from '../audio/tagWriter';
-import { ANALYSIS_SCHEMA, type Analysis, type ExportDocument } from '../domain/analysis';
+import {
+  ANALYSIS_SCHEMA,
+  type Analysis,
+  type ExportDocument,
+  type ModelManifest,
+} from '../domain/analysis';
+import { snapshotPath } from '../domain/snapshot';
 import { SOURCE_URL, cacheKey } from '../config';
 import { clearCache, getCached, putCached } from '../storage/cache';
 import { DropZone } from './DropZone';
 import type { FoundFile } from './files';
-import { shortHash } from './format';
+import { plural, shortHash } from './format';
 import { QueueList } from './QueueList';
+import { buildSnapshotExport } from './snapshotExport';
 import type { QueueItem } from './queue';
 
 export function App() {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [busy, setBusy] = useState(false);
-  const [modelSet, setModelSet] = useState<string | null>(null);
+  const [manifest, setManifest] = useState<ModelManifest | null>(null);
+  const modelSet = manifest?.modelSet ?? null;
+  const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [client] = useState(() => new AnalysisClient());
@@ -26,7 +35,7 @@ export function App() {
     let cancelled = false;
     loadManifest()
       .then((manifest) => {
-        if (!cancelled) setModelSet(manifest.modelSet);
+        if (!cancelled) setManifest(manifest);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -135,8 +144,6 @@ export function App() {
       setItems((previous) => [...previous, ...accepted]);
     }
 
-    const plural = (count: number, word: string) =>
-      `${count} ${word}${count === 1 ? '' : 's'}`;
 
     if (accepted.length === 0) {
       setNotice(
@@ -224,6 +231,48 @@ export function App() {
     URL.revokeObjectURL(url);
   };
 
+  /* The snapshot is the only thing this page produces that the player consumes: one
+   * file, at the card's root, that the device flashes and deletes. A Track outside a
+   * `music` directory is measured and shown but has no place in it, so the count is
+   * reported rather than silently dropped. */
+  const saveSnapshot = useCallback(async () => {
+    if (!manifest || savingSnapshot) return;
+    setSavingSnapshot(true);
+    try {
+      const result = await buildSnapshotExport(
+        items.map((item) => ({ file: item.file, analysis: item.analysis ?? null })),
+        manifest,
+      );
+      if (result.tracks === 0) {
+        setNotice(
+          'Nothing to write: drop the card root (or its music folder) so the tracks have a ' +
+            'path below music/.',
+        );
+        return;
+      }
+      const blob = new Blob([result.bytes], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'xtape.db';
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setNotice(
+        `Saved xtape.db for ${plural(result.tracks, 'track')}.` +
+          (result.skipped > 0
+            ? ` ${plural(result.skipped, 'analysed file')} outside music/ left out.`
+            : '') +
+          ' Put it at the card\'s root and put the card back.',
+      );
+    } catch (error) {
+      setNotice(
+        `Could not write the snapshot: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setSavingSnapshot(false);
+    }
+  }, [items, manifest, savingSnapshot]);
+
   const clearAll = async () => {
     setItems([]);
     setNotice(null);
@@ -283,6 +332,18 @@ export function App() {
         <div className="actions">
           <button type="button" className="ghost" onClick={exportJson} disabled={done === 0}>
             Download JSON
+          </button>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => void saveSnapshot()}
+            disabled={
+              savingSnapshot ||
+              !items.some((item) => item.analysis && snapshotPath(item.analysis.track.path))
+            }
+            title="Write xtape.db for the player: BPM, key, mood, energy and names, for a card whose music folder was what you dropped"
+          >
+            {savingSnapshot ? 'Writing…' : 'Save snapshot'}
           </button>
           <button
             type="button"
