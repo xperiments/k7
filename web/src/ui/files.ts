@@ -110,13 +110,6 @@ export async function scanDataTransfer(data: DataTransfer): Promise<ScanResult> 
   return { files, skipped: skipped.count };
 }
 
-/** The folder picker input supplies `webkitRelativePath` on every file. */
-export function filesFromInput(files: FileList): FoundFile[] {
-  return Array.from(files)
-    .map((file) => ({ file, path: file.webkitRelativePath || file.name }))
-    .filter((found) => !ignoredPath(found.path));
-}
-
 /** The slice of the File System Access handles this page walks. Structural, so both a
  * real FileSystemDirectoryHandle and a test's stand-in fit. */
 export interface CardFileHandle {
