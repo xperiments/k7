@@ -13,6 +13,7 @@ import {
 import { snapshotPath } from '../domain/snapshot';
 import { sendSnapshot } from '../device/upload';
 import { newId } from '../lib/id';
+import { needsMeasurement, tagAnalysis } from '../domain/tagAnalysis';
 import { SOURCE_URL, cacheKey } from '../config';
 import { clearCache, getCached, putCached } from '../storage/cache';
 import { WEIGHTS_MODE } from '../weights/config';
@@ -36,6 +37,8 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
   const [manifest, setManifest] = useState<ModelManifest | null>(null);
   const modelSet = manifest?.modelSet ?? null;
   const [savingSnapshot, setSavingSnapshot] = useState(false);
+  const [tagsOnly, setTagsOnly] = useState(true);
+  const [compact, setCompact] = useState(true);
   /* The card the user opened read-write, when they opened one: the snapshot goes back
    * there without asking again. A dropped folder leaves this null. */
   const [cardHandle, setCardHandle] = useState<SnapshotDirectory | null>(null);
@@ -100,6 +103,19 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
         }
 
         const metadata = await readTrackMetadata(item.file);
+
+        /* A track whose tags already carry BPM and key needs no inference: the row is built
+         * from the tags and the fields they cannot carry stay unknown. */
+        if (!needsMeasurement(metadata, tagsOnly)) {
+          const analysis = tagAnalysis(
+            { name: item.file.name, path: item.path, size: item.file.size, format: item.format, hash },
+            metadata,
+          );
+          await putCached(key, analysis);
+          update(item.id, { status: 'tagged', analysis, stage: undefined });
+          return;
+        }
+
         const need44k = metadata.bpm === undefined || metadata.key === undefined;
         const audio = await decodeFile(buffer, need44k);
         update(item.id, { status: 'analysing', stage: undefined });
@@ -126,7 +142,7 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
         setBusy(false);
       }
     },
-    [client, modelSet, update],
+    [client, modelSet, update, tagsOnly],
   );
 
   useEffect(() => {
@@ -438,6 +454,22 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
         <span className="muted small">
           {done} of {items.length} analysed
         </span>
+        <label className="muted small toggle" title="Use BPM and key from the file's own tags and measure only the tracks that are missing one">
+          <input
+            type="checkbox"
+            checked={tagsOnly}
+            onChange={(event) => setTagsOnly(event.target.checked)}
+          />
+          Only measure what the tags lack
+        </label>
+        <button
+          type="button"
+          className="ghost small"
+          onClick={() => setCompact((value) => !value)}
+          title="One line per file, or the full card for each"
+        >
+          {compact ? 'Verbose' : 'Normal'}
+        </button>
         <div className="actions">
           <button type="button" className="ghost" onClick={exportJson} disabled={done === 0}>
             Download JSON
@@ -485,6 +517,7 @@ export function PrepareView({ onBusyChange }: PrepareViewProps) {
       <QueueList
         items={items}
         busy={busy}
+        compact={compact}
         onDeep={deepAnalyse}
         onRetry={retry}
         onSave={saveTags}

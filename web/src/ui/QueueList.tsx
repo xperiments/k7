@@ -13,6 +13,7 @@ const STAGE_TEXT: Record<Stage, string> = {
 function statusText(item: QueueItem): string {
   if (item.status === 'error') return 'Failed';
   if (item.status === 'analysing') return item.stage ? STAGE_TEXT[item.stage] : 'Analysing…';
+  if (item.status === 'tagged') return 'From tags';
   if (item.status === 'hashing') return 'Hashing…';
   if (item.status === 'decoding') return 'Decoding…';
   return 'Queued';
@@ -21,15 +22,40 @@ function statusText(item: QueueItem): string {
 interface QueueListProps {
   items: QueueItem[];
   busy: boolean;
+  /** One line per file, or the full card for each. */
+  compact: boolean;
   onDeep: (item: QueueItem) => void;
   onRetry: (item: QueueItem) => void;
   onSave: (item: QueueItem) => void;
 }
 
-export function QueueList({ items, busy, onDeep, onRetry, onSave }: QueueListProps) {
+export function QueueList({ items, busy, compact, onDeep, onRetry, onSave }: QueueListProps) {
   return (
     <div className="queue">
       {items.map((item) => {
+        if (compact && item.analysis) {
+          const { analysis } = item;
+          const tempo = analysis.tempo.source === 'metadata' ? 'tagged' : 'measured';
+          return (
+            <div className="queue-row compact" key={item.id}>
+              <div className="queue-file">
+                <strong>{item.name}</strong>
+                {item.path !== item.name && (
+                  <span className="muted small queue-path">{item.path}</span>
+                )}
+              </div>
+              <div className="queue-state">
+                <span className="muted small">
+                  {analysis.tempo.bpm || '—'} BPM · {analysis.key.camelot || '—'} · {tempo}
+                </span>
+                <button type="button" className="ghost small" onClick={() => onDeep(item)} disabled={busy}>
+                  Details
+                </button>
+              </div>
+            </div>
+          );
+        }
+
         if (item.status === 'done' && item.analysis) {
           return (
             <ResultCard

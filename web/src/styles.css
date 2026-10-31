@@ -219,6 +219,21 @@ button:disabled {
   font-weight: 600;
 }
 
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.queue-row.compact {
+  padding-block: 8px;
+}
+
+.queue-row.compact .queue-file strong {
+  font-weight: 500;
+}
+
 .queue-path {
   overflow-wrap: anywhere;
 }
