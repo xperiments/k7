@@ -46,6 +46,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/controls/include \
        -I$(ROOT)/components/portable/groups/include \
        -I$(ROOT)/components/portable/rgb/include \
+       -I$(ROOT)/components/portable/snapshot/include \
        -I$(ROOT)/components/portable/app_services/include \
        -I$(ROOT)/components/portable/app_board/include \
        -I$(ROOT)/components/portable/dr_libs/include \
@@ -90,6 +91,7 @@ PROD_SRC := \
   $(ROOT)/components/portable/groups/groups.c \
   $(ROOT)/components/portable/rgb/rgb.c \
   $(ROOT)/components/portable/mini_icecast/mi_shuffle.c \
+  $(ROOT)/components/portable/snapshot/snapshot.c \
   $(ROOT)/components/portable/app_services/app_services.c \
   $(SHINE_SRC)
 
@@ -108,6 +110,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/controls \
           $(ROOT)/components/portable/groups \
           $(ROOT)/components/portable/rgb \
+          $(ROOT)/components/portable/snapshot \
           $(ROOT)/components/portable/app_services \
           $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
@@ -117,7 +120,7 @@ BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
-SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o
+SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o
@@ -135,7 +138,8 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t16_layout $(BIN)/t17_tone_eq \
          $(BIN)/t18_menu $(BIN)/t19_shuffle \
          $(BIN)/t21_button $(BIN)/t22_knob $(BIN)/t23_pad $(BIN)/t24_controls \
-         $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline $(BIN)/t28_entrance
+         $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline $(BIN)/t28_entrance \
+         $(BIN)/t29_snapshot
 
 .PHONY: all test integration layering check tools fixtures bench control control-check clean help
 
@@ -271,6 +275,10 @@ $(BIN)/t27_timeline: $(OBJ)/timeline.o $(OBJ)/t27_timeline.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
+$(BIN)/t29_snapshot: $(OBJ)/snapshot.o $(OBJ)/t29_snapshot.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
 $(BIN)/t28_entrance: $(OBJ)/entrance.o $(OBJ)/t28_entrance.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
@@ -286,6 +294,8 @@ integration: $(SERVER)
 	@HOST_BIN=$(SERVER) HOST_DIR=$(HERE) sh $(HERE)/tests/http_tests.sh
 	@echo "--- awkward file names (a real library is not called tone-44100.flac)"
 	@$(PYTHON) $(HERE)/tests/hostile_names.py $(SERVER) $(HERE)/fixtures/tone-44100.flac
+	@echo "--- the snapshot over MCP"
+	@$(PYTHON) $(HERE)/tests/snapshot_tests.py $(SERVER) $(HERE)/fixtures
 
 layering:
 	@ROOT=$(ROOT) sh $(HERE)/tests/layering.sh

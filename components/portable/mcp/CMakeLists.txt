@@ -1,6 +1,6 @@
 idf_component_register(SRCS "mcp.c"
                        INCLUDE_DIRS "include"
-                       REQUIRES library mini_icecast http_server)
+                       REQUIRES library mini_icecast http_server snapshot)
 
 # Control tools are opt-in at build time. The environment variable keeps the
 # default firmware byte-for-byte free of them.

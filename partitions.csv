@@ -6,3 +6,7 @@
 nvs,      data, nvs,     0x9000,  0x6000,
 phy_init, data, phy,     0xf000,  0x1000,
 factory,  app,  factory, 0x10000, 4M,
+# The Snapshot: the measurements the host produced, mapped read-only at boot and
+# never written except by the update path (ADR 0047). 64 KB-aligned so it can be
+# mmapped, and after the app so the app's size is free to grow.
+snapshot, data, 0x40,    0x410000, 2M,

@@ -6,7 +6,8 @@ Premises that outrank every requirement in every context below. Work that violat
 refused, not scheduled.
 
 - **The ESP32-S3 never serves a Track and never accepts a Track upload; all SD content
-  processing happens outside the device.** Stated in full, with what it does and does not
+  processing happens outside the device.** The one card write is the delete of an **Update
+  file** it has already flashed and verified. Stated in full, with what it does and does not
   forbid, in [the stream server's premise](./docs/specs/CONTEXT.md#the-global-premise).
 
 ## Contexts
@@ -15,7 +16,9 @@ refused, not scheduled.
   microSD card and broadcasts it over HTTP as a live MP3 stream, with an index that lists
   it. A global premise forbids serving or accepting a Track, so all SD content processing
   happens outside the device. Specified in
-  [`docs/specs/sd-stream-server.md`](./docs/specs/sd-stream-server.md).
+  [`docs/specs/sd-stream-server.md`](./docs/specs/sd-stream-server.md); its measurements are
+  specified in [`docs/specs/snapshot.md`](./docs/specs/snapshot.md) and byte-defined in
+  [`docs/specs/snapshot-format.md`](./docs/specs/snapshot-format.md).
 - [Radio player](./docs/research/01-library-architecture.md) — an ESP32-S3 that consumes
   someone else's internet radio stream and plays it out to a DAC over I2S. Researched in
   [`docs/research/`](./docs/research/); no `CONTEXT.md` yet, because work has not resumed
@@ -23,6 +26,7 @@ refused, not scheduled.
 - [Track analysis](./web/CONTEXT.md) — a browser app that measures tempo, key, mood and energy
   for a user's own audio files. Researched in
   [`docs/research/bpm-key-mood-energy-webapp.md`](./docs/research/bpm-key-mood-energy-webapp.md).
+  It is also the producer of the **Snapshot** the stream server answers its queries from.
 
 ## Relationships
 
@@ -37,8 +41,9 @@ refused, not scheduled.
 
 - **Stream server ↔ Track analysis**: both say "Track", with different scope. There it is a
   file in the card's music directory, owned by the device; here it is a file the user submits
-  for measurement. The two share a vocabulary, not code or data flow. The analyser is
-  host-side and the device emits only its live stream and its own computed views.
+  for measurement. They now share one data flow and one vocabulary: the analyser writes the
+  **Update file** that carries a **Snapshot** to the device (ADR 0047), and the device still
+  emits only its live stream and its own computed views.
 
 ## Note on the research tree
 

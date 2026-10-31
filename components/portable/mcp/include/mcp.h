@@ -10,6 +10,7 @@
  */
 #include "esp_err.h"
 #include "library.h"
+#include "snapshot.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,6 +27,11 @@ typedef struct {
     mcp_local_ip_fn local_ip; /* may be NULL; the guard then only accepts xtape.local */
     mcp_rescan_fn rescan;     /* control builds only; may be NULL */
     uint16_t port;            /* the HTTP port; 0 means 8000 */
+    /* The measurements this device holds, or NULL. `snapshot_state` explains a
+     * NULL: no partition, never flashed, or an image that failed validation. */
+    const snapshot_t *snapshot;
+    snapshot_result_t snapshot_state;
+    const char      *snapshot_reason; /* "" when there is nothing to say */
 } mcp_cfg_t;
 
 /* Register GET/POST /mcp. Call before http_server_start(). */

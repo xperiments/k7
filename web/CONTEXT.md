@@ -14,13 +14,21 @@ One MP3 or FLAC file submitted for analysis.
 _Avoid_: song, item, audio file
 
 **Folder**:
-A directory the user drops or picks. Scanned recursively for tracks.
+A directory the user drops or picks. Scanned recursively for tracks. A run that produces a
+**Snapshot** is given the card's root, and scans only its `music` directory.
 _Avoid_: directory, library
 
 **Relative path**:
 A track's location inside the folder it was added from, including the file name. Equals the
 file name for a single-file drop. The content hash, not the path, identifies the track.
 _Avoid_: full path, filepath
+
+**Snapshot path**:
+A track's location below the card's `music` directory: the volume name and the `music` segment
+dropped, `/`-separated, no leading slash. It exists only in a run that produces a **Snapshot**,
+and it is the string the Track fingerprint hashes — see
+[`snapshot-format.md`](../docs/specs/snapshot-format.md) §6.
+_Avoid_: relative path (that one keeps the folder it was added from), absolute path
 
 **Embedded metadata**:
 Tags stored in the file itself — ID3 for MP3, Vorbis comments for FLAC.

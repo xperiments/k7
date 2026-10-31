@@ -11,6 +11,7 @@
 #include "esp_log.h"
 #include "http_server.h"
 #include "mini_icecast.h"
+#include "snapshot.h"
 
 #define TAG "mcp"
 
@@ -61,6 +62,9 @@ typedef struct {
 } w_t;
 
 static const library_t *L;
+static const snapshot_t *SN;      /* NULL when this device has no Snapshot */
+static snapshot_result_t SN_state = SNAPSHOT_NO_PARTITION;
+static const char *SN_reason = "";
 static uint32_t L_scan_ms;
 static mcp_local_ip_fn L_local_ip;
 static mcp_rescan_fn L_rescan;
@@ -491,6 +495,97 @@ static bool ascii_contains(const char *hay, const char *needle)
     return false;
 }
 
+/* One track's measurements as JSON, or `null` when the Snapshot has no row for it.
+ * An unknown value is `null`, not an absent key: "not measured" is an answer the
+ * model can act on, and a missing key cannot be told from a typo. */
+static void write_opt_string(w_t *w, const snapshot_t *sn, const snapshot_row_t *row,
+                             const char *name, snapshot_string_t which)
+{
+    const char *v = snapshot_row_string(sn, row, which);
+    if (!v[0]) return;
+    w_printf(w, ",\"%s\":\"", name);
+    w_escaped(w, v);
+    w_put(w, "\"");
+}
+
+static void write_analysis(w_t *w, const snapshot_t *sn, const snapshot_row_t *row, bool have)
+{
+    if (!have || !sn) {
+        w_puts(w, "null");
+        return;
+    }
+    w_puts(w, "{\"bpm\":");
+    if (row->bpm_x10)
+        w_printf(w, "%u.%u", (unsigned)(row->bpm_x10 / 10u), (unsigned)(row->bpm_x10 % 10u));
+    else
+        w_puts(w, "null");
+
+    w_puts(w, ",\"key\":");
+    if (row->key >= 1 && row->key <= 24)
+        w_printf(w, "\"%u%c\"", (unsigned)(((row->key - 1u) % 12u) + 1u),
+                 row->key > 12 ? 'B' : 'A');
+    else
+        w_puts(w, "null");
+
+    static const char *const pct_name[4] = {"energy", "danceability", "valence", "arousal"};
+    uint8_t pct[4] = {row->energy, row->danceability, row->valence, row->arousal};
+    for (int i = 0; i < 4; i++) {
+        w_printf(w, ",\"%s\":", pct_name[i]);
+        if (pct[i] == SNAPSHOT_UNKNOWN_PCT)
+            w_puts(w, "null");
+        else
+            w_printf(w, "%u", (unsigned)pct[i]);
+    }
+
+    w_puts(w, ",\"mood\":[");
+    bool first = true;
+    for (unsigned i = 0; i < 5; i++) {
+        if (!(row->mood_bits & (1u << i))) continue;
+        if (!first) w_put(w, ",");
+        first = false;
+        w_printf(w, "\"%s\"", snapshot_mood_name(i));
+    }
+    w_puts(w, "]");
+
+    write_opt_string(w, sn, row, "title", SNAPSHOT_STRING_TITLE);
+    write_opt_string(w, sn, row, "artist", SNAPSHOT_STRING_ARTIST);
+    write_opt_string(w, sn, row, "album", SNAPSHOT_STRING_ALBUM);
+    write_opt_string(w, sn, row, "genre", SNAPSHOT_STRING_GENRE);
+
+    static const char *const src_name[4] = {"bpm", "key", "mood", "energy"};
+    uint8_t src_bit[4] = {SNAPSHOT_SRC_BPM_TAGGED, SNAPSHOT_SRC_KEY_TAGGED,
+                          SNAPSHOT_SRC_MOOD_TAGGED, SNAPSHOT_SRC_ENERGY_TAGGED};
+    w_puts(w, ",\"tagged\":[");
+    first = true;
+    for (int i = 0; i < 4; i++) {
+        if (!(row->source_flags & src_bit[i])) continue;
+        if (!first) w_put(w, ",");
+        first = false;
+        w_printf(w, "\"%s\"", src_name[i]);
+    }
+    w_puts(w, "]");
+
+    w_puts(w, ",\"confidence\":");
+    if (row->confidence == SNAPSHOT_UNKNOWN_PCT)
+        w_puts(w, "null");
+    else
+        w_printf(w, "%u", (unsigned)row->confidence);
+    w_puts(w, "}");
+}
+
+/* The row for a Library track, when this device has a Snapshot and the file still
+ * matches it. A file over 4 GiB cannot be represented in a row's size, so it is
+ * unanalysed rather than matched on a truncated size. */
+static bool track_row(const library_t *lib, lib_node_t n, snapshot_row_t *row)
+{
+    if (!SN) return false;
+    char rel[LIB_PATH_MAX];
+    if (library_relpath(lib, n, rel, sizeof rel) == (size_t)-1) return false;
+    uint64_t size = library_size(lib, n);
+    if (size > UINT32_MAX) return false;
+    return snapshot_find(SN, snapshot_path_hash(rel), (uint32_t)size, row);
+}
+
 static void write_entry(w_t *w, const library_t *lib, lib_node_t n)
 {
     uint16_t nlen = 0;
@@ -523,8 +618,13 @@ static void write_track(w_t *w, const library_t *lib, lib_node_t n)
     w_escaped(w, rel);
     w_puts(w, "\",\"size\":");
     w_printf(w, "%llu", (unsigned long long)library_size(lib, n));
-    w_printf(w, ",\"format\":\"%s\",\"track_index\":%u}",
+    w_printf(w, ",\"format\":\"%s\",\"track_index\":%u,\"analysis\":",
              fmt_name(library_format(lib, n)), (unsigned)library_track_index(lib, n));
+
+    snapshot_row_t row;
+    bool have = track_row(lib, n, &row);
+    write_analysis(w, SN, &row, have);
+    w_puts(w, "}");
 }
 
 static void write_stats(w_t *w, const library_t *lib)
@@ -533,12 +633,47 @@ static void write_stats(w_t *w, const library_t *lib)
         w_puts(w, "{\"available\":false}");
         return;
     }
+    /* Coverage is the number that bounds every answer: it is counted against the
+     * current Library, so a row for a track that no longer exists is not coverage. */
+    unsigned tracks = library_track_count(lib);
+    unsigned analysed = 0, tagged_bpm = 0, tagged_key = 0, tagged_mood = 0, tagged_energy = 0;
+    if (SN) {
+        for (uint32_t i = 0; i < tracks; i++) {
+            snapshot_row_t row;
+            if (!track_row(lib, library_track_at(lib, i), &row)) continue;
+            analysed++;
+            if (row.source_flags & SNAPSHOT_SRC_BPM_TAGGED) tagged_bpm++;
+            if (row.source_flags & SNAPSHOT_SRC_KEY_TAGGED) tagged_key++;
+            if (row.source_flags & SNAPSHOT_SRC_MOOD_TAGGED) tagged_mood++;
+            if (row.source_flags & SNAPSHOT_SRC_ENERGY_TAGGED) tagged_energy++;
+        }
+    }
+    const char *state = SN ? "ok"
+                      : SN_state == SNAPSHOT_NO_PARTITION ? "no_partition"
+                      : SN_state == SNAPSHOT_NO_UPDATE ? "no_update"
+                      : "invalid";
+
     w_printf(w, "{\"available\":true,\"state\":\"%s\",\"tracks\":%u,\"directories\":%u,"
-                "\"bytes\":%llu,\"generation\":%u,\"truncated\":%s,\"scan_ms\":%u}",
-             library_state_name(library_state(lib)), (unsigned)library_track_count(lib),
+                "\"bytes\":%llu,\"generation\":%u,\"truncated\":%s,\"scan_ms\":%u",
+             library_state_name(library_state(lib)), tracks,
              (unsigned)library_dir_count(lib), (unsigned long long)library_total_bytes(lib),
              (unsigned)library_generation(lib), library_truncated(lib) ? "true" : "false",
              (unsigned)L_scan_ms);
+    w_printf(w, ",\"snapshot\":{\"state\":\"%s\",\"format_version\":%u",
+             state, (unsigned)SNAPSHOT_VERSION);
+    if (SN) {
+        w_printf(w, ",\"generation\":%u,\"rows\":%u,\"analyser\":%u,\"model_set\":\"%llu\"",
+                 (unsigned)snapshot_generation(SN), (unsigned)snapshot_rows(SN),
+                 (unsigned)snapshot_analyser(SN), (unsigned long long)snapshot_model_set(SN));
+    } else if (SN_reason[0]) {
+        w_puts(w, ",\"reason\":\"");
+        w_escaped(w, SN_reason);
+        w_puts(w, "\"");
+    }
+    w_printf(w, ",\"coverage\":{\"tracks\":%u,\"analysed\":%u,\"percent\":%u},"
+                "\"tagged\":{\"bpm\":%u,\"key\":%u,\"mood\":%u,\"energy\":%u}}}",
+             tracks, analysed, tracks ? (analysed * 100u) / tracks : 0u, tagged_bpm, tagged_key,
+             tagged_mood, tagged_energy);
 }
 
 typedef struct {
@@ -688,49 +823,235 @@ static bool tool_library_list(w_t *w, const library_t *lib, const char *body, co
     return true;
 }
 
-static bool tool_library_search(w_t *w, const library_t *lib, const char *body, const jtok_t *t, int nt, int args)
+/* ------------------------------------------------------- search arguments */
+
+static int jtok_array_item(const jtok_t *t, int nt, int arr, int k)
 {
-    char query[256];
-    if (!arg_string(body, t, nt, args, "query", query, sizeof query, true) || !query[0]) {
-        w_puts(w, "query is required and must fit 255 bytes");
-        return false;
+    if (arr < 0 || arr >= nt || t[arr].type != JT_ARRAY) return -1;
+    int seen = 0;
+    for (int i = arr + 1; i < nt; i++) {
+        if (t[i].parent != arr) continue;
+        if (seen++ == k) return i;
     }
-    int limit = 50;
-    if (!arg_int(body, t, nt, args, "limit", &limit, 50) || limit < 1 || limit > 50) {
-        w_puts(w, "limit must be 1..50");
-        return false;
-    }
-    if (!lib) { w_puts(w, "no library generation"); return false; }
-    w_puts(w, "{\"query\":\"");
-    w_escaped(w, query);
-    w_puts(w, "\",\"tracks\":[");
-    unsigned found = 0;
-    bool truncated = false;
-    bool first = true;
-    for (uint32_t i = 0; i < library_track_count(lib); i++) {
-        lib_node_t n = library_track_at(lib, i);
-        char rel[LIB_PATH_MAX];
-        if (library_relpath(lib, n, rel, sizeof rel) == (size_t)-1) continue;
-        if (!ascii_contains(rel, query)) continue;
-        if (found >= (unsigned)limit) { truncated = true; break; }
-        if (!first) w_put(w, ",");
-        first = false;
-        write_track(w, lib, n);
-        found++;
-    }
-    w_printf(w, "],\"truncated\":%s}", truncated ? "true" : "false");
+    return -1;
+}
+
+/* BPM arrives as a decimal and the filter compares tenths, so "120.5" is 1205. */
+static bool arg_bpm(const char *body, const jtok_t *t, int nt, int args, const char *key,
+                    uint16_t *out)
+{
+    int v = jtok_member(body, t, nt, args, key);
+    if (v < 0) return true;
+    if (t[v].type != JT_PRIMITIVE) return false;
+    size_t n = (size_t)(t[v].end - t[v].start);
+    char buf[24];
+    if (n == 0 || n >= sizeof buf) return false;
+    memcpy(buf, body + t[v].start, n);
+    buf[n] = 0;
+    char *endp = NULL;
+    double d = strtod(buf, &endp);
+    if (!endp || *endp || d < 0 || d > 400) return false;
+    *out = (uint16_t)(d * 10.0 + 0.5);
     return true;
 }
 
-static bool tool_library_track(w_t *w, const library_t *lib, const char *body, const jtok_t *t, int nt, int args)
+/* A string array of keys, each Camelot or a note name. */
+static bool arg_keys(const char *body, const jtok_t *t, int nt, int args, uint16_t *mask)
 {
-    char path[LIB_PATH_MAX];
-    if (!arg_string(body, t, nt, args, "path", path, sizeof path, true) || !path[0]) {
-        w_puts(w, "path is required and must fit the path ceiling");
+    int arr = jtok_member(body, t, nt, args, "key");
+    if (arr < 0) return true;
+    if (t[arr].type != JT_ARRAY) return false;
+    for (int k = 0; k < 24; k++) {
+        int item = jtok_array_item(t, nt, arr, k);
+        if (item < 0) break;
+        if (t[item].type != JT_STRING) return false;
+        char one[24];
+        if (!jtok_unescape(body, &t[item], one, sizeof one)) return false;
+        uint8_t code = snapshot_key_parse(one);
+        if (!code) return false;
+        *mask |= (uint16_t)(1u << (code - 1));
+    }
+    return true;
+}
+
+static bool arg_moods(const char *body, const jtok_t *t, int nt, int args, uint8_t *mask)
+{
+    int arr = jtok_member(body, t, nt, args, "mood");
+    if (arr < 0) return true;
+    if (t[arr].type != JT_ARRAY) return false;
+    for (int k = 0; k < 8; k++) {
+        int item = jtok_array_item(t, nt, arr, k);
+        if (item < 0) break;
+        if (t[item].type != JT_STRING) return false;
+        char one[24];
+        if (!jtok_unescape(body, &t[item], one, sizeof one)) return false;
+        int hit = snapshot_mood_from_name(one);
+        if (hit < 0) return false;
+        *mask |= (uint8_t)(1u << hit);
+    }
+    return true;
+}
+
+/* Percentages are 0xFF for "unset"; an absent key must not write a bound, because 0 is
+ * a legal one. */
+static bool percent_filter(const char *body, const jtok_t *t, int nt, int args,
+                           const char *min_key, const char *max_key, uint8_t *lo, uint8_t *hi)
+{
+    int tok = jtok_member(body, t, nt, args, min_key);
+    if (tok >= 0) {
+        int v = 0;
+        if (!jtok_int(body, &t[tok], &v) || v < 0 || v > 100) return false;
+        *lo = (uint8_t)v;
+    }
+    tok = jtok_member(body, t, nt, args, max_key);
+    if (tok >= 0) {
+        int v = 0;
+        if (!jtok_int(body, &t[tok], &v) || v < 0 || v > 100) return false;
+        *hi = (uint8_t)v;
+    }
+    return true;
+}
+
+/* ------------------------------------------------------------- search tool */
+
+static bool tool_library_search(w_t *w, const library_t *lib, const char *body, const jtok_t *t,
+                                int nt, int args)
+{
+    snapshot_filter_t f;
+    snapshot_filter_defaults(&f);
+    char query[256] = {0};
+    char genre[64] = {0};
+    int limit = 50, offset = 0;
+
+    if (!arg_string(body, t, nt, args, "query", query, sizeof query, false)) {
+        w_puts(w, "query must fit 255 bytes");
         return false;
     }
+    if (!arg_string(body, t, nt, args, "genre", genre, sizeof genre, false)) {
+        w_puts(w, "genre must fit 63 bytes");
+        return false;
+    }
+    if (!arg_int(body, t, nt, args, "limit", &limit, 50) || limit < 1 || limit > 100 ||
+        !arg_int(body, t, nt, args, "offset", &offset, 0) || offset < 0 || offset > 199 ||
+        offset + limit > 200) {
+        w_puts(w, "limit must be 1..100, offset 0..199, and offset+limit at most 200");
+        return false;
+    }
+    if (!arg_bpm(body, t, nt, args, "bpm_min", &f.bpm_min_x10) ||
+        !arg_bpm(body, t, nt, args, "bpm_max", &f.bpm_max_x10)) {
+        w_puts(w, "bpm_min and bpm_max must be numbers");
+        return false;
+    }
+    if (!percent_filter(body, t, nt, args, "energy_min", "energy_max", &f.energy_min,
+                        &f.energy_max) ||
+        !percent_filter(body, t, nt, args, "danceability_min", "danceability_max",
+                        &f.danceability_min, &f.danceability_max) ||
+        !percent_filter(body, t, nt, args, "valence_min", "valence_max", &f.valence_min,
+                        &f.valence_max) ||
+        !percent_filter(body, t, nt, args, "arousal_min", "arousal_max", &f.arousal_min,
+                        &f.arousal_max)) {
+        w_puts(w, "percentage bounds are 0..100");
+        return false;
+    }
+    if (!arg_keys(body, t, nt, args, &f.key_mask) || !arg_moods(body, t, nt, args, &f.mood_mask)) {
+        w_puts(w, "key must be a list of Camelot codes or note names; "
+                  "mood a list of happy, sad, aggressive, relaxed, party");
+        return false;
+    }
+    char sort[16] = {0};
+    if (!arg_string(body, t, nt, args, "sort", sort, sizeof sort, false)) {
+        w_puts(w, "sort is invalid");
+        return false;
+    }
+    if (sort[0] && !snapshot_sort_parse(sort, &f.sort)) {
+        w_puts(w, "sort must be path, title, bpm, energy or danceability");
+        return false;
+    }
+    if (query[0]) f.query = query;
+    if (genre[0]) f.genre = genre;
+
+    bool wants_analysis = f.bpm_min_x10 || f.bpm_max_x10 || f.key_mask || f.mood_mask ||
+                          f.energy_min != SNAPSHOT_UNKNOWN_PCT ||
+                          f.energy_max != SNAPSHOT_UNKNOWN_PCT ||
+                          f.danceability_min != SNAPSHOT_UNKNOWN_PCT ||
+                          f.danceability_max != SNAPSHOT_UNKNOWN_PCT ||
+                          f.valence_min != SNAPSHOT_UNKNOWN_PCT ||
+                          f.valence_max != SNAPSHOT_UNKNOWN_PCT ||
+                          f.arousal_min != SNAPSHOT_UNKNOWN_PCT ||
+                          f.arousal_max != SNAPSHOT_UNKNOWN_PCT || f.genre;
+    if (wants_analysis && !SN) {
+        w_puts(w, "this device has no snapshot: name search works, measurements do not");
+        return false;
+    }
+
     if (!lib) { w_puts(w, "no library generation"); return false; }
-    lib_node_t n = library_find(lib, path);
+
+    snapshot_hits_t *hits = snapshot_hits_new((uint32_t)(offset + limit));
+    if (!hits) { w_puts(w, "out of memory"); return false; }
+
+    unsigned matched = 0;
+    uint32_t total = library_track_count(lib);
+    for (uint32_t i = 0; i < total; i++) {
+        lib_node_t n = library_track_at(lib, i);
+        char rel[LIB_PATH_MAX];
+        if (library_relpath(lib, n, rel, sizeof rel) == (size_t)-1) continue;
+        int64_t key = 0;
+        const char *str = NULL;
+        bool ok;
+        if (SN) {
+            ok = snapshot_matches(SN, &f, rel, (uint32_t)library_size(lib, n), &key, &str);
+        } else {
+            ok = query[0] && ascii_contains(rel, query);
+        }
+        if (!ok) continue;
+        matched++;
+        snapshot_hits_add(hits, i, key, str);
+    }
+
+    w_puts(w, "{\"query\":\"");
+    w_escaped(w, query);
+    w_printf(w, "\",\"matched\":%u,\"tracks\":[", matched);
+    bool first = true;
+    uint32_t count = snapshot_hits_count(hits);
+    for (uint32_t k = (uint32_t)offset; k < count; k++) {
+        if (!first) w_put(w, ",");
+        first = false;
+        write_track(w, lib, library_track_at(lib, snapshot_hits_index(hits, k)));
+    }
+    w_printf(w, "],\"truncated\":%s}", matched > (unsigned)(offset + limit) ? "true" : "false");
+    snapshot_hits_free(hits);
+    return true;
+}
+
+static bool tool_library_track(w_t *w, const library_t *lib, const char *body, const jtok_t *t,
+                               int nt, int args)
+{
+    if (!lib) { w_puts(w, "no library generation"); return false; }
+
+    char path[LIB_PATH_MAX] = {0};
+    if (!arg_string(body, t, nt, args, "path", path, sizeof path, false)) {
+        w_puts(w, "path must fit the path ceiling");
+        return false;
+    }
+    lib_node_t n = LIB_NODE_NONE;
+    if (path[0]) {
+        n = library_find(lib, path);
+    } else {
+        /* The pair a previous result carried: a node id is only meaningful inside the
+         * generation it came from, so both are required. */
+        int id = -1, generation = -1;
+        if (!arg_int(body, t, nt, args, "id", &id, -1) ||
+            !arg_int(body, t, nt, args, "generation", &generation, -1) || id < 0 ||
+            generation < 0) {
+            w_puts(w, "path, or id with generation, is required");
+            return false;
+        }
+        if (generation != (int)library_generation(lib) || (uint32_t)id >= library_node_count(lib)) {
+            w_puts(w, "the generation or id is not current");
+            return false;
+        }
+        n = (lib_node_t)id;
+    }
     if (n == LIB_NODE_NONE || library_kind(lib, n) != LIB_TRACK) {
         w_puts(w, "no such track");
         return false;
@@ -766,13 +1087,33 @@ static const char TOOLS_READONLY[] =
     "\"depth\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":8},"
     "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":200}}},"
     "\"annotations\":{\"readOnlyHint\":true}},"
-    "{\"name\":\"library_search\",\"description\":\"Find tracks whose relative path contains a query, case-insensitively.\","
-    "\"inputSchema\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},"
-    "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50}},\"required\":[\"query\"]},"
+    "{\"name\":\"library_search\",\"description\":\"Find tracks by name and/or musical properties. "
+    "Every filter is optional and they are ANDed. A track with no measurements matches name "
+    "searches only, and never matches a range.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+    "\"query\":{\"type\":\"string\",\"description\":\"case-insensitive substring of the path, title, artist, album or genre\"},"
+    "\"genre\":{\"type\":\"string\"},"
+    "\"bpm_min\":{\"type\":\"number\"},\"bpm_max\":{\"type\":\"number\"},"
+    "\"energy_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"energy_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"danceability_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"danceability_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"valence_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"valence_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"arousal_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"arousal_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"key\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Camelot codes (8A) or note names (Am, A minor, F#m)\"},"
+    "\"mood\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"happy\",\"sad\",\"aggressive\",\"relaxed\",\"party\"]}},"
+    "\"sort\":{\"type\":\"string\",\"enum\":[\"path\",\"title\",\"bpm\",\"energy\",\"danceability\"]},"
+    "\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":199},"
+    "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100}}},"
     "\"annotations\":{\"readOnlyHint\":true}},"
-    "{\"name\":\"library_track\",\"description\":\"Metadata for one track by relative path.\","
-    "\"inputSchema\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},"
-    "\"required\":[\"path\"]},\"annotations\":{\"readOnlyHint\":true}},"
+    "{\"name\":\"library_track\",\"description\":\"One track's metadata and its measurements, "
+    "by relative path or by id with generation.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},"
+    "\"id\":{\"type\":\"integer\",\"minimum\":0},"
+    "\"generation\":{\"type\":\"integer\",\"minimum\":1}}},"
+    "\"annotations\":{\"readOnlyHint\":true}},"
     "{\"name\":\"player_status\",\"description\":\"What the live broadcast is playing.\","
     "\"inputSchema\":{\"type\":\"object\",\"properties\":{}},\"annotations\":{\"readOnlyHint\":true}}"
     "]}";
@@ -788,13 +1129,33 @@ static const char TOOLS_CONTROL[] =
     "\"depth\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":8},"
     "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":200}}},"
     "\"annotations\":{\"readOnlyHint\":true}},"
-    "{\"name\":\"library_search\",\"description\":\"Find tracks whose relative path contains a query, case-insensitively.\","
-    "\"inputSchema\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},"
-    "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50}},\"required\":[\"query\"]},"
+    "{\"name\":\"library_search\",\"description\":\"Find tracks by name and/or musical properties. "
+    "Every filter is optional and they are ANDed. A track with no measurements matches name "
+    "searches only, and never matches a range.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+    "\"query\":{\"type\":\"string\",\"description\":\"case-insensitive substring of the path, title, artist, album or genre\"},"
+    "\"genre\":{\"type\":\"string\"},"
+    "\"bpm_min\":{\"type\":\"number\"},\"bpm_max\":{\"type\":\"number\"},"
+    "\"energy_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"energy_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"danceability_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"danceability_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"valence_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"valence_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"arousal_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"arousal_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
+    "\"key\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Camelot codes (8A) or note names (Am, A minor, F#m)\"},"
+    "\"mood\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"happy\",\"sad\",\"aggressive\",\"relaxed\",\"party\"]}},"
+    "\"sort\":{\"type\":\"string\",\"enum\":[\"path\",\"title\",\"bpm\",\"energy\",\"danceability\"]},"
+    "\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":199},"
+    "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100}}},"
     "\"annotations\":{\"readOnlyHint\":true}},"
-    "{\"name\":\"library_track\",\"description\":\"Metadata for one track by relative path.\","
-    "\"inputSchema\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},"
-    "\"required\":[\"path\"]},\"annotations\":{\"readOnlyHint\":true}},"
+    "{\"name\":\"library_track\",\"description\":\"One track's metadata and its measurements, "
+    "by relative path or by id with generation.\","
+    "\"inputSchema\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},"
+    "\"id\":{\"type\":\"integer\",\"minimum\":0},"
+    "\"generation\":{\"type\":\"integer\",\"minimum\":1}}},"
+    "\"annotations\":{\"readOnlyHint\":true}},"
     "{\"name\":\"player_status\",\"description\":\"What the live broadcast is playing.\","
     "\"inputSchema\":{\"type\":\"object\",\"properties\":{}},\"annotations\":{\"readOnlyHint\":true}},"
     "{\"name\":\"player_play\",\"description\":\"Play a Track now, by relative path or by id and generation.\","
@@ -1201,6 +1562,9 @@ esp_err_t mcp_start(const mcp_cfg_t *cfg)
     L_local_ip = cfg->local_ip;
     L_rescan = cfg->rescan;
     L_port = cfg->port ? cfg->port : 8000;
+    SN = cfg->snapshot;
+    SN_state = cfg->snapshot_state;
+    SN_reason = cfg->snapshot_reason ? cfg->snapshot_reason : "";
     esp_err_t err = http_server_register_route_method_ex("/mcp", "POST", post_route, NULL,
                                                           mcp_body_error);
     if (err == ESP_OK) err = http_server_register_route("/mcp", get_route, NULL);

@@ -9,6 +9,14 @@ continuous live MP3 stream plus an index that lists the library.
 > T13 are therefore **withdrawn**, and the route and its code are removed. The reasoning behind
 > ADR 0001 is kept as history. Everything else in this specification stands.
 
+> **Amended 2026-11-01 by the Snapshot (ADR 0047).** The premise now permits exactly one card
+> write: deleting the **Update file** a **Snapshot** arrived in, after the device has flashed
+> and verified it. A Snapshot held in a flash partition annotates the Library; it never lists
+> it. `library_search` gains optional filters and returns the measurements beside each track,
+> `library_stats` gains a **Coverage** block, and a result's relative path is already what
+> `player_play` takes, so the AI can act on what it finds. §6.6's tool names and its error
+> table are unchanged.
+
 **Relationship to `docs/research/server/s12-mp3-only-plan.md`.** That plan is the research
 input. This document is the buildable specification derived from it, and it **supersedes**
 the plan in three places where measurement contradicted it — see §11. Everything in the

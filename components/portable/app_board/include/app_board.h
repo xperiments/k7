@@ -53,6 +53,24 @@ bool app_board_local_ip(char *out, size_t out_size);
  * the host adapter is a no-op. */
 esp_err_t app_board_mdns_start(const char *hostname, uint16_t port, const char *path);
 
+/* The Snapshot image this board can offer, and why not when it cannot: the mapped
+ * `snapshot` partition on the device, a file named by XTAPE_SNAPSHOT on the host.
+ * The pointer stays valid for the life of the process; the caller validates it. */
+const uint8_t *app_board_snapshot_image(size_t *size, const char **why,
+                                        int *state); /* state: snapshot_result_t */
+
+typedef enum {
+    APP_BOARD_UPDATE_NONE = 0, /* no card, or no update file: nothing to do */
+    APP_BOARD_UPDATE_APPLIED,  /* flashed, verified, and the file deleted */
+    APP_BOARD_UPDATE_FAILED,   /* there was an update and it was not applied */
+} app_board_update_t;
+
+/* Apply CARD/xtape.db to the snapshot partition and delete it, before anything that
+ * needs PSRAM is running (a flash write disables the cache, and on this board the
+ * app's code lives in PSRAM). Mounts the card if it can, and leaves it as it found
+ * it. A failure never reboots and never removes the file. */
+app_board_update_t app_board_snapshot_update(void);
+
 #ifdef __cplusplus
 }
 #endif

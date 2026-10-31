@@ -16,10 +16,12 @@
 #include "appliance.h"
 
 #include <string.h>
+#include <sys/stat.h>
 
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_random.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
@@ -53,6 +55,15 @@ static void card_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(CARD_RETRY_MS));
         app_board_card_t card = app_board_card_mount(MUSIC_DIR);
         if (card.music_dir) {
+            /* A card that arrives after boot may carry a Snapshot update. Applying one
+             * means a flash write, which needs the window before the panel and the
+             * broadcast exist, so the device reboots once and applies it there rather
+             * than freezing a running appliance (snapshot.md U5). */
+            struct stat st;
+            if (stat("/sdcard/xtape.db", &st) == 0) {
+                ESP_LOGI(TAG, "an update file arrived with the card; rebooting to apply it");
+                esp_restart();
+            }
             mini_files_set_card(card.music_dir, NULL);
             app_services_card_state(true, NULL);
             for (;;) {
@@ -166,6 +177,15 @@ void appliance_run(void)
         ESP_LOGW(TAG, "the screen's HTTP diagnostics did not register: %s; the screen still runs",
                  esp_err_to_name(http_err));
 #endif
+
+    /* The Snapshot update runs first, before the screen and before the services. A
+     * flash write disables the cache and this build keeps its code and rodata in
+     * PSRAM, so there is no later moment where the write is invisible: the panel's
+     * DMA simply cannot fetch while it happens (ADR 0047). A failure here costs the
+     * measurements, never the appliance. */
+    app_board_update_t update = app_board_snapshot_update();
+    if (update == APP_BOARD_UPDATE_FAILED)
+        ESP_LOGE(TAG, "the snapshot update was not applied; the device serves without it");
 
     /* The screen comes first, before the services, for one reason: the panel's
      * framebuffers are uninitialised PSRAM and the backlight used to be lit over them, so

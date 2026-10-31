@@ -42,6 +42,7 @@ rate and encoded to MP3 for the stream.
 - [The card](#the-card)
 - [Hardware: pins, button, PSRAM](#hardware-pins-button-psram)
 - [Using it](#using-it)
+- [Measured music: the Snapshot](#measured-music-the-snapshot)
 - [Host build and tests (no board needed)](#host-build-and-tests-no-board-needed)
 - [Two-tier acceptance: host and board](#two-tier-acceptance-host-and-board)
 - [Architecture](#architecture)
@@ -1092,6 +1093,40 @@ name containing them cannot be sent verbatim.
 The group and song labels on the screen are not that title: they are the Track's own
 ID3/FLAC text tags, read by the display's loader for the peek and shown nowhere else. A
 listener's ICY client still sees the filename; the card is not re-read for the stream.
+
+## Measured music: the Snapshot
+
+The card carries one optional file the firmware never writes: `xtape.db` at the card's root, a
+**Snapshot** of what a host measured for the Library. Put the card in a computer, let the
+analysis app measure the tracks, drop the file at the root, and put the card back. At boot the
+device flashes the file into its 2 MB `snapshot` partition, verifies it, deletes it, and answers
+`library_search` from the mapped bytes:
+
+```jsonc
+// tools/call library_search
+{"bpm_min": 120, "bpm_max": 130, "key": ["8A", "9A"], "energy_min": 70, "sort": "danceability"}
+```
+
+Each result carries its measurements beside the track, `null` where nothing was measured:
+
+```jsonc
+{"path": "Alpha/One/tone.flac", "analysis": {"bpm": 128.0, "key": "8A", "energy": 80,
+ "danceability": 60, "valence": 50, "arousal": 80, "mood": ["happy", "party"],
+ "title": "Alpha Tone", "artist": "The Alphas", "album": "One", "genre": "electronic",
+ "tagged": ["bpm", "key"], "confidence": 70}}
+```
+
+`library_stats` reports the **Coverage**: how many tracks the Snapshot describes, out of how
+many the card holds. A track with no row is unanalysed, never hidden — it still lists, plays and
+matches a name search, and it never matches a range. Nothing about the Snapshot is resident:
+queries read the mapped partition, and a boot with no update file touches the card once.
+
+The byte format is [`docs/specs/snapshot-format.md`](docs/specs/snapshot-format.md), the
+subsystem and its failure modes are [`docs/specs/snapshot.md`](docs/specs/snapshot.md), and the
+decision behind both is [ADR 0047](docs/adr/0047-the-snapshot-lives-in-flash-and-is-never-resident.md).
+The host tier is tested end to end (`make -C host check` runs a real server against a generated
+image); the flash window and the update path are **board-tier pending** — no board has run
+them yet.
 
 ## The internal-RAM picture
 

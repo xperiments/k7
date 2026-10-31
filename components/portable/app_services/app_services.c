@@ -25,6 +25,7 @@
 #include "mi_station.h"
 #include "mini_files.h"
 #include "mini_icecast.h"
+#include "snapshot.h"
 
 static const char *TAG = "app";
 
@@ -34,6 +35,9 @@ static app_services_cfg_t s_cfg;
 static atomic_bool s_rescan_running;
 static pthread_mutex_t s_card_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool s_card_present;
+static snapshot_t *s_snapshot;
+static snapshot_result_t s_snapshot_state = SNAPSHOT_NO_PARTITION;
+static char s_snapshot_reason[96];
 static char s_card_error[160];
 
 static esp_err_t fail(app_services_report_t *r, esp_err_t err, const char *what)
@@ -214,6 +218,37 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         ESP_LOGE(TAG, "the device will still serve on the network; the index will say why");
     }
 
+    /* 3b. The Snapshot: the measurements, from the flash partition the board maps.
+     * Independent of the card: a cardless device still answers questions about the
+     * measurements, and a card full of new tracks still plays without them. This
+     * runs before the Library because it is the cheapest thing in the boot and the
+     * only one that can fail without changing what the device plays. */
+    {
+        size_t snap_size = 0;
+        const char *why = "";
+        int board_state = SNAPSHOT_NO_PARTITION;
+        const uint8_t *img = app_board_snapshot_image(&snap_size, &why, &board_state);
+        if (!img) {
+            s_snapshot_state = (snapshot_result_t)board_state;
+            snprintf(s_snapshot_reason, sizeof s_snapshot_reason, "%s", why ? why : "");
+        } else {
+            char open_why[96] = {0};
+            s_snapshot_state = snapshot_open_why(img, snap_size, &s_snapshot, open_why,
+                                                 sizeof open_why);
+            if (s_snapshot_state == SNAPSHOT_OK) {
+                ESP_LOGI(TAG, "snapshot: %u rows, generation %u, analyser %u",
+                         (unsigned)snapshot_rows(s_snapshot),
+                         (unsigned)snapshot_generation(s_snapshot),
+                         (unsigned)snapshot_analyser(s_snapshot));
+            } else {
+                snprintf(s_snapshot_reason, sizeof s_snapshot_reason, "%s",
+                         open_why[0] ? open_why : "the image is unusable");
+                ESP_LOGE(TAG, "snapshot: %s; queries answer without measurements",
+                         s_snapshot_reason);
+            }
+        }
+    }
+
     /* 4. The library. Built after the mount (the card state is known) and before
      * the file surface and the broadcast, so both start with a generation. A
      * missing card or a missing Music directory is a state, not a failure. */
@@ -295,6 +330,9 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         .local_ip = app_board_local_ip,
         .rescan = app_services_rescan,
         .port = cfg->port,
+        .snapshot = s_snapshot,
+        .snapshot_state = s_snapshot_state,
+        .snapshot_reason = s_snapshot_reason,
     };
     e = mcp_start(&mcp);
     if (e != ESP_OK) return fail(report, e, "MCP endpoint");

@@ -46,3 +46,53 @@ esp_err_t app_board_mdns_start(const char *hostname, uint16_t port, const char *
 }
 
 void app_board_log_hardware(void) { }
+
+/* The host has no partition, so the Snapshot is a file: XTAPE_SNAPSHOT names it and
+ * the integration test points it at a generated image. Absent is the normal host
+ * state, not an error. */
+const uint8_t *app_board_snapshot_image(size_t *size, const char **why, int *state)
+{
+    static uint8_t *image;
+    static size_t   image_size;
+    static bool     tried;
+
+    if (state) *state = 1; /* SNAPSHOT_NO_PARTITION */
+    if (tried) {
+        if (size) *size = image_size;
+        if (why && !image) *why = "no snapshot partition on the host";
+        return image;
+    }
+    tried = true;
+    if (why) *why = "no snapshot partition on the host";
+
+    const char *path = getenv("XTAPE_SNAPSHOT");
+    if (!path || !path[0]) return NULL;
+    /* From here on a failure is a bad image, not an absent one. */
+    if (state) *state = 3; /* SNAPSHOT_INVALID */
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        if (why) *why = "XTAPE_SNAPSHOT could not be opened";
+        return NULL;
+    }
+    long n = -1;
+    if (fseek(f, 0, SEEK_END) == 0) n = ftell(f);
+    if (n < 0 || fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        if (why) *why = "XTAPE_SNAPSHOT is not a readable file";
+        return NULL;
+    }
+    image = malloc((size_t)n);
+    if (!image || fread(image, 1, (size_t)n, f) != (size_t)n) {
+        free(image);
+        image = NULL;
+        fclose(f);
+        if (why) *why = "XTAPE_SNAPSHOT could not be read";
+        return NULL;
+    }
+    fclose(f);
+    image_size = (size_t)n;
+    if (size) *size = image_size;
+    if (why) *why = "";
+    if (state) *state = 0; /* SNAPSHOT_OK */
+    return image;
+}

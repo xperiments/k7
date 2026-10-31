@@ -22,11 +22,16 @@ refused at review, not queued behind other work.
   station format.
 - **No Track upload.** No `PUT`, no multipart body, no body that becomes a Track, no
   upload-and-scan. The POST bodies that exist (`/api/play`, `/api/rescan`, `/mcp`) are
-  commands: bounded, parsed, then discarded. There is no write path to the card at all.
+  commands: bounded, parsed, then discarded.
 - **The card is prepared outside.** Adding, removing, renaming or retagging music is a host
   operation — the card in a reader, or a host tool. The device's only SD access is the
-  read-only access the broadcast itself needs: mount the card, scan it to build the Library,
-  read a Track to encode it, read artwork for the display.
+  read-only access the broadcast and the Library need: mount the card, scan it to build the
+  Library, read a Track to encode it, read artwork for the display, read the **Update file**.
+  That is all of it but for the one delete below.
+- **The one delete.** After a **Snapshot** has been flashed and verified, the device deletes
+  the **Update file** it consumed and writes nothing else to the card: never a Track, never a
+  directory, never a repair. This is the smallest write that lets the card say what to do next
+  without the device keeping that state; it is recorded in ADR 0047.
 
 **What the premise does not forbid**, because the distinction is the point:
 
@@ -44,7 +49,8 @@ Read literally, "all SD processing outside" would forbid the broadcast itself. I
 mean that. **SD processing** in the premise means operating on the card's content on someone
 else's behalf: adding, removing, renaming, rewriting, or shipping a Track out. Reading a Track
 to put it on air is the appliance's own job, and it is what the Library scan and the decoder
-do. Nothing else may read the card, and nothing may write it.
+do. Nothing else may read the card, and nothing may write it except the one **Update file**
+delete.
 
 ## Language
 
@@ -52,7 +58,8 @@ do. Nothing else may read the card, and nothing may write it.
 
 **Music directory**:
 The root directory on the mounted card. Its contents, recursively, define the library; the
-directory is not itself the library. There is no database.
+directory is not itself the library. The library is discovered, never stored: a **Snapshot**
+annotates its tracks, it does not list them.
 _Avoid_: library root, media path
 
 **Library tree**:
@@ -78,6 +85,36 @@ _Avoid_: input codec, file type
 A track as stored, unmodified. What the broadcast reads and re-encodes; never what it sends,
 because nothing hands the stored bytes out.
 _Avoid_: raw file, raw audio
+
+### The snapshot
+
+**Snapshot**:
+What a host measured for a Library, delivered as one file and held in a flash partition. It
+annotates tracks that the Library already knows; it never lists them, and its absence changes
+nothing about what plays. The format and its reasoning are ADR 0047.
+_Avoid_: database, cache, index, library
+
+**Update file**:
+The one file at the card's root, `xtape.db`, that carries a Snapshot into the device. The
+device consumes it once — flash, verify, delete — and a card without one means "nothing to
+update", not "no Snapshot".
+_Avoid_: upload, seed, image
+
+**Track fingerprint**:
+The hash of a Track's relative path, paired with its size in bytes. It is the only identity the
+Snapshot and the Library share, so it is also what an unanalysed track still has.
+_Avoid_: track id (that is the Library's node), hash
+
+**Coverage**:
+How much of the Library a Snapshot describes: the tracks with a row, and the analyser and
+models that produced them. Every answer a query gives is bounded by it, which is why
+`library_stats` reports it.
+_Avoid_: completeness, stats
+
+**Measured value**, **Tagged value**:
+A value the analyser computed from the audio, or one it trusted from the Track's own tags
+instead (ADR 0009). A Snapshot row says which it holds, and never presents one as the other.
+_Avoid_: detected (ambiguous between the two), corrected
 
 ### The broadcast
 
