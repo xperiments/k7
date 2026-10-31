@@ -17,17 +17,23 @@ export interface SnapshotDirectory {
   }>;
 }
 
-export type DirectoryPicker = () => Promise<SnapshotDirectory>;
+export type DirectoryPicker = (options?: {
+  mode?: 'read' | 'readwrite';
+  id?: string;
+}) => Promise<SnapshotDirectory>;
 
 export type PickResult =
   | { kind: 'picked'; directory: SnapshotDirectory }
   | { kind: 'cancelled' }
   | { kind: 'unsupported' };
 
-/** The browser's picker, or undefined where there is none. */
+/** The browser's picker, or undefined where there is none. The returned function asks
+ * for read-write: a card the page cannot write back to is a card the snapshot has to be
+ * dragged onto by hand. */
 export function cardPicker(): DirectoryPicker | undefined {
   const picker = (globalThis as { showDirectoryPicker?: DirectoryPicker }).showDirectoryPicker;
-  return typeof picker === 'function' ? picker : undefined;
+  if (typeof picker !== 'function') return undefined;
+  return (options) => picker({ mode: 'readwrite', id: 'xtape-card', ...options });
 }
 
 /** Ask for the card's root. Cancelling is the user's answer, not an error. */

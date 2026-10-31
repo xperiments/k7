@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scanDataTransfer } from '../src/ui/files';
+import { scanDataTransfer, scanDirectoryHandle } from '../src/ui/files';
 
 interface FakeEntry {
   name: string;
@@ -106,5 +106,51 @@ describe('folder scanning', () => {
     const result = await scanDataTransfer(drop([], [plain]));
 
     expect(result.files).toEqual([{ file: plain, path: 'loose.mp3' }]);
+  });
+});
+
+describe('a folder chosen read-write', () => {
+  const file = (name: string) => ({
+    kind: 'file' as const,
+    name,
+    async getFile() {
+      return new File(['x'], name);
+    },
+  });
+  const dir = (name: string, children: unknown[]) => ({
+    kind: 'directory' as const,
+    name,
+    async *values() {
+      for (const child of children) yield child;
+    },
+  });
+
+  it('walks the tree and keeps the picked folder as the first path segment', async () => {
+    const root = dir('SDCARD', [
+      dir('music', [dir('Artist', [file('a.mp3')])]),
+      file('boot.txt'),
+      dir('.Trashes', [file('hidden.mp3')]),
+    ]);
+    /* Every file is offered, as a drop offers them; the page decides what is audio. */
+    const { files, skipped } = await scanDirectoryHandle(root as never);
+    expect(files.map((found) => found.path)).toEqual([
+      'SDCARD/boot.txt',
+      'SDCARD/music/Artist/a.mp3',
+    ]);
+    expect(skipped).toBe(0);
+  });
+
+  it('counts a file it cannot read and keeps walking', async () => {
+    const broken = {
+      kind: 'file' as const,
+      name: 'bad.mp3',
+      async getFile(): Promise<File> {
+        throw new Error('unreadable');
+      },
+    };
+    const root = dir('SDCARD', [dir('music', [broken, file('good.mp3')])]);
+    const { files, skipped } = await scanDirectoryHandle(root as never);
+    expect(files.map((found) => found.path)).toEqual(['SDCARD/music/good.mp3']);
+    expect(skipped).toBe(1);
   });
 });

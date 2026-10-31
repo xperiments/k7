@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cardPicker,
   pickCardDirectory,
   writeSnapshotToCard,
   type SnapshotDirectory,
@@ -50,5 +51,26 @@ describe('writing to the card', () => {
     expect(record.names).toEqual(['xtape.db']);
     expect(record.writes).toEqual([bytes]);
     expect(record.closed).toBe(true);
+  });
+});
+
+describe('the picker', () => {
+  it('asks for read-write, so the card can be written back', async () => {
+    const calls: Array<{ mode?: string; id?: string }> = [];
+    (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker = async (options: {
+      mode?: string;
+      id?: string;
+    }) => {
+      calls.push(options);
+      return {};
+    };
+    try {
+      const picker = cardPicker();
+      expect(picker).toBeDefined();
+      await picker!();
+      expect(calls[0]).toMatchObject({ mode: 'readwrite', id: 'xtape-card' });
+    } finally {
+      delete (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker;
+    }
   });
 });

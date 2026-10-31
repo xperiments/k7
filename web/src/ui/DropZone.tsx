@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { filesFromInput, scanDataTransfer, type FoundFile } from './files';
+import {
+  filesFromInput,
+  scanDataTransfer,
+  scanDirectoryHandle,
+  type CardDirectoryHandle,
+  type FoundFile,
+} from './files';
+import { cardPicker, pickCardDirectory, type SnapshotDirectory } from './cardWriter';
 
 interface DropZoneProps {
   disabled: boolean;
   onFiles: (found: FoundFile[], skipped: number) => void;
+  /** A folder the browser let us open read-write: the card, ready to be written back. */
+  onCard: (found: FoundFile[], skipped: number, handle: SnapshotDirectory) => void;
 }
 
-export function DropZone({ disabled, onFiles }: DropZoneProps) {
+export function DropZone({ disabled, onFiles, onCard }: DropZoneProps) {
   const filesInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
@@ -22,6 +31,37 @@ export function DropZone({ disabled, onFiles }: DropZoneProps) {
 
   const choose = () => {
     if (!inactive) filesInput.current?.click();
+  };
+
+  /* The card is chosen, not dropped. A dropped folder is read-only for good, so the
+   * only way to write the snapshot back where it came from is to ask for the root with
+   * write permission - and to keep the handle, which is the card for the rest of the
+   * session. */
+  const chooseCard = async () => {
+    if (inactive) return;
+    setError(null);
+    let picked;
+    try {
+      picked = await pickCardDirectory(cardPicker());
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+      return;
+    }
+    if (picked.kind === 'unsupported') {
+      setError('This browser cannot open a folder for writing; drop it and use Download .db.');
+      return;
+    }
+    if (picked.kind === 'cancelled') return;
+
+    setScanning(true);
+    try {
+      const result = await scanDirectoryHandle(picked.directory as unknown as CardDirectoryHandle);
+      onCard(result.files, result.skipped, picked.directory);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setScanning(false);
+    }
   };
 
   const scan = async (data: DataTransfer) => {
@@ -91,9 +131,28 @@ export function DropZone({ disabled, onFiles }: DropZoneProps) {
         </>
       ) : (
         <>
-          <p className="drop-title">Drop MP3, FLAC, or a folder</p>
-          <p className="muted small">nothing leaves this machine</p>
+          <p className="drop-title">
+            {cardPicker() ? 'Choose the SD card' : 'Drop MP3, FLAC, or a folder'}
+          </p>
+          <p className="muted small">
+            {cardPicker()
+              ? 'it opens read-write, so the snapshot can be written back to it'
+              : 'nothing leaves this machine'}
+          </p>
           <div className="drop-actions">
+            {cardPicker() && (
+              <button
+                type="button"
+                className="primary"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void chooseCard();
+                }}
+                disabled={inactive}
+              >
+                Choose card
+              </button>
+            )}
             <button
               type="button"
               className="ghost"

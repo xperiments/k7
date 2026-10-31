@@ -18,7 +18,12 @@ import type { FoundFile } from './files';
 import { plural, shortHash } from './format';
 import { QueueList } from './QueueList';
 import { buildSnapshotExport } from './snapshotExport';
-import { cardPicker, pickCardDirectory, writeSnapshotToCard } from './cardWriter';
+import {
+  cardPicker,
+  pickCardDirectory,
+  writeSnapshotToCard,
+  type SnapshotDirectory,
+} from './cardWriter';
 import type { QueueItem } from './queue';
 
 export function App() {
@@ -27,6 +32,9 @@ export function App() {
   const [manifest, setManifest] = useState<ModelManifest | null>(null);
   const modelSet = manifest?.modelSet ?? null;
   const [savingSnapshot, setSavingSnapshot] = useState(false);
+  /* The card the user opened read-write, when they opened one: the snapshot goes back
+   * there without asking again. A dropped folder leaves this null. */
+  const [cardHandle, setCardHandle] = useState<SnapshotDirectory | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [client] = useState(() => new AnalysisClient());
@@ -120,6 +128,14 @@ export function App() {
     started.current = true;
     void processItem(next);
   }, [items, busy, modelSet, processItem]);
+
+  /* The card arrived through the picker, so it is writable: remember the handle, and take
+   * the files the same way a drop delivers them. */
+  const addCard = (found: FoundFile[], skipped: number, handle: SnapshotDirectory) => {
+    setCardHandle(handle);
+    addFound(found, skipped);
+    setNotice(null);
+  };
 
   const addFound = (found: FoundFile[], skipped: number) => {
     const accepted: QueueItem[] = [];
@@ -260,26 +276,34 @@ export function App() {
    * first, then the image is built, then it is written. */
   const saveToCard = useCallback(async () => {
     if (savingSnapshot) return;
-    let picked: Awaited<ReturnType<typeof pickCardDirectory>>;
-    try {
-      picked = await pickCardDirectory(cardPicker());
-    } catch (error) {
-      setNotice(
-        `Could not open the card: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return;
+
+    /* Opened at intake, so there is nothing to ask. A dropped folder never got one, and
+     * only then does the page reach for the picker. */
+    let target = cardHandle;
+    if (!target) {
+      let picked: Awaited<ReturnType<typeof pickCardDirectory>>;
+      try {
+        picked = await pickCardDirectory(cardPicker());
+      } catch (error) {
+        setNotice(
+          `Could not open the card: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return;
+      }
+      if (picked.kind === 'unsupported') {
+        setNotice('This browser cannot write to a folder; download the file and move it instead.');
+        return;
+      }
+      if (picked.kind === 'cancelled') return;
+      target = picked.directory;
+      setCardHandle(target);
     }
-    if (picked.kind === 'unsupported') {
-      setNotice('This browser cannot write to a folder; download the file and move it instead.');
-      return;
-    }
-    if (picked.kind === 'cancelled') return;
 
     setSavingSnapshot(true);
     try {
       const result = await buildImage();
       if (!result) return;
-      await writeSnapshotToCard(picked.directory, result.bytes);
+      await writeSnapshotToCard(target, result.bytes);
       setNotice(
         `Wrote xtape.db for ${plural(result.tracks, 'track')} to the card.` +
           leftovers(result.skipped) +
@@ -292,7 +316,7 @@ export function App() {
     } finally {
       setSavingSnapshot(false);
     }
-  }, [buildImage, savingSnapshot]);
+  }, [buildImage, cardHandle, savingSnapshot]);
 
   const saveSnapshotFile = useCallback(async () => {
     if (savingSnapshot) return;
@@ -374,7 +398,7 @@ export function App() {
         </div>
       )}
 
-      <DropZone disabled={!modelSet} onFiles={addFound} />
+      <DropZone disabled={!modelSet} onFiles={addFound} onCard={addCard} />
 
       <div className="toolbar">
         <span className="muted small">
@@ -384,13 +408,13 @@ export function App() {
           <button type="button" className="ghost" onClick={exportJson} disabled={done === 0}>
             Download JSON
           </button>
-          {cardPicker() && (
+          {(cardHandle || cardPicker()) && (
             <button
               type="button"
               className="primary"
               onClick={() => void saveToCard()}
               disabled={!canSave || savingSnapshot}
-              title="Choose the card's root and write xtape.db there. A dropped folder is read-only, so the browser asks once."
+              title="Write xtape.db at the card's root. A card opened at intake is written without asking; a dropped one is read-only, so the browser asks once."
             >
               {savingSnapshot ? 'Writing…' : 'Save to card'}
             </button>

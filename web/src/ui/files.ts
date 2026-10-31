@@ -116,3 +116,58 @@ export function filesFromInput(files: FileList): FoundFile[] {
     .map((file) => ({ file, path: file.webkitRelativePath || file.name }))
     .filter((found) => !ignoredPath(found.path));
 }
+
+/** The slice of the File System Access handles this page walks. Structural, so both a
+ * real FileSystemDirectoryHandle and a test's stand-in fit. */
+export interface CardFileHandle {
+  kind: 'file';
+  name: string;
+  getFile(): Promise<File>;
+}
+
+export interface CardDirectoryHandle {
+  kind: 'directory';
+  name: string;
+  values(): AsyncIterable<CardFileHandle | CardDirectoryHandle>;
+}
+
+/**
+ * Walks a directory the user *picked*, rather than one they dropped.
+ *
+ * The difference is permission: a picked handle can be opened read-write, so the page
+ * can write the snapshot back to the card it just read. Paths carry the picked
+ * directory's own name as their first segment, exactly as `webkitRelativePath` does,
+ * so the snapshot's path rule is the same whichever way the card arrived.
+ */
+export async function scanDirectoryHandle(root: CardDirectoryHandle): Promise<ScanResult> {
+  const files: FoundFile[] = [];
+  const skipped = { count: 0 };
+
+  const walk = async (dir: CardDirectoryHandle, base: string): Promise<void> => {
+    const children: Array<CardFileHandle | CardDirectoryHandle> = [];
+    try {
+      for await (const child of dir.values()) children.push(child);
+    } catch {
+      skipped.count++;
+      return;
+    }
+    children.sort((left, right) => left.name.localeCompare(right.name));
+
+    for (const child of children) {
+      if (ignored(child.name)) continue;
+      const path = `${base}${child.name}`;
+      if (child.kind === 'file') {
+        try {
+          files.push({ file: await child.getFile(), path });
+        } catch {
+          skipped.count++;
+        }
+      } else {
+        await walk(child, `${path}/`);
+      }
+    }
+  };
+
+  await walk(root, `${root.name}/`);
+  return { files, skipped: skipped.count };
+}
