@@ -110,6 +110,65 @@ static void rescan_task(void *arg)
     vTaskDelete(NULL);
 }
 
+/* The snapshot arrives over the network instead of on the card: the browser analysed the
+ * card where the card is - in the computer - and the measurements are a few kilobytes.
+ *
+ * The content type is the guard, and it is not incidental: `application/octet-stream` is
+ * not a CORS-safelisted type, so a page on another origin cannot send it without a
+ * preflight this device never answers. A form post cannot forge one either. That is the
+ * whole CSRF story, and it is cheaper than a token the user would have to type. */
+static http_result_t snapshot_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)ctx;
+    if (strcmp(req->path, "/api/snapshot") != 0) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
+    if (strcmp(req->content_type, "application/octet-stream") != 0) {
+        http_send_error(fd, 415, "the snapshot must be application/octet-stream");
+        return HTTP_HANDLED;
+    }
+
+    /* The image is validated here, before the seam is asked to write it: the host's
+     * partition is a file and the device's is flash, and neither should be the place where
+     * "is this a snapshot" is answered. Opening it is the validation. */
+    char why[128] = {0};
+    snapshot_t *snap = NULL;
+    snapshot_result_t valid = snapshot_open_why(req->body, req->body_len, &snap, why, sizeof why);
+    if (snap) snapshot_close(snap);
+    app_board_flash_t r = valid == SNAPSHOT_OK
+                              ? app_board_snapshot_flash(req->body, req->body_len, why, sizeof why)
+                              : APP_BOARD_FLASH_INVALID;
+    int status;
+    char body[256];
+    switch (r) {
+    case APP_BOARD_FLASH_OK:
+        status = 200;
+        snprintf(body, sizeof body, "{\"applied\":true,\"bytes\":%u}", (unsigned)req->body_len);
+        break;
+    case APP_BOARD_FLASH_INVALID:
+        status = 400;
+        snprintf(body, sizeof body, "{\"applied\":false,\"error\":\"%s\"}", why);
+        break;
+    case APP_BOARD_FLASH_NO_PARTITION:
+        status = 503;
+        snprintf(body, sizeof body, "{\"applied\":false,\"error\":\"%s\"}", why);
+        break;
+    default:
+        status = 500;
+        snprintf(body, sizeof body, "{\"applied\":false,\"error\":\"%s\"}", why);
+        break;
+    }
+    size_t len = strlen(body);
+    http_send_headers(fd, status, "application/json", len, "Cache-Control: no-store\r\n");
+    http_send_all(fd, body, len);
+
+    /* The reader holds a mapping of the old image, and the write that just happened ran
+     * with the PSRAM cache off. A restart is the cheap, certain way to serve the new one. */
+    if (r == APP_BOARD_FLASH_OK) app_board_reboot_soon(1500);
+    return HTTP_HANDLED;
+}
+
 static http_result_t rescan_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
@@ -407,6 +466,11 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
 
     e = http_server_register_route_method("/api/rescan", "POST", rescan_route, NULL);
     if (e != ESP_OK) return fail(report, e, "rescan endpoint");
+
+    e = http_server_register_route_method("/api/snapshot", "POST", snapshot_route, NULL);
+    if (e != ESP_OK) return fail(report, e, "snapshot endpoint");
+    e = http_server_route_body_limit("/api/snapshot", "POST", HTTP_UPLOAD_MAX);
+    if (e != ESP_OK) return fail(report, e, "snapshot upload limit");
 
     /* 8. The listener, last: every route is registered by now. */
     http_server_cfg_t http = {

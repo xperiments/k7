@@ -38,7 +38,7 @@
 
 #define MUSIC_DIR    "/sdcard/music"
 #define STATION_NAME "ESP32 Radio"
-#define HTTP_PORT    8000
+#define HTTP_PORT    80
 
 /* A card that will not mount is the most likely fault this hardware has, so a
  * failed mount is not fatal: the device stays on the network and retries. */
@@ -212,7 +212,7 @@ void appliance_run(void)
 
     /* Discovery is advertised only after the listener is up and Wi-Fi has an
      * address: a record for a dead endpoint is worse than no record. */
-    esp_err_t mdns_err = app_board_mdns_start("xtape", 443, "/mcp");
+    esp_err_t mdns_err = app_board_mdns_start("xtape", HTTP_PORT, "/mcp");
     if (mdns_err != ESP_OK)
         ESP_LOGE(TAG, "mDNS did not start: %s; the device still serves", esp_err_to_name(mdns_err));
 

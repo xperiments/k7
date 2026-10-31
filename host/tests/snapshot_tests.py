@@ -12,12 +12,12 @@ import json
 import os
 import shutil
 import socket
-import struct
 import subprocess
 import sys
 import tempfile
 import time
-import zlib
+
+from snapshot_image import build_image, fnv1a64
 
 SERVER = sys.argv[1]
 FIXTURES = sys.argv[2]
@@ -35,45 +35,6 @@ def check(label, got, want):
         FAIL += 1
     else:
         print(f"  ok    {label}")
-
-
-def fnv1a64(text):
-    h = 0xCBF29CE484222325
-    for byte in text.encode("utf-8"):
-        h ^= byte
-        h = (h * 0x00000100000001B3) & 0xFFFFFFFFFFFFFFFF
-    return h
-
-
-def build_image(rows, generation=1767225600, analyser=300, schema=1, model_set=0x1234):
-    """rows: list of dicts with path, size, bpm_x10, key, energy, dance, valence,
-    arousal, mood, conf, src, title, artist, album, genre."""
-    rows = sorted(rows, key=lambda r: fnv1a64(r["path"]))
-    pool = bytearray()
-    encoded = []
-    for r in rows:
-        offset = len(pool)
-        for field in ("title", "artist", "album", "genre"):
-            pool += r.get(field, "").encode("utf-8") + b"\0"
-        encoded.append((r, offset))
-
-    body = bytearray()
-    for r, offset in encoded:
-        body += struct.pack(
-            "<QIIHBBBBBBBB6s",
-            fnv1a64(r["path"]), r["size"], offset, r["bpm_x10"], r["key"],
-            r["energy"], r["dance"], r["valence"], r["arousal"], r["mood"],
-            r["conf"], r["src"], b"\0" * 6,
-        )
-    body += pool
-    total = 64 + len(body)
-    header = struct.pack(
-        "<8sHHIIIQIIIIQQ",
-        MAGIC, 1, 64, total, len(rows), 32, generation, len(pool),
-        zlib.crc32(bytes(body)) & 0xFFFFFFFF, analyser, schema, model_set, 0,
-    )
-    assert len(header) == 64, len(header)
-    return header + bytes(body)
 
 
 def free_port():

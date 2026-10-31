@@ -78,6 +78,24 @@ typedef enum {
     APP_BOARD_UPDATE_FAILED,   /* there was an update and it was not applied */
 } app_board_update_t;
 
+typedef enum {
+    APP_BOARD_FLASH_OK = 0,      /* validated, written, read back */
+    APP_BOARD_FLASH_INVALID,     /* the image is not a snapshot; nothing was written */
+    APP_BOARD_FLASH_NO_PARTITION, /* no snapshot partition in this build */
+    APP_BOARD_FLASH_FAILED,      /* the partition refused a write */
+} app_board_flash_t;
+
+/* Write an image that arrived over HTTP into the snapshot partition. The image is
+ * validated in full - header, rows, checksum - before the first erase, so a refusal leaves
+ * the running snapshot intact. The caller reboots afterwards: the reader holds a mapping,
+ * and on this board a flash write disables the PSRAM the app is running from. */
+app_board_flash_t app_board_snapshot_flash(const uint8_t *image, size_t len, char *why,
+                                           size_t why_size);
+
+/* Restart the board after `ms`, so a reply can be written first. A no-op on the host,
+ * where "restart" is the test's next process. */
+void app_board_reboot_soon(uint32_t ms);
+
 /* Apply CARD/xtape.db to the snapshot partition and delete it, before anything that
  * needs PSRAM is running (a flash write disables the cache, and on this board the
  * app's code lives in PSRAM). Mounts the card if it can, and leaves it as it found

@@ -1420,7 +1420,7 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
         ESP_LOGE(TAG, "no memory for the broadcast task");
         return ESP_ERR_NO_MEM;
     }
-    ESP_LOGI(TAG, "GET /stream is ready on the plain listener (port 80); the app is on 443");
+    ESP_LOGI(TAG, "GET /stream is ready on port 80, beside the app");
     return ESP_OK;
 }
 

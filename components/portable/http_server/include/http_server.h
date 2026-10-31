@@ -41,6 +41,10 @@ extern "C" {
 
 #define HTTP_PATH_MAX 512 /* raw (percent-encoded) request target */
 #define HTTP_BODY_MAX 8192 /* a POST body larger than this is 413 */
+/* The largest body a route may opt into with http_server_route_body_limit. A snapshot
+ * image is ~12 KB for a few hundred tracks and ~400 KB for several thousand; this is the
+ * ceiling, and the buffer lives in PSRAM. */
+#define HTTP_UPLOAD_MAX (256u * 1024u)
 #define HTTP_QUERY_MAX 256 /* raw (percent-encoded) query string, without the ? */
 #define HTTP_HEADER_MAX 1024
 #define HTTP_MAX_ROUTES 16 /* the appliance's fourteen, plus the screen's two diagnostics */
@@ -88,7 +92,7 @@ typedef enum {
 typedef http_result_t (*http_route_fn)(int fd, const http_request_t *req, void *ctx);
 
 typedef struct {
-    uint16_t    port;        /* default 8000; the IDF backend ignores it and uses 443/80 */
+    uint16_t    port;        /* default 8000; the device passes 80 */
     const char *server_name; /* "Server:" header value; default "sd-stream/1.0" */
     uint8_t     max_conns;   /* concurrent request tasks, 1..HTTP_MAX_CONNS, default 4 */
     /* Which listener this instance is. False (the default, and the host build)
@@ -97,8 +101,8 @@ typedef struct {
      * nothing else. */
     bool            filter_by_listener;
     http_listener_t listener;
-    /* Answer a path this listener has no route for with 301 to HTTPS (front door
-     * R2: plain port 80 redirects everything that is not the stream). */
+    /* Answer a path this listener has no route for with a redirect to HTTPS. Off in this
+     * build - there is no TLS - and kept for a device that serves one again. */
     bool        redirect_to_tls;
     const char *tls_host; /* the name to redirect to when the request has no Host */
     uint16_t    tls_port; /* 0 = 443; only named in Location when it is not 443 */
@@ -114,6 +118,11 @@ esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void 
  * A path match with the wrong method is a 405, not a 404. */
 esp_err_t http_server_register_route_method(const char *prefix, const char *method,
                                             http_route_fn fn, void *ctx);
+/* Allow this route to take a body of up to `max` bytes of any content type. Call after
+ * registering it: the snapshot upload is the only route that needs it, and the rest keep
+ * the JSON rule that keeps the parsers simple. */
+esp_err_t http_server_route_body_limit(const char *prefix, const char *method, uint32_t max);
+
 /* A route that wants to render its own transport errors (MCP does). */
 typedef void (*http_error_fn)(int fd, int status, const char *detail, void *ctx);
 esp_err_t http_server_register_route_method_ex(const char *prefix, const char *method,

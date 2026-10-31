@@ -238,19 +238,39 @@ int http_post_rules(const http_request_t *req, const char *route_method, const c
 {
     const char *m = route_method && route_method[0] ? route_method : "GET";
     if (strcasecmp(m, "POST") != 0) return 0;
+
+    /* A route that named a limit is speaking bytes, not JSON: it checks its own type. */
+    http_route_find_t how;
+    const http_route_t *route = http_find_route(false, HTTP_LISTENER_PLAIN, req->path, m, &how);
+    uint32_t limit = route && route->body_max ? route->body_max : HTTP_BODY_MAX;
+    bool json = !(route && route->body_max);
+
     if (!req->has_content_length) {
         *detail = "Content-Length is required";
         return 411;
     }
-    if (req->content_length > HTTP_BODY_MAX) {
+    if (req->content_length > limit) {
         *detail = "the request body is too large";
         return 413;
     }
-    if (strcmp(req->content_type, "application/json") != 0) {
+    if (json && strcmp(req->content_type, "application/json") != 0) {
         *detail = "the request body must be application/json";
         return 415;
     }
     return 0;
+}
+
+esp_err_t http_server_route_body_limit(const char *prefix, const char *method, uint32_t max)
+{
+    if (!prefix || !method || !max || max > HTTP_UPLOAD_MAX) return ESP_ERR_INVALID_ARG;
+    for (int i = 0; i < S.nroutes; i++) {
+        if (strcmp(S.routes[i].prefix, prefix) == 0 &&
+            strcasecmp(S.routes[i].method ? S.routes[i].method : "GET", method) == 0) {
+            S.routes[i].body_max = max;
+            return ESP_OK;
+        }
+    }
+    return ESP_ERR_NOT_FOUND;
 }
 
 void http_route_error(int fd, const http_route_t *route, int status, const char *detail)

@@ -45,6 +45,10 @@ typedef struct {
     /* Which listener carries this route. TLS - the app - is the default, so a
      * route that does not say is the app's. /stream names the plain one. */
     http_listener_t listener;
+    /* Bytes of request body this route will take, and whether it wants JSON. Zero is
+     * the ordinary POST: JSON, and no more than HTTP_BODY_MAX. The snapshot upload sets
+     * it, because a flash image is neither JSON nor small. */
+    uint32_t        body_max;
 } http_route_t;
 
 /* Why a lookup found no route. */

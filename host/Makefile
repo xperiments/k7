@@ -311,6 +311,8 @@ integration: $(SERVER)
 	@$(PYTHON) $(HERE)/tests/snapshot_tests.py $(SERVER) $(HERE)/fixtures
 	@echo "--- the front door"
 	@$(PYTHON) $(HERE)/tests/front_door_tests.py $(SERVER) $(HERE)/fixtures
+	@echo "--- the snapshot upload"
+	@$(PYTHON) $(HERE)/tests/upload_tests.py $(SERVER) $(HERE)/fixtures
 
 layering:
 	@ROOT=$(ROOT) sh $(HERE)/tests/layering.sh

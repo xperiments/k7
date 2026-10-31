@@ -56,6 +56,44 @@ bool app_board_card_present(void) { return getenv("XTAPE_HOST_NO_CARD") == NULL;
 void app_board_card_forget(void) { }
 bool app_board_snapshot_pending(void) { return false; }
 
+/* The host's partition is the file XTAPE_SNAPSHOT names. Written whole or not at all:
+ * a half-written image would be the one thing worse than none. */
+app_board_flash_t app_board_snapshot_flash(const uint8_t *image, size_t len, char *why,
+                                           size_t why_size)
+{
+    if (why && why_size) why[0] = 0;
+    const char *path = getenv("XTAPE_SNAPSHOT");
+    if (!path || !path[0]) {
+        if (why) snprintf(why, why_size, "no snapshot partition on the host");
+        return APP_BOARD_FLASH_NO_PARTITION;
+    }
+    if (!image || !len) {
+        if (why) snprintf(why, why_size, "the upload is empty");
+        return APP_BOARD_FLASH_INVALID;
+    }
+
+    char tmp[512];
+    snprintf(tmp, sizeof tmp, "%s.tmp", path);
+    FILE *f = fopen(tmp, "wb");
+    if (!f) {
+        if (why) snprintf(why, why_size, "cannot write %s", tmp);
+        return APP_BOARD_FLASH_FAILED;
+    }
+    bool ok = fwrite(image, 1, len, f) == len;
+    ok = fclose(f) == 0 && ok;
+    if (!ok || rename(tmp, path) != 0) {
+        remove(tmp);
+        if (why) snprintf(why, why_size, "cannot replace %s", path);
+        return APP_BOARD_FLASH_FAILED;
+    }
+    return APP_BOARD_FLASH_OK;
+}
+
+void app_board_reboot_soon(uint32_t ms)
+{
+    (void)ms; /* the test starts the next process itself */
+}
+
 const uint8_t *app_board_snapshot_image(size_t *size, const char **why, int *state)
 {
     static uint8_t *image;

@@ -21,6 +21,7 @@
 #include "esp_partition.h"
 #include "esp_psram.h"
 #include "esp_spiffs.h"
+#include "esp_timer.h"
 #include "esp_vfs_fat.h"
 #include "esp_wifi.h"
 #include "mdns.h"
@@ -92,7 +93,7 @@ static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *e = data;
         snprintf(s_local_ip, sizeof s_local_ip, IPSTR, IP2STR(&e->ip_info.ip));
-        ESP_LOGI(TAG, "stream: http://" IPSTR "/stream  app: https://" IPSTR "/",
+        ESP_LOGI(TAG, "app: http://" IPSTR "/  stream: http://" IPSTR "/stream",
                  IP2STR(&e->ip_info.ip), IP2STR(&e->ip_info.ip));
         xEventGroupSetBits(wifi_ev, 1);
     }
@@ -377,6 +378,64 @@ static bool flash_read_cb(void *ctx, uint32_t off, uint8_t *data, uint32_t n)
 {
     flash_tgt_t *t = (flash_tgt_t *)ctx;
     return esp_partition_read(t->part, off, data, n) == ESP_OK;
+}
+
+/* --- an image pushed over HTTP ------------------------------------------ */
+
+typedef struct {
+    const uint8_t *data;
+    size_t         len;
+} mem_src_t;
+
+static uint32_t mem_size_cb(void *ctx) { return (uint32_t)((mem_src_t *)ctx)->len; }
+
+static bool mem_read_cb(void *ctx, uint32_t off, uint8_t *out, uint32_t n)
+{
+    mem_src_t *s = (mem_src_t *)ctx;
+    if (off > s->len || n > s->len - off) return false;
+    memcpy(out, s->data + off, n);
+    return true;
+}
+
+app_board_flash_t app_board_snapshot_flash(const uint8_t *image, size_t len, char *why,
+                                           size_t why_size)
+{
+    if (why && why_size) why[0] = 0;
+    if (!image || !len) {
+        if (why) snprintf(why, why_size, "the upload is empty");
+        return APP_BOARD_FLASH_INVALID;
+    }
+    const esp_partition_t *part =
+        esp_partition_find_first(ESP_PARTITION_TYPE_DATA, SNAPSHOT_UPDATE_PART, NULL);
+    if (!part) {
+        if (why) snprintf(why, why_size, "no snapshot partition in this build");
+        return APP_BOARD_FLASH_NO_PARTITION;
+    }
+    if (len > part->size) {
+        if (why) snprintf(why, why_size, "the upload is larger than the partition");
+        return APP_BOARD_FLASH_INVALID;
+    }
+
+    mem_src_t   msrc = {image, len};
+    flash_tgt_t ftgt = {part};
+    snapshot_source_t src = {&msrc, mem_size_cb, mem_read_cb};
+    snapshot_target_t tgt = {&ftgt, part->size, flash_erase_cb, flash_write_cb, flash_read_cb};
+    snapshot_result_t r = snapshot_apply(&src, &tgt, why, why_size);
+    if (r == SNAPSHOT_OK) {
+        ESP_LOGI(TAG, "snapshot: %u bytes written over HTTP, verified", (unsigned)len);
+        return APP_BOARD_FLASH_OK;
+    }
+    ESP_LOGW(TAG, "snapshot: the upload was refused (%s)", why && why[0] ? why : "no reason");
+    return r == SNAPSHOT_NO_MEM ? APP_BOARD_FLASH_FAILED : APP_BOARD_FLASH_INVALID;
+}
+
+static void reboot_cb(void *arg) { (void)arg; esp_restart(); }
+
+void app_board_reboot_soon(uint32_t ms)
+{
+    esp_timer_handle_t t = NULL;
+    const esp_timer_create_args_t args = {.callback = reboot_cb, .name = "xtape-restart"};
+    if (esp_timer_create(&args, &t) == ESP_OK) esp_timer_start_once(t, (uint64_t)ms * 1000u);
 }
 
 app_board_update_t app_board_snapshot_update(void)
