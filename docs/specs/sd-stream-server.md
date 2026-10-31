@@ -16,6 +16,12 @@ continuous live MP3 stream plus an index that lists the library.
 > `library_stats` gains a **Coverage** block, and a result's relative path is already what
 > `player_play` takes, so the AI can act on what it finds. §6.6's tool names and its error
 > table are unchanged.
+>
+> **Amended 2026-11-01 by the front door (ADR 0048).** `/` is no longer the Index. The device
+> serves the Track analysis app there, from its own flash partition, and the Index moves,
+> unchanged, to `/library`. The HTTP surface splits into two listeners: TLS on 443 for the app,
+> `/api/*` and `/mcp`; plain HTTP on 80 for `/stream`, with every other path on 80 redirecting
+> to HTTPS. The routes below keep their paths and change their listener. Not yet built.
 
 **Relationship to `docs/research/server/s12-mp3-only-plan.md`.** That plan is the research
 input. This document is the buildable specification derived from it, and it **supersedes**

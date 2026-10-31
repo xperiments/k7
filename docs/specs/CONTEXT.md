@@ -484,8 +484,8 @@ the server does not track listeners as identities.
 _Avoid_: listener, subscriber, user
 
 **Index**:
-The listing of the Library in Playlist order, and the device's diagnostic surface when the
-card is missing. It names Tracks and their sizes; it does not hand them out.
+The listing of the Library in Playlist order, at `/library`, and the device's diagnostic
+surface when the card is missing or the page cannot run. It names Tracks and their sizes; it does not hand them out.
 _Avoid_: directory listing, browse page, file browser
 
 **Track transfer**:
@@ -498,6 +498,38 @@ _Avoid_: download, upload, file transfer, share, NAS
 The access posture of this device: no authentication anywhere, reachable by anyone who can
 reach the port. A deliberate property of a LAN-only appliance, not a gap to be filled.
 _Avoid_: unauthenticated, public, insecure
+
+### The front door
+
+**Front door**:
+The page the device serves at `https://xtape.local`: the analysis app, with the **Player view**
+when a card is in the player and the **Prepare view** when it is not. It is the network's way in,
+as the **Cassette screen** is the panel's.
+_Avoid_: web UI, dashboard, admin page
+
+**Card state**:
+Whether the device has a card mounted right now. It is a fact the front door reports, never an
+instruction: a change of it offers the other view, it does not take one away.
+_Avoid_: card flag, insertion status
+
+**Player view**:
+The front door with a card in the player: what the broadcast is doing. TBD.
+_Avoid_: main screen, player mode
+
+**Prepare view**:
+The front door with no card in the player: the analysis app that measures a card and writes its
+**Snapshot** back. This is the view an analyser runs in.
+_Avoid_: analyser mode, setup screen
+
+**Shell**:
+The front door's own code - page, bundle, service worker, manifest - served by the device from
+its flash partition. It is what `web/` builds that belongs on the device.
+_Avoid_: app, frontend (alone)
+
+**Weights**:
+Everything the analysis needs that is too large to ship: the models and the runtimes. Fetched
+from a pinned release, verified by hash, and cached by the **Shell**'s service worker.
+_Avoid_: models, assets, blobs
 
 ### Build and licensing
 

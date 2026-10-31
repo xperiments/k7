@@ -18,7 +18,9 @@ refused, not scheduled.
   happens outside the device. Specified in
   [`docs/specs/sd-stream-server.md`](./docs/specs/sd-stream-server.md); its measurements are
   specified in [`docs/specs/snapshot.md`](./docs/specs/snapshot.md) and byte-defined in
-  [`docs/specs/snapshot-format.md`](./docs/specs/snapshot-format.md).
+  [`docs/specs/snapshot-format.md`](./docs/specs/snapshot-format.md). It also serves the Track
+  analysis app as its **Front door**, specified in
+  [`docs/specs/front-door.md`](./docs/specs/front-door.md).
 - [Radio player](./docs/research/01-library-architecture.md) — an ESP32-S3 that consumes
   someone else's internet radio stream and plays it out to a DAC over I2S. Researched in
   [`docs/research/`](./docs/research/); no `CONTEXT.md` yet, because work has not resumed
