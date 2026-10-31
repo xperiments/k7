@@ -33,3 +33,9 @@ sdkconfig.backlight-test
 .scratch/
 sdkconfig.verify
 sdkconfig.headless
+
+# The CA that signs the shipped leaf stays offline: the leaf key is public by design
+# (it is compiled into every firmware), the CA key is not.
+tls/ca.key
+tls/ca.srl
+tls/*.csr
