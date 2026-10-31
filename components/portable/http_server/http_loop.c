@@ -109,6 +109,18 @@ static void host_without_port(const char *host, char *out, size_t out_size)
  * rule here and not two. */
 static void send_https_redirect(int fd, const http_request_t *req)
 {
+    /* The entry point explains itself before it redirects. A first visit to the plain
+     * address is someone who has not trusted the certificate yet, so it lands on the page
+     * that says how; a deep link still goes straight to HTTPS, because a bookmarked
+     * /library comes from someone who already did. */
+    if (strcmp(req->path, "/") == 0) {
+        static const char see_other[] = "HTTP/1.0 303 See Other\r\nLocation: /setup\r\n"
+                                        "Content-Length: 0\r\nConnection: close\r\n\r\n";
+        ESP_LOGI(TAG, "GET / -> 303 /setup (trust the certificate first)");
+        http_send_all(fd, see_other, sizeof see_other - 1);
+        return;
+    }
+
     char host[128];
     host_without_port(req->host[0] ? req->host : (L.cfg.tls_host ? L.cfg.tls_host : ""),
                       host, sizeof host);

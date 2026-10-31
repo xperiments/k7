@@ -24,7 +24,7 @@ estimate of §1.
 
 | Piece | Bytes | Lives |
 |---|---:|---|
-| `index.html`, app bundle, worker, `wasi-adapter`, `ort.mjs`, `sw.js`, manifest, icons, `shell.json`, `weights.lock.json` | **816 KiB** | 1 MB SPIFFS partition at `0x610000` |
+| `index.html`, app bundle, worker, `wasi-adapter`, `ort.mjs`, `sw.js`, manifest, icons, `shell.json`, `weights.lock.json`, `setup.html`, `ca.pem` | **816 KiB** | 1 MB SPIFFS partition at `0x610000` |
 | Essentia (`essentia-wasm.es.js`, 2.56 MB) | 2.6 MB | jsDelivr, pinned tag, sha256-checked |
 | TagLib's one browser wasm | 0.7 MB | jsDelivr |
 | ONNX Runtime wasm | 14 MB | jsDelivr |
@@ -183,7 +183,7 @@ re-flashes the firmware — the same thing every other change does.
 | T2 | `/` serves the app, `/library` serves the index, unknown paths 404 | host | **proven** — `host/tests/front_door_tests.py`, 27 checks |
 | T3 | The SPIFFS image holds `index.html`, `sw.js` and the hashed assets, and `sw.js` is served `no-cache` | board | **proven by hand** (three files curled off the board); not automated |
 | T4 | A client that trusts the certificate loads the page over HTTPS and reports a secure context | board | **not proven**: `curl --cacert` proves the handshake and the page, but no browser has trusted the certificate, so the secure context itself is unproven |
-| T5 | `/stream` is reachable on plain 80 while the app is on 443, and 80 redirects everything else | board | **proven by hand** (`/stream` 200, `/library` 301 to https); not automated |
+| T5 | `/stream` is reachable on plain 80 while the app is on 443; `/` goes to the trust page and other paths redirect to HTTPS | board | **proven by hand** (`/stream` 200, `/` 303 → `/setup`, `/library` 301 to https, `/ca.pem` 200 `application/x-pem-file`); not automated |
 | T6 | `/api/status` reports the card state within one poll of a removal and a reinsertion | board | **not proven** — the card has not been through a removal/reinsertion cycle since the front door landed |
 | T7 | A cold cache loads the weights once; a warm cache starts the analyser with the network off | browser | **not proven in CI**: the web agent's manual Chrome smoke tests passed, nothing automated |
 | T8 | A tampered model is refused, by hash | host | **proven at the hash level** (`verifySha256` has accept/reject tests); no test yet that the loader refuses a bad body |

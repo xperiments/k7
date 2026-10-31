@@ -39,6 +39,7 @@ static const char *content_type_for(const char *path)
     if (strcmp(ext, "json") == 0 || strcmp(ext, "webmanifest") == 0)
         return "application/json; charset=utf-8";
     if (strcmp(ext, "wasm") == 0) return "application/wasm";
+    if (strcmp(ext, "pem") == 0) return "application/x-pem-file";
     if (strcmp(ext, "svg") == 0) return "image/svg+xml";
     if (strcmp(ext, "png") == 0) return "image/png";
     if (strcmp(ext, "ico") == 0) return "image/x-icon";
@@ -179,6 +180,55 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
     return HTTP_HANDLED;
 }
 
+/* The plain listener's page: how to trust the certificate, and the certificate itself. It
+ * has to work before anything is trusted, so it is served over HTTP from the Shell's own
+ * files - and a device with no Shell keeps the 301 to the app it cannot explain. */
+static http_result_t trust_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)ctx;
+    if (!F.shell_root || !F.shell_root[0]) {
+        http_send_error(fd, 404, "this firmware carries no page");
+        return HTTP_HANDLED;
+    }
+    if (strcmp(req->path, "/ca.pem") == 0) {
+        char file[520];
+        if (!shell_file_for("/ca.pem", file, sizeof file)) {
+            http_send_error(fd, 404, "no such path");
+            return HTTP_HANDLED;
+        }
+        FILE *f = fopen(file, "rb");
+        if (!f) {
+            http_send_error(fd, 404, "no such path");
+            return HTTP_HANDLED;
+        }
+        long size = -1;
+        if (fseek(f, 0, SEEK_END) == 0) size = ftell(f);
+        if (size < 0 || fseek(f, 0, SEEK_SET) != 0) {
+            fclose(f);
+            http_send_error(fd, 500, "cannot read the certificate");
+            return HTTP_HANDLED;
+        }
+        esp_err_t e = http_send_headers(fd, 200, "application/x-pem-file", (size_t)size,
+                                        "Content-Disposition: attachment; filename=\"ca.pem\"\r\n"
+                                        "Cache-Control: no-cache\r\n");
+        if (e == ESP_OK) {
+            char chunk[1024];
+            size_t got;
+            while ((got = fread(chunk, 1, sizeof chunk, f)) > 0) {
+                if (!http_send_all(fd, chunk, got)) break;
+            }
+        }
+        fclose(f);
+        return HTTP_HANDLED;
+    }
+    char page[520];
+    if (!shell_file_for("/setup.html", page, sizeof page)) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
+    return serve_file(fd, "/setup", page, 404);
+}
+
 static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
@@ -219,12 +269,16 @@ esp_err_t front_door_start(const front_door_cfg_t *cfg)
     if (!cfg) return ESP_ERR_INVALID_ARG;
     F = *cfg;
 
-    /* Both on the TLS listener. "/" is a catch-all, so it is the one route that
-     * must never be registered on the plain listener: port 80 answers /stream and
-     * redirects every other path to HTTPS, and a page catch-all there would
-     * swallow the redirect (front door R1, R2). */
-    esp_err_t e = http_server_register_route_on(HTTP_LISTENER_TLS, "/api/status", status_route,
+    /* The plain listener explains itself before it redirects: the certificate and how to
+     * trust it, for whoever has not done that yet. Those two paths only. "/" stays off the
+     * plain listener - a catch-all there would swallow the redirect (front door R1, R2). */
+    esp_err_t e = http_server_register_route_on(HTTP_LISTENER_PLAIN, "/ca.pem", trust_route,
                                                 NULL);
+    if (e != ESP_OK) return e;
+    e = http_server_register_route_on(HTTP_LISTENER_PLAIN, "/setup", trust_route, NULL);
+    if (e != ESP_OK) return e;
+
+    e = http_server_register_route_on(HTTP_LISTENER_TLS, "/api/status", status_route, NULL);
     if (e != ESP_OK) return e;
     e = http_server_register_route_on(HTTP_LISTENER_TLS, "/", page_route, NULL);
     if (e != ESP_OK) return e;

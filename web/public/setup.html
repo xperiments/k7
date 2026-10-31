@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>xtape — trust this player</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; background: #141414; color: #ececec;
+             font: 16px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; }
+      main { max-width: 720px; margin: 0 auto; padding: 40px 24px 64px; }
+      h1 { font-size: 28px; margin: 0 0 4px; }
+      h2 { font-size: 18px; margin: 32px 0 8px; }
+      p, li { color: #c9c9c9; }
+      a { color: #f0a03c; }
+      .lede { color: #9a9a9a; margin: 0 0 28px; }
+      .button { display: inline-block; margin: 8px 8px 8px 0; padding: 12px 18px;
+                border: 1px solid #f0a03c; border-radius: 999px; color: #f0a03c;
+                text-decoration: none; font-weight: 600; }
+      .button.solid { background: #f0a03c; color: #141414; }
+      code { background: #222; border-radius: 4px; padding: 1px 5px; font-size: 14px; }
+      ol { padding-left: 22px; }
+      .note { border-left: 2px solid #333; padding-left: 14px; color: #9a9a9a; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Trust this player once</h1>
+      <p class="lede">
+        xtape serves its app over HTTPS with a certificate of its own. Installing it takes a
+        minute and no account: after this the browser treats the player as a secure site, and
+        the app can open your card and keep its measurements offline.
+      </p>
+
+      <a class="button solid" href="/ca.pem" download>Download the certificate</a>
+      <a class="button" href="https://xtape.local/">I have already trusted it — open the app</a>
+
+      <h2>macOS</h2>
+      <ol>
+        <li>Open the downloaded <code>ca.pem</code>; Keychain Access asks which keychain — choose <em>System</em> or <em>login</em>.</li>
+        <li>Find <strong>xtape local CA</strong>, double-click it and open <em>Trust</em>.</li>
+        <li>Set <em>When using this certificate</em> to <strong>Always Trust</strong> and close the window.</li>
+        <li>Quit and reopen the browser, then open <a href="https://xtape.local/">https://xtape.local</a>.</li>
+      </ol>
+
+      <h2>Windows</h2>
+      <ol>
+        <li>Double-click the downloaded <code>ca.pem</code> and choose <em>Install Certificate</em>.</li>
+        <li><em>Local Machine</em>, then <em>Place all certificates in the following store</em>.</li>
+        <li>Choose <strong>Trusted Root Certification Authorities</strong> and finish.</li>
+        <li>Restart the browser, then open <a href="https://xtape.local/">https://xtape.local</a>.</li>
+      </ol>
+
+      <h2>Linux</h2>
+      <p>
+        In Chrome or Chromium:
+        <code>certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "xtape local CA" -i ca.pem</code>
+        then restart the browser. On Firefox, import <code>ca.pem</code> under
+        Settings → Privacy &amp; Security → Certificates → Authorities.
+      </p>
+
+      <h2>Phones and tablets</h2>
+      <p class="note">
+        iOS and Android each have their own way to install a certificate profile; the player
+        works, but the analysis app is meant for a computer. The stream needs none of this.
+      </p>
+
+      <h2>The stream needs no certificate</h2>
+      <p>
+        A radio or a car head unit can listen at
+        <a href="http://xtape.local/stream">http://xtape.local/stream</a> — plain HTTP, no
+        trust step, no app.
+      </p>
+    </main>
+  </body>
+</html>
