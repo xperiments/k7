@@ -188,7 +188,7 @@ components/
     mini_icecast.c/.h
   library/                boot-built tree, arena, JSON, Playlist and lookup  (new)
   library_http/           GET /api/library[.bin] from the prebuilt views    (new)
-  mini_files/             GET / index: a listing, not a file browser       (new)
+  mini_files/             GET /library index: a listing, not a file browser (new)
   shine/                  vendored, unmodified, separate licence             (new)
 ```
 

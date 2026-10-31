@@ -26,7 +26,9 @@ The decision, its evidence and its rejected alternatives are
 
 **F1.** `web/dist` is packed by `spiffs_create_partition_image` into the `frontdoor` partition,
 so `idf.py flash` writes the firmware and the page together. The build logs the app commit it
-packed.
+packed. A build that packs the page fails when `web/dist` is missing — an empty Shell is not a
+configuration, it is a mistake. A build that does **not** pack one is allowed while the
+partition is unimplemented: `/` then answers `503` naming `/library` (§6).
 
 **F2.** The **Shell** is our code and nothing else. The worker is built with Essentia
 external: it loads the module from the CDN, not from the bundle.
@@ -41,7 +43,8 @@ every cold load, not only the first.
 ## 2. Origins and routes
 
 **R1.** `https://xtape.local` (port 443) serves the app at `/`, the JSON API at `/api/*`, MCP at
-`/mcp`, and the index at `/library`.
+`/mcp`, and the index at `/library`. Unknown paths are `404`: the page is one screen with no
+client-side routes, so there is nothing for a fallback to serve.
 
 **R2.** `http://xtape.local` (port 80) serves `/stream`, plain and unchanging, and answers every
 other path with `301` to the same path on HTTPS. No TLS on 80, ever: hardware players and car
@@ -77,8 +80,10 @@ switched off and says the card is unreachable.
 **P2.** The Weights are cache-first, in a cache whose name carries the app version and the
 manifest hash. A model swapped at the same URL is a cache miss, not a stale hit.
 
-**P3.** `index.html` and `sw.js` are served `no-cache`; hashed `assets/*` are `immutable`.
-`/api/*` is never cached.
+**P3.** `index.html` and `sw.js` are served `no-cache`; hashed `assets/*` are
+`public, max-age=31536000, immutable`; anything else is revalidated. One `Cache-Control` per
+response — `http_send_headers` defaults to `no-cache` and a route's own header replaces it, never
+joins it. `/api/*` is `no-store`.
 
 **P4.** The page is installable: a manifest with the product's name and icons, served from the
 same partition.
@@ -90,8 +95,9 @@ than replacing the page under a running analysis.
 
 ## 4. The two views
 
-**S1.** `GET /api/status` returns the **Card state**, the library's track count, and what the
-broadcast is playing. The page polls it every 5 s. It is `no-store`.
+**S1.** `GET /api/status` returns the **Card state**, the library's track count and generation,
+and what the broadcast is playing (title, path, elapsed and duration). The page polls it every
+5 s. It is `no-store`, and it answers only on its own path: `/api/statuses` is a 404.
 
 **S2.** Card in → **Player view**. Card out → **Prepare view**. The view is chosen by the Card
 state at load.
@@ -118,6 +124,9 @@ names what is playing.
 
 | Condition | Behaviour |
 |---|---|
+| The firmware was built without a Shell | `/` answers `503` naming `/library`; every other route is unchanged |
+| The Shell directory exists but has no `index.html` | `/` answers `503` — a page that was packed and is not there is a device fault, not a typo |
+| An unregistered `/api/…` path | `404`, never the page |
 | The certificate is missing or unreadable | The TLS listener refuses to start; the device still serves the stream on 80 and logs why |
 | The client has not trusted the shipped certificate | The browser warns; the page cannot run (no secure context) — the one trust step is documented as the prerequisite |
 | CDN unreachable, cache cold | The Prepare view says the analyser cannot start without a first download that needs internet |

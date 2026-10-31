@@ -883,7 +883,7 @@ components/
     tone_eq/                the stream's three-band DJ EQ and trim, before the encoder
     library/                the immutable tree, arena, JSON, Playlist and lookup
     library_http/           GET /api/library[.bin] from the prebuilt views
-    mini_files/             GET / index: a listing, not a file browser
+    mini_files/             GET /library index: a listing, not a file browser
     cassette/               what the screen shows: reel phases, pack fills, tape ink, title
     artwork/                a Track's picture and text tags: ID3 APIC/TPE1/TIT2, FLAC
                             PICTURE/Vorbis, the cover fit

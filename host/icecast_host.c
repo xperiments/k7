@@ -91,9 +91,9 @@ int main(int argc, char **argv)
         .library_max_bytes = library_max_bytes,
         .library_max_tracks = library_max_tracks,
         .server_name = "mini_icecast/host",
-        /* The page's directory. The integration suite points this at a fixture tree; a
-         * checkout that has built the app gets web/dist by default. */
-        .web_root = getenv("XTAPE_WEB"),
+        /* The Shell's directory. Unset by default, so a bare host run has no page and
+         * `/` says so; the front-door test points it at a fixture tree. */
+        .shell_root = getenv("XTAPE_SHELL"),
     };
     app_services_report_t report;
     esp_err_t err = app_services_start(&cfg, &report);

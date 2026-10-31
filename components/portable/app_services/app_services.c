@@ -140,9 +140,8 @@ bool app_services_card_present(void) { return s_card_present; }
 
 /* The front door asks the question through a callback so it need not depend on this
  * module - the composition depends on both, and the arrow stays one-way. */
-static bool front_door_card_present(void *ctx)
+static bool front_door_card_present(void)
 {
-    (void)ctx;
     return s_card_present;
 }
 
@@ -364,9 +363,8 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     /* 5b. The page at `/`, and the card state it hangs from. A firmware with no page
      * still registers the route: `/` says so, and `/library` keeps working. */
     front_door_cfg_t door = {
-        .root = cfg->web_root,
+        .shell_root = cfg->shell_root,
         .card_present = front_door_card_present,
-        .ctx = NULL,
     };
     e = front_door_start(&door);
     if (e != ESP_OK) return fail(report, e, "front door");

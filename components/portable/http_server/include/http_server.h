@@ -34,7 +34,7 @@ extern "C" {
 #define HTTP_BODY_MAX 8192 /* a POST body larger than this is 413 */
 #define HTTP_QUERY_MAX 256 /* raw (percent-encoded) query string, without the ? */
 #define HTTP_HEADER_MAX 1024
-#define HTTP_MAX_ROUTES 12 /* the appliance's ten, plus the screen's two diagnostics */
+#define HTTP_MAX_ROUTES 16 /* the appliance's fourteen, plus the screen's two diagnostics */
 #define HTTP_LISTEN_BACKLOG 16
 #define HTTP_MAX_CONNS 6
 
@@ -95,7 +95,9 @@ esp_err_t http_server_start(const http_server_cfg_t *cfg);
 
 /* Write a status line and headers. `body_len` of (size_t)-1 omits
  * Content-Length, meaning "the body ends when this connection closes".
- * `extra_headers` may be NULL; it must end with CRLF if given. */
+ * `extra_headers` may be NULL; it must end with CRLF if given. A Cache-Control in
+ * `extra_headers` replaces the default `no-cache` rather than joining it — two of them
+ * in one response is a contradiction, and the first one wins. */
 esp_err_t http_send_headers(int fd, int status, const char *content_type,
                             size_t body_len, const char *extra_headers);
 

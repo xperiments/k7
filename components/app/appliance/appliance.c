@@ -115,9 +115,9 @@ void appliance_run(void)
          * connection worker as soon as it is registered. */
         .max_clients = 4,
         .max_conns = 4,
-        /* The page is served from the front door's SPIFFS partition once that exists;
-         * until then `/` answers 503 and the index at `/library` carries the device. */
-        .web_root = NULL,
+        /* The Shell is served from its SPIFFS partition once that exists; until then
+         * `/` answers 503 and the index at `/library` carries the device. */
+        .shell_root = NULL,
     };
 
 #if CONFIG_APP_UI_SCREEN_HTTP

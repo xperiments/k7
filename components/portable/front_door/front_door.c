@@ -50,7 +50,6 @@ static const char *content_type_for(const char *path)
  * time, the hashed bundle never is. */
 static const char *cache_control_for(const char *path)
 {
-    if (strcmp(path, "/sw.js") == 0) return "Cache-Control: no-cache\r\n";
     if (strncmp(path, "/assets/", 8) == 0)
         return "Cache-Control: public, max-age=31536000, immutable\r\n";
     return "Cache-Control: no-cache\r\n";
@@ -66,23 +65,25 @@ static bool path_is_safe(const char *path)
     return true;
 }
 
-/* `/` and any extensionless path are the page itself; the app routes in JavaScript. */
-static const char *resolve(const char *path, char *out, size_t cap)
+/* `/` is the page; everything else is a file with a real name. The app is one screen
+ * with no client-side routes, so an unknown path is a 404 rather than index.html. */
+static bool shell_file_for(const char *request_path, char *out, size_t cap)
 {
-    const char *target = path;
-    if (strcmp(path, "/") == 0 || extension(path)[0] == 0) target = "/index.html";
-    if (snprintf(out, cap, "%s%s", F.root ? F.root : "", target) >= (int)cap) return NULL;
-    return out;
+    const char *target = strcmp(request_path, "/") == 0 ? "/index.html" : request_path;
+    return snprintf(out, cap, "%s%s", F.shell_root ? F.shell_root : "", target) < (int)cap;
 }
 
-/* `path` is what was asked for, which is what the cache rules are written against;
- * `file` is what it resolved to, which is what the content type comes from. */
-static http_result_t serve_file(int fd, const char *path, const char *file)
+/* `request_path` is what the cache rules are written against; `file_path` is what the
+ * content type comes from. */
+static http_result_t serve_file(int fd, const char *request_path, const char *file_path,
+                                int missing_status)
 {
-    FILE *f = fopen(file, "rb");
+    FILE *f = fopen(file_path, "rb");
     if (!f) {
-        ESP_LOGI(TAG, "GET %s -> 404 (no %s)", path, file);
-        http_send_error(fd, 404, "no such path");
+        ESP_LOGW(TAG, "GET %s -> %d (no %s)", request_path, missing_status, file_path);
+        http_send_error(fd, missing_status,
+                        missing_status == 503 ? "the page is missing from this firmware"
+                                              : "no such path");
         return HTTP_HANDLED;
     }
     if (fseek(f, 0, SEEK_END) != 0) {
@@ -97,9 +98,8 @@ static http_result_t serve_file(int fd, const char *path, const char *file)
         return HTTP_HANDLED;
     }
 
-    char headers[96];
-    snprintf(headers, sizeof headers, "%s", cache_control_for(path));
-    esp_err_t e = http_send_headers(fd, 200, content_type_for(file), (size_t)size, headers);
+    esp_err_t e = http_send_headers(fd, 200, content_type_for(file_path), (size_t)size,
+                                    cache_control_for(request_path));
     if (e != ESP_OK) {
         fclose(f);
         return HTTP_HANDLED;
@@ -140,8 +140,8 @@ static void json_escape(char *out, size_t cap, const char *in)
 static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
-    if (strcmp(req->method, "GET") != 0) {
-        http_send_error(fd, 405, "only GET");
+    if (strcmp(req->path, "/api/status") != 0) {
+        http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
     }
 
@@ -158,7 +158,7 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
     json_escape(title, sizeof title, st.title);
     json_escape(path, sizeof path, st.path);
 
-    bool card = F.card_present ? F.card_present(F.ctx) : false;
+    bool card = F.card_present ? F.card_present() : false;
 
     char body[768];
     int n = snprintf(body, sizeof body,
@@ -182,11 +182,7 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
 static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
-    if (strcmp(req->method, "GET") != 0) {
-        http_send_error(fd, 405, "only GET");
-        return HTTP_HANDLED;
-    }
-    if (!F.root || !F.root[0]) {
+    if (!F.shell_root || !F.shell_root[0]) {
         /* A firmware without a page still has an index and an API. Only the page's own
          * paths say what is missing; anything else is still a 404. */
         bool is_page = strcmp(req->path, "/") == 0;
@@ -200,12 +196,22 @@ static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
     }
-    char file[520];
-    if (!resolve(req->path, file, sizeof file)) {
+    /* The API is the device's, not the page's: an unregistered /api path is a 404,
+     * never the HTML fallback. */
+    if (strncmp(req->path, "/api/", 5) == 0) {
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
     }
-    return serve_file(fd, req->path, file);
+
+    bool is_page = strcmp(req->path, "/") == 0;
+    char file[520];
+    if (!shell_file_for(req->path, file, sizeof file)) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
+    /* A page that was packed but is not on the partition is a device fault, so `/` says
+     * so; any other missing file is a 404 like every other. */
+    return serve_file(fd, req->path, file, is_page ? 503 : 404);
 }
 
 esp_err_t front_door_start(const front_door_cfg_t *cfg)
@@ -218,8 +224,8 @@ esp_err_t front_door_start(const front_door_cfg_t *cfg)
     e = http_server_register_route("/", page_route, NULL);
     if (e != ESP_OK) return e;
 
-    if (F.root && F.root[0])
-        ESP_LOGI(TAG, "page: %s (and /api/status)", F.root);
+    if (F.shell_root && F.shell_root[0])
+        ESP_LOGI(TAG, "page: %s (and /api/status)", F.shell_root);
     else
         ESP_LOGI(TAG, "page: none in this firmware; / answers 503 and /library stays");
     return ESP_OK;

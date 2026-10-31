@@ -20,12 +20,12 @@ extern "C" {
 #endif
 
 typedef struct {
-    /* Where the page's files live. NULL means this firmware carries no page: `/` then
-     * answers 503 and says so, while `/library` and the API keep working. */
-    const char *root;
-    /* The card state, as the page asks for it. May be NULL, which reads as "unknown". */
-    bool (*card_present)(void *ctx);
-    void *ctx;
+    /* The Shell's directory - the SPIFFS mount on the device, `web/dist` on the host.
+     * NULL means this firmware carries no page: `/` then answers 503 and says so, while
+     * `/library` and the API keep working. */
+    const char *shell_root;
+    /* The Card state, as the page asks for it. NULL reads as "no card". */
+    bool (*card_present)(void);
 } front_door_cfg_t;
 
 /* Register `/` and `/api/status`. Call before http_server_start(). */

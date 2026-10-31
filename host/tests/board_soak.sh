@@ -59,7 +59,7 @@ CAP=$!
 # load late.
 n=0
 while [ "$n" -lt 100 ]; do
-    curl -s -o /dev/null --max-time 1 "$BASE/" && break
+    curl -s -o /dev/null --max-time 1 "$BASE/library" && break
     n=$((n + 1))
     sleep 0.2
 done

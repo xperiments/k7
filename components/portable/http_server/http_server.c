@@ -103,7 +103,9 @@ esp_err_t http_send_headers(int fd, int status, const char *content_type,
     hdr_add(&w, "Server: %s\r\n", S.cfg.server_name ? S.cfg.server_name : "sd-stream/1.0");
     if (content_type) hdr_add(&w, "Content-Type: %s\r\n", content_type);
     if (body_len != (size_t)-1) hdr_add(&w, "Content-Length: %u\r\n", (unsigned)body_len);
-    hdr_add(&w, "Cache-Control: no-cache\r\nConnection: close\r\n");
+    if (!extra_headers || !strstr(extra_headers, "Cache-Control:"))
+        hdr_add(&w, "Cache-Control: no-cache\r\n");
+    hdr_add(&w, "Connection: close\r\n");
     if (extra_headers) hdr_add(&w, "%s", extra_headers);
     hdr_add(&w, "\r\n");
     if (!w.ok) return ESP_ERR_INVALID_SIZE;
