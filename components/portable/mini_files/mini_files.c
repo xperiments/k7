@@ -254,8 +254,11 @@ esp_err_t mini_files_start(const mini_files_cfg_t *cfg)
     mini_files_set_card(NULL, cfg->mount_error);
 
     /* The index is the only route: the device serves no Track and accepts no
-     * upload (the global premise in docs/specs/CONTEXT.md). */
-    esp_err_t err = http_server_register_route("/library", index_route, NULL);
+     * upload (the global premise in docs/specs/CONTEXT.md). It is the app's, so it
+     * is on the TLS listener (front door R3: "/" is the page, "/library" is the
+     * index). */
+    esp_err_t err = http_server_register_route_on(HTTP_LISTENER_TLS, "/library", index_route,
+                                                  NULL);
     if (err != ESP_OK) ESP_LOGE(TAG, "cannot register the index route: %s", esp_err_to_name(err));
     return err;
 }

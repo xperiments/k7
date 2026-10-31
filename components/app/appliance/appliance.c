@@ -27,6 +27,10 @@
 #include "nvs_flash.h"
 
 #include "app_board.h"
+/* The Shell's partition is board storage, so the mount belongs to the board adapter -
+ * not to the portable app_board seam, which the host build shares and which has no
+ * SPIFFS partition to name. */
+#include "board_shell.h"
 #include "app_services.h"
 #include "mini_files.h"
 #include "mini_icecast.h"
@@ -104,7 +108,7 @@ void appliance_run(void)
      * is that the broadcast never starves, and that is what the soak checks.
      * 32000 Hz / 96 kbps remains the documented fallback if headroom is ever
      * needed for something else. */
-    const app_services_cfg_t svc = {
+    app_services_cfg_t svc = {
         .music_dir = MUSIC_DIR,
         .station_name = STATION_NAME,
         .port = HTTP_PORT,
@@ -115,8 +119,9 @@ void appliance_run(void)
          * connection worker as soon as it is registered. */
         .max_clients = 4,
         .max_conns = 4,
-        /* The Shell is served from its SPIFFS partition once that exists; until then
-         * `/` answers 503 and the index at `/library` carries the device. */
+        /* Set below, once the panel has its boot mark and the Shell's partition has
+         * been mounted; until then, and forever on a firmware with no page, `/` answers
+         * 503 and the index at `/library` carries the device. */
         .shell_root = NULL,
     };
 
@@ -155,6 +160,13 @@ void appliance_run(void)
     if (boot_err != ESP_OK)
         ESP_LOGE(TAG, "the screen did not come up: %s; the device still serves",
                  esp_err_to_name(boot_err));
+
+    /* The Shell is the `frontdoor` SPIFFS partition the build packed, mounted here for
+     * two reasons and only these: the boot mark is already on the panel, so the panel
+     * never waits on a filesystem, and it is before app_services_start(), because the
+     * front door registers `/` inside that call. A missing or unflashed partition
+     * returns NULL - `/` then answers 503 and says so, and every other route serves. */
+    svc.shell_root = app_board_shell_mount();
 
     /* The services resolve the station first (arithmetic only), then bring up the
      * network before the broadcast takes its internal RAM, then the file surface,
@@ -200,7 +212,7 @@ void appliance_run(void)
 
     /* Discovery is advertised only after the listener is up and Wi-Fi has an
      * address: a record for a dead endpoint is worse than no record. */
-    esp_err_t mdns_err = app_board_mdns_start("xtape", HTTP_PORT, "/mcp");
+    esp_err_t mdns_err = app_board_mdns_start("xtape", 443, "/mcp");
     if (mdns_err != ESP_OK)
         ESP_LOGE(TAG, "mDNS did not start: %s; the device still serves", esp_err_to_name(mdns_err));
 

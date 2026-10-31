@@ -1397,7 +1397,11 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     S.skip = false;
     S.prev = false;
 
-    esp_err_t err2 = http_server_register_route("/stream", stream_route, NULL);
+    /* /stream is the one route on the plain listener: port 80, no TLS, ever
+     * (front door R2 - hardware players and car head units cannot trust a private
+     * CA). /api/play is the app's, so it stays on the TLS listener. */
+    esp_err_t err2 = http_server_register_route_on(HTTP_LISTENER_PLAIN, "/stream", stream_route,
+                                                  NULL);
     if (err2 == ESP_OK)
         err2 = http_server_register_route_method("/api/play", "POST", play_route, NULL);
     if (err2 != ESP_OK) {
@@ -1416,8 +1420,7 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
         ESP_LOGE(TAG, "no memory for the broadcast task");
         return ESP_ERR_NO_MEM;
     }
-    ESP_LOGI(TAG, "GET /stream is ready; call http_server_start() to listen on port %u",
-             (unsigned)S.station.port);
+    ESP_LOGI(TAG, "GET /stream is ready on the plain listener (port 80); the app is on 443");
     return ESP_OK;
 }
 

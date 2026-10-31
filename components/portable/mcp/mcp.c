@@ -1298,29 +1298,43 @@ static bool supported_version(const char *v)
            strcmp(v, MCP_VERSION_ALT2) == 0;
 }
 
+/* Same-origin, and this origin: the browser's page is the device itself, and the device
+ * answers to three names. A browser omits the port on 443 and 80, so a bare name is the
+ * shape a same-origin request actually has; the explicit ports are accepted for clients
+ * and tests that write them. `L_port` keeps the host build's tests, which dial a random
+ * port on 127.0.0.1. */
 static bool origin_ok(const http_request_t *req)
 {
     if (!req->origin[0]) return true; /* native clients do not send Origin */
     if (!req->host[0]) return false;
-    if (strncasecmp(req->origin, "http://", 7) != 0) return false;
-    const char *auth = req->origin + 7;
+
+    const char *auth;
+    if (strncasecmp(req->origin, "https://", 8) == 0)
+        auth = req->origin + 8;
+    else if (strncasecmp(req->origin, "http://", 7) == 0)
+        auth = req->origin + 7;
+    else
+        return false;
     if (!*auth || strpbrk(auth, "/?#@")) return false;
     if (strcasecmp(auth, req->host) != 0) return false;
 
-    char suffix[16];
-    snprintf(suffix, sizeof suffix, ":%u", (unsigned)L_port);
-    size_t alen = strlen(auth), slen = strlen(suffix);
-    if (alen < slen || strcasecmp(auth + alen - slen, suffix) != 0) return false;
+    static const char *const names[2] = {"xtape.local", "localhost"};
+    char local[32] = {0};
+    if (L_local_ip) L_local_ip(local, sizeof local);
 
-    char local[32];
-    if (L_local_ip && L_local_ip(local, sizeof local)) {
-        char pinned[64];
-        snprintf(pinned, sizeof pinned, "%s:%u", local, (unsigned)L_port);
+    for (int i = 0; i < 3; i++) {
+        const char *name = i < 2 ? names[i] : local;
+        if (!name || !name[0]) continue;
+        if (strcasecmp(auth, name) == 0) return true;
+        char pinned[80];
+        snprintf(pinned, sizeof pinned, "%s:443", name);
+        if (strcasecmp(auth, pinned) == 0) return true;
+        snprintf(pinned, sizeof pinned, "%s:80", name);
+        if (strcasecmp(auth, pinned) == 0) return true;
+        snprintf(pinned, sizeof pinned, "%s:%u", name, (unsigned)L_port);
         if (strcasecmp(auth, pinned) == 0) return true;
     }
-    char mdns[64];
-    snprintf(mdns, sizeof mdns, "xtape.local:%u", (unsigned)L_port);
-    return strcasecmp(auth, mdns) == 0;
+    return false;
 }
 
 static http_result_t post_route(int fd, const http_request_t *req, void *ctx)
@@ -1565,10 +1579,14 @@ esp_err_t mcp_start(const mcp_cfg_t *cfg)
     SN = cfg->snapshot;
     SN_state = cfg->snapshot_state;
     SN_reason = cfg->snapshot_reason ? cfg->snapshot_reason : "";
-    esp_err_t err = http_server_register_route_method_ex("/mcp", "POST", post_route, NULL,
-                                                          mcp_body_error);
-    if (err == ESP_OK) err = http_server_register_route("/mcp", get_route, NULL);
-    if (err == ESP_OK) err = http_server_register_route_method("/mcp", "DELETE", get_route, NULL);
+    /* MCP is the app's endpoint: TLS listener (front door R1). */
+    esp_err_t err = http_server_register_route_method_ex_on(HTTP_LISTENER_TLS, "/mcp", "POST",
+                                                            post_route, NULL, mcp_body_error);
+    if (err == ESP_OK)
+        err = http_server_register_route_on(HTTP_LISTENER_TLS, "/mcp", get_route, NULL);
+    if (err == ESP_OK)
+        err = http_server_register_route_method_on(HTTP_LISTENER_TLS, "/mcp", "DELETE", get_route,
+                                                   NULL);
     if (err != ESP_OK) ESP_LOGE(TAG, "cannot register /mcp: %s", esp_err_to_name(err));
     return err;
 }

@@ -90,7 +90,10 @@ static http_result_t bin_route(int fd, const http_request_t *req, void *ctx)
 esp_err_t library_http_start(const library_t *lib)
 {
     L_override = lib;
-    esp_err_t err = http_server_register_route("/api/library.bin", bin_route, NULL);
-    if (err == ESP_OK) err = http_server_register_route("/api/library", json_route, NULL);
+    /* The JSON API is the app's: TLS listener (front door R1). */
+    esp_err_t err = http_server_register_route_on(HTTP_LISTENER_TLS, "/api/library.bin",
+                                                  bin_route, NULL);
+    if (err == ESP_OK)
+        err = http_server_register_route_on(HTTP_LISTENER_TLS, "/api/library", json_route, NULL);
     return err;
 }

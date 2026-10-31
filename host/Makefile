@@ -59,9 +59,19 @@ SHINE_SRC := $(wildcard $(ROOT)/components/portable/shine/src/lib/*.c)
 SHINE_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(SHINE_SRC)))
 
 # The production sources. The firmware target compiles these portable files too.
+#
+# http_server compiles here with http_backend_single.c as its transport: one plain
+# listener, the hand-written loop in http_loop.c. The firmware compiles the same
+# front (http_server.c, http_parse.c, http_loop.c) with idf/http_server_idf.c as
+# its transport - esp_https_server on 443 plus this loop on 80. The backend is
+# whichever file the build picks; nothing is #ifdef'd by target. The device's file
+# is not listed here because it can only compile against ESP-IDF: it is the one
+# part of the component that is firmware-only.
 PROD_SRC := \
   $(ROOT)/components/portable/http_server/http_server.c \
   $(ROOT)/components/portable/http_server/http_parse.c \
+  $(ROOT)/components/portable/http_server/http_loop.c \
+  $(ROOT)/components/portable/http_server/http_backend_single.c \
   $(ROOT)/components/portable/audio_format/audio_format.c \
   $(ROOT)/components/portable/library/library.c \
   $(ROOT)/components/portable/library_http/library_http.c \
@@ -124,7 +134,7 @@ CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
 SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o
-HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
+HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/http_loop.o $(OBJ)/http_backend_single.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o
 

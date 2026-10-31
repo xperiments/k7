@@ -39,3 +39,15 @@ CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 # CONFIG_LCD_RGB_RESTART_IN_VSYNC is not set
 CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
 CONFIG_SPIRAM_RODATA=y
+
+# The Shell's hashed asset names exceed SPIFFS's 32-character default;
+# "/assets/unified-loader-DIIx7hKC.js" is 34.
+CONFIG_SPIFFS_OBJ_NAME_LEN=64
+
+# The front door is served over TLS; the component is compiled on purpose, not by
+# accident of IDF 6.1 not gating it.
+CONFIG_ESP_HTTPS_SERVER_ENABLE=y
+
+# The TLS listener's per-connection buffers come out of PSRAM: during playback
+# internal RAM is the scarce kind.
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y

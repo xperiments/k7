@@ -20,6 +20,7 @@
 #include "esp_netif.h"
 #include "esp_partition.h"
 #include "esp_psram.h"
+#include "esp_spiffs.h"
 #include "esp_vfs_fat.h"
 #include "esp_wifi.h"
 #include "mdns.h"
@@ -30,6 +31,7 @@
 #include "snapshot.h"
 
 #include "app_board.h"
+#include "board_shell.h"
 
 /* The credentials are compiled in, as the specification requires, but they live in
  * a gitignored header so a real network password does not end up in version
@@ -90,9 +92,8 @@ static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *e = data;
         snprintf(s_local_ip, sizeof s_local_ip, IPSTR, IP2STR(&e->ip_info.ip));
-        ESP_LOGI(TAG, "stream: http://" IPSTR ":%u/stream  index: http://" IPSTR ":%u/library",
-                 IP2STR(&e->ip_info.ip), (unsigned)s_http_port,
-                 IP2STR(&e->ip_info.ip), (unsigned)s_http_port);
+        ESP_LOGI(TAG, "stream: http://" IPSTR "/stream  app: https://" IPSTR "/",
+                 IP2STR(&e->ip_info.ip), IP2STR(&e->ip_info.ip));
         xEventGroupSetBits(wifi_ev, 1);
     }
 }
@@ -440,6 +441,63 @@ done:
     esp_vfs_fat_sdcard_unmount(MOUNT_POINT, s_card);
     s_card = NULL;
     return out;
+}
+
+/* --------------------------------------------------------------- the Shell */
+
+/* The page at `/`. The build packs the Shell into this partition with
+ * spiffs_create_partition_image() (root CMakeLists.txt) and `idf.py flash` writes it
+ * beside the app. The firmware only ever reads it, and the mount never formats: a
+ * partition that will not mount is a blank one, not a reason to erase the page.
+ *
+ * Two devices reach here without a page, and both are states rather than faults: one
+ * still carrying the old partition table has no `frontdoor` partition at all, and one
+ * flashed without the image has it blank. The front door is handed NULL in both cases,
+ * so `/` answers 503 and everything else serves. */
+#define SHELL_PARTITION   "frontdoor"
+#define SHELL_MOUNT_POINT "/frontdoor"
+
+static const char *s_shell_root;
+static bool s_shell_mount_tried;
+
+const char *app_board_shell_mount(void)
+{
+    if (s_shell_mount_tried) return s_shell_root;
+    s_shell_mount_tried = true;
+
+    const esp_partition_t *part = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, SHELL_PARTITION);
+    if (!part) {
+        ESP_LOGW(TAG, "shell: no \"%s\" partition in this build; / answers 503",
+                 SHELL_PARTITION);
+        return NULL;
+    }
+
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = SHELL_MOUNT_POINT,
+        .partition_label = SHELL_PARTITION,
+        /* One streamed file per connection, and the listener carries four: eight is the
+         * headroom the card's mount takes, for the same reason. */
+        .max_files = 8,
+        /* Never format: the image is written by the build and flashed with the app, so
+         * a partition that will not mount is one that has not been flashed yet. */
+        .format_if_mount_failed = false,
+    };
+    esp_err_t e = esp_vfs_spiffs_register(&conf);
+    if (e != ESP_OK) {
+        ESP_LOGW(TAG, "shell: %s did not mount (%s); the page is absent and / answers 503",
+                 SHELL_MOUNT_POINT, esp_err_to_name(e));
+        return NULL;
+    }
+
+    s_shell_root = SHELL_MOUNT_POINT;
+    size_t total = 0, used = 0;
+    if (esp_spiffs_info(SHELL_PARTITION, &total, &used) == ESP_OK)
+        ESP_LOGI(TAG, "shell: %s mounted, %u of %u KB used (never written by the firmware)",
+                 SHELL_MOUNT_POINT, (unsigned)(used >> 10), (unsigned)(total >> 10));
+    else
+        ESP_LOGI(TAG, "shell: %s mounted (never written by the firmware)", SHELL_MOUNT_POINT);
+    return s_shell_root;
 }
 
 /* P2/P3: what the memory available actually is, before anything is allocated, so

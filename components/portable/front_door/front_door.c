@@ -219,9 +219,14 @@ esp_err_t front_door_start(const front_door_cfg_t *cfg)
     if (!cfg) return ESP_ERR_INVALID_ARG;
     F = *cfg;
 
-    esp_err_t e = http_server_register_route("/api/status", status_route, NULL);
+    /* Both on the TLS listener. "/" is a catch-all, so it is the one route that
+     * must never be registered on the plain listener: port 80 answers /stream and
+     * redirects every other path to HTTPS, and a page catch-all there would
+     * swallow the redirect (front door R1, R2). */
+    esp_err_t e = http_server_register_route_on(HTTP_LISTENER_TLS, "/api/status", status_route,
+                                                NULL);
     if (e != ESP_OK) return e;
-    e = http_server_register_route("/", page_route, NULL);
+    e = http_server_register_route_on(HTTP_LISTENER_TLS, "/", page_route, NULL);
     if (e != ESP_OK) return e;
 
     if (F.shell_root && F.shell_root[0])

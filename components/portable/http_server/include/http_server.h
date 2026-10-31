@@ -2,10 +2,19 @@
 /*
  * http_server - the device's HTTP front door.
  *
- * Owns the listening socket and the accept loop. Every accepted connection is
- * parsed on its own short-lived task, so one client that connects and says
- * nothing cannot hold up anybody else; the number of tasks parsing at once is
- * capped by `max_conns` and the listen backlog is generous.
+ * Two listeners, one API. The app is served over TLS on 443
+ * (https://xtape.local) and the broadcast over plain HTTP on 80
+ * (http://xtape.local/stream); a route names the listener that carries it, and
+ * both tiers register, reply and start through this header alone.
+ *
+ * The transport underneath is a build decision, not a runtime one. The device
+ * compiles idf/http_server_idf.c: esp_https_server (IDF's httpd) for the TLS
+ * listener, and the hand-written loop in http_loop.c for the plain one, because
+ * /stream hands the socket to the broadcast and writes it itself. The host
+ * compiles http_backend_single.c, which is that same loop on a single plain
+ * listener: TLS routes register there and are served as plain HTTP, which is
+ * what the integration checks exercise. No source here is built for both tiers
+ * by branching on the target; the build picks the file.
  *
  * This component knows nothing about audio, files or markup. All three arrive
  * as routes registered by other components before the server starts, which
@@ -38,6 +47,15 @@ extern "C" {
 #define HTTP_LISTEN_BACKLOG 16
 #define HTTP_MAX_CONNS 6
 
+/* The two listeners. A route is served by exactly one of them; the device's
+ * plain listener answers /stream and nothing else. A build with a single
+ * listener (the host) serves every route on it, whatever the tag says, because
+ * it does not filter. */
+typedef enum {
+    HTTP_LISTENER_TLS = 0,   /* https://xtape.local: the app, the API, MCP */
+    HTTP_LISTENER_PLAIN = 1, /* http://xtape.local: the stream, plain, forever */
+} http_listener_t;
+
 typedef struct {
     char method[8];           /* request method, e.g. "GET" */
     char path[HTTP_PATH_MAX]; /* request target, percent-encoded, query stripped */
@@ -59,7 +77,9 @@ typedef struct {
  *
  * HTTP_HANDLED: the handler wrote a complete response. The server closes the fd.
  * HTTP_UPGRADED: the handler took ownership of the fd (a live stream that will
- *                outlive this request). The server must not close it. */
+ *                outlive this request). The server must not close it. Only the
+ *                plain listener can honour this - it is the only transport that
+ *                owns a bare socket; on TLS the flag is logged and ignored. */
 typedef enum {
     HTTP_HANDLED = 0,
     HTTP_UPGRADED = 1,
@@ -68,15 +88,27 @@ typedef enum {
 typedef http_result_t (*http_route_fn)(int fd, const http_request_t *req, void *ctx);
 
 typedef struct {
-    uint16_t    port;        /* default 8000 */
+    uint16_t    port;        /* default 8000; the IDF backend ignores it and uses 443/80 */
     const char *server_name; /* "Server:" header value; default "sd-stream/1.0" */
     uint8_t     max_conns;   /* concurrent request tasks, 1..HTTP_MAX_CONNS, default 4 */
+    /* Which listener this instance is. False (the default, and the host build)
+     * means "answer every registered route": one listener, no filtering. The
+     * device sets it on the plain listener so that listener answers /stream and
+     * nothing else. */
+    bool            filter_by_listener;
+    http_listener_t listener;
+    /* Answer a path this listener has no route for with 301 to HTTPS (front door
+     * R2: plain port 80 redirects everything that is not the stream). */
+    bool        redirect_to_tls;
+    const char *tls_host; /* the name to redirect to when the request has no Host */
+    uint16_t    tls_port; /* 0 = 443; only named in Location when it is not 443 */
 } http_server_cfg_t;
 
 /* Register a route. `prefix` is matched against the start of the raw request
  * path and the longest matching prefix wins; "/" therefore acts as the catch-all
  * and "/api/" takes precedence over it. Must be called before
- * http_server_start(), which is when main() should call it. */
+ * http_server_start(), which is when main() should call it. These register on
+ * the TLS listener, the app's: use the _on form to name the other one. */
 esp_err_t http_server_register_route(const char *prefix, http_route_fn fn, void *ctx);
 /* Register a route for one method. The GET wrapper above is the common case.
  * A path match with the wrong method is a 405, not a 404. */
@@ -88,7 +120,17 @@ esp_err_t http_server_register_route_method_ex(const char *prefix, const char *m
                                                http_route_fn fn, void *ctx,
                                                http_error_fn error_fn);
 
-/* Bind, listen and start accepting. Returns once the socket is listening. */
+/* The same three, on a named listener. */
+esp_err_t http_server_register_route_on(http_listener_t listener, const char *prefix,
+                                        http_route_fn fn, void *ctx);
+esp_err_t http_server_register_route_method_on(http_listener_t listener, const char *prefix,
+                                               const char *method, http_route_fn fn, void *ctx);
+esp_err_t http_server_register_route_method_ex_on(http_listener_t listener, const char *prefix,
+                                                  const char *method, http_route_fn fn,
+                                                  void *ctx, http_error_fn error_fn);
+
+/* Bind, listen and start accepting. Returns once this build's listener (or
+ * listeners) are up. */
 esp_err_t http_server_start(const http_server_cfg_t *cfg);
 
 /* ------------------------------------------------------------------ replies */
@@ -114,7 +156,8 @@ void http_send_timeout_ms(int fd, uint32_t ms);
 
 /* The least stack headroom any connection task has had left, in bytes. Part of
  * the memory-fit telemetry: a route that grows past the budget shows up here
- * before it shows up as a crash. */
+ * before it shows up as a crash. It reports the plain listener's workers; the
+ * TLS listener's stack is httpd's own and is not measured here. */
 uint32_t http_server_conn_stack_headroom_bytes(void);
 
 /* Decode a percent-encoded string in place into `out`.
