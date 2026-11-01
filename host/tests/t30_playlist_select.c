@@ -310,6 +310,30 @@ int main(void)
     CHECK_EQ(g_order_n, 0, "and the order");
     CHECK(!g_store_has, "and the stored id");
 
+    /* a card that is out keeps the choice: the same image, a Library that cannot resolve a
+     * row (an empty root) -- the walk stops, the selection does not (spec U3) */
+    char *empty_root = temp_root();
+    library_cfg_t empty_cfg = {.music_dir = empty_root, .build_json = false};
+    library_t *empty_lib = NULL;
+    CHECK_EQ(library_open(&empty_cfg, &empty_lib), LIB_OK, "the empty root opens");
+    CHECK_EQ(playlist_select_set(snap, lib, 0xAAAA000000000001ull), PLAYLIST_SELECT_OK,
+             "select before the card leaves");
+    CHECK_EQ(g_order_n, 3, "walking");
+    g_order_n = 0;
+    playlist_select_sync(snap, empty_lib);
+    CHECK_EQ(g_order_n, 0, "with no resolvable row the walk stops");
+    CHECK_EQ(playlist_select_current(), 0xAAAA000000000001ull,
+             "but the choice stands, so it comes back with the card");
+    CHECK(g_store_has, "and it is still stored");
+    playlist_select_sync(snap, lib);
+    CHECK_EQ(g_order_n, 3, "the card comes back and so does the walk");
+    CHECK_EQ(playlist_select_current(), 0xAAAA000000000001ull, "same choice");
+    library_close(empty_lib);
+    char rm[LIB_PATH_MAX + 16];
+    snprintf(rm, sizeof rm, "rm -rf '%s'", empty_root);
+    if (system(rm) != 0) { /* the test's own /tmp tree */ }
+    free(empty_root);
+
     /* the broadcast dropped the order for a Track outside it: the choice is cleared */
     CHECK_EQ(playlist_select_set(snap, lib, 0xAAAA000000000001ull), PLAYLIST_SELECT_OK,
              "select again for the drop");

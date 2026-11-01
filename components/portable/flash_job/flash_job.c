@@ -2,6 +2,10 @@
 
 #include <stddef.h>
 
+#include "esp_log.h"
+
+static const char *TAG = "flashjob";
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -9,7 +13,8 @@
 /* Serving a page runs SPIFFS (fopen/read) on this task, and a VFS open alone costs a
  * kilobyte or two; 6 KB leaves the SPIFFS walk comfortable room. */
 #define FLASH_JOB_STACK_BYTES 6144
-#define FLASH_JOB_DEFAULT_TIMEOUT_MS 8000u
+/* Long enough that a normal job never reaches it, short enough to notice a wedged one. */
+#define FLASH_JOB_SLOW_MS 3000u
 
 static SemaphoreHandle_t s_go;
 static SemaphoreHandle_t s_done;
@@ -47,7 +52,7 @@ bool flash_job_start(void)
     return true;
 }
 
-bool flash_job_run(bool (*fn)(void *ctx), void *ctx, unsigned timeout_ms)
+bool flash_job_run(bool (*fn)(void *ctx), void *ctx)
 {
     if (!fn) return false;
     if (!s_task) return fn(ctx); /* boot-time callers, on an internal stack already */
@@ -56,9 +61,14 @@ bool flash_job_run(bool (*fn)(void *ctx), void *ctx, unsigned timeout_ms)
     s_ctx = ctx;
     s_result = false;
     xSemaphoreGive(s_go);
-    unsigned wait = timeout_ms ? timeout_ms : FLASH_JOB_DEFAULT_TIMEOUT_MS;
-    bool done = xSemaphoreTake(s_done, pdMS_TO_TICKS(wait)) == pdTRUE;
-    bool result = done && s_result;
+    /* No timeout: the closure is usually the caller's stack frame, and returning to it
+     * while the writer still reads it is a use-after-return. A slow job is logged and
+     * waited for; the alternative is a corrupted page or a torn Snapshot. */
+    if (xSemaphoreTake(s_done, pdMS_TO_TICKS(FLASH_JOB_SLOW_MS)) != pdTRUE) {
+        ESP_LOGW(TAG, "a flash job is taking longer than %u ms", (unsigned)FLASH_JOB_SLOW_MS);
+        xSemaphoreTake(s_done, portMAX_DELAY);
+    }
+    bool result = s_result;
     xSemaphoreGive(s_lock);
     return result;
 }

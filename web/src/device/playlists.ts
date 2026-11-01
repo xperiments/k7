@@ -16,8 +16,11 @@ export interface DevicePlaylist {
 }
 
 export interface DevicePlaylists {
-  /** 16 hex characters, or null when the Library's own order is playing. */
+  /** 16 hex characters, or null when nothing has been chosen. */
   selected: string | null;
+  /** Whether that choice is actually walking now. A card that is out keeps the choice —
+   * it comes back with the card — while the broadcast plays the Library's order. */
+  walking: boolean;
   /** Rows of the selected list the Library could not resolve. */
   missing: number;
   lists: DevicePlaylist[];
@@ -65,6 +68,7 @@ export async function fetchPlaylists(): Promise<DevicePlaylists> {
   const body = await read<Partial<DevicePlaylists>>('/api/playlists');
   return {
     selected: typeof body.selected === 'string' ? body.selected : null,
+    walking: body.walking === true,
     missing: typeof body.missing === 'number' ? body.missing : 0,
     lists: Array.isArray(body.lists) ? body.lists : [],
   };

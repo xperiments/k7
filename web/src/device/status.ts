@@ -36,17 +36,19 @@ function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-/**
- * `playing` is a placeholder shape today; an unrecognised object is kept as an empty one
- * rather than throwing the whole status away, because the Card state is the fact the view
- * selection needs. A missing or malformed `playing` becomes `null`.
- */
+/* The Playlist the broadcast is walking. A firmware with the field but no usable id or
+ * name is read as "no list", because a nameless order is not one the page can show. */
 function parsePlaylist(value: unknown): PlayingPlaylist | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== 'string' || typeof value.name !== 'string') return null;
   return { id: value.id, name: value.name };
 }
 
+/**
+ * `playing` is a placeholder shape today; an unrecognised object is kept as an empty one
+ * rather than throwing the whole status away, because the Card state is the fact the view
+ * selection needs. A missing or malformed `playing` becomes `null`.
+ */
 function parsePlaying(value: unknown): PlayingStatus | null {
   if (!isRecord(value)) return null;
 

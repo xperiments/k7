@@ -62,7 +62,11 @@ export function ScanArea() {
   const rescanLibrary = async () => {
     setRescan({ state: 'sending' });
     try {
-      const response = await fetch('/api/rescan', { method: 'POST' });
+      const response = await fetch('/api/rescan', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
       const text = await response.text();
       let body: { ok?: boolean; error?: string } = {};
       try {

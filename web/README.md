@@ -131,23 +131,40 @@ CLI at the ReUI registry, so components are installed rather than written:
 
 ```sh
 npx shadcn@latest add card button progress switch empty spinner   # shadcn/ui
-npx shadcn@latest add @reui/badge @reui/alert                     # ReUI
+npx shadcn@latest add @reui/badge @reui/alert @reui/c-sidebar-1   # ReUI
 ```
 
+- **One shell, four areas** — Card (Process, Scan), Playlists (Manage, Ask), Media, Player —
+  adapted from the `c-sidebar-1` example: its workspace switcher is the device, its count
+  badges carry the track count and the draft count, and its account menu is gone (there are
+  no accounts). Settings and the licence sit in the sidebar footer.
+- **Routes are hashes** (`#/process`, `#/playlists/:id`, `#/media/video/:id`) so the device
+  still serves one page and answers 404 for everything it does not know. The card state
+  chooses the first area once; `src/ui/router.ts` is the whole router and it has no
+  dependency.
+- **Process stays mounted** while another route is shown, and that is what protects a running
+  queue: `App.tsx` hides it rather than unmounting it.
 - `src/index.css` is the only stylesheet: Tailwind, the theme tokens, and nothing else. The
   palette is the app's own — warm charcoal, an amber accent and a teal "measured" — mapped
   onto semantic tokens so the components keep their identity. The page is dark only:
   `index.html` carries `class="dark"`.
 - `src/components/ui/` and `src/components/reui/` are installed code. Do not edit them to
   restyle; change the tokens in `src/index.css`, or the `variant` and `size` a call site
-  passes.
-- `src/ui/` is ours: the two views and their pieces. Nothing in there is styled from scratch
-  — a panel is a `Card`, a state is a `Badge` variant, a meter is `Progress`, the intake is
-  an `Empty` with one action.
-- The Shell is packed into a 1.25 MB flash partition (`partitions.csv`); its SPIFFS image is
-  ~350 KiB because the text ships gzip-compressed. Page code still costs flash, not disk: a
-  single `AlertDialog` is ~56 KiB of JavaScript, which is why the destructive confirm is
-  asked in place. Weigh a new dependency as a budget decision.
+  passes. `src/components/examples/c-sidebar-1.tsx` is the installed example, kept as the
+  reference the shell was adapted from; nothing imports it.
+- `src/ui/` is ours: the shell, the eleven area files, and the pieces they use. A panel is a
+  `Card`, a state is a `Badge` variant, a meter is `Progress`, a missing thing is an `Empty`
+  with one action.
+- **Data**: `src/ui/state/analysis.tsx` owns the measuring queue and the image it builds;
+  `src/playlists/drafts.ts` owns the browser's drafts; `src/device/` is the device (a shared
+  status poller, `/api/playlists`, and a small MCP client); `src/media/` is the covers cache
+  index and the Invidious search; `src/settings.ts` is what this browser remembers for
+  itself.
+- The Shell is packed into a 1.25 MB flash partition (`partitions.csv`). Measured: **377 KiB
+  packed** (396 KiB in SPIFFS), up from ~350 KiB before the sidebar — the sidebar, its
+  dropdown menu, breadcrumb and avatar parts are most of the difference. Page code costs
+  flash, not disk: a single `AlertDialog` is ~56 KiB of JavaScript, which is why the
+  destructive confirm is asked in place. Weigh a new dependency as a budget decision.
 
 ## Accuracy caveats
 

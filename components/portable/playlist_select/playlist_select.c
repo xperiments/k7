@@ -82,7 +82,7 @@ static playlist_select_result_t apply(const snapshot_t *snap, const library_t *l
     if (list.row_count == 0) return PLAYLIST_SELECT_EMPTY;
 
     uint32_t *indices = malloc((size_t)list.row_count * sizeof *indices);
-    if (!indices) return PLAYLIST_SELECT_EMPTY;
+    if (!indices) return PLAYLIST_SELECT_NO_MEM;
 
     uint32_t missing = 0;
     uint32_t generation = library_generation(lib);
@@ -140,12 +140,21 @@ void playlist_select_sync(const snapshot_t *snap, const library_t *lib)
         if (s_store.load(s_store.ctx, &stored) && stored) id = stored;
     }
     playlist_select_result_t r = apply(snap, lib, id, false);
-    if (id && r != PLAYLIST_SELECT_OK) {
-        /* The image no longer holds it (or the Library cannot resolve a row): back to
-         * the Library's order, and forget the choice rather than retry it every boot. */
+    if (id && (r == PLAYLIST_SELECT_NOT_FOUND || r == PLAYLIST_SELECT_NO_SNAPSHOT)) {
+        /* The image no longer holds the list: back to the Library's order and forget the
+         * choice rather than retry it every boot. An EMPTY resolution is not this case --
+         * it means the card is out, so the choice stands and the walk resumes when the
+         * Library can resolve it again (U3: a refusal leaves the selection alone). */
         mini_icecast_set_order(NULL, 0, 0);
         remember(0, "", 0);
         store_save(0);
+    } else if (id && r == PLAYLIST_SELECT_EMPTY) {
+        /* Keep the id and its name; remember how many rows are waiting for the card. */
+        snapshot_list_t list;
+        if (snap && snapshot_list_find(snap, id, &list)) {
+            /* Nothing resolved, so every row is waiting for the card. */
+            remember(id, snapshot_list_name(snap, &list), list.row_count);
+        }
     }
     pthread_mutex_unlock(&s_lock);
 }
@@ -173,6 +182,11 @@ void playlist_select_name(char *out, size_t size)
     pthread_mutex_lock(&s_lock);
     snprintf(out, size, "%s", s_name);
     pthread_mutex_unlock(&s_lock);
+}
+
+bool playlist_select_walking(void)
+{
+    return mini_icecast_order_active();
 }
 
 uint32_t playlist_select_missing(void)

@@ -46,7 +46,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { useDrafts } from '../playlists/drafts';
-import { navigate, routeHref, type Route } from './router';
+import { navigate, routeArea, routeHref, routePage, type Route } from './router';
 
 /**
  * The shell: `c-sidebar-1`'s structure with this device's data in it.
@@ -61,8 +61,9 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  /** The routes this item is the current page of. */
+  names: Route['name'][];
   badge?: string;
-  active: (route: Route) => boolean;
 }
 
 interface NavGroup {
@@ -71,50 +72,73 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const isProcess = (route: Route) => route.name === 'process';
-const isScan = (route: Route) => route.name === 'scan';
-const isPlaylists = (route: Route) => route.name === 'playlists' || route.name === 'playlist';
-const isAsk = (route: Route) => route.name === 'ask';
-const isMedia = (route: Route) =>
-  route.name === 'media' || route.name === 'album' || route.name === 'artist' || route.name === 'video';
-const isPlayer = (route: Route) => route.name === 'player';
-
-/** The page's name inside its area, for the breadcrumb. */
-function pageName(route: Route): string {
-  switch (route.name) {
-    case 'process':
-      return 'Process';
-    case 'scan':
-      return 'Scan';
-    case 'playlists':
-      return 'Playlists';
-    case 'playlist':
-      return 'Editor';
-    case 'ask':
-      return 'Ask';
-    case 'media':
-      return 'Albums & artists';
-    case 'album':
-      return route.album;
-    case 'artist':
-      return route.artist;
-    case 'video':
-      return 'Video';
-    case 'player':
-      return 'Now playing';
-    case 'settings':
-      return 'Settings';
-    default:
-      return 'Not found';
-  }
-}
-
-function areaName(route: Route): string | null {
-  if (isProcess(route) || isScan(route)) return 'Card';
-  if (isPlaylists(route) || isAsk(route)) return 'Playlists';
-  if (isMedia(route)) return 'Media';
-  if (isPlayer(route)) return 'Player';
-  return null;
+/** The four areas, and the routes that belong to each. */
+function navGroups(drafts: number, tracks: number, playing: boolean): NavGroup[] {
+  return [
+    {
+      id: 'card',
+      label: 'Card',
+      items: [
+        {
+          href: routeHref({ name: 'process' }),
+          label: 'Process',
+          icon: <ListMusic aria-hidden="true" />,
+          names: ['process'],
+          badge: tracks > 0 ? String(tracks) : undefined,
+        },
+        {
+          href: routeHref({ name: 'scan' }),
+          label: 'Scan',
+          icon: <ScanLine aria-hidden="true" />,
+          names: ['scan'],
+        },
+      ],
+    },
+    {
+      id: 'playlists',
+      label: 'Playlists',
+      items: [
+        {
+          href: routeHref({ name: 'playlists' }),
+          label: 'Manage',
+          icon: <ListMusic aria-hidden="true" />,
+          names: ['playlists', 'playlist'],
+          badge: drafts > 0 ? String(drafts) : undefined,
+        },
+        {
+          href: routeHref({ name: 'ask' }),
+          label: 'Ask',
+          icon: <Sparkles aria-hidden="true" />,
+          names: ['ask'],
+        },
+      ],
+    },
+    {
+      id: 'media',
+      label: 'Media',
+      items: [
+        {
+          href: routeHref({ name: 'media' }),
+          label: 'Albums & artists',
+          icon: <Disc3 aria-hidden="true" />,
+          names: ['media', 'album', 'artist', 'video'],
+        },
+      ],
+    },
+    {
+      id: 'player',
+      label: 'Player',
+      items: [
+        {
+          href: routeHref({ name: 'player' }),
+          label: 'Now playing',
+          icon: <Play aria-hidden="true" />,
+          names: ['player'],
+          badge: playing ? '●' : undefined,
+        },
+      ],
+    },
+  ];
 }
 
 function DeviceMenu({ card, tracks, reachable }: { card: boolean; tracks: number; reachable: boolean }) {
@@ -171,7 +195,11 @@ function DeviceMenu({ card, tracks, reachable }: { card: boolean; tracks: number
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {
-                void fetch('/api/rescan', { method: 'POST' }).catch(() => {});
+                void fetch('/api/rescan', {
+                  method: 'POST',
+                  headers: { 'content-type': 'application/json' },
+                  body: '{}',
+                }).catch(() => {});
               }}
             >
               <RefreshCw aria-hidden="true" />
@@ -192,19 +220,22 @@ function Nav({ groups, route }: { groups: NavGroup[]; route: Route }) {
           <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {group.items.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    render={<a href={item.href} />}
-                    isActive={item.active(route)}
-                    tooltip={item.label}
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                  {item.badge ? <SidebarMenuBadge>{item.badge}</SidebarMenuBadge> : null}
-                </SidebarMenuItem>
-              ))}
+              {group.items.map((item) => {
+                const active = item.names.includes(route.name);
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      render={<a href={item.href} aria-current={active ? 'page' : undefined} />}
+                      isActive={active}
+                      tooltip={item.label}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                    {item.badge ? <SidebarMenuBadge>{item.badge}</SidebarMenuBadge> : null}
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -220,63 +251,9 @@ export function Shell({ route, children }: { route: Route; children: React.React
   const card = Boolean(status?.card);
   const tracks = status?.tracks ?? 0;
 
-  const groups: NavGroup[] = [
-    {
-      id: 'card',
-      label: 'Card',
-      items: [
-        {
-          href: routeHref({ name: 'process' }),
-          label: 'Process',
-          icon: <ListMusic aria-hidden="true" />,
-          badge: tracks > 0 ? String(tracks) : undefined,
-          active: isProcess,
-        },
-        { href: routeHref({ name: 'scan' }), label: 'Scan', icon: <ScanLine aria-hidden="true" />, active: isScan },
-      ],
-    },
-    {
-      id: 'playlists',
-      label: 'Playlists',
-      items: [
-        {
-          href: routeHref({ name: 'playlists' }),
-          label: 'Manage',
-          icon: <ListMusic aria-hidden="true" />,
-          badge: drafts.length > 0 ? String(drafts.length) : undefined,
-          active: isPlaylists,
-        },
-        { href: routeHref({ name: 'ask' }), label: 'Ask', icon: <Sparkles aria-hidden="true" />, active: isAsk },
-      ],
-    },
-    {
-      id: 'media',
-      label: 'Media',
-      items: [
-        {
-          href: routeHref({ name: 'media' }),
-          label: 'Albums & artists',
-          icon: <Disc3 aria-hidden="true" />,
-          active: isMedia,
-        },
-      ],
-    },
-    {
-      id: 'player',
-      label: 'Player',
-      items: [
-        {
-          href: routeHref({ name: 'player' }),
-          label: 'Now playing',
-          icon: <Play aria-hidden="true" />,
-          badge: playing?.title ? '●' : undefined,
-          active: isPlayer,
-        },
-      ],
-    },
-  ];
+  const groups = navGroups(drafts.length, tracks, Boolean(playing?.title));
 
-  const area = areaName(route);
+  const area = routeArea(route);
 
   return (
     <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden">
@@ -320,7 +297,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
                 </>
               ) : null}
               <BreadcrumbItem>
-                <BreadcrumbPage className="truncate">{pageName(route)}</BreadcrumbPage>
+                <BreadcrumbPage className="truncate">{routePage(route)}</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>

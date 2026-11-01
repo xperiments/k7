@@ -251,7 +251,7 @@ the device keeps serving, reports the reason, and never trusts a partially valid
 2. `magic`, and `header_size` is `64` for version 1 or `80` for version 2; `row_size == 32`.
 3. `format_version` is `1` or `2`. Unknown versions are refused, not guessed.
 4. `total_size == header_size + row_count*32 + pool_size` (version 1), or that sum plus
-   `list_count*32 + list_rows*12` (version 2), with no 32-bit overflow in any multiplication.
+   `list_count*32 + list_rows*4` (version 2), with no 32-bit overflow in any multiplication.
 5. `crc32` matches `[header_size, total_size)`.
 6. Rows are strictly ascending by `fingerprint`.
 7. Every `string_offset < pool_size`, and the row's four strings terminate inside the pool.

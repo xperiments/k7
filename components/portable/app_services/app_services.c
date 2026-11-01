@@ -175,7 +175,7 @@ static http_result_t snapshot_route(int fd, const http_request_t *req, void *ctx
     app_board_flash_t r;
     if (valid != SNAPSHOT_OK)
         r = APP_BOARD_FLASH_INVALID;
-    else if (!flash_job_run(flash_snapshot, &job, 0))
+    else if (!flash_job_run(flash_snapshot, &job))
         r = APP_BOARD_FLASH_FAILED;
     else
         r = job.result;
@@ -248,23 +248,6 @@ static void reply_json(int fd, int status, const char *body, const char *cache)
     http_send_all(fd, body, len);
 }
 
-static void json_escape_into(char *out, size_t cap, const char *in)
-{
-    size_t n = 0;
-    for (const unsigned char *p = (const unsigned char *)in; p && *p && n + 7 < cap; p++) {
-        switch (*p) {
-        case '"': out[n++] = '\\'; out[n++] = '"'; break;
-        case '\\': out[n++] = '\\'; out[n++] = '\\'; break;
-        case '\n': out[n++] = '\\'; out[n++] = 'n'; break;
-        case '\r': out[n++] = '\\'; out[n++] = 'r'; break;
-        case '\t': out[n++] = '\\'; out[n++] = 't'; break;
-        default:
-            if (*p < 0x20) n += (size_t)snprintf(out + n, cap - n, "\\u%04x", *p);
-            else out[n++] = (char)*p;
-        }
-    }
-    out[n] = 0;
-}
 
 static void id_hex(char out[17], uint64_t id)
 {
@@ -306,15 +289,11 @@ static http_result_t playlists_route(int fd, const http_request_t *req, void *ct
     }
     uint64_t selected = playlist_select_current();
     char sel[17] = {0};
-    char sel_name[200] = {0};
-    if (selected) {
-        char raw[96] = {0};
-        id_hex(sel, selected);
-        playlist_select_name(raw, sizeof raw);
-        json_escape_into(sel_name, sizeof sel_name, raw);
-    }
-    int at = snprintf(body, cap, "{\"selected\":%s%s%s,\"missing\":%u,\"lists\":[",
+    if (selected) id_hex(sel, selected);
+    int at = snprintf(body, cap,
+                      "{\"selected\":%s%s%s,\"walking\":%s,\"missing\":%u,\"lists\":[",
                       selected ? "\"" : "", selected ? sel : "null", selected ? "\"" : "",
+                      playlist_select_walking() ? "true" : "false",
                       (unsigned)playlist_select_missing());
     for (uint32_t i = 0; i < n && at > 0 && (size_t)at < cap; i++) {
         snapshot_list_t l;
@@ -322,7 +301,7 @@ static http_result_t playlists_route(int fd, const http_request_t *req, void *ct
         char id[17];
         char name[200];
         id_hex(id, l.id);
-        json_escape_into(name, sizeof name, snapshot_list_name(s_snapshot, &l));
+        http_json_escape(name, sizeof name, snapshot_list_name(s_snapshot, &l));
         at += snprintf(body + at, cap - (size_t)at,
                        "%s{\"id\":\"%s\",\"name\":\"%s\",\"created\":%llu,\"rows\":%u}",
                        i ? "," : "", id, name, (unsigned long long)l.created,
@@ -364,13 +343,13 @@ static http_result_t playlist_route(int fd, const http_request_t *req, void *ctx
     char id_hexed[17];
     char name[200];
     id_hex(id_hexed, id);
-    json_escape_into(name, sizeof name, snapshot_list_name(s_snapshot, &l));
+    http_json_escape(name, sizeof name, snapshot_list_name(s_snapshot, &l));
     int at = snprintf(body, cap, "{\"id\":\"%s\",\"name\":\"%s\",\"rows\":[", id_hexed, name);
     for (uint32_t i = 0; i < l.row_count && at > 0 && (size_t)at < cap; i++) {
         const char *path = NULL;
         if (!snapshot_list_row(s_snapshot, &l, i, &path)) continue;
         char escaped[LIB_PATH_MAX * 2];
-        json_escape_into(escaped, sizeof escaped, path);
+        http_json_escape(escaped, sizeof escaped, path);
         at += snprintf(body + at, cap - (size_t)at, "%s\"%s\"", i ? "," : "", escaped);
     }
     if (at > 0 && (size_t)at + 32 < cap) at += snprintf(body + at, cap - (size_t)at, "]}");

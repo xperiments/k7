@@ -27,6 +27,7 @@ typedef enum {
     PLAYLIST_SELECT_NO_SNAPSHOT, /* this device has no usable Snapshot */
     PLAYLIST_SELECT_NOT_FOUND,   /* no such list id in the image */
     PLAYLIST_SELECT_EMPTY,       /* the list has no row the Library can resolve */
+    PLAYLIST_SELECT_NO_MEM,      /* the order could not be built */
 } playlist_select_result_t;
 
 /* The persistence seam. Both are optional; with none the selection lives until reboot. */
@@ -61,6 +62,11 @@ uint64_t    playlist_select_current(void);
  * pointer because the name is written under this module's lock and read from another
  * task's stack. */
 void        playlist_select_name(char *out, size_t size);
+
+/* Whether an order is actually being walked. The choice and the walk are different facts:
+ * a card that is out leaves the choice standing (so it comes back with the card) while
+ * nothing walks. */
+bool        playlist_select_walking(void);
 
 /* Rows a resolution could not find on the card, for the last sync or set. */
 uint32_t    playlist_select_missing(void);

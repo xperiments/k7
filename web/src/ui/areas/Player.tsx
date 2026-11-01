@@ -220,19 +220,19 @@ export function PlayerArea() {
 
             {analysis ? (
               <div className="flex flex-wrap items-center gap-1.5">
-                <Badge variant="secondary" size="sm">
+                <Badge variant="secondary">
                   {analysis.bpm === null ? 'no BPM' : `${analysis.bpm.toFixed(1)} BPM`}
                 </Badge>
-                <Badge variant="secondary" size="sm">
+                <Badge variant="secondary">
                   {analysis.key ?? 'no key'}
                 </Badge>
                 {analysis.energy === null ? null : (
-                  <Badge variant="secondary" size="sm">
+                  <Badge variant="secondary">
                     {analysis.energy}% energy
                   </Badge>
                 )}
                 {analysis.mood.length > 0 ? (
-                  <Badge variant="secondary" size="sm">
+                  <Badge variant="secondary">
                     {analysis.mood.join(', ')}
                   </Badge>
                 ) : null}

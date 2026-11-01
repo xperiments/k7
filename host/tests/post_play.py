@@ -75,18 +75,18 @@ def main():
     status, headers, payload = exchange(header + body)
     bad += check("one-packet header+body is accepted", status, 200)
     bad += check("one-packet response is JSON", headers.get("content-type"), "application/json")
-    bad += check("one-packet response says ok", payload, b'{"ok":true}')
+    bad += check("one-packet response says ok", payload, b'{"ok":true,"order":"tree"}')
 
     # Header first, body after: the server must wait for the declared length.
     status, _headers, payload = exchange(header, body, split=True)
     bad += check("split header/body is accepted", status, 200)
-    bad += check("split response says ok", payload, b'{"ok":true}')
+    bad += check("split response says ok", payload, b'{"ok":true,"order":"tree"}')
 
     # The body straddles the first read: bytes already in the header buffer must
     # be kept and the rest read from the socket.
     status, payload = chunked(header, [body[:4], body[4:]])
     bad += check("a body straddling the header read is accepted", status, 200)
-    bad += check("straddled response says ok", payload, b'{"ok":true}')
+    bad += check("straddled response says ok", payload, b'{"ok":true,"order":"tree"}')
 
     # Accept is ignored.
     accept = (b"POST /api/play HTTP/1.0\r\nAccept: text/html\r\n"
@@ -123,7 +123,7 @@ def main():
         b"POST /api/play HTTP/1.0\r\nContent-Type: application/json\r\n"
         b"Content-Length: 8192\r\n\r\n" + exact)
     bad += check("8192 bytes is accepted", status, 200)
-    bad += check("8192-byte response says ok", payload, b'{"ok":true}')
+    bad += check("8192-byte response says ok", payload, b'{"ok":true,"order":"tree"}')
 
     over = json.dumps({"path": "two.wav"}).encode()
     over += b" " * (8193 - len(over))

@@ -79,7 +79,7 @@ static bool nvs_save(void *ctx)
 static bool selection_save(uint64_t id)
 {
     nvs_save_t job = {id, false};
-    return flash_job_run(nvs_save, &job, 0) && job.ok;
+    return flash_job_run(nvs_save, &job) && job.ok;
 }
 
 static const char *TAG = "app";

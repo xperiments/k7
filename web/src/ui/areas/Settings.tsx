@@ -378,7 +378,7 @@ export function SettingsArea() {
 
           {keySet ? (
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="success-light" size="sm">
+              <Badge variant="success-light">
                 key set
               </Badge>
               <Button variant="ghost" size="sm" onClick={clearKey}>

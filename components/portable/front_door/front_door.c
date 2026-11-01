@@ -163,26 +163,6 @@ static http_result_t serve_file(int fd, const char *request_path, const char *fi
     return HTTP_HANDLED;
 }
 
-static void json_escape(char *out, size_t cap, const char *in)
-{
-    size_t n = 0;
-    for (const unsigned char *p = (const unsigned char *)in; p && *p && n + 7 < cap; p++) {
-        switch (*p) {
-        case '"': out[n++] = '\\'; out[n++] = '"'; break;
-        case '\\': out[n++] = '\\'; out[n++] = '\\'; break;
-        case '\n': out[n++] = '\\'; out[n++] = 'n'; break;
-        case '\r': out[n++] = '\\'; out[n++] = 'r'; break;
-        case '\t': out[n++] = '\\'; out[n++] = 't'; break;
-        default:
-            if (*p < 0x20) {
-                n += (size_t)snprintf(out + n, cap - n, "\\u%04x", *p);
-            } else {
-                out[n++] = (char)*p;
-            }
-        }
-    }
-    out[n] = 0;
-}
 
 static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
 {
@@ -202,21 +182,24 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
 
     char title[200];
     char path[200];
-    json_escape(title, sizeof title, st.title);
-    json_escape(path, sizeof path, st.path);
+    http_json_escape(title, sizeof title, st.title);
+    http_json_escape(path, sizeof path, st.path);
 
     bool card = F.card_present ? F.card_present() : false;
 
     /* The order the broadcast is walking: the library tree, or the Playlist the device
      * was told to walk. A fact like the card state -- the page reads it, never sets it. */
-    uint64_t playlist = playlist_select_current();
+    /* The choice and the walk are different facts: a card that is out keeps the choice
+     * (it comes back with the card) while nothing is walking. */
+    bool walking = playlist_select_walking();
+    uint64_t playlist = walking ? playlist_select_current() : 0;
     char playlist_id[17] = {0};
     char playlist_name[200] = {0};
     if (playlist) {
         snprintf(playlist_id, sizeof playlist_id, "%016llx", (unsigned long long)playlist);
         char raw_name[96] = {0};
         playlist_select_name(raw_name, sizeof raw_name);
-        json_escape(playlist_name, sizeof playlist_name, raw_name);
+        http_json_escape(playlist_name, sizeof playlist_name, raw_name);
     }
 
     char playlist_json[320];
@@ -300,7 +283,7 @@ static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
      * writer, where the stack is internal. 30 s: a large gzipped bundle to a slow client
      * must not be cut in half by the writer's own default. */
     serve_job_t job = {fd, req->path, file, is_page ? 503 : 404, req->accepts_gzip};
-    if (!flash_job_run(serve_job, &job, 30000u)) {
+    if (!flash_job_run(serve_job, &job)) {
         /* The writer did not take it: answer instead of leaving the client hanging. */
         http_send_error(fd, 503, "the page reader is busy");
     }

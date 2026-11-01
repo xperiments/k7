@@ -126,6 +126,25 @@ esp_err_t http_send_headers(int fd, int status, const char *content_type,
     return http_send_all(fd, h, w.n) ? ESP_OK : ESP_FAIL;
 }
 
+void http_json_escape(char *out, size_t cap, const char *in)
+{
+    if (!out || !cap) return;
+    size_t n = 0;
+    for (const unsigned char *p = (const unsigned char *)in; p && *p && n + 7 < cap; p++) {
+        switch (*p) {
+        case '"': out[n++] = '\\'; out[n++] = '"'; break;
+        case '\\': out[n++] = '\\'; out[n++] = '\\'; break;
+        case '\n': out[n++] = '\\'; out[n++] = 'n'; break;
+        case '\r': out[n++] = '\\'; out[n++] = 'r'; break;
+        case '\t': out[n++] = '\\'; out[n++] = 't'; break;
+        default:
+            if (*p < 0x20) n += (size_t)snprintf(out + n, cap - n, "\\u%04x", *p);
+            else out[n++] = (char)*p;
+        }
+    }
+    out[n] = 0;
+}
+
 esp_err_t http_send_error(int fd, int status, const char *detail)
 {
     char body[600];

@@ -173,6 +173,12 @@ void http_send_timeout_ms(int fd, uint32_t ms);
  * TLS listener's stack is httpd's own and is not measured here. */
 uint32_t http_server_conn_stack_headroom_bytes(void);
 
+/* Escape `in` as the inside of a JSON string, into `out`. Control characters become
+ * \u00XX, the quote and the backslash are escaped, and nothing else is touched. Truncation
+ * is silent and always lands on a NUL - it is a cap on a display string, not on an
+ * identity, and the callers keep their caps comfortably above the data. */
+void http_json_escape(char *out, size_t cap, const char *in);
+
 /* Decode a percent-encoded string in place into `out`.
  * Returns the decoded length, or (size_t)-1 if the encoding is malformed or the
  * decoded result would not fit - it never truncates silently, because a

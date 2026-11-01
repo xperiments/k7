@@ -419,7 +419,11 @@ static http_result_t play_route(int fd, const http_request_t *req, void *ctx)
         send_json(fd, 404, "{\"ok\":false,\"error\":\"no such track\"}");
         return HTTP_HANDLED;
     }
-    send_json(fd, 200, "{\"ok\":true}");
+    /* A pick outside the selected Playlist drops it, so the reply says which order the
+     * broadcast is in now (front-door spec U4). */
+    send_json(fd, 200, mini_icecast_order_active()
+                          ? "{\"ok\":true,\"order\":\"list\"}"
+                          : "{\"ok\":true,\"order\":\"tree\"}");
     return HTTP_HANDLED;
 }
 

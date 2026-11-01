@@ -117,6 +117,7 @@ def main():
         check("playlists answers", status, 200)
         check("two lists", len(doc["lists"]), 2)
         check("nothing selected yet", doc["selected"], None)
+        check("and nothing walking", doc["walking"], False)
         names = [l["name"] for l in doc["lists"]]
         check("names", names, ["Late night", "Empty"])
         check("row count", doc["lists"][0]["rows"], 2)
@@ -146,6 +147,7 @@ def main():
 
         status, doc = request(port, "GET", "/api/playlists")
         check("the page sees the selection", doc["selected"], latelight_hex)
+        check("and the walk", doc["walking"], True)
 
         # A pick outside the list ends it: the rule the app relies on.
         outside = None

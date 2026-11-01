@@ -23,6 +23,7 @@ import { needsMeasurement, tagAnalysis } from '../../domain/tagAnalysis';
 import { sendSnapshot } from '../../device/upload';
 import { newId } from '../../lib/id';
 import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
+import { patchListArea } from '../../playlists/image';
 import { allMedia, countMedia, putMedia } from '../../storage/media';
 import {
   clearSnapshot,
@@ -107,6 +108,10 @@ export interface AnalysisApi {
   saveToCard: () => Promise<void>;
   saveSnapshotFile: () => Promise<void>;
   resendLast: () => Promise<void>;
+  /* Send this browser's drafts inside its last image. False when there is no image to
+   * carry them: sending a list must not throw the measurements away. */
+  canSendLists: boolean;
+  sendLists: () => Promise<boolean>;
   downloadLast: () => void;
   discardLast: () => Promise<void>;
   clearAll: () => Promise<void>;
@@ -631,6 +636,54 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     }
   }, [lastSnapshot, saving]);
 
+  /* A list edit is an image edit: the rows are already in the last image this browser
+   * built, so only the list area is rewritten and posted (ADR 0051). A browser with no
+   * image has nothing to patch, and says so instead of sending lists over a hole where
+   * the measurements were. */
+  const sendLists = useCallback(async (): Promise<boolean> => {
+    if (saving) return false;
+    const base = lastSnapshot ?? (await loadSnapshot());
+    if (!base) {
+      setNotice({
+        kind: 'error',
+        text:
+          'This browser has no image of this card yet. Measure it here once (or send from ' +
+          'Process), and playlist changes will go out on that image from then on.',
+      });
+      return false;
+    }
+    setSaving(true);
+    try {
+      const bytes = patchListArea(base.bytes, toSnapshotPlaylists());
+      const sent = await sendSnapshot(bytes);
+      const accepted: StoredSnapshot = {
+        ...base,
+        bytes,
+        sentAt: new Date().toISOString(),
+      };
+      await saveSnapshot(accepted);
+      setLastSnapshot(accepted);
+      setNotice({
+        kind: 'success',
+        text:
+          `Sent ${plural(drafts.length, 'playlist')} and ` +
+          `${plural(base.tracks, 'track')} to the player (${sent.bytes} bytes). ` +
+          'It is restarting to pick up the new lists.',
+      });
+      return true;
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text:
+          `Could not send the playlists: ${error instanceof Error ? error.message : String(error)}. ` +
+          'The image is kept — send it again when the player is back.',
+      });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [drafts.length, lastSnapshot, saving]);
+
   const downloadLast = useCallback(() => {
     if (!lastSnapshot) return;
     const blob = new Blob([lastSnapshot.bytes], { type: 'application/octet-stream' });
@@ -690,6 +743,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     saveToCard,
     saveSnapshotFile,
     resendLast,
+    canSendLists: Boolean(lastSnapshot),
+    sendLists,
     downloadLast,
     discardLast,
     clearAll,

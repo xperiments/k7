@@ -17,11 +17,13 @@ vocabulary is [`web/CONTEXT.md`](../../web/CONTEXT.md); the device's is
 [`CONTEXT.md`](./CONTEXT.md). The byte contract for the image is
 [`snapshot-format.md`](./snapshot-format.md).
 
-**Status:** the Shell, `/api/status`, `/library`, `/stream` and `POST /api/snapshot` are built and
-running on the board over plain HTTP. The four areas, the hash routes, the playlist section of the
-image (`format_version 2`), the selection command and the broadcast walking a list are **designed
-here and not built**. What is not proven: the browser flows end to end (no automated browser), the
-cold/warm weight cache, and §9's measurements.
+**Status:** built, flashed and running on the board over plain HTTP — the Shell (377 KiB packed),
+the four areas, the hash routes, `format_version 2` with the list area, `GET /api/playlists`,
+`GET /api/playlists/<id>`, `POST /api/playlists/select`, the selection remembered in NVS, and the
+broadcast walking a selected order. The page is served and its assets download from the device.
+What is not proven: a **selection restored across a reboot with a card mounted** (no card has been
+in the board since the feature landed, so nothing could resolve), the browser flows end to end (no
+automated browser), the cold/warm weight cache, and §9's measurements.
 
 ---
 
@@ -29,7 +31,7 @@ cold/warm weight cache, and §9's measurements.
 
 | Piece | Bytes | Lives |
 |---|---:|---|
-| `index.html`, app bundle, worker, `wasi-adapter`, `ort.mjs`, manifest, icons, `shell.json`, `weights.lock.json`, `setup.html` | **~350 KiB** packed | 1.25 MB SPIFFS partition at `0x610000` |
+| `index.html`, app bundle, worker, `wasi-adapter`, `ort.mjs`, manifest, icons, `shell.json`, `weights.lock.json`, `setup.html` | **377 KiB** packed (measured; 396 KiB in SPIFFS) | 1.25 MB SPIFFS partition at `0x610000` |
 | Essentia (`essentia-wasm.es.js`, 2.56 MB) | 2.6 MB | jsDelivr, pinned tag, sha256-checked |
 | TagLib's one browser wasm | 0.7 MB | jsDelivr |
 | ONNX Runtime wasm | 14 MB | jsDelivr |
@@ -54,6 +56,11 @@ it loads the module from the CDN, not from the bundle.
 use. JavaScript modules are fetched as text, checked, and imported from a blob URL;
 `ArrayBuffer` artefacts are checked before they reach ONNX Runtime. Verification happens on
 every cold load, not only the first.
+
+**F0.** Anything that touches flash at runtime runs on one task with an internal stack: the
+Snapshot write, the NVS selection, and serving a page. The HTTP workers' stacks are in PSRAM, and
+a flash access disables the cache they live behind — the page's own reads reset the device until
+this was found ([ADR 0054](../adr/0054-flash-io-runs-on-an-internal-stack.md)).
 
 **F4.** The Shell is **small on purpose**. Every component it installs is JavaScript the board
 has to store and the browser has to parse: `sidebar` plus its `dropdown-menu`, `breadcrumb`,
@@ -325,10 +332,12 @@ are the only source of names.
 | T6 | `/api/status` reports the card state within one poll of a removal and a reinsertion | board | **not proven** |
 | T7 | A cold cache loads the weights once; a warm cache starts with the network off | browser | **not proven** |
 | T8 | A tampered model is refused, by hash | host | **proven at the hash level** |
-| T9 | A v2 image with lists is accepted; one with a list row out of bounds, unsorted ids or a bad CRC is refused | host | **to build** |
-| T10 | `select` walks the list, wraps at the end, skips a row whose size changed, and survives a restart | host + board | **to build** |
-| T11 | A v1 image still applies on a v2 reader | host | **to build** |
-| T12 | Each hash route renders on a reload, and Process keeps its Queue across a navigation | browser | **to build** |
+| T9 | A v2 image with lists is accepted; one with a list row out of bounds, unsorted ids, a reserved byte or a bad CRC is refused | host | **proven** — `t29_snapshot` (v2 fixtures and every refusal) and `playlist_tests.py` |
+| T10 | `select` applies the list, `404`s an unknown id, `409`s an empty one, and a pick outside the list drops it | host | **proven** — `playlist_tests.py` |
+| T10b | The choice is remembered across a reboot with a card mounted, and a stored id the new image lacks falls back | board | **not proven** — the board has had no card since the feature landed (the NVS write itself is proven: `select {"id":null}` answered 200 on the board, where the PSRAM-stack handler used to reset) |
+| T11 | A v1 image still applies on a v2 reader | host + board | **proven** — `playlist_tests.py` (v1, no lists) and the board served its previous v1 image after the v2 firmware was flashed |
+| T12 | Each hash route renders on a reload | browser | **proven** — headless Chrome loaded `#/process`, `#/playlists`, `#/media`, `#/player` and `#/settings` from the running board and each rendered its area (the shell, nav and page); `router.test.ts` covers the parse/format inverse |
+| T12b | Process keeps its Queue across a navigation | browser | **not proven** — needs a measuring queue, which needs a card |
 
 ---
 

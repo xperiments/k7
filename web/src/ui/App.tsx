@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { loadDrafts } from '../playlists/drafts';
-import { deviceSnapshot, useDeviceStatus } from '../device/useDeviceStatus';
+import { useDeviceStatus } from '../device/useDeviceStatus';
 import { AlbumArea } from './areas/Album';
 import { ArtistArea } from './areas/Artist';
 import { AskArea } from './areas/Ask';
@@ -68,7 +68,3 @@ export function App() {
   );
 }
 
-/** For the shell's own use: is this device answering right now? */
-export function deviceIsReachable(): boolean {
-  return deviceSnapshot().reachable;
-}

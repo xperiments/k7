@@ -243,6 +243,10 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 | `GET /api/library.bin` | The same generation as an arena: versioned header, nodes, edges, track index and CRC. |
 | `POST /api/play` | `{"path":"Album/song.mp3"}` selects any Track at the next chunk boundary. A bad path is a 404 and leaves the stream alone. |
 | `POST /api/rescan` | `{}` starts one asynchronous Library rescan; `202` when started, `409` when one is already running. The old generation stays readable; the broadcast parks on the idle bed for the scan, resumes the current Track, and switches to the new generation at its next pass. |
+| `GET /api/playlists` | The Playlists the Snapshot holds — `{id, name, created, rows}` — and `selected`, the list the broadcast is walking (or `null` for the Library's own order), plus `missing`, the rows the Library could not resolve. |
+| `GET /api/playlists/<id>` | One list's rows, as the Library's own paths. A hex id; anything else is a `404`. |
+| `POST /api/playlists/select` | `{"id":"<hex16>"}` tells the broadcast to walk that Playlist, `{"id":null}` returns it to the Library's order. Remembered in NVS; a `404` for an unknown id, a `409` for a list with no Track the Library can find. A `POST /api/play` for a Track outside the selected list drops the selection. |
+| `GET /api/status` | The Card state, the Library's count and generation, the order (`tree` or `list`, with the Playlist's `{id, name}`), and what the broadcast is playing: `title`, `path`, `elapsed_ms`, `duration_ms`. |
 | `POST /mcp` | MCP (2025-11-25): `initialize`, `ping`, `tools/list`, `tools/call` for `library_stats`, `library_list`, `library_search`, `library_track` and `player_status`. Read-only by default; a build with `XTAPE_MCP_CONTROL=1` adds `player_play`, `player_skip`, `player_prev` and `library_rescan`. |
 | anything else | `404`, or `405` for a known path with the wrong method. |
 

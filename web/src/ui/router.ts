@@ -66,6 +66,58 @@ export function parseRoute(hash: string): Route {
   }
 }
 
+/** The area a route belongs to, or null for the shell's own pages (Settings). */
+export function routeArea(route: Route): 'Card' | 'Playlists' | 'Media' | 'Player' | null {
+  switch (route.name) {
+    case 'process':
+    case 'scan':
+      return 'Card';
+    case 'playlists':
+    case 'playlist':
+    case 'ask':
+      return 'Playlists';
+    case 'media':
+    case 'album':
+    case 'artist':
+    case 'video':
+      return 'Media';
+    case 'player':
+      return 'Player';
+    default:
+      return null;
+  }
+}
+
+/** The page's name for the breadcrumb: the area says where, this says what. */
+export function routePage(route: Route): string {
+  switch (route.name) {
+    case 'process':
+      return 'Process';
+    case 'scan':
+      return 'Scan';
+    case 'playlists':
+      return 'Playlists';
+    case 'playlist':
+      return 'Editor';
+    case 'ask':
+      return 'Ask';
+    case 'media':
+      return 'Albums & artists';
+    case 'album':
+      return route.album;
+    case 'artist':
+      return route.artist;
+    case 'video':
+      return 'Video';
+    case 'player':
+      return 'Now playing';
+    case 'settings':
+      return 'Settings';
+    default:
+      return 'Not found';
+  }
+}
+
 /** The hash a route is addressed by; the inverse of `parseRoute`. */
 export function routeHref(route: Route): string {
   switch (route.name) {

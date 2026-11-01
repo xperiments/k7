@@ -26,8 +26,12 @@ bool flash_job_start(void);
 
 /* Run `fn(ctx)` on the writer and wait for it. `fn` touches flash (reads or writes) and
  * must never call flash_job_run itself. Before the writer exists this runs `fn` inline:
- * the only callers then are boot-time, on an internal stack. */
-bool flash_job_run(bool (*fn)(void *ctx), void *ctx, unsigned timeout_ms);
+ * the only callers then are boot-time, on an internal stack.
+ *
+ * It waits until the job is done, with no timeout: `ctx` usually points at the caller's
+ * stack frame, so returning early would leave the writer reading a frame that is gone. A
+ * job that runs long is logged, not abandoned. */
+bool flash_job_run(bool (*fn)(void *ctx), void *ctx);
 
 #ifdef __cplusplus
 }

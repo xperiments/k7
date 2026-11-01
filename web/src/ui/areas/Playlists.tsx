@@ -4,7 +4,14 @@ import { ListMusic, Plus, Sparkles } from 'lucide-react';
 import { Alert, AlertAction, AlertDescription } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import {
   Empty,
   EmptyContent,
@@ -30,6 +37,7 @@ import {
   type Draft,
 } from '../../playlists/drafts';
 import { plural } from '../format';
+import { useAnalysis } from '../state/analysis';
 import { navigate, routeHref } from '../router';
 
 /**
@@ -37,7 +45,8 @@ import { navigate, routeHref } from '../router';
  *
  * **On the device** is what the last accepted image said, and which list the broadcast is
  * walking: reading it is a GET, choosing one is the `select` command. **Drafts** are this
- * browser's copies, and nothing here sends one — a draft reaches the player only when
+ * browser's copies; sending them rewrites the lists inside the last image and posts it, so
+ * a draft reaches the player only when
  * Process builds an image and posts it, which is what keeps ADR 0051's one-write rule true.
  */
 
@@ -67,16 +76,17 @@ function created(seconds: number): string {
 /** One list the device holds. Walking it is the only write this page can do. */
 function DeviceRow({
   list,
-  selected,
+  chosen,
   walking,
   disabled,
   onWalk,
 }: {
   list: DevicePlaylists['lists'][number];
-  selected: boolean;
-  /** This row's own command is in flight. */
+  /** This is the list the device was told to walk. */
+  chosen: boolean;
+  /** …and it is walking now. A chosen list is not walking when the card is out. */
   walking: boolean;
-  /** Another command is in flight, so every Walk button waits. */
+  /** This row's own command is in flight. */
   disabled: boolean;
   onWalk: (id: string) => void;
 }) {
@@ -85,10 +95,10 @@ function DeviceRow({
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-sm font-medium">{list.name}</span>
-          {selected ? (
-            <Badge variant="success-light" size="sm">
-              Walking
-            </Badge>
+          {walking ? (
+            <Badge variant="success-light">Walking</Badge>
+          ) : chosen ? (
+            <Badge variant="warning-light">Waiting for the card</Badge>
           ) : null}
         </div>
         <span className="text-xs text-muted-foreground tabular-nums">
@@ -96,13 +106,12 @@ function DeviceRow({
         </span>
       </div>
       <Button
-        variant={selected ? 'outline' : 'secondary'}
+        variant={chosen ? 'outline' : 'secondary'}
         size="sm"
-        disabled={selected || disabled}
+        disabled={walking || disabled}
         onClick={() => onWalk(list.id)}
-        aria-label={selected ? `${list.name} is walking` : `Walk ${list.name}`}
       >
-        {selected ? 'Walking' : walking ? 'Starting…' : 'Walk this'}
+        {walking ? 'Walking' : disabled ? 'Starting…' : 'Walk this'}
       </Button>
     </li>
   );
@@ -117,7 +126,7 @@ function DraftRow({ draft }: { draft: Draft }) {
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-sm font-medium">{draft.name}</span>
-          <Badge variant="info-light" size="sm">
+          <Badge variant="info-light">
             Not sent yet
           </Badge>
         </div>
@@ -155,6 +164,32 @@ function DraftRow({ draft }: { draft: Draft }) {
         )}
       </div>
     </li>
+  );
+}
+
+/** Send the drafts on the image this browser already has. */
+function SendDrafts() {
+  const { canSendLists, sendLists, saving } = useAnalysis();
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <CardAction>
+      <Button
+        size="sm"
+        disabled={saving || busy || !canSendLists}
+        title={
+          canSendLists
+            ? 'Rewrite the lists in this browser\'s last image and send it; the player restarts'
+            : 'This browser has no image of this card yet: measure it here once, or send from Process'
+        }
+        onClick={() => {
+          setBusy(true);
+          void sendLists().finally(() => setBusy(false));
+        }}
+      >
+        {busy ? 'Sending…' : 'Send to player'}
+      </Button>
+    </CardAction>
   );
 }
 
@@ -242,6 +277,8 @@ export function PlaylistsArea() {
   };
 
   const selected = device?.selected ?? null;
+  /* The choice and the walk are different facts: a card that is out keeps the choice. */
+  const isWalking = Boolean(device?.walking && selected);
   const hasLists = Boolean(device && device.lists.length > 0);
 
   return (
@@ -314,8 +351,8 @@ export function PlaylistsArea() {
                   <DeviceRow
                     key={list.id}
                     list={list}
-                    selected={list.id === selected}
-                    walking={walking === list.id}
+                    chosen={list.id === selected}
+                    walking={isWalking && list.id === selected}
                     disabled={walking !== null}
                     onWalk={(id) => void walk(id)}
                   />
@@ -347,9 +384,11 @@ export function PlaylistsArea() {
         <CardHeader>
           <CardTitle>Drafts</CardTitle>
           <CardDescription>
-            A draft becomes the player's copy when Process sends an image; nothing here changes
-            what plays.
+            A draft becomes the player's copy when an image carrying it is accepted. Sending
+            rewrites the lists inside the last image this browser built — the measurements are
+            kept — and the player restarts.
           </CardDescription>
+          <SendDrafts />
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {!draftsLoaded() ? (

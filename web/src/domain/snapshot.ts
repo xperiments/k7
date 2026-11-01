@@ -442,17 +442,91 @@ export function buildSnapshot(
     }
   }
 
-  const prepared = prepareLists(lists, encoder);
+  return assembleImage({
+    generationSeconds: input.generationSeconds,
+    analyserVersion: input.analyserVersion,
+    appSchema: input.appSchema,
+    modelSet: input.modelSet,
+    rowCount: rows.length,
+    rowStringOffsets: (() => {
+      const offsets: number[] = [];
+      let at = 0;
+      for (const row of rows) {
+        offsets.push(at);
+        at += row.strings.length;
+      }
+      return offsets;
+    })(),
+    rowBytes: rows.length
+      ? (() => {
+          const bytes = new Uint8Array(rows.length * ROW_SIZE);
+          const rowView = new DataView(bytes.buffer);
+          rows.forEach((row, index) => {
+            const at = index * ROW_SIZE;
+            rowView.setBigUint64(at, row.fingerprint, true);
+            rowView.setUint32(at + 8, row.size, true);
+            rowView.setUint16(at + 16, row.bpmX10, true);
+            rowView.setUint8(at + 18, row.key);
+            rowView.setUint8(at + 19, row.energy);
+            rowView.setUint8(at + 20, row.danceability);
+            rowView.setUint8(at + 21, row.valence);
+            rowView.setUint8(at + 22, row.arousal);
+            rowView.setUint8(at + 23, row.moodBits);
+            rowView.setUint8(at + 24, row.confidence);
+            rowView.setUint8(at + 25, row.sourceFlags);
+          });
+          return bytes;
+        })()
+      : new Uint8Array(0),
+    rowPool: rows.length ? concatBytes(rows.map((row) => row.strings)) : new Uint8Array(0),
+    lists,
+  });
+}
+
+/** The rows' strings, in order, as one buffer. */
+function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((n, part) => n + part.length, 0));
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.length;
+  }
+  return out;
+}
+
+interface Assembly {
+  generationSeconds: number;
+  analyserVersion: number;
+  appSchema: number;
+  modelSet: bigint;
+  /** `rowCount * 32` bytes, with `string_offset` left for the writer to fill in. */
+  rowBytes: Uint8Array;
+  /** Each row's `string_offset`: its strings' position in `rowPool`. */
+  rowStringOffsets: readonly number[];
+  rowCount: number;
+  /** Every row's four strings, concatenated in row order. */
+  rowPool: Uint8Array;
+  lists: readonly SnapshotPlaylist[];
+}
+
+/**
+ * Write an image from parts that are already encoded. `buildSnapshot` uses it after
+ * measuring, and `patchListArea` uses it to give an existing image new lists without
+ * disturbing its rows: the list area lives at the end, so everything before it can be
+ * copied verbatim and only the header's sizes and the CRC change.
+ */
+export function assembleImage(assembly: Assembly): Uint8Array<ArrayBuffer> {
+  const encoder = new TextEncoder();
+  const prepared = prepareLists(assembly.lists, encoder);
   const version = prepared.length > 0 ? FORMAT_VERSION_V2 : FORMAT_VERSION_V1;
   const headerSize = prepared.length > 0 ? HEADER_SIZE_V2 : HEADER_SIZE_V1;
 
-  const rowsPoolSize = rows.reduce((size, row) => size + row.strings.length, 0);
   const listsPoolSize = prepared.reduce((size, list) => size + list.strings.length, 0);
-  const poolSize = rowsPoolSize + listsPoolSize;
+  const poolSize = assembly.rowPool.length + listsPoolSize;
   const listRowCount = prepared.reduce((count, list) => count + list.rowCount, 0);
   const totalSize =
     headerSize +
-    rows.length * ROW_SIZE +
+    assembly.rowCount * ROW_SIZE +
     poolSize +
     prepared.length * LIST_SIZE +
     listRowCount * LIST_ROW_SIZE;
@@ -462,7 +536,7 @@ export function buildSnapshot(
 
   const image = new Uint8Array(totalSize);
   const view = new DataView(image.buffer);
-  const poolStart = headerSize + rows.length * ROW_SIZE;
+  const poolStart = headerSize + assembly.rowCount * ROW_SIZE;
   const listsStart = poolStart + poolSize;
   const listRowsStart = listsStart + prepared.length * LIST_SIZE;
 
@@ -473,13 +547,13 @@ export function buildSnapshot(
   view.setUint16(8, version, true);
   view.setUint16(10, headerSize, true);
   view.setUint32(12, totalSize, true);
-  view.setUint32(16, rows.length, true);
+  view.setUint32(16, assembly.rowCount, true);
   view.setUint32(20, ROW_SIZE, true);
-  view.setBigUint64(24, generationValue(input.generationSeconds), true);
+  view.setBigUint64(24, generationValue(assembly.generationSeconds), true);
   view.setUint32(32, poolSize, true);
-  view.setUint32(40, input.analyserVersion, true);
-  view.setUint32(44, input.appSchema, true);
-  view.setBigUint64(48, input.modelSet & UINT64_MASK, true);
+  view.setUint32(40, assembly.analyserVersion, true);
+  view.setUint32(44, assembly.appSchema, true);
+  view.setBigUint64(48, assembly.modelSet & UINT64_MASK, true);
   // `reserved` at 56..64 stays zero; the buffer starts zeroed and is never
   // written there.
 
@@ -491,31 +565,14 @@ export function buildSnapshot(
     view.setUint32(72, listRowCount, true);
   }
 
-  let poolOffset = 0;
-  for (let index = 0; index < rows.length; index += 1) {
-    const row = rows[index];
-    const offset = headerSize + index * ROW_SIZE;
-
-    view.setBigUint64(offset, row.fingerprint, true);
-    view.setUint32(offset + 8, row.size, true);
-    view.setUint32(offset + 12, poolOffset, true);
-    view.setUint16(offset + 16, row.bpmX10, true);
-    view.setUint8(offset + 18, row.key);
-    view.setUint8(offset + 19, row.energy);
-    view.setUint8(offset + 20, row.danceability);
-    view.setUint8(offset + 21, row.valence);
-    view.setUint8(offset + 22, row.arousal);
-    view.setUint8(offset + 23, row.moodBits);
-    view.setUint8(offset + 24, row.confidence);
-    view.setUint8(offset + 25, row.sourceFlags);
-    // `reserved` at 26..32 stays zero for the same reason as the header's.
-
-    image.set(row.strings, poolStart + poolOffset);
-    poolOffset += row.strings.length;
-  }
+  image.set(assembly.rowBytes, headerSize);
+  assembly.rowStringOffsets.forEach((offset, index) => {
+    view.setUint32(headerSize + index * ROW_SIZE + 12, offset, true);
+  });
+  image.set(assembly.rowPool, poolStart);
 
   // §7: the pool continues with each list's name and its rows' paths, in list order.
-  let listPoolOffset = poolOffset;
+  let listPoolOffset = assembly.rowPool.length;
   let listRowStart = 0;
   for (let index = 0; index < prepared.length; index += 1) {
     const list = prepared[index];

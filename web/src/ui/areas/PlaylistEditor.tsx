@@ -384,7 +384,7 @@ function Editor({ draft }: { draft: Draft }) {
                           {row?.title || baseName(path)}
                         </span>
                         {missingRow ? (
-                          <Badge variant="destructive-light" size="sm">
+                          <Badge variant="destructive-light">
                             Not on the card
                           </Badge>
                         ) : null}
