@@ -11,13 +11,15 @@ factory,  app,  factory, 0x10000, 4M,
 # mmapped, and after the app so the app's size is free to grow.
 snapshot, data, 0x40,    0x410000, 2M,
 # The Shell: the analysis app's own code (index.html, the bundle, the WASI adapter,
-# the manifest and the worker), served at `/` and mounted read-only at /frontdoor
-# (ADR 0048). One size and one place: `spiffs_create_partition_image()` in the root
-# CMakeLists.txt reads the size from this table, so there is no second number to
-# drift. The packed image measures ~350 KiB, because the build stores every text file
-# gzip-compressed and the front door serves it with `Content-Encoding: gzip`. 1.25 MB
-# keeps that at about a third, so a dependency is never a partition-table reflash: the
-# move to Tailwind/shadcn added ~100 KiB of code and would have overflowed the old 1 MB.
+# the manifest and the worker), served at `/`, as ONE image the board copies into PSRAM at
+# boot (ADR 0048, ADR 0055). Not a filesystem: a flash read through the partition API
+# disables the cache and the PSRAM window with it, and even a mapped read takes the bus the
+# panel scans from - so the page is served from RAM and flash is off its path entirely. `tools/pack_shell.py` writes the image and the
+# root CMakeLists.txt flashes it here; the size is stated once, in this table.
+# The image measures ~380 KiB, because the build stores every text file gzip-compressed and
+# the front door serves it with `Content-Encoding: gzip`. 1.25 MB keeps that at about a
+# third, so a dependency is never a partition-table reflash: the move to Tailwind/shadcn
+# added ~100 KiB of code and would have overflowed the old 1 MB.
 # The flash is 16 MB and 9.9 MB is free after snapshot (this partition then leaves
 # ~8.7 MB), so growing it later costs nothing but a line.
-frontdoor, data, spiffs, 0x610000, 0x140000,
+frontdoor, data, 0x40,   0x610000, 0x140000,

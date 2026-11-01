@@ -29,7 +29,17 @@ static const char *TAG = "panel";
 
 #define PANEL_W 800
 #define PANEL_H 480
-#define PCLK_HZ 18000000
+/* The profile's clock, and the only value this board has measured: 39.02 fps, 25.6 ms a
+ * frame. It was raised to 18 MHz in a working tree that also carried a reverted
+ * bounce-buffer experiment, and the move into this component (da817b6) carried the 18 in
+ * with it - "the pixel clock back to 16 MHz" (8c8d6e7) was never undone on purpose. The
+ * extra 12.5 % was never run on its own, and it buys nothing the UI can use: LVGL's own
+ * refresh period is 33 ms, so both clocks are above the rate the screen asks for. It did
+ * cost something - the scan-out pulls 36 MB/s out of PSRAM at 18 MHz instead of 32 - and a
+ * panel driven past its measured timing shows a constant sideways offset before it shows
+ * anything else. Back to 16. */
+#define PCLK_HZ 16000000
+
 
 /* boards/sunton-8048s050c.json -> wiring.dataPins */
 static const gpio_num_t k_data_pins[16] = {
@@ -173,6 +183,15 @@ esp_err_t panel_rgb_fill(uint16_t color)
         for (size_t n = 0; n < (size_t)PANEL_W * PANEL_H; n++) px[n] = color;
     }
     return ESP_OK;
+}
+
+esp_err_t panel_rgb_reinit(void)
+{
+    if (!s_panel) return ESP_ERR_INVALID_STATE;
+    /* rgb_panel_init stops the LCD engine, resets the FIFO and the GDMA channel and starts the
+     * transmission again, which is the only way from this side to re-establish the frame
+     * boundary after something took the PSRAM window away. */
+    return esp_lcd_panel_init(s_panel);
 }
 
 bool panel_rgb_frame(const uint16_t **px, int *w, int *h)

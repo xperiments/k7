@@ -41,9 +41,11 @@ typedef struct {
     uint32_t    library_max_bytes;  /* 0 = the library's default (4 MiB) */
     uint32_t    library_max_tracks; /* 0 = the library's default (20000) */
     const char *server_name;  /* HTTP Server: header; NULL = the server's default */
-    /* The Shell's directory: the SPIFFS mount on the device, `web/dist` on the host.
-     * NULL means this firmware carries no page. */
-    const char *shell_root;
+    /* The Shell's image, as `tools/pack_shell.py` wrote it: the mapped partition on the
+     * device, a buffer on the host. NULL (or bytes that do not validate) means this
+     * firmware carries no page. */
+    const void *shell_image;
+    size_t      shell_image_size;
     /* The remembered Playlist selection (id, 0 for none). NULL means this build
      * remembers none: the choice then lives until reboot. Wired to NVS by the
      * appliance, left NULL by the host. */

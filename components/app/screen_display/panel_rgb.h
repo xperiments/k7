@@ -30,4 +30,18 @@ esp_err_t panel_rgb_clear(void);
  * this without one can catch the buffer that is not in front. Call under
  * lvgl_port_lock(), and copy before unlocking if the caller means to touch the pixels
  * while the screen keeps drawing. */
+/* Stop the scan and start it again, from the frame in the framebuffers, cleanly.
+ *
+ * The scan-out is only as aligned as the moment it started: the driver primes the LCD FIFO
+ * from PSRAM with a one-microsecond head start, and any flash access after that takes the
+ * PSRAM window away for a few microseconds - which is a few dozen pixels of scan-out, after
+ * which the DMA and the engine are permanently out of step and the whole picture sits that far
+ * to one side. Boot is full of such accesses (Wi-Fi reads NVS), so the picture is painted
+ * correctly and then slips a moment later.
+ *
+ * This re-runs the driver's own init, which stops the peripheral, resets the FIFO and the
+ * channel and starts again - so the frame is established from a quiet bus instead of a busy
+ * one. Call it with both framebuffers holding the picture that should be on screen. */
+esp_err_t panel_rgb_reinit(void);
+
 bool panel_rgb_frame(const uint16_t **px, int *w, int *h);

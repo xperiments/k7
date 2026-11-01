@@ -52,6 +52,8 @@
 #include "backlight.h"
 #include "esp_lvgl_port.h"
 #include "panel_rgb.h"
+
+
 #include "touch_gt911.h"
 #endif
 
@@ -476,6 +478,7 @@ esp_err_t screen_display_boot(void)
     lv_obj_invalidate(lv_screen_active());
     lv_refr_now(s_disp);
 
+
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     lvgl_port_unlock();
 
@@ -515,6 +518,20 @@ esp_err_t screen_display_start(const char *music_dir)
 #else
     /* Build the picture first, then take the mark down: the cut is from the mark to the
      * finished cassette, never through an empty screen. */
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* Re-establish the scan before the cassette goes up. Everything that reads flash during
+     * boot - Wi-Fi's NVS, the card's own bookkeeping - has run by now, and each of those reads
+     * took the PSRAM window away for a few microseconds of scan-out, which is enough to leave
+     * the DMA and the LCD engine permanently out of step and the whole picture a band to one
+     * side. The driver's init stops the peripheral, resets the FIFO and the channel and starts
+     * again, so the frame is established from a quiet bus. Both buffers are blacked first, so
+     * the restart cannot show a half-painted page. */
+    panel_rgb_clear();
+    esp_err_t sc = panel_rgb_reinit();
+    if (sc != ESP_OK)
+        ESP_LOGW(TAG, "the scan could not be re-established (%s); the picture may sit offset",
+                 esp_err_to_name(sc));
+#endif
     cassette_view_create();
     card_mark_create(lv_screen_active());
     splash_destroy();

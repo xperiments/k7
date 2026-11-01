@@ -1,9 +1,10 @@
 /*
  * front_door - see include/front_door.h.
  *
- * Two routes and no state: the page's files come from a directory, and the one dynamic
- * answer is the card state. The filesystem calls are stdio, which on the device is the
- * mounted SPIFFS partition and on the host is a directory - the same code both ways.
+ * Two routes and no state: the page's files come out of one packed image, and the one
+ * dynamic answer is the card state. The image is resident - PSRAM on the board, a buffer on
+ * the host - so nothing here reads flash at all, and nothing is buffered: a file is a pointer
+ * and a length inside bytes that are already in memory.
  */
 #include "front_door.h"
 
@@ -15,13 +16,17 @@
 
 #include "http_server.h"
 #include "library.h"
-#include "flash_job.h"
 #include "mini_icecast.h"
 #include "playlist_select.h"
+#include "shell_image.h"
 
 static const char *TAG = "frontdoor";
 
 static front_door_cfg_t F;
+
+/* The image, validated once in front_door_start(). `s_shell.count` is 0 until then, and
+ * every path out of the page says "no page" rather than half-serving one. */
+static shell_image_t s_shell;
 
 /* ------------------------------------------------------------------ files */
 
@@ -71,62 +76,39 @@ static bool path_is_safe(const char *path)
 
 /* `/` is the page; everything else is a file with a real name. The app is one screen
  * with no client-side routes, so an unknown path is a 404 rather than index.html. */
-static bool shell_file_for(const char *request_path, char *out, size_t cap)
+static const char *logical_for(const char *request_path)
 {
-    const char *target = strcmp(request_path, "/") == 0 ? "/index.html" : request_path;
-    return snprintf(out, cap, "%s%s", F.shell_root ? F.shell_root : "", target) < (int)cap;
+    return strcmp(request_path, "/") == 0 ? "/index.html" : request_path;
 }
 
-/* The Shell is packed pre-compressed: the build writes `assets/index-abc.js.gz` and drops
- * the original, so the device streams those bytes with `Content-Encoding: gzip` and the
- * browser inflates them. Nothing on the board decompresses anything - the saving is flash,
- * and the transfer gets smaller too.
+/* The Shell is packed pre-compressed: the build stores `assets/index-abc.js` as gzip and
+ * drops the original, so the device sends those bytes with `Content-Encoding: gzip` and
+ * the browser inflates them. Nothing on the board decompresses anything - the saving is
+ * flash, and the transfer gets smaller too.
  *
  * A file the pack kept plain - `index.html`, the icons, anything that did not shrink - is
  * served as it is. A client that did not offer gzip cannot be handed a compressed-only
  * file, and the page means nothing to it anyway: it gets 406 rather than a misleading 404.
  *
- * `request_path` is what the cache rules are written against; `file_path` is the logical
- * name, and the content type comes from it - never from the trailing `.gz`. */
-static http_result_t serve_file(int fd, const char *request_path, const char *file_path,
-                                int missing_status, bool accepts_gzip)
+ * `request_path` is what the cache rules are written against; the logical name is what the
+ * image is keyed by, and the content type comes from it - never from a trailing `.gz`. */
+static http_result_t serve_file(int fd, const char *request_path, int missing_status,
+                                bool accepts_gzip)
 {
-    char packed[560];
-    bool has_packed = snprintf(packed, sizeof packed, "%s.gz", file_path) < (int)sizeof packed;
+    const char *logical = logical_for(request_path);
+    shell_blob_t blob;
+    shell_image_result_t found = shell_image_find(&s_shell, logical, accepts_gzip, &blob);
 
-    FILE *f = NULL;
-    bool compressed = false;
-    if (has_packed && accepts_gzip) {
-        f = fopen(packed, "rb");
-        compressed = f != NULL;
+    if (found == SHELL_IMAGE_PACKED_ONLY) {
+        ESP_LOGW(TAG, "GET %s -> 406 (packed gzip only)", request_path);
+        http_send_error(fd, 406, "this file is packed gzip-compressed only");
+        return HTTP_HANDLED;
     }
-    if (!f) f = fopen(file_path, "rb");
-    if (!f) {
-        if (has_packed) {
-            /* Only the compressed copy exists, and this client did not ask for it. */
-            FILE *packed_only = fopen(packed, "rb");
-            if (packed_only) {
-                fclose(packed_only);
-                ESP_LOGW(TAG, "GET %s -> 406 (packed gzip only)", request_path);
-                http_send_error(fd, 406, "this file is packed gzip-compressed only");
-                return HTTP_HANDLED;
-            }
-        }
-        ESP_LOGW(TAG, "GET %s -> %d (no %s)", request_path, missing_status, file_path);
+    if (found != SHELL_IMAGE_FOUND) {
+        ESP_LOGW(TAG, "GET %s -> %d (not in the shell image)", request_path, missing_status);
         http_send_error(fd, missing_status,
                         missing_status == 503 ? "the page is missing from this firmware"
                                               : "no such path");
-        return HTTP_HANDLED;
-    }
-    if (fseek(f, 0, SEEK_END) != 0) {
-        fclose(f);
-        http_send_error(fd, 500, "cannot read the page");
-        return HTTP_HANDLED;
-    }
-    long size = ftell(f);
-    if (size < 0 || fseek(f, 0, SEEK_SET) != 0) {
-        fclose(f);
-        http_send_error(fd, 500, "cannot read the page");
         return HTTP_HANDLED;
     }
 
@@ -135,34 +117,18 @@ static http_result_t serve_file(int fd, const char *request_path, const char *fi
      * it. 160 bytes covers the longest rule plus both extra lines. */
     char headers[160];
     snprintf(headers, sizeof headers, "%s%s%s", cache_control_for(request_path),
-             compressed ? "Content-Encoding: gzip\r\n" : "", "Vary: Accept-Encoding\r\n");
+             blob.gzip ? "Content-Encoding: gzip\r\n" : "", "Vary: Accept-Encoding\r\n");
 
-    esp_err_t e = http_send_headers(fd, 200, content_type_for(file_path), (size_t)size,
-                                    headers);
-    if (e != ESP_OK) {
-        fclose(f);
-        return HTTP_HANDLED;
-    }
+    esp_err_t e = http_send_headers(fd, 200, content_type_for(logical), blob.len, headers);
+    if (e != ESP_OK) return HTTP_HANDLED;
 
-    /* Streamed, not buffered: the largest file is a few hundred kilobytes and the device
-     * has better uses for that RAM. The chunk is on the heap rather than the stack: this
-     * runs on the flash writer, whose stack is internal and deliberately small, and 2 KB
-     * of it is what overflowed it. */
-    char *chunk = malloc(2048);
-    if (!chunk) {
-        fclose(f);
-        http_send_error(fd, 500, "no memory for the page");
-        return HTTP_HANDLED;
-    }
-    size_t got;
-    while ((got = fread(chunk, 1, 2048, f)) > 0) {
-        if (!http_send_all(fd, chunk, got)) break;
-    }
-    free(chunk);
-    fclose(f);
+    /* Nothing to read and nothing to buffer: the bytes are already in memory - mapped
+     * flash on the board - so the response is one send loop over the file. This is the
+     * whole point of the image: the old path did a 2 KB flash read per chunk, and every
+     * one of them blanked the PSRAM the panel draws from. */
+    http_send_all(fd, blob.data, blob.len);
     return HTTP_HANDLED;
 }
-
 
 /* One allocation instead of seven stack buffers (see the route's comment). */
 typedef struct {
@@ -243,28 +209,14 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
     return HTTP_HANDLED;
 }
 
-/* Serving the Shell reads SPIFFS, and a SPIFFS read is a flash read: the HTTP worker's
- * stack is in PSRAM, so the read happens on the writer task (flash_job.h). */
-typedef struct {
-    int         fd;
-    const char *request_path;
-    const char *file;
-    int         missing_status;
-    bool        accepts_gzip;
-} serve_job_t;
-
-static bool serve_job(void *ctx)
-{
-    serve_job_t *job = (serve_job_t *)ctx;
-    (void)serve_file(job->fd, job->request_path, job->file, job->missing_status,
-                     job->accepts_gzip);
-    return true;
-}
-
+/* Every file is served from the bytes the board handed over, which are resident (PSRAM on
+ * the board, a buffer on the host) - so a page load touches no flash at all, and this does
+ * not need the one flash-capable task. That is a change from ADR 0054, and it is the point:
+ * a flash read shares the bus with the panel's scan-out and tears the picture (ADR 0055). */
 static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
-    if (!F.shell_root || !F.shell_root[0]) {
+    if (!F.shell_image || s_shell.count == 0) {
         /* A firmware without a page still has an index and an API. Only the page's own
          * paths say what is missing; anything else is still a 404. */
         bool is_page = strcmp(req->path, "/") == 0;
@@ -285,22 +237,10 @@ static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
         return HTTP_HANDLED;
     }
 
+    /* A page that was packed but is not in the image is a device fault, so `/` says so;
+     * any other missing file is a 404 like every other. */
     bool is_page = strcmp(req->path, "/") == 0;
-    char file[520];
-    if (!shell_file_for(req->path, file, sizeof file)) {
-        http_send_error(fd, 404, "no such path");
-        return HTTP_HANDLED;
-    }
-    /* A page that was packed but is not on the partition is a device fault, so `/` says
-     * so; any other missing file is a 404 like every other. The read happens on the
-     * writer, where the stack is internal. 30 s: a large gzipped bundle to a slow client
-     * must not be cut in half by the writer's own default. */
-    serve_job_t job = {fd, req->path, file, is_page ? 503 : 404, req->accepts_gzip};
-    if (!flash_job_run(serve_job, &job)) {
-        /* The writer did not take it: answer instead of leaving the client hanging. */
-        http_send_error(fd, 503, "the page reader is busy");
-    }
-    return HTTP_HANDLED;
+    return serve_file(fd, req->path, is_page ? 503 : 404, req->accepts_gzip);
 }
 
 esp_err_t front_door_start(const front_door_cfg_t *cfg)
@@ -308,15 +248,24 @@ esp_err_t front_door_start(const front_door_cfg_t *cfg)
     if (!cfg) return ESP_ERR_INVALID_ARG;
     F = *cfg;
 
+    /* One check, once: every lookup afterwards trusts the table. An image that does not
+     * validate is treated exactly like a firmware that carries no page. */
+    if (F.shell_image && shell_image_open(&s_shell, F.shell_image, F.shell_image_size))
+        ESP_LOGI(TAG, "page: %u files in the shell image (%u KiB), and /api/status",
+                 (unsigned)s_shell.count, (unsigned)(s_shell.size >> 10));
+    else {
+        memset(&s_shell, 0, sizeof s_shell);
+        if (F.shell_image)
+            ESP_LOGW(TAG, "page: the shell image did not validate; / answers 503");
+    }
+
     /* One listener, one page. */
     esp_err_t e = http_server_register_route("/api/status", status_route, NULL);
     if (e != ESP_OK) return e;
     e = http_server_register_route("/", page_route, NULL);
     if (e != ESP_OK) return e;
 
-    if (F.shell_root && F.shell_root[0])
-        ESP_LOGI(TAG, "page: %s (and /api/status)", F.shell_root);
-    else
+    if (s_shell.count == 0)
         ESP_LOGI(TAG, "page: none in this firmware; / answers 503 and /library stays");
     return ESP_OK;
 }

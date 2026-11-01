@@ -75,6 +75,37 @@ int main(int argc, char **argv)
         }
     }
 
+    /* The Shell's image, read into memory. The board copies the same bytes out of flash into
+     * PSRAM at boot; on the host they are a buffer, which is why `front_door` takes an image
+     * and not a directory. Unset by default, so a bare host run has no page and `/` says so; the
+     * front-door test points this at an image packed from a fixture tree. */
+    void *shell_image = NULL;
+    size_t shell_image_size = 0;
+    const char *shell_path = getenv("XTAPE_SHELL_IMAGE");
+    if (shell_path && shell_path[0]) {
+        FILE *f = fopen(shell_path, "rb");
+        if (!f) {
+            fprintf(stderr, "%s: cannot open the Shell image %s\n", argv[0], shell_path);
+            return 2;
+        }
+        if (fseek(f, 0, SEEK_END) == 0) {
+            long size = ftell(f);
+            if (size > 0 && fseek(f, 0, SEEK_SET) == 0) {
+                shell_image = malloc((size_t)size);
+                if (shell_image && fread(shell_image, 1, (size_t)size, f) == (size_t)size)
+                    shell_image_size = (size_t)size;
+            }
+        }
+        fclose(f);
+        if (!shell_image_size) {
+            fprintf(stderr, "%s: the Shell image %s is empty or unreadable\n", argv[0],
+                    shell_path);
+            return 2;
+        }
+        ESP_LOGI(TAG, "shell image: %s (%u KiB)", shell_path,
+                 (unsigned)(shell_image_size >> 10));
+    }
+
     /* The same composition the firmware runs, with the host's board adapter: the
      * fixture directory is always mounted and there is no network to bring up. */
     app_services_cfg_t cfg = {
@@ -91,9 +122,8 @@ int main(int argc, char **argv)
         .library_max_bytes = library_max_bytes,
         .library_max_tracks = library_max_tracks,
         .server_name = "mini_icecast/host",
-        /* The Shell's directory. Unset by default, so a bare host run has no page and
-         * `/` says so; the front-door test points it at a fixture tree. */
-        .shell_root = getenv("XTAPE_SHELL"),
+        .shell_image = shell_image,
+        .shell_image_size = shell_image_size,
     };
     app_services_report_t report;
     esp_err_t err = app_services_start(&cfg, &report);

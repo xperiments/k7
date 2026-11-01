@@ -1,5 +1,12 @@
 # The device serves the analysis app, and the weights come from elsewhere
 
+> **Also amended by [ADR 0055](0055-the-shell-is-resident.md).** The `frontdoor` partition is
+> no longer a SPIFFS filesystem: it is one image - a table of contents and the files' bytes -
+> that the board copies into PSRAM at boot. Serving the page from a filesystem meant a flash
+> read per 2 KB chunk, and a flash read takes the bus the RGB panel's scan-out draws from,
+> which tore the picture on every page load. Everything else here - "the device serves the
+> app's own code", the size problem, the weights from the CDN - stands.
+>
 > **Amended by [ADR 0049](0049-the-front-door-is-plain-http.md).** The shell, the partition, the
 > weights from the CDN and the two views stand. The TLS listener, the shipped certificate and the
 > trust step do not: the front door is plain HTTP, and `xtape.db` is posted to the device instead

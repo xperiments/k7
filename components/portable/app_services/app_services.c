@@ -667,7 +667,8 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     /* 5b. The page at `/`, and the card state it hangs from. A firmware with no page
      * still registers the route: `/` says so, and `/library` keeps working. */
     front_door_cfg_t door = {
-        .shell_root = cfg->shell_root,
+        .shell_image = cfg->shell_image,
+        .shell_image_size = cfg->shell_image_size,
         .card_present = front_door_card_present,
     };
     e = front_door_start(&door);

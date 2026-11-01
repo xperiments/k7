@@ -42,12 +42,20 @@ endif()
 # `web/dist-shell` is the analysis app's own code and nothing else: index.html, the
 # bundle, the WASI adapter, the manifest, the worker. The weights (Essentia, ONNX
 # Runtime, TagLib, the models) are fetched from the CDN at run time and are not here
-# (ADR 0048). Packing the page into the `frontdoor` SPIFFS partition means one
-# `idf.py flash` writes firmware and page together, and the board mounts it at
-# /frontdoor at boot.
+# (ADR 0048).
 #
-# The partition's size is stated once, in partitions.csv. This block reads it from the
-# partition table instead of repeating a number that could drift.
+# It is packed into ONE image with tools/pack_shell.py and flashed to the `frontdoor`
+# partition, so one `idf.py flash` writes firmware and page together. The board copies that
+# image into PSRAM once at boot, before the panel exists, and serves it from there: a flash
+# read takes the bus the RGB panel's scan-out draws from, and that is what tore the picture
+# on every page load (ADR 0055).
+#
+# The image is the directory's bytes with a table of contents in front - the text files
+# already gzipped by the build, the rest plain - and nothing on the board decompresses.
+# Long hashed asset names no longer matter: the table stores lengths, not fixed-size names,
+# so the SPIFFS object-name limit that used to be configured here is gone with SPIFFS.
+#
+# The partition's size is stated once, in partitions.csv.
 #
 # A checkout without the built page still builds: `/` then answers 503 ("this firmware
 # carries no page"), /library and the API are unaffected. That is a deliberate
@@ -81,11 +89,21 @@ if(EXISTS "${XTAPE_SHELL_DIR}")
     endif()
     message(STATUS "Shell: packing ${XTAPE_SHELL_DIR} into the frontdoor partition "
                    "(app commit ${xtape_app_commit})")
-    # Object names longer than SPIFFS's limit fail the image, and a hashed asset name is
-    # over it: "/assets/taglib-wrapper-BhtJ47OT.js" is enough. The limit is
-    # CONFIG_SPIFFS_OBJ_NAME_LEN (sdkconfig.defaults sets it to 64); the OBJ_NAME_LEN
-    # argument this call used to pass is not read by IDF 6.1's spiffsgen invocation.
-    spiffs_create_partition_image(frontdoor "${XTAPE_SHELL_DIR}" FLASH_IN_PROJECT)
+
+    set(XTAPE_SHELL_IMAGE "${CMAKE_BINARY_DIR}/shell.bin")
+    set(XTAPE_SHELL_TOOL "${CMAKE_CURRENT_LIST_DIR}/tools/pack_shell.py")
+    idf_build_get_property(xtape_python PYTHON)
+    # Repacked whenever anything in the Shell changes: the image is derived, never edited.
+    file(GLOB_RECURSE xtape_shell_files LIST_DIRECTORIES false "${XTAPE_SHELL_DIR}/*")
+    add_custom_command(
+        OUTPUT "${XTAPE_SHELL_IMAGE}"
+        COMMAND "${xtape_python}" "${XTAPE_SHELL_TOOL}" "${XTAPE_SHELL_DIR}" "${XTAPE_SHELL_IMAGE}"
+        DEPENDS ${xtape_shell_files} "${XTAPE_SHELL_TOOL}"
+        COMMENT "Packing the Shell into one image"
+        VERBATIM)
+    add_custom_target(shell_image ALL DEPENDS "${XTAPE_SHELL_IMAGE}")
+    esptool_py_flash_to_partition(flash "frontdoor" "${XTAPE_SHELL_IMAGE}")
+    add_dependencies(flash shell_image)
 elseif(XTAPE_REQUIRE_SHELL)
     message(FATAL_ERROR
         "XTAPE_REQUIRE_SHELL is set but ${XTAPE_SHELL_DIR} does not exist. Build the "

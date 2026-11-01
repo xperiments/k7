@@ -263,7 +263,17 @@ after the tape body and shown and hidden with the
   same task reads the text tags (TPE1/TIT2, ARTIST/TITLE). Results are handed to the view
   under the LVGL lock. The request is one slot, replaced rather than queued, and the read
   backs off while the broadcast is behind. Compiled and started only on the panel board.
-- `panel_rgb.c` — the Sunton panel adapter, compiled only for that board. It holds the
+- `panel_rgb.c` — the Sunton panel adapter, compiled only for that board. Three things about it
+  are load-bearing. The backlight is held off until a frame has been painted, or the boot opens
+  on uninitialised PSRAM, which reads white. The RGB peripheral is not created until
+  `APP_UI_PANEL_SETTLE_MS` has passed, because this panel has no reset line and a signal that
+  reaches it while it is still starting leaves the picture shifted *until the next power cycle*
+  (the rail survives a reset, so such a picture outlives the reboot meant to clear it). And
+  `panel_rgb_reinit()` re-establishes the scan at the mark-to-cassette handover: the scan is only
+  as aligned as the moment it started, and **any flash access while it runs** — boot's Wi-Fi NVS
+  reads included — costs a few microseconds of FIFO and leaves the DMA and the engine
+  permanently out of step, which reads as the whole picture a band to one side. ADR 0055 has the
+  measurement. It holds the
   backlight off (`backlight_hold_off()`, which gives the pin to LEDC at duty 0) before the
   peripheral exists and leaves it off when it returns: the panel scans two uninitialised PSRAM
   framebuffers from the moment it is initialised, and those read as white. Then it waits

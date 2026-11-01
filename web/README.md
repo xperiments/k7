@@ -102,9 +102,15 @@ multiple threads; without those headers it falls back to one thread.
 partition. It contains our code only: `index.html`, the app bundle, the worker, the ORT
 loader glue, the TagLib adapter, `sw.js`, the manifest, the icons and `weights.lock.json`.
 It contains no models and no `.wasm` binary. Flash is the constraint there, not disk, so
-the build packs every text file as `<name>.gz` and drops the original: the board streams
-those bytes with `Content-Encoding: gzip` (nothing decompresses on the device) and the
-SPIFFS image comes to ~350 KiB.
+the build packs every text file as `<name>.gz` and drops the original: the board sends
+those bytes with `Content-Encoding: gzip` (nothing decompresses on the device).
+
+The device does not mount `dist-shell` as a filesystem. `tools/pack_shell.py` turns the
+directory into ONE image - a table of contents, the names, then the files' bytes - and the
+firmware copies that image into PSRAM once at boot and serves from there (ADR 0055). The
+reason is the panel: any flash access takes the bus its scan-out draws from, so a page load
+must not read flash at all.
+Today's image is ~381 KiB of the 1.25 MB partition.
 
 Everything else is a **weight**, loaded through `src/weights/`:
 
@@ -160,8 +166,9 @@ npx shadcn@latest add @reui/badge @reui/alert @reui/c-sidebar-1   # ReUI
   status poller, `/api/playlists`, and a small MCP client); `src/media/` is the covers cache
   index and the Invidious search; `src/settings.ts` is what this browser remembers for
   itself.
-- The Shell is packed into a 1.25 MB flash partition (`partitions.csv`). Measured: **377 KiB
-  packed** (396 KiB in SPIFFS), up from ~350 KiB before the sidebar — the sidebar, its
+- The Shell is packed into a 1.25 MB flash partition (`partitions.csv`) as one image, which
+  the board copies into PSRAM at boot.
+  Measured: **377 KiB of bytes** (381 KiB of image), up from ~350 KiB before the sidebar — the sidebar, its
   dropdown menu, breadcrumb and avatar parts are most of the difference. Page code costs
   flash, not disk: a single `AlertDialog` is ~56 KiB of JavaScript, which is why the
   destructive confirm is asked in place. Weigh a new dependency as a budget decision.

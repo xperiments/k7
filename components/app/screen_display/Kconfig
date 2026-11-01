@@ -84,7 +84,11 @@ config APP_UI_PANEL_SETTLE_MS
 
         Tune it against a COLD start - pull power, let the bulk capacitors drain, boot -
         and not against a warm reboot, where the rail never left and the panel never
-        reset. If a cold start still lands displaced with a large value here, the supply
+        reset. That cuts both ways and is easy to lose hours to: a flash or a reset drops
+        the SoC's reset pin and nothing else, so a shifted picture *outlives* the reboot
+        that was meant to clear it, and a build judged right after `idf.py flash` is being
+        judged on the previous power cycle. Change the value, then pull power, several
+        times, and only then believe the result. If a cold start still lands displaced with a large value here, the supply
         is not the cause; the panel is locking onto a frame the peripheral started
         mid-scan, and the lever is the driver's own restart, not a delay.
 

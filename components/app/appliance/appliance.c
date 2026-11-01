@@ -161,10 +161,11 @@ void appliance_run(void)
          * connection worker as soon as it is registered. */
         .max_clients = 4,
         .max_conns = 4,
-        /* Set below, once the panel has its boot mark and the Shell's partition has
-         * been mounted; until then, and forever on a firmware with no page, `/` answers
-         * 503 and the index at `/library` carries the device. */
-        .shell_root = NULL,
+        /* Set below, once the panel has its boot mark and the Shell's image has been
+         * mapped; until then, and forever on a firmware with no page, `/` answers 503
+         * and the index at `/library` carries the device. */
+        .shell_image = NULL,
+        .shell_image_size = 0,
         .selection_load = selection_load,
         .selection_save = selection_save,
     };
@@ -189,6 +190,21 @@ void appliance_run(void)
     if (update == APP_BOARD_UPDATE_FAILED)
         ESP_LOGE(TAG, "the snapshot update was not applied; the device serves without it");
 
+    /* The Shell is the `frontdoor` partition the build packed. It is copied into PSRAM
+     * here, BEFORE the panel exists, for two reasons and only these: the copy is a burst of
+     * flash reads, and a flash read shares the bus with the panel's scan-out (so while
+     * nothing is scanning, the copy is free), and it is before app_services_start(), because
+     * the front door registers `/` inside that call. A missing or unflashed partition
+     * returns false - `/` then answers 503 and says so, and every other route serves. */
+    {
+        const void *shell_bytes = NULL;
+        size_t shell_bytes_size = 0;
+        if (app_board_shell_image(&shell_bytes, &shell_bytes_size)) {
+            svc.shell_image = shell_bytes;
+            svc.shell_image_size = shell_bytes_size;
+        }
+    }
+
     /* The screen comes first, before the services, for one reason: the panel's
      * framebuffers are uninitialised PSRAM and the backlight used to be lit over them, so
      * boot opened on a white flash. screen_display_boot() paints the K7 mark on the black
@@ -204,13 +220,6 @@ void appliance_run(void)
     if (boot_err != ESP_OK)
         ESP_LOGE(TAG, "the screen did not come up: %s; the device still serves",
                  esp_err_to_name(boot_err));
-
-    /* The Shell is the `frontdoor` SPIFFS partition the build packed, mounted here for
-     * two reasons and only these: the boot mark is already on the panel, so the panel
-     * never waits on a filesystem, and it is before app_services_start(), because the
-     * front door registers `/` inside that call. A missing or unflashed partition
-     * returns NULL - `/` then answers 503 and says so, and every other route serves. */
-    svc.shell_root = app_board_shell_mount();
 
     /* The services resolve the station first (arithmetic only), then bring up the
      * network before the broadcast takes its internal RAM, then the file surface,

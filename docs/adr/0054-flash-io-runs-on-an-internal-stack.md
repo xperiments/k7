@@ -21,7 +21,10 @@ is a flash read through `esp_partition_read`, and it fails the same way.
   blocks on a semaphore, which is safe — waiting is not running.
 - **The page's `serve_file` runs on it.** That serialises page loads behind one task, which
   is the price. A page is a handful of files and a LAN is quick; a second flash-capable
-  task would cost another internal stack for a burst that happens twice a session.
+  task would cost another internal stack for a burst that happens twice a session. ([ADR
+  0055](0055-the-shell-is-resident.md) later took the page off this task altogether: its bytes
+  are copied into PSRAM at boot, so serving one is no longer a flash read and no longer waits
+  behind a Snapshot write. The rule below stands for everything that does touch flash.)
 - **Its stack is 6 KB, and no I/O buffer lives on it.** The 2 KB transfer chunk moved to the
   heap; the first version put it on the stack and overflowed, which read as a null partition
   pointer inside SPIFFS rather than as a stack problem.

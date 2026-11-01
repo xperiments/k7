@@ -31,20 +31,24 @@ automated browser), the cold/warm weight cache, and §9's measurements.
 
 | Piece | Bytes | Lives |
 |---|---:|---|
-| `index.html`, app bundle, worker, `wasi-adapter`, `ort.mjs`, manifest, icons, `shell.json`, `weights.lock.json`, `setup.html` | **377 KiB** packed (measured; 396 KiB in SPIFFS) | 1.25 MB SPIFFS partition at `0x610000` |
+| `index.html`, app bundle, worker, `wasi-adapter`, `ort.mjs`, manifest, icons, `shell.json`, `weights.lock.json`, `setup.html` | **377 KiB** of bytes (measured; 381 KiB of image) | 1.25 MB `frontdoor` partition at `0x610000`, read into PSRAM once at boot (ADR 0055) |
 | Essentia (`essentia-wasm.es.js`, 2.56 MB) | 2.6 MB | jsDelivr, pinned tag, sha256-checked |
 | TagLib's one browser wasm | 0.7 MB | jsDelivr |
 | ONNX Runtime wasm | 14 MB | jsDelivr |
 | Models, nine of them | 23.9 MB | jsDelivr |
 | **Weights together** | **≈ 41 MB** | fetched once, cached |
 
-**F1.** `web/dist-shell` is packed by `spiffs_create_partition_image` into the `frontdoor`
-partition, so `idf.py flash` writes the firmware and the page together, and the build logs the
-app commit it packed. Flash is the constraint, so the build stores every text file as
-`<name>.gz` and drops the original: the front door streams those bytes with
+**F1.** `web/dist-shell` is packed by `tools/pack_shell.py` into ONE image - a table of
+contents, then the files' bytes - and flashed to the `frontdoor` partition by
+`esptool_py_flash_to_partition`, so `idf.py flash` writes the firmware and the page together,
+and the build logs the app commit it packed. The board reads that partition **once**, before
+the panel exists, into PSRAM, and serves the page from there; a page load never touches flash,
+because any flash access takes the bus the panel's scan-out draws from (ADR 0055). Flash is the constraint, so the build
+stores every text file as gzip and drops the original: the front door sends those bytes with
 `Content-Encoding: gzip`, and a client that did not offer gzip for a compressed-only file gets
-`406`. `index.html` and the icons stay plain. The pack is a **configure-time** decision: after
-building the Shell the build directory must be reconfigured. A clean checkout without a Shell
+`406`. `index.html` and the icons stay plain. Nothing on the board decompresses anything. The
+pack is a **configure-time** decision: after building the Shell the build directory must be
+reconfigured. A clean checkout without a Shell
 still builds — the device is useful without a page, with `/` answering `503` naming `/library`.
 A shipping build passes `-DXTAPE_REQUIRE_SHELL=1`, which turns a missing or empty Shell into a
 configure error.
@@ -338,6 +342,7 @@ are the only source of names.
 | T11 | A v1 image still applies on a v2 reader | host + board | **proven** — `playlist_tests.py` (v1, no lists) and the board served its previous v1 image after the v2 firmware was flashed |
 | T12 | Each hash route renders on a reload | browser | **proven** — headless Chrome loaded `#/process`, `#/playlists`, `#/media`, `#/player` and `#/settings` from the running board and each rendered its area (the shell, nav and page); `router.test.ts` covers the parse/format inverse |
 | T12b | Process keeps its Queue across a navigation | browser | **not proven** — needs a measuring queue, which needs a card |
+| T12c | A page load leaves the panel alone: no tearing while the shell is fetched, and no offset left behind | board | **not proven** — the image path is proven on the host (`t31_shell_image`, `front_door_tests.py`, and all 45 files of the real shell served byte-exactly), but the panel is the one thing only the board can answer (ADR 0055) |
 
 ---
 

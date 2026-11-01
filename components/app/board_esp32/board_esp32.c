@@ -20,11 +20,12 @@
 #include "esp_netif.h"
 #include "esp_partition.h"
 #include "esp_psram.h"
-#include "esp_spiffs.h"
 #include "esp_timer.h"
 #include "esp_vfs_fat.h"
 #include "esp_wifi.h"
+
 #include "mdns.h"
+#include "shell_image.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
@@ -504,59 +505,85 @@ done:
 
 /* --------------------------------------------------------------- the Shell */
 
-/* The page at `/`. The build packs the Shell into this partition with
- * spiffs_create_partition_image() (root CMakeLists.txt) and `idf.py flash` writes it
- * beside the app. The firmware only ever reads it, and the mount never formats: a
- * partition that will not mount is a blank one, not a reason to erase the page.
+/* The page at `/`. The build packs the Shell into this partition with tools/pack_shell.py
+ * (root CMakeLists.txt) and `idf.py flash` writes it beside the app. The firmware only ever
+ * reads it, and it reads it ONCE: the image is copied into PSRAM here, before the panel
+ * exists, and the page is served out of that copy for the life of the process.
  *
- * Two devices reach here without a page, and both are states rather than faults: one
- * still carrying the old partition table has no `frontdoor` partition at all, and one
- * flashed without the image has it blank. The front door is handed NULL in both cases,
- * so `/` answers 503 and everything else serves. */
-#define SHELL_PARTITION   "frontdoor"
-#define SHELL_MOUNT_POINT "/frontdoor"
+ * Why not leave it in flash and serve from the mapping. Measured on this board: the mapped
+ * page still tore, though five times less than the filesystem did. Every cache line the
+ * copy/send pulls is an SPI0/1 transaction, and the RGB panel's scan-out reads PSRAM through
+ * the same controller - so a 187 KB bundle streamed in 108 ms is a run of stalls the LCD
+ * FIFO cannot sit through. Flash has to be off the page path entirely, not merely cheaper
+ * (ADR 0055). The panel is what makes this a rule rather than an optimisation; the same
+ * reason the app's instructions and rodata live in PSRAM.
+ *
+ * Two devices reach here without a page, and both are states rather than faults: one still
+ * carrying the old partition table has no `frontdoor` partition at all, and one flashed
+ * without the image has it blank. The front door is handed nothing in both cases, so `/`
+ * answers 503 and everything else serves. */
+#define SHELL_PARTITION "frontdoor"
 
-static const char *s_shell_root;
-static bool s_shell_mount_tried;
+static const void *s_shell_bytes;
+static size_t      s_shell_size;
+static bool        s_shell_tried;
 
-const char *app_board_shell_mount(void)
+bool app_board_shell_image(const void **bytes, size_t *size)
 {
-    if (s_shell_mount_tried) return s_shell_root;
-    s_shell_mount_tried = true;
+    if (!s_shell_tried) {
+        s_shell_tried = true;
+        size_t psram_before = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
 
-    const esp_partition_t *part = esp_partition_find_first(
-        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, SHELL_PARTITION);
-    if (!part) {
-        ESP_LOGW(TAG, "shell: no \"%s\" partition in this build; / answers 503",
-                 SHELL_PARTITION);
-        return NULL;
+        const esp_partition_t *part = esp_partition_find_first(
+            ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, SHELL_PARTITION);
+        if (!part) {
+            ESP_LOGW(TAG, "shell: no \"%s\" partition in this build; / answers 503",
+                     SHELL_PARTITION);
+        } else {
+            esp_partition_mmap_handle_t handle;
+            const void *mapped = NULL;
+            esp_err_t e = esp_partition_mmap(part, 0, part->size, ESP_PARTITION_MMAP_DATA,
+                                             &mapped, &handle);
+            if (e != ESP_OK || !mapped) {
+                ESP_LOGW(TAG, "shell: the %s partition did not map (%s); / answers 503",
+                         SHELL_PARTITION, esp_err_to_name(e));
+            } else {
+                /* The header says how long the image is; the partition is bigger than it, so
+                 * the image's own length is the only one worth copying. */
+                shell_image_t img;
+                if (!shell_image_open(&img, mapped, part->size)) {
+                    ESP_LOGW(TAG, "shell: the image in \"%s\" did not validate; / answers 503",
+                             SHELL_PARTITION);
+                    esp_partition_munmap(handle);
+                } else {
+                    uint8_t *copy = heap_caps_malloc(img.size, MALLOC_CAP_SPIRAM);
+                    if (copy) {
+                        memcpy(copy, mapped, img.size);
+                        s_shell_bytes = copy;
+                        s_shell_size = img.size;
+                        esp_partition_munmap(handle);
+                        ESP_LOGI(TAG, "shell: %u KiB copied to PSRAM at %p; flash is off the "
+                                      "page path (PSRAM free %u -> %u KB)",
+                                 (unsigned)(img.size >> 10), copy,
+                                 (unsigned)(psram_before >> 10),
+                                 (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >> 10));
+                    } else {
+                        /* No PSRAM for it. There is no honest halfway house: serving the
+                         * mapping would tear the panel, which is the bug this exists to
+                         * remove. So this firmware carries no page, and says why. */
+                        ESP_LOGW(TAG, "shell: no %u KiB of PSRAM for the image (free %u KB); "
+                                      "no page, / answers 503",
+                                 (unsigned)(img.size >> 10), (unsigned)(psram_before >> 10));
+                        esp_partition_munmap(handle);
+                    }
+                }
+            }
+        }
     }
-
-    esp_vfs_spiffs_conf_t conf = {
-        .base_path = SHELL_MOUNT_POINT,
-        .partition_label = SHELL_PARTITION,
-        /* One streamed file per connection, and the listener carries four: eight is the
-         * headroom the card's mount takes, for the same reason. */
-        .max_files = 8,
-        /* Never format: the image is written by the build and flashed with the app, so
-         * a partition that will not mount is one that has not been flashed yet. */
-        .format_if_mount_failed = false,
-    };
-    esp_err_t e = esp_vfs_spiffs_register(&conf);
-    if (e != ESP_OK) {
-        ESP_LOGW(TAG, "shell: %s did not mount (%s); the page is absent and / answers 503",
-                 SHELL_MOUNT_POINT, esp_err_to_name(e));
-        return NULL;
-    }
-
-    s_shell_root = SHELL_MOUNT_POINT;
-    size_t total = 0, used = 0;
-    if (esp_spiffs_info(SHELL_PARTITION, &total, &used) == ESP_OK)
-        ESP_LOGI(TAG, "shell: %s mounted, %u of %u KB used (never written by the firmware)",
-                 SHELL_MOUNT_POINT, (unsigned)(used >> 10), (unsigned)(total >> 10));
-    else
-        ESP_LOGI(TAG, "shell: %s mounted (never written by the firmware)", SHELL_MOUNT_POINT);
-    return s_shell_root;
+    if (!s_shell_bytes) return false;
+    if (bytes) *bytes = s_shell_bytes;
+    if (size) *size = s_shell_size;
+    return true;
 }
 
 /* P2/P3: what the memory available actually is, before anything is allocated, so

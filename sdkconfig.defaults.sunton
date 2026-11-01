@@ -40,10 +40,6 @@ CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
 CONFIG_SPIRAM_RODATA=y
 
-# The Shell's hashed asset names exceed SPIFFS's 32-character default;
-# "/assets/unified-loader-DIIx7hKC.js" is 34.
-CONFIG_SPIFFS_OBJ_NAME_LEN=64
-
 # The front door is served over TLS; the component is compiled on purpose, not by
 # accident of IDF 6.1 not gating it.
 CONFIG_ESP_HTTPS_SERVER_ENABLE=y
