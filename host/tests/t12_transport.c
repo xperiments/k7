@@ -54,7 +54,7 @@ static bool write_silence_wav(const char *path, int seconds)
     return ok;
 }
 
-/* The Playlist order the broadcast will consume. */
+/* The order the broadcast will consume. */
 static bool read_order(const library_t *lib, char names[][MINI_ICECAST_STATUS_FILE_MAX], int want)
 {
     if (library_track_count(lib) != (uint32_t)want) return false;
@@ -108,7 +108,7 @@ int main(void)
     char order[3][MINI_ICECAST_STATUS_FILE_MAX];
     char paths[3][LIB_PATH_MAX];
     bool listed = read_order(lib, order, 3);
-    CHECK(listed, "the Playlist has all three tracks");
+    CHECK(listed, "the broadcast order has all three tracks");
     for (int i = 0; i < 3; i++) {
         lib_node_t n = library_track_at(lib, (uint32_t)i);
         CHECK(library_relpath(lib, n, paths[i], sizeof paths[i]) != (size_t)-1,
@@ -134,7 +134,7 @@ int main(void)
         CHECK(st.path[0] != 0 && strchr(st.path, '/') != NULL,
               "the first track is several levels deep: %s", st.path);
         CHECK_EQ(st.generation, 1, "the status names generation 1");
-        CHECK_EQ(st.track_index, 0, "the first track is Playlist index 0");
+        CHECK_EQ(st.track_index, 0, "the first track is track index 0");
         CHECK_EQ(st.library_count, 3, "the library count is three");
 
         mini_icecast_skip();

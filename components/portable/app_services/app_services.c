@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "app_board.h"
@@ -27,6 +28,8 @@
 #include "mini_icecast.h"
 #include "snapshot.h"
 #include "front_door.h"
+#include "flash_job.h"
+#include "playlist_select.h"
 
 static const char *TAG = "app";
 
@@ -40,6 +43,19 @@ static snapshot_t *s_snapshot;
 static snapshot_result_t s_snapshot_state = SNAPSHOT_NO_PARTITION;
 static char s_snapshot_reason[96];
 static char s_card_error[160];
+
+/* The selection's persistence, as the injected store playlist_select takes. */
+static bool selection_load(void *ctx, uint64_t *id)
+{
+    (void)ctx;
+    return s_cfg.selection_load ? s_cfg.selection_load(id) : false;
+}
+
+static bool selection_save(void *ctx, uint64_t id)
+{
+    (void)ctx;
+    return s_cfg.selection_save ? s_cfg.selection_save(id) : false;
+}
 
 static esp_err_t fail(app_services_report_t *r, esp_err_t err, const char *what)
 {
@@ -89,6 +105,8 @@ static void rescan_task(void *arg)
         (void)library_json(next, &json_len);
         int64_t scan_ms = (esp_timer_get_time() - t0) / 1000;
         if (library_publish(next)) {
+            /* The indices the walk was given describe the old generation; re-resolve. */
+            playlist_select_sync(s_snapshot, next);
             ESP_LOGI(TAG, "library rescan: generation %u, tracks=%u dirs=%u, "
                           "scan=%lld ms, arena=%u B json=%u B, psram %u -> %u B",
                      (unsigned)gen, tracks, dirs, (long long)scan_ms,
@@ -117,6 +135,23 @@ static void rescan_task(void *arg)
  * not a CORS-safelisted type, so a page on another origin cannot send it without a
  * preflight this device never answers. A form post cannot forge one either. That is the
  * whole CSRF story, and it is cheaper than a token the user would have to type. */
+/* The flash write, on the writer task: an HTTP worker's stack is PSRAM, and a write
+ * disables the cache the stack lives behind (flash_job.h). */
+typedef struct {
+    const uint8_t  *image;
+    size_t          len;
+    char           *why;
+    size_t          why_size;
+    app_board_flash_t result;
+} snapshot_flash_t;
+
+static bool flash_snapshot(void *ctx)
+{
+    snapshot_flash_t *job = (snapshot_flash_t *)ctx;
+    job->result = app_board_snapshot_flash(job->image, job->len, job->why, job->why_size);
+    return true;
+}
+
 static http_result_t snapshot_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
@@ -136,9 +171,14 @@ static http_result_t snapshot_route(int fd, const http_request_t *req, void *ctx
     snapshot_t *snap = NULL;
     snapshot_result_t valid = snapshot_open_why(req->body, req->body_len, &snap, why, sizeof why);
     if (snap) snapshot_close(snap);
-    app_board_flash_t r = valid == SNAPSHOT_OK
-                              ? app_board_snapshot_flash(req->body, req->body_len, why, sizeof why)
-                              : APP_BOARD_FLASH_INVALID;
+    snapshot_flash_t job = {req->body, req->body_len, why, sizeof why, APP_BOARD_FLASH_INVALID};
+    app_board_flash_t r;
+    if (valid != SNAPSHOT_OK)
+        r = APP_BOARD_FLASH_INVALID;
+    else if (!flash_job_run(flash_snapshot, &job, 0))
+        r = APP_BOARD_FLASH_FAILED;
+    else
+        r = job.result;
     int status;
     char body[256];
     switch (r) {
@@ -192,6 +232,223 @@ static http_result_t rescan_route(int fd, const http_request_t *req, void *ctx)
     size_t len = strlen(body);
     http_send_headers(fd, status, "application/json", len, NULL);
     http_send_all(fd, body, len);
+    return HTTP_HANDLED;
+}
+
+
+/* ---------------------------------------------------------------- playlists */
+
+/* The page reads the Playlists the Snapshot holds; the broadcast walks one of them.
+ * These routes are the read side and the one command, and nothing here writes flash:
+ * a new list arrives as a new image (ADR 0051). */
+static void reply_json(int fd, int status, const char *body, const char *cache)
+{
+    size_t len = strlen(body);
+    http_send_headers(fd, status, "application/json", len, cache);
+    http_send_all(fd, body, len);
+}
+
+static void json_escape_into(char *out, size_t cap, const char *in)
+{
+    size_t n = 0;
+    for (const unsigned char *p = (const unsigned char *)in; p && *p && n + 7 < cap; p++) {
+        switch (*p) {
+        case '"': out[n++] = '\\'; out[n++] = '"'; break;
+        case '\\': out[n++] = '\\'; out[n++] = '\\'; break;
+        case '\n': out[n++] = '\\'; out[n++] = 'n'; break;
+        case '\r': out[n++] = '\\'; out[n++] = 'r'; break;
+        case '\t': out[n++] = '\\'; out[n++] = 't'; break;
+        default:
+            if (*p < 0x20) n += (size_t)snprintf(out + n, cap - n, "\\u%04x", *p);
+            else out[n++] = (char)*p;
+        }
+    }
+    out[n] = 0;
+}
+
+static void id_hex(char out[17], uint64_t id)
+{
+    snprintf(out, 17, "%016llx", (unsigned long long)id);
+}
+
+static bool parse_hex64(const char *s, size_t n, uint64_t *out)
+{
+    if (!s || n == 0 || n > 16) return false;
+    uint64_t v = 0;
+    for (size_t i = 0; i < n; i++) {
+        char c = s[i];
+        int d;
+        if (c >= '0' && c <= '9') d = c - '0';
+        else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') d = c - 'A' + 10;
+        else return false;
+        v = (v << 4) | (uint64_t)d;
+    }
+    *out = v;
+    return true;
+}
+
+/* GET /api/playlists: what the image holds and which one is walking. A device with no
+ * Snapshot answers an empty list rather than an error: "no lists" is true. */
+static http_result_t playlists_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)ctx;
+    if (strcmp(req->path, "/api/playlists") != 0) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
+    uint32_t n = s_snapshot ? snapshot_lists(s_snapshot) : 0;
+    size_t cap = 320 + (size_t)n * 320;
+    char *body = malloc(cap);
+    if (!body) {
+        http_send_error(fd, 500, "out of memory");
+        return HTTP_HANDLED;
+    }
+    uint64_t selected = playlist_select_current();
+    char sel[17] = {0};
+    char sel_name[200] = {0};
+    if (selected) {
+        char raw[96] = {0};
+        id_hex(sel, selected);
+        playlist_select_name(raw, sizeof raw);
+        json_escape_into(sel_name, sizeof sel_name, raw);
+    }
+    int at = snprintf(body, cap, "{\"selected\":%s%s%s,\"missing\":%u,\"lists\":[",
+                      selected ? "\"" : "", selected ? sel : "null", selected ? "\"" : "",
+                      (unsigned)playlist_select_missing());
+    for (uint32_t i = 0; i < n && at > 0 && (size_t)at < cap; i++) {
+        snapshot_list_t l;
+        if (!snapshot_list_at(s_snapshot, i, &l)) continue;
+        char id[17];
+        char name[200];
+        id_hex(id, l.id);
+        json_escape_into(name, sizeof name, snapshot_list_name(s_snapshot, &l));
+        at += snprintf(body + at, cap - (size_t)at,
+                       "%s{\"id\":\"%s\",\"name\":\"%s\",\"created\":%llu,\"rows\":%u}",
+                       i ? "," : "", id, name, (unsigned long long)l.created,
+                       (unsigned)l.row_count);
+    }
+    if (at > 0 && (size_t)at + 64 < cap) at += snprintf(body + at, cap - (size_t)at, "]}");
+    reply_json(fd, 200, body, "Cache-Control: no-cache\r\n");
+    free(body);
+    return HTTP_HANDLED;
+}
+
+/* GET /api/playlists/<id>: one list's rows, as the Library's own paths. */
+static http_result_t playlist_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)ctx;
+    uint64_t id = 0;
+    const char *suffix = req->path + strlen("/api/playlists/");
+    if (!s_snapshot || !parse_hex64(suffix, strlen(suffix), &id)) {
+        http_send_error(fd, 404, "no such list");
+        return HTTP_HANDLED;
+    }
+    snapshot_list_t l;
+    if (!snapshot_list_find(s_snapshot, id, &l)) {
+        http_send_error(fd, 404, "no such list");
+        return HTTP_HANDLED;
+    }
+    /* Exact enough: the paths are read once to size the body, so a list of long paths
+     * cannot ask for a buffer the device cannot give. */
+    size_t cap = 320;
+    for (uint32_t i = 0; i < l.row_count; i++) {
+        const char *path = NULL;
+        if (snapshot_list_row(s_snapshot, &l, i, &path) && path) cap += strlen(path) * 2 + 8;
+    }
+    char *body = malloc(cap);
+    if (!body) {
+        http_send_error(fd, 500, "out of memory");
+        return HTTP_HANDLED;
+    }
+    char id_hexed[17];
+    char name[200];
+    id_hex(id_hexed, id);
+    json_escape_into(name, sizeof name, snapshot_list_name(s_snapshot, &l));
+    int at = snprintf(body, cap, "{\"id\":\"%s\",\"name\":\"%s\",\"rows\":[", id_hexed, name);
+    for (uint32_t i = 0; i < l.row_count && at > 0 && (size_t)at < cap; i++) {
+        const char *path = NULL;
+        if (!snapshot_list_row(s_snapshot, &l, i, &path)) continue;
+        char escaped[LIB_PATH_MAX * 2];
+        json_escape_into(escaped, sizeof escaped, path);
+        at += snprintf(body + at, cap - (size_t)at, "%s\"%s\"", i ? "," : "", escaped);
+    }
+    if (at > 0 && (size_t)at + 32 < cap) at += snprintf(body + at, cap - (size_t)at, "]}");
+    reply_json(fd, 200, body, "Cache-Control: no-cache\r\n");
+    free(body);
+    return HTTP_HANDLED;
+}
+
+/* The id out of {"id":"<hex>"} or {"id":null}. Deliberately small: the body has one
+ * field, and a parser for one field is not an invitation to accept more. */
+static bool body_list_id(const char *body, size_t len, uint64_t *id)
+{
+    if (!body || !len) return false;
+    const char *p = strstr(body, "\"id\"");
+    if (!p || (size_t)(p - body) >= len) return false;
+    p += 4;
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    if (*p != ':') return false;
+    p++;
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    if (strncmp(p, "null", 4) == 0) {
+        *id = 0;
+        return true;
+    }
+    if (*p != '"') return false;
+    p++;
+    const char *end = strchr(p, '"');
+    if (!end) return false;
+    return parse_hex64(p, (size_t)(end - p), id);
+}
+
+/* POST /api/playlists/select: tell the broadcast which Playlist to walk. The choice is
+ * remembered; an id the image no longer holds is a 404, an empty one a 409. */
+static http_result_t select_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)ctx;
+    if (strcmp(req->path, "/api/playlists/select") != 0) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
+    uint64_t id = 0;
+    if (!body_list_id((const char *)req->body, req->body_len, &id)) {
+        reply_json(fd, 400, "{\"ok\":false,\"error\":\"a body of {\\\"id\\\":\\\"<hex>\\\"} or {\\\"id\\\":null}\"}",
+                   "Cache-Control: no-store\r\n");
+        return HTTP_HANDLED;
+    }
+    if (id && !s_snapshot) {
+        reply_json(fd, 503, "{\"ok\":false,\"error\":\"no Snapshot on this device\"}",
+                   "Cache-Control: no-store\r\n");
+        return HTTP_HANDLED;
+    }
+    const library_t *lib = library_acquire();
+    playlist_select_result_t r = playlist_select_set(s_snapshot, lib, id);
+    if (lib) library_release(lib);
+
+    int status;
+    const char *error = NULL;
+    switch (r) {
+    case PLAYLIST_SELECT_OK: status = 200; break;
+    case PLAYLIST_SELECT_NO_SNAPSHOT: status = 503; error = "no Snapshot on this device"; break;
+    case PLAYLIST_SELECT_NOT_FOUND: status = 404; error = "no such list"; break;
+    case PLAYLIST_SELECT_EMPTY:
+        status = 409;
+        error = "that list has no Track this Library can find";
+        break;
+    default: status = 500; error = "cannot select"; break;
+    }
+    char body[256];
+    if (error)
+        snprintf(body, sizeof body, "{\"ok\":false,\"error\":\"%s\"}", error);
+    else if (id) {
+        char hexed[17];
+        id_hex(hexed, id);
+        snprintf(body, sizeof body, "{\"ok\":true,\"order\":\"list\",\"selected\":\"%s\"}", hexed);
+    } else {
+        snprintf(body, sizeof body, "{\"ok\":true,\"order\":\"tree\",\"selected\":null}");
+    }
+    reply_json(fd, status, body, "Cache-Control: no-store\r\n");
     return HTTP_HANDLED;
 }
 
@@ -295,6 +552,10 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     if (report) *report = local;
     if (!cfg || !cfg->music_dir) return ESP_ERR_INVALID_ARG;
     s_cfg = *cfg;
+    /* The writer exists before any route can be reached. */
+    if (!flash_job_start()) return fail(report, ESP_ERR_NO_MEM, "flash writer task");
+    playlist_select_store_t store = {NULL, selection_load, selection_save};
+    playlist_select_init(&store);
 
     /* 1. The station, before anything allocates. Validation is arithmetic. */
     char err[192];
@@ -449,6 +710,10 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     if (e != ESP_OK) return fail(report, e, "broadcast");
     if (report) report->broadcast_up = true;
 
+    /* Which Playlist the broadcast walks, now that both the image and the Library
+     * exist: the remembered choice is resolved and handed over, or the Library plays. */
+    playlist_select_sync(s_snapshot, s_library);
+
     /* The MCP endpoint is registered before the listener, after the broadcast
      * exists because player_status reads its snapshot. */
     mcp_cfg_t mcp = {
@@ -466,6 +731,15 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
 
     e = http_server_register_route_method("/api/rescan", "POST", rescan_route, NULL);
     if (e != ESP_OK) return fail(report, e, "rescan endpoint");
+
+    e = http_server_register_route("/api/playlists", playlists_route, NULL);
+    if (e != ESP_OK) return fail(report, e, "playlists endpoint");
+
+    e = http_server_register_route("/api/playlists/", playlist_route, NULL);
+    if (e != ESP_OK) return fail(report, e, "playlist endpoint");
+
+    e = http_server_register_route_method("/api/playlists/select", "POST", select_route, NULL);
+    if (e != ESP_OK) return fail(report, e, "playlist select endpoint");
 
     e = http_server_register_route_method("/api/snapshot", "POST", snapshot_route, NULL);
     if (e != ESP_OK) return fail(report, e, "snapshot endpoint");

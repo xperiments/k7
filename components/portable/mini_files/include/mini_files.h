@@ -2,7 +2,7 @@
 /*
  * mini_files - the card's library, over HTTP.
  *
- * One route: the index at "/" - every Track in the Library tree, in playlist
+ * One route: the index at "/" - every Track in the Library tree, in broadcast
  * order, with the live stream's current title and a link to the stream. It reads
  * the immutable Library generation; it never walks the Music directory per
  * request. It is a listing, not a browser: the device serves no Track and accepts

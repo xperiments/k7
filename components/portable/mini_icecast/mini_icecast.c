@@ -77,7 +77,7 @@ typedef struct {
 } client_t;
 
 static struct {
-    const library_t   *library;   /* the Playlist this broadcast consumes */
+    const library_t   *library;   /* the Library this broadcast consumes, in broadcast order */
     mi_station_t       station;   /* resolved once by mi_station_resolve() */
     client_t           clients[MAX_CLIENTS];
     SemaphoreHandle_t  lock;
@@ -90,6 +90,15 @@ static struct {
     uint32_t           cur_src_hz;
     uint32_t           cur_total_ms;
     uint32_t           library_count;
+    /* The order being walked: Library track indices with the generation they were
+     * resolved in. `order` is read by the broadcast task for a whole pass and only the
+     * broadcast task swaps or frees it; `order_pending` is published by any task and
+     * applied at the top of the next pass. */
+    struct { uint32_t *items; uint32_t count; uint32_t generation; } order;
+    struct { uint32_t *items; uint32_t count; uint32_t generation; } order_pending;
+    bool               order_pending_set;
+    void             (*order_dropped_cb)(void *ctx);
+    void              *order_dropped_ctx;
     /* Audio broadcast from the current track. Written only by the broadcast task and
      * read by mini_icecast_status(); an aligned 32-bit load or store is atomic on this
      * core, so the reader needs no lock for it. At 44.1 kHz it holds 27 hours. */
@@ -107,7 +116,7 @@ static struct {
     uint32_t           title_ver;
     volatile bool      skip;
     /* A request for the track before this one. The broadcast task owns the
-     * Playlist position it goes back to; the display only raises the flag. */
+     * position in the broadcast order it goes back to; the display only raises the flag. */
     volatile bool      prev;
     volatile bool      play_pending;
 
@@ -520,7 +529,7 @@ static void set_title(const char *name, size_t n)
     xSemaphoreGive(S.lock);
 }
 
-/* A new Track: its name, relative path, Playlist position and container, with a
+/* A new Track: its name, relative path, position in the broadcast order and container, with a
  * reset progress. Called before the file is opened, so the display shows the name
  * while the decoder is still working. */
 static void set_track(const library_t *lib, uint32_t index, lib_node_t n)
@@ -868,7 +877,7 @@ static void stream_file(const char *path)
     }
     /* A source above the budget would not starve this Track alone: it would starve the
      * live stream for every listener until the Track ended. The decoder is already open
-     * because only it knows the source rate; stop it and let the Playlist advance. The
+     * because only it knows the source rate; stop it and let the broadcast advance. The
      * Track stays in the Library and is skipped, not deleted. */
     if (!mini_icecast_source_rate_ok(j.hz)) {
         ESP_LOGW(TAG, "skipping %s: %u Hz source is above the %u Hz playback budget "
@@ -987,7 +996,7 @@ static void shuffle_forget(void)
 
 /* Move the order's cursor to a picked Track, so the next advance continues from the
  * pick instead of from where the order had got to. The order is not rebuilt. A pick
- * made while the mode is off, or before the order covers the Playlist, is ignored. */
+ * made while the mode is off, or before the order covers the whole Library, is ignored. */
 static void shuffle_seek(uint32_t index)
 {
     xSemaphoreTake(S.lock, portMAX_DELAY);
@@ -1002,12 +1011,29 @@ static void shuffle_seek(uint32_t index)
  * `have_current` says a Track of this generation is playing (a pass that restarted at
  * a boundary after the mode changed); the order is then anchored at it, so the first
  * advance takes the element after it. A fresh pass has no Track playing, so the order is
- * anchored at Playlist index 0 like the linear pass, and *first_is_cursor tells the pass
+ * anchored at track index 0 like the linear pass, and *first_is_cursor tells the pass
  * to play the cursor rather than advance it.
  *
  * Returns true when the pass is shuffled. On an allocation failure the mode is turned
  * back off - mini_icecast_shuffle_enabled() must not claim a mode that is not running
- * - and the pass continues in Playlist order. */
+ * - and the pass continues in broadcast order. */
+/* ------------------------------------------------------------- the order */
+
+static bool order_has(const uint32_t *items, uint32_t n, uint32_t index)
+{
+    for (uint32_t i = 0; i < n; i++)
+        if (items[i] == index) return true;
+    return false;
+}
+
+/* Where a track sits in the order, or n when it is not in it. */
+static uint32_t order_position(const uint32_t *items, uint32_t n, uint32_t index)
+{
+    for (uint32_t i = 0; i < n; i++)
+        if (items[i] == index) return i;
+    return n;
+}
+
 static bool shuffle_pass_begin(uint32_t count, uint32_t generation, bool have_current,
                                uint32_t current, bool *first_is_cursor)
 {
@@ -1034,7 +1060,7 @@ static bool shuffle_pass_begin(uint32_t count, uint32_t generation, bool have_cu
     if (!order) order = malloc(bytes);
     if (!order) {
         ESP_LOGE(TAG, "shuffle: no memory for the %u B order; the mode stays off, "
-                      "playback continues in Playlist order", (unsigned)bytes);
+                      "playback continues in broadcast order", (unsigned)bytes);
         xSemaphoreTake(S.lock, portMAX_DELAY);
         S.shuffle_on = false;
         uint32_t *stale = S.shuffle.order;
@@ -1081,7 +1107,7 @@ static void broadcast_task(void *arg)
     (void)arg;
     S.t0 = esp_timer_get_time();
     int quiet = 0;
-    /* Playlist positions the pass has played. `prev` walks back through them and
+    /* Positions in the broadcast order the pass has played. `prev` walks back through them and
      * `skip` walks forward; only at its end is a new position appended. They live
      * across passes so a pass that restarts when the shuffle mode changes keeps the
      * history `prev` walks, and are reset when the generation changes. */
@@ -1122,7 +1148,7 @@ static void broadcast_task(void *arg)
 
         uint32_t generation = library_generation(lib);
         if (generation != history_generation || count != history_tracks) {
-            /* A new generation: the positions the old Playlist had mean nothing now. */
+            /* A new generation: the positions the old broadcast order had mean nothing now. */
             history_count = 0;
             history_pos = -1;
             back = false;
@@ -1130,19 +1156,54 @@ static void broadcast_task(void *arg)
             history_tracks = count;
         }
 
+        /* The order this pass walks: a published change lands here, and an order
+         * resolved for a generation that is gone is dropped rather than guessed. Only
+         * this task swaps or frees the active array, so a pass reads one array for its
+         * whole life. */
+        bool order_dropped = false;
+        const uint32_t *order = NULL;
+        uint32_t walk = count;
+        xSemaphoreTake(S.lock, portMAX_DELAY);
+        if (S.order_pending_set) {
+            free(S.order.items);
+            S.order.items = S.order_pending.items;
+            S.order.count = S.order_pending.count;
+            S.order.generation = S.order_pending.generation;
+            S.order_pending.items = NULL;
+            S.order_pending.count = 0;
+            S.order_pending.generation = 0;
+            S.order_pending_set = false;
+        }
+        if (S.order.count && S.order.generation != generation) {
+            ESP_LOGW(TAG, "order: resolved for generation %u, playing %u; back to the Library's",
+                     (unsigned)S.order.generation, (unsigned)generation);
+            free(S.order.items);
+            S.order.items = NULL;
+            S.order.count = 0;
+            S.order.generation = 0;
+            order_dropped = true;
+        }
+        order = S.order.items;
+        walk = S.order.count ? S.order.count : count;
+        xSemaphoreGive(S.lock);
+        if (order_dropped && S.order_dropped_cb) S.order_dropped_cb(S.order_dropped_ctx);
+
         /* The Track this pass continues from, when one of this generation is playing:
          * a pass that restarts at a Track boundary after the mode changed. A fresh
-         * pass has none and starts at the Playlist's first Track, as it always has. */
+         * pass has none and starts at the first Track of the broadcast order, as it always has. */
         xSemaphoreTake(S.lock, portMAX_DELAY);
         bool have_current = S.generation == generation && S.track_index < count;
         uint32_t current = S.track_index;
         xSemaphoreGive(S.lock);
+        uint32_t current_pos = order ? order_position(order, walk, current) : current;
+        bool have_pos = have_current && current_pos < walk;
 
         /* The shuffle order is built at the top of the pass, while the Library lease
-         * is held; enabling the mode only flips a flag (ADR 0023). */
+         * is held; enabling the mode only flips a flag (ADR 0023). It permutes the
+         * order being walked, so with a Playlist selected it shuffles that. */
         bool first_is_cursor = false;
-        bool pass_shuffle = shuffle_pass_begin(count, generation, have_current,
-                                               have_current ? current : 0, &first_is_cursor);
+        bool pass_shuffle = shuffle_pass_begin(walk, generation, have_pos,
+                                               have_pos ? current_pos : 0, &first_is_cursor);
         int played = 0;
 
         for (;;) {
@@ -1150,9 +1211,15 @@ static void broadcast_task(void *arg)
             bool same_library = S.library ? S.library == lib
                                           : library_current_generation() == generation;
             bool shuffle_mode = S.shuffle_on;
+            bool order_change = S.order_pending_set;
             xSemaphoreGive(S.lock);
+            if (order_change) {
+                /* A selection changed: end the pass at this Track boundary so the next
+                 * pass walks the new order. No Track is interrupted. */
+                break;
+            }
             if (!same_library || library_generation(lib) != generation) {
-                /* A new generation ends the pass; its order describes a Playlist that
+                /* A new generation ends the pass; its order describes a Library that
                  * is gone, and the next pass builds a new one with the mode still on. */
                 shuffle_forget();
                 break;
@@ -1168,7 +1235,10 @@ static void broadcast_task(void *arg)
             if (forced) {
                 /* A pick moves the order's cursor instead of rebuilding the order: the
                  * next advance continues from the picked Track (ADR 0023). */
-                if (pass_shuffle) shuffle_seek(index);
+                if (pass_shuffle) {
+                    uint32_t p = order ? order_position(order, walk, index) : index;
+                    if (p < walk) shuffle_seek(p);
+                }
                 first_is_cursor = false;
                 if (history_count == TRACK_HISTORY) {
                     memmove(history, history + 1, sizeof history[0] * (TRACK_HISTORY - 1));
@@ -1186,7 +1256,7 @@ static void broadcast_task(void *arg)
                 history_pos++;
                 index = history[history_pos];
             } else {
-                /* A new Playlist position: the shuffle order's next element when the
+                /* A new position in the broadcast order: the shuffle order's next element when the
                  * mode is on, else the position after the last one played. */
                 bool wrapped = false;
                 bool ordered = false;
@@ -1194,15 +1264,29 @@ static void broadcast_task(void *arg)
                     /* The order is read under the lock set(false) frees it with, so a
                      * toggle between the check above and here cannot dangle. */
                     xSemaphoreTake(S.lock, portMAX_DELAY);
-                    if (S.shuffle.ready && S.shuffle.count == count) {
-                        if (first_is_cursor) index = mi_shuffle_current(&S.shuffle);
-                        else index = mi_shuffle_next(&S.shuffle, &wrapped);
+                    if (S.shuffle.ready && S.shuffle.count == walk) {
+                        uint32_t p = first_is_cursor ? mi_shuffle_current(&S.shuffle)
+                                                     : mi_shuffle_next(&S.shuffle, &wrapped);
                         first_is_cursor = false;
-                        ordered = true;
+                        if (p < walk) {
+                            index = order ? order[p] : p;
+                            ordered = true;
+                        }
                     }
                     xSemaphoreGive(S.lock);
                 }
-                if (!ordered) {
+                if (!ordered && order) {
+                    /* The next Track in the selected order, wrapping at its end. A pick
+                     * that is not in the order (it can only arrive that way if the order
+                     * changed under it) restarts at the first row. */
+                    uint32_t pos = history_count
+                                       ? order_position(order, walk, history[history_count - 1])
+                                       : walk;
+                    if (pos >= walk) pos = 0;
+                    else pos = (pos + 1) % walk;
+                    wrapped = history_count && pos == 0;
+                    index = order[pos];
+                } else if (!ordered) {
                     index = history_count ? (history[history_count - 1] + 1) % count : 0;
                     wrapped = history_count && index == 0;
                 }
@@ -1424,6 +1508,68 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     return ESP_OK;
 }
 
+void mini_icecast_set_order(const uint32_t *indices, uint32_t count, uint32_t generation)
+{
+    uint32_t *copy = NULL;
+    if (indices && count) {
+        size_t bytes = (size_t)count * sizeof *copy;
+        copy = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!copy) copy = malloc(bytes);
+        if (!copy) {
+            ESP_LOGE(TAG, "order: no memory for %u B; the order in force stays",
+                     (unsigned)bytes);
+            return;
+        }
+        memcpy(copy, indices, bytes);
+    }
+    if (!S.lock) {
+        /* Before start(): there is no pass yet; the order is kept for the first one. */
+        free(S.order_pending.items);
+        S.order_pending.items = copy;
+        S.order_pending.count = copy ? count : 0;
+        S.order_pending.generation = copy ? generation : 0;
+        S.order_pending_set = true;
+        return;
+    }
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    free(S.order_pending.items);
+    S.order_pending.items = copy;
+    S.order_pending.count = copy ? count : 0;
+    S.order_pending.generation = copy ? generation : 0;
+    S.order_pending_set = true;
+    xSemaphoreGive(S.lock);
+}
+
+bool mini_icecast_order_active(void)
+{
+    if (!S.lock) {
+        return S.order_pending_set ? S.order_pending.count > 0 : S.order.count > 0;
+    }
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    bool on = S.order_pending_set ? S.order_pending.count > 0 : S.order.count > 0;
+    xSemaphoreGive(S.lock);
+    return on;
+}
+
+bool mini_icecast_order_contains(uint32_t track_index)
+{
+    if (!S.lock) return true;
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    const uint32_t *items = S.order_pending_set ? S.order_pending.items : S.order.items;
+    uint32_t n = S.order_pending_set ? S.order_pending.count : S.order.count;
+    bool in = !n || order_has(items, n, track_index);
+    xSemaphoreGive(S.lock);
+    return in;
+}
+
+void mini_icecast_set_order_dropped_cb(void (*cb)(void *ctx), void *ctx)
+{
+    if (S.lock) xSemaphoreTake(S.lock, portMAX_DELAY);
+    S.order_dropped_cb = cb;
+    S.order_dropped_ctx = ctx;
+    if (S.lock) xSemaphoreGive(S.lock);
+}
+
 bool mini_icecast_play(const char *relpath)
 {
     if (!relpath || !relpath[0]) return false;
@@ -1446,7 +1592,20 @@ bool mini_icecast_play(const char *relpath)
         if (owned) library_release(lib);
         return false;
     }
+    bool dropped = false;
     xSemaphoreTake(S.lock, portMAX_DELAY);
+    const uint32_t *walking = S.order_pending_set ? S.order_pending.items : S.order.items;
+    uint32_t walking_n = S.order_pending_set ? S.order_pending.count : S.order.count;
+    if (walking_n && !order_has(walking, walking_n, index)) {
+        /* The pick is outside the Playlist being walked: the walk is over. Published
+         * like any other order change, so the pass swaps it at the next boundary. */
+        free(S.order_pending.items);
+        S.order_pending.items = NULL;
+        S.order_pending.count = 0;
+        S.order_pending.generation = 0;
+        S.order_pending_set = true;
+        dropped = true;
+    }
     snprintf(S.pending_path, sizeof S.pending_path, "%s", relpath);
     S.pending_index = index;
     S.pending_generation = library_generation(lib);
@@ -1454,6 +1613,7 @@ bool mini_icecast_play(const char *relpath)
     S.skip = false;
     S.prev = false;
     xSemaphoreGive(S.lock);
+    if (dropped && S.order_dropped_cb) S.order_dropped_cb(S.order_dropped_ctx);
     if (owned) library_release(lib);
     return true;
 }

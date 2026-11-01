@@ -2,8 +2,9 @@
 /*
  * snapshot - the measured music a host produced for this Library.
  *
- * One immutable image, validated once and then read in place: a 64-byte header, one
- * 32-byte row per track sorted by fingerprint, and one UTF-8 string pool. Nothing is
+ * One immutable image, validated once and then read in place: a 64-byte header (80 in
+ * version 2, which adds the Playlists), one 32-byte row per track sorted by
+ * fingerprint, and one UTF-8 string pool. Nothing is
  * copied, nothing is cached, and the module never touches a filesystem -- it is handed
  * a pointer and a length. On the device the pointer is the mapped `snapshot` partition
  * (ADR 0047); in the host tests it is a buffer.
@@ -21,9 +22,18 @@ extern "C" {
 #endif
 
 #define SNAPSHOT_MAGIC        "XTAPESNP"
-#define SNAPSHOT_HEADER_SIZE  64u
+/* Version 1 has no list area and a 64-byte header; version 2 appends the lists and
+ * grows the header to 80 bytes. The reader accepts both (format spec §12). */
+#define SNAPSHOT_VERSION_1    1u
+#define SNAPSHOT_VERSION_2    2u
+#define SNAPSHOT_VERSION      SNAPSHOT_VERSION_2
+#define SNAPSHOT_HEADER_SIZE  64u  /* version 1; version 2 is this plus 16 */
+#define SNAPSHOT_HEADER_SIZE_2 80u
 #define SNAPSHOT_ROW_SIZE     32u
-#define SNAPSHOT_VERSION      1u
+#define SNAPSHOT_LIST_SIZE    32u
+#define SNAPSHOT_LIST_ROW_SIZE 4u
+#define SNAPSHOT_MAX_LISTS    64u
+#define SNAPSHOT_MAX_LIST_ROWS 8192u
 #define SNAPSHOT_MAX_BYTES    (2u * 1024u * 1024u)
 
 /* Unknown percentages are 0xFF and unknown BPM/key are 0; the accessors keep them
@@ -41,6 +51,16 @@ typedef enum {
 
 /* A validated image. Opaque: the fields are read through the accessors below. */
 typedef struct snapshot snapshot_t;
+
+/* One Playlist, as read: its opaque id, where its name is in the pool, and its slice
+ * of the list-row array. `snapshot_list_row` reads one row of that slice. */
+typedef struct {
+    uint64_t id;
+    uint32_t name_offset;
+    uint32_t row_start;
+    uint32_t row_count;
+    uint64_t created;
+} snapshot_list_t;
 
 /* One row, as read. `snapshot_find` fills it; every field is exactly what the image
  * holds, unknown markers included. */
@@ -91,6 +111,8 @@ snapshot_result_t snapshot_open_why(const uint8_t *image, size_t size, snapshot_
                                     char *why, size_t why_size);
 void              snapshot_close(snapshot_t *s);
 
+/* 1 or 2; the image's own format version, which the accessors below depend on. */
+uint16_t       snapshot_version(const snapshot_t *s);
 uint32_t       snapshot_rows(const snapshot_t *s);
 uint32_t       snapshot_generation(const snapshot_t *s);
 uint32_t       snapshot_analyser(const snapshot_t *s);
@@ -106,6 +128,24 @@ bool snapshot_find(const snapshot_t *s, uint64_t fingerprint, uint32_t size,
 /* A row's string, NUL-terminated inside the image; "" when absent. */
 const char *snapshot_row_string(const snapshot_t *s, const snapshot_row_t *row,
                                 snapshot_string_t which);
+
+/* ---------------------------------------------------------------- the lists */
+
+/* Playlists are version 2 only: a version 1 image reports zero and every accessor
+ * below returns false or "". Lists are stored in ascending id order, so `find` is a
+ * binary search. None of this resolves a row to a track -- that needs the Library,
+ * which this module never touches. */
+uint32_t snapshot_lists(const snapshot_t *s);
+bool     snapshot_list_at(const snapshot_t *s, uint32_t index, snapshot_list_t *out);
+bool     snapshot_list_find(const snapshot_t *s, uint64_t id, snapshot_list_t *out);
+const char *snapshot_list_name(const snapshot_t *s, const snapshot_list_t *list);
+uint32_t snapshot_list_rows_total(const snapshot_t *s);
+
+/* One row of a list: the relative path it names, NUL-terminated inside the image. The
+ * path is the whole binding -- a list row has no measurement to protect, and the
+ * Library is what resolves it. */
+bool snapshot_list_row(const snapshot_t *s, const snapshot_list_t *list, uint32_t index,
+                       const char **path);
 
 /* FNV-1a 64 of a relative path's bytes -- the hash half of a Track fingerprint. The
  * other half is the file's size, which the lookup takes separately because a renamed
@@ -151,7 +191,7 @@ snapshot_result_t snapshot_apply(const snapshot_source_t *src, const snapshot_ta
 /* ---------------------------------------------------------------- matching */
 
 typedef enum {
-    SNAPSHOT_SORT_PATH = 0, /* Playlist order */
+    SNAPSHOT_SORT_PATH = 0, /* broadcast order */
     SNAPSHOT_SORT_TITLE,
     SNAPSHOT_SORT_BPM,
     SNAPSHOT_SORT_ENERGY,
@@ -205,7 +245,7 @@ bool snapshot_matches(const snapshot_t *s, const snapshot_filter_t *f, const cha
 /* ---------------------------------------------------------------- hits */
 
 /* A bounded, ordered set of hits: the best `cap` in sort order, then the caller skips
- * and truncates. Deterministic: equal keys break by track index, so Playlist order is
+ * and truncates. Deterministic: equal keys break by track index, so broadcast order is
  * the tie-break everywhere. */
 typedef struct snapshot_hits snapshot_hits_t;
 

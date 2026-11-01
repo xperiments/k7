@@ -35,6 +35,20 @@ static const char *find_header(const char *req, const char *name)
     }
 }
 
+/* Whether one header's value contains `token`, case-insensitively and stopping at the end
+ * of that header's line: `find_header` returns a pointer into the whole block, so an
+ * unbounded search would match a token in a later header. A `;q=0` list is not honoured -
+ * every client that matters offers gzip either way or offers nothing. */
+static bool header_line_has(const char *value, const char *token)
+{
+    size_t len = strcspn(value, "\r\n");
+    size_t tlen = strlen(token);
+    for (size_t i = 0; i + tlen <= len; i++) {
+        if (strncasecmp(value + i, token, tlen) == 0) return true;
+    }
+    return false;
+}
+
 int http_split_target(const char *target, char *path, size_t path_size,
                       char *query, size_t query_size)
 {
@@ -94,6 +108,11 @@ int http_parse_request(char *buf, http_request_t *req)
 
     const char *icy = find_header(line_end + 2, "icy-metadata");
     req->want_icy_metadata = icy != NULL && icy[0] == '1';
+
+    /* The front door packs its text files compressed only, so a client that cannot take
+     * gzip is told 406 rather than handed bytes it will not decode. */
+    const char *ae = find_header(line_end + 2, "accept-encoding");
+    req->accepts_gzip = ae != NULL && header_line_has(ae, "gzip");
 
     const char *cl = find_header(line_end + 2, "content-length");
     if (cl) {

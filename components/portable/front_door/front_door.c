@@ -8,13 +8,16 @@
 #include "front_door.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "esp_log.h"
 
 #include "http_server.h"
 #include "library.h"
+#include "flash_job.h"
 #include "mini_icecast.h"
+#include "playlist_select.h"
 
 static const char *TAG = "frontdoor";
 
@@ -74,13 +77,41 @@ static bool shell_file_for(const char *request_path, char *out, size_t cap)
     return snprintf(out, cap, "%s%s", F.shell_root ? F.shell_root : "", target) < (int)cap;
 }
 
-/* `request_path` is what the cache rules are written against; `file_path` is what the
- * content type comes from. */
+/* The Shell is packed pre-compressed: the build writes `assets/index-abc.js.gz` and drops
+ * the original, so the device streams those bytes with `Content-Encoding: gzip` and the
+ * browser inflates them. Nothing on the board decompresses anything - the saving is flash,
+ * and the transfer gets smaller too.
+ *
+ * A file the pack kept plain - `index.html`, the icons, anything that did not shrink - is
+ * served as it is. A client that did not offer gzip cannot be handed a compressed-only
+ * file, and the page means nothing to it anyway: it gets 406 rather than a misleading 404.
+ *
+ * `request_path` is what the cache rules are written against; `file_path` is the logical
+ * name, and the content type comes from it - never from the trailing `.gz`. */
 static http_result_t serve_file(int fd, const char *request_path, const char *file_path,
-                                int missing_status)
+                                int missing_status, bool accepts_gzip)
 {
-    FILE *f = fopen(file_path, "rb");
+    char packed[560];
+    bool has_packed = snprintf(packed, sizeof packed, "%s.gz", file_path) < (int)sizeof packed;
+
+    FILE *f = NULL;
+    bool compressed = false;
+    if (has_packed && accepts_gzip) {
+        f = fopen(packed, "rb");
+        compressed = f != NULL;
+    }
+    if (!f) f = fopen(file_path, "rb");
     if (!f) {
+        if (has_packed) {
+            /* Only the compressed copy exists, and this client did not ask for it. */
+            FILE *packed_only = fopen(packed, "rb");
+            if (packed_only) {
+                fclose(packed_only);
+                ESP_LOGW(TAG, "GET %s -> 406 (packed gzip only)", request_path);
+                http_send_error(fd, 406, "this file is packed gzip-compressed only");
+                return HTTP_HANDLED;
+            }
+        }
         ESP_LOGW(TAG, "GET %s -> %d (no %s)", request_path, missing_status, file_path);
         http_send_error(fd, missing_status,
                         missing_status == 503 ? "the page is missing from this firmware"
@@ -99,20 +130,35 @@ static http_result_t serve_file(int fd, const char *request_path, const char *fi
         return HTTP_HANDLED;
     }
 
+    /* One Cache-Control, never two: the rule already says how the response is cached, and
+     * `Vary` keeps a shared cache from handing a gzip body to a client that cannot read
+     * it. 160 bytes covers the longest rule plus both extra lines. */
+    char headers[160];
+    snprintf(headers, sizeof headers, "%s%s%s", cache_control_for(request_path),
+             compressed ? "Content-Encoding: gzip\r\n" : "", "Vary: Accept-Encoding\r\n");
+
     esp_err_t e = http_send_headers(fd, 200, content_type_for(file_path), (size_t)size,
-                                    cache_control_for(request_path));
+                                    headers);
     if (e != ESP_OK) {
         fclose(f);
         return HTTP_HANDLED;
     }
 
     /* Streamed, not buffered: the largest file is a few hundred kilobytes and the device
-     * has better uses for that RAM. */
-    char chunk[2048];
+     * has better uses for that RAM. The chunk is on the heap rather than the stack: this
+     * runs on the flash writer, whose stack is internal and deliberately small, and 2 KB
+     * of it is what overflowed it. */
+    char *chunk = malloc(2048);
+    if (!chunk) {
+        fclose(f);
+        http_send_error(fd, 500, "no memory for the page");
+        return HTTP_HANDLED;
+    }
     size_t got;
-    while ((got = fread(chunk, 1, sizeof chunk, f)) > 0) {
+    while ((got = fread(chunk, 1, 2048, f)) > 0) {
         if (!http_send_all(fd, chunk, got)) break;
     }
+    free(chunk);
     fclose(f);
     return HTTP_HANDLED;
 }
@@ -161,12 +207,33 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
 
     bool card = F.card_present ? F.card_present() : false;
 
-    char body[768];
+    /* The order the broadcast is walking: the library tree, or the Playlist the device
+     * was told to walk. A fact like the card state -- the page reads it, never sets it. */
+    uint64_t playlist = playlist_select_current();
+    char playlist_id[17] = {0};
+    char playlist_name[200] = {0};
+    if (playlist) {
+        snprintf(playlist_id, sizeof playlist_id, "%016llx", (unsigned long long)playlist);
+        char raw_name[96] = {0};
+        playlist_select_name(raw_name, sizeof raw_name);
+        json_escape(playlist_name, sizeof playlist_name, raw_name);
+    }
+
+    char playlist_json[320];
+    if (playlist)
+        snprintf(playlist_json, sizeof playlist_json, "{\"id\":\"%s\",\"name\":\"%s\"}",
+                 playlist_id, playlist_name);
+    else
+        snprintf(playlist_json, sizeof playlist_json, "null");
+
+    char body[1536];
     int n = snprintf(body, sizeof body,
                      "{\"card\":%s,\"tracks\":%u,\"generation\":%u,\"library\":\"%s\","
+                     "\"order\":\"%s\",\"playlist\":%s,"
                      "\"playing\":{\"title\":\"%s\",\"path\":\"%s\",\"elapsed_ms\":%u,"
                      "\"duration_ms\":%u}}",
-                     card ? "true" : "false", tracks, generation, state, title, path,
+                     card ? "true" : "false", tracks, generation, state,
+                     playlist ? "list" : "tree", playlist_json, title, path,
                      (unsigned)st.elapsed_ms, (unsigned)st.duration_ms);
     if (lib) library_release(lib);
     if (n < 0 || n >= (int)sizeof body) {
@@ -178,6 +245,24 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
                           "Cache-Control: no-store\r\n") == ESP_OK)
         http_send_all(fd, body, (size_t)n);
     return HTTP_HANDLED;
+}
+
+/* Serving the Shell reads SPIFFS, and a SPIFFS read is a flash read: the HTTP worker's
+ * stack is in PSRAM, so the read happens on the writer task (flash_job.h). */
+typedef struct {
+    int         fd;
+    const char *request_path;
+    const char *file;
+    int         missing_status;
+    bool        accepts_gzip;
+} serve_job_t;
+
+static bool serve_job(void *ctx)
+{
+    serve_job_t *job = (serve_job_t *)ctx;
+    (void)serve_file(job->fd, job->request_path, job->file, job->missing_status,
+                     job->accepts_gzip);
+    return true;
 }
 
 static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
@@ -211,8 +296,15 @@ static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
         return HTTP_HANDLED;
     }
     /* A page that was packed but is not on the partition is a device fault, so `/` says
-     * so; any other missing file is a 404 like every other. */
-    return serve_file(fd, req->path, file, is_page ? 503 : 404);
+     * so; any other missing file is a 404 like every other. The read happens on the
+     * writer, where the stack is internal. 30 s: a large gzipped bundle to a slow client
+     * must not be cut in half by the writer's own default. */
+    serve_job_t job = {fd, req->path, file, is_page ? 503 : 404, req->accepts_gzip};
+    if (!flash_job_run(serve_job, &job, 30000u)) {
+        /* The writer did not take it: answer instead of leaving the client hanging. */
+        http_send_error(fd, 503, "the page reader is busy");
+    }
+    return HTTP_HANDLED;
 }
 
 esp_err_t front_door_start(const front_door_cfg_t *cfg)

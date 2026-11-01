@@ -44,6 +44,11 @@ typedef struct {
     /* The Shell's directory: the SPIFFS mount on the device, `web/dist` on the host.
      * NULL means this firmware carries no page. */
     const char *shell_root;
+    /* The remembered Playlist selection (id, 0 for none). NULL means this build
+     * remembers none: the choice then lives until reboot. Wired to NVS by the
+     * appliance, left NULL by the host. */
+    bool (*selection_load)(uint64_t *id);
+    bool (*selection_save)(uint64_t id);
 } app_services_cfg_t;
 
 typedef struct {

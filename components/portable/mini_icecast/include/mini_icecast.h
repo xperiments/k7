@@ -23,7 +23,7 @@
 #include <stdint.h>
 
 #include "audio_format.h" /* mi_fmt_t: the status struct reports a container */
-#include "library.h"       /* the immutable Playlist the broadcast consumes */
+#include "library.h"       /* the immutable Library the broadcast walks */
 
 #include "esp_err.h"
 
@@ -54,9 +54,9 @@ static inline bool mini_icecast_source_rate_ok(uint32_t hz)
 #define MINI_ICECAST_METAINT_DEFAULT 16000
 
 typedef struct {
-    /* The Playlist to broadcast; NULL means idle/no card. The caller keeps the
-     * generation alive for as long as the broadcast may use it (ticket 11 adds
-     * the lease). */
+    /* The Library to broadcast in its own order; NULL means idle/no card. The
+     * caller keeps the generation alive for as long as the broadcast may use it
+     * (ticket 11 adds the lease). */
     const library_t *library;
     const char *station_name;  /* icy-name, default "ESP32 Radio" */
     uint16_t    port;          /* default 8000; used in the startup log */
@@ -114,8 +114,8 @@ typedef struct {
     uint32_t elapsed_ms;                           /* broadcast from this track so far */
     uint32_t duration_ms;                          /* this track's length, 0 = unknown */
     uint32_t library_count;                        /* Tracks in the Library generation */
-    uint32_t generation;                           /* the generation the Playlist came from */
-    uint32_t track_index;                          /* position in the Playlist, 0-based; 0 when idle */
+    uint32_t generation;                           /* the generation the Library came from */
+    uint32_t track_index;                          /* position in the broadcast order, 0-based; 0 when idle */
     /* RMS of the chunk being encoded, 0..1 per channel: the display's level, not
      * the wire's. Written by the broadcast task per chunk and read without the
      * lock like elapsed_ms - a 32-bit float store is atomic on this core. */
@@ -146,10 +146,28 @@ void      mini_icecast_park_card(uint32_t max_ms);
 void      mini_icecast_unpark_card(void);
 bool      mini_icecast_card_parked(void);
 
-/* Replace the Playlist generation. The caller keeps `lib` alive until the next
+/* Replace the Library generation. The caller keeps `lib` alive until the next
  * call or shutdown; the broadcast resets its history and starts the new
  * generation at its first Track. NULL idles. */
 void      mini_icecast_set_library(const library_t *lib);
+
+/* Walk a chosen order instead of the Library's: Library track indices, in the order
+ * they should play, resolved against `generation` (the Library generation the caller
+ * looked them up in). The array is copied. NULL or 0 returns to the Library's own
+ * order. The change lands at the next Track boundary, so the current Track is never
+ * cut, and it is dropped rather than guessed if the generation it was resolved for is
+ * no longer the one playing. Safe from any task, before or after start(). */
+void      mini_icecast_set_order(const uint32_t *indices, uint32_t count, uint32_t generation);
+
+/* Whether a chosen order is being walked, and whether it holds this Track. With no
+ * order the Library is the order, so every Track is "in" it. */
+bool      mini_icecast_order_active(void);
+bool      mini_icecast_order_contains(uint32_t track_index);
+
+/* A play command for a Track outside the order drops the order; this is told after
+ * the fact, outside the broadcast's lock, so the page layer can clear its selection
+ * and its stored id. */
+void      mini_icecast_set_order_dropped_cb(void (*cb)(void *ctx), void *ctx);
 
 /* Play a Track by its relative path at the next chunk boundary, like skip.
  * Returns false when the path is unknown or the Library has no generation; the
@@ -162,9 +180,9 @@ void      mini_icecast_prev(void);                              /* jump to the p
 /* Shuffle: a mode of the broadcast, not an action
  * (docs/adr/0023-shuffle-is-a-broadcast-mode.md).
  *
- * One permutation of the whole Playlist, walked forward by the natural end of a Track
+ * One permutation of the whole broadcast order, walked forward by the natural end of a Track
  * and the next command and back by the previous one; the end of a lap clears the
- * history, as the linear Playlist's lap does. A pick (mini_icecast_play) moves the
+ * history, as the linear broadcast order's lap does. A pick (mini_icecast_play) moves the
  * order's cursor, so the next advance continues from it without rebuilding. A new
  * Library generation builds a new order with the mode still on. The mode lives until
  * reboot; there is no NVS entry.
@@ -179,9 +197,9 @@ void      mini_icecast_shuffle_seed(uint32_t seed);
  * builds the order at the top of its next pass, off the UI thread, where it already
  * holds the Library lease - so mini_icecast_shuffle_enabled() reads On immediately
  * and the order catches up at the next Track boundary. `set(false)` frees the order
- * and returns to Playlist order at the same boundary. If the order cannot be
+ * and returns to broadcast order at the same boundary. If the order cannot be
  * allocated the mode stays Off, the failure is logged, and playback continues in
- * Playlist order: the row cannot claim a mode that is not running. Safe from any
+ * broadcast order: the row cannot claim a mode that is not running. Safe from any
  * task; mini_icecast_shuffle_enabled() is what the Menu's row reads. */
 void      mini_icecast_shuffle_set(bool on);
 bool      mini_icecast_shuffle_enabled(void);

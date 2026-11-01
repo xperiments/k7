@@ -65,6 +65,10 @@ typedef struct {
     char path[HTTP_PATH_MAX]; /* request target, percent-encoded, query stripped */
     char query[HTTP_QUERY_MAX]; /* everything after the '?', percent-encoded; "" if none */
     bool want_icy_metadata;   /* the client asked for inline ICY metadata */
+    /* The client's `Accept-Encoding` mentions gzip. The front door packs its text files
+     * compressed and has no plain copy of them, so this decides whether a request can be
+     * answered at all. */
+    bool accepts_gzip;
     bool has_content_length;
     size_t content_length;
     char content_type[64];    /* lower-case value up to the first ';'; "" if absent */

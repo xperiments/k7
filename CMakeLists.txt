@@ -81,10 +81,11 @@ if(EXISTS "${XTAPE_SHELL_DIR}")
     endif()
     message(STATUS "Shell: packing ${XTAPE_SHELL_DIR} into the frontdoor partition "
                    "(app commit ${xtape_app_commit})")
-    # spiffsgen's default object-name limit is 32, and a hashed asset name is 33 or more:
-    # "/assets/taglib-wrapper-BhtJ47OT.js" is enough to fail the configure.
-    spiffs_create_partition_image(frontdoor "${XTAPE_SHELL_DIR}" FLASH_IN_PROJECT
-                                  OBJ_NAME_LEN 64)
+    # Object names longer than SPIFFS's limit fail the image, and a hashed asset name is
+    # over it: "/assets/taglib-wrapper-BhtJ47OT.js" is enough. The limit is
+    # CONFIG_SPIFFS_OBJ_NAME_LEN (sdkconfig.defaults sets it to 64); the OBJ_NAME_LEN
+    # argument this call used to pass is not read by IDF 6.1's spiffsgen invocation.
+    spiffs_create_partition_image(frontdoor "${XTAPE_SHELL_DIR}" FLASH_IN_PROJECT)
 elseif(XTAPE_REQUIRE_SHELL)
     message(FATAL_ERROR
         "XTAPE_REQUIRE_SHELL is set but ${XTAPE_SHELL_DIR} does not exist. Build the "

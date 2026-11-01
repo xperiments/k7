@@ -42,7 +42,7 @@ bool mi_shuffle_build(mi_shuffle_t *s, uint32_t *order, uint32_t count, uint32_t
 
     for (uint32_t i = 0; i < count; i++) order[i] = i;
     /* Fisher-Yates, high to low: every permutation is reachable, and the work is
-     * one draw and at most one swap per element (20,000 at the Playlist's ceiling). */
+     * one draw and at most one swap per element (20,000 at the library's ceiling). */
     for (uint32_t i = count - 1; i > 0; i--) {
         uint32_t j = sh_next(s) % (i + 1);
         uint32_t t = order[i];

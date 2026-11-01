@@ -107,9 +107,20 @@ and which one is selected. `GET /api/playlists/<id>` reports one list's rows as 
 
 **U3.** `POST /api/playlists/select` takes `{"id": "<hex16>"}` or `{"id": null}` and tells the
 broadcast which Playlist to walk. `404` for an id the Snapshot does not hold, `409` for a list
-with no rows, `503` when there is no Snapshot. The choice is remembered in NVS and survives a
-restart; on boot a stored id the current image no longer holds falls back to the tree's order and
-is reported.
+with no rows — or whose rows the Library cannot resolve at all — `503` when there is no Snapshot,
+`400` for a body that is not that object. The choice is remembered in NVS and survives a restart;
+on boot a stored id the current image no longer holds falls back to the tree's order and the
+stored id is cleared. A refusal leaves the working selection alone.
+
+**U4.** `POST /api/play` keeps its meaning: the broadcast moves to that Track. If a Playlist is
+selected and the Track is not in it, the selection is **dropped** — the walk is over — and the
+reply's `order` and the next `/api/status` say so. This is the one implicit mode change, and it
+is the honest reading of "play this now".
+
+**S1.** `GET /api/status` reports the **Card state**, the Library's count and generation, what is
+Playing (`title`, `path`, `elapsed_ms`, `duration_ms`), and the order: `order` is `"tree"` or
+`"list"`, and `playlist` is `{"id","name"}` or `null`. It is `no-store` and answers only on its
+own path.
 
 **U4.** There is **no TLS**. No certificate is compiled in, no trust step exists, and a browser
 shows "Not secure" and no interstitial. The consequences are accepted, not hidden: no service
@@ -214,10 +225,13 @@ Two acts, named apart because they happen on different machines.
 
 ### 4.4 Media
 
-- `#/media` lists albums and artists from the device's Snapshot rows (`library_search` paged, so
-  names are complete exactly as far as **Coverage** is). Tracks with no row are grouped under
-  **Not measured** and offer Process. Covers come from this browser's cache; a track measured
-  elsewhere shows a placeholder tile — ordinary, not an error.
+- `#/media` lists albums and artists from **this browser's `xtape-media` cache** — the tags and
+  pictures the analyser kept when it read the card — because the device's search cannot be paged
+  to the end of a library (`offset` is capped at 199, `limit` at 100). The device supplies what
+  exists (the status count and generation, and a walk of `library_list`) and the measurements of
+  an opened album (`library_track` per row, batched). Library tracks with no cached row are
+  grouped under **Not measured** and offer Process; a cover measured elsewhere shows a
+  placeholder tile — ordinary, not an error.
 - One album or artist opens its tracks with BPM, key and energy, and a way to add them to a
   Draft.
 - A track offers **Look up on YouTube**: an Invidious search seeded with artist and title and
@@ -254,7 +268,8 @@ is saved, only indicated as set.
 |---|---|---|
 | Card state, tracks, generation, Playing | `GET /api/status` | no device: the last answer, marked unreachable |
 | The Library's tree | `library_list` over `/mcp` | no device: Media says so |
-| Titles, artists, albums, measurements | `library_search`, `library_track` over `/mcp` | no Snapshot: "not measured" |
+| Titles, artists, albums | this browser's `xtape-media` cache | "not measured", with Process |
+| One track's measurements | `library_track` over `/mcp` | a dash, not an error |
 | Playlists, the selection | `GET /api/playlists` | no Snapshot: none, and a Draft is still authorable |
 | Covers | this browser's `xtape-media` store | placeholder tile, never an error |
 | Videos | the Invidious **Instance** | a note and the setting |
@@ -323,6 +338,8 @@ are the only source of names.
    while the partition is erased and written.
 2. The Shell's packed size after the sidebar, and whether the 1.25 MB partition still holds it
    with room for the Card area's code.
-3. `library_search` paging across a 5,000-track library: how many round trips Media needs for the
-   album index, and whether a bulk read is worth a new MCP tool.
+3. ~~`library_search` paging across a 5,000-track library~~ — resolved: the cap makes a full
+   album index ~50 partial requests, so the index is the browser's cache and the device is asked
+   only per opened album. A bulk album tool remains the alternative if a card is ever measured
+   elsewhere and its albums must still appear.
 4. The boot cost of resolving a 500-row Playlist against the library by path.

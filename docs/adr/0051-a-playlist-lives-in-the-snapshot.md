@@ -15,8 +15,8 @@ before a byte is written, and already immutable once flashed.
 ## Decision
 
 - **The Snapshot carries the lists.** `format_version 2` adds a list area after the string pool:
-  a fixed-width list record (id, name, created, its rows), and for each row the Library path and
-  the **Track fingerprint** that binds it. Caps and byte layout are
+  a fixed-width list record (id, name, created, its rows), and for each row the Track's
+  Library path — the same key `/api/play` resolves. Caps and byte layout are
   [`docs/specs/snapshot-format.md`](../specs/snapshot-format.md) §10.
 - **A list is a selection, not a model of the library.** A Snapshot still never says what
   exists — the card and the boot scan do. A list says which of those tracks, and in what order.
@@ -28,6 +28,9 @@ before a byte is written, and already immutable once flashed.
   fingerprint no longer matches the file, and is what **Shuffle mode** permutes.
 - **The reader accepts v1 and v2.** An image with no lists is still written as v1, so a producer
   that has nothing to say about lists keeps producing something an older device can apply.
+- **A row names a path, not a fingerprint.** The Track fingerprint binds a measurement to a
+  file's size; a Playlist row has no measurement to protect, and binding the size would strand a
+  row whose file was merely re-encoded. The slot is the path.
 
 ## What this costs
 

@@ -348,7 +348,7 @@ static void test_main_tree(void)
         char path[LIB_PATH_MAX];
         CHECK_EQ(library_relpath(lib, n, path, sizeof path), strlen(playlist[i]),
                  "track path length");
-        CHECK(strcmp(path, playlist[i]) == 0, "playlist %u is %s (got %s)", i, playlist[i], path);
+        CHECK(strcmp(path, playlist[i]) == 0, "broadcast order %u is %s (got %s)", i, playlist[i], path);
         CHECK(library_track_index(lib, n) == i, "track %u index", i);
     }
 

@@ -1221,10 +1221,10 @@ lib_node_t library_find(const library_t *lib, const char *relpath)
     }
 }
 
-lib_node_t library_track_at(const library_t *lib, uint32_t playlist_index)
+lib_node_t library_track_at(const library_t *lib, uint32_t track_index)
 {
-    if (!lib || playlist_index >= lib->track_count) return LIB_NODE_NONE;
-    return tracks(lib)[playlist_index];
+    if (!lib || track_index >= lib->track_count) return LIB_NODE_NONE;
+    return tracks(lib)[track_index];
 }
 
 uint32_t library_track_index(const library_t *lib, lib_node_t n)

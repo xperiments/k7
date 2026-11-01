@@ -64,7 +64,7 @@ struct cassette {
 
     /* The Card's table ink. It is the Track's path, hashed, because the shell is part of
      * the Track's identity: a Track with no Cover still changes the cassette, and the
-     * choice survives a pause and a rebuilt Playlist. */
+     * choice survives a pause and a rebuilt broadcast order. */
     uint32_t shown_ink_seed;
     bool     have_ink;
 };

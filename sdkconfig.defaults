@@ -114,3 +114,9 @@ CONFIG_FATFS_MAX_LFN=128
 
 # Linear gradients at an angle, for the controls page's edge glow.
 CONFIG_LV_USE_DRAW_SW_COMPLEX_GRADIENTS=y
+
+# The Shell's hashed asset names exceed SPIFFS's 32-byte default (and its gzip twin adds
+# four more): '/ort/ort-wasm-simd-threaded.mjs.gz' alone is 32 bytes. spiffsgen refuses
+# the image rather than truncating, and the length comes from this Kconfig value, not from
+# the OBJ_NAME_LEN argument that spiffs_create_partition_image() silently ignores on IDF 6.x.
+CONFIG_SPIFFS_OBJ_NAME_LEN=64

@@ -4,7 +4,7 @@
  *
  * The scan walks the Music directory recursively, accepts only Tracks whose name
  * passes the shared source-format rule, sorts each directory by name, and builds
- * one arena: the tree the HTTP surface looks up, the Playlist order, the prebuilt
+ * one arena: the tree the HTTP surface looks up, the broadcast order, the prebuilt
  * JSON view and the binary view. Lookups walk the arena; they never touch the
  * filesystem.
  *
@@ -127,8 +127,8 @@ size_t       library_abspath(const library_t *lib, lib_node_t n, char *buf, size
  * fallback returns LIB_NODE_NONE. No filesystem call. */
 lib_node_t   library_find(const library_t *lib, const char *relpath);
 
-/* The Playlist is the depth-first track index. */
-lib_node_t   library_track_at(const library_t *lib, uint32_t playlist_index);
+/* The broadcast order is the depth-first track index. */
+lib_node_t   library_track_at(const library_t *lib, uint32_t track_index);
 uint32_t     library_track_index(const library_t *lib, lib_node_t n); /* LIB_NODE_NONE if not a track */
 
 /* The prebuilt views, valid until library_close(). */

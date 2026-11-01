@@ -42,11 +42,11 @@ Version 2 adds one area, after everything version 1 has:
 | rows        row_count x 32 B, strictly ascending by fingerprint |
 | strings     pool_size B: row strings, then list names and paths  |
 | lists       list_count x 32 B, strictly ascending by list id     |
-| list rows   list_rows x 12 B, tiled by the lists in list order   |
+| list rows   list_rows x 4 B, tiled by the lists in list order    |
 +------------------------------------------------------------------+
 ```
 
-`total_size = 80 + row_count * 32 + pool_size + list_count * 32 + list_rows * 12`. The list area is
+`total_size = 80 + row_count * 32 + pool_size + list_count * 32 + list_rows * 4`. The list area is
 absent when `list_count` is zero, and an image with nothing to say about lists is still written as
 version 1 (§12).
 
@@ -92,7 +92,7 @@ Bytes `0..64` are exactly the version 1 header, with `format_version = 2` and
 |---:|---:|---|---|
 | 64 | 2 | `list_count` | number of Playlists, `0..64` |
 | 66 | 2 | `list_size` | `32` |
-| 68 | 2 | `list_row_size` | `12` |
+| 68 | 2 | `list_row_size` | `4` |
 | 70 | 2 | `reserved` | zero |
 | 72 | 4 | `list_rows` | Playlist rows across all lists, `0..8192` |
 | 76 | 4 | `reserved` | zero |
@@ -258,7 +258,7 @@ the device keeps serving, reports the reason, and never trusts a partially valid
 8. `bpm_x10` is `0` or in `700..1800`; `key` is `0..24`; each percentage is `0..100` or `0xFF`;
    `mood_bits & 0xE0 == 0`; `source_flags & 0xC0 == 0`; `reserved` is zero.
 9. Version 2 only: `list_count <= 64`, `list_rows <= 8192`, `list_size == 32`,
-   `list_row_size == 12`, list ids strictly ascending, every list's name and paths terminate
+   `list_row_size == 4`, list ids strictly ascending, every list's name and paths terminate
    inside the pool, and the lists tile the list-row array exactly (the first starts at 0, each
    `row_start` is the previous one plus its `row_count`, and the total equals `list_rows`).
 
@@ -280,7 +280,8 @@ of what the Library contains.
 
 Limits: `list_count` 0..64, `list_rows` 0..8192 across the image, a list's name under 64 bytes,
 and a list's own `row_count` may not exceed `list_rows`. A producer that breaks a limit refuses to
-write rather than truncating.
+write rather than truncating. A list may have **no rows** — an empty draft is a normal state —
+and selecting one is the command's `409`, not an invalid image.
 
 ### List record (32 bytes)
 
@@ -297,21 +298,21 @@ write rather than truncating.
 must not change it. Two lists in one image may not share an id — the producer detects the
 collision and refuses, exactly as it does for rows.
 
-### List row (12 bytes)
+### List row (4 bytes)
 
 | Offset | Size | Field | Value |
 |---:|---:|---|---|
-| 0 | 8 | `fingerprint` | FNV-1a 64 of the Track's relative path (§6) |
-| 8 | 4 | `path_offset` | offset into the pool of the Track's relative path |
+| 0 | 4 | `path_offset` | offset into the pool of the Track's relative path |
 
-A row is both a **binding** and a **resolution**: the path is what the device looks the Track up by
-(`library_find`), and the fingerprint is what lets it refuse a row whose file is no longer the one
-that was put in the list — the device recomputes `FNV-1a(path, size)` from the Library node and
-compares. A mismatch, or a path the Library does not hold, means the row is **skipped** at
-playback and reported as missing; it is never deleted and never silently played as something else.
+A row names a Track by the Library's own key: its relative path. The device resolves it with
+`library_find`, which is the same lookup `/api/play` uses, so a Playlist row and a play command
+agree about what a Track is. A path the Library does not hold is **skipped** at playback and
+reported as missing; it is never deleted.
 
-Like a measurement row, a list row binds a size without storing one: the size is in the path's
-fingerprint, and the Library node supplies the size to check it against.
+A row deliberately does not bind the file's size or its content. The **Track fingerprint** binds
+(path, size) so a Snapshot row is never worn by a file that was replaced under the same name; a
+Playlist row has no measurements to wear, and binding the size would strand a row whose file was
+merely re-encoded. The slot is the path.
 
 ## 11. Size
 
@@ -324,7 +325,7 @@ fingerprint, and the Library node supplies the size to check it against.
 The pool dominates, and it is the part a Snapshot can do without: at 20,000 tracks the
 partition would need to grow or the strings would need to be de-duplicated. 5,000 — the stated
 target — fits a 2 MB partition with room for a second axis of growth. Lists are small next to it:
-2,000 rows are 24 KB of records, and their names and paths are shared with nothing but themselves.
+2,000 rows are 8 KB of records, and their names and paths are shared with nothing but themselves.
 
 ## 12. Versioning
 

@@ -77,10 +77,16 @@ uint64_t snapshot_path_hash(const char *relative_path)
 struct snapshot {
     const uint8_t *image;
     size_t         size;
+    uint16_t       version;
+    uint32_t       header_size;
     const uint8_t *rows;
     uint32_t       row_count;
     const uint8_t *pool;
     uint32_t       pool_size;
+    const uint8_t *lists;
+    uint32_t       list_count;
+    const uint8_t *list_rows;
+    uint32_t       list_rows_total;
     uint32_t       generation;
     uint32_t       analyser;
     uint32_t       app_schema;
@@ -119,6 +125,35 @@ static bool strings_ok(const uint8_t *pool, uint32_t pool_size, uint32_t off,
 
 static bool pct_ok(uint8_t v) { return v <= 100u || v == SNAPSHOT_UNKNOWN_PCT; }
 
+/* One NUL-terminated string inside the pool; `out_len` receives its length. */
+static bool one_string_ok(const uint8_t *pool, uint32_t pool_size, uint32_t off,
+                          uint32_t *out_len)
+{
+    if (off >= pool_size) return false;
+    uint32_t i = off;
+    while (i < pool_size && pool[i]) i++;
+    if (i >= pool_size) return false;
+    if (out_len) *out_len = i - off;
+    return true;
+}
+
+/* One list record: id, a name in the pool, and a slice of the list-row array that
+ * starts exactly where the previous list ended and stays inside it. */
+static bool list_ok(const uint8_t *l, const uint8_t *pool, uint32_t pool_size,
+                    uint32_t row_start_expected, uint32_t list_rows_total,
+                    uint32_t *next_row_start)
+{
+    if (rd64(l) == 0) return false;                  /* an id is never zero */
+    if (rd32(l + 28) != 0) return false;             /* reserved */
+    uint32_t row_start = rd32(l + 12);
+    uint32_t row_count = rd32(l + 16);
+    if (row_start != row_start_expected) return false;
+    if ((uint64_t)row_start + row_count > list_rows_total) return false;
+    if (!one_string_ok(pool, pool_size, rd32(l + 8), NULL)) return false;
+    *next_row_start = row_start + row_count;
+    return true;
+}
+
 static bool row_ok(const uint8_t *row, const uint8_t *pool, uint32_t pool_size)
 {
     uint16_t bpm = rd16(row + 16);
@@ -142,38 +177,83 @@ static bool bad(char *why, size_t why_size, const char *reason)
     return false;
 }
 
+/* What the header says, once it is believed. */
+typedef struct {
+    uint16_t version;
+    uint32_t header_size;
+    uint32_t rows;
+    uint32_t pool;
+    uint32_t total;
+    uint32_t lists;
+    uint32_t list_rows;
+} header_t;
+
 /* Every structural rule that can be decided from the header alone. Both the reader
  * and the update path run it: an update must not erase a partition for a file the
- * reader would refuse. */
-static bool header_check(const uint8_t *hdr, uint32_t size, uint32_t *rows_out,
-                         uint32_t *pool_out, uint32_t *total_out, char *why, size_t why_size)
+ * reader would refuse. `hdr_len` is how much of the header was actually read, so a
+ * truncated file cannot make this read past its end. */
+static bool header_check(const uint8_t *hdr, uint32_t hdr_len, uint32_t size,
+                         header_t *out, char *why, size_t why_size)
 {
     if (size < SNAPSHOT_HEADER_SIZE) return bad(why, why_size, "image shorter than its header");
+    if (hdr_len < SNAPSHOT_HEADER_SIZE) return bad(why, why_size, "header is unreadable");
     if (memcmp(hdr, SNAPSHOT_MAGIC, 8) != 0) return bad(why, why_size, "not a snapshot");
-    if (rd16(hdr + 8) != SNAPSHOT_VERSION) return bad(why, why_size, "unknown format version");
-    if (rd16(hdr + 10) != SNAPSHOT_HEADER_SIZE) return bad(why, why_size, "bad header size");
+
+    uint16_t version = rd16(hdr + 8);
+    if (version != SNAPSHOT_VERSION_1 && version != SNAPSHOT_VERSION_2)
+        return bad(why, why_size, "unknown format version");
+    uint32_t hsize = version == SNAPSHOT_VERSION_1 ? SNAPSHOT_HEADER_SIZE : SNAPSHOT_HEADER_SIZE_2;
+    if (hdr_len < hsize) return bad(why, why_size, "header is unreadable");
+    if (size < hsize) return bad(why, why_size, "image shorter than its header");
+    if (rd16(hdr + 10) != hsize) return bad(why, why_size, "bad header size");
     if (rd32(hdr + 20) != SNAPSHOT_ROW_SIZE) return bad(why, why_size, "bad row size");
     for (int i = 56; i < (int)SNAPSHOT_HEADER_SIZE; i++)
         if (hdr[i]) return bad(why, why_size, "reserved header bytes are not zero");
 
+    uint32_t lists = 0, list_rows = 0;
+    if (version == SNAPSHOT_VERSION_2) {
+        lists = rd16(hdr + 64);
+        list_rows = rd32(hdr + 72);
+        if (rd16(hdr + 66) != SNAPSHOT_LIST_SIZE)
+            return bad(why, why_size, "bad list size");
+        if (rd16(hdr + 68) != SNAPSHOT_LIST_ROW_SIZE)
+            return bad(why, why_size, "bad list row size");
+        if (rd16(hdr + 70) != 0 || rd32(hdr + 76) != 0)
+            return bad(why, why_size, "reserved header bytes are not zero");
+        if (lists > SNAPSHOT_MAX_LISTS) return bad(why, why_size, "too many lists");
+        if (list_rows > SNAPSHOT_MAX_LIST_ROWS) return bad(why, why_size, "too many list rows");
+        if (lists == 0 && list_rows != 0)
+            return bad(why, why_size, "list rows without lists");
+    }
+
     uint32_t total = rd32(hdr + 12);
     uint32_t rows = rd32(hdr + 16);
     uint32_t pool = rd32(hdr + 32);
-    uint64_t want = (uint64_t)SNAPSHOT_HEADER_SIZE + (uint64_t)rows * SNAPSHOT_ROW_SIZE + pool;
+    uint64_t want = (uint64_t)hsize + (uint64_t)rows * SNAPSHOT_ROW_SIZE + pool;
+    if (version == SNAPSHOT_VERSION_2)
+        want += (uint64_t)lists * SNAPSHOT_LIST_SIZE +
+                (uint64_t)list_rows * SNAPSHOT_LIST_ROW_SIZE;
     if (want != total) return bad(why, why_size, "sizes disagree");
     if (total != size) return bad(why, why_size, "image is not its stated length");
     if (total > SNAPSHOT_MAX_BYTES) return bad(why, why_size, "image is larger than any partition");
 
-    *rows_out = rows;
-    *pool_out = pool;
-    *total_out = total;
+    if (out) {
+        out->version = version;
+        out->header_size = hsize;
+        out->rows = rows;
+        out->pool = pool;
+        out->total = total;
+        out->lists = lists;
+        out->list_rows = list_rows;
+    }
     return true;
 }
 
 /* Feed one chunk's payload (everything after the header) into a running CRC. */
-static uint32_t feed_payload(uint32_t crc, uint32_t off, const uint8_t *buf, uint32_t n)
+static uint32_t feed_payload(uint32_t crc, uint32_t header_size, uint32_t off,
+                             const uint8_t *buf, uint32_t n)
 {
-    uint32_t skip = off < SNAPSHOT_HEADER_SIZE ? SNAPSHOT_HEADER_SIZE - off : 0;
+    uint32_t skip = off < header_size ? header_size - off : 0;
     return skip < n ? snapshot_crc_feed(crc, buf + skip, n - skip) : crc;
 }
 
@@ -185,34 +265,60 @@ snapshot_result_t snapshot_open_why(const uint8_t *image, size_t size, snapshot_
     *out = NULL;
     if (size > UINT32_MAX) return fail(why, why_size, "image is larger than any partition");
 
-    uint32_t rows = 0, pool_size = 0, total = 0;
-    if (!header_check(image, (uint32_t)size, &rows, &pool_size, &total, why, why_size))
+    header_t h;
+    if (!header_check(image, (uint32_t)size, (uint32_t)size, &h, why, why_size))
         return SNAPSHOT_INVALID;
 
-    if (snapshot_crc32(image + SNAPSHOT_HEADER_SIZE, size - SNAPSHOT_HEADER_SIZE) !=
-        rd32(image + 36))
+    if (snapshot_crc32(image + h.header_size, size - h.header_size) != rd32(image + 36))
         return fail(why, why_size, "checksum mismatch");
 
-    const uint8_t *rowp = image + SNAPSHOT_HEADER_SIZE;
-    const uint8_t *pool = rowp + (size_t)rows * SNAPSHOT_ROW_SIZE;
+    const uint8_t *rowp = image + h.header_size;
+    const uint8_t *pool = rowp + (size_t)h.rows * SNAPSHOT_ROW_SIZE;
 
     uint64_t prev = 0;
-    for (uint32_t i = 0; i < rows; i++) {
+    for (uint32_t i = 0; i < h.rows; i++) {
         const uint8_t *r = rowp + (size_t)i * SNAPSHOT_ROW_SIZE;
         uint64_t fp = rd64(r);
         if (i && fp <= prev) return fail(why, why_size, "rows are not sorted by fingerprint");
         prev = fp;
-        if (!row_ok(r, pool, pool_size)) return fail(why, why_size, "a row is out of range");
+        if (!row_ok(r, pool, h.pool)) return fail(why, why_size, "a row is out of range");
+    }
+
+    const uint8_t *lists = pool + h.pool;
+    const uint8_t *list_rows = lists + (size_t)h.lists * SNAPSHOT_LIST_SIZE;
+    if (h.version == SNAPSHOT_VERSION_2) {
+        uint64_t prev_id = 0;
+        uint32_t next_row = 0;
+        for (uint32_t i = 0; i < h.lists; i++) {
+            const uint8_t *l = lists + (size_t)i * SNAPSHOT_LIST_SIZE;
+            uint64_t id = rd64(l);
+            if (i && id <= prev_id) return fail(why, why_size, "lists are not sorted by id");
+            prev_id = id;
+            if (!list_ok(l, pool, h.pool, next_row, h.list_rows, &next_row))
+                return fail(why, why_size, "a list is out of range");
+        }
+        if (next_row != h.list_rows) return fail(why, why_size, "lists do not tile their rows");
+        for (uint32_t i = 0; i < h.list_rows; i++) {
+            const uint8_t *r = list_rows + (size_t)i * SNAPSHOT_LIST_ROW_SIZE;
+            if (!one_string_ok(pool, h.pool, rd32(r), NULL))
+                return fail(why, why_size, "a list row is out of range");
+        }
     }
 
     snapshot_t *s = (snapshot_t *)calloc(1, sizeof *s);
     if (!s) return SNAPSHOT_NO_MEM;
     s->image = image;
     s->size = size;
+    s->version = h.version;
+    s->header_size = h.header_size;
     s->rows = rowp;
-    s->row_count = rows;
+    s->row_count = h.rows;
     s->pool = pool;
-    s->pool_size = pool_size;
+    s->pool_size = h.pool;
+    s->lists = lists;
+    s->list_count = h.lists;
+    s->list_rows = list_rows;
+    s->list_rows_total = h.list_rows;
     s->generation = (uint32_t)rd64(image + 24);
     s->analyser = rd32(image + 40);
     s->app_schema = rd32(image + 44);
@@ -289,6 +395,74 @@ const char *snapshot_row_string(const snapshot_t *s, const snapshot_row_t *row,
     }
     if (i >= s->pool_size) return "";
     return (const char *)(s->pool + i);
+}
+
+/* ------------------------------------------------------------------ lists */
+
+uint16_t snapshot_version(const snapshot_t *s) { return s ? s->version : 0; }
+
+uint32_t snapshot_lists(const snapshot_t *s) { return s ? s->list_count : 0; }
+
+uint32_t snapshot_list_rows_total(const snapshot_t *s) { return s ? s->list_rows_total : 0; }
+
+static const uint8_t *list_at(const snapshot_t *s, uint32_t i)
+{
+    return s->lists + (size_t)i * SNAPSHOT_LIST_SIZE;
+}
+
+static void list_read(const uint8_t *l, snapshot_list_t *out)
+{
+    out->id = rd64(l);
+    out->name_offset = rd32(l + 8);
+    out->row_start = rd32(l + 12);
+    out->row_count = rd32(l + 16);
+    out->created = rd64(l + 20);
+}
+
+bool snapshot_list_at(const snapshot_t *s, uint32_t index, snapshot_list_t *out)
+{
+    if (!s || index >= s->list_count) return false;
+    if (out) list_read(list_at(s, index), out);
+    return true;
+}
+
+bool snapshot_list_find(const snapshot_t *s, uint64_t id, snapshot_list_t *out)
+{
+    if (!s || !s->list_count || id == 0) return false;
+    uint32_t lo = 0, hi = s->list_count;
+    while (lo < hi) {
+        uint32_t mid = lo + (hi - lo) / 2;
+        uint64_t v = rd64(list_at(s, mid));
+        if (v < id)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    if (lo >= s->list_count) return false;
+    const uint8_t *l = list_at(s, lo);
+    if (rd64(l) != id) return false;
+    if (out) list_read(l, out);
+    return true;
+}
+
+const char *snapshot_list_name(const snapshot_t *s, const snapshot_list_t *list)
+{
+    if (!s || !list || list->name_offset >= s->pool_size) return "";
+    return (const char *)(s->pool + list->name_offset);
+}
+
+bool snapshot_list_row(const snapshot_t *s, const snapshot_list_t *list, uint32_t index,
+                       const char **path)
+{
+    if (!s || !list || index >= list->row_count) return false;
+    uint32_t at = list->row_start + index;
+    if (at >= s->list_rows_total) return false;
+    const uint8_t *r = s->list_rows + (size_t)at * SNAPSHOT_LIST_ROW_SIZE;
+    if (path) {
+        uint32_t off = rd32(r);
+        *path = off < s->pool_size ? (const char *)(s->pool + off) : "";
+    }
+    return true;
 }
 
 /* ------------------------------------------------------------------ keys */
@@ -550,14 +724,18 @@ snapshot_result_t snapshot_apply(const snapshot_source_t *src, const snapshot_ta
     uint32_t size = src->size(src->ctx);
     if (size < SNAPSHOT_HEADER_SIZE) return fail(why, why_size, "the update file is too short");
 
-    uint8_t hdr[SNAPSHOT_HEADER_SIZE];
-    if (!src->read(src->ctx, 0, hdr, sizeof hdr))
+    /* Read as much of the header as the file has, up to the longest version. */
+    uint8_t hdr[SNAPSHOT_HEADER_SIZE_2];
+    uint32_t hdr_len = size < sizeof hdr ? size : (uint32_t)sizeof hdr;
+    if (!src->read(src->ctx, 0, hdr, hdr_len))
         return fail(why, why_size, "the update file cannot be read");
 
-    uint32_t rows = 0, pool = 0, total = 0;
-    if (!header_check(hdr, size, &rows, &pool, &total, why, why_size)) return SNAPSHOT_INVALID;
-    if (total > tgt->capacity) return fail(why, why_size, "the update file exceeds the partition");
+    header_t h;
+    if (!header_check(hdr, hdr_len, size, &h, why, why_size)) return SNAPSHOT_INVALID;
+    if (h.total > tgt->capacity)
+        return fail(why, why_size, "the update file exceeds the partition");
     uint32_t want = rd32(hdr + 36);
+    uint32_t total = h.total;
 
     /* The file is checksummed before the partition is touched: an update that would
      * be refused must not erase the image the device is still serving from. */
@@ -566,7 +744,7 @@ snapshot_result_t snapshot_apply(const snapshot_source_t *src, const snapshot_ta
         uint32_t n = total - off < APPLY_CHUNK ? total - off : APPLY_CHUNK;
         if (!src->read(src->ctx, off, apply_chunk, n))
             return fail(why, why_size, "the update file stopped early");
-        crc = feed_payload(crc, off, apply_chunk, n);
+        crc = feed_payload(crc, h.header_size, off, apply_chunk, n);
         off += n;
     }
     if (snapshot_crc_end(crc) != want)
@@ -590,7 +768,7 @@ snapshot_result_t snapshot_apply(const snapshot_source_t *src, const snapshot_ta
         uint32_t n = total - off < APPLY_CHUNK ? total - off : APPLY_CHUNK;
         if (!tgt->read(tgt->ctx, off, apply_chunk, n))
             return fail(why, why_size, "the partition read-back failed");
-        back = feed_payload(back, off, apply_chunk, n);
+        back = feed_payload(back, h.header_size, off, apply_chunk, n);
         off += n;
     }
     if (snapshot_crc_end(back) != want)

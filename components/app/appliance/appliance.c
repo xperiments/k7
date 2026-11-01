@@ -27,6 +27,7 @@
 #include "nvs_flash.h"
 
 #include "app_board.h"
+#include "flash_job.h"
 /* The Shell's partition is board storage, so the mount belongs to the board adapter -
  * not to the portable app_board seam, which the host build shares and which has no
  * SPIFFS partition to name. */
@@ -42,6 +43,44 @@
 
 /* A card that will not mount is the most likely fault this hardware has, so a
  * failed mount is not fatal: the device stays on the network and retries. */
+
+/* The one NVS key the device keeps besides the Wi-Fi calibration. */
+static bool selection_load(uint64_t *id)
+{
+    nvs_handle_t h;
+    if (nvs_open("xtape", NVS_READONLY, &h) != ESP_OK) return false;
+    uint64_t v = 0;
+    esp_err_t e = nvs_get_u64(h, "playlist", &v);
+    nvs_close(h);
+    if (e != ESP_OK) return false;
+    *id = v;
+    return true;
+}
+
+/* NVS is flash: on the writer task, where the stack is internal (flash_job.h). */
+typedef struct {
+    uint64_t id;
+    bool     ok;
+} nvs_save_t;
+
+static bool nvs_save(void *ctx)
+{
+    nvs_save_t *job = (nvs_save_t *)ctx;
+    nvs_handle_t h;
+    if (nvs_open("xtape", NVS_READWRITE, &h) != ESP_OK) return false;
+    esp_err_t e = job->id ? nvs_set_u64(h, "playlist", job->id) : nvs_erase_key(h, "playlist");
+    if (e == ESP_ERR_NVS_NOT_FOUND) e = ESP_OK;
+    if (e == ESP_OK) e = nvs_commit(h);
+    nvs_close(h);
+    job->ok = e == ESP_OK;
+    return job->ok;
+}
+
+static bool selection_save(uint64_t id)
+{
+    nvs_save_t job = {id, false};
+    return flash_job_run(nvs_save, &job, 0) && job.ok;
+}
 
 static const char *TAG = "app";
 
@@ -108,6 +147,9 @@ void appliance_run(void)
      * is that the broadcast never starves, and that is what the soak checks.
      * 32000 Hz / 96 kbps remains the documented fallback if headroom is ever
      * needed for something else. */
+    /* The chosen Playlist survives a power cut. NVS is the device's; the composition
+     * takes it as two callbacks so playlist_select stays portable (ADR 0051). An NVS
+     * that has never been written is "no choice", not an error. */
     app_services_cfg_t svc = {
         .music_dir = MUSIC_DIR,
         .station_name = STATION_NAME,
@@ -123,6 +165,8 @@ void appliance_run(void)
          * been mounted; until then, and forever on a firmware with no page, `/` answers
          * 503 and the index at `/library` carries the device. */
         .shell_root = NULL,
+        .selection_load = selection_load,
+        .selection_save = selection_save,
     };
 
 #if CONFIG_APP_UI_SCREEN_HTTP

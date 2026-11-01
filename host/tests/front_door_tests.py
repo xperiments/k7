@@ -8,6 +8,7 @@ index still answering at /library.
 
 Usage: front_door_tests.py SERVER FIXTURES_DIR
 """
+import gzip
 import json
 import os
 import shutil
@@ -39,9 +40,12 @@ def free_port():
     return port
 
 
-def get(port, path):
+def request(port, path, accept=None):
     s = socket.create_connection(("127.0.0.1", port), timeout=5)
-    s.sendall(f"GET {path} HTTP/1.0\r\nHost: 127.0.0.1:{port}\r\n\r\n".encode())
+    headers_out = f"GET {path} HTTP/1.0\r\nHost: 127.0.0.1:{port}\r\n"
+    if accept:
+        headers_out += f"Accept-Encoding: {accept}\r\n"
+    s.sendall((headers_out + "\r\n").encode())
     data = b""
     while True:
         part = s.recv(65536)
@@ -56,7 +60,12 @@ def get(port, path):
     for line in lines[1:]:
         name, _, value = line.partition(":")
         headers[name.strip().lower()] = value.strip()
-    return status, headers, head.decode("latin1"), body.decode("utf-8", "replace")
+    return status, headers, head.decode("latin1"), body
+
+
+def get(port, path):
+    status, headers, head, body = request(port, path)
+    return status, headers, head, body.decode("utf-8", "replace")
 
 
 def start(web_root, music, port):
@@ -112,6 +121,31 @@ def main():
         check("and never revalidated", headers.get("cache-control"),
               "public, max-age=31536000, immutable")
         check("one Cache-Control, not two", head.lower().count("cache-control:"), 1)
+
+        # The Shell is packed compressed: the build writes `x.js.gz` and drops the original,
+        # so the server sends the stored bytes and says so, and a client that cannot take
+        # gzip is told rather than handed bytes it will not decode.
+        with open(os.path.join(dist, "assets", "packed-def456.js.gz"), "wb") as f:
+            f.write(gzip.compress(b"console.log('packed');"))
+
+        status, headers, head, raw = request(port, "/assets/packed-def456.js", accept="gzip, deflate")
+        check("a compressed-only file is served to a gzip client", status, 200)
+        check("with the encoding header", headers.get("content-encoding"), "gzip")
+        check("under the plain name's content type", headers.get("content-type"),
+              "text/javascript; charset=utf-8")
+        check("and a length that matches the bytes sent", int(headers.get("content-length", 0)),
+              len(raw))
+        check("one Cache-Control, not two", head.lower().count("cache-control:"), 1)
+        check("a cache is told the encoding varies", headers.get("vary"), "Accept-Encoding")
+        check("and the bytes inflate to the file", gzip.decompress(raw),
+              b"console.log('packed');")
+
+        status, _, _, _ = request(port, "/assets/packed-def456.js")
+        check("a client without gzip is refused, not 404d", status, 406)
+
+        # The page itself stays plain, so `/` answers any client.
+        status, headers, _, _ = request(port, "/")
+        check("the page is not compressed", headers.get("content-encoding"), None)
 
         status, headers, _, _ = get(port, "/sw.js")
         check("the worker is served", status, 200)

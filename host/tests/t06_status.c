@@ -79,7 +79,7 @@ int main(void)
     if (!got_playing) return 1;
     CHECK(st.path[0] != 0, "the status carries the Track's relative path: %s", st.path);
     CHECK_EQ(st.generation, library_generation(lib), "the status names the generation");
-    CHECK(st.track_index < st.library_count, "the track index is inside the Playlist");
+    CHECK(st.track_index < st.library_count, "the track index is inside the broadcast order");
     const char *slash = strrchr(st.path, '/');
     CHECK(strcmp(st.file, slash ? slash + 1 : st.path) == 0,
           "the file name is the last segment of the path");

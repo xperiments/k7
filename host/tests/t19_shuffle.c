@@ -14,7 +14,7 @@
 
 #include "mi_shuffle.h"
 
-/* The Playlist ceiling is 20,000 Tracks; a thousand is enough to make a repeated or
+/* The library ceiling is 20,000 Tracks; a thousand is enough to make a repeated or
  * missing index stand out without making the failure output unreadable. */
 #define COUNT 1000
 
@@ -39,7 +39,7 @@ static void test_coverage(void)
     CHECK(mi_shuffle_build(&s, order, COUNT, 0), "the order builds");
     CHECK(mi_shuffle_ready(&s), "the order is ready to walk");
     CHECK_EQ(s.count, COUNT, "the order holds every Track");
-    CHECK(is_permutation(order, COUNT), "every Playlist index appears exactly once");
+    CHECK(is_permutation(order, COUNT), "every track index appears exactly once");
     CHECK_EQ(mi_shuffle_current(&s), 0, "the playing Track is at the cursor");
 }
 
@@ -115,7 +115,7 @@ static void test_seek(void)
     CHECK_EQ(got, order[(pos + 1) % COUNT], "next continues after the seek");
     CHECK(!wrapped, "a seek inside the lap does not wrap the next step");
 
-    CHECK(!mi_shuffle_seek(&s, COUNT), "seek refuses an index outside the Playlist");
+    CHECK(!mi_shuffle_seek(&s, COUNT), "seek refuses an index outside the broadcast order");
     CHECK_EQ(mi_shuffle_current(&s), order[(pos + 1) % COUNT],
              "a refused seek leaves the cursor where next left it");
 }
@@ -155,7 +155,7 @@ static void test_edges(void)
 
     CHECK(mi_shuffle_build(&s, order, 1, 0), "a one-Track order builds");
     CHECK(mi_shuffle_ready(&s), "a one-Track order is ready");
-    CHECK_EQ(order[0], 0, "the only Track is Playlist index 0");
+    CHECK_EQ(order[0], 0, "the only Track is track index 0");
     CHECK_EQ(mi_shuffle_current(&s), 0, "the only Track is at the cursor");
     wrapped = false;
     CHECK_EQ(mi_shuffle_next(&s, &wrapped), 0, "next on one Track returns it");
@@ -177,7 +177,7 @@ static void test_rebuild(void)
     CHECK_EQ(s.count, 40, "the first order holds 40 Tracks");
     CHECK(is_permutation(order, 40), "the first order covers 0..39");
 
-    /* A rescan's Playlist can be smaller or larger; the caller reuses the same struct
+    /* A rescan's library can be smaller or larger; the caller reuses the same struct
      * and array and the build starts over from the new count. */
     CHECK(mi_shuffle_build(&s, order, 37, 12), "a smaller order builds on the same struct");
     CHECK_EQ(s.count, 37, "the rebuilt order holds 37 Tracks");

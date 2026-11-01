@@ -111,7 +111,7 @@ static void sparse_at(const char *root, const char *rel, off_t size)
  *   Rock/Don't Stop (Live).wav                   40 B
  *
  * Children sort case-insensitively (the library's rule), so the root is
- * Café.mp3, Jazz, loose song.mp3, Rock and the Playlist (depth first) is
+ * Café.mp3, Jazz, loose song.mp3, Rock and the broadcast order (depth first) is
  * Café, 01 - Blue Train, 02 - Moment's Notice, So What, loose song, Don't Stop.
  * Six tracks, four directories, 210 bytes.
  */
@@ -679,10 +679,10 @@ static void test_tracks_rows(void)
     menu_facts_t facts = facts_plain();
     menu_t *m = menu_open_with(lib, &facts);
 
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Tracks row pushes the Playlist");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Tracks row pushes the broadcast order");
     want_str(menu_title(m), "Tracks", "Tracks title");
-    CHECK_EQ(menu_count(m), 6, "the Playlist has six rows");
-    CHECK_EQ(menu_band(m), 0, "the Playlist starts at its first Track");
+    CHECK_EQ(menu_count(m), 6, "the broadcast order has six rows");
+    CHECK_EQ(menu_band(m), 0, "the broadcast order starts at its first Track");
     CHECK_EQ(menu_position(m), 1, "Tracks position 1");
 
     menu_row_t r[MENU_ROWS];
@@ -693,7 +693,7 @@ static void test_tracks_rows(void)
     want_label(&r[3], "So What", "Track row 3 label");
     want_label(&r[4], "loose song", "Track row 4 label");
     for (int i = 0; i < MENU_ROWS; i++) {
-        want_kind(&r[i], MENU_ROW_TRACK, "a Playlist row is a Track row");
+        want_kind(&r[i], MENU_ROW_TRACK, "a broadcast-order row is a Track row");
         want_icon(&r[i], MENU_ICON_TRACK, "a Track row wears radio-waves");
         CHECK(!r[i].chevron, "a Track row has no chevron");
         CHECK(r[i].enabled, "a Track row is live");
@@ -1052,8 +1052,8 @@ static void test_band_window(void)
     menu_facts_t facts = facts_plain();
     menu_t *m = menu_open_with(g_many_lib, &facts);
 
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Tracks row pushes the Playlist");
-    CHECK_EQ(menu_count(m), (int)MANY_TRACKS, "the Playlist is the whole library");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Tracks row pushes the broadcast order");
+    CHECK_EQ(menu_count(m), (int)MANY_TRACKS, "the broadcast order is the whole library");
     CHECK_EQ(menu_band(m), 0, "the band starts on the first visible row");
     CHECK_EQ(menu_position(m), 1, "the position is 1");
 
@@ -1120,7 +1120,7 @@ static void test_ratchet(void)
 {
     menu_facts_t facts = facts_plain();
     menu_t *m = menu_open_with(g_many_lib, &facts);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Tracks row pushes the Playlist");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Tracks row pushes the broadcast order");
 
     /* One row per 54 px at rest, and only whole rows. menu_position() is the
      * absolute 1-based row, so it is what a ratchet assertion wants. */
@@ -1236,7 +1236,7 @@ static void test_update_generation(void)
     read_rows(m, r);
     want_label(&r[0], "a", "the rows come from the new generation");
 
-    /* The Playlist rebuilds and its band clamps. */
+    /* The broadcast order rebuilds and its band clamps. */
     CHECK(!menu_back(m), "Back to the root");
     menu_step(m, -1);
     CHECK_EQ(menu_band(m), 0, "the band is on Tracks");

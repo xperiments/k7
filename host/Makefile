@@ -47,6 +47,8 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/groups/include \
        -I$(ROOT)/components/portable/rgb/include \
        -I$(ROOT)/components/portable/snapshot/include \
+       -I$(ROOT)/components/portable/playlist_select/include \
+       -I$(ROOT)/components/portable/flash_job/include \
        -I$(ROOT)/components/portable/front_door/include \
        -I$(ROOT)/components/portable/app_services/include \
        -I$(ROOT)/components/portable/app_board/include \
@@ -103,6 +105,8 @@ PROD_SRC := \
   $(ROOT)/components/portable/rgb/rgb.c \
   $(ROOT)/components/portable/mini_icecast/mi_shuffle.c \
   $(ROOT)/components/portable/snapshot/snapshot.c \
+  $(ROOT)/components/portable/playlist_select/playlist_select.c \
+  $(ROOT)/components/portable/flash_job/flash_job.c \
   $(ROOT)/components/portable/front_door/front_door.c \
   $(ROOT)/components/portable/app_services/app_services.c \
   $(SHINE_SRC)
@@ -123,6 +127,8 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/groups \
           $(ROOT)/components/portable/rgb \
           $(ROOT)/components/portable/snapshot \
+          $(ROOT)/components/portable/playlist_select \
+          $(ROOT)/components/portable/flash_job \
           $(ROOT)/components/portable/front_door \
           $(ROOT)/components/portable/app_services \
           $(ROOT)/components/portable/shine/src/lib \
@@ -133,7 +139,7 @@ BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
-SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o
+SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/http_loop.o $(OBJ)/http_backend_single.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o
@@ -152,7 +158,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t18_menu $(BIN)/t19_shuffle \
          $(BIN)/t21_button $(BIN)/t22_knob $(BIN)/t23_pad $(BIN)/t24_controls \
          $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline $(BIN)/t28_entrance \
-         $(BIN)/t29_snapshot
+         $(BIN)/t29_snapshot $(BIN)/t30_playlist_select
 
 .PHONY: all test integration layering check tools fixtures bench control control-check clean help
 
@@ -292,6 +298,10 @@ $(BIN)/t29_snapshot: $(OBJ)/snapshot.o $(OBJ)/t29_snapshot.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
+$(BIN)/t30_playlist_select: $(OBJ)/playlist_select.o $(OBJ)/snapshot.o $(OBJ)/library.o $(OBJ)/audio_format.o $(OBJ)/shim.o $(OBJ)/t30_playlist_select.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
 $(BIN)/t28_entrance: $(OBJ)/entrance.o $(OBJ)/t28_entrance.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
@@ -313,6 +323,8 @@ integration: $(SERVER)
 	@$(PYTHON) $(HERE)/tests/front_door_tests.py $(SERVER) $(HERE)/fixtures
 	@echo "--- the snapshot upload"
 	@$(PYTHON) $(HERE)/tests/upload_tests.py $(SERVER) $(HERE)/fixtures
+	@echo "--- playlists over HTTP"
+	@$(PYTHON) $(HERE)/tests/playlist_tests.py $(SERVER) $(HERE)/fixtures
 
 layering:
 	@ROOT=$(ROOT) sh $(HERE)/tests/layering.sh

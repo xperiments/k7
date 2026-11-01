@@ -39,7 +39,7 @@ extern "C" {
 
 typedef enum {
     MENU_ICON_NONE = 0,
-    MENU_ICON_TRACKS,    /* the Playlist destination */
+    MENU_ICON_TRACKS,    /* the broadcast order destination */
     MENU_ICON_BROWSE,    /* the Library-tree destination */
     MENU_ICON_DIRECTORY, /* a directory row inside Browse */
     MENU_ICON_TRACK,     /* a Track row */
