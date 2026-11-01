@@ -41,9 +41,12 @@
  * (the index's directory and error buffers) + http_send_headers' header block +
  * the index's 1 KB streaming writer + lwIP's send() and ESP_LOG's vsnprintf.
  * Measured on the device: 6 KB overflowed while serving the index (detected as
- * "A stack overflow in task http_conn"), 10 KB leaves a comfortable margin, and
- * the margin is reported with the rest of the telemetry. */
-#define CONN_TASK_STACK 10240
+ * "A stack overflow in task http_conn"). 10 KB held until `/api/status` grew a
+ * Playlist block beside the broadcast status struct's own 1.4 KB of strings, and
+ * it overflowed again on the first poll after boot. The routes' big buffers moved to
+ * the heap (status and `/api/playlists/<id>`), and the budget is 12 KB so the next
+ * route to grow shows up in the headroom telemetry rather than in a panic. */
+#define CONN_TASK_STACK 12288
 #define ACCEPT_TASK_STACK 6144
 
 static struct {

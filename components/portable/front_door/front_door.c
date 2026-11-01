@@ -164,6 +164,17 @@ static http_result_t serve_file(int fd, const char *request_path, const char *fi
 }
 
 
+/* One allocation instead of seven stack buffers (see the route's comment). */
+typedef struct {
+    mini_icecast_status_t st;
+    char body[1536];
+    char title[200];
+    char path[200];
+    char playlist_name[200];
+    char raw_name[96];
+    char playlist_json[320];
+} status_buffers_t;
+
 static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
@@ -177,56 +188,58 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
     unsigned generation = lib ? library_generation(lib) : 0;
     const char *state = lib ? library_state_name(library_state(lib)) : "none";
 
-    mini_icecast_status_t st;
-    mini_icecast_status(&st);
-
-    char title[200];
-    char path[200];
-    http_json_escape(title, sizeof title, st.title);
-    http_json_escape(path, sizeof path, st.path);
+    /* Every buffer here is on the heap, not the stack: this route's frames plus the
+     * broadcast status struct's own 1.4 KB of strings is what overflowed a connection
+     * worker once the Playlist block joined them. One allocation, freed once. The fields
+     * are members of one struct rather than pointers carved out of a char block because
+     * the compiler cannot prove disjointness for pointers, and -Wrestrict is an error in
+     * this build. */
+    status_buffers_t *b = malloc(sizeof *b);
+    if (!b) {
+        if (lib) library_release(lib);
+        http_send_error(fd, 500, "no memory for the status");
+        return HTTP_HANDLED;
+    }
+    mini_icecast_status(&b->st);
+    http_json_escape(b->title, sizeof b->title, b->st.title);
+    http_json_escape(b->path, sizeof b->path, b->st.path);
 
     bool card = F.card_present ? F.card_present() : false;
 
-    /* The order the broadcast is walking: the library tree, or the Playlist the device
-     * was told to walk. A fact like the card state -- the page reads it, never sets it. */
     /* The choice and the walk are different facts: a card that is out keeps the choice
      * (it comes back with the card) while nothing is walking. */
     bool walking = playlist_select_walking();
     uint64_t playlist = walking ? playlist_select_current() : 0;
-    char playlist_id[17] = {0};
-    char playlist_name[200] = {0};
     if (playlist) {
-        snprintf(playlist_id, sizeof playlist_id, "%016llx", (unsigned long long)playlist);
-        char raw_name[96] = {0};
-        playlist_select_name(raw_name, sizeof raw_name);
-        http_json_escape(playlist_name, sizeof playlist_name, raw_name);
+        char id[17] = {0};
+        snprintf(id, sizeof id, "%016llx", (unsigned long long)playlist);
+        playlist_select_name(b->raw_name, sizeof b->raw_name);
+        http_json_escape(b->playlist_name, sizeof b->playlist_name, b->raw_name);
+        snprintf(b->playlist_json, sizeof b->playlist_json,
+                 "{\"id\":\"%s\",\"name\":\"%s\"}", id, b->playlist_name);
+    } else {
+        snprintf(b->playlist_json, sizeof b->playlist_json, "null");
     }
 
-    char playlist_json[320];
-    if (playlist)
-        snprintf(playlist_json, sizeof playlist_json, "{\"id\":\"%s\",\"name\":\"%s\"}",
-                 playlist_id, playlist_name);
-    else
-        snprintf(playlist_json, sizeof playlist_json, "null");
-
-    char body[1536];
-    int n = snprintf(body, sizeof body,
+    int n = snprintf(b->body, sizeof b->body,
                      "{\"card\":%s,\"tracks\":%u,\"generation\":%u,\"library\":\"%s\","
                      "\"order\":\"%s\",\"playlist\":%s,"
                      "\"playing\":{\"title\":\"%s\",\"path\":\"%s\",\"elapsed_ms\":%u,"
                      "\"duration_ms\":%u}}",
                      card ? "true" : "false", tracks, generation, state,
-                     playlist ? "list" : "tree", playlist_json, title, path,
-                     (unsigned)st.elapsed_ms, (unsigned)st.duration_ms);
+                     playlist ? "list" : "tree", b->playlist_json, b->title, b->path,
+                     (unsigned)b->st.elapsed_ms, (unsigned)b->st.duration_ms);
     if (lib) library_release(lib);
-    if (n < 0 || n >= (int)sizeof body) {
+    if (n < 0 || n >= (int)sizeof b->body) {
+        free(b);
         http_send_error(fd, 500, "status too large");
         return HTTP_HANDLED;
     }
 
     if (http_send_headers(fd, 200, "application/json", (size_t)n,
                           "Cache-Control: no-store\r\n") == ESP_OK)
-        http_send_all(fd, body, (size_t)n);
+        http_send_all(fd, b->body, (size_t)n);
+    free(b);
     return HTTP_HANDLED;
 }
 

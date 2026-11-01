@@ -336,7 +336,12 @@ static http_result_t playlist_route(int fd, const http_request_t *req, void *ctx
         if (snapshot_list_row(s_snapshot, &l, i, &path) && path) cap += strlen(path) * 2 + 8;
     }
     char *body = malloc(cap);
-    if (!body) {
+    /* A path is escaped into twice its bytes, and LIB_PATH_MAX alone is a kilobyte: on the
+     * connection worker's stack that was the second half of its overflow. */
+    char *escaped = malloc((size_t)LIB_PATH_MAX * 2);
+    if (!body || !escaped) {
+        free(body);
+        free(escaped);
         http_send_error(fd, 500, "out of memory");
         return HTTP_HANDLED;
     }
@@ -348,13 +353,13 @@ static http_result_t playlist_route(int fd, const http_request_t *req, void *ctx
     for (uint32_t i = 0; i < l.row_count && at > 0 && (size_t)at < cap; i++) {
         const char *path = NULL;
         if (!snapshot_list_row(s_snapshot, &l, i, &path)) continue;
-        char escaped[LIB_PATH_MAX * 2];
-        http_json_escape(escaped, sizeof escaped, path);
+        http_json_escape(escaped, (size_t)LIB_PATH_MAX * 2, path);
         at += snprintf(body + at, cap - (size_t)at, "%s\"%s\"", i ? "," : "", escaped);
     }
     if (at > 0 && (size_t)at + 32 < cap) at += snprintf(body + at, cap - (size_t)at, "]}");
     reply_json(fd, 200, body, "Cache-Control: no-cache\r\n");
     free(body);
+    free(escaped);
     return HTTP_HANDLED;
 }
 
