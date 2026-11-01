@@ -42,7 +42,7 @@ refused at review, not queued behind other work.
   is still sent with `Content-Disposition: attachment`, and that is fine: it is a photograph
   of the index, not a Track. "Attachment" describes how a response is framed; the premise
   bans what the bytes *are*, and these are not a Track.
-- **The Index**, as a listing: names and sizes in Playlist order, with no links to bytes. It
+- **The Index**, as a listing: names and sizes in broadcast order, with no links to bytes. It
   survives because it is the device's diagnostic surface when the card is missing.
 
 Read literally, "all SD processing outside" would forbid the broadcast itself. It does not
@@ -59,22 +59,28 @@ delete.
 **Music directory**:
 The root directory on the mounted card. Its contents, recursively, define the library; the
 directory is not itself the library. The library is discovered, never stored: a **Snapshot**
-annotates its tracks, it does not list them.
+annotates its tracks and may carry **Playlists**, but it never lists the library.
 _Avoid_: library root, media path
 
 **Library tree**:
-The directories and tracks under the music directory, as one ordered tree. The playlist and the
-JSON view are views of it.
+The directories and tracks under the music directory, as one ordered tree. The JSON view is a
+view of it, and the **broadcast order** is too unless a **Playlist** is selected.
 _Avoid_: file list, index
 
 **Track**:
 One playable audio file in the library tree, in any of the three accepted source formats.
 _Avoid_: song, item, entry
 
+**Broadcast order**:
+The order the broadcast walks Tracks in: the library tree's depth-first, name-sorted order, or a
+**Playlist**'s order while one is selected. Derived, except for the order a Playlist imposes.
+_Avoid_: playlist (that is the authored one), queue, rotation
+
 **Playlist**:
-The ordered sequence of tracks the broadcast plays: depth-first, name-sorted, derived from the
-library tree. It is not stored separately.
-_Avoid_: queue, play list, rotation
+An ordered selection of the Library's Tracks, authored outside the device, stored in a
+**Snapshot**, and walked by the broadcast while selected. It is not a view of the library tree,
+and not a Track's place in it.
+_Avoid_: broadcast order, setlist, crate, rotation
 
 **Source format**:
 The container and codec a track is stored in — MP3, FLAC or WAV. What the card holds, not what
@@ -90,8 +96,9 @@ _Avoid_: raw file, raw audio
 
 **Snapshot**:
 What a host measured for a Library, delivered as one file and held in a flash partition. It
-annotates tracks that the Library already knows; it never lists them, and its absence changes
-nothing about what plays. The format and its reasoning are ADR 0047.
+annotates tracks that the Library already knows and may carry the host's **Playlists**; it never
+defines what the Library contains, and its absence changes nothing about what plays. The format
+and its reasoning are ADR 0047, amended by ADR 0051.
 _Avoid_: database, cache, index, library
 
 **Update file**:
@@ -118,6 +125,11 @@ _Avoid_: detected (ambiguous between the two), corrected
 
 ### The broadcast
 
+**Selected Playlist**:
+The one **Playlist** the broadcast is walking, or none. It is a choice, not a copy: the lists
+live in the Snapshot, and the selection is remembered by the device across a restart.
+_Avoid_: active playlist, current list, mode
+
 **Station format**:
 The single output format every track is converted to before it goes on the wire: MP3, at one
 sample rate and one bit rate. Chosen at boot and fixed for the life of the process.
@@ -139,11 +151,12 @@ the same moment, so it cannot be paused, seeked or replayed.
 _Avoid_: feed, radio, channel
 
 **Shuffle mode**:
-A mode of the **live stream**: a shuffled order of the whole **Playlist** that the broadcast
-walks one **Track** at a time - forward when a Track ends and when it is told to skip, back
-when it is told to go back. Turning it on does not interrupt the Track that is playing, picking a
-Track moves the order's cursor to it without rebuilding the order, and a new **Library
-generation** builds a new order. It changes neither the Playlist nor a Track's place in it.
+A mode of the **live stream**: a shuffled order of the whole **broadcast order** that the
+broadcast walks one **Track** at a time - forward when a Track ends and when it is told to skip,
+back when it is told to go back. Turning it on does not interrupt the Track that is playing,
+picking a Track moves the order's cursor to it without rebuilding the order, and a new **Library
+generation** builds a new order. It changes neither the broadcast order nor a Track's place in
+it, and while a **Playlist** is selected it shuffles that Playlist and nothing else.
 _Avoid_: random play, shuffle action, random next
 
 **Chunk**:
@@ -345,7 +358,7 @@ _Avoid_: cursor, highlight, select bar
 
 **Menu list**:
 One screen of the **Menu**: its **Rows** and what they are drawn from - the root's four
-destinations, Settings' five, the **Playlist**, a directory of the **Library tree**, or one of
+destinations, Settings' five, the **broadcast order**, a directory of the **Library tree**, or one of
 the read-only lists. `<` goes up one, to the list that opened it - a directory's parent, or
 Settings - and the header names the one on top.
 _Avoid_: menu page, menu screen, level, sheet
@@ -484,7 +497,7 @@ the server does not track listeners as identities.
 _Avoid_: listener, subscriber, user
 
 **Index**:
-The listing of the Library in Playlist order, at `/library`, and the device's diagnostic
+The listing of the Library in broadcast order, at `/library`, and the device's diagnostic
 surface when the card is missing or the page cannot run. It names Tracks and their sizes; it does not hand them out.
 _Avoid_: directory listing, browse page, file browser
 
@@ -502,41 +515,28 @@ _Avoid_: unauthenticated, public, insecure
 ### The front door
 
 **Front door**:
-The page the device serves at `http://xtape.local`, its only address and port: the analysis
-app, with the **Player view** when a card is in the player and the **Prepare view** when it is
-not. It is the network's way in, as the **Cassette screen** is the panel's. Plain HTTP, with
-no certificate and no trust step (ADR 0049).
+The page the device serves at `http://xtape.local`, its only address and port, and the app
+behind it: one shell with four areas. It is the network's way in, as the **Cassette screen** is
+the panel's. Plain HTTP, with no certificate and no trust step (ADR 0049). The page's own
+vocabulary is the front door context's — see [`web/CONTEXT.md`](../../web/CONTEXT.md).
 _Avoid_: web UI, dashboard, admin page
 
 **Card state**:
-Whether the device has a card mounted right now. It is a fact the front door reports, never an
-instruction: a change of it offers the other view, it does not take one away.
+Whether the device has a card mounted right now, as `/api/status` reports it. A fact the page
+reads, never an instruction: it chooses the page's first area and nothing after that.
 _Avoid_: card flag, insertion status
-
-**Player view**:
-The front door with a card in the player: what the broadcast is doing. TBD.
-_Avoid_: main screen, player mode
 
 **Snapshot upload**:
 `POST /api/snapshot`: how a **Snapshot** reaches the device when the card is in the computer.
 The image is validated before anything is erased and the device restarts afterwards. It is the
-one write the device accepts, and it carries measurements, never a **Track**.
+one write the device accepts, and it carries measurements and **Playlists**, never a **Track**.
 _Avoid_: file upload, flash endpoint
 
-**Prepare view**:
-The front door with no card in the player: the analysis app that measures a card in the
-computer and sends the **Snapshot** to the player. This is the view an analyser runs in.
-_Avoid_: analyser mode, setup screen
-
-**Shell**:
-The front door's own code - page, bundle, service worker, manifest - served by the device from
-its flash partition. It is what `web/` builds that belongs on the device.
-_Avoid_: app, frontend (alone)
-
-**Weights**:
-Everything the analysis needs that is too large to ship: the models and the runtimes. Fetched
-from a pinned release, verified by hash, and cached by the **Shell**'s service worker.
-_Avoid_: models, assets, blobs
+**Playlist selection**:
+`POST /api/playlists/select`: the command that tells the broadcast which **Playlist** to walk,
+or `none`. Remembered across a restart; a selection naming a list the Snapshot no longer holds
+falls back to the library tree's order.
+_Avoid_: switch, activate, load
 
 ### Build and licensing
 

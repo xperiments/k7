@@ -15,20 +15,20 @@ refused, not scheduled.
 - [Stream server](./docs/specs/CONTEXT.md) — an ESP32-S3 that owns a music library on a
   microSD card and broadcasts it over HTTP as a live MP3 stream, with an index that lists
   it. A global premise forbids serving or accepting a Track, so all SD content processing
-  happens outside the device. Specified in
+  happens outside the device. It also holds the **Snapshot** — the measurements and the
+  **Playlists** the page produced — and walks a selected Playlist when told to. Specified in
   [`docs/specs/sd-stream-server.md`](./docs/specs/sd-stream-server.md); its measurements are
   specified in [`docs/specs/snapshot.md`](./docs/specs/snapshot.md) and byte-defined in
-  [`docs/specs/snapshot-format.md`](./docs/specs/snapshot-format.md). It also serves the Track
-  analysis app as its **Front door**, specified in
+  [`docs/specs/snapshot-format.md`](./docs/specs/snapshot-format.md).
+- [Front door](./web/CONTEXT.md) — the page the stream server serves at `http://xtape.local`:
+  one shell with four areas that measures Tracks, authors Playlists, browses the library's
+  albums and artists, and shows what the broadcast is playing. It is the producer of the
+  **Snapshot** the stream server answers its queries from. Specified in
   [`docs/specs/front-door.md`](./docs/specs/front-door.md).
 - [Radio player](./docs/research/01-library-architecture.md) — an ESP32-S3 that consumes
   someone else's internet radio stream and plays it out to a DAC over I2S. Researched in
   [`docs/research/`](./docs/research/); no `CONTEXT.md` yet, because work has not resumed
   there.
-- [Track analysis](./web/CONTEXT.md) — a browser app that measures tempo, key, mood and energy
-  for a user's own audio files. Researched in
-  [`docs/research/bpm-key-mood-energy-webapp.md`](./docs/research/bpm-key-mood-energy-webapp.md).
-  It is also the producer of the **Snapshot** the stream server answers its queries from.
 
 ## Relationships
 
@@ -41,11 +41,21 @@ refused, not scheduled.
   client-side ICY parser. This is why the server's header emission is held to canonical
   Icecast form rather than "whatever a permissive parser accepts".
 
-- **Stream server ↔ Track analysis**: both say "Track", with different scope. There it is a
-  file in the card's music directory, owned by the device; here it is a file the user submits
-  for measurement. They now share one data flow and one vocabulary: the analyser writes the
-  **Update file** that carries a **Snapshot** to the device (ADR 0047), and the device still
-  emits only its live stream and its own computed views.
+- **Stream server ↔ Front door**: the server serves the page, answers its JSON and MCP calls,
+  and reports its **Card state**; the page reads the card where it lies and builds the one
+  artifact the server accepts. They share three words with different scope, so each is defined
+  in both glossaries:
+  - **Track** — there, a file in the card's music directory, owned by the device; here, a file
+    the user submits for measurement.
+  - **Playlist** — there, an ordered selection stored in the Snapshot and walked by the
+    broadcast; here, the same thing while it is being authored, named and reordered.
+  - **Snapshot** — there, an immutable image in a flash partition; here, an image this browser
+    builds, keeps as its **last image**, and sends.
+
+- **Front door → Stream server**: the page can never change what plays by editing a Playlist.
+  A Playlist reaches the device only inside a Snapshot (an image, a restart), and a chosen
+  Playlist is a command afterwards (ADR 0050). This is why the page's editor is a draft and
+  sending is an act.
 
 ## Note on the research tree
 

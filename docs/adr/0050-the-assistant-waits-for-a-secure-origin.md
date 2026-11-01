@@ -1,5 +1,10 @@
 # The assistant waits for a secure origin
 
+> **Status: superseded by [ADR 0053](./0053-the-assistant-writes-filters.md)** — the verdict
+> ("no assistant is built") no longer holds now that the model is remote rather than local. The
+> shape rule this ADR settled — the model produces filters, never results — is adopted there
+> unchanged. The reasoning below is kept as the record of why it waited.
+
 The owner wanted an in-browser assistant: a local LLM that turns a sentence — "something for a
 rainy Sunday that doesn't repeat the last hour" — into a query over the **Library**. It was
 grilled down to its dependencies, and then dropped. This records why, so it is not re-argued

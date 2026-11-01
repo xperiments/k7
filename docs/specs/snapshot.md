@@ -29,14 +29,16 @@ are cited. §10 lists what the first board run has to measure.
 | R5 | `library_track` and `library_search` return the measurements beside the track, `null` where a track has none |
 | R6 | `library_stats` reports **Coverage** and the Snapshot's provenance |
 | R7 | A track with no row is unanalysed, not hidden: it plays, lists, and matches by name |
+| R8 | A version 2 image carries the host's **Playlists**, and the device can walk a selected one (ADR 0051) |
 
 ### Out of scope
 
 Per-query card access; device-side analysis; a text index or any other built index; incremental
 Snapshot updates (each image is complete); embeddings or vector similarity; a
-`find_similar_tracks` tool; playlist objects; editing a Snapshot on the device; detecting a card
-swapped under a running device (unchanged from today — the retry task only covers a card that
-was absent at boot).
+`find_similar_tracks` tool; editing a Snapshot on the device — a new list arrives only as a new
+image; MCP tools over Playlists (the page reads them at `/api/playlists`, and an agent that should
+read them is a later decision); detecting a card swapped under a running device (unchanged from
+today — the retry task only covers a card that was absent at boot).
 
 ---
 
@@ -137,6 +139,14 @@ snapshot_hits_t *snapshot_hits_new(uint32_t cap);
 bool snapshot_hits_add(snapshot_hits_t *h, uint32_t index, int64_t key, const char *str);
 uint32_t snapshot_hits_index(const snapshot_hits_t *h, uint32_t i);
 
+/* Lists, version 2. A row resolves through the Library, never through the image. */
+uint32_t  snapshot_lists(const snapshot_t *s);
+bool      snapshot_list_at(const snapshot_t *s, uint32_t i, snapshot_list_t *list);
+bool      snapshot_list_find(const snapshot_t *s, uint64_t id, snapshot_list_t *list);
+uint32_t  snapshot_list_rows(const snapshot_t *s, const snapshot_list_t *list);
+const char *snapshot_list_row_path(const snapshot_t *s, const snapshot_list_t *list,
+                                   uint32_t row, uint64_t *fingerprint);
+
 /* The update: source and target injected, so it is host-testable. */
 snapshot_result_t snapshot_apply(const snapshot_source_t *src, const snapshot_target_t *tgt,
                                  char *why, size_t why_size);
@@ -165,7 +175,7 @@ Coverage and a reason, and every query still runs against the Library.
 ## 5. The query engine
 
 **Q1. Matching is over the Library, not the Snapshot.** The engine iterates the current
-Library generation's track array, in Playlist order. For each track it builds the relative path
+Library generation's track array, in broadcast order. For each track it builds the relative path
 with `library_relpath()`, computes the **Track fingerprint**, and binary-searches the rows.
 Nothing iterates the Snapshot.
 
@@ -188,9 +198,9 @@ excludes that track.
 | `mood` | array of `happy`, `sad`, `aggressive`, `relaxed`, `party` | any listed bit set |
 | `genre` | string | case-insensitive ASCII substring of the genre string |
 
-**Q4. Sorting and paging.** `sort` is one of `path` (default, Playlist order), `title`, `bpm`,
+**Q4. Sorting and paging.** `sort` is one of `path` (default, broadcast order), `title`, `bpm`,
 `energy`, `danceability` — the Library keeps no duration, so there is nothing to sort by. Tracks with no value for the sort key sort last; ties
-break by Playlist index, so the order is total and deterministic. `offset` is 0..199 and
+break by track index, so the order is total and deterministic. `offset` is 0..199 and
 `limit` 1..100 (default 50), with `offset + limit <= 200`; the engine selects the top
 `offset + limit` with a bounded array (≤ 200 entries) and then skips `offset`. No full sort, no
 candidate array proportional to the library.
@@ -273,6 +283,10 @@ of transient PSRAM under a query — a third of what the cover path leaves free
 | A row for a track that no longer exists | Ignored — matching is Library → Snapshot, never the reverse |
 | A track with no row | Unanalysed: listed, playable, matches by name |
 | The card changes without a new Update file | The old Snapshot stays; `coverage` drops as tracks stop matching |
+| A list row's path is not in the Library | Skipped at playback, reported as missing; never deleted |
+| A list row's size no longer matches its fingerprint | Skipped: the file there is not the one that was listed |
+| A selected list, then an image without it | Falls back to the broadcast order; the stored id is ignored and reported |
+| An image with a list area that fails §8.9 | The whole image is refused, as with any other invalid byte |
 
 ---
 

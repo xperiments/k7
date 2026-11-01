@@ -108,7 +108,7 @@ one line, and the error message names the component.
 * Put your tracks under `/sdcard/music/`, in subdirectories if you like. The tree
   is scanned at boot and by an explicit rescan into a PSRAM arena; there is no
   per-request directory walk. Names are sorted case-insensitively, directories and
-  tracks interleave, and the Playlist is that depth-first order.
+  tracks interleave, and the broadcast order is that depth-first order.
 * Each name may be up to 128 characters; a complete path must fit `FILENAME_MAX`
   (1024 bytes on this build, with a 1025-byte tree buffer). A file whose path is
   longer is skipped and logged, not silently truncated.
@@ -121,7 +121,7 @@ one line, and the error message names the component.
   index/JSON say so; it does not reboot. A 64-track, 2.28 GB card measured
   `scan=96 ms arena=6285 B json=12343 B`; a forced one-track cap logged
   `truncated=1`. The boot scan is synchronous, with a 16 KB main-task stack.
-* The index uses that Playlist order; the live stream plays it in order, looping
+* The index uses that broadcast order; the live stream plays it in order, looping
   forever.
 
 The MCP endpoint is also advertised over mDNS as `xtape.local` (`_mcp._tcp`, port 80,
@@ -237,7 +237,7 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 
 | URL | What it does |
 |---|---|
-| `GET /library` | The index: every Track in the Library tree, in Playlist order, with its size, what is playing now, and a link to the stream. It is a listing, not a file browser: there is no link to a track's bytes. Also the device's diagnostic page when no card is mounted. `GET /` is the front door's page, and says so (503) in a firmware that carries none. |
+| `GET /library` | The index: every Track in the Library tree, in broadcast order, with its size, what is playing now, and a link to the stream. It is a listing, not a file browser: there is no link to a track's bytes. Also the device's diagnostic page when no card is mounted. `GET /` is the front door's page, and says so (503) in a firmware that carries none. |
 | `GET /stream` | The live stream: continuous `audio/mpeg` at the station rate and bit rate. Ask with `Icy-MetaData: 1` and the current track is interleaved every 16 000 encoded bytes. |
 | `GET /api/library` | The prebuilt Library JSON, with `state`, counts and a generation ETag. |
 | `GET /api/library.bin` | The same generation as an arena: versioned header, nodes, edges, track index and CRC. |
@@ -882,7 +882,7 @@ components/
       mini_icecast.c/.h     the decoded source (ice_decode, core 0), pacing, client list,
                             station status
     tone_eq/                the stream's three-band DJ EQ and trim, before the encoder
-    library/                the immutable tree, arena, JSON, Playlist and lookup
+    library/                the immutable tree, arena, JSON, broadcast order and lookup
     library_http/           GET /api/library[.bin] from the prebuilt views
     mini_files/             GET /library index: a listing, not a file browser
     cassette/               what the screen shows: reel phases, pack fills, tape ink, title

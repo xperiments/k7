@@ -1,6 +1,6 @@
 # The Menu
 
-The Menu is the screen's way into everything that is not the cassette: the Playlist, the card's
+The Menu is the screen's way into everything that is not the cassette: the Library tree, the card's
 directories, the shuffle mode and the settings. It is a **mode of the Controls**, not a Level or
 a screen: the cassette area becomes a five-row list, the right bar's group gives way to the
 **Pad**, and the mode bar's cassette button is the way in and out.
@@ -70,7 +70,7 @@ nothing playing both footer lines are empty.
 
 ```
 MENU
-├─ Tracks        radio-waves     chevron   the Playlist, one Track per Row
+├─ Tracks        radio-waves     chevron   the Library tree, one Track per Row
 ├─ Browse        books           chevron   a directory of the Library tree
 ├─ Shuffle       toggle-off/on   OFF / ON  toggles Shuffle mode (ADR 0023)
 └─ Settings      settings        chevron
@@ -87,7 +87,7 @@ MENU
 | List | Rows | Source | Title |
 |---|---|---|---|
 | Root | 4 | fixed | `Menu` |
-| Tracks | the whole Playlist, Track rows | `library_track_count()` / `library_track_at()` | `Tracks` |
+| Tracks | the whole Library tree, Track rows | `library_track_count()` / `library_track_at()` | `Tracks` |
 | Browse | the directory's children in the library's name order, directories and Tracks mixed | `library_child_count()` / `library_child()` / `library_kind()` | `Browse`, then `Browse /Jazz`, ... |
 | Settings | 5 | fixed | `Settings` |
 | Station | Format, Rate, Bitrate | `mini_icecast_status_t` | `Station` |

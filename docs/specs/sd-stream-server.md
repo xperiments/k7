@@ -22,6 +22,12 @@ continuous live MP3 stream plus an index that lists the library.
 > unchanged, to `/library`. The HTTP surface splits into two listeners: TLS on 443 for the app,
 > `/api/*` and `/mcp`; plain HTTP on 80 for `/stream`, with every other path on 80 redirecting
 > to HTTPS. The routes below keep their paths and change their listener. Not yet built.
+>
+> **Amended by ADR 0049 and ADR 0052.** There is no TLS listener and no redirect: one plain-HTTP
+> listener serves `/`, `/api/*`, `/mcp`, `/library` and `/stream`. The page at `/` is the
+> **front door**, a shell of four areas with hash routes, specified in
+> [`front-door.md`](./front-door.md); its vocabulary is [`web/CONTEXT.md`](../../web/CONTEXT.md).
+> What this document calls the Playlist is the **broadcast order**.
 
 **Relationship to `docs/research/server/s12-mp3-only-plan.md`.** That plan is the research
 input. This document is the buildable specification derived from it, and it **supersedes**
@@ -186,7 +192,7 @@ components/
     mi_decode.c/.h
     mi_resample.c/.h
     mini_icecast.c/.h
-  library/                boot-built tree, arena, JSON, Playlist and lookup  (new)
+  library/                boot-built tree, arena, JSON, broadcast order and lookup  (new)
   library_http/           GET /api/library[.bin] from the prebuilt views    (new)
   mini_files/             GET /library index: a listing, not a file browser (new)
   shine/                  vendored, unmodified, separate licence             (new)
@@ -369,8 +375,8 @@ against the code**; two were new, introduced by R7, and are withdrawn with it.
 
 | Method and path | Response | Contract |
 |---|---|---|
-| `GET /stream` | `audio/mpeg` | Live Playlist broadcast, ICY metadata optional |
-| `GET /` | HTML | Index in Playlist order; diagnostic page without a card |
+| `GET /stream` | `audio/mpeg` | Live broadcast, ICY metadata optional |
+| `GET /` | HTML | Index in broadcast order; diagnostic page without a card |
 | `GET /api/library` | `application/json` | Prebuilt tree, generation, state, truncation |
 | `GET /api/library.bin` | `application/octet-stream` | Versioned arena, CRC and generation |
 | `POST /api/play` | `application/json` | `{"path":"..."}`; next-chunk switch |
@@ -387,7 +393,7 @@ broadcast.
 
 ### 6.1 `GET /stream` — the live stream
 
-The stream consumes the Library Playlist: depth-first, name-sorted, no per-pass
+The stream consumes the Library tree in broadcast order: depth-first, name-sorted, no per-pass
 `readdir()`. Unchanged from today except for the output format:
 
 - `Content-Type: audio/mpeg` (was `audio/wav`, `mini_icecast.c:224`).
@@ -405,7 +411,7 @@ The stream consumes the Library Playlist: depth-first, name-sorted, no per-pass
 
 ### 6.2 `GET /` — the index
 
-**Requirement I1.** One HTML page listing every Track in the Library tree in Playlist order,
+**Requirement I1.** One HTML page listing every Track in the Library tree in broadcast order,
 each row showing the relative path and its size. The tree may be nested; there is no
 pagination. **A row is text, not a link**: the device hands out no Track.
 
@@ -541,7 +547,7 @@ host result transfers.
 | T3 | End-to-end wire format | `curl -s http://<addr>:8000/stream \| ffprobe -` | **both** | `ffprobe` reports **MPEG audio, 44100 Hz, 128 kb/s, joint stereo**, not WAV. On the host this runs against the host build of the real server (§10.5) |
 | T4 | Accept loop (D1) | Open a TCP connection to the port and send nothing; then immediately connect a real client | **both** | Second client receives headers within 2 s; no 2 s stall |
 | T5 | ICY metadata | `curl -s -H 'Icy-MetaData: 1' http://<addr>:8000/stream \| head -c 40000` and inspect | **both** | `icy-metaint: 16000` present; a `StreamTitle='...';` block appears at byte offset 16 000 of the body |
-| T6 | Index | `curl -s http://<addr>:8000/` | **both** | Lists exactly the `.mp3/.flac/.wav` Tracks in the Library tree, in Playlist order, with sizes matching `ls -l` (host) / the FATFS listing (board) |
+| T6 | Index | `curl -s http://<addr>:8000/` | **both** | Lists exactly the `.mp3/.flac/.wav` Tracks in the Library tree, in broadcast order, with sizes matching `ls -l` (host) / the FATFS listing (board) |
 | T7 | **Withdrawn** | (was the byte-exact download; route removed) | — | — |
 | T8 | **Withdrawn** | (was the download path guard; route removed) | — | — |
 | T8b | No Track transfer (premise) | `GET /music/<path>` and `PUT /music/<path>` on the host build; `GET /api/library.bin` | **both** | The Track requests are `404`; the index still lists it as text; the library blob is still `200` with `Content-Disposition: attachment` |

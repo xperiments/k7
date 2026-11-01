@@ -21,6 +21,8 @@ Everything here is normative unless marked **[producer]** (a rule only the host 
 
 ## 2. Image layout
 
+Version 1:
+
 ```text
 +------------------------------------------------------------------+
 | header      64 B   magic, version, sizes, provenance, CRC       |
@@ -31,6 +33,22 @@ Everything here is normative unless marked **[producer]** (a rule only the host 
 
 `total_size = 64 + row_count * 32 + pool_size`. That equality is checked, not assumed. There are
 no other sections, no directory, and no alignment padding between them.
+
+Version 2 adds one area, after everything version 1 has:
+
+```text
++------------------------------------------------------------------+
+| header      80 B   as version 1, then the list counts            |
+| rows        row_count x 32 B, strictly ascending by fingerprint |
+| strings     pool_size B: row strings, then list names and paths  |
+| lists       list_count x 32 B, strictly ascending by list id     |
+| list rows   list_rows x 12 B, tiled by the lists in list order   |
++------------------------------------------------------------------+
+```
+
+`total_size = 80 + row_count * 32 + pool_size + list_count * 32 + list_rows * 12`. The list area is
+absent when `list_count` is zero, and an image with nothing to say about lists is still written as
+version 1 (§12).
 
 The image is written at offset 0 of the `snapshot` partition. The file's length **is**
 `total_size`; a longer file is a longer image, not a padded one.
@@ -64,6 +82,24 @@ card's possession of an Update file is the only "should I update" signal (ADR 00
 `model_set` is the producer's identity for the exact model set used: FNV-1a 64 over the sorted,
 newline-joined descriptors (model name and content hash), no trailing newline. It exists so the
 device can report *which* models produced a Snapshot without carrying a string table.
+
+### 3.1 Version 2 header (80 bytes)
+
+Bytes `0..64` are exactly the version 1 header, with `format_version = 2` and
+`header_size = 80`. Bytes `64..80` are:
+
+| Offset | Size | Field | Value |
+|---:|---:|---|---|
+| 64 | 2 | `list_count` | number of Playlists, `0..64` |
+| 66 | 2 | `list_size` | `32` |
+| 68 | 2 | `list_row_size` | `12` |
+| 70 | 2 | `reserved` | zero |
+| 72 | 4 | `list_rows` | Playlist rows across all lists, `0..8192` |
+| 76 | 4 | `reserved` | zero |
+
+`crc32` in a version 2 image covers `[80, total_size)`: everything after the header, as in version 1,
+with the header now being 80 bytes. `header_size` is what tells the reader which length to use, and
+it is checked before any other offset is read.
 
 ## 4. Row (32 bytes)
 
@@ -191,8 +227,20 @@ reader does not rely on it).
 **[producer]** Strings carry no length limit beyond the pool's 4 GiB, but they are copied into
 fixed buffers on the device, so keep each under 1 KB and the pool under 1 MB.
 
+In a version 2 image the pool continues after the last row's strings with, in list order, each
+list's name and then each of its rows' paths:
+
+```text
+name \0 path \0 path \0 ...  (one block per list, in list order)
+```
+
+**[producer]** Strings carry no length limit beyond the pool's 4 GiB, but they are copied into
+fixed buffers on the device, so keep each under 1 KB, a list's name under 64 bytes, and the pool
+under 1 MB.
+
 **[reader]** Walking a row's four strings must stay inside `[pool, pool + pool_size)`; a row
-whose fourth string has no terminator inside the pool invalidates the image.
+whose fourth string has no terminator inside the pool invalidates the image. The same holds for a
+list's name and each of its rows' paths.
 
 ## 8. Validation
 
@@ -200,39 +248,88 @@ whose fourth string has no terminator inside the pool invalidates the image.
 the device keeps serving, reports the reason, and never trusts a partially valid image.
 
 1. `total_size >= 64` and `total_size <= partition size`.
-2. `magic`, `header_size == 64`, `row_size == 32`.
-3. `format_version == 1`. Unknown versions are refused, not guessed.
-4. `total_size == 64 + row_count*32 + pool_size`, with no 32-bit overflow in the multiplication.
-5. `crc32` matches `[64, total_size)`.
+2. `magic`, and `header_size` is `64` for version 1 or `80` for version 2; `row_size == 32`.
+3. `format_version` is `1` or `2`. Unknown versions are refused, not guessed.
+4. `total_size == header_size + row_count*32 + pool_size` (version 1), or that sum plus
+   `list_count*32 + list_rows*12` (version 2), with no 32-bit overflow in any multiplication.
+5. `crc32` matches `[header_size, total_size)`.
 6. Rows are strictly ascending by `fingerprint`.
 7. Every `string_offset < pool_size`, and the row's four strings terminate inside the pool.
 8. `bpm_x10` is `0` or in `700..1800`; `key` is `0..24`; each percentage is `0..100` or `0xFF`;
    `mood_bits & 0xE0 == 0`; `source_flags & 0xC0 == 0`; `reserved` is zero.
+9. Version 2 only: `list_count <= 64`, `list_rows <= 8192`, `list_size == 32`,
+   `list_row_size == 12`, list ids strictly ascending, every list's name and paths terminate
+   inside the pool, and the lists tile the list-row array exactly (the first starts at 0, each
+   `row_start` is the previous one plus its `row_count`, and the total equals `list_rows`).
 
-`row_count` is bounded by the partition: the reader also checks `64 + row_count*32 <= total_size`
-before the equality, so a forged count cannot wrap.
+`row_count` is bounded by the partition: the reader also checks `header_size + row_count*32 <=
+total_size` before the equality, so a forged count cannot wrap.
 
 ## 9. Determinism
 
-**[producer]** The same input must produce the same bytes: rows sorted by fingerprint, pool in
-row order, reserved fields zeroed, percentages rounded half away from zero. Two runs over an
-unchanged library produce byte-identical files, which is what makes a regenerated Snapshot safe
-to compare and safe to skip.
+**[producer]** The same input must produce the same bytes: rows sorted by fingerprint, lists
+sorted by id, pool in row order and then list order, reserved fields zeroed, percentages rounded
+half away from zero. Two runs over an unchanged library produce byte-identical files, which is
+what makes a regenerated Snapshot safe to compare and safe to skip.
 
-## 10. Size
+## 10. Version 2: Playlists
 
-| Tracks | Rows | Pool (est.) | Image |
-|---:|---:|---:|---:|
-| 1,000 | 32 KB | ~110 KB | ~142 KB |
-| 5,000 | 160 KB | ~550 KB | ~710 KB |
-| 20,000 | 640 KB | ~2.2 MB | ~2.8 MB |
+A **Playlist** is an ordered selection of the Library's Tracks. It is stored here because this
+image is the one artifact the host produces for the device (ADR 0051); it is not a second model
+of what the Library contains.
+
+Limits: `list_count` 0..64, `list_rows` 0..8192 across the image, a list's name under 64 bytes,
+and a list's own `row_count` may not exceed `list_rows`. A producer that breaks a limit refuses to
+write rather than truncating.
+
+### List record (32 bytes)
+
+| Offset | Size | Field | Value |
+|---:|---:|---|---|
+| 0 | 8 | `list_id` | FNV-1a 64 of the list's name and creation time, strictly ascending |
+| 8 | 4 | `name_offset` | offset into the pool of the list's NUL-terminated name |
+| 12 | 4 | `row_start` | index of the list's first row in the list-row array |
+| 16 | 4 | `row_count` | number of rows in this list |
+| 20 | 8 | `created` | Unix seconds (UTC) when the list was made |
+| 28 | 4 | `reserved` | zero |
+
+`list_id` is opaque to the device: it is what `select` and the NVS key carry, so renaming a list
+must not change it. Two lists in one image may not share an id — the producer detects the
+collision and refuses, exactly as it does for rows.
+
+### List row (12 bytes)
+
+| Offset | Size | Field | Value |
+|---:|---:|---|---|
+| 0 | 8 | `fingerprint` | FNV-1a 64 of the Track's relative path (§6) |
+| 8 | 4 | `path_offset` | offset into the pool of the Track's relative path |
+
+A row is both a **binding** and a **resolution**: the path is what the device looks the Track up by
+(`library_find`), and the fingerprint is what lets it refuse a row whose file is no longer the one
+that was put in the list — the device recomputes `FNV-1a(path, size)` from the Library node and
+compares. A mismatch, or a path the Library does not hold, means the row is **skipped** at
+playback and reported as missing; it is never deleted and never silently played as something else.
+
+Like a measurement row, a list row binds a size without storing one: the size is in the path's
+fingerprint, and the Library node supplies the size to check it against.
+
+## 11. Size
+
+| Tracks | Rows | Pool (est.) | Version 1 | + 10 lists x 200 rows |
+|---:|---:|---:|---:|---:|
+| 1,000 | 32 KB | ~110 KB | ~142 KB | ~180 KB |
+| 5,000 | 160 KB | ~550 KB | ~710 KB | ~750 KB |
+| 20,000 | 640 KB | ~2.2 MB | ~2.8 MB | ~2.8 MB |
 
 The pool dominates, and it is the part a Snapshot can do without: at 20,000 tracks the
 partition would need to grow or the strings would need to be de-duplicated. 5,000 — the stated
-target — fits a 2 MB partition with room for a second axis of growth.
+target — fits a 2 MB partition with room for a second axis of growth. Lists are small next to it:
+2,000 rows are 24 KB of records, and their names and paths are shared with nothing but themselves.
 
-## 11. Versioning
+## 12. Versioning
 
 Bump `format_version` for any change to this document, including adding a field to the
-`reserved` bytes. The reader knows exactly one version and refuses the rest; a Snapshot is
+`reserved` bytes. A version 2 reader **accepts versions 1 and 2**: version 1 is a valid image with
+no lists, and a producer with nothing to say about lists keeps writing it, so an older device can
+still apply what a newer page sends. A reader refuses any version it does not know; a Snapshot is
 cheap to regenerate, so there is no reason to guess at a half-understood image.

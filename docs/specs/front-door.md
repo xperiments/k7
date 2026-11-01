@@ -1,23 +1,27 @@
-# The front door: the analysis app, served by the device
+# The front door: one shell, four areas
 
-**Goal.** `http://xtape.local` is the one address. With a card in the player it shows the
-**Player view**; with the card out it shows the **Prepare view** — the analysis page that
-measures the card and writes `xtape.db` back to it. The app's own code ships in the firmware;
-the 38 MB of models and runtimes are fetched once and cached on the computer that runs it.
+**Goal.** `http://xtape.local` is the one address and the one page. It is a small app with a
+sidebar: **Card**, **Playlists**, **Media**, **Player**. The Card area measures a card in the
+computer and sends `xtape.db` back; Playlists authors the lists that image carries; Media browses
+what the device holds and looks a track up on YouTube; Player shows what the broadcast is
+carrying. The app's own code ships in the firmware; the 38 MB of models and runtimes are fetched
+once and cached on the computer that runs it.
 
-The decision, its evidence and its rejected alternatives are
-[ADR 0048](../adr/0048-the-device-serves-the-analysis-app.md). Vocabulary is
-[`CONTEXT.md`](./CONTEXT.md): **Front door**, **Player view**, **Prepare view**, **Card state**,
-**Shell**, **Weights**.
+The decision to serve a page at all is [ADR 0048](../adr/0048-the-device-serves-the-analysis-app.md);
+plain HTTP is [ADR 0049](../adr/0049-the-front-door-is-plain-http.md); a shell of areas with hash
+routes is [ADR 0052](../adr/0052-the-front-door-is-a-shell-of-areas.md); a Playlist in the Snapshot,
+walked by the broadcast, is [ADR 0051](../adr/0051-a-playlist-lives-in-the-snapshot.md); the
+assistant writing filters rather than results is
+[ADR 0053](../adr/0053-the-assistant-writes-filters.md). The page's
+vocabulary is [`web/CONTEXT.md`](../../web/CONTEXT.md); the device's is
+[`CONTEXT.md`](./CONTEXT.md). The byte contract for the image is
+[`snapshot-format.md`](./snapshot-format.md).
 
-**Status:** built and running on the board, over **plain HTTP** — no certificate, no trust
-step, superseding the TLS sections of this document (see
-[ADR 0049](../adr/0049-the-front-door-is-plain-http.md)). `http://xtape.local/` serves the
-Shell from its own flash, `/api/status` answers, `/library` is the index, `/stream` is beside
-them, and `POST /api/snapshot` takes the image the browser built and flashes it. The card stays
-in the computer. What is not proven: the browser flows end to end (no automated browser), the
-Player view is a placeholder, the cold/warm weight cache, and §9's measurements. The Shell is
-816 KiB.
+**Status:** the Shell, `/api/status`, `/library`, `/stream` and `POST /api/snapshot` are built and
+running on the board over plain HTTP. The four areas, the hash routes, the playlist section of the
+image (`format_version 2`), the selection command and the broadcast walking a list are **designed
+here and not built**. What is not proven: the browser flows end to end (no automated browser), the
+cold/warm weight cache, and §9's measurements.
 
 ---
 
@@ -25,7 +29,7 @@ Player view is a placeholder, the cold/warm weight cache, and §9's measurements
 
 | Piece | Bytes | Lives |
 |---|---:|---|
-| `index.html`, app bundle, worker, `wasi-adapter`, `ort.mjs`, `sw.js`, manifest, icons, `shell.json`, `weights.lock.json`, `setup.html`, `ca.pem` | **816 KiB** | 1 MB SPIFFS partition at `0x610000` |
+| `index.html`, app bundle, worker, `wasi-adapter`, `ort.mjs`, manifest, icons, `shell.json`, `weights.lock.json`, `setup.html` | **~350 KiB** packed | 1.25 MB SPIFFS partition at `0x610000` |
 | Essentia (`essentia-wasm.es.js`, 2.56 MB) | 2.6 MB | jsDelivr, pinned tag, sha256-checked |
 | TagLib's one browser wasm | 0.7 MB | jsDelivr |
 | ONNX Runtime wasm | 14 MB | jsDelivr |
@@ -34,126 +38,263 @@ Player view is a placeholder, the cold/warm weight cache, and §9's measurements
 
 **F1.** `web/dist-shell` is packed by `spiffs_create_partition_image` into the `frontdoor`
 partition, so `idf.py flash` writes the firmware and the page together, and the build logs the
-app commit it packed. The pack is a **configure-time** decision: after building the Shell the
-build directory must be reconfigured. A clean checkout without a Shell still builds — the device
-is useful without a page, with `/` answering `503` naming `/library` — and a build that is
-meant to ship one passes `-DXTAPE_REQUIRE_SHELL=1`, which turns a missing or empty Shell into a
+app commit it packed. Flash is the constraint, so the build stores every text file as
+`<name>.gz` and drops the original: the front door streams those bytes with
+`Content-Encoding: gzip`, and a client that did not offer gzip for a compressed-only file gets
+`406`. `index.html` and the icons stay plain. The pack is a **configure-time** decision: after
+building the Shell the build directory must be reconfigured. A clean checkout without a Shell
+still builds — the device is useful without a page, with `/` answering `503` naming `/library`.
+A shipping build passes `-DXTAPE_REQUIRE_SHELL=1`, which turns a missing or empty Shell into a
 configure error.
 
-**F2.** The **Shell** is our code and nothing else. The worker is built with Essentia
-external: it loads the module from the CDN, not from the bundle.
+**F2.** The **Shell** is our code and nothing else. The worker is built with Essentia external:
+it loads the module from the CDN, not from the bundle.
 
-**F3.** The **Weights** are pinned to a tag and verified against the manifest's `sha256`
-before use. JavaScript modules are fetched as text, checked, and imported from a blob URL;
+**F3.** The **Weights** are pinned to a tag and verified against the manifest's `sha256` before
+use. JavaScript modules are fetched as text, checked, and imported from a blob URL;
 `ArrayBuffer` artefacts are checked before they reach ONNX Runtime. Verification happens on
 every cold load, not only the first.
+
+**F4.** The Shell is **small on purpose**. Every component it installs is JavaScript the board
+has to store and the browser has to parse: `sidebar` plus its `dropdown-menu`, `breadcrumb`,
+`avatar` and `sheet` parts are the largest single addition the front door has taken. A component
+that is not on a route the user can reach is not installed. `web/README.md` carries the measured
+size and the budget.
 
 ---
 
 ## 2. Origins and routes
 
-**R1.** `http://xtape.local` is the device's only address and its only port. One listener
-serves the app at `/`, the JSON API at `/api/*`, MCP at `/mcp`, and the index at `/library`.
-Unknown paths are `404`: the page is one screen with no client-side routes.
+**R1.** `http://xtape.local` is the device's only address and its only port. One listener serves
+the page at `/`, the JSON API at `/api/*`, MCP at `/mcp`, and the index at `/library`. Unknown
+paths are `404`: the device serves one page and has no catch-all.
 
-**R2.** `/stream` is on the same port, byte-identical to what a radio has always received. It
-was on 80 alone while the app was on 443; with one listener it is simply another route.
+**R2.** Inside that one page, the **routes** are hashes — `#/process`, `#/playlists/:id` — so the
+address bar has a location for every place without asking anything of the firmware. A hash
+change is a client event: the device never sees it, no request is made, and the back button
+works.
 
-**R3.** `/` stops being the index. The index moves to `/library` unchanged — the diagnostic
-page when no card is mounted, and the listing of a mounted one.
+| Route | Area | What it shows |
+|---|---|---|
+| `#/process` | Card | the Queue, the run's progress, the image actions |
+| `#/scan` | Card | intake (drop or pick a card here) and the player's own rescan |
+| `#/playlists` | Playlists | the device's Playlists and this browser's Drafts |
+| `#/playlists/:id` | Playlists | one Playlist's rows, order and actions |
+| `#/playlists/ask` | Playlists | the prompt, the Intent, and the search that becomes a Draft |
+| `#/media` | Media | albums and artists, from the device's Snapshot rows |
+| `#/media/album/:artist/:album` | Media | one album's tracks |
+| `#/media/artist/:artist` | Media | one artist's albums |
+| `#/media/video/:id` | Media | one Video, taking the viewport |
+| `#/player` | Player | cover, what is Playing, the device's facts |
+| `#/settings` | — | the Provider and the Invidious Instance |
+
+**R3.** `/stream` is on the same port, byte-identical to what a radio has always received.
+
+**R4.** `/library` is the Index: every Track in the Library tree in **broadcast order**, with its
+size, what is Playing and a link to the stream. It is the device's diagnostic page when no card is
+mounted and the page cannot run.
 
 **U1.** `POST /api/snapshot` takes an `application/octet-stream` body — the `xtape.db` image —
 validates it in full before erasing anything, writes the snapshot partition, reads it back, and
 restarts in 1.5 s so the reply lands first. A refusal leaves the running snapshot untouched. The
-content type is also the CSRF guard: it is not CORS-safelisted, so another origin cannot send it
-without a preflight the device never answers, and a form cannot produce it.
+image may carry **Playlists** (`format_version 2`, §10 of the format); an accepted image replaces
+the previous lists entirely. The content type is also the CSRF guard: it is not CORS-safelisted,
+so another origin cannot send it without a preflight the device never answers.
 
-**U2.** There is **no TLS**. No certificate is compiled in, no trust step exists, and a browser
+**U2.** `GET /api/playlists` reports the lists the Snapshot holds — id, name, created, row count —
+and which one is selected. `GET /api/playlists/<id>` reports one list's rows as paths. Both are
+`no-cache`, like the rest of `/api/*` but `/api/status`.
+
+**U3.** `POST /api/playlists/select` takes `{"id": "<hex16>"}` or `{"id": null}` and tells the
+broadcast which Playlist to walk. `404` for an id the Snapshot does not hold, `409` for a list
+with no rows, `503` when there is no Snapshot. The choice is remembered in NVS and survives a
+restart; on boot a stored id the current image no longer holds falls back to the tree's order and
+is reported.
+
+**U4.** There is **no TLS**. No certificate is compiled in, no trust step exists, and a browser
 shows "Not secure" and no interstitial. The consequences are accepted, not hidden: no service
 worker and no installable PWA, no `crypto.subtle` (a pure-JS SHA-256 replaces it), and no
-directory picker (replaced by the upload). See ADR 0049.
+directory picker. See ADR 0049.
+
+---
 
 ## 3. The page
 
-**P1.** A service worker precaches the Shell on install, so the app opens with the device
-switched off. It opens in the **Prepare view** and stays there: a cold offline load has no
-status, and a missing device reads as "no card", not as an error banner.
+**P1.** There is no service worker, because a plain-HTTP origin cannot register one. The device
+serves the Shell from its own flash, so the page is always the firmware's own build and there is
+nothing to precache. The Weights are the only thing that outlives a load, cached in IndexedDB
+and verified by hash on every cold use (F3).
 
-**P2.** The Weights are cache-first, in a cache whose name carries the app version and the
-manifest hash. A model swapped at the same URL is a cache miss, not a stale hit.
-
-**P3.** `index.html` and `sw.js` are served `no-cache`; hashed `assets/*` are
+**P2.** `index.html` is served `no-cache`; hashed `assets/*` are
 `public, max-age=31536000, immutable`; anything else is revalidated. One `Cache-Control` per
 response — `http_send_headers` defaults to `no-cache` and a route's own header replaces it, never
-joins it. `/api/status` is `no-store`; the rest of `/api/*` keeps the default `no-cache`, which
-revalidates the library views and the control commands.
+joins it. `/api/status` is `no-store`; the rest of `/api/*` keeps the default `no-cache`.
 
-**P4.** The page is installable: a manifest with the product's name and icons, served from the
-same partition.
+**P3.** The manifest is still served, and no service worker means no install prompt. The page is
+a page, not an installed app.
 
-**P5.** An update is never imposed: a new service worker waits rather than replacing the page
-under a running analysis. Offering it — a button that reloads — is **not built**.
+**P4.** The app is **dark only**: `index.html` carries `class="dark"`, the palette is the app's own
+(warm charcoal, an amber accent, a teal "measured"), and it is mapped onto semantic tokens in
+`src/index.css` so installed components keep their identity.
 
----
-
-## 4. The two views
-
-**S1.** `GET /api/status` returns the **Card state**, the library's track count and generation,
-and what the broadcast is playing: `title`, `path`, `elapsed_ms`, `duration_ms`. The page polls
-it every 5 s and maps the two times to `elapsed`/`duration` for the view. It is `no-store`, and
-it answers only on its own path: `/api/statuses` is a 404.
-
-**S2.** Card in → **Player view**. Card out → **Prepare view**. The view is chosen by the Card
-state at load.
-
-**S3.** A change of Card state switches the view only when the queue is idle. Mid-analysis the
-page stays and shows a banner offering the switch. A card that comes back does not throw away a
-running analysis.
-
-**S4.** The Player view is TBD; until it exists it is a placeholder that says the card is in and
-names what is playing, with a link to the stream. The link is absolute and points at port 80,
-because the stream is plain HTTP on a different origin from the page.
+**P5.** The page is **dense**: it is a tool worked in, not a page read once. Controls take
+`size="sm"`, body text is `text-sm`, meta is `text-xs`, and a Process row is about 32 px tall.
 
 ---
 
-## 5. What this does not change
+## 4. The four areas
 
-- The cassette on the panel, the Snapshot flow, the MCP tools and `/api/library`.
-- The global premise: the device still serves no Track. The page it serves is not a Track, and
-  the card still leaves only as the live stream.
+The shell is `c-sidebar-1` — the ReUI example — installed from the registry and adapted, not
+rebuilt: `SidebarProvider`, an inset, a header with the trigger and a breadcrumb, and the
+template's own collapse and mobile `Sheet` behaviour. What changes is data and destination, never
+the structure:
+
+- **Header.** The workspace switcher becomes the device: the name, whether a card is in, and a
+  menu of device actions (open the stream, open `/library`, copy the MCP endpoint, rescan).
+- **Groups.** Card, Playlists, Media, Player, each a `SidebarGroup` with count badges the
+  template already supports. The template's "Projects" group and account block are removed: there
+  are no projects and no accounts.
+- **Footer.** Settings (`#/settings`) and the licence line that used to sit under every page.
+
+**The card state chooses the first area, once.** A cold load with a card in the player opens
+`#/player`; with no card, `#/process`. After that the sidebar is the user's. The S3 banner is
+gone; what it protected is structural — **the Process area stays mounted while another route is
+shown**, so navigating can never destroy a running Queue nor stop a worker. Every other area
+mounts on demand.
+
+### 4.1 Card — Process
+
+The Queue, measured, with an explicit `Send`.
+
+- **Header:** title, the run's state (`14 of 32 analysed`), and the actions — Send to player
+  (primary), Save to card (only when a writable handle exists), Download `.db`, Download JSON,
+  Clear (asked in place, as today).
+- **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
+  page: it stays at the top while the rows scroll.
+- **Rows:** one line each, ~32 px — name, BPM, key, a mood mark, and the status word. A row that
+  is working shows its stage; a row that failed shows the failure and a Retry. Clicking a row
+  opens the full result **in place** (the existing `ResultCard`), one open at a time. The old
+  "Compact rows" switch is gone: minimal is the only row, and detail is a drill-in.
+- **States:** empty (no Queue: an `Empty` with one action, "Scan a card"), loading (rows appear
+  as they are found; `Skeleton` only for the manifest), error (models missing or a weight
+  refused, inline, with what to do).
+- **Device work:** it builds `xtape.db` — rows from the Queue, lists from the Playlists Drafts —
+  keeps it as the **last image**, and sends it.
+
+### 4.2 Card — Scan
+
+Two acts, named apart because they happen on different machines.
+
+- **Read a card here:** the drop zone and the folder picker (`DropZone`), reporting what was
+  found and how much was skipped, handing the files to Process. Read-only: a dropped folder never
+  becomes writable, which is why Send exists.
+- **Player's library:** the card in the player, its track count and Library generation, whether a
+  Snapshot covers it, and **Rescan** (`POST /api/rescan`) with the device's answer. Disabled, with
+  a reason, when the device is unreachable.
+
+### 4.3 Playlists
+
+- `#/playlists` lists what the device holds (from `GET /api/playlists`, with the selected one
+  marked) and what this browser has not sent yet (Drafts). Creating one is a name, and a Send
+  later.
+- `#/playlists/:id` is the editor: rows in order, drag to reorder, a "Sort by" menu that applies
+  a rule **once** — BPM rising, Camelot wheel, energy arc, artist/album, name — and an add
+  affordance that opens Media's tracks. Removing a row is a row action; nothing here is
+  destructive enough to need a dialog.
+- `#/playlists/ask` is **Ask**: a sentence, an **Intent** (the `library_search` filters the model
+  produced), shown and editable, and then a search — run against the device's own MCP endpoint —
+  whose rows become a new Draft. With no Provider configured, the filter fields stand alone. The
+  model never sees a track (ADR 0053).
+- Rows come from the device: a Draft's rows are paths and Track fingerprints, resolved against
+  the Library for names and measurements, against this browser's cache for covers. A row the
+  Library no longer has is shown as missing and skipped by the broadcast, not deleted here.
+- **Sending** is one act: rebuild the image (patching the **last image** when this browser has
+  one and the card is elsewhere), post it, and say plainly that the player restarts. The device's
+  copy is always the last thing sent.
+
+### 4.4 Media
+
+- `#/media` lists albums and artists from the device's Snapshot rows (`library_search` paged, so
+  names are complete exactly as far as **Coverage** is). Tracks with no row are grouped under
+  **Not measured** and offer Process. Covers come from this browser's cache; a track measured
+  elsewhere shows a placeholder tile — ordinary, not an error.
+- One album or artist opens its tracks with BPM, key and energy, and a way to add them to a
+  Draft.
+- A track offers **Look up on YouTube**: an Invidious search seeded with artist and title and
+  editable, 3–5 thumbnail results, each opening `#/media/video/:id` — the embed taking the
+  viewport, with the player's own fullscreen. Nothing is downloaded, nothing is embedded in a
+  list, and no Video can become a Playlist row.
+- **States:** empty (no Snapshot: "measure the card once"), loading (skeleton tiles), error
+  (device unreachable → cached names and covers, with a note; Invidious unreachable → the
+  Instance can be changed from here).
+
+### 4.5 Player
+
+- The cover, the Track's name, artist and album (joined from the Snapshot row and this browser's
+  cache), its path, an elapsed/duration bar from `/api/status`, and the device's facts: card,
+  tracks, Library generation, Snapshot coverage and when it was built.
+- **No transport.** A live stream cannot pause for one listener, and the only HTTP verb is
+  `POST /api/play {path}`; offering next/previous here would promise what the device does not have
+  outside an opt-in MCP build.
+- **States:** device unreachable (the last thing seen, clearly marked, with the stream link),
+  nothing playing, no cover, no Snapshot.
+
+### 4.6 Settings
+
+`#/settings`, reachable from the sidebar footer: the **Provider** (base URL, model, key, and a
+Test that proves the model returns a parseable Intent) and the Invidious **Instance**. Stored in
+`localStorage`, never sent to the device, lost with site data. The key is never rendered after it
+is saved, only indicated as set.
+
+---
+
+## 5. What the page reads, and from where
+
+| Fact | Source | Absent means |
+|---|---|---|
+| Card state, tracks, generation, Playing | `GET /api/status` | no device: the last answer, marked unreachable |
+| The Library's tree | `library_list` over `/mcp` | no device: Media says so |
+| Titles, artists, albums, measurements | `library_search`, `library_track` over `/mcp` | no Snapshot: "not measured" |
+| Playlists, the selection | `GET /api/playlists` | no Snapshot: none, and a Draft is still authorable |
+| Covers | this browser's `xtape-media` store | placeholder tile, never an error |
+| Videos | the Invidious **Instance** | a note and the setting |
+| A sentence's filters | the **Provider** | the filter form alone |
+
+`/api/library` is not read by the page: it carries paths and sizes and no tags, so the MCP rows
+are the only source of names.
+
+---
+
+## 6. What this does not change
+
+- The cassette on the panel, `/stream`, `/library`, the Snapshot flow and the existing MCP tools.
+- The global premise: the device still serves no Track and accepts none. A page is not a Track,
+  and the card still leaves only as the live stream.
 - The host build's composition: it runs the same services, on the hand-written backend.
+- The panel's Menu still browses the library tree; nothing on the cassette screen names the
+  selected Playlist (ADR 0051).
 
 ---
 
-## 6. Failure modes
+## 7. Failure modes
 
 | Condition | Behaviour |
 |---|---|
 | The firmware was built without a Shell | `/` answers `503` naming `/library`; every other route is unchanged |
-| The Shell directory exists but has no `index.html` | `/` answers `503` — a page that was packed and is not there is a device fault, not a typo |
 | An unregistered `/api/…` path | `404`, never the page |
-| An upload that is not a snapshot | `400` with the reader's reason; the partition is untouched |
-| An upload with the wrong content type | `415`: a form or another origin cannot reach the write path |
+| A hash route the shell does not know | The shell's own not-found view, with the areas listed |
+| An upload that is not a snapshot, or is v1/v2-invalid | The reader's reason, `400`, partition untouched |
 | An upload larger than the route allows | `413` before the body is read |
-| An upload when the build has no snapshot partition | `503` |
+| A v2 image on a firmware that knows only v1 | Refused as an unknown version; the running snapshot is untouched |
 | The device restarts after an upload | The reply is written first; the reader re-opens the new image at boot |
-| CDN unreachable, cache cold | The Prepare view says the analyser cannot start without a first download that needs internet |
-| CDN unreachable, cache warm | The app runs from IndexedDB (there is no service worker on plain HTTP) |
-| A model's hash does not match | It is refused, named in the log and on the page, and the analysis does not start |
-| Card pulled mid-analysis | The queue's current file fails; the page keeps the view and says why |
-| Device unreachable | The page still opens (it was served by the device, so this means the device went away); the Prepare view keeps what it has and there is no error banner |
-
----
-
-## 7. Build and flash
-
-**B1.** `cd web && npm run build:shell`, then `idf.py build flash` — `build` writes `dist/` for
-local development, and `build:shell` writes the `dist-shell/` that is packed. A shipping build
-adds `-DXTAPE_REQUIRE_SHELL=1`, which fails the configure when the Shell is missing or empty;
-without it the firmware builds and `/` answers `503`.
-
-**B2.** Nothing to install and no certificate to ship: see ADR 0049. `tls/` and
-`tools/make-cert.sh` stay in the tree, unused, for a device that serves TLS again.
+| A selected Playlist disappears from a new image | Falls back to the tree's order, reported in status |
+| A Playlist row's file is gone or resized | Skipped at playback; shown as missing in the editor |
+| CDN unreachable, cache cold | Process says the analyser cannot start without a first download |
+| A model's hash does not match | Refused, named in the log and on the page, and the analysis does not start |
+| Card pulled mid-analysis | The queue's current file fails; the page keeps the route and says why |
+| Device unreachable | Player and Media keep what they had and mark it stale; Process keeps its Queue; no error banner |
+| The Provider rejects the key | The Intent is empty, the form stands alone, and the failure names the provider |
+| The Invidious Instance is down | The search says so and points at Settings |
 
 ---
 
@@ -163,21 +304,25 @@ without it the firmware builds and `/` answers `503`.
 |---|---|---|---|
 | T1 | `/` serves the app, `/library` serves the index, unknown paths 404 | host | **proven** — `host/tests/front_door_tests.py` |
 | T2 | A valid image posted to `/api/snapshot` lands byte for byte and is served after a restart | host | **proven** — `host/tests/upload_tests.py` |
-| T3 | A corrupt image, an empty one, a JSON body and an oversized one are each refused, with the partition untouched | host | **proven** — the same file |
-| T4 | The same upload over the board's own listener | board | **proven by hand**: `POST /api/snapshot` → 200, and `library_stats` reports `snapshot.state=ok, rows=1` after the restart |
-| T5 | `/stream` and the app share port 80, and nothing listens on 443 | board | **proven by hand**: `/` 200, `/stream` 200, `https://` refuses the connection |
-| T6 | `/api/status` reports the card state within one poll of a removal and a reinsertion | board | **not proven** — the card has not been through a removal/reinsertion cycle since the front door landed |
-| T7 | A cold cache loads the weights once; a warm cache starts the analyser with the network off | browser | **not proven**: manual Chrome smoke tests passed before the HTTP move, nothing automated |
-| T8 | A tampered model is refused, by hash | host | **proven at the hash level**, and the JS SHA-256 is pinned to the standard vectors; no test yet that the loader refuses a bad body |
+| T3 | A corrupt, empty, JSON or oversized image is refused, partition untouched | host | **proven** — the same file |
+| T4 | The same upload over the board's own listener | board | **proven by hand** |
+| T5 | `/stream` and the app share port 80, and nothing listens on 443 | board | **proven by hand** |
+| T6 | `/api/status` reports the card state within one poll of a removal and a reinsertion | board | **not proven** |
+| T7 | A cold cache loads the weights once; a warm cache starts with the network off | browser | **not proven** |
+| T8 | A tampered model is refused, by hash | host | **proven at the hash level** |
+| T9 | A v2 image with lists is accepted; one with a list row out of bounds, unsorted ids or a bad CRC is refused | host | **to build** |
+| T10 | `select` walks the list, wraps at the end, skips a row whose size changed, and survives a restart | host + board | **to build** |
+| T11 | A v1 image still applies on a v2 reader | host | **to build** |
+| T12 | Each hash route renders on a reload, and Process keeps its Queue across a navigation | browser | **to build** |
+
+---
 
 ## 9. Open measurements
 
-1. The upload's write time on the board, and how long the PSRAM cache is off while the
-   snapshot partition is erased and written.
-2. First-load time of the 41 MB of weights over the LAN, and how much the IndexedDB cache
-   saves on the second load.
-3. SPIFFS mount time and the read cost of the 816 KiB shell.
-4. The JS SHA-256's cost against `crypto.subtle` on a real weights download — it is the one
-   capability the move to plain HTTP gives up, and it is on the critical path once.
-5. Whether a browser shows anything worse than the "Not secure" chip for a page that posts a
-   binary body to its own origin (no interstitial is expected; unmeasured).
+1. The upload's write time on the board with a list section, and how long the PSRAM cache is off
+   while the partition is erased and written.
+2. The Shell's packed size after the sidebar, and whether the 1.25 MB partition still holds it
+   with room for the Card area's code.
+3. `library_search` paging across a 5,000-track library: how many round trips Media needs for the
+   album index, and whether a bulk read is worth a new MCP tool.
+4. The boot cost of resolving a 500-row Playlist against the library by path.
