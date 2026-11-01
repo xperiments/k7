@@ -47,13 +47,50 @@ export interface McpSearch {
   truncated: boolean;
 }
 
+export interface McpCoverage {
+  tracks: number;
+  analysed: number;
+  percent: number;
+}
+
+/** The Snapshot block of `library_stats`. `coverage` and `tagged` live *inside* it, and
+ * the block is absent when the device has no library at all (`{"available":false}`) —
+ * the shape is docs/specs/snapshot.md M3, and the integration suite asserts it. */
+export interface McpSnapshot {
+  state: string;
+  format_version?: number;
+  generation?: number;
+  rows?: number;
+  analyser?: number;
+  model_set?: string;
+  reason?: string;
+  coverage?: McpCoverage;
+  tagged?: { bpm: number; key: number; mood: number; energy: number };
+}
+
 export interface McpStats {
   available: boolean;
+  /** The Library's own state: `ok`, `no_card`, ... Not the Snapshot's. */
   state: string;
   tracks: number;
   directories: number;
   generation: number;
-  coverage: { tracks: number; analysed: number; percent: number };
+  snapshot?: McpSnapshot;
+}
+
+/** The coverage block, or null when this firmware does not report one. One guarded read,
+ * because a region that assumes a field it did not receive takes the whole page with it. */
+export function statsCoverage(stats: McpStats | null): McpCoverage | null {
+  const coverage = stats?.snapshot?.coverage;
+  if (!coverage) return null;
+  if (
+    typeof coverage.tracks !== 'number' ||
+    typeof coverage.analysed !== 'number' ||
+    typeof coverage.percent !== 'number'
+  ) {
+    return null;
+  }
+  return coverage;
 }
 
 export class McpError extends Error {

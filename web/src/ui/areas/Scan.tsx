@@ -3,7 +3,7 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/r
 import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { libraryStats, type McpStats } from '../../device/mcp';
+import { libraryStats, statsCoverage, type McpStats } from '../../device/mcp';
 import { refreshDevice, useDeviceStatus } from '../../device/useDeviceStatus';
 import { DropZone } from '../DropZone';
 import { plural } from '../format';
@@ -32,6 +32,7 @@ export function ScanArea() {
   const { status, reachable } = useDeviceStatus();
   const [rescan, setRescan] = useState<Rescan>({ state: 'idle' });
   const [stats, setStats] = useState<McpStats | null>(null);
+  const coverage = statsCoverage(stats);
   const [statsError, setStatsError] = useState<string | null>(null);
 
   /* Coverage is the device's own answer about its Snapshot (library_stats), so it is read
@@ -182,11 +183,13 @@ export function ScanArea() {
               )}
               {stats && (
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  {stats.available
-                    ? `Snapshot covers ${stats.coverage.analysed} of ${stats.tracks} (${stats.coverage.percent}%)`
-                    : stats.state === 'no_update'
-                      ? 'no Snapshot on the player yet'
-                      : `Snapshot unavailable (${stats.state})`}
+                  {!stats.available
+                    ? 'the player has no library yet'
+                    : coverage
+                      ? `Snapshot covers ${coverage.analysed} of ${stats.tracks} (${coverage.percent}%)`
+                      : stats.snapshot?.state === 'no_update'
+                        ? 'no Snapshot on the player yet'
+                        : `Snapshot ${stats.snapshot?.state ?? 'unavailable'}`}
                 </span>
               )}
               {!stats && reachable && !statsError && (

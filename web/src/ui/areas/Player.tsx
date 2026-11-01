@@ -5,7 +5,7 @@ import { Badge } from '@/components/reui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { libraryStats, trackAt, type McpStats, type McpTrack } from '../../device/mcp';
+import { libraryStats, statsCoverage, trackAt, type McpStats, type McpTrack } from '../../device/mcp';
 import type { DeviceStatus } from '../../device/status';
 import { useDeviceStatus } from '../../device/useDeviceStatus';
 import { getMedia, type CachedMedia } from '../../storage/media';
@@ -28,26 +28,11 @@ import { Cover } from './Media';
  *   coverage     `library_stats`, which is also the only place a Snapshot's age is known
  */
 
-interface StatusExtras {
-  order?: unknown;
-  playlist?: unknown;
-}
-
-interface StatsWithSnapshot extends McpStats {
-  snapshot?: { state?: string; generation?: number; rows?: number };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 /** The order the broadcast walks, as the device reports it; the page never assumes a list. */
 function orderLabel(status: DeviceStatus | null): string {
   if (!status) return '—';
-  const extras = status as DeviceStatus & StatusExtras;
-  if (extras.order === 'list' && isRecord(extras.playlist)) {
-    const name = extras.playlist.name;
-    if (typeof name === 'string' && name.trim()) return `the playlist “${name.trim()}”`;
+  if (status.order === 'list' && status.playlist?.name.trim()) {
+    return `the playlist “${status.playlist.name.trim()}”`;
   }
   return 'the library';
 }
@@ -167,7 +152,8 @@ export function PlayerArea() {
   const duration = playing?.duration ?? 0;
   const percent = duration > 0 ? Math.min(100, Math.max(0, (elapsed / duration) * 100)) : 0;
 
-  const snapshot = (stats as StatsWithSnapshot | null)?.snapshot ?? null;
+  const snapshot = stats?.snapshot ?? null;
+  const coverage = statsCoverage(stats);
   const builtAt =
     snapshot && typeof snapshot.generation === 'number' && snapshot.generation > 0
       ? new Date(snapshot.generation * 1000).toLocaleString()
@@ -286,10 +272,9 @@ export function PlayerArea() {
                 'the device has no library'
               ) : !snapshot || snapshot.state !== 'ok' ? (
                 `no Snapshot (${snapshotState(snapshot?.state ?? 'unknown')})`
-              ) : stats.coverage ? (
+              ) : coverage ? (
                 <span className="tabular-nums">
-                  {stats.coverage.analysed} of {stats.coverage.tracks} analysed (
-                  {stats.coverage.percent}%)
+                  {coverage.analysed} of {coverage.tracks} analysed ({coverage.percent}%)
                 </span>
               ) : (
                 '—'
