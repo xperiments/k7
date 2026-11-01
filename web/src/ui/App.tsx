@@ -1,82 +1,74 @@
-import { useEffect, useRef, useState } from 'react';
-import { useDeviceStatus } from '../device/useDeviceStatus';
-import { PlayerView } from './PlayerView';
-import { PrepareView } from './PrepareView';
-import { initialView, selectView, type View } from './view';
+import { useEffect, useRef } from 'react';
+import { loadDrafts } from '../playlists/drafts';
+import { deviceSnapshot, useDeviceStatus } from '../device/useDeviceStatus';
+import { AlbumArea } from './areas/Album';
+import { ArtistArea } from './areas/Artist';
+import { AskArea } from './areas/Ask';
+import { MediaArea } from './areas/Media';
+import { PlayerArea } from './areas/Player';
+import { PlaylistEditor } from './areas/PlaylistEditor';
+import { PlaylistsArea } from './areas/Playlists';
+import { ProcessArea } from './areas/Process';
+import { ScanArea } from './areas/Scan';
+import { SettingsArea } from './areas/Settings';
+import { VideoArea } from './areas/Video';
+import { navigate, useRoute } from './router';
+import { NotFound, Shell } from './Shell';
+import { AnalysisProvider } from './state/analysis';
 
 /**
- * The shell of the page: it holds the two views and the rule that moves between them.
+ * The front door: one shell, four areas, and the routes between them (ADR 0052).
  *
- * The Prepare view stays mounted while the Player view is shown. A card that arrives in
- * the middle of an analysis must not throw the queue away (S3), and hiding the component
- * keeps its worker and its queue exactly where they were.
+ * The Card state chooses the first area and nothing after that: with a card in the
+ * player the page opens on Player, without one on Process. Every later change is the
+ * user's -- what S3 protected is structural instead, because the Process area stays
+ * mounted while another route is shown, so navigating never destroys a running Queue.
  */
 export function App() {
-  const { status, reachable } = useDeviceStatus();
-  const [view, setView] = useState<View>('prepare');
-  const [queueBusy, setQueueBusy] = useState(false);
-  const [switchOffered, setSwitchOffered] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-  const initialized = useRef(false);
+  const route = useRoute();
+  const { status } = useDeviceStatus();
+  const landed = useRef(false);
 
-  const desired = status ? initialView(status.card) : null;
-
-  // S2: the first answer from the device chooses the view, once. If the device only
-  // appears after the user has already started a queue, that first answer is a change
-  // like any other and S3 applies to it.
   useEffect(() => {
-    if (!status || initialized.current) return;
-    initialized.current = true;
-    const selection = selectView(view, status.card, !queueBusy);
-    setView(selection.view);
-    setSwitchOffered(selection.switchOffered);
-  }, [status, queueBusy, view]);
+    void loadDrafts();
+  }, []);
 
-  // S3: every later change switches only while the queue is idle; otherwise it is offered.
   useEffect(() => {
-    if (!status || !initialized.current) return;
-    const selection = selectView(view, status.card, !queueBusy);
-    if (selection.view !== view) setView(selection.view);
-    setSwitchOffered(selection.switchOffered && !dismissed);
-  }, [status, queueBusy, view, dismissed]);
-
-  // A change back to the view already on screen is a fresh state, not a dismissed offer.
-  useEffect(() => {
-    if (desired !== null && desired === view) setDismissed(false);
-  }, [desired, view]);
-
-  const switchNow = () => {
-    if (!status) return;
-    setView(initialView(status.card));
-    setSwitchOffered(false);
-  };
+    if (landed.current || !status) return;
+    // Nothing chosen yet: the address bar is empty, and this is the only moment the card
+    // state picks an area.
+    if (window.location.hash === '') {
+      landed.current = true;
+      navigate(status.card ? '#/player' : '#/process', { replace: true });
+    }
+  }, [status]);
 
   return (
-    <div className="views">
-      {switchOffered && status && (
-        <div className="app switch-app">
-          <div className="banner">
-            <span className="small">
-              {status.card ? 'The card is in the player.' : 'The card is out of the player.'}{' '}
-              The queue is still running.
-            </span>
-            <div className="actions">
-              <button type="button" className="primary" onClick={switchNow}>
-                Switch now
-              </button>
-              <button type="button" className="ghost" onClick={() => setDismissed(true)}>
-                Not now
-              </button>
-            </div>
-          </div>
+    <AnalysisProvider>
+      <Shell route={route}>
+        {/* Mounted always, hidden when it is not the route: a queue in flight outlives a
+            visit to Media. */}
+        <div hidden={route.name !== 'process'} className="min-h-0">
+          <ProcessArea />
         </div>
-      )}
 
-      <div className="view" hidden={view !== 'prepare'}>
-        <PrepareView onBusyChange={setQueueBusy} />
-      </div>
-
-      {view === 'player' && <PlayerView status={status} reachable={reachable} />}
-    </div>
+        {route.name === 'scan' && <ScanArea />}
+        {route.name === 'playlists' && <PlaylistsArea />}
+        {route.name === 'playlist' && <PlaylistEditor id={route.id} />}
+        {route.name === 'ask' && <AskArea />}
+        {route.name === 'media' && <MediaArea />}
+        {route.name === 'album' && <AlbumArea artist={route.artist} album={route.album} />}
+        {route.name === 'artist' && <ArtistArea artist={route.artist} />}
+        {route.name === 'video' && <VideoArea id={route.id} />}
+        {route.name === 'player' && <PlayerArea />}
+        {route.name === 'settings' && <SettingsArea />}
+        {route.name === 'not-found' && <NotFound path={route.path} />}
+      </Shell>
+    </AnalysisProvider>
   );
+}
+
+/** For the shell's own use: is this device answering right now? */
+export function deviceIsReachable(): boolean {
+  return deviceSnapshot().reachable;
 }

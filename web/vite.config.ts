@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { basename, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
@@ -18,10 +20,67 @@ const isolationHeaders = {
 };
 
 /**
+ * Extensions worth compressing: all of them are text, and text shrinks about three to
+ * one. Anything already compressed (the PNG icons) is left alone, because gzip would
+ * only add bytes.
+ */
+const COMPRESSIBLE = new Set([
+  '.css',
+  '.html',
+  '.js',
+  '.json',
+  '.mjs',
+  '.pem',
+  '.svg',
+  '.txt',
+  '.wasm',
+  '.webmanifest',
+]);
+
+async function collectFiles(dir: string): Promise<string[]> {
+  const found: string[] = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const path = resolve(dir, entry.name);
+    if (entry.isDirectory()) found.push(...(await collectFiles(path)));
+    else found.push(path);
+  }
+  return found;
+}
+
+/**
+ * Pack the shell compressed: `<file>.gz` written, the original dropped.
+ *
+ * The partition is flash, so the bytes in `dist-shell` are the bytes on the board, and
+ * the app is 928 KiB of mostly JavaScript. The device never inflates anything - it sends
+ * the stored bytes with `Content-Encoding: gzip` (`front_door.c`) and the browser does
+ * the work. `index.html` stays plain: the firmware's shell check looks for that exact
+ * file, and it is under a kilobyte.
+ */
+async function precompress(dir: string): Promise<{ raw: number; packed: number }> {
+  let raw = 0;
+  let packed = 0;
+  for (const file of await collectFiles(dir)) {
+    if (basename(file) === 'index.html') continue;
+    if (!COMPRESSIBLE.has(extname(file))) continue;
+    const bytes = await readFile(file);
+    const gz = gzipSync(bytes, { level: 9 });
+    // Incompressible content keeps its original name: it would be sent plain either way,
+    // and two copies of it in flash would be worse than one.
+    if (gz.length >= bytes.length) continue;
+    await writeFile(`${file}.gz`, gz);
+    await unlink(file);
+    raw += bytes.length;
+    packed += gz.length;
+  }
+  return { raw, packed };
+}
+
+/**
  * The device build. `npm run build` stays the local build with `public/models` and
- * `public/ort` beside it; `npm run build:shell` is the shell that fits the 1 MB partition.
- * The public directory is not copied wholesale for the shell, because 38 MB of weights and
- * a 14 MB ORT binary must not be mistaken for app code.
+ * `public/ort` beside it; `npm run build:shell` is the shell packed into the frontdoor
+ * partition, with its text files pre-compressed. The public directory is not copied
+ * wholesale for the shell, because 38 MB of weights and a 14 MB ORT binary must not be
+ * mistaken for app code.
  */
 function shellOutputs(shell: boolean): Plugin {
   let emitted: string[] = [];
@@ -96,6 +155,14 @@ function shellOutputs(shell: boolean): Plugin {
         resolve(outDir, 'shell.json'),
         `${JSON.stringify({ version: packageVersion, manifestHash, assets }, null, 2)}\n`,
       );
+
+      if (shell) {
+        const { raw, packed } = await precompress(outDir);
+        this.info(
+          `shell: ${raw} -> ${packed} bytes on flash (gzip, ` +
+            `${Math.round((1 - packed / raw) * 100)}% smaller)`,
+        );
+      }
     },
   };
 }
@@ -104,9 +171,12 @@ export default defineConfig(({ mode }) => {
   const shell = mode === 'shell';
 
   return {
-    plugins: [react(), shellOutputs(shell)],
+    plugins: [react(), tailwindcss(), shellOutputs(shell)],
     publicDir: shell ? false : 'public',
-    resolve: { conditions: ['onnxruntime-web-use-extern-wasm'] },
+    resolve: {
+      conditions: ['onnxruntime-web-use-extern-wasm'],
+      alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    },
     define: {
       __APP_VERSION__: JSON.stringify(packageVersion),
       __WEIGHTS_MODE__: JSON.stringify(shell ? 'cdn' : 'local'),
@@ -119,7 +189,7 @@ export default defineConfig(({ mode }) => {
     worker: { format: 'es' },
     test: {
       environment: 'node',
-      include: ['tests/**/*.test.ts'],
+      include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
       testTimeout: 120_000,
     },
   };

@@ -3,7 +3,7 @@
 A browser-only webapp that measures **tempo, key, mood and energy** for MP3 and FLAC files.
 Files never leave the machine: decode, analysis, caching and export all happen in the tab.
 
-![The analyser showing tempo, key, energy and mood bars for a test track](docs/screenshot.png)
+![The analyser after a run: two tracks read from their tags and one measured, with tempo, key, energy and mood bars](docs/screenshot.png)
 
 This is the implementation of
 [`docs/research/bpm-key-mood-energy-webapp.md`](../docs/research/bpm-key-mood-energy-webapp.md).
@@ -26,7 +26,7 @@ This is the implementation of
   energy (DEAM is skipped). Valence/arousal are only present when DEAM ran, so a tagged energy
   with a measured mood shows the bars without the V/A plot.
 
-![A fully tagged file, a mood-tagged file, and an energy-tagged file](docs/tagged.png)
+![A file whose tags carried tempo and key, and one whose tags also carried mood and energy](docs/tagged.png)
 
 Results are read-only and are cached in IndexedDB by content hash, analyzer version and model
 set. `Download JSON` exports the analyses with provenance.
@@ -98,10 +98,13 @@ multiple threads; without those headers it falls back to one thread.
 
 ### The device shell and the weights
 
-`npm run build:shell` produces `dist-shell/`, the files packed into the device's 1 MB
+`npm run build:shell` produces `dist-shell/`, the files packed into the device's 1.25 MB
 partition. It contains our code only: `index.html`, the app bundle, the worker, the ORT
 loader glue, the TagLib adapter, `sw.js`, the manifest, the icons and `weights.lock.json`.
-It contains no models and no `.wasm` binary — that build is under 1 MB.
+It contains no models and no `.wasm` binary. Flash is the constraint there, not disk, so
+the build packs every text file as `<name>.gz` and drops the original: the board streams
+those bytes with `Content-Encoding: gzip` (nothing decompresses on the device) and the
+SPIFFS image comes to ~350 KiB.
 
 Everything else is a **weight**, loaded through `src/weights/`:
 
@@ -119,6 +122,32 @@ Everything else is a **weight**, loaded through `src/weights/`:
 `npm run dev` and `npm run build` use the same code with `WEIGHTS_MODE=local`: the weights
 come from `public/models/`, `public/ort/` and `public/weights/`, so development needs no
 network. A local build that has not run `npm run models` says so instead of analysing.
+
+## The interface
+
+The page is React 19 on Vite, styled with Tailwind CSS v4 and built from shadcn/ui. The
+component style is `base-nova` (Base UI primitives) and `components.json` points the shadcn
+CLI at the ReUI registry, so components are installed rather than written:
+
+```sh
+npx shadcn@latest add card button progress switch empty spinner   # shadcn/ui
+npx shadcn@latest add @reui/badge @reui/alert                     # ReUI
+```
+
+- `src/index.css` is the only stylesheet: Tailwind, the theme tokens, and nothing else. The
+  palette is the app's own — warm charcoal, an amber accent and a teal "measured" — mapped
+  onto semantic tokens so the components keep their identity. The page is dark only:
+  `index.html` carries `class="dark"`.
+- `src/components/ui/` and `src/components/reui/` are installed code. Do not edit them to
+  restyle; change the tokens in `src/index.css`, or the `variant` and `size` a call site
+  passes.
+- `src/ui/` is ours: the two views and their pieces. Nothing in there is styled from scratch
+  — a panel is a `Card`, a state is a `Badge` variant, a meter is `Progress`, the intake is
+  an `Empty` with one action.
+- The Shell is packed into a 1.25 MB flash partition (`partitions.csv`); its SPIFFS image is
+  ~350 KiB because the text ships gzip-compressed. Page code still costs flash, not disk: a
+  single `AlertDialog` is ~56 KiB of JavaScript, which is why the destructive confirm is
+  asked in place. Weigh a new dependency as a budget decision.
 
 ## Accuracy caveats
 

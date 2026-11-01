@@ -7,10 +7,20 @@ import type { Analysis, MoodTag } from './analysis';
  */
 const MUSIC_DIRECTORY = 'music';
 
-const HEADER_SIZE = 64;
+const HEADER_SIZE_V1 = 64;
+const HEADER_SIZE_V2 = 80;
 const ROW_SIZE = 32;
-const FORMAT_VERSION = 1;
+const FORMAT_VERSION_V1 = 1;
+const FORMAT_VERSION_V2 = 2;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+/** Version 2's list record, list row, and the caps the format puts on them. */
+const LIST_SIZE = 32;
+const LIST_ROW_SIZE = 4;
+const MAX_LISTS = 64;
+const MAX_LIST_ROWS = 8192;
+/** A name is written NUL-terminated, so its UTF-8 bytes must stay under 64. */
+const MAX_LIST_NAME_BYTES = 63;
 
 const UNKNOWN_PERCENT = 0xff;
 
@@ -51,6 +61,18 @@ export function fnv1a64(bytes: Uint8Array): bigint {
   return hash;
 }
 
+/**
+ * A Playlist's initial id, as §10 describes it: FNV-1a 64 over the name and the
+ * creation time, newline-joined. Compute it **once**, when the list is made, and
+ * keep it: renaming must not move it, because it is what `select` and the device's
+ * NVS key carry. Zero is remapped to one, since the format refuses an id of zero.
+ */
+export function playlistId(name: string, createdAtSeconds: number): bigint {
+  const created = generationValue(createdAtSeconds);
+  const id = fnv1a64(new TextEncoder().encode(`${name}\n${created}`));
+  return id === 0n ? 1n : id;
+}
+
 export interface SnapshotTrack {
   /** Browser path under the card root, e.g. `MYCARD/music/Artist/track.mp3`. */
   path: string;
@@ -69,6 +91,38 @@ export interface SnapshotInput {
   analyserVersion: number;
   appSchema: number;
   modelSet: bigint;
+}
+
+/**
+ * A **Playlist** to carry in the image (format §10, list record).
+ *
+ * `id` is opaque, 64-bit and non-zero; it is what `select` and the device's NVS
+ * key carry, so renaming a list must not change it. `createdAt` is Unix seconds
+ * and is informational.
+ *
+ * `rows` are **Snapshot paths**, in the order the list plays them: each is a
+ * Track's location below the card's `music` directory (`Artist/Album/track.mp3`),
+ * never the browser path it was found at. A row names a Track by that path alone —
+ * there is no fingerprint and no size — so the file the Library holds at that path
+ * is what plays, and a path the Library no longer has is skipped.
+ */
+export interface SnapshotPlaylist {
+  id: bigint | string;
+  /** NUL-terminated in the pool, so its UTF-8 encoding must be under 64 bytes. */
+  name: string;
+  createdAt: number;
+  rows: readonly string[];
+}
+
+/** A list after validation, sorting and pool encoding: what the writer emits. */
+interface PreparedList {
+  id: bigint;
+  createdAt: bigint;
+  /** `name\0path\0path\0...`, UTF-8, Tracks in the list's own order. */
+  strings: Uint8Array;
+  /** Each row's `path_offset`, relative to the start of this list's block. */
+  pathOffsets: number[];
+  rowCount: number;
 }
 
 interface SnapshotRow {
@@ -235,13 +289,150 @@ function toRow(track: SnapshotTrack, encoder: TextEncoder): SnapshotRow {
   };
 }
 
-export function buildSnapshot(input: SnapshotInput): Uint8Array<ArrayBuffer> {
+/** Compare two 64-bit ids without going through `Number`. */
+function compareUint64(left: bigint, right: bigint): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/**
+ * A 64-bit unsigned value, from a `bigint` or from the textual forms a caller may
+ * hold it in: `0x`-prefixed hex, decimal, or up to sixteen hex digits that contain
+ * a letter (so a bare string of digits is always decimal).
+ */
+function parseUint64(value: bigint | string, field: string): bigint {
+  let parsed: bigint;
+  if (typeof value === 'bigint') {
+    parsed = value;
+  } else {
+    const text = value.trim();
+    if (/^0[xX][0-9a-fA-F]{1,16}$/.test(text)) parsed = BigInt(text);
+    else if (/^[0-9]{1,20}$/.test(text)) parsed = BigInt(text);
+    else if (/^[0-9a-fA-F]{1,16}$/.test(text)) parsed = BigInt(`0x${text}`);
+    else throw new Error(`${field} "${value}" is not a 64-bit unsigned integer`);
+  }
+  if (parsed < 0n || parsed > UINT64_MASK) {
+    throw new Error(`${field} ${parsed} is outside the 64-bit unsigned range`);
+  }
+  return parsed;
+}
+
+/**
+ * A Playlist row names a Track the Library has, so its path must be one the device
+ * can look up: relative to the Music directory, `/`-separated, no empty, `.` or
+ * `..` segment, and no backslash (which `library_find` refuses).
+ */
+function assertListPath(path: string, where: string): void {
+  if (path.length === 0) throw new Error(`${where}: the path is empty`);
+  if (path.includes('\0')) throw new Error(`${where}: the path contains a NUL byte`);
+  if (path.startsWith('/')) {
+    throw new Error(`${where}: "${path}" is absolute; a Playlist row is a path below music/`);
+  }
+  if (path.includes('\\')) {
+    throw new Error(`${where}: "${path}" contains a backslash, which the Library refuses`);
+  }
+  for (const segment of path.split('/')) {
+    if (segment === '' || segment === '.' || segment === '..') {
+      throw new Error(`${where}: "${path}" has an empty, "." or ".." segment`);
+    }
+  }
+}
+
+/** Concatenate already-encoded strings, each followed by its NUL terminator. */
+function joinNulTerminated(parts: readonly Uint8Array[]): Uint8Array {
+  const bytes = new Uint8Array(
+    parts.reduce((length, part) => length + part.length + 1, 0),
+  );
+  let offset = 0;
+  for (const part of parts) {
+    bytes.set(part, offset);
+    // The terminator is the zero the array was allocated with.
+    offset += part.length + 1;
+  }
+  return bytes;
+}
+
+/**
+ * Validate, order and encode the lists. Refusing here rather than writing a
+ * truncated or out-of-order image is the format's rule (§10, §12): the device
+ * checks these invariants and would reject the whole image anyway.
+ */
+function prepareLists(
+  lists: readonly SnapshotPlaylist[],
+  encoder: TextEncoder,
+): PreparedList[] {
+  if (lists.length > MAX_LISTS) {
+    throw new Error(`snapshot has ${lists.length} Playlists; the format allows ${MAX_LISTS}`);
+  }
+
+  const prepared = lists.map((list, listIndex): PreparedList => {
+    const where = `Playlist ${listIndex}${list.name ? ` ("${list.name}")` : ''}`;
+    const id = parseUint64(list.id, `${where}: id`);
+    if (id === 0n) throw new Error(`${where}: an id of zero is not a Playlist`);
+
+    if (list.name.includes('\0')) {
+      throw new Error(`${where}: the name contains a NUL byte`);
+    }
+    const nameBytes = encoder.encode(list.name);
+    if (nameBytes.length > MAX_LIST_NAME_BYTES) {
+      throw new Error(
+        `${where}: the name is ${nameBytes.length} bytes; the format allows ${MAX_LIST_NAME_BYTES}`,
+      );
+    }
+
+    const parts: Uint8Array[] = [nameBytes];
+    const pathOffsets: number[] = [];
+    // The name comes first in the block, so the first path starts after it.
+    let offset = nameBytes.length + 1;
+
+    list.rows.forEach((path, rowIndex) => {
+      assertListPath(path, `${where}, row ${rowIndex}`);
+      const pathBytes = encoder.encode(path);
+      parts.push(pathBytes);
+      pathOffsets.push(offset);
+      offset += pathBytes.length + 1;
+    });
+
+    return {
+      id,
+      createdAt: generationValue(list.createdAt),
+      strings: joinNulTerminated(parts),
+      pathOffsets,
+      rowCount: list.rows.length,
+    };
+  });
+
+  prepared.sort((left, right) => compareUint64(left.id, right.id));
+
+  for (let index = 1; index < prepared.length; index += 1) {
+    if (prepared[index].id === prepared[index - 1].id) {
+      throw new Error(
+        `duplicate Playlist id ${prepared[index].id.toString(16)}: two lists share one id`,
+      );
+    }
+  }
+
+  const listRows = prepared.reduce((count, list) => count + list.rowCount, 0);
+  if (listRows > MAX_LIST_ROWS) {
+    throw new Error(`snapshot has ${listRows} Playlist rows; the format allows ${MAX_LIST_ROWS}`);
+  }
+
+  return prepared;
+}
+
+/**
+ * Builds the image. `lists` is the second argument rather than a field of
+ * `SnapshotInput` so that a caller with no Playlists keeps the old call and the old
+ * bytes: with none, the output is byte-identical version 1 (`header_size` 64, no list
+ * area); with at least one, it is version 2 (`header_size` 80, §2 of the format).
+ */
+export function buildSnapshot(
+  input: SnapshotInput,
+  lists: readonly SnapshotPlaylist[] = [],
+): Uint8Array<ArrayBuffer> {
   const encoder = new TextEncoder();
   const rows = input.tracks.map((track) => toRow(track, encoder));
 
-  rows.sort((left, right) =>
-    left.fingerprint < right.fingerprint ? -1 : left.fingerprint > right.fingerprint ? 1 : 0,
-  );
+  rows.sort((left, right) => compareUint64(left.fingerprint, right.fingerprint));
 
   for (let index = 1; index < rows.length; index += 1) {
     if (rows[index].fingerprint === rows[index - 1].fingerprint) {
@@ -251,22 +442,36 @@ export function buildSnapshot(input: SnapshotInput): Uint8Array<ArrayBuffer> {
     }
   }
 
-  const poolSize = rows.reduce((size, row) => size + row.strings.length, 0);
-  const totalSize = HEADER_SIZE + rows.length * ROW_SIZE + poolSize;
+  const prepared = prepareLists(lists, encoder);
+  const version = prepared.length > 0 ? FORMAT_VERSION_V2 : FORMAT_VERSION_V1;
+  const headerSize = prepared.length > 0 ? HEADER_SIZE_V2 : HEADER_SIZE_V1;
+
+  const rowsPoolSize = rows.reduce((size, row) => size + row.strings.length, 0);
+  const listsPoolSize = prepared.reduce((size, list) => size + list.strings.length, 0);
+  const poolSize = rowsPoolSize + listsPoolSize;
+  const listRowCount = prepared.reduce((count, list) => count + list.rowCount, 0);
+  const totalSize =
+    headerSize +
+    rows.length * ROW_SIZE +
+    poolSize +
+    prepared.length * LIST_SIZE +
+    listRowCount * LIST_ROW_SIZE;
   if (totalSize > MAX_IMAGE_BYTES) {
     throw new Error(`snapshot is ${totalSize} bytes, larger than ${MAX_IMAGE_BYTES}`);
   }
 
   const image = new Uint8Array(totalSize);
   const view = new DataView(image.buffer);
-  const poolStart = HEADER_SIZE + rows.length * ROW_SIZE;
+  const poolStart = headerSize + rows.length * ROW_SIZE;
+  const listsStart = poolStart + poolSize;
+  const listRowsStart = listsStart + prepared.length * LIST_SIZE;
 
   const magic = 'XTAPESNP';
   for (let index = 0; index < magic.length; index += 1) {
     view.setUint8(index, magic.charCodeAt(index));
   }
-  view.setUint16(8, FORMAT_VERSION, true);
-  view.setUint16(10, HEADER_SIZE, true);
+  view.setUint16(8, version, true);
+  view.setUint16(10, headerSize, true);
   view.setUint32(12, totalSize, true);
   view.setUint32(16, rows.length, true);
   view.setUint32(20, ROW_SIZE, true);
@@ -278,10 +483,18 @@ export function buildSnapshot(input: SnapshotInput): Uint8Array<ArrayBuffer> {
   // `reserved` at 56..64 stays zero; the buffer starts zeroed and is never
   // written there.
 
+  if (version === FORMAT_VERSION_V2) {
+    // §3.1: the list counts, then `reserved` at 70..72 and 76..80, both zero.
+    view.setUint16(64, prepared.length, true);
+    view.setUint16(66, LIST_SIZE, true);
+    view.setUint16(68, LIST_ROW_SIZE, true);
+    view.setUint32(72, listRowCount, true);
+  }
+
   let poolOffset = 0;
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index];
-    const offset = HEADER_SIZE + index * ROW_SIZE;
+    const offset = headerSize + index * ROW_SIZE;
 
     view.setBigUint64(offset, row.fingerprint, true);
     view.setUint32(offset + 8, row.size, true);
@@ -301,8 +514,33 @@ export function buildSnapshot(input: SnapshotInput): Uint8Array<ArrayBuffer> {
     poolOffset += row.strings.length;
   }
 
-  // The CRC covers the rows and the pool, never the header that carries it.
-  view.setUint32(36, crc32(image.subarray(HEADER_SIZE, totalSize)), true);
+  // §7: the pool continues with each list's name and its rows' paths, in list order.
+  let listPoolOffset = poolOffset;
+  let listRowStart = 0;
+  for (let index = 0; index < prepared.length; index += 1) {
+    const list = prepared[index];
+    const record = listsStart + index * LIST_SIZE;
+
+    view.setBigUint64(record, list.id, true);
+    view.setUint32(record + 8, listPoolOffset, true);
+    view.setUint32(record + 12, listRowStart, true);
+    view.setUint32(record + 16, list.rowCount, true);
+    view.setBigUint64(record + 20, list.createdAt, true);
+    // `reserved` at 28..32 stays zero.
+
+    image.set(list.strings, poolStart + listPoolOffset);
+
+    for (let rowIndex = 0; rowIndex < list.rowCount; rowIndex += 1) {
+      const at = listRowsStart + (listRowStart + rowIndex) * LIST_ROW_SIZE;
+      view.setUint32(at, listPoolOffset + list.pathOffsets[rowIndex], true);
+    }
+
+    listRowStart += list.rowCount;
+    listPoolOffset += list.strings.length;
+  }
+
+  // The CRC covers everything after the header, never the header that carries it.
+  view.setUint32(36, crc32(image.subarray(headerSize, totalSize)), true);
   return image;
 }
 

@@ -4,6 +4,7 @@ import {
   buildSnapshot,
   modelSetId,
   snapshotPath,
+  type SnapshotPlaylist,
   type SnapshotTrack,
 } from '../domain/snapshot';
 
@@ -44,10 +45,15 @@ function versionNumber(version: string): number {
  * so only Tracks that are inside one can be written: a folder dropped from somewhere else
  * is measured and shown, and simply not part of the card's Library. Titles come from the
  * files' own tags, because the player's text search is only as good as the names it has.
+ *
+ * `lists` are this browser's Playlists (ADR 0051). With none, the image is byte-identical
+ * version 1 — the old format — so a page that has nothing to say about lists does not make
+ * the device refuse an image over a section it did not need.
  */
 export async function buildSnapshotExport(
   items: readonly SnapshotItem[],
   manifest: ModelManifest,
+  lists: readonly SnapshotPlaylist[] = [],
 ): Promise<SnapshotExport> {
   const { parseBlob } = await import('music-metadata');
   const tracks: SnapshotTrack[] = [];
@@ -91,12 +97,15 @@ export async function buildSnapshotExport(
     });
   }
 
-  const bytes = buildSnapshot({
-    tracks,
-    generationSeconds: Math.floor(Date.now() / 1000),
-    analyserVersion: versionNumber(ANALYZER_VERSION),
-    appSchema: ANALYSIS_SCHEMA,
-    modelSet: modelSetId(manifest.models),
-  });
+  const bytes = buildSnapshot(
+    {
+      tracks,
+      generationSeconds: Math.floor(Date.now() / 1000),
+      analyserVersion: versionNumber(ANALYZER_VERSION),
+      appSchema: ANALYSIS_SCHEMA,
+      modelSet: modelSetId(manifest.models),
+    },
+    lists,
+  );
   return { bytes, tracks: tracks.length, skipped };
 }

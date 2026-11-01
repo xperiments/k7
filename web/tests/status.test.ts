@@ -6,6 +6,8 @@ const valid = {
   tracks: 12,
   generation: 3,
   library: 'sha256:abc',
+  order: 'tree',
+  playlist: null,
   playing: {
     title: 'A track',
     path: 'music/Artist/a.mp3',
@@ -21,6 +23,8 @@ const parsed = {
   tracks: 12,
   generation: 3,
   library: 'sha256:abc',
+  order: 'tree',
+  playlist: null,
   playing: {
     title: 'A track',
     path: 'music/Artist/a.mp3',
@@ -49,6 +53,30 @@ describe('the device status contract', () => {
   it('treats an unrecognised playing value as nothing playing', () => {
     expect(parseStatus({ ...valid, playing: 'a string' })?.playing).toBeNull();
     expect(parseStatus({ ...valid, playing: { elapsed_ms: 'soon' } })?.playing).toEqual({});
+  });
+
+  it('reads a selected Playlist, and its absence as the library order', () => {
+    const { order: _order, playlist: _playlist, ...beforeTheFields } = valid;
+    expect(parseStatus(beforeTheFields)?.order).toBe('tree');
+    expect(parseStatus(beforeTheFields)?.playlist).toBeNull();
+
+    expect(
+      parseStatus({
+        ...valid,
+        order: 'list',
+        playlist: { id: 'aaaa000000000001', name: 'Late night' },
+      }),
+    ).toMatchObject({
+      order: 'list',
+      playlist: { id: 'aaaa000000000001', name: 'Late night' },
+    });
+  });
+
+  it('does not claim a list it cannot name', () => {
+    expect(parseStatus({ ...valid, order: 'list', playlist: null })?.order).toBe('tree');
+    expect(
+      parseStatus({ ...valid, order: 'list', playlist: { id: 'aaaa000000000001' } })?.order,
+    ).toBe('tree');
   });
 
   it('ignores fields the page does not know', () => {

@@ -4,8 +4,10 @@ import type { Analysis } from '../src/domain/analysis';
 import {
   buildSnapshot,
   fnv1a64,
+  playlistId,
   snapshotPath,
   type SnapshotInput,
+  type SnapshotPlaylist,
   type SnapshotTrack,
 } from '../src/domain/snapshot';
 import { sampleAnalysis } from './sampleAnalysis';
@@ -14,7 +16,10 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 const HEADER_SIZE = 64;
+const HEADER_SIZE_V2 = 80;
 const ROW_SIZE = 32;
+const LIST_SIZE = 32;
+const LIST_ROW_SIZE = 4;
 
 interface AnalysisPatch {
   tempo?: Partial<Analysis['tempo']>;
@@ -83,8 +88,8 @@ function canonicalInput(): SnapshotInput {
   ]);
 }
 
-function rowOffset(index: number): number {
-  return HEADER_SIZE + index * ROW_SIZE;
+function rowOffset(index: number, headerSize = HEADER_SIZE): number {
+  return headerSize + index * ROW_SIZE;
 }
 
 function viewOf(image: Uint8Array): DataView {
@@ -98,9 +103,9 @@ function readString(image: Uint8Array, offset: number): { value: string; next: n
 }
 
 /** The four strings a row points at, read through the header's pool fields. */
-function rowStrings(image: Uint8Array, index: number): string[] {
+function rowStrings(image: Uint8Array, index: number, headerSize = HEADER_SIZE): string[] {
   const view = viewOf(image);
-  const poolStart = HEADER_SIZE + view.getUint32(16, true) * ROW_SIZE;
+  const poolStart = headerSize + view.getUint32(16, true) * ROW_SIZE;
   let offset = poolStart + view.getUint32(rowOffset(index) + 12, true);
 
   const values: string[] = [];
@@ -345,5 +350,308 @@ describe('snapshot image', () => {
     });
 
     expect(() => buildSnapshot(input([oversized]))).toThrow(/larger than 2097152/);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Format version 2: Playlists (§10 of docs/specs/snapshot-format.md)
+ * ------------------------------------------------------------------ */
+
+interface V2Areas {
+  headerSize: number;
+  poolStart: number;
+  poolSize: number;
+  listCount: number;
+  listRows: number;
+  listsStart: number;
+  listRowsStart: number;
+}
+
+/** The five regions, read back through the header exactly as the C reader would. */
+function v2Areas(image: Uint8Array): V2Areas {
+  const view = viewOf(image);
+  const headerSize = view.getUint16(10, true);
+  const rowCount = view.getUint32(16, true);
+  const poolSize = view.getUint32(32, true);
+  const listCount = view.getUint16(64, true);
+  const listRows = view.getUint32(72, true);
+  const poolStart = headerSize + rowCount * ROW_SIZE;
+  const listsStart = poolStart + poolSize;
+  return {
+    headerSize,
+    poolStart,
+    poolSize,
+    listCount,
+    listRows,
+    listsStart,
+    listRowsStart: listsStart + listCount * LIST_SIZE,
+  };
+}
+
+function listRecord(image: Uint8Array, index: number) {
+  const view = viewOf(image);
+  const at = v2Areas(image).listsStart + index * LIST_SIZE;
+  return {
+    id: view.getBigUint64(at, true),
+    nameOffset: view.getUint32(at + 8, true),
+    rowStart: view.getUint32(at + 12, true),
+    rowCount: view.getUint32(at + 16, true),
+    created: view.getBigUint64(at + 20, true),
+    reserved: Array.from(image.subarray(at + 28, at + 32)),
+  };
+}
+
+/** One 4-byte list row: a path offset into the pool, and nothing else. */
+function listRow(image: Uint8Array, index: number) {
+  const view = viewOf(image);
+  const at = v2Areas(image).listRowsStart + index * LIST_ROW_SIZE;
+  return { pathOffset: view.getUint32(at, true), bytes: Array.from(image.subarray(at, at + 4)) };
+}
+
+/** A pool string at an offset relative to the pool, as both offsets in a record are. */
+function poolString(image: Uint8Array, relativeOffset: number): string {
+  return readString(image, v2Areas(image).poolStart + relativeOffset).value;
+}
+
+function playlist(
+  overrides: Pick<SnapshotPlaylist, 'id' | 'name' | 'rows'> &
+    Partial<Pick<SnapshotPlaylist, 'createdAt'>>,
+): SnapshotPlaylist {
+  return { createdAt: 1_710_000_000, ...overrides };
+}
+
+describe('snapshot images with Playlists', () => {
+  /**
+   * The v2 fixture. Its numbers are worked out from the format rather than from the
+   * writer: the canonical track's four strings are 28 bytes, the name is 12 with its
+   * NUL, the two paths are 28 and 29, so the pool is 97 and the image is
+   * 80 + 32 + 97 + 32 + 2*4 = 249.
+   */
+  function v2Input(): [SnapshotInput, SnapshotPlaylist[]] {
+    return [
+      canonicalInput(),
+      [
+        playlist({
+          id: 0x0123456789abcdefn,
+          name: 'Night drive',
+          rows: ['Artist/Album/01 - Track.mp3', 'Artist/Album/02 - Other.flac'],
+        }),
+      ],
+    ];
+  }
+
+  it('writes the version 2 header and the list counts at their offsets', () => {
+    const [input, lists] = v2Input();
+    const image = buildSnapshot(input, lists);
+    const view = viewOf(image);
+
+    expect(decoder.decode(image.subarray(0, 8))).toBe('XTAPESNP');
+    expect(view.getUint16(8, true)).toBe(2);
+    expect(view.getUint16(10, true)).toBe(80);
+    expect(image.byteLength).toBe(249);
+    expect(view.getUint32(12, true)).toBe(249);
+    expect(view.getUint32(16, true)).toBe(1);
+    expect(view.getUint32(20, true)).toBe(32);
+    expect(view.getUint32(32, true)).toBe(97);
+    expect(view.getBigUint64(56, true)).toBe(0n);
+
+    // §3.1, bytes 64..80.
+    expect(view.getUint16(64, true)).toBe(1);
+    expect(view.getUint16(66, true)).toBe(32);
+    expect(view.getUint16(68, true)).toBe(4);
+    expect(view.getUint16(70, true)).toBe(0);
+    expect(view.getUint32(72, true)).toBe(2);
+    expect(view.getUint32(76, true)).toBe(0);
+
+    // The CRC starts at the end of the header, which is now 80 bytes.
+    expect(view.getUint32(36, true)).toBe(crc32(image.subarray(HEADER_SIZE_V2)));
+    expect(view.getUint32(36, true)).not.toBe(crc32(image.subarray(HEADER_SIZE)));
+  });
+
+  it('keeps the version 1 header bytes 0..56 apart from the version and size', () => {
+    const [input] = v2Input();
+    const v1 = buildSnapshot(input);
+    const v2 = buildSnapshot(input, v2Input()[1]);
+
+    // 0..8 magic, 20..32 row size and generation, 40..56 provenance.
+    expect(Array.from(v2.subarray(0, 8))).toEqual(Array.from(v1.subarray(0, 8)));
+    expect(Array.from(v2.subarray(20, 24))).toEqual(Array.from(v1.subarray(20, 24)));
+    expect(Array.from(v2.subarray(24, 32))).toEqual(Array.from(v1.subarray(24, 32)));
+    expect(Array.from(v2.subarray(40, 56))).toEqual(Array.from(v1.subarray(40, 56)));
+    // The row itself is byte-identical: the header grew, the row did not.
+    expect(Array.from(v2.subarray(80, 112))).toEqual(Array.from(v1.subarray(64, 96)));
+  });
+
+  it('tiles the list records and rows in id order', () => {
+    const lists = [
+      playlist({
+        id: 0xfedcba9876543210n,
+        name: 'A side',
+        createdAt: 1_700_000_001,
+        rows: ['B/one.mp3', 'B/two.mp3'],
+      }),
+      playlist({
+        id: 0x0123456789abcdefn,
+        name: 'B side',
+        createdAt: 1_700_000_002,
+        rows: ['A/three.mp3'],
+      }),
+    ];
+    const image = buildSnapshot(input([]), lists);
+    const areas = v2Areas(image);
+
+    expect(areas.headerSize).toBe(HEADER_SIZE_V2);
+    expect(areas.listCount).toBe(2);
+    expect(areas.listRows).toBe(3);
+    expect(image.byteLength).toBe(
+      areas.headerSize + areas.poolSize + 2 * LIST_SIZE + 3 * LIST_ROW_SIZE,
+    );
+    expect(areas.listRowsStart + areas.listRows * LIST_ROW_SIZE).toBe(image.byteLength);
+
+    const first = listRecord(image, 0);
+    const second = listRecord(image, 1);
+    expect(first.id).toBe(0x0123456789abcdefn);
+    expect(second.id).toBe(0xfedcba9876543210n);
+    expect(first.id < second.id).toBe(true);
+
+    // Tiling: the first starts at 0, each start is the previous plus its count.
+    expect(first.rowStart).toBe(0);
+    expect(first.rowCount).toBe(1);
+    expect(second.rowStart).toBe(first.rowStart + first.rowCount);
+    expect(second.rowCount).toBe(2);
+    expect(second.rowStart + second.rowCount).toBe(areas.listRows);
+
+    expect(first.created).toBe(1_700_000_002n);
+    expect(second.created).toBe(1_700_000_001n);
+    expect(first.reserved).toEqual([0, 0, 0, 0]);
+    expect(second.reserved).toEqual([0, 0, 0, 0]);
+
+    // §7: the pool carries every name and path, and each offset resolves through it.
+    expect(poolString(image, first.nameOffset)).toBe('B side');
+    expect(poolString(image, second.nameOffset)).toBe('A side');
+
+    const expectedPaths = ['A/three.mp3', 'B/one.mp3', 'B/two.mp3'];
+    for (let index = 0; index < expectedPaths.length; index += 1) {
+      const stored = listRow(image, index);
+      expect(stored.bytes).toHaveLength(4);
+      expect(poolString(image, stored.pathOffset)).toBe(expectedPaths[index]);
+    }
+  });
+
+  it('writes a row for a Track the Snapshot has no measurements for', () => {
+    const image = buildSnapshot(canonicalInput(), [
+      playlist({ id: 7n, name: 'Unmeasured', rows: ['Missing/not-measured.mp3'] }),
+    ]);
+
+    expect(viewOf(image).getUint32(16, true)).toBe(1); // still one measurement row
+    expect(poolString(image, listRow(image, 0).pathOffset)).toBe('Missing/not-measured.mp3');
+  });
+
+  it('accepts an id as a bigint, a decimal string or hex', () => {
+    const id = 0x0123456789abcdefn;
+    const forms: Array<bigint | string> = [
+      id,
+      '81985529216486895',
+      '0123456789abcdef',
+      '0x0123456789abcdef',
+      '0X0123456789ABCDEF',
+    ];
+    const images = forms.map((form) =>
+      buildSnapshot(input([]), [playlist({ id: form, name: 'One', rows: [] })]),
+    );
+
+    for (const image of images) expect(Array.from(image)).toEqual(Array.from(images[0]));
+    expect(listRecord(images[0], 0).id).toBe(id);
+  });
+
+  it('is byte-identical across builds and across input order', () => {
+    const first = playlist({ id: 2n, name: 'Two', rows: ['x/1.mp3'] });
+    const second = playlist({ id: 1n, name: 'One', rows: ['x/2.mp3', 'x/3.mp3'] });
+
+    const forwards = buildSnapshot(canonicalInput(), [first, second]);
+    const backwards = buildSnapshot(canonicalInput(), [second, first]);
+    const again = buildSnapshot(canonicalInput(), [first, second]);
+
+    expect(Array.from(backwards)).toEqual(Array.from(forwards));
+    expect(Array.from(again)).toEqual(Array.from(forwards));
+  });
+
+  it('keeps writing version 1 when there are no Playlists', () => {
+    const implicit = buildSnapshot(canonicalInput());
+    const explicit = buildSnapshot(canonicalInput(), []);
+    const view = viewOf(implicit);
+
+    expect(Array.from(explicit)).toEqual(Array.from(implicit));
+    expect(view.getUint16(8, true)).toBe(1);
+    expect(view.getUint16(10, true)).toBe(64);
+    expect(implicit.byteLength).toBe(124);
+    // The canonical fixture's CRC and length, unchanged from before version 2.
+    expect(view.getUint32(36, true)).toBe(0x17ef7ef3);
+    expect(crc32(implicit.subarray(HEADER_SIZE))).toBe(0x17ef7ef3);
+  });
+
+  it('refuses two lists with one id, and an id of zero', () => {
+    const duplicate = playlist({ id: 5n, name: 'Same', rows: [] });
+
+    expect(() => buildSnapshot(input([]), [duplicate, { ...duplicate, name: 'Other' }])).toThrow(
+      /duplicate Playlist id/,
+    );
+    expect(() => buildSnapshot(input([]), [playlist({ id: 0n, name: 'Zero', rows: [] })])).toThrow(
+      /id of zero/,
+    );
+    expect(() => buildSnapshot(input([]), [playlist({ id: '0', name: 'Zero', rows: [] })])).toThrow(
+      /id of zero/,
+    );
+  });
+
+  it('refuses more than 64 lists', () => {
+    const many = Array.from({ length: 65 }, (_unused, index) =>
+      playlist({ id: BigInt(index + 1), name: `List ${index}`, rows: [] }),
+    );
+
+    expect(() => buildSnapshot(input([]), many)).toThrow(/allows 64/);
+  });
+
+  it('refuses a name of 64 bytes and accepts 63', () => {
+    expect(() =>
+      buildSnapshot(input([]), [playlist({ id: 1n, name: 'x'.repeat(64), rows: [] })]),
+    ).toThrow(/allows 63/);
+
+    const image = buildSnapshot(input([]), [
+      playlist({ id: 1n, name: 'x'.repeat(63), rows: [] }),
+    ]);
+    expect(poolString(image, listRecord(image, 0).nameOffset)).toBe('x'.repeat(63));
+  });
+
+  it('refuses more than 8192 Playlist rows', () => {
+    const rows = Array.from({ length: 8193 }, (_unused, index) => `t/${index}.mp3`);
+
+    expect(() => buildSnapshot(input([]), [playlist({ id: 1n, name: 'Huge', rows })])).toThrow(
+      /allows 8192/,
+    );
+  });
+
+  it('refuses a list row that is not a path the Library can look up', () => {
+    const cases = ['/absolute.mp3', 'a//b.mp3', 'a/./b.mp3', 'a/../b.mp3', 'a\\b.mp3', ''];
+
+    for (const path of cases) {
+      expect(() =>
+        buildSnapshot(input([]), [playlist({ id: 1n, name: 'Bad', rows: [path] })]),
+      ).toThrow(/row 0/);
+    }
+  });
+
+  it('derives a stable, non-zero id from a name and a time', () => {
+    const id = playlistId('Night drive', 1_710_000_000);
+
+    expect(id).toBe(playlistId('Night drive', 1_710_000_000));
+    expect(id).not.toBe(0n);
+    expect(id).not.toBe(playlistId('Night drive', 1_710_000_001));
+    expect(id).not.toBe(playlistId('Day drive', 1_710_000_000));
+    // Once kept, the id outlives the name it came from.
+    const image = buildSnapshot(input([]), [
+      playlist({ id, name: 'Night drive, renamed', rows: [] }),
+    ]);
+    expect(listRecord(image, 0).id).toBe(id);
   });
 });

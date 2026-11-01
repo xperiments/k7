@@ -29,32 +29,71 @@ export async function fetchStatus(timeoutMs = 4000): Promise<DeviceStatus | null
 }
 
 /**
- * Polls `/api/status` every five seconds. On failure the last known status is kept and
- * the device is marked unreachable, so a Player view that was showing can say the device
- * is off rather than silently becoming the Prepare view.
+ * One poller for the whole page. The sidebar, the Player area, Scan and Media all ask
+ * the same question, and four pollers asking it four times a second is not a design.
+ * The first subscriber starts the loop; the last one stops it.
+ */
+let snapshot: DeviceSnapshot = INITIAL;
+let timer: ReturnType<typeof setInterval> | null = null;
+let inFlight = false;
+const listeners = new Set<() => void>();
+
+function publish(next: DeviceSnapshot): void {
+  snapshot = next;
+  for (const listener of listeners) listener();
+}
+
+async function pollOnce(): Promise<void> {
+  if (inFlight) return;
+  inFlight = true;
+  try {
+    const status = await fetchStatus();
+    publish(status ? { status, reachable: true } : { status: snapshot.status, reachable: false });
+  } finally {
+    inFlight = false;
+  }
+}
+
+function start(intervalMs: number): void {
+  if (timer !== null) return;
+  void pollOnce();
+  timer = setInterval(() => void pollOnce(), intervalMs);
+}
+
+function stop(): void {
+  if (timer === null) return;
+  clearInterval(timer);
+  timer = null;
+}
+
+/** The last answer without subscribing: for a click handler that needs the card state. */
+export function deviceSnapshot(): DeviceSnapshot {
+  return snapshot;
+}
+
+/** Refresh now, e.g. after a rescan was accepted or a card was inserted. */
+export function refreshDevice(): Promise<void> {
+  return pollOnce();
+}
+
+/**
+ * The device's Card state and what it is playing. On failure the last known status is
+ * kept and the device is marked unreachable, so an area that was showing can say the
+ * device is off rather than silently emptying itself.
  */
 export function useDeviceStatus(intervalMs = 5000): DeviceSnapshot {
-  const [snapshot, setSnapshot] = useState<DeviceSnapshot>(INITIAL);
+  const [value, setValue] = useState<DeviceSnapshot>(snapshot);
 
   useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const poll = async () => {
-      const status = await fetchStatus();
-      if (cancelled) return;
-      setSnapshot((previous) =>
-        status ? { status, reachable: true } : { status: previous.status, reachable: false },
-      );
-      timer = setTimeout(() => void poll(), intervalMs);
-    };
-
-    void poll();
+    const listener = () => setValue(snapshot);
+    listeners.add(listener);
+    start(intervalMs);
+    listener();
     return () => {
-      cancelled = true;
-      if (timer !== undefined) clearTimeout(timer);
+      listeners.delete(listener);
+      if (listeners.size === 0) stop();
     };
   }, [intervalMs]);
 
-  return snapshot;
+  return value;
 }

@@ -191,8 +191,8 @@ page owns its authoring.
 _Avoid_: setlist, crate, mixtape, queue (that one is the analyser's)
 
 **Playlist row**:
-One Track's place in a **Playlist**: the path that finds it and the **Track fingerprint** that
-binds it. A row whose track is no longer on the card is skipped, never silently dropped.
+One Track's place in a **Playlist**, named by its path below the card's `music` directory. A row
+whose path is no longer on the card is skipped, never silently dropped.
 _Avoid_: entry, item, slot
 
 **Draft**:
