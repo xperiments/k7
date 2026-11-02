@@ -32,6 +32,10 @@ typedef struct {
     size_t      shell_image_size;
     /* The Card state, as the page asks for it. NULL reads as "no card". */
     bool (*card_present)(void);
+    /* Called once per page file, before it is read out of flash. A board whose screen shares a
+     * bus with flash uses it to take the picture off the glass while the bytes are read; the
+     * host has nothing to protect and leaves it NULL. See screen_display_page_service(). */
+    void (*page_service)(void);
 } front_door_cfg_t;
 
 /* Register `/` and `/api/status`. Call before http_server_start(). */

@@ -166,6 +166,10 @@ void appliance_run(void)
          * and the index at `/library` carries the device. */
         .shell_image = NULL,
         .shell_image_size = 0,
+        /* The page is served out of the frontdoor partition, and a flash read shares the bus
+         * with the panel's scan-out: the screen goes black for the length of a page load and
+         * re-establishes the scan before it comes back (ADR 0055). */
+        .page_service = screen_display_page_service,
         .selection_load = selection_load,
         .selection_save = selection_save,
     };

@@ -15,6 +15,7 @@
 #include "esp_log.h"
 
 #include "http_server.h"
+#include "flash_job.h"
 #include "library.h"
 #include "mini_icecast.h"
 #include "playlist_select.h"
@@ -209,10 +210,25 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
     return HTTP_HANDLED;
 }
 
-/* Every file is served from the bytes the board handed over, which are resident (PSRAM on
- * the board, a buffer on the host) - so a page load touches no flash at all, and this does
- * not need the one flash-capable task. That is a change from ADR 0054, and it is the point:
- * a flash read shares the bus with the panel's scan-out and tears the picture (ADR 0055). */
+/* The bytes are mapped flash on the board and a buffer on the host, so a page load is a flash
+ * read on one and nothing on the other. On the board it runs on the one flash-capable task:
+ * that is what keeps a page load from overlapping a Snapshot write, which would leave the
+ * mapping unreadable (ADR 0054). What makes the reads harmless to the picture is the panel's
+ * bounce buffer, not the task (ADR 0055). */
+typedef struct {
+    int         fd;
+    const char *request_path;
+    int         missing_status;
+    bool        accepts_gzip;
+} serve_job_t;
+
+static bool serve_job(void *ctx)
+{
+    serve_job_t *job = (serve_job_t *)ctx;
+    (void)serve_file(job->fd, job->request_path, job->missing_status, job->accepts_gzip);
+    return true;
+}
+
 static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
@@ -239,8 +255,17 @@ static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
 
     /* A page that was packed but is not in the image is a device fault, so `/` says so;
      * any other missing file is a 404 like every other. */
+    /* The bytes are about to come out of flash: let the board take its screen off the glass
+     * first, if it has one and shares a bus with the partition. */
+    if (F.page_service) F.page_service();
+
     bool is_page = strcmp(req->path, "/") == 0;
-    return serve_file(fd, req->path, is_page ? 503 : 404, req->accepts_gzip);
+    serve_job_t job = {fd, req->path, is_page ? 503 : 404, req->accepts_gzip};
+    if (!flash_job_run(serve_job, &job)) {
+        /* The writer did not take it: answer instead of leaving the client hanging. */
+        http_send_error(fd, 503, "the page reader is busy");
+    }
+    return HTTP_HANDLED;
 }
 
 esp_err_t front_door_start(const front_door_cfg_t *cfg)

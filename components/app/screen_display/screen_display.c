@@ -281,6 +281,52 @@ static void card_poll(void)
         ESP_LOGW(TAG, "no card: showing the SD mark");
 }
 
+/* How long the glass stays black after the last page file was asked for. A page load is a
+ * burst of requests over a few hundred milliseconds; a second past the last one is enough to
+ * cover it, and it is the one moment nobody is looking at the cassette. */
+#define PAGE_HOLD_MS 1000
+
+/* What the hold does, and why it is black.
+ *
+ * The slip a flash read causes is a bus-level displacement of the *scan*, not of LVGL's drawing
+ * - a pattern painted with no renderer behind it slipped too. So painting black is not what
+ * prevents the jump; it is what stops anyone *seeing* it, because the frame that slips is
+ * black. Freezing the renderer alone was built and tried on the board: the cassette stayed up
+ * and jumped sideways during a load, then snapped back at the re-establish. A black page is the
+ * honest way to hide a bus the panel cannot share. */
+#define PAGE_HOLD_BLACK 1
+
+/* The deadline, in ms on the system clock. Written by the HTTP task, read by the screen task;
+ * a 32-bit word on this core is atomic, and a stale read only moves the deadline by a pass. */
+static volatile uint32_t s_page_hold_until;
+static bool s_page_held;
+
+static bool page_hold_active(void)
+{
+    uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+    return s_page_hold_until && (int32_t)(s_page_hold_until - now) > 0;
+}
+
+void screen_display_page_service(void)
+{
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    if (!s_disp) return;
+
+    bool already = page_hold_active();
+    s_page_hold_until = (uint32_t)(esp_timer_get_time() / 1000) + PAGE_HOLD_MS;
+    if (already || !lvgl_port_lock(50)) return; /* the glass is already dark */
+
+#if PAGE_HOLD_BLACK
+    /* Both buffers black, so the frame the scan is on is black too - a slip behind it is not
+     * a picture anyone sees. Then one frame of wait: the first flash read must not land on a
+     * picture that is still on the glass. */
+    panel_rgb_clear();
+    lvgl_port_unlock();
+    vTaskDelay(pdMS_TO_TICKS(40));
+#endif
+#endif
+}
+
 static void screen_task(void *arg)
 {
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
@@ -329,8 +375,22 @@ static void screen_task(void *arg)
                     ESP_LOGI(TAG, "backlight %d%% after %u s without a touch",
                              target, (unsigned)(idle_ms / 1000u));
             }
-            cassette_view_update(&st);
-            card_poll();
+            if (page_hold_active()) {
+                /* The glass is black and must stay black: no model step, so no invalidation
+                 * puts the cassette back over it, and the scan may slip unseen. */
+                s_page_held = true;
+            } else {
+                if (s_page_held) {
+                    /* The load is over. The driver's init re-establishes the frame boundary
+                     * (whatever the reads behind the black did to it), and only then is the
+                     * picture painted again. */
+                    panel_rgb_reinit();
+                    lv_obj_invalidate(lv_screen_active());
+                    s_page_held = false;
+                }
+                cassette_view_update(&st);
+                card_poll();
+            }
             lvgl_port_unlock();
         }
         /* One fade step per pass. backlight_set_percent() has already taken the first

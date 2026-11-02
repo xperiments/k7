@@ -507,16 +507,16 @@ done:
 
 /* The page at `/`. The build packs the Shell into this partition with tools/pack_shell.py
  * (root CMakeLists.txt) and `idf.py flash` writes it beside the app. The firmware only ever
- * reads it, and it reads it ONCE: the image is copied into PSRAM here, before the panel
- * exists, and the page is served out of that copy for the life of the process.
+ * reads it, and it reads it through a MAPPING, not a copy: the image stays in flash and the
+ * page is served straight out of the mapped window, which costs no PSRAM at all.
  *
- * Why not leave it in flash and serve from the mapping. Measured on this board: the mapped
- * page still tore, though five times less than the filesystem did. Every cache line the
- * copy/send pulls is an SPI0/1 transaction, and the RGB panel's scan-out reads PSRAM through
- * the same controller - so a 187 KB bundle streamed in 108 ms is a run of stalls the LCD
- * FIFO cannot sit through. Flash has to be off the page path entirely, not merely cheaper
- * (ADR 0055). The panel is what makes this a rule rather than an optimisation; the same
- * reason the app's instructions and rodata live in PSRAM.
+ * A mapped read is still a flash transaction on SPI0/1, and the panel's DMA shares that
+ * controller - which is why serving the page from here used to displace the whole picture by
+ * a band (ADR 0055). What makes it safe now is the panel's bounce buffer: the LCD's DMA reads
+ * internal SRAM and the driver refills it from PSRAM in the background, so ten lines of buffer
+ * is ~0.5 ms of slack against a 2.5 us transaction - two hundred times over. If that ever stops
+ * being true, the fallback is to halt the scan for the length of a page load and re-establish
+ * it afterwards, which costs a blank screen instead of PSRAM.
  *
  * Two devices reach here without a page, and both are states rather than faults: one still
  * carrying the old partition table has no `frontdoor` partition at all, and one flashed
@@ -532,7 +532,6 @@ bool app_board_shell_image(const void **bytes, size_t *size)
 {
     if (!s_shell_tried) {
         s_shell_tried = true;
-        size_t psram_before = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
 
         const esp_partition_t *part = esp_partition_find_first(
             ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, SHELL_PARTITION);
@@ -548,34 +547,17 @@ bool app_board_shell_image(const void **bytes, size_t *size)
                 ESP_LOGW(TAG, "shell: the %s partition did not map (%s); / answers 503",
                          SHELL_PARTITION, esp_err_to_name(e));
             } else {
-                /* The header says how long the image is; the partition is bigger than it, so
-                 * the image's own length is the only one worth copying. */
+                /* The header says how long the image is; the partition is bigger than it. */
                 shell_image_t img;
                 if (!shell_image_open(&img, mapped, part->size)) {
                     ESP_LOGW(TAG, "shell: the image in \"%s\" did not validate; / answers 503",
                              SHELL_PARTITION);
                     esp_partition_munmap(handle);
                 } else {
-                    uint8_t *copy = heap_caps_malloc(img.size, MALLOC_CAP_SPIRAM);
-                    if (copy) {
-                        memcpy(copy, mapped, img.size);
-                        s_shell_bytes = copy;
-                        s_shell_size = img.size;
-                        esp_partition_munmap(handle);
-                        ESP_LOGI(TAG, "shell: %u KiB copied to PSRAM at %p; flash is off the "
-                                      "page path (PSRAM free %u -> %u KB)",
-                                 (unsigned)(img.size >> 10), copy,
-                                 (unsigned)(psram_before >> 10),
-                                 (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >> 10));
-                    } else {
-                        /* No PSRAM for it. There is no honest halfway house: serving the
-                         * mapping would tear the panel, which is the bug this exists to
-                         * remove. So this firmware carries no page, and says why. */
-                        ESP_LOGW(TAG, "shell: no %u KiB of PSRAM for the image (free %u KB); "
-                                      "no page, / answers 503",
-                                 (unsigned)(img.size >> 10), (unsigned)(psram_before >> 10));
-                        esp_partition_munmap(handle);
-                    }
+                    s_shell_bytes = mapped;
+                    s_shell_size = img.size;
+                    ESP_LOGI(TAG, "shell: %u KB mapped read-only at %p, served from flash "
+                                  "(no PSRAM)", (unsigned)(img.size >> 10), mapped);
                 }
             }
         }

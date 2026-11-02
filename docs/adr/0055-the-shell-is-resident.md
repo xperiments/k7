@@ -1,4 +1,33 @@
-# The Shell is one image, and it is resident
+# The Shell is one image
+
+> **Amended twice the same day. The image is mapped, not resident, and the screen blacks out
+> while a page is served.**
+>
+> Three shapes were tried against the rule this document establishes:
+>
+> 1. **Resident** — copy the image into PSRAM at boot. It works, and it is what the sections
+>    below were written around; it costs 390 KB of the PSRAM the artwork budget counts on, and
+>    on the board that lost the cover. Rejected on cost.
+> 2. **Bounce buffer** — leave the image in flash and give the panel a ten-line bounce buffer,
+>    so the LCD's DMA reads internal SRAM and a flash transaction is absorbed (0.5 ms of slack
+>    against 2.5 µs). No PSRAM, no blank screen. Rejected before it was measured: its price is a
+>    CPU copy of the whole frame every frame (~30 MB/s, and ~13 % of a core), and this board
+>    already spends its cores on the encoder. It stays the first thing to retry if the chosen
+>    shape ever proves too ugly.
+> 3. **Chosen: the screen blacks out for a page load.** The image is mapped, so it costs no
+>    PSRAM and no CPU. `screen_display_page_service()` blacks both framebuffers when a page file
+>    is about to be read out of flash, and a second after the last request the screen task
+>    re-establishes the scan (`panel_rgb_reinit()`) and repaints. The slip that flash reads cause
+>    happens behind a black frame, where there is nothing to see, and the frame boundary is put
+>    back before the picture returns. It costs a black screen for the length of a page load,
+>    which is the one moment nobody is looking at the cassette.
+>
+>    Two variants of the hold were built and measured on the board before this one was settled:
+>    **freeze only** (renderer stopped, picture left up) — the cassette stays and visibly jumps
+>    sideways during a load, then snaps back at the re-establish; and **freeze + slow the scan to
+>    2 MHz** (to make the FIFO eight microseconds deep against a 2.5 us transaction) — which on
+>    this panel blanks anyway, because the clock change itself takes it out of lock. A black
+>    that happens on purpose is worth more than a black that happens by accident.
 
 The front door serves the page and the screen tears. Not every time, and not always in the
 same place: a band of the picture shifts sideways for a frame, and after a page load the whole
@@ -60,12 +89,12 @@ page's bytes in RAM.
   them (text already gzipped, the rest plain). `esptool_py_flash_to_partition` flashes it to
   the `frontdoor` partition, so one `idf.py flash` still writes firmware and page together. The
   partition's subtype stops claiming to be SPIFFS; it is opaque data now.
-- **It is read once, into PSRAM, before the panel exists.** `app_board_shell_image()` maps the
-  partition, validates the image, copies its declared length into a PSRAM buffer, unmaps, and
-  hands that buffer over. A page request is then a table lookup and one send out of RAM: no
-  flash read, no mapping, no stall. The copy itself is the one burst of flash reads in the
-  process, and it happens while nothing is scanning — the appliance calls it before
-  `screen_display_boot()`.
+- **~~It is read once, into PSRAM, before the panel exists.~~ Amended: it is mapped, and the
+  screen is taken off the glass while it is read.** `app_board_shell_image()` maps the partition,
+  validates the image and hands the mapping over; nothing is copied and no PSRAM is spent.
+  Serving runs on the flash writer, because a mapped window and a Snapshot write must not overlap
+  (ADR 0054), and each page file is preceded by `screen_display_page_service()` — see the
+  amendment at the top for why a page load blacks the screen.
 - **The page path no longer uses the flash writer.** A resident file is not a flash read, so
   `front_door` drops `flash_job`. That also removes ADR 0054's accepted cost: a slow client no
   longer holds the one flash-capable task, and a Snapshot upload no longer waits behind a page
@@ -98,11 +127,11 @@ page's bytes in RAM.
 
 ## What this costs
 
-- **390 KB of PSRAM, permanently.** ADR 0047 counted ~504 KB free with the cover path live;
-  this spends most of it, leaving ~114 KB. The page is always wanted and the cover is only
-  wanted for a Track that has a picture, so the page wins — but if the artwork loader ever
-  starts failing to allocate, this is the line to look at, and the boot log prints PSRAM free
-  before and after the copy.
+- **~~390 KB of PSRAM, permanently.~~ Amended: a black screen for the length of a page load.**
+  The chosen shape costs no memory at all, and the price is paid in the one currency left: the
+  screen is black from the first page file until a second after the last one (PAGE_HOLD_MS), and
+  comes back only once the scan has been re-established. A slow client that keeps requesting
+  keeps it black; nothing else does.
 - **No degraded fallback.** If the PSRAM allocation fails there is no page; `/` answers 503
   and says why, in the log and in the response. The alternative was a page that tears, which
   is the bug this exists to remove.
@@ -157,13 +186,11 @@ handover, `panel_rgb_reinit()` blacks both buffers and re-runs the driver's init
 engine, reset the FIFO and the channel, start again — so the cassette's frame is established
 from a quiet bus. On the board the cassette is then correct on every reboot.
 
-**What it does not fix is the boot mark**, and that is honest rather than incidental: the mark is
-on screen *during* those flash reads, so it can sit off for the second or two it is up. The
-re-init catches the scan before the cassette, which is why the cassette is clean and the mark
-sometimes is not. Fixing the mark would mean either doing the network's flash work before the
-panel exists — a boot-order change ADR 0004 argues against, because the panel's 16 KB internal
-stack must be taken before Wi-Fi asks for its contiguous DMA buffers — or re-initialising the
-scan periodically while the mark is up, which flickers.
+**What the re-init does not fix is the boot mark**, and that is honest rather than incidental:
+the mark is on screen *during* those flash reads, so it can sit off for the second or two it is
+up. The re-init catches the scan before the cassette, which is why the cassette is clean and the
+mark sometimes is not. Nothing in the chosen shape can fix that: the boot's own flash reads
+have no black frame to hide behind, because the mark *is* what is on the glass.
 
 ## The measurements
 

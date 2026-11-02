@@ -34,6 +34,22 @@ esp_err_t screen_display_boot(void);
  * Returns ESP_OK, or the reason the cassette could not be built; the mark stays up. */
 esp_err_t screen_display_start(const char *music_dir);
 
+/* The page is being served out of flash: take the picture off the glass until a moment after
+ * the last call.
+ *
+ * Serving a file is a read out of the frontdoor partition, and a flash transaction takes the
+ * PSRAM bus from the panel's scan-out for a couple of microseconds - enough for the LCD engine
+ * to consume pixels that are not there, after which the DMA and the engine are permanently out
+ * of step and the whole picture sits a band to one side (ADR 0055). So the screen goes black
+ * for the length of a page load and is re-established afterwards: the slip happens behind a
+ * black frame, where it cannot be seen, and panel_rgb_reinit() puts the scan back before the
+ * picture returns. A page load is the one moment nobody is looking at the cassette.
+ *
+ * Cheap to call per file: the first call of a burst does the blacking and waits a frame for it
+ * to land, the rest only extend the hold. The screen comes back by itself a second after the
+ * last call. No-op on a build with no panel. */
+void screen_display_page_service(void);
+
 #if CONFIG_APP_UI_SCREEN_HTTP
 /* Register the screen's HTTP diagnostics with the front door: GET /api/screen.bmp, the
  * rendered 800x480 frame as a 24-bit BMP, and POST /api/scene?n=0..9, which re-aims the
