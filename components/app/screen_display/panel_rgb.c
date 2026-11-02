@@ -47,6 +47,11 @@ static const gpio_num_t k_data_pins[16] = {
 };
 
 static esp_lcd_panel_handle_t s_panel;
+/* The display the port created in panel_rgb_start(); the refresh timer it owns stays paused
+ * until the first clock, and panel_rgb_scan_start()/panel_rgb_reinit() resume it. */
+static lv_display_t *s_lvgl_disp;
+/* True once the LCD engine has been started at least once. */
+static bool s_scanning;
 
 /* The port's own task: the reference project's parameters, adjusted for this firmware's
  * core split - the broadcast/encoder owns core 1, so the refresh lives on core 0 with
@@ -63,17 +68,20 @@ static const lvgl_port_cfg_t k_port = {
 
 lv_display_t *panel_rgb_start(void)
 {
-    /* The light goes off before the panel exists. The peripheral starts scanning the two
-     * PSRAM framebuffers the moment it is initialised, and they read as white until
-     * something paints them; a pin left floating lights the panel over exactly that. */
+    /* The light goes off before the panel exists. The peripheral will scan the two PSRAM
+     * framebuffers, and they read as white until something paints them; a pin left floating
+     * lights the panel over exactly that. The scan itself does not start until the first
+     * clock (panel_rgb_scan_start()), but the light has to be off before then. */
     backlight_hold_off();
 
-    /* Then the panel's supply gets its time before the first clock. This board gives the panel
-     * no reset line - the RGB driver sends it no commands, and the profile wires no
-     * display-enable pin - so its power-on reset is the only one it gets. The wait is behind the
-     * light, where it costs boot latency and nothing visible. */
+    /* Then the panel's supply gets its time before the peripheral exists - before any signal
+     * reaches it. This board gives the panel no reset line - the RGB driver sends it no
+     * commands, and the profile wires no display-enable pin - so its power-on reset is the only
+     * one it gets. The first clock is deferred much further than this (until after the boot's
+     * flash work), so this wait is about the GPIO routing and the first data lines, not about
+     * the clock. It is behind the light, where it costs boot latency and nothing visible. */
     if (CONFIG_APP_UI_PANEL_SETTLE_MS > 0) {
-        ESP_LOGI(TAG, "waiting %d ms for the panel's supply before its first clock",
+        ESP_LOGI(TAG, "waiting %d ms for the panel's supply before the peripheral exists",
                  CONFIG_APP_UI_PANEL_SETTLE_MS);
         vTaskDelay(pdMS_TO_TICKS(CONFIG_APP_UI_PANEL_SETTLE_MS));
     }
@@ -116,8 +124,12 @@ lv_display_t *panel_rgb_start(void)
      * working panel into a boot loop and a black screen. */
     esp_err_t err = esp_lcd_panel_reset(s_panel);
     if (err != ESP_OK) ESP_LOGW(TAG, "panel reset: %s (continuing)", esp_err_to_name(err));
-    err = esp_lcd_panel_init(s_panel);
-    if (err != ESP_OK) ESP_LOGW(TAG, "panel init: %s (continuing)", esp_err_to_name(err));
+    /* esp_lcd_panel_init() is deliberately NOT called here. It is the call that applies the
+     * timings, starts the pixel clock and starts the scan, and the panel must stay dark
+     * through the boot's flash work - the Snapshot, the Shell's table and Wi-Fi's NVS. A
+     * flash access takes the PSRAM window from the scan-out for a few microseconds, which
+     * displaces the picture permanently (ADR 0055). The first clock is therefore deferred to
+     * panel_rgb_scan_start(), after app_services_start() has returned. */
     err = esp_lcd_panel_disp_on_off(s_panel, true);
     if (err == ESP_ERR_NOT_SUPPORTED)
         ESP_LOGI(TAG, "no display-enable pin in the profile, so disp_on_off does nothing");
@@ -146,18 +158,64 @@ lv_display_t *panel_rgb_start(void)
     };
     const lvgl_port_display_rgb_cfg_t rcfg = { .flags = { .avoid_tearing = true } };
 
+    /* The port's lock is taken *before* the display exists and held across the first refresh
+     * being scheduled and paused. lv_display_create() invalidates the screen and marks the
+     * refresh timer ready, so without this the port task could flush into an engine that is
+     * not scanning yet - and an RGB flush in direct mode waits for the panel's vsync, which
+     * would never come. The lock is recursive, so lvgl_port_add_disp_rgb() takes it again
+     * for itself. */
+    if (!lvgl_port_lock(1000)) {
+        ESP_LOGE(TAG, "the LVGL port did not give its lock; the panel stays dark");
+        return NULL;
+    }
     lv_display_t *disp = lvgl_port_add_disp_rgb(&dcfg, &rcfg);
     if (!disp) {
+        lvgl_port_unlock();
         ESP_LOGE(TAG, "the port refused the RGB display");
         return NULL;
     }
-    ESP_LOGI(TAG, "panel up through esp_lvgl_port: %dx%d, two framebuffers in PSRAM, pclk %u Hz",
+    s_lvgl_disp = disp;
+    lv_timer_t *refr = lv_display_get_refr_timer(disp);
+    if (refr) lv_timer_pause(refr); /* resumed by panel_rgb_scan_start() */
+    lvgl_port_unlock();
+
+    ESP_LOGI(TAG, "panel up through esp_lvgl_port: %dx%d, two framebuffers in PSRAM, pclk %u Hz, "
+                  "first clock deferred",
              PANEL_W, PANEL_H, (unsigned)PCLK_HZ);
 
     /* The light stays off on purpose. The panel is dark until whoever brought it up has
      * painted something worth lighting - the boot mark - and only then calls
      * backlight_start(). Lighting it here showed the uninitialised framebuffers. */
     return disp;
+}
+
+esp_err_t panel_rgb_scan_start(void)
+{
+    if (!s_panel) return ESP_ERR_INVALID_STATE;
+    if (s_scanning) return ESP_OK;
+
+    if (!lvgl_port_lock(1000)) {
+        ESP_LOGE(TAG, "the LVGL port did not give its lock; the panel's clock never started");
+        return ESP_ERR_TIMEOUT;
+    }
+    /* This is the first clock and the first scan. It is legal for the caller to hold the port
+     * lock already (the boot mark path does): the mutex is recursive. */
+    esp_err_t err = esp_lcd_panel_init(s_panel);
+    if (err == ESP_OK) {
+        s_scanning = true;
+        if (s_lvgl_disp) {
+            lv_timer_t *refr = lv_display_get_refr_timer(s_lvgl_disp);
+            if (refr) lv_timer_resume(refr);
+        }
+    }
+    lvgl_port_unlock();
+
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "the panel's first clock did not start: %s", esp_err_to_name(err));
+        return err;
+    }
+    ESP_LOGI(TAG, "the panel's first clock starts with the boot's flash work behind it");
+    return ESP_OK;
 }
 
 esp_err_t panel_rgb_clear(void)
@@ -191,7 +249,18 @@ esp_err_t panel_rgb_reinit(void)
     /* rgb_panel_init stops the LCD engine, resets the FIFO and the GDMA channel and starts the
      * transmission again, which is the only way from this side to re-establish the frame
      * boundary after something took the PSRAM window away. */
-    return esp_lcd_panel_init(s_panel);
+    esp_err_t err = esp_lcd_panel_init(s_panel);
+    if (err != ESP_OK) return err;
+
+    /* It also starts the first clock if panel_rgb_scan_start() never managed to, so the
+     * refresh timer is resumed here too: the cassette that follows must not wait on a timer
+     * that was paused for a clock this call has just established. */
+    s_scanning = true;
+    if (s_lvgl_disp) {
+        lv_timer_t *refr = lv_display_get_refr_timer(s_lvgl_disp);
+        if (refr) lv_timer_resume(refr);
+    }
+    return ESP_OK;
 }
 
 bool panel_rgb_frame(const uint16_t **px, int *w, int *h)

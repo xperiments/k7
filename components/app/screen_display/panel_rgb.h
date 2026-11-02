@@ -5,15 +5,32 @@
 #include "esp_lcd_panel_ops.h"
 #include "lvgl.h"
 
-/* Bring the panel up through esp_lvgl_port and hand back the display it created, or NULL
- * if the panel or the port refused. The port owns the framebuffer and vsync handshake
- * from there on; LVGL calls made from other tasks must take lvgl_port_lock().
+/* Bring the panel's peripheral, its framebuffers and the LVGL port up, and hand back the
+ * display the port created, or NULL if either refused. The port owns the framebuffer and
+ * vsync handshake from there on; LVGL calls made from other tasks must take
+ * lvgl_port_lock().
  *
- * **The backlight is left off.** The peripheral starts scanning two PSRAM framebuffers the
- * moment it is initialised, and until something paints them they hold whatever PSRAM
- * powered up with - white - so lighting the panel here is the white flash at boot. The
- * caller paints its first frame and then calls backlight_start(). */
+ * **No clock, no scan, no light.** Three things are deliberately left for later:
+ *
+ *  - `esp_lcd_panel_init()` is not called. It is the call that applies the timings, starts
+ *    the pixel clock and starts the scan, and the panel must not be scanning while the boot
+ *    touches flash: a flash access takes the PSRAM window from the scan-out and displaces
+ *    the picture permanently (ADR 0055). `esp_lcd_new_rgb_panel()` and `lvgl_port_init()`
+ *    stay here because the port's 16 KB internal stack must be taken before Wi-Fi asks for
+ *    its contiguous DMA buffers (ADR 0004). The first clock is `panel_rgb_scan_start()`.
+ *  - The display's refresh timer is paused, because an RGB flush in direct mode waits for
+ *    the panel's vsync, and there is none until the clock starts.
+ *  - The backlight is left off. The peripheral will scan two PSRAM framebuffers that read
+ *    as white until something paints them, so lighting the panel here is the white flash at
+ *    boot. The caller clears and paints them after the first clock, then calls
+ *    backlight_start(). */
 lv_display_t *panel_rgb_start(void);
+
+/* Start the pixel clock and the scan - the driver's own init - now that the boot's flash work
+ * is behind it. Blacks nothing itself: the caller fills both framebuffers first, so the first
+ * frame the engine scans is the colour the caller chose. Resumes the display's refresh timer.
+ * Takes and releases the port lock, so it may be called with it already held. Idempotent. */
+esp_err_t panel_rgb_scan_start(void);
 
 /* Fill both framebuffers with one RGB565 colour - panel_rgb_clear() fills them black.
  * Call under lvgl_port_lock() and before the backlight is lit; the first frame LVGL
@@ -30,6 +47,8 @@ esp_err_t panel_rgb_clear(void);
  * this without one can catch the buffer that is not in front. Call under
  * lvgl_port_lock(), and copy before unlocking if the caller means to touch the pixels
  * while the screen keeps drawing. */
+bool panel_rgb_frame(const uint16_t **px, int *w, int *h);
+
 /* Stop the scan and start it again, from the frame in the framebuffers, cleanly.
  *
  * The scan-out is only as aligned as the moment it started: the driver primes the LCD FIFO
@@ -41,7 +60,6 @@ esp_err_t panel_rgb_clear(void);
  *
  * This re-runs the driver's own init, which stops the peripheral, resets the FIFO and the
  * channel and starts again - so the frame is established from a quiet bus instead of a busy
- * one. Call it with both framebuffers holding the picture that should be on screen. */
+ * one. Call it with both framebuffers holding the picture that should be on screen. It also
+ * resumes the display's refresh timer, in case the first clock never started. */
 esp_err_t panel_rgb_reinit(void);
-
-bool panel_rgb_frame(const uint16_t **px, int *w, int *h);

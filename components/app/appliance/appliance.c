@@ -7,11 +7,13 @@
  * screen, the station format this product ships, the card retry after a missing card, and
  * the console line. The transport is the screen's, not a physical button's.
  *
- * The screen is the one thing that comes first rather than last. Its panel powers up
- * scanning uninitialised PSRAM, so the boot mark has to be painted before the backlight is
- * lit and has to stay up while the card is scanned - and the scan is inside
- * app_services_start(). So the appliance calls screen_display_boot() before the services
- * and screen_display_start() after them.
+ * The screen is the one thing that comes first rather than last, and it comes in two stages.
+ * The panel's hardware and the LVGL port are taken before the services (its 16 KB internal
+ * stack has to win the RAM the Wi-Fi DMA buffers want), but its first clock is not started
+ * until app_services_start() has returned: the boot's flash work - the Snapshot, the Shell's
+ * table, Wi-Fi's NVS - then happens on a dark panel, because a flash access during a scan
+ * displaces the picture permanently (ADR 0055). The mark is painted after that work, lit, and
+ * held for its dwell; then the cassette replaces it.
  */
 #include "appliance.h"
 
@@ -209,17 +211,19 @@ void appliance_run(void)
         }
     }
 
-    /* The screen comes first, before the services, for one reason: the panel's
-     * framebuffers are uninitialised PSRAM and the backlight used to be lit over them, so
-     * boot opened on a white flash. screen_display_boot() paints the K7 mark on the black
-     * page and only then lights the panel; the mark stays up through the network coming up
-     * and the card being mounted and scanned, which is what app_services_start() does.
+    /* The screen's hardware comes up before the services; its first clock does not. Two
+     * reasons, in this order:
      *
-     * The cost of that order is internal RAM: the panel's LVGL port task takes a 16 KB
-     * internal stack before esp_wifi_init() asks for its contiguous DMA buffers, where the
-     * rule used to be the other way round (ADR 0004). LVGL's own allocations are PSRAM by
-     * policy, so what moves is that one block, and the line the boot screen logs after the
-     * panel is up is the margin left for Wi-Fi - check it there rather than guess. */
+     *  - internal RAM: the panel's LVGL port task takes a 16 KB internal stack, and that has
+     *    to be taken before esp_wifi_init() asks for its contiguous DMA buffers, where the
+     *    rule used to be the other way round (ADR 0004). LVGL's own allocations are PSRAM by
+     *    policy, so that one block is what moves; the line screen_display_boot() logs is the
+     *    margin left for Wi-Fi - check it there rather than guess.
+     *  - flash: the boot's flash work - the Snapshot, the Shell's table, Wi-Fi's NVS - is
+     *    inside app_services_start(), and a flash access takes the PSRAM window from the
+     *    panel's scan-out for a few microseconds, which displaces the picture permanently
+     *    (ADR 0055). So screen_display_boot() stops short of esp_lcd_panel_init(): the clock
+     *    and the scan start only after that call has returned, and the mark goes up then. */
     esp_err_t boot_err = screen_display_boot();
     if (boot_err != ESP_OK)
         ESP_LOGE(TAG, "the screen did not come up: %s; the device still serves",
@@ -250,10 +254,17 @@ void appliance_run(void)
      * Menu's row toggles. */
     mini_icecast_shuffle_seed((uint32_t)esp_random());
 
-    /* The card is mounted and scanned by now - or refused, and the retry task below owns
-     * it - so the mark has waited long enough: replace it with the cassette.
+    /* The boot's flash work is behind us, so the panel's first clock can start now. The mark
+     * is painted on a quiet bus, the backlight is lit over it, and it is held for its dwell
+     * before the cassette replaces it. app_services_start() has mounted and scanned the card,
+     * or refused it and left the retry task to own it, so the cassette has something to show.
      * MUSIC_DIR is also the root the Artwork level reads a Track's own picture from. */
     if (boot_err == ESP_OK) {
+        esp_err_t mark_err = screen_display_mark();
+        if (mark_err != ESP_OK)
+            ESP_LOGE(TAG, "the boot mark did not come up: %s; the device still serves",
+                     esp_err_to_name(mark_err));
+
         esp_err_t screen_err = screen_display_start(MUSIC_DIR);
         if (screen_err != ESP_OK) {
             ESP_LOGE(TAG, "the screen did not start: %s; the device still serves",

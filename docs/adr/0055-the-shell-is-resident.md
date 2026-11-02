@@ -28,6 +28,12 @@
 >    2 MHz** (to make the FIFO eight microseconds deep against a 2.5 us transaction) — which on
 >    this panel blanks anyway, because the clock change itself takes it out of lock. A black
 >    that happens on purpose is worth more than a black that happens by accident.
+>
+> **Amended again: the first clock now waits for the boot's flash work.** The chosen shape
+> stands; what changes is when the panel starts. `esp_lcd_panel_init()` — the call that starts
+> the pixel clock and the scan — now runs after `app_services_start()`, so the boot's flash work
+> happens on a dark panel and the mark is never on the glass while flash is touched. The boot
+> mark gets its own 2 s dwell and the cassette follows. See "The late clock" below.
 
 The front door serves the page and the screen tears. Not every time, and not always in the
 same place: a band of the picture shifts sideways for a frame, and after a page load the whole
@@ -189,8 +195,79 @@ from a quiet bus. On the board the cassette is then correct on every reboot.
 **What the re-init does not fix is the boot mark**, and that is honest rather than incidental:
 the mark is on screen *during* those flash reads, so it can sit off for the second or two it is
 up. The re-init catches the scan before the cassette, which is why the cassette is clean and the
-mark sometimes is not. Nothing in the chosen shape can fix that: the boot's own flash reads
-have no black frame to hide behind, because the mark *is* what is on the glass.
+mark sometimes is not. Nothing in the shape as first chosen could fix that: the boot's own flash
+reads have no black frame to hide behind, because the mark *is* what is on the glass. The
+amendment below fixes it by moving the clock, and with it the mark's window - see "The late
+clock".
+
+## The late clock
+
+The mark's window was the boot's own flash work, and a picture cannot hide a slip it is the
+subject of. The mark is decorative, so the answer was to move the window rather than hide it:
+do not start the panel's clock until that flash work is finished.
+
+**What moved.** `esp_lcd_new_rgb_panel()` and `lvgl_port_init()` stay where they are, before
+`app_services_start()`. That is the internal-RAM ordering constraint, and it is why route (2) -
+moving the whole screen after the services - was not taken: the port's 16 KB internal stack has
+to be taken before `esp_wifi_init()` asks for its contiguous DMA buffers (ADR 0004), and moving
+the screen would have put it after Wi-Fi's allocation instead. One call moved:
+`esp_lcd_panel_init()`, the driver's init that applies the timings, starts the pixel clock and
+starts the scan. It is now `panel_rgb_scan_start()`, called from `screen_display_mark()` after
+`app_services_start()` has returned. Two consequences fell out of that:
+
+- **The refresh timer waits with the clock.** `lv_display_create()` invalidates the screen and
+  marks the refresh timer ready, and an RGB flush in direct mode waits on the panel's vsync,
+  which a stopped engine never sends. `panel_rgb_start()` therefore holds the port's recursive
+  lock across the display's creation and pauses the refresh timer before releasing it.
+  `panel_rgb_scan_start()` resumes it, and so does `panel_rgb_reinit()` - the belt, and the
+  recovery path if the first clock ever failed.
+- **The mark is painted after the services, not before them.** `screen_display_boot()` creates
+  the panel, the two framebuffers and the port, and leaves the buffers unpainted and the light
+  off. `screen_display_mark()` fills both framebuffers black, starts the first clock, paints the
+  K7 mark, lights the backlight over it and holds it for `APP_UI_MARK_HOLD_MS` (2 s).
+  `screen_display_start()` still calls `panel_rgb_reinit()` at the handover, unchanged.
+
+`esp_lcd_panel_init()` was already the routine that restarts the scan after a page load, so the
+late start reuses it rather than adding a second mechanism.
+
+**Measured on the board, warm boot.** The order is in the log, and so is the fact that the boot's
+flash work now precedes the first clock:
+
+    I (1592) panel: panel up through esp_lvgl_port: ... pclk 16000000 Hz, first clock deferred
+    I (1607) screen: screen memory: internal free 227519 B (largest 131072 B) before,
+                      205519 B (largest 118784 B) after bringing the panel up
+    I (1641) wifi:config NVS flash: enabled
+    I (2061) app: library: state=ok tracks=93 ... scan=167 ms
+    I (2431) http: listening on :80 ...
+    I (2522) panel: the panel's first clock starts with the boot's flash work behind it
+    I (2625) backlight: backlight on GPIO 2 ...
+    I (2629) screen: boot mark 800x480 on the glass, held 2000 ms before the cassette
+    I (4854) screen: cassette 2 of 7: (no track)
+
+The mark is up from 2629 to 4854: the 2 s dwell plus the cassette's own build. Before the change
+the same board logged the mark at 1847 and Wi-Fi's NVS read at 1890, so the mark was on the glass
+while flash was being touched; now every known flash user in the boot - NVS, the Snapshot, the
+mapped Shell - has finished before 2522. What moved is the scan (from ~1.65 s, inside the old
+panel bring-up, to ~2.52 s), the mark (~0.8 s later) and the cassette (~2.0 s later, the dwell).
+
+**The internal-RAM line is unchanged.** It still covers exactly the panel bring-up - new panel +
+port + display. The mark, the splash and the light are PSRAM/LEDC work and allocate no internal
+RAM, and nothing else in the bring-up moved. Measured 227 519 B free (largest 131 072 B) before
+and 205 519 B (largest 118 784 B) after, against HEAD's 227 483/205 479 and 227 615/205 611 on
+the same board: the same cluster and the same largest blocks. Route (2) would have moved the
+port's 16 KB after Wi-Fi's allocation, so it was not needed and was not taken.
+
+**What this does not change.** A flash access while the panel scans still displaces the picture
+until the engine is restarted. The late clock removes the boot's own flash work from the mark's
+window; it does not make the scan able to share the bus. A page load is still hidden behind the
+black frame, and the handover still re-establishes the scan with `panel_rgb_reinit()`.
+
+**Cold boots are the acceptance, and they passed.** The run was 8-10 power pulls - power off,
+the rail drained, power on - with the K7 mark centred and up for its ~2 s on every boot, and the
+cassette centred on every boot. A warm reset is not the test: it does not re-run the panel's
+power-on state, and a flash or a reset leaves the rail up, so a shifted picture outlives the
+reboot that was meant to clear it. The log above is a warm boot and proves the order; the cold
+run is what proves the picture.
 
 ## The measurements
 

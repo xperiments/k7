@@ -2,13 +2,14 @@
 
 The screen: the panel (or the headless framebuffer), LVGL's PSRAM allocator, the
 cassette screen and, on the panel board, its touch controller and the card-side artwork
-loader. The public interface is `include/screen_display.h` — two calls and nothing else:
-`screen_display_boot()` puts the boot mark up before the services (the panel's framebuffers
-are uninitialised PSRAM, so the light is only lit once something is painted), and
-`screen_display_start()` replaces it with the cassette after them (the card has been
-mounted and scanned by then). Everything else is private:
+loader. The public interface is `include/screen_display.h` — three calls and nothing else:
+`screen_display_boot()` takes the panel's hardware and LVGL's internal stack before the
+services but starts neither the clock nor the scan; `screen_display_mark()` runs after them,
+starts the first clock on a bus the boot's flash work has finished with, paints the boot mark,
+lights the backlight over it and holds it for `APP_UI_MARK_HOLD_MS`; and
+`screen_display_start()` replaces it with the cassette. Everything else is private:
 
-- `screen_display.c` — the two boot phases, the draw buffer, the serial dump and the task
+- `screen_display.c` — the three boot phases, the draw buffer, the serial dump and the task
   that keeps the cassette current.
 - `splash.c` — the boot mark: the icon font's K7 glyph at 128 px tall in the palette's primary,
   centred on the palette's black. It is a glyph, not a bitmap, and it owns no geometry.
@@ -263,28 +264,28 @@ after the tape body and shown and hidden with the
   same task reads the text tags (TPE1/TIT2, ARTIST/TITLE). Results are handed to the view
   under the LVGL lock. The request is one slot, replaced rather than queued, and the read
   backs off while the broadcast is behind. Compiled and started only on the panel board.
-- `panel_rgb.c` — the Sunton panel adapter, compiled only for that board. Three things about it
-  are load-bearing. The backlight is held off until a frame has been painted, or the boot opens
-  on uninitialised PSRAM, which reads white. The RGB peripheral is not created until
-  `APP_UI_PANEL_SETTLE_MS` has passed, because this panel has no reset line and a signal that
+- `panel_rgb.c` — the Sunton panel adapter, compiled only for that board. Four things about it
+  are load-bearing. The backlight is held off (`backlight_hold_off()`, which gives the pin to
+  LEDC at duty 0) before the peripheral exists and left off when it returns, or the boot opens
+  on uninitialised PSRAM, which reads white. The peripheral is not created until
+  `APP_UI_PANEL_SETTLE_MS` (250 ms) has passed, because this panel has no reset line - the RGB
+  driver sends it no commands and the profile wires no display-enable pin - so a signal that
   reaches it while it is still starting leaves the picture shifted *until the next power cycle*
-  (the rail survives a reset, so such a picture outlives the reboot meant to clear it). And
-  The Shell is served out of its own flash partition, so a page load is a burst of flash reads
-  on the bus the scan-out shares. `screen_display_page_service()` is the answer: it blacks both
-  framebuffers for the length of a page load, the slip happens behind a frame nobody can see,
-  and a second after the last request the screen task calls `panel_rgb_reinit()` to
-  re-establish the frame boundary before the picture returns. `panel_rgb_reinit()` is also
-  called at the mark-to-cassette handover, so a slip from the boot's own flash reads is
-  corrected before the cassette. ADR 0055 has the measurements, the three shapes tried, and the
-  nine suspects they cleared. It holds the
-  backlight off (`backlight_hold_off()`, which gives the pin to LEDC at duty 0) before the
-  peripheral exists and leaves it off when it returns: the panel scans two uninitialised PSRAM
-  framebuffers from the moment it is initialised, and those read as white. Then it waits
-  `APP_UI_PANEL_SETTLE_MS` (250 ms) before creating the peripheral, because this panel has no
-  reset line - the RGB driver sends it no commands and the profile wires no display-enable pin -
-  so its own power-on reset is the only one it gets, and the first clock must not arrive while it
-  is still starting up. `panel_rgb_clear()` fills both black, and the screen lights the panel
-  only after the boot mark is in both buffers.
+  (the rail survives a reset, so such a picture outlives the reboot meant to clear it).
+  `esp_lcd_panel_init()` — the call that applies the timings and starts the pixel clock and the
+  scan — is deliberately not called from `panel_rgb_start()`; `panel_rgb_scan_start()` does it
+  after `app_services_start()`, so the boot's flash work happens on a dark panel. The LVGL
+  refresh timer is paused until then, because an RGB flush waits for the panel's vsync and a
+  stopped engine never sends one. And the Shell is served out of its own flash partition, so a
+  page load is a burst of flash reads on the bus the scan-out shares.
+  `screen_display_page_service()` is the answer: it blacks both framebuffers for the length of
+  a page load, the slip happens behind a frame nobody can see, and a second after the last
+  request the screen task calls `panel_rgb_reinit()` to re-establish the frame boundary before
+  the picture returns. `panel_rgb_reinit()` is also called at the mark-to-cassette handover, so
+  a slip from anything that touched flash after the mark started is corrected before the
+  cassette. `panel_rgb_clear()` fills both black before the first clock, and the screen lights
+  the panel only after the boot mark is in both buffers. ADR 0055 has the measurements, the
+  three shapes tried, and the nine suspects they cleared.
 - `backlight.c` — the Sunton backlight on GPIO 2, now a 400 Hz, 8-bit LEDC duty rather than
   an on/off pin. It starts at `APP_UI_BACKLIGHT_AWAKE_PCT` (100% by default), then
   fades to 60% after 2 minutes, 30% after 5, and 0% after 10 with no touch, each step

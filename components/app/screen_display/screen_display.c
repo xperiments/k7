@@ -2,15 +2,20 @@
  * The screen display: its memory, its display, the boot mark and the loop that keeps the
  * cassette current.
  *
- * The screen comes up in two calls, and the split is a hardware fact rather than a taste.
- * On the panel board the RGB peripheral starts scanning two PSRAM framebuffers the moment
- * the driver is initialised, and PSRAM powers up reading white; lighting the backlight
- * before LVGL has painted anything was the white flash on boot. So stage one
- * (screen_display_boot) brings the panel up with its light off, fills both buffers black,
- * paints the K7 mark into both and only then calls backlight_start(); stage two
- * (screen_display_start) builds the cassette over the mark and takes it down. The appliance
- * calls the first before the services and the second after them, which is what keeps the
- * mark on the panel for the card's mount and scan.
+ * The screen comes up in three calls, and every split is a hardware fact rather than a taste.
+ * On the panel board the RGB peripheral scans two PSRAM framebuffers once the first clock
+ * starts, PSRAM powers up reading white, and the scan-out cannot share the bus with flash: a
+ * flash access takes the PSRAM window away and displaces the picture until the engine is
+ * restarted (ADR 0055). So stage one (screen_display_boot) creates the panel and the LVGL port
+ * but starts neither the clock nor the scan, and leaves the light off; stage two
+ * (screen_display_mark) runs after app_services_start() - after the Snapshot, the Shell's table
+ * and Wi-Fi's NVS - and only then starts the first clock, fills both buffers black, paints the
+ * K7 mark into both, lights the backlight and holds the mark for its dwell; stage three
+ * (screen_display_start) re-establishes the scan and builds the cassette over the mark.
+ *
+ * The first clock is late on purpose. The boot's flash work is what displaces a running scan,
+ * and there is no black frame to hide it behind while the mark is what is on the glass. Starting
+ * the clock after that work is finished is the only order in which the mark can be still.
  *
  * Memory placement is deliberate rather than inherited (ADR 0004): LVGL allocates
  * through heap_caps_malloc_prefer(PSRAM first) because the default path prefers
@@ -62,6 +67,11 @@ static const char *TAG = "screen";
 /* The display the boot screen created: one per process, and the second phase of the
  * screen (the cassette) is built on it. NULL until screen_display_boot(). */
 static lv_display_t *s_disp;
+
+/* True once a picture is actually on the glass (or in the headless framebuffer). Before that
+ * the buffers are unpainted PSRAM and the panel may not be scanning yet, so a capture would
+ * read nothing and a forced refresh on the panel would wait for a vsync that cannot come. */
+static bool s_frame_live;
 
 /* The panel, and the framebuffer when there is no panel to scan it out. */
 #define UI_W 800
@@ -310,7 +320,9 @@ static bool page_hold_active(void)
 void screen_display_page_service(void)
 {
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
-    if (!s_disp) return;
+    /* Nothing is scanning yet: the first clock waits for app_services_start() to finish, so a
+     * page read now cannot displace a scan, and there is no picture to take off the glass. */
+    if (!s_disp || !s_frame_live) return;
 
     bool already = page_hold_active();
     s_page_hold_until = (uint32_t)(esp_timer_get_time() / 1000) + PAGE_HOLD_MS;
@@ -512,21 +524,55 @@ esp_err_t screen_display_boot(void)
 #endif
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The panel exists and the port is running, but neither the clock nor the scan has started
+     * and the light is off. screen_display_mark() brings the picture up once
+     * app_services_start() has finished with flash. */
+    ESP_LOGI(TAG, "panel %dx%d and LVGL up; the first clock waits for the boot's flash work",
+             UI_W, UI_H);
+#else
+    ESP_LOGI(TAG, "headless display %dx%d up; the mark waits for the services", UI_W, UI_H);
+#endif
+    ESP_LOGI(TAG, "screen memory: internal free %u B (largest %u B) before, %u B (largest %u B) after bringing the panel up",
+             (unsigned)internal_before, (unsigned)largest_before,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    return ESP_OK;
+}
+
+esp_err_t screen_display_mark(void)
+{
+    if (!s_disp) {
+        ESP_LOGE(TAG, "the screen was not booted; there is no mark to show");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
     /* The port's task is already running lv_timer_handler() by now, so everything LVGL-related
      * in this function happens under its lock: two tasks inside LVGL at once draw the
      * interface twice, at different offsets, into a buffer the panel is scanning. */
     if (!lvgl_port_lock(1000)) {
-        ESP_LOGE(TAG, "the LVGL port did not give its lock; no boot screen");
+        ESP_LOGE(TAG, "the LVGL port did not give its lock; no boot mark");
         return ESP_ERR_TIMEOUT;
     }
-    /* Nothing has painted these buffers yet. They are uninitialised PSRAM - which reads as
-     * white - and the peripheral has been scanning them since panel_rgb_start(). */
+    /* Nothing has painted these buffers yet and they read as white; fill both black before the
+     * engine's first clock, so the first frame it scans is the page the mark sits on. */
     panel_rgb_clear();
+
+    /* The first clock. It is here, not in screen_display_boot(), because the boot's flash work
+     * is done by now and the bus is quiet: a scan started before that work would be displaced
+     * by the first flash access and stay displaced (ADR 0055). */
+    esp_err_t scan_err = panel_rgb_scan_start();
+    if (scan_err != ESP_OK) {
+        lvgl_port_unlock();
+        ESP_LOGE(TAG, "the panel's first clock did not start: %s; the screen stays dark",
+                 esp_err_to_name(scan_err));
+        return scan_err;
+    }
 #endif
 
 #if !CONFIG_APP_UI_BACKLIGHT_TEST
-    /* The mark goes up here and stays up until the appliance has scanned the card. The
-     * backlight test owns the whole screen with its own white page, so it gets none. */
+    /* The mark goes up here and stays until the cassette replaces it. The backlight test owns
+     * the whole screen with its own white page, so it gets none. */
     splash_create();
 #endif
 
@@ -537,7 +583,7 @@ esp_err_t screen_display_boot(void)
     lv_refr_now(s_disp);
     lv_obj_invalidate(lv_screen_active());
     lv_refr_now(s_disp);
-
+    s_frame_live = true;
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     lvgl_port_unlock();
@@ -550,12 +596,14 @@ esp_err_t screen_display_boot(void)
                  esp_err_to_name(bl_err));
 #endif
 
-    ESP_LOGI(TAG, "boot screen %dx%d up: the mark on the black page, held until the card is scanned",
-             UI_W, UI_H);
-    ESP_LOGI(TAG, "screen memory: internal free %u B (largest %u B) before, %u B (largest %u B) after bringing the panel up",
-             (unsigned)internal_before, (unsigned)largest_before,
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    /* The mark is decorative, so it gets its own dwell before anything has to happen - and the
+     * dwell starts when the picture is actually lit, after the boot's flash work, not before
+     * it. Nothing in it touches flash. */
+    ESP_LOGI(TAG, "boot mark %dx%d on the glass, held %d ms before the cassette",
+             UI_W, UI_H, (int)CONFIG_APP_UI_MARK_HOLD_MS);
+#if CONFIG_APP_UI_MARK_HOLD_MS > 0
+    vTaskDelay(pdMS_TO_TICKS(CONFIG_APP_UI_MARK_HOLD_MS));
+#endif
     return ESP_OK;
 }
 
@@ -710,6 +758,10 @@ uint16_t *screen_capture_frame(int *w, int *h)
 {
     if (w) *w = 0;
     if (h) *h = 0;
+
+    /* The mark is the first painted frame, and forcing a refresh before it exists would wait
+     * on a panel vsync that has no clock behind it yet. The handlers answer 503 until then. */
+    if (!s_frame_live) return NULL;
 
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
     lv_display_t *disp = lv_display_get_default();

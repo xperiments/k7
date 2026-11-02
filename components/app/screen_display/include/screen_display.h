@@ -3,13 +3,15 @@
  * screen_display - the screen: the panel (or the headless framebuffer), LVGL's memory
  * and the cassette view.
  *
- * The screen comes up in two calls, because the boot mark has to be on the panel before
- * the card is scanned. `screen_display_boot()` brings the hardware and LVGL up and paints
- * the K7 mark on the black page; `screen_display_start()` replaces it with the cassette
- * and starts the task that keeps that current. The status comes from the live stream
- * inside the module; callers do not push frames. The panel and the headless path are two
- * adapters behind this same interface, selected at build time by
- * CONFIG_APP_BOARD_SUNTON_8048S050C.
+ * The screen comes up in three calls, because the panel must not scan while the boot
+ * touches flash, and the boot mark must be on the glass for its dwell before the cassette.
+ * `screen_display_boot()` brings the hardware and LVGL up with the clock stopped and the
+ * light off; `screen_display_mark()` - after the services have finished the boot's flash
+ * work - starts the first clock, paints the K7 mark on the black page, lights the backlight
+ * and holds the mark; `screen_display_start()` replaces it with the cassette and starts the
+ * task that keeps that current. The status comes from the live stream inside the module;
+ * callers do not push frames. The panel and the headless path are two adapters behind this
+ * same interface, selected at build time by CONFIG_APP_BOARD_SUNTON_8048S050C.
  */
 #include "esp_err.h"
 
@@ -17,20 +19,30 @@
 extern "C" {
 #endif
 
-/* Bring the screen and LVGL up and put the boot mark on it - the K7 logo at 64 px in the
- * palette's primary, centred on the palette's black. Returns ESP_OK, or the reason the
- * screen stayed dark; the device still serves.
+/* Bring the screen's hardware and LVGL up, with nothing on the glass and the backlight off.
+ * Returns ESP_OK, or the reason the screen stayed dark; the device still serves.
  *
- * Call this **before** the services, not after: the panel's framebuffers are uninitialised
- * PSRAM until LVGL paints them, and the backlight is lit over this mark rather than over
- * them. The mark stays up until screen_display_start(). */
+ * On the panel board this allocates the two PSRAM framebuffers, takes the LVGL port's 16 KB
+ * internal stack and pauses the display's refresh timer, but deliberately does NOT call
+ * `esp_lcd_panel_init()`: that call starts the pixel clock and the scan, and a flash access
+ * during a scan displaces the picture permanently (ADR 0055). The clock is started by
+ * `screen_display_mark()`, after the services. Call this **before** the services, both for
+ * the internal-RAM order (ADR 0004) and so the flash work afterwards happens on a dark
+ * panel. */
 esp_err_t screen_display_boot(void);
+
+/* Start the first clock (panel board), paint the boot mark, light the backlight and hold for
+ * CONFIG_APP_UI_MARK_HOLD_MS before returning. Call once, **after** the services: by then
+ * app_services_start() has mapped and validated the Snapshot and the Shell, and Wi-Fi has
+ * read its NVS out of flash, so the scan starts on a quiet bus and nothing displaces the
+ * mark. Returns ESP_OK, or the reason the mark did not go up; the device still serves and
+ * the screen stays dark. */
+esp_err_t screen_display_mark(void);
 
 /* Replace the boot mark with the cassette and start updating it. `music_dir` is the card
  * directory the broadcast's Track paths are relative to: the Artwork level reads a Track's
  * own picture from it. Pass NULL on a build with no card reader; the screen still runs and
- * the Artwork level stays empty. Call once, after the services are up - which is also after
- * the card has been mounted and scanned, and so the moment the mark has been waiting for.
+ * the Artwork level stays empty. Call once, after `screen_display_mark()` has returned.
  * Returns ESP_OK, or the reason the cassette could not be built; the mark stays up. */
 esp_err_t screen_display_start(const char *music_dir);
 
@@ -47,7 +59,7 @@ esp_err_t screen_display_start(const char *music_dir);
  *
  * Cheap to call per file: the first call of a burst does the blacking and waits a frame for it
  * to land, the rest only extend the hold. The screen comes back by itself a second after the
- * last call. No-op on a build with no panel. */
+ * last call. No-op on a build with no panel, and before the mark has started the first clock. */
 void screen_display_page_service(void);
 
 #if CONFIG_APP_UI_SCREEN_HTTP

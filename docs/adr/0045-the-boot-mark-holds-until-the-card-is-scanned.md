@@ -1,5 +1,16 @@
 # The boot mark holds until the card is scanned
 
+> **Amended again (the late first clock):** the screen comes up in three calls now. Stage one
+> (`screen_display_boot()`) still runs before the services and still creates the panel and the
+> LVGL port there, but it no longer starts the scan: `esp_lcd_panel_init()` — the call that
+> starts the pixel clock — moved to `screen_display_mark()`, which the appliance calls after
+> `app_services_start()`. The mark is therefore painted after the boot's flash work rather than
+> before it, the backlight is lit over it there, and `APP_UI_MARK_HOLD_MS` (2 s) is its dwell
+> before `screen_display_start()` builds the cassette. The `APP_UI_PANEL_SETTLE_MS` wait and the
+> no-light-over-an-unpainted-buffer rule below still hold; only "two calls and no third entry
+> point" is superseded. The reason is in ADR 0055's "The late clock": a scan that starts before
+> the boot touches flash is displaced by the first access and stays displaced.
+
 **Amended (a panel bring-up wait, not a delay to hide a frame):** stage one now holds for
 `APP_UI_PANEL_SETTLE_MS` (250 ms by default) between `backlight_hold_off()` and the peripheral's
 creation, because this panel has no reset line - the RGB driver's `reset()` and `init()` send it
@@ -24,20 +35,25 @@ until the card has been scanned.
 
 ## Decision
 
-- **The screen comes up in two calls, and the first one runs before the services.**
-  `screen_display_boot()` brings the panel and LVGL up and paints the mark;
+- **The screen comes up in three calls, and the first runs before the services.**
+  ~~`screen_display_boot()` brings the panel and LVGL up and paints the mark;
   `screen_display_start()` builds the cassette over it and starts the task that keeps it
   current. The appliance calls the first before `app_services_start()` and the second after
   it - after the network, the card mount and the scan - so the mark is on the panel for
   exactly as long as there is nothing to show. `screen_display.h` states the order; there is
-  no third entry point.
+  no third entry point.~~ **Amended:** `screen_display_boot()` creates the panel and the LVGL
+  port but starts neither the clock nor the scan; `screen_display_mark()` starts the first
+  clock, paints the mark, lights the panel and holds it; `screen_display_start()` builds the
+  cassette over it and starts the task that keeps it current. The appliance calls the first
+  before `app_services_start()` and the other two after it. `screen_display.h` states the
+  order; there is no fourth entry point.
 - **The panel is never lit over an unpainted buffer.** `backlight_hold_off()` gives the pin to
   LEDC at duty 0 before the panel exists (a plain GPIO drive would have made the channel's
-  later pin routing report a conflict); `panel_rgb_start()` clears both framebuffers
-  (`panel_rgb_clear()`) and returns with the light still off; the screen paints the mark into
-  both with the same two forced refreshes the capture path uses, and only then calls
-  `backlight_start()`. The fix is the order, not a delay: if the light cannot be on before a
-  picture, it does not matter how long boot takes.
+  later pin routing report a conflict); `panel_rgb_start()` leaves the light off,
+  `screen_display_mark()` fills both framebuffers black before the engine's first clock and
+  paints the mark into both with the same two forced refreshes the capture path uses, and only
+  then calls `backlight_start()`. The fix is the order, not a delay: if the light cannot be on
+  before a picture, it does not matter how long boot takes.
 - **The mark is a glyph, not an asset.** It is `CASSETTE_ICON_K7LOGO` (U+F00F) in
   `xtape_logo_128`, `k_col_primary` on `k_col_bg`, centred by LVGL's own label. The icon font
   already carries the mark, the palette already carries the two colours, and the style colours
@@ -85,10 +101,12 @@ until the card has been scanned.
 
 ## Consequences
 
-- **The mark is up for the network as well as the scan.** Wi-Fi association is started inside
-  `app_services_start()`, before the card is touched, so the logo covers it too; on this board
-  that is the larger part of the wait. A cold boot now reads as: black, the mark, the
-  cassette.
+- **The mark is up for its own dwell, not for the network or the scan.** Wi-Fi association is
+  started inside `app_services_start()` and may still be in flight while the mark is up, but
+  the boot's flash work - Wi-Fi's NVS, the Snapshot, the Shell - is behind the first clock now,
+  and the card is scanned before the mark is painted. A cold boot reads as: black (the
+  services), the mark for its 2 s, the cassette. The time before the mark belongs to the
+  services, not to the mark.
 - **Stage one runs before `esp_wifi_init()`, and that is a memory order change.** The LVGL
   port's 16 KB internal stack is the one block that moves, where the rule had been network
   before anything internal (ADR 0004). Measured on the board: internal free 230 303 B
@@ -101,15 +119,18 @@ until the card has been scanned.
   scan reports `psram=5149008 -> 5130064 B` free with an 82-track card (146 ms), essentially
   the 5.2 MB the earlier boot measured - comfortably above the 4 MiB `library_max_bytes`
   ceiling, and the same arrangement a rescan has always had.
-- **The boot is `APP_UI_PANEL_SETTLE_MS` longer before anything is drawn.** The `panel up` line
-  in the log below (1226 ms) moves by the configured value, 250 ms by default, and nothing after
-  it changes. The knob exists because the panel's power-on reset is the only reset it gets; the
-  failure it is aimed at is a cold start landing on a shifted picture, which a warm reboot never
-  shows because the panel never lost power. If a cold start still lands displaced with a large
-  value set, the supply is not the cause and the lever is the driver's frame restart instead.
-- **The screen's HTTP diagnostics have a picture from boot.** `/api/screen.bmp` used to
-  answer 503 until the cassette existed; it now serves the mark. Nothing else about the route
-  changes.
+- **The boot pays `APP_UI_PANEL_SETTLE_MS` before the panel's peripheral exists.** The `panel
+  up` line moves by the configured value, 250 ms by default. Since the first clock moved to
+  after the services, this wait no longer decides when the first clock arrives; it still keeps
+  the GPIO routing and the first data lines off a panel whose supply may not have settled. The
+  knob exists because the panel's power-on reset is the only reset it gets; the failure it is
+  aimed at is a cold start landing on a shifted picture, which a warm reboot never shows because
+  the panel never lost power. If a cold start still lands displaced with a large value set, the
+  supply is not the cause and the lever is the driver's frame restart instead.
+- **The screen's HTTP diagnostics have a picture from the mark.** `/api/screen.bmp` used to
+  answer 503 until the cassette existed; it now serves the mark once the first clock has started,
+  and answers 503 before that - the capture forces full refreshes, and an engine with no clock
+  has no vsync to wait for. Nothing else about the route changes.
 - **Flash.** Measured: the image with the 64 px mark was 1 746 288 B and with the 128 px mark
   and the large-font format 1 768 448 B - 22 KB, of which the glyph is 15 KB (238x128 at 4 bpp)
   and the rest is the wider descriptor on every other font. One part's mark, not a whole icon
@@ -125,3 +146,11 @@ no LEDC pin conflict. The mark's size went from 50x27 (a 64 px em, read as too s
 238x128 (a 314 px em, the large-font format on). The picture itself is the one thing a log
 cannot check: the size and the absence of a white frame before the mark are confirmed by eye,
 on the panel.
+
+**Amended 2026-11-02:** the first clock moved after `app_services_start()`, so the mark is
+painted there instead of before the services and held for `APP_UI_MARK_HOLD_MS` (2 s). The
+order measured on the board is `panel ... first clock deferred` (1592 ms), Wi-Fi's NVS read
+(1641), `the panel's first clock starts` (2522), `backlight` (2625), `boot mark ... held 2000
+ms` (2629), the cassette (4854). ADR 0055's "The late clock" has the measurements, the reason
+and the unchanged internal-RAM line. Confirmed on the cold-boot run (8-10 power pulls): the
+mark centred and held its 2 s, and the cassette arrived centred, on every boot.

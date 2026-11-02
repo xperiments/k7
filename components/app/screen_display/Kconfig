@@ -60,6 +60,21 @@ config APP_UI_DUMP_SCENE
         Combine with APP_UI_DUMP_STRIDE=1 when the ink matters and not only the layout:
         two-pixel marks alias badly at every second pixel.
 
+config APP_UI_MARK_HOLD_MS
+    int "How long the boot mark stays up before the cassette (ms)"
+    default 2000
+    range 0 10000
+    help
+        The mark is decorative and has a dwell of its own: it is painted after
+        app_services_start() has finished the boot's flash work (the Snapshot, the Shell's
+        table, Wi-Fi's NVS), the backlight is lit over it, and it stays up for this long
+        before the cassette replaces it. It is the one moment the boot shows something
+        without also touching flash, so it is held rather than rushed.
+
+        The dwell starts when the mark is actually lit, not when the panel is created. 0
+        removes it: the cassette follows the mark immediately. It does not affect how long
+        the boot takes before the panel's first clock - that is the services' time.
+
 # The RGB panel has no reset line on this board, so what happens between power-on and
 # its first clock is a hardware behaviour worth a knob.
 menu "Panel"
@@ -78,9 +93,14 @@ config APP_UI_PANEL_SETTLE_MS
         picture until the next power cycle.
 
         This waits, with the backlight already held off, before the peripheral is
-        created - so before the first clock, the first data line and the first frame
-        reach the panel. The cost is exactly this much boot latency, paid before the
-        boot mark appears; 0 disables it.
+        created - so before the first signal reaches the panel. The cost is exactly this
+        much boot latency, paid before the boot mark appears; 0 disables it.
+
+        Since the first clock is now deferred until after app_services_start(), this wait
+        is no longer what keeps the first clock away from a panel that is still starting;
+        it stays because it also keeps the GPIO routing and the first data lines off the
+        panel until its supply has settled. It costs one delay, and the panel has no reset
+        to recover with.
 
         Tune it against a COLD start - pull power, let the bulk capacitors drain, boot -
         and not against a warm reboot, where the rail never left and the panel never
