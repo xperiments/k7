@@ -25,6 +25,9 @@ export function ProcessArea() {
     done,
     total,
     busy,
+    running,
+    pause,
+    resume,
     busyStage,
     modelSet,
     setupError,
@@ -56,6 +59,7 @@ export function ProcessArea() {
   const tagsOnlyLabelId = useId();
 
   const percent = total > 0 ? (done / total) * 100 : 0;
+  const queued = items.filter((item) => item.status === 'queued').length;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6">
@@ -138,6 +142,15 @@ export function ProcessArea() {
                 {busyStage}
               </span>
             )}
+            {!running && queued > 0 ? (
+              <Button size="sm" onClick={resume}>
+                Measure {plural(queued, 'track')}
+              </Button>
+            ) : busy ? (
+              <Button size="sm" variant="outline" onClick={pause}>
+                Pause
+              </Button>
+            ) : null}
           </div>
         )}
 

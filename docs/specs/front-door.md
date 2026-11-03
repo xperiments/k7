@@ -213,10 +213,13 @@ The Queue, measured, written to the card by the run itself.
   twice — and **Change card** opens the picker, replacing the queue with the new card's and the
   Scope with it. Clear, asked in place, is the last action. The handle is remembered per Scope
   (`card/handles.ts`), so a reload does not lose the card: Rescan asks for the read-write grant
-  again on the click, which is the only moment a browser will show the prompt. **A load never
-  walks the card on its own**: reading it fills the queue, and a full queue starts a run, so an
-  automatic read would turn every reload into hours of measuring the card again — the click is
-  the page's, not the load's.
+  again on the click, which is the only moment a browser will show the prompt.
+- **A reload picks the card up, and holds the run.** When the browser still reports the grant as
+  given (`queryAccess`, which never prompts), the load walks the card and the queue is its
+  contents again — but the queue arrives **held**: the header offers *Measure N tracks*, and no
+  worker starts until it is pressed. Reading is not measuring; a load that measured would turn
+  every reload into the card's whole run. The same bar carries **Pause** while a run is in
+  flight, so a long run is never a page you cannot leave.
 - **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
   page: it stays at the top while the rows scroll.
 - **Rows:** gathered by album — *Album / Artist* as the heading, with its track count, in the

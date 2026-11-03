@@ -110,6 +110,24 @@ export async function ensureAccess(
   return (await permissioned.requestPermission({ mode })) === 'granted';
 }
 
+/**
+ * Whether the grant is **already** there, without asking for it. A page load cannot prompt —
+ * a prompt needs a person's click — so this is what a reload may ask itself: if the answer is
+ * yes, the card can be read straight away; if it is 'prompt', only a gesture can get it.
+ */
+export async function queryAccess(
+  handle: FileSystemDirectoryHandle,
+  mode: PermissionMode,
+): Promise<boolean> {
+  const permissioned = handle as unknown as Permissioned;
+  if (typeof permissioned.queryPermission !== 'function') return true;
+  try {
+    return (await permissioned.queryPermission({ mode })) === 'granted';
+  } catch {
+    return false;
+  }
+}
+
 /** Reading a card's files: what playing a track off it needs, and nothing more. */
 export function ensureRead(handle: FileSystemDirectoryHandle): Promise<boolean> {
   return ensureAccess(handle, 'read');

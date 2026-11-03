@@ -21,7 +21,13 @@ import { patchListArea } from '../../playlists/image';
 import { countMedia, getMedia, listMedia, measuredHash, putMedia, tagsOf } from '../../storage/media';
 import { cardRefFor, currentCardScope, subscribeCardScope } from '../../card/session';
 import { readCardFile as readFileFromCard, type CardRoot } from '../../card/read';
-import { cardHandleFor, ensureAccess, ensureRead, forgetCardHandle } from '../../card/handles';
+import {
+  cardHandleFor,
+  ensureAccess,
+  ensureRead,
+  forgetCardHandle,
+  queryAccess,
+} from '../../card/handles';
 import { loadSnapshot, saveSnapshot, type StoredSnapshot } from '../../storage/snapshots';
 import { clearCache, getCached, putCached } from '../../storage/cache';
 import { requestPersistence } from '../../storage/persist';
@@ -63,6 +69,14 @@ export interface AnalysisApi {
   items: QueueItem[];
   /** True while any worker holds a row. */
   busy: boolean;
+  /**
+   * Whether queued rows are being handed to the workers. A card read on load arrives **held**
+   * (`false`): the queue is its contents, but a load must not become hours of measuring the
+   * card again. Nothing else pauses it; a manual read starts it.
+   */
+  running: boolean;
+  pause: () => void;
+  resume: () => void;
   /** What the run is doing, for the header; null when nothing is in flight. */
   busyStage: string | null;
   /** Rows with an analysis, and rows in total. */
@@ -130,6 +144,10 @@ const AnalysisContext = createContext<AnalysisApi | null>(null);
 export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [busy, setBusy] = useState(false);
+  /* Held only by a load-time read; every other intake starts a run. */
+  const [running, setRunning] = useState(true);
+  /** The Scope the page already tried to pick up on load, so a failure is not a loop. */
+  const reconnected = useRef<string | null>(null);
   const [manifest, setManifest] = useState<ModelManifest | null>(null);
   const modelSet = manifest?.modelSet ?? null;
   const [saving, setSaving] = useState(false);
@@ -391,7 +409,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * a different client, and let them finish in any order. The claim set exists because the
    * effect re-runs on every status change and would otherwise hand the same item out twice. */
   useEffect(() => {
-    if (!modelSet) return;
+    if (!modelSet || !running) return;
     for (;;) {
       if (inFlight.current >= clients.length) break;
       const next = items.find(
@@ -407,7 +425,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         if (inFlight.current === 0) setBusy(false);
       });
     }
-  }, [items, modelSet, processItem, clients]);
+  }, [items, modelSet, processItem, clients, running]);
 
   /**
    * Take a card's files into the queue.
@@ -417,7 +435,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * is recognised from the card's own record — and appending would double every row.
    */
   const acceptIntake = useCallback(
-    (found: FoundFile[], skipped: number, replace: boolean, readOnly = false) => {
+    (
+      found: FoundFile[],
+      skipped: number,
+      replace: boolean,
+      readOnly = false,
+      start: 'run' | 'held' = 'run',
+    ) => {
     const accepted: QueueItem[] = [];
     const rejected: string[] = [];
 
@@ -439,6 +463,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
     if (accepted.length > 0) {
       setItems((previous) => (replace ? accepted : [...previous, ...accepted]));
+      // A card read on load is held; anything a person did starts measuring at once.
+      setRunning(start === 'run');
     }
 
     if (accepted.length === 0) {
@@ -470,6 +496,45 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   },
     [],
   );
+
+  /**
+   * The card a reload left behind: the handle is remembered, the grant usually is not, and the
+   * browser will not prompt without a person. So a load **asks itself** — `queryAccess` never
+   * prompts — and only when the answer is already yes does it walk the card. What it reads
+   * arrives **held**: the queue is the card's contents, but measuring starts on the button
+   * ("Measure N tracks"), because a reload must never become the card's whole run.
+   */
+  useEffect(() => {
+    if (storedHandle === null || items.length > 0 || busy) return;
+    const scope = currentCardScope();
+    if (reconnected.current === scope) return;
+    reconnected.current = scope;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (!(await queryAccess(storedHandle, 'read'))) return;
+        if (cancelled) return;
+        if (await queryAccess(storedHandle, 'readwrite')) {
+          setCardHandle(storedHandle as unknown as SnapshotDirectory);
+        }
+        const read = await readOpenCard(storedHandle as unknown as SnapshotDirectory);
+        if (cancelled || 'problem' in read) return;
+        setRunning(false);
+        acceptIntake(read.files, read.skipped, true, false, 'held');
+        setNotice({
+          kind: 'success',
+          text: `The card this browser remembers is in: ${plural(read.files.length, 'file')} read, not measured. Press Measure when you want the run.`,
+        });
+      } catch {
+        /* The card is out, or the handle no longer points at it: nothing to say on load. */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storedHandle, items.length, busy, acceptIntake]);
 
   const addFound = useCallback(
     (found: FoundFile[], skipped: number, readOnly = false) =>
@@ -842,9 +907,15 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     [cardHandle, items, storedHandle],
   );
 
+  const pause = useCallback(() => setRunning(false), []);
+  const resume = useCallback(() => setRunning(true), []);
+
   const value: AnalysisApi = {
     items,
     busy,
+    running,
+    pause,
+    resume,
     busyStage: busy ? runStage(items) : null,
     done,
     total,
