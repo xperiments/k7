@@ -323,9 +323,9 @@ _Avoid_: preferences, config, options
 ### The videos
 
 **Video**:
-A YouTube search result: something to watch about a Track, never a Track. It opens on YouTube,
-in its own tab — the App embeds no player and frames nothing. It cannot become a **Playlist**
-row and the player never sees it.
+A YouTube search result: something to watch about a Track, never a Track. It plays inline on
+its own route, in YouTube's no-cookie player, created only when someone presses play. It cannot
+become a **Playlist** row and the player never sees it.
 _Avoid_: track, song, media
 
 **Instance**:

@@ -20,13 +20,14 @@ import { getDevice } from '../../device/device';
 import { trackAt, type McpTrack } from '../../device/mcp';
 import { refreshDevice } from '../../device/useDeviceStatus';
 import { findAlbum, UNKNOWN_ARTIST, useMediaIndex, type Album } from '../../media/albums';
-import { isAbort, searchVideos, VideoError, watchUrl, type Video } from '../../media/youtube';
+import { isAbort, searchVideos, VideoError, type Video } from '../../media/youtube';
 import { addRows, createDraft, useDrafts } from '../../playlists/drafts';
 import { getSettings } from '../../settings';
 import type { CachedMedia } from '../../storage/media';
 import { formatDuration, plural } from '../format';
 import { Cover } from './Media';
 import { navigate, routeHref } from '../router';
+import { rememberVideo } from './Video';
 
 /**
  * One album: the cache rows it is made of, the measurements the device answers for them,
@@ -110,8 +111,8 @@ function LookupPanel({ lookup, onClose }: { lookup: { query: string; title: stri
       <CardHeader>
         <CardTitle>On YouTube for “{lookup.title}”</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Searched on the Invidious instance in Settings. A tile opens YouTube in a new tab;
-          nothing is downloaded and nothing joins a playlist.
+          Searched on the Invidious instance in Settings. A tile plays here; nothing is
+          downloaded and nothing joins a playlist.
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -141,9 +142,8 @@ function LookupPanel({ lookup, onClose }: { lookup: { query: string; title: stri
             {(videos ?? []).map((video) => (
               <a
                 key={video.id}
-                href={watchUrl(video.id)}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={routeHref({ name: 'video', id: video.id })}
+                onClick={() => rememberVideo(video)}
                 className="flex flex-col gap-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <img

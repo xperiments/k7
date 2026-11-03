@@ -19,6 +19,7 @@ export type Route =
   | { name: 'media' }
   | { name: 'album'; artist: string; album: string }
   | { name: 'artist'; artist: string }
+  | { name: 'video'; id: string }
   | { name: 'player' }
   | { name: 'settings' }
   | { name: 'not-found'; path: string };
@@ -57,6 +58,8 @@ export function parseRoute(hash: string): Route {
         return { name: 'album', artist: decode(parts[2]), album: decode(parts[3]) };
       if (parts.length === 3 && parts[1] === 'artist')
         return { name: 'artist', artist: decode(parts[2]) };
+      if (parts.length === 3 && parts[1] === 'video')
+        return { name: 'video', id: decode(parts[2]) };
       return { name: 'not-found', path };
     default:
       return { name: 'not-found', path };
@@ -76,6 +79,7 @@ export function routeArea(route: Route): 'Card' | 'Playlists' | 'Media' | 'Playe
     case 'media':
     case 'album':
     case 'artist':
+    case 'video':
       return 'Media';
     case 'player':
       return 'Player';
@@ -103,6 +107,8 @@ export function routePage(route: Route): string {
       return route.album;
     case 'artist':
       return route.artist;
+    case 'video':
+      return 'Video';
     case 'player':
       return 'Now playing';
     case 'settings':
@@ -129,6 +135,8 @@ export function routeHref(route: Route): string {
       return `#/media/album/${encodeURIComponent(route.artist)}/${encodeURIComponent(route.album)}`;
     case 'artist':
       return `#/media/artist/${encodeURIComponent(route.artist)}`;
+    case 'video':
+      return `#/media/video/${encodeURIComponent(route.id)}`;
     case 'player':
       return '#/player';
     case 'settings':

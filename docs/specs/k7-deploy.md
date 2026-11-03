@@ -75,9 +75,12 @@ storage. Notes on the two entries that look odd and are not:
 - `img-src https:` — for the same reason, from the other side: a Video's thumbnail comes from
   the **Invidious Instance** the user chose, which is a hostname no build can know. A picture
   is not code; the policy that matters is `script-src`, and it is unchanged.
-- `frame-src 'none'` — the App frames nothing. The video page that used to embed a player was
-  the only frame, and it is gone: a search result opens YouTube in its own tab, where the
-  player is YouTube's and no policy of ours has to allow it.
+- `frame-src https://www.youtube-nocookie.com https://www.youtube.com` — exactly one frame,
+  named twice: the inline player on `#/media/video/:id`. It is not the user's Invidious
+  Instance, because a header cannot name a hostname that is a setting; framing the Instance
+  would need `frame-src https:`, and an Instance that refuses framing shows a blank player
+  with no way to say why. The no-cookie host is the reliable one, and the page loads it only
+  on a click.
 
 **D7. No `COOP` header, ever.** `Cross-Origin-Opener-Policy: same-origin` would sever
 `window.opener` and silently kill connected mode; `same-origin-allow-popups` would do the same
