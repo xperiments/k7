@@ -13,15 +13,17 @@
  * `k7.local` is that second case, and the request is then gated on the `local-network`
  * permission rather than on the scheme.
  *
- * **Chrome 156 does not do this yet.** Measured on 2026-11-03 from the deployed origin with
- * the permission granted: a fetch to `http://k7.local` and to `http://192.168.0.38` both
- * fail with `TypeError: Failed to fetch`, and not one request — not even the CORS preflight —
- * reaches the network. The permission exists; the mixed-content bypass is unshipped.
+ * **Measured, 2026-11-03, Chrome 156, on the deployed origin:** a person granted the
+ * `local-network` prompt and `fetch('http://k7.local/api/status')` answered **200** with the
+ * device's CORS headers. It works. Two earlier attempts of mine read as a refusal for a
+ * reason worth recording: a permission granted through Chrome's debugging protocol is not a
+ * permission granted by a person, and `Browser.grantPermissions` produced `Failed to fetch`
+ * in 1 ms with nothing on the wire. The prompt has to be answered.
  *
- * So this transport is dormant by construction: `device.ts` tries it first, and a failed
- * probe falls through to the bridge, which is the path that works today. When a browser
- * ships §2.5, the same code starts answering and the Launcher stops being required — with
- * the device's CORS headers (app_services.c) already in place to receive it.
+ * `device.ts` tries this first. A browser that will not do it — Safari, Firefox, a person
+ * who denies the prompt — falls through to the bridge, which is why the Launcher still
+ * exists. The device's CORS headers (app_services.c) are what let the request through once
+ * the connection is permitted.
  */
 
 import { DEVICE_ORIGIN } from '../config';

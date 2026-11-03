@@ -61,7 +61,10 @@ everything it does it does on behalf of the App.
 opens the first entry and accepts messages from any entry. No URL parameter, query string,
 referrer or stored setting can add one.
 
-**L2. The App trusts exactly one Launcher origin: `http://k7.local`.** Not an IP, not another
+**L2. The App trusts exactly one Launcher origin: `http://k7.local`.** The same origin is
+also reachable directly, without a Launcher, when the browser grants the Local Network Access
+permission (measured in Chrome 156 — see [`local.ts`](../../web/src/device/local.ts)); the
+bridge remains for every browser that does not. Not an IP, not another
 port, not another host. Reached at `http://192.168.0.13`, the Launcher still shows status and
 the stream, and its Launch button says the App needs `k7.local`; the App shows the same
 sentence in reverse.

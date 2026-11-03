@@ -1,9 +1,13 @@
 # The bridge: typed operations between the App and the Launcher
 
-**Goal.** The **App** runs at `https://k7.xperiments.dev`, a secure origin, and can never
-reach `http://k7.local`: an HTTPS page cannot fetch an HTTP endpoint (mixed content), cannot
-embed it in a frame (blockable mixed content), and the browser's Local Network Access rules
-forbid a public origin from addressing a LAN host in the first place. The **Launcher** is the
+**Goal.** The **App** runs at `https://k7.xperiments.dev`, a secure origin. It can reach
+`http://k7.local` only where the browser permits it: a plain `fetch()` is mixed content and
+is refused, an iframe of it is refused too, and Local Network Access gates the address space.
+The one exception is the LNA permission prompt, which for a `.local` name bypasses mixed
+content once a person grants it — measured working in Chrome 156, and the reason
+[`device/local.ts`](../../web/src/device/local.ts) exists. Where that is unavailable or
+denied, the **Launcher** is the page that *is* on `http://k7.local`, and the bridge is how
+the App asks it. The **Launcher** is the
 page that *is* on `http://k7.local`, so it is the only thing that can talk to the device's
 own API. The bridge is how the App asks it to.
 
