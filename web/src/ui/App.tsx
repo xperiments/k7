@@ -20,7 +20,7 @@ import { UpdateBanner } from './UpdateBanner';
 import { prepareOffline } from './prefetchStore';
 
 /**
- * The front door: one shell, four areas, and the routes between them (ADR 0052).
+ * The shell: four areas and the routes between them (ADR 0052).
  *
  * The Card state chooses the first area and nothing after that: with a card in the
  * player the page opens on Player, without one on Process. Every later change is the

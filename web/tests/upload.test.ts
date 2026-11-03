@@ -14,7 +14,7 @@ const reply = (status: number, body: string) =>
 
 /** The Device copy's module graph: the seam picks `direct` because of the origin. */
 async function deviceCopy(): Promise<typeof import('../src/device/upload')> {
-  vi.stubGlobal('location', { origin: DEVICE_ORIGIN });
+  vi.stubGlobal('location', { origin: DEVICE_ORIGIN, protocol: 'http:' });
   vi.resetModules();
   return import('../src/device/upload');
 }

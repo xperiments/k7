@@ -16,6 +16,7 @@
  */
 
 import {
+  BRIDGE_VERSION,
   OP_SPECS,
   hello,
   parseMessage,
@@ -279,6 +280,12 @@ export function createBridgeDevice(options: BridgeOptions): BridgeDevice {
       case 'welcome':
         // W7: a peer claiming to be the App is not the Launcher and is dropped.
         if (message.role !== 'launcher') return;
+        if (message.v !== BRIDGE_VERSION) {
+          // W8: the App is deployed and the firmware is flashed, so this is a real state,
+          // not a fault to hide: stay standalone and say the two disagree.
+          disconnect(`the player's bridge speaks version ${message.v}, not ${BRIDGE_VERSION}`);
+          return;
+        }
         audio = { playing: message.audio.playing, volume: message.audio.volume, blocked: false };
         setLink('bridge');
         return;

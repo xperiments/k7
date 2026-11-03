@@ -192,7 +192,7 @@ export function ProcessArea() {
                 size="sm"
                 onClick={() => run('card', saveToCard)}
                 disabled={!canSave || saving}
-                title="Write xtape.db at the card's root, in the folder opened at intake."
+                title="Write k7.db at the card's root, in the folder opened at intake."
               >
                 {pending === 'card' ? 'Writing…' : 'Save to card'}
               </Button>
@@ -202,7 +202,7 @@ export function ProcessArea() {
               size="sm"
               onClick={() => run('file', saveSnapshotFile)}
               disabled={!canSave || saving}
-              title="Download xtape.db and move it to the card's root yourself"
+              title="Download k7.db and move it to the card's root yourself"
             >
               {pending === 'file' ? 'Preparing…' : 'Download .db'}
             </Button>

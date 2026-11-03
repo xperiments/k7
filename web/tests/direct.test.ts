@@ -82,7 +82,7 @@ describe('which Device a window gets', () => {
     const net = recorder();
     net.replies.push(() => json(statusBody));
     vi.stubGlobal('fetch', vi.fn(net.fetch));
-    vi.stubGlobal('location', { origin: DEVICE_ORIGIN });
+    vi.stubGlobal('location', { origin: DEVICE_ORIGIN, protocol: 'http:' });
     vi.resetModules();
 
     const { getDevice } = await import('../src/device/device');
@@ -100,7 +100,7 @@ describe('which Device a window gets', () => {
   });
 
   it('is none at an App origin with no opener, and every request says so', async () => {
-    vi.stubGlobal('location', { origin: APP });
+    vi.stubGlobal('location', { origin: APP, protocol: 'https:' });
     vi.resetModules();
 
     const { getDevice } = await import('../src/device/device');

@@ -971,7 +971,8 @@ function mountLauncherPage() {
     gateway.hidden = face !== 'gateway';
     bridgePanel.hidden = face !== 'bridge';
   };
-  showFace(window.opener ? 'bridge' : 'gateway');
+  // W1: bridge mode follows a *trusted* hello, not the presence of an opener.
+  showFace('gateway');
 
   if (originNote && window.location.hostname !== 'k7.local') {
     originNote.textContent = 'Connected mode needs http://k7.local. This page is at ' + window.location.hostname + '.';

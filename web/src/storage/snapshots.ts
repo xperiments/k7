@@ -58,19 +58,7 @@ interface SnapshotDB extends DBSchema {
  */
 const DB_NAME = 'k7-snapshots';
 const DB_VERSION = 2;
-const LEGACY_DB_NAME = 'xtape-snapshots';
 
-/** Best-effort removal of the pre-rename database: unscoped and unreachable from here. */
-function discardLegacyDatabase(): void {
-  try {
-    const request = globalThis.indexedDB?.deleteDatabase(LEGACY_DB_NAME);
-    if (request) request.onerror = () => {};
-  } catch {
-    /* No IndexedDB means no legacy database; the open below reports the real failure. */
-  }
-}
-
-discardLegacyDatabase();
 
 const dbPromise = openDB<SnapshotDB>(DB_NAME, DB_VERSION, {
   upgrade(db, oldVersion) {

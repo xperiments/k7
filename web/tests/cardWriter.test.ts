@@ -3,6 +3,7 @@ import {
   cardPicker,
   identifyCard,
   pickCardDirectory,
+  UNMARKED_CARD,
   writeSnapshotToCard,
   type CardDirectory,
   type SnapshotDirectory,
@@ -148,7 +149,7 @@ describe('identifying the picked directory', () => {
   it('never overwrites a mark this app did not write', async () => {
     const { handle, writes } = cardDirectory({ [MARK_NAME]: '{"v":1,"id":"nope"}' }, CARD_ROOT);
 
-    expect(await identifyCard(handle)).toBe(UNSCOPED);
+    expect(await identifyCard(handle)).toBe(UNMARKED_CARD);
     expect(writes).toEqual([]);
   });
 });

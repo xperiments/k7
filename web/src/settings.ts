@@ -18,7 +18,7 @@ export interface Settings {
   invidious: string;
 }
 
-const STORAGE_KEY = 'xtape.settings.v1';
+const STORAGE_KEY = 'k7.settings.v1';
 
 export const DEFAULT_SETTINGS: Settings = {
   providerBaseUrl: '',

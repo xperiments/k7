@@ -1,5 +1,5 @@
 /**
- * Writing `xtape.db` straight onto the card.
+ * Writing `k7.db` straight onto the card.
  *
  * A dropped folder is read-only for good: drag-and-drop hands over a handle whose
  * permission cannot be raised to `readwrite` (ADR 0010). The only way to write is
@@ -52,6 +52,13 @@ import {
   serialiseCardMark,
 } from '../card/mark';
 import { UNSCOPED } from '../card/session';
+
+/**
+ * A card root whose mark is absent-and-unwritable, foreign or newer: identity falls back to
+ * the fingerprint of its contents (card-mark.md G1). Distinct from `UNSCOPED`, which is a
+ * Folder — measured like anything else, and never given a card's scope.
+ */
+export const UNMARKED_CARD = 'unmarked-card';
 
 /** The browser's picker, or undefined where there is none. The returned function asks
  * for read-write: a card the page cannot write back to is a card the snapshot has to be
@@ -125,9 +132,9 @@ export async function identifyCard(directory: CardDirectory): Promise<string> {
       );
       return scopeFor(decision.write);
     } catch {
-      /* A card that refused the write is still a card; its covers go unscoped. */
-      return UNSCOPED;
+      /* A card that refused the write is still a card: the caller fingerprints it. */
+      return UNMARKED_CARD;
     }
   }
-  return UNSCOPED;
+  return UNMARKED_CARD;
 }

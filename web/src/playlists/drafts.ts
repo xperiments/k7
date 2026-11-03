@@ -22,7 +22,7 @@ export interface Draft {
   rows: string[];
 }
 
-const DB_NAME = 'xtape-playlists';
+const DB_NAME = 'k7-playlists';
 const STORE = 'drafts';
 
 let db: Promise<IDBPDatabase> | null = null;

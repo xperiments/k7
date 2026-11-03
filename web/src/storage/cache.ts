@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 import type { Analysis } from '../domain/analysis';
 
-const dbPromise = openDB('xtape-analysis', 1, {
+const dbPromise = openDB('k7-analysis', 1, {
   upgrade(db) {
     db.createObjectStore('analyses');
   },

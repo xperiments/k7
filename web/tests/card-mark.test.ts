@@ -104,11 +104,21 @@ describe('parsing k7.card', () => {
     );
   });
 
-  it('calls a mark from a newer format newer', () => {
-    expect(parseCardMark(JSON.stringify({ v: 2, id: ID, created: CREATED }))).toBe('newer');
+  it('reads a mark from a newer format as a name, marked as newer', () => {
+    expect(parseCardMark(JSON.stringify({ v: 2, id: ID, created: CREATED }))).toEqual({
+      v: 2,
+      id: ID,
+      created: CREATED,
+      newer: true,
+    });
     // A newer format may spell its other fields however it likes; only the id has to be
     // something this build could name a scope after.
-    expect(parseCardMark(JSON.stringify({ v: 2, id: ID }))).toBe('newer');
+    expect(parseCardMark(JSON.stringify({ v: 2, id: ID }))).toEqual({
+      v: 2,
+      id: ID,
+      created: '',
+      newer: true,
+    });
   });
 
   it('calls a newer version with no usable id foreign', () => {
@@ -254,13 +264,15 @@ describe('what the App does with the mark', () => {
     expect(decideMark('foreign', { writable: false })).toEqual({ action: 'unmarked' });
   });
 
-  it('never overwrites a newer mark, even when the card is writable', () => {
-    expect(decideMark('newer', { writable: true })).toEqual({ action: 'unmarked' });
-    expect(decideMark('newer', { writable: false })).toEqual({ action: 'unmarked' });
+  it('adopts a newer mark as a name and never writes it back', () => {
+    const newer = parseCardMark(JSON.stringify({ v: 2, id: ID, created: CREATED }));
+    expect(newer).not.toBe('absent');
+    expect(decideMark(newer, { writable: true })).toEqual({ action: 'use' });
+    expect(decideMark(newer, { writable: false })).toEqual({ action: 'use' });
   });
 
   it('only ever writes when it creates', () => {
-    for (const state of [mark(), 'absent', 'foreign', 'newer'] as const) {
+    for (const state of [mark(), 'absent', 'foreign'] as const) {
       for (const writable of [true, false]) {
         const decision = decideMark(state, { ...createOptions, writable });
         if (decision.action === 'create') {

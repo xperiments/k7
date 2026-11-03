@@ -12,7 +12,6 @@
 
 import { useSyncExternalStore } from 'react';
 
-import { DEVICE_ORIGIN } from '../config';
 import { createBridgeDevice, type BridgeDevice } from './bridge';
 import { createDirectDevice, type DirectDevice } from './direct';
 import { NO_LINK, type Device, type Link } from './transport';
@@ -24,9 +23,14 @@ interface NoneDevice extends Device {
 
 type NamedDevice = DirectDevice | BridgeDevice | NoneDevice;
 
-/** The Device copy: the App's own bytes, served by the device, at its own origin. */
+/**
+ * The Device copy: the App's own bytes, served by the device. The device is the only thing
+ * that serves this App over plain HTTP — the Hosted App is always HTTPS — so the scheme is
+ * the fact, not the hostname. Reached by IP it is still the Device copy, and it must keep
+ * working: that page is what you open when mDNS does not.
+ */
 function isDeviceCopy(): boolean {
-  return typeof location !== 'undefined' && location.origin === DEVICE_ORIGIN;
+  return typeof location !== 'undefined' && location.protocol === 'http:';
 }
 
 /**

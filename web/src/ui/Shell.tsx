@@ -49,6 +49,7 @@ import { DEVICE_ORIGIN } from '../config';
 import { connectToDevice, getDevice, useDeviceLink } from '../device/device';
 import type { Link } from '../device/transport';
 import { useDeviceStatus } from '../device/useDeviceStatus';
+import { InstallButton } from './InstallButton';
 import { useDrafts } from '../playlists/drafts';
 import { navigate, routeArea, routeHref, routePage, type Route } from './router';
 
@@ -217,7 +218,7 @@ function DeviceMenu({
               <AudioLines className="size-4" aria-hidden="true" />
             </span>
             <span className="grid min-w-0 flex-1 text-left leading-tight">
-              <span className="truncate text-sm font-medium">xtape</span>
+              <span className="truncate text-sm font-medium">K7</span>
               <span className="truncate text-xs text-sidebar-foreground/70">{subtitle}</span>
             </span>
           </DropdownMenuTrigger>
@@ -322,6 +323,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
           <Nav groups={groups} route={route} />
         </SidebarContent>
         <SidebarFooter>
+          <InstallButton />
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton

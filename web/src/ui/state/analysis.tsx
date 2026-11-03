@@ -34,6 +34,14 @@ import {
 } from '../../storage/snapshots';
 import { clearCache, getCached, putCached } from '../../storage/cache';
 import { requestPersistence } from '../../storage/persist';
+
+/** O5: the first analysis is when persistence is worth asking the browser for. */
+let persistenceAsked = false;
+function askPersistenceOnce(): void {
+  if (persistenceAsked) return;
+  persistenceAsked = true;
+  void requestPersistence();
+}
 import { cacheKey } from '../../config';
 import { isWeightError } from '../../weights/errors';
 import { writeSnapshotToCard, type SnapshotDirectory } from '../cardWriter';
@@ -104,7 +112,7 @@ export interface AnalysisApi {
   saveTags: (item: QueueItem) => Promise<void>;
   exportJson: () => void;
 
-  /** Builds `xtape.db` from the queue and this browser's drafts. */
+  /** Builds `k7.db` from the queue and this browser's drafts. */
   buildImage: () => Promise<SnapshotExport | null>;
   sendToPlayer: () => Promise<void>;
   saveToCard: () => Promise<void>;
@@ -270,8 +278,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             metadata,
           );
           await putCached(key, analysis);
-        void requestPersistence();
-          void requestPersistence();
+        askPersistenceOnce();
           update(item.id, { status: 'tagged', analysis, stage: undefined });
           void rememberMedia(item);
           return;
@@ -293,7 +300,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           (stage) => update(item.id, { stage }),
         );
         await putCached(key, analysis);
-        void requestPersistence();
+        askPersistenceOnce();
         update(item.id, { status: 'done', analysis, stage: undefined });
         void rememberMedia(item);
       } catch (error) {
@@ -398,7 +405,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         const tempo = await clients[0].deep(audio);
         const analysis = { ...item.analysis, tempo };
         await putCached(cacheKey(item.analysis.track.hash, modelSet), analysis);
-        void requestPersistence();
+        askPersistenceOnce();
         update(item.id, { status: 'done', analysis, stage: undefined, cached: false });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -452,7 +459,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `xtape-analysis-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.download = `k7-analysis-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   }, [items]);
@@ -529,7 +536,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       setNotice({
         kind: 'success',
         text:
-          `Wrote xtape.db for ${plural(result.tracks, 'track')}` +
+          `Wrote k7.db for ${plural(result.tracks, 'track')}` +
           `${listMessage(nonEmptyLists())} to the card.` +
           leftovers(result.skipped) +
           ' Put the card back in the player.',
@@ -608,13 +615,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = 'xtape.db';
+      anchor.download = 'k7.db';
       anchor.click();
       URL.revokeObjectURL(url);
       setNotice({
         kind: 'success',
         text:
-          `Saved xtape.db for ${plural(result.tracks, 'track')}` +
+          `Saved k7.db for ${plural(result.tracks, 'track')}` +
           `${listMessage(nonEmptyLists())}.` +
           leftovers(result.skipped) +
           " Put it at the card's root and put the card back.",
@@ -710,7 +717,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'xtape.db';
+    anchor.download = 'k7.db';
     anchor.click();
     URL.revokeObjectURL(url);
   }, [lastSnapshot]);

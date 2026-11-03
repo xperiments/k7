@@ -11,9 +11,11 @@ The page the device used to serve is gone. **Front door** is retired as a word: 
 **Launcher**, the **App**, and — when the device serves the App's own bytes as a fallback —
 the **Device copy**.
 
-**Status:** designed, not built. The App runs today only as the device-served page at
-`http://k7.local/` (formerly `http://xtape.local/`), which is a secure context on nothing, so
-the card writer, the service worker and WebGPU are all dead there by construction.
+**Status:** M1–M3 are built and tested in this repository — the Launcher and its bridge, the
+card's mark and the scoped stores, installability, and the one offline weights store with a
+gated prefetch. Not deployed and not flashed. M4 is partly built: the Device copy's `direct`
+transport exists, the Library's image source and the local Provider do not, so `#/media`,
+`#/playlists` and Ask still read the player only.
 
 **Vocabulary:** [`web/CONTEXT.md`](../../web/CONTEXT.md). The device's own API is
 [`front-door.md`](./front-door.md) §2 — the spec as it stood when the device served the app
@@ -61,7 +63,7 @@ referrer or stored setting can add one.
 
 **L2. The App trusts exactly one Launcher origin: `http://k7.local`.** Not an IP, not another
 port, not another host. Reached at `http://192.168.0.13`, the Launcher still shows status and
-the stream, and its Launch button says connected mode needs `k7.local`; the App shows the same
+the stream, and its Launch button says the App needs `k7.local`; the App shows the same
 sentence in reverse.
 
 **L3. The device's name is `k7.local`.** The mDNS hostname is one string in

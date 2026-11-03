@@ -46,33 +46,17 @@ interface MediaDB extends DBSchema {
 }
 
 /**
- * The store used to be `xtape-media`, unscoped, one row per path. Neither of those can be
+ * The store used to be `k7-media`, unscoped, one row per path. Neither of those can be
  * carried over: a row belongs to a card, and a row that never recorded one cannot be
- * attributed to any. The spec accepts the loss (§2), so the old database is discarded
- * rather than migrated, and the new one is keyed differently from the first byte.
+ * attributed to any. The spec accepts the loss (§2), so nothing is migrated: the old database
+ * is left where it is and the new one is keyed differently from the first byte.
  *
  * The version is 2 because the first scoped attempt on this name would have been 1; an
  * upgrade from it recreates the store too, rather than failing on a key-path mismatch.
  */
 const DB_NAME = 'k7-media';
 const DB_VERSION = 2;
-const LEGACY_DB_NAME = 'xtape-media';
 
-/**
- * Best-effort removal of the pre-rename database. Its rows are unscoped and unreachable
- * from this build, so leaving it would only spend quota the App reports in Settings. A
- * deletion blocked by an older tab is an orphan, not a reason to fail the app.
- */
-function discardLegacyDatabase(): void {
-  try {
-    const request = globalThis.indexedDB?.deleteDatabase(LEGACY_DB_NAME);
-    if (request) request.onerror = () => {};
-  } catch {
-    /* No IndexedDB means no legacy database; the open below reports the real failure. */
-  }
-}
-
-discardLegacyDatabase();
 
 const dbPromise = openDB<MediaDB>(DB_NAME, DB_VERSION, {
   upgrade(db, oldVersion) {

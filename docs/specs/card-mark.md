@@ -10,8 +10,8 @@ copy it, edit it, or `dd` it onto a second card. The mark answers *"is this the 
 prepared?"* and never *"is this card allowed to do this?"* — the second question has no answer
 on this device, which has no authentication at all.
 
-**Status:** designed, not built. The card writer, the store scoping and the fingerprint are
-all new; the device does not read the mark yet.
+**Status:** the mark, the policy, the fingerprint and the scoped stores are built and tested.
+The device does not read the mark yet (D1), and §7's Update-file shim is in the firmware.
 
 ---
 

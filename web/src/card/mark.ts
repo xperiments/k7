@@ -44,7 +44,16 @@ export interface CardMark {
  * `newer` and `foreign` are read-only and lead to the fingerprint scope (§5), with
  * **re-mark this card** left as an explicit act.
  */
-export type MarkState = CardMark | 'absent' | 'newer' | 'foreign';
+/**
+ * A mark from a format this build does not know. Its id is a usable name — the card is the
+ * same card — but nothing else about it can be trusted, and it is never written back.
+ */
+export interface NewerCardMark extends Omit<CardMark, 'v'> {
+  v: number;
+  newer: true;
+}
+
+export type MarkState = CardMark | NewerCardMark | 'absent' | 'foreign';
 
 /** Fills the given sixteen-byte buffer with random bytes; the shape `getRandomValues` has. */
 export type RandomSource = (bytes: Uint8Array) => Uint8Array;
@@ -155,7 +164,14 @@ export function parseCardMark(text: string): MarkState {
     return mark;
   }
 
-  if (version > MARK_VERSION) return 'newer';
+  if (version > MARK_VERSION) {
+    return {
+      v: version,
+      id,
+      created: typeof record.created === 'string' ? record.created : '',
+      newer: true,
+    };
+  }
 
   return 'foreign';
 }
@@ -163,9 +179,8 @@ export function parseCardMark(text: string): MarkState {
 /**
  * The §4 policy table as one function.
  *
- * `newer` is unmarked here rather than adopted: this build cannot promise to honour fields
- * it does not know, and a scope is not worth a silent misreading. The card is still told
- * apart by its fingerprint, and re-marking remains an explicit act.
+ * Only an object is adopted, and only a `CardMark` is ever created: a newer format's id
+ * names the card, but this build does not write a file whose fields it does not understand.
  */
 export function decideMark(state: MarkState, options: DecideOptions): MarkDecision {
   if (typeof state === 'object' && state !== null) return { action: 'use' };
@@ -194,7 +209,7 @@ export function serialiseCardMark(mark: CardMark): string {
 }
 
 /** The scope a card's name produces: `mark:<id>`. */
-export function scopeFor(mark: CardMark): string {
+export function scopeFor(mark: { id: string }): string {
   return `mark:${mark.id}`;
 }
 

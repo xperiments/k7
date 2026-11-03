@@ -5,8 +5,8 @@
 A development origin, `https://k7-dev.xperiments.dev:8000`, exists so connected mode can be
 tested against the same shape it ships in — real TLS, no warning, a genuine secure context.
 
-**Status:** the App is not deployed anywhere yet; today it is served by the device at
-`http://xtape.local/`. Nothing below has been run.
+**Status:** the config, the two checkers and the CI workflow exist; nothing has been deployed,
+no Vercel project points at it, and no certificate or DNS record has been created.
 
 ---
 

@@ -10,8 +10,9 @@ own API. The bridge is how the App asks it to.
 It is a request/response RPC with a closed operation table. It is not a proxy, not a tunnel,
 and not a stream.
 
-**Status:** designed, not built. No firmware carries the Launcher yet, and no App speaks this
-protocol. The rules below are the contract both ends are written against.
+**Status:** built on both ends and tested (the protocol module, the Launcher's executor, the
+App's client, and a contract test that transcribes §3 by hand). Not yet exercised in a browser
+across two real origins — that Playwright suite is the one item of §9 outstanding.
 
 **Vocabulary:** [the App's glossary](../../web/CONTEXT.md). The device's API is specified in
 [`sd-stream-server.md`](./sd-stream-server.md) and [`front-door.md`](./front-door.md) §2; the

@@ -17,7 +17,7 @@ import { routeHref } from '../router';
  * them back. A reload therefore says "Video" rather than inventing a name.
  */
 
-const REMEMBERED = 'xtape.video.';
+const REMEMBERED = 'k7.video.';
 
 /** Keep the name of a Video the user just chose, for the route that shows it. */
 export function rememberVideo(video: Video): void {

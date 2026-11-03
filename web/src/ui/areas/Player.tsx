@@ -22,7 +22,7 @@ import { Cover } from './Media';
  *
  * The joins are the interesting part, and each one degrades to a dash rather than an error:
  *
- *   cover        the `xtape-media` cache by the Snapshot path in `/api/status`
+ *   cover        the `k7-media` cache by the Snapshot path in `/api/status`
  *   name         `playing.title`, then the cache, then the device's row, then the file name
  *   artist/album the cache first, the device's row when the cache has no names
  *   order        `/api/status`'s `order` and `playlist`, when the firmware reports them

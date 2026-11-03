@@ -146,6 +146,13 @@ function shellOutputs(shell: boolean): Plugin {
           .map((origin) => origin.trim())
           .filter(Boolean);
         if (origins.length === 0) throw new Error('K7_APP_ORIGINS has no origin in it');
+        const shipping =
+          process.env.XTAPE_REQUIRE_SHELL === '1' || process.env.K7_REQUIRE_SHELL === '1';
+        if (shipping && (origins.length !== 1 || origins[0] !== 'https://k7.xperiments.dev')) {
+          throw new Error(
+            'a shipping Shell trusts one App origin; K7_APP_ORIGINS is ' + origins.join(', '),
+          );
+        }
         await writeFile(
           resolve(outDir, 'launcher-origins.js'),
           `window.K7_APP_ORIGINS = ${JSON.stringify(origins)};\n`,

@@ -55,7 +55,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # The target the repo already has: unit tests, the layering check (H3), and the HTTP
-      # acceptance tests, including /app mapping and the two Update-file names.
+      # acceptance tests, including /app mapping and both Snapshot magics. The k7.db →
+      # xtape.db fallback lives in board_esp32.c, which needs a card and a board: it is
+      # proven on hardware, not here.
       - name: make -C host check
         run: make -C host check
 

@@ -22,6 +22,7 @@ import {
   cardPicker,
   identifyCard,
   pickCardDirectory,
+  UNMARKED_CARD,
   type CardDirectory,
   type SnapshotDirectory,
 } from './cardWriter';
@@ -88,9 +89,11 @@ export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZone
       const result = await scanDirectoryHandle(picked.directory as unknown as CardDirectoryHandle);
       // Identify the card before the run: the scope has to exist before the first cover is
       // written, and a mark this App did not write is never overwritten (card-mark.md §4).
-      const marked = await identifyCard(picked.directory as unknown as CardDirectory);
+      const identified = await identifyCard(picked.directory as unknown as CardDirectory);
       setCardScope(
-        marked !== UNSCOPED ? marked : fingerprintScope(await fingerprintOf(result.files)),
+        identified === UNMARKED_CARD
+          ? fingerprintScope(await fingerprintOf(result.files))
+          : identified,
       );
       onCard(result.files, result.skipped, picked.directory);
     } catch (failure) {
@@ -106,7 +109,12 @@ export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZone
     setError(null);
     try {
       const result = await scanDataTransfer(data);
-      setCardScope(fingerprintScope(await fingerprintOf(result.files)));
+      // A dropped card is a card (it has a `music/` in it) and gets its fingerprint; a
+      // dropped Folder is not, and stays unscoped (card-mark.md K2, G1).
+      const droppedACard = result.files.some((found) => /(^|\/)music\//i.test(found.path));
+      setCardScope(
+        droppedACard ? fingerprintScope(await fingerprintOf(result.files)) : UNSCOPED,
+      );
       onFiles(result.files, result.skipped);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));

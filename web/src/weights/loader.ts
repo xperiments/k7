@@ -4,7 +4,7 @@ import { WeightIntegrityError, WeightUnavailableError } from './errors';
 import { verifySha256 } from './hash';
 import { weightCacheKey } from './key';
 
-const DB_NAME = 'xtape-weights';
+const DB_NAME = 'k7-weights';
 const STORE = 'weights';
 
 let dbPromise: ReturnType<typeof openDB> | null = null;

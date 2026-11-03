@@ -16,8 +16,8 @@
  */
 const APP_VERSION = '__APP_VERSION__';
 
-const SHELL_CACHE = `xtape-shell-${APP_VERSION}`;
-const SHELL_PREFIX = 'xtape-shell-';
+const SHELL_CACHE = `k7-shell-${APP_VERSION}`;
+const SHELL_PREFIX = 'k7-shell-';
 
 function isShellAsset(pathname) {
   return (
