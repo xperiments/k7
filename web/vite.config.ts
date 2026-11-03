@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { patchTaglibGlue } from './src/audio/taglib-glue.ts';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 
@@ -26,6 +27,24 @@ const devHttps =
 const packageVersion = (
   JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { version: string }
 ).version;
+
+/**
+ * TagLib's glue is bundled, not fetched as a weight, so the App's Content Security Policy has
+ * to be honoured before the bundle exists: its embind code builds invokers with `new Function`
+ * (74 of them during `TagLib.initialize()` alone) and the policy refuses every one. The
+ * replacement is the closures those bodies produced; `src/audio/taglib-glue.ts` says which
+ * three sites and why, and fails the build on glue it does not recognise.
+ */
+function taglibWithoutDynamicCode(): Plugin {
+  return {
+    name: 'k7-taglib-without-dynamic-code',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!id.includes('taglib-wasm/dist/taglib-wrapper.js')) return null;
+      return { code: patchTaglibGlue(code), map: null };
+    },
+  };
+}
 
 /**
  * A development origin must not carry a service worker (§ pwa.ts), and an old bundle cannot
@@ -247,7 +266,13 @@ export default defineConfig(({ mode }) => {
   const cdnWeights = shell || mode === 'production' || process.env.K7_WEIGHTS === 'cdn';
 
   return {
-    plugins: [react(), tailwindcss(), noWorkerInDevelopment(), shellOutputs(shell)],
+    plugins: [
+      react(),
+      tailwindcss(),
+      noWorkerInDevelopment(),
+      taglibWithoutDynamicCode(),
+      shellOutputs(shell),
+    ],
     /* The dev origin is `https://k7-dev.xperiments.dev:8000`; the port is part of it, and
      * the certificate only exists once someone has run mkcert (k7-deploy.md §4). */
     server: { host: true, port: 8000, https: devHttps },
