@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>lna probe</title></head>
+<body>
+<pre id="out">pending</pre>
+<script>
+const results = {};
+async function probe(name, url) {
+  try {
+    const r = await fetch(url, { mode: 'cors' });
+    results[name] = { ok: r.ok, status: r.status, body: (await r.text()).slice(0, 90) };
+  } catch (e) {
+    results[name] = { error: e && e.message ? e.message : String(e) };
+  }
+}
+(async () => {
+  await probe('ip', 'http://192.168.0.38:8124/api/status');
+  await probe('mdns', 'http://k7.local/api/status');
+  document.getElementById('out').textContent = JSON.stringify(results[i] || results);
+  document.getElementById('out').textContent = JSON.stringify(results);
+  try { await fetch('http://192.168.0.38:8124/report?v=' + encodeURIComponent(JSON.stringify(results))); } catch (e) {}
+})();
+</script>
+</body></html>
