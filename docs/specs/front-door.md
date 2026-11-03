@@ -95,7 +95,7 @@ works.
 | `#/media/album/:album` | Media | one album's tracks |
 | `#/media/artist/:artist` | Media | one artist's albums |
 | `#/media/video/:id` | Media | one Video, click to play |
-| `#/player` | Player | cover, what is Playing, the device's facts |
+| `#/player` | Player | cover, what is Playing, the device's facts (no sidebar entry) |
 | `#/settings` | — | the Provider and the Invidious Instance |
 
 **R3.** `/stream` is on the same port, byte-identical to what a radio has always received.
@@ -176,24 +176,26 @@ the structure:
 
 - **Header.** The workspace switcher becomes the device: the name, whether a card is in, and a
   menu of device actions (open the stream, open `/library`, copy the MCP endpoint, rescan).
-- **Groups.** Card, Playlists, Media, Player, each a `SidebarGroup` with count badges the
-  template already supports. The template's "Projects" group and account block are removed: there
-  are no projects and no accounts.
+- **Groups.** Card, Playlists, Media, each a `SidebarGroup` with count badges the template
+  already supports. There is no "Now playing" entry: the bar is the player. The template's
+  "Projects" group and account block are removed: there are no projects and no accounts.
 - **Footer.** Settings (`#/settings`) and the licence line that used to sit under every page.
 - **Bar.** A player at the bottom of the inset, under every area: the cover, what is sounding,
-  play/pause, a stop, and a volume — plus, for a card track, previous and next and a **seek that
-  spans the bar**. A card play is the **album**: the bar is handed its tracks in order and one
-  loader, so a track that ends asks for the next (the last one stops) and next/previous move
-  through it. A stream has neither, because there is nothing to be next to. It has two sources and
-  says which — the player's **stream** (`/stream`, live, no seek) or a **file off the card in
-  the computer**, read through the card's handle (`card/read.ts`) — the one the page holds, or
-  the one the browser remembers for that Scope, re-granted read-only on the click that plays —
-  and played from a blob URL. Its one element lives in `PlaybackProvider`, not in the bar, so re-rendering an area
-  never interrupts the sound and any page can start it. With no card in the player, `play` on an
-  album row means this file; with one, it means the player, and the bar follows its broadcast.
+  play/pause, a stop, a volume, and — while a card track is sounding and the player is emitting
+  — a **go live** icon back to the broadcast; plus, for a card track, previous and next and a
+  **seek that spans the bar**. A card play is the **album**: the bar is handed its tracks in
+  order and one loader, so a track that ends asks for the next (the last one stops) and
+  next/previous move through it. A stream has neither, because there is nothing to be next to.
+  It has two sources and says which — the player's **stream** (`/stream`, live, no seek) or a
+  **file off the card in the computer**, read through the card's handle (`card/read.ts`) — the
+  one the page holds, or the one the browser remembers for that Scope, re-granted read-only on
+  the click that plays — and played from a blob URL. Its one element lives in
+  `PlaybackProvider`, not in the bar, so re-rendering an area never interrupts the sound and any
+  page can start it. With no card in the player, `play` on an album row means this file; with
+  one, it means the player, and the bar follows its broadcast.
 
 **The card state chooses the first area, once.** A cold load with a card in the player opens
-`#/player`; with no card, `#/process`. After that the sidebar is the user's. The S3 banner is
+`#/media` — the bar already says what is playing; with no card, `#/process`. After that the sidebar is the user's. The S3 banner is
 gone; what it protected is structural — **the Process area stays mounted while another route is
 shown**, so navigating can never destroy a running Queue nor stop a worker. Every other area
 mounts on demand.
@@ -312,6 +314,9 @@ The Queue, measured, written to the card by the run itself.
   Instance can be changed from here).
 
 ### 4.4 Player
+
+Reachable at `#/player` and not in the sidebar: the bar is the player, so a page for it would be
+a second place to look at the same fact. It stays as the place the device's own numbers live.
 
 - The cover, the Track's name, artist and album (joined from the Snapshot row and this browser's
   cache), its path, an elapsed/duration bar from `/api/status`, and the device's facts: card,

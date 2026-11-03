@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   Disc3,
   ListMusic,
-  Play,
   Plug,
   RefreshCw,
   Settings as SettingsIcon,
@@ -78,7 +77,7 @@ interface NavGroup {
 }
 
 /** The four areas, and the routes that belong to each. */
-function navGroups(drafts: number, tracks: number, playing: boolean): NavGroup[] {
+function navGroups(drafts: number, tracks: number): NavGroup[] {
   return [
     {
       id: 'card',
@@ -121,19 +120,6 @@ function navGroups(drafts: number, tracks: number, playing: boolean): NavGroup[]
           label: 'Albums',
           icon: <Disc3 aria-hidden="true" />,
           names: ['media', 'album', 'artist', 'video'],
-        },
-      ],
-    },
-    {
-      id: 'player',
-      label: 'Player',
-      items: [
-        {
-          href: routeHref({ name: 'player' }),
-          label: 'Now playing',
-          icon: <Play aria-hidden="true" />,
-          names: ['player'],
-          badge: playing ? '●' : undefined,
         },
       ],
     },
@@ -316,11 +302,13 @@ export function Shell({ route, children }: { route: Route; children: React.React
   const { status, reachable } = useDeviceStatus();
   const link = useDeviceLink();
   const drafts = useDrafts();
-  const playing = status?.playing ?? null;
   const card = Boolean(status?.card);
   const tracks = status?.tracks ?? 0;
 
-  const groups = navGroups(drafts.length, tracks, Boolean(playing?.title));
+  /* There is no "Now playing" entry: the bar at the bottom of every area *is* the player, so
+   * a page for it would be a second place to look at the same fact. `#/player` still renders
+   * the device's facts for anyone who has the address. */
+  const groups = navGroups(drafts.length, tracks);
 
   const area = routeArea(route);
 

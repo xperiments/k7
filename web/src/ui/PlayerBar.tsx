@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Disc3, Pause, Play, SkipBack, SkipForward, Square } from 'lucide-react';
+import { Disc3, Pause, Play, Radio, SkipBack, SkipForward, Square } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { useCardScope } from '../card/session';
@@ -67,6 +67,11 @@ export function PlayerBar() {
   const artist = cardTrack ? cardTrack.artist : playback.source === null ? '' : 'Live from the player';
   const cover = cardTrack ? cardTrack.cover : deviceTrack.cover;
   const seekable = playback.source?.kind === 'card';
+  /* The player is emitting something, and this page is playing a file instead: one icon is
+   * the way back to the broadcast. It is the fact that decides, not the link — a player with
+   * a track on is a stream, whatever this page can or cannot fetch. */
+  const emitting = Boolean(playing?.title);
+  const canGoLive = seekable && emitting;
   const safeDuration = Number.isFinite(playback.duration) && playback.duration > 0
     ? playback.duration
     : 0;
@@ -146,6 +151,18 @@ export function PlayerBar() {
         {playback.source !== null ? (
           <Button size="icon" variant="ghost" aria-label="Stop" onClick={playback.stop}>
             <Square aria-hidden="true" />
+          </Button>
+        ) : null}
+
+        {canGoLive ? (
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Go live"
+            title="Go live: what the player is emitting"
+            onClick={playback.playStream}
+          >
+            <Radio aria-hidden="true" />
           </Button>
         ) : null}
 
