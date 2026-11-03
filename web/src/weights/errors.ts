@@ -42,3 +42,16 @@ export class WeightIntegrityError extends WeightError {
 export function isWeightError(error: unknown): boolean {
   return error instanceof WeightError || (error instanceof Error && error.name === 'WeightError');
 }
+
+/**
+ * The weight arrived and hashed correctly, but its own code cannot run here — this origin's
+ * policy, not the network and not the bytes. Essentia's glue needing `eval` is the reason
+ * this exists (`weights/essentia-glue.ts`); it is a weight failure because the analyser
+ * cannot start without it.
+ */
+export class WeightIncompatibleError extends WeightError {
+  constructor(weight: Weight, reason: string) {
+    super(`${weight.label} cannot run on this origin: ${reason}`, weight);
+    this.name = 'WeightIncompatibleError';
+  }
+}
