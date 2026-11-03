@@ -19,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getDevice } from '../../device/device';
 import { trackAt, type McpTrack } from '../../device/mcp';
 import { refreshDevice } from '../../device/useDeviceStatus';
-import { findAlbum, UNKNOWN_ARTIST, useMediaIndex, type Album } from '../../media/albums';
+import { findAlbum, useMediaIndex, type Album } from '../../media/albums';
 import { isAbort, searchVideos, VideoError, type Video } from '../../media/youtube';
 import { addRows, createDraft, useDrafts } from '../../playlists/drafts';
 import { getSettings } from '../../settings';
@@ -51,15 +51,21 @@ function titleOf(row: CachedMedia): string {
   return name.replace(/\.[^.]+$/, '');
 }
 
-/** The sentence to search YouTube with: the artist if it is known, then the title. */
+/** The sentence to search YouTube with: the row's artist, then the title. */
 function queryFor(row: CachedMedia, album: Album): string {
   const title = titleOf(row);
-  const artist = album.artist === UNKNOWN_ARTIST ? '' : album.artist;
-  const singer = row.artist.trim() || artist;
+  const singer = row.artist.trim() || (album.artists.length === 1 ? album.artists[0] : '');
   return [singer, title].filter(Boolean).join(' ');
 }
 
 type Notice = { kind: 'ok' | 'error'; text: string };
+
+/** The album's genre when every row agrees, and a word for what it is when they do not. */
+function genreText(album: Album): string {
+  const genres = new Set(album.rows.map((row) => row.genre.trim()).filter(Boolean));
+  if (genres.size === 0) return 'no genre tag';
+  return genres.size === 1 ? [...genres][0] : 'mixed genres';
+}
 
 function TrackMeasurement({ track }: { track: McpTrack | null | undefined }) {
   if (track === undefined) {
@@ -174,6 +180,7 @@ function LookupPanel({ lookup, onClose }: { lookup: { query: string; title: stri
 function TrackRow({
   row,
   track,
+  showArtist,
   onPlay,
   onLookup,
   onAdd,
@@ -181,6 +188,8 @@ function TrackRow({
 }: {
   row: CachedMedia;
   track: McpTrack | null | undefined;
+  /** True on a compilation, where the album's header cannot say whose track this is. */
+  showArtist: boolean;
   onPlay: () => void;
   onLookup: () => void;
   onAdd: (draftId: string, draftName: string) => void;
@@ -188,11 +197,12 @@ function TrackRow({
 }) {
   const drafts = useDrafts();
   const title = titleOf(row);
+  const label = showArtist ? `${row.artist} - ${title}` : title;
 
   return (
     <li className="flex flex-col gap-2 border-b py-2 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium">{title}</span>
+        <span className="truncate text-sm font-medium">{label}</span>
         <span className="truncate text-xs text-muted-foreground">{row.path}</span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -203,7 +213,7 @@ function TrackRow({
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${title}`} />}
+            render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${label}`} />}
           >
             <MoreHorizontal aria-hidden="true" />
           </DropdownMenuTrigger>
@@ -229,9 +239,9 @@ function TrackRow({
   );
 }
 
-export function AlbumArea({ artist, album }: { artist: string; album: string }) {
+export function AlbumArea({ album }: { album: string }) {
   const state = useMediaIndex();
-  const found = findAlbum(state.index, artist, album);
+  const found = findAlbum(state.index, album);
   const [measurements, setMeasurements] = useState<Map<string, McpTrack | null> | null>(null);
   const [lookup, setLookup] = useState<{ query: string; title: string } | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -334,14 +344,20 @@ export function AlbumArea({ artist, album }: { artist: string; album: string }) 
         </div>
         <div className="flex min-w-0 flex-col gap-1">
           <h1 className="text-xl font-semibold tracking-tight">{found.album}</h1>
-          <a
-            href={routeHref({ name: 'artist', artist: found.artist })}
-            className="w-fit text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            {found.artist}
-          </a>
+          {found.artists.length === 1 ? (
+            <a
+              href={routeHref({ name: 'artist', artist: found.artists[0] })}
+              className="w-fit text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              {found.artists[0]}
+            </a>
+          ) : (
+            <span className="w-fit text-sm text-muted-foreground">
+              {plural(found.artists.length, 'artist')} · each track names its own
+            </span>
+          )}
           <span className="text-xs text-muted-foreground tabular-nums">
-            {plural(found.tracks, 'track')} · {found.rows[0]?.genre || 'no genre tag'}
+            {plural(found.tracks, 'track')} · {genreText(found)}
           </span>
         </div>
       </header>
@@ -371,6 +387,7 @@ export function AlbumArea({ artist, album }: { artist: string; album: string }) 
               <TrackRow
                 key={row.path}
                 row={row}
+                showArtist={found.artists.length > 1}
                 track={measurements === null ? undefined : (measurements.get(row.path) ?? null)}
                 onPlay={() => void play(row)}
                 onLookup={() => setLookup({ query: queryFor(row, found), title: titleOf(row) })}

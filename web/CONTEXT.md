@@ -47,7 +47,7 @@ routes and nothing else; what it shows it reads from the player, from this brows
 _Avoid_: page, tab, section
 
 **Route**:
-A hash path in the address bar — `#/process`, `#/playlists/:id`, `#/media/album/:artist/:album` — naming an
+A hash path in the address bar — `#/process`, `#/playlists/:id`, `#/media/album/:album` — naming an
 area and, sometimes, one thing in it. The player serves one page and knows no path; a route
 exists only inside the App.
 _Avoid_: URL, link, path

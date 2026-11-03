@@ -23,10 +23,9 @@ describe('the shell routes', () => {
       name: 'playlist',
       id: 'aaaa000000000001',
     });
-    expect(parseRoute('#/media/album/AC%2FDC/Back%20In%20Black')).toEqual({
+    expect(parseRoute('#/media/album/AC%2FDC%20-%20Back%20In%20Black')).toEqual({
       name: 'album',
-      artist: 'AC/DC',
-      album: 'Back In Black',
+      album: 'AC/DC - Back In Black',
     });
     expect(parseRoute('#/media/artist/Miles%20Davis')).toEqual({
       name: 'artist',
@@ -41,9 +40,9 @@ describe('the shell routes', () => {
   it('anything else is the shell own not-found, and says which path', () => {
     expect(parseRoute('#/nope')).toEqual({ name: 'not-found', path: '/nope' });
     expect(parseRoute('#/process/extra')).toEqual({ name: 'not-found', path: '/process/extra' });
-    expect(parseRoute('#/media/album/only-one-segment')).toEqual({
+    expect(parseRoute('#/media/album/a/b')).toEqual({
       name: 'not-found',
-      path: '/media/album/only-one-segment',
+      path: '/media/album/a/b',
     });
   });
 
@@ -54,7 +53,7 @@ describe('the shell routes', () => {
       { name: 'ask' },
       { name: 'playlist', id: 'aaaa000000000001' },
       { name: 'media' },
-      { name: 'album', artist: 'AC/DC', album: 'Back In Black' },
+      { name: 'album', album: 'AC/DC - Back In Black' },
       { name: 'artist', artist: 'Miles Davis' },
       { name: 'video', id: 'dQw4w9WgXcQ' },
       { name: 'player' },

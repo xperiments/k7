@@ -81,7 +81,7 @@ export function App() {
         {route.name === 'playlist' && <PlaylistEditor id={route.id} />}
         {route.name === 'ask' && <AskArea />}
         {route.name === 'media' && <MediaArea />}
-        {route.name === 'album' && <AlbumArea artist={route.artist} album={route.album} />}
+        {route.name === 'album' && <AlbumArea album={route.album} />}
         {route.name === 'artist' && <ArtistArea artist={route.artist} />}
         {route.name === 'video' && <VideoArea id={route.id} />}
         {route.name === 'player' && <PlayerArea />}

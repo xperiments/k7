@@ -81,13 +81,17 @@ export function AlbumCard({ album }: { album: Album }) {
   return (
     <Card size="sm">
       <a
-        href={routeHref({ name: 'album', artist: album.artist, album: album.album })}
+        href={routeHref({ name: 'album', album: album.album })}
         className="flex flex-col gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <Cover cover={album.cover} initial={album.album} />
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-sm font-medium">{album.album}</span>
-          <span className="truncate text-xs text-muted-foreground">{album.artist}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {album.artists.length === 1
+              ? album.artists[0]
+              : plural(album.artists.length, 'artist')}
+          </span>
           <span className="text-xs text-muted-foreground tabular-nums">
             {plural(album.tracks, 'track')}
           </span>
@@ -102,7 +106,7 @@ export function AlbumGrid({ albums }: { albums: Album[] }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
       {albums.map((album) => (
-        <AlbumCard key={`${album.artist}\u0000${album.album}`} album={album} />
+        <AlbumCard key={album.album} album={album} />
       ))}
     </div>
   );
@@ -194,7 +198,7 @@ export function MediaArea() {
         (album) =>
           !needle ||
           album.album.toLowerCase().includes(needle) ||
-          album.artist.toLowerCase().includes(needle),
+          album.artists.some((artist) => artist.toLowerCase().includes(needle)),
       ),
     [state.index, needle],
   );

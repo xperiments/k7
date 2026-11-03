@@ -92,7 +92,7 @@ works.
 | `#/playlists/:id` | Playlists | one Playlist's rows, order and actions |
 | `#/playlists/ask` | Playlists | the prompt, the Intent, and the search that becomes a Draft |
 | `#/media` | Media | albums, from the device's Snapshot rows |
-| `#/media/album/:artist/:album` | Media | one album's tracks |
+| `#/media/album/:album` | Media | one album's tracks |
 | `#/media/artist/:artist` | Media | one artist's albums |
 | `#/media/video/:id` | Media | one Video, click to play |
 | `#/player` | Player | cover, what is Playing, the device's facts |
@@ -256,6 +256,10 @@ The Queue, measured, written to the card by the run itself.
   placeholder tile — ordinary, not an error.
 - One album opens its tracks with BPM, key and energy, and a way to add them to a Draft. There
   is no artist list beside the grid: an artist's page is reached from the album it made.
+- An album is its **title**. Two artists on one title are one tile, not one each — a
+  compilation is one shelf, the same rule Process groups its queue by — and its page says how
+  many names it carries, with each track naming its own. The route therefore carries the title
+  alone (`#/media/album/:album`).
 - A track offers **Look up on YouTube**: an Invidious search seeded with artist and title and
   editable, 3–5 thumbnail results, each opening `#/media/video/:id` — a **click-to-play** page:
   the poster is the thumbnail the search already had, and the player is created only when

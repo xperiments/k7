@@ -11,8 +11,10 @@
  *
  * The rules that follow from that:
  *
- * 1. An album is a group of cache rows; an artist is a group of albums. No cache row, no
- *    album -- which is why the empty state says "measure the card once".
+ * 1. An album is the title its cache rows share. The artists on those rows are names it
+ *    carries, not part of what makes it one album: a compilation is one shelf, not one per
+ *    name -- the same rule Process groups its queue by. No cache row, no album, which is why
+ *    the empty state says "measure the card once".
  * 2. Existence decides what counts. When the device listed *the whole* library, a cache row
  *    whose track is no longer on the card is left out: the album does not claim a file that
  *    is gone. When the listing was partial (it caps at 200 entries), the cache is shown
@@ -34,9 +36,10 @@ export const UNKNOWN_ALBUM = 'Unknown album';
 const PRESENCE_LIMIT = 200;
 
 export interface Album {
-  /** Display name *and* identity: the route carries these two strings. */
-  artist: string;
+  /** The title *and* the identity: two rows sharing it are the same album, and the route carries it. */
   album: string;
+  /** The artists its rows name, sorted. More than one is a compilation. */
+  artists: string[];
   /** The cache rows, in path order. */
   rows: CachedMedia[];
   tracks: number;
@@ -68,7 +71,7 @@ function clean(value: string | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-/** An album's name and artist, with the fallbacks that also serve as their identity. */
+/** An album's title and the artist a row names, with the fallbacks the display uses. */
 export function albumOf(row: Pick<CachedMedia, 'artist' | 'album'>): {
   artist: string;
   album: string;
@@ -77,11 +80,6 @@ export function albumOf(row: Pick<CachedMedia, 'artist' | 'album'>): {
     artist: clean(row.artist) || UNKNOWN_ARTIST,
     album: clean(row.album) || UNKNOWN_ALBUM,
   };
-}
-
-/** The key two album routes share; `\0` cannot appear in a tag, so it cannot collide. */
-export function albumKey(artist: string, album: string): string {
-  return `${artist}\u0000${album}`;
 }
 
 function byText(left: string, right: string): number {
@@ -101,31 +99,33 @@ export function buildMediaIndex(
     (row) => !(presence?.complete ?? false) || presence?.paths.has(row.path),
   );
 
-  const groups = new Map<string, Album>();
+  // Keyed by the title alone: a second artist on the same title adds a name to the album it
+  // already is, it does not start another album.
+  const groups = new Map<string, { album: Album; artists: Set<string> }>();
   for (const row of rows) {
     const names = albumOf(row);
-    const key = albumKey(names.artist, names.album);
-    const album = groups.get(key);
-    if (album) {
-      album.rows.push(row);
-    } else {
-      groups.set(key, {
-        artist: names.artist,
-        album: names.album,
-        rows: [row],
-        tracks: 0,
-        cover: null,
-      });
+    const entry = groups.get(names.album);
+    if (entry) {
+      entry.album.rows.push(row);
+      entry.artists.add(names.artist);
+      continue;
     }
+    groups.set(names.album, {
+      album: { album: names.album, artists: [], rows: [row], tracks: 0, cover: null },
+      artists: new Set([names.artist]),
+    });
   }
 
-  const albums = [...groups.values()];
+  const albums = [...groups.values()].map(({ album, artists }) => ({
+    ...album,
+    artists: [...artists].sort(byText),
+  }));
   for (const album of albums) {
     album.rows.sort(byPath);
     album.tracks = album.rows.length;
     album.cover = album.rows.find((row) => row.cover)?.cover ?? null;
   }
-  albums.sort((left, right) => byText(left.artist, right.artist) || byText(left.album, right.album));
+  albums.sort((left, right) => byText(left.album, right.album));
 
   const unmeasured = (presence?.tracks ?? [])
     .filter((track) => !cache.has(track.path))
@@ -234,12 +234,12 @@ export function useMediaIndex(): MediaIndexState {
   return { index, loading: cache === null, reachable, deviceTracks: tracks };
 }
 
-/** One album, by the two strings its route carries. */
-export function findAlbum(index: MediaIndex | null, artist: string, album: string): Album | null {
-  return index?.albums.find((entry) => entry.artist === artist && entry.album === album) ?? null;
+/** One album, by the title its route carries. */
+export function findAlbum(index: MediaIndex | null, album: string): Album | null {
+  return index?.albums.find((entry) => entry.album === album) ?? null;
 }
 
-/** An artist's albums, in the index's order (artist, then album). */
+/** An artist's albums, in the index's order: every shelf their name is on, compilations included. */
 export function albumsOf(index: MediaIndex | null, artist: string): Album[] {
-  return index?.albums.filter((entry) => entry.artist === artist) ?? [];
+  return index?.albums.filter((entry) => entry.artists.includes(artist)) ?? [];
 }
