@@ -5,6 +5,7 @@ import {
   instanceBase,
   isAbort,
   mapSearchResults,
+  watchUrl,
 } from './youtube';
 
 /**
@@ -117,5 +118,16 @@ describe('isAbort', () => {
     expect(isAbort(Object.assign(new Error('x'), { name: 'AbortError' }))).toBe(true);
     expect(isAbort(new VideoError('down', 0))).toBe(false);
     expect(isAbort(null)).toBe(false);
+  });
+
+  it('upgrades an instance’s http thumbnail, which an https page cannot show', () => {
+    const [video] = mapSearchResults([
+      { ...valid, videoThumbnails: [{ url: 'http://inv.example/vi/dQw4w9WgXcQ/mq.jpg' }] },
+    ]);
+    expect(video.thumbnail).toBe('https://inv.example/vi/dQw4w9WgXcQ/mq.jpg');
+  });
+
+  it('opens the Video on YouTube, never in an embed', () => {
+    expect(watchUrl('dQw4w9WgXcQ')).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
   });
 });

@@ -35,6 +35,11 @@ export class VideoError extends Error {
   }
 }
 
+/** Where a Video is watched: YouTube itself, in a new tab. Nothing is embedded. */
+export function watchUrl(id: string): string {
+  return `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
+}
+
 /** The search returns a handful: the page shows 3 to 5 and a longer list is a list. */
 export const MAX_VIDEOS = 5;
 
@@ -62,7 +67,11 @@ function httpUrl(value: unknown): string | null {
   if (!candidate) return null;
   try {
     const url = new URL(candidate);
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+    if (url.protocol === 'http:') {
+      // An https page cannot show an http picture; the same host over TLS usually can.
+      url.protocol = 'https:';
+    }
+    return url.protocol === 'https:' ? url.toString() : null;
   } catch {
     return null;
   }

@@ -12,7 +12,6 @@ import { PlaylistsArea } from './areas/Playlists';
 import { ProcessArea } from './areas/Process';
 import { ScanArea } from './areas/Scan';
 import { SettingsArea } from './areas/Settings';
-import { VideoArea } from './areas/Video';
 import { navigate, useRoute } from './router';
 import { NotFound, Shell } from './Shell';
 import { tryLocalConnect } from '../device/device';
@@ -85,7 +84,6 @@ export function App() {
         {route.name === 'media' && <MediaArea />}
         {route.name === 'album' && <AlbumArea artist={route.artist} album={route.album} />}
         {route.name === 'artist' && <ArtistArea artist={route.artist} />}
-        {route.name === 'video' && <VideoArea id={route.id} />}
         {route.name === 'player' && <PlayerArea />}
         {route.name === 'settings' && <SettingsArea />}
         {route.name === 'not-found' && <NotFound path={route.path} />}

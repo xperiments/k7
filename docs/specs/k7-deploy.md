@@ -72,6 +72,12 @@ storage. Notes on the two entries that look odd and are not:
   imported from a blob URL; that is the integrity design, not a hole.
 - `connect-src https:` — the **Provider**'s base URL is configured by the user, so no list can
   be enumerated ahead of time. A tighter list would break every self-hosted endpoint.
+- `img-src https:` — for the same reason, from the other side: a Video's thumbnail comes from
+  the **Invidious Instance** the user chose, which is a hostname no build can know. A picture
+  is not code; the policy that matters is `script-src`, and it is unchanged.
+- `frame-src 'none'` — the App frames nothing. The video page that used to embed a player was
+  the only frame, and it is gone: a search result opens YouTube in its own tab, where the
+  player is YouTube's and no policy of ours has to allow it.
 
 **D7. No `COOP` header, ever.** `Cross-Origin-Opener-Policy: same-origin` would sever
 `window.opener` and silently kill connected mode; `same-origin-allow-popups` would do the same

@@ -31,9 +31,11 @@ describe('the shell routes', () => {
       name: 'artist',
       artist: 'Miles Davis',
     });
+    // The video page is gone — a search tile opens YouTube in a new tab — so an old
+    // bookmark is the shell's not-found rather than a page that framed a player.
     expect(parseRoute('#/media/video/dQw4w9WgXcQ')).toEqual({
-      name: 'video',
-      id: 'dQw4w9WgXcQ',
+      name: 'not-found',
+      path: '/media/video/dQw4w9WgXcQ',
     });
   });
 
@@ -56,7 +58,6 @@ describe('the shell routes', () => {
       { name: 'media' },
       { name: 'album', artist: 'AC/DC', album: 'Back In Black' },
       { name: 'artist', artist: 'Miles Davis' },
-      { name: 'video', id: 'dQw4w9WgXcQ' },
       { name: 'player' },
       { name: 'settings' },
     ];

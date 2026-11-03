@@ -47,7 +47,7 @@ routes and nothing else; what it shows it reads from the player, from this brows
 _Avoid_: page, tab, section
 
 **Route**:
-A hash path in the address bar — `#/process`, `#/playlists/:id`, `#/media/video/:id` — naming an
+A hash path in the address bar — `#/process`, `#/playlists/:id`, `#/media/album/:artist/:album` — naming an
 area and, sometimes, one thing in it. The player serves one page and knows no path; a route
 exists only inside the App.
 _Avoid_: URL, link, path
@@ -323,8 +323,9 @@ _Avoid_: preferences, config, options
 ### The videos
 
 **Video**:
-A YouTube search result: something to watch about a Track, never a Track. It cannot become a
-**Playlist** row and the player never sees it.
+A YouTube search result: something to watch about a Track, never a Track. It opens on YouTube,
+in its own tab — the App embeds no player and frames nothing. It cannot become a **Playlist**
+row and the player never sees it.
 _Avoid_: track, song, media
 
 **Instance**:

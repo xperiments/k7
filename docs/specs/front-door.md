@@ -95,7 +95,6 @@ works.
 | `#/media` | Media | albums and artists, from the device's Snapshot rows |
 | `#/media/album/:artist/:album` | Media | one album's tracks |
 | `#/media/artist/:artist` | Media | one artist's albums |
-| `#/media/video/:id` | Media | one Video, taking the viewport |
 | `#/player` | Player | cover, what is Playing, the device's facts |
 | `#/settings` | — | the Provider and the Invidious Instance |
 
@@ -264,9 +263,10 @@ Two acts, named apart because they happen on different machines.
 - One album or artist opens its tracks with BPM, key and energy, and a way to add them to a
   Draft.
 - A track offers **Look up on YouTube**: an Invidious search seeded with artist and title and
-  editable, 3–5 thumbnail results, each opening `#/media/video/:id` — the embed taking the
-  viewport, with the player's own fullscreen. Nothing is downloaded, nothing is embedded in a
-  list, and no Video can become a Playlist row.
+  editable, 3–5 thumbnail results, each of which **opens YouTube in a new tab** — the tile is
+  the link. Nothing is embedded: the App frames nothing at all (`frame-src 'none'`), so there
+  is no player to sit inside the page and no fullscreen to arrange. Nothing is downloaded, and
+  no Video can become a Playlist row.
 - **States:** empty (no Snapshot: "measure the card once"), loading (skeleton tiles), error
   (device unreachable → cached names and covers, with a note; Invidious unreachable → the
   Instance can be changed from here).
