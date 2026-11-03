@@ -43,12 +43,6 @@ export interface Album {
   cover: CachedCover | null;
 }
 
-export interface ArtistEntry {
-  name: string;
-  albums: number;
-  tracks: number;
-}
-
 /** A track the device listed, with the name the listing gave it. */
 export interface DeviceTrack {
   name: string;
@@ -65,7 +59,6 @@ export interface Presence {
 
 export interface MediaIndex {
   albums: Album[];
-  artists: ArtistEntry[];
   /** Device tracks with no cache row: measured nowhere this browser knows. */
   unmeasured: DeviceTrack[];
   presence: Presence | null;
@@ -99,7 +92,7 @@ function byPath(left: CachedMedia, right: CachedMedia): number {
   return left.path.localeCompare(right.path);
 }
 
-/** Group the cache into albums and artists. Pure, so the rule above is testable by reading. */
+/** Group the cache into albums. Pure, so the rule above is testable by reading. */
 export function buildMediaIndex(
   cache: ReadonlyMap<string, CachedMedia>,
   presence: Presence | null,
@@ -134,21 +127,12 @@ export function buildMediaIndex(
   }
   albums.sort((left, right) => byText(left.artist, right.artist) || byText(left.album, right.album));
 
-  const artists = new Map<string, ArtistEntry>();
-  for (const album of albums) {
-    const artist = artists.get(album.artist) ?? { name: album.artist, albums: 0, tracks: 0 };
-    artist.albums += 1;
-    artist.tracks += album.tracks;
-    artists.set(album.artist, artist);
-  }
-
   const unmeasured = (presence?.tracks ?? [])
     .filter((track) => !cache.has(track.path))
     .sort((left, right) => byText(left.path, right.path));
 
   return {
     albums,
-    artists: [...artists.values()].sort((left, right) => byText(left.name, right.name)),
     unmeasured,
     presence,
   };

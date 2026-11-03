@@ -21,8 +21,9 @@ import { plural } from '../format';
 import { navigate, routeHref } from '../router';
 
 /**
- * The Media area: the albums and artists this browser read from the card, and the way into
- * one album's tracks.
+ * The Media area: the albums this browser read from the card, and the way into one album's
+ * tracks. There is no artist list beside it: an artist is the name on an album, and its page
+ * is reached from the album it made.
  *
  * The rule the index is built on is in `src/media/albums.ts`: names come from the cache,
  * existence from the device, and the tracks the device lists without a cache row are shown
@@ -117,7 +118,7 @@ function NoAlbums({ reachable }: { reachable: boolean }) {
         <EmptyTitle>No albums here yet</EmptyTitle>
         <EmptyDescription>
           {reachable
-            ? 'Measure a card in this browser and its albums and artists appear here. The device lists the tracks; this browser remembers the names and covers.'
+            ? 'Measure a card in this browser and its albums appear here. The device lists the tracks; this browser remembers the names and covers.'
             : 'The device is not answering, and this browser has not measured a card. Put the card in the computer and measure it once.'}
         </EmptyDescription>
       </EmptyHeader>
@@ -183,7 +184,6 @@ function NotMeasured({ state }: { state: MediaIndexState }) {
 
 export function MediaArea() {
   const state = useMediaIndex();
-  const [mode, setMode] = useState<'albums' | 'artists'>('albums');
   const [query, setQuery] = useState('');
   const searchId = useId();
 
@@ -198,45 +198,17 @@ export function MediaArea() {
       ),
     [state.index, needle],
   );
-  const artists = useMemo(
-    () =>
-      (state.index?.artists ?? []).filter(
-        (artist) => !needle || artist.name.toLowerCase().includes(needle),
-      ),
-    [state.index, needle],
-  );
 
   const hasAlbums = (state.index?.albums.length ?? 0) > 0;
-  const nothingMatches =
-    state.index !== null && needle.length > 0 && albums.length === 0 && artists.length === 0;
+  const nothingMatches = state.index !== null && needle.length > 0 && albums.length === 0;
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-0.5">
-          <h1 className="text-xl font-semibold tracking-tight">Media</h1>
-          <p className="text-sm text-muted-foreground">
-            The albums and artists this browser read from the card.
-          </p>
-        </div>
-        <div role="group" aria-label="Show albums or artists" className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant={mode === 'albums' ? 'default' : 'outline'}
-            aria-pressed={mode === 'albums'}
-            onClick={() => setMode('albums')}
-          >
-            Albums
-          </Button>
-          <Button
-            size="sm"
-            variant={mode === 'artists' ? 'default' : 'outline'}
-            aria-pressed={mode === 'artists'}
-            onClick={() => setMode('artists')}
-          >
-            Artists
-          </Button>
-        </div>
+      <header className="flex flex-col gap-0.5">
+        <h1 className="text-xl font-semibold tracking-tight">Albums</h1>
+        <p className="text-sm text-muted-foreground">
+          What this browser read from the card.
+        </p>
       </header>
 
       {!state.reachable && !state.loading ? (
@@ -251,13 +223,13 @@ export function MediaArea() {
 
       <div className="flex flex-col gap-1">
         <label htmlFor={searchId} className="sr-only">
-          Search albums and artists
+          Search albums
         </label>
         <Input
           id={searchId}
           type="search"
           value={query}
-          placeholder="Search albums and artists"
+          placeholder="Search albums"
           autoComplete="off"
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -275,11 +247,7 @@ export function MediaArea() {
         <Empty className="border">
           <EmptyHeader>
             <EmptyTitle>Nothing matches “{query.trim()}”</EmptyTitle>
-            <EmptyDescription>
-              {mode === 'albums'
-                ? 'Album names and artists are searched.'
-                : 'Only artist names are searched.'}
-            </EmptyDescription>
+            <EmptyDescription>Album names and artists are searched.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button size="sm" variant="outline" onClick={() => setQuery('')}>
@@ -287,31 +255,8 @@ export function MediaArea() {
             </Button>
           </EmptyContent>
         </Empty>
-      ) : mode === 'albums' ? (
-        <AlbumGrid albums={albums} />
       ) : (
-        <Card size="sm">
-          <CardContent>
-            <ul className="flex flex-col">
-              {artists.map((artist) => (
-                <li
-                  key={artist.name}
-                  className="flex flex-col gap-1 border-b py-2 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <a
-                    href={routeHref({ name: 'artist', artist: artist.name })}
-                    className="truncate text-sm font-medium underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                  >
-                    {artist.name}
-                  </a>
-                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                    {plural(artist.albums, 'album')} · {plural(artist.tracks, 'track')}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        <AlbumGrid albums={albums} />
       )}
 
       <NotMeasured state={state} />

@@ -96,7 +96,7 @@ export function routePage(route: Route): string {
     case 'ask':
       return 'Ask';
     case 'media':
-      return 'Albums & artists';
+      return 'Albums';
     case 'album':
       return route.album;
     case 'artist':

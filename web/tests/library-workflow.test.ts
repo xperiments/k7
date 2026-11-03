@@ -67,7 +67,7 @@ describe('a measured card after the page reloads', () => {
     expect(next.session.currentCardScope()).toBe('mark:00000000-0000-4000-8000-00000000a001');
   });
 
-  it('lists the albums and artists the browser measured', async () => {
+  it('lists the albums the browser measured', async () => {
     const first = await loadApp();
     const scope = 'mark:00000000-0000-4000-8000-00000000a002';
     first.session.setCardScope(scope);
@@ -87,7 +87,7 @@ describe('a measured card after the page reloads', () => {
       'Richard D. James',
       'Selected Ambient Works',
     ]);
-    expect(index.artists.map((artist) => artist.name)).toEqual(['Aphex Twin']);
+    expect(index.albums.find((album) => album.album === 'Selected Ambient Works')?.tracks).toBe(2);
   });
 
   it('finds the last image, so Playlists can send a list change', async () => {

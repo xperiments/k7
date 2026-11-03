@@ -117,7 +117,7 @@ function navGroups(drafts: number, tracks: number, playing: boolean): NavGroup[]
       items: [
         {
           href: routeHref({ name: 'media' }),
-          label: 'Albums & artists',
+          label: 'Albums',
           icon: <Disc3 aria-hidden="true" />,
           names: ['media', 'album', 'artist', 'video'],
         },

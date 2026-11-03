@@ -91,7 +91,7 @@ works.
 | `#/playlists` | Playlists | the device's Playlists and this browser's Drafts |
 | `#/playlists/:id` | Playlists | one Playlist's rows, order and actions |
 | `#/playlists/ask` | Playlists | the prompt, the Intent, and the search that becomes a Draft |
-| `#/media` | Media | albums and artists, from the device's Snapshot rows |
+| `#/media` | Media | albums, from the device's Snapshot rows |
 | `#/media/album/:artist/:album` | Media | one album's tracks |
 | `#/media/artist/:artist` | Media | one artist's albums |
 | `#/media/video/:id` | Media | one Video, click to play |
@@ -247,15 +247,15 @@ The Queue, measured, written to the card by the run itself.
 
 ### 4.3 Media
 
-- `#/media` lists albums and artists from **this browser's `xtape-media` cache** — the tags and
+- `#/media` lists albums from **this browser's `xtape-media` cache** — the tags and
   pictures the analyser kept when it read the card — because the device's search cannot be paged
   to the end of a library (`offset` is capped at 199, `limit` at 100). The device supplies what
   exists (the status count and generation, and a walk of `library_list`) and the measurements of
   an opened album (`library_track` per row, batched). Library tracks with no cached row are
   grouped under **Not measured** and offer Process; a cover measured elsewhere shows a
   placeholder tile — ordinary, not an error.
-- One album or artist opens its tracks with BPM, key and energy, and a way to add them to a
-  Draft.
+- One album opens its tracks with BPM, key and energy, and a way to add them to a Draft. There
+  is no artist list beside the grid: an artist's page is reached from the album it made.
 - A track offers **Look up on YouTube**: an Invidious search seeded with artist and title and
   editable, 3–5 thumbnail results, each opening `#/media/video/:id` — a **click-to-play** page:
   the poster is the thumbnail the search already had, and the player is created only when
