@@ -193,7 +193,9 @@ The Queue, measured, with an explicit `Send`.
   Clear (asked in place, as today).
 - **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
   page: it stays at the top while the rows scroll.
-- **Rows:** one line each, ~32 px — name, BPM, key, a mood mark, and the status word. A row that
+- **Rows:** one line each, ~32 px — name, the genre from the file's own tags, BPM, key, a mood
+  mark, and the status word. The genre is the one text the page cannot measure, so a cached
+  Track shows it without being re-analysed and a Track with none shows a dash. A row that
   is working shows its stage; a row that failed shows the failure and a Retry. Clicking a row
   opens the full result **in place** (the existing `ResultCard`), one open at a time. The old
   "Compact rows" switch is gone: minimal is the only row, and detail is a drill-in.
@@ -271,6 +273,16 @@ Test that proves the model returns a parseable Intent) and the Invidious **Insta
 `localStorage`, never sent to the device, lost with site data. The key is never rendered after it
 is saved, only indicated as set.
 
+A **Start from** row fills the base URL and the model for Ollama, Gemini or OpenRouter; it fills
+nothing else, and no endpoint or credential ships with the page. With no preset chosen the card
+is the three fields it always was.
+
+A Provider on this computer — Ollama at `http://localhost:11434/v1` — is a different origin from
+the page, so it has to allow `http://xtape.local`; until it does, the browser discards a reply
+the server did send. Test says that when it is the reason, names the origin to add and the knob
+that adds it, and never calls a running Provider unreachable (ADR 0056). The recipe is in
+`web/README.md`.
+
 ---
 
 ## 5. What the page reads, and from where
@@ -320,6 +332,7 @@ are the only source of names.
 | Card pulled mid-analysis | The queue's current file fails; the page keeps the route and says why |
 | Device unreachable | Player and Media keep what they had and mark it stale; Process keeps its Queue; no error banner |
 | The Provider rejects the key | The Intent is empty, the form stands alone, and the failure names the provider |
+| The Provider does not allow this page's origin | Test and Ask say the endpoint answered, name the origin to allow and — for a Provider on this machine — the setting that allows it; a Provider that is up is never called unreachable |
 | The Invidious Instance is down | The search says so and points at Settings |
 
 ---
@@ -343,6 +356,7 @@ are the only source of names.
 | T12 | Each hash route renders on a reload | browser | **proven** — headless Chrome loaded `#/process`, `#/playlists`, `#/media`, `#/player` and `#/settings` from the running board and each rendered its area (the shell, nav and page); `router.test.ts` covers the parse/format inverse |
 | T12b | Process keeps its Queue across a navigation | browser | **not proven** — needs a measuring queue, which needs a card |
 | T12c | A page load leaves the panel alone: no tearing while the shell is fetched, and no offset left behind | board | **not proven** — the image path is proven on the host (`t31_shell_image`, `front_door_tests.py`, and all 45 files of the real shell served byte-exactly), but the panel is the one thing only the board can answer (ADR 0055) |
+| T13 | A Provider that answers without CORS is named as that, with the origin to allow; a dead one is named as dead | unit | **proven** — `src/provider.test.ts` (the probe and the two sentences); the CORS refusal itself was seen by hand against Ollama 0.40.13 at `http://localhost:11434`, `403` and no `Access-Control-Allow-Origin` for `Origin: http://xtape.local` |
 
 ---
 

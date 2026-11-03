@@ -173,6 +173,98 @@ npx shadcn@latest add @reui/badge @reui/alert @reui/c-sidebar-1   # ReUI
   flash, not disk: a single `AlertDialog` is ~56 KiB of JavaScript, which is why the
   destructive confirm is asked in place. Weigh a new dependency as a budget decision.
 
+## The Provider, and why a local one needs a setting
+
+Ask sends one sentence to an OpenAI-compatible endpoint and gets filters back; the endpoint, the
+model and the key are Settings, in this browser (ADR 0053). The page is served by the device at
+`http://xtape.local`, so a Provider on **this computer** — Ollama at
+`http://localhost:11434/v1` — is a different origin, and its server has to allow that origin or
+the browser throws the answer away before the page sees it. Settings' Test names that case
+instead of calling a working Provider unreachable (ADR 0056).
+
+### Presets
+
+The Provider card carries a **Start from** row that fills the base URL and the model. It fills
+nothing else: the key is always yours, and no endpoint or credential ships with the page.
+
+| Preset | Base URL | Model |
+|---|---|---|
+| Ollama | `http://localhost:11434/v1` | whatever you have pulled — `ollama list` |
+| Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` (free tier) |
+| OpenRouter | `https://openrouter.ai/api/v1` | `google/gemma-4-26b-a4b-it:free` |
+
+A preset is a head start, not a default: with none chosen the card is the three fields it always
+was. The free lists turn over, so if a preset's model has gone, ask the provider:
+
+```sh
+# OpenRouter: ids ending in :free are the free variants (20 req/min, 50/day under 10 credits)
+curl -s https://openrouter.ai/api/v1/models | grep -o '"id":"[^"]*:free"'
+
+# Gemini: what this key can see
+curl -s https://generativelanguage.googleapis.com/v1beta/openai/models \
+  -H "Authorization: Bearer $GEMINI_API_KEY"
+```
+
+For Ollama, allow the page, then restart the server so it reads the setting:
+
+```sh
+# The app (macOS): set it where its process inherits it, then quit and reopen Ollama.
+launchctl setenv OLLAMA_ORIGINS "http://xtape.local"
+# Undo with: launchctl unsetenv OLLAMA_ORIGINS
+
+# Or run the server by hand.
+OLLAMA_ORIGINS=http://xtape.local ollama serve
+```
+
+The origin is whatever the address bar says: `http://xtape.local` on a network that resolves the
+name, `http://192.168.1.69` on one that does not — set the one the page is opened at, and note
+that a port is part of it only if one is in the address bar. Ollama ignores the key, so any word
+in Settings' Key field will do.
+
+A hosted Provider needs none of it, and calling one over HTTPS from this plain-HTTP origin is not
+mixed content — that rule runs the other way, a secure page refusing an insecure resource
+(ADR 0049). Checked against the same preflight with `Origin: http://xtape.local`:
+`api.openai.com` and Gemini's OpenAI-compatible endpoint echo the origin back, OpenRouter, Groq,
+Mistral and Together answer `*`, and all of them allow the `authorization` header. A Provider that
+refuses the preflight outright — Anthropic's own endpoint does — cannot be asked from a browser
+at all; it needs something in front of it that adds CORS, not a setting in this page.
+
+### Gemini
+
+Google's OpenAI-compatible layer is the whole setup; there is nothing to allow on Google's side.
+
+| Settings field | Value |
+|---|---|
+| Base URL | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| Model | `gemini-3.8-flash`, or `gemini-3.5-flash-lite` for cost |
+| Key | an [AI Studio](https://aistudio.google.com/apikey) key |
+
+Ask's request is `POST <base>/chat/completions` with a system message and a one-line user
+message, so no `models/` prefix, no `?key=`, and no `/chat/completions` in the Base URL field —
+the page appends that itself. To confirm the key sees a model, ask Google rather than the page:
+
+```sh
+curl -s https://generativelanguage.googleapis.com/v1beta/openai/models \
+  -H "Authorization: Bearer $GEMINI_API_KEY"
+```
+
+Two things about Gemini specifically: **the 2.5 models are deprecated** — `gemini-2.5-flash`
+starts routing to `gemini-3.5-flash-lite` on 1 December 2026 — and **Gemini 3 and later cannot
+switch reasoning off**, so the Test sends no `max_tokens` and waits twenty seconds: a tight output
+cap is spent on thinking before any answer is visible, which reads as "answered without a
+message". Ask is unaffected (it has no cap and a thirty-second timeout).
+
+To check the Ollama setting without the page:
+
+```sh
+curl -si -X OPTIONS http://localhost:11434/v1/chat/completions \
+  -H 'Origin: http://xtape.local' -H 'Access-Control-Request-Method: POST' | head -6
+```
+
+`Access-Control-Allow-Origin: http://xtape.local` means the page will be allowed;
+`403` with no such header means it will not, and that is the browser's error, not the
+Provider's.
+
 ## Accuracy caveats
 
 These are measurements, not ground truth for your library:

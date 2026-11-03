@@ -13,9 +13,9 @@ import { useAnalysis } from './state/analysis';
 /**
  * The queue, one line each.
  *
- * Minimal is the only row: a measured Track shows its numbers on one line and opens into
- * the full card **in place**, because a page of thirty cards is a page nobody can scan.
- * The card did not change — it is the drill-in now instead of the default.
+ * Minimal is the only row: a measured Track shows its genre and its numbers on one line and
+ * opens into the full card **in place**, because a page of thirty cards is a page nobody can
+ * scan. The card did not change — it is the drill-in now instead of the default.
  *
  * One row is open at a time. The list is a run's progress, not a report to browse, and a
  * second open row would push the sticky header's work off the screen.
@@ -65,6 +65,21 @@ function MeasuredCells({ analysis }: { analysis: Analysis }) {
   );
 }
 
+/**
+ * The genre a row shows: the file's own tag, or a dash. It is not a measurement — no model
+ * produces it — so it is the one cell a cached Track can show without being re-analysed.
+ */
+function GenreCell({ genre }: { genre: string | undefined }) {
+  return (
+    <span
+      className="hidden w-24 shrink-0 truncate text-xs text-muted-foreground md:block"
+      title={genre ? `Genre: ${genre}` : 'Genre'}
+    >
+      {genre || '—'}
+    </span>
+  );
+}
+
 interface RowProps {
   item: QueueItem;
   busy: boolean;
@@ -88,6 +103,7 @@ function MeasuredRow({ item, busy, open, onToggle, onDeep, onSave }: RowProps) {
         title={item.path}
       >
         <span className="min-w-0 flex-1 truncate text-sm">{item.name}</span>
+        <GenreCell genre={item.tags?.genre} />
         <MeasuredCells analysis={analysis} />
         <span className="w-20 shrink-0 truncate text-right text-xs text-muted-foreground">
           {statusWord(item)}

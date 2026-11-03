@@ -6,6 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { isAbort, searchVideos } from '../../media/youtube';
+import {
+  completionsUrl,
+  providerFailureSentence,
+  PROVIDER_PRESETS,
+  type ProviderPreset,
+} from '../../provider';
 import { getSettings, hasProvider, setSettings, type Settings } from '../../settings';
 import { plural } from '../format';
 
@@ -33,7 +39,15 @@ interface TestResult {
   text: string;
 }
 
-const TEST_TIMEOUT_MS = 8000;
+/** The Invidious lookup is one GET; eight seconds is already generous for it. */
+const INSTANCE_TEST_TIMEOUT_MS = 8000;
+
+/**
+ * A Provider may think before it answers: Gemini 3 and later cannot switch reasoning off, and
+ * that latency is the model working, not the network stalling. Twenty seconds is long enough
+ * for a reasoning model and still short enough that a wrong URL fails while the user waits.
+ */
+const PROVIDER_TEST_TIMEOUT_MS = 20_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -99,16 +113,19 @@ function providerError(payload: unknown): string {
 /**
  * One tiny request, one tiny answer: the point is to prove the endpoint, the model and the
  * key work together, not to ask the model anything a user would care about.
+ *
+ * A throw is not automatically "unreachable": a Provider on this machine is a different
+ * origin from the page, so the browser can refuse a reply the server did send. That case is
+ * named rather than guessed at — `providerFailureSentence` asks the endpoint whether it is up.
  */
 async function testProvider(settings: Settings, signal: AbortSignal): Promise<TestResult> {
   if (!hasProvider(settings)) {
     return { ok: false, text: 'Save a base URL, a model and a key first.' };
   }
-  const base = settings.providerBaseUrl.trim().replace(/\/+$/, '');
 
   let response: Response;
   try {
-    response = await fetch(`${base}/chat/completions`, {
+    response = await fetch(completionsUrl(settings.providerBaseUrl), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -118,7 +135,9 @@ async function testProvider(settings: Settings, signal: AbortSignal): Promise<Te
       body: JSON.stringify({
         model: settings.providerModel,
         temperature: 0,
-        max_tokens: 24,
+        // No max_tokens: a reasoning model counts its thinking against the cap, and a tight
+        // one (this used to be 24) ends the answer empty with finish_reason "length" — the
+        // model answered, and the page saw nothing. The prompt keeps the answer short.
         messages: [
           { role: 'system', content: 'You answer with one JSON object and nothing else.' },
           { role: 'user', content: 'Reply with exactly {"ok":true}' },
@@ -126,14 +145,11 @@ async function testProvider(settings: Settings, signal: AbortSignal): Promise<Te
       }),
       signal,
     });
-  } catch (error) {
-    if (isAbort(error)) {
-      return { ok: false, text: 'The provider did not answer within eight seconds.' };
+  } catch {
+    if (signal.aborted) {
+      return { ok: false, text: 'The Provider did not answer within twenty seconds.' };
     }
-    return {
-      ok: false,
-      text: `The provider could not be reached: ${error instanceof Error ? error.message : String(error)}`,
-    };
+    return { ok: false, text: await providerFailureSentence(settings.providerBaseUrl) };
   }
 
   const body = await response.text();
@@ -148,21 +164,21 @@ async function testProvider(settings: Settings, signal: AbortSignal): Promise<Te
     const detail = providerError(parsed);
     return {
       ok: false,
-      text: `The provider refused it (${response.status})${detail ? `: ${detail}` : '.'}`,
+      text: `The Provider refused it (${response.status})${detail ? `: ${detail}` : '.'}`,
     };
   }
 
   const content = messageContent(parsed);
-  if (!content) return { ok: false, text: 'The provider answered without a message.' };
+  if (!content) return { ok: false, text: 'The Provider answered without a message.' };
 
   const json = firstJsonObject(content);
   if (json === null) {
     return {
       ok: false,
-      text: `The provider answered, but not with JSON: “${content.slice(0, 80)}”.`,
+      text: `The Provider answered, but not with JSON: “${content.slice(0, 80)}”.`,
     };
   }
-  return { ok: true, text: 'The provider answered with JSON — Ask can ask it for filters.' };
+  return { ok: true, text: 'The Provider answered with JSON — Ask can ask it for filters.' };
 }
 
 function Field({
@@ -210,6 +226,7 @@ export function SettingsArea() {
   const [instanceNotice, setInstanceNotice] = useState<Notice | null>(null);
   const [testingProvider, setTestingProvider] = useState(false);
   const [testingInstance, setTestingInstance] = useState(false);
+  const [preset, setPreset] = useState<ProviderPreset | null>(null);
 
   const baseUrlId = useId();
   const modelId = useId();
@@ -217,6 +234,17 @@ export function SettingsArea() {
   const instanceId = useId();
 
   const keySet = Boolean(saved.providerKey);
+
+  /**
+   * A preset fills what the Provider decides — where it lives and, when there is one good
+   * answer, which model — and leaves the key and the choice of model where the user's are.
+   */
+  const applyPreset = (chosen: ProviderPreset) => {
+    setBaseUrl(chosen.baseUrl);
+    setModel(chosen.model);
+    setPreset(chosen);
+    setProviderNotice(null);
+  };
 
   const saveProvider = () => {
     const url = baseUrl.trim();
@@ -259,7 +287,7 @@ export function SettingsArea() {
     setTestingProvider(true);
     setProviderNotice(null);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), PROVIDER_TEST_TIMEOUT_MS);
     try {
       // Test what the form says, not only what was saved: a key is typed and tested before
       // it is stored, and the saved key stands in when the field is left empty.
@@ -291,7 +319,7 @@ export function SettingsArea() {
     setTestingInstance(true);
     setInstanceNotice(null);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), INSTANCE_TEST_TIMEOUT_MS);
     try {
       const found = await searchVideos('test', instance, controller.signal);
       setInstanceNotice({
@@ -332,8 +360,34 @@ export function SettingsArea() {
           </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">Start from</span>
+              {PROVIDER_PRESETS.map((each) => (
+                <Button
+                  key={each.id}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => applyPreset(each)}
+                >
+                  {each.label}
+                </Button>
+              ))}
+            </div>
+            {preset ? (
+              <p className="text-xs text-muted-foreground">
+                <span className="text-foreground">{preset.label}:</span> {preset.note}
+              </p>
+            ) : null}
+          </div>
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Base URL" htmlFor={baseUrlId} hint="For example https://api.openai.com/v1">
+            <Field
+              label="Base URL"
+              htmlFor={baseUrlId}
+              hint="For example https://api.openai.com/v1"
+            >
               <Input
                 id={baseUrlId}
                 type="url"
@@ -348,7 +402,7 @@ export function SettingsArea() {
               <Input
                 id={modelId}
                 value={model}
-                placeholder="gpt-4o-mini"
+                placeholder={preset?.modelPlaceholder ?? 'gpt-4o-mini'}
                 autoComplete="off"
                 spellCheck={false}
                 onChange={(event) => setModel(event.target.value)}
@@ -362,7 +416,7 @@ export function SettingsArea() {
             hint={
               keySet
                 ? 'A key is saved and is never shown again. Type here to replace it.'
-                : 'Saved in this browser’s local storage, never in the device.'
+                : 'Saved in this browser’s local storage, never in the device. Ollama asks for one and ignores it, so any word will do.'
             }
           >
             <Input

@@ -7,20 +7,14 @@ import {
   type SnapshotPlaylist,
   type SnapshotTrack,
 } from '../domain/snapshot';
-
-export interface SnapshotTags {
-  title: string;
-  artist: string;
-  album: string;
-  genre: string;
-}
+import type { TrackTags } from '../audio/metadata';
 
 /** One analysed Track, as the queue holds it: the File, for its tags, and the analysis. */
 export interface SnapshotItem {
   file: File;
   analysis: Analysis | null;
-  /** Tags the page already read into its own cache; the file is only read when absent. */
-  tags?: SnapshotTags;
+  /** Tags the queue read at analysis time; the file is only read when they are absent. */
+  tags?: TrackTags;
 }
 
 export interface SnapshotExport {
@@ -39,7 +33,7 @@ function versionNumber(version: string): number {
 }
 
 /**
- * Builds `xtape.db` for the player from what the queue has measured.
+ * Builds `k7.db` for the player from what the queue has measured.
  *
  * The snapshot's rows are keyed by the Track's path below the card's `music` directory,
  * so only Tracks that are inside one can be written: a folder dropped from somewhere else

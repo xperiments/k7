@@ -94,7 +94,11 @@ if(EXISTS "${XTAPE_SHELL_DIR}")
     set(XTAPE_SHELL_TOOL "${CMAKE_CURRENT_LIST_DIR}/tools/pack_shell.py")
     idf_build_get_property(xtape_python PYTHON)
     # Repacked whenever anything in the Shell changes: the image is derived, never edited.
-    file(GLOB_RECURSE xtape_shell_files LIST_DIRECTORIES false "${XTAPE_SHELL_DIR}/*")
+    # CONFIGURE_DEPENDS is what keeps that true across a page rebuild: `npm run build:shell`
+    # rehashes asset file names, so the list below changes without any file CMake tracks
+    # being edited, and without it ninja goes on depending on assets that no longer exist.
+    file(GLOB_RECURSE xtape_shell_files LIST_DIRECTORIES false CONFIGURE_DEPENDS
+         "${XTAPE_SHELL_DIR}/*")
     add_custom_command(
         OUTPUT "${XTAPE_SHELL_IMAGE}"
         COMMAND "${xtape_python}" "${XTAPE_SHELL_TOOL}" "${XTAPE_SHELL_DIR}" "${XTAPE_SHELL_IMAGE}"

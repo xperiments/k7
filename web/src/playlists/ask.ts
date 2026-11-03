@@ -10,10 +10,13 @@
  * `parseIntent` is the boundary: whatever the model says is untrusted text, so every field
  * is checked, unknown keys are dropped, and every number is clamped to the range the
  * device documents (limits from `library_search` in `components/portable/mcp/mcp.c`).
- * `requestIntent` is the only function that touches the network, and it is not tested.
+ * `requestIntent` is the only function that touches the network, and it is not tested; when the
+ * call throws, the failure is named by `provider.ts`, because a Provider on this machine is a
+ * different origin from this page and "could not be reached" would be a lie about it (ADR 0056).
  */
 
 import type { SearchArgs } from '../device/mcp';
+import { completionsUrl, providerFailureSentence } from '../provider';
 import { getSettings, hasProvider, type Settings } from '../settings';
 
 /** The five mood heads the device knows. Danceability is a property, not a mood. */
@@ -264,17 +267,12 @@ export async function requestIntent(
   const asked = sentence.trim();
   if (!asked) return failure('Say what you are looking for first.');
 
-  const base = settings.providerBaseUrl
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\/chat\/completions$/, '');
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   let response: Response;
   try {
-    response = await fetch(`${base}/chat/completions`, {
+    response = await fetch(completionsUrl(settings.providerBaseUrl), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -292,9 +290,10 @@ export async function requestIntent(
       signal: controller.signal,
     });
   } catch {
-    return failure(
-      'The Provider could not be reached. Check its base URL in Settings and that this computer is online.',
-    );
+    if (controller.signal.aborted) {
+      return failure('The Provider did not answer within thirty seconds.');
+    }
+    return failure(await providerFailureSentence(settings.providerBaseUrl));
   } finally {
     clearTimeout(timeout);
   }
