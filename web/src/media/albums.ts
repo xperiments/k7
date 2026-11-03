@@ -25,7 +25,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useCardScope } from '../card/session';
-import { listLibrary } from '../device/mcp';
+import { measureableName } from '../domain/analysis';
+import { listLibrary, type LibraryListing } from '../device/mcp';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { listMedia, type CachedCover, type CachedMedia } from '../storage/media';
 
@@ -53,17 +54,22 @@ export interface DeviceTrack {
 }
 
 export interface Presence {
-  /** Every track path the device listed. */
+  /** The measurable track paths the device listed, folded by `foldPath` (a card has no case). */
   paths: ReadonlySet<string>;
+  /** Device tracks this App can open: the only ones that can be "not measured". */
   tracks: DeviceTrack[];
+  /** Device tracks in a format this App never opens (a `.wav`, say): on the card, not work left. */
+  unmeasurable: DeviceTrack[];
   /** True when the listing covered the whole library, so absence means the track is gone. */
   complete: boolean;
 }
 
 export interface MediaIndex {
   albums: Album[];
-  /** Device tracks with no cache row: measured nowhere this browser knows. */
+  /** Measurable device tracks with no cache row: measured nowhere this browser knows. */
   unmeasured: DeviceTrack[];
+  /** Device tracks this App cannot open, reported apart from the ones it simply has not read. */
+  unmeasurable: DeviceTrack[];
   presence: Presence | null;
 }
 
@@ -82,6 +88,15 @@ export function albumOf(row: Pick<CachedMedia, 'artist' | 'album'>): {
   };
 }
 
+/**
+ * A path folded the way the card's filesystem is: case is not information on FAT32, and the
+ * device folds it too (`library_find`). Two sides that name one file differently by case are
+ * naming one file, so a joined path is compared folded and kept as it arrived.
+ */
+export function foldPath(path: string): string {
+  return path.toLowerCase();
+}
+
 function byText(left: string, right: string): number {
   return left.localeCompare(right, undefined, { sensitivity: 'base' });
 }
@@ -96,7 +111,7 @@ export function buildMediaIndex(
   presence: Presence | null,
 ): MediaIndex {
   const rows = [...cache.values()].filter(
-    (row) => !(presence?.complete ?? false) || presence?.paths.has(row.path),
+    (row) => !(presence?.complete ?? false) || presence?.paths.has(foldPath(row.path)),
   );
 
   // Keyed by the title alone: a second artist on the same title adds a name to the album it
@@ -127,13 +142,15 @@ export function buildMediaIndex(
   }
   albums.sort((left, right) => byText(left.album, right.album));
 
-  const unmeasured = (presence?.tracks ?? [])
-    .filter((track) => !cache.has(track.path))
-    .sort((left, right) => byText(left.path, right.path));
+  // Joined folded: the cache key is the browser's spelling, the listing's is the device's, and
+  // on a card they can differ by case without being two files.
+  const cached = new Set([...cache.keys()].map(foldPath));
+  const unmeasured = (presence?.tracks ?? []).filter((track) => !cached.has(foldPath(track.path)));
 
   return {
     albums,
     unmeasured,
+    unmeasurable: presence?.unmeasurable ?? [],
     presence,
   };
 }
@@ -143,32 +160,44 @@ export function buildMediaIndex(
  * listing can say whether it covered the library: the device caps a call at 200 entries,
  * and a count that matches the Library's own track count is the only proof of completeness.
  *
- * `null` means the device did not answer -- the Media area then shows the cache alone and
- * says so, rather than reporting every cached track as missing.
+ * Three kinds of entry share that listing. A directory is not a track. A track this App can
+ * measure is what "unmeasured" is decided on. A track it cannot (the device also plays WAV)
+ * is kept apart: the browser will never open it, so reporting it as not measured would say
+ * the card is half done while it is not.
  */
-export async function fetchPresence(expectedTracks: number): Promise<Presence | null> {
-  let listing;
-  try {
-    listing = await listLibrary('', { depth: 8, limit: PRESENCE_LIMIT });
-  } catch {
-    return null;
-  }
-
+export function presenceOf(listing: LibraryListing, expectedTracks: number): Presence {
   const paths = new Set<string>();
   const tracks: DeviceTrack[] = [];
+  const unmeasurable: DeviceTrack[] = [];
+  let listed = 0;
+
   for (const entry of listing.entries ?? []) {
     if (entry.type !== 'track') continue;
-    if (paths.has(entry.path)) continue;
-    paths.add(entry.path);
-    tracks.push({ name: entry.name, path: entry.path });
+    const folded = foldPath(entry.path);
+    if (paths.has(folded)) continue;
+    paths.add(folded);
+    listed += 1;
+    const track = { name: entry.name, path: entry.path };
+    if (measureableName(entry.name) === null) unmeasurable.push(track);
+    else tracks.push(track);
   }
 
   // A listing with no tracks proves nothing: the card may be out of the player, where the
   // library is empty and this browser's cache is still the only record of what was measured.
-  const complete =
-    tracks.length > 0 && !listing.truncated && tracks.length === expectedTracks;
+  const complete = listed > 0 && !listing.truncated && listed === expectedTracks;
 
-  return { paths, tracks: tracks.sort((left, right) => byText(left.path, right.path)), complete };
+  const byPath = (left: DeviceTrack, right: DeviceTrack) => byText(left.path, right.path);
+  return { paths, tracks: tracks.sort(byPath), unmeasurable: unmeasurable.sort(byPath), complete };
+}
+
+/** The listing, or `null` when the device did not answer -- the Media area then shows the cache. */
+export async function fetchPresence(expectedTracks: number): Promise<Presence | null> {
+  try {
+    const listing = await listLibrary('', { depth: 8, limit: PRESENCE_LIMIT });
+    return presenceOf(listing, expectedTracks);
+  } catch {
+    return null;
+  }
 }
 
 export interface MediaIndexState {

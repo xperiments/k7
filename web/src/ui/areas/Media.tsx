@@ -186,6 +186,32 @@ function NotMeasured({ state }: { state: MediaIndexState }) {
   );
 }
 
+/**
+ * The tracks the device lists in a format this App never opens -- the device also plays WAV.
+ * They are not "not measured": nothing here will ever measure them, so they are said once,
+ * quietly, instead of sitting in a list that reads as work left undone.
+ */
+function Unmeasurable({ state }: { state: MediaIndexState }) {
+  const tracks = state.index?.unmeasurable ?? [];
+  if (tracks.length === 0) return null;
+
+  const formats = [
+    ...new Set(
+      tracks
+        .map((track) => track.path.split('.').pop()?.toUpperCase() ?? '')
+        .filter(Boolean),
+    ),
+  ];
+
+  return (
+    <p className="text-xs text-muted-foreground">
+      The device also lists {plural(tracks.length, 'track')} this App cannot open
+      {formats.length > 0 ? ` (${formats.join(', ')})` : ''}: it measures MP3 and FLAC. They
+      stay on the card and play from the player.
+    </p>
+  );
+}
+
 export function MediaArea() {
   const state = useMediaIndex();
   const [query, setQuery] = useState('');
@@ -262,6 +288,8 @@ export function MediaArea() {
       ) : (
         <AlbumGrid albums={albums} />
       )}
+
+      <Unmeasurable state={state} />
 
       <NotMeasured state={state} />
     </div>

@@ -1,13 +1,15 @@
 import type { DecodedAudio } from './analyzer';
-import type { TrackFormat } from '../domain/analysis';
+import { measureableName, type TrackFormat } from '../domain/analysis';
 import { sha256Hex } from '../lib/sha256';
 
 export { sha256Hex };
 
 export function trackFormat(file: File): TrackFormat | null {
-  const name = file.name.toLowerCase();
-  if (name.endsWith('.mp3') || file.type === 'audio/mpeg') return 'mp3';
-  if (name.endsWith('.flac') || file.type === 'audio/flac') return 'flac';
+  const byName = measureableName(file.name);
+  if (byName !== null) return byName;
+  // A file whose type the browser knows but whose name hides its extension still decodes.
+  if (file.type === 'audio/mpeg') return 'mp3';
+  if (file.type === 'audio/flac') return 'flac';
   return null;
 }
 

@@ -12,6 +12,19 @@ export const MOOD_TAGS = [
 export type MoodTag = (typeof MOOD_TAGS)[number];
 
 export type TrackFormat = 'mp3' | 'flac';
+
+/**
+ * The formats this App can measure, judged by the file name alone — the same judgement
+ * intake makes before a file joins the queue, and presence makes before calling a track
+ * unmeasured. A card may hold more than these (the device also plays WAV); nothing here
+ * opens them, so they are counted apart rather than reported as work left undone.
+ */
+export function measureableName(name: string): TrackFormat | null {
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.mp3')) return 'mp3';
+  if (lower.endsWith('.flac')) return 'flac';
+  return null;
+}
 export type TempoEngine = 'fast' | 'deep';
 export type MeasurementSource = 'metadata' | 'measured';
 

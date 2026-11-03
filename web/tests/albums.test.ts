@@ -4,9 +4,10 @@ import {
   albumsOf,
   buildMediaIndex,
   findAlbum,
+  presenceOf,
+  type Presence,
   UNKNOWN_ALBUM,
   UNKNOWN_ARTIST,
-  type Presence,
 } from '../src/media/albums';
 import type { CachedMedia } from '../src/storage/media';
 
@@ -34,11 +35,20 @@ function indexOf(rows: CachedMedia[], presence: Presence | null = null) {
   );
 }
 
-const listing = (paths: string[]): Presence => ({
-  paths: new Set(paths),
-  tracks: paths.map((path) => ({ name: path.split('/').pop() ?? path, path })),
-  complete: true,
-});
+/** The device's answer to one walk: every path is a track it listed. */
+function deviceLists(paths: string[]) {
+  return presenceOf(
+    {
+      path: '',
+      entries: paths.map((path) => ({
+        name: path.split('/').pop() ?? path,
+        path,
+        type: 'track' as const,
+      })),
+    },
+    paths.length,
+  );
+}
 
 describe('the album index', () => {
   it('lists one album per title, not one per artist', () => {
@@ -99,16 +109,38 @@ describe('the album index', () => {
   it('leaves a gone track out when the listing covered the whole library', () => {
     const index = indexOf(
       [row('a/01.mp3', 'Aphex Twin', 'Ambient Works'), row('a/02.mp3', 'Aphex Twin', 'Gone')],
-      listing(['a/01.mp3']),
+      deviceLists(['a/01.mp3']),
     );
 
     expect(index.albums.map((album) => album.album)).toEqual(['Ambient Works']);
   });
 
+  it('joins the cache and the listing without regard to case', () => {
+    const index = indexOf(
+      [row('Artist/01.mp3', 'Aphex Twin', 'Ambient Works')],
+      // The device's spelling differs, as a FAT32 card may hand it back; one file either way.
+      deviceLists(['artist/01.MP3']),
+    );
+
+    expect(index.albums).toHaveLength(1);
+    expect(index.unmeasured).toEqual([]);
+  });
+
+  it('keeps a format the App cannot open out of "not measured"', () => {
+    const index = indexOf(
+      [row('a/01.mp3', 'Aphex Twin', 'Ambient Works')],
+      deviceLists(['a/01.mp3', 'a/02.wav']),
+    );
+
+    expect(index.unmeasured).toEqual([]);
+    expect(index.unmeasurable.map((track) => track.path)).toEqual(['a/02.wav']);
+    expect(index.presence?.complete).toBe(true);
+  });
+
   it('keeps the cache whole when the listing was partial', () => {
     const index = indexOf(
       [row('a/01.mp3', 'Aphex Twin', 'Ambient Works'), row('a/02.mp3', 'Aphex Twin', 'Gone')],
-      { ...listing(['a/01.mp3']), complete: false },
+      { ...deviceLists(['a/01.mp3']), complete: false },
     );
 
     expect(index.albums).toHaveLength(2);

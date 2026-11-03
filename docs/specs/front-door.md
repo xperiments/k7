@@ -254,6 +254,15 @@ The Queue, measured, written to the card by the run itself.
   an opened album (`library_track` per row, batched). Library tracks with no cached row are
   grouped under **Not measured** and offer Process; a cover measured elsewhere shows a
   placeholder tile — ordinary, not an error.
+- Presence counts only what the App can open — MP3 and FLAC, the same judgement intake makes
+  (`measureableName`). A track the device lists in a format it also plays (WAV) is named once
+  as **cannot open**, never as unmeasured: no run will ever read it, so listing it as work left
+  undone would be a lie. Paths are joined without regard to case, since a FAT32 card has none
+  and the device folds them too (`library_find`).
+- A track whose analysis is already known by content hash is not measured again, but it still
+  leaves its tags and picture in this browser's cache under the card it was found on. The
+  analysis is keyed by content, the shelf by card; joining on the card's row is what keeps a
+  recognised track from appearing as unmeasured.
 - One album opens its tracks with BPM, key and energy, and a way to add them to a Draft. There
   is no artist list beside the grid: an artist's page is reached from the album it made.
 - An album is its **title**. Two artists on one title are one tile, not one each — a

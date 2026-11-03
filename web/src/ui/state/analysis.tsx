@@ -307,6 +307,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             },
           };
           update(item.id, { status: 'done', analysis, cached: true });
+          // The analysis is keyed by the content's hash, not by the card: this file may be
+          // known from another card while this card's shelf has never seen it. The row is
+          // what Media joins on, so measuring it once here is what keeps "processed" from
+          // being reported as "not measured".
+          void rememberMedia(item, hash);
           return;
         }
 
@@ -426,7 +431,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     }
 
     const leftovers: string[] = [];
-    if (rejected.length > 0) leftovers.push(`${plural(rejected.length, 'non-audio file')} ignored`);
+    // Not "non-audio": WAV is audio the device plays, and this App never opens it. Said as
+    // what it is, because Media reports the same files apart rather than as unmeasured.
+    if (rejected.length > 0)
+      leftovers.push(`${plural(rejected.length, 'file')} this App cannot measure`);
     if (skipped > 0) leftovers.push(`${plural(skipped, 'item')} unreadable`);
 
     if (leftovers.length > 0 || readOnly) {
