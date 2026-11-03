@@ -5,6 +5,7 @@ import {
   cardHandleFor,
   ensureAccess,
   forgetCardHandle,
+  queryAccess,
   rememberCardHandle,
 } from '../src/card/handles';
 
@@ -58,5 +59,32 @@ describe('asking for the grant', () => {
 
   it('proceeds in a browser that grants on use, or in a test stand-in', async () => {
     expect(await ensureAccess(directory('SDCARD'), 'read')).toBe(true);
+  });
+});
+
+describe('asking whether the grant is already there', () => {
+  it('answers without prompting, which is what a page load may do', async () => {
+    const granted = {
+      kind: 'directory',
+      name: 'SDCARD',
+      queryPermission: async () => 'granted',
+      requestPermission: vi.fn(async () => 'denied'),
+    } as unknown as FileSystemDirectoryHandle;
+
+    expect(await queryAccess(granted, 'read')).toBe(true);
+    expect(
+      (granted as unknown as { requestPermission: unknown }).requestPermission,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('is false while the grant still needs a gesture, and false when asked of a stub', async () => {
+    const prompt = {
+      kind: 'directory',
+      name: 'SDCARD',
+      queryPermission: async () => 'prompt',
+    } as unknown as FileSystemDirectoryHandle;
+
+    expect(await queryAccess(prompt, 'read')).toBe(false);
+    expect(await queryAccess(directory('SDCARD'), 'read')).toBe(true);
   });
 });

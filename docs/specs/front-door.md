@@ -213,7 +213,10 @@ The Queue, measured, written to the card by the run itself.
   twice — and **Change card** opens the picker, replacing the queue with the new card's and the
   Scope with it. Clear, asked in place, is the last action. The handle is remembered per Scope
   (`card/handles.ts`), so a reload does not lose the card: Rescan asks for the read-write grant
-  again on the click, which is the only moment a browser will show the prompt.
+  again on the click, which is the only moment a browser will show the prompt. A browser that
+  kept the grant (an installed app with "allow on every visit") is read without a click: on
+  load the page **asks itself** — `queryAccess`, which never prompts — and when the answer is
+  yes it walks the card and the queue is its contents again.
 - **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
   page: it stays at the top while the rows scroll.
 - **Rows:** gathered by album — *Album / Artist* as the heading, with its track count, in the
