@@ -289,7 +289,10 @@ The Queue, measured, written to the card by the run itself.
   (`readImageMeasurements`), keyed as the player keys them: the path's fingerprint and the
   file's size. With no card in the player the page does not ask at all, and an album answered
   entirely from the image says so once rather than per row.
-- One album opens its tracks with BPM, key and energy, and a way to add them to a Draft. There
+- One album opens its tracks with BPM, key and energy, and a way to add them to a Draft. A
+  row's one button says what the press will do: **Play** when the card is in the computer (the
+  track is read off it and sounds in the page's bar), **Queue** when the card is in the player
+  (the track is sent to the player and arrives through the stream a moment later). There
   is no artist list beside the grid: an artist's page is reached from the album it made.
 - An album is its **title**. Two artists on one title are one tile, not one each — a
   compilation is one shelf, the same rule Process groups its queue by — and its page says how

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, MoreHorizontal, Play as PlayIcon } from 'lucide-react';
+import { ArrowLeft, ListPlus, MoreHorizontal, Play as PlayIcon } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
@@ -278,6 +278,7 @@ function TrackRow({
   track,
   image,
   showArtist,
+  action,
   onPlay,
   onLookup,
   onAdd,
@@ -289,6 +290,12 @@ function TrackRow({
   image: ImageMeasurement | null;
   /** True on a compilation, where the album's header cannot say whose track this is. */
   showArtist: boolean;
+  /**
+   * What the row's one button does. With the card in the player there is nothing to read
+   * here: the press **queues** the track on the player, which starts it at once — the sound
+   * arrives through the stream, a moment later, not in this page's player.
+   */
+  action: 'play' | 'queue';
   onPlay: () => void;
   onLookup: () => void;
   onAdd: (draftId: string, draftName: string) => void;
@@ -307,8 +314,12 @@ function TrackRow({
       <div className="flex shrink-0 items-center gap-2">
         <TrackMeasurement track={track} image={image} />
         <Button variant="outline" size="sm" onClick={onPlay}>
-          <PlayIcon aria-hidden="true" />
-          Play
+          {action === 'queue' ? (
+            <ListPlus aria-hidden="true" />
+          ) : (
+            <PlayIcon aria-hidden="true" />
+          )}
+          {action === 'queue' ? 'Queue' : 'Play'}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -318,7 +329,9 @@ function TrackRow({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={onPlay}>Play now</DropdownMenuItem>
+              <DropdownMenuItem onClick={onPlay}>
+                {action === 'queue' ? 'Queue on the player' : 'Play now'}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={onLookup}>Look up on YouTube</DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
@@ -446,7 +459,7 @@ export function AlbumArea({ album }: { album: string }) {
       await playTrack(row.path);
       await refreshDevice();
       playback.playStream();
-      setNotice({ kind: 'ok', text: `Playing “${titleOf(row)}” on the player.` });
+      setNotice({ kind: 'ok', text: `Queued “${titleOf(row)}” on the player.` });
     } catch (error) {
       setNotice({
         kind: 'error',
@@ -592,6 +605,7 @@ export function AlbumArea({ album }: { album: string }) {
                 key={row.path}
                 row={row}
                 showArtist={found.artists.length > 1}
+                action={state.card ? 'queue' : 'play'}
                 image={imageOf(row)}
                 track={measurements === null ? undefined : (measurements.get(row.path) ?? null)}
                 onPlay={() => void play(row)}
