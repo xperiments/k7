@@ -19,22 +19,21 @@ import type { LauncherFetch, LauncherEvent, LauncherWindow } from '../public/lau
  * §3 again, by hand. Both implementations are compared against this table rather than
  * against each other, so the two ends cannot drift *together* to a wrong value.
  */
-const SPEC: Record<string, { timeout: number; bytes: boolean }> = {
-  status: { timeout: 4_000, bytes: false },
-  playlists: { timeout: 6_000, bytes: false },
-  playlist: { timeout: 6_000, bytes: false },
-  select: { timeout: 10_000, bytes: false },
-  snapshot: { timeout: 30_000, bytes: true },
-  rescan: { timeout: 10_000, bytes: false },
-  play: { timeout: 10_000, bytes: false },
-  'library.search': { timeout: 10_000, bytes: false },
-  'library.list': { timeout: 10_000, bytes: false },
-  'library.stats': { timeout: 10_000, bytes: false },
-  'library.track': { timeout: 10_000, bytes: false },
-  'stream.play': { timeout: 2_000, bytes: false },
-  'stream.pause': { timeout: 2_000, bytes: false },
-  'stream.volume': { timeout: 2_000, bytes: false },
-  'stream.state': { timeout: 2_000, bytes: false },
+const SPEC: Record<string, { timeout: number }> = {
+  status: { timeout: 4_000 },
+  playlists: { timeout: 6_000 },
+  playlist: { timeout: 6_000 },
+  select: { timeout: 10_000 },
+  rescan: { timeout: 10_000 },
+  play: { timeout: 10_000 },
+  'library.search': { timeout: 10_000 },
+  'library.list': { timeout: 10_000 },
+  'library.stats': { timeout: 10_000 },
+  'library.track': { timeout: 10_000 },
+  'stream.play': { timeout: 2_000 },
+  'stream.pause': { timeout: 2_000 },
+  'stream.volume': { timeout: 2_000 },
+  'stream.state': { timeout: 2_000 },
 };
 
 const NAMES = Object.keys(SPEC).sort();
@@ -50,10 +49,10 @@ describe('the bridge contract', () => {
   it('declares exactly the spec operations, on both ends', () => {
     expect(Object.keys(APP_OPS).sort()).toEqual(NAMES);
     expect(Object.keys(LAUNCHER_OPS).sort()).toEqual(NAMES);
-    expect(NAMES).toHaveLength(15);
+    expect(NAMES).toHaveLength(14);
   });
 
-  it('agrees on every timeout and the one binary op', () => {
+  it('agrees on every timeout', () => {
     for (const [name, spec] of Object.entries(APP_OPS)) {
       expect(spec, `App op ${name}`).toEqual(SPEC[name]);
       expect(LAUNCHER_OPS[name], `Launcher op ${name}`).toEqual(spec);
@@ -68,7 +67,7 @@ describe('the bridge contract', () => {
 
   it('agrees on the size caps in §5', () => {
     expect(LAUNCHER_LIMITS).toEqual(APP_LIMITS);
-    expect(APP_LIMITS).toEqual({ request: 256 * 1024, json: 64 * 1024, response: 1024 * 1024 });
+    expect(APP_LIMITS).toEqual({ json: 64 * 1024, response: 1024 * 1024 });
   });
 });
 

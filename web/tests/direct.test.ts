@@ -159,33 +159,6 @@ describe('the requests this Device makes', () => {
     expect(bodyOf(net.calls[0])).toEqual({ id: 'aaaa000000000001' });
   });
 
-  it('posts a snapshot as bytes the player can tell apart from a form', async () => {
-    const net = recorder();
-    net.replies.push(() => json({ applied: true, bytes: 9 }));
-    const device = createDirectDevice({ fetch: net.fetch });
-
-    const bytes = new Uint8Array([1, 2, 3]);
-    await expect(device.request('snapshot', { bytes })).resolves.toEqual({ bytes: 9 });
-    expect(net.calls[0]?.url).toBe('/api/snapshot');
-    expect(net.calls[0]?.init?.method).toBe('POST');
-    expect((net.calls[0]?.init?.headers as Record<string, string>)['Content-Type']).toBe(
-      'application/octet-stream',
-    );
-    expect(net.calls[0]?.init?.body).toBe(bytes);
-  });
-
-  it('keeps a refused snapshot refusal and its status', async () => {
-    const net = recorder();
-    net.replies.push(() => json({ applied: false, error: 'image is not its stated length' }, 400));
-    const device = createDirectDevice({ fetch: net.fetch });
-
-    await expect(device.request('snapshot', { bytes: new Uint8Array([1]) })).rejects.toMatchObject({
-      code: 'refused',
-      status: 400,
-      message: 'image is not its stated length',
-    });
-  });
-
   it('rescans with POST /api/rescan, and reads 409 as a refusal that names the reason', async () => {
     const net = recorder();
     net.replies.push(() => json({ ok: true }, 202));

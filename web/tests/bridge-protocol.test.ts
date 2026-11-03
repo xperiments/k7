@@ -22,7 +22,6 @@ const OPS: OpName[] = [
   'playlists',
   'playlist',
   'select',
-  'snapshot',
   'rescan',
   'play',
   'library.search',
@@ -54,7 +53,6 @@ const TIMEOUTS: Record<OpName, number> = {
   playlists: 6_000,
   playlist: 6_000,
   select: 10_000,
-  snapshot: 30_000,
   rescan: 10_000,
   play: 10_000,
   'library.search': 10_000,
@@ -84,12 +82,11 @@ describe('the bridge wire', () => {
     expect(BRIDGE_VERSION).toBe(1);
   });
 
-  it('knows exactly the fifteen operations, with the spec timeouts and one binary op', () => {
+  it('knows exactly the fourteen operations, with the spec timeouts', () => {
     expect(Object.keys(OP_SPECS).sort()).toEqual([...OPS].sort());
     for (const op of OPS) {
       expect(OP_SPECS[op].timeout).toBe(TIMEOUTS[op]);
     }
-    expect(OPS.filter((op) => OP_SPECS[op].bytes)).toEqual(['snapshot']);
   });
 
   it('recognises an operation name and nothing else', () => {
@@ -263,8 +260,8 @@ describe('the constructors', () => {
     for (const message of [
       hello('launcher'),
       welcome({ playing: false, volume: 1 }),
-      req('1', 'snapshot', { bytes: new Uint8Array(4) }),
-      ok('1', { applied: true, bytes: 4 }),
+      req('1', 'play', { path: 'A/x.mp3' }),
+      ok('1', {}),
       fail('1', 'blocked', 'press play'),
       bye(),
     ]) {
@@ -287,14 +284,6 @@ describe('the constructors', () => {
     });
   });
 
-  it('keeps a req carrying binary', () => {
-    const bytes = new Uint8Array([1, 2, 3]);
-    const message = parsed(req('9', 'snapshot', { bytes }));
-    if (message.t !== 'req') throw new Error('expected a req');
-    const args = message.args;
-    if (args === null || !(args.bytes instanceof Uint8Array)) throw new Error('expected bytes');
-    expect(Array.from(args.bytes)).toEqual([1, 2, 3]);
-  });
 });
 
 describe('the App-side response reader', () => {

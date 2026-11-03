@@ -30,6 +30,15 @@ export interface CachedMedia {
   genre: string;
   cover?: CachedCover;
   at: string;
+  /**
+   * The file as it was measured: its size, its modification time and the SHA-256 of its
+   * bytes. A re-scan compares these against the card's own files, so a Track this browser
+   * has already measured is recognised without being read again. Rows from before these
+   * fields existed have none, and are measured once more rather than guessed at.
+   */
+  size?: number;
+  mtime?: number;
+  hash?: string;
 }
 
 /** The row as stored: the media plus the card it was read from. */
@@ -110,4 +119,21 @@ export async function clearMedia(scope: string): Promise<void> {
   // `[scope]` is a prefix of every `[scope, path]` key, and the empty array sorts above any
   // string in IndexedDB's key ordering, so this bound covers exactly one scope's rows.
   await db.delete('media', IDBKeyRange.bound([scope], [scope, []]));
+}
+
+/**
+ * The content hash of the file a row describes, or null when the row is not about that file.
+ *
+ * A re-scan has the card's files in hand and no reason to read them: path, size and
+ * modification time are enough to know whether this browser already measured the bytes, and
+ * the hash the row was stored with is what names the analysis. A row without those fields is
+ * from before they existed — measured again, never guessed at.
+ */
+export function measuredHash(
+  media: CachedMedia | undefined,
+  file: { size: number; lastModified: number },
+): string | null {
+  if (!media || media.hash === undefined) return null;
+  if (media.size !== file.size || media.mtime !== file.lastModified) return null;
+  return media.hash;
 }

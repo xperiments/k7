@@ -226,3 +226,20 @@ export function fingerprintScope(hex: string): string {
 export function isCardRoot(names: string[]): boolean {
   return names.some((name) => name.toLowerCase() === 'music');
 }
+
+/**
+ * The mark among a dropped card's files, if it carries one.
+ *
+ * A dropped card is read-only — a dropped handle's permission cannot be raised (ADR 0010) —
+ * so the mark cannot be written there. It can still be *read*, and reading it is what keeps
+ * the identity the card already has: without this, a second drop after adding one Track
+ * fingerprints to a different scope and the covers and last image look lost (`card-mark.md`
+ * G2). The file must sit exactly one level below the choice, which is the card root.
+ */
+export function findCardMark(paths: readonly string[]): string | null {
+  for (const path of paths) {
+    const parts = path.split('/').filter((segment) => segment !== '');
+    if (parts.length === 2 && parts[1].toLowerCase() === MARK_NAME) return path;
+  }
+  return null;
+}

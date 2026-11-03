@@ -18,13 +18,12 @@ export const BRIDGE_VERSION = 1;
 
 export type Role = 'app' | 'launcher';
 
-/** The fifteen operations. Nothing else is bridged (O2, X5). */
+/** The fourteen operations. Nothing else is bridged (O2, X5). */
 export type OpName =
   | 'status'
   | 'playlists'
   | 'playlist'
   | 'select'
-  | 'snapshot'
   | 'rescan'
   | 'play'
   | 'library.search'
@@ -52,32 +51,27 @@ export type ErrorCode =
 export interface OpSpec {
   /** How long the caller waits for this op's answer, in milliseconds. */
   readonly timeout: number;
-  /** True when `args.bytes` carries a `Uint8Array` under the 256 KiB cap (C3). */
-  readonly bytes: boolean;
 }
 
 export const OP_SPECS: Readonly<Record<OpName, OpSpec>> = {
-  status: { timeout: 4_000, bytes: false },
-  playlists: { timeout: 6_000, bytes: false },
-  playlist: { timeout: 6_000, bytes: false },
-  select: { timeout: 10_000, bytes: false },
-  snapshot: { timeout: 30_000, bytes: true },
-  rescan: { timeout: 10_000, bytes: false },
-  play: { timeout: 10_000, bytes: false },
-  'library.search': { timeout: 10_000, bytes: false },
-  'library.list': { timeout: 10_000, bytes: false },
-  'library.stats': { timeout: 10_000, bytes: false },
-  'library.track': { timeout: 10_000, bytes: false },
-  'stream.play': { timeout: 2_000, bytes: false },
-  'stream.pause': { timeout: 2_000, bytes: false },
-  'stream.volume': { timeout: 2_000, bytes: false },
-  'stream.state': { timeout: 2_000, bytes: false },
+  status: { timeout: 4_000 },
+  playlists: { timeout: 6_000 },
+  playlist: { timeout: 6_000 },
+  select: { timeout: 10_000 },
+  rescan: { timeout: 10_000 },
+  play: { timeout: 10_000 },
+  'library.search': { timeout: 10_000 },
+  'library.list': { timeout: 10_000 },
+  'library.stats': { timeout: 10_000 },
+  'library.track': { timeout: 10_000 },
+  'stream.play': { timeout: 2_000 },
+  'stream.pause': { timeout: 2_000 },
+  'stream.volume': { timeout: 2_000 },
+  'stream.state': { timeout: 2_000 },
 };
 
 /** §5: the request cap, the JSON cap and the response cap, in bytes. */
 export const LIMITS = {
-  /** `args` carrying binary (`snapshot`), the device's own upload limit. */
-  request: 256 * 1024,
   /** `args` carrying JSON. */
   json: 64 * 1024,
   /** Any `data` the Launcher sends back. */

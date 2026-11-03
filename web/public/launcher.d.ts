@@ -82,7 +82,6 @@ export interface LauncherBridge {
 
 export interface LauncherOpSpec {
   readonly timeout: number;
-  readonly bytes: boolean;
 }
 
 export declare const BRIDGE_VERSION: number;

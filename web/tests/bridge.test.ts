@@ -331,25 +331,6 @@ describe('requests', () => {
   });
 });
 
-describe('transfers', () => {
-  it('sends the snapshot buffer in the transfer list, never a copy (C3)', async () => {
-    const { launcher, win, device } = paired();
-
-    const bytes = new Uint8Array([1, 2, 3]);
-    const pending = device.request('snapshot', { bytes });
-    const post = launcher.posts[launcher.posts.length - 1];
-    const sent = lastRequest(launcher);
-
-    expect(sent.op).toBe('snapshot');
-    expect(sent.args?.['bytes']).toBe(bytes);
-    expect(post?.transfer).toEqual([bytes.buffer]);
-
-    // The Launcher's receipt need not repeat the length: the App knew it before posting.
-    win.deliver(DEVICE_ORIGIN, launcher, ok(sent.id, { applied: true }));
-    await expect(pending).resolves.toEqual({ bytes: 3 });
-  });
-});
-
 describe('sessions', () => {
   it('goes none on bye, rejects what was in flight, and tells the page', async () => {
     const { launcher, win, device } = paired();

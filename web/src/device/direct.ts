@@ -36,7 +36,6 @@ import {
 } from './playlists';
 import { parseStatus, type DeviceStatus } from './status';
 import { DeviceError, type Device, type OpArgs, type OpData } from './transport';
-import { parseUploadResult } from './upload';
 
 /** A `fetch` this module can be handed in a test; the page's own is the default. */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -396,38 +395,6 @@ export function createDirectDevice(options: DirectOptions = {}): DirectDevice {
         parseSelectResult,
         'selection',
       );
-    },
-
-    async snapshot(args: { bytes: Uint8Array<ArrayBuffer> }) {
-      const response = await call('snapshot', '/api/snapshot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: args.bytes,
-      });
-      const text = await response.text();
-      let document: unknown = {};
-      try {
-        document = text ? (JSON.parse(text) as unknown) : {};
-      } catch {
-        /* the body is the player's error page; the status says enough */
-      }
-      const detail = isRecord(document) && typeof document.error === 'string' ? document.error : null;
-      if (!response.ok || !isRecord(document) || document.applied !== true) {
-        throw new DeviceError(
-          detail ?? `the player refused it (${response.status})`,
-          'refused',
-          response.status,
-        );
-      }
-      const result = parseUploadResult(document, args.bytes.length);
-      if (result === null) {
-        throw new DeviceError(
-          'the player answered a receipt this page could not read',
-          'unreachable',
-          0,
-        );
-      }
-      return result;
     },
 
     async rescan() {

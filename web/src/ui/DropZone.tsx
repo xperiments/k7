@@ -27,8 +27,15 @@ import {
   type SnapshotDirectory,
 } from './cardWriter';
 import { cardFingerprint } from '../card/fingerprint';
-import { fingerprintScope } from '../card/mark';
-import { setCardScope, UNSCOPED } from '../card/session';
+import { findCardMark, parseCardMark, fingerprintScope, scopeFor } from '../card/mark';
+import { cardShapeOf, cardShapeProblem } from '../card/shape';
+import { setCardScope } from '../card/session';
+
+/** The two things a refusal can be: the folder is wrong, or the browser could not open it. */
+interface Problem {
+  title: string;
+  text: string;
+}
 
 interface DropZoneProps {
   disabled: boolean;
@@ -64,7 +71,10 @@ function fingerprintOf(files: readonly FoundFile[]): Promise<string> {
 export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZoneProps) {
   const [over, setOver] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Problem | null>(null);
+  /* Said, not refused: a dropped card cannot carry a mark written by this page, and the
+   * fingerprint scope it gets instead changes the moment a Track is added. */
+  const [note, setNote] = useState<string | null>(null);
   const inactive = disabled || scanning;
   const pickable = cardPicker() !== undefined;
 
@@ -75,11 +85,14 @@ export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZone
     try {
       picked = await pickCardDirectory(cardPicker());
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+      setError({ title: 'Could not open the folder', text: failure instanceof Error ? failure.message : String(failure) });
       return;
     }
     if (picked.kind === 'unsupported') {
-      setError('This browser cannot open a folder for writing; drop it and use Download .db.');
+      setError({
+        title: 'This browser cannot open a folder for writing',
+        text: 'The card has to be chosen read-write so k7.db can be written to it. A browser without the folder picker can only measure a dropped folder, read-only.',
+      });
       return;
     }
     if (picked.kind === 'cancelled') return;
@@ -87,6 +100,13 @@ export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZone
     setScanning(true);
     try {
       const result = await scanDirectoryHandle(picked.directory as unknown as CardDirectoryHandle);
+      // The card root is the only choice that can be written back: one level down is the
+      // music directory, one up is the card's parent, and neither can hold k7.db (K1).
+      const problem = cardShapeProblem(cardShapeOf(result.files.map((found) => found.path)));
+      if (problem !== null) {
+        setError({ title: 'That folder is not the card', text: problem });
+        return;
+      }
       // Identify the card before the run: the scope has to exist before the first cover is
       // written, and a mark this App did not write is never overwritten (card-mark.md §4).
       const identified = await identifyCard(picked.directory as unknown as CardDirectory);
@@ -95,9 +115,13 @@ export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZone
           ? fingerprintScope(await fingerprintOf(result.files))
           : identified,
       );
+      setNote(null);
       onCard(result.files, result.skipped, picked.directory);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+      setError({
+        title: 'Could not read the card',
+        text: failure instanceof Error ? failure.message : String(failure),
+      });
     } finally {
       setScanning(false);
     }
@@ -109,15 +133,32 @@ export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZone
     setError(null);
     try {
       const result = await scanDataTransfer(data);
-      // A dropped card is a card (it has a `music/` in it) and gets its fingerprint; a
-      // dropped Folder is not, and stays unscoped (card-mark.md K2, G1).
-      const droppedACard = result.files.some((found) => /(^|\/)music\//i.test(found.path));
+      const problem = cardShapeProblem(cardShapeOf(result.files.map((found) => found.path)));
+      if (problem !== null) {
+        setError({ title: 'That folder is not the card', text: problem });
+        return;
+      }
+      // The card's own mark is read when it has one: a dropped card is read-only, so the
+      // mark cannot be written here, but the identity it already carries is what keeps the
+      // covers and the last image attached to it (card-mark.md G2).
+      const markPath = findCardMark(result.files.map((found) => found.path));
+      const markFile = markPath === null ? undefined : result.files.find((found) => found.path === markPath);
+      const mark = markFile === undefined ? null : parseCardMark(await markFile.file.text());
+      const usable = typeof mark === 'object' && mark !== null ? mark : null;
       setCardScope(
-        droppedACard ? fingerprintScope(await fingerprintOf(result.files)) : UNSCOPED,
+        usable !== null ? scopeFor(usable) : fingerprintScope(await fingerprintOf(result.files)),
+      );
+      setNote(
+        usable === null
+          ? 'That card has no mark this page can read, so it is identified by its contents for now. Open it once with “Choose card” to give it one.'
+          : null,
       );
       onFiles(result.files, result.skipped);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+      setError({
+        title: 'Could not read the folder',
+        text: failure instanceof Error ? failure.message : String(failure),
+      });
     } finally {
       setScanning(false);
     }
@@ -169,10 +210,17 @@ export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZone
         </EmptyContent>
       )}
 
+      {note && (
+        <Alert className="w-full max-w-sm text-left">
+          <AlertTitle>Unmarked card</AlertTitle>
+          <AlertDescription>{note}</AlertDescription>
+        </Alert>
+      )}
+
       {error && (
         <Alert variant="destructive" className="w-full max-w-sm text-left">
-          <AlertTitle>Could not open the folder</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertTitle>{error.title}</AlertTitle>
+          <AlertDescription>{error.text}</AlertDescription>
         </Alert>
       )}
     </Empty>

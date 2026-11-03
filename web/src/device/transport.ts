@@ -14,7 +14,6 @@ import type { OpName } from '../bridge/protocol';
 import type { McpSearch, McpStats, McpTrack, LibraryListing, SearchArgs } from './mcp';
 import type { DevicePlaylists, DevicePlaylistRows, SelectResult } from './playlists';
 import type { DeviceStatus } from './status';
-import type { UploadResult } from './upload';
 
 /**
  * Where the answers come from, or `none` when there is no player in this window.
@@ -41,7 +40,6 @@ export interface OpArgs {
   playlists: undefined;
   playlist: { id: string };
   select: { id: string | null };
-  snapshot: { bytes: Uint8Array<ArrayBuffer> };
   rescan: undefined;
   play: { path: string };
   'library.search': SearchArgs;
@@ -60,7 +58,6 @@ export interface OpData {
   playlists: DevicePlaylists;
   playlist: DevicePlaylistRows;
   select: SelectResult;
-  snapshot: UploadResult;
   rescan: { ok: boolean };
   play: Record<string, never>;
   'library.search': McpSearch;

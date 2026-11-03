@@ -23,7 +23,6 @@ export const SESSION_IDLE_MS = 60_000;
 
 /** §5: 256 KiB of binary args, 64 KiB of JSON args, 1 MiB of response. */
 export const LIMITS = Object.freeze({
-  request: 256 * 1024,
   json: 64 * 1024,
   response: 1024 * 1024,
 });
@@ -113,11 +112,6 @@ function selectArgs(args) {
     return badArgs('`id` must be 16 hex characters or null');
   }
   return { value: { id: args.id } };
-}
-
-function snapshotArgs(args) {
-  if (!isRecord(args) || !(args.bytes instanceof Uint8Array)) return badArgs('`bytes` must be a Uint8Array');
-  return { value: { bytes: args.bytes } };
 }
 
 function playArgs(args) {
@@ -255,83 +249,67 @@ function trackToolArgs(value) {
 const OPS = {
   status: {
     timeout: 4_000,
-    bytes: false,
     validate: noArgs,
     build: () => ({ path: '/api/status', method: 'GET' }),
   },
   playlists: {
     timeout: 6_000,
-    bytes: false,
     validate: noArgs,
     build: () => ({ path: '/api/playlists', method: 'GET' }),
   },
   playlist: {
     timeout: 6_000,
-    bytes: false,
     validate: playlistArgs,
     build: (value) => ({ path: `/api/playlists/${encodeURIComponent(value.id)}`, method: 'GET' }),
   },
   select: {
     timeout: 10_000,
-    bytes: false,
     validate: selectArgs,
     build: (value) => ({ path: '/api/playlists/select', method: 'POST', body: JSON.stringify({ id: value.id }) }),
   },
-  snapshot: {
-    timeout: 30_000,
-    bytes: true,
-    validate: snapshotArgs,
-    build: (value) => ({ path: '/api/snapshot', method: 'POST', body: value.bytes }),
-  },
   rescan: {
     timeout: 10_000,
-    bytes: false,
     validate: noArgs,
     build: () => ({ path: '/api/rescan', method: 'POST' }),
   },
   play: {
     timeout: 10_000,
-    bytes: false,
     validate: playArgs,
     build: (value) => ({ path: '/api/play', method: 'POST', body: JSON.stringify({ path: value.path }) }),
   },
   'library.search': {
     timeout: 10_000,
-    bytes: false,
     validate: searchArgs,
     mcp: 'library_search',
     mcpArgs: searchToolArgs,
   },
   'library.list': {
     timeout: 10_000,
-    bytes: false,
     validate: listArgs,
     mcp: 'library_list',
     mcpArgs: listToolArgs,
   },
   'library.stats': {
     timeout: 10_000,
-    bytes: false,
     validate: noArgs,
     mcp: 'library_stats',
     mcpArgs: () => ({}),
   },
   'library.track': {
     timeout: 10_000,
-    bytes: false,
     validate: trackArgs,
     mcp: 'library_track',
     mcpArgs: trackToolArgs,
   },
-  'stream.play': { timeout: 2_000, bytes: false, stream: true, validate: noArgs },
-  'stream.pause': { timeout: 2_000, bytes: false, stream: true, validate: noArgs },
-  'stream.volume': { timeout: 2_000, bytes: false, stream: true, validate: volumeArgs },
-  'stream.state': { timeout: 2_000, bytes: false, stream: true, validate: noArgs },
+  'stream.play': { timeout: 2_000, stream: true, validate: noArgs },
+  'stream.pause': { timeout: 2_000, stream: true, validate: noArgs },
+  'stream.volume': { timeout: 2_000, stream: true, validate: volumeArgs },
+  'stream.state': { timeout: 2_000, stream: true, validate: noArgs },
 };
 
-/** The table as the contract test reads it: names, timeouts and the bytes flag. */
+/** The table as the contract test reads it: names and timeouts. */
 export const OP_SPECS = Object.freeze(
-  Object.fromEntries(Object.entries(OPS).map(([name, spec]) => [name, { timeout: spec.timeout, bytes: spec.bytes }])),
+  Object.fromEntries(Object.entries(OPS).map(([name, spec]) => [name, { timeout: spec.timeout }])),
 );
 
 /* ------------------------------------------------------------------------- messages ---- */
@@ -686,8 +664,8 @@ export function createLauncherBridge(options) {
       post(source, failMessage(id, 'bad-args', validated.error), originName);
       return;
     }
-    const size = spec.bytes ? validated.value.bytes.byteLength : jsonBytes(message.args);
-    const cap = spec.bytes ? LIMITS.request : LIMITS.json;
+    const size = jsonBytes(message.args);
+    const cap = LIMITS.json;
     if (size === null || size > cap) {
       post(source, 
         failMessage(id, 'too-large', `the request is over the ${Math.round(cap / 1024)} KiB cap`),
@@ -777,10 +755,6 @@ export function createLauncherBridge(options) {
       throw new BridgeFailure('unreachable', 'the player did not answer');
     }
     const data = await readJson(response);
-    if (op === 'snapshot' && (!isRecord(data) || data.applied !== true)) {
-      const detail = isRecord(data) && typeof data.error === 'string' ? data.error : null;
-      throw new BridgeFailure('refused', detail || 'the player did not accept the image', response.status);
-    }
     return data;
   }
 

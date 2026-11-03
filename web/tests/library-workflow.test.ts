@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
+import { measuredHash } from '../src/storage/media';
 
 /**
  * The workflow the library views depend on, as one run:
@@ -178,5 +179,29 @@ describe('a measured card after the page reloads', () => {
       ),
     );
     expect(next.albums.buildMediaIndex(cache, null).albums).toHaveLength(1);
+  });
+
+  it('recognises a file it already measured from the row the card left', async () => {
+    const app = await loadApp();
+    const scope = 'mark:00000000-0000-4000-8000-00000000a008';
+    app.session.setCardScope(scope);
+    const path = 'Aphex Twin/Selected Ambient Works/01.mp3';
+    const hash = 'ab'.repeat(32);
+    await app.media.putMedia(scope, {
+      ...row(path, 'Selected Ambient Works'),
+      size: 5_242_880,
+      mtime: 1_700_000_000_000,
+      hash,
+    });
+
+    const stored = await app.media.getMedia(scope, path);
+    const sameFile = { size: 5_242_880, lastModified: 1_700_000_000_000 };
+
+    // Read off the record: no bytes are read to decide this.
+    expect(measuredHash(stored, sameFile)).toBe(hash);
+    // The same path with a different size is a different file, and is measured again.
+    expect(measuredHash(stored, { ...sameFile, size: 6_000_000 })).toBeNull();
+    // And a row from before the fields existed says nothing rather than guessing.
+    expect(measuredHash({ ...stored!, hash: undefined }, sameFile)).toBeNull();
   });
 });

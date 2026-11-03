@@ -99,9 +99,15 @@ expiry (§6); no correct behaviour may depend on receiving `bye`.
 
 ## 3. Operations
 
-Fifteen operations and no others. There is no path, method, header, query or body on the wire:
+Fourteen operations and no others. There is no path, method, header, query or body on the wire:
 each op maps to exactly one request the Launcher makes, and the App cannot express anything
 outside this table.
+
+There is no `snapshot` op. The image reaches the player on the card's Update file and nowhere
+else ([ADR 0065](../adr/0065-the-card-is-the-only-way-to-the-player.md)): the App writes it at
+the card's root, and the device flashes it at boot. A channel that could push an image over the
+network is a second write the product does not want, and it was the only binary `args` on the
+wire.
 
 | Op | The Launcher's request | `args` | `data` | Timeout |
 |---|---|---|---:|---:|
@@ -109,7 +115,6 @@ outside this table.
 | `playlists` | `GET /api/playlists` | — | `{selected, walking, missing, lists}` | 6 s |
 | `playlist` | `GET /api/playlists/<id>` | `{id: hex16}` | `{id, name, rows: string[]}` | 6 s |
 | `select` | `POST /api/playlists/select` | `{id: hex16 \| null}` | `{order, selected}` | 10 s |
-| `snapshot` | `POST /api/snapshot` | `{bytes: Uint8Array}` | `{applied, bytes}` | 30 s |
 | `rescan` | `POST /api/rescan` | — | `{ok}` or a `refused` with status 409 | 10 s |
 | `play` | `POST /api/play` | `{path: string}` | `{}` | 10 s |
 | `library.search` | `POST /mcp` → `library_search` | `SearchArgs` | `{rows, total}` | 10 s |
@@ -138,10 +143,9 @@ the user to press play in the bridge window. The Launcher also carries its own t
 controls, so that instruction can always be obeyed.
 
 **O4. Serialized, one in flight.** The Launcher runs one request at a time and queues the rest
-in arrival order. The device has four connection workers shared with the broadcast, one
-flash-capable task, and a snapshot upload that restarts it; a bridge that fans out would make
-"the player restarted" look like "the player is broken". Both ends enforce the operation's
-budget: the App stops waiting and reports `timeout`, and the Launcher answers `timeout` on the
+in arrival order. The device has four connection workers shared with the broadcast and one
+flash-capable task, and a bridge that fans out would make "the player is busy" look like "the
+player is broken". Both ends enforce the operation's budget: the App stops waiting and reports `timeout`, and the Launcher answers `timeout` on the
 same budget without aborting the request — it holds the one-in-flight slot until the request
 actually settles, so the device never sees two bridge requests at once.
 
@@ -183,10 +187,10 @@ trip. Non-binary arguments are capped at 64 KiB of JSON.
 **C2. A response is capped at 1 MiB.** Every bridged document is far smaller today; the cap
 exists so a future op cannot fill the tab's memory through a channel nobody was watching.
 
-**C3. Two ops carry binary this way.** `snapshot` sends `args.bytes` as a `Uint8Array` with the
-buffer in the transfer list, so the App's copy is detached rather than duplicated.
-`library.search` and friends return JSON. No op returns binary today; the rule is that a `data`
-field named `bytes` is transferred, never cloned.
+**C3. No op carries binary.** Every `args` is JSON and every `data` is JSON, so nothing is
+transferred and nothing is cloned. Removing the image upload from the channel removed the one
+buffer that used to cross it; a future op that carries bytes would bring the transfer rule
+back with it.
 
 ---
 
@@ -210,9 +214,9 @@ session that has been silent for a minute is gone. Expiry is a disconnect, not a
 
 **S5. Three facts, not one.** *Bridge alive* (a session exists), *device reachable* (the last op
 or poll got an answer), and *offline* (the browser has no network) are independent. The App's
-chip composes them; a truthy bridge never implies a reachable device, and a snapshot upload
-implies the device is about to restart, so a poll that fails for two seconds after one is
-expected, not an alarm.
+chip composes them; a truthy bridge never implies a reachable device. Nothing the App does
+restarts the device any more — the snapshot arrives on the card — so a failed poll is never
+expected after an operation.
 
 **S6. Reconnection is a click.** When the bridge dies, the App degrades to standalone and its
 Connect button opens a fresh `k7-bridge`. When the App dies, the Launcher notices

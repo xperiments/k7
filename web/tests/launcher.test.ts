@@ -321,12 +321,12 @@ describe('requests', () => {
     expect(h.network.calls).toHaveLength(0);
   });
 
-  it('refuses a request over 256 KiB before it is sent', async () => {
+  it('refuses a request over the JSON cap before it is sent', async () => {
     const h = harness();
     announce(h);
     h.app.clear();
 
-    send(h, '5', 'snapshot', { bytes: new Uint8Array(256 * 1024 + 1) });
+    send(h, '5', 'play', { path: 'x'.repeat(70 * 1024) });
     await tick();
     expect(codeOf(onlyResponse(h))).toBe('too-large');
     expect(h.network.calls).toHaveLength(0);

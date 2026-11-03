@@ -12,26 +12,15 @@ import { decodeFile, sha256Hex, trackFormat } from '../../audio/decode';
 import { loadManifest } from '../../audio/models';
 import { readTrackMetadata } from '../../audio/metadata';
 import { downloadTaggedCopy, writeAnalysisTags } from '../../audio/tagWriter';
-import {
-  ANALYSIS_SCHEMA,
-  type Analysis,
-  type ExportDocument,
-  type ModelManifest,
-} from '../../domain/analysis';
+import type { Analysis, ModelManifest } from '../../domain/analysis';
 import { snapshotPath } from '../../domain/snapshot';
 import { needsMeasurement, tagAnalysis } from '../../domain/tagAnalysis';
-import { sendSnapshot } from '../../device/upload';
 import { newId } from '../../lib/id';
 import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
 import { patchListArea } from '../../playlists/image';
-import { countMedia, listMedia, putMedia } from '../../storage/media';
+import { countMedia, getMedia, listMedia, measuredHash, putMedia } from '../../storage/media';
 import { cardRefFor, currentCardScope, subscribeCardScope } from '../../card/session';
-import {
-  clearSnapshot,
-  loadSnapshot,
-  saveSnapshot,
-  type StoredSnapshot,
-} from '../../storage/snapshots';
+import { loadSnapshot, saveSnapshot, type StoredSnapshot } from '../../storage/snapshots';
 import { clearCache, getCached, putCached } from '../../storage/cache';
 import { requestPersistence } from '../../storage/persist';
 
@@ -110,24 +99,12 @@ export interface AnalysisApi {
   retry: (item: QueueItem) => void;
   deepAnalyse: (item: QueueItem) => Promise<void>;
   saveTags: (item: QueueItem) => Promise<void>;
-  exportJson: () => void;
 
-  /** Builds `k7.db` from the queue and this browser's drafts. */
-  buildImage: () => Promise<SnapshotExport | null>;
-  sendToPlayer: () => Promise<void>;
-  saveToCard: () => Promise<void>;
-  saveSnapshotFile: () => Promise<void>;
-  resendLast: () => Promise<void>;
-  /* Send this browser's drafts inside its last image. False when there is no image to
-   * carry them: sending a list must not throw the measurements away. */
-  canSendLists: boolean;
-  sendLists: () => Promise<boolean>;
-  downloadLast: () => void;
-  discardLast: () => Promise<void>;
+  /** When the card last took an image from this page, or null if it has not. */
+  writtenAt: string | null;
+  /** The card this page is working on, as its scope names it: a mark, or a fingerprint. */
+  cardLabel: string;
   clearAll: () => Promise<void>;
-
-  /** Something the player could be given: a measured track below `music/`, or a list. */
-  canSave: boolean;
 }
 
 const AnalysisContext = createContext<AnalysisApi | null>(null);
@@ -138,6 +115,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [manifest, setManifest] = useState<ModelManifest | null>(null);
   const modelSet = manifest?.modelSet ?? null;
   const [saving, setSaving] = useState(false);
+  /* Bumped whenever a Track's analysis changes, so the card-write effect can tell a new
+   * measurement from the one it already wrote (a deep analysis keeps the content hash). */
+  const [runRevision, setRunRevision] = useState(0);
   const [tagsOnly, setTagsOnly] = useState(true);
   const [lastSnapshot, setLastSnapshot] = useState<StoredSnapshot | null>(null);
   const [mediaCount, setMediaCount] = useState(0);
@@ -214,7 +194,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * be kept: the player serves paths and measurements, never a picture. So every track that
    * settles leaves its tags and its art here, keyed by the Snapshot's own path, and the
    * library views join the two by that key. */
-  const rememberMedia = useCallback(async (item: QueueItem) => {
+  const rememberMedia = useCallback(async (item: QueueItem, hash: string) => {
     const path = snapshotPath(item.path);
     if (!path) return;
     try {
@@ -231,6 +211,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           ? { bytes: new Uint8Array(picture.data), format: picture.format }
           : undefined,
         at: new Date().toISOString(),
+        size: item.file.size,
+        mtime: item.file.lastModified,
+        hash,
       });
       void countMedia(currentCardScope()).then((n) => setMediaCount(n));
     } catch {
@@ -238,16 +221,50 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * The analysis for a file this browser has already measured, or null.
+   *
+   * The card's own record decides it: the media row stores the file's path, size,
+   * modification time and content hash, so a re-scan can name the Track without reading a
+   * byte. A file whose size or mtime moved is a different file and is measured again; a row
+   * from before those fields existed has neither, and is measured once more rather than
+   * guessed at.
+   */
+  const knownAnalysis = useCallback(
+    async (item: QueueItem): Promise<Analysis | null> => {
+      if (!modelSet) return null;
+      const path = snapshotPath(item.path);
+      if (path === null) return null;
+      const media = await getMedia(currentCardScope(), path).catch(() => undefined);
+      const hash = measuredHash(media, item.file);
+      if (hash === null) return null;
+      const cached = await getCached(cacheKey(hash, modelSet)).catch(() => null);
+      if (!cached) return null;
+      return {
+        ...cached,
+        track: { ...cached.track, name: item.name, path: item.path, size: item.file.size, hash },
+      };
+    },
+    [modelSet],
+  );
+
   const update = useCallback((id: string, patch: Partial<QueueItem>) => {
     setItems((previous) =>
       previous.map((item) => (item.id === id ? { ...item, ...patch } : item)),
     );
+    if (patch.analysis !== undefined) setRunRevision((revision) => revision + 1);
   }, []);
 
   const processItem = useCallback(
     async (item: QueueItem, client: AnalysisClient) => {
       if (!modelSet) return;
       try {
+        /* Already measured, and the card still holds the same bytes: nothing to read. */
+        const known = await knownAnalysis(item);
+        if (known !== null) {
+          update(item.id, { status: 'done', analysis: known, cached: true, skipped: true });
+          return;
+        }
         update(item.id, { status: 'hashing', error: undefined });
         const buffer = await item.file.arrayBuffer();
         const hash = await sha256Hex(buffer);
@@ -295,7 +312,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           await putCached(key, analysis);
         askPersistenceOnce();
           update(item.id, { status: 'tagged', analysis, stage: undefined });
-          void rememberMedia(item);
+          void rememberMedia(item, hash);
           return;
         }
 
@@ -317,7 +334,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         await putCached(key, analysis);
         askPersistenceOnce();
         update(item.id, { status: 'done', analysis, stage: undefined });
-        void rememberMedia(item);
+        void rememberMedia(item, hash);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (isWeightError(error)) setWeightError(message);
@@ -326,7 +343,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         claimed.current.delete(item.id);
       }
     },
-    [modelSet, update, tagsOnly, rememberMedia],
+    [modelSet, update, tagsOnly, rememberMedia, knownAnalysis],
   );
 
   /* Keep every lane busy: claim as many queued items as there are free workers, hand each to
@@ -460,38 +477,18 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
-  const exportJson = useCallback(() => {
-    const analyses = items.flatMap((item) => (item.analysis ? [item.analysis] : []));
-    if (analyses.length === 0) return;
-    const payload: ExportDocument = {
-      schema: ANALYSIS_SCHEMA,
-      generatedAt: new Date().toISOString(),
-      analyses,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `k7-analysis-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }, [items]);
-
   /**
-   * The snapshot is the only thing this page produces that the player consumes: one
-   * file, at the card's root, that the device flashes and deletes. It carries the
-   * measurements *and* this browser's drafts (ADR 0051); with no Playlist the output is
-   * byte-identical version 1, so an image with nothing to say about lists stays the
-   * smaller, older format.
+   * The snapshot is the only thing this page produces that the player consumes: one file,
+   * at the card's root, that the device flashes and deletes. It carries the measurements
+   * *and* this browser's drafts (ADR 0051); with no Playlist the output is byte-identical
+   * version 1, so an image with nothing to say about lists stays the smaller, older format.
    *
    * A Track outside a `music` directory is measured and shown but has no place in it, so
    * the count is reported rather than silently dropped.
    */
   const buildImage = useCallback(async (): Promise<SnapshotExport | null> => {
     if (!manifest) {
-      /* A draft can enable Send before the weights are in: the image needs the model set
+      /* A draft can enable a write before the weights are in: the image needs the model set
        * to say which models produced it, so there is nothing honest to build yet. */
       setNotice({
         kind: 'error',
@@ -518,8 +515,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       setNotice({
         kind: 'error',
         text:
-          'Nothing to write: drop the card root (or its music folder) so the tracks have a ' +
-          'path below music/, or add a Playlist.',
+          'Nothing to write yet: no Track below music/ has been measured, and there is no ' +
+          'Playlist to carry. Measure the card, or add a Playlist.',
       });
       return null;
     }
@@ -529,230 +526,162 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const leftovers = (skipped: number) =>
     skipped > 0 ? ` ${plural(skipped, 'analysed file')} outside music/ left out.` : '';
 
-  /* An image may carry lists and no measurements; saying so is the difference between a
-   * send that is worth doing and one that looks like a lie. */
-  const listMessage = (count: number) =>
-    count > 0 ? ` and ${plural(count, 'playlist')}` : '';
+  const listMessage = (count: number) => (count > 0 ? ` and ${plural(count, 'playlist')}` : '');
 
   const nonEmptyLists = () =>
     toSnapshotPlaylists().filter((list) => list.rows.length > 0).length;
 
-  /* Writing is only offered on a card the page opened read-write at intake. A dropped
-   * folder never is one - a dropped handle's permission cannot be raised (ADR 0010) -
-   * so there is no fallback picker here to surprise anyone with: the button that would
-   * call this is not rendered without the handle. */
-  const saveToCard = useCallback(async () => {
-    if (!cardHandle || saving) return;
-    setSaving(true);
-    try {
-      const result = await buildImage();
-      if (!result) return;
-      await writeSnapshotToCard(cardHandle, result.bytes);
-      setNotice({
-        kind: 'success',
-        text:
-          `Wrote k7.db for ${plural(result.tracks, 'track')}` +
-          `${listMessage(nonEmptyLists())} to the card.` +
-          leftovers(result.skipped) +
-          ' Put the card back in the player.',
-      });
-    } catch (error) {
-      setNotice({
-        kind: 'error',
-        text: `Could not write to the card: ${error instanceof Error ? error.message : String(error)}`,
-      });
-    } finally {
-      setSaving(false);
-    }
-  }, [buildImage, cardHandle, saving]);
+  /* What the card last took. The two signatures let an effect tell a new run or a changed
+   * list from the state it already wrote, so a settled queue does not rewrite the card on
+   * every render. */
+  const written = useRef({ run: '', lists: '' });
+  /* A write in flight, as a ref: `saving` drives the UI, but the effects below must not
+   * re-run merely because a write finished — that would retry a failed one forever. */
+  const writing = useRef(false);
+  const [writtenAt, setWrittenAt] = useState<string | null>(null);
 
-  /* The card stays in the computer; the measurements go to the player over the network.
-   * The player validates the image before it writes a byte of flash and restarts itself
-   * afterwards, so the honest thing to say here is "it is restarting". */
-  const sendToPlayer = useCallback(async () => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      const result = await buildImage();
-      if (!result) return;
-      const scope = currentCardScope();
-      const stored: StoredSnapshot = {
-        scope,
-        card: cardRefFor(scope),
-        bytes: result.bytes,
-        tracks: result.tracks,
-        skipped: result.skipped,
-        at: new Date().toISOString(),
-      };
-      await saveSnapshot(stored.scope, stored);
-      const sent = await sendSnapshot(result.bytes);
-      const accepted: StoredSnapshot = { ...stored, sentAt: new Date().toISOString() };
-      await saveSnapshot(accepted.scope, accepted);
-      setLastSnapshot(accepted);
-      setNotice({
-        kind: 'success',
-        text:
-          `Sent ${plural(result.tracks, 'track')}${listMessage(nonEmptyLists())} to the ` +
-          `player (${sent.bytes} bytes).` +
-          leftovers(result.skipped) +
-          ' It is restarting to pick up the new measurements.',
-      });
-    } catch (error) {
-      setNotice({
-        kind: 'error',
-        text:
-          `Could not send to the player: ${error instanceof Error ? error.message : String(error)}. ` +
-          'The image is kept — send it again when the player is back.',
-      });
-    } finally {
-      setSaving(false);
-    }
-  }, [buildImage, saving]);
+  const done = items.filter((item) => item.analysis).length;
+  const total = items.length;
+  /* A run is every queued Track measured: nothing waiting, nothing in flight. The write is
+   * debounced because a queue settles one Track at a time and each write is the whole
+   * image. */
+  const pending = items.filter(
+    (item) =>
+      item.status === 'queued' ||
+      item.status === 'hashing' ||
+      item.status === 'decoding' ||
+      item.status === 'analysing',
+  ).length;
+  const settled = total > 0 && pending === 0 && !busy;
 
-  const saveSnapshotFile = useCallback(async () => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      const result = await buildImage();
-      if (!result) return;
-      const scope = currentCardScope();
-      const stored: StoredSnapshot = {
-        scope,
-        card: cardRefFor(scope),
-        bytes: result.bytes,
-        tracks: result.tracks,
-        skipped: result.skipped,
-        at: new Date().toISOString(),
-      };
-      await saveSnapshot(stored.scope, stored);
-      setLastSnapshot(stored);
-      const blob = new Blob([result.bytes], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = 'k7.db';
-      anchor.click();
-      URL.revokeObjectURL(url);
-      setNotice({
-        kind: 'success',
-        text:
-          `Saved k7.db for ${plural(result.tracks, 'track')}` +
-          `${listMessage(nonEmptyLists())}.` +
-          leftovers(result.skipped) +
-          " Put it at the card's root and put the card back.",
-      });
-    } catch (error) {
-      setNotice({
-        kind: 'error',
-        text: `Could not write the snapshot: ${error instanceof Error ? error.message : String(error)}`,
-      });
-    } finally {
-      setSaving(false);
-    }
-  }, [buildImage, saving]);
+  /**
+   * The card is the App's only output, so the write happens by itself.
+   *
+   * `run` builds the image from the queue; `lists` patches this browser's lists into the
+   * image already on the card, which is one 2 MB rewrite instead of a re-measurement. Both
+   * need the card to have been opened read-write at intake: a dropped folder's permission
+   * cannot be raised (ADR 0010), and nothing else can write a card.
+   */
+  const writeToCard = useCallback(
+    async (mode: 'run' | 'lists'): Promise<boolean> => {
+      if (!cardHandle || writing.current) return false;
+      writing.current = true;
+      setSaving(true);
+      try {
+        let bytes: Uint8Array<ArrayBuffer>;
+        let tracks: number;
+        let skipped = 0;
+        let lists: number;
+        if (mode === 'lists' && lastSnapshot) {
+          bytes = patchListArea(lastSnapshot.bytes, toSnapshotPlaylists());
+          tracks = lastSnapshot.tracks;
+          lists = nonEmptyLists();
+        } else {
+          const built = await buildImage();
+          if (!built) return false;
+          bytes = built.bytes;
+          tracks = built.tracks;
+          skipped = built.skipped;
+          lists = nonEmptyLists();
+        }
+        await writeSnapshotToCard(cardHandle, bytes);
+        const scope = currentCardScope();
+        const stored: StoredSnapshot = {
+          scope,
+          card: cardRefFor(scope),
+          bytes,
+          tracks,
+          skipped,
+          at: new Date().toISOString(),
+        };
+        await saveSnapshot(scope, stored);
+        setLastSnapshot(stored);
+        setWrittenAt(stored.at);
+        setNotice({
+          kind: 'success',
+          text:
+            (mode === 'lists'
+              ? `Wrote ${plural(lists, 'playlist')} to the card’s image.`
+              : `Wrote k7.db for ${plural(tracks, 'track')}${listMessage(lists)} to the card.` +
+                leftovers(skipped)) + ' Put the card back in the player.',
+        });
+        return true;
+      } catch (error) {
+        setNotice({
+          kind: 'error',
+          text: `Could not write to the card: ${error instanceof Error ? error.message : String(error)}`,
+        });
+        return false;
+      } finally {
+        writing.current = false;
+        setSaving(false);
+      }
+    },
+    [buildImage, cardHandle, lastSnapshot],
+  );
 
-  /* Sending again is the whole point of keeping the image: the player restarts after it
-   * accepts one, and a page that had to re-measure the card to try again would punish the
-   * one moment it cannot avoid. */
-  const resendLast = useCallback(async () => {
-    if (!lastSnapshot || saving) return;
-    setSaving(true);
-    try {
-      const sent = await sendSnapshot(lastSnapshot.bytes);
-      const accepted = { ...lastSnapshot, sentAt: new Date().toISOString() };
-      await saveSnapshot(accepted.scope, accepted);
-      setLastSnapshot(accepted);
-      setNotice({
-        kind: 'success',
-        text:
-          `Sent ${plural(lastSnapshot.tracks, 'track')} to the player (${sent.bytes} bytes). ` +
-          'It is restarting to pick up the new measurements.',
-      });
-    } catch (error) {
-      setNotice({
-        kind: 'error',
-        text: `Could not send to the player: ${error instanceof Error ? error.message : String(error)}`,
-      });
-    } finally {
-      setSaving(false);
-    }
-  }, [lastSnapshot, saving]);
 
-  /* A list edit is an image edit: the rows are already in the last image this browser
-   * built, so only the list area is rewritten and posted (ADR 0051). A browser with no
-   * image has nothing to patch, and says so instead of sending lists over a hole where
-   * the measurements were. */
-  const sendLists = useCallback(async (): Promise<boolean> => {
-    if (saving) return false;
-    const base = lastSnapshot ?? (await loadSnapshot(currentCardScope()));
-    if (!base) {
-      setNotice({
-        kind: 'error',
-        text:
-          'This browser has no image of this card yet. Measure it here once (or send from ' +
-          'Process), and playlist changes will go out on that image from then on.',
-      });
-      return false;
-    }
-    setSaving(true);
-    try {
-      const bytes = patchListArea(base.bytes, toSnapshotPlaylists());
-      const sent = await sendSnapshot(bytes);
-      const accepted: StoredSnapshot = {
-        ...base,
-        bytes,
-        sentAt: new Date().toISOString(),
-      };
-      await saveSnapshot(accepted.scope, accepted);
-      setLastSnapshot(accepted);
-      setNotice({
-        kind: 'success',
-        text:
-          `Sent ${plural(drafts.length, 'playlist')} and ` +
-          `${plural(base.tracks, 'track')} to the player (${sent.bytes} bytes). ` +
-          'It is restarting to pick up the new lists.',
-      });
-      return true;
-    } catch (error) {
-      setNotice({
-        kind: 'error',
-        text:
-          `Could not send the playlists: ${error instanceof Error ? error.message : String(error)}. ` +
-          'The image is kept — send it again when the player is back.',
-      });
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }, [drafts.length, lastSnapshot, saving]);
+  const listsSignature = drafts
+    .map((draft) => `${draft.id}:${draft.name}:${draft.rows.join('|')}`)
+    .join(';');
 
-  const downloadLast = useCallback(() => {
-    if (!lastSnapshot) return;
-    const blob = new Blob([lastSnapshot.bytes], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'k7.db';
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }, [lastSnapshot]);
+  useEffect(() => {
+    if (!cardHandle || !manifest || !settled || writing.current) return;
+    const signature = `${runRevision}:${total}:${done}`;
+    if (signature === written.current.run) return;
+    const timer = window.setTimeout(() => {
+      void writeToCard('run').then((ok) => {
+        if (!ok) return;
+        written.current.run = signature;
+        written.current.lists = listsSignature;
+      });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [cardHandle, manifest, settled, runRevision, total, done, listsSignature, writeToCard]);
 
-  const discardLast = useCallback(async () => {
-    await clearSnapshot(currentCardScope());
-    setLastSnapshot(null);
-  }, []);
+  /* Playlists ride the image, so editing one after a run has to reach the card too — but
+   * only once this session has written an image: a card that has not been measured here is
+   * not overwritten with a stored one. */
+  useEffect(() => {
+    if (!cardHandle || !lastSnapshot || written.current.run === '') return;
+    if (listsSignature === written.current.lists) return;
+    const timer = window.setTimeout(() => {
+      void writeToCard('lists').then((ok) => {
+        if (ok) written.current.lists = listsSignature;
+      });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [cardHandle, lastSnapshot, listsSignature, writeToCard]);
+
+  /* A dropped card root is read-only, so a finished run has nowhere to go. Say it once,
+   * with the one act that fixes it, rather than leaving the user with a measured queue. */
+  const toldReadOnly = useRef('');
+  useEffect(() => {
+    if (cardHandle || !settled) return;
+    const signature = `${runRevision}:${total}`;
+    if (toldReadOnly.current === signature) return;
+    toldReadOnly.current = signature;
+    setNotice({
+      kind: 'error',
+      text:
+        `Measured ${plural(done, 'track')}, but k7.db was not written: this card was dropped, ` +
+        'so the page can read it and not write it. Open it with “Choose card” once to write ' +
+        'the image (nothing has to be measured again).',
+    });
+  }, [cardHandle, settled, runRevision, total, done]);
+
+  const cardLabel = (() => {
+    const reference = cardRefFor(currentCardScope());
+    if (reference.mark) return `mark ${reference.mark.slice(0, 8)}…`;
+    if (reference.fingerprint) return `unmarked, fingerprint ${reference.fingerprint.slice(0, 8)}…`;
+    return 'no card yet';
+  })();
 
   const clearAll = useCallback(async () => {
     setItems([]);
     setNotice(null);
     await clearCache();
   }, []);
-
-  const done = items.filter((item) => item.analysis).length;
-  const total = items.length;
-  const canSave =
-    items.some((item) => item.analysis && snapshotPath(item.analysis.track.path) !== null) ||
-    drafts.some((draft) => draft.rows.length > 0);
 
   const value: AnalysisApi = {
     items,
@@ -779,18 +708,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     retry,
     deepAnalyse,
     saveTags,
-    exportJson,
-    buildImage,
-    sendToPlayer,
-    saveToCard,
-    saveSnapshotFile,
-    resendLast,
-    canSendLists: Boolean(lastSnapshot),
-    sendLists,
-    downloadLast,
-    discardLast,
+    writtenAt,
+    cardLabel,
     clearAll,
-    canSave,
   };
 
   return <AnalysisContext.Provider value={value}>{children}</AnalysisContext.Provider>;

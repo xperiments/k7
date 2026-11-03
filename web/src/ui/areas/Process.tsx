@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import { ScanLine } from 'lucide-react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
@@ -15,7 +15,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { WEIGHTS_MODE } from '../../weights/config';
-import { formatBytes, plural, shortHash } from '../format';
+import { plural, shortHash } from '../format';
 import { QueueList } from '../QueueList';
 import { navigate, routeHref } from '../router';
 import { useAnalysis } from '../state/analysis';
@@ -48,15 +48,9 @@ export function ProcessArea() {
     setTagsOnly,
     confirmingClear,
     setConfirmingClear,
-    exportJson,
-    sendToPlayer,
-    saveToCard,
-    saveSnapshotFile,
-    resendLast,
-    downloadLast,
-    discardLast,
+    writtenAt,
+    cardLabel,
     clearAll,
-    canSave,
     hasCardHandle,
   } = useAnalysis();
 
@@ -66,14 +60,6 @@ export function ProcessArea() {
   const tagsOnlyLabelId = useId();
 
   const percent = total > 0 ? (done / total) * 100 : 0;
-
-  /* Which action is running, so the label on the button the user pressed is the truth.
-   * `saving` alone cannot say: it is one flag over four different writes. */
-  const [pending, setPending] = useState<'send' | 'card' | 'file' | 'resend' | null>(null);
-  const run = (action: 'send' | 'card' | 'file' | 'resend', work: () => Promise<void>) => {
-    setPending(action);
-    void work().finally(() => setPending(null));
-  };
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6">
@@ -178,37 +164,6 @@ export function ProcessArea() {
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              onClick={() => run('send', sendToPlayer)}
-              disabled={!canSave || saving}
-              title="Send the image to the player; it writes it to its own flash and restarts."
-            >
-              {pending === 'send' ? 'Sending…' : 'Send to player'}
-            </Button>
-            {hasCardHandle && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => run('card', saveToCard)}
-                disabled={!canSave || saving}
-                title="Write k7.db at the card's root, in the folder opened at intake."
-              >
-                {pending === 'card' ? 'Writing…' : 'Save to card'}
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => run('file', saveSnapshotFile)}
-              disabled={!canSave || saving}
-              title="Download k7.db and move it to the card's root yourself"
-            >
-              {pending === 'file' ? 'Preparing…' : 'Download .db'}
-            </Button>
-            <Button variant="outline" size="sm" onClick={exportJson} disabled={done === 0}>
-              Download JSON
-            </Button>
             {/* Asked in place rather than in a dialog: a modal is 56 kB of the front-door
                 partition, which is a lot of flash for one confirmation. */}
             {confirmingClear ? (
@@ -247,36 +202,30 @@ export function ProcessArea() {
         </div>
       </div>
 
-      {lastSnapshot && (
-        <Card size="sm">
-          <CardContent className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-muted-foreground tabular-nums">
-              Last image: {plural(lastSnapshot.tracks, 'track')} ·{' '}
-              {formatBytes(lastSnapshot.bytes.length)} ·{' '}
-              {lastSnapshot.sentAt
-                ? `accepted ${new Date(lastSnapshot.sentAt).toLocaleTimeString()}`
-                : `built ${new Date(lastSnapshot.at).toLocaleTimeString()}`}
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => run('resend', resendLast)}
-                disabled={saving}
-                title="Send the same image again, without measuring anything"
-              >
-                {pending === 'resend' ? 'Sending…' : 'Send to player'}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={downloadLast}>
-                Download
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => void discardLast()}>
-                Discard
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Card size="sm">
+        <CardContent className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Card</span>
+          <span className="tabular-nums">{cardLabel}</span>
+          <span aria-hidden="true">·</span>
+          <span>
+            {saving
+              ? 'writing k7.db…'
+              : writtenAt
+                ? `k7.db written ${new Date(writtenAt).toLocaleTimeString()}`
+                : hasCardHandle
+                  ? 'k7.db is written when the run finishes'
+                  : 'dropped card — read-only, so k7.db is not written'}
+          </span>
+          {lastSnapshot ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="tabular-nums">
+                {plural(lastSnapshot.tracks, 'track')} in the image
+              </span>
+            </>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {items.length === 0 ? (
         <Empty className="border border-dashed py-10">
@@ -287,7 +236,7 @@ export function ProcessArea() {
             <EmptyTitle>{lastSnapshot ? 'The queue is empty' : 'No tracks measured yet'}</EmptyTitle>
             <EmptyDescription>
               {lastSnapshot
-                ? 'The queue lives in this page, so a reload empties it; the image measured before it is above. Send that again, or change its playlists from Playlists — nothing has to be measured twice.'
+                ? 'The queue lives in this page, so a reload empties it. What the card holds is the image the last run wrote; scan the card again to measure what is new — nothing already measured is measured twice.'
                 : setupError
                   ? 'The models did not load, so nothing can be measured — see the message above.'
                   : modelSet

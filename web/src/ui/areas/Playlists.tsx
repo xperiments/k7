@@ -6,7 +6,6 @@ import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -37,7 +36,6 @@ import {
   type Draft,
 } from '../../playlists/drafts';
 import { plural } from '../format';
-import { useAnalysis } from '../state/analysis';
 import { navigate, routeHref } from '../router';
 
 /**
@@ -164,32 +162,6 @@ function DraftRow({ draft }: { draft: Draft }) {
         )}
       </div>
     </li>
-  );
-}
-
-/** Send the drafts on the image this browser already has. */
-function SendDrafts() {
-  const { canSendLists, sendLists, saving } = useAnalysis();
-  const [busy, setBusy] = useState(false);
-
-  return (
-    <CardAction>
-      <Button
-        size="sm"
-        disabled={saving || busy || !canSendLists}
-        title={
-          canSendLists
-            ? 'Rewrite the lists in this browser\'s last image and send it; the player restarts'
-            : 'This browser has no image of this card yet: measure it here once, or send from Process'
-        }
-        onClick={() => {
-          setBusy(true);
-          void sendLists().finally(() => setBusy(false));
-        }}
-      >
-        {busy ? 'Sending…' : 'Send to player'}
-      </Button>
-    </CardAction>
   );
 }
 
@@ -384,11 +356,10 @@ export function PlaylistsArea() {
         <CardHeader>
           <CardTitle>Drafts</CardTitle>
           <CardDescription>
-            A draft becomes the player's copy when an image carrying it is accepted. Sending
-            rewrites the lists inside the last image this browser built — the measurements are
-            kept — and the player restarts.
+            A draft becomes the player’s copy when the next run writes the card: the lists
+            travel inside the image, and editing one after a run rewrites the card’s image
+            while it is still open.
           </CardDescription>
-          <SendDrafts />
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {!draftsLoaded() ? (

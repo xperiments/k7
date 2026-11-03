@@ -23,6 +23,8 @@ export interface QueueItem {
   tags?: TrackTags;
   analysis?: Analysis;
   cached?: boolean;
+  /** Recognised from the card's own record: not read, not measured again. */
+  skipped?: boolean;
   error?: string;
   saving?: boolean;
 }

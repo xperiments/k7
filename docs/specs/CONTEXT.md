@@ -527,7 +527,9 @@ reads, never an instruction: it chooses the page's first area and nothing after 
 _Avoid_: card flag, insertion status
 
 **Snapshot upload**:
-`POST /api/snapshot`: how a **Snapshot** reaches the device when the card is in the computer.
+`POST /api/snapshot`: how a **Snapshot** used to reach the device when the card was in the
+computer. The App stopped using it when the card replaced the network as the only way in
+([ADR 0065](../adr/0065-the-card-is-the-only-way-to-the-player.md)); the route is still there.
 The image is validated before anything is erased and the device restarts afterwards. It is the
 one write the device accepts, and it carries measurements and **Playlists**, never a **Track**.
 _Avoid_: file upload, flash endpoint

@@ -139,9 +139,9 @@ to the player.
 _Avoid_: analyse, run, batch
 
 **Last image**:
-The **Snapshot** this browser built — and, once sent, the one the player accepted — kept here so
-sending again costs no re-measurement. It belongs to one Card, and it is a **Library source** of
-its own.
+The **Snapshot** this browser last wrote to a card, kept here so the next write costs no
+re-measurement and so a Playlist edit can be written without re-running anything. It belongs to
+one Card, and it is a **Library source** of its own.
 _Avoid_: cache, backup, export
 
 ### The material

@@ -105,7 +105,11 @@ works.
 size, what is Playing and a link to the stream. It is the device's diagnostic page when no card is
 mounted and the page cannot run.
 
-**U1.** `POST /api/snapshot` takes an `application/octet-stream` body — the `xtape.db` image —
+**U1.** The App no longer posts to this route: the image travels on the card and arrives as
+the Update file ([ADR 0065](../adr/0065-the-card-is-the-only-way-to-the-player.md)). The route
+itself is unchanged and still validates what it is given — removing it from the firmware is a
+separate, flash-sized decision — so what follows describes the device's behaviour, not the
+App's. `POST /api/snapshot` takes an `application/octet-stream` body — the `xtape.db` image —
 validates it in full before erasing anything, writes the snapshot partition, reads it back, and
 restarts in 1.5 s so the reply lands first. A refusal leaves the running snapshot untouched. The
 image may carry **Playlists** (`format_version 2`, §10 of the format); an accepted image replaces
@@ -188,9 +192,11 @@ mounts on demand.
 
 The Queue, measured, with an explicit `Send`.
 
-- **Header:** title, the run's state (`14 of 32 analysed`), and the actions — Send to player
-  (primary), Save to card (only when a writable handle exists), Download `.db`, Download JSON,
-  Clear (asked in place, as today).
+- **Header:** title, the run's state (`14 of 32 analysed`), the card the run belongs to (its
+  mark, or a fingerprint when it has none), and the one fact that matters after it — *k7.db
+  written 12:34*. There is nothing to press: the image is written to the card when the run
+  finishes, and again when a Playlist changes while the card is still open (ADR 0065). Clear is
+  the only action left, asked in place, as today.
 - **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
   page: it stays at the top while the rows scroll.
 - **Rows:** one line each, ~32 px — name, the genre from the file's own tags, BPM, key, a mood

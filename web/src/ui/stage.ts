@@ -22,7 +22,7 @@ export function statusWord(item: QueueItem): string {
   if (item.status === 'tagged') return 'From tags';
   if (item.status === 'hashing') return 'Hashing…';
   if (item.status === 'decoding') return 'Decoding…';
-  if (item.status === 'done') return 'Measured';
+  if (item.status === 'done') return item.skipped ? 'Already measured' : 'Measured';
   return 'Queued';
 }
 

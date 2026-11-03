@@ -39,7 +39,6 @@ import {
   type OpArgs,
   type OpData,
 } from './transport';
-import { parseUploadResult } from './upload';
 
 /** S4: the same 5 s cadence as the status poll, which is the protocol's only heartbeat. */
 export const TICK_MS = 5_000;
@@ -124,8 +123,6 @@ interface Pending {
   readonly resolve: (data: unknown) => void;
   readonly reject: (error: DeviceError) => void;
   readonly timer: ReturnType<typeof setTimeout>;
-  /** The image's length as it was before the transfer detached it (C3). */
-  readonly sentBytes: number;
 }
 
 export function createBridgeDevice(options: BridgeOptions): BridgeDevice {
@@ -212,7 +209,7 @@ export function createBridgeDevice(options: BridgeOptions): BridgeDevice {
     pending.delete(message.id);
     clearTimeout(entry.timer);
     if (message.ok) {
-      const data = parseReply(entry.op, message.data, entry.sentBytes);
+      const data = parseReply(entry.op, message.data);
       if (data === null) {
         entry.reject(
           new DeviceError('the player answered something this page could not read', 'unreachable'),
@@ -229,7 +226,7 @@ export function createBridgeDevice(options: BridgeOptions): BridgeDevice {
    * O5: the answer is parsed, never trusted. Each op's reader is the one the direct Device
    * uses, so the two links accept and reject the same documents.
    */
-  function parseReply(op: OpName, data: unknown, sentBytes: number): unknown | null {
+  function parseReply(op: OpName, data: unknown): unknown | null {
     switch (op) {
       case 'status':
         return parseStatus(data);
@@ -239,8 +236,6 @@ export function createBridgeDevice(options: BridgeOptions): BridgeDevice {
         return parsePlaylistRows(data);
       case 'select':
         return parseSelectResult(data);
-      case 'snapshot':
-        return parseUploadResult(data, sentBytes);
       case 'rescan':
         return isRecord(data) && typeof data.ok === 'boolean' ? { ok: data.ok } : null;
       case 'play':
@@ -326,12 +321,6 @@ export function createBridgeDevice(options: BridgeOptions): BridgeDevice {
     const payload = args as Readonly<Record<string, unknown>> | undefined;
     const message = req(id, op, payload ?? null);
 
-    // C3: the image's buffer travels, not a copy, so the App's own is detached.
-    const bytes = op === 'snapshot' ? payload?.['bytes'] : undefined;
-    const transfer =
-      bytes instanceof Uint8Array && bytes.buffer instanceof ArrayBuffer ? [bytes.buffer] : undefined;
-    const sentBytes = bytes instanceof Uint8Array ? bytes.byteLength : 0;
-
     const deadline = OP_SPECS[op].timeout;
     return new Promise<OpData[O]>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -354,9 +343,8 @@ export function createBridgeDevice(options: BridgeOptions): BridgeDevice {
         resolve: (data) => resolve(data as OpData[O]),
         reject,
         timer,
-        sentBytes,
       });
-      postTo(target, message, transfer);
+      postTo(target, message);
     });
   }
 
