@@ -21,13 +21,7 @@ import { patchListArea } from '../../playlists/image';
 import { countMedia, getMedia, listMedia, measuredHash, putMedia, tagsOf } from '../../storage/media';
 import { cardRefFor, currentCardScope, subscribeCardScope } from '../../card/session';
 import { readCardFile as readFileFromCard, type CardRoot } from '../../card/read';
-import {
-  cardHandleFor,
-  ensureAccess,
-  ensureRead,
-  forgetCardHandle,
-  queryAccess,
-} from '../../card/handles';
+import { cardHandleFor, ensureAccess, ensureRead, forgetCardHandle } from '../../card/handles';
 import { loadSnapshot, saveSnapshot, type StoredSnapshot } from '../../storage/snapshots';
 import { clearCache, getCached, putCached } from '../../storage/cache';
 import { requestPersistence } from '../../storage/persist';
@@ -149,8 +143,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   /* The card the user opened read-write, when they opened one: the image goes back there
    * without asking again. A dropped folder leaves this null. */
   const [cardHandle, setCardHandle] = useState<SnapshotDirectory | null>(null);
-  /** The Scope the page already tried to reconnect to, so a failed attempt is not a loop. */
-  const reconnected = useRef<string | null>(null);
   /* The same card's handle as this browser remembered it, when this visit has not opened one.
    * It is not a grant: reading needs the permission asked for again on the gesture. */
   const [storedHandle, setStoredHandle] = useState<FileSystemDirectoryHandle | null>(null);
@@ -478,45 +470,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   },
     [],
   );
-
-  /**
-   * A reload keeps the card's handle, never its grant — but a browser that did keep the grant
-   * (an installed app with "allow on every visit") can be read without a click, and that is
-   * worth doing: the card the person chose is the card this page is about. So on load the page
-   * **asks itself** for the permission instead of a person: granted, the card is walked and the
-   * queue is its contents again; 'prompt', nothing happens and Rescan or Play is one click
-   * away, which is the only way a browser will show the prompt.
-   */
-  useEffect(() => {
-    if (storedHandle === null || items.length > 0 || busy) return;
-    const scope = currentCardScope();
-    if (reconnected.current === scope) return;
-    reconnected.current = scope;
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        if (!(await queryAccess(storedHandle, 'read'))) return;
-        if (cancelled) return;
-        if (await queryAccess(storedHandle, 'readwrite')) {
-          setCardHandle(storedHandle as unknown as SnapshotDirectory);
-        }
-        const read = await readOpenCard(storedHandle as unknown as SnapshotDirectory);
-        if (cancelled || 'problem' in read) return;
-        acceptIntake(read.files, read.skipped, true);
-        setNotice({
-          kind: 'success',
-          text: `The card this browser remembers is in: ${plural(read.files.length, 'file')} read.`,
-        });
-      } catch {
-        /* The card is out, or the handle no longer points at it: nothing to say on load. */
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [storedHandle, items.length, busy, acceptIntake]);
 
   const addFound = useCallback(
     (found: FoundFile[], skipped: number, readOnly = false) =>
