@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -307,16 +308,20 @@ export function AskArea() {
                   {intent.sort ? `Sort: ${intent.sort}` : 'Sort: none'}
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuLabel>Sort</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => setField('sort', undefined)}>
-                    None
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {SORT_VALUES.map((sort) => (
-                    <DropdownMenuItem key={sort} onClick={() => setField('sort', sort)}>
-                      {sort}
+                  {/* Base UI's label needs a group; outside one it throws and takes the
+                   * popup down (error #31). Radix does not require this. */}
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Sort</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => setField('sort', undefined)}>
+                      None
                     </DropdownMenuItem>
-                  ))}
+                    <DropdownMenuSeparator />
+                    {SORT_VALUES.map((sort) => (
+                      <DropdownMenuItem key={sort} onClick={() => setField('sort', sort)}>
+                        {sort}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

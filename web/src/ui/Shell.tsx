@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -229,45 +230,42 @@ function DeviceMenu({
             </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="start" className="w-64">
-            <DropdownMenuLabel>The device</DropdownMenuLabel>
-            {link !== 'none' ? (
-              <p className="px-2 pb-1 text-xs text-muted-foreground">{deviceFacts}</p>
-            ) : null}
-            {link === 'none' ? (
-              <>
+            {/* Base UI's group is what a group label reads its context from: a bare
+             * `DropdownMenuLabel` throws "MenuGroupContext is missing" and takes the popup —
+             * and the page — down with it (Base UI error #31). Radix allows it; this is not
+             * Radix. The error text is on the trigger's subtitle, not in here. */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>
+                {link === 'none' ? 'The device' : `The device · ${deviceFacts}`}
+              </DropdownMenuLabel>
+              {link === 'none' ? (
                 <DropdownMenuItem onClick={() => void connect()}>
                   <Plug aria-hidden="true" />
-                  Connect a player
+                  {connecting ? 'Waiting for the bridge…' : 'Connect a player'}
                 </DropdownMenuItem>
-                {connectError ? (
-                  <p role="alert" className="px-2 pb-1 text-xs text-destructive">
-                    {connectError}
-                  </p>
-                ) : null}
-                <DropdownMenuSeparator />
-              </>
-            ) : null}
-            <DropdownMenuItem
-              render={<a href={stream} target="_blank" rel="noopener noreferrer" />}
-            >
-              <Waves aria-hidden="true" />
-              Open the live stream
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              render={<a href={`${DEVICE_ORIGIN}/library`} target="_blank" rel="noopener noreferrer" />}
-            >
-              <Disc3 aria-hidden="true" />
-              Open the library index
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void copyMcp()}>
-              <Sparkles aria-hidden="true" />
-              {copied ? 'Copied the MCP endpoint' : 'Copy the MCP endpoint'}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={rescan}>
-              <RefreshCw aria-hidden="true" />
-              Rescan the player&apos;s library
-            </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem
+                render={<a href={stream} target="_blank" rel="noopener noreferrer" />}
+              >
+                <Waves aria-hidden="true" />
+                Open the live stream
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                render={<a href={`${DEVICE_ORIGIN}/library`} target="_blank" rel="noopener noreferrer" />}
+              >
+                <Disc3 aria-hidden="true" />
+                Open the library index
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void copyMcp()}>
+                <Sparkles aria-hidden="true" />
+                {copied ? 'Copied the MCP endpoint' : 'Copy the MCP endpoint'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={rescan}>
+                <RefreshCw aria-hidden="true" />
+                Rescan the player&apos;s library
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

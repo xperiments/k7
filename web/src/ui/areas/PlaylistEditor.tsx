@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -184,16 +185,19 @@ function SortMenu({
         Sort by
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Applied once</DropdownMenuLabel>
-        {SORT_RULES.map((rule) => (
-          <DropdownMenuItem
-            key={rule}
-            disabled={blocked && needsFacts(rule)}
-            onClick={() => onSort(rule)}
-          >
-            {SORT_LABELS[rule]}
-          </DropdownMenuItem>
-        ))}
+        {/* Base UI's label needs a group; outside one it throws (error #31). */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Applied once</DropdownMenuLabel>
+          {SORT_RULES.map((rule) => (
+            <DropdownMenuItem
+              key={rule}
+              disabled={blocked && needsFacts(rule)}
+              onClick={() => onSort(rule)}
+            >
+              {SORT_LABELS[rule]}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
