@@ -9,7 +9,8 @@ describe('the shell routes', () => {
 
   it('reads every page the shell renders', () => {
     expect(parseRoute('#/process')).toEqual({ name: 'process' });
-    expect(parseRoute('#/scan')).toEqual({ name: 'scan' });
+    // `#/scan` is gone: reading a card is what Process does, and its dock is the drop zone.
+    expect(parseRoute('#/scan')).toEqual({ name: 'not-found', path: '/scan' });
     expect(parseRoute('#/playlists')).toEqual({ name: 'playlists' });
     expect(parseRoute('#/playlists/ask')).toEqual({ name: 'ask' });
     expect(parseRoute('#/media')).toEqual({ name: 'media' });
@@ -49,7 +50,6 @@ describe('the shell routes', () => {
   it('routeHref is the inverse of parseRoute', () => {
     const routes: Route[] = [
       { name: 'process' },
-      { name: 'scan' },
       { name: 'playlists' },
       { name: 'ask' },
       { name: 'playlist', id: 'aaaa000000000001' },

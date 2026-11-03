@@ -10,7 +10,6 @@ import { PlayerArea } from './areas/Player';
 import { PlaylistEditor } from './areas/PlaylistEditor';
 import { PlaylistsArea } from './areas/Playlists';
 import { ProcessArea } from './areas/Process';
-import { ScanArea } from './areas/Scan';
 import { SettingsArea } from './areas/Settings';
 import { VideoArea } from './areas/Video';
 import { navigate, useRoute } from './router';
@@ -78,7 +77,6 @@ export function App() {
           <ProcessArea />
         </div>
 
-        {route.name === 'scan' && <ScanArea />}
         {route.name === 'playlists' && <PlaylistsArea />}
         {route.name === 'playlist' && <PlaylistEditor id={route.id} />}
         {route.name === 'ask' && <AskArea />}

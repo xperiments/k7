@@ -12,7 +12,6 @@ import { useSyncExternalStore } from 'react';
 
 export type Route =
   | { name: 'process' }
-  | { name: 'scan' }
   | { name: 'playlists' }
   | { name: 'playlist'; id: string }
   | { name: 'ask' }
@@ -41,8 +40,6 @@ export function parseRoute(hash: string): Route {
   switch (parts[0]) {
     case 'process':
       return parts.length === 1 ? { name: 'process' } : { name: 'not-found', path };
-    case 'scan':
-      return parts.length === 1 ? { name: 'scan' } : { name: 'not-found', path };
     case 'player':
       return parts.length === 1 ? { name: 'player' } : { name: 'not-found', path };
     case 'settings':
@@ -70,7 +67,6 @@ export function parseRoute(hash: string): Route {
 export function routeArea(route: Route): 'Card' | 'Playlists' | 'Media' | 'Player' | null {
   switch (route.name) {
     case 'process':
-    case 'scan':
       return 'Card';
     case 'playlists':
     case 'playlist':
@@ -93,8 +89,6 @@ export function routePage(route: Route): string {
   switch (route.name) {
     case 'process':
       return 'Process';
-    case 'scan':
-      return 'Scan';
     case 'playlists':
       return 'Playlists';
     case 'playlist':
@@ -121,8 +115,6 @@ export function routePage(route: Route): string {
 /** The hash a route is addressed by; the inverse of `parseRoute`. */
 export function routeHref(route: Route): string {
   switch (route.name) {
-    case 'scan':
-      return '#/scan';
     case 'playlists':
       return '#/playlists';
     case 'playlist':

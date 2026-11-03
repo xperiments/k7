@@ -27,7 +27,7 @@ import { getSettings, hasProvider, subscribeSettings } from '../../settings';
 import { navigate, routeHref } from '../router';
 
 /**
- * Ask (front door §4.3): a sentence, an **Intent**, then a search.
+ * Ask (front door §4.2): a sentence, an **Intent**, then a search.
  *
  * The model is asked for `library_search` filters and for nothing else — it never sees a
  * track, an artist or a measurement (ADR 0053, which adopted ADR 0050's shape rule). The

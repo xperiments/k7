@@ -5,7 +5,7 @@
  * `k7-media` holds the title, artist, album, genre and picture of every track this
  * browser read while the card was in the computer; the device's `library_search` pages at
  * `offset <= 199`, so indexing 5,000 tracks by paging would take ~50 requests and still be
- * partial (front door spec §4.4, corrected by the build note). What the device supplies is
+ * partial (front door spec §4.3, corrected by the build note). What the device supplies is
  * **existence** -- the track count and generation in `/api/status`, plus one listing walked
  * for track paths -- and, when an album is opened, the measurements for its rows.
  *

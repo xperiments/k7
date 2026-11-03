@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getDevice } from '../../device/device';
 import { libraryStats, statsCoverage, trackAt, type McpStats, type McpTrack } from '../../device/mcp';
 import type { DeviceStatus } from '../../device/status';
-import { useDeviceStatus } from '../../device/useDeviceStatus';
+import { DeviceError } from '../../device/transport';
+import { refreshDevice, useDeviceStatus } from '../../device/useDeviceStatus';
 import { currentCardScope } from '../../card/session';
 import { getMedia, type CachedMedia } from '../../storage/media';
 import { formatDuration, plural } from '../format';
@@ -18,7 +21,7 @@ import { Cover } from './Media';
  *
  * Read-only on purpose. A live stream cannot be paused for one listener, and the only
  * transport verb the page has is `POST /api/play {path}`, which the album rows offer; a
- * next button here would promise a control the device does not have (front door spec §4.5).
+ * next button here would promise a control the device does not have (front door spec §4.4).
  *
  * The joins are the interesting part, and each one degrades to a dash rather than an error:
  *
@@ -52,6 +55,13 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
     </div>
   );
 }
+
+type Rescan =
+  | { state: 'idle' }
+  | { state: 'sending' }
+  | { state: 'accepted' }
+  | { state: 'busy'; text: string }
+  | { state: 'failed'; text: string };
 
 function snapshotState(state: string): string {
   switch (state) {
@@ -160,6 +170,45 @@ export function PlayerArea() {
       ? new Date(snapshot.generation * 1000).toLocaleString()
       : null;
   const libraryEmpty = Boolean(stats && !stats.available);
+
+  /* The Rescan: the device rebuilding its Library from the card it is holding. It is the one
+   * write this page can ask for, so it sits with the facts it changes rather than on a page
+   * of its own. */
+  const [rescan, setRescan] = useState<Rescan>({ state: 'idle' });
+  const rescanUnavailable = !reachable
+    ? 'the device is not answering'
+    : !status?.card
+      ? 'there is no card in the player'
+      : null;
+
+  const rescanLibrary = async () => {
+    setRescan({ state: 'sending' });
+    try {
+      const result = await getDevice().request('rescan');
+      setRescan(
+        result.ok
+          ? { state: 'accepted' }
+          : { state: 'failed', text: 'The player did not start the scan.' },
+      );
+    } catch (error) {
+      /* A refusal keeps the device's own sentence: "a scan is already running" is its
+       * fact, and 409 is how it says so (E1). */
+      if (error instanceof DeviceError && error.status === 409) {
+        setRescan({ state: 'busy', text: error.message });
+      } else if (error instanceof DeviceError && error.code === 'refused') {
+        setRescan({
+          state: 'failed',
+          text: error.message || `The player answered ${error.status}.`,
+        });
+      } else if (error instanceof DeviceError) {
+        setRescan({ state: 'failed', text: 'The player did not answer; is it on the same network?' });
+      } else {
+        setRescan({ state: 'failed', text: error instanceof Error ? error.message : String(error) });
+      }
+    } finally {
+      void refreshDevice();
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
@@ -291,6 +340,28 @@ export function PlayerArea() {
               )}
             </Fact>
           </dl>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void rescanLibrary()}
+              disabled={rescanUnavailable !== null || rescan.state === 'sending'}
+            >
+              {rescan.state === 'sending' ? 'Asking…' : 'Rescan the card'}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {rescanUnavailable
+                ? `Unavailable: ${rescanUnavailable}.`
+                : rescan.state === 'accepted'
+                  ? 'Accepted — the library is rebuilding; the count follows on the next poll.'
+                  : rescan.state === 'busy'
+                    ? rescan.text
+                    : rescan.state === 'failed'
+                      ? rescan.text
+                      : 'Rebuilds the Library from the card in the player. Nothing is measured.'}
+            </span>
+          </div>
         </CardContent>
       </Card>
 

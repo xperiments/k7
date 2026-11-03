@@ -4,7 +4,7 @@
  *
  * A **Video** is something to watch about a Track -- never a Track. It cannot become a
  * Playlist row, it is never downloaded, and the device never sees it (front door spec
- * §4.4, and the glossary in `web/CONTEXT.md`). So this module is deliberately small: one
+ * §4.3, and the glossary in `web/CONTEXT.md`). So this module is deliberately small: one
  * GET, a strict mapping, and an error that names what went wrong. The instance comes from
  * Settings, because public instances come and go.
  *

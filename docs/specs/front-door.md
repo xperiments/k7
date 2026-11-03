@@ -87,8 +87,7 @@ works.
 
 | Route | Area | What it shows |
 |---|---|---|
-| `#/process` | Card | the Queue, the run's progress, the image actions |
-| `#/scan` | Card | intake (drop or pick a card here) and the player's own rescan |
+| `#/process` | Card | intake (drop or pick a card), the Queue, the run's progress |
 | `#/playlists` | Playlists | the device's Playlists and this browser's Drafts |
 | `#/playlists/:id` | Playlists | one Playlist's rows, order and actions |
 | `#/playlists/ask` | Playlists | the prompt, the Intent, and the search that becomes a Draft |
@@ -207,32 +206,23 @@ The Queue, measured, written to the card by the run itself.
   track number (`01 - `, `02. `), while a title that merely starts with a number keeps it. **Provenance is paint, not text:** a value the file's tags carried is written in
   the foreground colour, a value this App measured in the warning colour, and an absent one as
   a muted dash. A mixed row shows it at a glance, and no row carries a provenance word. A row
-  that is working shows its stage; a row that failed shows the failure and a Retry; a row the
-  card already had reads *Already measured*. **There is no drill-in**: the row does not open,
+  that is working shows its stage; a row that failed shows the failure and a Retry. **There is no drill-in**: the row does not open,
   and the analysis explaining itself — the old `ResultCard` behind an accordion — is not a list
   of five thousand rows. Its two actions, *measure the tempo* and *save a tagged copy*, live in
   the row's own menu.
-- **States:** empty (no Queue: an `Empty` with one action, "Scan a card"), loading (rows appear
-  as they are found; `Skeleton` only for the manifest), error (models missing or a weight
-  refused, inline, with what to do).
+- **Intake:** the folder picker and the drop zone (`DropZone`) are here, where the run is — there
+  is no separate Scan page. The choice is checked before anything is measured: only the card
+  root — the directory holding `music/` — is accepted, and a `music` directory, a parent folder
+  or a folder with no `music` in it is refused by name
+  ([`card/shape.ts`](../../web/src/card/shape.ts)). A picker is the only path that can write the
+  image back; a dropped card is measured read-only.
+- **States:** empty (no Queue: the drop zone *is* the empty state), loading (rows appear as they
+  are found; `Skeleton` only for the manifest), error (models missing or a weight refused,
+  inline, with what to do).
 - **Device work:** the run builds `k7.db` — rows from the Queue, lists from the Playlists
   Drafts — keeps it as the **last image**, and writes it to the card (ADR 0065).
 
-### 4.2 Card — Scan
-
-Two acts, named apart because they happen on different machines.
-
-- **Read a card here:** the folder picker and the drop zone (`DropZone`), reporting what was
-  found and how much was skipped, handing the files to Process. The choice is checked before
-  anything is measured: only the card root — the directory holding `music/` — is accepted, and
-  a `music` directory, a parent folder or a folder with no `music` in it is refused by name
-  ([`card/shape.ts`](../../web/src/card/shape.ts)). A picker is the only path that can write
-  the image back; a dropped card is measured read-only.
-- **Player's library:** the card in the player, its track count and Library generation, whether a
-  Snapshot covers it, and **Rescan** (`POST /api/rescan`) with the device's answer. Disabled, with
-  a reason, when the device is unreachable.
-
-### 4.3 Playlists
+### 4.2 Playlists
 
 - `#/playlists` lists what the device holds (from `GET /api/playlists`, with the selected one
   marked) and this browser's Drafts. Creating one is a name; the lists reach the card with the
@@ -248,11 +238,11 @@ Two acts, named apart because they happen on different machines.
 - Rows come from the device: a Draft's rows are paths and Track fingerprints, resolved against
   the Library for names and measurements, against this browser's cache for covers. A row the
   Library no longer has is shown as missing and skipped by the broadcast, not deleted here.
-- **Sending** is one act: rebuild the image (patching the **last image** when this browser has
-  one and the card is elsewhere), post it, and say plainly that the player restarts. The device's
-  copy is always the last thing sent.
+- **The card is the only delivery.** A list reaches the player inside the next run's image; an
+  edit made while the card is still open rewrites that image on the card, and there is nothing
+  to send (ADR 0065).
 
-### 4.4 Media
+### 4.3 Media
 
 - `#/media` lists albums and artists from **this browser's `xtape-media` cache** — the tags and
   pictures the analyser kept when it read the card — because the device's search cannot be paged
@@ -276,7 +266,7 @@ Two acts, named apart because they happen on different machines.
   (device unreachable → cached names and covers, with a note; Invidious unreachable → the
   Instance can be changed from here).
 
-### 4.5 Player
+### 4.4 Player
 
 - The cover, the Track's name, artist and album (joined from the Snapshot row and this browser's
   cache), its path, an elapsed/duration bar from `/api/status`, and the device's facts: card,
@@ -284,10 +274,14 @@ Two acts, named apart because they happen on different machines.
 - **No transport.** A live stream cannot pause for one listener, and the only HTTP verb is
   `POST /api/play {path}`; offering next/previous here would promise what the device does not have
   outside an opt-in MCP build.
+- **Rescan** (`POST /api/rescan`) sits with the facts it changes, because it is the device
+  rebuilding its Library from the card it is holding — a different act from reading a card in
+  this computer, which is Process's intake. Disabled with the reason when the device is
+  unreachable or the slot is empty, and a `409` keeps the device's own sentence.
 - **States:** device unreachable (the last thing seen, clearly marked, with the stream link),
   nothing playing, no cover, no Snapshot.
 
-### 4.6 Settings
+### 4.5 Settings
 
 `#/settings`, reachable from the sidebar footer: the **Provider** (base URL, model, key, and a
 Test that proves the model returns a parseable Intent) and the Invidious **Instance**. Stored in

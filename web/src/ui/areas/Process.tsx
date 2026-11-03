@@ -1,23 +1,14 @@
 import { useId } from 'react';
-import { ScanLine } from 'lucide-react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { WEIGHTS_MODE } from '../../weights/config';
 import { plural, shortHash } from '../format';
+import { DropZone } from '../DropZone';
 import { QueueList } from '../QueueList';
-import { navigate, routeHref } from '../router';
 import { useAnalysis } from '../state/analysis';
 
 /**
@@ -52,6 +43,8 @@ export function ProcessArea() {
     cardLabel,
     clearAll,
     hasCardHandle,
+    addFound,
+    addCard,
   } = useAnalysis();
 
   /* The switch's own id lands on Base UI's hidden input, so the label needs a second id for
@@ -228,28 +221,23 @@ export function ProcessArea() {
       </Card>
 
       {items.length === 0 ? (
-        <Empty className="border border-dashed py-10">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <ScanLine aria-hidden="true" />
-            </EmptyMedia>
-            <EmptyTitle>{lastSnapshot ? 'The queue is empty' : 'No tracks measured yet'}</EmptyTitle>
-            <EmptyDescription>
-              {lastSnapshot
-                ? 'The queue lives in this page, so a reload empties it. What the card holds is the image the last run wrote; scan the card again to measure what is new — nothing already measured is measured twice.'
-                : setupError
-                  ? 'The models did not load, so nothing can be measured — see the message above.'
-                  : modelSet
-                    ? 'Scan a card that is in this computer: the queue fills itself and every file is measured here, never uploaded.'
-                    : 'Loading the models. The queue can be filled while they load.'}
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button size="sm" onClick={() => navigate(routeHref({ name: 'scan' }))}>
-              Scan a card
-            </Button>
-          </EmptyContent>
-        </Empty>
+        <div className="flex flex-col gap-2">
+          {lastSnapshot ? (
+            <p className="text-xs text-muted-foreground">
+              The queue lives in this page, so a reload empties it. What the card holds is the
+              image the last run wrote; read the card again to measure what is new — nothing
+              already measured is measured twice.
+            </p>
+          ) : null}
+          <DropZone
+            disabled={!modelSet}
+            disabledReason={
+              setupError ? 'The models are missing — see the message above.' : undefined
+            }
+            onFiles={(found, skipped) => addFound(found, skipped, true)}
+            onCard={addCard}
+          />
+        </div>
       ) : (
         <QueueList />
       )}

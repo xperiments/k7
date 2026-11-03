@@ -44,7 +44,7 @@ import {
 import { navigate, routeHref } from '../router';
 
 /**
- * One draft's rows: the order, the sorts, and the move/remove controls (front door §4.3).
+ * One draft's rows: the order, the sorts, and the move/remove controls (front door §4.2).
  *
  * Reordering is native HTML5 drag and drop — no dependency — and the same move is reachable
  * from the keyboard through the up/down buttons, which is why those buttons exist rather

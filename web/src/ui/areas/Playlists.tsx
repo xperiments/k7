@@ -39,7 +39,7 @@ import { plural } from '../format';
 import { navigate, routeHref } from '../router';
 
 /**
- * Playlists, in two halves that must not be confused (front door §4.3).
+ * Playlists, in two halves that must not be confused (front door §4.2).
  *
  * **On the device** is what the last accepted image said, and which list the broadcast is
  * walking: reading it is a GET, choosing one is the `select` command. **Drafts** are this

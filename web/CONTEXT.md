@@ -125,7 +125,8 @@ _Avoid_: snapshot file, image file, config
 
 **Scan**:
 Reading a card that is in this computer: a picked directory walked for MP3 and FLAC, producing
-**Queue** entries. Never writes.
+**Queue** entries. Never writes. It happens in **Process** — the drop zone is that area's intake,
+not a page of its own.
 _Avoid_: import, add files, load
 
 **Rescan**:
