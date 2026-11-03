@@ -15,7 +15,7 @@ import {
   type MeasurementSource,
   type MoodTag,
 } from '../domain/analysis';
-import { groupByAlbum, type QueueItem } from './queue';
+import { artistOf, displayName, groupByAlbum, type QueueItem } from './queue';
 import { plural } from './format';
 import { sourcesOf } from './sources';
 import { isWorking, statusWord } from './stage';
@@ -123,9 +123,11 @@ function RowMenu({ item, busy, onDeep, onSave }: {
   );
 }
 
-function MeasuredRow({ item, busy, onDeep, onSave }: {
+function MeasuredRow({ item, busy, mixed, onDeep, onSave }: {
   item: QueueItem;
   busy: boolean;
+  /** The album names more than one artist, so this row says whose track it is. */
+  mixed: boolean;
   onDeep: () => void;
   onSave: () => void;
 }) {
@@ -135,7 +137,12 @@ function MeasuredRow({ item, busy, onDeep, onSave }: {
 
   return (
     <div className="flex h-8 items-center gap-3 px-2.5" title={item.path}>
-      <span className="min-w-0 flex-1 truncate text-sm">{item.name}</span>
+      <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+        {mixed ? (
+          <span className="shrink-0 text-xs text-muted-foreground">{artistOf(item)} -</span>
+        ) : null}
+        <span className="truncate text-sm">{displayName(item.name)}</span>
+      </span>
       <Cell
         source="metadata"
         value={item.tags?.genre ?? ''}
@@ -160,6 +167,12 @@ function MeasuredRow({ item, busy, onDeep, onSave }: {
         title="Mood"
         className="hidden w-16 text-xs sm:block"
       />
+      <span
+        className="w-10 shrink-0 text-right text-xs tracking-wide text-muted-foreground uppercase"
+        title={`Format: ${item.format}`}
+      >
+        {item.format}
+      </span>
       <RowMenu item={item} busy={busy} onDeep={onDeep} onSave={onSave} />
     </div>
   );
@@ -169,7 +182,7 @@ function WorkingRow({ item }: { item: QueueItem }) {
   return (
     <div className="flex h-8 items-center gap-3 px-2.5">
       <span className="min-w-0 flex-1 truncate text-sm" title={item.path}>
-        {item.name}
+        {displayName(item.name)}
       </span>
       {isWorking(item) && <Spinner aria-hidden="true" className="size-3.5 text-primary" />}
       <span className="shrink-0 text-xs text-muted-foreground">{statusWord(item)}</span>
@@ -182,7 +195,7 @@ function FailedRow({ item, onRetry }: { item: QueueItem; onRetry: () => void }) 
     <div className="flex flex-col gap-1 px-2.5 py-1.5">
       <div className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-sm" title={item.path}>
-          {item.name}
+          {displayName(item.name)}
         </span>
         <Badge variant="destructive-light">Failed</Badge>
         <Button variant="ghost" size="sm" onClick={onRetry}>
@@ -203,13 +216,24 @@ export function QueueList() {
   return (
     <section className="flex flex-col gap-3" aria-label="The queue">
       {groupByAlbum(items).map((group) => (
-        <section key={group.album} aria-label={`Album: ${group.artist} / ${group.album}`}>
+        <section
+          key={group.album}
+          aria-label={
+            group.artist === null
+              ? `Album: ${group.album}`
+              : `Album: ${group.album} / ${group.artist}`
+          }
+        >
           <h2 className="flex items-baseline gap-1.5 border-b px-2.5 py-1.5 text-xs">
-            <span className="min-w-0 truncate text-muted-foreground">{group.artist}</span>
-            <span aria-hidden="true" className="shrink-0 text-muted-foreground/60">
-              /
-            </span>
             <span className="min-w-0 truncate font-medium text-foreground">{group.album}</span>
+            {group.artist !== null ? (
+              <>
+                <span aria-hidden="true" className="shrink-0 text-muted-foreground/60">
+                  /
+                </span>
+                <span className="min-w-0 truncate text-muted-foreground">{group.artist}</span>
+              </>
+            ) : null}
             <span className="ml-auto shrink-0 pl-2 text-muted-foreground tabular-nums">
               {plural(group.items.length, 'track')}
             </span>
@@ -223,6 +247,7 @@ export function QueueList() {
                   <MeasuredRow
                     item={item}
                     busy={busy}
+                    mixed={group.mixed}
                     onDeep={() => void deepAnalyse(item)}
                     onSave={() => void saveTags(item)}
                   />

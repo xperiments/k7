@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupByAlbum, type QueueItem } from '../src/ui/queue';
+import { displayName, groupByAlbum, type QueueItem } from '../src/ui/queue';
 
 /**
  * The queue gathered by album, which is how a run is read: a card is a shelf of albums, not a
@@ -33,30 +33,53 @@ describe('grouping the queue by album', () => {
 
     expect(groups.map((group) => group.album)).toEqual(['First', 'Second']);
     expect(groups.map((group) => group.artist)).toEqual(['Aphex Twin', 'Aphex Twin']);
+    expect(groups.map((group) => group.mixed)).toEqual([false, false]);
     expect(groups[0].items.map((row) => row.name)).toEqual(['one.mp3', 'three.mp3']);
     expect(groups[1].items.map((row) => row.name)).toEqual(['two.mp3']);
   });
 
-  it('files a track with no tags under the unknown pair', () => {
+  it('files a track with no tags under the unknown album, with no artist to name', () => {
     const groups = groupByAlbum([item('loose.mp3', undefined), item('loose2.mp3', '  ', '  ')]);
     expect(groups).toHaveLength(1);
-    expect(groups[0]).toMatchObject({ artist: 'Unknown artist', album: 'Unknown album' });
+    // Nothing known to put in the heading; the row itself would say "Unknown artist" if the
+    // album turned out to mix artists.
+    expect(groups[0]).toMatchObject({ album: 'Unknown album', artist: null, mixed: false });
     expect(groups[0].items).toHaveLength(2);
   });
 
-  it('keeps two artists’ albums of the same name apart', () => {
+  it('makes one album of a title several artists share, and says so', () => {
     const groups = groupByAlbum([
       item('a/1.mp3', 'Greatest Hits', 'Blur'),
       item('b/1.mp3', 'Greatest Hits', 'Queen'),
       item('a/2.mp3', 'Greatest Hits', 'Blur'),
     ]);
-    expect(groups).toHaveLength(2);
-    expect(groups[0]).toMatchObject({ artist: 'Blur', album: 'Greatest Hits' });
-    expect(groups[0].items).toHaveLength(2);
-    expect(groups[1]).toMatchObject({ artist: 'Queen', album: 'Greatest Hits' });
+    expect(groups).toHaveLength(1);
+    // No single artist to put in the heading, so every row names its own.
+    expect(groups[0]).toMatchObject({ album: 'Greatest Hits', artist: null, mixed: true });
+    expect(groups[0].items.map((row) => row.name)).toEqual(['1.mp3', '1.mp3', '2.mp3']);
   });
 
   it('is empty for an empty queue', () => {
     expect(groupByAlbum([])).toEqual([]);
+  });
+});
+
+describe('a file name as a row shows it', () => {
+  it('drops the extension, which the format column carries', () => {
+    expect(displayName('Xtal.mp3')).toBe('Xtal');
+    expect(displayName('Xtal.FLAC')).toBe('Xtal');
+    expect(displayName('Xtal.flac')).toBe('Xtal');
+  });
+
+  it('drops a track number when a ripper prefixed one', () => {
+    expect(displayName('01 - Xtal.mp3')).toBe('Xtal');
+    expect(displayName('02. Xtal.mp3')).toBe('Xtal');
+    expect(displayName('3 – Xtal.mp3')).toBe('Xtal');
+    expect(displayName('07-Tha.flac')).toBe('Tha');
+  });
+
+  it('keeps a title that starts with a number but is not numbered', () => {
+    expect(displayName('1999 - Something.mp3')).toBe('1999 - Something');
+    expect(displayName('7 Rings.mp3')).toBe('7 Rings');
   });
 });

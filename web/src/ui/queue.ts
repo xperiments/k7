@@ -31,33 +31,65 @@ export interface QueueItem {
 export const UNKNOWN_ARTIST = 'Unknown artist';
 export const UNKNOWN_ALBUM = 'Unknown album';
 
+/** A number a ripper put in front of a title: `01 - `, `02. `, `03 – `. */
+const TRACK_NUMBER = /^\s*\d{1,3}\s*[-–—.]\s*/;
+
+/**
+ * A file name as a reader wants it: the extension goes (the row has a format column), and so
+ * does the track number a ripper prefixed. Only a number followed by a separator is a number —
+ * `1999 - Something` is a title, and four digits are not three.
+ */
+export function displayName(name: string): string {
+  const withoutExtension = name.replace(/\.(mp3|flac)$/i, '');
+  const withoutNumber = withoutExtension.replace(TRACK_NUMBER, '');
+  const trimmed = withoutNumber.trim();
+  // A name that was *only* its number and extension keeps something the reader can click.
+  return trimmed === '' ? name : trimmed;
+}
+
+/** The artist a row names, or the unknown one when its tags are blank or unread. */
+export function artistOf(item: QueueItem): string {
+  return (item.tags?.artist ?? '').trim() || UNKNOWN_ARTIST;
+}
+
 export interface AlbumGroup {
-  artist: string;
   album: string;
+  /** The album's one artist, or `null` when it has none yet or several. */
+  artist: string | null;
+  /** The rows name more than one artist, so each of them says whose track it is. */
+  mixed: boolean;
   items: QueueItem[];
 }
 
-/** An album is a title *by* someone: two artists' "Greatest Hits" are two albums. */
-function keyOf(artist: string, album: string): string {
-  return `${artist}\u0000${album}`;
-}
-
 /**
- * The queue gathered by the album its files name — artist and title, because an album is
- * both — in the order each album first appears, which is the order the card was walked in.
- * Nothing is sorted, so a run never reshuffles itself beyond the row that just learned its
- * tags; a row whose tags have not been read yet has none and sits under the unknown pair
- * until they arrive.
+ * The queue gathered by the album title its files name, in the order each album first appears
+ * — the order the card was walked in. Nothing is sorted, so a run never reshuffles itself
+ * beyond the row that just learned its tags.
+ *
+ * The group **is** the title, not the pair: two artists sharing a title are one album on one
+ * shelf, and the difference is told row by row (`artistOf`), which is what a compilation looks
+ * like. A row whose tags have not been read yet has no artist and does not make the group
+ * mixed on its own.
  */
 export function groupByAlbum(items: readonly QueueItem[]): AlbumGroup[] {
-  const groups = new Map<string, AlbumGroup>();
+  const groups = new Map<string, { group: AlbumGroup; artists: Set<string> }>();
   for (const item of items) {
-    const artist = (item.tags?.artist ?? '').trim() || UNKNOWN_ARTIST;
     const album = (item.tags?.album ?? '').trim() || UNKNOWN_ALBUM;
-    const key = keyOf(artist, album);
-    const group = groups.get(key);
-    if (group) group.items.push(item);
-    else groups.set(key, { artist, album, items: [item] });
+    const entry = groups.get(album);
+    if (entry) {
+      entry.group.items.push(item);
+      if (item.tags?.artist?.trim()) entry.artists.add(item.tags.artist.trim());
+      continue;
+    }
+    const artists = new Set<string>();
+    if (item.tags?.artist?.trim()) artists.add(item.tags.artist.trim());
+    groups.set(album, { group: { album, artist: null, mixed: false, items: [item] }, artists });
   }
-  return [...groups.values()];
+
+  return [...groups.values()].map(({ group, artists }) => ({
+    ...group,
+    // One artist is named once in the heading; several make the rows do the naming.
+    artist: artists.size === 1 ? [...artists][0] : null,
+    mixed: artists.size > 1,
+  }));
 }
