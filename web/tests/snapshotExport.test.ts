@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ModelManifest } from '../src/domain/analysis';
 import { modelSetId } from '../src/domain/snapshot';
+import { ANALYZER_VERSION } from '../src/domain/version';
 import { buildSnapshotExport, type SnapshotItem } from '../src/ui/snapshotExport';
 import { sampleAnalysis } from './sampleAnalysis';
 
@@ -50,7 +51,10 @@ describe('building the snapshot for the player', () => {
     expect(view.getUint32(12, true)).toBe(bytes.length);
     expect(view.getUint32(16, true)).toBe(1);
     expect(view.getUint32(20, true)).toBe(32);
-    expect(view.getUint32(40, true)).toBeGreaterThan(0); // an analyser version
+    // The analyser version travels in the image as major*10000 + minor*100 + patch, and it
+    // is the pipeline's own version — not the app release (ADR 0066).
+    const [major = 0, minor = 0, patch = 0] = ANALYZER_VERSION.split('.').map(Number);
+    expect(view.getUint32(40, true)).toBe(major * 10_000 + minor * 100 + patch);
   });
 
   it('writes no rows when nothing is under a music directory', async () => {
