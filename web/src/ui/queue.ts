@@ -23,8 +23,31 @@ export interface QueueItem {
   tags?: TrackTags;
   analysis?: Analysis;
   cached?: boolean;
-  /** Recognised from the card's own record: not read, not measured again. */
-  skipped?: boolean;
   error?: string;
   saving?: boolean;
+}
+
+/** What a Track with no album tag is filed under, in the words the Media area uses. */
+export const UNKNOWN_ALBUM = 'Unknown album';
+
+export interface AlbumGroup {
+  album: string;
+  items: QueueItem[];
+}
+
+/**
+ * The queue gathered by the album its files name — in the order each album first appears,
+ * which is the order the card was walked in. Nothing is sorted, so a run never reshuffles
+ * itself beyond the row that just learned its album; a row whose tags have not been read yet
+ * has none and sits in *Unknown album* until they arrive.
+ */
+export function groupByAlbum(items: readonly QueueItem[]): AlbumGroup[] {
+  const groups = new Map<string, QueueItem[]>();
+  for (const item of items) {
+    const album = (item.tags?.album ?? '').trim() || UNKNOWN_ALBUM;
+    const group = groups.get(album);
+    if (group) group.push(item);
+    else groups.set(album, [item]);
+  }
+  return [...groups].map(([album, rows]) => ({ album, items: rows }));
 }

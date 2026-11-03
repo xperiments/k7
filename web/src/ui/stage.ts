@@ -18,10 +18,9 @@ export const STAGE_TEXT: Record<Stage, string> = {
 /**
  * One row's state in words — for the work in flight, and nothing about what it came to.
  *
- * A measured row no longer carries a provenance word: the values themselves are painted by
- * where they came from (foreground for a tag, warning for a measurement), so "Measured" would
- * repeat what the colour already says. The one post-run word left, *Already measured*, is
- * written by the row that skipped.
+ * A measured row carries no word at all: the values themselves are painted by where they came
+ * from (foreground for a tag, warning for a measurement), so "Measured" would repeat what the
+ * colour already says, and a row the card already had says nothing rather than announcing it.
  */
 export function statusWord(item: QueueItem): string {
   if (item.status === 'analysing') return item.stage ? STAGE_TEXT[item.stage] : 'Analysing…';

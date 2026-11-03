@@ -271,7 +271,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             analysis: known.analysis,
             tags: known.tags,
             cached: true,
-            skipped: true,
           });
           return;
         }

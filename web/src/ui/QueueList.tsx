@@ -15,7 +15,8 @@ import {
   type MeasurementSource,
   type MoodTag,
 } from '../domain/analysis';
-import type { QueueItem } from './queue';
+import { groupByAlbum, type QueueItem } from './queue';
+import { plural } from './format';
 import { sourcesOf } from './sources';
 import { isWorking, statusWord } from './stage';
 import { useAnalysis } from './state/analysis';
@@ -159,10 +160,6 @@ function MeasuredRow({ item, busy, onDeep, onSave }: {
         title="Mood"
         className="hidden w-16 text-xs sm:block"
       />
-      {/* A provenance word would repeat the paint; the one word left says why nothing ran. */}
-      <span className="w-28 shrink-0 truncate text-right text-xs text-muted-foreground">
-        {item.skipped ? 'Already measured' : ''}
-      </span>
       <RowMenu item={item} busy={busy} onDeep={onDeep} onSave={onSave} />
     </div>
   );
@@ -204,23 +201,35 @@ export function QueueList() {
   if (items.length === 0) return null;
 
   return (
-    <ul className="flex flex-col divide-y divide-border" aria-label="The queue">
-      {items.map((item) => (
-        <li key={item.id}>
-          {item.status === 'error' ? (
-            <FailedRow item={item} onRetry={() => retry(item)} />
-          ) : item.analysis ? (
-            <MeasuredRow
-              item={item}
-              busy={busy}
-              onDeep={() => void deepAnalyse(item)}
-              onSave={() => void saveTags(item)}
-            />
-          ) : (
-            <WorkingRow item={item} />
-          )}
-        </li>
+    <section className="flex flex-col gap-3" aria-label="The queue">
+      {groupByAlbum(items).map((group) => (
+        <section key={group.album} aria-label={`Album: ${group.album}`}>
+          <h2 className="flex items-baseline gap-2 border-b px-2.5 py-1.5 text-xs font-medium">
+            <span className="min-w-0 truncate">{group.album}</span>
+            <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
+              {plural(group.items.length, 'track')}
+            </span>
+          </h2>
+          <ul className="flex flex-col divide-y divide-border">
+            {group.items.map((item) => (
+              <li key={item.id}>
+                {item.status === 'error' ? (
+                  <FailedRow item={item} onRetry={() => retry(item)} />
+                ) : item.analysis ? (
+                  <MeasuredRow
+                    item={item}
+                    busy={busy}
+                    onDeep={() => void deepAnalyse(item)}
+                    onSave={() => void saveTags(item)}
+                  />
+                ) : (
+                  <WorkingRow item={item} />
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       ))}
-    </ul>
+    </section>
   );
 }
