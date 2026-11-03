@@ -1,32 +1,54 @@
-import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
-import { MOOD_TAGS, type Analysis, type MoodTag } from '../domain/analysis';
+import {
+  MOOD_TAGS,
+  type Analysis,
+  type MeasurementSource,
+  type MoodTag,
+} from '../domain/analysis';
 import type { QueueItem } from './queue';
-import { ResultCard } from './ResultCard';
+import { sourcesOf } from './sources';
 import { isWorking, statusWord } from './stage';
 import { useAnalysis } from './state/analysis';
 
 /**
  * The queue, one line each.
  *
- * Minimal is the only row: a measured Track shows its genre and its numbers on one line and
- * opens into the full card **in place**, because a page of thirty cards is a page nobody can
- * scan. The card did not change — it is the drill-in now instead of the default.
+ * A row is a line, not a page: the name, the genre the file carried, and the three numbers a
+ * run produces — tempo, key, mood — aligned by fixed widths so a hundred rows can be scanned
+ * in one movement. The row does not open. What was behind the accordion was the analysis
+ * explaining itself, which is a page for one Track, not a list of five thousand.
  *
- * One row is open at a time. The list is a run's progress, not a report to browse, and a
- * second open row would push the sticky header's work off the screen.
+ * **Provenance is paint, not text.** A value the file's own tags carried is written in the
+ * foreground colour — the original; a value this App measured is written in the warning
+ * colour. The row therefore says *where each number came from* without a word of its own, and
+ * a mixed row (tagged tempo, measured key) shows it at a glance.
+ *
+ * The two actions that used to live at the bottom of the accordion — measure the tempo again,
+ * write a tagged copy — stay reachable from the row's own menu.
  */
 
+/** The colour a value is written in, by where it came from. */
+function paint(source: MeasurementSource | null | undefined): string {
+  if (source === 'measured') return 'text-warning';
+  if (source === 'metadata') return 'text-foreground';
+  return 'text-muted-foreground';
+}
+
 /** The mood a row shows: the tagged label, else the strongest head, else nothing. */
-function moodWord(analysis: Analysis | undefined): string {
-  if (!analysis) return '—';
+function moodWord(analysis: Analysis): string {
   const { mood } = analysis;
   if (mood.label) return mood.label;
-  if (!mood.tags) return '—';
+  if (!mood.tags) return '';
   let best: MoodTag | null = null;
   let score = -1;
   for (const tag of MOOD_TAGS) {
@@ -35,100 +57,114 @@ function moodWord(analysis: Analysis | undefined): string {
       best = tag;
     }
   }
-  return best ?? '—';
+  return best ?? '';
 }
 
-/** The four numbers a measured row carries, aligned across rows by fixed widths. */
-function MeasuredCells({ analysis }: { analysis: Analysis }) {
-  const bpm = analysis.tempo.bpm;
-  return (
-    <>
-      <span
-        className="w-12 shrink-0 text-right text-sm tabular-nums text-muted-foreground"
-        title="Folded BPM"
-      >
-        {bpm ? bpm.toFixed(1) : '—'}
-      </span>
-      <span
-        className="w-8 shrink-0 text-right text-xs tabular-nums text-muted-foreground"
-        title="Camelot key"
-      >
-        {analysis.key.camelot || '—'}
-      </span>
-      <span
-        className="hidden w-16 shrink-0 truncate text-xs text-muted-foreground sm:block"
-        title="Mood"
-      >
-        {moodWord(analysis)}
-      </span>
-    </>
-  );
+interface CellProps {
+  /** Where the value came from; `null` paints it as absent. */
+  source: MeasurementSource | null | undefined;
+  value: string;
+  title: string;
+  className?: string;
 }
 
 /**
- * The genre a row shows: the file's own tag, or a dash. It is not a measurement — no model
- * produces it — so it is the one cell a cached Track can show without being re-analysed.
+ * One aligned value. `tabular-nums` keeps the columns from moving between rows, and an absent
+ * value is a muted dash rather than a painted one — "not measured" is not a colour.
  */
-function GenreCell({ genre }: { genre: string | undefined }) {
+function Cell({ source, value, title, className }: CellProps) {
+  const present = value !== '';
   return (
     <span
-      className="hidden w-24 shrink-0 truncate text-xs text-muted-foreground md:block"
-      title={genre ? `Genre: ${genre}` : 'Genre'}
+      className={cn(
+        'shrink-0 truncate tabular-nums',
+        className,
+        present ? paint(source) : 'text-muted-foreground',
+      )}
+      title={present ? `${title}: ${value}` : title}
     >
-      {genre || '—'}
+      {present ? value : '—'}
     </span>
   );
 }
 
-interface RowProps {
+function RowMenu({ item, busy, onDeep, onSave }: {
   item: QueueItem;
   busy: boolean;
-  open: boolean;
-  onToggle: () => void;
   onDeep: () => void;
   onSave: () => void;
-}
-
-function MeasuredRow({ item, busy, open, onToggle, onDeep, onSave }: RowProps) {
-  const { analysis } = item;
+}) {
+  const analysis = item.analysis;
   if (!analysis) return null;
   return (
-    <>
-      <Button
-        variant="ghost"
-        size="default"
-        className="w-full justify-start gap-3 text-left font-normal"
-        aria-expanded={open}
-        onClick={onToggle}
-        title={item.path}
-      >
-        <span className="min-w-0 flex-1 truncate text-sm">{item.name}</span>
-        <GenreCell genre={item.tags?.genre} />
-        <MeasuredCells analysis={analysis} />
-        <span className="w-20 shrink-0 truncate text-right text-xs text-muted-foreground">
-          {statusWord(item)}
-        </span>
-        <ChevronDown
-          className={cn(
-            'size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-            open && 'rotate-180',
-          )}
-          aria-hidden="true"
-        />
-      </Button>
-      {open && (
-        <div className="pb-4">
-          <ResultCard
-            analysis={analysis}
-            busy={busy}
-            cached={Boolean(item.cached)}
-            saving={Boolean(item.saving)}
-            onDeep={onDeep}
-            onSave={onSave}
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Actions for ${item.name}`}
+            className="shrink-0"
           />
-        </div>
-      )}
-    </>
+        }
+      >
+        <MoreHorizontal aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuItem disabled={busy} onClick={onDeep}>
+          {analysis.tempo.source === 'metadata' ? 'Measure the tempo' : 'Deep analyse'}
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={Boolean(item.saving)} onClick={onSave}>
+          {item.saving ? 'Saving…' : 'Save a tagged copy'}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function MeasuredRow({ item, busy, onDeep, onSave }: {
+  item: QueueItem;
+  busy: boolean;
+  onDeep: () => void;
+  onSave: () => void;
+}) {
+  const analysis = item.analysis;
+  if (!analysis) return null;
+  const sources = sourcesOf(analysis);
+
+  return (
+    <div className="flex h-8 items-center gap-3 px-2.5" title={item.path}>
+      <span className="min-w-0 flex-1 truncate text-sm">{item.name}</span>
+      <Cell
+        source="metadata"
+        value={item.tags?.genre ?? ''}
+        title="Genre"
+        className="hidden w-24 text-xs md:block"
+      />
+      <Cell
+        source={analysis.tempo.bpm ? sources.tempo : null}
+        value={analysis.tempo.bpm ? analysis.tempo.bpm.toFixed(1) : ''}
+        title="Folded BPM"
+        className="w-12 text-right text-sm"
+      />
+      <Cell
+        source={sources.key}
+        value={analysis.key.camelot}
+        title="Camelot key"
+        className="w-8 text-right text-xs"
+      />
+      <Cell
+        source={sources.mood}
+        value={moodWord(analysis)}
+        title="Mood"
+        className="hidden w-16 text-xs sm:block"
+      />
+      {/* A provenance word would repeat the paint; the one word left says why nothing ran. */}
+      <span className="w-28 shrink-0 truncate text-right text-xs text-muted-foreground">
+        {item.skipped ? 'Already measured' : ''}
+      </span>
+      <RowMenu item={item} busy={busy} onDeep={onDeep} onSave={onSave} />
+    </div>
   );
 }
 
@@ -164,34 +200,27 @@ function FailedRow({ item, onRetry }: { item: QueueItem; onRetry: () => void }) 
 /** The rows. The area owns the empty state: an empty queue is not a list of nothing. */
 export function QueueList() {
   const { items, busy, deepAnalyse, saveTags, retry } = useAnalysis();
-  const [openId, setOpenId] = useState<string | null>(null);
 
   if (items.length === 0) return null;
 
   return (
     <ul className="flex flex-col divide-y divide-border" aria-label="The queue">
-      {items.map((item) => {
-        const measured = Boolean(item.analysis) && item.status !== 'error';
-        const open = openId === item.id;
-        return (
-          <li key={item.id}>
-            {item.status === 'error' ? (
-              <FailedRow item={item} onRetry={() => retry(item)} />
-            ) : measured ? (
-              <MeasuredRow
-                item={item}
-                busy={busy}
-                open={open}
-                onToggle={() => setOpenId(open ? null : item.id)}
-                onDeep={() => void deepAnalyse(item)}
-                onSave={() => void saveTags(item)}
-              />
-            ) : (
-              <WorkingRow item={item} />
-            )}
-          </li>
-        );
-      })}
+      {items.map((item) => (
+        <li key={item.id}>
+          {item.status === 'error' ? (
+            <FailedRow item={item} onRetry={() => retry(item)} />
+          ) : item.analysis ? (
+            <MeasuredRow
+              item={item}
+              busy={busy}
+              onDeep={() => void deepAnalyse(item)}
+              onSave={() => void saveTags(item)}
+            />
+          ) : (
+            <WorkingRow item={item} />
+          )}
+        </li>
+      ))}
     </ul>
   );
 }

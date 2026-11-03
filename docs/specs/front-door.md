@@ -190,7 +190,7 @@ mounts on demand.
 
 ### 4.1 Card — Process
 
-The Queue, measured, with an explicit `Send`.
+The Queue, measured, written to the card by the run itself.
 
 - **Header:** title, the run's state (`14 of 32 analysed`), the card the run belongs to (its
   mark, or a fingerprint when it has none), and the one fact that matters after it — *k7.db
@@ -199,25 +199,31 @@ The Queue, measured, with an explicit `Send`.
   the only action left, asked in place, as today.
 - **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
   page: it stays at the top while the rows scroll.
-- **Rows:** one line each, ~32 px — name, the genre from the file's own tags, BPM, key, a mood
-  mark, and the status word. The genre is the one text the page cannot measure, so a cached
-  Track shows it without being re-analysed and a Track with none shows a dash. A row that
-  is working shows its stage; a row that failed shows the failure and a Retry. Clicking a row
-  opens the full result **in place** (the existing `ResultCard`), one open at a time. The old
-  "Compact rows" switch is gone: minimal is the only row, and detail is a drill-in.
+- **Rows:** one line each, ~32 px — name, the genre from the file's own tags, BPM, key, and a
+  mood word. **Provenance is paint, not text:** a value the file's tags carried is written in
+  the foreground colour, a value this App measured in the warning colour, and an absent one as
+  a muted dash. A mixed row shows it at a glance, and no row carries a provenance word. A row
+  that is working shows its stage; a row that failed shows the failure and a Retry; a row the
+  card already had reads *Already measured*. **There is no drill-in**: the row does not open,
+  and the analysis explaining itself — the old `ResultCard` behind an accordion — is not a list
+  of five thousand rows. Its two actions, *measure the tempo* and *save a tagged copy*, live in
+  the row's own menu.
 - **States:** empty (no Queue: an `Empty` with one action, "Scan a card"), loading (rows appear
   as they are found; `Skeleton` only for the manifest), error (models missing or a weight
   refused, inline, with what to do).
-- **Device work:** it builds `xtape.db` — rows from the Queue, lists from the Playlists Drafts —
-  keeps it as the **last image**, and sends it.
+- **Device work:** the run builds `k7.db` — rows from the Queue, lists from the Playlists
+  Drafts — keeps it as the **last image**, and writes it to the card (ADR 0065).
 
 ### 4.2 Card — Scan
 
 Two acts, named apart because they happen on different machines.
 
-- **Read a card here:** the drop zone and the folder picker (`DropZone`), reporting what was
-  found and how much was skipped, handing the files to Process. Read-only: a dropped folder never
-  becomes writable, which is why Send exists.
+- **Read a card here:** the folder picker and the drop zone (`DropZone`), reporting what was
+  found and how much was skipped, handing the files to Process. The choice is checked before
+  anything is measured: only the card root — the directory holding `music/` — is accepted, and
+  a `music` directory, a parent folder or a folder with no `music` in it is refused by name
+  ([`card/shape.ts`](../../web/src/card/shape.ts)). A picker is the only path that can write
+  the image back; a dropped card is measured read-only.
 - **Player's library:** the card in the player, its track count and Library generation, whether a
   Snapshot covers it, and **Rescan** (`POST /api/rescan`) with the device's answer. Disabled, with
   a reason, when the device is unreachable.
@@ -225,8 +231,8 @@ Two acts, named apart because they happen on different machines.
 ### 4.3 Playlists
 
 - `#/playlists` lists what the device holds (from `GET /api/playlists`, with the selected one
-  marked) and what this browser has not sent yet (Drafts). Creating one is a name, and a Send
-  later.
+  marked) and this browser's Drafts. Creating one is a name; the lists reach the card with the
+  next run's image, and an edit made while the card is still open rewrites it (ADR 0065).
 - `#/playlists/:id` is the editor: rows in order, drag to reorder, a "Sort by" menu that applies
   a rule **once** — BPM rising, Camelot wheel, energy arc, artist/album, name — and an add
   affordance that opens Media's tracks. Removing a row is a row action; nothing here is
