@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, MoreHorizontal, Play as PlayIcon } from 'lucide-react';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +20,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getDevice } from '../../device/device';
 import { trackAt, type McpTrack } from '../../device/mcp';
 import { refreshDevice } from '../../device/useDeviceStatus';
-import { findAlbum, useMediaIndex, type Album } from '../../media/albums';
+import { findAlbum, useMediaIndex, type Album, type MediaIndexState } from '../../media/albums';
+import { useCardScope } from '../../card/session';
+import { loadSnapshot } from '../../storage/snapshots';
 import { isAbort, searchVideos, VideoError, type Video } from '../../media/youtube';
 import { addRows, createDraft, useDrafts } from '../../playlists/drafts';
 import { getSettings } from '../../settings';
@@ -60,6 +63,50 @@ function queryFor(row: CachedMedia, album: Album): string {
 
 type Notice = { kind: 'ok' | 'error'; text: string };
 
+/** The image this browser wrote for the card being browsed, as far as the device is told. */
+interface CardImage {
+  at: string;
+  tracks: number;
+}
+
+function when(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
+}
+
+/**
+ * A whole album of "not in the image", explained as one fact.
+ *
+ * The player keeps the last image it applied, and it applies one when a card carrying `k7.db`
+ * arrives -- not when the page writes it. So a card measured since then is answered from an
+ * older image, and every track of it looks unmeasured even though the browser measured it.
+ * The page used to say "not measured" for all of these, which reads as "you have not done
+ * this"; the sentence now says which image answered, and what makes it answer from this one.
+ */
+function imageProblem(state: MediaIndexState, card: CardImage | null): string {
+  const image = state.deviceImage;
+  if (image === null) {
+    return 'The player did not say which image it is answering from. Its measurements come from the image it last applied, so this album cannot be checked against it.';
+  }
+
+  const built = when(image.at);
+  const sameImage =
+    card !== null &&
+    card.tracks === image.rows &&
+    Math.abs(Date.parse(card.at) - Date.parse(image.at)) < 120_000;
+
+  if (sameImage) {
+    return `The player is using this card's image (${plural(image.rows, 'row')}, built ${built}) and it has no row for any track here. The files may have changed since it was written: measure the card again in Process.`;
+  }
+
+  const written =
+    card === null
+      ? 'This browser has no image for this card. '
+      : `This browser wrote this card's image ${when(card.at)}, with ${plural(card.tracks, 'track')}. `;
+
+  return `The player answers from an image built ${built}, with ${plural(image.rows, 'row')} — not this card's. ${written}The player applies a card's image when the card arrives: put the card in and it will answer from its own.`;
+}
+
 /** The album's genre when every row agrees, and a word for what it is when they do not. */
 function genreText(album: Album): string {
   const genres = new Set(album.rows.map((row) => row.genre.trim()).filter(Boolean));
@@ -67,6 +114,13 @@ function genreText(album: Album): string {
   return genres.size === 1 ? [...genres][0] : 'mixed genres';
 }
 
+/**
+ * One track's measurements, and the difference between two silences the page used to blur:
+ * `null` is the device not answering for the track at all (the request failed), while a
+ * track document whose `analysis` is null is an answer -- this file exists and the image the
+ * player is holding has no row for it. They mean different things and lead to different
+ * acts, so they are not one word.
+ */
 function TrackMeasurement({ track }: { track: McpTrack | null | undefined }) {
   if (track === undefined) {
     return (
@@ -76,8 +130,19 @@ function TrackMeasurement({ track }: { track: McpTrack | null | undefined }) {
       </span>
     );
   }
-  if (track === null || track.analysis === null) {
-    return <span className="text-xs text-muted-foreground">not measured</span>;
+  if (track === null) {
+    return (
+      <span className="text-xs text-muted-foreground" title="The device did not answer for this track">
+        no answer
+      </span>
+    );
+  }
+  if (track.analysis === null) {
+    return (
+      <span className="text-xs text-muted-foreground" title="The player's image has no row for this track">
+        not in the image
+      </span>
+    );
   }
   return (
     <span className="flex items-center gap-3 text-sm tabular-nums">
@@ -242,9 +307,28 @@ function TrackRow({
 export function AlbumArea({ album }: { album: string }) {
   const state = useMediaIndex();
   const found = findAlbum(state.index, album);
+  const scope = useCardScope();
+  const [cardImage, setCardImage] = useState<CardImage | null>(null);
   const [measurements, setMeasurements] = useState<Map<string, McpTrack | null> | null>(null);
   const [lookup, setLookup] = useState<{ query: string; title: string } | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+
+  /* The image this browser wrote for this card, so the page can say whether the player is
+   * answering from it. Stored per Scope, so it is the right card's even after a swap. */
+  useEffect(() => {
+    let cancelled = false;
+    loadSnapshot(scope)
+      .then((stored) => {
+        if (cancelled) return;
+        setCardImage(stored ? { at: stored.at, tracks: stored.tracks } : null);
+      })
+      .catch(() => {
+        if (!cancelled) setCardImage(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scope]);
 
   useEffect(() => {
     if (!found) return;
@@ -266,6 +350,14 @@ export function AlbumArea({ album }: { album: string }) {
       cancelled = true;
     };
   }, [found]);
+
+  /* Two silences, counted rather than repeated per row: no answer at all (the device, or the
+   * card, is not there) and an answer with no row (the image is not this album's). */
+  const answers = measurements === null ? null : [...measurements.values()];
+  const answered = (answers ?? []).filter((track) => track !== null);
+  const noRow = answered.filter((track) => track.analysis === null);
+  const nothingAnswered = answers !== null && answers.length > 0 && answered.length === 0;
+  const nothingInTheImage = answered.length > 0 && noRow.length === answered.length;
 
   const play = async (row: CachedMedia) => {
     try {
@@ -373,12 +465,28 @@ export function AlbumArea({ album }: { album: string }) {
 
       {lookup ? <LookupPanel lookup={lookup} onClose={() => setLookup(null)} /> : null}
 
+      {nothingAnswered ? (
+        <Alert variant="warning">
+          <AlertTitle>The device did not answer for any track here</AlertTitle>
+          <AlertDescription>
+            No path on this album answered, so nothing here can be checked against the player.
+            The device may have no card in it, or these files may no longer be on it.
+          </AlertDescription>
+        </Alert>
+      ) : nothingInTheImage ? (
+        <Alert variant="warning">
+          <AlertTitle>No track here is in the player&apos;s image</AlertTitle>
+          <AlertDescription>{imageProblem(state, cardImage)}</AlertDescription>
+        </Alert>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Tracks</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Tempo and key are the device&apos;s measurements; a dash means the Snapshot has no row
-            for that track.
+            Tempo and key are the device&apos;s measurements. <em>Not in the image</em> means the
+            player&apos;s Snapshot has no row for the track; <em>no answer</em> means the device did
+            not reply for it at all.
           </p>
         </CardHeader>
         <CardContent>

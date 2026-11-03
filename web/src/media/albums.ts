@@ -26,7 +26,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useCardScope } from '../card/session';
 import { measureableName } from '../domain/analysis';
-import { listLibrary, type LibraryListing } from '../device/mcp';
+import { libraryStats, listLibrary, type LibraryListing } from '../device/mcp';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { listMedia, type CachedCover, type CachedMedia } from '../storage/media';
 
@@ -200,6 +200,18 @@ export async function fetchPresence(expectedTracks: number): Promise<Presence | 
   }
 }
 
+/**
+ * The image the player is answering from, as the device reports it. Measurements are not
+ * stored in the library: every one comes from this image, which is the card's `k7.db` the
+ * player applied when the card arrived. An album that says "not in the image" is described
+ * by this, not by the card in the computer.
+ */
+export interface DeviceImage {
+  /** When the image was built: the format's generation, seconds since the epoch. */
+  at: string;
+  rows: number;
+}
+
 export interface MediaIndexState {
   /** null until the cache has been read once. */
   index: MediaIndex | null;
@@ -207,6 +219,8 @@ export interface MediaIndexState {
   /** The device's own answer, not the listing's: status is the poller the shell shares. */
   reachable: boolean;
   deviceTracks: number;
+  /** The image the player answers from; null when it does not say or has none. */
+  deviceImage: DeviceImage | null;
 }
 
 /**
@@ -219,6 +233,7 @@ export function useMediaIndex(): MediaIndexState {
   const scope = useCardScope();
   const [cache, setCache] = useState<Map<string, CachedMedia> | null>(null);
   const [presence, setPresence] = useState<Presence | null>(null);
+  const [deviceImage, setDeviceImage] = useState<DeviceImage | null>(null);
 
   const tracks = status?.tracks ?? 0;
   const generation = status?.generation ?? 0;
@@ -255,12 +270,41 @@ export function useMediaIndex(): MediaIndexState {
     };
   }, [hasDevice, tracks, generation]);
 
+  /* Which image is answering. Its own poll: the library listing says what exists, this says
+   * what the device knows about it, and the two changes are independent. */
+  useEffect(() => {
+    if (!hasDevice) {
+      setDeviceImage(null);
+      return;
+    }
+    let cancelled = false;
+    libraryStats()
+      .then((stats) => {
+        if (cancelled) return;
+        const image = stats.snapshot;
+        setDeviceImage(
+          image && image.state === 'ok' && (image.generation ?? 0) > 0
+            ? {
+                at: new Date((image.generation ?? 0) * 1000).toISOString(),
+                rows: image.rows ?? 0,
+              }
+            : null,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setDeviceImage(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasDevice, generation]);
+
   const index = useMemo(
     () => (cache ? buildMediaIndex(cache, presence) : null),
     [cache, presence],
   );
 
-  return { index, loading: cache === null, reachable, deviceTracks: tracks };
+  return { index, loading: cache === null, reachable, deviceTracks: tracks, deviceImage };
 }
 
 /** One album, by the title its route carries. */

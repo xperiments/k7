@@ -263,6 +263,13 @@ The Queue, measured, written to the card by the run itself.
   leaves its tags and picture in this browser's cache under the card it was found on. The
   analysis is keyed by content, the shelf by card; joining on the card's row is what keeps a
   recognised track from appearing as unmeasured.
+- Measurements are not in the library: `library_track` answers from the image the player last
+  applied, which is the card's `k7.db` taken when the card arrived (the device reboots once to
+  apply it, then deletes the file). A card measured since then is answered from an older image,
+  so an album page names the image (`snapshot.generation`, `rows` in `library_stats`) beside the
+  image this browser wrote, instead of printing "not measured" per row. The two silences are
+  named apart: **no answer** (the device did not reply for that path) and **not in the image**
+  (it replied, and the image has no row).
 - One album opens its tracks with BPM, key and energy, and a way to add them to a Draft. There
   is no artist list beside the grid: an artist's page is reached from the album it made.
 - An album is its **title**. Two artists on one title are one tile, not one each — a
