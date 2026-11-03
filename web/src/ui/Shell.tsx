@@ -202,6 +202,8 @@ function DeviceMenu({
       ? 'waiting for the bridge…'
       : link === 'bridge'
       ? 'connected through the launcher'
+      : link === 'local'
+      ? 'connected on your network'
       : link === 'direct'
         ? 'this is the device copy'
         : (connectError ?? 'no player — connect');

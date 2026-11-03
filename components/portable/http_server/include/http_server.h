@@ -47,7 +47,7 @@ extern "C" {
 #define HTTP_UPLOAD_MAX (256u * 1024u)
 #define HTTP_QUERY_MAX 256 /* raw (percent-encoded) query string, without the ? */
 #define HTTP_HEADER_MAX 1024
-#define HTTP_MAX_ROUTES 16 /* the appliance's fourteen, plus the screen's two diagnostics */
+#define HTTP_MAX_ROUTES 18 /* the appliance's fourteen, plus the screen's two diagnostics */
 #define HTTP_LISTEN_BACKLOG 16
 #define HTTP_MAX_CONNS 6
 
@@ -98,6 +98,10 @@ typedef http_result_t (*http_route_fn)(int fd, const http_request_t *req, void *
 typedef struct {
     uint16_t    port;        /* default 8000; the device passes 80 */
     const char *server_name; /* "Server:" header value; default "sd-stream/1.0" */
+    /* The one origin allowed to read this device's JSON from a browser — the K7 App.
+     * Null serves no CORS headers. See the note in app_services.c about why this exists
+     * before the browser feature that needs it has shipped. */
+    const char *cors_origin;
     uint8_t     max_conns;   /* concurrent request tasks, 1..HTTP_MAX_CONNS, default 4 */
     /* Which listener this instance is. False (the default, and the host build)
      * means "answer every registered route": one listener, no filtering. The

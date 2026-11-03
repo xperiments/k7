@@ -112,7 +112,7 @@ esp_err_t http_send_headers(int fd, int status, const char *content_type,
     http_plan_reply(&reply, S.cfg.server_name, status, content_type, body_len, extra_headers);
     if (http_transport_owns(fd)) return http_transport_reply(fd, &reply);
 
-    char h[512];
+    char h[1024];
     hdr_t w = {h, sizeof h, 0, true};
     hdr_add(&w, "HTTP/1.0 %d %s\r\n", reply.status, reply.reason);
     hdr_add(&w, "Server: %s\r\n", reply.server_name);
@@ -121,6 +121,17 @@ esp_err_t http_send_headers(int fd, int status, const char *content_type,
     if (reply.default_cache_control) hdr_add(&w, "Cache-Control: no-cache\r\n");
     hdr_add(&w, "Connection: close\r\n");
     if (reply.extra_headers) hdr_add(&w, "%s", reply.extra_headers);
+    /* One origin, one set of preflight answers: the App reads this device's JSON from a
+     * public HTTPS origin, and a browser only allows that with these headers. They cost
+     * nothing while no browser makes the request. */
+    if (S.cfg.cors_origin && *S.cfg.cors_origin) {
+        hdr_add(&w, "Access-Control-Allow-Origin: %s\r\n", S.cfg.cors_origin);
+        hdr_add(&w, "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n");
+        hdr_add(&w, "Access-Control-Allow-Headers: Content-Type, Accept\r\n");
+        hdr_add(&w, "Access-Control-Max-Age: 600\r\n");
+        /* No `Vary: Origin`: the origin is a constant, so the response does not vary by it,
+         * and a second Vary would sit beside the routes' own `Vary: Accept-Encoding`. */
+    }
     hdr_add(&w, "\r\n");
     if (!w.ok) return ESP_ERR_INVALID_SIZE;
     return http_send_all(fd, h, w.n) ? ESP_OK : ESP_FAIL;

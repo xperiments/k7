@@ -55,6 +55,8 @@ export interface DirectOptions {
   fetch?: FetchLike;
   /** `null` explicitly when this window has no audio; omitted means the DOM's own. */
   audio?: DirectAudio | null;
+  /** Where the stream lives. Relative on the Device copy; absolute from the hosted App. */
+  streamSrc?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -75,11 +77,11 @@ function replyDetail(text: string): string | null {
 }
 
 /** The Device copy's own stream element, or null in a window that cannot carry audio. */
-function domStreamAudio(): DirectAudio | null {
+function domStreamAudio(src: string): DirectAudio | null {
   if (typeof Audio === 'undefined') return null;
   const element = new Audio();
   element.preload = 'none';
-  element.src = '/stream';
+  element.src = src;
   const state: DirectAudio = {
     playing: false,
     blocked: false,
@@ -158,7 +160,10 @@ export function createDirectDevice(options: DirectOptions = {}): DirectDevice {
   let audio: DirectAudio | null | undefined;
   function streamAudio(): DirectAudio | null {
     if (audio === undefined) {
-      audio = options.audio === undefined ? domStreamAudio() : options.audio;
+      audio =
+        options.audio === undefined
+          ? domStreamAudio(options.streamSrc ?? '/stream')
+          : options.audio;
     }
     return audio;
   }

@@ -16,8 +16,14 @@ import type { DevicePlaylists, DevicePlaylistRows, SelectResult } from './playli
 import type { DeviceStatus } from './status';
 import type { UploadResult } from './upload';
 
-/** Where the answers come from, or `none` when there is no player in this window. */
-export type Link = 'bridge' | 'direct' | 'none';
+/**
+ * Where the answers come from, or `none` when there is no player in this window.
+ *
+ * `local` is the hosted App reaching the device directly over the LAN — the simple path the
+ * Local Network Access specification allows and no shipped browser permits yet (see
+ * `local.ts`). `direct` remains the Device copy: same-origin because it *is* the device.
+ */
+export type Link = 'bridge' | 'direct' | 'local' | 'none';
 
 export interface AudioState {
   playing: boolean;

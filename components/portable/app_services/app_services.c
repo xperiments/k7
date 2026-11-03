@@ -529,6 +529,20 @@ static void card_watch_task(void *arg)
     }
 }
 
+/* The App's origin, for the CORS headers the browser needs before it will read this
+ * device's JSON from another origin. One string: a second origin would mean rebuilding. */
+#define K7_APP_ORIGIN "https://k7.xperiments.dev"
+
+/* A preflight is answered with the headers http_send_headers adds, and no body. Registered
+ * for /api/ and /mcp, the surfaces the App and its MCP clients read. */
+static http_result_t cors_preflight_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)req;
+    (void)ctx;
+    http_send_headers(fd, 204, NULL, 0, NULL);
+    return HTTP_HANDLED;
+}
+
 esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_t *report)
 {
     app_services_report_t local;
@@ -732,11 +746,22 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     e = http_server_route_body_limit("/api/snapshot", "POST", HTTP_UPLOAD_MAX);
     if (e != ESP_OK) return fail(report, e, "snapshot upload limit");
 
+    /* CORS preflight for the App's origin. Local Network Access, as specified, would let
+     * https://k7.xperiments.dev fetch this device over plain HTTP once the user grants the
+     * `local-network` permission; Chrome has not shipped that mixed-content bypass yet, so
+     * these routes answer a question nobody asks today. They are what the path needs when
+     * it does, and they cost two empty responses. */
+    e = http_server_register_route_method("/api/", "OPTIONS", cors_preflight_route, NULL);
+    if (e != ESP_OK) return fail(report, e, "CORS preflight");
+    e = http_server_register_route_method("/mcp", "OPTIONS", cors_preflight_route, NULL);
+    if (e != ESP_OK) return fail(report, e, "CORS preflight");
+
     /* 8. The listener, last: every route is registered by now. */
     http_server_cfg_t http = {
         .port = cfg->port,
         .server_name = cfg->server_name ? cfg->server_name : "sd-stream/1.0",
         .max_conns = cfg->max_conns ? cfg->max_conns : 4,
+        .cors_origin = K7_APP_ORIGIN,
     };
     e = http_server_start(&http);
     if (e != ESP_OK) return fail(report, e, "HTTP server");

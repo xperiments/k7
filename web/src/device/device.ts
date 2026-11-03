@@ -14,6 +14,7 @@ import { useSyncExternalStore } from 'react';
 
 import { createBridgeDevice, type BridgeDevice } from './bridge';
 import { createDirectDevice, type DirectDevice } from './direct';
+import { createLocalDevice, type LocalDevice } from './local';
 import { DeviceError, NO_LINK, type Device, type Link } from './transport';
 
 /** Every device this module can hand out, discriminated by the kind of link it answers. */
@@ -21,7 +22,7 @@ interface NoneDevice extends Device {
   readonly kind: 'none';
 }
 
-type NamedDevice = DirectDevice | BridgeDevice | NoneDevice;
+type NamedDevice = DirectDevice | BridgeDevice | LocalDevice | NoneDevice;
 
 /**
  * The Device copy: the App's own bytes, served by the device. The device is the only thing
@@ -127,6 +128,20 @@ export async function connectToDevice(): Promise<void> {
     await device.connect();
     return;
   }
+  // 1. Direct, if this browser permits it: no window, nothing to keep open. The probe is
+  // the permission request in a browser that has shipped the LNA mixed-content bypass, and
+  // an ordinary failure everywhere else.
+  const local = createLocalDevice();
+  try {
+    await local.request('status');
+    adopt(local);
+    notify();
+    return;
+  } catch {
+    /* Not this browser, or the device is off: the bridge is the path that works. */
+  }
+
+  // 2. The bridge, in the window named `k7-bridge`.
   const bridge: BridgeDevice = createBridgeDevice({ window });
   adopt(bridge);
   notify();
