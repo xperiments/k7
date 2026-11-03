@@ -1,13 +1,24 @@
 /**
- * The offline shell only exists on a secure origin: service workers are unavailable on
- * plain HTTP. On `npm run dev` this is a no-op, which is correct — a worker there would
- * cache the source tree instead of the shell.
+ * The offline shell is a property of the **hosted** App: it precaches the built shell so a
+ * reload works with no network. Two origins must never have one.
+ *
+ * Plain HTTP cannot. And a **development origin** must not: its assets change with every
+ * edit while the worker's cached `index.html` keeps naming the old hashes, so the next load
+ * asks for a file that no longer exists and the stylesheet dies with `net::ERR_FAILED`. The
+ * hosted App is always port 443, so a port is the honest test for "this is not it".
+ *
+ * Leaving a worker behind on a development origin is worse than never registering one, so
+ * the opt-out also removes the one an earlier build installed.
  *
  * It returns the registration, or null when there is none, so the caller can wire update
  * detection (`watchForUpdate`) and the update banner to the same worker.
  */
 export function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (location.protocol !== 'https:') return Promise.resolve(null);
+  if (location.port !== '') {
+    void discardDevelopmentWorker();
+    return Promise.resolve(null);
+  }
   if (!('serviceWorker' in navigator)) return Promise.resolve(null);
 
   return new Promise((resolve) => {
@@ -33,4 +44,22 @@ export function registerServiceWorker(): Promise<ServiceWorkerRegistration | nul
     if (document.readyState === 'complete') register();
     else window.addEventListener('load', register, { once: true });
   });
+}
+
+/**
+ * Undo what an earlier build left on a development origin: the registrations, and the shell
+ * caches they filled. Best effort — a page that cannot clean up still runs.
+ */
+async function discardDevelopmentWorker(): Promise<void> {
+  try {
+    const registrations = await navigator.serviceWorker?.getRegistrations?.();
+    await Promise.all((registrations ?? []).map((registration) => registration.unregister()));
+    if (typeof caches === 'undefined') return;
+    const names = await caches.keys();
+    await Promise.all(
+      names.filter((name) => name.startsWith('k7-shell-')).map((name) => caches.delete(name)),
+    );
+  } catch {
+    /* Nothing to clean, or no permission to: either way the page still works. */
+  }
 }

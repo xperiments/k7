@@ -90,9 +90,15 @@ async function shellAssetFirst(request) {
   const cache = await caches.open(SHELL_CACHE);
   const cached = await cache.match(request);
   if (cached) return cached;
-  const response = await fetch(request);
-  if (response.ok) await cache.put(request, response.clone());
-  return response;
+  try {
+    const response = await fetch(request);
+    if (response.ok) await cache.put(request, response.clone());
+    return response;
+  } catch {
+    // A cancelled or failed fetch is answered, not rethrown: an unhandled rejection here
+    // surfaced as a broken stylesheet and a console full of `Failed to fetch`.
+    return (await cache.match(request)) ?? Response.error();
+  }
 }
 
 self.addEventListener('fetch', (event) => {
