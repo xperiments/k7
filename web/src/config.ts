@@ -1,7 +1,7 @@
 import { ANALYZER_VERSION } from './domain/version';
 
-/** Set to the public repository URL before deploying the analyser. */
-export const SOURCE_URL = '';
+/** The AGPL-3.0 source offer (ADR 0006). A public origin makes it a deployment requirement. */
+export const SOURCE_URL = 'https://github.com/xperiments/k7';
 
 /**
  * The device's one address (bridge-protocol.md X3, k7-app.md L3). The Launcher is the only

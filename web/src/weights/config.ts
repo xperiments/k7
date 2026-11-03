@@ -11,7 +11,7 @@
  * caret range in package.json is a build input, while this table is what the cache was
  * verified against.
  */
-export const WEIGHTS_REPO = 'xperiments/xtape';
+export const WEIGHTS_REPO = 'xperiments/k7';
 export const WEIGHTS_REF = 'v0.4.0';
 
 export const PACKAGE_VERSIONS: Record<string, string> = {
