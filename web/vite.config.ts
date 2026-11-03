@@ -28,6 +28,26 @@ const packageVersion = (
 ).version;
 
 /**
+ * A development origin must not carry a service worker (§ pwa.ts), and an old bundle cannot
+ * be edited to stop registering one. The browser does it for us: a registration whose script
+ * answers 404 is redundant and is discarded on its next update check. The hosted App is
+ * built, not served, so nothing in production is affected.
+ */
+function noWorkerInDevelopment(): Plugin {
+  const refuse = (req: { url?: string }, res: { statusCode: number; end: (body: string) => void }, next: () => void): void => {
+    if (req.url?.split('?')[0] !== '/sw.js') { next(); return; }
+    res.statusCode = 404;
+    res.end('a development origin carries no service worker; the hosted App does');
+  };
+  return {
+    name: 'k7-no-worker-in-development',
+    apply: 'serve',
+    configureServer(server) { server.middlewares.use(refuse); },
+    configurePreviewServer(server) { server.middlewares.use(refuse); },
+  };
+}
+
+/**
  * No `COOP`, deliberately (ADR 0058).
  *
  * `Cross-Origin-Opener-Policy: same-origin` would make this document cross-origin
@@ -227,7 +247,7 @@ export default defineConfig(({ mode }) => {
   const cdnWeights = shell || mode === 'production' || process.env.K7_WEIGHTS === 'cdn';
 
   return {
-    plugins: [react(), tailwindcss(), shellOutputs(shell)],
+    plugins: [react(), tailwindcss(), noWorkerInDevelopment(), shellOutputs(shell)],
     /* The dev origin is `https://k7-dev.xperiments.dev:8000`; the port is part of it, and
      * the certificate only exists once someone has run mkcert (k7-deploy.md §4). */
     server: { host: true, port: 8000, https: devHttps },
