@@ -214,7 +214,7 @@ export function ProcessArea() {
                 ? `k7.db written ${new Date(writtenAt).toLocaleTimeString()}`
                 : hasCardHandle
                   ? 'k7.db is written when the run finishes'
-                  : 'dropped card — read-only, so k7.db is not written'}
+                  : 'k7.db is written by a run on a card opened read-write'}
           </span>
           {lastSnapshot ? (
             <>
