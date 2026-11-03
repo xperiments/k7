@@ -419,24 +419,25 @@ export function AlbumArea({ album }: { album: string }) {
 
   /* Two kinds of play. With the card in the player, the player plays it and the bar follows
    * its broadcast. With the card in the computer, the player has nothing to play — so the
-   * file is read off the card and played here, in the same bar. */
+   * album is handed to the bar, in its own order, and each track is read off the card as the
+   * play reaches it: that is what makes the bar's next and previous mean something. */
   const play = async (row: CachedMedia) => {
     if (!state.card) {
-      const file = await readCardFile(row.path);
-      if (file === null) {
+      const tracks = (found?.rows ?? []).map((entry) => ({
+        path: entry.path,
+        title: titleOf(entry),
+        artist: entry.artist,
+        cover: found?.cover ?? null,
+      }));
+      const start = tracks.findIndex((track) => track.path === row.path);
+      const played = await playback.playAlbum(tracks, Math.max(0, start), readCardFile);
+      if (!played) {
         setNotice({
           kind: 'error',
           text: 'This browser could not read that file from the card. Play again to allow access, or open the card in Process.',
         });
         return;
       }
-      playback.playCard({
-        file,
-        path: row.path,
-        title: titleOf(row),
-        artist: row.artist || (found?.artists[0] ?? ''),
-        cover: found?.cover ?? null,
-      });
       setNotice({ kind: 'ok', text: `Playing “${titleOf(row)}” from the card.` });
       return;
     }

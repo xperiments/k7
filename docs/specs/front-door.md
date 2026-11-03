@@ -181,7 +181,10 @@ the structure:
   are no projects and no accounts.
 - **Footer.** Settings (`#/settings`) and the licence line that used to sit under every page.
 - **Bar.** A player at the bottom of the inset, under every area: the cover, what is sounding,
-  one play/pause, a stop, a seek that only a file earns, and a volume. It has two sources and
+  play/pause, a stop, and a volume — plus, for a card track, previous and next and a **seek that
+  spans the bar**. A card play is the **album**: the bar is handed its tracks in order and one
+  loader, so a track that ends asks for the next (the last one stops) and next/previous move
+  through it. A stream has neither, because there is nothing to be next to. It has two sources and
   says which — the player's **stream** (`/stream`, live, no seek) or a **file off the card in
   the computer**, read through the card's handle (`card/read.ts`) — the one the page holds, or
   the one the browser remembers for that Scope, re-granted read-only on the click that plays —

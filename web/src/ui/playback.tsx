@@ -16,43 +16,57 @@ import type { CachedCover } from '../storage/media';
  * The page's one audio element, and what it is playing.
  *
  * Two sources, and they are different facts: the **stream** is what the player is playing,
- * fetched from the device's own `/stream`; a **card file** is a track read off the card in the
+ * fetched from the device's own `/stream`; a **card track** is a file read off the card in the
  * computer, through the handle the page holds. The bar shows which, because "playing here"
  * means something different in each case — one is a live radio, the other a file with a
- * beginning and an end.
+ * beginning, an end, and neighbours.
  *
- * The element is created with the provider rather than by the bar, so a bar that is re-rendered,
- * hidden or scrolled does not interrupt the sound, and so `playStream()` can be called from a
- * page that has no bar in view (the Player area's stream button).
+ * A card play is always **an album**: the provider is handed the album's tracks in order and
+ * one loader for their bytes, so `next()` needs nothing from the page that started it. A
+ * track that ends asks for the next; the last one stops. A stream has no next, because there
+ * is nothing to be next to.
  */
 
-export interface CardTrack {
-  /** The file as the card holds it now. */
-  file: File;
-  /** The path below `music`, so the bar can say where it came from. */
+export interface TrackMeta {
+  /** The path below `music`, which is also what the loader is asked for. */
   path: string;
   title: string;
   artist: string;
   cover: CachedCover | null;
 }
 
-export type Source = { kind: 'stream' } | ({ kind: 'card' } & CardTrack);
+/** Reads one track's bytes off the card; null when the card cannot give them. */
+export type TrackLoader = (path: string) => Promise<File | null>;
+
+export type Source =
+  | { kind: 'stream' }
+  | { kind: 'card'; track: TrackMeta; index: number; length: number };
 
 export interface PlaybackApi {
   /** What the element is pointed at; null before anything has been chosen. */
   source: Source | null;
   playing: boolean;
-  /** The browser or the device refused the stream: the sentence to show. */
+  /** The browser or the device refused the source: the sentence to show. */
   error: string | null;
-  /** Seconds into a card file; 0 for a live stream. */
+  /** Seconds into a card track; 0 for a live stream. */
   time: number;
-  /** A card file's length; `Infinity` for a stream, which has none. */
+  /** A card track's length; `Infinity` for a stream, which has none. */
   duration: number;
   volume: number;
+  /** The album has a track before this one. False for a stream and for a first track. */
+  hasPrevious: boolean;
+  /** The album has a track after this one. False for a stream and for a last track. */
+  hasNext: boolean;
   toggle: () => void;
   playStream: () => void;
-  playCard: (track: CardTrack) => void;
-  /** Stop and forget the source; the bar goes back to "nothing playing". */
+  /**
+   * Play one track of an album, with its neighbours. Resolves false when the card cannot give
+   * the track's bytes — the bar then says so and nothing else changes.
+   */
+  playAlbum: (tracks: readonly TrackMeta[], start: number, load: TrackLoader) => Promise<boolean>;
+  next: () => void;
+  previous: () => void;
+  /** Stop and forget the source and the album; the bar goes back to "nothing playing". */
   stop: () => void;
   seek: (seconds: number) => void;
   setVolume: (level: number) => void;
@@ -85,6 +99,13 @@ function mediaError(element: HTMLMediaElement): string {
 export function PlaybackProvider({ children }: { children: ReactNode }) {
   const audio = useRef<HTMLAudioElement | null>(null);
   const objectUrl = useRef<string | null>(null);
+  /* The album and the way to read it. Refs, not state: they are not rendered, and a new
+   * array on every render would be an identity that changes for no reason. */
+  const queue = useRef<readonly TrackMeta[]>([]);
+  const loader = useRef<TrackLoader | null>(null);
+  /** What the element should do when a track ends, kept current by an effect below. */
+  const advance = useRef<() => void>(() => {});
+
   const [source, setSource] = useState<Source | null>(null);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,44 +120,6 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     audio.current.volume = volume;
   }
 
-  useEffect(() => {
-    const element = audio.current;
-    if (!element) return;
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onTime = () => setTime(element.currentTime);
-    const onDuration = () => setDuration(element.duration);
-    const onError = () => {
-      setPlaying(false);
-      setError(mediaError(element));
-    };
-    /* A finished file starts over, so the play button plays it again rather than doing
-     * nothing at the end of the file. */
-    const onEnded = () => {
-      element.currentTime = 0;
-      setTime(0);
-      setPlaying(false);
-    };
-    element.addEventListener('play', onPlay);
-    element.addEventListener('pause', onPause);
-    element.addEventListener('timeupdate', onTime);
-    element.addEventListener('durationchange', onDuration);
-    element.addEventListener('loadedmetadata', onDuration);
-    element.addEventListener('error', onError);
-    element.addEventListener('ended', onEnded);
-    return () => {
-      element.removeEventListener('play', onPlay);
-      element.removeEventListener('pause', onPause);
-      element.removeEventListener('timeupdate', onTime);
-      element.removeEventListener('durationchange', onDuration);
-      element.removeEventListener('loadedmetadata', onDuration);
-      element.removeEventListener('error', onError);
-      element.removeEventListener('ended', onEnded);
-    };
-  }, []);
-
-  /* A blob URL lives until it is revoked; a page that plays twenty tracks should not keep
-   * twenty files in memory. */
   const releaseObjectUrl = useCallback(() => {
     if (objectUrl.current !== null) {
       URL.revokeObjectURL(objectUrl.current);
@@ -153,41 +136,87 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     try {
       await element.play();
     } catch {
-      // A refusal is not a failure of the source: the bar says which, and offers play again.
       setError('The browser would not start the audio. Press play to try again.');
     }
   }, []);
+
+  const forgetAlbum = useCallback(() => {
+    queue.current = [];
+    loader.current = null;
+  }, []);
+
+  /** One track of the album, replacing whatever was sounding. */
+  const playAt = useCallback(
+    async (index: number): Promise<boolean> => {
+      const element = audio.current;
+      const track = queue.current[index];
+      const read = loader.current;
+      if (!element || !track || !read) return false;
+
+      let file: File | null;
+      try {
+        file = await read(track.path);
+      } catch {
+        file = null;
+      }
+      if (file === null) {
+        setError('This browser could not read that track from the card.');
+        return false;
+      }
+
+      releaseObjectUrl();
+      const url = URL.createObjectURL(file);
+      objectUrl.current = url;
+      element.src = url;
+      element.preload = 'metadata';
+      setSource({ kind: 'card', track, index, length: queue.current.length });
+      setTime(0);
+      setDuration(0);
+      void start();
+      return true;
+    },
+    [releaseObjectUrl, start],
+  );
+
+  const playAlbum = useCallback(
+    async (tracks: readonly TrackMeta[], startIndex: number, read: TrackLoader) => {
+      queue.current = tracks;
+      loader.current = read;
+      const played = await playAt(startIndex);
+      if (!played) {
+        forgetAlbum();
+        setError('This browser could not read that track from the card. Play again to allow access.');
+      }
+      return played;
+    },
+    [forgetAlbum, playAt],
+  );
 
   const playStream = useCallback(() => {
     const element = audio.current;
     if (!element) return;
     releaseObjectUrl();
+    forgetAlbum();
     const url = streamUrl(getDevice().link());
-    if (element.src !== new URL(url, location.href).href) {
-      element.src = url;
-    }
+    if (element.src !== new URL(url, location.href).href) element.src = url;
     setSource({ kind: 'stream' });
     setTime(0);
     setDuration(0);
     void start();
-  }, [releaseObjectUrl, start]);
+  }, [forgetAlbum, releaseObjectUrl, start]);
 
-  const playCard = useCallback(
-    (track: CardTrack) => {
-      const element = audio.current;
-      if (!element) return;
-      releaseObjectUrl();
-      const url = URL.createObjectURL(track.file);
-      objectUrl.current = url;
-      element.src = url;
-      element.preload = 'metadata';
-      setSource({ kind: 'card', ...track });
-      setTime(0);
-      setDuration(0);
-      void start();
-    },
-    [releaseObjectUrl, start],
-  );
+  const hasPrevious = source?.kind === 'card' && source.index > 0;
+  const hasNext = source?.kind === 'card' && source.index < source.length - 1;
+
+  const next = useCallback(() => {
+    if (source?.kind !== 'card' || source.index >= source.length - 1) return;
+    void playAt(source.index + 1);
+  }, [playAt, source]);
+
+  const previous = useCallback(() => {
+    if (source?.kind !== 'card' || source.index === 0) return;
+    void playAt(source.index - 1);
+  }, [playAt, source]);
 
   const toggle = useCallback(() => {
     const element = audio.current;
@@ -208,11 +237,12 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       element.load();
     }
     releaseObjectUrl();
+    forgetAlbum();
     setSource(null);
     setPlaying(false);
     setTime(0);
     setDuration(0);
-  }, [releaseObjectUrl]);
+  }, [forgetAlbum, releaseObjectUrl]);
 
   const seek = useCallback((seconds: number) => {
     const element = audio.current;
@@ -223,9 +253,55 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
 
   const setVolume = useCallback((level: number) => {
     const element = audio.current;
-    const next = Math.min(1, Math.max(0, level));
-    if (element) element.volume = next;
-    setLevel(next);
+    const nextLevel = Math.min(1, Math.max(0, level));
+    if (element) element.volume = nextLevel;
+    setLevel(nextLevel);
+  }, []);
+
+  /* The handler the element runs: it sees today's album through the refs, not the album that
+   * existed when the listener was attached. */
+  useEffect(() => {
+    advance.current = () => {
+      if (hasNext) next();
+      else stop();
+    };
+  }, [hasNext, next, stop]);
+
+  useEffect(() => {
+    const element = audio.current;
+    if (!element) return;
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    const onTime = () => setTime(element.currentTime);
+    const onDuration = () => setDuration(element.duration);
+    const onError = () => {
+      setPlaying(false);
+      setError(mediaError(element));
+    };
+    /* A track that ends moves to the next one; the last one is the end of the album, so it
+     * stops rather than looping. */
+    const onEnded = () => {
+      element.currentTime = 0;
+      setTime(0);
+      setPlaying(false);
+      advance.current();
+    };
+    element.addEventListener('play', onPlay);
+    element.addEventListener('pause', onPause);
+    element.addEventListener('timeupdate', onTime);
+    element.addEventListener('durationchange', onDuration);
+    element.addEventListener('loadedmetadata', onDuration);
+    element.addEventListener('error', onError);
+    element.addEventListener('ended', onEnded);
+    return () => {
+      element.removeEventListener('play', onPlay);
+      element.removeEventListener('pause', onPause);
+      element.removeEventListener('timeupdate', onTime);
+      element.removeEventListener('durationchange', onDuration);
+      element.removeEventListener('loadedmetadata', onDuration);
+      element.removeEventListener('error', onError);
+      element.removeEventListener('ended', onEnded);
+    };
   }, []);
 
   const api: PlaybackApi = {
@@ -235,9 +311,13 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     time,
     duration,
     volume,
+    hasPrevious,
+    hasNext,
     toggle,
     playStream,
-    playCard,
+    playAlbum,
+    next,
+    previous,
     stop,
     seek,
     setVolume,
