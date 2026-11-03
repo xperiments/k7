@@ -14,6 +14,7 @@ import { SettingsArea } from './areas/Settings';
 import { VideoArea } from './areas/Video';
 import { navigate, useRoute } from './router';
 import { NotFound, Shell } from './Shell';
+import { tryLocalConnect } from '../device/device';
 import { AnalysisProvider } from './state/analysis';
 import { OfflineNotice } from './OfflineNotice';
 import { UpdateBanner } from './UpdateBanner';
@@ -34,6 +35,13 @@ export function App() {
 
   useEffect(() => {
     void loadDrafts();
+  }, []);
+
+  /* The player is not a place you go, it is a fact about the page: try the direct path on
+   * load. The first attempt raises the Local Network Access prompt; after it is granted —
+   * or if it was granted before — this connects with nothing to click and no window. */
+  useEffect(() => {
+    void tryLocalConnect();
   }, []);
 
   /* O4: the 41 MB is downloaded for people who installed the app, and for nobody else. */

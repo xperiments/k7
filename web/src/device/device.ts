@@ -121,27 +121,50 @@ export function useDeviceLink(): Link {
  * Only ever called from a user gesture, because `window.open` without one is blocked and a
  * blocked popup is `null`. A window that is already the Device copy has nothing to connect.
  */
+/** True while a probe is in flight, so the UI can say "looking" instead of "no player". */
+let probing = false;
+export function isProbing(): boolean {
+  return probing;
+}
+
+/**
+ * Try the direct path and nothing else: no window, no opener, no fallback.
+ *
+ * This is what runs on load. It reaches the device if the browser's Local Network Access
+ * permission has been granted — the first attempt is what raises the prompt — and returns
+ * false quietly otherwise, which is the standalone case and not an error.
+ */
+export async function tryLocalConnect(): Promise<boolean> {
+  if (isDeviceCopy()) return false;
+  if (ensure().link() !== 'none') return true;
+  probing = true;
+  notify();
+  try {
+    const local = createLocalDevice();
+    await local.request('status');
+    adopt(local);
+    notify();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    probing = false;
+    notify();
+  }
+}
+
 export async function connectToDevice(): Promise<void> {
   if (isDeviceCopy()) return;
+  // The direct path first, and if it answers there is nothing to open.
+  if (await tryLocalConnect()) return;
+  if (ensure().link() !== 'none') return;
   const device = ensure();
   if (device.kind === 'bridge') {
     await device.connect();
     return;
   }
-  // 1. Direct, if this browser permits it: no window, nothing to keep open. The probe is
-  // the permission request in a browser that has shipped the LNA mixed-content bypass, and
-  // an ordinary failure everywhere else.
-  const local = createLocalDevice();
-  try {
-    await local.request('status');
-    adopt(local);
-    notify();
-    return;
-  } catch {
-    /* Not this browser, or the device is off: the bridge is the path that works. */
-  }
-
-  // 2. The bridge, in the window named `k7-bridge`.
+  // The bridge, in the window named `k7-bridge`: for a browser that will not do the direct
+  // path, and for a person who denied the prompt.
   const bridge: BridgeDevice = createBridgeDevice({ window });
   adopt(bridge);
   notify();

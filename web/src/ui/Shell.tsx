@@ -47,7 +47,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { DEVICE_ORIGIN } from '../config';
-import { connectToDevice, getDevice, useDeviceLink } from '../device/device';
+import { connectToDevice, getDevice, isProbing, useDeviceLink } from '../device/device';
 import type { Link } from '../device/transport';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { InstallButton } from './InstallButton';
@@ -200,6 +200,8 @@ function DeviceMenu({
   const subtitle =
     connecting
       ? 'waiting for the bridge…'
+      : isProbing()
+      ? 'looking for the player…'
       : link === 'bridge'
       ? 'connected through the launcher'
       : link === 'local'
