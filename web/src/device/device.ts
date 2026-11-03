@@ -14,7 +14,7 @@ import { useSyncExternalStore } from 'react';
 
 import { createBridgeDevice, type BridgeDevice } from './bridge';
 import { createDirectDevice, type DirectDevice } from './direct';
-import { NO_LINK, type Device, type Link } from './transport';
+import { DeviceError, NO_LINK, type Device, type Link } from './transport';
 
 /** Every device this module can hand out, discriminated by the kind of link it answers. */
 interface NoneDevice extends Device {
@@ -131,4 +131,32 @@ export async function connectToDevice(): Promise<void> {
   adopt(bridge);
   notify();
   await bridge.connect();
+  // The window opening is not the bridge answering. A popup that lands on an error page —
+  // `k7.local` not resolving yet, say — otherwise leaves the tab silent and the user with a
+  // black window and no sentence, so the wait has a deadline and a cause.
+  await waitForWelcome(bridge, 5_000);
+}
+
+/** Resolves when the Launcher has said `welcome`; rejects with what to look at instead. */
+function waitForWelcome(device: Device, ms: number): Promise<void> {
+  if (device.link() === 'bridge') return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    let stop: (() => void) | null = null;
+    const timer = setTimeout(() => {
+      stop?.();
+      reject(
+        new DeviceError(
+          'The bridge window opened but did not answer. Check that http://k7.local/ ' +
+            'loads there, then press Connect again.',
+          'unreachable',
+        ),
+      );
+    }, ms);
+    stop = device.onLinkChange(() => {
+      if (device.link() !== 'bridge') return;
+      clearTimeout(timer);
+      stop?.();
+      resolve();
+    });
+  });
 }

@@ -159,6 +159,7 @@ function DeviceMenu({
 }) {
   const [copied, setCopied] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
   const stream = `${DEVICE_ORIGIN}/stream`;
 
   const copyMcp = async () => {
@@ -175,12 +176,15 @@ function DeviceMenu({
    * blocked, and the browser says so by returning null (W4). */
   const connect = async () => {
     setConnectError(null);
+    setConnecting(true);
     try {
       await connectToDevice();
     } catch (error) {
       setConnectError(
         error instanceof Error ? error.message : 'The browser blocked the bridge window.',
       );
+    } finally {
+      setConnecting(false);
     }
   };
 
@@ -193,7 +197,9 @@ function DeviceMenu({
   };
 
   const subtitle =
-    link === 'bridge'
+    connecting
+      ? 'waiting for the bridge…'
+      : link === 'bridge'
       ? 'connected through the launcher'
       : link === 'direct'
         ? 'this is the device copy'
