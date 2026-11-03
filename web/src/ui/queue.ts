@@ -27,27 +27,37 @@ export interface QueueItem {
   saving?: boolean;
 }
 
-/** What a Track with no album tag is filed under, in the words the Media area uses. */
+/** The fallbacks that also serve as identity, in the words the Media area uses. */
+export const UNKNOWN_ARTIST = 'Unknown artist';
 export const UNKNOWN_ALBUM = 'Unknown album';
 
 export interface AlbumGroup {
+  artist: string;
   album: string;
   items: QueueItem[];
 }
 
+/** An album is a title *by* someone: two artists' "Greatest Hits" are two albums. */
+function keyOf(artist: string, album: string): string {
+  return `${artist}\u0000${album}`;
+}
+
 /**
- * The queue gathered by the album its files name — in the order each album first appears,
- * which is the order the card was walked in. Nothing is sorted, so a run never reshuffles
- * itself beyond the row that just learned its album; a row whose tags have not been read yet
- * has none and sits in *Unknown album* until they arrive.
+ * The queue gathered by the album its files name — artist and title, because an album is
+ * both — in the order each album first appears, which is the order the card was walked in.
+ * Nothing is sorted, so a run never reshuffles itself beyond the row that just learned its
+ * tags; a row whose tags have not been read yet has none and sits under the unknown pair
+ * until they arrive.
  */
 export function groupByAlbum(items: readonly QueueItem[]): AlbumGroup[] {
-  const groups = new Map<string, QueueItem[]>();
+  const groups = new Map<string, AlbumGroup>();
   for (const item of items) {
+    const artist = (item.tags?.artist ?? '').trim() || UNKNOWN_ARTIST;
     const album = (item.tags?.album ?? '').trim() || UNKNOWN_ALBUM;
-    const group = groups.get(album);
-    if (group) group.push(item);
-    else groups.set(album, [item]);
+    const key = keyOf(artist, album);
+    const group = groups.get(key);
+    if (group) group.items.push(item);
+    else groups.set(key, { artist, album, items: [item] });
   }
-  return [...groups].map(([album, rows]) => ({ album, items: rows }));
+  return [...groups.values()];
 }

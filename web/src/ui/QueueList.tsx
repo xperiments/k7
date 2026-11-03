@@ -203,10 +203,14 @@ export function QueueList() {
   return (
     <section className="flex flex-col gap-3" aria-label="The queue">
       {groupByAlbum(items).map((group) => (
-        <section key={group.album} aria-label={`Album: ${group.album}`}>
-          <h2 className="flex items-baseline gap-2 border-b px-2.5 py-1.5 text-xs font-medium">
-            <span className="min-w-0 truncate">{group.album}</span>
-            <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
+        <section key={group.album} aria-label={`Album: ${group.artist} / ${group.album}`}>
+          <h2 className="flex items-baseline gap-1.5 border-b px-2.5 py-1.5 text-xs">
+            <span className="min-w-0 truncate text-muted-foreground">{group.artist}</span>
+            <span aria-hidden="true" className="shrink-0 text-muted-foreground/60">
+              /
+            </span>
+            <span className="min-w-0 truncate font-medium text-foreground">{group.album}</span>
+            <span className="ml-auto shrink-0 pl-2 text-muted-foreground tabular-nums">
               {plural(group.items.length, 'track')}
             </span>
           </h2>

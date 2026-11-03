@@ -199,9 +199,10 @@ The Queue, measured, written to the card by the run itself.
   the only action left, asked in place, as today.
 - **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
   page: it stays at the top while the rows scroll.
-- **Rows:** gathered by album — each album a heading with its track count, in the order the
-  card was walked — and one line each, ~32 px: name, the genre from the file's own tags, BPM,
-  key, and a mood word. **Provenance is paint, not text:** a value the file's tags carried is written in
+- **Rows:** gathered by album — *Artist / Album* as the heading, with its track count, in the
+  order the card was walked — and one line each, ~32 px: name, the genre from the file's own
+  tags, BPM, key, and a mood word. An album is a title *by* someone: two artists' *Greatest
+  Hits* are two headings. **Provenance is paint, not text:** a value the file's tags carried is written in
   the foreground colour, a value this App measured in the warning colour, and an absent one as
   a muted dash. A mixed row shows it at a glance, and no row carries a provenance word. A row
   that is working shows its stage; a row that failed shows the failure and a Retry; a row the
