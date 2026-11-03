@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>frame probe</title></head>
+<body>
+<pre id="out">pending</pre>
+<iframe id="f" src="http://192.168.0.38:8124/frame" width="200" height="40"></iframe>
+<script src="http://192.168.0.38:8124/x.js"></script>
+<img id="i" src="http://192.168.0.38:8124/p.png">
+<script>
+  const result = () => ({
+    secure: window.isSecureContext,
+    frames: window.frames.length,
+    script: window.__scriptLoaded === true,
+    imgW: document.getElementById('i').naturalWidth,
+    blockedEvents: window.__blocked === true
+  });
+  window.addEventListener('securitypolicyviolation', () => { window.__blocked = true; });
+  setTimeout(() => {
+    const text = JSON.stringify(result());
+    document.getElementById('out').textContent = text;
+    // A report the server can see even if the DOM is unreachable from here.
+    fetch('http://192.168.0.38:8124/report?v=' + encodeURIComponent(text)).catch(() => {});
+  }, 1500);
+</script>
+</body></html>
