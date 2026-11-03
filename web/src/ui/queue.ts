@@ -1,5 +1,6 @@
 import type { Analysis, TrackFormat } from '../domain/analysis';
 import type { Stage } from '../audio/analyzer';
+import type { TrackTags } from '../audio/metadata';
 
 export type ItemStatus =
   | 'queued'
@@ -18,6 +19,8 @@ export interface QueueItem {
   format: TrackFormat;
   status: ItemStatus;
   stage?: Stage;
+  /** What the file's own tags say; read once per Track, before the cache is consulted. */
+  tags?: TrackTags;
   analysis?: Analysis;
   cached?: boolean;
   error?: string;

@@ -2,6 +2,20 @@ import { parseEnergyTag } from '../domain/energyTag';
 import { parseKeyTag, type ParsedKey } from '../domain/keyTag';
 import { parseStoredAnalysis, type StoredAnalysis } from '../domain/storedAnalysis';
 
+/**
+ * What a file says about itself, for display and search. Never measured, and never a reason
+ * to fail a run: a Track with none is analysed like any other.
+ *
+ * The Process row shows the genre, and the Snapshot carries all four so the player's text
+ * search has names to match (front door §4.1, `docs/specs/snapshot-format.md`).
+ */
+export interface TrackTags {
+  title: string;
+  artist: string;
+  album: string;
+  genre: string;
+}
+
 export interface TrackMetadata {
   /** BPM from an embedded tag (TBPM / Vorbis BPM). */
   bpm?: number;
@@ -13,6 +27,8 @@ export interface TrackMetadata {
   energy?: number;
   /** The lossless manifest written by this app, if present. */
   stored?: StoredAnalysis;
+  /** The file's own names and genre; empty strings when a field is absent. */
+  tags?: TrackTags;
 }
 
 interface NativeTag {
@@ -84,6 +100,15 @@ export async function readTrackMetadata(file: File): Promise<TrackMetadata> {
     const energy =
       parseEnergyTag(nativeValue(native, ENERGY_TAGS)) ?? undefined;
 
+    /* The genre is the first non-empty one: a file may carry several, and the row shows one
+     * — the same one the Snapshot writes (`common.genre[0]` was the rule there too). */
+    const tags: TrackTags = {
+      title: common.title?.trim() ?? '',
+      artist: common.artist?.trim() ?? '',
+      album: common.album?.trim() ?? '',
+      genre: (common.genre ?? []).map((each) => each.trim()).find(Boolean) ?? '',
+    };
+
     if (stored) {
       return {
         bpm: stored.bpm,
@@ -91,10 +116,11 @@ export async function readTrackMetadata(file: File): Promise<TrackMetadata> {
         mood: stored.moodLabel ?? undefined,
         energy: stored.energy ?? undefined,
         stored,
+        tags,
       };
     }
 
-    return { bpm, key: key ?? undefined, mood, energy };
+    return { bpm, key: key ?? undefined, mood, energy, tags };
   } catch {
     return {};
   }
