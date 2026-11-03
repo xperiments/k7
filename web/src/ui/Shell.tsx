@@ -82,7 +82,7 @@ function navGroups(drafts: number, tracks: number, playing: boolean): NavGroup[]
   return [
     {
       id: 'card',
-      label: 'Card',
+      label: 'SD Card',
       items: [
         {
           href: routeHref({ name: 'process' }),
@@ -222,19 +222,23 @@ function DeviceMenu({
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={<SidebarMenuButton size="lg" className="aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-accent-foreground" />}
+            render={
+              <SidebarMenuButton
+                size="lg"
+                className="h-auto aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-accent-foreground"
+              />
+            }
           >
-            {/* The brand mark, not an icon: it is a wordmark, so it takes the slot the tile
-             * had and is inverted on the dark sidebar — the file is drawn in black. */}
+            {/* The brand mark, not an icon: it is a wordmark, so it takes the slot and is
+             * inverted on the dark sidebar — the file is drawn in black. It is the button's
+             * name too, since the word that used to sit beside it is the wordmark itself. */}
             <img
               src="/icons/k7logo.svg"
-              alt=""
-              aria-hidden="true"
+              alt="K7"
               draggable={false}
-              className="h-8 w-8 shrink-0 object-contain dark:invert"
+              className="size-16 shrink-0 object-contain dark:invert group-data-[collapsible=icon]:size-4!"
             />
             <span className="grid min-w-0 flex-1 text-left leading-tight">
-              <span className="truncate text-sm font-medium">K7</span>
               <span className="truncate text-xs text-sidebar-foreground/70">{subtitle}</span>
             </span>
           </DropdownMenuTrigger>
