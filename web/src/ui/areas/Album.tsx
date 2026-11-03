@@ -309,7 +309,7 @@ function TrackRow({
     <li className="flex flex-col gap-2 border-b py-2 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-sm font-medium">{label}</span>
-        <span className="truncate text-xs text-muted-foreground">{row.path}</span>
+        {/* <span className="truncate text-xs text-muted-foreground">{row.path}</span> */}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <TrackMeasurement track={track} image={image} />
@@ -526,102 +526,101 @@ export function AlbumArea({ album }: { album: string }) {
         </Button>
       </div>
 
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <div className="w-40 shrink-0 sm:w-48">
-          <Cover cover={found.cover} initial={found.album} />
-        </div>
-        <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="text-xl font-semibold tracking-tight">{found.album}</h1>
-          {found.artists.length === 1 ? (
-            <a
-              href={routeHref({ name: 'artist', artist: found.artists[0] })}
-              className="w-fit text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            >
-              {found.artists[0]}
-            </a>
-          ) : (
-            <span className="w-fit text-sm text-muted-foreground">
-              {plural(found.artists.length, 'artist')} · each track names its own
+      {/* Two columns: the album on the left, what one does with it on the right. On a
+          narrow page they stack, cover first, because the cover is what says which album
+          this is. */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-6">
+        <aside className="flex flex-col gap-3 sm:flex-row sm:items-start lg:flex-col">
+          <div className="w-40 shrink-0 sm:w-48 lg:w-full">
+            <Cover cover={found.cover} initial={found.album} />
+          </div>
+          <div className="flex min-w-0 flex-col gap-1">
+            <h1 className="text-xl font-semibold tracking-tight">{found.album}</h1>
+            {found.artists.length === 1 ? (
+              <a
+                href={routeHref({ name: 'artist', artist: found.artists[0] })}
+                className="w-fit text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                {found.artists[0]}
+              </a>
+            ) : (
+              <span className="w-fit text-sm text-muted-foreground">
+                {plural(found.artists.length, 'artist')} · each track names its own
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {plural(found.tracks, 'track')} · {genreText(found)}
             </span>
-          )}
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {plural(found.tracks, 'track')} · {genreText(found)}
-          </span>
-        </div>
-      </header>
+          </div>
+        </aside>
 
-      {notice ? (
-        <div role="status" className="flex items-center gap-2 text-sm">
-          <Badge variant={notice.kind === 'ok' ? 'success-light' : 'destructive-light'}>
-            {notice.kind === 'ok' ? 'done' : 'failed'}
-          </Badge>
-          <span className="min-w-0 break-words">{notice.text}</span>
-        </div>
-      ) : null}
+        <div className="flex min-w-0 flex-col gap-4">
+          {notice ? (
+            <div role="status" className="flex items-center gap-2 text-sm">
+              <Badge variant={notice.kind === 'ok' ? 'success-light' : 'destructive-light'}>
+                {notice.kind === 'ok' ? 'done' : 'failed'}
+              </Badge>
+              <span className="min-w-0 break-words">{notice.text}</span>
+            </div>
+          ) : null}
 
-      {lookup ? <LookupPanel lookup={lookup} onClose={() => setLookup(null)} /> : null}
+          {lookup ? <LookupPanel lookup={lookup} onClose={() => setLookup(null)} /> : null}
 
-      {(nothingAnswered || nothingInTheImage) && allFromImage ? (
-        <Alert>
-          <AlertTitle>
-            {nothingAnswered
-              ? 'The player is not answering for this album'
-              : 'The player has not applied this card’s image'}
-          </AlertTitle>
-          <AlertDescription>
-            {nothingAnswered
-              ? 'The card is not in the player, so it cannot answer for these files. The numbers below are the ones from the image this browser wrote for the card — the same rows the player uses once the card is in it.'
-              : `${imageProblem(state, cardImage)} The numbers below come from the image this browser wrote.`}
-          </AlertDescription>
-        </Alert>
-      ) : nothingAnswered ? (
-        <Alert variant="warning">
-          <AlertTitle>The device did not answer for any track here</AlertTitle>
-          <AlertDescription>
-            No path on this album answered, so nothing here can be checked against the player.
-            The device may have no card in it, or these files may no longer be on it.
-          </AlertDescription>
-        </Alert>
-      ) : nothingInTheImage ? (
-        <Alert variant="warning">
-          <AlertTitle>No track here is in the player&apos;s image</AlertTitle>
-          <AlertDescription>{imageProblem(state, cardImage)}</AlertDescription>
-        </Alert>
-      ) : null}
+          {(nothingAnswered || nothingInTheImage) && allFromImage ? (
+            <Alert>
+              <AlertTitle>
+                {nothingAnswered
+                  ? 'The player is not answering for this album'
+                  : 'The player has not applied this card’s image'}
+              </AlertTitle>
+              <AlertDescription>
+                {nothingAnswered
+                  ? 'The card is not in the player, so it cannot answer for these files. The numbers below are the ones from the image this browser wrote for the card — the same rows the player uses once the card is in it.'
+                  : `${imageProblem(state, cardImage)} The numbers below come from the image this browser wrote.`}
+              </AlertDescription>
+            </Alert>
+          ) : nothingAnswered ? (
+            <Alert variant="warning">
+              <AlertTitle>The device did not answer for any track here</AlertTitle>
+              <AlertDescription>
+                No path on this album answered, so nothing here can be checked against the player.
+                The device may have no card in it, or these files may no longer be on it.
+              </AlertDescription>
+            </Alert>
+          ) : nothingInTheImage ? (
+            <Alert variant="warning">
+              <AlertTitle>No track here is in the player&apos;s image</AlertTitle>
+              <AlertDescription>{imageProblem(state, cardImage)}</AlertDescription>
+            </Alert>
+          ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Tracks</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Tempo and key are the device&apos;s measurements. <em>Not in the image</em> means the
-            player&apos;s Snapshot has no row for the track; <em>no answer</em> means the device did
-            not reply for it at all.
+          <Card>
+            <CardContent>
+              <ul className="flex flex-col">
+                {found.rows.map((row) => (
+                  <TrackRow
+                    key={row.path}
+                    row={row}
+                    showArtist={found.artists.length > 1}
+                    action={state.card ? 'queue' : 'play'}
+                    image={imageOf(row)}
+                    track={measurements === null ? undefined : (measurements.get(row.path) ?? null)}
+                    onPlay={() => void play(row)}
+                    onLookup={() => setLookup({ query: queryFor(row, found), title: titleOf(row) })}
+                    onAdd={(draftId, draftName) => addTo(draftId, draftName, row)}
+                    onNew={() => addToNew(row)}
+                  />
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Separator />
+          <p className="text-xs text-muted-foreground">
+            Playing moves the live stream for everyone listening; it is not a private queue.
           </p>
-        </CardHeader>
-        <CardContent>
-          <ul className="flex flex-col">
-            {found.rows.map((row) => (
-              <TrackRow
-                key={row.path}
-                row={row}
-                showArtist={found.artists.length > 1}
-                action={state.card ? 'queue' : 'play'}
-                image={imageOf(row)}
-                track={measurements === null ? undefined : (measurements.get(row.path) ?? null)}
-                onPlay={() => void play(row)}
-                onLookup={() => setLookup({ query: queryFor(row, found), title: titleOf(row) })}
-                onAdd={(draftId, draftName) => addTo(draftId, draftName, row)}
-                onNew={() => addToNew(row)}
-              />
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
-
-      <Separator />
-      <p className="text-xs text-muted-foreground">
-        Playing moves the live stream for everyone listening; it is not a private queue.
-      </p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -291,7 +291,9 @@ The Queue, measured, written to the card by the run itself.
   (`readImageMeasurements`), keyed as the player keys them: the path's fingerprint and the
   file's size. With no card in the player the page does not ask at all, and an album answered
   entirely from the image says so once rather than per row.
-- One album opens its tracks with BPM, key and energy, and a way to add them to a Draft. A
+- One album is **two columns**: the album itself on the left — cover, title, the artist as a
+  link, tracks and genre — and what one does with it on the right, the track list with BPM, key
+  and energy and the way to add a row to a Draft. Below `lg` they stack, cover first. A
   row's one button says what the press will do: **Play** when the card is in the computer (the
   track is read off it and sounds in the page's bar), **Queue** when the card is in the player
   (the track is sent to the player and arrives through the stream a moment later). There
