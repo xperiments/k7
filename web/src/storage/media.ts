@@ -137,3 +137,24 @@ export function measuredHash(
   if (media.size !== file.size || media.mtime !== file.lastModified) return null;
   return media.hash;
 }
+
+/**
+ * The four tags a Queue row shows, for a Track this browser has already measured.
+ *
+ * A re-scan that skips a file never opens it, so the row's genre has to come from somewhere
+ * — and the media row is where it was kept the first time. The shape is `TrackTags` without
+ * importing it: the store is storage, and the queue is what knows what a tag row is.
+ */
+export function tagsOf(media: CachedMedia): {
+  title: string;
+  artist: string;
+  album: string;
+  genre: string;
+} {
+  return {
+    title: media.title,
+    artist: media.artist,
+    album: media.album,
+    genre: media.genre,
+  };
+}

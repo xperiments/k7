@@ -204,4 +204,26 @@ describe('a measured card after the page reloads', () => {
     // And a row from before the fields existed says nothing rather than guessing.
     expect(measuredHash({ ...stored!, hash: undefined }, sameFile)).toBeNull();
   });
+
+  it('gives a skipped row its tags back, so the genre survives a rescan', async () => {
+    const app = await loadApp();
+    const scope = 'mark:00000000-0000-4000-8000-00000000a009';
+    app.session.setCardScope(scope);
+    const path = 'Aphex Twin/Selected Ambient Works/01.mp3';
+    await app.media.putMedia(scope, {
+      ...row(path, 'Selected Ambient Works'),
+      size: 1,
+      mtime: 2,
+      hash: 'cd'.repeat(32),
+    });
+
+    const stored = await app.media.getMedia(scope, path);
+    // A skipped file is never opened, so this is the only place its genre can come from.
+    expect(app.media.tagsOf(stored!)).toEqual({
+      title: path.split('/').pop(),
+      artist: 'Aphex Twin',
+      album: 'Selected Ambient Works',
+      genre: 'IDM',
+    });
+  });
 });

@@ -10,7 +10,7 @@ import {
 import { AnalysisClient } from '../../audio/client';
 import { decodeFile, sha256Hex, trackFormat } from '../../audio/decode';
 import { loadManifest } from '../../audio/models';
-import { readTrackMetadata } from '../../audio/metadata';
+import { readTrackMetadata, type TrackTags } from '../../audio/metadata';
 import { downloadTaggedCopy, writeAnalysisTags } from '../../audio/tagWriter';
 import type { Analysis, ModelManifest } from '../../domain/analysis';
 import { snapshotPath } from '../../domain/snapshot';
@@ -18,7 +18,7 @@ import { needsMeasurement, tagAnalysis } from '../../domain/tagAnalysis';
 import { newId } from '../../lib/id';
 import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
 import { patchListArea } from '../../playlists/image';
-import { countMedia, getMedia, listMedia, measuredHash, putMedia } from '../../storage/media';
+import { countMedia, getMedia, listMedia, measuredHash, putMedia, tagsOf } from '../../storage/media';
 import { cardRefFor, currentCardScope, subscribeCardScope } from '../../card/session';
 import { loadSnapshot, saveSnapshot, type StoredSnapshot } from '../../storage/snapshots';
 import { clearCache, getCached, putCached } from '../../storage/cache';
@@ -222,7 +222,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
-   * The analysis for a file this browser has already measured, or null.
+   * The analysis *and the row's tags* for a file this browser has already measured, or null.
    *
    * The card's own record decides it: the media row stores the file's path, size,
    * modification time and content hash, so a re-scan can name the Track without reading a
@@ -231,18 +231,22 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * guessed at.
    */
   const knownAnalysis = useCallback(
-    async (item: QueueItem): Promise<Analysis | null> => {
+    async (item: QueueItem): Promise<{ analysis: Analysis; tags: TrackTags } | null> => {
       if (!modelSet) return null;
       const path = snapshotPath(item.path);
       if (path === null) return null;
       const media = await getMedia(currentCardScope(), path).catch(() => undefined);
       const hash = measuredHash(media, item.file);
-      if (hash === null) return null;
+      if (hash === null || media === undefined) return null;
       const cached = await getCached(cacheKey(hash, modelSet)).catch(() => null);
       if (!cached) return null;
       return {
-        ...cached,
-        track: { ...cached.track, name: item.name, path: item.path, size: item.file.size, hash },
+        analysis: {
+          ...cached,
+          track: { ...cached.track, name: item.name, path: item.path, size: item.file.size, hash },
+        },
+        // The row was never opened, so its tags come from the record, not from the file.
+        tags: tagsOf(media),
       };
     },
     [modelSet],
@@ -262,7 +266,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         /* Already measured, and the card still holds the same bytes: nothing to read. */
         const known = await knownAnalysis(item);
         if (known !== null) {
-          update(item.id, { status: 'done', analysis: known, cached: true, skipped: true });
+          update(item.id, {
+            status: 'done',
+            analysis: known.analysis,
+            tags: known.tags,
+            cached: true,
+            skipped: true,
+          });
           return;
         }
         update(item.id, { status: 'hashing', error: undefined });
