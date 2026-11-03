@@ -22,6 +22,11 @@ import { trackAt, type McpTrack } from '../../device/mcp';
 import { refreshDevice } from '../../device/useDeviceStatus';
 import { findAlbum, useMediaIndex, type Album, type MediaIndexState } from '../../media/albums';
 import { useCardScope } from '../../card/session';
+import {
+  imageRowKey,
+  readImageMeasurements,
+  type ImageMeasurement,
+} from '../../domain/snapshot';
 import { loadSnapshot } from '../../storage/snapshots';
 import { isAbort, searchVideos, VideoError, type Video } from '../../media/youtube';
 import { addRows, createDraft, useDrafts } from '../../playlists/drafts';
@@ -121,7 +126,14 @@ function genreText(album: Album): string {
  * player is holding has no row for it. They mean different things and lead to different
  * acts, so they are not one word.
  */
-function TrackMeasurement({ track }: { track: McpTrack | null | undefined }) {
+function TrackMeasurement({
+  track,
+  image,
+}: {
+  track: McpTrack | null | undefined;
+  /** The row this browser wrote for the card, used when the player cannot answer. */
+  image?: ImageMeasurement | null;
+}) {
   if (track === undefined) {
     return (
       <span className="flex items-center gap-2">
@@ -130,6 +142,31 @@ function TrackMeasurement({ track }: { track: McpTrack | null | undefined }) {
       </span>
     );
   }
+
+  /* The device first: with the card in it, its answer is what the player will play. */
+  if (track !== null && track.analysis !== null) {
+    return (
+      <span className="flex items-center gap-3 text-sm tabular-nums">
+        <span>{track.analysis.bpm === null ? '—' : `${track.analysis.bpm.toFixed(1)} BPM`}</span>
+        <span className="text-muted-foreground">{track.analysis.key ?? '—'}</span>
+      </span>
+    );
+  }
+
+  /* The card is in the computer, or its image has not been applied: the browser wrote the
+   * image, so it can read the row back rather than leaving the album unmeasured. */
+  if (image) {
+    return (
+      <span
+        className="flex items-center gap-3 text-sm tabular-nums"
+        title="From the image this browser wrote for the card; the player did not answer for it"
+      >
+        <span>{image.bpm === null ? '—' : `${image.bpm.toFixed(1)} BPM`}</span>
+        <span className="text-muted-foreground">{image.key ?? '—'}</span>
+      </span>
+    );
+  }
+
   if (track === null) {
     return (
       <span className="text-xs text-muted-foreground" title="The device did not answer for this track">
@@ -137,17 +174,9 @@ function TrackMeasurement({ track }: { track: McpTrack | null | undefined }) {
       </span>
     );
   }
-  if (track.analysis === null) {
-    return (
-      <span className="text-xs text-muted-foreground" title="The player's image has no row for this track">
-        not in the image
-      </span>
-    );
-  }
   return (
-    <span className="flex items-center gap-3 text-sm tabular-nums">
-      <span>{track.analysis.bpm === null ? '—' : `${track.analysis.bpm.toFixed(1)} BPM`}</span>
-      <span className="text-muted-foreground">{track.analysis.key ?? '—'}</span>
+    <span className="text-xs text-muted-foreground" title="The player's image has no row for this track">
+      not in the image
     </span>
   );
 }
@@ -245,6 +274,7 @@ function LookupPanel({ lookup, onClose }: { lookup: { query: string; title: stri
 function TrackRow({
   row,
   track,
+  image,
   showArtist,
   onPlay,
   onLookup,
@@ -253,6 +283,8 @@ function TrackRow({
 }: {
   row: CachedMedia;
   track: McpTrack | null | undefined;
+  /** This browser's row for the track, when the player cannot answer for it. */
+  image: ImageMeasurement | null;
   /** True on a compilation, where the album's header cannot say whose track this is. */
   showArtist: boolean;
   onPlay: () => void;
@@ -271,7 +303,7 @@ function TrackRow({
         <span className="truncate text-xs text-muted-foreground">{row.path}</span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <TrackMeasurement track={track} />
+        <TrackMeasurement track={track} image={image} />
         <Button variant="outline" size="sm" onClick={onPlay}>
           <PlayIcon aria-hidden="true" />
           Play
@@ -309,6 +341,7 @@ export function AlbumArea({ album }: { album: string }) {
   const found = findAlbum(state.index, album);
   const scope = useCardScope();
   const [cardImage, setCardImage] = useState<CardImage | null>(null);
+  const [imageRows, setImageRows] = useState<Map<string, ImageMeasurement> | null>(null);
   const [measurements, setMeasurements] = useState<Map<string, McpTrack | null> | null>(null);
   const [lookup, setLookup] = useState<{ query: string; title: string } | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -321,9 +354,17 @@ export function AlbumArea({ album }: { album: string }) {
       .then((stored) => {
         if (cancelled) return;
         setCardImage(stored ? { at: stored.at, tracks: stored.tracks } : null);
+        try {
+          setImageRows(stored ? readImageMeasurements(stored.bytes) : null);
+        } catch {
+          // An image this build cannot read is no fallback: the device's answer stands alone.
+          setImageRows(null);
+        }
       })
       .catch(() => {
-        if (!cancelled) setCardImage(null);
+        if (cancelled) return;
+        setCardImage(null);
+        setImageRows(null);
       });
     return () => {
       cancelled = true;
@@ -332,6 +373,12 @@ export function AlbumArea({ album }: { album: string }) {
 
   useEffect(() => {
     if (!found) return;
+    // No card in the player, no library: asking for every row would be a dozen refusals for
+    // an answer already known. The browser's own image answers instead.
+    if (!state.card) {
+      setMeasurements(new Map(found.rows.map((row) => [row.path, null] as const)));
+      return;
+    }
     let cancelled = false;
     setMeasurements(null);
     void Promise.all(
@@ -349,7 +396,11 @@ export function AlbumArea({ album }: { album: string }) {
     return () => {
       cancelled = true;
     };
-  }, [found]);
+  }, [found, state.card]);
+
+  /* The row's numbers, as this browser wrote them, when the player cannot give them back. */
+  const imageOf = (row: CachedMedia): ImageMeasurement | null =>
+    imageRows?.get(imageRowKey(row.path, row.size ?? -1)) ?? null;
 
   /* Two silences, counted rather than repeated per row: no answer at all (the device, or the
    * card, is not there) and an answer with no row (the image is not this album's). */
@@ -358,6 +409,9 @@ export function AlbumArea({ album }: { album: string }) {
   const noRow = answered.filter((track) => track.analysis === null);
   const nothingAnswered = answers !== null && answers.length > 0 && answered.length === 0;
   const nothingInTheImage = answered.length > 0 && noRow.length === answered.length;
+  // Every row the player could not answer for is one this browser can: the album is not lost.
+  const allFromImage =
+    found !== null && found.rows.length > 0 && found.rows.every((row) => imageOf(row) !== null);
 
   const play = async (row: CachedMedia) => {
     try {
@@ -465,7 +519,20 @@ export function AlbumArea({ album }: { album: string }) {
 
       {lookup ? <LookupPanel lookup={lookup} onClose={() => setLookup(null)} /> : null}
 
-      {nothingAnswered ? (
+      {(nothingAnswered || nothingInTheImage) && allFromImage ? (
+        <Alert>
+          <AlertTitle>
+            {nothingAnswered
+              ? 'The player is not answering for this album'
+              : 'The player has not applied this card’s image'}
+          </AlertTitle>
+          <AlertDescription>
+            {nothingAnswered
+              ? 'The card is not in the player, so it cannot answer for these files. The numbers below are the ones from the image this browser wrote for the card — the same rows the player uses once the card is in it.'
+              : `${imageProblem(state, cardImage)} The numbers below come from the image this browser wrote.`}
+          </AlertDescription>
+        </Alert>
+      ) : nothingAnswered ? (
         <Alert variant="warning">
           <AlertTitle>The device did not answer for any track here</AlertTitle>
           <AlertDescription>
@@ -496,6 +563,7 @@ export function AlbumArea({ album }: { album: string }) {
                 key={row.path}
                 row={row}
                 showArtist={found.artists.length > 1}
+                image={imageOf(row)}
                 track={measurements === null ? undefined : (measurements.get(row.path) ?? null)}
                 onPlay={() => void play(row)}
                 onLookup={() => setLookup({ query: queryFor(row, found), title: titleOf(row) })}

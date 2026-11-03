@@ -610,6 +610,73 @@ export function assembleImage(assembly: Assembly): Uint8Array<ArrayBuffer> {
   return image;
 }
 
+/** What an image says about one track: the numbers the player answers with. */
+export interface ImageMeasurement {
+  bpm: number | null;
+  key: string | null;
+}
+
+/** The key an image row is found by: the path's fingerprint and the file's size. */
+export function imageRowKey(path: string, size: number): string {
+  return `${fnv1a64(new TextEncoder().encode(path)).toString(16)}:${size}`;
+}
+
+/** The key a row's number names, written the way the player writes it: `8A`, `12B`. */
+function camelotOf(key: number): string | null {
+  if (key < 1 || key > 24) return null;
+  return `${((key - 1) % 12) + 1}${key > 12 ? 'B' : 'A'}`;
+}
+
+/**
+ * Reads the measurements back out of an image this browser wrote.
+ *
+ * The album page asks the device for a track's numbers, and the device answers from the image
+ * it last applied — so with the card in the computer there is no answer at all, even though
+ * this browser wrote the image the card holds. The rows are on disk here, and this turns them
+ * back into the same two numbers, keyed exactly as the device keys them: the path's
+ * fingerprint, the file's size, and nothing else.
+ *
+ * It refuses what the player refuses: a wrong magic, a version it does not know, a header of
+ * the wrong size, a length that is not the one stated.
+ */
+export function readImageMeasurements(image: Uint8Array): Map<string, ImageMeasurement> {
+  const out = new Map<string, ImageMeasurement>();
+  if (image.length < HEADER_SIZE_V1) throw new Error('the image is shorter than its header');
+
+  const magic = String.fromCharCode(...image.subarray(0, 8));
+  if (magic !== 'K7SNAP\0\0' && magic !== 'XTAPESNP') throw new Error('this is not a Snapshot');
+
+  const view = new DataView(image.buffer, image.byteOffset, image.byteLength);
+  const version = view.getUint16(8, true);
+  if (version !== FORMAT_VERSION_V1 && version !== FORMAT_VERSION_V2) {
+    throw new Error(`unknown format version ${version}`);
+  }
+  const headerSize = view.getUint16(10, true);
+  if (headerSize !== (version === FORMAT_VERSION_V1 ? HEADER_SIZE_V1 : HEADER_SIZE_V2)) {
+    throw new Error(`a version ${version} image has a ${headerSize}-byte header`);
+  }
+  if (view.getUint32(12, true) !== image.length) throw new Error('the image is not its stated length');
+  if (view.getUint16(20, true) !== ROW_SIZE) throw new Error('unexpected row size');
+
+  const rowCount = view.getUint32(16, true);
+  const poolSize = view.getUint32(32, true);
+  if (headerSize + rowCount * ROW_SIZE + poolSize > image.length) {
+    throw new Error('the rows and string pool are out of range');
+  }
+
+  for (let index = 0; index < rowCount; index += 1) {
+    const at = headerSize + index * ROW_SIZE;
+    const fingerprint = view.getBigUint64(at, true);
+    const size = view.getUint32(at + 8, true);
+    const bpmX10 = view.getUint16(at + 16, true);
+    out.set(`${fingerprint.toString(16)}:${size}`, {
+      bpm: bpmX10 === 0 ? null : bpmX10 / 10,
+      key: camelotOf(view.getUint8(at + 18)),
+    });
+  }
+  return out;
+}
+
 /**
  * The producer's identity for a model set: FNV-1a 64 over the sorted `name:sha256`
  * descriptors, newline-joined. The device reports it in `library_stats` and never

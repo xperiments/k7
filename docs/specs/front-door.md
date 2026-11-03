@@ -270,6 +270,12 @@ The Queue, measured, written to the card by the run itself.
   image this browser wrote, instead of printing "not measured" per row. The two silences are
   named apart: **no answer** (the device did not reply for that path) and **not in the image**
   (it replied, and the image has no row).
+- The browser keeps every image it writes (`k7-snapshots`, keyed by Scope), so an album is
+  readable with the card in the computer and the player empty. The page asks the player first —
+  with a card in it, its answer is what it plays — and falls back to its own rows
+  (`readImageMeasurements`), keyed as the player keys them: the path's fingerprint and the
+  file's size. With no card in the player the page does not ask at all, and an album answered
+  entirely from the image says so once rather than per row.
 - One album opens its tracks with BPM, key and energy, and a way to add them to a Draft. There
   is no artist list beside the grid: an artist's page is reached from the album it made.
 - An album is its **title**. Two artists on one title are one tile, not one each — a

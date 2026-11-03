@@ -218,6 +218,8 @@ export interface MediaIndexState {
   loading: boolean;
   /** The device's own answer, not the listing's: status is the poller the shell shares. */
   reachable: boolean;
+  /** Whether a card is in the player. Without one its library is empty and nothing answers. */
+  card: boolean;
   deviceTracks: number;
   /** The image the player answers from; null when it does not say or has none. */
   deviceImage: DeviceImage | null;
@@ -304,7 +306,14 @@ export function useMediaIndex(): MediaIndexState {
     [cache, presence],
   );
 
-  return { index, loading: cache === null, reachable, deviceTracks: tracks, deviceImage };
+  return {
+    index,
+    loading: cache === null,
+    reachable,
+    card: status?.card === true,
+    deviceTracks: tracks,
+    deviceImage,
+  };
 }
 
 /** One album, by the title its route carries. */

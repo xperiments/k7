@@ -4,7 +4,9 @@ import type { Analysis } from '../src/domain/analysis';
 import {
   buildSnapshot,
   fnv1a64,
+  imageRowKey,
   playlistId,
+  readImageMeasurements,
   snapshotPath,
   type SnapshotInput,
   type SnapshotPlaylist,
@@ -116,6 +118,49 @@ function rowStrings(image: Uint8Array, index: number, headerSize = HEADER_SIZE):
   }
   return values;
 }
+
+describe('reading an image back', () => {
+  it('answers the same numbers it wrote, keyed by path and size', () => {
+    const rows = readImageMeasurements(buildSnapshot(canonicalInput()));
+
+    expect(rows.get(imageRowKey('Artist/Album/01 - Track.mp3', 4_000_000))).toEqual({
+      bpm: 124.5,
+      key: '8A',
+    });
+  });
+
+  it('finds nothing under a different size — the same file is part of the binding', () => {
+    const rows = readImageMeasurements(buildSnapshot(canonicalInput()));
+
+    expect(rows.get(imageRowKey('Artist/Album/01 - Track.mp3', 4_000_001))).toBeUndefined();
+    expect(rows.get(imageRowKey('Artist/Album/02.mp3', 4_000_000))).toBeUndefined();
+  });
+
+  it('says a row has no number when it was written without one', () => {
+    const image = buildSnapshot(
+      input([
+        {
+          path: 'CARD/music/A/b.mp3',
+          size: 1,
+          title: '',
+          artist: '',
+          album: '',
+          genre: '',
+          analysis: analysis({ tempo: { bpm: 0 }, key: { camelot: '' } }),
+        },
+      ]),
+    );
+
+    expect(readImageMeasurements(image).get(imageRowKey('A/b.mp3', 1))).toEqual({
+      bpm: null,
+      key: null,
+    });
+  });
+
+  it('refuses what is not an image', () => {
+    expect(() => readImageMeasurements(new Uint8Array(64))).toThrow(/not a Snapshot/);
+  });
+});
 
 describe('snapshot paths', () => {
   it('drops the volume name and the music directory', () => {
