@@ -21,6 +21,7 @@ import { patchListArea } from '../../playlists/image';
 import { countMedia, getMedia, listMedia, measuredHash, putMedia, tagsOf } from '../../storage/media';
 import { cardRefFor, currentCardScope, subscribeCardScope } from '../../card/session';
 import { readCardFile as readFileFromCard, type CardRoot } from '../../card/read';
+import { cardHandleFor, ensureAccess, ensureRead, forgetCardHandle } from '../../card/handles';
 import { loadSnapshot, saveSnapshot, type StoredSnapshot } from '../../storage/snapshots';
 import { clearCache, getCached, putCached } from '../../storage/cache';
 import { requestPersistence } from '../../storage/persist';
@@ -102,6 +103,11 @@ export interface AnalysisApi {
   /** The card was opened read-write in this session, so it can be written back to. */
   hasCardHandle: boolean;
   /**
+   * A card this browser can read: the one opened this visit, or the one it remembers opening
+   * before. Rescan only needs read access, so it outlives the write grant.
+   */
+  canRescan: boolean;
+  /**
    * The bytes of one track as the card holds them now, by its path below `music` — the card
    * handle when this page has one, the queue's own file when it does not. `null` means the
    * card is not here: nothing can be played from it.
@@ -137,6 +143,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   /* The card the user opened read-write, when they opened one: the image goes back there
    * without asking again. A dropped folder leaves this null. */
   const [cardHandle, setCardHandle] = useState<SnapshotDirectory | null>(null);
+  /* The same card's handle as this browser remembered it, when this visit has not opened one.
+   * It is not a grant: reading needs the permission asked for again on the gesture. */
+  const [storedHandle, setStoredHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [weightError, setWeightError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -165,6 +174,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       const scope = currentCardScope();
       const stillCurrent = () => !cancelled && scope === currentCardScope();
       setLastSnapshot(null);
+      setStoredHandle(null);
+      cardHandleFor(scope)
+        .then((handle) => {
+          if (stillCurrent()) setStoredHandle(handle);
+        })
+        .catch(() => {});
       countMedia(scope)
         .then((count) => {
           if (stillCurrent()) setMediaCount(count);
@@ -469,7 +484,22 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * reload leaves this unavailable — the picker is the way back.
    */
   const rescanCard = useCallback(async () => {
-    if (!cardHandle) {
+    let handle = cardHandle;
+    if (handle === null && storedHandle !== null) {
+      /* A remembered handle still needs its grant, and this click is the moment to ask. It is
+       * asked for read-write because a rescan is usually the prelude to a run, and a run that
+       * cannot write the image back is half a run. */
+      if (!(await ensureAccess(storedHandle, 'readwrite'))) {
+        setNotice({
+          kind: 'error',
+          text: 'This browser needs permission to read and write the card again. Open it with “Change card”.',
+        });
+        return;
+      }
+      setCardHandle(storedHandle as unknown as SnapshotDirectory);
+      handle = storedHandle as unknown as SnapshotDirectory;
+    }
+    if (handle === null) {
       setNotice({
         kind: 'error',
         text: 'No card is open in this page. Use “Change card” to open one.',
@@ -477,7 +507,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const read = await readOpenCard(cardHandle);
+      const read = await readOpenCard(handle);
       if ('problem' in read) {
         setNotice({ kind: 'error', text: read.problem });
         return;
@@ -489,7 +519,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         text: `Could not read the card again: ${error instanceof Error ? error.message : String(error)}`,
       });
     }
-  }, [acceptIntake, cardHandle]);
+  }, [acceptIntake, cardHandle, storedHandle]);
 
   /** Open another card: the same four steps as the first pick, and the queue becomes its. */
   const changeCard = useCallback(async () => {
@@ -782,14 +812,25 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const clearAll = useCallback(async () => {
     setItems([]);
     setNotice(null);
+    setCardHandle(null);
+    setStoredHandle(null);
+    await forgetCardHandle(currentCardScope());
     await clearCache();
   }, []);
 
   const readCardFile = useCallback(
     async (path: string): Promise<File | null> => {
-      if (cardHandle !== null) {
+      let handle = cardHandle;
+      /* No handle this visit: the card can still be the one this browser opened before. The
+       * grant is requested here, on the click that asked to play, which is the only moment a
+       * browser will show it. Read only, and never promoted to the write handle: playing a
+       * track must not turn into a promise that `k7.db` can be written back. */
+      if (handle === null && storedHandle !== null && (await ensureRead(storedHandle))) {
+        handle = storedHandle as unknown as SnapshotDirectory;
+      }
+      if (handle !== null) {
         try {
-          const file = await readFileFromCard(cardHandle as unknown as CardRoot, path);
+          const file = await readFileFromCard(handle as unknown as CardRoot, path);
           if (file !== null) return file;
         } catch {
           // A handle can be revoked under the page; the queue below is the second door.
@@ -798,7 +839,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       const measured = items.find((item) => snapshotPath(item.path) === path);
       return measured?.file ?? null;
     },
-    [cardHandle, items],
+    [cardHandle, items, storedHandle],
   );
 
   const value: AnalysisApi = {
@@ -825,6 +866,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     rescanCard,
     changeCard,
     hasCardHandle: cardHandle !== null,
+    canRescan: cardHandle !== null || storedHandle !== null,
     readCardFile,
     retry,
     deepAnalyse,

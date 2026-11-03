@@ -43,6 +43,7 @@ export function ProcessArea() {
     cardLabel,
     clearAll,
     hasCardHandle,
+    canRescan,
     addFound,
     addCard,
     rescanCard,
@@ -163,9 +164,9 @@ export function ProcessArea() {
               variant="outline"
               size="sm"
               onClick={() => void rescanCard()}
-              disabled={busy || !hasCardHandle}
+              disabled={busy || !canRescan}
               title={
-                hasCardHandle
+                canRescan
                   ? 'Read this card again, now: tracks already measured are recognised, not measured twice'
                   : 'No card is open in this page — use Change card'
               }

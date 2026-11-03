@@ -110,12 +110,20 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       setPlaying(false);
       setError(mediaError(element));
     };
+    /* A finished file starts over, so the play button plays it again rather than doing
+     * nothing at the end of the file. */
+    const onEnded = () => {
+      element.currentTime = 0;
+      setTime(0);
+      setPlaying(false);
+    };
     element.addEventListener('play', onPlay);
     element.addEventListener('pause', onPause);
     element.addEventListener('timeupdate', onTime);
     element.addEventListener('durationchange', onDuration);
     element.addEventListener('loadedmetadata', onDuration);
     element.addEventListener('error', onError);
+    element.addEventListener('ended', onEnded);
     return () => {
       element.removeEventListener('play', onPlay);
       element.removeEventListener('pause', onPause);
@@ -123,6 +131,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       element.removeEventListener('durationchange', onDuration);
       element.removeEventListener('loadedmetadata', onDuration);
       element.removeEventListener('error', onError);
+      element.removeEventListener('ended', onEnded);
     };
   }, []);
 

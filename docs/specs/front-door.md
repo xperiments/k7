@@ -183,8 +183,9 @@ the structure:
 - **Bar.** A player at the bottom of the inset, under every area: the cover, what is sounding,
   one play/pause, a stop, a seek that only a file earns, and a volume. It has two sources and
   says which — the player's **stream** (`/stream`, live, no seek) or a **file off the card in
-  the computer**, read through the handle the page holds (`card/read.ts`) and played from a blob
-  URL. Its one element lives in `PlaybackProvider`, not in the bar, so re-rendering an area
+  the computer**, read through the card's handle (`card/read.ts`) — the one the page holds, or
+  the one the browser remembers for that Scope, re-granted read-only on the click that plays —
+  and played from a blob URL. Its one element lives in `PlaybackProvider`, not in the bar, so re-rendering an area
   never interrupts the sound and any page can start it. With no card in the player, `play` on an
   album row means this file; with one, it means the player, and the bar follows its broadcast.
 
@@ -205,7 +206,9 @@ The Queue, measured, written to the card by the run itself.
   header does offer is intake, because a card changes under the page: **Rescan card** walks the
   card this page holds open again — the tracks it already has are recognised, not measured
   twice — and **Change card** opens the picker, replacing the queue with the new card's and the
-  Scope with it. Clear, asked in place, is the last action.
+  Scope with it. Clear, asked in place, is the last action. The handle is remembered per Scope
+  (`card/handles.ts`), so a reload does not lose the card: Rescan asks for the read-write grant
+  again on the click, which is the only moment a browser will show the prompt.
 - **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
   page: it stays at the top while the rows scroll.
 - **Rows:** gathered by album — *Album / Artist* as the heading, with its track count, in the

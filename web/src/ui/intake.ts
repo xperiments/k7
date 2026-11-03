@@ -9,6 +9,7 @@
  */
 
 import { cardFingerprint } from '../card/fingerprint';
+import { rememberCardHandle } from '../card/handles';
 import { fingerprintScope } from '../card/mark';
 import { cardShapeOf, cardShapeProblem } from '../card/shape';
 import { setCardScope } from '../card/session';
@@ -85,11 +86,14 @@ export async function readCardWithPicker(
     // Identify the card before the run: the scope has to exist before the first cover is
     // written, and a mark this App did not write is never overwritten (card-mark.md §4).
     const identified = await identifyCard(directory as unknown as CardDirectory);
-    setCardScope(
+    const scope =
       identified === UNMARKED_CARD
         ? fingerprintScope(await fingerprintOf(result.files))
-        : identified,
-    );
+        : identified;
+    setCardScope(scope);
+    // Remembered so a reload can still read the card's own files (play, rescan): the handle
+    // survives storage, the permission is asked for again on the gesture that needs it.
+    await rememberCardHandle(scope, directory as unknown as FileSystemDirectoryHandle);
     return { kind: 'read', files: result.files, skipped: result.skipped, handle: directory };
   } catch (failure) {
     return { kind: 'failed', message: failure instanceof Error ? failure.message : String(failure) };

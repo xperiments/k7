@@ -426,7 +426,7 @@ export function AlbumArea({ album }: { album: string }) {
       if (file === null) {
         setNotice({
           kind: 'error',
-          text: 'That file is not open in this page. Open the card in Process to play it here.',
+          text: 'This browser could not read that file from the card. Play again to allow access, or open the card in Process.',
         });
         return;
       }
