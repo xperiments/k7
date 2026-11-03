@@ -214,12 +214,12 @@ The Queue, measured, written to the card by the run itself.
   Scope with it. Clear, asked in place, is the last action. The handle is remembered per Scope
   (`card/handles.ts`), so a reload does not lose the card: Rescan asks for the read-write grant
   again on the click, which is the only moment a browser will show the prompt.
-- **A reload picks the card up, and holds the run.** When the browser still reports the grant as
-  given (`queryAccess`, which never prompts), the load walks the card and the queue is its
-  contents again — but the queue arrives **held**: the header offers *Measure N tracks*, and no
-  worker starts until it is pressed. Reading is not measuring; a load that measured would turn
-  every reload into the card's whole run. The same bar carries **Pause** while a run is in
-  flight, so a long run is never a page you cannot leave.
+- **A reload picks the card up and measures it.** When the browser still reports the grant as
+  given (`queryAccess`, which never prompts), the load walks the card and the run starts: the
+  card being in the computer is the fact, and most rows are recognised from the card's own record
+  in milliseconds, so a reload continues rather than repeats. A **Pause** in the header holds the
+  run (the rows already handed out finish, nothing new is claimed) and becomes **Resume**; a new
+  queue always measures again.
 - **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
   page: it stays at the top while the rows scroll.
 - **Rows:** gathered by album — *Album / Artist* as the heading, with its track count, in the

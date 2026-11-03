@@ -143,8 +143,12 @@ export function ProcessArea() {
               </span>
             )}
             {!running && queued > 0 ? (
-              <Button size="sm" onClick={resume}>
-                Measure {plural(queued, 'track')}
+              <Button
+                size="sm"
+                onClick={resume}
+                title={`Measure the remaining ${plural(queued, 'track')}`}
+              >
+                Resume
               </Button>
             ) : busy ? (
               <Button size="sm" variant="outline" onClick={pause}>

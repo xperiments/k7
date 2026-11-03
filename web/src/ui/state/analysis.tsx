@@ -70,9 +70,8 @@ export interface AnalysisApi {
   /** True while any worker holds a row. */
   busy: boolean;
   /**
-   * Whether queued rows are being handed to the workers. A card read on load arrives **held**
-   * (`false`): the queue is its contents, but a load must not become hours of measuring the
-   * card again. Nothing else pauses it; a manual read starts it.
+   * Whether queued rows are being handed to the workers. True unless **Pause** was pressed:
+   * a new queue always measures, and Pause holds the run it was pressed on until Resume.
    */
   running: boolean;
   pause: () => void;
@@ -435,13 +434,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * is recognised from the card's own record — and appending would double every row.
    */
   const acceptIntake = useCallback(
-    (
-      found: FoundFile[],
-      skipped: number,
-      replace: boolean,
-      readOnly = false,
-      start: 'run' | 'held' = 'run',
-    ) => {
+    (found: FoundFile[], skipped: number, replace: boolean, readOnly = false) => {
     const accepted: QueueItem[] = [];
     const rejected: string[] = [];
 
@@ -463,8 +456,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
     if (accepted.length > 0) {
       setItems((previous) => (replace ? accepted : [...previous, ...accepted]));
-      // A card read on load is held; anything a person did starts measuring at once.
-      setRunning(start === 'run');
+      // A new queue always measures; a pause is for the run it was pressed on, not a latch.
+      setRunning(true);
     }
 
     if (accepted.length === 0) {
@@ -500,9 +493,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   /**
    * The card a reload left behind: the handle is remembered, the grant usually is not, and the
    * browser will not prompt without a person. So a load **asks itself** — `queryAccess` never
-   * prompts — and only when the answer is already yes does it walk the card. What it reads
-   * arrives **held**: the queue is the card's contents, but measuring starts on the button
-   * ("Measure N tracks"), because a reload must never become the card's whole run.
+   * prompts — and when the answer is already yes it walks the card and measures it, which is
+   * what "the card is still in the computer" should mean. Pause is what stops it; a load is not
+   * a question, and a button in front of the run it was about to do was one click of nothing.
    */
   useEffect(() => {
     if (storedHandle === null || items.length > 0 || busy) return;
@@ -520,11 +513,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         }
         const read = await readOpenCard(storedHandle as unknown as SnapshotDirectory);
         if (cancelled || 'problem' in read) return;
-        setRunning(false);
-        acceptIntake(read.files, read.skipped, true, false, 'held');
+        acceptIntake(read.files, read.skipped, true);
         setNotice({
           kind: 'success',
-          text: `The card this browser remembers is in: ${plural(read.files.length, 'file')} read, not measured. Press Measure when you want the run.`,
+          text: `The card this browser remembers is in: ${plural(read.files.length, 'file')} read, measuring them now.`,
         });
       } catch {
         /* The card is out, or the handle no longer points at it: nothing to say on load. */
