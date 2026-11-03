@@ -3,7 +3,9 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/r
 import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { getDevice } from '../../device/device';
 import { libraryStats, statsCoverage, type McpStats } from '../../device/mcp';
+import { DeviceError } from '../../device/transport';
 import { refreshDevice, useDeviceStatus } from '../../device/useDeviceStatus';
 import { DropZone } from '../DropZone';
 import { plural } from '../format';
@@ -63,34 +65,33 @@ export function ScanArea() {
   const rescanLibrary = async () => {
     setRescan({ state: 'sending' });
     try {
-      const response = await fetch('/api/rescan', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{}',
-      });
-      const text = await response.text();
-      let body: { ok?: boolean; error?: string } = {};
-      try {
-        body = text ? (JSON.parse(text) as typeof body) : {};
-      } catch {
-        /* the body is the device's error page; the status says enough */
-      }
-
-      if (response.status === 202) {
-        setRescan({ state: 'accepted' });
-      } else if (response.status === 409) {
+      const result = await getDevice().request('rescan');
+      setRescan(
+        result.ok
+          ? { state: 'accepted' }
+          : { state: 'failed', text: 'The player did not start the scan.' },
+      );
+    } catch (error) {
+      /* A refusal keeps the device's own sentence: "a scan is already running" is its
+       * fact, and 409 is how it says so (E1). */
+      if (error instanceof DeviceError && error.status === 409) {
+        setRescan({ state: 'busy', text: error.message });
+      } else if (error instanceof DeviceError && error.code === 'refused') {
         setRescan({
-          state: 'busy',
-          text: body.error ?? 'A scan is already running.',
+          state: 'failed',
+          text: error.message || `The player answered ${error.status}.`,
+        });
+      } else if (error instanceof DeviceError) {
+        setRescan({
+          state: 'failed',
+          text: 'The player did not answer; is it on the same network?',
         });
       } else {
         setRescan({
           state: 'failed',
-          text: body.error ?? `The player answered ${response.status}.`,
+          text: error instanceof Error ? error.message : String(error),
         });
       }
-    } catch {
-      setRescan({ state: 'failed', text: 'The player did not answer; is it on the same network?' });
     } finally {
       void refreshDevice();
     }

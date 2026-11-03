@@ -4,7 +4,14 @@
  * The page never writes a list here: a list reaches the device inside a Snapshot
  * (ADR 0051), and this module only reads what the last accepted image said and asks the
  * broadcast to choose one. `select` is the one command.
+ *
+ * Both links answer through the `Device` seam, so nothing here fetches; the parsers are
+ * exported because the direct Device and the bridge both use them, and a document this
+ * module cannot read never reaches a view (O5).
  */
+
+import { getDevice } from './device';
+import { DeviceError } from './transport';
 
 export interface DevicePlaylist {
   /** 16 hex characters. */
@@ -43,39 +50,54 @@ export class PlaylistsError extends Error {
   }
 }
 
-async function read<T>(path: string): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(path, { cache: 'no-store', headers: { accept: 'application/json' } });
-  } catch {
-    throw new PlaylistsError('the device did not answer', 0);
-  }
-  const text = await response.text();
-  if (!response.ok) {
-    let detail = text;
-    try {
-      const parsed = JSON.parse(text) as { error?: string };
-      if (parsed.error) detail = parsed.error;
-    } catch {
-      /* the body is the device's error page */
-    }
-    throw new PlaylistsError(detail || `the device answered ${response.status}`, response.status);
-  }
-  return JSON.parse(text) as T;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export async function fetchPlaylists(): Promise<DevicePlaylists> {
-  const body = await read<Partial<DevicePlaylists>>('/api/playlists');
+function finite(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+/** One entry of the index. An entry without an id or a name is not a Playlist a page can show. */
+export function parsePlaylist(value: unknown): DevicePlaylist | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== 'string' || typeof value.name !== 'string') return null;
   return {
-    selected: typeof body.selected === 'string' ? body.selected : null,
-    walking: body.walking === true,
-    missing: typeof body.missing === 'number' ? body.missing : 0,
-    lists: Array.isArray(body.lists) ? body.lists : [],
+    id: value.id,
+    name: value.name,
+    created: finite(value.created, 0),
+    rows: finite(value.rows, 0),
   };
 }
 
-export async function fetchPlaylistRows(id: string): Promise<DevicePlaylistRows> {
-  return read<DevicePlaylistRows>(`/api/playlists/${encodeURIComponent(id)}`);
+/** `GET /api/playlists`: the index, tolerating the fields a firmware predates. */
+export function parsePlaylists(value: unknown): DevicePlaylists | null {
+  if (!isRecord(value)) return null;
+  const lists: DevicePlaylist[] = [];
+  if (Array.isArray(value.lists)) {
+    for (const entry of value.lists) {
+      const playlist = parsePlaylist(entry);
+      if (playlist !== null) lists.push(playlist);
+    }
+  }
+  return {
+    selected: typeof value.selected === 'string' ? value.selected : null,
+    walking: value.walking === true,
+    missing: finite(value.missing, 0),
+    lists,
+  };
+}
+
+/** `GET /api/playlists/<id>`: one list's rows, in play order. */
+export function parsePlaylistRows(value: unknown): DevicePlaylistRows | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== 'string' || typeof value.name !== 'string') return null;
+  if (!Array.isArray(value.rows)) return null;
+  return {
+    id: value.id,
+    name: value.name,
+    rows: value.rows.filter((row): row is string => typeof row === 'string'),
+  };
 }
 
 export interface SelectResult {
@@ -83,32 +105,46 @@ export interface SelectResult {
   selected: string | null;
 }
 
+/** `POST /api/playlists/select`: the order the broadcast is walking now. */
+export function parseSelectResult(value: unknown): SelectResult | null {
+  if (!isRecord(value)) return null;
+  return {
+    order: value.order === 'list' ? 'list' : 'tree',
+    selected: typeof value.selected === 'string' ? value.selected : null,
+  };
+}
+
+/**
+ * The seam's `DeviceError` in this module's own vocabulary, so the pages that switch on a
+ * status keep working: `refused` carries the device's HTTP status, and a link that has
+ * nothing to answer for is `0` (the "did not answer" sentence).
+ */
+function playlistsError(error: unknown): PlaylistsError {
+  if (error instanceof DeviceError) return new PlaylistsError(error.message, error.status ?? 0);
+  return new PlaylistsError(error instanceof Error ? error.message : String(error), 0);
+}
+
+export async function fetchPlaylists(): Promise<DevicePlaylists> {
+  try {
+    return await getDevice().request('playlists');
+  } catch (error) {
+    throw playlistsError(error);
+  }
+}
+
+export async function fetchPlaylistRows(id: string): Promise<DevicePlaylistRows> {
+  try {
+    return await getDevice().request('playlist', { id });
+  } catch (error) {
+    throw playlistsError(error);
+  }
+}
+
 /** Tell the broadcast which list to walk; `null` returns it to the Library's order. */
 export async function selectPlaylist(id: string | null): Promise<SelectResult> {
-  let response: Response;
   try {
-    response = await fetch('/api/playlists/select', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
-  } catch {
-    throw new PlaylistsError('the device did not answer', 0);
+    return await getDevice().request('select', { id });
+  } catch (error) {
+    throw playlistsError(error);
   }
-  const text = await response.text();
-  let document: Partial<SelectResult> & { error?: string } = {};
-  try {
-    document = text ? (JSON.parse(text) as typeof document) : {};
-  } catch {
-    /* the body is the device's error page; the status says enough */
-  }
-  if (!response.ok) {
-    // 409 is the interesting one: the list has no Track the Library can find.
-    throw new PlaylistsError(document.error ?? `the device refused it (${response.status})`,
-      response.status);
-  }
-  return {
-    order: document.order === 'list' ? 'list' : 'tree',
-    selected: typeof document.selected === 'string' ? document.selected : null,
-  };
 }

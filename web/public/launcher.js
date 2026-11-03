@@ -608,10 +608,16 @@ export function createLauncherBridge(options) {
   let started = false;
   let tail = Promise.resolve();
 
-  function post(message, targetOrigin) {
+  /**
+   * W9: a reply goes to the window that spoke, with an explicit origin. Posting to `win`
+   * here would send the answer to the Launcher itself — the channel would look alive in the
+   * tests (which only record) and carry nothing in a browser.
+   */
+  function post(source, message, targetOrigin) {
     if (!started) return;
+    if (!source || typeof source.postMessage !== 'function') return;
     if (typeof targetOrigin !== 'string' || targetOrigin === '' || targetOrigin === '*') return;
-    win.postMessage(message, targetOrigin);
+    source.postMessage(message, targetOrigin);
   }
 
   function dropSession(source) {
@@ -645,7 +651,7 @@ export function createLauncherBridge(options) {
     const session = { origin: originName, version: message.v, lastSeen: now(), timer: undefined };
     sessions.set(source, session);
     touch(source, session);
-    post(welcomeMessage(audioState()), originName);
+    post(source, welcomeMessage(audioState()), originName);
   }
 
   function acceptRequest(originName, source, message) {
@@ -658,32 +664,32 @@ export function createLauncherBridge(options) {
     // before the op table: an op this firmware has never heard of is the symptom, not the
     // diagnosis, when the App and the firmware disagree.
     if (session.version !== BRIDGE_VERSION) {
-      post(
+      post(source, 
         failMessage(id, 'version', `the player's bridge speaks version ${BRIDGE_VERSION}, not ${session.version}`),
         originName,
       );
       return;
     }
     if (!Object.hasOwn(OPS, message.op)) {
-      post(failMessage(id, 'unknown-op', `the bridge has no operation named ${message.op}`), originName);
+      post(source, failMessage(id, 'unknown-op', `the bridge has no operation named ${message.op}`), originName);
       return;
     }
     const op = message.op;
     const spec = OPS[op];
     if (inFlight.has(id)) {
-      post(failMessage(id, 'bad-message', 'that request id is already in flight'), originName);
+      post(source, failMessage(id, 'bad-message', 'that request id is already in flight'), originName);
       return;
     }
 
     const validated = spec.validate(message.args);
     if (validated.error) {
-      post(failMessage(id, 'bad-args', validated.error), originName);
+      post(source, failMessage(id, 'bad-args', validated.error), originName);
       return;
     }
     const size = spec.bytes ? validated.value.bytes.byteLength : jsonBytes(message.args);
     const cap = spec.bytes ? LIMITS.request : LIMITS.json;
     if (size === null || size > cap) {
-      post(
+      post(source, 
         failMessage(id, 'too-large', `the request is over the ${Math.round(cap / 1024)} KiB cap`),
         originName,
       );
@@ -691,10 +697,10 @@ export function createLauncherBridge(options) {
     }
 
     if (spec.stream) {
-      runStream(id, originName, op, spec, validated.value);
+      runStream(id, originName, op, spec, validated.value, source);
       return;
     }
-    runNetwork(id, originName, op, spec, validated.value);
+    runNetwork(id, originName, op, spec, validated.value, source);
   }
 
   function withDeadline(work, ms, onTimeout, onFailure) {
@@ -778,13 +784,13 @@ export function createLauncherBridge(options) {
     return data;
   }
 
-  function runStream(id, originName, op, spec, value) {
+  function runStream(id, originName, op, spec, value, source) {
     withDeadline(
       executeStream(id, op, value),
       spec.timeout,
       () => failMessage(id, 'timeout', 'the stream controls did not answer in time'),
       () => failMessage(id, 'blocked', 'the stream controls failed'),
-    ).then((message) => post(message, originName));
+    ).then((message) => post(source, message, originName));
   }
 
   /**
@@ -792,7 +798,7 @@ export function createLauncherBridge(options) {
    * answers `timeout` at once but keeps its slot until the device actually settles, so the
    * player never sees two of the bridge's requests at the same time.
    */
-  function runNetwork(id, originName, op, spec, value) {
+  function runNetwork(id, originName, op, spec, value, source) {
     inFlight.add(id);
     const job = async () => {
       const work = executeHttp(id, op, spec, value);
@@ -803,7 +809,7 @@ export function createLauncherBridge(options) {
         () => failMessage(id, 'unreachable', 'the player did not answer'),
       );
       inFlight.delete(id);
-      post(response, originName);
+      post(source, response, originName);
       await work;
     };
     tail = tail.then(job, job).catch(() => {});
@@ -836,8 +842,11 @@ export function createLauncherBridge(options) {
 
   function stop() {
     if (!started) return;
-    for (const session of sessions.values()) {
-      win.postMessage(byeMessage(), session.origin); // W10: best effort, explicit target.
+    for (const [source, session] of sessions) {
+      // W10: best effort, to the window that opened the session, with its explicit origin.
+      if (source && typeof source.postMessage === 'function') {
+        source.postMessage(byeMessage(), session.origin);
+      }
     }
     started = false;
     win.removeEventListener('message', onMessage);

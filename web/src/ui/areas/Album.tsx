@@ -16,6 +16,7 @@ import {
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getDevice } from '../../device/device';
 import { trackAt, type McpTrack } from '../../device/mcp';
 import { refreshDevice } from '../../device/useDeviceStatus';
 import { findAlbum, UNKNOWN_ARTIST, useMediaIndex, type Album } from '../../media/albums';
@@ -38,24 +39,9 @@ import { rememberVideo } from './Video';
  * device has no row rather than showing a zero.
  */
 
-const PLAY_PATH = '/api/play';
-
-/** `POST /api/play` takes the Snapshot path and moves the shared broadcast to it. */
+/** `play` moves the shared broadcast to one Snapshot path, through whichever link exists. */
 async function playTrack(path: string): Promise<void> {
-  const response = await fetch(PLAY_PATH, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path }),
-  });
-  if (response.ok) return;
-  let reason = '';
-  try {
-    const body = (await response.json()) as { error?: unknown };
-    reason = typeof body.error === 'string' ? body.error : '';
-  } catch {
-    /* the device's error page says nothing the status does not */
-  }
-  throw new Error(reason || `the device answered ${response.status}`);
+  await getDevice().request('play', { path });
 }
 
 function titleOf(row: CachedMedia): string {

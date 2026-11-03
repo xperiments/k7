@@ -4,6 +4,7 @@ import {
   Disc3,
   ListMusic,
   Play,
+  Plug,
   RefreshCw,
   ScanLine,
   Settings as SettingsIcon,
@@ -44,6 +45,9 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
+import { DEVICE_ORIGIN } from '../config';
+import { connectToDevice, getDevice, useDeviceLink } from '../device/device';
+import type { Link } from '../device/transport';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { useDrafts } from '../playlists/drafts';
 import { navigate, routeArea, routeHref, routePage, type Route } from './router';
@@ -141,19 +145,66 @@ function navGroups(drafts: number, tracks: number, playing: boolean): NavGroup[]
   ];
 }
 
-function DeviceMenu({ card, tracks, reachable }: { card: boolean; tracks: number; reachable: boolean }) {
+function DeviceMenu({
+  link,
+  card,
+  tracks,
+  reachable,
+}: {
+  link: Link;
+  card: boolean;
+  tracks: number;
+  reachable: boolean;
+}) {
   const [copied, setCopied] = useState(false);
-  const stream = `http://${location.hostname}/stream`;
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const stream = `${DEVICE_ORIGIN}/stream`;
 
   const copyMcp = async () => {
     try {
-      await navigator.clipboard.writeText(`http://${location.hostname}/mcp`);
+      await navigator.clipboard.writeText(`${DEVICE_ORIGIN}/mcp`);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       /* a page without the clipboard permission simply does not copy */
     }
   };
+
+  /* Connecting is a click, never a load-time attempt: a popup opened without a gesture is
+   * blocked, and the browser says so by returning null (W4). */
+  const connect = async () => {
+    setConnectError(null);
+    try {
+      await connectToDevice();
+    } catch (error) {
+      setConnectError(
+        error instanceof Error ? error.message : 'The browser blocked the bridge window.',
+      );
+    }
+  };
+
+  const rescan = () => {
+    void getDevice()
+      .request('rescan')
+      .catch(() => {
+        /* the state the menu would report is the poll's job, not this click's */
+      });
+  };
+
+  const subtitle =
+    link === 'bridge'
+      ? 'connected through the launcher'
+      : link === 'direct'
+        ? 'this is the device copy'
+        : (connectError ?? 'no player — connect');
+
+  /* What the player reports, as opposed to how this page reaches it: the link is the
+   * subtitle's fact, these are the device's (S5's first two facts, named apart). */
+  const deviceFacts = !reachable
+    ? 'device unreachable'
+    : card
+      ? `${tracks} tracks in the player`
+      : 'no card in the player';
 
   return (
     <SidebarMenu>
@@ -167,24 +218,37 @@ function DeviceMenu({ card, tracks, reachable }: { card: boolean; tracks: number
             </span>
             <span className="grid min-w-0 flex-1 text-left leading-tight">
               <span className="truncate text-sm font-medium">xtape</span>
-              <span className="truncate text-xs text-sidebar-foreground/70">
-                {!reachable
-                  ? 'device unreachable'
-                  : card
-                    ? `${tracks} tracks in the player`
-                    : 'no card in the player'}
-              </span>
+              <span className="truncate text-xs text-sidebar-foreground/70">{subtitle}</span>
             </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="start" className="w-64">
             <DropdownMenuLabel>The device</DropdownMenuLabel>
+            {link !== 'none' ? (
+              <p className="px-2 pb-1 text-xs text-muted-foreground">{deviceFacts}</p>
+            ) : null}
+            {link === 'none' ? (
+              <>
+                <DropdownMenuItem onClick={() => void connect()}>
+                  <Plug aria-hidden="true" />
+                  Connect a player
+                </DropdownMenuItem>
+                {connectError ? (
+                  <p role="alert" className="px-2 pb-1 text-xs text-destructive">
+                    {connectError}
+                  </p>
+                ) : null}
+                <DropdownMenuSeparator />
+              </>
+            ) : null}
             <DropdownMenuItem
               render={<a href={stream} target="_blank" rel="noopener noreferrer" />}
             >
               <Waves aria-hidden="true" />
               Open the live stream
             </DropdownMenuItem>
-            <DropdownMenuItem render={<a href="/library" target="_blank" rel="noopener noreferrer" />}>
+            <DropdownMenuItem
+              render={<a href={`${DEVICE_ORIGIN}/library`} target="_blank" rel="noopener noreferrer" />}
+            >
               <Disc3 aria-hidden="true" />
               Open the library index
             </DropdownMenuItem>
@@ -193,17 +257,9 @@ function DeviceMenu({ card, tracks, reachable }: { card: boolean; tracks: number
               {copied ? 'Copied the MCP endpoint' : 'Copy the MCP endpoint'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                void fetch('/api/rescan', {
-                  method: 'POST',
-                  headers: { 'content-type': 'application/json' },
-                  body: '{}',
-                }).catch(() => {});
-              }}
-            >
+            <DropdownMenuItem onClick={rescan}>
               <RefreshCw aria-hidden="true" />
-              Rescan the player's library
+              Rescan the player&apos;s library
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -246,6 +302,7 @@ function Nav({ groups, route }: { groups: NavGroup[]; route: Route }) {
 
 export function Shell({ route, children }: { route: Route; children: React.ReactNode }) {
   const { status, reachable } = useDeviceStatus();
+  const link = useDeviceLink();
   const drafts = useDrafts();
   const playing = status?.playing ?? null;
   const card = Boolean(status?.card);
@@ -259,7 +316,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
     <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden">
       <Sidebar variant="inset" collapsible="icon">
         <SidebarHeader>
-          <DeviceMenu card={card} tracks={tracks} reachable={reachable} />
+          <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
         </SidebarHeader>
         <SidebarContent role="navigation" aria-label="Areas">
           <Nav groups={groups} route={route} />
@@ -310,7 +367,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
               size="sm"
               nativeButton={false}
               render={
-                <a href={`http://${location.hostname}/stream`} target="_blank" rel="noopener noreferrer" />
+                <a href={`${DEVICE_ORIGIN}/stream`} target="_blank" rel="noopener noreferrer" />
               }
             >
               Stream

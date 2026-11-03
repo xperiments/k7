@@ -96,6 +96,17 @@ class WindowProxyFake implements LauncherWindow {
   }
 }
 
+/** The App's window: replies land here, not in the Launcher's own window. */
+function peer() {
+  const posts: { message: unknown; targetOrigin: string }[] = [];
+  return {
+    posts,
+    postMessage(message: unknown, targetOrigin: string): void {
+      posts.push({ message, targetOrigin });
+    },
+  };
+}
+
 function parsedAt(posts: { message: unknown }[], at: number): Message {
   const message = parseMessage(posts[at]?.message);
   if (message === null) throw new Error(`post ${at} is not a bridge message`);
@@ -110,7 +121,7 @@ const tick = (): Promise<void> =>
 describe('the two ends on one wire', () => {
   it('emits welcome and res messages the App-side parser accepts', async () => {
     const win = new WindowProxyFake();
-    const source = {};
+    const source = peer();
     const fetch: LauncherFetch = () =>
       Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('{"card":true,"tracks":3}') });
     const bridge = createLauncherBridge({
@@ -125,7 +136,7 @@ describe('the two ends on one wire', () => {
     bridge.start();
 
     win.deliver(APP, source, { t: 'hello', v: 1, role: 'app', app: APP });
-    expect(parsedAt(win.posts, 0)).toEqual({
+    expect(parsedAt(source.posts, 0)).toEqual({
       t: 'welcome',
       v: APP_VERSION,
       role: 'launcher',
@@ -134,7 +145,7 @@ describe('the two ends on one wire', () => {
 
     win.deliver(APP, source, { t: 'req', id: '1', op: 'status', args: null });
     await tick();
-    expect(parsedAt(win.posts, 1)).toEqual({
+    expect(parsedAt(source.posts, 1)).toEqual({
       t: 'res',
       id: '1',
       ok: true,
@@ -142,7 +153,7 @@ describe('the two ends on one wire', () => {
     });
 
     win.deliver(APP, source, { t: 'req', id: '2', op: 'library.delete', args: null });
-    expect(parsedAt(win.posts, 2)).toEqual({
+    expect(parsedAt(source.posts, 2)).toEqual({
       t: 'res',
       id: '2',
       ok: false,
@@ -150,7 +161,7 @@ describe('the two ends on one wire', () => {
     });
 
     win.deliver(APP, source, { t: 'req', id: '3', op: 'play', args: { path: 42 } });
-    expect(parsedAt(win.posts, 3)).toEqual({
+    expect(parsedAt(source.posts, 3)).toEqual({
       t: 'res',
       id: '3',
       ok: false,
@@ -162,6 +173,7 @@ describe('the two ends on one wire', () => {
 
   it('gives every message an explicit targetOrigin', () => {
     const win = new WindowProxyFake();
+    const source = peer();
     const bridge = createLauncherBridge({
       win,
       fetch: () => Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('{}') }),
@@ -171,9 +183,10 @@ describe('the two ends on one wire', () => {
       audio: { playing: false, blocked: false, volume: 1, play: () => true, pause: () => {} },
     });
     bridge.start();
-    win.deliver(APP, {}, { t: 'hello', v: 1, role: 'app' });
-    win.deliver(APP, {}, { t: 'req', id: '1', op: 'stream.state', args: null });
-    for (const post of win.posts) expect(post.targetOrigin).toBe(APP);
+    win.deliver(APP, source, { t: 'hello', v: 1, role: 'app' });
+    win.deliver(APP, source, { t: 'req', id: '1', op: 'stream.state', args: null });
+    expect(source.posts.length).toBeGreaterThan(0);
+    for (const post of source.posts) expect(post.targetOrigin).toBe(APP);
     bridge.stop();
   });
 });

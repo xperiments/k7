@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { parseStatus, type DeviceStatus } from './status';
+
+import { getDevice, subscribeDeviceLink } from './device';
+import type { DeviceStatus } from './status';
 
 export interface DeviceSnapshot {
   /** The last successful answer; null when the device has never answered. */
@@ -9,22 +11,18 @@ export interface DeviceSnapshot {
 
 const INITIAL: DeviceSnapshot = { status: null, reachable: false };
 
-/** One poll, tolerant of every failure an absent device can produce. */
-export async function fetchStatus(timeoutMs = 4000): Promise<DeviceStatus | null> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+/**
+ * One poll, tolerant of every failure an absent device can produce.
+ *
+ * The request goes through the `Device` seam: bridged, the answer arrives from the
+ * Launcher; direct, from the device's own API; with no link at all it rejects at once and
+ * the absence is `null`, which every view already has copy for.
+ */
+export async function fetchStatus(): Promise<DeviceStatus | null> {
   try {
-    const response = await fetch('/api/status', {
-      cache: 'no-store',
-      headers: { accept: 'application/json' },
-      signal: controller.signal,
-    });
-    if (!response.ok) return null;
-    return parseStatus(await response.json());
+    return await getDevice().request('status');
   } catch {
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -35,6 +33,7 @@ export async function fetchStatus(timeoutMs = 4000): Promise<DeviceStatus | null
  */
 let snapshot: DeviceSnapshot = INITIAL;
 let timer: ReturnType<typeof setInterval> | null = null;
+let stopWatchingLink: (() => void) | null = null;
 let inFlight = false;
 const listeners = new Set<() => void>();
 
@@ -56,6 +55,9 @@ async function pollOnce(): Promise<void> {
 
 function start(intervalMs: number): void {
   if (timer !== null) return;
+  /* A link that arrives or dies is a reason to ask now rather than at the next tick: the
+   * poll is the protocol's heartbeat, and Connect should show its answer immediately. */
+  stopWatchingLink ??= subscribeDeviceLink(() => void pollOnce());
   void pollOnce();
   timer = setInterval(() => void pollOnce(), intervalMs);
 }
@@ -64,6 +66,8 @@ function stop(): void {
   if (timer === null) return;
   clearInterval(timer);
   timer = null;
+  stopWatchingLink?.();
+  stopWatchingLink = null;
 }
 
 /** The last answer without subscribing: for a click handler that needs the card state. */

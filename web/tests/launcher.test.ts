@@ -151,8 +151,8 @@ interface Harness {
   readonly clock: Clock;
   readonly bridge: LauncherBridge;
   readonly audio: LauncherAudio;
-  /** The App's `WindowProxy`, one per harness. */
-  readonly app: object;
+  /** The App's `WindowProxy`, one per harness: where replies have to arrive. */
+  readonly app: FakeWindow;
 }
 
 function harness(options: { audio?: Partial<LauncherAudio>; appOrigins?: string[] } = {}): Harness {
@@ -170,7 +170,7 @@ function harness(options: { audio?: Partial<LauncherAudio>; appOrigins?: string[
     audio,
   });
   bridge.start();
-  return { win, network, clock, bridge, audio, app: {} };
+  return { win, network, clock, bridge, audio, app: new FakeWindow() };
 }
 
 const tick = (): Promise<void> =>
@@ -188,7 +188,7 @@ function send(h: Harness, id: string, op: OpName, args: RequestArgs = null, sour
 
 function responses(h: Harness): ResponseMessage[] {
   const out: ResponseMessage[] = [];
-  for (const post of h.win.posts) {
+  for (const post of h.app.posts) {
     const message = parseMessage(post.message);
     if (message !== null && message.t === 'res') out.push(message);
   }
@@ -214,8 +214,8 @@ describe('the handshake', () => {
     const h = harness();
     announce(h);
 
-    expect(h.win.posts).toHaveLength(1);
-    const [post] = h.win.posts;
+    expect(h.app.posts).toHaveLength(1);
+    const [post] = h.app.posts;
     expect(post?.targetOrigin).toBe(APP);
     expect(parseMessage(post?.message)).toEqual({
       t: 'welcome',
@@ -235,47 +235,47 @@ describe('the handshake', () => {
     h.win.deliver('https://evil.example', h.app, hello('app'));
     h.win.deliver('*', h.app, hello('app'));
     h.win.deliver('http://k7.local', h.app, hello('app'));
-    expect(h.win.posts).toEqual([]);
+    expect(h.app.posts).toEqual([]);
     expect(h.bridge.sessions()).toEqual([]);
   });
 
   it('drops a hello with the wrong role instead of answering it (W7)', () => {
     const h = harness();
     h.win.deliver(APP, h.app, hello('launcher'));
-    expect(h.win.posts).toEqual([]);
+    expect(h.app.posts).toEqual([]);
     expect(h.bridge.sessions()).toEqual([]);
   });
 
   it('reads a hello with unknown fields as a hello', () => {
     const h = harness();
     h.win.deliver(APP, h.app, { t: 'hello', v: 1, role: 'app', app: APP, extra: { a: 1 } });
-    expect(parseMessage(h.win.posts[0]?.message)?.t).toBe('welcome');
+    expect(parseMessage(h.app.posts[0]?.message)?.t).toBe('welcome');
     expect(h.bridge.sessions()).toHaveLength(1);
   });
 
   it('drops a malformed req rather than answering a message it cannot read', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     h.win.deliver(APP, h.app, { t: 'req', id: 7, op: 'status', args: null });
     h.win.deliver(APP, h.app, { t: 'req', id: '', op: 'status', args: null });
     h.win.deliver(APP, h.app, { t: 'req', id: '1', op: 'status', args: [] });
     await tick();
-    expect(h.win.posts).toEqual([]);
+    expect(h.app.posts).toEqual([]);
     expect(h.network.calls).toHaveLength(0);
   });
 
   it('welcomes a peer on another version but refuses its requests with `version` (W8)', async () => {
     const h = harness();
     h.win.deliver(APP, h.app, { t: 'hello', v: 2, role: 'app' });
-    expect(parseMessage(h.win.posts[0]?.message)).toEqual({
+    expect(parseMessage(h.app.posts[0]?.message)).toEqual({
       t: 'welcome',
       v: 1,
       role: 'launcher',
       audio: { playing: false, volume: 1 },
     });
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'status');
     await tick();
@@ -289,14 +289,14 @@ describe('requests', () => {
     const h = harness();
     h.win.deliver(APP, {}, req('1', 'status'));
     await tick();
-    expect(h.win.posts).toEqual([]);
+    expect(h.app.posts).toEqual([]);
     expect(h.network.calls).toHaveLength(0);
   });
 
   it('round-trips status against GET /api/status', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'status');
     await tick();
@@ -312,7 +312,7 @@ describe('requests', () => {
   it('answers an op outside the table with `unknown-op` and calls nothing', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     h.win.deliver(APP, h.app, { t: 'req', id: '9', op: 'library.delete', args: null });
     await tick();
@@ -324,7 +324,7 @@ describe('requests', () => {
   it('refuses a request over 256 KiB before it is sent', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '5', 'snapshot', { bytes: new Uint8Array(256 * 1024 + 1) });
     await tick();
@@ -335,7 +335,7 @@ describe('requests', () => {
   it('refuses args that fail the op schema', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '6', 'play', { path: 42 });
     await tick();
@@ -346,7 +346,7 @@ describe('requests', () => {
   it('answers `timeout` at the op budget while the request is still outstanding', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'status');
     await tick();
@@ -360,7 +360,7 @@ describe('requests', () => {
   it('runs one request at a time: the second fetch starts only after the first settles', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'status');
     send(h, '2', 'status');
@@ -380,7 +380,7 @@ describe('requests', () => {
   it('maps an unanswered request to `unreachable` and a refusal to `refused` with its status', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'status');
     await tick();
@@ -388,7 +388,7 @@ describe('requests', () => {
     await tick();
     expect(codeOf(onlyResponse(h))).toBe('unreachable');
 
-    h.win.clear();
+    h.app.clear();
     send(h, '2', 'rescan');
     await tick();
     h.network.calls[1]?.respond(json({ error: 'A scan is already running' }, 409));
@@ -405,7 +405,7 @@ describe('requests', () => {
   it('refuses a response over 1 MiB', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'status');
     await tick();
@@ -417,7 +417,7 @@ describe('requests', () => {
   it('answers a second request with the same in-flight id with `bad-message` (X6)', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'status');
     await tick();
@@ -437,8 +437,8 @@ describe('requests', () => {
     await tick();
     h.network.calls[0]?.respond(json({ card: true }));
     await tick();
-    expect(h.win.posts.length).toBeGreaterThan(1);
-    for (const post of h.win.posts) expect(post.targetOrigin).toBe(APP);
+    expect(h.app.posts.length).toBeGreaterThan(1);
+    for (const post of h.app.posts) expect(post.targetOrigin).toBe(APP);
   });
 });
 
@@ -446,7 +446,7 @@ describe('library over MCP', () => {
   it('initializes once and calls library_search with the device argument names', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'library.search', { query: 'aphex', bpmMin: 120, key: ['8A'], sort: 'bpm', limit: 10 });
     await tick();
@@ -479,7 +479,7 @@ describe('library over MCP', () => {
   it('reports a tool that answered isError as `refused`', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'library.stats');
     await tick();
@@ -498,7 +498,7 @@ describe('library over MCP', () => {
   it('refuses library_track without a path and does not call the device', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'library.track', {});
     await tick();
@@ -511,25 +511,25 @@ describe('the stream', () => {
   it('drives the injected audio without touching the network', async () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'stream.state');
     await tick();
     expect(onlyResponse(h)).toEqual(ok('1', { playing: false, volume: 1, blocked: false }));
 
-    h.win.clear();
+    h.app.clear();
     send(h, '2', 'stream.volume', { level: 0.25 });
     await tick();
     expect(h.audio.volume).toBe(0.25);
     expect(onlyResponse(h)).toEqual(ok('2', { volume: 0.25 }));
 
-    h.win.clear();
+    h.app.clear();
     send(h, '3', 'stream.play');
     await tick();
     expect(h.audio.playing).toBe(true);
     expect(onlyResponse(h)).toEqual(ok('3', { playing: true }));
 
-    h.win.clear();
+    h.app.clear();
     send(h, '4', 'stream.pause');
     await tick();
     expect(h.audio.playing).toBe(false);
@@ -544,7 +544,7 @@ describe('the stream', () => {
       },
     });
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'stream.play');
     await tick();
@@ -557,7 +557,7 @@ describe('the stream', () => {
   it('also answers `blocked` when play() resolves false', async () => {
     const h = harness({ audio: { play: () => false } });
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '1', 'stream.play');
     await tick();
@@ -577,11 +577,11 @@ describe('sessions', () => {
 
     h.win.deliver(APP, h.app, bye());
     expect(h.bridge.sessions()).toEqual([]);
-    h.win.clear();
+    h.app.clear();
 
     send(h, '2', 'status');
     await tick();
-    expect(h.win.posts).toEqual([]);
+    expect(h.app.posts).toEqual([]);
     expect(h.network.calls).toHaveLength(1);
   });
 
@@ -603,24 +603,24 @@ describe('sessions', () => {
     h.clock.advance(2_000);
     expect(h.bridge.sessions()).toEqual([]);
 
-    h.win.clear();
+    h.app.clear();
     send(h, '2', 'status');
     await tick();
-    expect(h.win.posts).toEqual([]);
+    expect(h.app.posts).toEqual([]);
     expect(h.network.calls).toHaveLength(1);
   });
 
   it('forgets every session when stopped, and says bye to each origin', () => {
     const h = harness();
     announce(h);
-    h.win.clear();
+    h.app.clear();
 
     h.bridge.stop();
     expect(h.win.listening).toBe(0);
     expect(h.bridge.sessions()).toEqual([]);
-    expect(h.win.posts).toHaveLength(1);
-    expect(parseMessage(h.win.posts[0]?.message)).toEqual(bye());
-    expect(h.win.posts[0]?.targetOrigin).toBe(APP);
+    expect(h.app.posts).toHaveLength(1);
+    expect(parseMessage(h.app.posts[0]?.message)).toEqual(bye());
+    expect(h.app.posts[0]?.targetOrigin).toBe(APP);
   });
 
   it('hands the page the same audio object it was given', () => {
