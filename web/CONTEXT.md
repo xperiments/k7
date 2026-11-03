@@ -113,7 +113,9 @@ _Avoid_: card mark, checksum, hash
 
 **Scope**:
 Which card a stored thing belongs to — a mark's id or a fingerprint. What covers, a Draft's
-resolution and the Last image are kept under.
+resolution and the Last image are kept under. The App remembers the last scope it worked on,
+because the pick cannot be repeated once the card is in the player
+([ADR 0063](../docs/adr/0063-the-browser-remembers-the-card-it-last-worked-on.md)).
 _Avoid_: namespace, partition, key
 
 **Update file**:

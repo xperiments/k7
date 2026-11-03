@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { restoreCardScope } from '../card/session';
 import { loadDrafts } from '../playlists/drafts';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { AlbumArea } from './areas/Album';
@@ -35,6 +36,13 @@ export function App() {
 
   useEffect(() => {
     void loadDrafts();
+  }, []);
+
+  /* The card this browser last worked on, when the scope was not recorded: everything the
+   * Media and Playlists areas show is keyed by it, and the pick that would name it again
+   * cannot happen while the card is in the player. */
+  useEffect(() => {
+    void restoreCardScope();
   }, []);
 
   /* The player is not a place you go, it is a fact about the page: try the direct path on

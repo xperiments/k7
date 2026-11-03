@@ -284,13 +284,15 @@ export function ProcessArea() {
             <EmptyMedia variant="icon">
               <ScanLine aria-hidden="true" />
             </EmptyMedia>
-            <EmptyTitle>No tracks measured yet</EmptyTitle>
+            <EmptyTitle>{lastSnapshot ? 'The queue is empty' : 'No tracks measured yet'}</EmptyTitle>
             <EmptyDescription>
-              {setupError
-                ? 'The models did not load, so nothing can be measured — see the message above.'
-                : modelSet
-                  ? 'Scan a card that is in this computer: the queue fills itself and every file is measured here, never uploaded.'
-                  : 'Loading the models. The queue can be filled while they load.'}
+              {lastSnapshot
+                ? 'The queue lives in this page, so a reload empties it; the image measured before it is above. Send that again, or change its playlists from Playlists — nothing has to be measured twice.'
+                : setupError
+                  ? 'The models did not load, so nothing can be measured — see the message above.'
+                  : modelSet
+                    ? 'Scan a card that is in this computer: the queue fills itself and every file is measured here, never uploaded.'
+                    : 'Loading the models. The queue can be filled while they load.'}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>

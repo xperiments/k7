@@ -32,15 +32,22 @@ const UINT64_MASK = 0xffffffffffffffffn;
 
 /**
  * The path the device hashes: everything below the selection's `music`
- * directory, with `/` separators. Case and Unicode are left as they arrived,
- * because both sides hash the bytes they were given.
+ * directory, with `/` separators. Case and Unicode below that segment are left
+ * as they arrived, because both sides hash the bytes they were given.
+ *
+ * The Music directory's own case is not information: a card is FAT32, where
+ * `MUSIC` and `music` are one directory, and the App already says so when it
+ * decides what a card is (`card/mark.ts` K1). Matching it exactly here would
+ * accept such a card and then give every track on it no Snapshot path at all.
  */
 export function snapshotPath(relativePath: string): string | null {
   const segments = relativePath.split('/');
   // The selection is the card root, so `music` is either the only root segment or the
   // card's child. A `music` further down is a directory inside the library, not the
   // Music directory, and is not a reason to accept the path.
-  const music = segments[0] === MUSIC_DIRECTORY ? 0 : segments[1] === MUSIC_DIRECTORY ? 1 : -1;
+  const isMusic = (segment: string | undefined) =>
+    segment !== undefined && segment.toLowerCase() === MUSIC_DIRECTORY;
+  const music = isMusic(segments[0]) ? 0 : isMusic(segments[1]) ? 1 : -1;
   if (music === -1) return null;
 
   const below = segments.slice(music + 1);

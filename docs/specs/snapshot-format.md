@@ -210,7 +210,12 @@ the producer refuses with "this is not the card's root" rather than writing an i
 match nothing. A wrong path costs a Snapshot with zero **Coverage**: visible, but a wasted
 generation.
 
-Case and Unicode are not normalised on either side. Both hash the bytes they were given; a
+That `music` segment is matched **without regard to case**, because the card is FAT32 and
+`MUSIC` is the same directory as `music` there — the device's own mount proves it. It is the
+one segment whose case carries no information; refusing `MUSIC/` would accept such a card and
+then give every track on it no relative path at all.
+
+Case and Unicode are not normalised anywhere else. Both sides hash the bytes they were given; a
 disagreement costs a missing row, never a wrong one.
 
 ## 7. String pool

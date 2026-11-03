@@ -25,7 +25,7 @@ import { newId } from '../../lib/id';
 import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
 import { patchListArea } from '../../playlists/image';
 import { countMedia, listMedia, putMedia } from '../../storage/media';
-import { cardRefFor, currentCardScope } from '../../card/session';
+import { cardRefFor, currentCardScope, subscribeCardScope } from '../../card/session';
 import {
   clearSnapshot,
   loadSnapshot,
@@ -166,16 +166,31 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * page can lose its origin for a second and still have the run to send again. */
   useEffect(() => {
     let cancelled = false;
-    void countMedia(currentCardScope()).then(setMediaCount).catch(() => {});
-    loadSnapshot(currentCardScope())
-      .then((stored) => {
-        if (!cancelled && stored) setLastSnapshot(stored);
-      })
-      .catch(() => {
-        /* A store that cannot be read is not a reason to fail the page. */
-      });
+    /* Both reads are for one card, so both are re-run when the pick changes which one that
+     * is. A Last image left from the card before must never be what a list change is patched
+     * onto and posted. */
+    const loadForCurrentCard = () => {
+      const scope = currentCardScope();
+      const stillCurrent = () => !cancelled && scope === currentCardScope();
+      setLastSnapshot(null);
+      countMedia(scope)
+        .then((count) => {
+          if (stillCurrent()) setMediaCount(count);
+        })
+        .catch(() => {});
+      loadSnapshot(scope)
+        .then((stored) => {
+          if (stillCurrent()) setLastSnapshot(stored ?? null);
+        })
+        .catch(() => {
+          /* A store that cannot be read is not a reason to fail the page. */
+        });
+    };
+    loadForCurrentCard();
+    const unsubscribe = subscribeCardScope(loadForCurrentCard);
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 

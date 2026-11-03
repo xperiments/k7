@@ -22,7 +22,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { currentCardScope } from '../card/session';
+import { useCardScope } from '../card/session';
 import { listLibrary } from '../device/mcp';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { listMedia, type CachedCover, type CachedMedia } from '../storage/media';
@@ -197,11 +197,13 @@ export interface MediaIndexState {
 }
 
 /**
- * The index for one visit. The cache is read once per mount -- navigating away and back
- * re-reads it, which is what makes a newly measured card appear.
+ * The index for one visit. The cache is read once per mount and again whenever the card
+ * changes — a pick mid-visit re-reads, and so does a reload, because the scope is
+ * remembered (`card/session.ts`). A newly measured card therefore appears without a detour.
  */
 export function useMediaIndex(): MediaIndexState {
   const { status, reachable } = useDeviceStatus();
+  const scope = useCardScope();
   const [cache, setCache] = useState<Map<string, CachedMedia> | null>(null);
   const [presence, setPresence] = useState<Presence | null>(null);
 
@@ -211,7 +213,7 @@ export function useMediaIndex(): MediaIndexState {
 
   useEffect(() => {
     let cancelled = false;
-    listMedia(currentCardScope())
+    listMedia(scope)
       .then((rows) => {
         if (!cancelled) setCache(new Map(rows.map((row) => [row.path, row] as const)));
       })
@@ -222,7 +224,7 @@ export function useMediaIndex(): MediaIndexState {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     if (!hasDevice) {

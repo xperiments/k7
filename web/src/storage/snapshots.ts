@@ -87,6 +87,26 @@ export async function loadSnapshot(scope: string): Promise<StoredSnapshot | unde
   return (await dbPromise).get('snapshots', scope);
 }
 
+/**
+ * The image this browser built or sent most recently, whichever card it belongs to.
+ *
+ * This is what makes "the card I last worked on" recoverable when nothing recorded it: an
+ * image is the most deliberate thing a run produces, and its own `scope` names the card. A
+ * browser that measured before scopes were remembered has no other way back to its rows.
+ */
+export async function newestSnapshot(): Promise<StoredSnapshot | undefined> {
+  const all = await (await dbPromise).getAll('snapshots');
+  let newest: StoredSnapshot | undefined;
+  let newestAt = -Infinity;
+  for (const stored of all) {
+    const at = Date.parse(stored.sentAt ?? stored.at);
+    if (!Number.isFinite(at) || at < newestAt) continue;
+    newest = stored;
+    newestAt = at;
+  }
+  return newest;
+}
+
 /** Forget this card's Last image; every other card keeps its own. */
 export async function clearSnapshot(scope: string): Promise<void> {
   await (await dbPromise).delete('snapshots', scope);

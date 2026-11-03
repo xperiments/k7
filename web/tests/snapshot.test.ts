@@ -130,9 +130,17 @@ describe('snapshot paths', () => {
   it('returns null outside the music directory', () => {
     expect(snapshotPath('MYCARD/Artist/Album/x.mp3')).toBeNull();
     expect(snapshotPath('MYCARD/mymusic/Album/x.mp3')).toBeNull();
-    expect(snapshotPath('MYCARD/Music/Album/x.mp3')).toBeNull();
     expect(snapshotPath('MYCARD/music')).toBeNull();
     expect(snapshotPath('MYCARD/music/')).toBeNull();
+  });
+
+  it('matches the music directory whatever case the card formatted it with', () => {
+    // A card is FAT32: `MUSIC` and `music` are one directory, and `isCardRoot` accepts
+    // either. Refusing the path here would accept the card and then give every track on
+    // it no Snapshot path at all — measured, and nowhere to be written.
+    expect(snapshotPath('MYCARD/Music/Album/x.mp3')).toBe('Album/x.mp3');
+    expect(snapshotPath('MYCARD/MUSIC/Album/x.mp3')).toBe('Album/x.mp3');
+    expect(snapshotPath('Music/Album/x.mp3')).toBe('Album/x.mp3');
   });
 
   it('only accepts music at the root or as the card\'s child', () => {
