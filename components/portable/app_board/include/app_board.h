@@ -96,10 +96,12 @@ app_board_flash_t app_board_snapshot_flash(const uint8_t *image, size_t len, cha
  * where "restart" is the test's next process. */
 void app_board_reboot_soon(uint32_t ms);
 
-/* Apply CARD/xtape.db to the snapshot partition and delete it, before anything that
+/* Apply CARD/k7.db to the snapshot partition and delete it, before anything that
  * needs PSRAM is running (a flash write disables the cache, and on this board the
- * app's code lives in PSRAM). Mounts the card if it can, and leaves it as it found
- * it. A failure never reboots and never removes the file. */
+ * app's code lives in PSRAM). A card written before the rename still holds
+ * CARD/xtape.db, which is read when the current name is absent. Mounts the card if it
+ * can, and leaves it as it found it. A failure never reboots and never removes the
+ * file. */
 app_board_update_t app_board_snapshot_update(void);
 
 #ifdef __cplusplus

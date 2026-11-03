@@ -43,7 +43,7 @@ describe('building the snapshot for the player', () => {
     expect(skipped).toBe(1);
 
     /* The header, read here rather than through the module's own writer. */
-    expect(new TextDecoder().decode(bytes.subarray(0, 8))).toBe('XTAPESNP');
+    expect(new TextDecoder().decode(bytes.subarray(0, 8))).toBe('K7SNAP\0\0');
     const view = new DataView(bytes.buffer);
     expect(view.getUint16(8, true)).toBe(1);
     expect(view.getUint16(10, true)).toBe(64);

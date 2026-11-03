@@ -1,8 +1,10 @@
 {
   "id": "/",
-  "name": "xtape",
-  "short_name": "xtape",
-  "description": "The player and the analyser for the card in the xtape player.",
+  "name": "K7",
+  "short_name": "K7",
+  "description": "The player and the analyser for the card in the K7 player.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -20,6 +22,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

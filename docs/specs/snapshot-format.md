@@ -57,7 +57,7 @@ The image is written at offset 0 of the `snapshot` partition. The file's length 
 
 | Offset | Size | Field | Value |
 |---:|---:|---|---|
-| 0 | 8 | `magic` | ASCII `XTAPESNP` |
+| 0 | 8 | `magic` | ASCII `K7SNAP`, NUL-padded to 8 bytes |
 | 8 | 2 | `format_version` | `1` |
 | 10 | 2 | `header_size` | `64` |
 | 12 | 4 | `total_size` | image length in bytes, header included |
@@ -75,6 +75,9 @@ The image is written at offset 0 of the `snapshot` partition. The file's length 
 itself. There is no header checksum: a corrupt header fails one of the structural checks
 (magic, sizes, version) or makes `total_size` disagree with the fields, which is why those
 checks exist.
+
+**[reader]** `XTAPESNP` is also accepted as the magic: an image written before the rename
+(ADR 0062) must still open, and it is validated no less strictly.
 
 `generation` is informational. The device reports it and never compares it to anything; the
 card's possession of an Update file is the only "should I update" signal (ADR 0047).

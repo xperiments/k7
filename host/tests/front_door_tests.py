@@ -114,6 +114,7 @@ def main():
     tmp = tempfile.mkdtemp(prefix="xtape-frontdoor-")
     dist = os.path.join(tmp, "dist")
     write(os.path.join(dist, "index.html"), "<!doctype html><title>xtape</title>")
+    write(os.path.join(dist, "app.html"), "<!doctype html><title>K7</title>")
     write(os.path.join(dist, "assets", "index-abc123.js"), "console.log('app');")
     write(os.path.join(dist, "sw.js"), "self.addEventListener('fetch', () => {});")
     write(os.path.join(dist, "manifest.webmanifest"), '{"name":"xtape"}')
@@ -134,6 +135,17 @@ def main():
         check("it is html", headers.get("content-type"), "text/html; charset=utf-8")
         check("it is revalidated every time", headers.get("cache-control"), "no-cache")
         check("and it is the index", body, "<!doctype html><title>xtape</title>")
+
+        # The Device copy: `/app` is a clean address for app.html. It and `/app/` are the
+        # only two names that map; everything below them is still an exact filename.
+        status, headers, _, body = get(port, "/app")
+        check("the Device copy is at /app", status, 200)
+        check("it is html", headers.get("content-type"), "text/html; charset=utf-8")
+        check("and it is app.html", body, "<!doctype html><title>K7</title>")
+        status, _, _, _ = get(port, "/app/")
+        check("a slash after /app is the same file", status, 200)
+        status, _, _, _ = get(port, "/app/missing")
+        check("anything below /app is still a 404", status, 404)
 
         status, headers, head, _ = get(port, "/assets/index-abc123.js")
         check("a hashed asset is served", status, 200)

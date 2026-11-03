@@ -24,7 +24,8 @@ import { sendSnapshot } from '../../device/upload';
 import { newId } from '../../lib/id';
 import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
 import { patchListArea } from '../../playlists/image';
-import { allMedia, countMedia, putMedia } from '../../storage/media';
+import { countMedia, listMedia, putMedia } from '../../storage/media';
+import { cardRefFor, currentCardScope } from '../../card/session';
 import {
   clearSnapshot,
   loadSnapshot,
@@ -32,6 +33,7 @@ import {
   type StoredSnapshot,
 } from '../../storage/snapshots';
 import { clearCache, getCached, putCached } from '../../storage/cache';
+import { requestPersistence } from '../../storage/persist';
 import { cacheKey } from '../../config';
 import { isWeightError } from '../../weights/errors';
 import { writeSnapshotToCard, type SnapshotDirectory } from '../cardWriter';
@@ -156,8 +158,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * page can lose its origin for a second and still have the run to send again. */
   useEffect(() => {
     let cancelled = false;
-    void countMedia().then(setMediaCount).catch(() => {});
-    loadSnapshot()
+    void countMedia(currentCardScope()).then(setMediaCount).catch(() => {});
+    loadSnapshot(currentCardScope())
       .then((stored) => {
         if (!cancelled && stored) setLastSnapshot(stored);
       })
@@ -196,7 +198,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       const { parseBlob } = await import('music-metadata');
       const parsed = await parseBlob(item.file, { duration: false, skipCovers: false });
       const picture = parsed.common.picture?.[0];
-      await putMedia({
+      await putMedia(currentCardScope(), {
         path,
         title: parsed.common.title ?? '',
         artist: parsed.common.artist ?? '',
@@ -207,7 +209,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           : undefined,
         at: new Date().toISOString(),
       });
-      void countMedia().then((n) => setMediaCount(n));
+      void countMedia(currentCardScope()).then((n) => setMediaCount(n));
     } catch {
       /* Tags and art are a convenience: a file without them is measured like any other. */
     }
@@ -229,6 +231,14 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         const key = cacheKey(hash, modelSet);
 
         update(item.id, { status: 'decoding' });
+
+        /* The file's own tags are read before the cache is consulted. They are not part of a
+         * stored analysis — the Process row shows the genre, and a cached Track would
+         * otherwise be the one row without it — and the Snapshot export reuses them instead
+         * of re-reading the file. */
+        const metadata = await readTrackMetadata(item.file);
+        update(item.id, { tags: metadata.tags });
+
         const cached = await getCached(key);
         if (cached) {
           // Identity is the content hash; the file may have been found at a different path.
@@ -246,8 +256,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const metadata = await readTrackMetadata(item.file);
-
         /* A track whose tags already carry BPM and key needs no inference: the row is built
          * from the tags and the fields they cannot carry stay unknown. */
         if (!needsMeasurement(metadata, tagsOnly)) {
@@ -262,6 +270,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             metadata,
           );
           await putCached(key, analysis);
+        void requestPersistence();
+          void requestPersistence();
           update(item.id, { status: 'tagged', analysis, stage: undefined });
           void rememberMedia(item);
           return;
@@ -283,6 +293,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           (stage) => update(item.id, { stage }),
         );
         await putCached(key, analysis);
+        void requestPersistence();
         update(item.id, { status: 'done', analysis, stage: undefined });
         void rememberMedia(item);
       } catch (error) {
@@ -387,6 +398,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         const tempo = await clients[0].deep(audio);
         const analysis = { ...item.analysis, tempo };
         await putCached(cacheKey(item.analysis.track.hash, modelSet), analysis);
+        void requestPersistence();
         update(item.id, { status: 'done', analysis, stage: undefined, cached: false });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -467,7 +479,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       });
       return null;
     }
-    const media = await allMedia();
+    const media = new Map(
+      (await listMedia(currentCardScope())).map((row) => [row.path, row] as const),
+    );
     const lists = toSnapshotPlaylists();
     const result = await buildSnapshotExport(
       items.map((item) => ({
@@ -539,16 +553,19 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     try {
       const result = await buildImage();
       if (!result) return;
+      const scope = currentCardScope();
       const stored: StoredSnapshot = {
+        scope,
+        card: cardRefFor(scope),
         bytes: result.bytes,
         tracks: result.tracks,
         skipped: result.skipped,
         at: new Date().toISOString(),
       };
-      await saveSnapshot(stored);
+      await saveSnapshot(stored.scope, stored);
       const sent = await sendSnapshot(result.bytes);
       const accepted: StoredSnapshot = { ...stored, sentAt: new Date().toISOString() };
-      await saveSnapshot(accepted);
+      await saveSnapshot(accepted.scope, accepted);
       setLastSnapshot(accepted);
       setNotice({
         kind: 'success',
@@ -576,13 +593,16 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     try {
       const result = await buildImage();
       if (!result) return;
+      const scope = currentCardScope();
       const stored: StoredSnapshot = {
+        scope,
+        card: cardRefFor(scope),
         bytes: result.bytes,
         tracks: result.tracks,
         skipped: result.skipped,
         at: new Date().toISOString(),
       };
-      await saveSnapshot(stored);
+      await saveSnapshot(stored.scope, stored);
       setLastSnapshot(stored);
       const blob = new Blob([result.bytes], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
@@ -618,7 +638,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     try {
       const sent = await sendSnapshot(lastSnapshot.bytes);
       const accepted = { ...lastSnapshot, sentAt: new Date().toISOString() };
-      await saveSnapshot(accepted);
+      await saveSnapshot(accepted.scope, accepted);
       setLastSnapshot(accepted);
       setNotice({
         kind: 'success',
@@ -642,7 +662,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * the measurements were. */
   const sendLists = useCallback(async (): Promise<boolean> => {
     if (saving) return false;
-    const base = lastSnapshot ?? (await loadSnapshot());
+    const base = lastSnapshot ?? (await loadSnapshot(currentCardScope()));
     if (!base) {
       setNotice({
         kind: 'error',
@@ -661,7 +681,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         bytes,
         sentAt: new Date().toISOString(),
       };
-      await saveSnapshot(accepted);
+      await saveSnapshot(accepted.scope, accepted);
       setLastSnapshot(accepted);
       setNotice({
         kind: 'success',
@@ -696,7 +716,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   }, [lastSnapshot]);
 
   const discardLast = useCallback(async () => {
-    await clearSnapshot();
+    await clearSnapshot(currentCardScope());
     setLastSnapshot(null);
   }, []);
 

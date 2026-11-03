@@ -6,7 +6,8 @@ and a test that invents its own bytes is testing itself.
 import struct
 import zlib
 
-MAGIC = b"XTAPESNP"
+# The header's magic field is eight bytes: K7SNAP and two NULs (format spec §3).
+MAGIC = b"K7SNAP\0\0"
 
 
 def fnv1a64(text):

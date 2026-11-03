@@ -21,7 +21,12 @@
 extern "C" {
 #endif
 
-#define SNAPSHOT_MAGIC        "XTAPESNP"
+/* The header's first eight bytes. The product was renamed (ADR 0062) and the app writes
+ * `K7SNAP` now; `XTAPESNP` is what a card or a previous app build may still send. The
+ * field is eight bytes, so the shorter name is NUL-padded and a compare covers all eight -
+ * never the C string, or "K7SNAPxx" would read as a Snapshot. */
+#define SNAPSHOT_MAGIC        "K7SNAP\0\0"
+#define SNAPSHOT_MAGIC_LEGACY "XTAPESNP"
 /* Version 1 has no list area and a 64-byte header; version 2 appends the lists and
  * grows the header to 80 bytes. The reader accepts both (format spec §12). */
 #define SNAPSHOT_VERSION_1    1u
@@ -102,6 +107,12 @@ typedef enum {
 } snapshot_string_t;
 
 /* ---------------------------------------------------------------- the image */
+
+/* Whether these first eight bytes are a magic this firmware reads: the current
+ * `SNAPSHOT_MAGIC`, or `SNAPSHOT_MAGIC_LEGACY`. A caller that pre-checks a header (the
+ * board's mapped partition) uses this instead of comparing the constants itself, so the
+ * read-both rule lives in one place. */
+bool snapshot_magic_ok(const uint8_t *magic);
 
 /* Validate an image already in memory and take a reference to it. The image must
  * outlive the snapshot. `why`, when non-NULL, receives one sentence naming the first

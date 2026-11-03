@@ -538,6 +538,33 @@ static void test_validation(void)
     free(empty);
 }
 
+/* ADR 0062: the app writes K7SNAP now, but a card or a previous app build may still send
+ * XTAPESNP. Both open; the old name buys no leniency, and a third name is still refused. */
+static void test_magic_shim(void)
+{
+    size_t n = 0;
+    uint8_t *img = build_image(&n, ROWS, 2, POOL, POOL_N);
+    snapshot_t *s = NULL;
+
+    /* The field is eight bytes, not the C string: K7SNAP and two NULs. */
+    CHECK(memcmp(img, "K7SNAP\0\0", 8) == 0, "the builder writes K7SNAP");
+    CHECK(snapshot_open(img, n, &s) == SNAPSHOT_OK, "and it opens");
+    snapshot_close(s);
+
+    memcpy(img, "XTAPESNP", 8);
+    CHECK(snapshot_open(img, n, &s) == SNAPSHOT_OK, "an image with the old magic opens");
+    snapshot_close(s);
+
+    img[8] = 3; /* format_version, still under the old magic */
+    CHECK(snapshot_open(img, n, &s) == SNAPSHOT_INVALID, "the old magic buys no leniency");
+    img[8] = SNAPSHOT_VERSION_1;
+
+    memcpy(img, "XTAPESNQ", 8);
+    CHECK(snapshot_open(img, n, &s) == SNAPSHOT_INVALID, "a wrong magic is still refused");
+
+    free(img);
+}
+
 static void test_lookup(void)
 {
     size_t n = 0;
@@ -962,6 +989,7 @@ int main(void)
 {
     test_vectors();
     test_validation();
+    test_magic_shim();
     test_lookup();
     test_keys();
     test_filters();

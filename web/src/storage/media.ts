@@ -1,4 +1,4 @@
-import { openDB } from 'idb';
+import { openDB, type DBSchema } from 'idb';
 
 /**
  * What the card's files carry besides their audio: their tags, and their picture.
@@ -9,8 +9,11 @@ import { openDB } from 'idb';
  * computer, so a playlist composed later - from the Snapshot's measurements joined to these
  * rows by path - can show a cover and a name without the card coming back.
  *
- * Keyed by the path below `music/`, which is the same key the Snapshot's rows use, so the
- * join is a lookup and not a guess.
+ * The join's other half is the **Scope** (`docs/specs/card-mark.md` §2, M1). A path alone is
+ * not an identity: `Artist/Album/01.mp3` on card B would otherwise inherit card A's cover
+ * and title. The store is keyed by `[scope, path]`, where `scope` is `mark:<id>` or
+ * `fingerprint:<sha256>`. The same path on two cards is two rows, and a clone - which shares
+ * a mark - shares them deliberately.
  */
 export interface CachedCover {
   bytes: Uint8Array<ArrayBuffer>;
@@ -29,29 +32,98 @@ export interface CachedMedia {
   at: string;
 }
 
-const dbPromise = openDB('xtape-media', 1, {
-  upgrade(db) {
-    db.createObjectStore('media', { keyPath: 'path' });
+/** The row as stored: the media plus the card it was read from. */
+interface StoredMedia extends CachedMedia {
+  scope: string;
+}
+
+interface MediaDB extends DBSchema {
+  media: {
+    key: [string, string];
+    value: StoredMedia;
+    indexes: { scope: string };
+  };
+}
+
+/**
+ * The store used to be `xtape-media`, unscoped, one row per path. Neither of those can be
+ * carried over: a row belongs to a card, and a row that never recorded one cannot be
+ * attributed to any. The spec accepts the loss (§2), so the old database is discarded
+ * rather than migrated, and the new one is keyed differently from the first byte.
+ *
+ * The version is 2 because the first scoped attempt on this name would have been 1; an
+ * upgrade from it recreates the store too, rather than failing on a key-path mismatch.
+ */
+const DB_NAME = 'k7-media';
+const DB_VERSION = 2;
+const LEGACY_DB_NAME = 'xtape-media';
+
+/**
+ * Best-effort removal of the pre-rename database. Its rows are unscoped and unreachable
+ * from this build, so leaving it would only spend quota the App reports in Settings. A
+ * deletion blocked by an older tab is an orphan, not a reason to fail the app.
+ */
+function discardLegacyDatabase(): void {
+  try {
+    const request = globalThis.indexedDB?.deleteDatabase(LEGACY_DB_NAME);
+    if (request) request.onerror = () => {};
+  } catch {
+    /* No IndexedDB means no legacy database; the open below reports the real failure. */
+  }
+}
+
+discardLegacyDatabase();
+
+const dbPromise = openDB<MediaDB>(DB_NAME, DB_VERSION, {
+  upgrade(db, oldVersion) {
+    if (oldVersion < 2) {
+      // v0/v1 held `media` with keyPath 'path' (or not at all). Recreate it: there is no
+      // scope to backfill, and doing so would be a guess about which card each row came
+      // from.
+      if (db.objectStoreNames.contains('media')) db.deleteObjectStore('media');
+    }
+
+    if (!db.objectStoreNames.contains('media')) {
+      const store = db.createObjectStore('media', { keyPath: ['scope', 'path'] });
+      // Listing one card's rows and counting them are both scope queries; the compound
+      // primary key alone would force a scan of every card.
+      store.createIndex('scope', 'scope');
+    }
   },
 });
 
-export async function putMedia(media: CachedMedia): Promise<void> {
-  await (await dbPromise).put('media', media);
+/**
+ * Store one track's tags and picture under a card's scope.
+ *
+ * The scope argument is authoritative: spreading it last means a `CachedMedia` that somehow
+ * carries a `scope` cannot put the row on the wrong card.
+ */
+export async function putMedia(scope: string, media: CachedMedia): Promise<void> {
+  await (await dbPromise).put('media', { ...media, scope });
 }
 
-export async function getMedia(path: string): Promise<CachedMedia | undefined> {
-  return (await dbPromise).get('media', path);
+/** One track's cached media, for the card and path given. */
+export async function getMedia(scope: string, path: string): Promise<CachedMedia | undefined> {
+  return (await dbPromise).get('media', [scope, path]);
 }
 
-export async function allMedia(): Promise<Map<string, CachedMedia>> {
-  const rows = (await (await dbPromise).getAll('media')) as CachedMedia[];
-  return new Map(rows.map((row) => [row.path, row]));
+/**
+ * Every cached row for one card, in path order. This is what the library source joins a
+ * Snapshot's rows against; it never crosses a scope.
+ */
+export async function listMedia(scope: string): Promise<CachedMedia[]> {
+  return (await dbPromise).getAllFromIndex('media', 'scope', scope);
 }
 
-export async function countMedia(): Promise<number> {
-  return (await dbPromise).count('media');
+/** How many tracks this card has cached, for the page's status line. */
+export async function countMedia(scope: string): Promise<number> {
+  return (await dbPromise).countFromIndex('media', 'scope', scope);
 }
 
-export async function clearMedia(): Promise<void> {
-  await (await dbPromise).clear('media');
+/** Forget one card's media; every other card is untouched. */
+export async function clearMedia(scope: string): Promise<void> {
+  const db = await dbPromise;
+  // `[scope]` is a prefix of every `[scope, path]` key, and the empty array sorts above any
+  // string in IndexedDB's key ordering, so this bound covers exactly one scope's rows.
+  await db.delete('media', IDBKeyRange.bound([scope], [scope, []]));
 }

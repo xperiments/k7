@@ -540,7 +540,9 @@ export function assembleImage(assembly: Assembly): Uint8Array<ArrayBuffer> {
   const listsStart = poolStart + poolSize;
   const listRowsStart = listsStart + prepared.length * LIST_SIZE;
 
-  const magic = 'XTAPESNP';
+  /* The magic field is eight bytes (format spec §3): the six-letter name and two NULs.
+   * Written out in full so the device's eight-byte compare sees exactly one value. */
+  const magic = 'K7SNAP\0\0';
   for (let index = 0; index < magic.length; index += 1) {
     view.setUint8(index, magic.charCodeAt(index));
   }

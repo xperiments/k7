@@ -1280,13 +1280,13 @@ static void rpc_tool(int fd, const char *body, const jtok_t *id, const char *tex
 /* --------------------------------------------------------------- lifecycle */
 
 static const char INSTRUCTIONS[] =
-    "The xtape music library on the card. Use library_list and library_search to browse. "
+    "The K7 music library on the card. Use library_list and library_search to browse. "
     "Player tools are available only when control is enabled.";
 
 static void initialize_result(w_t *w, const char *version)
 {
     w_printf(w, "{\"protocolVersion\":\"%s\",\"capabilities\":{\"tools\":{\"listChanged\":false}},"
-                "\"serverInfo\":{\"name\":\"xtape\",\"version\":\"1.0.0\"},"
+                "\"serverInfo\":{\"name\":\"K7\",\"version\":\"1.0.0\"},"
                 "\"instructions\":\"", version);
     w_escaped(w, INSTRUCTIONS);
     w_puts(w, "\"}");
@@ -1321,7 +1321,7 @@ static bool origin_ok(const http_request_t *req)
     char local[32] = {0};
     if (L_local_ip) L_local_ip(local, sizeof local);
 
-    const char *const names[3] = {"xtape.local", "localhost", local};
+    const char *const names[3] = {"k7.local", "localhost", local};
     for (int i = 0; i < 3; i++) {
         const char *name = names[i];
         if (!name[0]) continue;

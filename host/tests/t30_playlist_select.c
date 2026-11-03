@@ -131,7 +131,7 @@ static uint8_t *build_v2(size_t *out_n, const char *name, uint64_t id, const cha
     uint8_t *img = calloc(1, total);
     if (!img) abort();
 
-    memcpy(img, "XTAPESNP", 8);
+    memcpy(img, SNAPSHOT_MAGIC, 8);
     put16(img, 8, 2);
     put16(img, 10, 80);
     put32(img, 12, (uint32_t)total);

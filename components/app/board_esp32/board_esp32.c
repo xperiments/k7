@@ -250,7 +250,19 @@ app_board_card_t app_board_card_mount(const char *expected_music_dir)
     return card;
 }
 
-#define SNAPSHOT_UPDATE_FILE MOUNT_POINT "/xtape.db"
+/* The Update file's name changed with the product (ADR 0062): a card written by an older
+ * app still holds xtape.db. The reader takes the current name first and falls back to the
+ * old one, and reports which it used, because only the file that was actually flashed may
+ * be deleted. `st` is filled for the caller's regular-file check. */
+static const char *snapshot_update_file(struct stat *st)
+{
+    static const char *const names[] = {MOUNT_POINT "/k7.db", MOUNT_POINT "/xtape.db"};
+
+    for (size_t i = 0; i < sizeof names / sizeof names[0]; i++)
+        if (stat(names[i], st) == 0) return names[i];
+    return NULL;
+}
+
 #define SNAPSHOT_UPDATE_PART 0x40
 
 bool app_board_card_present(void)
@@ -272,7 +284,8 @@ void app_board_card_forget(void)
 bool app_board_snapshot_pending(void)
 {
     struct stat st;
-    return stat(SNAPSHOT_UPDATE_FILE, &st) == 0 && S_ISREG(st.st_mode);
+    const char *file = snapshot_update_file(&st);
+    return file && S_ISREG(st.st_mode);
 }
 
 /* ------------------------------------------------------------- snapshot */
@@ -310,7 +323,7 @@ const uint8_t *app_board_snapshot_image(size_t *size, const char **why, int *sta
         if (state) *state = SNAPSHOT_INVALID;
         return NULL;
     }
-    if (memcmp(hdr, SNAPSHOT_MAGIC, 8) != 0) {
+    if (!snapshot_magic_ok(hdr)) {
         if (why) *why = "the snapshot partition holds no image";
         if (state) *state = SNAPSHOT_NO_UPDATE;
         return NULL;
@@ -451,12 +464,13 @@ app_board_update_t app_board_snapshot_update(void)
     FILE *f = NULL;
 
     struct stat st;
-    if (stat(SNAPSHOT_UPDATE_FILE, &st) != 0) {
+    const char *file = snapshot_update_file(&st);
+    if (!file) {
         out = APP_BOARD_UPDATE_NONE;
         goto done;
     }
     if (!S_ISREG(st.st_mode)) {
-        ESP_LOGE(TAG, "snapshot: %s is not a file; left alone", SNAPSHOT_UPDATE_FILE);
+        ESP_LOGE(TAG, "snapshot: %s is not a file; left alone", file);
         goto done;
     }
 
@@ -467,9 +481,9 @@ app_board_update_t app_board_snapshot_update(void)
         goto done;
     }
 
-    f = fopen(SNAPSHOT_UPDATE_FILE, "rb");
+    f = fopen(file, "rb");
     if (!f) {
-        ESP_LOGE(TAG, "snapshot: cannot open %s", SNAPSHOT_UPDATE_FILE);
+        ESP_LOGE(TAG, "snapshot: cannot open %s", file);
         goto done;
     }
 
@@ -484,16 +498,14 @@ app_board_update_t app_board_snapshot_update(void)
     f = NULL;
 
     if (r != SNAPSHOT_OK) {
-        ESP_LOGE(TAG, "snapshot: not applied (%s); %s is left in place", why,
-                 SNAPSHOT_UPDATE_FILE);
+        ESP_LOGE(TAG, "snapshot: not applied (%s); %s is left in place", why, file);
         goto done;
     }
     /* Only now: the card holds the master copy until the flash has agreed. */
-    if (remove(SNAPSHOT_UPDATE_FILE) == 0)
+    if (remove(file) == 0)
         ESP_LOGI(TAG, "snapshot: flashed and verified; the update file is deleted");
     else
-        ESP_LOGW(TAG, "snapshot: flashed and verified, but %s could not be deleted",
-                 SNAPSHOT_UPDATE_FILE);
+        ESP_LOGW(TAG, "snapshot: flashed and verified, but %s could not be deleted", file);
     out = APP_BOARD_UPDATE_APPLIED;
 
 done:

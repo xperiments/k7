@@ -70,8 +70,8 @@ export async function loadWeightBytes(weight: Weight): Promise<Uint8Array> {
 
   let response: Response;
   try {
-    // The service worker may serve this from Cache Storage. Fetching `no-store` keeps a
-    // stale HTTP cache from bypassing the hash check.
+    // One offline store, and it is the one above: the worker caches the shell and nothing
+    // else (O2). Fetching `no-store` keeps a stale HTTP cache from bypassing the hash check.
     response = await fetch(url, { cache: 'no-store' });
   } catch {
     throw new WeightUnavailableError(weight);

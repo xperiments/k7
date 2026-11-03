@@ -10,3 +10,6 @@ public/weights/
 # npm cache workaround for a non-writable ~/.npm
 .npm-cache/
 *.ses
+
+# The mkcert pair for the development origin (k7-deploy.md §4).
+.certs/

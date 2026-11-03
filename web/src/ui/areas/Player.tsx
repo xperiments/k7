@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { libraryStats, statsCoverage, trackAt, type McpStats, type McpTrack } from '../../device/mcp';
 import type { DeviceStatus } from '../../device/status';
 import { useDeviceStatus } from '../../device/useDeviceStatus';
+import { currentCardScope } from '../../card/session';
 import { getMedia, type CachedMedia } from '../../storage/media';
 import { formatDuration, plural } from '../format';
 import { Cover } from './Media';
@@ -95,7 +96,7 @@ export function PlayerArea() {
     let cancelled = false;
     setCached(null);
     setMeasured(null);
-    void getMedia(path)
+    void getMedia(currentCardScope(), path)
       .then((row) => {
         if (!cancelled) setCached(row ?? null);
       })

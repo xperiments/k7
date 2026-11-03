@@ -239,13 +239,13 @@ def main():
     check("and still names the protocol", hdrs.get("mcp-protocol-version"), "2025-11-25")
 
     # Origin is checked only when present and pinned to the device address or
-    # xtape.local, not merely echoed from Host.
+    # k7.local, not merely echoed from Host.
     base = f"{HOST}:{PORT}"
     status, _hdrs, doc = call(initialize(), {"Host": base, "Origin": f"http://{base}"})
     check("Origin pinned to the local IP is accepted", status, 200)
-    status, _hdrs, doc = call(initialize(), {"Host": f"xtape.local:{PORT}",
-                                            "Origin": f"http://xtape.local:{PORT}"})
-    check("Origin pinned to xtape.local is accepted", status, 200)
+    status, _hdrs, doc = call(initialize(), {"Host": f"k7.local:{PORT}",
+                                            "Origin": f"http://k7.local:{PORT}"})
+    check("Origin pinned to k7.local is accepted", status, 200)
     status, _hdrs, doc = call(initialize(), {"Host": "evil.example:9999",
                                             "Origin": "http://evil.example:9999"})
     check("a rebinding authority is 403", status, 403)

@@ -1,21 +1,23 @@
 /*
  * The app's service worker, written by hand rather than generated.
  *
- * The two placeholders below are substituted by the build with the app version and the
- * sha256 of weights.lock.json. That makes the weights cache name change whenever the
- * manifest changes, so a model swapped at the same URL is a miss, not a stale hit.
+ * `__APP_VERSION__` is substituted by the build with the package version, so a release
+ * opens a new shell cache instead of mixing chunks across versions.
  *
- * It deliberately does not call skipWaiting(): a new worker waits for a reload instead of
- * replacing the page under a running analysis.
+ * The weights are deliberately absent. They live content-addressed in IndexedDB, keyed by
+ * URL and sha256 and re-verified on every read (`src/weights/loader.ts`), and the App
+ * prefetches them. One offline store for a weight, not two: a model that changes costs one
+ * file rather than the whole set, and a failed download never leaves the App with no
+ * worker at all.
+ *
+ * It deliberately does not call skipWaiting() on install: a new worker waits for a reload
+ * instead of replacing the page under a running analysis. When the user accepts the update
+ * banner the page posts SKIP_WAITING, which is the only thing that activates it early.
  */
 const APP_VERSION = '__APP_VERSION__';
-const MANIFEST_HASH = '__WEIGHTS_MANIFEST_HASH__';
 
 const SHELL_CACHE = `xtape-shell-${APP_VERSION}`;
-const WEIGHTS_CACHE = `xtape-weights-${APP_VERSION}-${MANIFEST_HASH}`;
 const SHELL_PREFIX = 'xtape-shell-';
-const WEIGHTS_PREFIX = 'xtape-weights-';
-const CDN_HOST = 'cdn.jsdelivr.net';
 
 function isShellAsset(pathname) {
   return (
@@ -60,14 +62,16 @@ self.addEventListener('activate', (event) => {
       const keys = await caches.keys();
       await Promise.all(
         keys.map((key) => {
-          const ours = key.startsWith(SHELL_PREFIX) || key.startsWith(WEIGHTS_PREFIX);
-          if (!ours) return undefined;
-          if (key === SHELL_CACHE || key === WEIGHTS_CACHE) return undefined;
+          if (!key.startsWith(SHELL_PREFIX) || key === SHELL_CACHE) return undefined;
           return caches.delete(key);
         }),
       );
     })(),
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 async function shellNavigation(request) {
@@ -91,15 +95,6 @@ async function shellAssetFirst(request) {
   return response;
 }
 
-async function weightFirst(request) {
-  const cache = await caches.open(WEIGHTS_CACHE);
-  const cached = await cache.match(request);
-  if (cached) return cached;
-  const response = await fetch(request);
-  if (response.ok) await cache.put(request, response.clone());
-  return response;
-}
-
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -109,11 +104,8 @@ self.addEventListener('fetch', (event) => {
   // `/api/*` is never cached and never intercepted: the status poll must reach the device.
   if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
 
-  if (url.hostname === CDN_HOST) {
-    event.respondWith(weightFirst(request));
-    return;
-  }
-
+  // A cross-origin request is not ours: the weights come from the CDN and are stored by
+  // the App in IndexedDB, never here.
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {

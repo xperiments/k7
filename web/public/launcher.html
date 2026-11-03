@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; media-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'"
+    />
+    <title>K7</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0e0f11;
+        --panel: #17191d;
+        --line: #26292f;
+        --text: #eceef1;
+        --muted: #9aa1ab;
+        --accent: #f0b429;
+        --warn: #f07429;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+      main {
+        max-width: 30rem;
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 3rem;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 0.6rem;
+        margin-bottom: 1.5rem;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.45rem;
+        letter-spacing: 0.14em;
+        color: var(--accent);
+      }
+      .sub,
+      .note,
+      .hint,
+      .lead {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin: 0;
+      }
+      .lead {
+        color: var(--text);
+        margin-bottom: 1rem;
+      }
+      .note {
+        margin-top: 0.9rem;
+      }
+      #origin-note {
+        border-left: 2px solid var(--warn);
+        padding-left: 0.7rem;
+        margin-bottom: 1rem;
+        color: var(--warn);
+        font-size: 0.85rem;
+      }
+      .facts {
+        margin: 0 0 1.4rem;
+        border: 1px solid var(--line);
+        border-radius: 0.6rem;
+        overflow: hidden;
+      }
+      .facts div {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.6rem 0.85rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .facts div:last-child {
+        border-bottom: 0;
+      }
+      .facts dt {
+        color: var(--muted);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .facts dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      button,
+      .button {
+        appearance: none;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        font: inherit;
+        font-size: 0.9rem;
+        padding: 0.5rem 0.9rem;
+        border-radius: 0.45rem;
+        cursor: pointer;
+        text-decoration: none;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+      button:hover,
+      .button:hover {
+        border-color: var(--accent);
+      }
+      .primary {
+        border-color: var(--accent);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .volume {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .volume input {
+        accent-color: var(--accent);
+        width: 7rem;
+      }
+      audio {
+        display: none;
+      }
+      .hint {
+        margin-top: 0.8rem;
+        min-height: 1.2rem;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="k7">
+      <header>
+        <h1>K7</h1>
+        <p class="sub">the player on this network</p>
+      </header>
+
+      <section id="gateway">
+        <p id="origin-note" hidden></p>
+        <dl class="facts">
+          <div><dt>Card</dt><dd id="st-card">—</dd></div>
+          <div><dt>Tracks</dt><dd id="st-tracks">—</dd></div>
+          <div><dt>Playing</dt><dd id="st-playing">—</dd></div>
+          <div><dt>Order</dt><dd id="st-order">—</dd></div>
+        </dl>
+        <div class="row">
+          <button id="launch" type="button" class="primary">Launch K7</button>
+          <a class="button" href="/library">Library</a>
+          <a class="button" href="/stream">Stream</a>
+        </div>
+        <p id="gateway-hint" class="hint" role="status"></p>
+      </section>
+
+      <section id="bridge" hidden>
+        <p class="lead">The app is driving this window.</p>
+        <audio id="stream-audio" src="/stream" preload="none"></audio>
+        <div class="row">
+          <button id="play" type="button" class="primary">Play</button>
+          <button id="pause" type="button">Pause</button>
+          <label class="volume">Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="1" /></label>
+        </div>
+        <p id="bridge-status" class="note">—</p>
+        <p class="note">Keep this window open. It carries the audio and answers the app.</p>
+        <p id="bridge-hint" class="hint" role="status"></p>
+      </section>
+    </main>
+    <script src="/launcher-origins.js"></script>
+    <script type="module" src="/launcher.js"></script>
+  </body>
+</html>

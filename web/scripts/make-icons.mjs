@@ -1,5 +1,5 @@
 /**
- * The two PWA icons, drawn here so the repository does not carry a drawing dependency.
+ * The PWA icons, drawn here so the repository does not carry a drawing dependency.
  * Everything is rasterised at 4x and box-filtered, which is enough to keep the circles
  * from looking stepped at 192px.
  */
@@ -40,7 +40,21 @@ function sample(x, y) {
   return BACKGROUND;
 }
 
-function raster(size) {
+/**
+ * A launcher may crop a maskable icon to any shape inside the safe circle, which is 80% of
+ * the canvas, so the artwork has to sit inside it. The cassette's bounding box is 0.8 x 0.64
+ * of the canvas, putting its corners 0.512 from the centre; 0.75 brings that to 0.384,
+ * inside the 0.4 radius, and what the shrink leaves around it is background (A9).
+ */
+const MASKABLE_SHRINK = 0.75;
+
+/** One canvas point. `shrink` pulls the artwork towards the centre, background outside. */
+function colourAt(x, y, shrink) {
+  if (shrink === 1) return sample(x, y);
+  return sample((x - 0.5) / shrink + 0.5, (y - 0.5) / shrink + 0.5);
+}
+
+function raster(size, shrink) {
   const scale = 4;
   const rgba = Buffer.alloc(size * size * 4);
   for (let y = 0; y < size; y++) {
@@ -50,7 +64,11 @@ function raster(size) {
       let b = 0;
       for (let sy = 0; sy < scale; sy++) {
         for (let sx = 0; sx < scale; sx++) {
-          const colour = sample((x + (sx + 0.5) / scale) / size, (y + (sy + 0.5) / scale) / size);
+          const colour = colourAt(
+            (x + (sx + 0.5) / scale) / size,
+            (y + (sy + 0.5) / scale) / size,
+            shrink,
+          );
           r += colour[0];
           g += colour[1];
           b += colour[2];
@@ -91,8 +109,8 @@ function chunk(type, data) {
   return Buffer.concat([length, body, crc]);
 }
 
-function png(size) {
-  const pixels = raster(size);
+function png(size, shrink) {
+  const pixels = raster(size, shrink);
   const raw = Buffer.alloc((size * 4 + 1) * size);
   for (let y = 0; y < size; y++) {
     raw[y * (size * 4 + 1)] = 0; // filter: none
@@ -116,8 +134,16 @@ function png(size) {
   ]);
 }
 
+const ICONS = [
+  { name: 'icon-192.png', size: 192, shrink: 1 },
+  { name: 'icon-512.png', size: 512, shrink: 1 },
+  // The same drawing, shrunk: an Android launcher crops the maskable one, and the cassette
+  // must survive the crop.
+  { name: 'icon-512-maskable.png', size: 512, shrink: MASKABLE_SHRINK },
+];
+
 await mkdir(out, { recursive: true });
-for (const size of [192, 512]) {
-  await writeFile(join(out, `icon-${size}.png`), png(size));
-  console.log(`icons: ${size}x${size}`);
+for (const { name, size, shrink } of ICONS) {
+  await writeFile(join(out, name), png(size, shrink));
+  console.log(`icons: ${name}`);
 }

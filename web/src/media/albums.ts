@@ -22,9 +22,10 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { currentCardScope } from '../card/session';
 import { listLibrary } from '../device/mcp';
 import { useDeviceStatus } from '../device/useDeviceStatus';
-import { allMedia, type CachedCover, type CachedMedia } from '../storage/media';
+import { listMedia, type CachedCover, type CachedMedia } from '../storage/media';
 
 export const UNKNOWN_ARTIST = 'Unknown artist';
 export const UNKNOWN_ALBUM = 'Unknown album';
@@ -210,9 +211,9 @@ export function useMediaIndex(): MediaIndexState {
 
   useEffect(() => {
     let cancelled = false;
-    allMedia()
+    listMedia(currentCardScope())
       .then((rows) => {
-        if (!cancelled) setCache(rows);
+        if (!cancelled) setCache(new Map(rows.map((row) => [row.path, row] as const)));
       })
       .catch(() => {
         // A store that cannot be read is an empty library, not an error page.

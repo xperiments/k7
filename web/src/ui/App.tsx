@@ -15,6 +15,9 @@ import { VideoArea } from './areas/Video';
 import { navigate, useRoute } from './router';
 import { NotFound, Shell } from './Shell';
 import { AnalysisProvider } from './state/analysis';
+import { OfflineNotice } from './OfflineNotice';
+import { UpdateBanner } from './UpdateBanner';
+import { prepareOffline } from './prefetchStore';
 
 /**
  * The front door: one shell, four areas, and the routes between them (ADR 0052).
@@ -31,6 +34,13 @@ export function App() {
 
   useEffect(() => {
     void loadDrafts();
+  }, []);
+
+  /* O4: the 41 MB is downloaded for people who installed the app, and for nobody else. */
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    if (!window.matchMedia('(display-mode: standalone)').matches) return;
+    void prepareOffline();
   }, []);
 
   useEffect(() => {
@@ -64,6 +74,8 @@ export function App() {
         {route.name === 'settings' && <SettingsArea />}
         {route.name === 'not-found' && <NotFound path={route.path} />}
       </Shell>
+      <UpdateBanner />
+      <OfflineNotice />
     </AnalysisProvider>
   );
 }

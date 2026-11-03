@@ -75,11 +75,16 @@ static bool path_is_safe(const char *path)
     return true;
 }
 
-/* `/` is the page; everything else is a file with a real name. The app is one screen
- * with no client-side routes, so an unknown path is a 404 rather than index.html. */
+/* `/` is the Launcher and `/app` is the Device copy: two documents behind two clean
+ * addresses, so they are the only names that are not themselves a file. Everything else
+ * is a file with a real name. The app is one screen with no client-side routes, so an
+ * unknown path is a 404 rather than index.html. */
 static const char *logical_for(const char *request_path)
 {
-    return strcmp(request_path, "/") == 0 ? "/index.html" : request_path;
+    if (strcmp(request_path, "/") == 0) return "/index.html";
+    if (strcmp(request_path, "/app") == 0 || strcmp(request_path, "/app/") == 0)
+        return "/app.html";
+    return request_path;
 }
 
 /* The Shell is packed pre-compressed: the build stores `assets/index-abc.js` as gzip and

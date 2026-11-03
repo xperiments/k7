@@ -27,6 +27,15 @@ static uint64_t rd64(const uint8_t *p)
     return v;
 }
 
+/* ADR 0062: the app writes K7SNAP now, but a card or a partition written before the
+ * rename still says XTAPESNP. Which name it is changes only the eight bytes compared
+ * here; every check after them stays exactly as strict. */
+bool snapshot_magic_ok(const uint8_t *magic)
+{
+    return memcmp(magic, SNAPSHOT_MAGIC, 8) == 0 ||
+           memcmp(magic, SNAPSHOT_MAGIC_LEGACY, 8) == 0;
+}
+
 static uint32_t crc_table[256];
 static bool     crc_ready;
 
@@ -197,7 +206,7 @@ static bool header_check(const uint8_t *hdr, uint32_t hdr_len, uint32_t size,
 {
     if (size < SNAPSHOT_HEADER_SIZE) return bad(why, why_size, "image shorter than its header");
     if (hdr_len < SNAPSHOT_HEADER_SIZE) return bad(why, why_size, "header is unreadable");
-    if (memcmp(hdr, SNAPSHOT_MAGIC, 8) != 0) return bad(why, why_size, "not a snapshot");
+    if (!snapshot_magic_ok(hdr)) return bad(why, why_size, "not a snapshot");
 
     uint16_t version = rd16(hdr + 8);
     if (version != SNAPSHOT_VERSION_1 && version != SNAPSHOT_VERSION_2)

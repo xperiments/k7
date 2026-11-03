@@ -1,6 +1,5 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { copyFile, mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { basename, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -14,10 +13,15 @@ const packageVersion = (
   JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { version: string }
 ).version;
 
-const isolationHeaders = {
-  'Cross-Origin-Opener-Policy': 'same-origin',
-  'Cross-Origin-Embedder-Policy': 'require-corp',
-};
+/**
+ * No `COOP`, deliberately (ADR 0058).
+ *
+ * `Cross-Origin-Opener-Policy: same-origin` would make this document cross-origin
+ * isolated and sever `window.opener` in the same move — and `window.opener` is the
+ * bridge to the Launcher. Without isolation there is no `SharedArrayBuffer` to protect,
+ * so `COEP: require-corp` has nothing to buy and would only refuse the CDN's weights.
+ * The Playwright test in `docs/specs/bridge-protocol.md` §T2 guards this.
+ */
 
 /**
  * Extensions worth compressing: all of them are text, and text shrinks about three to
@@ -60,7 +64,9 @@ async function precompress(dir: string): Promise<{ raw: number; packed: number }
   let raw = 0;
   let packed = 0;
   for (const file of await collectFiles(dir)) {
-    if (basename(file) === 'index.html') continue;
+    /* `index.html` is the Launcher and `app.html` is the App's entry: both are looked up
+     * by name by the firmware and both are under a kilobyte, so neither is worth packing. */
+    if (basename(file) === 'index.html' || basename(file) === 'app.html') continue;
     if (!COMPRESSIBLE.has(extname(file))) continue;
     const bytes = await readFile(file);
     const gz = gzipSync(bytes, { level: 9 });
@@ -111,30 +117,52 @@ function shellOutputs(shell: boolean): Plugin {
           resolve(root, 'public/manifest.webmanifest'),
           resolve(outDir, 'manifest.webmanifest'),
         );
-        for (const icon of ['icon-192.png', 'icon-512.png']) {
-          await copyFile(
-            resolve(root, 'public/icons', icon),
-            resolve(outDir, 'icons', icon),
-          );
+        /* Every icon the directory holds: the maskable 512 is a manifest requirement, and
+         * a hand-written list here is how it silently goes missing from the image. */
+        for (const icon of await readdir(resolve(root, 'public/icons'))) {
+          if (!icon.endsWith('.png')) continue;
+          await copyFile(resolve(root, 'public/icons', icon), resolve(outDir, 'icons', icon));
         }
         await copyFile(
           resolve(root, 'public/ort/ort-wasm-simd-threaded.mjs'),
           resolve(outDir, 'ort/ort-wasm-simd-threaded.mjs'),
         );
+
+        /* One page at `/`, and it is the Launcher. The App's own entry moves aside to
+         * `/app.html`, which `front_door`'s `logical_for` maps from `/app`; doing it here
+         * rather than in the packer keeps the image a plain copy of the build. */
+        await rename(resolve(outDir, 'index.html'), resolve(outDir, 'app.html'));
+
+        const launcher = await readFile(resolve(root, 'public/launcher.html'), 'utf8').catch(() => {
+          throw new Error('the shell build needs web/public/launcher.html');
+        });
+        await writeFile(resolve(outDir, 'index.html'), launcher);
+        await copyFile(resolve(root, 'public/launcher.js'), resolve(outDir, 'launcher.js'));
+
+        /* The Launcher's allowlist is compiled in (L1, X2). A development Shell is a Shell
+         * that was told to trust a development origin; the same build refused without one. */
+        const origins = (process.env.K7_APP_ORIGINS ?? 'https://k7.xperiments.dev')
+          .split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean);
+        if (origins.length === 0) throw new Error('K7_APP_ORIGINS has no origin in it');
+        await writeFile(
+          resolve(outDir, 'launcher-origins.js'),
+          `window.K7_APP_ORIGINS = ${JSON.stringify(origins)};\n`,
+        );
       }
 
-      const lock = await readFile(resolve(root, 'weights.lock.json'));
+      /* The lock is copied so the page can enumerate what it needs; the worker no longer
+       * keys a weights cache on it, because the weights have one offline store and it is
+       * IndexedDB (O2). */
       await copyFile(resolve(root, 'weights.lock.json'), resolve(outDir, 'weights.lock.json'));
-      const manifestHash = createHash('sha256').update(lock).digest('hex');
 
       // sw.js is a template: its cache names have to be exact in the output, so the values
       // are written here rather than fetched and guessed at install time.
       const sw = await readFile(resolve(root, 'public/sw.js'), 'utf8');
       await writeFile(
         resolve(outDir, 'sw.js'),
-        sw
-          .replaceAll('__APP_VERSION__', packageVersion)
-          .replaceAll('__WEIGHTS_MANIFEST_HASH__', manifestHash),
+        sw.replaceAll('__APP_VERSION__', packageVersion),
       );
 
       // The worker precaches this list at install. It is generated from the files that
@@ -142,10 +170,13 @@ function shellOutputs(shell: boolean): Plugin {
       // by the install rather than by an offline reload.
       const assets = Array.from(
         new Set([
-          '/index.html',
+          /* On the device `/` is the Launcher and the App is `/app.html`; on the hosted
+           * origin it is the other way round. `shell.json` names whichever this build made. */
+          ...(shell ? ['/app.html', '/launcher.js', '/launcher-origins.js'] : ['/index.html']),
           '/manifest.webmanifest',
           '/icons/icon-192.png',
           '/icons/icon-512.png',
+          '/icons/icon-512-maskable.png',
           '/weights.lock.json',
           ...(shell ? ['/ort/ort-wasm-simd-threaded.mjs'] : []),
           ...emitted.map((file) => `/${file}`),
@@ -153,7 +184,7 @@ function shellOutputs(shell: boolean): Plugin {
       );
       await writeFile(
         resolve(outDir, 'shell.json'),
-        `${JSON.stringify({ version: packageVersion, manifestHash, assets }, null, 2)}\n`,
+        `${JSON.stringify({ version: packageVersion, assets }, null, 2)}\n`,
       );
 
       if (shell) {
@@ -184,8 +215,6 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: shell ? 'dist-shell' : 'dist',
     },
-    server: { headers: isolationHeaders },
-    preview: { headers: isolationHeaders },
     worker: { format: 'es' },
     test: {
       environment: 'node',

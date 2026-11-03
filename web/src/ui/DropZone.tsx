@@ -18,7 +18,16 @@ import {
   type CardDirectoryHandle,
   type FoundFile,
 } from './files';
-import { cardPicker, pickCardDirectory, type SnapshotDirectory } from './cardWriter';
+import {
+  cardPicker,
+  identifyCard,
+  pickCardDirectory,
+  type CardDirectory,
+  type SnapshotDirectory,
+} from './cardWriter';
+import { cardFingerprint } from '../card/fingerprint';
+import { fingerprintScope } from '../card/mark';
+import { setCardScope, UNSCOPED } from '../card/session';
 
 interface DropZoneProps {
   disabled: boolean;
@@ -41,6 +50,16 @@ interface DropZoneProps {
  * The intake is also the empty state of the queue below it, which is why it carries the
  * one action ("Choose card") and the queue adds no second empty of its own.
  */
+function fingerprintOf(files: readonly FoundFile[]): Promise<string> {
+  return cardFingerprint(
+    files.map((found) => ({
+      path: found.path,
+      size: found.file.size,
+      mtime: found.file.lastModified,
+    })),
+  );
+}
+
 export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZoneProps) {
   const [over, setOver] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -67,6 +86,12 @@ export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZone
     setScanning(true);
     try {
       const result = await scanDirectoryHandle(picked.directory as unknown as CardDirectoryHandle);
+      // Identify the card before the run: the scope has to exist before the first cover is
+      // written, and a mark this App did not write is never overwritten (card-mark.md §4).
+      const marked = await identifyCard(picked.directory as unknown as CardDirectory);
+      setCardScope(
+        marked !== UNSCOPED ? marked : fingerprintScope(await fingerprintOf(result.files)),
+      );
       onCard(result.files, result.skipped, picked.directory);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
@@ -81,6 +106,7 @@ export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZone
     setError(null);
     try {
       const result = await scanDataTransfer(data);
+      setCardScope(fingerprintScope(await fingerprintOf(result.files)));
       onFiles(result.files, result.skipped);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));

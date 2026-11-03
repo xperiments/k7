@@ -280,7 +280,7 @@ void appliance_run(void)
 
     /* Discovery is advertised only after the listener is up and Wi-Fi has an
      * address: a record for a dead endpoint is worse than no record. */
-    esp_err_t mdns_err = app_board_mdns_start("xtape", HTTP_PORT, "/mcp");
+    esp_err_t mdns_err = app_board_mdns_start("k7", HTTP_PORT, "/mcp");
     if (mdns_err != ESP_OK)
         ESP_LOGE(TAG, "mDNS did not start: %s; the device still serves", esp_err_to_name(mdns_err));
 

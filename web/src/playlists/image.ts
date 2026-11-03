@@ -14,7 +14,9 @@ import type { SnapshotPlaylist } from '../domain/snapshot';
  * whose lists are replaced loses its old list strings rather than accumulating them.
  */
 
-const MAGIC = 'XTAPESNP';
+/* The header's magic: eight bytes, so `K7SNAP` is followed by two NULs. The whole field is
+ * compared, never a trimmed string, so only a real Snapshot passes. */
+const MAGIC = 'K7SNAP\0\0';
 const HEADER_V1 = 64;
 const HEADER_V2 = 80;
 const ROW_SIZE = 32;

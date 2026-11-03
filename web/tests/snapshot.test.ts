@@ -163,7 +163,7 @@ describe('snapshot image', () => {
     const image = buildSnapshot(canonicalInput());
     const view = viewOf(image);
 
-    expect(decoder.decode(image.subarray(0, 8))).toBe('XTAPESNP');
+    expect(decoder.decode(image.subarray(0, 8))).toBe('K7SNAP\0\0');
     expect(view.getUint16(8, true)).toBe(1);
     expect(view.getUint16(10, true)).toBe(64);
     expect(image.byteLength).toBe(124);
@@ -445,7 +445,7 @@ describe('snapshot images with Playlists', () => {
     const image = buildSnapshot(input, lists);
     const view = viewOf(image);
 
-    expect(decoder.decode(image.subarray(0, 8))).toBe('XTAPESNP');
+    expect(decoder.decode(image.subarray(0, 8))).toBe('K7SNAP\0\0');
     expect(view.getUint16(8, true)).toBe(2);
     expect(view.getUint16(10, true)).toBe(80);
     expect(image.byteLength).toBe(249);

@@ -57,6 +57,7 @@ describe('giving an image new Playlists', () => {
     const v2 = patchListArea(v1, [list]);
 
     expect(v2.length).toBeGreaterThan(v1.length);
+    expect(new TextDecoder().decode(v2.subarray(0, 8))).toBe('K7SNAP\0\0');
     expect(new DataView(v2.buffer).getUint16(8, true)).toBe(2);
     expect(new DataView(v2.buffer).getUint16(10, true)).toBe(80);
     expect(u32(v2, 12)).toBe(v2.length);
