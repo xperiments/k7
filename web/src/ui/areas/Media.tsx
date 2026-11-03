@@ -84,7 +84,7 @@ export function AlbumCard({ album }: { album: Album }) {
         href={routeHref({ name: 'album', album: album.album })}
         className="flex flex-col gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
-        <Cover cover={album.cover} initial={album.album} />
+        <Cover cover={album.cover} initial={album.album} className="aspect-[16/25]" />
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-sm font-medium">{album.album}</span>
           <span className="truncate text-xs text-muted-foreground">
@@ -101,10 +101,18 @@ export function AlbumCard({ album }: { album: Album }) {
   );
 }
 
-/** The grid an album list uses, so Media and an artist's page agree on the shape. */
+/**
+ * The grid an album list uses, so Media and an artist's page agree on the shape.
+ *
+ * A cassette stands on its short end: 100 mm of tape, 64 mm tall, so a cover is **16:25** —
+ * taller than wide, the way a case sits in a shelf. The grid is denser than a square grid of
+ * the same page because each tile is narrower than it is tall.
+ */
+export const ALBUM_GRID = 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6';
+
 export function AlbumGrid({ albums }: { albums: Album[] }) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+    <div className={ALBUM_GRID}>
       {albums.map((album) => (
         <AlbumCard key={album.album} album={album} />
       ))}
@@ -266,9 +274,9 @@ export function MediaArea() {
       </div>
 
       {state.loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-          {Array.from({ length: 8 }, (_, index) => (
-            <Skeleton key={index} className="h-48 w-full" />
+        <div className={ALBUM_GRID}>
+          {Array.from({ length: 12 }, (_, index) => (
+            <Skeleton key={index} className="aspect-[16/25] w-full" />
           ))}
         </div>
       ) : !hasAlbums ? (

@@ -291,6 +291,10 @@ The Queue, measured, written to the card by the run itself.
   (`readImageMeasurements`), keyed as the player keys them: the path's fingerprint and the
   file's size. With no card in the player the page does not ask at all, and an album answered
   entirely from the image says so once rather than per row.
+- Album tiles are **cassette-shaped**: a case stands on its short end — 100 mm of tape, 64 mm
+  tall — so a cover is `16:25`, taller than wide, and the grid is denser than a square one
+  (`ALBUM_GRID`) because each tile is narrower than it is tall. Art is cropped to fill, never
+  letterboxed.
 - One album is **two columns**: the album itself on the left — cover, title, the artist as a
   link, tracks and genre — and what one does with it on the right, the track list with BPM, key
   and energy and the way to add a row to a Draft. Below `lg` they stack, cover first. A

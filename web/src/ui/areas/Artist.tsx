@@ -5,7 +5,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '
 import { Skeleton } from '@/components/ui/skeleton';
 import { albumsOf, UNKNOWN_ARTIST, useMediaIndex } from '../../media/albums';
 import { plural } from '../format';
-import { AlbumGrid } from './Media';
+import { ALBUM_GRID, AlbumGrid } from './Media';
 import { navigate, routeHref } from '../router';
 
 /**
@@ -22,9 +22,9 @@ export function ArtistArea({ artist }: { artist: string }) {
     return (
       <div className="flex flex-col gap-4 p-4 sm:p-6">
         <Skeleton className="h-8 w-40" />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-          {Array.from({ length: 4 }, (_, index) => (
-            <Skeleton key={index} className="h-48 w-full" />
+        <div className={ALBUM_GRID}>
+          {Array.from({ length: 6 }, (_, index) => (
+            <Skeleton key={index} className="aspect-[16/25] w-full" />
           ))}
         </div>
       </div>
