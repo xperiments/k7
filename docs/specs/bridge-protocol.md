@@ -31,8 +31,11 @@ Image is byte-defined in [`snapshot-format.md`](./snapshot-format.md).
 | `k7-app` | the App at its HTTPS origin | client: sends every request |
 | `k7-bridge` | the Launcher at `http://k7.local/` | agent: executes every request |
 
-**W1. Either side may open the other.** A Launcher loading with no trusted opener shows its
-gateway page and opens the App on a click. An App with no link offers **Connect**, which
+**W1. Either side may open the other.** `http://k7.local/` is a doorbell: it redirects to the
+App, because the App connects to the device directly where the browser permits it. The
+Launcher's own page — and the bridge's agent — is `/bridge`, which the App opens when it needs
+a window. A Launcher at `/bridge` with no trusted opener shows its gateway page and can open
+the App on a click. An App with no link offers **Connect**, which
 opens the Launcher in the window named `k7-bridge`; the Launcher sees a trusted opener and
 enters bridge mode instead of showing its Launch button. This is what lets an installed PWA
 connect: it has no opener, ever, but it can open one.

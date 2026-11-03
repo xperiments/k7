@@ -84,6 +84,10 @@ static const char *logical_for(const char *request_path)
     if (strcmp(request_path, "/") == 0) return "/index.html";
     if (strcmp(request_path, "/app") == 0 || strcmp(request_path, "/app/") == 0)
         return "/app.html";
+    /* `/` is a redirect to the App now; the Launcher's own page — and the bridge window —
+     * is here. Both paths are the same image entry. */
+    if (strcmp(request_path, "/bridge") == 0 || strcmp(request_path, "/bridge/") == 0)
+        return "/index.html";
     return request_path;
 }
 

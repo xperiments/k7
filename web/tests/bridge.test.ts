@@ -418,7 +418,7 @@ describe('connect', () => {
 
     await device.connect();
 
-    expect(win.opened).toEqual([{ url: `${DEVICE_ORIGIN}/`, target: 'k7-bridge' }]);
+    expect(win.opened).toEqual([{ url: `${DEVICE_ORIGIN}/bridge`, target: 'k7-bridge' }]);
     expect(parseMessage(target.posts[0]?.message)).toEqual(hello('app', APP));
     expect(target.posts[0]?.targetOrigin).toBe(DEVICE_ORIGIN);
 

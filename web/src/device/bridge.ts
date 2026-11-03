@@ -361,7 +361,7 @@ export function createBridgeDevice(options: BridgeOptions): BridgeDevice {
   }
 
   async function connect(): Promise<void> {
-    const openedWindow = win.open(`${DEVICE_ORIGIN}/`, DEVICE_WINDOW);
+    const openedWindow = win.open(`${DEVICE_ORIGIN}/bridge`, DEVICE_WINDOW);
     if (openedWindow === null || openedWindow === undefined) {
       throw new DeviceError(
         'the browser blocked the bridge window. Allow popups for this site, then press Connect.',

@@ -958,6 +958,16 @@ function mountLauncherPage() {
     volumeInput.value = String(audioEl.volume);
   });
 
+  /* `/` is a doorbell, not a page: the App lives at its own origin and connects to this
+   * device directly, so the only useful thing the device's address can do is send you there.
+   * The Launcher itself lives on at `/bridge`, where the App opens it when a browser cannot
+   * do the direct path — that window is the fallback, and this one would be a detour. */
+  const path = typeof window === 'undefined' ? '/' : window.location.pathname;
+  if (path === '/' || path === '/index.html') {
+    if (typeof window !== 'undefined') window.location.replace(`${APP_ORIGINS[0]}/#/player`);
+    return;
+  }
+
   const bridge = createLauncherBridge({
     win: window,
     fetch: (url, init) => window.fetch(url, init),

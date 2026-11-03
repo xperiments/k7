@@ -15,8 +15,10 @@ does what the App asks it to. The device is a different context — see
 either.
 
 **Launcher**:
-The page the player serves at its only address, on plain HTTP. It shows the device's state,
-carries the stream's audio, and executes the App's requests. It holds no analysis and no library.
+The page the player serves on plain HTTP. At its root it only sends the browser to the App —
+the player's address is a doorbell. At `/bridge` it is the window that executes the App's
+requests and carries the stream's audio, for a browser that cannot reach the device directly.
+It holds no analysis and no library.
 _Avoid_: front door, device UI, landing page, dashboard
 
 **App**:
