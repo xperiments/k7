@@ -335,9 +335,9 @@ export function Shell({ route, children }: { route: Route; children: React.React
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
-          <p className="px-2 pb-1 text-xs text-sidebar-foreground/60">
+          {/* <p className="px-2 pb-1 text-xs text-sidebar-foreground/60">
             Models CC BY-NC 4.0 · AGPL-3.0
-          </p>
+          </p> */}
         </SidebarFooter>
       </Sidebar>
 
