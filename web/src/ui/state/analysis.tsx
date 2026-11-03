@@ -34,6 +34,7 @@ function askPersistenceOnce(): void {
 import { cacheKey } from '../../config';
 import { isWeightError } from '../../weights/errors';
 import { writeSnapshotToCard, type SnapshotDirectory } from '../cardWriter';
+import { readCardWithPicker, readOpenCard } from '../intake';
 import type { FoundFile } from '../files';
 import { plural } from '../format';
 import type { QueueItem } from '../queue';
@@ -93,6 +94,10 @@ export interface AnalysisApi {
 
   addFound: (found: FoundFile[], skipped: number, readOnly?: boolean) => void;
   addCard: (found: FoundFile[], skipped: number, handle: SnapshotDirectory) => void;
+  /** Walk the card this page holds open again; its files replace the queue. */
+  rescanCard: () => Promise<void>;
+  /** Open a different card; its files replace the queue and the Scope follows. */
+  changeCard: () => Promise<void>;
   /** The card was opened read-write in this session, so it can be written back to. */
   hasCardHandle: boolean;
 
@@ -377,7 +382,15 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     }
   }, [items, modelSet, processItem, clients]);
 
-  const addFound = useCallback((found: FoundFile[], skipped: number, readOnly = false) => {
+  /**
+   * Take a card's files into the queue.
+   *
+   * `replace` is what a re-read of the same card means: the queue *is* that card, so its
+   * rows are the card's rows. Measuring again is cheap — everything the browser already has
+   * is recognised from the card's own record — and appending would double every row.
+   */
+  const acceptIntake = useCallback(
+    (found: FoundFile[], skipped: number, replace: boolean, readOnly = false) => {
     const accepted: QueueItem[] = [];
     const rejected: string[] = [];
 
@@ -398,7 +411,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     }
 
     if (accepted.length > 0) {
-      setItems((previous) => [...previous, ...accepted]);
+      setItems((previous) => (replace ? accepted : [...previous, ...accepted]));
     }
 
     if (accepted.length === 0) {
@@ -417,12 +430,77 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     if (skipped > 0) leftovers.push(`${plural(skipped, 'item')} unreadable`);
 
     if (leftovers.length > 0 || readOnly) {
-      const parts = [`Added ${plural(accepted.length, 'track')}`];
+      const parts = [
+        `${replace ? 'Read' : 'Added'} ${plural(accepted.length, 'track')}`,
+      ];
       if (leftovers.length > 0) parts.push(leftovers.join(' · '));
       if (readOnly) parts.push('a dropped folder is read-only · choose the card to write back');
       setNotice({ kind: 'success', text: parts.join(' · ') });
     }
-  }, []);
+  },
+    [],
+  );
+
+  const addFound = useCallback(
+    (found: FoundFile[], skipped: number, readOnly = false) =>
+      acceptIntake(found, skipped, false, readOnly),
+    [acceptIntake],
+  );
+
+  /**
+   * Read the card this page already holds open again: the same folder, walked now. It is the
+   * gesture for "I added tracks to the card; look again" without reloading the page or picking
+   * the folder a second time. Only a handle the page picked can be walked, which is why a
+   * reload leaves this unavailable — the picker is the way back.
+   */
+  const rescanCard = useCallback(async () => {
+    if (!cardHandle) {
+      setNotice({
+        kind: 'error',
+        text: 'No card is open in this page. Use “Change card” to open one.',
+      });
+      return;
+    }
+    try {
+      const read = await readOpenCard(cardHandle);
+      if ('problem' in read) {
+        setNotice({ kind: 'error', text: read.problem });
+        return;
+      }
+      acceptIntake(read.files, read.skipped, true);
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text: `Could not read the card again: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }, [acceptIntake, cardHandle]);
+
+  /** Open another card: the same four steps as the first pick, and the queue becomes its. */
+  const changeCard = useCallback(async () => {
+    const picked = await readCardWithPicker();
+    switch (picked.kind) {
+      case 'read':
+        setCardHandle(picked.handle);
+        acceptIntake(picked.files, picked.skipped, true);
+        setNotice(null);
+        return;
+      case 'wrong':
+        setNotice({ kind: 'error', text: picked.problem });
+        return;
+      case 'failed':
+        setNotice({ kind: 'error', text: `Could not read the card: ${picked.message}` });
+        return;
+      case 'unsupported':
+        setNotice({
+          kind: 'error',
+          text: 'This browser cannot open a folder for writing, so it cannot write k7.db to a card.',
+        });
+        return;
+      case 'cancelled':
+        return;
+    }
+  }, [acceptIntake]);
 
   /* The card arrived through the picker, so it is writable: remember the handle, and take
    * the files the same way a drop delivers them. */
@@ -713,6 +791,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setConfirmingClear,
     addFound,
     addCard,
+    rescanCard,
+    changeCard,
     hasCardHandle: cardHandle !== null,
     retry,
     deepAnalyse,

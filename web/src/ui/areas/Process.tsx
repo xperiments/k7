@@ -45,6 +45,8 @@ export function ProcessArea() {
     hasCardHandle,
     addFound,
     addCard,
+    rescanCard,
+    changeCard,
   } = useAnalysis();
 
   /* The switch's own id lands on Base UI's hidden input, so the label needs a second id for
@@ -157,6 +159,28 @@ export function ProcessArea() {
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void rescanCard()}
+              disabled={busy || !hasCardHandle}
+              title={
+                hasCardHandle
+                  ? 'Read this card again, now: tracks already measured are recognised, not measured twice'
+                  : 'No card is open in this page — use Change card'
+              }
+            >
+              Rescan card
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void changeCard()}
+              disabled={busy}
+              title="Open another card; a run in flight is left alone"
+            >
+              Change card
+            </Button>
             {/* Asked in place rather than in a dialog: a modal is 56 kB of the front-door
                 partition, which is a lot of flash for one confirmation. */}
             {confirmingClear ? (

@@ -193,9 +193,12 @@ The Queue, measured, written to the card by the run itself.
 
 - **Header:** title, the run's state (`14 of 32 analysed`), the card the run belongs to (its
   mark, or a fingerprint when it has none), and the one fact that matters after it — *k7.db
-  written 12:34*. There is nothing to press: the image is written to the card when the run
-  finishes, and again when a Playlist changes while the card is still open (ADR 0065). Clear is
-  the only action left, asked in place, as today.
+  written 12:34*. There is nothing to send: the image is written to the card when the run
+  finishes, and again when a Playlist changes while the card is still open (ADR 0065). What the
+  header does offer is intake, because a card changes under the page: **Rescan card** walks the
+  card this page holds open again — the tracks it already has are recognised, not measured
+  twice — and **Change card** opens the picker, replacing the queue with the new card's and the
+  Scope with it. Clear, asked in place, is the last action.
 - **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
   page: it stays at the top while the rows scroll.
 - **Rows:** gathered by album — *Album / Artist* as the heading, with its track count, in the
