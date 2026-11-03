@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { copyFile, mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { basename, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,20 @@ import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
+
+/**
+ * The development origin is `https://k7-dev.xperiments.dev:8000` (k7-deploy.md §4). Its
+ * certificate is a local mkcert pair, so it is trusted without a warning and the App is a
+ * genuine secure context there — the same shape as production, which is what makes the
+ * launcher's development allowlist entry meaningful. Without the pair the servers stay
+ * plain HTTP: `npm run dev` still works, it just cannot install or open a card.
+ */
+const devCertPath = process.env.K7_DEV_CERT ?? resolve(root, '.certs/k7-dev.pem');
+const devKeyPath = process.env.K7_DEV_KEY ?? resolve(root, '.certs/k7-dev-key.pem');
+const devHttps =
+  existsSync(devCertPath) && existsSync(devKeyPath)
+    ? { cert: readFileSync(devCertPath), key: readFileSync(devKeyPath) }
+    : undefined;
 const packageVersion = (
   JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { version: string }
 ).version;
@@ -214,6 +228,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss(), shellOutputs(shell)],
+    /* The dev origin is `https://k7-dev.xperiments.dev:8000`; the port is part of it, and
+     * the certificate only exists once someone has run mkcert (k7-deploy.md §4). */
+    server: { host: true, port: 8000, https: devHttps },
+    preview: { host: true, port: 8000, https: devHttps },
     publicDir: shell ? false : 'public',
     resolve: {
       conditions: ['onnxruntime-web-use-extern-wasm'],
