@@ -2,18 +2,23 @@
  * Essentia's WebAssembly glue, made loadable under this App's Content Security Policy.
  *
  * The pinned `essentia-wasm` build is Emscripten output from before `-sDYNAMIC_EXECUTION=0`
- * existed, and its embind glue builds three invokers out of strings with `new Function(...)`:
+ * existed, and its embind glue builds five invokers out of strings — three with
+ * `new Function(...)`, the older two through `new_(Function, …)`, which reaches the same place
+ * via `Function.apply`:
  *
  * 1. `createNamedFunction` — one per registered class and error constructor;
  * 2. `embind__requireFunction`'s `makeDynCaller` — one per registered method, and this is the
  *    one that fires during `new Essentia(...)`, before the first Track is measured;
- * 3. `craftEmvalAllocator` — a JavaScript constructor invoked from wasm.
+ * 3. `craftEmvalAllocator` — a JavaScript constructor invoked from wasm;
+ * 4. `craftInvokerFunction` — one per registered method, fired by the first call into Essentia;
+ * 5. `__emval_get_method_caller` — a JavaScript method wasm calls back into.
  *
  * The App's policy is `script-src 'self' 'wasm-unsafe-eval' blob:` (`vercel.json`): WebAssembly
  * may compile, JavaScript may not be made out of strings. The blob URL is therefore loaded and
- * the first `new Function` inside it is refused — the analyser never initialises, and every
+ * the first dynamic function inside it is refused — the analyser never initialises, and every
  * Track fails with "Evaluating a string as JavaScript violates the following Content Security
- * Policy directive".
+ * Policy directive". `new_` is the reason a sweep for `new Function` is not a sweep: it builds
+ * the function by calling `Function.apply`, so the token appears as a value, never as a call.
  *
  * So the text is rewritten, before it becomes a blob, into the closures those string bodies
  * would have produced. Each site must be found exactly once: a site this build does not know
@@ -38,7 +43,58 @@ interface Site {
  */
 const DYNAMIC = ['new', 'Function'].join(' ');
 
+/**
+ * `new_(Function, …)` — the same function built through `Function.apply` instead of `new`.
+ * Assembled for the same reason: the patch has to search for it, and the shipped worker must
+ * not contain the token.
+ */
+const NEW_ = ['new_', 'Function'].join('(');
+
+/**
+ * `craftInvokerFunction`, the older embind generator: it builds its body as a string and hands
+ * it to `new_(Function, …)`. Same shape as the newer `createJsInvoker`, over `argTypes`.
+ */
+const CRAFT_INVOKER: Site = {
+  what: 'craftInvokerFunction',
+  find: `${NEW_},args1).apply(null,args2)`,
+  replace:
+    '(function(){' +
+    'var wires=[],dtors=[];' +
+    'for(var i=0;i<argCount-2;++i){var t=argTypes[i+2];wires.push(t.toWireType.bind(t));dtors.push(t.destructorFunction||null)}' +
+    'return function(){' +
+    'if(arguments.length!==argCount-2){throwBindingError("function "+humanName+" called with "+arguments.length+" arguments, expected "+(argCount-2)+" args!")}' +
+    'var destructors=needsDestructorStack?[]:null;var wired=[];' +
+    'if(isClassMethodFunc){wired.push(argTypes[1].toWireType(destructors,this))}' +
+    'for(var i=0;i<wires.length;++i){wired.push(wires[i](destructors,arguments[i]))}' +
+    'var rv=cppInvokerFunc.apply(null,[cppTargetFunc].concat(wired));' +
+    'if(needsDestructorStack){runDestructors(destructors)}' +
+    'else{for(var i=0;i<dtors.length;++i){if(dtors[i]){dtors[i](wired[(isClassMethodFunc?1:0)+i])}}}' +
+    'return returns?argTypes[0].fromWireType(rv):undefined' +
+    '}})()',
+};
+
+/**
+ * `__emval_get_method_caller`, the same build's method caller: it reads each argument through
+ * its registered type, calls the JavaScript method the handle names, deletes the arguments,
+ * and wires the result back.
+ */
+const EMVAL_METHOD_CALLER: Site = {
+  what: '__emval_get_method_caller',
+  find: `${NEW_},params).apply(null,args)`,
+  replace:
+    '(function(){' +
+    'return function(handle,methodName,destructorsRef,argPtr){' +
+    'var values=[],offset=0;' +
+    'for(var i=0;i<argCount-1;++i){var t=types[1+i];values.push(t.readValueFromPointer(argPtr+offset));offset+=t.argPackAdvance}' +
+    'var rv=handle[methodName].apply(handle,values);' +
+    'for(var i=0;i<argCount-1;++i){var t=types[1+i];if(t.deleteObject){t.deleteObject(values[i])}}' +
+    'return retType.isVoid?undefined:retType.toWireType(destructorsRef,rv)' +
+    '}})()',
+};
+
 const SITES: readonly Site[] = [
+  CRAFT_INVOKER,
+  EMVAL_METHOD_CALLER,
   {
     what: 'createNamedFunction',
     find: String.raw`function createNamedFunction(name,body){name=makeLegalFunctionName(name);return ${DYNAMIC}("body","return function "+name+"() {\n"+'    "use strict";'+"    return body.apply(this, arguments);\n"+"};\n")(body)}`,

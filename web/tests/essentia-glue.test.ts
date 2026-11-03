@@ -77,15 +77,21 @@ describe('Essentia under a policy without unsafe-eval', () => {
     // The problem, stated on the bytes that ship. If this line ever fails, the pinned build
     // stopped using dynamic code and this module can be deleted.
     expect(glue).toContain('new Function');
+    expect(glue).toContain('new_(Function');
 
     const patched = patchEssentiaGlue(glue);
 
-    expect(patched).not.toContain('new Function');
-    expect(patched).not.toContain('eval(');
+    // Every idiom a browser refuses, not just the one that fires first: `new_(Function, …)`
+    // builds the function through `Function.apply`, so it never matches a search for a call.
+    const dynamic = /(?<![A-Za-z0-9_$.])(Function\(|eval\()|new_\(\s*Function/;
+    expect(patched).not.toMatch(dynamic);
     // The three bodies written out, and the module otherwise intact: a rewrite, not a stub.
     expect(patched).toContain('return dynCall.apply(null,a)');
     expect(patched).toContain('Reflect.construct(constructor,a)');
-    expect(patched.length).toBeLessThan(glue.length);
+    expect(patched).toContain('cppInvokerFunc.apply(null,[cppTargetFunc].concat(wired))');
+    expect(patched).toContain('handle[methodName].apply(handle,values)');
+    // A rewrite, not a stub or a doubled file.
+    expect(Math.abs(patched.length - glue.length)).toBeLessThan(glue.length * 0.05);
   });
 
   it('measures exactly what the unpatched glue measures', async () => {
@@ -104,6 +110,6 @@ describe('Essentia under a policy without unsafe-eval', () => {
 
   it('refuses a glue it does not know rather than loading dynamic code', () => {
     expect(() => patchEssentiaGlue('function somethingElse(){}')).toThrow(EssentiaGlueError);
-    expect(() => patchEssentiaGlue('function somethingElse(){}')).toThrow(/createNamedFunction/);
+    expect(() => patchEssentiaGlue('function somethingElse(){}')).toThrow(/Re-audit/);
   });
 });
