@@ -14,6 +14,7 @@ import { SettingsArea } from './areas/Settings';
 import { VideoArea } from './areas/Video';
 import { navigate, useRoute } from './router';
 import { NotFound, Shell } from './Shell';
+import { PlaybackProvider } from './playback';
 import { tryLocalConnect } from '../device/device';
 import { AnalysisProvider } from './state/analysis';
 import { OfflineNotice } from './OfflineNotice';
@@ -70,26 +71,28 @@ export function App() {
 
   return (
     <AnalysisProvider>
-      <Shell route={route}>
-        {/* Mounted always, hidden when it is not the route: a queue in flight outlives a
-            visit to Media. */}
-        <div hidden={route.name !== 'process'} className="min-h-0">
-          <ProcessArea />
-        </div>
+      <PlaybackProvider>
+        <Shell route={route}>
+          {/* Mounted always, hidden when it is not the route: a queue in flight outlives a
+              visit to Media. */}
+          <div hidden={route.name !== 'process'} className="min-h-0">
+            <ProcessArea />
+          </div>
 
-        {route.name === 'playlists' && <PlaylistsArea />}
-        {route.name === 'playlist' && <PlaylistEditor id={route.id} />}
-        {route.name === 'ask' && <AskArea />}
-        {route.name === 'media' && <MediaArea />}
-        {route.name === 'album' && <AlbumArea album={route.album} />}
-        {route.name === 'artist' && <ArtistArea artist={route.artist} />}
-        {route.name === 'video' && <VideoArea id={route.id} />}
-        {route.name === 'player' && <PlayerArea />}
-        {route.name === 'settings' && <SettingsArea />}
-        {route.name === 'not-found' && <NotFound path={route.path} />}
-      </Shell>
-      <UpdateBanner />
-      <OfflineNotice />
+          {route.name === 'playlists' && <PlaylistsArea />}
+          {route.name === 'playlist' && <PlaylistEditor id={route.id} />}
+          {route.name === 'ask' && <AskArea />}
+          {route.name === 'media' && <MediaArea />}
+          {route.name === 'album' && <AlbumArea album={route.album} />}
+          {route.name === 'artist' && <ArtistArea artist={route.artist} />}
+          {route.name === 'video' && <VideoArea id={route.id} />}
+          {route.name === 'player' && <PlayerArea />}
+          {route.name === 'settings' && <SettingsArea />}
+          {route.name === 'not-found' && <NotFound path={route.path} />}
+        </Shell>
+        <UpdateBanner />
+        <OfflineNotice />
+      </PlaybackProvider>
     </AnalysisProvider>
   );
 }

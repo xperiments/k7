@@ -180,6 +180,13 @@ the structure:
   template already supports. The template's "Projects" group and account block are removed: there
   are no projects and no accounts.
 - **Footer.** Settings (`#/settings`) and the licence line that used to sit under every page.
+- **Bar.** A player at the bottom of the inset, under every area: the cover, what is sounding,
+  one play/pause, a stop, a seek that only a file earns, and a volume. It has two sources and
+  says which — the player's **stream** (`/stream`, live, no seek) or a **file off the card in
+  the computer**, read through the handle the page holds (`card/read.ts`) and played from a blob
+  URL. Its one element lives in `PlaybackProvider`, not in the bar, so re-rendering an area
+  never interrupts the sound and any page can start it. With no card in the player, `play` on an
+  album row means this file; with one, it means the player, and the bar follows its broadcast.
 
 **The card state chooses the first area, once.** A cold load with a card in the player opens
 `#/player`; with no card, `#/process`. After that the sidebar is the user's. The S3 banner is

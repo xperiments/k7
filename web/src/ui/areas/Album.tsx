@@ -36,6 +36,8 @@ import { formatDuration, plural } from '../format';
 import { Cover } from './Media';
 import { navigate, routeHref } from '../router';
 import { rememberVideo } from './Video';
+import { usePlayback } from '../playback';
+import { useAnalysis } from '../state/analysis';
 
 /**
  * One album: the cache rows it is made of, the measurements the device answers for them,
@@ -339,6 +341,8 @@ function TrackRow({
 export function AlbumArea({ album }: { album: string }) {
   const state = useMediaIndex();
   const found = findAlbum(state.index, album);
+  const playback = usePlayback();
+  const { readCardFile } = useAnalysis();
   const scope = useCardScope();
   const [cardImage, setCardImage] = useState<CardImage | null>(null);
   const [imageRows, setImageRows] = useState<Map<string, ImageMeasurement> | null>(null);
@@ -413,11 +417,35 @@ export function AlbumArea({ album }: { album: string }) {
   const allFromImage =
     found !== null && found.rows.length > 0 && found.rows.every((row) => imageOf(row) !== null);
 
+  /* Two kinds of play. With the card in the player, the player plays it and the bar follows
+   * its broadcast. With the card in the computer, the player has nothing to play — so the
+   * file is read off the card and played here, in the same bar. */
   const play = async (row: CachedMedia) => {
+    if (!state.card) {
+      const file = await readCardFile(row.path);
+      if (file === null) {
+        setNotice({
+          kind: 'error',
+          text: 'That file is not open in this page. Open the card in Process to play it here.',
+        });
+        return;
+      }
+      playback.playCard({
+        file,
+        path: row.path,
+        title: titleOf(row),
+        artist: row.artist || (found?.artists[0] ?? ''),
+        cover: found?.cover ?? null,
+      });
+      setNotice({ kind: 'ok', text: `Playing “${titleOf(row)}” from the card.` });
+      return;
+    }
+
     try {
       await playTrack(row.path);
       await refreshDevice();
-      setNotice({ kind: 'ok', text: `Playing “${titleOf(row)}”.` });
+      playback.playStream();
+      setNotice({ kind: 'ok', text: `Playing “${titleOf(row)}” on the player.` });
     } catch (error) {
       setNotice({
         kind: 'error',

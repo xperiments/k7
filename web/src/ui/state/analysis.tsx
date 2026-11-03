@@ -20,6 +20,7 @@ import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
 import { patchListArea } from '../../playlists/image';
 import { countMedia, getMedia, listMedia, measuredHash, putMedia, tagsOf } from '../../storage/media';
 import { cardRefFor, currentCardScope, subscribeCardScope } from '../../card/session';
+import { readCardFile as readFileFromCard, type CardRoot } from '../../card/read';
 import { loadSnapshot, saveSnapshot, type StoredSnapshot } from '../../storage/snapshots';
 import { clearCache, getCached, putCached } from '../../storage/cache';
 import { requestPersistence } from '../../storage/persist';
@@ -100,6 +101,12 @@ export interface AnalysisApi {
   changeCard: () => Promise<void>;
   /** The card was opened read-write in this session, so it can be written back to. */
   hasCardHandle: boolean;
+  /**
+   * The bytes of one track as the card holds them now, by its path below `music` — the card
+   * handle when this page has one, the queue's own file when it does not. `null` means the
+   * card is not here: nothing can be played from it.
+   */
+  readCardFile: (path: string) => Promise<File | null>;
 
   retry: (item: QueueItem) => void;
   deepAnalyse: (item: QueueItem) => Promise<void>;
@@ -778,6 +785,22 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     await clearCache();
   }, []);
 
+  const readCardFile = useCallback(
+    async (path: string): Promise<File | null> => {
+      if (cardHandle !== null) {
+        try {
+          const file = await readFileFromCard(cardHandle as unknown as CardRoot, path);
+          if (file !== null) return file;
+        } catch {
+          // A handle can be revoked under the page; the queue below is the second door.
+        }
+      }
+      const measured = items.find((item) => snapshotPath(item.path) === path);
+      return measured?.file ?? null;
+    },
+    [cardHandle, items],
+  );
+
   const value: AnalysisApi = {
     items,
     busy,
@@ -802,6 +825,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     rescanCard,
     changeCard,
     hasCardHandle: cardHandle !== null,
+    readCardFile,
     retry,
     deepAnalyse,
     saveTags,

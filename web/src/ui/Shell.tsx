@@ -51,6 +51,7 @@ import { useDeviceStatus } from '../device/useDeviceStatus';
 import { InstallButton } from './InstallButton';
 import { useDrafts } from '../playlists/drafts';
 import { navigate, routeArea, routeHref, routePage, type Route } from './router';
+import { PlayerBar } from './PlayerBar';
 
 /**
  * The shell: `c-sidebar-1`'s structure with this device's data in it.
@@ -374,20 +375,12 @@ export function Shell({ route, children }: { route: Route; children: React.React
             {!reachable ? (
               <span className="text-xs text-muted-foreground">device unreachable</span>
             ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={
-                <a href={`${DEVICE_ORIGIN}/stream`} target="_blank" rel="noopener noreferrer" />
-              }
-            >
-              Stream
-            </Button>
           </div>
         </header>
 
         <div className={cn('min-h-0 flex-1 overflow-auto')}>{children}</div>
+
+        <PlayerBar />
       </SidebarInset>
     </SidebarProvider>
   );
