@@ -6,7 +6,7 @@ async function probe(name, url) {
   show();
   const started = Date.now();
   try {
-    const r = await fetch(url, { mode: 'cors' });
+    const r = await fetch(url, { mode: 'cors', targetAddressSpace: 'local' });
     results[name] = { status: r.status, body: (await r.text()).slice(0, 120), ms: Date.now() - started };
   } catch (e) {
     results[name] = { error: String(e), ms: Date.now() - started };
