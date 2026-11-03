@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  AudioLines,
   Disc3,
   ListMusic,
   Play,
@@ -225,9 +224,15 @@ function DeviceMenu({
           <DropdownMenuTrigger
             render={<SidebarMenuButton size="lg" className="aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-accent-foreground" />}
           >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-              <AudioLines className="size-4" aria-hidden="true" />
-            </span>
+            {/* The brand mark, not an icon: it is a wordmark, so it takes the slot the tile
+             * had and is inverted on the dark sidebar — the file is drawn in black. */}
+            <img
+              src="/icons/k7logo.svg"
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+              className="h-8 w-8 shrink-0 object-contain dark:invert"
+            />
             <span className="grid min-w-0 flex-1 text-left leading-tight">
               <span className="truncate text-sm font-medium">K7</span>
               <span className="truncate text-xs text-sidebar-foreground/70">{subtitle}</span>

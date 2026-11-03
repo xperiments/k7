@@ -237,6 +237,9 @@ function shellOutputs(shell: boolean): Plugin {
           '/icons/icon-192.png',
           '/icons/icon-512.png',
           '/icons/icon-512-maskable.png',
+          /* The brand mark sits in the sidebar on every page: offline it must be there on
+           * the first paint, not after a fetch that fails. */
+          '/icons/k7logo.svg',
           '/weights.lock.json',
           ...(shell ? ['/ort/ort-wasm-simd-threaded.mjs'] : []),
           ...emitted.map((file) => `/${file}`),
