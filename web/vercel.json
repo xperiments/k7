@@ -1,6 +1,6 @@
 {
   "framework": "vite",
-  "buildCommand": "npm run build",
+  "buildCommand": "K7_WEIGHTS=cdn npm run build",
   "outputDirectory": "dist",
   "headers": [
     {

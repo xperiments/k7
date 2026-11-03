@@ -207,6 +207,10 @@ function shellOutputs(shell: boolean): Plugin {
 
 export default defineConfig(({ mode }) => {
   const shell = mode === 'shell';
+  /* `K7_WEIGHTS=cdn` is what Vercel builds with: the models are not in the repository, so a
+   * hosted artifact that expects `/models/…` would 404 on its first analysis. The Shell
+   * build is always `cdn` for the same reason. */
+  const cdnWeights = shell || process.env.K7_WEIGHTS === 'cdn';
 
   return {
     plugins: [react(), tailwindcss(), shellOutputs(shell)],
@@ -217,7 +221,7 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       __APP_VERSION__: JSON.stringify(packageVersion),
-      __WEIGHTS_MODE__: JSON.stringify(shell ? 'cdn' : 'local'),
+      __WEIGHTS_MODE__: JSON.stringify(cdnWeights ? 'cdn' : 'local'),
     },
     build: {
       outDir: shell ? 'dist-shell' : 'dist',
