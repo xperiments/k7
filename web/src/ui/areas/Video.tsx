@@ -60,6 +60,18 @@ function rememberedVideo(id: string): Remembered | null {
   }
 }
 
+/**
+ * What the frame sends as `Referer`: the origin, and nothing else.
+ *
+ * It is not optional. YouTube's player refuses a frame that arrives with no referrer, and the
+ * symptom is a player showing **error 153** — `embedder.identity.missing.referrer` — inside an
+ * otherwise correct iframe. This App's pages answer `Referrer-Policy: no-referrer`
+ * (`vercel.json`), deliberately, so the frame states its own policy: the element's
+ * `referrerpolicy` overrides the document's, and `origin` sends `https://k7.xperiments.dev/`
+ * with no path and no query. Only the embed gets it; everything else keeps no referrer.
+ */
+export const EMBED_REFERRER = 'origin';
+
 /** The no-cookie embed, asked to start on its own: it is only created by a click. */
 export function embedUrl(id: string): string {
   return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0`;
@@ -108,6 +120,8 @@ export function VideoArea({ id }: { id: string }) {
           <iframe
             src={embedUrl(id)}
             title={title}
+            // YouTube shows error 153 without one; the document is `no-referrer`.
+            referrerPolicy={EMBED_REFERRER}
             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
             allowFullScreen
             className="absolute inset-0 h-full w-full border-0"

@@ -268,6 +268,8 @@ Two acts, named apart because they happen on different machines.
   the poster is the thumbnail the search already had, and the player is created only when
   someone presses play. The frame is YouTube's no-cookie embed and nothing else; `frame-src`
   names exactly that host, because a static header cannot name an Instance chosen in Settings.
+  It carries `referrerpolicy="origin"` because the page is served `no-referrer` and the player
+  answers a bare frame with error 153.
   "Open on YouTube" sits beside it as the escape hatch. Nothing is downloaded, and no Video can
   become a Playlist row.
 - **States:** empty (no Snapshot: "measure the card once"), loading (skeleton tiles), error

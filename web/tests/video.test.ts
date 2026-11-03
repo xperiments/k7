@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { embedUrl } from '../src/ui/areas/Video';
+import { EMBED_REFERRER, embedUrl } from '../src/ui/areas/Video';
 
 /**
  * The one frame the App is allowed to create.
@@ -18,5 +18,12 @@ describe('the inline player', () => {
 
   it('encodes an id rather than pasting it into the path', () => {
     expect(embedUrl('a/b')).toContain('a%2Fb');
+  });
+
+  it('sends an origin as the referrer, because YouTube refuses a bare frame', () => {
+    // Error 153 inside the player is `embedder.identity.missing.referrer`: the pages answer
+    // `Referrer-Policy: no-referrer`, so the frame states its own. `origin` sends the host
+    // and nothing else, which is the least that makes the player work.
+    expect(EMBED_REFERRER).toBe('origin');
   });
 });

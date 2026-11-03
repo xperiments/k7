@@ -75,6 +75,11 @@ storage. Notes on the two entries that look odd and are not:
 - `img-src https:` — for the same reason, from the other side: a Video's thumbnail comes from
   the **Invidious Instance** the user chose, which is a hostname no build can know. A picture
   is not code; the policy that matters is `script-src`, and it is unchanged.
+- **The frame sends a referrer of its own.** D6 also sets `Referrer-Policy: no-referrer` on
+  every response, and YouTube's player refuses a frame that arrives with no referrer — it shows
+  **error 153**, `embedder.identity.missing.referrer`. So the iframe carries
+  `referrerpolicy="origin"`: the element's policy overrides the document's, and `https://k7.
+  xperiments.dev/` is all the player learns. Nothing else on the origin sends a referrer.
 - `frame-src https://www.youtube-nocookie.com https://www.youtube.com` — exactly one frame,
   named twice: the inline player on `#/media/video/:id`. It is not the user's Invidious
   Instance, because a header cannot name a hostname that is a setting; framing the Instance
