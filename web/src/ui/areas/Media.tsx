@@ -240,34 +240,43 @@ export function MediaArea({ album }: { album?: string } = {}) {
         </div>
       </header>
 
-      {state.loading ? (
-        <div className="flex justify-center py-6">
-          <Skeleton className="aspect-[16/25] w-40" />
-        </div>
-      ) : !hasAlbums ? (
-        <NoAlbums reachable={state.reachable} />
-      ) : nothingMatches ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyTitle>Nothing matches “{query.trim()}”</EmptyTitle>
-            <EmptyDescription>Album names and artists are searched.</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button size="sm" variant="outline" onClick={() => setQuery('')}>
-              Clear the search
-            </Button>
-          </EmptyContent>
-        </Empty>
-      ) : (
-        <AlbumShelf albums={albums} selected={selected} onSelect={setSelected} />
-      )}
-
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
+      {/* Two columns from `lg`: the shelf on the left, the tracks on the right. The shelf
+          keeps its own height and never scrolls; the right column is the only scroll region
+          on the page, so the case stays in view while its tracks go past. Below `lg` the
+          shelf goes back on top and the tracks keep the remaining height. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
         {!state.loading && hasAlbums && !nothingMatches && active ? (
-          <AlbumDetail album={active} state={state} />
+          <aside className="shrink-0 lg:w-[21rem] lg:self-start">
+            <AlbumShelf albums={albums} selected={selected} onSelect={setSelected} />
+          </aside>
         ) : null}
-        <Unmeasurable state={state} />
-        <NotMeasured state={state} />
+
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
+          {state.loading ? (
+            <div className="flex justify-center py-6">
+              <Skeleton className="aspect-[16/25] w-40" />
+            </div>
+          ) : !hasAlbums ? (
+            <NoAlbums reachable={state.reachable} />
+          ) : nothingMatches ? (
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyTitle>Nothing matches “{query.trim()}”</EmptyTitle>
+                <EmptyDescription>Album names and artists are searched.</EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button size="sm" variant="outline" onClick={() => setQuery('')}>
+                  Clear the search
+                </Button>
+              </EmptyContent>
+            </Empty>
+          ) : active ? (
+            <AlbumDetail album={active} state={state} />
+          ) : null}
+
+          <Unmeasurable state={state} />
+          <NotMeasured state={state} />
+        </div>
       </div>
     </div>
   );

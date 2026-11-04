@@ -13,7 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getDevice } from '../device/device';
 import { trackAt, type McpTrack } from '../device/mcp';
@@ -554,15 +553,12 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
               </ul>
             </CardContent>
           </Card>
-
+{/* 
           {videosHere ? (
             <LookupResults title={album.album} search={albumSearch} />
-          ) : null}
+          ) : null} */}
 
-          <Separator />
-          <p className="text-xs text-muted-foreground">
-            Playing moves the live stream for everyone listening; it is not a private queue.
-          </p>
+          
       </div>
     </div>
   );
