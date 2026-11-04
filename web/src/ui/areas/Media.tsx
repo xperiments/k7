@@ -217,7 +217,10 @@ export function MediaArea({ album }: { album?: string } = {}) {
   const nothingMatches = state.index !== null && needle.length > 0 && albums.length === 0;
 
   return (
-    <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+    /* The shelf and the search stay where they are; the tracks are the part that scrolls.
+       `h-full` + a `min-h-0` child is what gives the list a height to scroll inside, rather
+       than letting the whole page scroll the case out of view. */
+    <div className="flex h-full min-h-0 flex-col gap-3 p-4 sm:gap-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <h1 className="text-xl font-semibold tracking-tight">Albums</h1>
         {/* The search is the header's one action: on the title's line when there is room
@@ -256,15 +259,16 @@ export function MediaArea({ album }: { album?: string } = {}) {
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="flex flex-col gap-6">
-          <AlbumShelf albums={albums} selected={selected} onSelect={setSelected} />
-          {active ? <AlbumDetail album={active} state={state} /> : null}
-        </div>
+        <AlbumShelf albums={albums} selected={selected} onSelect={setSelected} />
       )}
 
-      <Unmeasurable state={state} />
-
-      <NotMeasured state={state} />
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
+        {!state.loading && hasAlbums && !nothingMatches && active ? (
+          <AlbumDetail album={active} state={state} />
+        ) : null}
+        <Unmeasurable state={state} />
+        <NotMeasured state={state} />
+      </div>
     </div>
   );
 }

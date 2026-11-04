@@ -82,7 +82,7 @@ export function AlbumShelf({
   if (!active) return null;
 
   return (
-    <section className="flex flex-col items-center gap-4" aria-label="Albums">
+    <section className="flex flex-col items-center gap-3" aria-label="Albums">
       <div
         className="k7-shelf"
         role="group"

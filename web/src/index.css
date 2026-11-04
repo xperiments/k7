@@ -211,7 +211,7 @@
 
         position: relative;
         width: 100%;
-        height: calc(var(--ch) + 2.5rem);
+        height: calc(var(--ch) + 0.5rem);
         overflow: clip;
         perspective: 90rem;
         touch-action: pan-y;

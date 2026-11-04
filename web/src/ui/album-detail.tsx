@@ -1,7 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { ListPlus, MoreHorizontal, Play as PlayIcon } from 'lucide-react';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,7 +35,7 @@ import { isAbort, searchVideos, VideoError, type Video } from '../media/youtube'
 import { addRows, createDraft, useDrafts } from '../playlists/drafts';
 import { getSettings, subscribeSettings } from '../settings';
 import type { CachedMedia } from '../storage/media';
-import { formatDuration, plural } from './format';
+import { formatDuration } from './format';
 import { navigate, routeHref } from './router';
 import { rememberVideo } from './areas/Video';
 import { usePlayback } from './playback';
@@ -86,57 +85,6 @@ function albumQueryFor(album: Album): string | null {
 }
 
 type Notice = { kind: 'ok' | 'error'; text: string };
-
-/** The image this browser wrote for the card being browsed, as far as the device is told. */
-interface CardImage {
-  at: string;
-  tracks: number;
-}
-
-function when(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
-}
-
-/**
- * A whole album of "not in the image", explained as one fact.
- *
- * The player keeps the last image it applied, and it applies one when a card carrying `k7.db`
- * arrives -- not when the page writes it. So a card measured since then is answered from an
- * older image, and every track of it looks unmeasured even though the browser measured it.
- * The page used to say "not measured" for all of these, which reads as "you have not done
- * this"; the sentence now says which image answered, and what makes it answer from this one.
- */
-function imageProblem(state: MediaIndexState, card: CardImage | null): string {
-  const image = state.deviceImage;
-  if (image === null) {
-    return 'The player did not say which image it is answering from. Its measurements come from the image it last applied, so this album cannot be checked against it.';
-  }
-
-  const built = when(image.at);
-  const sameImage =
-    card !== null &&
-    card.tracks === image.rows &&
-    Math.abs(Date.parse(card.at) - Date.parse(image.at)) < 120_000;
-
-  if (sameImage) {
-    return `The player is using this card's image (${plural(image.rows, 'row')}, built ${built}) and it has no row for any track here. The files may have changed since it was written: measure the card again in Process.`;
-  }
-
-  const written =
-    card === null
-      ? 'This browser has no image for this card. '
-      : `This browser wrote this card's image ${when(card.at)}, with ${plural(card.tracks, 'track')}. `;
-
-  return `The player answers from an image built ${built}, with ${plural(image.rows, 'row')} — not this card's. ${written}The player applies a card's image when the card arrives: put the card in and it will answer from its own.`;
-}
-
-/** The album's genre when every row agrees, and a word for what it is when they do not. */
-function genreText(album: Album): string {
-  const genres = new Set(album.rows.map((row) => row.genre.trim()).filter(Boolean));
-  if (genres.size === 0) return 'no genre tag';
-  return genres.size === 1 ? [...genres][0] : 'mixed genres';
-}
 
 /**
  * One track's measurements, and the difference between two silences the page used to blur:
@@ -285,10 +233,6 @@ function LookupResults({
     <Card size="sm">
       <CardHeader>
         <CardTitle>On YouTube for “{title}”</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Searched on the Invidious instance in Settings. A tile plays here; nothing is
-          downloaded and nothing joins a playlist.
-        </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {searching ? (
@@ -445,7 +389,6 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
   const playback = usePlayback();
   const { readCardFile } = useAnalysis();
   const scope = useCardScope();
-  const [cardImage, setCardImage] = useState<CardImage | null>(null);
   const [imageRows, setImageRows] = useState<Map<string, ImageMeasurement> | null>(null);
   const [measurements, setMeasurements] = useState<Map<string, McpTrack | null> | null>(null);
   const [lookup, setLookup] = useState<{ query: string; title: string } | null>(null);
@@ -474,7 +417,6 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
     loadSnapshot(scope)
       .then((stored) => {
         if (cancelled) return;
-        setCardImage(stored ? { at: stored.at, tracks: stored.tracks } : null);
         try {
           setImageRows(stored ? readImageMeasurements(stored.bytes) : null);
         } catch {
@@ -484,7 +426,6 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
       })
       .catch(() => {
         if (cancelled) return;
-        setCardImage(null);
         setImageRows(null);
       });
     return () => {
@@ -522,17 +463,6 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
   /* The row's numbers, as this browser wrote them, when the player cannot give them back. */
   const imageOf = (row: CachedMedia): ImageMeasurement | null =>
     imageRows?.get(imageRowKey(row.path, row.size ?? -1)) ?? null;
-
-  /* Two silences, counted rather than repeated per row: no answer at all (the device, or the
-   * card, is not there) and an answer with no row (the image is not this album's). */
-  const answers = measurements === null ? null : [...measurements.values()];
-  const answered = (answers ?? []).filter((track) => track !== null);
-  const noRow = answered.filter((track) => track.analysis === null);
-  const nothingAnswered = answers !== null && answers.length > 0 && answered.length === 0;
-  const nothingInTheImage = answered.length > 0 && noRow.length === answered.length;
-  // Every row the player could not answer for is one this browser can: the album is not lost.
-  const allFromImage =
-    album !== null && album.rows.length > 0 && album.rows.every((row) => imageOf(row) !== null);
 
   /* Two kinds of play. With the card in the player, the player plays it and the bar follows
    * its broadcast. With the card in the computer, the player has nothing to play — so the
@@ -588,25 +518,6 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Who made it and what it is. The shelf's label carries the name and the count; this
-          is the one line with somewhere to go — the artist. */}
-      <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-        {album.artists.length === 1 ? (
-          <a
-            href={routeHref({ name: 'artist', artist: album.artists[0] })}
-            className="underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            {album.artists[0]}
-          </a>
-        ) : (
-          <span>{plural(album.artists.length, 'artist')} · each track names its own</span>
-        )}
-        <span aria-hidden="true">·</span>
-        <span className="tabular-nums">{plural(album.tracks, 'track')}</span>
-        <span aria-hidden="true">·</span>
-        <span>{genreText(album)}</span>
-      </div>
-
         <div className="flex min-w-0 flex-col gap-4">
           {notice ? (
             <div role="status" className="flex items-center gap-2 text-sm">
@@ -618,34 +529,6 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
           ) : null}
 
           {lookup ? <LookupPanel lookup={lookup} onClose={() => setLookup(null)} /> : null}
-
-          {(nothingAnswered || nothingInTheImage) && allFromImage ? (
-            <Alert>
-              <AlertTitle>
-                {nothingAnswered
-                  ? 'The player is not answering for this album'
-                  : 'The player has not applied this card’s image'}
-              </AlertTitle>
-              <AlertDescription>
-                {nothingAnswered
-                  ? 'The card is not in the player, so it cannot answer for these files. The numbers below are the ones from the image this browser wrote for the card — the same rows the player uses once the card is in it.'
-                  : `${imageProblem(state, cardImage)} The numbers below come from the image this browser wrote.`}
-              </AlertDescription>
-            </Alert>
-          ) : nothingAnswered ? (
-            <Alert variant="warning">
-              <AlertTitle>The device did not answer for any track here</AlertTitle>
-              <AlertDescription>
-                No path on this album answered, so nothing here can be checked against the player.
-                The device may have no card in it, or these files may no longer be on it.
-              </AlertDescription>
-            </Alert>
-          ) : nothingInTheImage ? (
-            <Alert variant="warning">
-              <AlertTitle>No track here is in the player&apos;s image</AlertTitle>
-              <AlertDescription>{imageProblem(state, cardImage)}</AlertDescription>
-            </Alert>
-          ) : null}
 
           <Card>
             <CardContent>
