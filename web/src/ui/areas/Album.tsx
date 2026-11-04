@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { ArrowLeft, ListPlus, MoreHorizontal, Play as PlayIcon } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert';
@@ -20,7 +20,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getDevice } from '../../device/device';
 import { trackAt, type McpTrack } from '../../device/mcp';
 import { refreshDevice } from '../../device/useDeviceStatus';
-import { findAlbum, useMediaIndex, type Album, type MediaIndexState } from '../../media/albums';
+import {
+  findAlbum,
+  UNKNOWN_ALBUM,
+  UNKNOWN_ARTIST,
+  useMediaIndex,
+  type Album,
+  type MediaIndexState,
+} from '../../media/albums';
 import { useCardScope } from '../../card/session';
 import {
   imageRowKey,
@@ -30,7 +37,7 @@ import {
 import { loadSnapshot } from '../../storage/snapshots';
 import { isAbort, searchVideos, VideoError, type Video } from '../../media/youtube';
 import { addRows, createDraft, useDrafts } from '../../playlists/drafts';
-import { getSettings } from '../../settings';
+import { getSettings, subscribeSettings } from '../../settings';
 import type { CachedMedia } from '../../storage/media';
 import { formatDuration, plural } from '../format';
 import { Cover } from './Media';
@@ -41,7 +48,9 @@ import { useAnalysis } from '../state/analysis';
 
 /**
  * One album: the cache rows it is made of, the measurements the device answers for them,
- * and the three things a row can do -- play it, add it to a Playlist, or look it up.
+ * and the two things a row can do -- play it, or add it to a Playlist. The video search is
+ * the album's own: when the Invidious instance in Settings answers, its results sit after
+ * the tracks, and the row menu no longer offers a second way to the same thing.
  *
  * Measurements arrive one `library_track` call per row, in parallel, and are kept in state
  * for the visit. They are deliberately not part of the index: an album's names are this
@@ -66,6 +75,18 @@ function queryFor(row: CachedMedia, album: Album): string {
   const title = titleOf(row);
   const singer = row.artist.trim() || (album.artists.length === 1 ? album.artists[0] : '');
   return [singer, title].filter(Boolean).join(' ');
+}
+
+/**
+ * The sentence the album's own search uses: the artist when it has one name, then the title.
+ * An album with no tags at all has nothing worth asking an index about, so it asks nothing.
+ */
+function albumQueryFor(album: Album): string | null {
+  if (album.album === UNKNOWN_ALBUM) return null;
+  const singer = album.artists.length === 1 && album.artists[0] !== UNKNOWN_ARTIST
+    ? album.artists[0]
+    : '';
+  return [singer, album.album].filter(Boolean).join(' ');
 }
 
 type Notice = { kind: 'ok' | 'error'; text: string };
@@ -183,35 +204,91 @@ function TrackMeasurement({
   );
 }
 
-function LookupPanel({ lookup, onClose }: { lookup: { query: string; title: string }; onClose: () => void }) {
+/**
+ * An instance that has not answered in this long is treated as not answering: the album page
+ * then keeps its row menu, and a hand-run lookup says why instead of sitting on skeletons.
+ */
+const VIDEO_SEARCH_TIMEOUT_MS = 10_000;
+
+/** What one video search is doing, so the panel and the page can ask the same question. */
+interface VideoSearch {
+  videos: Video[] | null;
+  error: string | null;
+  searching: boolean;
+}
+
+/**
+ * One Invidious search, or none when there is no query.
+ *
+ * The instance is read when the search starts, so a page opened after Settings changed
+ * searches where the settings now say; the abort is what keeps a fast album switch from
+ * letting an old answer land under a new album's name.
+ */
+function useVideoSearch(query: string | null): VideoSearch {
   const [videos, setVideos] = useState<Video[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [searching, setSearching] = useState(true);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
+    if (query === null) {
+      setVideos(null);
+      setError(null);
+      setSearching(false);
+      return;
+    }
     const controller = new AbortController();
+    let timedOut = false;
+    const timer = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, VIDEO_SEARCH_TIMEOUT_MS);
     setVideos(null);
     setError(null);
     setSearching(true);
-    void searchVideos(lookup.query, getSettings().invidious, controller.signal)
+    void searchVideos(query, getSettings().invidious, controller.signal)
       .then((found) => {
         if (controller.signal.aborted) return;
         setVideos(found);
       })
       .catch((failure: unknown) => {
+        // A timeout is an answer of sorts; the page's own abort is not.
+        if (timedOut) {
+          setError('the instance did not answer in time');
+          return;
+        }
         if (controller.signal.aborted || isAbort(failure)) return;
         setError(failure instanceof VideoError ? failure.message : String(failure));
       })
       .finally(() => {
-        if (!controller.signal.aborted) setSearching(false);
+        window.clearTimeout(timer);
+        if (!controller.signal.aborted || timedOut) setSearching(false);
       });
-    return () => controller.abort();
-  }, [lookup]);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
+
+  return { videos, error, searching };
+}
+
+/** The search's answer: skeletons, an error with the way to Settings, the tiles, or nothing found. */
+function LookupResults({
+  title,
+  search,
+  onClose,
+}: {
+  title: string;
+  search: VideoSearch;
+  /** Present only for a lookup the page opened by hand: an automatic one has nothing to close. */
+  onClose?: () => void;
+}) {
+  const { videos, error, searching } = search;
 
   return (
     <Card size="sm">
       <CardHeader>
-        <CardTitle>On YouTube for “{lookup.title}”</CardTitle>
+        <CardTitle>On YouTube for “{title}”</CardTitle>
         <p className="text-sm text-muted-foreground">
           Searched on the Invidious instance in Settings. A tile plays here; nothing is
           downloaded and nothing joins a playlist.
@@ -263,14 +340,28 @@ function LookupPanel({ lookup, onClose }: { lookup: { query: string; title: stri
             ))}
           </div>
         )}
-        <div>
-          <Button size="sm" variant="ghost" onClick={onClose}>
-            Close
-          </Button>
-        </div>
+        {onClose ? (
+          <div>
+            <Button size="sm" variant="ghost" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
+}
+
+/** A lookup the reader asked for from a row, when the album's own search is not there. */
+function LookupPanel({
+  lookup,
+  onClose,
+}: {
+  lookup: { query: string; title: string };
+  onClose: () => void;
+}) {
+  const search = useVideoSearch(lookup.query);
+  return <LookupResults title={lookup.title} search={search} onClose={onClose} />;
 }
 
 function TrackRow({
@@ -297,7 +388,8 @@ function TrackRow({
    */
   action: 'play' | 'queue';
   onPlay: () => void;
-  onLookup: () => void;
+  /** Absent when the album's own search already fills the page: one door, not two. */
+  onLookup?: () => void;
   onAdd: (draftId: string, draftName: string) => void;
   onNew: () => void;
 }) {
@@ -332,7 +424,9 @@ function TrackRow({
               <DropdownMenuItem onClick={onPlay}>
                 {action === 'queue' ? 'Queue on the player' : 'Play now'}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onLookup}>Look up on YouTube</DropdownMenuItem>
+              {onLookup ? (
+                <DropdownMenuItem onClick={onLookup}>Look up on YouTube</DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
@@ -362,6 +456,22 @@ export function AlbumArea({ album }: { album: string }) {
   const [measurements, setMeasurements] = useState<Map<string, McpTrack | null> | null>(null);
   const [lookup, setLookup] = useState<{ query: string; title: string } | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+
+  /* The album's own place on YouTube, searched only when Settings names an instance. An
+   * instance that answers - even with nothing - is what replaces the row menu's lookup: the
+   * section is already on the page, so the menu would be a second door to the same room. An
+   * instance that does not answer changes nothing, and the row keeps its own way in. */
+  const settings = useSyncExternalStore(subscribeSettings, getSettings, getSettings);
+  const albumQuery =
+    found !== null && settings.invidious.trim() !== '' ? albumQueryFor(found) : null;
+  const albumSearch = useVideoSearch(albumQuery);
+  /* Only a search with something in it replaces the row menu: an album's query can come back
+   * empty while a track's finds the song, so an empty answer keeps both doors. */
+  const videosHere = (albumSearch.videos?.length ?? 0) > 0;
+
+  useEffect(() => {
+    if (videosHere) setLookup(null);
+  }, [videosHere]);
 
   /* The image this browser wrote for this card, so the page can say whether the player is
    * answering from it. Stored per Scope, so it is the right card's even after a swap. */
@@ -606,7 +716,11 @@ export function AlbumArea({ album }: { album: string }) {
                     image={imageOf(row)}
                     track={measurements === null ? undefined : (measurements.get(row.path) ?? null)}
                     onPlay={() => void play(row)}
-                    onLookup={() => setLookup({ query: queryFor(row, found), title: titleOf(row) })}
+                    onLookup={
+                      videosHere
+                        ? undefined
+                        : () => setLookup({ query: queryFor(row, found), title: titleOf(row) })
+                    }
                     onAdd={(draftId, draftName) => addTo(draftId, draftName, row)}
                     onNew={() => addToNew(row)}
                   />
@@ -614,6 +728,10 @@ export function AlbumArea({ album }: { album: string }) {
               </ul>
             </CardContent>
           </Card>
+
+          {videosHere ? (
+            <LookupResults title={found.album} search={albumSearch} />
+          ) : null}
 
           <Separator />
           <p className="text-xs text-muted-foreground">
