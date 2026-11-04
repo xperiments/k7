@@ -75,17 +75,13 @@ static bool path_is_safe(const char *path)
     return true;
 }
 
-/* `/` is the Launcher and `/app` is the Device copy: two documents behind two clean
- * addresses, so they are the only names that are not themselves a file. Everything else
- * is a file with a real name. The app is one screen with no client-side routes, so an
- * unknown path is a 404 rather than index.html. */
+/* `/` is the Launcher: the page that opens the hosted App, and the bridge window when one
+ * is needed. `/bridge` is that same document under the name the App opens it by. The App
+ * itself is not in the image — the hosted origin is the only copy — so `/app` is a 404 like
+ * any other name the image does not carry. Everything else is a file with a real name. */
 static const char *logical_for(const char *request_path)
 {
     if (strcmp(request_path, "/") == 0) return "/index.html";
-    if (strcmp(request_path, "/app") == 0 || strcmp(request_path, "/app/") == 0)
-        return "/app.html";
-    /* `/` is a redirect to the App now; the Launcher's own page — and the bridge window —
-     * is here. Both paths are the same image entry. */
     if (strcmp(request_path, "/bridge") == 0 || strcmp(request_path, "/bridge/") == 0)
         return "/index.html";
     return request_path;

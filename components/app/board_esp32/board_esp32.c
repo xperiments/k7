@@ -522,13 +522,10 @@ done:
  * reads it, and it reads it through a MAPPING, not a copy: the image stays in flash and the
  * page is served straight out of the mapped window, which costs no PSRAM at all.
  *
- * A mapped read is still a flash transaction on SPI0/1, and the panel's DMA shares that
- * controller - which is why serving the page from here used to displace the whole picture by
- * a band (ADR 0055). What makes it safe now is the panel's bounce buffer: the LCD's DMA reads
- * internal SRAM and the driver refills it from PSRAM in the background, so ten lines of buffer
- * is ~0.5 ms of slack against a 2.5 us transaction - two hundred times over. If that ever stops
- * being true, the fallback is to halt the scan for the length of a page load and re-establish
- * it afterwards, which costs a blank screen instead of PSRAM.
+ * The image is copied into PSRAM at boot, so serving it is a read of ordinary memory: no flash
+ * transaction, and nothing for the panel's DMA to share a controller with. That is what the
+ * black hold over a page load was buying (ADR 0055), and why it is no longer needed - the
+ * image is the Launcher only, tens of KB, because the App is the hosted origin's.
  *
  * Two devices reach here without a page, and both are states rather than faults: one still
  * carrying the old partition table has no `frontdoor` partition at all, and one flashed
@@ -566,10 +563,26 @@ bool app_board_shell_image(const void **bytes, size_t *size)
                              SHELL_PARTITION);
                     esp_partition_munmap(handle);
                 } else {
-                    s_shell_bytes = mapped;
-                    s_shell_size = img.size;
-                    ESP_LOGI(TAG, "shell: %u KB mapped read-only at %p, served from flash "
-                                  "(no PSRAM)", (unsigned)(img.size >> 10), mapped);
+                    /* A copy, not the mapping. The image is the Launcher and nothing else
+                     * (tens of KB), and a page served out of flash is a flash read while the
+                     * panel scans - the slip ADR 0055 blacks the screen for. In PSRAM the
+                     * page costs a read of ordinary memory and the screen can stay on. The
+                     * mapping is released; the copy is the only reference. A copy that cannot
+                     * be made falls back to the mapping, which still serves. */
+                    void *copy = heap_caps_malloc(img.size, MALLOC_CAP_SPIRAM);
+                    if (copy) {
+                        memcpy(copy, mapped, img.size);
+                        s_shell_bytes = copy;
+                        s_shell_size = img.size;
+                        esp_partition_munmap(handle);
+                        ESP_LOGI(TAG, "shell: %u KB copied to PSRAM at %p, served from RAM",
+                                 (unsigned)(img.size >> 10), copy);
+                    } else {
+                        s_shell_bytes = mapped;
+                        s_shell_size = img.size;
+                        ESP_LOGW(TAG, "shell: %u KB could not be copied to PSRAM; the page is "
+                                      "served from the mapping", (unsigned)(img.size >> 10));
+                    }
                 }
             }
         }

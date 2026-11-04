@@ -288,7 +288,7 @@ makes that a deployment requirement, not a nicety.
 
 | | HTTPS artifact | Device artifact |
 |---|---|---|
-| Entry | `index.html` is the App; `start_url: "/"` | `index.html` is the Launcher; the App is `app.html`, served at `/app` |
+| Entry | `index.html` is the App; `start_url: "/"` | `index.html` is the Launcher, and that is the whole image: the App is the hosted origin's |
 | Compression | plain | text as gzip, originals dropped, served with `Content-Encoding: gzip` |
 | Weights | fetched from jsDelivr | the same |
 | Local Provider | included, lazy chunk | `VITE_LOCAL_PROVIDER=0` — no WebGPU on that origin, so the chunk would be dead bytes |
@@ -332,7 +332,7 @@ artifact carries no firmware path at all. `k7-deploy.md`.
 | What | Why it is not known |
 |---|---|
 | A `library.list` / `library.search` response for 5 000 tracks | the bridge's 1 MiB cap is a guess until measured |
-| ~~Shell image size with the Launcher and `app.html`~~ | measured: 392 783 bytes packed (377 KiB before), so ~15 KB |
+| ~~Shell image size with the Launcher and `app.html`~~ | measured: 392 783 bytes packed with the App copy; the Launcher alone is **14 613 bytes** (index.html + `launcher.js.gz` + `launcher-origins.js`) |
 | A page load's black frame with the Launcher | ADR 0055 measured 187 KB; the Launcher is 30× smaller |
 | Writing `k7.card` on a real FAT32 card through the picker | the writer is unbuilt |
 | Cold 41 MB prefetch over the LAN and over a WAN | the offline promise's first-run cost |
@@ -375,5 +375,5 @@ no device; with a device, send/play/stream work; a local model produces an Inten
   disconnect and reconnect, offline reload, a blocked popup. Plus an installability assertion
   where the test browser fires `beforeinstallprompt` — desktop Chrome and Edge do, the headless
   shell may not — with the manifest shape check in CI as the half that always runs.
-- **host / Python** — the Shell image holds `index.html` (Launcher) and `app.html`, `/app` maps,
-  `/k7.db` and `/xtape.db` both update.
+- **host / Python** — the Shell image holds the Launcher only (`index.html`, `launcher.js`,
+  `launcher-origins.js`), `/app` is a 404, `/k7.db` and `/xtape.db` both update.

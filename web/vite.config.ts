@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { copyFile, mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { copyFile, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { basename, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -165,11 +165,14 @@ function shellOutputs(shell: boolean): Plugin {
     apply: 'build',
     generateBundle(_options, bundle) {
       if (shell) {
-        // TagLib's loader still contains a fallback URL for its own wasm. The app always
-        // hands it verified bytes, so the emitted fallback asset is dead weight.
-        for (const file of Object.keys(bundle)) {
-          if (file.endsWith('.wasm')) delete bundle[file];
-        }
+        /* The device serves the Launcher and nothing else. The App is the hosted origin's
+         * — its service worker keeps it offline — and carrying a second copy in flash was
+         * 600 KB of partition for a page nobody opens, whose reads would displace the
+         * panel's scan. The app is still *built* here (that is what proves it compiles);
+         * its output is not kept. */
+        for (const file of Object.keys(bundle)) delete bundle[file];
+        emitted = [];
+        return;
       }
 
       emitted = Object.keys(bundle)
@@ -179,37 +182,9 @@ function shellOutputs(shell: boolean): Plugin {
     async closeBundle() {
       const outDir = resolve(root, shell ? 'dist-shell' : 'dist');
 
-      /* The subsets the app's `@font-face` names. Copied (and precached) by name rather
-       * than by glob so a font the stylesheet stops using is not carried in flash for
-       * ever; `OFL.txt` rides along because the image distributes the font. */
-      const shellFonts = ['jura-latin.woff2', 'jura-latin-ext.woff2', 'OFL.txt'];
       if (shell) {
-        await mkdir(resolve(outDir, 'icons'), { recursive: true });
-        await mkdir(resolve(outDir, 'ort'), { recursive: true });
-        await mkdir(resolve(outDir, 'fonts'), { recursive: true });
-        for (const font of shellFonts) {
-          await copyFile(resolve(root, 'public/fonts', font), resolve(outDir, 'fonts', font));
-        }
-        await copyFile(
-          resolve(root, 'public/manifest.webmanifest'),
-          resolve(outDir, 'manifest.webmanifest'),
-        );
-        /* Every icon the directory holds: the maskable 512 is a manifest requirement, and
-         * a hand-written list here is how it silently goes missing from the image. */
-        for (const icon of await readdir(resolve(root, 'public/icons'))) {
-          if (!icon.endsWith('.png')) continue;
-          await copyFile(resolve(root, 'public/icons', icon), resolve(outDir, 'icons', icon));
-        }
-        await copyFile(
-          resolve(root, 'public/ort/ort-wasm-simd-threaded.mjs'),
-          resolve(outDir, 'ort/ort-wasm-simd-threaded.mjs'),
-        );
-
-        /* One page at `/`, and it is the Launcher. The App's own entry moves aside to
-         * `/app.html`, which `front_door`'s `logical_for` maps from `/app`; doing it here
-         * rather than in the packer keeps the image a plain copy of the build. */
-        await rename(resolve(outDir, 'index.html'), resolve(outDir, 'app.html'));
-
+        /* One page at `/`, and it is the Launcher: its HTML, its script and the allowlist
+         * the build baked in. Nothing else — no App, no fonts, no icons, no worker. */
         const launcher = await readFile(resolve(root, 'public/launcher.html'), 'utf8').catch(() => {
           throw new Error('the shell build needs web/public/launcher.html');
         });
@@ -236,44 +211,44 @@ function shellOutputs(shell: boolean): Plugin {
         );
       }
 
-      /* The lock is copied so the page can enumerate what it needs; the worker no longer
-       * keys a weights cache on it, because the weights have one offline store and it is
-       * IndexedDB (O2). */
-      await copyFile(resolve(root, 'weights.lock.json'), resolve(outDir, 'weights.lock.json'));
+      if (!shell) {
+        /* The lock is copied so the page can enumerate what it needs; the worker no longer
+         * keys a weights cache on it, because the weights have one offline store and it is
+         * IndexedDB (O2). The device's Launcher has no worker and no weights. */
+        await copyFile(resolve(root, 'weights.lock.json'), resolve(outDir, 'weights.lock.json'));
 
-      // sw.js is a template: its cache names have to be exact in the output, so the values
-      // are written here rather than fetched and guessed at install time.
-      const sw = await readFile(resolve(root, 'public/sw.js'), 'utf8');
-      await writeFile(
-        resolve(outDir, 'sw.js'),
-        sw.replaceAll('__APP_VERSION__', packageVersion),
-      );
+        // sw.js is a template: its cache names have to be exact in the output, so the values
+        // are written here rather than fetched and guessed at install time.
+        const sw = await readFile(resolve(root, 'public/sw.js'), 'utf8');
+        await writeFile(
+          resolve(outDir, 'sw.js'),
+          sw.replaceAll('__APP_VERSION__', packageVersion),
+        );
+      }
 
-      // The worker precaches this list at install. It is generated from the files that
-      // were actually emitted, so dynamic chunks are included and a missing one is caught
-      // by the install rather than by an offline reload.
-      const assets = Array.from(
-        new Set([
-          /* On the device `/` is the Launcher and the App is `/app.html`; on the hosted
-           * origin it is the other way round. `shell.json` names whichever this build made. */
-          ...(shell ? ['/app.html', '/launcher.js', '/launcher-origins.js'] : ['/index.html']),
-          '/manifest.webmanifest',
-          '/icons/icon-192.png',
-          '/icons/icon-512.png',
-          '/icons/icon-512-maskable.png',
-          /* The brand mark sits in the sidebar on every page: offline it must be there on
-           * the first paint, not after a fetch that fails. */
-          '/icons/k7logo.svg',
-          ...(shell ? ['/fonts/jura-latin.woff2', '/fonts/jura-latin-ext.woff2'] : []),
-          '/weights.lock.json',
-          ...(shell ? ['/ort/ort-wasm-simd-threaded.mjs'] : []),
-          ...emitted.map((file) => `/${file}`),
-        ]),
-      );
-      await writeFile(
-        resolve(outDir, 'shell.json'),
-        `${JSON.stringify({ version: packageVersion, assets }, null, 2)}\n`,
-      );
+      if (!shell) {
+        // The worker precaches this list at install. It is generated from the files that
+        // were actually emitted, so dynamic chunks are included and a missing one is caught
+        // by the install rather than by an offline reload.
+        const assets = Array.from(
+          new Set([
+            '/index.html',
+            '/manifest.webmanifest',
+            '/icons/icon-192.png',
+            '/icons/icon-512.png',
+            '/icons/icon-512-maskable.png',
+            /* The brand mark sits in the sidebar on every page: offline it must be there on
+             * the first paint, not after a fetch that fails. */
+            '/icons/k7logo.svg',
+            '/weights.lock.json',
+            ...emitted.map((file) => `/${file}`),
+          ]),
+        );
+        await writeFile(
+          resolve(outDir, 'shell.json'),
+          `${JSON.stringify({ version: packageVersion, assets }, null, 2)}\n`,
+        );
+      }
 
       if (shell) {
         const { raw, packed } = await precompress(outDir);

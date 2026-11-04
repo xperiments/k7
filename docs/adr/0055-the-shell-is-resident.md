@@ -1,5 +1,14 @@
 # The Shell is one image
 
+> **Amended again: the image is the Launcher, and it is resident.** The App is the hosted
+> origin's — the device never carried a second copy that anyone opened, and the 390 KB this
+> document weighed was that copy, not the page. The Launcher is `index.html` (5 KB),
+> `launcher.js` (33 KB, 9 KB gzipped) and `launcher-origins.js`: **14 613 bytes**, copied into
+> PSRAM at boot and served from there. No flash read is behind a page load, so the slide is
+> not hidden — it does not happen — and the black hold, its re-establish and the picture that
+> sometimes came back a band to one side all go with it. Shape 1 below was right about the
+> mechanism and wrong about the price: it was pricing the App, not the Launcher.
+>
 > **Amended twice the same day. The image is mapped, not resident, and the screen blacks out
 > while a page is served.**
 >
