@@ -58,20 +58,9 @@ esp_err_t screen_display_start(const char *music_dir);
  * picture returns. A page load is the one moment nobody is looking at the cassette.
  *
  * Cheap to call per file: the first call of a burst does the blacking and waits a frame for it
- * to land, the rest only extend the hold. No-op on a build with no panel, and before the mark
- * has started the first clock. */
+ * to land, the rest only extend the hold. The screen comes back by itself a second after the
+ * last call. No-op on a build with no panel, and before the mark has started the first clock. */
 void screen_display_page_service(void);
-
-/* The file that page_service() announced has been sent.
- *
- * The hold lasts while a response is in flight, not for a fixed time after its first byte:
- * a page's largest script can take longer to send than any sensible hold, and a scan
- * re-established in the middle of it is displaced again by the reads that follow - which is
- * how the picture ended up a band to one side on some loads and not others. Pairing the two
- * calls makes the hold the length of the load; the scan comes back a quiet moment after the
- * last response, when there is nothing left to read. Must be called once for every
- * screen_display_page_service(). */
-void screen_display_page_done(void);
 
 #if CONFIG_APP_UI_SCREEN_HTTP
 /* Register the screen's HTTP diagnostics with the front door: GET /api/screen.bmp, the

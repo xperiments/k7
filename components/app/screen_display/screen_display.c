@@ -293,14 +293,8 @@ static void card_poll(void)
 
 /* How long the glass stays black after the last page file was asked for. A page load is a
  * burst of requests over a few hundred milliseconds; a second past the last one is enough to
- * cover it, and it is the one moment nobody is looking at the cassette. It is a floor for the
- * hold, not its length: the hold also lasts while a response is in flight (s_page_busy). */
+ * cover it, and it is the one moment nobody is looking at the cassette. */
 #define PAGE_HOLD_MS 1000
-
-/* How long after the last response has been sent the scan is re-established. Reading is what
- * displaces it, so the re-establish must not race a read: a quiet window is what makes the
- * picture come back right rather than sometimes right. */
-#define PAGE_QUIET_MS 400
 
 /* What the hold does, and why it is black.
  *
@@ -317,17 +311,8 @@ static void card_poll(void)
 static volatile uint32_t s_page_hold_until;
 static bool s_page_held;
 
-/* Page files being sent right now. A response can take longer than PAGE_HOLD_MS - the page's
- * largest script over a slow client is the usual one - and the scan must not be re-established
- * while its remaining reads are still to come, or the picture that comes back is displaced
- * again with nothing left to fix it. Bumped by the HTTP tasks on either side of the job, so the
- * pair is taken under a spinlock: it is two instructions and no blocking. */
-static portMUX_TYPE s_page_lock = portMUX_INITIALIZER_UNLOCKED;
-static volatile uint32_t s_page_busy;
-
 static bool page_hold_active(void)
 {
-    if (s_page_busy) return true;
     uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
     return s_page_hold_until && (int32_t)(s_page_hold_until - now) > 0;
 }
@@ -341,9 +326,6 @@ void screen_display_page_service(void)
 
     bool already = page_hold_active();
     s_page_hold_until = (uint32_t)(esp_timer_get_time() / 1000) + PAGE_HOLD_MS;
-    portENTER_CRITICAL(&s_page_lock);
-    s_page_busy += 1;
-    portEXIT_CRITICAL(&s_page_lock);
     if (already || !lvgl_port_lock(50)) return; /* the glass is already dark */
 
 #if PAGE_HOLD_BLACK
@@ -354,22 +336,6 @@ void screen_display_page_service(void)
     lvgl_port_unlock();
     vTaskDelay(pdMS_TO_TICKS(40));
 #endif
-#endif
-}
-
-void screen_display_page_done(void)
-{
-#if CONFIG_APP_BOARD_SUNTON_8048S050C
-    if (!s_disp || !s_frame_live) return;
-
-    portENTER_CRITICAL(&s_page_lock);
-    if (s_page_busy > 0) s_page_busy -= 1;
-    portEXIT_CRITICAL(&s_page_lock);
-
-    /* The last response of a load is the moment the bus goes quiet; the scan waits a little
-     * past it, and never shortens a hold a newer request has already set. */
-    uint32_t until = (uint32_t)(esp_timer_get_time() / 1000) + PAGE_QUIET_MS;
-    if ((int32_t)(until - s_page_hold_until) > 0) s_page_hold_until = until;
 #endif
 }
 
