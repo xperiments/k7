@@ -38,7 +38,12 @@ static const char *TAG = "panel";
  * cost something - the scan-out pulls 36 MB/s out of PSRAM at 18 MHz instead of 32 - and a
  * panel driven past its measured timing shows a constant sideways offset before it shows
  * anything else. Back to 16. */
-#define PCLK_HZ 16000000
+/* 12.5 MHz, down from the profile's 16: the scan-out reads PSRAM continuously, and the
+ * panel's FIFO is what runs dry when the rest of the board is using the same memory. A
+ * quarter less scan-out is a quarter more slack for everything else; 12.5 MHz still scans
+ * 31 frames a second, and LVGL asks for 30. Worth its own measurement if the picture still
+ * slips - the number to watch is the frame rate in the boot log, not the clock itself. */
+#define PCLK_HZ 12500000
 
 
 /* boards/sunton-8048s050c.json -> wiring.dataPins */
