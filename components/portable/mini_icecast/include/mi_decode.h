@@ -17,7 +17,12 @@ uint32_t  mi_dec_hz(const mi_dec_t *d);
 /* The track's length, or 0 when the decoder cannot know it (a truncated file, a
  * stream that never announced its length). For MP3 the figure includes the encoder
  * delay and padding the format carries, so it runs a few tens of milliseconds long -
- * the honest answer, since that is how much audio the file holds. */
+ * the honest answer, since that is how much audio the file holds.
+ *
+ * An MP3 with no Xing/Info header is estimated from its frame length and bitrate: the
+ * exact count costs a linear read of the whole file, and this is asked at the moment
+ * the broadcast has nothing else to send. A VBR file that announces no length is 0,
+ * not a guess. */
 uint32_t  mi_dec_duration_ms(const mi_dec_t *d);
 size_t    mi_dec_read(mi_dec_t *d, int16_t *stereo, size_t max_frames); /* <= MI_READ_FRAMES; 0 = end */
 /* Wall time this decoder has spent blocked in fread() since it was opened. The

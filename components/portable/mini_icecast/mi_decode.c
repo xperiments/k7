@@ -31,6 +31,9 @@ struct mi_dec {
     uint32_t hz;
     int      ch;
     uint64_t io_us; /* wall time blocked in fread(), so decode CPU can be separated */
+    /* An MP3 without a Xing/Info header: a length estimate from the first frame, so the
+     * broadcast is never held while dr_mp3 reads the whole file to count frames. */
+    uint32_t dur_hint_ms;
     int16_t *tmp; /* native-channel scratch */
     union {
         drmp3   mp3;
@@ -61,6 +64,101 @@ static drmp3_bool32 mp3_tell(void *ud, drmp3_int64 *c) { *c = ftell(((mi_dec_t *
 static drflac_bool32 flac_tell(void *ud, drflac_int64 *c) { *c = ftell(((mi_dec_t *)ud)->f); return 1; }
 static drwav_bool32 wav_tell(void *ud, drwav_int64 *c) { *c = ftell(((mi_dec_t *)ud)->f); return 1; }
 
+/* The bitrate a 4-byte MPEG audio frame header declares, in kbps, or 0 when the header
+ * is not a valid one. ISO 11172-3 and 13818-3's bitrate index tables. */
+static uint32_t mp3_header_kbps(const uint8_t *h)
+{
+    static const uint16_t v1_l1[] = { 0, 32, 64, 96, 128, 160, 192, 224,
+                                      256, 288, 320, 352, 384, 416, 448, 0 };
+    static const uint16_t v1_l2[] = { 0, 32, 48, 56, 64, 80, 96, 112,
+                                      128, 160, 192, 224, 256, 320, 384, 0 };
+    static const uint16_t v1_l3[] = { 0, 32, 40, 48, 56, 64, 80, 96,
+                                      112, 128, 160, 192, 224, 256, 320, 0 };
+    static const uint16_t v2_l1[] = { 0, 32, 48, 56, 64, 80, 96, 112,
+                                      128, 144, 160, 176, 192, 224, 256, 0 };
+    static const uint16_t v2_l23[] = { 0, 8, 16, 24, 32, 40, 48, 56,
+                                       64, 80, 96, 112, 128, 144, 160, 0 };
+
+    if (h[0] != 0xFF || (h[1] & 0xE0) != 0xE0) return 0;
+    int version = (h[1] >> 3) & 0x3; /* 3 = MPEG1, 2 = MPEG2, 0 = MPEG2.5 */
+    int layer = (h[1] >> 1) & 0x3;   /* 1 = III, 2 = II, 3 = I */
+    int index = (h[2] >> 4) & 0xF;
+    if (version == 1 || layer == 0 || index == 0 || index == 15) return 0;
+    if (version == 3) {
+        if (layer == 1) return v1_l3[index];
+        if (layer == 2) return v1_l2[index];
+        return v1_l1[index];
+    }
+    return layer == 3 ? v2_l1[index] : v2_l23[index];
+}
+
+/* The sample rate a frame header declares, in Hz, or 0. */
+static uint32_t mp3_header_hz(const uint8_t *h)
+{
+    static const uint16_t v1[] = { 44100, 48000, 32000, 0 };
+    static const uint16_t v2[] = { 22050, 24000, 16000, 0 };
+    static const uint16_t v25[] = { 11025, 12000, 8000, 0 };
+    int version = (h[1] >> 3) & 0x3; /* 3 = MPEG1, 2 = MPEG2, 0 = MPEG2.5 */
+    int index = (h[2] >> 2) & 0x3;
+    if (version == 1) return 0;
+    return version == 3 ? v1[index] : version == 2 ? v2[index] : v25[index];
+}
+
+/* The length a frame header declares, in bytes, or 0. */
+static uint32_t mp3_frame_bytes(const uint8_t *h)
+{
+    uint32_t kbps = mp3_header_kbps(h);
+    uint32_t hz = mp3_header_hz(h);
+    if (!kbps || !hz) return 0;
+    int version = (h[1] >> 3) & 0x3;
+    int layer = (h[1] >> 1) & 0x3; /* 1 = III, 2 = II, 3 = I */
+    uint32_t pad = (uint32_t)((h[2] >> 1) & 0x1);
+    uint32_t bps = kbps * 1000u;
+    if (layer == 3) return (12u * bps / hz + pad) * 4u;        /* Layer I */
+    if (layer == 1 && version != 3) return 72u * bps / hz + pad; /* Layer III, MPEG2/2.5 */
+    return 144u * bps / hz + pad;                               /* the rest */
+}
+
+/* A Track's length when its MP3 carries no Xing/Info header. dr_mp3's exact count reads
+ * the whole file in linear time, and doing that before the first sample leaves the
+ * broadcast silent for as long as the card takes — a 2 s ring does not survive it.
+ *
+ * The estimate is the stream's byte length over the first frame's bitrate, which is the
+ * real length for a CBR file. A VBR file without a length header cannot be estimated
+ * from one frame (the first frame's bitrate says nothing about the average), so it gets
+ * 0 - an unknown length, which the player shows as such, rather than a number that is
+ * wrong by a factor. Two frame headers are what tells the two apart, and they cost two
+ * sectors against a scan's ten thousand. */
+static uint32_t mp3_estimate_ms(mi_dec_t *d)
+{
+    drmp3 *p = &d->u.mp3;
+    if (p->streamStartOffset > 0x7FFFFFFF) return 0;
+    long at = ftell(d->f);
+    uint8_t h[4];
+    uint32_t kbps = 0;
+    uint32_t bytes = 0;
+    if (fseek(d->f, (long)p->streamStartOffset, SEEK_SET) == 0 &&
+        fread(h, 1, sizeof h, d->f) == sizeof h) {
+        kbps = mp3_header_kbps(h);
+        bytes = mp3_frame_bytes(h);
+        if (kbps && bytes && p->streamStartOffset + bytes + 4 <= p->streamLength) {
+            uint8_t next[4];
+            if (fseek(d->f, (long)(p->streamStartOffset + bytes), SEEK_SET) == 0 &&
+                fread(next, 1, sizeof next, d->f) == sizeof next &&
+                mp3_header_kbps(next) != kbps) {
+                kbps = 0; /* a VBR stream with no length header: not ours to guess */
+            }
+        }
+    }
+    if (at >= 0) fseek(d->f, at, SEEK_SET); /* the decoder's cursor is where it was */
+    if (kbps == 0) return 0;
+    uint64_t audio = p->streamLength > p->streamStartOffset
+                         ? p->streamLength - p->streamStartOffset
+                         : 0;
+    uint64_t ms = audio * 8 / kbps;
+    return ms > 0xFFFFFFFFu ? 0xFFFFFFFFu : (uint32_t)ms;
+}
+
 mi_dec_t *mi_dec_open(const char *path)
 {
     mi_fmt_t kind = mi_dec_format_of(path);
@@ -79,6 +177,11 @@ mi_dec_t *mi_dec_open(const char *path)
         if (!drmp3_init(&d->u.mp3, cb_read, mp3_seek, mp3_tell, NULL, d, NULL)) goto out;
         d->hz = d->u.mp3.sampleRate;
         d->ch = d->u.mp3.channels;
+        /* The length is known only when the file carries a Xing/Info header. When it
+         * does not, estimate it now rather than let a later call scan the card. */
+        if (d->u.mp3.totalPCMFrameCount == DRMP3_UINT64_MAX) {
+            d->dur_hint_ms = mp3_estimate_ms(d);
+        }
         break;
     case MI_FMT_FLAC:
         d->u.flac = drflac_open(cb_read, flac_seek, flac_tell, d, NULL);
@@ -112,7 +215,18 @@ uint32_t mi_dec_duration_ms(const mi_dec_t *d)
 {
     uint64_t frames;
     switch (d->kind) {
-    case MI_FMT_MP3:  frames = (uint64_t)drmp3_get_pcm_frame_count((drmp3 *)&d->u.mp3); break;
+    case MI_FMT_MP3: {
+        /* Never drmp3_get_pcm_frame_count(): for a file with no length header it reads
+         * the whole file, and this is called at the moment the broadcast has nothing
+         * else to send. The count dr_mp3 already has is exact; the estimate is not. */
+        const drmp3 *p = &d->u.mp3;
+        if (p->totalPCMFrameCount == DRMP3_UINT64_MAX) return d->dur_hint_ms;
+        frames = (uint64_t)p->totalPCMFrameCount;
+        /* The header's count includes the encoder's delay and padding. */
+        frames = frames > p->delayInPCMFrames ? frames - p->delayInPCMFrames : 0;
+        frames = frames > p->paddingInPCMFrames ? frames - p->paddingInPCMFrames : 0;
+        break;
+    }
     case MI_FMT_FLAC: frames = (uint64_t)d->u.flac->totalPCMFrameCount; break;
     case MI_FMT_WAV:  frames = (uint64_t)d->u.wav.totalPCMFrameCount; break;
     default: return 0;

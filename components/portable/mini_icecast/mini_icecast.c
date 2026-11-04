@@ -788,11 +788,17 @@ typedef struct {
 static void src_task(void *arg)
 {
     src_job_t *j = arg;
+    int64_t open_at = esp_timer_get_time();
     j->dec = mi_dec_open(j->path);
     if (j->dec) {
         j->hz = mi_dec_hz(j->dec);
         j->duration_ms = mi_dec_duration_ms(j->dec);
         j->ok = j->hz != 0;
+        /* The track change is the one moment the stream has nothing to send: how long
+         * the open and the length took is what tells a slow card from a slow scan. */
+        ESP_LOGI(TAG, "track open: %s (%llu ms), %u Hz, length %u ms",
+                 j->path, (unsigned long long)((esp_timer_get_time() - open_at) / 1000),
+                 (unsigned)j->hz, (unsigned)j->duration_ms);
     }
     xSemaphoreGive(j->ready);
     if (!j->ok) {
