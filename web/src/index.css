@@ -246,6 +246,24 @@
         perspective: 90rem;
         touch-action: pan-y;
         cursor: grab;
+        /* The row does not end at the column's edge: it fades into the page there, so a
+           shelf that continues past the fold reads as continuing rather than as cut. The
+           mask fades the cases themselves, which is why there is no overlay to click
+           through — the left and right of the stage are simply not drawn. */
+        -webkit-mask-image: linear-gradient(
+            to right,
+            transparent 0%,
+            black 12%,
+            black 88%,
+            transparent 100%
+        );
+        mask-image: linear-gradient(
+            to right,
+            transparent 0%,
+            black 12%,
+            black 88%,
+            transparent 100%
+        );
     }
 
     .k7-shelf:active {
