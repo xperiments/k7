@@ -190,6 +190,36 @@
     font-size: 130%;
     color-scheme: dark;
     }
+
+  /* Scrollbars, iOS-style: no channel, no buttons, and a thin rounded thumb that is not
+   * there until you point at the surface or tab into it — as close as CSS gets to iOS's
+   * "only while you are in it". The region still reserves its six pixels (`overflow:
+   * overlay` is gone), but the page is not crossed by a grey channel any more.
+   * `scrollbar-width`/`scrollbar-color` are the same two answers for Firefox. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  *:hover,
+  *:focus-within {
+    scrollbar-color: color-mix(in oklch, var(--foreground) 30%, transparent) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 999px;
+  }
+  *:hover::-webkit-scrollbar-thumb,
+  *:focus-within::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--foreground) 26%, transparent);
+  }
 }
 
 /*
