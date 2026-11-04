@@ -251,7 +251,9 @@ export function MediaArea({ album }: { album?: string } = {}) {
           </aside>
         ) : null}
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
+        {/* Centred like the shelf while it fits, filling the column and scrolling when it
+            does not: `max-h-full` is what keeps a long album inside the row. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto lg:max-h-full lg:self-center">
           {state.loading ? (
             <div className="flex justify-center py-6">
               <Skeleton className="aspect-[16/25] w-40" />
