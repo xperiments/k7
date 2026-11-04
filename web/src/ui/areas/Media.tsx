@@ -251,33 +251,37 @@ export function MediaArea({ album }: { album?: string } = {}) {
           </aside>
         ) : null}
 
-        {/* Centred like the shelf while it fits, filling the column and scrolling when it
-            does not: `max-h-full` is what keeps a long album inside the row. */}
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto lg:max-h-full lg:self-center">
-          {state.loading ? (
-            <div className="flex justify-center py-6">
-              <Skeleton className="aspect-[16/25] w-40" />
-            </div>
-          ) : !hasAlbums ? (
-            <NoAlbums reachable={state.reachable} />
-          ) : nothingMatches ? (
-            <Empty className="border">
-              <EmptyHeader>
-                <EmptyTitle>Nothing matches “{query.trim()}”</EmptyTitle>
-                <EmptyDescription>Album names and artists are searched.</EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <Button size="sm" variant="outline" onClick={() => setQuery('')}>
-                  Clear the search
-                </Button>
-              </EmptyContent>
-            </Empty>
-          ) : active ? (
-            <AlbumDetail album={active} state={state} />
-          ) : null}
+        {/* The column is the album's panel: it fills its half and carries the gradient, and
+            the list floats in the middle of it on its own surface. The margins — not flex
+            centring — are what places it, because auto margins collapse to nothing when the
+            content is taller than the panel, where flex centring would clip the first row. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-[linear-gradient(to_bottom,black_0%,#888888_50%,black_100%)]">
+          <div className="m-auto flex w-full flex-col gap-4">
+            {state.loading ? (
+              <div className="flex justify-center py-6">
+                <Skeleton className="aspect-[16/25] w-40" />
+              </div>
+            ) : !hasAlbums ? (
+              <NoAlbums reachable={state.reachable} />
+            ) : nothingMatches ? (
+              <Empty className="border">
+                <EmptyHeader>
+                  <EmptyTitle>Nothing matches “{query.trim()}”</EmptyTitle>
+                  <EmptyDescription>Album names and artists are searched.</EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button size="sm" variant="outline" onClick={() => setQuery('')}>
+                    Clear the search
+                  </Button>
+                </EmptyContent>
+              </Empty>
+            ) : active ? (
+              <AlbumDetail album={active} state={state} />
+            ) : null}
 
-          <Unmeasurable state={state} />
-          <NotMeasured state={state} />
+            <Unmeasurable state={state} />
+            <NotMeasured state={state} />
+          </div>
         </div>
       </div>
     </div>
