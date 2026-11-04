@@ -246,7 +246,7 @@ export function MediaArea({ album }: { album?: string } = {}) {
           shelf goes back on top and the tracks keep the remaining height. */}
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:grid lg:grid-cols-2 lg:gap-6">
         {!state.loading && hasAlbums && !nothingMatches && active ? (
-          <aside className="min-h-0 lg:self-start">
+          <aside className="min-h-0 lg:self-center">
             <AlbumShelf albums={albums} selected={selected} onSelect={setSelected} />
           </aside>
         ) : null}
