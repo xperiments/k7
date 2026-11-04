@@ -47,3 +47,16 @@ CONFIG_ESP_HTTPS_SERVER_ENABLE=y
 # The TLS listener's per-connection buffers come out of PSRAM: during playback
 # internal RAM is the scarce kind.
 CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+
+# Keep Wi-Fi's and lwIP's buffers out of PSRAM on this board.
+#
+# The base defaults put them there to free internal DRAM for the encoder, which is the
+# right trade for a board with no panel. This board has one: the LCD's GDMA reads two
+# 800x480 framebuffers straight out of PSRAM at ~32 MB/s, and its FIFO holds only a few
+# lines. A Wi-Fi transmit burst is read from the same memory by the radio's DMA - one
+# aggregated burst of TX buffers is tens of KB in a couple of milliseconds, which is the
+# same order as the panel's whole bandwidth - and the FIFO runs dry, after which the
+# panel is out of step until something re-establishes it. The internal heap measured
+# ~155 KB free (~77 KB contiguous) with the encoder state already in PSRAM, which is
+# enough for the ~25-50 KB Wi-Fi needs; the boot log says if it is not.
+# CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP is not set
