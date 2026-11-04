@@ -1,7 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import { Disc3 } from 'lucide-react';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -198,36 +197,24 @@ export function MediaArea() {
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-      <header className="flex flex-col gap-0.5">
+      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <h1 className="text-xl font-semibold tracking-tight">Albums</h1>
-        <p className="text-sm text-muted-foreground">
-          What this browser read from the card.
-        </p>
+        {/* The search is the header's one action: on the title's line when there is room
+            for it, under it when there is not. */}
+        <div className="flex w-full flex-col gap-1 sm:w-64">
+          <label htmlFor={searchId} className="sr-only">
+            Search albums
+          </label>
+          <Input
+            id={searchId}
+            type="search"
+            value={query}
+            placeholder="Search albums"
+            autoComplete="off"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
       </header>
-
-      {!state.reachable && !state.loading ? (
-        <Alert variant="warning">
-          <AlertTitle>The device is not answering</AlertTitle>
-          <AlertDescription>
-            Showing what this browser measured. Nothing is being marked as gone while the device
-            is away.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor={searchId} className="sr-only">
-          Search albums
-        </label>
-        <Input
-          id={searchId}
-          type="search"
-          value={query}
-          placeholder="Search albums"
-          autoComplete="off"
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </div>
 
       {state.loading ? (
         <div className="flex justify-center py-6">
