@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Disc3,
   ListMusic,
+  MessageCircle,
   Plug,
   RefreshCw,
   Settings as SettingsIcon,
@@ -105,8 +106,8 @@ function navGroups(drafts: number, tracks: number): NavGroup[] {
         },
         {
           href: routeHref({ name: 'ask' }),
-          label: 'Ask',
-          icon: <Sparkles aria-hidden="true" />,
+          label: 'Chat',
+          icon: <MessageCircle aria-hidden="true" />,
           names: ['ask'],
         },
       ],

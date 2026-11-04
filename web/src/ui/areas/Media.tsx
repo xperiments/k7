@@ -251,11 +251,11 @@ export function MediaArea({ album }: { album?: string } = {}) {
           </aside>
         ) : null}
 
-        {/* The column is the album's panel: it fills its half and carries the gradient, and
-            the list floats in the middle of it on its own surface. The margins — not flex
-            centring — are what places it, because auto margins collapse to nothing when the
-            content is taller than the panel, where flex centring would clip the first row. */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-[linear-gradient(to_bottom,black_0%,#888888_50%,black_100%)]">
+        {/* The column fills its half and the list floats in the middle of it. The margins —
+            not flex centring — are what places it, because auto margins collapse to nothing
+            when the content is taller than the column, where centring would clip the first
+            row. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto">
           <div className="m-auto flex w-full flex-col gap-4">
             {state.loading ? (
               <div className="flex justify-center py-6">
