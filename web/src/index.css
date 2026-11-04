@@ -302,7 +302,11 @@
         border: 0;
         background: none;
         color: inherit;
-        transform: rotateY(90deg);
+        /* A spine that is turned ninety degrees reaches towards the camera, so it projects
+           taller than the case it belongs to and reads as *nearer* than the case it is
+           beside. A little smaller keeps it behind that case, where a row going back
+           belongs, and the stage no longer has to be tall enough for the projection. */
+        transform: rotateY(90deg) scale(0.94);
         transform-style: preserve-3d;
         transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
         cursor: pointer;
