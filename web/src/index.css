@@ -204,10 +204,10 @@
  */
 @layer components {
     .k7-shelf {
-        --cw: 10rem;
+        --cw: 13rem;
         --ch: calc(var(--cw) * 25 / 16);
-        --cd: 2rem;
-        --cg: 0.5rem;
+        --cd: 2.6rem;
+        --cg: 0.65rem;
 
         position: relative;
         width: 100%;

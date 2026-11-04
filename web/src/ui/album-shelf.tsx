@@ -23,9 +23,9 @@ import { navigate, routeHref } from './router';
  */
 
 /** rem, and the same numbers as `--cw`, `--cd`, `--cg` in `index.css`. */
-const CASE_W = 10;
-const CASE_D = 2;
-const CASE_GAP = 0.5;
+const CASE_W = 13;
+const CASE_D = 2.6;
+const CASE_GAP = 0.65;
 /** How far either side of the selection the row is built; the rest is off the shelf. */
 const WINDOW = 10;
 
@@ -52,7 +52,7 @@ function placeAt(distance: number): string {
   if (distance === 0) return 'translate3d(0, 0, 0)';
   const steps = Math.abs(distance) - 1;
   const x = CASE_W / 2 + CASE_GAP + steps * (CASE_D + CASE_GAP) + CASE_D / 2;
-  const z = -Math.min(Math.abs(distance), 8) * 1.2;
+  const z = -Math.min(Math.abs(distance), 8) * 1.56;
   return `translate3d(${(distance > 0 ? x : -x).toFixed(3)}rem, 0, ${z.toFixed(2)}rem)`;
 }
 
