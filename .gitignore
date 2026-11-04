@@ -39,3 +39,10 @@ sdkconfig.headless
 tls/ca.key
 tls/ca.srl
 tls/*.csr
+
+# The label artwork's sources are 27 MB of binaries. The exported JPEG and PNG are what the
+# build and the screen use; the .psd stays on the machine that draws it.
+assets/labels/*.psd
+
+# The ReUI agent skill is installed by its own installer and updated there, not vendored.
+.agents/

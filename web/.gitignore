@@ -13,3 +13,6 @@ public/weights/
 
 # The mkcert pair for the development origin (k7-deploy.md §4).
 .certs/
+
+# The typecheck's incremental cache, rewritten by every `tsc --noEmit`
+tsconfig.tsbuildinfo
