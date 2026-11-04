@@ -244,9 +244,9 @@ export function MediaArea({ album }: { album?: string } = {}) {
           keeps its own height and never scrolls; the right column is the only scroll region
           on the page, so the case stays in view while its tracks go past. Below `lg` the
           shelf goes back on top and the tracks keep the remaining height. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:grid lg:grid-cols-2 lg:gap-6">
         {!state.loading && hasAlbums && !nothingMatches && active ? (
-          <aside className="shrink-0 lg:w-[21rem] lg:self-start">
+          <aside className="min-h-0 lg:self-start">
             <AlbumShelf albums={albums} selected={selected} onSelect={setSelected} />
           </aside>
         ) : null}
