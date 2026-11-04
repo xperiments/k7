@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import { restoreCardScope } from '../card/session';
 import { loadDrafts } from '../playlists/drafts';
 import { useDeviceStatus } from '../device/useDeviceStatus';
-import { AlbumArea } from './areas/Album';
 import { ArtistArea } from './areas/Artist';
 import { AskArea } from './areas/Ask';
 import { MediaArea } from './areas/Media';
@@ -84,7 +83,9 @@ export function App() {
           {route.name === 'playlist' && <PlaylistEditor id={route.id} />}
           {route.name === 'ask' && <AskArea />}
           {route.name === 'media' && <MediaArea />}
-          {route.name === 'album' && <AlbumArea album={route.album} />}
+          {/* An album is not a page any more: its route turns the case on the shelf and the
+              tracks below it, so a link to one album still lands somewhere useful. */}
+          {route.name === 'album' && <MediaArea album={route.album} />}
           {route.name === 'artist' && <ArtistArea artist={route.artist} />}
           {route.name === 'video' && <VideoArea id={route.id} />}
           {route.name === 'player' && <PlayerArea />}

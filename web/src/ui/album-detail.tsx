@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { ArrowLeft, ListPlus, MoreHorizontal, Play as PlayIcon } from 'lucide-react';
+import { ListPlus, MoreHorizontal, Play as PlayIcon } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
@@ -14,37 +14,33 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getDevice } from '../../device/device';
-import { trackAt, type McpTrack } from '../../device/mcp';
-import { refreshDevice } from '../../device/useDeviceStatus';
+import { getDevice } from '../device/device';
+import { trackAt, type McpTrack } from '../device/mcp';
+import { refreshDevice } from '../device/useDeviceStatus';
 import {
-  findAlbum,
   UNKNOWN_ALBUM,
   UNKNOWN_ARTIST,
-  useMediaIndex,
   type Album,
   type MediaIndexState,
-} from '../../media/albums';
-import { useCardScope } from '../../card/session';
+} from '../media/albums';
+import { useCardScope } from '../card/session';
 import {
   imageRowKey,
   readImageMeasurements,
   type ImageMeasurement,
-} from '../../domain/snapshot';
-import { loadSnapshot } from '../../storage/snapshots';
-import { isAbort, searchVideos, VideoError, type Video } from '../../media/youtube';
-import { addRows, createDraft, useDrafts } from '../../playlists/drafts';
-import { getSettings, subscribeSettings } from '../../settings';
-import type { CachedMedia } from '../../storage/media';
-import { formatDuration, plural } from '../format';
-import { Cover } from '../cover';
-import { navigate, routeHref } from '../router';
-import { rememberVideo } from './Video';
-import { usePlayback } from '../playback';
-import { useAnalysis } from '../state/analysis';
+} from '../domain/snapshot';
+import { loadSnapshot } from '../storage/snapshots';
+import { isAbort, searchVideos, VideoError, type Video } from '../media/youtube';
+import { addRows, createDraft, useDrafts } from '../playlists/drafts';
+import { getSettings, subscribeSettings } from '../settings';
+import type { CachedMedia } from '../storage/media';
+import { formatDuration, plural } from './format';
+import { navigate, routeHref } from './router';
+import { rememberVideo } from './areas/Video';
+import { usePlayback } from './playback';
+import { useAnalysis } from './state/analysis';
 
 /**
  * One album: the cache rows it is made of, the measurements the device answers for them,
@@ -246,9 +242,9 @@ function useVideoSearch(query: string | null): VideoSearch {
     setError(null);
     setSearching(true);
     void searchVideos(query, getSettings().invidious, controller.signal)
-      .then((found) => {
+      .then((album) => {
         if (controller.signal.aborted) return;
-        setVideos(found);
+        setVideos(album);
       })
       .catch((failure: unknown) => {
         // A timeout is an answer of sorts; the page's own abort is not.
@@ -272,7 +268,7 @@ function useVideoSearch(query: string | null): VideoSearch {
   return { videos, error, searching };
 }
 
-/** The search's answer: skeletons, an error with the way to Settings, the tiles, or nothing found. */
+/** The search's answer: skeletons, an error with the way to Settings, the tiles, or nothing album. */
 function LookupResults({
   title,
   search,
@@ -315,7 +311,7 @@ function LookupResults({
             </div>
           </div>
         ) : videos && videos.length === 0 ? (
-          <p className="text-sm text-muted-foreground">The instance found nothing for that query.</p>
+          <p className="text-sm text-muted-foreground">The instance album nothing for that query.</p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {(videos ?? []).map((video) => (
@@ -445,9 +441,7 @@ function TrackRow({
   );
 }
 
-export function AlbumArea({ album }: { album: string }) {
-  const state = useMediaIndex();
-  const found = findAlbum(state.index, album);
+export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexState }) {
   const playback = usePlayback();
   const { readCardFile } = useAnalysis();
   const scope = useCardScope();
@@ -463,7 +457,7 @@ export function AlbumArea({ album }: { album: string }) {
    * instance that does not answer changes nothing, and the row keeps its own way in. */
   const settings = useSyncExternalStore(subscribeSettings, getSettings, getSettings);
   const albumQuery =
-    found !== null && settings.invidious.trim() !== '' ? albumQueryFor(found) : null;
+    album !== null && settings.invidious.trim() !== '' ? albumQueryFor(album) : null;
   const albumSearch = useVideoSearch(albumQuery);
   /* Only a search with something in it replaces the row menu: an album's query can come back
    * empty while a track's finds the song, so an empty answer keeps both doors. */
@@ -499,17 +493,17 @@ export function AlbumArea({ album }: { album: string }) {
   }, [scope]);
 
   useEffect(() => {
-    if (!found) return;
+    if (!album) return;
     // No card in the player, no library: asking for every row would be a dozen refusals for
     // an answer already known. The browser's own image answers instead.
     if (!state.card) {
-      setMeasurements(new Map(found.rows.map((row) => [row.path, null] as const)));
+      setMeasurements(new Map(album.rows.map((row) => [row.path, null] as const)));
       return;
     }
     let cancelled = false;
     setMeasurements(null);
     void Promise.all(
-      found.rows.map(async (row) => {
+      album.rows.map(async (row) => {
         try {
           return [row.path, await trackAt(row.path)] as const;
         } catch {
@@ -523,7 +517,7 @@ export function AlbumArea({ album }: { album: string }) {
     return () => {
       cancelled = true;
     };
-  }, [found, state.card]);
+  }, [album, state.card]);
 
   /* The row's numbers, as this browser wrote them, when the player cannot give them back. */
   const imageOf = (row: CachedMedia): ImageMeasurement | null =>
@@ -538,7 +532,7 @@ export function AlbumArea({ album }: { album: string }) {
   const nothingInTheImage = answered.length > 0 && noRow.length === answered.length;
   // Every row the player could not answer for is one this browser can: the album is not lost.
   const allFromImage =
-    found !== null && found.rows.length > 0 && found.rows.every((row) => imageOf(row) !== null);
+    album !== null && album.rows.length > 0 && album.rows.every((row) => imageOf(row) !== null);
 
   /* Two kinds of play. With the card in the player, the player plays it and the bar follows
    * its broadcast. With the card in the computer, the player has nothing to play — so the
@@ -546,11 +540,11 @@ export function AlbumArea({ album }: { album: string }) {
    * play reaches it: that is what makes the bar's next and previous mean something. */
   const play = async (row: CachedMedia) => {
     if (!state.card) {
-      const tracks = (found?.rows ?? []).map((entry) => ({
+      const tracks = (album?.rows ?? []).map((entry) => ({
         path: entry.path,
         title: titleOf(entry),
         artist: entry.artist,
-        cover: found?.cover ?? null,
+        cover: album?.cover ?? null,
       }));
       const start = tracks.findIndex((track) => track.path === row.path);
       const played = await playback.playAlbum(tracks, Math.max(0, start), readCardFile);
@@ -588,81 +582,30 @@ export function AlbumArea({ album }: { album: string }) {
   };
 
   const addToNew = (row: CachedMedia) => {
-    const draft = createDraft(found?.album ?? 'New playlist', [row.path]);
+    const draft = createDraft(album.album ?? 'New playlist', [row.path]);
     setNotice({ kind: 'ok', text: `Added “${titleOf(row)}” to a new playlist, “${draft.name}”.` });
   };
 
-  if (state.loading) {
-    return (
-      <div className="flex flex-col gap-4 p-4 sm:p-6">
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-48 w-48" />
-      </div>
-    );
-  }
-
-  if (!found) {
-    return (
-      <div className="p-4 sm:p-6">
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyTitle>This album is not in this browser</EmptyTitle>
-            <EmptyDescription>
-              The album index is built from the tags this browser read. If the card was measured
-              somewhere else, measure it here once.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button size="sm" onClick={() => navigate(routeHref({ name: 'media' }))}>
-              Back to Media
-            </Button>
-          </EmptyContent>
-        </Empty>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          nativeButton={false}
-          render={<a href={routeHref({ name: 'media' })} />}
-        >
-          <ArrowLeft aria-hidden="true" />
-          Media
-        </Button>
+    <div className="flex flex-col gap-4">
+      {/* Who made it and what it is. The shelf's label carries the name and the count; this
+          is the one line with somewhere to go — the artist. */}
+      <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+        {album.artists.length === 1 ? (
+          <a
+            href={routeHref({ name: 'artist', artist: album.artists[0] })}
+            className="underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            {album.artists[0]}
+          </a>
+        ) : (
+          <span>{plural(album.artists.length, 'artist')} · each track names its own</span>
+        )}
+        <span aria-hidden="true">·</span>
+        <span className="tabular-nums">{plural(album.tracks, 'track')}</span>
+        <span aria-hidden="true">·</span>
+        <span>{genreText(album)}</span>
       </div>
-
-      {/* Two columns: the album on the left, what one does with it on the right. On a
-          narrow page they stack, cover first, because the cover is what says which album
-          this is. */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-6">
-        <aside className="flex flex-col gap-3 sm:flex-row sm:items-start lg:flex-col">
-          <div className="w-40 shrink-0 sm:w-48 lg:w-full">
-            <Cover cover={found.cover} initial={found.album} />
-          </div>
-          <div className="flex min-w-0 flex-col gap-1">
-            <h1 className="text-xl font-semibold tracking-tight">{found.album}</h1>
-            {found.artists.length === 1 ? (
-              <a
-                href={routeHref({ name: 'artist', artist: found.artists[0] })}
-                className="w-fit text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              >
-                {found.artists[0]}
-              </a>
-            ) : (
-              <span className="w-fit text-sm text-muted-foreground">
-                {plural(found.artists.length, 'artist')} · each track names its own
-              </span>
-            )}
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {plural(found.tracks, 'track')} · {genreText(found)}
-            </span>
-          </div>
-        </aside>
 
         <div className="flex min-w-0 flex-col gap-4">
           {notice ? (
@@ -707,11 +650,11 @@ export function AlbumArea({ album }: { album: string }) {
           <Card>
             <CardContent>
               <ul className="flex flex-col">
-                {found.rows.map((row) => (
+                {album.rows.map((row) => (
                   <TrackRow
                     key={row.path}
                     row={row}
-                    showArtist={found.artists.length > 1}
+                    showArtist={album.artists.length > 1}
                     action={state.card ? 'queue' : 'play'}
                     image={imageOf(row)}
                     track={measurements === null ? undefined : (measurements.get(row.path) ?? null)}
@@ -719,7 +662,7 @@ export function AlbumArea({ album }: { album: string }) {
                     onLookup={
                       videosHere
                         ? undefined
-                        : () => setLookup({ query: queryFor(row, found), title: titleOf(row) })
+                        : () => setLookup({ query: queryFor(row, album), title: titleOf(row) })
                     }
                     onAdd={(draftId, draftName) => addTo(draftId, draftName, row)}
                     onNew={() => addToNew(row)}
@@ -730,14 +673,13 @@ export function AlbumArea({ album }: { album: string }) {
           </Card>
 
           {videosHere ? (
-            <LookupResults title={found.album} search={albumSearch} />
+            <LookupResults title={album.album} search={albumSearch} />
           ) : null}
 
           <Separator />
           <p className="text-xs text-muted-foreground">
             Playing moves the live stream for everyone listening; it is not a private queue.
           </p>
-        </div>
       </div>
     </div>
   );

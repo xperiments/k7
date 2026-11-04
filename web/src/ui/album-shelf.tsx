@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useRef, type CSSProperties } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { Album } from '../media/albums';
 import { useCoverUrl } from './cover';
 import { plural } from './format';
-import { navigate, routeHref } from './router';
 
 /**
  * The album shelf: the cases on their short ends, spines out, the selected one turned to
@@ -56,38 +55,34 @@ function placeAt(distance: number): string {
   return `translate3d(${(distance > 0 ? x : -x).toFixed(3)}rem, 0, ${z.toFixed(2)}rem)`;
 }
 
-export function AlbumShelf({ albums }: { albums: Album[] }) {
-  const [current, setCurrent] = useState(0);
+export function AlbumShelf({
+  albums,
+  selected,
+  onSelect,
+}: {
+  albums: Album[];
+  /** Which case is turned; the page owns it because the tracks below belong to it. */
+  selected: number;
+  onSelect: (index: number) => void;
+}) {
   const dragFrom = useRef<number | null>(null);
   /* A drag ends with a click on whatever case the finger left; that click must not also
    * select it, or the row moves twice for one gesture. */
   const dragged = useRef(false);
 
   const count = albums.length;
-  const at = Math.min(current, Math.max(0, count - 1));
+  const at = Math.min(selected, Math.max(0, count - 1));
   const active = albums[at];
 
-  /* A new search is a new shelf: the selection belongs to the list it was made in. */
-  useEffect(() => {
-    setCurrent(0);
-  }, [albums]);
-
   const go = useCallback(
-    (delta: number) => {
-      setCurrent((from) => Math.min(Math.max(0, from + delta), Math.max(0, count - 1)));
-    },
-    [count],
+    (delta: number) => onSelect(Math.min(Math.max(0, at + delta), Math.max(0, count - 1))),
+    [at, count, onSelect],
   );
-
-  const open = useCallback(() => {
-    if (!active) return;
-    navigate(routeHref({ name: 'album', album: active.album }));
-  }, [active]);
 
   if (!active) return null;
 
   return (
-    <section className="flex flex-col items-center gap-5" aria-label="Albums">
+    <section className="flex flex-col items-center gap-4" aria-label="Albums">
       <div
         className="k7-shelf"
         role="group"
@@ -122,7 +117,7 @@ export function AlbumShelf({ albums }: { albums: Album[] }) {
           {albums.map((album, index) => {
             const distance = index - at;
             if (Math.abs(distance) > WINDOW) return null;
-            const selected = distance === 0;
+            const activeCase = distance === 0;
             return (
               <div
                 key={album.album}
@@ -132,17 +127,16 @@ export function AlbumShelf({ albums }: { albums: Album[] }) {
                 <button
                   type="button"
                   className="k7-case"
-                  data-active={selected}
+                  data-active={activeCase}
                   style={{ '--hue': `${hueOf(album.album)}deg` } as CSSProperties}
                   aria-label={`${album.album} — ${byline(album)}`}
-                  aria-current={selected ? 'true' : undefined}
+                  aria-current={activeCase ? 'true' : undefined}
                   onClick={() => {
                     if (dragged.current) {
                       dragged.current = false;
                       return;
                     }
-                    if (selected) open();
-                    else setCurrent(index);
+                    onSelect(index);
                   }}
                 >
                   <span className="k7-face k7-front">
@@ -165,14 +159,10 @@ export function AlbumShelf({ albums }: { albums: Album[] }) {
         </div>
       </div>
 
-      <div className="flex flex-col items-center gap-0.5 text-center">
-        <span className="text-sm font-medium">{active.album}</span>
-        <span className="text-xs text-muted-foreground">
-          {byline(active)} · {plural(active.tracks, 'track')}
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2">
+      {/* The name between the two buttons: one line that says which case is turned and moves
+          the row, so the tracks below start as high on the page as they can. Who made it,
+          how many and what it is are the detail's line, one block down. */}
+      <div className="flex items-center justify-center gap-3">
         <Button
           size="icon-sm"
           variant="outline"
@@ -182,13 +172,7 @@ export function AlbumShelf({ albums }: { albums: Album[] }) {
         >
           <ChevronLeft aria-hidden="true" />
         </Button>
-        <Button
-          size="sm"
-          nativeButton={false}
-          render={<a href={routeHref({ name: 'album', album: active.album })} />}
-        >
-          Open album
-        </Button>
+        <span className="min-w-0 max-w-72 truncate text-sm font-medium">{active.album}</span>
         <Button
           size="icon-sm"
           variant="outline"

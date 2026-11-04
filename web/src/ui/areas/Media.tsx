@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Disc3 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMediaIndex, type Album, type MediaIndexState } from '../../media/albums';
+import { AlbumDetail } from '../album-detail';
 import { AlbumShelf } from '../album-shelf';
 import { Cover } from '../cover';
 import { plural } from '../format';
@@ -175,9 +176,13 @@ function Unmeasurable({ state }: { state: MediaIndexState }) {
   );
 }
 
-export function MediaArea() {
+export function MediaArea({ album }: { album?: string } = {}) {
   const state = useMediaIndex();
   const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState(0);
+  /* The route's album is applied once, when it arrives: a search that keeps it visible must
+   * not drag the selection back to it after the reader has moved on. */
+  const applied = useRef<string | null>(null);
   const searchId = useId();
 
   const needle = query.trim().toLowerCase();
@@ -191,6 +196,22 @@ export function MediaArea() {
       ),
     [state.index, needle],
   );
+
+  /* A route that names an album turns it; a search that hides the selection falls back to
+   * the first case rather than to a case that is no longer on the shelf. */
+  useEffect(() => {
+    if (album === undefined || applied.current === album) return;
+    const at = albums.findIndex((entry) => entry.album === album);
+    if (at < 0) return;
+    applied.current = album;
+    setSelected(at);
+  }, [album, albums]);
+
+  useEffect(() => {
+    setSelected((at) => Math.min(at, Math.max(0, albums.length - 1)));
+  }, [albums]);
+
+  const active = albums.length > 0 ? albums[Math.min(selected, albums.length - 1)] : null;
 
   const hasAlbums = (state.index?.albums.length ?? 0) > 0;
   const nothingMatches = state.index !== null && needle.length > 0 && albums.length === 0;
@@ -235,7 +256,10 @@ export function MediaArea() {
           </EmptyContent>
         </Empty>
       ) : (
-        <AlbumShelf albums={albums} />
+        <div className="flex flex-col gap-6">
+          <AlbumShelf albums={albums} selected={selected} onSelect={setSelected} />
+          {active ? <AlbumDetail album={active} state={state} /> : null}
+        </div>
       )}
 
       <Unmeasurable state={state} />
