@@ -36,6 +36,7 @@ export function ProcessArea() {
     dismissNotice,
     dismissWeightError,
     mediaCount,
+    labelsPending,
     lastSnapshot,
     saving,
     tagsOnly,
@@ -60,6 +61,17 @@ export function ProcessArea() {
 
   const percent = total > 0 ? (done / total) * 100 : 0;
   const queued = items.filter((item) => item.status === 'queued').length;
+
+  /* Measuring is not the end of the run: the labels are drawn and written afterwards, one
+   * at a time, and the image waits for them. One line, in the order the run finishes.
+   *
+   * The count is kept out of the live region: it changes with every label, and a status that
+   * reads "12 left… 11 left… 10 left" is noise. The phase is announced once; the number is
+   * for the eyes. */
+  const runPhase =
+    labelsPending > 0 ? 'writing labels' : saving ? 'writing k7.db…' : busyStage;
+  const runCount =
+    labelsPending > 0 ? ` · ${plural(labelsPending, 'track')} left` : null;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6">
@@ -137,9 +149,10 @@ export function ProcessArea() {
             <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
               {done} of {total} analysed
             </span>
-            {busyStage && (
+            {runPhase && (
               <span className="shrink-0 text-xs text-muted-foreground" role="status">
-                {busyStage}
+                {runPhase}
+                {runCount ? <span aria-hidden="true">{runCount}</span> : null}
               </span>
             )}
             {!running && queued > 0 ? (
@@ -245,11 +258,13 @@ export function ProcessArea() {
           <span>
             {saving
               ? 'writing k7.db…'
-              : writtenAt
-                ? `k7.db written ${new Date(writtenAt).toLocaleTimeString()}`
-                : hasCardHandle
-                  ? 'k7.db is written when the run finishes'
-                  : 'k7.db is written by a run on a card opened read-write'}
+              : labelsPending > 0
+                ? `labels still being written · ${plural(labelsPending, 'track')} left`
+                : writtenAt
+                  ? `k7.db written ${new Date(writtenAt).toLocaleTimeString()}`
+                  : hasCardHandle
+                    ? 'k7.db is written when the run and its labels finish'
+                    : 'k7.db is written by a run on a card opened read-write'}
           </span>
           {lastSnapshot ? (
             <>

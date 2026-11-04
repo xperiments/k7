@@ -90,6 +90,16 @@ Then open the printed URL, drop files or a folder, and wait for the cards.
 8. Saving tags loads `taglib-wasm` on demand, writes the standard fields plus the `XTAPE`
    manifest into a copy of the bytes, and downloads it. A saved copy's `XTAPE` tag takes
    precedence over its standard tags on the next analysis.
+9. That same write puts the player's picture of the Track in the file: **k7label**, a
+   402x188 JPEG (the print on the white page's Card) fitted cover-style from the Track's own
+   art and passed through the worn-print shader (`src/audio/covers.ts`, `src/audio/worn.ts`).
+   A card opened read-write gets it in place as each Track settles; a dropped folder can only
+   get it in the saved copy. Every pass draws the label again and compares it with the
+   picture the file holds, byte for byte: a changed filter lands on the next pass, and a file
+   that already has the same picture is not rewritten.
+   Pictures change a file's size and hash, so the row and the analysis are re-keyed to the
+   bytes the card now holds. The 426x272 cassette picture is not written at the moment; a
+   file that carries one from an earlier build keeps it, and it is never used as art.
 
 The worker loads ONNX Runtime's WASM loader from `public/ort/` by absolute URL, so Vite
 never treats it as a source import (public files cannot be imported from source in dev); the
@@ -164,8 +174,9 @@ npx shadcn@latest add @reui/badge @reui/alert @reui/c-sidebar-1   # ReUI
 - **Data**: `src/ui/state/analysis.tsx` owns the measuring queue and the image it builds;
   `src/playlists/drafts.ts` owns the browser's drafts; `src/device/` is the device (a shared
   status poller, `/api/playlists`, and a small MCP client); `src/media/` is the covers cache
-  index and the Invidious search; `src/settings.ts` is what this browser remembers for
-  itself.
+  index and the Invidious search; `src/audio/covers.ts` is the label a file carries for the
+  player's screen, and `src/audio/worn.ts` the shader that wears it; `src/settings.ts` is
+  what this browser remembers for itself.
 - The Shell is packed into a 1.25 MB flash partition (`partitions.csv`) as one image, which
   the board copies into PSRAM at boot.
   Measured: **377 KiB of bytes** (381 KiB of image), up from ~350 KiB before the sidebar — the sidebar, its

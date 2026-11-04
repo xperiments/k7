@@ -12,6 +12,9 @@
  */
 
 export interface SnapshotDirectory {
+  /** The picked folder's own name. The handle a real picker returns always has one; a
+   * test's stand-in may not, and then nothing is written back to it. */
+  name?: string;
   getFileHandle(name: string, options?: { create?: boolean }): Promise<{
     createWritable(): Promise<{ write(data: Uint8Array): Promise<void>; close(): Promise<void> }>;
   }>;

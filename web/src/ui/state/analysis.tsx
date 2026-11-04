@@ -11,16 +11,18 @@ import { AnalysisClient } from '../../audio/client';
 import { decodeFile, sha256Hex, trackFormat } from '../../audio/decode';
 import { loadManifest } from '../../audio/models';
 import { readTrackMetadata, type TrackTags } from '../../audio/metadata';
-import { downloadTaggedCopy, writeAnalysisTags } from '../../audio/tagWriter';
+import { downloadTaggedCopy, writeAnalysisTags, writeTrackLabel } from '../../audio/tagWriter';
+import { coverSource, type EmbeddablePicture } from '../../audio/covers';
 import type { Analysis, ModelManifest } from '../../domain/analysis';
 import { snapshotPath } from '../../domain/snapshot';
 import { needsMeasurement, tagAnalysis } from '../../domain/tagAnalysis';
 import { newId } from '../../lib/id';
 import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
 import { patchListArea } from '../../playlists/image';
-import { countMedia, getMedia, listMedia, measuredHash, putMedia, tagsOf } from '../../storage/media';
+import { countMedia, getMedia, listMedia, measuredHash, putMedia, tagsOf, type CachedMedia } from '../../storage/media';
 import { cardRefFor, currentCardScope, subscribeCardScope } from '../../card/session';
 import { readCardFile as readFileFromCard, type CardRoot } from '../../card/read';
+import { writableCard, writeCardFile } from '../../card/write';
 import {
   cardHandleFor,
   ensureAccess,
@@ -94,6 +96,12 @@ export interface AnalysisApi {
 
   /** Covers and tags kept in this browser for the library views. */
   mediaCount: number;
+  /**
+   * Tracks whose label is still being drawn and written into their file. The run is not
+   * over while this is above zero - the labels move sizes the image reports - and the page
+   * says so rather than leaving a full bar to mean "done".
+   */
+  labelsPending: number;
   /** The image this browser built (and the player accepted, once `sentAt` is set). */
   lastSnapshot: StoredSnapshot | null;
   /** An image is being built, written or sent. */
@@ -175,6 +183,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const nextClient = useRef(0);
   const inFlight = useRef(0);
   const claimed = useRef(new Set<string>());
+  /* The queue as of the last render, for the work that finishes after a Track has settled:
+   * a label write patches the row it started with, and must not undo a deep analysis that
+   * landed while it was writing. */
+  const itemsRef = useRef<QueueItem[]>([]);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   /* Drafts are read reactively so a Playlist added while the page is open makes "Send to
    * player" available without a reload: a list is part of what an image is. */
@@ -237,33 +252,148 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   /* The card is in the computer exactly once, and the browser is the only place a cover can
    * be kept: the player serves paths and measurements, never a picture. So every track that
    * settles leaves its tags and its art here, keyed by the Snapshot's own path, and the
-   * library views join the two by that key. */
-  const rememberMedia = useCallback(async (item: QueueItem, hash: string) => {
-    const path = snapshotPath(item.path);
-    if (!path) return;
-    try {
-      const { parseBlob } = await import('music-metadata');
-      const parsed = await parseBlob(item.file, { duration: false, skipCovers: false });
-      const picture = parsed.common.picture?.[0];
-      await putMedia(currentCardScope(), {
-        path,
-        title: parsed.common.title ?? '',
-        artist: parsed.common.artist ?? '',
-        album: parsed.common.album ?? '',
-        genre: parsed.common.genre?.[0] ?? '',
-        cover: picture
-          ? { bytes: new Uint8Array(picture.data), format: picture.format }
-          : undefined,
-        at: new Date().toISOString(),
-        size: item.file.size,
-        mtime: item.file.lastModified,
-        hash,
-      });
-      void countMedia(currentCardScope()).then((n) => setMediaCount(n));
-    } catch {
-      /* Tags and art are a convenience: a file without them is measured like any other. */
-    }
+   * library views join the two by that key.
+   *
+   * The pictures come back with the row: the same parse that keeps the art is what the label
+   * is drawn from (`audio/covers.ts`), so a Track is read once for both. */
+  const rememberMedia = useCallback(
+    async (
+      item: QueueItem,
+      hash: string,
+    ): Promise<{ row: CachedMedia; pictures: EmbeddablePicture[] } | null> => {
+      const path = snapshotPath(item.path);
+      if (!path) return null;
+      try {
+        const { parseBlob } = await import('music-metadata');
+        const parsed = await parseBlob(item.file, { duration: false, skipCovers: false });
+        const pictures: EmbeddablePicture[] = (parsed.common.picture ?? []).map((picture) => ({
+          description: picture.description,
+          type: picture.type,
+          mimeType: picture.format,
+          data: picture.data,
+        }));
+        // The Track's own front cover, never the worn label this App adds.
+        const cover = coverSource(pictures) ?? pictures[0];
+        const row: CachedMedia = {
+          path,
+          title: parsed.common.title ?? '',
+          artist: parsed.common.artist ?? '',
+          album: parsed.common.album ?? '',
+          genre: parsed.common.genre?.[0] ?? '',
+          cover: cover
+            ? { bytes: new Uint8Array(cover.data), format: cover.mimeType ?? 'image/jpeg' }
+            : undefined,
+          at: new Date().toISOString(),
+          size: item.file.size,
+          mtime: item.file.lastModified,
+          hash,
+        };
+        await putMedia(currentCardScope(), row);
+        void countMedia(currentCardScope()).then((n) => setMediaCount(n));
+        return { row, pictures };
+      } catch {
+        /* Tags and art are a convenience: a file without them is measured like any other. */
+        return null;
+      }
+    },
+    [],
+  );
+
+  const update = useCallback((id: string, patch: Partial<QueueItem>) => {
+    setItems((previous) =>
+      previous.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+    if (patch.analysis !== undefined) setRunRevision((revision) => revision + 1);
   }, []);
+
+  /* One label write at a time. TagLib is one WASM module on the main thread, and a queue
+   * that settles three tracks at once must not have three buffers editing it.
+   *
+   * The count is what the image waits for: every label written changes its Track's size and
+   * hash, and the Snapshot carries that size, so an image written between two labels is an
+   * image written against a card that is still moving. */
+  const labelsQueue = useRef<Promise<void>>(Promise.resolve());
+  const [labelsPending, setLabelsPending] = useState(0);
+
+  /**
+   * The worn label the player prints, written into the file itself.
+   *
+   * Only a card this page opened read-write is touched, and only for a file the run read from
+   * it - a dropped folder has no handle to write through. Every Track is drawn again, so a
+   * filter that changed between builds reaches a card that was already processed; the file
+   * is only rewritten when the picture that comes out is not the one it already holds.
+   *
+   * Adding a picture changes the file's size and its whole-file hash, so the row and the
+   * analysis are re-keyed to the bytes the card now holds: otherwise the next pass would
+   * decide every written Track had changed and measure the library again.
+   */
+  const commitLabel = useCallback(
+    (item: QueueItem, known: { pictures?: readonly EmbeddablePicture[]; row?: CachedMedia }) => {
+      if (cardHandle === null || cardHandle.name === undefined) return;
+      const root = cardHandle.name;
+      if (!item.path.toLowerCase().startsWith(`${root.toLowerCase()}/`)) return;
+
+      const handle = cardHandle;
+      const scope = currentCardScope();
+      setLabelsPending((count) => count + 1);
+      labelsQueue.current = labelsQueue.current.then(async () => {
+        try {
+          const result = await writeTrackLabel(item.file, known.pictures);
+          if (result.kind === 'complete' || result.kind === 'no-source') return;
+
+          const card = writableCard(handle);
+          if (card === null) return;
+          const fresh = await writeCardFile(card, item.path, result.bytes);
+          if (fresh === null || currentCardScope() !== scope) return;
+
+          const hash = await sha256Hex(result.bytes);
+          /* The row as it stands now, not as it stood when this write started: a deep
+           * analysis may have landed while the card was being written. */
+          const latest = itemsRef.current.find((each) => each.id === item.id) ?? item;
+          if (modelSet !== null && latest.analysis !== undefined) {
+            const analysis: Analysis = {
+              ...latest.analysis,
+              track: { ...latest.analysis.track, size: fresh.size, hash },
+            };
+            await putCached(cacheKey(hash, modelSet), analysis);
+            update(item.id, { analysis, file: fresh });
+          } else {
+            update(item.id, { file: fresh });
+          }
+          if (known.row) {
+            await putMedia(scope, {
+              ...known.row,
+              size: fresh.size,
+              mtime: fresh.lastModified,
+              hash,
+              at: new Date().toISOString(),
+            });
+          }
+        } catch {
+          /* A card that refuses the write is still measured: the label is a convenience. */
+        } finally {
+          setLabelsPending((count) => Math.max(0, count - 1));
+        }
+      });
+    },
+    [cardHandle, modelSet, update],
+  );
+
+  /**
+   * A settled Track's record: the row the library reads, then the pictures the player prints.
+   * One parse serves both, and neither is allowed to fail the row — a Track is measured
+   * whether or not its art could be kept.
+   */
+  const keepTrack = useCallback(
+    (item: QueueItem, hash: string) => {
+      void rememberMedia(item, hash).then((remembered) => {
+        if (remembered !== null) {
+          void commitLabel(item, { pictures: remembered.pictures, row: remembered.row });
+        }
+      });
+    },
+    [rememberMedia, commitLabel],
+  );
 
   /**
    * The analysis *and the row's tags* for a file this browser has already measured, or null.
@@ -275,7 +405,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * guessed at.
    */
   const knownAnalysis = useCallback(
-    async (item: QueueItem): Promise<{ analysis: Analysis; tags: TrackTags } | null> => {
+    async (
+      item: QueueItem,
+    ): Promise<{ analysis: Analysis; tags: TrackTags; media: CachedMedia } | null> => {
       if (!modelSet) return null;
       const path = snapshotPath(item.path);
       if (path === null) return null;
@@ -291,17 +423,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         },
         // The row was never opened, so its tags come from the record, not from the file.
         tags: tagsOf(media),
+        media,
       };
     },
     [modelSet],
   );
-
-  const update = useCallback((id: string, patch: Partial<QueueItem>) => {
-    setItems((previous) =>
-      previous.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-    );
-    if (patch.analysis !== undefined) setRunRevision((revision) => revision + 1);
-  }, []);
 
   const processItem = useCallback(
     async (item: QueueItem, client: AnalysisClient) => {
@@ -316,6 +442,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             tags: known.tags,
             cached: true,
           });
+          /* Nothing was read: the row says whether the file still needs the pictures. */
+          void commitLabel(item, { row: known.media });
           return;
         }
         update(item.id, { status: 'hashing', error: undefined });
@@ -350,7 +478,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           // known from another card while this card's shelf has never seen it. The row is
           // what Media joins on, so measuring it once here is what keeps "processed" from
           // being reported as "not measured".
-          void rememberMedia(item, hash);
+          keepTrack(item, hash);
           return;
         }
 
@@ -370,7 +498,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           await putCached(key, analysis);
         askPersistenceOnce();
           update(item.id, { status: 'tagged', analysis, stage: undefined });
-          void rememberMedia(item, hash);
+          keepTrack(item, hash);
           return;
         }
 
@@ -392,7 +520,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         await putCached(key, analysis);
         askPersistenceOnce();
         update(item.id, { status: 'done', analysis, stage: undefined });
-        void rememberMedia(item, hash);
+        keepTrack(item, hash);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (isWeightError(error)) setWeightError(message);
@@ -401,7 +529,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         claimed.current.delete(item.id);
       }
     },
-    [modelSet, update, tagsOnly, rememberMedia, knownAnalysis],
+    [modelSet, update, tagsOnly, keepTrack, knownAnalysis, commitLabel],
   );
 
   /* Keep every lane busy: claim as many queued items as there are free workers, hand each to
@@ -645,8 +773,17 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       if (!item.analysis) return;
       update(item.id, { saving: true });
       try {
-        const bytes = await writeAnalysisTags(item.file, item.analysis);
-        downloadTaggedCopy(item.name, bytes, item.format);
+        const tagged = await writeAnalysisTags(item.file, item.analysis);
+        /* A dropped folder's only write is this copy, so it carries the label too. Art that
+         * will not encode is not a reason to lose the tags: fall back to them. */
+        const result = await writeTrackLabel(item.file, undefined, { bytes: tagged }).catch(
+          () => null,
+        );
+        downloadTaggedCopy(
+          item.name,
+          result?.kind === 'written' ? result.bytes : tagged,
+          item.format,
+        );
         setNotice({ kind: 'success', text: `Saved a tagged copy of ${item.name}.` });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -814,8 +951,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     .map((draft) => `${draft.id}:${draft.name}:${draft.rows.join('|')}`)
     .join(';');
 
+  /* A card is only written once nothing is still moving on it. The queue settling is not
+   * the end of a run any more: the label pass keeps rewriting files after the last measure,
+   * and each of those writes moves a size the Snapshot reports. Waiting for both is what
+   * turns a rewrite per label into one image at the end. */
+  const finished = settled && labelsPending === 0;
   useEffect(() => {
-    if (!cardHandle || !manifest || !settled || writing.current) return;
+    if (!cardHandle || !manifest || !finished || writing.current) return;
     const signature = `${runRevision}:${total}:${done}`;
     if (signature === written.current.run) return;
     const timer = window.setTimeout(() => {
@@ -826,7 +968,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       });
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [cardHandle, manifest, settled, runRevision, total, done, listsSignature, writeToCard]);
+  }, [cardHandle, manifest, finished, runRevision, total, done, listsSignature, writeToCard]);
 
   /* Playlists ride the image, so editing one after a run has to reach the card too — but
    * only once this session has written an image: a card that has not been measured here is
@@ -918,6 +1060,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     dismissNotice: () => setNotice(null),
     dismissWeightError: () => setWeightError(null),
     mediaCount,
+    labelsPending,
     lastSnapshot,
     saving,
     tagsOnly,

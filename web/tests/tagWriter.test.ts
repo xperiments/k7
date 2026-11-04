@@ -1,8 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { parseBlob } from 'music-metadata';
 import { describe, expect, it } from 'vitest';
+import { TagLib } from 'taglib-wasm';
+import { imageSize } from '../src/audio/covers';
 import { readTrackMetadata } from '../src/audio/metadata';
-import { writeAnalysisTags } from '../src/audio/tagWriter';
+import { writeAnalysisTags, writeTrackLabel } from '../src/audio/tagWriter';
 import { sampleAnalysis } from './sampleAnalysis';
 
 const fixtures = {
@@ -58,4 +60,105 @@ describe('tag writing', () => {
       expect(metadata.stored?.energy).toBeCloseTo(0.6);
     });
   }
+});
+
+describe('the worn label picture', () => {
+  const coverAsset = new URL('../../assets/labels/cover.jpg', import.meta.url);
+
+  /** A JPEG header that declares a size; the writer only reads these bytes back by header. */
+  function jpeg(width: number, height: number): Uint8Array {
+    return new Uint8Array([
+      0xff, 0xd8,
+      0xff, 0xc0, 0x00, 0x11, 0x08,
+      height >> 8, height & 0xff, width >> 8, width & 0xff,
+      0x03,
+      0x01, 0x11, 0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00,
+      0xff, 0xd9,
+    ]);
+  }
+
+  /** Stands in for the browser's canvas and the wear shader. */
+  async function render(): Promise<Uint8Array> {
+    return jpeg(402, 188);
+  }
+
+  function fileOf(bytes: Uint8Array, name: string, type: string): File {
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    return new File([copy], name, { type });
+  }
+
+  for (const format of ['mp3', 'flac'] as const) {
+    const type = format === 'mp3' ? 'audio/mpeg' : 'audio/flac';
+
+    it(`adds k7label to ${format.toUpperCase()}, then leaves the file alone`, async () => {
+      const input = new Uint8Array(await readFile(fixtures[format]));
+      const art = new Uint8Array(await readFile(coverAsset));
+      const taglib = await TagLib.initialize();
+
+      // A Track with art of its own: that is what the two are made from.
+      const withArt = await taglib.edit(input, (audio) => {
+        audio.setPictures([{ type: 'FrontCover', mimeType: 'image/jpeg', data: art }]);
+      });
+
+      const written = await writeTrackLabel(fileOf(withArt, `art.${format}`, type), undefined, {
+        render,
+      });
+      expect(written.kind).toBe('written');
+
+      const done = written.kind === 'written' ? written.bytes : withArt;
+      const parsed = await parseBlob(fileOf(done, `done.${format}`, type), {
+        skipCovers: false,
+        duration: false,
+      });
+      const pictures = parsed.common.picture ?? [];
+      expect(pictures.map((picture) => picture.description ?? '')).toEqual(['', 'k7label']);
+      expect(imageSize(pictures[1].data)).toEqual({ width: 402, height: 188 });
+
+      // The next pass reads what the file carries and has nothing to do.
+      const again = await writeTrackLabel(fileOf(done, `done.${format}`, type), undefined, {
+        render,
+      });
+      expect(again.kind).toBe('complete');
+    });
+  }
+
+  it('replaces a label this build would not make any more', async () => {
+    const input = new Uint8Array(await readFile(fixtures.mp3));
+    const art = new Uint8Array(await readFile(coverAsset));
+    const taglib = await TagLib.initialize();
+    const withArt = await taglib.edit(input, (audio) => {
+      audio.setPictures([{ type: 'FrontCover', mimeType: 'image/jpeg', data: art }]);
+    });
+
+    const first = await writeTrackLabel(fileOf(withArt, 'art.mp3', 'audio/mpeg'), undefined, {
+      render,
+    });
+    const old = first.kind === 'written' ? first.bytes : withArt;
+
+    // The same file, a build whose wear renders differently: the old picture must go.
+    const other = await writeTrackLabel(fileOf(old, 'art.mp3', 'audio/mpeg'), undefined, {
+      render: async () => jpeg(402, 189),
+    });
+    expect(other.kind).toBe('written');
+    const done = other.kind === 'written' ? other.bytes : old;
+
+    const parsed = await parseBlob(fileOf(done, 'done.mp3', 'audio/mpeg'), {
+      skipCovers: false,
+      duration: false,
+    });
+    const labels = (parsed.common.picture ?? []).filter(
+      (picture) => picture.description === 'k7label',
+    );
+    expect(labels).toHaveLength(1);
+    expect(imageSize(labels[0].data)).toEqual({ width: 402, height: 189 });
+  });
+
+  it('leaves a file with no art of its own alone: there is nothing to scale', async () => {
+    const input = new Uint8Array(await readFile(fixtures.mp3));
+    const untouched = await writeTrackLabel(fileOf(input, 'plain.mp3', 'audio/mpeg'), undefined, {
+      render,
+    });
+    expect(untouched.kind).toBe('no-source');
+  });
 });
