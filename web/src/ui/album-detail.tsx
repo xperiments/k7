@@ -343,7 +343,12 @@ function TrackRow({
         {/* <span className="truncate text-xs text-muted-foreground">{row.path}</span> */}
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <TrackMeasurement track={track} image={image} />
+        {/* One width for the numbers, right-aligned: "128.0 BPM 8A" and "no answer" are not
+            the same length, and the buttons after them must not move row to row — nor the
+            room a song's name has to be truncated in. */}
+        <div className="flex w-24 shrink-0 items-center justify-end">
+          <TrackMeasurement track={track} image={image} />
+        </div>
         <Button variant="outline" size="sm" onClick={onPlay}>
           {action === 'queue' ? (
             <ListPlus aria-hidden="true" />
