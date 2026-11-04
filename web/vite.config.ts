@@ -24,6 +24,22 @@ const devHttps =
   existsSync(devCertPath) && existsSync(devKeyPath)
     ? { cert: readFileSync(devCertPath), key: readFileSync(devKeyPath) }
     : undefined;
+/* MCP from the development origin. The device answers `/mcp` on plain HTTP and its guard
+ * accepts only a same-origin request whose host is the device's own name, so a page served
+ * over https cannot call it: the browser blocks the mixed content, and the request's Origin
+ * would not match the device's Host anyway. This proxy makes it a same-origin call to the
+ * dev server, which forwards it from Node — no Origin header, Host rewritten to the device's
+ * — so neither rule is broken. `K7_DEVICE` points it at another address. */
+const mcpProxy = {
+  '/mcp': {
+    target: process.env.K7_DEVICE ?? 'http://k7.local',
+    changeOrigin: true,
+    configure: (proxy: { on: (event: 'proxyReq', fn: (req: { removeHeader: (name: string) => void }) => void) => void }) => {
+      proxy.on('proxyReq', (req) => req.removeHeader('origin'));
+    },
+  },
+};
+
 const packageVersion = (
   JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { version: string }
 ).version;
@@ -287,8 +303,8 @@ export default defineConfig(({ mode }) => {
     ],
     /* The dev origin is `https://k7-dev.xperiments.dev:8000`; the port is part of it, and
      * the certificate only exists once someone has run mkcert (k7-deploy.md §4). */
-    server: { host: true, port: 8000, https: devHttps },
-    preview: { host: true, port: 8000, https: devHttps },
+    server: { host: true, port: 8000, https: devHttps, proxy: mcpProxy },
+    preview: { host: true, port: 8000, https: devHttps, proxy: mcpProxy },
     publicDir: shell ? false : 'public',
     resolve: {
       conditions: ['onnxruntime-web-use-extern-wasm'],
