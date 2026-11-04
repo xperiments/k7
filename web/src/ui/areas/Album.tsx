@@ -40,7 +40,7 @@ import { addRows, createDraft, useDrafts } from '../../playlists/drafts';
 import { getSettings, subscribeSettings } from '../../settings';
 import type { CachedMedia } from '../../storage/media';
 import { formatDuration, plural } from '../format';
-import { Cover } from './Media';
+import { Cover } from '../cover';
 import { navigate, routeHref } from '../router';
 import { rememberVideo } from './Video';
 import { usePlayback } from '../playback';

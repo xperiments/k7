@@ -14,7 +14,7 @@ import { refreshDevice, useDeviceStatus } from '../../device/useDeviceStatus';
 import { currentCardScope } from '../../card/session';
 import { getMedia, type CachedMedia } from '../../storage/media';
 import { formatDuration, plural } from '../format';
-import { Cover } from './Media';
+import { Cover } from '../cover';
 
 /**
  * The Player: what the broadcast is carrying, and what the device says about itself.

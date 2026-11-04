@@ -1,5 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react';
-import { cn } from 'cn';
+import { useId, useMemo, useState } from 'react';
 import { Disc3 } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert';
@@ -16,7 +15,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMediaIndex, type Album, type MediaIndexState } from '../../media/albums';
-import type { CachedCover } from '../../storage/media';
+import { AlbumShelf } from '../album-shelf';
+import { Cover } from '../cover';
 import { plural } from '../format';
 import { navigate, routeHref } from '../router';
 
@@ -31,50 +31,6 @@ import { navigate, routeHref } from '../router';
  * empty on a browser that never had the card, and why it can still be useful with the device
  * off.
  */
-
-/** The cover, as a blob URL made once per image and released when the tile goes away. */
-export function Cover({
-  cover,
-  initial,
-  alt = '',
-  className,
-}: {
-  cover: CachedCover | null;
-  /** What the placeholder tile shows when there is no picture. */
-  initial: string;
-  alt?: string;
-  className?: string;
-}) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!cover) {
-      setUrl(null);
-      return;
-    }
-    const objectUrl = URL.createObjectURL(
-      new Blob([cover.bytes], { type: cover.format || 'image/jpeg' }),
-    );
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [cover]);
-
-  if (!cover || !url) {
-    return (
-      <div
-        aria-hidden="true"
-        className={cn(
-          'flex aspect-square w-full items-center justify-center bg-muted text-2xl font-semibold text-muted-foreground',
-          className,
-        )}
-      >
-        {(initial.trim().slice(0, 1) || '?').toUpperCase()}
-      </div>
-    );
-  }
-
-  return <img src={url} alt={alt} className={cn('aspect-square w-full object-cover', className)} />;
-}
 
 /** One album in a grid: the picture, its name, who made it, and how many tracks. */
 export function AlbumCard({ album }: { album: Album }) {
@@ -274,10 +230,8 @@ export function MediaArea() {
       </div>
 
       {state.loading ? (
-        <div className={ALBUM_GRID}>
-          {Array.from({ length: 12 }, (_, index) => (
-            <Skeleton key={index} className="aspect-[16/25] w-full" />
-          ))}
+        <div className="flex justify-center py-6">
+          <Skeleton className="aspect-[16/25] w-40" />
         </div>
       ) : !hasAlbums ? (
         <NoAlbums reachable={state.reachable} />
@@ -294,7 +248,7 @@ export function MediaArea() {
           </EmptyContent>
         </Empty>
       ) : (
-        <AlbumGrid albums={albums} />
+        <AlbumShelf albums={albums} />
       )}
 
       <Unmeasurable state={state} />

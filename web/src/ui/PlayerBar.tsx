@@ -6,7 +6,7 @@ import { useCardScope } from '../card/session';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { getMedia, type CachedCover } from '../storage/media';
 import { formatDuration } from './format';
-import { Cover } from './areas/Media';
+import { Cover } from './cover';
 import { usePlayback } from './playback';
 
 /**
