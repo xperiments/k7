@@ -67,6 +67,7 @@ static snapshot_result_t SN_state = SNAPSHOT_NO_PARTITION;
 static const char *SN_reason = "";
 static uint32_t L_scan_ms;
 static mcp_local_ip_fn L_local_ip;
+static const char *L_app_origin = ""; /* the deployed App's origin, or "" */
 static mcp_rescan_fn L_rescan;
 static uint16_t L_port = 8000;
 
@@ -1299,13 +1300,20 @@ static bool supported_version(const char *v)
 }
 
 /* Same-origin, and this origin: the browser's page is the device itself, and the device
- * answers to three names. A browser omits the port on 443 and 80, so a bare name is the
- * shape a same-origin request actually has; the explicit ports are accepted for clients
- * and tests that write them. `L_port` keeps the host build's tests, which dial a random
- * port on 127.0.0.1. */
+ * answers to its front-door name, its mDNS name, localhost and its LAN address. A browser
+ * omits the port on 443 and 80, so a bare name is the shape a same-origin request actually
+ * has; the explicit ports are accepted for clients and tests that write them. `L_port`
+ * keeps the host build's tests, which dial a random port on 127.0.0.1.
+ *
+ * `xtape.local` is the name the TLS certificate carries (tls/xtape.local.pem), so it is the
+ * name the App is actually served under; leaving it out rejected the device's own page. */
 static bool origin_ok(const http_request_t *req)
 {
     if (!req->origin[0]) return true; /* native clients do not send Origin */
+    /* The deployed App is never same-origin with the device (it reaches k7.local through
+     * Local Network Access), and it is the page the endpoint exists for. Its origin is
+     * compiled in, so this is not "any origin": it is the one App. */
+    if (L_app_origin && *L_app_origin && strcasecmp(req->origin, L_app_origin) == 0) return true;
     if (!req->host[0]) return false;
 
     const char *auth;
@@ -1321,8 +1329,8 @@ static bool origin_ok(const http_request_t *req)
     char local[32] = {0};
     if (L_local_ip) L_local_ip(local, sizeof local);
 
-    const char *const names[3] = {"k7.local", "localhost", local};
-    for (int i = 0; i < 3; i++) {
+    const char *const names[4] = {"xtape.local", "k7.local", "localhost", local};
+    for (int i = 0; i < 4; i++) {
         const char *name = names[i];
         if (!name[0]) continue;
         if (strcasecmp(auth, name) == 0) return true;
@@ -1574,6 +1582,7 @@ esp_err_t mcp_start(const mcp_cfg_t *cfg)
     L = cfg->library;
     L_scan_ms = cfg->scan_ms;
     L_local_ip = cfg->local_ip;
+    L_app_origin = cfg->app_origin ? cfg->app_origin : "";
     L_rescan = cfg->rescan;
     L_port = cfg->port ? cfg->port : 8000;
     SN = cfg->snapshot;

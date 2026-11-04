@@ -25,6 +25,11 @@ typedef struct {
     const library_t *library; /* may be NULL; library tools then report an error */
     uint32_t scan_ms;         /* the boot scan+build time, for library_stats */
     mcp_local_ip_fn local_ip; /* may be NULL; the guard then only accepts xtape.local */
+    /* The deployed App's origin (e.g. https://k7.xperiments.dev), or NULL. The App is
+     * cross-origin to the device by construction — Local Network Access is what lets it
+     * reach k7.local at all — so its requests never match the device's own Host and the
+     * same-origin rule would refuse the App that exists to talk to this device. */
+    const char *app_origin;
     mcp_rescan_fn rescan;     /* control builds only; may be NULL */
     uint16_t port;            /* the HTTP port; 0 means 8000 */
     /* The measurements this device holds, or NULL. `snapshot_state` explains a

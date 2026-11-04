@@ -246,6 +246,14 @@ def main():
     status, _hdrs, doc = call(initialize(), {"Host": f"k7.local:{PORT}",
                                             "Origin": f"http://k7.local:{PORT}"})
     check("Origin pinned to k7.local is accepted", status, 200)
+    # The name the TLS certificate carries is the name the App is served under
+    # (tls/xtape.local.pem), so the device's own page has to be allowed by its own guard.
+    status, _hdrs, doc = call(initialize(), {"Host": "xtape.local",
+                                            "Origin": "https://xtape.local"})
+    check("Origin pinned to xtape.local is accepted", status, 200)
+    status, _hdrs, doc = call(initialize(), {"Host": f"xtape.local:{PORT}",
+                                            "Origin": f"https://xtape.local:{PORT}"})
+    check("Origin pinned to xtape.local with its port is accepted", status, 200)
     status, _hdrs, doc = call(initialize(), {"Host": "evil.example:9999",
                                             "Origin": "http://evil.example:9999"})
     check("a rebinding authority is 403", status, 403)

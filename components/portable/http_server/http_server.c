@@ -127,7 +127,12 @@ esp_err_t http_send_headers(int fd, int status, const char *content_type,
     if (S.cfg.cors_origin && *S.cfg.cors_origin) {
         hdr_add(&w, "Access-Control-Allow-Origin: %s\r\n", S.cfg.cors_origin);
         hdr_add(&w, "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n");
-        hdr_add(&w, "Access-Control-Allow-Headers: Content-Type, Accept\r\n");
+        /* `Mcp-Protocol-Version` is what an MCP client sends on every POST, and the browser
+         * refuses the request at the preflight if it is not named here; the response carries
+         * the same header back, which `Expose-Headers` is what lets a page read. */
+        hdr_add(&w,
+                "Access-Control-Allow-Headers: Content-Type, Accept, Mcp-Protocol-Version\r\n");
+        hdr_add(&w, "Access-Control-Expose-Headers: Mcp-Protocol-Version\r\n");
         hdr_add(&w, "Access-Control-Max-Age: 600\r\n");
         /* No `Vary: Origin`: the origin is a constant, so the response does not vary by it,
          * and a second Vary would sit beside the routes' own `Vary: Accept-Encoding`. */
