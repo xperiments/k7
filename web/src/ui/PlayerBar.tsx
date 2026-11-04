@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { useCardScope } from '../card/session';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { getMedia, type CachedCover } from '../storage/media';
+import { CassetteCase, hueOf } from './cassette';
 import { formatDuration } from './format';
-import { Cover } from './cover';
 import { usePlayback } from './playback';
 
 /**
@@ -80,9 +80,9 @@ export function PlayerBar() {
     <div className="flex shrink-0 flex-col border-t bg-background">
       <div className="flex h-14 items-center gap-3 px-3 sm:px-4">
         {cover || title !== 'Nothing playing' ? (
-          <div className="w-10 shrink-0 overflow-hidden rounded-md">
-            <Cover cover={cover} initial={title || 'K'} className="size-10 text-base" />
-          </div>
+          /* The thing that is playing, as the thing it is: one cassette off the shelf,
+             turned to face the bar. */
+          <CassetteCase cover={cover} initial={title || 'K'} hue={hueOf(title || 'K')} />
         ) : (
           <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
             <Disc3 aria-hidden="true" className="size-5" />

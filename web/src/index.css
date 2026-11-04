@@ -266,6 +266,40 @@
         );
     }
 
+    /* One case outside the shelf: the player bar's cover. The same box, smaller — the width
+       is the only number given, and the height follows from it as it does on the shelf. */
+    .k7-mini {
+        --cw: 1.9rem;
+        --ch: calc(var(--cw) * 25 / 16);
+        --cd: calc(var(--cw) * 0.2);
+        position: relative;
+        width: var(--cw);
+        height: var(--ch);
+        flex: none;
+    }
+
+    .k7-mini .k7-case {
+        transform: rotateY(0deg);
+        transition: none;
+        cursor: default;
+    }
+
+    /* At forty pixels the shelf's six-pixel moulding is a fifth of the face: the bar's case
+       keeps the same drawing, at the width a hairline has there. */
+    .k7-mini .k7-frame {
+        border-width: 1px;
+        border-radius: 2px;
+        box-shadow:
+            inset 0 0 0 1px oklch(0.85 0.01 90 / 0.45),
+            0 0 0 1px oklch(0.3 0.01 265);
+    }
+
+    /* The initial on a coverless face is sized for a shelf case; at forty pixels it would
+       be taller than the case. */
+    .k7-mini .k7-cover-fallback {
+        font-size: 1rem;
+    }
+
     .k7-shelf:active {
         cursor: grabbing;
     }

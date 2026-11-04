@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { Album } from '../media/albums';
-import { useCoverUrl } from './cover';
+import { CassetteFront, hueOf } from './cassette';
 import { plural } from './format';
 
 /**
@@ -29,16 +29,6 @@ const CASE_GAP = 0.65;
 const SELECTED_GAP = 1.25;
 /** How far either side of the selection the row is built; the rest is off the shelf. */
 const WINDOW = 10;
-
-/**
- * A hue per album, from its name: the spine, the side and the no-cover face need *a* colour,
- * and a hash of the name is stable across visits, machines and the device's own table.
- */
-function hueOf(text: string): number {
-  let hue = 0;
-  for (let at = 0; at < text.length; at += 1) hue = (hue * 31 + text.charCodeAt(at)) % 360;
-  return hue;
-}
 
 function byline(album: Album): string {
   return album.artists.length === 1 ? album.artists[0] : plural(album.artists.length, 'artist');
@@ -191,15 +181,7 @@ export function AlbumShelf({
   );
 }
 
-/** The picture on the case's face: the album's own art, or a tinted face with its initial. */
+/** The album's face: its own art, or a tinted face with its initial. */
 function CaseCover({ album }: { album: Album }) {
-  const url = useCoverUrl(album.cover);
-  if (url) {
-    return <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />;
-  }
-  return (
-    <span className="k7-cover-fallback" aria-hidden="true">
-      {initialOf(album)}
-    </span>
-  );
+  return <CassetteFront cover={album.cover} initial={initialOf(album)} />;
 }
