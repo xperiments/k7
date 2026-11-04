@@ -168,11 +168,10 @@ void appliance_run(void)
          * and the index at `/library` carries the device. */
         .shell_image = NULL,
         .shell_image_size = 0,
-        /* The page is copied into PSRAM at boot (the Launcher only), so serving it is not a
-         * flash read and the panel's scan is never taken away from it: no black hold, and no
-         * re-establish to get wrong (ADR 0055). The hook stays for a board that serves out of
-         * the mapping - `screen_display_page_service()` - and is NULL here. */
-        .page_service = NULL,
+        /* The board takes the glass off while the network is being used: a page file, or a
+         * listener arriving on the stream. The slip those cause happens behind a black frame,
+         * and the scan is re-established before the picture returns (ADR 0055). */
+        .page_service = screen_display_page_service,
         .selection_load = selection_load,
         .selection_save = selection_save,
     };

@@ -518,6 +518,9 @@ static mini_icecast_register_result_t mini_icecast_register_client(int fd, bool 
     c->reserved = false;
     xSemaphoreGive(S.lock);
     ESP_LOGI(TAG, "client %d connected (icy=%d, burst=%u B)", slot, want_icy_metadata, (unsigned)burst);
+    /* The board may want the glass off before the burst reaches the wire; the listener is
+     * live now, so the audio task will not wait for it. */
+    if (S.station.on_client_connect) S.station.on_client_connect();
     return MINI_ICECAST_REGISTERED;
 }
 

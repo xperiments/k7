@@ -69,6 +69,12 @@ typedef struct {
     uint32_t    metaint;       /* bytes of audio between ICY metadata blocks, default 16000 */
     uint32_t    lead_ms;       /* how far ahead of real time we send, default 1500 */
     uint32_t    burst_ms;      /* history sent on connect, default 500, in external memory if present */
+    /* Called on the HTTP task when a listener has been registered and the sender is
+     * about to start. NULL does nothing. A board whose panel shares memory with the
+     * rest of the system uses it to take the picture off the glass for a moment: a
+     * listener arriving is a burst of work (history, headers, TCP ramp-up) and the one
+     * moment a page load's twin happens. */
+    void      (*on_client_connect)(void);
 } mini_icecast_cfg_t;
 
 /* Check a configuration without starting anything.

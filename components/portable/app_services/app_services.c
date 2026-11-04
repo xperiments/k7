@@ -705,6 +705,9 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         .metaint = cfg->metaint,
         .lead_ms = cfg->lead_ms,
         .burst_ms = cfg->burst_ms,
+        /* A listener arriving is the App's own page load seen from the stream side: the
+         * board blacks the glass for it, as it does for a page file. */
+        .on_client_connect = cfg->page_service,
     };
     e = mini_icecast_start(&ice);
     if (e != ESP_OK) return fail(report, e, "broadcast");

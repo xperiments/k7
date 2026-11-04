@@ -34,6 +34,7 @@ esp_err_t mi_station_resolve(const mini_icecast_cfg_t *cfg, mi_station_t *out,
         .metaint      = cfg->metaint ? cfg->metaint : MINI_ICECAST_METAINT_DEFAULT,
         .lead_ms      = cfg->lead_ms ? cfg->lead_ms : DEFAULT_LEAD_MS,
         .burst_ms     = cfg->burst_ms ? cfg->burst_ms : DEFAULT_BURST_MS,
+        .on_client_connect = cfg->on_client_connect,
     };
 
     /* Refuse rather than coerce: a client limit outside the table would be a
