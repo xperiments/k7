@@ -24,7 +24,8 @@ import type { CachedCover } from '../storage/media';
  * A card play is always **an album**: the provider is handed the album's tracks in order and
  * one loader for their bytes, so `next()` needs nothing from the page that started it. A
  * track that ends asks for the next; the last one stops. A stream has no next, because there
- * is nothing to be next to.
+ * is nothing to be next to — and no end either: when its connection drops, the page
+ * reconnects to the live edge instead of reporting silence to someone listening to a radio.
  */
 
 export interface TrackMeta {
@@ -107,6 +108,9 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   const advance = useRef<() => void>(() => {});
 
   const [source, setSource] = useState<Source | null>(null);
+  /* The same value for the element's handlers, which are attached once and must not go
+   * stale: whether a stopped stream is a stream is the whole of the reconnect rule. */
+  const sourceRef = useRef<Source | null>(null);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [time, setTime] = useState(0);
@@ -120,6 +124,10 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     audio.current.volume = volume;
   }
 
+  useEffect(() => {
+    sourceRef.current = source;
+  }, [source]);
+
   const releaseObjectUrl = useCallback(() => {
     if (objectUrl.current !== null) {
       URL.revokeObjectURL(objectUrl.current);
@@ -128,6 +136,40 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => releaseObjectUrl, [releaseObjectUrl]);
+
+  /* A live stream that stops is not an error to report and forget. The device drops a
+   * client that falls ten seconds behind (its ring is a valve, not a queue that grows), a
+   * phone loses Wi-Fi, the player reboots — and the broadcast goes on without any of them.
+   * So the page reconnects on its own, with a backoff that tops out at ten seconds, and the
+   * listener hears a gap instead of silence until a reload. */
+  const stream = useRef<{ timer: number | null; attempt: number }>({ timer: null, attempt: 0 });
+
+  const cancelReconnect = useCallback(() => {
+    if (stream.current.timer !== null) {
+      window.clearTimeout(stream.current.timer);
+      stream.current.timer = null;
+    }
+    stream.current.attempt = 0;
+  }, []);
+
+  const reconnectStream = useCallback(() => {
+    if (sourceRef.current?.kind !== 'stream' || stream.current.timer !== null) return;
+    const wait = Math.min(1000 * 2 ** stream.current.attempt, 10_000);
+    stream.current.attempt += 1;
+    stream.current.timer = window.setTimeout(() => {
+      stream.current.timer = null;
+      const element = audio.current;
+      if (!element || sourceRef.current?.kind !== 'stream') return;
+      /* A fresh query on each try: the browser must open a new connection rather than
+       * reuse the one the device has already dropped. */
+      const url = new URL(streamUrl(getDevice().link()), location.href);
+      url.searchParams.set('reconnect', String(stream.current.attempt));
+      element.src = url.href;
+      element.play().catch(() => {
+        setError('The stream stopped, and the browser would not restart it. Press play.');
+      });
+    }, wait);
+  }, []);
 
   const start = useCallback(async () => {
     const element = audio.current;
@@ -195,6 +237,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   const playStream = useCallback(() => {
     const element = audio.current;
     if (!element) return;
+    cancelReconnect();
     releaseObjectUrl();
     forgetAlbum();
     const url = streamUrl(getDevice().link());
@@ -203,7 +246,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     setTime(0);
     setDuration(0);
     void start();
-  }, [forgetAlbum, releaseObjectUrl, start]);
+  }, [cancelReconnect, forgetAlbum, releaseObjectUrl, start]);
 
   const hasPrevious = source?.kind === 'card' && source.index > 0;
   const hasNext = source?.kind === 'card' && source.index < source.length - 1;
@@ -230,6 +273,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   }, [playStream, source, start]);
 
   const stop = useCallback(() => {
+    cancelReconnect();
     const element = audio.current;
     if (element) {
       element.pause();
@@ -242,7 +286,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     setPlaying(false);
     setTime(0);
     setDuration(0);
-  }, [forgetAlbum, releaseObjectUrl]);
+  }, [cancelReconnect, forgetAlbum, releaseObjectUrl]);
 
   const seek = useCallback((seconds: number) => {
     const element = audio.current;
@@ -270,17 +314,35 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const element = audio.current;
     if (!element) return;
-    const onPlay = () => setPlaying(true);
+    const onPlay = () => {
+      setPlaying(true);
+      setError(null);
+      stream.current.attempt = 0;
+    };
     const onPause = () => setPlaying(false);
     const onTime = () => setTime(element.currentTime);
     const onDuration = () => setDuration(element.duration);
     const onError = () => {
       setPlaying(false);
+      if (sourceRef.current?.kind === 'stream') {
+        /* A dropped client, a lost Wi-Fi link, a rebooted player: all the same from the
+         * page's side, and all recovered the same way. */
+        setError('The stream stopped; reconnecting…');
+        reconnectStream();
+        return;
+      }
       setError(mediaError(element));
     };
     /* A track that ends moves to the next one; the last one is the end of the album, so it
      * stops rather than looping. */
     const onEnded = () => {
+      /* A live stream has no end: what ended is the connection, and the listener should
+       * not have to notice. */
+      if (sourceRef.current?.kind === 'stream') {
+        setPlaying(false);
+        reconnectStream();
+        return;
+      }
       element.currentTime = 0;
       setTime(0);
       setPlaying(false);
@@ -302,7 +364,9 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       element.removeEventListener('error', onError);
       element.removeEventListener('ended', onEnded);
     };
-  }, []);
+  }, [reconnectStream]);
+
+  useEffect(() => cancelReconnect, [cancelReconnect]);
 
   const api: PlaybackApi = {
     source,
