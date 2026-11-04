@@ -51,3 +51,12 @@ Attribution and references:
 | `music-metadata` 12 | MIT |
 | `taglib-wasm` 2.4 | MIT wrapper; TagLib LGPL-2.1 / MPL-1.1 |
 | Vitest, `onnxruntime-node` (development only) | MIT |
+
+## Fonts
+
+**Jura** (variable, 300–700) — the face the device's own screen draws with. Served from this
+origin as two `woff2` subsets in `public/fonts/`, downloaded from Google Fonts.
+
+- Source: <https://fonts.google.com/specimen/Jura>, <https://github.com/ossobuffo/jura>
+- Copyright 2019 The Jura Project Authors.
+- Licence: SIL Open Font License 1.1 — the full text is `public/fonts/OFL.txt`.

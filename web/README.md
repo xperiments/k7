@@ -160,7 +160,8 @@ npx shadcn@latest add @reui/badge @reui/alert @reui/c-sidebar-1   # ReUI
   dependency.
 - **Process stays mounted** while another route is shown, and that is what protects a running
   queue: `App.tsx` hides it rather than unmounting it.
-- `src/index.css` is the only stylesheet: Tailwind, the theme tokens, and nothing else. The
+- `src/index.css` is the only stylesheet: Tailwind, the theme tokens, the two `@font-face`
+  rules for the self-hosted **Jura** (the face the device draws with), and nothing else. The
   palette is the app's own — warm charcoal, an amber accent and a teal "measured" — mapped
   onto semantic tokens so the components keep their identity. The page is dark only:
   `index.html` carries `class="dark"`.

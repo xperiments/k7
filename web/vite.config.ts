@@ -163,9 +163,17 @@ function shellOutputs(shell: boolean): Plugin {
     async closeBundle() {
       const outDir = resolve(root, shell ? 'dist-shell' : 'dist');
 
+      /* The subsets the app's `@font-face` names. Copied (and precached) by name rather
+       * than by glob so a font the stylesheet stops using is not carried in flash for
+       * ever; `OFL.txt` rides along because the image distributes the font. */
+      const shellFonts = ['jura-latin.woff2', 'jura-latin-ext.woff2', 'OFL.txt'];
       if (shell) {
         await mkdir(resolve(outDir, 'icons'), { recursive: true });
         await mkdir(resolve(outDir, 'ort'), { recursive: true });
+        await mkdir(resolve(outDir, 'fonts'), { recursive: true });
+        for (const font of shellFonts) {
+          await copyFile(resolve(root, 'public/fonts', font), resolve(outDir, 'fonts', font));
+        }
         await copyFile(
           resolve(root, 'public/manifest.webmanifest'),
           resolve(outDir, 'manifest.webmanifest'),
@@ -240,6 +248,7 @@ function shellOutputs(shell: boolean): Plugin {
           /* The brand mark sits in the sidebar on every page: offline it must be there on
            * the first paint, not after a fetch that fails. */
           '/icons/k7logo.svg',
+          ...(shell ? ['/fonts/jura-latin.woff2', '/fonts/jura-latin-ext.woff2'] : []),
           '/weights.lock.json',
           ...(shell ? ['/ort/ort-wasm-simd-threaded.mjs'] : []),
           ...emitted.map((file) => `/${file}`),

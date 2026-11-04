@@ -22,6 +22,7 @@ const SHELL_PREFIX = 'k7-shell-';
 function isShellAsset(pathname) {
   return (
     pathname.startsWith('/assets/') ||
+    pathname.startsWith('/fonts/') ||
     pathname.startsWith('/icons/') ||
     pathname.startsWith('/ort/') ||
     pathname.startsWith('/weights/') ||
