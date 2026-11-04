@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Disc3 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import {
   Empty,
   EmptyContent,
@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMediaIndex, type Album, type MediaIndexState } from '../../media/albums';
+import { useMediaIndex, type Album } from '../../media/albums';
 import { AlbumDetail } from '../album-detail';
 import { AlbumShelf } from '../album-shelf';
 import { Cover } from '../cover';
@@ -96,83 +96,6 @@ function NoAlbums({ reachable }: { reachable: boolean }) {
         </Button>
       </EmptyContent>
     </Empty>
-  );
-}
-
-/** The tracks the device lists that no cache row covers: a few names, a count, and Process. */
-function NotMeasured({ state }: { state: MediaIndexState }) {
-  const index = state.index;
-  if (!index || index.unmeasured.length === 0) return null;
-
-  const shown = index.unmeasured.slice(0, 40);
-  const listed = index.presence?.tracks.length ?? 0;
-  const partial = !(index.presence?.complete ?? false);
-
-  return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>Not measured</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          {plural(index.unmeasured.length, 'track')} the device lists that this browser has no tags
-          for. They have no album here because nothing was read from them.
-        </p>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <ul className="flex flex-col gap-1 text-sm">
-          {shown.map((track) => (
-            <li key={track.path} className="truncate text-muted-foreground" title={track.path}>
-              {track.name}
-            </li>
-          ))}
-          {index.unmeasured.length > shown.length ? (
-            <li className="text-xs text-muted-foreground">
-              and {plural(index.unmeasured.length - shown.length, 'more track')}
-            </li>
-          ) : null}
-        </ul>
-        {partial ? (
-          <p className="text-xs text-muted-foreground">
-            The device lists at most 200 tracks at a time, so this only covers the{' '}
-            {plural(listed, 'track')} it named.
-          </p>
-        ) : null}
-        <div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => navigate(routeHref({ name: 'process' }))}
-          >
-            Measure them in Process
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-/**
- * The tracks the device lists in a format this App never opens -- the device also plays WAV.
- * They are not "not measured": nothing here will ever measure them, so they are said once,
- * quietly, instead of sitting in a list that reads as work left undone.
- */
-function Unmeasurable({ state }: { state: MediaIndexState }) {
-  const tracks = state.index?.unmeasurable ?? [];
-  if (tracks.length === 0) return null;
-
-  const formats = [
-    ...new Set(
-      tracks
-        .map((track) => track.path.split('.').pop()?.toUpperCase() ?? '')
-        .filter(Boolean),
-    ),
-  ];
-
-  return (
-    <p className="text-xs text-muted-foreground">
-      The device also lists {plural(tracks.length, 'track')} this App cannot open
-      {formats.length > 0 ? ` (${formats.join(', ')})` : ''}: it measures MP3 and FLAC. They
-      stay on the card and play from the player.
-    </p>
   );
 }
 
@@ -279,8 +202,6 @@ export function MediaArea({ album }: { album?: string } = {}) {
               <AlbumDetail album={active} state={state} />
             ) : null}
 
-            <Unmeasurable state={state} />
-            <NotMeasured state={state} />
           </div>
         </div>
       </div>
