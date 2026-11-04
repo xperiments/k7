@@ -685,6 +685,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         .shell_image_size = cfg->shell_image_size,
         .card_present = front_door_card_present,
         .page_service = cfg->page_service,
+        .page_done = cfg->page_done,
     };
     e = front_door_start(&door);
     if (e != ESP_OK) return fail(report, e, "front door");

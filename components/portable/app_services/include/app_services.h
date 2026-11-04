@@ -47,8 +47,10 @@ typedef struct {
     const void *shell_image;
     size_t      shell_image_size;
     /* Passed to the front door: called before each page file is read out of flash, so a board
-     * can take the screen off the glass for the length of a page load. NULL does nothing. */
+     * can take the screen off the glass for the length of a page load, and again when that
+     * file has been sent. NULL does nothing. */
     void (*page_service)(void);
+    void (*page_done)(void);
     /* The remembered Playlist selection (id, 0 for none). NULL means this build
      * remembers none: the choice then lives until reboot. Wired to NVS by the
      * appliance, left NULL by the host. */

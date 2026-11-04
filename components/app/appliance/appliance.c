@@ -172,6 +172,7 @@ void appliance_run(void)
          * with the panel's scan-out: the screen goes black for the length of a page load and
          * re-establishes the scan before it comes back (ADR 0055). */
         .page_service = screen_display_page_service,
+        .page_done = screen_display_page_done,
         .selection_load = selection_load,
         .selection_save = selection_save,
     };

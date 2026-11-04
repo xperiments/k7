@@ -274,6 +274,9 @@ static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
         /* The writer did not take it: answer instead of leaving the client hanging. */
         http_send_error(fd, 503, "the page reader is busy");
     }
+    /* The file is out of flash and on the socket. The board may re-establish the scan now,
+     * once nothing else is in flight. */
+    if (F.page_done) F.page_done();
     return HTTP_HANDLED;
 }
 
