@@ -131,6 +131,28 @@ static size_t add_apic(buf_t *body, int major, uint8_t type, const char *mime,
     return data;
 }
 
+/* The same APIC with a description, in a one-byte encoding: the shape the App's own
+ * writer produces (`k7label`). */
+static size_t add_apic_described(buf_t *body, int major, uint8_t type, const char *mime,
+                                 const char *desc, const uint8_t *img, size_t img_len)
+{
+    b_bytes(body, "APIC", 4);
+    size_t size_at = body->n;
+    b_be32(body, 0);
+    b_u8(body, 0);
+    b_u8(body, 0);
+
+    size_t data = body->n;
+    b_u8(body, 0); /* ISO-8859-1 */
+    b_bytes(body, mime, strlen(mime) + 1);
+    b_u8(body, type);
+    b_bytes(body, desc, strlen(desc) + 1);
+    b_bytes(body, img, img_len);
+
+    put_be32(body->p + size_at, (uint32_t)(body->n - data));
+    return data;
+}
+
 /* Wrap `body` in an ID3v2 header. */
 static size_t wrap_id3(uint8_t *out, size_t cap, int major, uint8_t flags,
                        const uint8_t *body, size_t body_len)
@@ -178,6 +200,30 @@ static size_t add_flac_picture(buf_t *blocks, bool last, uint8_t ptype, const ch
     size_t img_at = blocks->n;
     b_bytes(blocks, img, img_len);
     (void)start;
+    return img_at;
+}
+
+/* The same PICTURE block with a description. */
+static size_t add_flac_picture_described(buf_t *blocks, bool last, uint8_t ptype,
+                                         const char *mime, const char *desc,
+                                         uint32_t w, uint32_t h,
+                                         const uint8_t *img, size_t img_len)
+{
+    uint32_t body = (uint32_t)(4 + 4 + strlen(mime) + 4 + strlen(desc) + 16 + 4 + img_len);
+    b_u8(blocks, (uint8_t)((last ? 0x80 : 0) | 0x06));
+    b_be24(blocks, body);
+    b_be32(blocks, ptype);
+    b_be32(blocks, (uint32_t)strlen(mime));
+    b_bytes(blocks, mime, strlen(mime));
+    b_be32(blocks, (uint32_t)strlen(desc));
+    b_bytes(blocks, desc, strlen(desc));
+    b_be32(blocks, w);
+    b_be32(blocks, h);
+    b_be32(blocks, 24); /* depth */
+    b_be32(blocks, 0);  /* colours */
+    b_be32(blocks, (uint32_t)img_len);
+    size_t img_at = blocks->n;
+    b_bytes(blocks, img, img_len);
     return img_at;
 }
 
@@ -259,6 +305,7 @@ static void test_id3_v23_front(void)
     CHECK_EQ(ref.png, 0, "JPEG, not PNG");
     CHECK_EQ(ref.width, 500, "width from the SOF");
     CHECK_EQ(ref.height, 500, "height from the SOF");
+    CHECK_EQ(ref.label, 0, "a front cover is not the App's label");
 }
 
 static void test_id3_v24_png(void)
@@ -299,6 +346,26 @@ static void test_id3_prefers_front(void)
     CHECK_EQ(artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref), ARTWORK_OK,
              "a front cover is found");
     CHECK_EQ(ref.width, 700, "the first front cover wins, not the later one nor the back");
+}
+
+static void test_id3_label_wins(void)
+{
+    uint8_t cover[128], label[128];
+    size_t cover_len = jpeg_head(cover, 700, 700);
+    size_t label_len = jpeg_head(label, 402, 188);
+
+    buf_t body = { g_body, 0, sizeof g_body };
+    add_apic(&body, 3, 3, "image/jpeg", cover, cover_len, false, 0); /* front cover */
+    add_apic_described(&body, 3, 0, "image/jpeg", "k7label", label, label_len);
+    size_t total = wrap_id3(g_file, sizeof g_file, 3, 0, body.p, body.n);
+
+    mem_t m = { g_file, total };
+    artwork_ref_t ref;
+    CHECK_EQ(artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref), ARTWORK_OK,
+             "a label beside a front cover is found");
+    CHECK_EQ(ref.label, 1, "the label is the picture the screen prints");
+    CHECK_EQ(ref.width, 402, "at the print's width");
+    CHECK_EQ(ref.height, 188, "and height");
 }
 
 static void test_id3_no_cover(void)
@@ -415,6 +482,26 @@ static void test_flac_front(void)
     CHECK_EQ(ref.offset, 42 + front_at, "the front cover's offset");
     CHECK_EQ(ref.png, 1, "PNG");
     CHECK_EQ(ref.width, 500, "width");
+}
+
+static void test_flac_label_wins(void)
+{
+    uint8_t cover[128], label[128];
+    size_t cover_len = jpeg_head(cover, 700, 700);
+    size_t label_len = jpeg_head(label, 402, 188);
+
+    buf_t blocks = { g_body, 0, sizeof g_body };
+    add_flac_picture(&blocks, false, 3, "image/jpeg", 700, 700, cover, cover_len);
+    add_flac_picture_described(&blocks, true, 0, "image/jpeg", "k7label",
+                               402, 188, label, label_len);
+    size_t total = wrap_flac(g_file, sizeof g_file, blocks.p, blocks.n);
+
+    mem_t m = { g_file, total };
+    artwork_ref_t ref;
+    CHECK_EQ(artwork_locate(MI_FMT_FLAC, mem_read, &m, total, &ref), ARTWORK_OK,
+             "a label beside a front cover is found");
+    CHECK_EQ(ref.label, 1, "the label is the picture the screen prints");
+    CHECK_EQ(ref.width, 402, "at the print's width");
 }
 
 static void test_flac_no_picture(void)
@@ -830,10 +917,12 @@ int main(void)
     test_id3_no_cover();
     test_id3_v24_plain_size();
     test_id3_utf16_description();
+    test_id3_label_wins();
     test_id3_caps();
     test_id3_bad();
 
     test_flac_front();
+    test_flac_label_wins();
     test_flac_no_picture();
     test_flac_bad_magic();
 

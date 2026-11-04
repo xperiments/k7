@@ -46,6 +46,12 @@ bool art_image_info(const uint8_t *p, size_t n, art_image_info_t *out);
  * NUL-terminated; `len` bounds it. */
 bool art_mime_ok(const char *mime, size_t len, bool *png);
 
+/* True when a picture's description is this App's label marker, `k7label`. Case is
+ * folded: a tagger that upper-cases a description is still naming the same picture. The
+ * description is the one-byte text both containers carry; a UTF-16 description is not
+ * this App's, so it never matches. */
+bool art_desc_is_label(const char *desc, size_t len);
+
 /* The common checks once a candidate's offset and length are known: the MIME, the
  * magic, the encoded-size cap and, for PNG, the dimension cap. Reads up to the first
  * 24 bytes of the picture for the sniff. */

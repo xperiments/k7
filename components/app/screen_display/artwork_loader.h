@@ -2,11 +2,12 @@
 /*
  * artwork_loader - the card side of the white page's cover and the peek's tags.
  *
- * Locates a Track's own picture (components/portable/artwork), decodes it with TJpgDec
- * as the decoder reads the JPEG from the card on demand, and fits it, cover-style, to
- * one 603x385 RGB565 buffer. The white controls page scales that buffer to the
- * cassette's outer frame; it is the old Artwork screen's window size, kept because the
- * decode and the fit were already tested at it. It also reads the Track's text tags -
+ * Locates the picture a Track is printed with (components/portable/artwork: the App's own
+ * `k7label` when the file carries one, else its front cover), decodes it with TJpgDec as
+ * the decoder reads the JPEG from the card on demand, and fits it, cover-style, to one
+ * RGB565 buffer. A label is already the print, so it is decoded at 402x188 and drawn 1:1;
+ * anything else is fitted to 603x385 and the white page scales that to the cassette's
+ * outer frame. It also reads the Track's text tags -
  * TPE1/TIT2 in an MP3, ARTIST/TITLE in a FLAC Vorbis comment - for the peek's two
  * labels. Work happens on its own task, off the audio core and behind a one-slot
  * request, so the view never touches the card or a decoder.

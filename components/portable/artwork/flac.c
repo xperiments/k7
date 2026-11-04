@@ -1,5 +1,6 @@
 /*
- * flac.c - the front cover in a native FLAC file's PICTURE metadata block.
+ * flac.c - the picture in a native FLAC file's PICTURE metadata block: the App's
+ * `k7label` first, then the front cover.
  *
  * FLAC metadata blocks are a four-byte header (last flag, type, 24-bit length) and a
  * payload. PICTURE is type 6, and the payload is a sequence of big-endian lengths and
@@ -25,8 +26,9 @@ artwork_result_t art_flac_locate(artwork_read_fn read, void *ctx, uint64_t file_
     if (!read(ctx, 0, h, sizeof h)) return ARTWORK_IO;
     if (memcmp(h, "fLaC", 4) != 0) return ARTWORK_BAD_FILE;
 
-    artwork_ref_t first;
+    artwork_ref_t first, front;
     bool have_first = false;
+    bool have_front = false;
     bool saw_picture = false;
     uint64_t pos = 4;
 
@@ -53,6 +55,8 @@ artwork_result_t art_flac_locate(artwork_read_fn read, void *ctx, uint64_t file_
                 o += mime_len;
                 uint32_t desc_len = art_be32(head + o);
                 o += 4;
+                bool is_label = desc_len == 7 && (uint64_t)o + desc_len <= want &&
+                                art_desc_is_label((const char *)head + o, desc_len);
                 /* width, height, depth, colours, then the picture's length and data */
                 if ((uint64_t)o + desc_len + 20 <= want) {
                     o += desc_len;
@@ -60,9 +64,16 @@ artwork_result_t art_flac_locate(artwork_read_fn read, void *ctx, uint64_t file_
                     uint64_t data_off = data + o + 20;
                     artwork_ref_t tmp;
                     if (art_accept(read, ctx, data_off, data_len, png, &tmp) == ARTWORK_OK) {
-                        if (picture_type == 3) { /* front cover */
+                        tmp.label = is_label;
+                        if (is_label) { /* the App's own label is what the Card prints */
                             *out = tmp;
                             return ARTWORK_OK;
+                        }
+                        /* Remembered, not returned: the App's label may come after the
+                         * cover, and the label is what the Card prints. */
+                        if (picture_type == 3 && !have_front) {
+                            front = tmp;
+                            have_front = true;
                         }
                         if (!have_first) {
                             first = tmp;
@@ -77,6 +88,10 @@ artwork_result_t art_flac_locate(artwork_read_fn read, void *ctx, uint64_t file_
         pos = data + len;
     }
 
+    if (have_front) {
+        *out = front;
+        return ARTWORK_OK;
+    }
     if (have_first) {
         *out = first;
         return ARTWORK_OK;

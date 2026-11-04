@@ -20,6 +20,12 @@ static bool ieq_n(const char *a, const char *b, size_t n)
     return true;
 }
 
+bool art_desc_is_label(const char *desc, size_t len)
+{
+    static const char marker[] = "k7label";
+    return len == sizeof marker - 1 && ieq_n(desc, marker, len);
+}
+
 bool art_mime_ok(const char *mime, size_t len, bool *png)
 {
     if (len == 10 && ieq_n(mime, "image/jpeg", len)) { *png = false; return true; }

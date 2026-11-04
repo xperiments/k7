@@ -53,9 +53,17 @@ typedef struct {
     uint32_t width;  /* from the container when it carries them, else the header */
     uint32_t height;
     bool     png;    /* false = JPEG */
+    /* The App's worn label - the picture this project's own writer describes
+     * `k7label` - and not the Track's own cover. It is the print itself (402x188), so
+     * the screen draws it 1:1 in the Card's window instead of fitting it to the
+     * cassette's 603x385 shape. */
+    bool     label;
 } artwork_ref_t;
 
-/* Locate the front-cover picture in a Track, by its Source format. WAV has none.
+/* Locate the picture a Track is printed with, by its Source format. WAV has none.
+ * The order is the App's: its own label first, then the front cover, then the first
+ * usable picture - a card written here shows the label it was written with, and a
+ * card from anywhere else still shows its front cover.
  * `file_size` is used only to reject a header that claims to be larger than the file;
  * pass 0 when it is not known. */
 artwork_result_t artwork_locate(mi_fmt_t format, artwork_read_fn read, void *ctx,

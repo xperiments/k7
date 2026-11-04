@@ -10,11 +10,12 @@
  * hundred bytes at a time, so the Track's JPEG is read from the card on demand and
  * never sits in PSRAM whole.
  *
- * The picture is fitted, cover-style, to one 603x385 RGB565 buffer. That was the old
- * Artwork screen's window; the white controls page now scales the same buffer to the
- * cassette's outer frame, so the decode and the fit did not change when the screen did.
- * The view hides the picture when a new Track is requested, so the decode writes the
- * buffer while it is not drawn.
+ * A Track's own picture is fitted, cover-style, to one 603x385 RGB565 buffer. That was
+ * the old Artwork screen's window; the white controls page now scales the same buffer to
+ * the cassette's outer frame, so the decode and the fit did not change when the screen did.
+ * The App's own label is the exception: it is already the print (402x188), so it is
+ * decoded at that size and drawn 1:1 in the same buffer. The view hides the picture when a
+ * new Track is requested, so the decode writes the buffer while it is not drawn.
  *
  * Memory is the project's scarce resource: the app's rodata and instructions live in
  * PSRAM (moving them to flash brought the panel's glitches back), which leaves about
@@ -66,6 +67,12 @@ static const char *TAG = "artwork";
 #define COVER_W 603
 #define COVER_H 385
 #define COVER_BYTES ((size_t)COVER_W * COVER_H * 2)
+
+/* The App's label is the print itself: frame[0]'s rect in the Card (ADR 0039), 402x188.
+ * It is decoded at that size and drawn 1:1, so the wear and the edges the writer put
+ * there are what the screen shows - a label fitted to cover 603x385 would lose its sides. */
+#define LABEL_W 402
+#define LABEL_H 188
 
 #define LOADER_TASK_STACK (16 * 1024)
 #define LOADER_TASK_PRIO  2
@@ -257,12 +264,13 @@ static int jpeg_out(JDEC *jd, void *bitmap, JRECT *r)
     return 1;
 }
 
-/* Decode a Track's JPEG from the card into `dst`, fitted to 603x385. The picture is
- * read on demand, so neither the encoded bytes nor a full-size RGB copy are held in
+/* Decode a Track's JPEG from the card into `dst`, fitted to `dst_w x dst_h`. The picture
+ * is read on demand, so neither the encoded bytes nor a full-size RGB copy are held in
  * PSRAM: the only workspace is the band for a streaming fit or the crop buffer for an
  * upscale. */
 static bool decode_jpeg_file(FILE *f, uint64_t off, uint32_t size,
-                             uint32_t seq, uint16_t *dst)
+                             uint32_t seq, uint16_t *dst,
+                             uint32_t dst_w, uint32_t dst_h)
 {
     if (!f || !dst || size == 0 || off > 0x7FFFFFFF) return false;
     if (fseek(f, (long)off, SEEK_SET) != 0) return false;
@@ -295,7 +303,7 @@ static bool decode_jpeg_file(FILE *f, uint64_t off, uint32_t size,
     }
 
     bool ok = false;
-    const bool streaming = artwork_cover_streams(jd.width, jd.height, COVER_W, COVER_H);
+    const bool streaming = artwork_cover_streams(jd.width, jd.height, dst_w, dst_h);
     if (streaming) {
         /* The band is sized to this picture, not to the largest one the decoder accepts:
          * a 1000 px cover needs 48 KB, and the card heap has little room left. */
@@ -309,7 +317,7 @@ static bool decode_jpeg_file(FILE *f, uint64_t off, uint32_t size,
             heap_caps_free(pool);
             return false;
         }
-        if (!artwork_cover_begin(&j->cover, jd.width, jd.height, dst, COVER_W, COVER_H,
+        if (!artwork_cover_begin(&j->cover, jd.width, jd.height, dst, dst_w, dst_h,
                                  band, ARTWORK_COVER_BAND_ROWS)) {
             heap_caps_free(band);
             heap_caps_free(pool);
@@ -326,7 +334,7 @@ static bool decode_jpeg_file(FILE *f, uint64_t off, uint32_t size,
     } else {
         /* Smaller than the window: decode the crop and upscale it bilinearly. The crop
          * is the window's aspect, so the fit is a straight resample. */
-        artwork_cover_begin(&j->cover, jd.width, jd.height, dst, COVER_W, COVER_H, NULL, 0);
+        artwork_cover_begin(&j->cover, jd.width, jd.height, dst, dst_w, dst_h, NULL, 0);
         uint16_t *tmp = heap_caps_malloc((size_t)j->cover.cw * j->cover.ch * 2,
                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!tmp) {
@@ -340,7 +348,7 @@ static bool decode_jpeg_file(FILE *f, uint64_t off, uint32_t size,
         rc = jd_decomp(&jd, jpeg_out, 0);
         if (rc == JDR_OK && !j->failed) {
             ok = artwork_scale_cover(tmp, j->cover.cw, j->cover.ch,
-                                     dst, COVER_W, COVER_H);
+                                     dst, dst_w, dst_h);
         } else {
             ESP_LOGW(TAG, "jpeg: jd_decomp failed (%d)", (int)rc);
         }
@@ -437,6 +445,7 @@ static void render_tags(const char *track_path, mi_fmt_t fmt, uint32_t seq)
 static void render_art(const char *track_path, mi_fmt_t fmt, uint32_t seq)
 {
     bool ok = false;
+    bool printed_label = false;
     uint64_t wait_ms = 0, open_ms = 0, decode_ms = 0;
 
     if (track_path[0] && fmt != MI_FMT_NONE && s_art_buf) {
@@ -462,9 +471,23 @@ static void render_art(const char *track_path, mi_fmt_t fmt, uint32_t seq)
                     ESP_LOGI(TAG, "%s: %u B PNG picture; only JPEG is decoded",
                              track_path, (unsigned)ref.size);
                 } else {
+                    /* The App's label is decoded at the print's own size and drawn 1:1;
+                     * anything else is fitted to the cassette's 603x385 shape. */
+                    const uint32_t dst_w = ref.label ? LABEL_W : COVER_W;
+                    const uint32_t dst_h = ref.label ? LABEL_H : COVER_H;
                     int64_t t_decode = esp_timer_get_time();
-                    ok = decode_jpeg_file(f, ref.offset, ref.size, seq, s_art_buf);
+                    ok = decode_jpeg_file(f, ref.offset, ref.size, seq, s_art_buf,
+                                          dst_w, dst_h);
                     decode_ms = (uint64_t)((esp_timer_get_time() - t_decode) / 1000);
+                    if (ok) {
+                        /* What the print sees: the view sizes the picture from this
+                         * descriptor, and a label must not be reported as 603x385. */
+                        s_art_dsc.header.w = dst_w;
+                        s_art_dsc.header.h = dst_h;
+                        s_art_dsc.header.stride = dst_w * 2;
+                        s_art_dsc.data_size = dst_w * dst_h * 2;
+                        printed_label = ref.label;
+                    }
                 }
             } else if (r != ARTWORK_NONE) {
                 ESP_LOGI(TAG, "%s: %s", track_path,
@@ -485,7 +508,7 @@ static void render_art(const char *track_path, mi_fmt_t fmt, uint32_t seq)
 
     ESP_LOGI(TAG, "%s: %s (wait %llu ms, open %llu ms, read+decode %llu ms, %s)",
              track_path[0] ? track_path : "(none)",
-             ok ? "603x385 cover" : "no cover",
+             ok ? (printed_label ? "402x188 label" : "603x385 cover") : "no cover",
              (unsigned long long)wait_ms, (unsigned long long)open_ms,
              (unsigned long long)decode_ms,
              current ? "current" : "superseded");

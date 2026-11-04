@@ -1,5 +1,6 @@
 /*
- * id3.c - the front cover in an MP3's ID3v2.3/2.4 APIC frame.
+ * id3.c - the picture in an MP3's ID3v2.3/2.4 APIC frame: the App's `k7label` first,
+ * then the front cover.
  *
  * Only what locating needs is parsed: the tag header, the extended header when it is
  * present, and each frame's ten-byte header. The APIC frame's own header (encoding,
@@ -45,9 +46,10 @@ static bool description_end(const uint8_t *p, size_t n, uint8_t enc, size_t *end
     return false;
 }
 
-/* Parse one APIC frame's head. Returns the picture type on success (0..20), or -1. */
+/* Parse one APIC frame's head. Returns the picture type on success (0..20), or -1.
+ * `label` says whether the description is this App's `k7label`. */
 static int parse_apic(artwork_read_fn read, void *ctx, uint64_t frame_off,
-                      uint32_t frame_size, artwork_ref_t *out)
+                      uint32_t frame_size, artwork_ref_t *out, bool *label)
 {
     if (frame_size <= 4) return -1;
     uint8_t head[APIC_HEAD_MAX];
@@ -72,13 +74,20 @@ static int parse_apic(artwork_read_fn read, void *ctx, uint64_t frame_off,
     size_t desc_end;
     if (!description_end(head + i, want - i, enc, &desc_end)) return -1;
 
+    /* The label marker is written in a one-byte encoding (the writer uses ASCII); a
+     * UTF-16 description of the same word is somebody else's and is left alone. */
+    bool is_label = enc != 1 && enc != 2 && desc_end > 1 &&
+                    art_desc_is_label((const char *)head + i, desc_end - 1);
+
     uint64_t image_off = frame_off + i + desc_end;
     if (frame_size <= i + desc_end) return -1;
     uint32_t image_len = (uint32_t)(frame_size - i - desc_end);
 
     artwork_ref_t tmp;
     if (art_accept(read, ctx, image_off, image_len, png, &tmp) != ARTWORK_OK) return -1;
+    tmp.label = is_label;
     *out = tmp;
+    if (label) *label = is_label;
     return picture_type;
 }
 
@@ -115,8 +124,9 @@ artwork_result_t art_id3_locate(artwork_read_fn read, void *ctx, uint64_t file_s
         if (pos >= tag_end) return ARTWORK_BAD_FILE;
     }
 
-    artwork_ref_t first;
+    artwork_ref_t first, front;
     bool have_first = false;
+    bool have_front = false;
     bool saw_apic = false;
 
     for (int frame = 0; frame < MAX_FRAMES && pos + ID3_FRAME_BYTES <= tag_end; frame++) {
@@ -145,10 +155,17 @@ artwork_result_t art_id3_locate(artwork_read_fn read, void *ctx, uint64_t file_s
         if (!unusable && memcmp(f, "APIC", 4) == 0) {
             saw_apic = true;
             artwork_ref_t tmp;
-            int type = parse_apic(read, ctx, pos + ID3_FRAME_BYTES, fsize, &tmp);
-            if (type == 3) { /* front cover is the one */
+            bool label = false;
+            int type = parse_apic(read, ctx, pos + ID3_FRAME_BYTES, fsize, &tmp, &label);
+            if (label) { /* the App's own label is what the Card prints */
                 *out = tmp;
                 return ARTWORK_OK;
+            }
+            /* The cover is remembered, not returned: the App's label may be written
+             * after it, and the label is the picture the Card prints. */
+            if (type == 3 && !have_front) {
+                front = tmp;
+                have_front = true;
             }
             if (type >= 0 && !have_first) {
                 first = tmp;
@@ -158,6 +175,10 @@ artwork_result_t art_id3_locate(artwork_read_fn read, void *ctx, uint64_t file_s
         pos += ID3_FRAME_BYTES + fsize;
     }
 
+    if (have_front) {
+        *out = front;
+        return ARTWORK_OK;
+    }
     if (have_first) {
         *out = first;
         return ARTWORK_OK;
