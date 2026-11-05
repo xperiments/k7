@@ -12,7 +12,7 @@ import { startWorkerPool, type WorkerCapacity } from '../../audio/workers';
 import { decodeFile, sha256Hex, trackFormat } from '../../audio/decode';
 import { loadManifest } from '../../audio/models';
 import { readTrackMetadata, type TrackTags } from '../../audio/metadata';
-import { downloadTaggedCopy, writeAnalysisTags, writeTrackLabel, writeTrackMetadata } from '../../audio/tagWriter';
+import { downloadTaggedCopy, writeAnalysisTags, writeTrackLabel } from '../../audio/tagWriter';
 import { coverSource, type EmbeddablePicture } from '../../audio/covers';
 import type { Analysis, ModelManifest } from '../../domain/analysis';
 import { snapshotPath } from '../../domain/snapshot';
@@ -216,16 +216,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const nextClient = useRef(0);
   const inFlight = useRef(0);
   const claimed = useRef(new Set<string>());
-  /* The queue as of the last render, for the work that finishes after a Track has settled:
-   * a label write patches the row it started with, and must not undo a deep analysis that
-   * landed while it was writing. */
-  const itemsRef = useRef<QueueItem[]>([]);
-  useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
+  /* A client holds its Track until the worker has also written the tags and the label and the
+   * page has saved the bytes. Only then does the scheduler give it another row. */
+  const busyClients = useRef(new Set<AnalysisClient>());
+  const [laneTick, setLaneTick] = useState(0);
 
   /* Drafts are read reactively so a Playlist added while the page is open makes "Send to
    * player" available without a reload: a list is part of what an image is. */
@@ -339,131 +335,101 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setItems((previous) =>
       previous.map((item) => (item.id === id ? { ...item, ...patch } : item)),
     );
-    const analysis = patch.analysis;
-    if (analysis !== undefined) {
-      /* The metadata queue reads this ref, not the last render: a deep analysis can land
-       * between the tag write being queued and its turn, and the file must end with the
-       * newest values. */
-      itemsRef.current = itemsRef.current.map((item) =>
-        item.id === id ? { ...item, analysis } : item,
-      );
-      setRunRevision((revision) => revision + 1);
-    }
+    if (patch.analysis !== undefined) setRunRevision((revision) => revision + 1);
   }, []);
 
-  /* One metadata write at a time. TagLib is one WASM module on the main thread, and a queue
-   * that settles three tracks at once must not have three buffers editing it.
-   *
-   * The count is what the image waits for: every tag and label written changes its Track's
-   * size and hash, and the Snapshot carries that size, so an image written between two
-   * writes is an image written against a card that is still moving. */
-  const metadataQueue = useRef<Promise<void>>(Promise.resolve());
+  /* The image waits for every tag/label write: each changes a Track's size and hash, and the
+   * Snapshot carries that size. With the writers in the workers this is at most one per lane,
+   * not a queue of hundreds. */
   const [metadataPending, setMetadataPending] = useState(0);
 
   /**
-   * The measured tags and the worn label, written into the file itself.
+   * Finish one Track in the lane that measured it.
    *
-   * Only a card this page opened read-write is touched, and only for a file the run read from
-   * it - a dropped folder has no handle to write through. The standard tags (BPM, key, mood,
-   * energy) and the XTAPE manifest are what make a later pass — on this card or a copy of it
-   * on another SD — read the measurement instead of running the models again. Every Track is
-   * also drawn again, so a filter that changed between builds reaches a card that was already
-   * processed; the writer only changes the bytes when a tag or the picture is not what this
-   * analysis would write.
+   * The worker writes the tags and the label and hands back the bytes; the page writes those
+   * bytes to the card once. Only a card this page opened read-write is touched, and only for a
+   * file the run read from it — a dropped folder has no handle to write through. The caller
+   * awaits this before releasing the worker, so a fast analyser cannot outrun the writer.
    *
-   * A tag or picture changes the file's size and its whole-file hash, so the row and the
-   * analysis are re-keyed to the bytes the card now holds: otherwise the next pass would
-   * decide every written Track had changed and measure the library again.
+   * The file's size and hash move with the tags, so the row, the analysis and the cache are
+   * re-keyed to the bytes the card now holds; otherwise the next pass would decide every
+   * written Track had changed and measure the library again.
    */
-  const commitMetadata = useCallback(
-    (
+  const finalizeTrack = useCallback(
+    async (
       item: QueueItem,
-      known: { pictures?: readonly EmbeddablePicture[]; row?: CachedMedia; analysis?: Analysis },
-    ) => {
-      if (cardHandle === null || cardHandle.name === undefined) return;
-      const root = cardHandle.name;
-      if (!item.path.toLowerCase().startsWith(`${root.toLowerCase()}/`)) return;
+      client: AnalysisClient,
+      analysis: Analysis,
+      hash: string,
+      known?: CachedMedia,
+    ): Promise<void> => {
+      const root = cardHandle?.name;
+      const writable =
+        root !== undefined && item.path.toLowerCase().startsWith(`${root.toLowerCase()}/`);
 
-      const handle = cardHandle;
-      const scope = currentCardScope();
+      if (!writable) {
+        /* A dropped folder has no handle to write through; the row is still remembered so
+         * Media can show it, and the row menu can save a tagged copy. */
+        if (known === undefined) await rememberMedia(item, hash);
+        return;
+      }
+
       setMetadataPending((count) => count + 1);
-      metadataQueue.current = metadataQueue.current.then(async () => {
-        try {
-          /* At its turn, not when it was queued: the newest analysis is what the file's tags
-           * must carry. */
-          const written =
-            itemsRef.current.find((each) => each.id === item.id)?.analysis ?? known.analysis;
-          const result = written
-            ? await writeTrackMetadata(item.file, written, known.pictures)
-            : await writeTrackLabel(item.file, known.pictures);
-          if (result.kind === 'complete' || result.kind === 'no-source') return;
+      try {
+        let file = item.file;
+        let fileHash = hash;
+        let current = analysis;
 
-          const card = writableCard(handle);
-          if (card === null) return;
-          const fresh = await writeCardFile(card, item.path, result.bytes);
-          if (fresh === null || currentCardScope() !== scope) return;
-
-          const hash = await sha256Hex(result.bytes);
-          /* The row as it stands now, not as it stood when this write started: a deep
-           * analysis may have landed while the card was being written. What it says wins over
-           * the analysis whose tags were written. */
-          const latest = itemsRef.current.find((each) => each.id === item.id) ?? item;
-          const current = latest.analysis ?? known.analysis;
-          if (modelSet !== null && current !== undefined) {
-            const analysis: Analysis = {
-              ...current,
-              track: { ...current.track, size: fresh.size, hash },
-            };
-            await putCached(cacheKey(hash, modelSet), analysis);
-            update(item.id, { analysis, file: fresh });
-          } else {
-            update(item.id, { file: fresh });
-          }
-          if (known.row) {
-            await putMedia(scope, {
-              ...known.row,
-              size: fresh.size,
-              mtime: fresh.lastModified,
-              hash,
-              at: new Date().toISOString(),
-            });
-          }
-        } catch {
-          /* A card that refuses the write is still measured; the tags only make a later pass
-           * quicker. */
-        } finally {
-          setMetadataPending((count) => Math.max(0, count - 1));
-        }
-      });
-    },
-    [cardHandle, modelSet, update],
-  );
-
-  /**
-   * A settled Track's record: the row the library reads, then the pictures the player prints.
-   * One parse serves both, and neither is allowed to fail the row — a Track is measured
-   * whether or not its art could be kept.
-   */
-  const keepTrack = useCallback(
-    (item: QueueItem, hash: string, analysis: Analysis) => {
-      /* The parse belongs to the same settle: until it finishes, the image must not be built,
-       * because the tag write that follows changes the file's size and hash. */
-      setMetadataPending((count) => count + 1);
-      void rememberMedia(item, hash)
-        .then((remembered) => {
-          /* The row and its art are a convenience; the tags are not. Even when the media
-           * parse fails, the writer can still open the file and put the measurement in it. */
-          void commitMetadata(item, {
-            pictures: remembered?.pictures,
-            row: remembered?.row,
+        const finalized = await client
+          .finalize(
+            item.file,
             analysis,
+            cardHandle as unknown as FileSystemDirectoryHandle,
+            item.path,
+          )
+          .catch(() => null);
+        if (finalized?.kind === 'written') {
+          let fresh: File | null = 'file' in finalized ? finalized.file : null;
+          if (fresh === null && 'bytes' in finalized && cardHandle !== null) {
+            /* The worker could not write through the cloned handle; this page still can. */
+            const card = writableCard(cardHandle);
+            if (card !== null) {
+              fresh = await writeCardFile(card, item.path, finalized.bytes).catch(() => null);
+            }
+          }
+          if (fresh !== null) {
+            file = fresh;
+            fileHash = finalized.hash;
+            current = {
+              ...analysis,
+              track: { ...analysis.track, size: fresh.size, hash: fileHash },
+            };
+            if (modelSet !== null) {
+              await putCached(cacheKey(fileHash, modelSet), current);
+            }
+            update(item.id, { analysis: current, file });
+          }
+        }
+
+        if (known === undefined) {
+          await rememberMedia({ ...item, file }, fileHash);
+        } else if (fileHash !== hash) {
+          await putMedia(currentCardScope(), {
+            ...known,
+            size: file.size,
+            mtime: file.lastModified,
+            hash: fileHash,
+            at: new Date().toISOString(),
           });
-        })
-        .finally(() => {
-          setMetadataPending((count) => Math.max(0, count - 1));
-        });
+        }
+      } catch {
+        /* A card that refuses the write is still measured; the tags only make a later pass
+         * quicker. */
+      } finally {
+        setMetadataPending((count) => Math.max(0, count - 1));
+      }
     },
-    [rememberMedia, commitMetadata],
+    [cardHandle, modelSet, rememberMedia, update],
   );
 
   /**
@@ -513,8 +479,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             tags: known.tags,
             cached: true,
           });
-          /* Nothing was read: the row says whether the file still needs the pictures. */
-          void commitMetadata(item, { row: known.media, analysis: known.analysis });
+          /* The row is already known; the file may still need its tags and label. */
+          await finalizeTrack(item, client, known.analysis, known.analysis.track.hash, known.media);
           return;
         }
         update(item.id, { status: 'hashing', error: undefined });
@@ -549,7 +515,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           // known from another card while this card's shelf has never seen it. The row is
           // what Media joins on, so measuring it once here is what keeps "processed" from
           // being reported as "not measured".
-          keepTrack(item, hash, analysis);
+          await finalizeTrack(item, client, analysis, hash);
           return;
         }
 
@@ -569,7 +535,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           await putCached(key, analysis);
         askPersistenceOnce();
           update(item.id, { status: 'tagged', analysis, stage: undefined });
-          keepTrack(item, hash, analysis);
+          await finalizeTrack(item, client, analysis, hash);
           return;
         }
 
@@ -591,7 +557,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         await putCached(key, analysis);
         askPersistenceOnce();
         update(item.id, { status: 'done', analysis, stage: undefined });
-        keepTrack(item, hash, analysis);
+        await finalizeTrack(item, client, analysis, hash);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (isWeightError(error)) setWeightError(message);
@@ -600,30 +566,35 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         claimed.current.delete(item.id);
       }
     },
-    [modelSet, update, tagsOnly, keepTrack, knownAnalysis, commitMetadata],
+    [modelSet, update, tagsOnly, finalizeTrack, knownAnalysis],
   );
 
-  /* Keep every lane busy: claim as many queued items as there are free workers, hand each to
-   * a different client, and let them finish in any order. The claim set exists because the
-   * effect re-runs on every status change and would otherwise hand the same item out twice. */
+  /* Keep every lane busy with one Track at a time. A client is free only when its last
+   * `processItem` has finished — analysis, tags, label and the card write — so no lane starts
+   * another row while its file is still being saved. `laneTick` makes the effect run when a
+   * lane frees, not only when an item's status changes. */
   useEffect(() => {
     if (!modelSet || !running || clients.length === 0) return;
     for (;;) {
       if (inFlight.current >= clients.length) break;
+      const client = clients.find((each) => !busyClients.current.has(each));
+      if (!client) break;
       const next = items.find(
         (item) => item.status === 'queued' && !claimed.current.has(item.id),
       );
       if (!next) break;
       claimed.current.add(next.id);
-      const client = clients[nextClient.current++ % clients.length];
+      busyClients.current.add(client);
       inFlight.current += 1;
       setBusy(true);
       void processItem(next, client).finally(() => {
+        busyClients.current.delete(client);
         inFlight.current -= 1;
         if (inFlight.current === 0) setBusy(false);
+        setLaneTick((tick) => tick + 1);
       });
     }
-  }, [items, modelSet, processItem, clients, running]);
+  }, [items, modelSet, processItem, clients, running, laneTick]);
 
   /**
    * Take a card's files into the queue.
@@ -823,11 +794,15 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const deepAnalyse = useCallback(
     async (item: QueueItem) => {
       if (!item.analysis || !modelSet || busy) return;
-      const client = clients[0];
+      const client = clients.find((each) => !busyClients.current.has(each));
       if (!client) {
-        setNotice({ kind: 'error', text: 'The analysis workers are still starting; try again in a moment.' });
+        setNotice({
+          kind: 'error',
+          text: 'The analysis workers are busy; try again when the run pauses.',
+        });
         return;
       }
+      busyClients.current.add(client);
       setBusy(true);
       try {
         update(item.id, { status: 'analysing', stage: 'deep' });
@@ -840,17 +815,19 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         update(item.id, { status: 'done', analysis, stage: undefined, cached: false });
         /* The file's XTAPE is now one tempo behind: rewrite the tags so the next pass reads
          * the deep result too. */
-        void commitMetadata(item, { analysis });
+        await finalizeTrack(item, client, analysis, item.analysis.track.hash);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (isWeightError(error)) setWeightError(message);
         setNotice({ kind: 'error', text: `Deep analysis failed: ${message}` });
         update(item.id, { status: 'done', stage: undefined });
       } finally {
+        busyClients.current.delete(client);
         setBusy(false);
+        setLaneTick((tick) => tick + 1);
       }
     },
-    [busy, clients, modelSet, update, commitMetadata],
+    [busy, clients, modelSet, update, finalizeTrack],
   );
 
   const saveTags = useCallback(

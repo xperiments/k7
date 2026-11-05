@@ -95,6 +95,31 @@ describe('the automatic metadata write', () => {
   }
 });
 
+describe('the audio behind the tags', () => {
+  for (const format of ['mp3', 'flac'] as const) {
+    it(`does not re-encode ${format.toUpperCase()} when it writes the measured tags`, async () => {
+      const input = new Uint8Array(await readFile(fixtures[format]));
+      const file = fileOf(input, `plain.${format}`, format === 'mp3' ? 'audio/mpeg' : 'audio/flac');
+      const taglib = await TagLib.initialize();
+      const options = format === 'flac' ? ({ basis: 'pcm' } as const) : undefined;
+
+      const before = await taglib.open(input);
+      const original = await before.mediaChecksum(options);
+      before.dispose();
+
+      const output = await writeTrackMetadata(file, sampleAnalysis);
+      expect(output.kind).toBe('written');
+      const bytes = output.kind === 'written' ? output.bytes : input;
+
+      const after = await taglib.open(bytes);
+      const written = await after.mediaChecksum(options);
+      after.dispose();
+
+      expect(written.hex).toBe(original.hex);
+    });
+  }
+});
+
 describe('the worn label picture', () => {
   const coverAsset = new URL('../../assets/labels/cover.jpg', import.meta.url);
 

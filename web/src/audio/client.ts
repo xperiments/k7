@@ -1,7 +1,7 @@
 import type { Analysis } from '../domain/analysis';
 import type { DecodedAudio, Stage, TrackInput } from './analyzer';
 import type { TrackMetadata } from './metadata';
-import type { WorkerRequest, WorkerResponse } from './protocol';
+import type { FinalizeResult, WorkerRequest, WorkerResponse } from './protocol';
 
 type Resolved = Analysis | Analysis['tempo'];
 
@@ -17,11 +17,17 @@ interface Probe {
   timer: ReturnType<typeof setTimeout>;
 }
 
+interface Finalizing {
+  resolve: (result: FinalizeResult) => void;
+  reject: (error: Error) => void;
+}
+
 export class AnalysisClient {
   private readonly worker: Worker;
   private sequence = 0;
   private readonly pending = new Map<string, Pending>();
   private readonly probes = new Map<string, Probe>();
+  private readonly finalizing = new Map<string, Finalizing>();
 
   constructor() {
     this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
@@ -98,6 +104,31 @@ export class AnalysisClient {
     });
   }
 
+  /**
+   * Ask the same worker that measured the file to write the tags and the label. The page
+   * gets bytes back and saves them; a worker holds this lane until that save is done.
+   */
+  finalize(
+    file: File,
+    analysis: Analysis,
+    card?: FileSystemDirectoryHandle,
+    path = '',
+  ): Promise<FinalizeResult> {
+    const id = String(++this.sequence);
+    return new Promise<FinalizeResult>((resolve, reject) => {
+      this.finalizing.set(id, { resolve, reject });
+      const message: WorkerRequest = { type: 'finalize', id, file, analysis, card, path };
+      try {
+        this.worker.postMessage(message);
+      } catch {
+        /* A handle the platform will not clone is not a reason to lose the tags: finalize
+         * without it and let the page write the returned bytes. */
+        const { card: _card, ...rest } = message;
+        this.worker.postMessage({ ...rest, card: undefined });
+      }
+    });
+  }
+
   /** Terminate the worker; anything the page was still waiting for fails. */
   dispose(): void {
     this.worker.terminate();
@@ -111,6 +142,23 @@ export class AnalysisClient {
       this.probes.delete(message.id);
       probe.resolve(message.ms);
       return;
+    }
+
+    if (message.type === 'finalized') {
+      const finalizing = this.finalizing.get(message.id);
+      if (!finalizing) return;
+      this.finalizing.delete(message.id);
+      finalizing.resolve(message.result);
+      return;
+    }
+
+    if (message.type === 'error') {
+      const finalizing = this.finalizing.get(message.id);
+      if (finalizing) {
+        this.finalizing.delete(message.id);
+        finalizing.reject(new Error(message.message));
+        return;
+      }
     }
 
     const pending = this.pending.get(message.id);
@@ -141,6 +189,10 @@ export class AnalysisClient {
       probe.reject(new Error(message));
     }
     this.probes.clear();
+    for (const finalizing of this.finalizing.values()) {
+      finalizing.reject(new Error(message));
+    }
+    this.finalizing.clear();
     for (const [id, pending] of this.pending) {
       this.pending.delete(id);
       pending.reject(new Error(message));

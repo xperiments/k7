@@ -20,9 +20,10 @@ function loadTaglib(): Promise<TagLib> {
       const { TagLib } = await import('taglib-wasm');
 
       // The Node tier has no page origin to fetch a weight from; the package resolves its
-      // own wasm there. In the browser the binary is a verified weight, and handing it
-      // over keeps TagLib from fetching a second, unchecked copy from beside its module.
-      if (typeof window === 'undefined') return TagLib.initialize();
+      // own wasm there. A browser *worker* also has no window, but it has a page origin and
+      // IndexedDB, so it takes the verified weight like the page does.
+      const node = typeof process !== 'undefined' && Boolean(process.versions?.node);
+      if (node) return TagLib.initialize();
 
       const wasmBinary = await loadWeightBytes(TAGLIB_WASM);
       return TagLib.initialize({ wasmBinary });
