@@ -303,7 +303,7 @@ removes the music there and the hiss fills the gap, which is what tape does.
 
 Neither a host clock nor an instruction count is trustworthy alone: the host says nothing
 about a 240 MHz single-issue core, and instruction counts say nothing about stalls. Both were
-measured; the reproduction is `.scratch/tape-fx-bench/` (`make`, `make opt`, `make probe`,
+measured; the reproduction is `tools/bench/tape-fx/` (`make`, `make opt`, `make probe`,
 `make asm`).
 
 ### 6.1 Host, per 1024-frame stereo chunk (MEASURED)

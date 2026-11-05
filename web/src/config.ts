@@ -4,14 +4,13 @@ import { ANALYZER_VERSION } from './domain/version';
 export const SOURCE_URL = 'https://github.com/xperiments/k7';
 
 /**
- * The device's one address (bridge-protocol.md X3, k7-app.md L3). The Launcher is the only
- * page on it, and it is the only origin the App trusts: an IP, another port and another host
- * are all rejected. A device link is built from this constant, never from `location`.
+ * The device's one address (k7-app.md L3), and the only origin the App trusts: an IP,
+ * another port and another host are all rejected. A device request is built from this
+ * constant, never from `location`.
  */
 export const DEVICE_ORIGIN = 'http://k7.local';
 
-/** The window names of bridge-protocol.md §1. `window.open` reuses a named window. */
-export const DEVICE_WINDOW = 'k7-bridge';
+/** The App's window name. `window.open` reuses a named window. */
 export const APP_WINDOW = 'k7-app';
 
 export function cacheKey(hash: string, modelSet: string): string {

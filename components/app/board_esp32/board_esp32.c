@@ -25,7 +25,6 @@
 #include "esp_wifi.h"
 
 #include "mdns.h"
-#include "shell_image.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
@@ -33,7 +32,6 @@
 #include "snapshot.h"
 
 #include "app_board.h"
-#include "board_shell.h"
 
 /* The credentials are compiled in, as the specification requires, but they live in
  * a gitignored header so a real network password does not end up in version
@@ -513,84 +511,6 @@ done:
     esp_vfs_fat_sdcard_unmount(MOUNT_POINT, s_card);
     s_card = NULL;
     return out;
-}
-
-/* --------------------------------------------------------------- the Shell */
-
-/* The page at `/`. The build packs the Shell into this partition with tools/pack_shell.py
- * (root CMakeLists.txt) and `idf.py flash` writes it beside the app. The firmware only ever
- * reads it, and it reads it through a MAPPING, not a copy: the image stays in flash and the
- * page is served straight out of the mapped window, which costs no PSRAM at all.
- *
- * The image is copied into PSRAM at boot, so serving it is a read of ordinary memory: no flash
- * transaction, and nothing for the panel's DMA to share a controller with. That is what the
- * black hold over a page load was buying (ADR 0055), and why it is no longer needed - the
- * image is the Launcher only, tens of KB, because the App is the hosted origin's.
- *
- * Two devices reach here without a page, and both are states rather than faults: one still
- * carrying the old partition table has no `frontdoor` partition at all, and one flashed
- * without the image has it blank. The front door is handed nothing in both cases, so `/`
- * answers 503 and everything else serves. */
-#define SHELL_PARTITION "frontdoor"
-
-static const void *s_shell_bytes;
-static size_t      s_shell_size;
-static bool        s_shell_tried;
-
-bool app_board_shell_image(const void **bytes, size_t *size)
-{
-    if (!s_shell_tried) {
-        s_shell_tried = true;
-
-        const esp_partition_t *part = esp_partition_find_first(
-            ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, SHELL_PARTITION);
-        if (!part) {
-            ESP_LOGW(TAG, "shell: no \"%s\" partition in this build; / answers 503",
-                     SHELL_PARTITION);
-        } else {
-            esp_partition_mmap_handle_t handle;
-            const void *mapped = NULL;
-            esp_err_t e = esp_partition_mmap(part, 0, part->size, ESP_PARTITION_MMAP_DATA,
-                                             &mapped, &handle);
-            if (e != ESP_OK || !mapped) {
-                ESP_LOGW(TAG, "shell: the %s partition did not map (%s); / answers 503",
-                         SHELL_PARTITION, esp_err_to_name(e));
-            } else {
-                /* The header says how long the image is; the partition is bigger than it. */
-                shell_image_t img;
-                if (!shell_image_open(&img, mapped, part->size)) {
-                    ESP_LOGW(TAG, "shell: the image in \"%s\" did not validate; / answers 503",
-                             SHELL_PARTITION);
-                    esp_partition_munmap(handle);
-                } else {
-                    /* A copy, not the mapping. The image is the Launcher and nothing else
-                     * (tens of KB), and a page served out of flash is a flash read while the
-                     * panel scans - the slip ADR 0055 blacks the screen for. In PSRAM the
-                     * page costs a read of ordinary memory and the screen can stay on. The
-                     * mapping is released; the copy is the only reference. A copy that cannot
-                     * be made falls back to the mapping, which still serves. */
-                    void *copy = heap_caps_malloc(img.size, MALLOC_CAP_SPIRAM);
-                    if (copy) {
-                        memcpy(copy, mapped, img.size);
-                        s_shell_bytes = copy;
-                        s_shell_size = img.size;
-                        esp_partition_munmap(handle);
-                        ESP_LOGI(TAG, "shell: %u KB copied to PSRAM at %p, served from RAM",
-                                 (unsigned)(img.size >> 10), copy);
-                    } else {
-                        s_shell_bytes = mapped;
-                        s_shell_size = img.size;
-                        ESP_LOGW(TAG, "shell: %u KB could not be copied to PSRAM; the page is "
-                                      "served from the mapping", (unsigned)(img.size >> 10));
-                    }
-                }
-            }
-        }
-    }
-    if (!s_shell_bytes) return false;
-    if (bytes) *bytes = s_shell_bytes;
-    if (size) *size = s_shell_size;
-    return true;
 }
 
 /* P2/P3: what the memory available actually is, before anything is allocated, so

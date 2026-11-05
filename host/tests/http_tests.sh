@@ -1,8 +1,7 @@
 #!/bin/sh
 
-# This suite judges a firmware with no page: `/` answers 503 and `/library` is the
-# index. A Shell in the environment would change what `/` answers.
-unset XTAPE_SHELL
+# This suite judges the device's HTTP surface with no page: `/` is a 404 and `/library`
+# is the index.
 # Host acceptance tests for the HTTP surface: T3, T4, T5, T6, T7, T8, T9, T12, T14, T15, T16 and T17,
 # run against the real server on this machine with no board attached.
 #

@@ -1,40 +1,18 @@
 # K7
 
-The application at `https://k7.xperiments.dev`, and the small page the player serves beside it.
-The App measures a card's tracks, authors the Playlists a Snapshot carries, browses the library
-from the player or from its own last run, and is usable with no player in the room. The Launcher
-is the player's own page: it shows what the device is doing, carries the broadcast's audio, and
-does what the App asks it to. The device is a different context — see
+The application at `https://k7.xperiments.dev`. It measures a card's tracks, authors the
+Playlists a Snapshot carries, browses the library from the player or from its own last run, and
+reaches the player directly over the local network. The device is a different context — see
 [`CONTEXT-MAP.md`](../CONTEXT-MAP.md).
 
 ## Language
 
-### The two pages
-
-**Front door** is retired: it named one page where there are now two, and it is not a synonym for
-either.
-
-**Launcher**:
-The page the player serves on plain HTTP. At its root it only sends the browser to the App —
-the player's address is a doorbell. At `/bridge` it is the window that executes the App's
-requests and carries the stream's audio, for a browser that cannot reach the device directly.
-It holds no analysis and no library.
-_Avoid_: front door, device UI, landing page, dashboard
+### The application
 
 **App**:
 The application at the HTTPS origin: its areas, its stores, its worker, and everything it
-computes. Opened from the Launcher, from its own installed icon, or by hand.
-_Avoid_: front door, website, frontend, web app
-
-**Device copy**:
-The App's own bytes served by the player, for a network with no internet. The same code under
-its origin's limits: no worker, no card write, no WebGPU, never installable.
-_Avoid_: fallback app, offline mode, backup copy
-
-**Shell**:
-The App's code as one packed image in the player's flash — the Launcher and the Device copy.
-What the player serves that is ours, and nothing else.
-_Avoid_: bundle, frontend, page
+computes. Opened from its installed icon or by hand.
+_Avoid_: website, frontend, web app, launcher
 
 **Weights**:
 Everything the analysis and the Local Provider need that is too big to ship: the models and the
@@ -48,40 +26,31 @@ _Avoid_: page, tab, section
 
 **Route**:
 A hash path in the address bar — `#/process`, `#/playlists/:id`, `#/media/album/:album` — naming an
-area and, sometimes, one thing in it. The player serves one page and knows no path; a route
+area and, sometimes, one thing in it. The App serves one document and knows no path; a route
 exists only inside the App.
 _Avoid_: URL, link, path
 
 ### The link
 
 **Link**:
-Whether the App can command a player right now: **bridged** through a Launcher, **direct** because
-it is the Device copy, or **none**. An observed fact, never a mode the user selects.
+Whether the App can command a player right now: **local** when the device answers over the local
+network, or **none**. An observed fact, never a mode the user selects.
 _Avoid_: mode, connection state, online
 
-**Bridge**:
-The channel between the App and the Launcher: the App's requests and the Launcher's answers, in a
-closed table of operations. It carries no stream, no push and no arbitrary request.
-_Avoid_: pipe, proxy, socket, API, tunnel
-
-**Gateway**:
-The Launcher as it is when no trusted App has opened it: it reports the device and offers to open
-the App. One of its two faces; the other is the **Bridge window**.
-_Avoid_: home page, menu
-
-**Bridge window**:
-The Launcher once a trusted App has opened it: it executes the App's requests and carries the
-stream's audio, and closing it disconnects the App.
-_Avoid_: worker, agent, service
+**Local network**:
+The `local-network` permission a person grants this origin, which is what lets the App fetch
+`http://k7.local` from its HTTPS origin (LNA §2.5). Without it the App is gated: no area renders.
+_Avoid_: LAN mode, device access
 
 **Capabilities**:
 What this browser and this origin can actually do — secure context, service worker, WebGPU,
-directory access, OPFS. Observed at boot, shown in Settings, and what every feature is gated on.
+directory access, OPFS, local network. Observed at boot, shown in Settings, and what every feature
+is gated on.
 _Avoid_: mode, support matrix, features
 
 **Network**:
-Whether this machine has internet. Independent of **Link**: a bridged App can be offline, and a
-standalone one can be online.
+Whether this machine has internet. Independent of **Link**: a linked App can be offline, and an
+unlinked one can be online.
 _Avoid_: mode, offline mode, connectivity
 
 ### The card

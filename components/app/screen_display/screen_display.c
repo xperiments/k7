@@ -8,8 +8,8 @@
  * flash access takes the PSRAM window away and displaces the picture until the engine is
  * restarted (ADR 0055). So stage one (screen_display_boot) creates the panel and the LVGL port
  * but starts neither the clock nor the scan, and leaves the light off; stage two
- * (screen_display_mark) runs after app_services_start() - after the Snapshot, the Shell's table
- * and Wi-Fi's NVS - and only then starts the first clock, fills both buffers black, paints the
+ * (screen_display_mark) runs after app_services_start() - after the Snapshot and Wi-Fi's NVS -
+ * and only then starts the first clock, fills both buffers black, paints the
  * K7 mark into both, lights the backlight and holds the mark for its dwell; stage three
  * (screen_display_start) re-establishes the scan and builds the cassette over the mark.
  *
@@ -291,9 +291,9 @@ static void card_poll(void)
         ESP_LOGW(TAG, "no card: showing the SD mark");
 }
 
-/* How long the glass stays black after the last page file was asked for. A page load is a
- * burst of requests over a few hundred milliseconds; a second past the last one is enough to
- * cover it, and it is the one moment nobody is looking at the cassette. */
+/* How long the glass stays black after the last flash read was asked for. A Snapshot read is
+ * a burst of requests over a few hundred milliseconds; a second past the last one is enough
+ * to cover it, and it is the one moment nobody is looking at the cassette. */
 #define PAGE_HOLD_MS 1000
 
 /* What the hold does, and why it is black.

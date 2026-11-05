@@ -66,8 +66,8 @@ config APP_UI_MARK_HOLD_MS
     range 0 10000
     help
         The mark is decorative and has a dwell of its own: it is painted after
-        app_services_start() has finished the boot's flash work (the Snapshot, the Shell's
-        table, Wi-Fi's NVS), the backlight is lit over it, and it stays up for this long
+        app_services_start() has finished the boot's flash work (the Snapshot and Wi-Fi's
+        NVS), the backlight is lit over it, and it stays up for this long
         before the cassette replaces it. It is the one moment the boot shows something
         without also touching flash, so it is held rather than rushed.
 

@@ -6,8 +6,8 @@
  * broadcast to choose one. `select` is the one command.
  *
  * Both links answer through the `Device` seam, so nothing here fetches; the parsers are
- * exported because the direct Device and the bridge both use them, and a document this
- * module cannot read never reaches a view (O5).
+ * exported because the direct Device uses them, and a document this module cannot read
+ * never reaches a view (O5).
  */
 
 import { getDevice } from './device';

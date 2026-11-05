@@ -1,86 +1,75 @@
-# K7: a secure application, and a Launcher that stays behind
+# K7: a secure application that reaches the player directly
 
 **Goal.** K7 is the App — one secure origin, **installable from Chrome in one click as an
-app**, offline-capable, and useful with no player in the room. The device keeps a small page of
-its own at `http://k7.local`, the
-**Launcher**, whose job is to be reachable on plain HTTP forever: it shows the device's state,
-opens the App, carries the stream's audio, and executes the bridge's operations
-([`bridge-protocol.md`](./bridge-protocol.md)). The device is a gateway, not the runtime.
+app**, offline-capable, and useful with no player in the room. It reaches the device at
+`http://k7.local` with its own `fetch`, gated on the browser's `local-network` permission: no
+second window, no second document, no page on the device
+([ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md)). The device is a gateway, not the
+runtime.
 
-The page the device used to serve is gone. **Front door** is retired as a word: it is now the
-**Launcher**, the **App**, and — when the device serves the App's own bytes as a fallback —
-the **Device copy**.
+The page the device used to serve is gone: **Front door**, **Launcher**, **Device copy**,
+**Shell** and **Bridge** are retired words.
 
-**Status:** M1–M3 are built and tested in this repository — the Launcher and its bridge, the
-card's mark and the scoped stores, installability, and the one offline weights store with a
-gated prefetch. Not deployed and not flashed. M4 is partly built: the Device copy's `direct`
-transport exists, the Library's image source and the local Provider do not, so `#/media`,
-`#/playlists` and Ask still read the player only.
+**Status:** M1–M3 are built and tested in this repository — the card's mark and the scoped
+stores, installability, and the one offline weights store with a gated prefetch. Not deployed
+and not flashed. M4 is partly built: the direct transport exists; the Library's image source and
+the local Provider do not, so `#/media`, `#/playlists` and Ask still read the player only.
 
 **Vocabulary:** [`web/CONTEXT.md`](../../web/CONTEXT.md). The device's own API is
-[`front-door.md`](./front-door.md) §2 — the spec as it stood when the device served the app
-there; its routes and contracts still hold, its "one page" does not — and
-[`sd-stream-server.md`](./sd-stream-server.md); the Image is
+[`front-door.md`](./front-door.md) §2 — its routes and contracts still hold, the page it once
+served does not — and [`sd-stream-server.md`](./sd-stream-server.md); the Image is
 [`snapshot-format.md`](./snapshot-format.md); the card's mark is
 [`card-mark.md`](./card-mark.md). The origin decision is
-[ADR 0057](../adr/0057-the-app-lives-at-a-public-origin.md); the bridge's shape is
-[ADR 0058](../adr/0058-the-bridge-is-a-typed-rpc-between-two-windows.md).
+[ADR 0057](../adr/0057-the-app-lives-at-a-public-origin.md); the direct transport is
+[ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md).
 
 ---
 
 ## 1. The pieces
 
-| | **Launcher** | **App** | **Device copy** |
-|---|---|---|---|
-| Origin | `http://k7.local/` | `https://k7.xperiments.dev` | `http://k7.local/app` |
-| Served by | the device, from the Shell image | Vercel, with headers | the device, from the Shell image |
-| Secure context | no | yes | no |
-| Owns | device facts, stream audio, Launch, the bridge's agent side | library processing, card writes, the PWA, WebGPU, every view | the same App, degraded by its origin |
-| Never | serves a Track, writes the card, runs the analysis | fetches the device directly | writes the card, installs, or uses WebGPU |
+| | **App** |
+|---|---|
+| Origin | `https://k7.xperiments.dev` |
+| Served by | Vercel, with headers; the device serves no page |
+| Secure context | yes |
+| Owns | library processing, card writes, the PWA, WebGPU, every view |
+| Never | serves a Track, accepts a Track upload |
 
-**A1. One codebase, two packagings.** The App's code is the same in both artifacts; only the
-entry HTML, the compression and one build flag differ (§9).
+**A1. One artifact.** `npm run build` produces the App; there is no device packaging to keep in
+step with it.
 
-**A2. The Device copy exists because the device may be reachable when the internet is not.**
-It is the App minus everything its origin forbids: no service worker, no directory handles, no
-WebGPU, no OPFS, and `crypto.subtle` absent, so its hashes run in JavaScript. Its weights live
-in the same IndexedDB entries — that store is not secure-context-gated — so it too works offline
-once a weight has been fetched; only the first fetch needs the network. That is the fallback's
-honest limit.
+**A2. The App reaches the device over the local network.** `fetch('http://k7.local/api/…')` from
+the HTTPS origin, allowed because LNA §2.5 exempts a `.local` host from mixed content once the
+`local-network` permission is granted. Measured in Chrome 156 on the deployed origin
+([`local.ts`](../../web/src/device/local.ts)).
 
-**A3. The Launcher has no routes, no analysis and no weights.** It is a few kilobytes of
-hand-written HTML and JS. Everything it shows it reads from `/api/status` and `/api/playlists`;
-everything it does it does on behalf of the App.
+**A3. The permission is asked for, and the App is refused until it is answered.**
+`ui/LocalNetworkGate.tsx` blocks every area until
+`navigator.permissions.query({name: 'local-network'})` is `granted`; a denial, or a browser with
+no such API, gets a wall with instructions, never a fallback.
 
 ---
 
 ## 2. Origins and trust
 
-**L1. The Launcher trusts an app-origin list compiled into it at build time:**
-`https://k7.xperiments.dev`, plus a development origin only when the build is told one. It
-opens the first entry and accepts messages from any entry. No URL parameter, query string,
-referrer or stored setting can add one.
+**L1. The App trusts exactly one device origin: `http://k7.local`.** Not an IP, not another
+port, not another host. Reached at `http://192.168.0.13`, the App's gate says the device needs
+`k7.local`.
 
-**L2. The App trusts exactly one Launcher origin: `http://k7.local`.** The same origin is
-also reachable directly, without a Launcher, when the browser grants the Local Network Access
-permission (measured in Chrome 156 — see [`local.ts`](../../web/src/device/local.ts)); the
-bridge remains for every browser that does not. Not an IP, not another
-port, not another host. Reached at `http://192.168.0.13`, the Launcher still shows status and
-the stream, and its Launch button says the App needs `k7.local`; the App shows the same
-sentence in reverse.
+**L2. The permission is per origin.** `https://k7.xperiments.dev` and the development origin are
+two grants; a preview deployment is a third and is never given one.
 
 **L3. The device's name is `k7.local`.** The mDNS hostname is one string in
-[`appliance.c`](../../components/app/appliance/appliance.c). The App's allowlist gets no
-`xtape.local` entry: an unrenamed board serves the *old app* at that name and no Launcher at
-all, so there is nothing there to trust. The cost of the rename is a flash, not a trust entry.
+[`appliance.c`](../../components/app/appliance/appliance.c). An unrenamed board serves nothing at
+`xtape.local`, so there is nothing there to trust. The cost of the rename is a flash.
 
 **L4. A development origin is a build input, never a runtime fact.**
 `https://k7-dev.xperiments.dev:8000` — the port included, because an origin includes the port —
-is compiled into a development Shell only. A shipping build refuses it (§9, [`k7-deploy.md`](./k7-deploy.md)).
+is what a development build is served from; a shipping build refuses it (§9, [`k7-deploy.md`](./k7-deploy.md)).
 
 **L5. The App is a public page.** Anyone may load it. That is safe because the App holds no
-credential and can reach nothing: it can only *ask a Launcher it was opened by*, and only for
-the operations in the table.
+credential and can reach nothing on its own: a device request needs the `local-network` grant,
+and the device's own CORS and routes decide what a granted origin may ask.
 
 ---
 
@@ -88,13 +77,12 @@ the operations in the table.
 
 Three observed facts. There is no mode enum, and no precedence table.
 
-**A4. `link`** — `bridge` (a session with a Launcher), `direct` (the App is the Device copy, so
-same-origin `fetch` works), or `none`.
+**A4. `link`** — `local` (the device answered over the local network) or `none`.
 
 **A5. `network`** — `online` or `offline`, from the browser's own event.
 
 **A6. `capabilities`** — `isSecureContext`, service worker, `navigator.gpu`, directory handles,
-OPFS, all read at boot and shown in Settings.
+OPFS, the `local-network` permission, all read at boot and shown in Settings.
 
 **A7. One chip composes them** — "Connected · k7.local", "Connected · player unreachable",
 "No player — Connect", "Offline · cached". A feature is gated on the capability it needs, never
@@ -102,7 +90,7 @@ on the chip.
 
 | Feature | Needs |
 |---|---|
-| Scan a dropped folder, measure, build an Image, download it | File API — works on the Device copy |
+| Scan a dropped folder, measure, build an Image, download it | File API |
 | Pick a card, write `k7.db`, write the card mark | secure context + directory handles |
 | Install, offline shell, weight prefetch | secure context + service worker |
 | Local Provider (WebLLM) | secure context + WebGPU + ~1 GB of patience |
@@ -111,8 +99,8 @@ on the chip.
 | Device facts, playlists, send, play, stream | `link !== none` |
 | Ask over a remote Provider | `network === online` + Settings |
 
-**A8. `window.isSecureContext` is a readout, not an assertion.** The Device copy shows `false`
-and the features it forbids, instead of failing at the first call.
+**A8. `window.isSecureContext` is a readout, not an assertion.** The App reads it and gates the
+features it forbids, instead of failing at the first call.
 
 ### Install
 
@@ -127,14 +115,12 @@ handler — which the App has for its own reasons.
 **A10. Installing must be one click, offered where it can work.** `beforeinstallprompt` is
 captured and replayed from an explicit **Install K7** control; `appinstalled` and
 `display-mode: standalone` hide it once it is done; Safari gets the Share → Add to Home Screen
-sentence and Firefox an honest "this browser does not install apps". The **Device copy never
-offers it**: an insecure origin cannot be installed, and a dead button is worse than no button.
-An optional wide `screenshot` in the manifest buys the richer install dialog.
+sentence and Firefox an honest "this browser does not install apps". An optional wide
+`screenshot` in the manifest buys the richer install dialog.
 
 **A11. The installed window is the normal case, not a downgrade.** An installed App has no
-opener, ever — which is exactly why the Bridge opens from the App's side as well as the
-Launcher's ([`bridge-protocol.md`](./bridge-protocol.md) W1). Installing must be presented as
-the recommended way to use K7, and **Connect** as what makes it work with a player.
+opener, and it does not need one: it reaches the device with its own `fetch`. Installing must be
+presented as the recommended way to use K7, and **Connect** as what makes it work with a player.
 
 **A12. The manifest is revalidated, never inferred.** It is served `no-cache` with the worker
 and the entry ([`k7-deploy.md`](./k7-deploy.md) D4): a manifest is how Chrome decides what is
@@ -142,7 +128,7 @@ installed, so a stale one is an install that never sees new icons. `id` stays `/
 origin — changing it is a different app to Chrome, and leaves the old install behind.
 
 **A13. Installability is a deployment acceptance test.** Checked on the real origin, by hand,
-once per release, with the Device copy and a Vercel preview both expected to refuse: Chrome's
+once per release, with a Vercel preview expected to refuse: Chrome's
 omnibox install icon appears, the app opens in its own window with no address bar, and the
 Icon on the launcher is not cropped.
 
@@ -261,19 +247,17 @@ unconditional.
 
 ## 8. Security posture
 
-The channel's rules are [`bridge-protocol.md`](./bridge-protocol.md) §7. What the App adds:
+The device's trust rules are in §2 (`k7-deploy.md` D3, D14). What the App adds:
 
 **X1.** Every device call goes through the transport seam. No view calls `fetch('/api/…')` and
 no component knows an origin.
 
-**X2.** The App never fetches `http://k7.local`. It could not, and the design does not pretend
-otherwise: if a feature needs the device, it needs a Launcher.
+**X2.** The App fetches `http://k7.local` and nothing else. The `local-network` grant is the
+only thing that lets it, and the device's CORS headers are what make the answer readable.
 
-**X3.** No `COOP: same-origin` on any App response. It would sever `window.opener` and kill
-connected mode silently, and it is the one header that looks like a hardening win and is a
-regression here ([ADR 0058](../adr/0058-the-bridge-is-a-typed-rpc-between-two-windows.md)). The
-consequence — no `SharedArrayBuffer`, so ONNX Runtime stays single-threaded — is accepted, and
-is already true on the Device copy.
+**X3.** No `COOP: same-origin` on any App response. It would make the document cross-origin
+isolated and change what the CDN's weights may load — a separate decision (`k7-deploy.md` D7),
+not a hardening sweep. ORT stays single-threaded, and that is accepted.
 
 **X4.** The Provider's key is the only secret the App holds. It lives in this origin's storage,
 never crosses the bridge, and a CSP on the deployed App is what protects it from injected
@@ -286,26 +270,21 @@ makes that a deployment requirement, not a nicety.
 
 ## 9. Packaging
 
-| | HTTPS artifact | Device artifact |
-|---|---|---|
-| Entry | `index.html` is the App; `start_url: "/"` | `index.html` is the Launcher, and that is the whole image: the App is the hosted origin's |
-| Compression | plain | text as gzip, originals dropped, served with `Content-Encoding: gzip` |
-| Weights | fetched from jsDelivr | the same |
-| Local Provider | included, lazy chunk | `VITE_LOCAL_PROVIDER=0` — no WebGPU on that origin, so the chunk would be dead bytes |
+| | The App |
+|---|---|
+| Entry | `index.html` is the App; `start_url: "/"` |
+| Compression | plain; the host gzips |
+| Weights | fetched from jsDelivr at the pinned tag |
+| Local Provider | included, lazy chunk |
 
-**K1. The Launcher is a static file copied into the shell build**, not a Vite entry: it needs
-no bundle, and a multi-page Vite config to serve 5 KB would be a cost with no return.
+**K1. There is no second packaging.** ADR 0067 removed the Shell: the build has one mode,
+`vite build`, and produces `dist`.
 
-**K2. `/app` is one line** in `logical_for` ([`front_door.c`](../../components/portable/front_door/front_door.c)).
-Every other path stays an exact filename.
+**K2. The artifact carries the App, not the weights.** `pruneAppArtifact` drops `models/`,
+`weights/` and `ort/*.wasm` from `dist` — the App fetches them from the CDN — keeping
+`ort/ort-wasm-simd-threaded.mjs`, which `browser-runtime.ts` loads from `/ort/` on this origin.
 
-**K3. The Shell image grows by the Launcher and loses nothing.** The crash of a page load on
-the panel — the black frame ADR 0055 chose — now covers the Launcher and, on the Device copy
-only, the App's own bytes. Measured: 392 783 bytes packed, against 377 KiB before the Launcher
-existed — about 15 KB, the maskable icon included.
-
-**K4. The build refuses a shipping Shell carrying a development origin**, and the deployed
-artifact carries no firmware path at all. `k7-deploy.md`.
+**K3. The build refuses a shipping artifact carrying a development origin.** `k7-deploy.md`.
 
 ---
 
@@ -313,10 +292,6 @@ artifact carries no firmware path at all. `k7-deploy.md`.
 
 - **No cross-origin isolation.** No `SharedArrayBuffer`, so ORT is single-threaded. WebGPU is
   unaffected, which is why the capability that motivated the move is not the one that pays.
-- **Connected mode needs the new firmware**, because the Launcher *is* firmware. A board with
-  the old image serves the old app and cannot bridge.
-- **Two origins, two stores.** Work done in the Device copy cannot be handed to the Hosted App;
-  the card is the only bridge between them.
 - **A public origin is a permanent dependency.** A fresh browser needs the internet once; after
   that the worker is the app.
 - **The fallback is thin.** No service worker, no picker, no WebGPU, and the App's code only
@@ -341,6 +316,9 @@ artifact carries no firmware path at all. `k7-deploy.md`.
 ---
 
 ## 12. Build order
+
+> The milestones below predate [ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md) where
+> they name the Launcher, the Device copy or the Shell: read those words as retired.
 
 **M1 — the channel, and an App that installs.** The manifest and its three icons (the rename,
 the maskable pass), the Install control with its four states, the Launcher page (gateway and
@@ -375,5 +353,4 @@ no device; with a device, send/play/stream work; a local model produces an Inten
   disconnect and reconnect, offline reload, a blocked popup. Plus an installability assertion
   where the test browser fires `beforeinstallprompt` — desktop Chrome and Edge do, the headless
   shell may not — with the manifest shape check in CI as the half that always runs.
-- **host / Python** — the Shell image holds the Launcher only (`index.html`, `launcher.js`,
-  `launcher-origins.js`), `/app` is a 404, `/k7.db` and `/xtape.db` both update.
+- **host / Python** — `/`, `/bridge` and `/app` are 404; `/k7.db` and `/xtape.db` both update.

@@ -1,5 +1,8 @@
 # The App lives at a public origin, and the device serves a Launcher
 
+> **Partly superseded by [ADR 0067](./0067-chrome-only-direct-to-the-device.md).** The App's
+> public origin stands; the Launcher the device served beside it does not.
+
 [ADR 0049](./0049-the-front-door-is-plain-http.md) took the app off TLS because the only ways
 past a browser's certificate warning were a per-machine trust step or a public certificate on
 the device — "a name in public DNS pointing at its LAN address, not a better certificate". It

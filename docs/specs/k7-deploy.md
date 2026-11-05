@@ -1,9 +1,10 @@
 # Deploying K7
 
-**Goal.** Two artifacts from one repository: the **App** at `https://k7.xperiments.dev`, and the
-**Shell** packed into the firmware so the device can serve the **Launcher** and the Device copy.
-A development origin, `https://k7-dev.xperiments.dev:8000`, exists so connected mode can be
-tested against the same shape it ships in — real TLS, no warning, a genuine secure context.
+**Goal.** One artifact from one repository: the **App** at `https://k7.xperiments.dev`. The
+device serves no page — it answers the API and the stream, and the App reaches it directly over
+the local network once a person grants the `local-network` permission (ADR 0067). A development
+origin, `https://k7-dev.xperiments.dev:8000`, exists so connected mode can be tested against the
+same shape it ships in — real TLS, no warning, a genuine secure context.
 
 **Status:** the config, the two checkers and the CI workflow exist; nothing has been deployed,
 no Vercel project points at it, and no certificate or DNS record has been created.
@@ -13,14 +14,13 @@ no Vercel project points at it, and no certificate or DNS record has been create
 ## 1. Production: Vercel
 
 **D1. Project settings.** Root directory `web`, build command `npm run build`, output `dist`.
-`build:shell` is the device's artifact and is never the Vercel build.
 
 **D2. Domains.** `k7.xperiments.dev` is added to the project; Vercel issues and renews the
 certificate. `www.xperiments.dev` stays where it is — a different project, unaffected.
 
-**D3. Previews are standalone-only.** Every Vercel preview is its own origin, and the
-Launcher's allowlist does not contain it, so connected mode cannot be exercised on a preview.
-That is correct: a preview URL must never be able to command a player.
+**D3. Previews are standalone-only.** Every Vercel preview is its own origin, so a preview can
+never inherit the production origin's `local-network` grant and connected mode cannot be
+exercised there. That is correct: a preview URL must never be able to command a player.
 
 ---
 
@@ -87,11 +87,11 @@ storage. Notes on the two entries that look odd and are not:
   with no way to say why. The no-cookie host is the reliable one, and the page loads it only
   on a click.
 
-**D7. No `COOP` header, ever.** `Cross-Origin-Opener-Policy: same-origin` would sever
-`window.opener` and silently kill connected mode; `same-origin-allow-popups` would do the same
-from the App's side. The App's isolation is the one capability this design trades away
-(ADR 0058). A future "security headers" sweep must not add them back; the Playwright test in
-`bridge-protocol.md` §T2 exists to catch it.
+**D7. No `COOP` header, yet.** `Cross-Origin-Opener-Policy: same-origin` would have severed
+`window.opener` and killed the bridge; ADR 0067 removed the bridge, so that reason is gone. It is
+still unset because turning it on makes the document cross-origin isolated, which changes what
+the CDN's weights may load (`COEP`) — a separate, deliberate decision, not a "security headers"
+sweep.
 
 ---
 
@@ -115,12 +115,12 @@ mkcert -cert-file web/.certs/k7-dev.pem -key-file web/.certs/k7-dev-key.pem \
   k7-dev.xperiments.dev 192.168.0.38 localhost 127.0.0.1
 ```
 
-`.certs/` is gitignored. The same pair serves `vite preview` and the App at the address the
-Launcher's development allowlist contains.
+`.certs/` is gitignored. The same pair serves `vite preview` and the App at the development
+origin.
 
-**D11. The port is part of the origin.** `https://k7-dev.xperiments.dev:8000` is what the
-Launcher is built to open, in full, including `:8000`. Serving the same certificate on another
-port makes another origin and needs another allowlist entry.
+**D11. The port is part of the origin.** `https://k7-dev.xperiments.dev:8000` is the App's
+development origin, in full, including `:8000`. Serving the same certificate on another port
+makes another origin, with its own `local-network` grant to give.
 
 **D12. Serve the built App, not the dev server.** `vite preview --port 8000 --host` with
 `preview.https` set from `.certs/`, so the artifact being tested is the artifact being shipped's
@@ -128,45 +128,29 @@ shape: worker, headers and all.
 
 ---
 
-## 5. The two artifacts
+## 5. The one artifact
 
-| | Command | Origin baked in |
+| | Command | What it bakes in |
 |---|---|---|
-| HTTPS artifact (Vercel) | `npm run build` | the App has no launcher baked in; it trusts `http://k7.local` |
-| Device artifact (Shell) | `K7_APP_ORIGINS=https://k7.xperiments.dev npm run build:shell` | the Launcher's allowlist |
-| Development Shell | `K7_APP_ORIGINS=https://k7.xperiments.dev,https://k7-dev.xperiments.dev:8000 npm run build:shell` | two entries, one of them a warning |
+| The App (Vercel) | `npm run build` | trusts `http://k7.local`; the `local-network` permission is asked for at first render |
 
-**D13. The Launcher's allowlist is written at build** from `K7_APP_ORIGINS`, as
-`launcher-origins.js` beside the Launcher. **The first entry is the one *Launch K7* opens**;
-the rest are trusted to message the bridge. A development Shell therefore lists the
-development origin first, and the shipping origin second if it needs to. It is a file rather than an inline script so the
-Launcher keeps `default-src 'self'` with no `'unsafe-inline'`; the hosted build's copy holds
-the production origin and the Shell build replaces the file. Nothing reads an origin at
-runtime.
+**D13. There is no device artifact.** ADR 0067 removed the Launcher and the Shell: the firmware
+packs no page, `/` and `/bridge` answer 404, and the App at its own origin is the only UI.
 
-**D14. A shipping build refuses a development origin.** Two guards, because this is the one
-mistake in the design with a security consequence:
-- the web build fails if `K7_APP_ORIGINS` contains anything but `https://k7.xperiments.dev`
-  while `K7_REQUIRE_SHELL=1` is set;
-- the deployed artifact fails the check if the development origin's string appears anywhere in
-  `dist`.
-
-**D15. `VITE_LOCAL_PROVIDER=0` for the Shell build.** WebGPU needs a secure context, so the
-Device copy can never run the local Provider; shipping `web-llm` there would be dead bytes in
-flash.
+**D14. A shipping build refuses a development origin.** The deployed artifact fails the check if
+the development origin's string appears anywhere in `dist`.
 
 ---
 
 ## 6. CI
 
-Four jobs, all on a pull request:
+Three jobs, all on a pull request:
 
 | Job | What it runs |
 |---|---|
 | `web` | `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, the artifact guard (D14), and a manifest shape check — `id`, `name`/`short_name`, `start_url`, `scope`, `display`, `theme_color`, and 192/512/512-maskable icons — so A9 cannot regress silently |
-| `e2e` | `npx playwright install --with-deps chromium`, then the two-origin suite; the App is served at `http://localhost:<port>` so no certificate is needed (`bridge-protocol.md` §T3) |
-| `host` | `make -C host check` — the device's own fixtures, including `/app` mapping and the two Update-file names |
-| `shell` | `K7_REQUIRE_SHELL=1 npm run build:shell` with a clean `dist-shell`, so a missing entry is a failure rather than a 503 nobody noticed |
+| `host` | `make -C host check` — the device's own fixtures, including the two Update-file names |
+| `e2e` | documented but commented until a Playwright dependency lands: one status round trip from the App's origin to `http://k7.local` with the `local-network` permission granted |
 
 **D16. The firmware build stays a local step.** It needs ESP-IDF; CI proves the artifact, not
 the flash.
@@ -182,15 +166,16 @@ the flash.
    heuristic, the App's own **Install K7** button does the same in one click, and the result
    opens in its own window with no address bar. The 512 maskable icon is not cropped.
 4. The worker serves a reload with the network off.
-5. `k7.local` serves the Launcher; Launch opens the App in `k7-app`; the chip says connected.
+5. `k7.local` serves the API, not a page; the App asks for the `local-network` permission and,
+   once granted, the chip says connected.
 6. A card is picked, marked, measured, and `k7.db` written; the device flashes it and restarts.
-7. Close the bridge window: the App degrades to standalone and Connect restores it.
-8. Open `k7.local` with no Launcher at all: Connect opens the bridge from the App's side.
+7. Deny the permission and reload: the gate blocks every area and says how to restore it.
+8. Open the App in a browser with no LNA API (Safari, Firefox): the same gate, naming Chrome.
 
 ---
 
 ## 8. Rollback
 
 **D17. Vercel's previous deployment is the rollback**, and it is one reload away because the
-worker waits instead of replacing the page. There is no version to downgrade on the device for
-the App — the App is the deployed thing; only the firmware holds the Launcher.
+worker waits instead of replacing the page. There is nothing on the device to downgrade for the
+App — the App is the deployed thing.

@@ -7,7 +7,6 @@
   "scripts": {
     "dev": "npm run assets && vite",
     "build": "npm run assets && tsc --noEmit && vite build",
-    "build:shell": "npm run assets && tsc --noEmit && vite build --mode shell",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

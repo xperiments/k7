@@ -113,4 +113,4 @@ and where a Track lives.
 - Design and evidence: [the research document](../research/server/s13-library-tree-and-mcp.md).
 - Vocabulary: [`docs/specs/CONTEXT.md`](../specs/CONTEXT.md) — Music directory, Library tree,
   Playlist.
-- Implementation tickets: `.scratch/library-tree/issues/01`–`14`.
+- Implementation tickets: `docs/design/library-tree/issues/01`–`14`.

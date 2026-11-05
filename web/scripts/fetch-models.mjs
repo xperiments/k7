@@ -1,5 +1,7 @@
 // Downloads the pinned ONNX model set from essentia.upf.edu into public/models/.
-// The weights are CC BY-NC 4.0 and are deliberately not committed to this repository.
+// The files are committed: the App fetches them from jsDelivr at the pinned tag, which
+// serves this repository's tree, so `public/models/` is the CDN's source. This script
+// re-fetches them for a local checkout (and after a tag bump) and verifies each hash.
 // The hashes live in weights.lock.json, which the browser app also reads, so a fetched
 // model and the model the app verifies cannot drift apart.
 import { createHash } from 'node:crypto';

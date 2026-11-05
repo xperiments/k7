@@ -153,8 +153,8 @@ function DeviceMenu({
     }
   };
 
-  /* Connecting is a click, never a load-time attempt: a popup opened without a gesture is
-   * blocked, and the browser says so by returning null (W4). */
+  /* Connecting is a click: it asks for Local Network Access and reaches the player directly.
+   * Nothing opens a window, so a browser that blocks popups has nothing to block. */
   const connect = async () => {
     setConnectError(null);
     setConnecting(true);
@@ -162,7 +162,7 @@ function DeviceMenu({
       await connectToDevice();
     } catch (error) {
       setConnectError(
-        error instanceof Error ? error.message : 'The browser blocked the bridge window.',
+        error instanceof Error ? error.message : 'Chrome blocked local network access.',
       );
     } finally {
       setConnecting(false);
@@ -179,16 +179,12 @@ function DeviceMenu({
 
   const subtitle =
     connecting
-      ? 'waiting for the bridge…'
+      ? 'asking for local network access…'
       : isProbing()
       ? 'looking for the player…'
-      : link === 'bridge'
-      ? 'connected through the launcher'
       : link === 'local'
       ? 'connected on your network'
-      : link === 'direct'
-        ? 'this is the device copy'
-        : (connectError ?? 'no player — connect');
+      : (connectError ?? 'no player — connect');
 
   /* What the player reports, as opposed to how this page reaches it: the link is the
    * subtitle's fact, these are the device's (S5's first two facts, named apart). */
@@ -235,7 +231,7 @@ function DeviceMenu({
               {link === 'none' ? (
                 <DropdownMenuItem onClick={() => void connect()}>
                   <Plug aria-hidden="true" />
-                  {connecting ? 'Waiting for the bridge…' : 'Connect a player'}
+                  {connecting ? 'Waiting for Chrome…' : 'Connect a player'}
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuItem

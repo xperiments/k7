@@ -378,7 +378,7 @@ licensing requirements: `docs/specs/sd-stream-server.md:470-512`. Codec and pate
 `docs/research/server/s6-codec-licensing-matrix.md`. WebDAV (research only; the note was
 renumbered during this session and currently sits at `docs/research/server/s15-webdav.md`).
 The longer code-verified inventory this note condenses — 1,100 lines, one `file:line` per claim —
-is in `.scratch/service-surface/current-services.md`; that directory is gitignored, so fold it
+is in `docs/design/misc/service-surface/current-services.md`; that directory is gitignored, so fold it
 into `docs/research/` if it is worth keeping.
 
 **External** (fetched 2026-10-30; prices are the vendors' own pages):

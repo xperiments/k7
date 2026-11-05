@@ -35,7 +35,7 @@ describe('the local transport', () => {
     expect(calls[0].init?.mode).toBe('cors');
   });
 
-  it('reports itself as a local link, not as the Device copy', () => {
+  it('reports itself as a local link', () => {
     const device = createLocalDevice({ audio: null, fetch: () => answer(STATUS) });
     expect(device.link()).toBe('local');
   });

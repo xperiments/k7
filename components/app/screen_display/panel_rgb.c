@@ -126,7 +126,7 @@ lv_display_t *panel_rgb_start(void)
     if (err != ESP_OK) ESP_LOGW(TAG, "panel reset: %s (continuing)", esp_err_to_name(err));
     /* esp_lcd_panel_init() is deliberately NOT called here. It is the call that applies the
      * timings, starts the pixel clock and starts the scan, and the panel must stay dark
-     * through the boot's flash work - the Snapshot, the Shell's table and Wi-Fi's NVS. A
+     * through the boot's flash work - the Snapshot and Wi-Fi's NVS. A
      * flash access takes the PSRAM window from the scan-out for a few microseconds, which
      * displaces the picture permanently (ADR 0055). The first clock is therefore deferred to
      * panel_rgb_scan_start(), after app_services_start() has returned. */

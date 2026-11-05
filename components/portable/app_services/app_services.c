@@ -286,7 +286,7 @@ static http_result_t playlists_route(int fd, const http_request_t *req, void *ct
         return HTTP_HANDLED;
     }
     /* The Snapshot is mapped flash: reading it while the panel scans displaces the picture, so
-     * the board takes the glass off first, exactly as it does for a page load (ADR 0047, 0055). */
+     * the board takes the glass off first (ADR 0047, 0055). */
     if (s_cfg.page_service) s_cfg.page_service();
     uint32_t n = s_snapshot ? snapshot_lists(s_snapshot) : 0;
     size_t cap = 320 + (size_t)n * 320;
@@ -406,7 +406,7 @@ static http_result_t select_route(int fd, const http_request_t *req, void *ctx)
         return HTTP_HANDLED;
     }
     /* Resolving the choice reads the Snapshot (mapped flash) and writes NVS (flash); guard the
-     * scan first, as for a page load (ADR 0047, 0055). */
+     * scan first (ADR 0047, 0055). */
     if (s_cfg.page_service) s_cfg.page_service();
     uint64_t id = 0;
     if (!body_list_id((const char *)req->body, req->body_len, &id)) {
@@ -691,13 +691,10 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     if (e != ESP_OK) return fail(report, e, "file surface");
     if (report) report->files_up = true;
 
-    /* 5b. The page at `/`, and the card state it hangs from. A firmware with no page
-     * still registers the route: `/` says so, and `/library` keeps working. */
+    /* 5b. The card state the App asks for. The device serves no page, so this is the
+     * only route the front door registers; `/` is the listener's 404. */
     front_door_cfg_t door = {
-        .shell_image = cfg->shell_image,
-        .shell_image_size = cfg->shell_image_size,
         .card_present = front_door_card_present,
-        .page_service = cfg->page_service,
     };
     e = front_door_start(&door);
     if (e != ESP_OK) return fail(report, e, "front door");

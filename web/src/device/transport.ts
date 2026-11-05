@@ -1,16 +1,17 @@
 /**
  * The seam between the App and a device.
  *
- * Every view asks the same fifteen questions (bridge-protocol.md §3), and there are three
- * ways to answer them: through the Launcher's bridge, directly because this *is* the Device
- * copy, or not at all. The seam exists so a view never knows which, and so the two
- * implementations cannot drift in what they accept or return.
+ * Every view asks the same fourteen questions, and there is one way to answer them: over the
+ * local network when Chrome's Local Network Access permission allows it (see `local.ts`). A
+ * window with no player answers `none` and rejects every request. The seam exists so a view
+ * never knows which, and so the link and the views cannot drift in what they accept or
+ * return.
  *
- * `OpName` comes from the wire module on purpose: the operation table is the protocol's,
- * and a second copy of the names here is a second thing to forget.
+ * `OpName` comes from the device's operation table on purpose: a second copy of the names
+ * here is a second thing to forget.
  */
 
-import type { OpName } from '../bridge/protocol';
+import type { OpName } from './protocol';
 import type { McpSearch, McpStats, McpTrack, LibraryListing, SearchArgs } from './mcp';
 import type { DevicePlaylists, DevicePlaylistRows, SelectResult } from './playlists';
 import type { DeviceStatus } from './status';
@@ -18,11 +19,10 @@ import type { DeviceStatus } from './status';
 /**
  * Where the answers come from, or `none` when there is no player in this window.
  *
- * `local` is the hosted App reaching the device directly over the LAN — the simple path the
- * Local Network Access specification allows and no shipped browser permits yet (see
- * `local.ts`). `direct` remains the Device copy: same-origin because it *is* the device.
+ * `local` is the App reaching the device over the LAN, gated on the Local Network Access
+ * permission (`local.ts`).
  */
-export type Link = 'bridge' | 'direct' | 'local' | 'none';
+export type Link = 'local' | 'none';
 
 export interface AudioState {
   playing: boolean;
@@ -70,7 +70,7 @@ export interface OpData {
   'stream.state': AudioState;
 }
 
-/** The closed error vocabulary of bridge-protocol.md §4, plus `direct`'s own failures. */
+/** The closed error vocabulary the device API answers with, plus `direct`'s own failures. */
 export type DeviceErrorCode =
   | 'bad-message'
   | 'unknown-op'

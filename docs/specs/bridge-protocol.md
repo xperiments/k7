@@ -1,5 +1,10 @@
 # The bridge: typed operations between the App and the Launcher
 
+> **Retired by [ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md).** There is no
+> Launcher and no bridge: the App reaches `http://k7.local` directly once the `local-network`
+> permission is granted. The operation table survives as `OP_SPECS` in
+> [`device/protocol.ts`](../../web/src/device/protocol.ts); nothing else here is implemented.
+
 **Goal.** The **App** runs at `https://k7.xperiments.dev`, a secure origin. It can reach
 `http://k7.local` only where the browser permits it: a plain `fetch()` is mixed content and
 is refused, an iframe of it is refused too, and Local Network Access gates the address space.

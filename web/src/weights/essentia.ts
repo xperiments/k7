@@ -31,8 +31,8 @@ async function loadGlue(): Promise<string> {
 
 /**
  * Essentia is fetched as text, checked, and imported from a blob URL. It cannot be a static
- * import: the 2.56 MB module would then be frozen into the device's 1 MB shell, and the
- * manifest check would not happen at all. The smaller core class stays in the bundle.
+ * import: the 2.56 MB module would then be frozen into the bundle, and the manifest check
+ * would not happen at all. The smaller core class stays in the bundle.
  *
  * The text is patched before it becomes a blob: the pinned build's embind glue builds its
  * invokers with `new Function`, which this origin's policy refuses, so `new Essentia(...)`

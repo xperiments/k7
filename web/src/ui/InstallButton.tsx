@@ -2,13 +2,13 @@ import { MonitorDown } from 'lucide-react';
 import { useSyncExternalStore } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { installSnapshot, onDeviceCopy, promptInstallNow, subscribeInstall } from './installStore';
+import { installSnapshot, onInsecureOrigin, promptInstallNow, subscribeInstall } from './installStore';
 
 /**
  * Installing K7 as an app (A10): one explicit control, and only where it can work.
  *
- * - the **Device copy** never sees it: an insecure origin cannot install, and A10 says a
- *   dead button is worse than no button;
+ * - an **insecure origin** never sees it: Chrome cannot install there, and A10 says a dead
+ *   button is worse than no button;
  * - **installed** renders nothing, because the app is already the app;
  * - **unsupported** says so in a sentence rather than offering a dialog that will not open
  *   (Safari and Firefox), and names what does work;
@@ -18,7 +18,7 @@ import { installSnapshot, onDeviceCopy, promptInstallNow, subscribeInstall } fro
 export function InstallButton() {
   const state = useSyncExternalStore(subscribeInstall, installSnapshot, installSnapshot);
 
-  if (onDeviceCopy() || state === 'installed' || state === 'unknown') return null;
+  if (onInsecureOrigin() || state === 'installed' || state === 'unknown') return null;
 
   if (state === 'installable') {
     return (

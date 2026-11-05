@@ -14,9 +14,9 @@ const INITIAL: DeviceSnapshot = { status: null, reachable: false };
 /**
  * One poll, tolerant of every failure an absent device can produce.
  *
- * The request goes through the `Device` seam: bridged, the answer arrives from the
- * Launcher; direct, from the device's own API; with no link at all it rejects at once and
- * the absence is `null`, which every view already has copy for.
+ * The request goes through the `Device` seam: local, the answer arrives from the device
+ * over the network; direct, from the device's own API; with no link at all it rejects at
+ * once and the absence is `null`, which every view already has copy for.
  */
 export async function fetchStatus(): Promise<DeviceStatus | null> {
   try {

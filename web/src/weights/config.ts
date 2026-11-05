@@ -1,9 +1,10 @@
 /**
  * Where the weights come from.
  *
- * The shell is packed into the device's 1 MB partition; everything larger is fetched.
- * The repository and the tag are the only two values that move when the app is released,
- * because a pinned URL is also the only thing that makes a cache entry reproducible.
+ * The App is a hosted page: its own bundle is served, and the weights come from the pinned
+ * CDN. The repository and the tag are the only two values that move when the app is
+ * released, because a pinned URL is also the only thing that makes a cache entry
+ * reproducible.
  *
  * The model files live beside the app in the repository at `web/public/models`, so the
  * pinned tag must contain them. The runtimes are npm packages and jsDelivr serves them
@@ -27,8 +28,8 @@ export type WeightsMode = 'local' | 'cdn';
 declare const __WEIGHTS_MODE__: string | undefined;
 
 /**
- * `npm run build:shell` compiles for the device (mode `shell`); every other build serves
- * the weights from the local public tree, so `npm run dev` and `npm test` need no network.
+ * A production build — and any build with `K7_WEIGHTS=cdn` — serves the weights from the
+ * CDN; `npm run dev` and `npm test` read the local public tree, so they need no network.
  */
 export const WEIGHTS_MODE: WeightsMode =
   typeof __WEIGHTS_MODE__ === 'string'

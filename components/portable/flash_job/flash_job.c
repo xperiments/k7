@@ -10,8 +10,8 @@ static const char *TAG = "flashjob";
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-/* Serving a page runs SPIFFS (fopen/read) on this task, and a VFS open alone costs a
- * kilobyte or two; 6 KB leaves the SPIFFS walk comfortable room. */
+/* The Snapshot job reads the update file and writes the partition on this task; 6 KB
+ * leaves that call chain comfortable room. */
 #define FLASH_JOB_STACK_BYTES 6144
 /* Long enough that a normal job never reaches it, short enough to notice a wedged one. */
 #define FLASH_JOB_SLOW_MS 3000u

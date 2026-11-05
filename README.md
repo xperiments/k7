@@ -803,11 +803,9 @@ panel driver — the same tool photographs both.
 
 ```bash
 # the panel build, with the capture on
-idf.py -B build_http -D SDKCONFIG=sdkconfig.verify \
-       -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.sunton;sdkconfig.defaults.capture" build
+./tools/build.sh verify build
 # the headless build, with the capture on
-idf.py -B build_headless -D SDKCONFIG=sdkconfig.headless \
-       -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.capture" build
+./tools/build.sh headless build
 
 python3 tools/screen_over_http.py capture --host <board>:8000 --out /tmp/before
 python3 tools/screen_over_http.py compare /tmp/before /tmp/after   # 0 px outside the parts that move

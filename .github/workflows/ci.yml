@@ -1,8 +1,7 @@
-# CI for the two artifacts and the device's own fixtures (k7-deploy.md §6).
+# CI for the App artifact and the device's own fixtures (k7-deploy.md §6).
 #
-#   web    the HTTPS artifact: typecheck, unit tests, build, A9 manifest shape, D14 artifact guard
+#   web    the App: typecheck, unit tests, build, A9 manifest shape, D14 artifact guard
 #   host   the device's portable C, on the host build (host/Makefile `check`)
-#   shell  the device artifact: a clean web/dist-shell with an index.html in it
 #   e2e    documented but commented: it needs a Playwright dependency that does not exist yet
 #
 # The firmware build is deliberately not here: it needs ESP-IDF, and CI proves the artifact,
@@ -61,47 +60,10 @@ jobs:
       - name: make -C host check
         run: make -C host check
 
-  shell:
-    name: shell (device artifact)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    env:
-      # `build:shell` today is `assets + tsc + vite build --mode shell`; it reads no
-      # environment variable at all, so there is no K7_REQUIRE_SHELL to pass it. The repo's
-      # real "a Shell must exist" flag is XTAPE_REQUIRE_SHELL, a CMake configure variable
-      # (CMakeLists.txt, front-door F1) that belongs to the firmware build and is not run in
-      # CI. It is declared here for the firmware build this artifact feeds, and its
-      # postcondition is asserted directly below: a clean dist-shell with an index.html.
-      XTAPE_REQUIRE_SHELL: "1"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Install
-        run: npm ci
-      - name: Build the Shell from a clean output
-        run: |
-          rm -rf dist-shell
-          npm run build:shell
-      # What XTAPE_REQUIRE_SHELL turns into a firmware configure error, caught earlier: an
-      # empty Shell would otherwise be a 503 on `/` that nobody noticed.
-      - name: Assert the Shell entry exists
-        run: |
-          if [ ! -s dist-shell/index.html ]; then
-            echo "::error::dist-shell/index.html is missing or empty — the firmware would carry no page (front-door F1, XTAPE_REQUIRE_SHELL)"
-            exit 1
-          fi
-
-  # e2e: activates when the Playwright two-origin suite lands (bridge-protocol.md §T2) — the
-  # handshake in both directions, opener still reachable after load (the COOP guard), one
-  # status round trip, disconnect on bridge close, and the Shell served offline. The App is
-  # served at http://localhost:<port> so no certificate is needed (§T3). No Playwright
-  # dependency exists in web/package.json yet, so this job stays commented rather than red.
+  # e2e: activates when the Playwright suite lands — one status round trip from the hosted
+  # App to `http://k7.local` once the Local Network Access permission is granted. The App is
+  # served at http://localhost:<port> so no certificate is needed. No Playwright dependency
+  # exists in web/package.json yet, so this job stays commented rather than red.
   #
   # e2e:
   #   name: e2e (two origins)

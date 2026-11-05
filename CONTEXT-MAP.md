@@ -17,21 +17,20 @@ refused, not scheduled.
   microSD card and broadcasts it over HTTP as a live MP3 stream, with an index that lists it.
   A global premise forbids serving or accepting a Track, so all SD content processing happens
   outside the device. It also holds the **Snapshot** — the measurements and the **Playlists**
-  the app produced — and walks a selected Playlist when told to. Since
-  [ADR 0057](./docs/adr/0057-the-app-lives-at-a-public-origin.md) its only address,
-  `http://k7.local`, serves the **Launcher** rather than the app, plus `/api/*`, `/mcp`,
-  `/library`, `/stream`, and the app's own bytes at `/app` as the Device copy. Specified in
+  the app produced — and walks a selected Playlist when told to. Its only address,
+  `http://k7.local`, serves the API and the stream — `/api/*`, `/mcp`, `/library`, `/stream` —
+  and no page at all ([ADR 0067](./docs/adr/0067-chrome-only-direct-to-the-device.md)).
+  Specified in
   [`docs/specs/sd-stream-server.md`](./docs/specs/sd-stream-server.md); its measurements are
   specified in [`docs/specs/snapshot.md`](./docs/specs/snapshot.md) and byte-defined in
   [`docs/specs/snapshot-format.md`](./docs/specs/snapshot-format.md).
-- [K7 app](./web/CONTEXT.md) — the application at `https://k7.xperiments.dev` and the Launcher
-  beside it: one codebase, two origins. The App measures Tracks, authors Playlists, browses the
-  library from either the device or its own **Last image**, and writes the card's **Update
-  file** and its **Card mark**. The Launcher is the page on the device's own origin that shows
-  its state, carries the stream's audio, and executes the **Bridge**'s operations. The App is
-  the producer of the **Snapshot** the stream server answers its queries from. Specified in
-  [`docs/specs/k7-app.md`](./docs/specs/k7-app.md); the channel in
-  [`docs/specs/bridge-protocol.md`](./docs/specs/bridge-protocol.md); deployment in
+- [K7 app](./web/CONTEXT.md) — the application at `https://k7.xperiments.dev`. It measures
+  Tracks, authors Playlists, browses the library from either the device or its own **Last
+  image**, and writes the card's **Update file** and its **Card mark**. It reaches the device
+  directly over Local Network Access, gated on the `local-network` permission, and only in
+  Chrome ([ADR 0067](./docs/adr/0067-chrome-only-direct-to-the-device.md)). The App is the
+  producer of the **Snapshot** the stream server answers its queries from. Specified in
+  [`docs/specs/k7-app.md`](./docs/specs/k7-app.md); deployment in
   [`docs/specs/k7-deploy.md`](./docs/specs/k7-deploy.md).
 - [Radio player](./docs/research/01-library-architecture.md) — an ESP32-S3 that consumes
   someone else's internet radio stream and plays it out to a DAC over I2S. Researched in
@@ -49,9 +48,9 @@ refused, not scheduled.
   client-side ICY parser. This is why the server's header emission is held to canonical
   Icecast form rather than "whatever a permissive parser accepts".
 
-- **K7 app ↔ Stream server**: the server serves the Launcher and the Device copy, answers the
-  App's calls **through the Launcher's Bridge** (the App never fetches the device itself:
-  mixed content and Local Network Access forbid it), and reports its **Card state**. The App
+- **K7 app ↔ Stream server**: the App fetches the device directly, from the HTTPS origin to
+  `http://k7.local`, once a person has granted the `local-network` permission (ADR 0067); the
+  server reports its **Card state** and answers the App's calls on its own. The App
   reads the card where it lies and builds the one artifact the server accepts. They share three
   words with different scope, so each is defined in both glossaries:
   - **Track** — there, a file in the card's music directory, owned by the device; here, a file
@@ -65,11 +64,6 @@ refused, not scheduled.
   Playlist reaches the device only inside a Snapshot (an image, a restart), and a chosen
   Playlist is a command afterwards (ADR 0051). This is why the app's editor is a draft and
   sending is an act.
-
-- **Within the K7 app**: the App and the Launcher are one codebase in two origins, and the
-  Bridge is the only thing between them (ADR 0058). The Device copy is the App's own bytes on
-  the device's origin — reachable when the network is not, and incapable of the card write, the
-  worker and WebGPU that its insecure origin forbids.
 
 ## Note on the research tree
 

@@ -1,5 +1,10 @@
 # The front door: one shell, four areas
 
+> **The page half of this document is retired** by
+> [ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md): the device serves no page and
+> packs no Shell, and `/`, `/bridge` and `/app` are 404. The routes and contracts in §2 are the
+> device's API and still hold; everything below about serving a page does not.
+
 **Goal.** `http://xtape.local` is the one address and the one page. It is a small app with a
 sidebar: **Card**, **Playlists**, **Media**, **Player**. The Card area measures a card in the
 computer and sends `xtape.db` back; Playlists authors the lists that image carries; Media browses

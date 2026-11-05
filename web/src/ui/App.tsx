@@ -18,7 +18,24 @@ import { tryLocalConnect } from '../device/device';
 import { AnalysisProvider } from './state/analysis';
 import { OfflineNotice } from './OfflineNotice';
 import { UpdateBanner } from './UpdateBanner';
+import { LocalNetworkGate } from './LocalNetworkGate';
 import { prepareOffline } from './prefetchStore';
+
+/**
+ * The App, behind the Local Network Access gate.
+ *
+ * Nothing here can work without the player, and the player is only reachable while Chrome's
+ * `local-network` permission is granted, so the gate decides whether this tree mounts at
+ * all. It sits above the providers on purpose: no analysis worker, no playback owner and no
+ * poll starts before there is a player to point them at.
+ */
+export function App() {
+  return (
+    <LocalNetworkGate>
+      <AppContent />
+    </LocalNetworkGate>
+  );
+}
 
 /**
  * The shell: four areas and the routes between them (ADR 0052).
@@ -28,7 +45,7 @@ import { prepareOffline } from './prefetchStore';
  * user's -- what S3 protected is structural instead, because the Process area stays
  * mounted while another route is shown, so navigating never destroys a running Queue.
  */
-export function App() {
+function AppContent() {
   const route = useRoute();
   const { status } = useDeviceStatus();
   const landed = useRef(false);

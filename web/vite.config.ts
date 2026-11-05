@@ -1,8 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { copyFile, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
-import { basename, extname, resolve } from 'node:path';
+import { copyFile, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gzipSync } from 'node:zlib';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import type { Plugin } from 'vite';
@@ -14,9 +13,10 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 /**
  * The development origin is `https://k7-dev.xperiments.dev:8000` (k7-deploy.md §4). Its
  * certificate is a local mkcert pair, so it is trusted without a warning and the App is a
- * genuine secure context there — the same shape as production, which is what makes the
- * launcher's development allowlist entry meaningful. Without the pair the servers stay
- * plain HTTP: `npm run dev` still works, it just cannot install or open a card.
+ * genuine secure context there — the same shape as production, which is what Chrome's
+ * Local Network Access permission requires. Without the pair the servers stay plain HTTP:
+ * `npm run dev` still works, but an insecure origin is refused the permission and the
+ * player cannot be reached.
  */
 const devCertPath = process.env.K7_DEV_CERT ?? resolve(root, '.certs/k7-dev.pem');
 const devKeyPath = process.env.K7_DEV_KEY ?? resolve(root, '.certs/k7-dev-key.pem');
@@ -83,32 +83,12 @@ function noWorkerInDevelopment(): Plugin {
 }
 
 /**
- * No `COOP`, deliberately (ADR 0058).
+ * No `COOP` and no `COEP`, deliberately (ADR 0058).
  *
- * `Cross-Origin-Opener-Policy: same-origin` would make this document cross-origin
- * isolated and sever `window.opener` in the same move — and `window.opener` is the
- * bridge to the Launcher. Without isolation there is no `SharedArrayBuffer` to protect,
- * so `COEP: require-corp` has nothing to buy and would only refuse the CDN's weights.
- * The Playwright test in `docs/specs/bridge-protocol.md` §T2 guards this.
+ * `Cross-Origin-Opener-Policy: same-origin` would make this document cross-origin isolated,
+ * and without isolation there is no `SharedArrayBuffer` to protect, so `COEP: require-corp`
+ * has nothing to buy — it would only refuse the CDN's weights.
  */
-
-/**
- * Extensions worth compressing: all of them are text, and text shrinks about three to
- * one. Anything already compressed (the PNG icons) is left alone, because gzip would
- * only add bytes.
- */
-const COMPRESSIBLE = new Set([
-  '.css',
-  '.html',
-  '.js',
-  '.json',
-  '.mjs',
-  '.pem',
-  '.svg',
-  '.txt',
-  '.wasm',
-  '.webmanifest',
-]);
 
 async function collectFiles(dir: string): Promise<string[]> {
   const found: string[] = [];
@@ -121,152 +101,120 @@ async function collectFiles(dir: string): Promise<string[]> {
 }
 
 /**
- * Pack the shell compressed: `<file>.gz` written, the original dropped.
+ * Remove from the built App what the App origin does not serve: the weights, and nothing
+ * else.
  *
- * The partition is flash, so the bytes in `dist-shell` are the bytes on the board, and
- * the app is 928 KiB of mostly JavaScript. The device never inflates anything - it sends
- * the stored bytes with `Content-Encoding: gzip` (`front_door.c`) and the browser does
- * the work. `index.html` stays plain: the firmware's shell check looks for that exact
- * file, and it is under a kilobyte.
+ * Every build compiles in CDN mode (`weightsUrl`, `src/weights/config.ts`) and the CDN is
+ * the repository at the pinned tag, so the local copies Vite carried out of `public/` must
+ * not reach the deployment. `public/` keeps them so `npm run dev` and `npm test` need no
+ * network. The ORT glue `.mjs` stays: it is code, not a weight, and `browser-runtime.ts`
+ * loads it from `/ort/` on this origin.
  */
-async function precompress(dir: string): Promise<{ raw: number; packed: number }> {
-  let raw = 0;
-  let packed = 0;
-  for (const file of await collectFiles(dir)) {
-    /* `index.html` is the Launcher and `app.html` is the App's entry: both are looked up
-     * by name by the firmware and both are under a kilobyte, so neither is worth packing. */
-    if (basename(file) === 'index.html' || basename(file) === 'app.html') continue;
-    if (!COMPRESSIBLE.has(extname(file))) continue;
-    const bytes = await readFile(file);
-    const gz = gzipSync(bytes, { level: 9 });
-    // Incompressible content keeps its original name: it would be sent plain either way,
-    // and two copies of it in flash would be worse than one.
-    if (gz.length >= bytes.length) continue;
-    await writeFile(`${file}.gz`, gz);
-    await unlink(file);
-    raw += bytes.length;
-    packed += gz.length;
+async function pruneAppArtifact(dir: string): Promise<number> {
+  let bytes = 0;
+
+  const dropDir = async (path: string): Promise<void> => {
+    let files: string[];
+    try {
+      files = await collectFiles(path);
+    } catch {
+      return;
+    }
+    for (const file of files) bytes += (await stat(file)).size;
+    await rm(path, { recursive: true, force: true });
+  };
+
+  const dropFile = async (path: string): Promise<void> => {
+    try {
+      bytes += (await stat(path)).size;
+    } catch {
+      return;
+    }
+    await rm(path, { force: true });
+  };
+
+  await dropDir(resolve(dir, 'models'));
+  await dropDir(resolve(dir, 'weights'));
+
+  const ort = resolve(dir, 'ort');
+  const entries = await readdir(ort).catch(() => [] as string[]);
+  for (const entry of entries) {
+    if (entry.endsWith('.wasm')) await dropFile(resolve(ort, entry));
   }
-  return { raw, packed };
+
+  return bytes;
 }
 
 /**
- * The device build. `npm run build` stays the local build with `public/models` and
- * `public/ort` beside it; `npm run build:shell` is the shell packed into the frontdoor
- * partition, with its text files pre-compressed. The public directory is not copied
- * wholesale for the shell, because 38 MB of weights and a 14 MB ORT binary must not be
- * mistaken for app code.
+ * The App's build outputs: the worker template with its version filled in, the precache
+ * list the worker installs from, and the weight copies the artifact does not serve.
  */
-function shellOutputs(shell: boolean): Plugin {
+function shellOutputs(cdnWeights: boolean): Plugin {
   let emitted: string[] = [];
 
   return {
     name: 'xtape-shell-outputs',
     apply: 'build',
     generateBundle(_options, bundle) {
-      if (shell) {
-        /* The device serves the Launcher and nothing else. The App is the hosted origin's
-         * — its service worker keeps it offline — and carrying a second copy in flash was
-         * 600 KB of partition for a page nobody opens, whose reads would displace the
-         * panel's scan. The app is still *built* here (that is what proves it compiles);
-         * its output is not kept. */
-        for (const file of Object.keys(bundle)) delete bundle[file];
-        emitted = [];
-        return;
-      }
-
       emitted = Object.keys(bundle)
         .filter((file) => !file.endsWith('.map') && !file.endsWith('.wasm'))
         .sort();
     },
     async closeBundle() {
-      const outDir = resolve(root, shell ? 'dist-shell' : 'dist');
+      const outDir = resolve(root, 'dist');
 
-      if (shell) {
-        /* One page at `/`, and it is the Launcher: its HTML, its script and the allowlist
-         * the build baked in. Nothing else — no App, no fonts, no icons, no worker. */
-        const launcher = await readFile(resolve(root, 'public/launcher.html'), 'utf8').catch(() => {
-          throw new Error('the shell build needs web/public/launcher.html');
-        });
-        await writeFile(resolve(outDir, 'index.html'), launcher);
-        await copyFile(resolve(root, 'public/launcher.js'), resolve(outDir, 'launcher.js'));
+      /* The lock is copied so the page can enumerate what it needs; the worker no longer
+       * keys a weights cache on it, because the weights have one offline store and it is
+       * IndexedDB (O2). */
+      await copyFile(resolve(root, 'weights.lock.json'), resolve(outDir, 'weights.lock.json'));
 
-        /* The Launcher's allowlist is compiled in (L1, X2). A development Shell is a Shell
-         * that was told to trust a development origin; the same build refused without one. */
-        const origins = (process.env.K7_APP_ORIGINS ?? 'https://k7.xperiments.dev')
-          .split(',')
-          .map((origin) => origin.trim())
-          .filter(Boolean);
-        if (origins.length === 0) throw new Error('K7_APP_ORIGINS has no origin in it');
-        const shipping =
-          process.env.XTAPE_REQUIRE_SHELL === '1' || process.env.K7_REQUIRE_SHELL === '1';
-        if (shipping && (origins.length !== 1 || origins[0] !== 'https://k7.xperiments.dev')) {
-          throw new Error(
-            'a shipping Shell trusts one App origin; K7_APP_ORIGINS is ' + origins.join(', '),
-          );
+      // sw.js is a template: its cache names have to be exact in the output, so the values
+      // are written here rather than fetched and guessed at install time.
+      const sw = await readFile(resolve(root, 'public/sw.js'), 'utf8');
+      await writeFile(
+        resolve(outDir, 'sw.js'),
+        sw.replaceAll('__APP_VERSION__', packageVersion),
+      );
+
+      // The worker precaches this list at install. It is generated from the files that
+      // were actually emitted, so dynamic chunks are included and a missing one is caught
+      // by the install rather than by an offline reload.
+      const assets = Array.from(
+        new Set([
+          '/index.html',
+          '/manifest.webmanifest',
+          '/icons/icon-192.png',
+          '/icons/icon-512.png',
+          '/icons/icon-512-maskable.png',
+          /* The brand mark sits in the sidebar on every page: offline it must be there on
+           * the first paint, not after a fetch that fails. */
+          '/icons/k7logo.svg',
+          '/weights.lock.json',
+          ...emitted.map((file) => `/${file}`),
+        ]),
+      );
+      await writeFile(
+        resolve(outDir, 'shell.json'),
+        `${JSON.stringify({ version: packageVersion, assets }, null, 2)}\n`,
+      );
+
+      /* The App fetches every weight from the pinned CDN, so the copies under `public/` are
+       * not kept: the deployment ships the App, not the CDN's weights. */
+      if (cdnWeights) {
+        const dropped = await pruneAppArtifact(outDir);
+        if (dropped > 0) {
+          this.info(`artifact: dropped ${Math.round(dropped / 1024)} KiB the App does not serve`);
         }
-        await writeFile(
-          resolve(outDir, 'launcher-origins.js'),
-          `window.K7_APP_ORIGINS = ${JSON.stringify(origins)};\n`,
-        );
-      }
-
-      if (!shell) {
-        /* The lock is copied so the page can enumerate what it needs; the worker no longer
-         * keys a weights cache on it, because the weights have one offline store and it is
-         * IndexedDB (O2). The device's Launcher has no worker and no weights. */
-        await copyFile(resolve(root, 'weights.lock.json'), resolve(outDir, 'weights.lock.json'));
-
-        // sw.js is a template: its cache names have to be exact in the output, so the values
-        // are written here rather than fetched and guessed at install time.
-        const sw = await readFile(resolve(root, 'public/sw.js'), 'utf8');
-        await writeFile(
-          resolve(outDir, 'sw.js'),
-          sw.replaceAll('__APP_VERSION__', packageVersion),
-        );
-      }
-
-      if (!shell) {
-        // The worker precaches this list at install. It is generated from the files that
-        // were actually emitted, so dynamic chunks are included and a missing one is caught
-        // by the install rather than by an offline reload.
-        const assets = Array.from(
-          new Set([
-            '/index.html',
-            '/manifest.webmanifest',
-            '/icons/icon-192.png',
-            '/icons/icon-512.png',
-            '/icons/icon-512-maskable.png',
-            /* The brand mark sits in the sidebar on every page: offline it must be there on
-             * the first paint, not after a fetch that fails. */
-            '/icons/k7logo.svg',
-            '/weights.lock.json',
-            ...emitted.map((file) => `/${file}`),
-          ]),
-        );
-        await writeFile(
-          resolve(outDir, 'shell.json'),
-          `${JSON.stringify({ version: packageVersion, assets }, null, 2)}\n`,
-        );
-      }
-
-      if (shell) {
-        const { raw, packed } = await precompress(outDir);
-        this.info(
-          `shell: ${raw} -> ${packed} bytes on flash (gzip, ` +
-            `${Math.round((1 - packed / raw) * 100)}% smaller)`,
-        );
       }
     },
   };
 }
 
 export default defineConfig(({ mode }) => {
-  const shell = mode === 'shell';
-  /* A production build fetches the weights from the pinned release: the models are not in
-   * the repository, so an artifact that expects `/models/…` would 404 on its first analysis.
-   * Only `dev` and `test` read the local tree, which is the one place it exists. */
-  const cdnWeights = shell || mode === 'production' || process.env.K7_WEIGHTS === 'cdn';
+  /* A production build serves the weights from jsDelivr at the pinned tag, whose source is
+   * this repository's tree at that tag (`web/public/models/`). The artifact therefore drops
+   * the local copies (see `pruneAppArtifact`); `dev` and `test` read the local tree. */
+  const cdnWeights = mode === 'production' || process.env.K7_WEIGHTS === 'cdn';
 
   return {
     plugins: [
@@ -274,13 +222,13 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       noWorkerInDevelopment(),
       taglibWithoutDynamicCode(),
-      shellOutputs(shell),
+      shellOutputs(cdnWeights),
     ],
     /* The dev origin is `https://k7-dev.xperiments.dev:8000`; the port is part of it, and
      * the certificate only exists once someone has run mkcert (k7-deploy.md §4). */
     server: { host: true, port: 8000, https: devHttps, proxy: mcpProxy },
     preview: { host: true, port: 8000, https: devHttps, proxy: mcpProxy },
-    publicDir: shell ? false : 'public',
+    publicDir: 'public',
     resolve: {
       conditions: ['onnxruntime-web-use-extern-wasm'],
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
@@ -290,7 +238,7 @@ export default defineConfig(({ mode }) => {
       __WEIGHTS_MODE__: JSON.stringify(cdnWeights ? 'cdn' : 'local'),
     },
     build: {
-      outDir: shell ? 'dist-shell' : 'dist',
+      outDir: 'dist',
     },
     worker: { format: 'es' },
     test: {

@@ -11,7 +11,7 @@
  */
 
 import {
-  isDeviceCopy,
+  isInsecureOrigin,
   promptInstall,
   readInstallState,
   watchInstall,
@@ -49,9 +49,9 @@ export function subscribeInstall(listener: () => void): () => void {
   };
 }
 
-/** The Device copy can never install, so the control is not offered there at all. */
-export function onDeviceCopy(): boolean {
-  return watching !== null && isDeviceCopy(watching);
+/** An insecure origin can never install, so the control is not offered there at all. */
+export function onInsecureOrigin(): boolean {
+  return watching !== null && isInsecureOrigin(watching);
 }
 
 /** Replays the captured prompt. A refusal leaves the state to the browser's own report. */

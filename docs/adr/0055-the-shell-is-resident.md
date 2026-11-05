@@ -1,5 +1,8 @@
 # The Shell is one image
 
+> **Superseded by [ADR 0067](./0067-chrome-only-direct-to-the-device.md).** There is no Shell:
+> the device serves no page and the `frontdoor` partition is gone.
+
 > **Amended again: the image is the Launcher, and it is resident.** The App is the hosted
 > origin's — the device never carried a second copy that anyone opened, and the 390 KB this
 > document weighed was that copy, not the page. The Launcher is `index.html` (5 KB),

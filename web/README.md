@@ -54,7 +54,6 @@ Then open the printed URL, drop files or a folder, and wait for the cards.
 |---|---|
 | `npm run dev` | Vite dev server with cross-origin isolation headers |
 | `npm run build` | Typechecks and builds the local app into `dist/` |
-| `npm run build:shell` | Builds `dist-shell/`, the device shell with no weights or model files |
 | `npm run preview` | Serves the production build with the same headers |
 | `npm test` | Vitest: domain logic, mel parity, real-model pipeline |
 | `npm run models` | Fetches and verifies the ONNX model set |
@@ -106,30 +105,21 @@ never treats it as a source import (public files cannot be imported from source 
 models come from `public/models/`. The dev and preview servers set COOP/COEP so ORT can use
 multiple threads; without those headers it falls back to one thread.
 
-### The device shell and the weights
+### The device page
 
-`npm run build:shell` produces `dist-shell/`, the files packed into the device's 1.25 MB
-partition. It contains our code only: `index.html`, the app bundle, the worker, the ORT
-loader glue, the TagLib adapter, `sw.js`, the manifest, the icons and `weights.lock.json`.
-It contains no models and no `.wasm` binary. Flash is the constraint there, not disk, so
-the build packs every text file as `<name>.gz` and drops the original: the board sends
-those bytes with `Content-Encoding: gzip` (nothing decompresses on the device).
-
-The device does not mount `dist-shell` as a filesystem. `tools/pack_shell.py` turns the
-directory into ONE image - a table of contents, the names, then the files' bytes - and the
-firmware copies that image into PSRAM once at boot and serves from there (ADR 0055). The
-reason is the panel: any flash access takes the bus its scan-out draws from, so a page load
-must not read flash at all.
-Today's image is ~381 KiB of the 1.25 MB partition.
+There is none. [ADR 0067](../docs/adr/0067-chrome-only-direct-to-the-device.md) removed the
+Launcher and the Shell: the device serves no page, packs no image, and `/` answers 404. The App
+reaches the device directly once the `local-network` permission is granted — `src/device/local.ts`,
+read and gated by `src/ui/LocalNetworkGate.tsx`.
 
 Everything else is a **weight**, loaded through `src/weights/`:
 
 1. `weights.lock.json` (imported into the app) lists every file, its URL source and its
    sha256. The models are fetched from the repository at the pinned tag; Essentia, ONNX
    Runtime and TagLib come from jsDelivr at their published versions.
-   The weights are licence-bound and are not committed in every checkout, so a release tag
-   has to be created from a tree that includes `web/public/models/`; otherwise the first
-   analysis is refused by the hash check, which is the correct failure.
+   The models are committed at `web/public/models/` precisely because that tag's tree is the
+   CDN's source; `npm run models` re-fetches them, and a release tag cut from a tree without
+   them would make the first analysis fail the hash check, which is the correct failure.
 2. A weight is fetched, hashed and only then handed to its runtime. A mismatch is refused
    and named. Essentia's JavaScript is imported from a blob URL after the check.
 3. Verified bytes are cached in IndexedDB by URL and hash, and the service worker keeps a
@@ -308,10 +298,10 @@ These are measurements, not ground truth for your library:
 ## Licence
 
 - The app code is **AGPL-3.0**; see [`LICENSE`](./LICENSE).
-- The ONNX weights are **CC BY-NC 4.0**, by the Music Technology Group (UPF), and are not
-  committed to this repository. They are downloaded separately and remain under their own
-  licence; the combined application is therefore **non-commercial**. Commercial use needs a
-  proprietary licence from MTG.
+- The ONNX weights are **CC BY-NC 4.0**, by the Music Technology Group (UPF), and are
+  committed to this repository at `web/public/models/` because jsDelivr serves them from the
+  pinned tag's tree. They remain under their own licence; the combined application is
+  therefore **non-commercial**. Commercial use needs a proprietary licence from MTG.
 - Model provenance and citations are in [`NOTICE`](./NOTICE).
 
 The domain glossary for this context is [`CONTEXT.md`](./CONTEXT.md).

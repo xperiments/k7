@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isDeviceCopy,
+  isInsecureOrigin,
   promptInstall,
   readInstallState,
   watchInstall,
@@ -172,7 +172,7 @@ describe('what the browser has said about installing', () => {
   });
 
   it('is unsupported on an insecure origin, where Chrome cannot install at all', () => {
-    // A10: the Device copy is served over http and must never be offered an install.
+    // A10: a plain http origin must never be offered an install.
     expect(readInstallState(fakeWindow({ protocol: 'http:' }).env)).toBe('unsupported');
   });
 
@@ -223,13 +223,13 @@ describe('prompting the install', () => {
   });
 });
 
-describe('the Device copy', () => {
+describe('an insecure origin', () => {
   it('is a plain http origin, where install is impossible', () => {
-    expect(isDeviceCopy(fakeWindow({ protocol: 'http:' }).env)).toBe(true);
+    expect(isInsecureOrigin(fakeWindow({ protocol: 'http:' }).env)).toBe(true);
   });
 
   it('is not the app origin', () => {
-    expect(isDeviceCopy(fakeWindow({ protocol: 'https:' }).env)).toBe(false);
+    expect(isInsecureOrigin(fakeWindow({ protocol: 'https:' }).env)).toBe(false);
   });
 });
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // D14's second guard, and L2/L3's stale host, checked in the artifact itself: a page that
-// ships with the development origin would let a deployed App talk to a development
-// Launcher, and `http://xtape.local` is a host the renamed device no longer answers on.
+// ships with the development origin would let a deployed App talk to a development device,
+// and `http://xtape.local` is a host the renamed device no longer answers on.
 // Either one in `dist` is a mistake with a security consequence, not a typo.
 //
 //   node scripts/check-artifact.mjs [dir]   (default: web/dist)
@@ -31,7 +31,7 @@ const label = shown(dist);
 const FORBIDDEN = [
   {
     needle: 'k7-dev.xperiments.dev',
-    why: 'the development origin belongs to a development Shell only, never to a shipped App (k7-deploy D14, k7-app L4)',
+    why: 'the development origin belongs to a development build only, never to a shipped App (k7-deploy D14, k7-app L4)',
   },
   {
     needle: 'http://xtape.local',

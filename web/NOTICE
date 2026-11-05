@@ -1,8 +1,10 @@
 # Third-party notices
 
 The application code in this directory is licensed AGPL-3.0 (see [`LICENSE`](./LICENSE)).
-The ONNX model weights are **not** distributed in this repository. `npm run models` downloads
-them from the Music Technology Group (UPF) and pins each file by SHA-256.
+The ONNX model weights are committed at `web/public/models/`, because the App fetches them
+from jsDelivr at the pinned tag (`/gh/xperiments/k7@v0.4.0/web/public/models/…`): that tag's
+tree is the CDN's source. `npm run models` re-fetches them from the Music Technology Group
+(UPF) for a local checkout and pins each file by SHA-256.
 
 ## Models
 

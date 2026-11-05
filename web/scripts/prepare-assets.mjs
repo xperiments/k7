@@ -1,7 +1,8 @@
-// Copies the runtime files a local build serves itself. The shell build uses only the
-// ORT loader glue; the large binaries are fetched from jsDelivr and verified instead.
-// Every copied binary is checked against weights.lock.json, so a node_modules version
-// that no longer matches the pin fails here instead of in the worker at analysis time.
+// Copies the runtime files a local build serves itself, so `npm run dev` and `npm test`
+// need no network. Every copied binary is checked against weights.lock.json, so a
+// node_modules version that no longer matches the pin fails here instead of in the worker
+// at analysis time. A production build fetches the binaries from jsDelivr and its artifact
+// drops these local copies (`pruneAppArtifact`).
 import { createHash } from 'node:crypto';
 import { copyFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';

@@ -4,7 +4,7 @@
  * Everything here is a function of what the browser has told us, with the window passed in
  * rather than reached for: the situations that matter - a captured prompt, an already
  * standalone window, a browser that can never install - can then be arranged in `node`,
- * and importing this module on the Device copy touches no global.
+ * and importing this module touches no global.
  *
  * What it keeps is what the browser said and the spec cannot re-derive: the captured
  * `beforeinstallprompt` event, because Chrome allows a single `prompt()` on it and a second
@@ -78,10 +78,10 @@ function isChromium(env: InstallEnv): boolean {
 }
 
 /**
- * The insecure origin, which is the Device copy: Chrome never fires `beforeinstallprompt`
- * on `http:`, so waiting for it would leave a control that can never work (A10).
+ * An insecure origin: Chrome never fires `beforeinstallprompt` on `http:`, so waiting for
+ * it would leave a control that can never work (A10).
  */
-export function isDeviceCopy(env: InstallEnv): boolean {
+export function isInsecureOrigin(env: InstallEnv): boolean {
   return env.location?.protocol === 'http:';
 }
 
@@ -93,7 +93,7 @@ export function isDeviceCopy(env: InstallEnv): boolean {
 export function readInstallState(env: InstallEnv): InstallState {
   if (isInstalled(env)) return 'installed';
   if (captured.has(env)) return 'installable';
-  if (isDeviceCopy(env)) return 'unsupported';
+  if (isInsecureOrigin(env)) return 'unsupported';
   if (!isChromium(env)) return 'unsupported';
   return 'unknown';
 }

@@ -2,14 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DEVICE_ORIGIN } from '../src/config';
 import { createDirectDevice, type DirectAudio } from '../src/device/direct';
-import { OP_SPECS } from '../src/bridge/protocol';
+import { OP_SPECS } from '../src/device/protocol';
 import { DeviceError } from '../src/device/transport';
 
 /**
- * The direct Device: the App *is* the Device copy, so each of the fifteen operations is one
- * `fetch` against the device's own API, and the answer is parsed by the parsers the bridge
- * uses too. The fakes record the request rather than answering it meaningfully, because the
- * question here is what went on the wire and what came back parsed.
+ * The direct transport: the request implementation `local.ts` wraps. Each of the fourteen
+ * operations is one `fetch` against a path, and the answer is parsed by the parsers the
+ * local transport exposes. The fakes record the request rather than answering it
+ * meaningfully, because the question here is what went on the wire and what came back
+ * parsed.
  */
 
 const APP = 'https://k7.xperiments.dev';
@@ -56,16 +57,6 @@ function bodyOf(call: Recorded | undefined): Record<string, unknown> {
   return body as Record<string, unknown>;
 }
 
-const statusBody = {
-  card: true,
-  tracks: 12,
-  generation: 3,
-  library: 'sha256:abc',
-  order: 'tree',
-  playlist: null,
-  playing: { title: 'A track', elapsed_ms: 12.5, duration_ms: 203 },
-};
-
 const mcpHandshake = () =>
   json({ jsonrpc: '2.0', id: 1, result: { protocolVersion: '2025-11-25' } });
 
@@ -78,25 +69,19 @@ afterEach(() => {
 });
 
 describe('which Device a window gets', () => {
-  it('is direct on the device origin, and its first request is GET /api/status', async () => {
-    const net = recorder();
-    net.replies.push(() => json(statusBody));
-    vi.stubGlobal('fetch', vi.fn(net.fetch));
+  it('is none even on an http origin: the device serves no copy of the App', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('no request should be made'))));
     vi.stubGlobal('location', { origin: DEVICE_ORIGIN, protocol: 'http:' });
     vi.resetModules();
 
     const { getDevice } = await import('../src/device/device');
     const device = getDevice();
-    expect(device.link()).toBe('direct');
-
-    await expect(device.request('status')).resolves.toMatchObject({
-      card: true,
-      tracks: 12,
-      // `elapsed_ms` on the wire, `elapsed` in the view: the parser did its job.
-      playing: { title: 'A track', elapsed: 12.5, duration: 203 },
+    expect(device.link()).toBe('none');
+    await expect(device.request('status')).rejects.toMatchObject({
+      name: 'DeviceError',
+      code: 'unreachable',
+      message: 'no player is connected',
     });
-    expect(net.calls[0]?.url).toBe('/api/status');
-    expect(net.calls[0]?.init?.method ?? 'GET').toBe('GET');
   });
 
   it('is none at an App origin with no opener, and every request says so', async () => {
@@ -274,7 +259,7 @@ describe('the library over MCP', () => {
   });
 });
 
-describe('the stream on the Device copy', () => {
+describe('the stream on the local transport', () => {
   it('drives its own audio element and reports the three facts', async () => {
     const audio: DirectAudio = {
       playing: false,

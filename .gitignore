@@ -1,16 +1,15 @@
 # Real Wi-Fi credentials: compiled in, deliberately not tracked
 components/app/board_esp32/wifi_credentials.h
 
-# ESP-IDF build output and configuration. `build*/
-sdkconfig.sunton
-sdkconfig.sunton.old` covers the extra build
-# directories used to keep one IDF version's output from overwriting another's.
+# ESP-IDF build output: one directory per variant under build/ (see tools/build.sh).
+# A variant's generated config is sdkconfig.<variant>; only the sdkconfig.defaults*
+# sources are tracked, so a fresh clone reconfigures from them.
 build*/
-sdkconfig.sunton
-sdkconfig.sunton.old
-build/
 sdkconfig
-sdkconfig.old
+sdkconfig.*
+!sdkconfig.defaults
+!sdkconfig.defaults.*
+
 # Fetched dependencies. The sources are downloaded by the component manager, but the
 # lock file is committed: it is what makes the resolution reproducible, and LVGL's
 # memory behaviour is part of this project's design.
@@ -27,12 +26,8 @@ __pycache__/
 # macOS
 .DS_Store
 
-# Generated config for the visual backlight test build
-sdkconfig.backlight-test
-
+# Transient work; design notes that outlive it belong in docs/design/
 .scratch/
-sdkconfig.verify
-sdkconfig.headless
 
 # The CA that signs the shipped leaf stays offline: the leaf key is public by design
 # (it is compiled into every firmware), the CA key is not.

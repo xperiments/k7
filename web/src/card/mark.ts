@@ -76,9 +76,8 @@ export interface MarkDecision {
 }
 
 /**
- * `crypto.randomUUID` is secure-context-only, and the Device copy at `http://k7.local/app`
- * is not a secure context. `getRandomValues` is not gated that way, gives the same 122
- * bits, and works wherever a card can be picked.
+ * `crypto.randomUUID` is secure-context-only. `getRandomValues` is not gated that way,
+ * gives the same 122 bits, and works wherever a card can be picked.
  */
 function systemRandom(bytes: Uint8Array): Uint8Array {
   if (!globalThis.crypto?.getRandomValues) {

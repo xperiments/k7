@@ -41,13 +41,8 @@ typedef struct {
     uint32_t    library_max_bytes;  /* 0 = the library's default (4 MiB) */
     uint32_t    library_max_tracks; /* 0 = the library's default (20000) */
     const char *server_name;  /* HTTP Server: header; NULL = the server's default */
-    /* The Shell's image, as `tools/pack_shell.py` wrote it: the mapped partition on the
-     * device, a buffer on the host. NULL (or bytes that do not validate) means this
-     * firmware carries no page. */
-    const void *shell_image;
-    size_t      shell_image_size;
-    /* Passed to the front door: called before each page file is read out of flash, so a board
-     * can take the screen off the glass for the length of a page load. NULL does nothing. */
+    /* Called before a mapped-flash read (the Snapshot, a Playlist, MCP), so a board can
+     * take the screen off the glass for the duration of the read. NULL does nothing. */
     void (*page_service)(void);
     /* The remembered Playlist selection (id, 0 for none). NULL means this build
      * remembers none: the choice then lives until reboot. Wired to NVS by the

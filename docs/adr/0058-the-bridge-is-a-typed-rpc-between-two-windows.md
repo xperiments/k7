@@ -1,5 +1,8 @@
 # The bridge is a typed RPC between two windows
 
+> **Superseded by [ADR 0067](./0067-chrome-only-direct-to-the-device.md).** The App reaches the
+> device directly over Local Network Access; there is no bridge.
+
 The App cannot reach the device. An HTTPS page cannot fetch `http://k7.local` (mixed content),
 cannot frame it (`<iframe>` is blockable mixed content and is always blocked), and a public
 origin addressing a LAN host runs into Local Network Access rules before any of that. The only

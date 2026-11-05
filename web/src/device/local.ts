@@ -1,9 +1,9 @@
 /**
  * The device, directly — `fetch('http://k7.local/api/…')` from the hosted App.
  *
- * This is the simplest shape the product could have: no bridge window, no opener, no
- * second tab. The Local Network Access specification allows exactly it, and the current
- * text is explicit about the part everyone assumes is impossible:
+ * This is the simplest shape the product could have: no second window, no opener, no second
+ * tab. The Local Network Access specification allows exactly it, and the current text is
+ * explicit about the part everyone assumes is impossible:
  *
  *   "Many local network servers do not run HTTPS… One solution is to bypass mixed content
  *    checks in situations where the request is known to be a local network request. This is
@@ -20,10 +20,11 @@
  * permission granted by a person, and `Browser.grantPermissions` produced `Failed to fetch`
  * in 1 ms with nothing on the wire. The prompt has to be answered.
  *
- * `device.ts` tries this first. A browser that will not do it — Safari, Firefox, a person
- * who denies the prompt — falls through to the bridge, which is why the Launcher still
- * exists. The device's CORS headers (app_services.c) are what let the request through once
- * the connection is permitted.
+ * `device.ts` is the only caller, and only after `ui/LocalNetworkGate.tsx` holds the
+ * permission. A browser that will not do it — Safari, Firefox, a person who denies the
+ * prompt — is a browser this product does not support (Chrome-only). The device's CORS
+ * headers (app_services.c) are what let the request through once the connection is
+ * permitted.
  */
 
 import { DEVICE_ORIGIN } from '../config';
@@ -68,8 +69,11 @@ export function createLocalDevice(options: LocalOptions = {}): LocalDevice {
   return {
     ...inner,
     kind: 'local',
-    // `direct` is the Device copy; this one is a different fact and says so.
     link: () => 'local' as const,
+    /** The local link is the page's link: it does not change while the document lives. */
+    onLinkChange() {
+      return () => {};
+    },
     blocked: null,
   } as LocalDevice;
 }

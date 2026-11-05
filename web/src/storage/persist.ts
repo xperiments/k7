@@ -4,7 +4,7 @@
  * The analysis store and the weights are only as durable as the browser lets them be:
  * a site without persistence is evicted first under pressure. Asking is not granting, so
  * every answer is reported rather than assumed. `navigator` is injectable for tests and
- * for the Device copy, where the same API is present but the origin is not secure.
+ * for an insecure origin, where the same API is present but the origin is not secure.
  */
 
 export type Persistence = 'granted' | 'denied' | 'unsupported';

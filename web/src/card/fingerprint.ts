@@ -9,7 +9,7 @@
  *
  * The sort is by the path's **UTF-8 bytes**, never `localeCompare`: two machines with two
  * locales must agree on the same card. The hash comes from `src/lib/sha256.ts`, which falls
- * back to pure JavaScript when the Device copy withholds `crypto.subtle`.
+ * back to pure JavaScript when `crypto.subtle` is unavailable (an insecure context).
  */
 
 import { sha256Hex } from '../lib/sha256';

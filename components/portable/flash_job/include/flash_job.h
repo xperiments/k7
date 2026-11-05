@@ -8,11 +8,10 @@
  * device resets. That is not a theory - a POST that wrote NVS, or that flashed a
  * Snapshot, reset the connection on the board while every read kept working.
  *
- * So the flash operations the page can trigger are handed to one task whose stack is
- * INTERNAL and whose body touches no PSRAM: the Snapshot write, the remembered Playlist
- * selection, and serving a file out of the Shell's SPIFFS partition (a SPIFFS read is a
- * flash read, and it disables the cache the same way). The caller blocks on a semaphore,
- * which is safe - waiting is not running.
+ * So the flash operations the HTTP surface can trigger are handed to one task whose stack
+ * is INTERNAL and whose body touches no PSRAM: the Snapshot write and the remembered
+ * Playlist selection. The caller blocks on a semaphore, which is safe - waiting is not
+ * running.
  */
 #include <stdbool.h>
 

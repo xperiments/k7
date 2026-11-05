@@ -10,9 +10,9 @@
  * The screen is the one thing that comes first rather than last, and it comes in two stages.
  * The panel's hardware and the LVGL port are taken before the services (its 16 KB internal
  * stack has to win the RAM the Wi-Fi DMA buffers want), but its first clock is not started
- * until app_services_start() has returned: the boot's flash work - the Snapshot, the Shell's
- * table, Wi-Fi's NVS - then happens on a dark panel, because a flash access during a scan
- * displaces the picture permanently (ADR 0055). The mark is painted after that work, lit, and
+ * until app_services_start() has returned: the boot's flash work - the Snapshot and Wi-Fi's
+ * NVS - then happens on a dark panel, because a flash access during a scan displaces the
+ * picture permanently (ADR 0055). The mark is painted after that work, lit, and
  * held for its dwell; then the cassette replaces it.
  */
 #include "appliance.h"
@@ -30,10 +30,6 @@
 
 #include "app_board.h"
 #include "flash_job.h"
-/* The Shell's partition is board storage, so the mount belongs to the board adapter -
- * not to the portable app_board seam, which the host build shares and which has no
- * SPIFFS partition to name. */
-#include "board_shell.h"
 #include "app_services.h"
 #include "mini_files.h"
 #include "mini_icecast.h"
@@ -163,14 +159,9 @@ void appliance_run(void)
          * connection worker as soon as it is registered. */
         .max_clients = 4,
         .max_conns = 4,
-        /* Set below, once the panel has its boot mark and the Shell's image has been
-         * mapped; until then, and forever on a firmware with no page, `/` answers 503
-         * and the index at `/library` carries the device. */
-        .shell_image = NULL,
-        .shell_image_size = 0,
-        /* The board takes the glass off while the network is being used: a page file, or a
-         * listener arriving on the stream. The slip those cause happens behind a black frame,
-         * and the scan is re-established before the picture returns (ADR 0055). */
+        /* The board takes the glass off while the network is being used: a Snapshot read,
+         * or a listener arriving on the stream. The slip those cause happens behind a black
+         * frame, and the scan is re-established before the picture returns (ADR 0055). */
         .page_service = screen_display_page_service,
         .selection_load = selection_load,
         .selection_save = selection_save,
@@ -196,21 +187,6 @@ void appliance_run(void)
     if (update == APP_BOARD_UPDATE_FAILED)
         ESP_LOGE(TAG, "the snapshot update was not applied; the device serves without it");
 
-    /* The Shell is the `frontdoor` partition the build packed. It is copied into PSRAM
-     * here, BEFORE the panel exists, for two reasons and only these: the copy is a burst of
-     * flash reads, and a flash read shares the bus with the panel's scan-out (so while
-     * nothing is scanning, the copy is free), and it is before app_services_start(), because
-     * the front door registers `/` inside that call. A missing or unflashed partition
-     * returns false - `/` then answers 503 and says so, and every other route serves. */
-    {
-        const void *shell_bytes = NULL;
-        size_t shell_bytes_size = 0;
-        if (app_board_shell_image(&shell_bytes, &shell_bytes_size)) {
-            svc.shell_image = shell_bytes;
-            svc.shell_image_size = shell_bytes_size;
-        }
-    }
-
     /* The screen's hardware comes up before the services; its first clock does not. Two
      * reasons, in this order:
      *
@@ -219,7 +195,7 @@ void appliance_run(void)
      *    rule used to be the other way round (ADR 0004). LVGL's own allocations are PSRAM by
      *    policy, so that one block is what moves; the line screen_display_boot() logs is the
      *    margin left for Wi-Fi - check it there rather than guess.
-     *  - flash: the boot's flash work - the Snapshot, the Shell's table, Wi-Fi's NVS - is
+     *  - flash: the boot's flash work - the Snapshot and Wi-Fi's NVS - is
      *    inside app_services_start(), and a flash access takes the PSRAM window from the
      *    panel's scan-out for a few microseconds, which displaces the picture permanently
      *    (ADR 0055). So screen_display_boot() stops short of esp_lcd_panel_init(): the clock

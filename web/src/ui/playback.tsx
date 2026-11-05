@@ -9,7 +9,6 @@ import {
 } from 'react';
 
 import { DEVICE_ORIGIN } from '../config';
-import { getDevice } from '../device/device';
 import type { CachedCover } from '../storage/media';
 
 /**
@@ -75,9 +74,9 @@ export interface PlaybackApi {
 
 const PlaybackContext = createContext<PlaybackApi | null>(null);
 
-/** Where the device's stream lives from this page: its own origin when it served the page. */
-export function streamUrl(link: string): string {
-  return link === 'direct' ? '/stream' : `${DEVICE_ORIGIN}/stream`;
+/** Where the device's stream lives from this page: the device's own origin, always. */
+export function streamUrl(): string {
+  return `${DEVICE_ORIGIN}/stream`;
 }
 
 /** The browser's own refusal, said usefully: the code is the only thing it gives. */
@@ -162,7 +161,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       if (!element || sourceRef.current?.kind !== 'stream') return;
       /* A fresh query on each try: the browser must open a new connection rather than
        * reuse the one the device has already dropped. */
-      const url = new URL(streamUrl(getDevice().link()), location.href);
+      const url = new URL(streamUrl(), location.href);
       url.searchParams.set('reconnect', String(stream.current.attempt));
       element.src = url.href;
       element.play().catch(() => {
@@ -240,7 +239,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     cancelReconnect();
     releaseObjectUrl();
     forgetAlbum();
-    const url = streamUrl(getDevice().link());
+    const url = streamUrl();
     if (element.src !== new URL(url, location.href).href) element.src = url;
     setSource({ kind: 'stream' });
     setTime(0);

@@ -1,20 +1,20 @@
 /**
- * The direct Device: the App is the Device copy, so the device's own API is same-origin.
+ * The request implementation behind the local transport: one `fetch`, one parser table.
  *
- * Everything here is one `fetch` against a relative path — no proxy, no CORS, no key — and
- * the fifteen operations of bridge-protocol.md §3 are exactly the requests this file makes.
- * The parsing lives in `status.ts`, `playlists.ts`, `mcp.ts` and `upload.ts` and is shared
- * with the bridge, so the two ways of reaching a player accept and reject the same
- * documents (O5).
+ * This is not a Device and has no link of its own — `local.ts` owns the origin and the
+ * link, and wraps `createDirectDevice` — so nothing selects it and no page can reach a
+ * player through it alone.
  *
- * The Device copy is at `http://k7.local/app`, and `/api/...` resolves to the device root
- * from there, which is why every path is absolute-path-relative rather than relative.
+ * Everything here is one `fetch` against a path — no proxy, no CORS, no key — and the
+ * fourteen operations of `protocol.ts` are exactly the requests this file makes. The
+ * parsing lives in `status.ts`, `playlists.ts`, `mcp.ts` and `upload.ts`, so a document
+ * this module cannot read never reaches a view (O5).
  *
- * `link()` is a constant here: the App can only be the Device copy by having been served by
- * the device, so there is nothing to connect and nothing to lose.
+ * The paths are relative on purpose: the transport hands in a `fetch` that prefixes the
+ * device's own origin, which is how the hosted App reaches `http://k7.local/api/…`.
  */
 
-import { OP_SPECS, type OpName } from '../bridge/protocol';
+import { OP_SPECS, type OpName } from './protocol';
 import {
   parseListing,
   parseSearch,
@@ -35,12 +35,12 @@ import {
   type SelectResult,
 } from './playlists';
 import { parseStatus, type DeviceStatus } from './status';
-import { DeviceError, type Device, type OpArgs, type OpData } from './transport';
+import { DeviceError, type OpArgs, type OpData } from './transport';
 
 /** A `fetch` this module can be handed in a test; the page's own is the default. */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-/** The Device copy's own `<audio src="/stream">` (O3): the page that owns the audio drives it. */
+/** The page's own `<audio src="/stream">` (O3): the transport that owns the audio drives it. */
 export interface DirectAudio {
   playing: boolean;
   blocked: boolean;
@@ -54,7 +54,7 @@ export interface DirectOptions {
   fetch?: FetchLike;
   /** `null` explicitly when this window has no audio; omitted means the DOM's own. */
   audio?: DirectAudio | null;
-  /** Where the stream lives. Relative on the Device copy; absolute from the hosted App. */
+  /** Where the stream lives. `local.ts` passes the device's absolute URL. */
   streamSrc?: string;
 }
 
@@ -75,7 +75,7 @@ function replyDetail(text: string): string | null {
   return null;
 }
 
-/** The Device copy's own stream element, or null in a window that cannot carry audio. */
+/** The transport's own stream element, or null in a window that cannot carry audio. */
 function domStreamAudio(src: string): DirectAudio | null {
   if (typeof Audio === 'undefined') return null;
   const element = new Audio();
@@ -113,7 +113,7 @@ function domStreamAudio(src: string): DirectAudio | null {
   return state;
 }
 
-/** The device's argument names for `library_search`, exactly as the Launcher translates them. */
+/** The device's argument names for `library_search`, exactly as its own API spells them. */
 function searchArguments(args: SearchArgs): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const put = (to: string, value: unknown) => {
@@ -142,20 +142,21 @@ function searchArguments(args: SearchArgs): Record<string, unknown> {
 const MCP_PATH = '/mcp';
 const MCP_PROTOCOL = '2025-11-25';
 
-export interface DirectDevice extends Device {
-  readonly kind: 'direct';
+/** What `local.ts` wraps: the requests and parsers, with no link identity of its own. */
+export interface DirectTransport {
+  request<O extends OpName>(op: O, args?: OpArgs[O]): Promise<OpData[O]>;
 }
 
 /**
- * One device, one `fetch`. The object is stateless except for the MCP handshake, which the
- * device requires once per page load and which belongs to whichever document is asking.
+ * One transport, one `fetch`. The object is stateless except for the MCP handshake, which
+ * the device requires once per page load and which belongs to whichever document is asking.
  */
-export function createDirectDevice(options: DirectOptions = {}): DirectDevice {
+export function createDirectDevice(options: DirectOptions = {}): DirectTransport {
   const doFetch: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
 
-  /* O3: the Device copy's own `<audio>`. It is made on the first stream operation rather
-   * than at boot, because an element with a `src` may open a connection and the device
-   * carries four of them. */
+  /* O3: the page's own `<audio>`. It is made on the first stream operation rather than at
+   * boot, because an element with a `src` may open a connection and the device carries four
+   * of them. */
   let audio: DirectAudio | null | undefined;
   function streamAudio(): DirectAudio | null {
     if (audio === undefined) {
@@ -470,8 +471,6 @@ export function createDirectDevice(options: DirectOptions = {}): DirectDevice {
   };
 
   return {
-    kind: 'direct',
-    link: () => 'direct',
     /**
      * TypeScript cannot index a mapped type by a generic key, and the table above is the
      * proof that every operation is implemented with its own argument and answer types.
@@ -479,10 +478,6 @@ export function createDirectDevice(options: DirectOptions = {}): DirectDevice {
     request<O extends OpName>(op: O, args?: OpArgs[O]): Promise<OpData[O]> {
       const handler = handlers[op] as (value: OpArgs[O] | undefined) => Promise<OpData[O]>;
       return handler(args);
-    },
-    onLinkChange() {
-      /* The Device copy is direct for as long as the document lives. */
-      return () => {};
     },
   };
 }

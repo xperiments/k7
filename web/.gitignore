@@ -1,6 +1,5 @@
 node_modules/
 dist/
-dist-shell/
 .vite/
 public/ort/
 public/weights/

@@ -90,9 +90,7 @@ describe('reading a card file', () => {
 });
 
 describe('the stream address', () => {
-  it('is the page’s own when the device served the page, and the device’s otherwise', () => {
-    expect(streamUrl('direct')).toBe('/stream');
-    expect(streamUrl('local')).toBe('http://k7.local/stream');
-    expect(streamUrl('bridge')).toBe('http://k7.local/stream');
+  it('is the device’s own address, whichever page asks for it', () => {
+    expect(streamUrl()).toBe('http://k7.local/stream');
   });
 });
