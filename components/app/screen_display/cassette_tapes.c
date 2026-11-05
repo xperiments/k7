@@ -74,14 +74,14 @@ static cassette_rect_t s_window;
 #define HUB_SPOKE_R0 66    /* the divider stops short of the centre and of the rim (82); */
 #define HUB_SPOKE_R1 72    /* together they cut the box it invalidates ~7x on 0..84 */
 
-/* The full-screen picture's divider: six marks at 60 degrees, four times the body's weight -
- * the teeth a hub has when the window is 556 px across and the hub 168. They stop at 68 so a
- * 16 px stroke's round cap (8 px) lands just inside the 8 px rim's inner edge at 76. */
-#define HUB_SPOKE_PREVIEW_COUNT 6
-#define HUB_SPOKE_PREVIEW_W 16
-#define HUB_SPOKE_PREVIEW_R0 44
+/* The full-screen picture's divider: four marks at 90 degrees, twice the body's weight - the
+ * teeth a hub has when the window is 556 px across and the hub 168. They stop at 68 so an
+ * 8 px stroke's round cap (4 px) lands just inside the 8 px rim's inner edge at 76. */
+#define HUB_SPOKE_PREVIEW_COUNT 4
+#define HUB_SPOKE_PREVIEW_W 8
+#define HUB_SPOKE_PREVIEW_R0 56
 #define HUB_SPOKE_PREVIEW_R1 68
-#define HUB_SPOKE_MAX 6
+#define HUB_SPOKE_MAX 4
 
 /* One frame's angle, and half a turn, where the opposite spoke sits. The model's
  * hub_frame rises with the phase, but the drawing walks the angle the other way: LVGL
@@ -415,7 +415,7 @@ static void spoke_set(hub_spoke_t *sp, int cx, int cy, double a, int r0, int r1,
  * step is well inside the 90 deg where the shortest motion would turn ambiguous. */
 static void hub_frame_set(int i, uint8_t frame)
 {
-    /* Body: two opposite marks. Preview: six, four times the weight, at 60 degrees. */
+    /* Body: two opposite marks. Preview: four, twice the weight, at 90 degrees. */
     const int count = s_preview ? HUB_SPOKE_PREVIEW_COUNT : 2;
     const int r0 = s_preview ? HUB_SPOKE_PREVIEW_R0 : HUB_SPOKE_R0;
     const int r1 = s_preview ? HUB_SPOKE_PREVIEW_R1 : HUB_SPOKE_R1;
@@ -784,7 +784,7 @@ void cassette_tapes_set_preview(bool on)
         if (s_rim[i])
             lv_obj_set_style_border_width(s_rim[i], on ? HUB_RIM_PREVIEW_W : HUB_RIM_W, 0);
         if (s_roller[i]) lv_obj_set_style_border_color(s_roller[i], col, 0);
-        /* The body's divider is two marks, the preview's six: show what the mode uses, and
+        /* The body's divider is two marks, the preview's four: show what the mode uses, and
          * re-place the hub so the marks come back at the right weight and length. */
         for (int k = 0; k < HUB_SPOKE_MAX; k++) {
             if (!s_hub_spoke[i][k].obj) continue;
@@ -919,7 +919,7 @@ void cassette_tapes_create(lv_obj_t *parent)
             lv_obj_set_style_line_width(sp, HUB_SPOKE_W, 0);
             lv_obj_set_style_line_rounded(sp, true, 0);
             lv_obj_set_clickable(sp, false);
-            /* The body's divider is two marks; the preview's is six. */
+            /* The body's divider is two marks; the preview's is four. */
             if (k >= 2) lv_obj_set_hidden(sp, true);
             s_hub_spoke[i][k].obj = sp;
         }
