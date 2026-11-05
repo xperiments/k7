@@ -74,6 +74,15 @@ static cassette_rect_t s_window;
 #define HUB_SPOKE_R0 66    /* the divider stops short of the centre and of the rim (82); */
 #define HUB_SPOKE_R1 72    /* together they cut the box it invalidates ~7x on 0..84 */
 
+/* The full-screen picture's divider: six marks at 60 degrees, four times the body's weight -
+ * the teeth a hub has when the window is 556 px across and the hub 168. They stop at 68 so a
+ * 16 px stroke's round cap (8 px) lands just inside the 8 px rim's inner edge at 76. */
+#define HUB_SPOKE_PREVIEW_COUNT 6
+#define HUB_SPOKE_PREVIEW_W 16
+#define HUB_SPOKE_PREVIEW_R0 44
+#define HUB_SPOKE_PREVIEW_R1 68
+#define HUB_SPOKE_MAX 6
+
 /* One frame's angle, and half a turn, where the opposite spoke sits. The model's
  * hub_frame rises with the phase, but the drawing walks the angle the other way: LVGL
  * measures from 3 o'clock with positive clockwise, so negating the frame turns the reels
@@ -117,7 +126,7 @@ typedef struct {
     lv_point_precise_t pts[2];
 } hub_spoke_t;
 
-static hub_spoke_t s_hub_spoke[2][2];
+static hub_spoke_t s_hub_spoke[2][HUB_SPOKE_MAX];
 static lv_obj_t *s_pack[2], *s_strand[2];  /* the packs, and the two side tape paths */
 static lv_obj_t *s_roller[2];               /* the two rollers under the tape */
 static lv_obj_t *s_run;                    /* the horizontal run between the rollers */
@@ -377,14 +386,14 @@ static void strand_draw_cb(lv_event_t *e)
  * short of the centre. Two opposite spokes are two objects on purpose: each is clipped
  * to its own quadrant, and two quadrant boxes are never joined into the hub's full
  * box (lv_refr_join_area() joins only when the union is smaller than the sum). */
-static void spoke_set(hub_spoke_t *sp, int cx, int cy, double a)
+static void spoke_set(hub_spoke_t *sp, int cx, int cy, double a, int r0, int r1, int width)
 {
-    int x0 = cx + (int)lround(SC(HUB_SPOKE_R0) * cos(a));
-    int y0 = cy + (int)lround(SC(HUB_SPOKE_R0) * sin(a));
-    int x1 = cx + (int)lround(SC(HUB_SPOKE_R1) * cos(a));
-    int y1 = cy + (int)lround(SC(HUB_SPOKE_R1) * sin(a));
+    int x0 = cx + (int)lround(SC(r0) * cos(a));
+    int y0 = cy + (int)lround(SC(r0) * sin(a));
+    int x1 = cx + (int)lround(SC(r1) * cos(a));
+    int y1 = cy + (int)lround(SC(r1) * sin(a));
 
-    int pad = HUB_SPOKE_W / 2 + 1;
+    int pad = width / 2 + 1;
     int ox = LV_MIN(x0, x1) - pad, oy = LV_MIN(y0, y1) - pad;
 
     /* The size is explicit, so lv_line's own self-size refresh returns early
@@ -406,11 +415,17 @@ static void spoke_set(hub_spoke_t *sp, int cx, int cy, double a)
  * step is well inside the 90 deg where the shortest motion would turn ambiguous. */
 static void hub_frame_set(int i, uint8_t frame)
 {
+    /* Body: two opposite marks. Preview: six, four times the weight, at 60 degrees. */
+    const int count = s_preview ? HUB_SPOKE_PREVIEW_COUNT : 2;
+    const int r0 = s_preview ? HUB_SPOKE_PREVIEW_R0 : HUB_SPOKE_R0;
+    const int r1 = s_preview ? HUB_SPOKE_PREVIEW_R1 : HUB_SPOKE_R1;
+    const int w = s_preview ? HUB_SPOKE_PREVIEW_W : HUB_SPOKE_W;
+    const double step = 2.0 * 3.14159265358979323846 / (double)count;
     double a = -(double)frame * k_hub_step;   /* the reels turn counter-clockwise */
 
-    for (int k = 0; k < 2; k++)
-        spoke_set(&s_hub_spoke[i][k], SCX(HUB_X(i)), SCY(HUB_Y),
-                  a + (k ? HUB_HALF_TURN : 0.0));
+    for (int k = 0; k < count; k++)
+        spoke_set(&s_hub_spoke[i][k], SCX(HUB_X(i)), SCY(HUB_Y), a + (double)k * step,
+                  r0, r1, w);
 }
 
 /* A hub as the window's slice draws it: the disc, its rim and the two spokes, at the frame
@@ -707,7 +722,7 @@ void cassette_tapes_set_body_hidden(bool hidden)
     for (int i = 0; i < 2; i++) {
         if (s_pack[i]) lv_obj_set_hidden(s_pack[i], hidden);
         if (s_rim[i]) lv_obj_set_hidden(s_rim[i], hidden);
-        for (int k = 0; k < 2; k++)
+        for (int k = 0; k < HUB_SPOKE_MAX; k++)
             if (s_hub_spoke[i][k].obj) lv_obj_set_hidden(s_hub_spoke[i][k].obj, hidden);
     }
 }
@@ -769,6 +784,15 @@ void cassette_tapes_set_preview(bool on)
         if (s_rim[i])
             lv_obj_set_style_border_width(s_rim[i], on ? HUB_RIM_PREVIEW_W : HUB_RIM_W, 0);
         if (s_roller[i]) lv_obj_set_style_border_color(s_roller[i], col, 0);
+        /* The body's divider is two marks, the preview's six: show what the mode uses, and
+         * re-place the hub so the marks come back at the right weight and length. */
+        for (int k = 0; k < HUB_SPOKE_MAX; k++) {
+            if (!s_hub_spoke[i][k].obj) continue;
+            lv_obj_set_style_line_width(s_hub_spoke[i][k].obj,
+                                        on ? HUB_SPOKE_PREVIEW_W : HUB_SPOKE_W, 0);
+            lv_obj_set_hidden(s_hub_spoke[i][k].obj, k >= (on ? HUB_SPOKE_PREVIEW_COUNT : 2));
+        }
+        if (s_rim[i]) hub_frame_set(i, s_shown_hub[i]);
         /* The pack's paint changed shape and ink: it is not a size change, so repaint it
          * whole. */
         if (s_pack[i]) lv_obj_invalidate(s_pack[i]);
@@ -888,13 +912,15 @@ void cassette_tapes_create(lv_obj_t *parent)
         lv_obj_set_style_border_opa(s_rim[i], LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(s_rim[i], HUB_RIM_W, 0);
 
-        for (int k = 0; k < 2; k++) {
+        for (int k = 0; k < HUB_SPOKE_MAX; k++) {
             lv_obj_t *sp = lv_line_create(parent);
             lv_obj_remove_style_all(sp);
             lv_obj_set_style_line_color(sp, k_col_hub_ink, 0);
             lv_obj_set_style_line_width(sp, HUB_SPOKE_W, 0);
             lv_obj_set_style_line_rounded(sp, true, 0);
             lv_obj_set_clickable(sp, false);
+            /* The body's divider is two marks; the preview's is six. */
+            if (k >= 2) lv_obj_set_hidden(sp, true);
             s_hub_spoke[i][k].obj = sp;
         }
 
