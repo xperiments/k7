@@ -735,17 +735,16 @@ void cassette_tapes_set_body_hidden(bool hidden)
  *
  *   body     the disc is the hub's plastic, the rim carries the playing ink, the marks the
  *            hub's own ink; with a picture printed on the Card the rim and marks go white.
- *   preview  the whole hub is white - the disc too - because the window is the picture's and
- *            not the cassette's. The marks stay the pack's dark red, or a white hub would be
- *            a blank circle.
+ *   preview  the rim and the four marks are white and the disc is the hub's plastic: the
+ *            window is the picture's, so the hub's drawing is what shows, not its colour.
  */
 static void hub_ink_apply(void)
 {
-    const lv_color_t disc = s_preview ? k_col_hub_white : k_col_hub_ring;
+    const lv_color_t disc = k_col_hub_ring;
     lv_color_t ring = s_preview ? k_col_hub_white
                                 : lv_color_mix(k_col_tape_dark, k_col_tape, s_tape_ink);
     if (!s_preview && s_hubs_white) ring = k_col_hub_white;
-    const lv_color_t mark = s_preview ? k_col_tape_dark_preview
+    const lv_color_t mark = s_preview ? k_col_hub_white
                                       : (s_hubs_white ? k_col_hub_white : k_col_hub_ink);
 
     for (int i = 0; i < 2; i++) {
