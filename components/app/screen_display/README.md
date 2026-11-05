@@ -278,9 +278,10 @@ after the tape body and shown and hidden with the
   page empty and logs it once.
 - `artwork_loader.c` — the card side of the peek's tags and the white page's cover. It
   locates the picture (an ID3 `APIC` or a FLAC `PICTURE`): the App's `k7label` when the
-  file has one, else the front cover. A label is the print already (402x188) and is
-  decoded at that size for a 1:1 draw; any other picture is fitted cover-style into one
-  603x385 RGB565 buffer. The same task reads the text tags (TPE1/TIT2, ARTIST/TITLE). Results are handed to the view
+  file has one, and nothing at all otherwise - cover art is not printed. A label is the print
+  already (402x188) and is decoded at that size for a 1:1 draw. The cover-style fit into one
+  603x385 RGB565 buffer is still in the loader and is no longer reached: only a label is ever
+  located. The same task reads the text tags (TPE1/TIT2, ARTIST/TITLE). Results are handed to the view
   under the LVGL lock. The request is one slot, replaced rather than queued, and the read
   backs off while the broadcast is behind. Compiled and started only on the panel board.
 - `panel_rgb.c` — the Sunton panel adapter, compiled only for that board. Four things about it
@@ -803,10 +804,11 @@ starts it with the screen; the fit is still cover-style, centre-cropped, and the
 page scales the result to frame 0's width at draw time.
 
 The one picture that is not fitted is the App's own: a file written by `web/` carries a
-`k7label` APIC/PICTURE at 402x188, and the locator prefers it over the front cover. The
-loader decodes it at the print's size into the same buffer and reports a 402x188 descriptor,
-so `cassette_cover.c` draws it 1:1 - no crop, no rescale, the wear exactly as written. A
-card from anywhere else has no label and keeps its front cover.
+`k7label` APIC/PICTURE at 402x188, and the locator accepts only that: a file without the
+marker prints no picture at all. The loader decodes it at the print's size into the same
+buffer and reports a 402x188 descriptor, so `cassette_cover.c` draws it 1:1 - no crop, no
+rescale, the wear exactly as written. A card from anywhere else has no label, and shows its
+label fill.
 
 The old Case backdrop is still parked: `assets/labels/cover.jpg` (768,000 B decoded) and
 the Label cover's source (`assets/labels/k7logo.png`) stay in the tree unembedded, with the

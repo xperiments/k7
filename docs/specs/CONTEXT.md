@@ -418,7 +418,8 @@ _Avoid_: hole, cutout, slot, ventana
 
 **Track artwork**:
 The picture a Track carries in its own file: an ID3v2.3/2.4 `APIC` frame in an MP3, or
-a native FLAC `PICTURE` block, preferring the front cover. JPEG is decoded; a PNG is
+a native FLAC `PICTURE` block, and only the App's own `k7label` picture: cover art is
+ignored. JPEG is decoded; a PNG is
 located but not drawn. A Track with no usable picture leaves the **Cover** empty. The
 locator and fit are built on the panel board and tested on the host; the old **Artwork**
 Level that showed it is still parked.

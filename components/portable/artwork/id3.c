@@ -78,6 +78,9 @@ static int parse_apic(artwork_read_fn read, void *ctx, uint64_t frame_off,
      * UTF-16 description of the same word is somebody else's and is left alone. */
     bool is_label = enc != 1 && enc != 2 && desc_end > 1 &&
                     art_desc_is_label((const char *)head + i, desc_end - 1);
+    /* The caller needs to know this even when the picture itself is unusable: a label that
+     * cannot be decoded is worth saying out loud, where cover art is simply not wanted. */
+    if (label) *label = is_label;
 
     uint64_t image_off = frame_off + i + desc_end;
     if (frame_size <= i + desc_end) return -1;
@@ -87,7 +90,6 @@ static int parse_apic(artwork_read_fn read, void *ctx, uint64_t frame_off,
     if (art_accept(read, ctx, image_off, image_len, png, &tmp) != ARTWORK_OK) return -1;
     tmp.label = is_label;
     *out = tmp;
-    if (label) *label = is_label;
     return picture_type;
 }
 
@@ -124,11 +126,6 @@ artwork_result_t art_id3_locate(artwork_read_fn read, void *ctx, uint64_t file_s
         if (pos >= tag_end) return ARTWORK_BAD_FILE;
     }
 
-    artwork_ref_t first, front;
-    bool have_first = false;
-    bool have_front = false;
-    bool saw_apic = false;
-
     for (int frame = 0; frame < MAX_FRAMES && pos + ID3_FRAME_BYTES <= tag_end; frame++) {
         uint8_t f[ID3_FRAME_BYTES];
         if (!read(ctx, pos, f, sizeof f)) return ARTWORK_IO;
@@ -153,37 +150,21 @@ artwork_result_t art_id3_locate(artwork_read_fn read, void *ctx, uint64_t file_s
         bool unusable = (major == 3) ? (fflags & 0xE0) != 0
                                      : (fflags & 0x47) != 0;
         if (!unusable && memcmp(f, "APIC", 4) == 0) {
-            saw_apic = true;
             artwork_ref_t tmp;
             bool label = false;
             int type = parse_apic(read, ctx, pos + ID3_FRAME_BYTES, fsize, &tmp, &label);
-            if (label) { /* the App's own label is what the Card prints */
+            /* The Card prints the App's own label and nothing else. Cover art - a type-3
+             * front cover, a back cover, whatever a card from elsewhere carries - is not
+             * the picture this screen wants: a Track without the label shows its label
+             * fill instead. */
+            if (label) {
+                if (type < 0) return ARTWORK_UNSUPPORTED;   /* the label, unreadable */
                 *out = tmp;
                 return ARTWORK_OK;
-            }
-            /* The cover is remembered, not returned: the App's label may be written
-             * after it, and the label is the picture the Card prints. */
-            if (type == 3 && !have_front) {
-                front = tmp;
-                have_front = true;
-            }
-            if (type >= 0 && !have_first) {
-                first = tmp;
-                have_first = true;
             }
         }
         pos += ID3_FRAME_BYTES + fsize;
     }
 
-    if (have_front) {
-        *out = front;
-        return ARTWORK_OK;
-    }
-    if (have_first) {
-        *out = first;
-        return ARTWORK_OK;
-    }
-    /* An APIC frame that exists but is not a JPEG/PNG within the caps is a different
-     * case from no picture at all, and worth saying so in the log. */
-    return saw_apic ? ARTWORK_UNSUPPORTED : ARTWORK_NONE;
+    return ARTWORK_NONE;
 }

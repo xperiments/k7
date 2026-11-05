@@ -61,9 +61,10 @@ typedef struct {
 } artwork_ref_t;
 
 /* Locate the picture a Track is printed with, by its Source format. WAV has none.
- * The order is the App's: its own label first, then the front cover, then the first
- * usable picture - a card written here shows the label it was written with, and a
- * card from anywhere else still shows its front cover.
+ * Only the App's own label counts: a picture whose description is `k7label`, which is
+ * what this project's writer puts on a card. Cover art - a type-3 front cover, a back
+ * cover, the first picture in the tag - is not the picture this screen prints, so a
+ * Track without the label reports ARTWORK_NONE and the screen shows its label fill.
  * `file_size` is used only to reject a header that claims to be larger than the file;
  * pass 0 when it is not known. */
 artwork_result_t artwork_locate(mi_fmt_t format, artwork_read_fn read, void *ctx,

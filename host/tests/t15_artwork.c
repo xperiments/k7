@@ -285,27 +285,28 @@ static bool mem_read(void *ctx, uint64_t off, void *dst, size_t n)
 static uint8_t g_body[2 * 1024 * 1024];
 static uint8_t g_file[2 * 1024 * 1024];
 
-static void test_id3_v23_front(void)
+static void test_id3_v23_label(void)
 {
     uint8_t jpg[128];
     size_t jpg_len = jpeg_head(jpg, 500, 500);
 
     buf_t body = { g_body, 0, sizeof g_body };
-    size_t body_off = add_apic(&body, 3, 3, "image/jpeg", jpg, jpg_len, false, 0);
+    size_t body_off = add_apic_described(&body, 3, 0, "image/jpeg", "k7label", jpg, jpg_len);
     size_t total = wrap_id3(g_file, sizeof g_file, 3, 0, body.p, body.n);
     CHECK(total > 0, "the tag was built");
 
     mem_t m = { g_file, total };
     artwork_ref_t ref;
     artwork_result_t r = artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref);
-    CHECK_EQ(r, ARTWORK_OK, "v2.3 front cover");
-    CHECK_EQ(ref.offset, 10 + body_off + (1 + (long)strlen("image/jpeg") + 1 + 1 + 1),
+    CHECK_EQ(r, ARTWORK_OK, "v2.3 label");
+    CHECK_EQ(ref.offset,
+             10 + body_off + (1 + (long)strlen("image/jpeg") + 1 + 1 + (long)strlen("k7label") + 1),
              "image offset");
     CHECK_EQ(ref.size, jpg_len, "image size");
     CHECK_EQ(ref.png, 0, "JPEG, not PNG");
     CHECK_EQ(ref.width, 500, "width from the SOF");
     CHECK_EQ(ref.height, 500, "height from the SOF");
-    CHECK_EQ(ref.label, 0, "a front cover is not the App's label");
+    CHECK_EQ(ref.label, 1, "the marker is what makes it the printed picture");
 }
 
 static void test_id3_v24_png(void)
@@ -314,21 +315,22 @@ static void test_id3_v24_png(void)
     size_t png_len = png_head(png, 600, 400);
 
     buf_t body = { g_body, 0, sizeof g_body };
-    size_t body_off = add_apic(&body, 4, 3, "image/png", png, png_len, false, 0);
+    size_t body_off = add_apic_described(&body, 4, 0, "image/png", "k7label", png, png_len);
     size_t total = wrap_id3(g_file, sizeof g_file, 4, 0, body.p, body.n);
 
     mem_t m = { g_file, total };
     artwork_ref_t ref;
     artwork_result_t r = artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref);
-    CHECK_EQ(r, ARTWORK_OK, "v2.4 PNG front cover");
-    CHECK_EQ(ref.offset, 10 + body_off + (1 + (long)strlen("image/png") + 1 + 1 + 1),
+    CHECK_EQ(r, ARTWORK_OK, "v2.4 PNG label");
+    CHECK_EQ(ref.offset,
+             10 + body_off + (1 + (long)strlen("image/png") + 1 + 1 + (long)strlen("k7label") + 1),
              "PNG image offset");
     CHECK_EQ(ref.png, 1, "PNG");
     CHECK_EQ(ref.width, 600, "PNG width");
     CHECK_EQ(ref.height, 400, "PNG height");
 }
 
-static void test_id3_prefers_front(void)
+static void test_id3_ignores_cover_art(void)
 {
     uint8_t jpg_back[128], jpg_front[128], png[64];
     size_t back_len = jpeg_head(jpg_back, 300, 300);
@@ -343,9 +345,10 @@ static void test_id3_prefers_front(void)
 
     mem_t m = { g_file, total };
     artwork_ref_t ref;
-    CHECK_EQ(artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref), ARTWORK_OK,
-             "a front cover is found");
-    CHECK_EQ(ref.width, 700, "the first front cover wins, not the later one nor the back");
+    /* Cover art is not the picture the Card prints, whatever its type and however good
+     * it is: only the App's `k7label` is. */
+    CHECK_EQ(artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref), ARTWORK_NONE,
+             "a card with covers and no label prints no picture");
 }
 
 static void test_id3_label_wins(void)
@@ -389,7 +392,21 @@ static void test_id3_v24_plain_size(void)
     uint8_t jpg[128];
     size_t jpg_len = jpeg_head(jpg, 512, 512);
     buf_t body = { g_body, 0, sizeof g_body };
-    add_apic(&body, 4, 3, "image/jpeg", jpg, jpg_len, true, 0); /* plain size in a v2.4 frame */
+    /* A plain size in a v2.4 frame, on the picture the Card prints. */
+    size_t at = body.n;
+    b_bytes(&body, "APIC", 4);
+    size_t size_at = body.n;
+    b_be32(&body, 0);
+    b_u8(&body, 0);
+    b_u8(&body, 0);
+    size_t data = body.n;
+    b_u8(&body, 0);
+    b_bytes(&body, "image/jpeg", strlen("image/jpeg") + 1);
+    b_u8(&body, 0);
+    b_bytes(&body, "k7label", strlen("k7label") + 1);
+    b_bytes(&body, jpg, jpg_len);
+    put_be32(body.p + size_at, (uint32_t)(body.n - data));
+    (void)at;
     size_t total = wrap_id3(g_file, sizeof g_file, 4, 0, body.p, body.n);
 
     mem_t m = { g_file, total };
@@ -409,11 +426,11 @@ static void test_id3_utf16_description(void)
 
     mem_t m = { g_file, total };
     artwork_ref_t ref;
-    CHECK_EQ(artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref), ARTWORK_OK,
-             "a UTF-16 description is skipped");
-    /* 1 encoding + MIME and its NUL + 1 type + a 2-byte BOM + a 2-byte terminator */
-    CHECK_EQ(ref.offset, 10 + body_off + 1 + (long)strlen("image/jpeg") + 1 + 1 + 2 + 2,
-             "offset past the UTF-16 description");
+    /* The marker is only read in a one-byte encoding: a UTF-16 description of the same word
+     * is somebody else's, so this is cover art and is not printed. */
+    CHECK_EQ(artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref), ARTWORK_NONE,
+             "a UTF-16 description is not the App's label");
+    (void)body_off;
 }
 
 static void test_id3_caps(void)
@@ -424,28 +441,28 @@ static void test_id3_caps(void)
     size_t png_len = png_head(png, 900, 400);    /* over the PNG edge cap */
 
     buf_t body = { g_body, 0, sizeof g_body };
-    add_apic(&body, 3, 3, "image/png", png, png_len, false, 0);
+    add_apic_described(&body, 3, 0, "image/png", "k7label", png, png_len);
     size_t total = wrap_id3(g_file, sizeof g_file, 3, 0, body.p, body.n);
     mem_t m = { g_file, total };
     artwork_ref_t ref;
     CHECK_EQ(artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref), ARTWORK_UNSUPPORTED,
-             "a PNG over 800 px is refused");
+             "a label whose PNG is over 800 px is refused");
 
     /* A JPEG of 1000x1000 is accepted: TJpgDec scales it. */
     body.n = 0;
-    add_apic(&body, 3, 3, "image/jpeg", jpg, jpg_len, false, 0);
+    add_apic_described(&body, 3, 0, "image/jpeg", "k7label", jpg, jpg_len);
     total = wrap_id3(g_file, sizeof g_file, 3, 0, body.p, body.n);
     m.p = g_file; m.n = total;
     CHECK_EQ(artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref), ARTWORK_OK,
-             "a JPEG over 800 px is accepted");
+             "a label's JPEG over 800 px is accepted");
 
-    /* A non-picture APIC is UNSUPPORTED, not NONE. */
+    /* A label in a format the screen cannot decode is UNSUPPORTED, not NONE. */
     body.n = 0;
     add_apic(&body, 3, 3, "image/webp", jpg, jpg_len, false, 0);
     total = wrap_id3(g_file, sizeof g_file, 3, 0, body.p, body.n);
     m.p = g_file; m.n = total;
-    CHECK_EQ(artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref), ARTWORK_UNSUPPORTED,
-             "an APIC that is neither JPEG nor PNG is unsupported");
+    CHECK_EQ(artwork_locate(MI_FMT_MP3, mem_read, &m, total, &ref), ARTWORK_NONE,
+             "an APIC that is neither JPEG nor PNG is not the App's label");
 }
 
 static void test_id3_bad(void)
@@ -466,22 +483,20 @@ static void test_id3_bad(void)
              "a tag larger than the file is refused");
 }
 
-static void test_flac_front(void)
+static void test_flac_ignores_cover_art(void)
 {
     uint8_t png[64];
     size_t png_len = png_head(png, 500, 500);
     buf_t blocks = { g_body, 0, sizeof g_body };
     add_flac_picture(&blocks, false, 4, "image/png", 500, 500, png, png_len); /* back */
-    size_t front_at = add_flac_picture(&blocks, true, 3, "image/png", 500, 500, png, png_len);
+    add_flac_picture(&blocks, true, 3, "image/png", 500, 500, png, png_len);  /* front */
     size_t total = wrap_flac(g_file, sizeof g_file, blocks.p, blocks.n);
 
     mem_t m = { g_file, total };
     artwork_ref_t ref;
-    CHECK_EQ(artwork_locate(MI_FMT_FLAC, mem_read, &m, total, &ref), ARTWORK_OK,
-             "a FLAC PICTURE is found");
-    CHECK_EQ(ref.offset, 42 + front_at, "the front cover's offset");
-    CHECK_EQ(ref.png, 1, "PNG");
-    CHECK_EQ(ref.width, 500, "width");
+    /* A PICTURE block without the App's description is cover art: not printed. */
+    CHECK_EQ(artwork_locate(MI_FMT_FLAC, mem_read, &m, total, &ref), ARTWORK_NONE,
+             "a FLAC with covers and no label prints no picture");
 }
 
 static void test_flac_label_wins(void)
@@ -911,9 +926,9 @@ static void test_cover_stream_refuses_upscale(void)
 
 int main(void)
 {
-    test_id3_v23_front();
+    test_id3_v23_label();
     test_id3_v24_png();
-    test_id3_prefers_front();
+    test_id3_ignores_cover_art();
     test_id3_no_cover();
     test_id3_v24_plain_size();
     test_id3_utf16_description();
@@ -921,7 +936,7 @@ int main(void)
     test_id3_caps();
     test_id3_bad();
 
-    test_flac_front();
+    test_flac_ignores_cover_art();
     test_flac_label_wins();
     test_flac_no_picture();
     test_flac_bad_magic();

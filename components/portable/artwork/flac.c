@@ -26,10 +26,6 @@ artwork_result_t art_flac_locate(artwork_read_fn read, void *ctx, uint64_t file_
     if (!read(ctx, 0, h, sizeof h)) return ARTWORK_IO;
     if (memcmp(h, "fLaC", 4) != 0) return ARTWORK_BAD_FILE;
 
-    artwork_ref_t first, front;
-    bool have_first = false;
-    bool have_front = false;
-    bool saw_picture = false;
     uint64_t pos = 4;
 
     for (int block = 0; block < MAX_BLOCKS; block++) {
@@ -39,13 +35,12 @@ artwork_result_t art_flac_locate(artwork_read_fn read, void *ctx, uint64_t file_
         uint32_t len = art_be24(h + 1);
         uint64_t data = pos + 4;
 
-        if (type == 6) saw_picture = true;
         if (type == 6 && len >= 32) {
             uint8_t head[FLAC_HEAD_MAX];
             size_t want = len < sizeof head ? len : sizeof head;
             if (!read(ctx, data, head, want)) return ARTWORK_IO;
 
-            uint32_t picture_type = art_be32(head);
+            (void)art_be32(head);   /* the picture type: the label marker decides */
             uint32_t mime_len = art_be32(head + 4);
             size_t o = 8;
             bool png = false;
@@ -63,22 +58,14 @@ artwork_result_t art_flac_locate(artwork_read_fn read, void *ctx, uint64_t file_
                     uint32_t data_len = art_be32(head + o + 16);
                     uint64_t data_off = data + o + 20;
                     artwork_ref_t tmp;
-                    if (art_accept(read, ctx, data_off, data_len, png, &tmp) == ARTWORK_OK) {
-                        tmp.label = is_label;
-                        if (is_label) { /* the App's own label is what the Card prints */
-                            *out = tmp;
-                            return ARTWORK_OK;
-                        }
-                        /* Remembered, not returned: the App's label may come after the
-                         * cover, and the label is what the Card prints. */
-                        if (picture_type == 3 && !have_front) {
-                            front = tmp;
-                            have_front = true;
-                        }
-                        if (!have_first) {
-                            first = tmp;
-                            have_first = true;
-                        }
+                    artwork_result_t ar = art_accept(read, ctx, data_off, data_len, png, &tmp);
+                    /* The Card prints the App's own label and nothing else: a PICTURE
+                     * block without the description is cover art, and is left alone. */
+                    if (is_label) {
+                        if (ar != ARTWORK_OK) return ARTWORK_UNSUPPORTED;
+                        tmp.label = true;
+                        *out = tmp;
+                        return ARTWORK_OK;
                     }
                 }
             }
@@ -88,13 +75,5 @@ artwork_result_t art_flac_locate(artwork_read_fn read, void *ctx, uint64_t file_
         pos = data + len;
     }
 
-    if (have_front) {
-        *out = front;
-        return ARTWORK_OK;
-    }
-    if (have_first) {
-        *out = first;
-        return ARTWORK_OK;
-    }
-    return saw_picture ? ARTWORK_UNSUPPORTED : ARTWORK_NONE;
+    return ARTWORK_NONE;
 }

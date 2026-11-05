@@ -3,7 +3,7 @@
  * artwork_loader - the card side of the white page's cover and the peek's tags.
  *
  * Locates the picture a Track is printed with (components/portable/artwork: the App's own
- * `k7label` when the file carries one, else its front cover), decodes it with TJpgDec as
+ * `k7label`; cover art is ignored), decodes it with TJpgDec as
  * the decoder reads the JPEG from the card on demand, and fits it, cover-style, to one
  * RGB565 buffer. A label is already the print, so it is decoded at 402x188 and drawn 1:1;
  * anything else is fitted to 603x385 and the white page scales that to the cassette's
