@@ -29,7 +29,6 @@ typedef struct {
     uint32_t    metaint;      /* encoded bytes between metadata blocks */
     uint32_t    lead_ms;
     uint32_t    burst_ms;
-    void      (*on_client_connect)(void); /* may be NULL */
     /* mi_enc_check_format()'s tier: 3 = MPEG-1, 2 = MPEG-2, 0 = MPEG-2.5, which
      * is VALID - test `>= 0`, never truthiness. */
     int         mpeg;

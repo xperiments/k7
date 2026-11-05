@@ -72,6 +72,19 @@ static mcp_rescan_fn L_rescan;
 static uint16_t L_port = 8000;
 static void (*page_service_fn)(void); /* screen guard for Snapshot reads; NULL where no panel */
 
+/* The Snapshot coverage, cached so `library_stats` never walks the mapped Snapshot per request.
+ * `mcp_refresh_coverage()` recomputes it at boot and on each rescan; the stored generation is the
+ * published Library's, so a mismatch in `write_stats` means a publish slipped past and it walks once. */
+typedef struct {
+    uint32_t generation;
+    uint32_t analysed;
+    uint32_t tagged_bpm;
+    uint32_t tagged_key;
+    uint32_t tagged_mood;
+    uint32_t tagged_energy;
+} coverage_t;
+static coverage_t coverage;
+
 /* --------------------------------------------------------------- JSON read */
 
 static void jp_ws(jparser_t *j)
@@ -588,6 +601,35 @@ static bool track_row(const library_t *lib, lib_node_t n, snapshot_row_t *row)
     return snapshot_find(SN, snapshot_path_hash(rel), (uint32_t)size, row);
 }
 
+/* Walk the Library against the Snapshot once and cache the coverage. Called only at boot and on
+ * rescan (mcp_refresh_coverage), and defensively by write_stats if a publish slipped past - never
+ * per request, because this walk is the mapped-flash read that displaced the panel. */
+static void compute_coverage(const library_t *lib)
+{
+    coverage.generation = lib ? library_generation(lib) : 0;
+    coverage.analysed = 0;
+    coverage.tagged_bpm = coverage.tagged_key = 0;
+    coverage.tagged_mood = coverage.tagged_energy = 0;
+    if (!SN || !lib) return;
+    uint32_t tracks = library_track_count(lib);
+    for (uint32_t i = 0; i < tracks; i++) {
+        snapshot_row_t row;
+        if (!track_row(lib, library_track_at(lib, i), &row)) continue;
+        coverage.analysed++;
+        if (row.source_flags & SNAPSHOT_SRC_BPM_TAGGED) coverage.tagged_bpm++;
+        if (row.source_flags & SNAPSHOT_SRC_KEY_TAGGED) coverage.tagged_key++;
+        if (row.source_flags & SNAPSHOT_SRC_MOOD_TAGGED) coverage.tagged_mood++;
+        if (row.source_flags & SNAPSHOT_SRC_ENERGY_TAGGED) coverage.tagged_energy++;
+    }
+}
+
+void mcp_refresh_coverage(void)
+{
+    const library_t *lib = library_acquire();
+    compute_coverage(lib);
+    if (lib) library_release(lib);
+}
+
 static void write_entry(w_t *w, const library_t *lib, lib_node_t n)
 {
     uint16_t nlen = 0;
@@ -636,20 +678,17 @@ static void write_stats(w_t *w, const library_t *lib)
         return;
     }
     /* Coverage is the number that bounds every answer: it is counted against the
-     * current Library, so a row for a track that no longer exists is not coverage. */
+     * current Library, so a row for a track that no longer exists is not coverage. It is
+     * cached, because walking the mapped Snapshot on every request is what displaced the
+     * panel (ADR 0047, 0055): the cache is refreshed at boot and on rescan, and a generation
+     * mismatch means a publish slipped past, so it is walked once here rather than reported
+     * stale. */
     unsigned tracks = library_track_count(lib);
-    unsigned analysed = 0, tagged_bpm = 0, tagged_key = 0, tagged_mood = 0, tagged_energy = 0;
-    if (SN) {
-        for (uint32_t i = 0; i < tracks; i++) {
-            snapshot_row_t row;
-            if (!track_row(lib, library_track_at(lib, i), &row)) continue;
-            analysed++;
-            if (row.source_flags & SNAPSHOT_SRC_BPM_TAGGED) tagged_bpm++;
-            if (row.source_flags & SNAPSHOT_SRC_KEY_TAGGED) tagged_key++;
-            if (row.source_flags & SNAPSHOT_SRC_MOOD_TAGGED) tagged_mood++;
-            if (row.source_flags & SNAPSHOT_SRC_ENERGY_TAGGED) tagged_energy++;
-        }
-    }
+    if (coverage.generation != library_generation(lib))
+        compute_coverage(lib);
+    unsigned analysed = coverage.analysed, tagged_bpm = coverage.tagged_bpm,
+             tagged_key = coverage.tagged_key, tagged_mood = coverage.tagged_mood,
+             tagged_energy = coverage.tagged_energy;
     const char *state = SN ? "ok"
                       : SN_state == SNAPSHOT_NO_PARTITION ? "no_partition"
                       : SN_state == SNAPSHOT_NO_UPDATE ? "no_update"
@@ -1511,11 +1550,11 @@ static http_result_t post_route(int fd, const http_request_t *req, void *ctx)
         }
         w_t tw = w_make(text, MCP_TEXT_MAX);
         bool ok = true;
-        /* These three tools read the Snapshot, which is mapped flash; the board takes the glass
-         * off first so the reads cannot displace the scan (ADR 0047, 0055). library_list and
-         * player_status read only the resident Library, so they leave the screen alone. */
-        if (strcmp(name, "library_stats") == 0 || strcmp(name, "library_search") == 0 ||
-            strcmp(name, "library_track") == 0) {
+        /* These two tools read the Snapshot, which is mapped flash; the board takes the glass
+         * off first so the reads cannot displace the scan (ADR 0047, 0055). library_stats reads
+         * the cached coverage, and library_list and player_status read only the resident Library,
+         * so those leave the screen alone. */
+        if (strcmp(name, "library_search") == 0 || strcmp(name, "library_track") == 0) {
             if (page_service_fn) page_service_fn();
         }
         if (strcmp(name, "library_stats") == 0) {

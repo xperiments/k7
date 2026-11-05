@@ -46,6 +46,11 @@ typedef struct {
 /* Register GET/POST /mcp. Call before http_server_start(). */
 esp_err_t mcp_start(const mcp_cfg_t *cfg);
 
+/* Recompute the cached Snapshot coverage against the currently published Library. Call once at
+ * boot (after mcp_start, before the panel's first clock) and again after each rescan publishes a
+ * generation, so `library_stats` never walks the mapped Snapshot on a request (ADR 0047, 0055). */
+void mcp_refresh_coverage(void);
+
 #ifdef __cplusplus
 }
 #endif

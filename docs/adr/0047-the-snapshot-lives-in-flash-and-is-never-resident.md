@@ -1,15 +1,18 @@
 # The measurements live in a flash partition, and are never resident
 
-> **Amended: Snapshot reads take the screen off the glass, like a page load.** The rule ADR 0055
-> establishes — the scan-out cannot survive any flash access — applies to the Snapshot's mapped
-> reads exactly as it did to the Shell's page reads: a query that reads the mapped partition is a
-> cache-line fetch on the bus the RGB DMA draws from, which displaces the picture. This is what
-> kept tearing the screen when the App at the public origin reloaded and fired a burst of
-> `/api/playlists` and `/mcp` calls at the device, while a Launcher reload was clean. The Snapshot
-> is not copied to PSRAM (the numbers in "Why flash and not PSRAM" still hold, and the copy is
-> what the owner rejected as too large); instead the routes and MCP tools that read it call
-> `page_service` first — the same black-and-re-establish guard ADR 0055 chose for page loads —
-> so the slip happens behind a black frame and the scan is re-established when the read is over.
+> **Amended: the reload never reads the Snapshot, and the reads that remain are guarded.** The
+> rule ADR 0055 establishes — the scan-out cannot survive any flash access — applies to the
+> Snapshot's mapped reads exactly as it did to the Shell's page reads. The first thing that broke
+> was a page reload of the App at its public origin: `library_stats` walked every Library track
+> against the Snapshot to compute coverage on **every call**, so a reload that only wanted the
+> image's header (`generation`, `rows`) displaced the picture on ~10,000 cache-line fetches. That
+> walk is now cached (`mcp_refresh_coverage()`, computed once at boot and once per rescan, when
+> the Library and Snapshot are already fixed), so a reload makes no flash read at all. The reads
+> that are genuinely per-request — `library_search`, `library_track`, and the `/api/playlists`
+> routes — still read the mapping, and each calls `page_service` first: the black-and-re-establish
+> guard ADR 0055 chose for page loads, so the slip happens behind a black frame and the scan is
+> re-established after. The Snapshot is not copied to PSRAM (the numbers in "Why flash and not
+> PSRAM" still hold, and the copy is what the owner rejected as too large).
 
 A design for this device proposed a custom binary music database on the card: fixed 64-byte
 track records, sorted BPM and year indexes, categorical bitsets, an inverted text index, opened

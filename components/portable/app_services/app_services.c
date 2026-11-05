@@ -107,6 +107,11 @@ static void rescan_task(void *arg)
         if (library_publish(next)) {
             /* The indices the walk was given describe the old generation; re-resolve. */
             playlist_select_sync(s_snapshot, next);
+            /* The coverage follows the published generation, so it is re-walked once here on a
+             * card change - never per `library_stats` request. This runs on core 0 with the panel
+             * scanning, so a rescan still slips the picture for its flash reads; that is a card
+             * event, not the page reload the cache removes (ADR 0047, 0055). */
+            mcp_refresh_coverage();
             ESP_LOGI(TAG, "library rescan: generation %u, tracks=%u dirs=%u, "
                           "scan=%lld ms, arena=%u B json=%u B, psram %u -> %u B",
                      (unsigned)gen, tracks, dirs, (long long)scan_ms,
@@ -713,9 +718,6 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         .metaint = cfg->metaint,
         .lead_ms = cfg->lead_ms,
         .burst_ms = cfg->burst_ms,
-        /* A listener arriving is the App's own page load seen from the stream side: the
-         * board blacks the glass for it, as it does for a page file. */
-        .on_client_connect = cfg->page_service,
     };
     e = mini_icecast_start(&ice);
     if (e != ESP_OK) return fail(report, e, "broadcast");
@@ -741,6 +743,11 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     };
     e = mcp_start(&mcp);
     if (e != ESP_OK) return fail(report, e, "MCP endpoint");
+
+    /* The Snapshot coverage is walked once here, at boot, against the Library just published and
+     * before the panel's first clock - the walk reads mapped flash, and doing it on every
+     * `library_stats` request is what displaced the screen on a reload (ADR 0047, 0055). */
+    mcp_refresh_coverage();
 
     e = http_server_register_route_method("/api/rescan", "POST", rescan_route, NULL);
     if (e != ESP_OK) return fail(report, e, "rescan endpoint");
