@@ -66,6 +66,10 @@ static cassette_rect_t s_window;
  * angular resolution of the animation. */
 #define HUB_FRAME_COUNT CASSETTE_TAPES_FRAME_COUNT
 #define HUB_RIM_W 2
+/* The full-screen picture's hub: a thicker rim on the same disc, and no divider. At the entry
+ * pose the hub is 168 px across, so 8 px is the weight the 2 px rim has at the Controls pose;
+ * it is what the owner asked for after looking at the window there. */
+#define HUB_RIM_PREVIEW_W 8
 #define HUB_SPOKE_W 4
 #define HUB_SPOKE_R0 66    /* the divider stops short of the centre and of the rim (82); */
 #define HUB_SPOKE_R1 72    /* together they cut the box it invalidates ~7x on 0..84 */
@@ -145,6 +149,10 @@ static lv_opa_t s_tape_ink = LV_OPA_COVER;
  * and the spokes - and the tape's own inks otherwise. The flag is the Cover's, the ink is this
  * module's. */
 static bool s_hubs_white;
+
+/* The full-screen picture is up: the hubs are drawn as the owner wants the preview - one rim
+ * round the disc, no divider - and each pack as the tape's edge once, not the ring stack. */
+static bool s_preview;
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -476,6 +484,18 @@ static void pack_draw_rings(lv_layer_t *layer, int i)
     dsc.start_angle = 0;
     dsc.end_angle = 360;
 
+    /* The preview paints the tape's edge once: the rings are the pack's winding, and at the
+     * entry pose the window shows one edge, not ten. */
+    if (s_preview) {
+        int r = SC(s_pack_d[i]) / 2;
+        if (r > SC(HUB_RING_D) / 2 && ring_in_clip(layer, dsc.center.x, dsc.center.y, r,
+                                                  PACK_RING_W)) {
+            dsc.radius = (uint16_t)r;
+            lv_draw_arc(layer, &dsc);
+        }
+        return;
+    }
+
     /* The gap shrinks with the cassette, but a ring is a pixel: a gap of 0 would draw the
      * same circle for ever. */
     int gap = SC(PACK_RING_GAP);
@@ -713,6 +733,24 @@ void cassette_tapes_set_hubs_white(bool white)
         lv_area_t hb;
         hub_box(i, &hb);
         slice_dirty(&hb);
+    }
+}
+
+/* The full-screen picture's hub: a thicker rim and no divider, and each pack as one circle.
+ * The body stays built - the spokes keep their angle while hidden - so putting the picture
+ * away restores the cassette exactly as it was. */
+void cassette_tapes_set_preview(bool on)
+{
+    if (on == s_preview) return;
+    s_preview = on;
+
+    for (int i = 0; i < 2; i++) {
+        if (s_rim[i])
+            lv_obj_set_style_border_width(s_rim[i], on ? HUB_RIM_PREVIEW_W : HUB_RIM_W, 0);
+        for (int k = 0; k < 2; k++)
+            if (s_hub_spoke[i][k].obj) lv_obj_set_hidden(s_hub_spoke[i][k].obj, on);
+        /* The pack's paint changed shape: it is not a size change, so repaint it whole. */
+        if (s_pack[i]) lv_obj_invalidate(s_pack[i]);
     }
 }
 

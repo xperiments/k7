@@ -189,6 +189,7 @@ static void controls_apply(controls_changed_t changed)
          * both are the entry pose. */
         cassette_card_set_full(s_ctl.full);
         cassette_cover_set_full(s_ctl.full);
+        cassette_tapes_set_preview(s_ctl.full);
     }
 
     if (changed & CONTROLS_CHANGED_PAGE) {
