@@ -66,21 +66,21 @@ static cassette_rect_t s_window;
  * angular resolution of the animation. */
 #define HUB_FRAME_COUNT CASSETTE_TAPES_FRAME_COUNT
 #define HUB_RIM_W 2
-/* The full-screen picture's hub: a thicker rim on the same disc, and no divider. At the entry
- * pose the hub is 168 px across, so 8 px is the weight the 2 px rim has at the Controls pose;
- * it is what the owner asked for after looking at the window there. */
-#define HUB_RIM_PREVIEW_W 8
+/* The full-screen picture's hub: a thick white rim on the same disc. At the entry pose the hub
+ * is 168 px across, so 16 px is the weight the owner asked for after looking at the window
+ * there; it leaves 68 px of plastic inside it. */
+#define HUB_RIM_PREVIEW_W 16
 #define HUB_SPOKE_W 4
 #define HUB_SPOKE_R0 66    /* the divider stops short of the centre and of the rim (82); */
 #define HUB_SPOKE_R1 72    /* together they cut the box it invalidates ~7x on 0..84 */
 
 /* The full-screen picture's divider: four marks at 90 degrees, twice the body's weight - the
- * teeth a hub has when the window is 556 px across and the hub 168. They stop at 68 so an
- * 8 px stroke's round cap (4 px) lands just inside the 8 px rim's inner edge at 76. */
+ * teeth a hub has when the window is 556 px across and the hub 168. They stop at 62 so an
+ * 8 px stroke's round cap (4 px) lands at 66, just inside the 16 px rim's inner edge at 68. */
 #define HUB_SPOKE_PREVIEW_COUNT 4
 #define HUB_SPOKE_PREVIEW_W 8
-#define HUB_SPOKE_PREVIEW_R0 56
-#define HUB_SPOKE_PREVIEW_R1 68
+#define HUB_SPOKE_PREVIEW_R0 50
+#define HUB_SPOKE_PREVIEW_R1 62
 #define HUB_SPOKE_MAX 4
 
 /* One frame's angle, and half a turn, where the opposite spoke sits. The model's
