@@ -319,12 +319,12 @@ export function Shell({ route, children }: { route: Route; children: React.React
       <Sidebar variant="inset" collapsible="icon">
         <SidebarHeader>
           <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
+          <InstallButton />
         </SidebarHeader>
         <SidebarContent role="navigation" aria-label="Areas">
           <Nav groups={groups} route={route} />
         </SidebarContent>
         <SidebarFooter>
-          <InstallButton />
           <SidebarMenu>
             {/* The label is the action, not the state: the theme you are in is what the
                 whole page already says, and a button that reads "Dark theme" while dark

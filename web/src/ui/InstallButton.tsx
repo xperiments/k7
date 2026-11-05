@@ -23,7 +23,7 @@ export function InstallButton() {
   if (state === 'installable') {
     return (
       <Button
-        variant="outline"
+        
         size="sm"
         className="w-full justify-start gap-2"
         onClick={() => void promptInstallNow()}

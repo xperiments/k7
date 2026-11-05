@@ -39,6 +39,28 @@ export interface CachedMedia {
   size?: number;
   mtime?: number;
   hash?: string;
+  /**
+   * Which finalize this file has already taken: the `METADATA_WRITE_VERSION` of the tags and
+   * label that were written into it. It is set only after a write finished, so a row without
+   * it says "measured, but the file may still need its tags" — the old rows and a read-only
+   * card. A re-scan that matches the file's size, mtime and hash *and* this number has
+   * nothing to open the file for.
+   */
+  written?: number;
+}
+
+/**
+ * Whether the card's file already carries this build's tags and label, as far as the record
+ * can tell without opening it: the row is about the same bytes and a finalize for exactly
+ * this writer completed. A row from another card cannot answer for this one — the caller
+ * reads the row under this card's scope.
+ */
+export function writeCurrent(
+  media: CachedMedia | undefined,
+  hash: string,
+  version: number,
+): boolean {
+  return media !== undefined && media.hash === hash && media.written === version;
 }
 
 /** The row as stored: the media plus the card it was read from. */

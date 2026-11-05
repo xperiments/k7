@@ -12,6 +12,18 @@ import {
 import { loadWeightBytes } from '../weights/loader';
 import { TAGLIB_WASM } from '../weights/manifest';
 
+/**
+ * What a settled file carries, as one number for the card's record.
+ *
+ * A media row remembers this after a finalize has finished, so the next scan can tell that
+ * the file already says everything this build would write — its standard tags, its XTAPE
+ * manifest and its label — and does not have to open, re-encode or rewrite it to find out.
+ * Bump it when the bytes a settled file should carry change: a tag this App starts writing,
+ * a different label, a different encoder. A bump is one pass that rewrites every measured
+ * file, deliberately, exactly like an analyser bump is one pass of measuring.
+ */
+export const METADATA_WRITE_VERSION = 1;
+
 let taglibPromise: Promise<TagLib> | null = null;
 
 function loadTaglib(): Promise<TagLib> {

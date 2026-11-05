@@ -97,9 +97,11 @@ Then open the printed URL, drop files or a folder, and wait for the cards.
    402x188 JPEG (the print on the white page's Card) fitted cover-style from the Track's own
    art and passed through the worn-print shader (`src/audio/covers.ts`, `src/audio/worn.ts`).
    A card opened read-write gets both the tags and the label in place as each Track settles; a
-   dropped folder can only get them in the saved copy. Every pass draws the label again and
-   compares it with the picture the file holds, byte for byte: a changed filter lands on the
-   next pass, and a file that already has the same picture is not rewritten.
+   dropped folder can only get them in the saved copy. A finalize records the writer's version
+   on the Track's media row (`METADATA_WRITE_VERSION`), so the next scan opens a file only when
+   that record is absent or older than the build: a settled card is recognised in milliseconds
+   and a reload does not draw or rewrite it again. A changed filter, tag set or encoder is a
+   new version, which is one pass that rewrites every measured file.
    Pictures change a file's size and hash, so the row and the analysis are re-keyed to the
    bytes the card now holds. The 426x272 cassette picture is not written at the moment; a
    file that carries one from an earlier build keeps it, and it is never used as art.

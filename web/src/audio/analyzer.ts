@@ -203,13 +203,22 @@ export class Analyzer {
     confidence: number;
   } {
     const result = this.essentia.RhythmExtractor2013(vec44 as never);
-    if (!Number.isFinite(result.bpm) || result.bpm <= 0) {
-      return { rawBpm: fallbackBpm, confidence: 0 };
+    /* Essentia's vectors live in the WASM heap and JavaScript does not collect them: every
+     * one this App asks for is deleted once read. Otherwise a long run kept a whole track's
+     * 44.1 kHz excerpt per track in the heap (see the note on the tempo/key block below). */
+    try {
+      if (!Number.isFinite(result.bpm) || result.bpm <= 0) {
+        return { rawBpm: fallbackBpm, confidence: 0 };
+      }
+      return {
+        rawBpm: result.bpm,
+        confidence: normaliseDeepConfidence(result.confidence),
+      };
+    } finally {
+      result.ticks?.delete?.();
+      result.estimates?.delete?.();
+      result.bpmIntervals?.delete?.();
     }
-    return {
-      rawBpm: result.bpm,
-      confidence: normaliseDeepConfidence(result.confidence),
-    };
   }
 
   /** Re-runs only the tempo measurement, for the manual deep button. */
@@ -221,16 +230,20 @@ export class Analyzer {
     const from = Math.floor(span.start * 44_100);
     const to = Math.min(decoded.pcm44k.length, Math.floor((span.start + span.duration) * 44_100));
     const vec44 = this.essentia.arrayToVector(decoded.pcm44k.subarray(from, to));
-    const deep = this.deepTempo(vec44, 0);
-    return {
-      bpm: foldTempo(deep.rawBpm),
-      rawBpm: deep.rawBpm,
-      confidence: deep.confidence,
-      engine: 'deep',
-      escalated: false,
-      suggestEscalation: false,
-      source: 'measured',
-    };
+    try {
+      const deep = this.deepTempo(vec44, 0);
+      return {
+        bpm: foldTempo(deep.rawBpm),
+        rawBpm: deep.rawBpm,
+        confidence: deep.confidence,
+        engine: 'deep',
+        escalated: false,
+        suggestEscalation: false,
+        source: 'measured',
+      };
+    } finally {
+      vec44.delete();
+    }
   }
 
   async analyze(
@@ -301,73 +314,91 @@ export class Analyzer {
       }
       return vector44;
     };
+    /* A closure, so the compiler keeps the union type here: the one above assigns it. */
+    const freeVector = () => {
+      vector44?.delete();
+      vector44 = null;
+    };
 
     let tempo: Analysis['tempo'];
-    if (metadata.bpm !== undefined) {
-      tempo = {
-        bpm: foldTempo(metadata.bpm),
-        rawBpm: metadata.bpm,
-        confidence: null,
-        engine: null,
-        escalated: false,
-        suggestEscalation: false,
-        source: 'metadata',
-      };
-    } else {
-      onStage?.('tempo');
-      const beats = this.essentia.vectorToArray(
-        this.essentia.BeatTrackerDegara(vec44()).ticks,
-      );
-      const rawBpm = bpmFromBeats(beats);
-      const confidence = tempoConfidence(beats);
-      /* The multifeature tracker is 5x the beat tracker and 20x the key extractor, and it used
-       * to run automatically whenever confidence came out low - so the slowest tracks were
-       * exactly the ones that paid for it twice. It is now a decision: `shouldEscalate` still
-       * says when it would be worth it, the card says so, and the button runs it. The field
-       * records that the fast path was taken, not that the tempo is certain. */
-      const engine: TempoEngine = 'fast';
-      const escalated = false;
-      const suggestEscalation = shouldEscalate(confidence, beats.length);
-
-      tempo = {
-        bpm: foldTempo(rawBpm),
-        rawBpm,
-        confidence,
-        engine,
-        escalated,
-        suggestEscalation,
-        source: 'measured',
-      };
-    }
-
     let key: Analysis['key'];
-    if (metadata.key) {
-      key = { ...metadata.key, strength: null, source: 'metadata' };
-    } else {
-      onStage?.('key');
-      const measured = this.essentia.KeyExtractor(
-        vec44(),
-        true,
-        4096,
-        4096,
-        12,
-        3500,
-        60,
-        25,
-        0.2,
-        'bgate',
-        44100,
-      );
-      const mode = measured.scale === 'minor' ? 'minor' : 'major';
-      key = {
-        tonic: measured.key,
-        mode,
-        camelot: camelot(measured.key, mode),
-        strength: measured.strength,
-        source: 'measured',
-      };
-    }
+    try {
+      if (metadata.bpm !== undefined) {
+        tempo = {
+          bpm: foldTempo(metadata.bpm),
+          rawBpm: metadata.bpm,
+          confidence: null,
+          engine: null,
+          escalated: false,
+          suggestEscalation: false,
+          source: 'metadata',
+        };
+      } else {
+        onStage?.('tempo');
+        const tracked = this.essentia.BeatTrackerDegara(vec44());
+        let beats: Float32Array;
+        try {
+          beats = this.essentia.vectorToArray(tracked.ticks);
+        } finally {
+          tracked.ticks.delete();
+        }
+        const rawBpm = bpmFromBeats(beats);
+        const confidence = tempoConfidence(beats);
+        /* The multifeature tracker is 5x the beat tracker and 20x the key extractor, and it used
+         * to run automatically whenever confidence came out low - so the slowest tracks were
+         * exactly the ones that paid for it twice. It is now a decision: `shouldEscalate` still
+         * says when it would be worth it, the card says so, and the button runs it. The field
+         * records that the fast path was taken, not that the tempo is certain. */
+        const engine: TempoEngine = 'fast';
+        const escalated = false;
+        const suggestEscalation = shouldEscalate(confidence, beats.length);
 
+        tempo = {
+          bpm: foldTempo(rawBpm),
+          rawBpm,
+          confidence,
+          engine,
+          escalated,
+          suggestEscalation,
+          source: 'measured',
+        };
+      }
+
+      if (metadata.key) {
+        key = { ...metadata.key, strength: null, source: 'metadata' };
+      } else {
+        onStage?.('key');
+        const measured = this.essentia.KeyExtractor(
+          vec44(),
+          true,
+          4096,
+          4096,
+          12,
+          3500,
+          60,
+          25,
+          0.2,
+          'bgate',
+          44100,
+        );
+        const mode = measured.scale === 'minor' ? 'minor' : 'major';
+        key = {
+          tonic: measured.key,
+          mode,
+          camelot: camelot(measured.key, mode),
+          strength: measured.strength,
+          source: 'measured',
+        };
+      }
+    } finally {
+      /* Essentia vectors are allocated in the WASM heap and are not garbage-collected by
+       * JavaScript. `arrayToVector` copies the excerpt (a 120 s window is 21 MB) and the
+       * module keeps it until `delete()`; a run of a few thousand tracks exhausted the tab
+       * and turned the next `decodeAudioData` into "Unable to decode audio data" even though
+       * the file was fine. This is the one owner of that vector, so it frees it here, on the
+       * error path too. */
+      freeVector();
+    }
     const needTags = metadata.mood === undefined;
     const needAxes = metadata.energy === undefined;
     let tags: Record<MoodTag, number> | null = null;

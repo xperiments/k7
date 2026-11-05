@@ -1,6 +1,8 @@
 declare module 'essentia.js/dist/essentia.js-core.es.js' {
   interface EssentiaVector {
     size(): number;
+    /** Free the vector's copy in the WASM heap. JavaScript does not collect it. */
+    delete(): void;
   }
 
   export default class Essentia {
@@ -17,7 +19,13 @@ declare module 'essentia.js/dist/essentia.js-core.es.js' {
       maxTempo?: number,
       method?: string,
       minTempo?: number,
-    ): { bpm: number; confidence: number; ticks: EssentiaVector };
+    ): {
+      bpm: number;
+      confidence: number;
+      ticks: EssentiaVector;
+      estimates: EssentiaVector;
+      bpmIntervals: EssentiaVector;
+    };
     KeyExtractor(
       audio: EssentiaVector,
       averageDetuningCorrection?: boolean,

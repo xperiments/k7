@@ -8,11 +8,12 @@ import {
   type ReactNode,
 } from 'react';
 import { AnalysisClient } from '../../audio/client';
+import type { FinalizeResult } from '../../audio/protocol';
 import { startWorkerPool, type WorkerCapacity } from '../../audio/workers';
 import { decodeFile, sha256Hex, trackFormat } from '../../audio/decode';
 import { loadManifest } from '../../audio/models';
 import { readTrackMetadata, type TrackTags } from '../../audio/metadata';
-import { downloadTaggedCopy, writeAnalysisTags, writeTrackLabel } from '../../audio/tagWriter';
+import { downloadTaggedCopy, METADATA_WRITE_VERSION, writeAnalysisTags, writeTrackLabel } from '../../audio/tagWriter';
 import { coverSource, type EmbeddablePicture } from '../../audio/covers';
 import type { Analysis, ModelManifest } from '../../domain/analysis';
 import { snapshotPath } from '../../domain/snapshot';
@@ -20,9 +21,10 @@ import { needsMeasurement, tagAnalysis } from '../../domain/tagAnalysis';
 import { newId } from '../../lib/id';
 import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
 import { patchListArea } from '../../playlists/image';
-import { countMedia, getMedia, listMedia, measuredHash, putMedia, tagsOf, type CachedMedia } from '../../storage/media';
+import { countMedia, getMedia, listMedia, measuredHash, putMedia, tagsOf, writeCurrent, type CachedMedia } from '../../storage/media';
 import { cardRefFor, currentCardScope, subscribeCardScope } from '../../card/session';
 import { readCardFile as readFileFromCard, type CardRoot } from '../../card/read';
+import { isNotReadable, openReadable, withReadable } from '../../card/readable';
 import { writableCard, writeCardFile } from '../../card/write';
 import {
   cardHandleFor,
@@ -281,6 +283,61 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const update = useCallback((id: string, patch: Partial<QueueItem>) => {
+    setItems((previous) =>
+      previous.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+    if (patch.analysis !== undefined) setRunRevision((revision) => revision + 1);
+  }, []);
+
+  /* A long run outlives its File snapshots. Chrome hands back a File that records the bytes at
+   * the moment `getFile()` was called, and a write to that file - this App's own tag write,
+   * another tab, a sync tool, or the OS reclaiming an old snapshot - leaves the copy the queue
+   * still holds unreadable: NotReadableError, once per file, for the rest of the run. The card
+   * handle is still good, so the answer is to walk to the path again and take the file it has
+   * now. A folder with no card path has no handle to reopen through; its snapshot is all there
+   * is and the error is the caller's. */
+  const reopenItem = useCallback(
+    async (item: QueueItem): Promise<File | null> => {
+      const path = snapshotPath(item.path);
+      if (path === null) return null;
+      let handle: SnapshotDirectory | null = cardHandle;
+      if (handle === null && storedHandle !== null) {
+        try {
+          if (await ensureRead(storedHandle)) {
+            handle = storedHandle as unknown as SnapshotDirectory;
+          }
+        } catch {
+          /* No grant for the remembered handle: there is nothing to reopen through. */
+        }
+      }
+      if (handle === null) return null;
+      try {
+        const fresh = await readFileFromCard(handle as unknown as CardRoot, path);
+        if (fresh === null) return null;
+        update(item.id, { file: fresh });
+        return fresh;
+      } catch {
+        return null;
+      }
+    },
+    [cardHandle, storedHandle, update],
+  );
+
+  /* The card's answer after too many stale snapshots it could not hand back: the run pauses
+   * with one sentence rather than painting every remaining row as an error. */
+  const unreadable = useRef(0);
+
+  /** The file's bytes, reopening the card's snapshot once if it is dead. */
+  const readItem = useCallback(
+    async (item: QueueItem) => {
+      const opened = await openReadable(item.file, () => reopenItem(item));
+      unreadable.current = 0;
+      return opened;
+    },
+    [reopenItem],
+  );
+
   /* The card is in the computer exactly once, and the browser is the only place a cover can
    * be kept: the player serves paths and measurements, never a picture. So every track that
    * settles leaves its tags and its art here, keyed by the Snapshot's own path, and the
@@ -292,12 +349,20 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     async (
       item: QueueItem,
       hash: string,
+      written = false,
     ): Promise<{ row: CachedMedia; pictures: EmbeddablePicture[] } | null> => {
       const path = snapshotPath(item.path);
       if (!path) return null;
       try {
         const { parseBlob } = await import('music-metadata');
-        const parsed = await parseBlob(item.file, { duration: false, skipCovers: false });
+        const { parsed, file: source } = await withReadable(
+          item.file,
+          () => reopenItem(item),
+          async (file) => ({
+            parsed: await parseBlob(file, { duration: false, skipCovers: false }),
+            file,
+          }),
+        );
         const pictures: EmbeddablePicture[] = (parsed.common.picture ?? []).map((picture) => ({
           description: picture.description,
           type: picture.type,
@@ -316,9 +381,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             ? { bytes: new Uint8Array(cover.data), format: cover.mimeType ?? 'image/jpeg' }
             : undefined,
           at: new Date().toISOString(),
-          size: item.file.size,
-          mtime: item.file.lastModified,
+          size: source.size,
+          mtime: source.lastModified,
           hash,
+          /* Only a finalize that finished says the file carries this build's tags and label;
+           * a row remembered without one is measured, not settled. */
+          written: written ? METADATA_WRITE_VERSION : undefined,
         };
         await putMedia(currentCardScope(), row);
         void countMedia(currentCardScope()).then((n) => setMediaCount(n));
@@ -328,15 +396,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
-    [],
+    [reopenItem],
   );
-
-  const update = useCallback((id: string, patch: Partial<QueueItem>) => {
-    setItems((previous) =>
-      previous.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-    );
-    if (patch.analysis !== undefined) setRunRevision((revision) => revision + 1);
-  }, []);
 
   /* The image waits for every tag/label write: each changes a Track's size and hash, and the
    * Snapshot carries that size. With the writers in the workers this is at most one per lane,
@@ -380,14 +441,35 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         let fileHash = hash;
         let current = analysis;
 
-        const finalized = await client
-          .finalize(
+        let finalized: FinalizeResult | null = null;
+        try {
+          finalized = await client.finalize(
             item.file,
             analysis,
             cardHandle as unknown as FileSystemDirectoryHandle,
             item.path,
-          )
-          .catch(() => null);
+          );
+        } catch (error) {
+          /* The worker's first read is the file the queue holds. If that snapshot is dead,
+           * the card can still hand the file back: give the lane the fresh one and retry. */
+          if (isNotReadable(error)) {
+            const fresh = await reopenItem(item);
+            if (fresh !== null) {
+              /* The try below may return no change, so keep the file the card handed back:
+               * the media row reads this one, not the dead snapshot. */
+              file = fresh;
+              finalized = await client
+                .finalize(
+                  fresh,
+                  analysis,
+                  cardHandle as unknown as FileSystemDirectoryHandle,
+                  item.path,
+                )
+                .catch(() => null);
+            }
+          }
+        }
+        let settled = finalized?.kind === 'complete';
         if (finalized?.kind === 'written') {
           let fresh: File | null = 'file' in finalized ? finalized.file : null;
           if (fresh === null && 'bytes' in finalized && cardHandle !== null) {
@@ -404,6 +486,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
               ...analysis,
               track: { ...analysis.track, size: fresh.size, hash: fileHash },
             };
+            settled = true;
             if (modelSet !== null) {
               await putCached(cacheKey(fileHash, modelSet), current);
             }
@@ -412,13 +495,16 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         }
 
         if (known === undefined) {
-          await rememberMedia({ ...item, file }, fileHash);
-        } else if (fileHash !== hash) {
+          await rememberMedia({ ...item, file }, fileHash, settled);
+        } else {
+          /* A known row still records the finalize it just took (or keeps the one it had when
+           * the write failed), so the next load can skip opening the file at all. */
           await putMedia(currentCardScope(), {
             ...known,
             size: file.size,
             mtime: file.lastModified,
             hash: fileHash,
+            written: settled ? METADATA_WRITE_VERSION : known.written,
             at: new Date().toISOString(),
           });
         }
@@ -429,7 +515,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         setMetadataPending((count) => Math.max(0, count - 1));
       }
     },
-    [cardHandle, modelSet, rememberMedia, update],
+    [cardHandle, modelSet, rememberMedia, update, reopenItem],
   );
 
   /**
@@ -479,13 +565,28 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             tags: known.tags,
             cached: true,
           });
-          /* The row is already known; the file may still need its tags and label. */
-          await finalizeTrack(item, client, known.analysis, known.analysis.track.hash, known.media);
+          /* The row and the file are both settled: a finalize recorded exactly this writer
+           * after it last ran, so there is nothing to open, draw or write. Without that
+           * record (an older row, or a card that was read-only) the file may still need its
+           * tags and label, so the lane does that work once. */
+          if (!writeCurrent(known.media, known.analysis.track.hash, METADATA_WRITE_VERSION)) {
+            await finalizeTrack(
+              item,
+              client,
+              known.analysis,
+              known.analysis.track.hash,
+              known.media,
+            );
+          }
           return;
         }
         update(item.id, { status: 'hashing', error: undefined });
-        const buffer = await item.file.arrayBuffer();
-        const hash = await sha256Hex(buffer);
+        /* The queue's File is the scan's snapshot. A long run outlives it (the App's own tag
+         * writes included), so this read reopens the card's file when the browser says the
+         * snapshot is dead, and every later read uses the file those bytes came from. */
+        const { file: source, bytes } = await readItem(item);
+        const buffer = bytes.buffer;
+        const hash = await sha256Hex(bytes);
         const key = cacheKey(hash, modelSet);
 
         update(item.id, { status: 'decoding' });
@@ -494,7 +595,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
          * stored analysis — the Process row shows the genre, and a cached Track would
          * otherwise be the one row without it — and the Snapshot export reuses them instead
          * of re-reading the file. */
-        const metadata = await readTrackMetadata(item.file);
+        const metadata = await readTrackMetadata(source);
         update(item.id, { tags: metadata.tags });
 
         const cached = await getCached(key);
@@ -506,16 +607,39 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
               ...cached.track,
               name: item.name,
               path: item.path,
-              size: item.file.size,
+              size: source.size,
               hash,
             },
           };
           update(item.id, { status: 'done', analysis, cached: true });
-          // The analysis is keyed by the content's hash, not by the card: this file may be
-          // known from another card while this card's shelf has never seen it. The row is
-          // what Media joins on, so measuring it once here is what keeps "processed" from
-          // being reported as "not measured".
-          await finalizeTrack(item, client, analysis, hash);
+          /* The analysis is keyed by the content's hash, not by the card: this file may be
+           * known from another card while this card's shelf has never seen it. The row is
+           * what Media joins on, so measuring it once here is what keeps "processed" from
+           * being reported as "not measured".
+           *
+           * A row that already records this exact file and this build's finalize is settled
+           * even though the fast path above missed it (its mtime is not the one the row
+           * kept); refreshing the record is enough, and the next load takes the fast path. */
+          const path = snapshotPath(item.path);
+          const media =
+            path === null
+              ? undefined
+              : await getMedia(currentCardScope(), path).catch(() => undefined);
+          if (writeCurrent(media, hash, METADATA_WRITE_VERSION)) {
+            if (
+              media !== undefined &&
+              (media.size !== source.size || media.mtime !== source.lastModified)
+            ) {
+              await putMedia(currentCardScope(), {
+                ...media,
+                size: source.size,
+                mtime: source.lastModified,
+                at: new Date().toISOString(),
+              });
+            }
+            return;
+          }
+          await finalizeTrack({ ...item, file: source }, client, analysis, hash);
           return;
         }
 
@@ -524,9 +648,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         if (!needsMeasurement(metadata, tagsOnly)) {
           const analysis = tagAnalysis(
             {
-              name: item.file.name,
+              name: source.name,
               path: item.path,
-              size: item.file.size,
+              size: source.size,
               format: item.format,
               hash,
             },
@@ -535,7 +659,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           await putCached(key, analysis);
         askPersistenceOnce();
           update(item.id, { status: 'tagged', analysis, stage: undefined });
-          await finalizeTrack(item, client, analysis, hash);
+          await finalizeTrack({ ...item, file: source }, client, analysis, hash);
           return;
         }
 
@@ -544,9 +668,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         update(item.id, { status: 'analysing', stage: undefined });
         const analysis = await client.analyze(
           {
-            name: item.file.name,
+            name: source.name,
             path: item.path,
-            size: item.file.size,
+            size: source.size,
             format: item.format,
             hash,
           },
@@ -557,16 +681,31 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         await putCached(key, analysis);
         askPersistenceOnce();
         update(item.id, { status: 'done', analysis, stage: undefined });
-        await finalizeTrack(item, client, analysis, hash);
+        await finalizeTrack({ ...item, file: source }, client, analysis, hash);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (isWeightError(error)) setWeightError(message);
+        /* A snapshot the card would not hand back means the run has lost the card, not that
+         * one track is bad. Three in a row is the card, and the run pauses once instead of
+         * painting every remaining row as an error. */
+        if (isNotReadable(error)) {
+          unreadable.current += 1;
+          if (unreadable.current >= 3) {
+            setRunning(false);
+            setNotice({
+              kind: 'error',
+              text: 'The card stopped handing back its files. Rescan the card, then press Resume; the run is paused where it stopped.',
+            });
+          }
+        } else {
+          unreadable.current = 0;
+        }
         update(item.id, { status: 'error', error: message });
       } finally {
         claimed.current.delete(item.id);
       }
     },
-    [modelSet, update, tagsOnly, finalizeTrack, knownAnalysis],
+    [modelSet, update, tagsOnly, finalizeTrack, knownAnalysis, readItem],
   );
 
   /* Keep every lane busy with one Track at a time. A client is free only when its last
@@ -806,8 +945,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       setBusy(true);
       try {
         update(item.id, { status: 'analysing', stage: 'deep' });
-        const buffer = await item.file.arrayBuffer();
-        const audio = await decodeFile(buffer);
+        const { file: source, bytes } = await readItem(item);
+        const audio = await decodeFile(bytes.buffer);
         const tempo = await client.deep(audio);
         const analysis = { ...item.analysis, tempo };
         await putCached(cacheKey(item.analysis.track.hash, modelSet), analysis);
@@ -815,7 +954,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         update(item.id, { status: 'done', analysis, stage: undefined, cached: false });
         /* The file's XTAPE is now one tempo behind: rewrite the tags so the next pass reads
          * the deep result too. */
-        await finalizeTrack(item, client, analysis, item.analysis.track.hash);
+        await finalizeTrack(
+          { ...item, file: source },
+          client,
+          analysis,
+          item.analysis.track.hash,
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (isWeightError(error)) setWeightError(message);
@@ -827,7 +971,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         setLaneTick((tick) => tick + 1);
       }
     },
-    [busy, clients, modelSet, update, finalizeTrack],
+    [busy, clients, modelSet, update, finalizeTrack, readItem],
   );
 
   const saveTags = useCallback(
@@ -835,7 +979,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       if (!item.analysis) return;
       update(item.id, { saving: true });
       try {
-        const tagged = await writeAnalysisTags(item.file, item.analysis);
+        /* The bytes come from the card's file; a dead snapshot is reopened once, so a long
+         * run's stale queue does not turn saving into a failure. */
+        const tagged = await withReadable(item.file, () => reopenItem(item), (file) =>
+          writeAnalysisTags(file, item.analysis!),
+        );
         /* A dropped folder's only write is this copy, so it carries the label too. Art that
          * will not encode is not a reason to lose the tags: fall back to them. */
         const result = await writeTrackLabel(item.file, undefined, { bytes: tagged }).catch(
@@ -855,7 +1003,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         update(item.id, { saving: false });
       }
     },
-    [update],
+    [update, reopenItem],
   );
 
   const retry = useCallback(
