@@ -150,8 +150,9 @@ static lv_opa_t s_tape_ink = LV_OPA_COVER;
  * module's. */
 static bool s_hubs_white;
 
-/* The full-screen picture is up: the hubs are drawn as the owner wants the preview - one rim
- * round the disc, no divider - and each pack as the tape's edge once, not the ring stack. */
+/* The full-screen picture is up: the hubs are drawn as the owner wants the preview - a thick
+ * rim round the disc, divider and all - and each pack as the tape's edge once, not the ring
+ * stack. */
 static bool s_preview;
 
 /* ------------------------------------------------------------------ helpers */
@@ -736,9 +737,9 @@ void cassette_tapes_set_hubs_white(bool white)
     }
 }
 
-/* The full-screen picture's hub: a thicker rim and no divider, and each pack as one circle.
- * The body stays built - the spokes keep their angle while hidden - so putting the picture
- * away restores the cassette exactly as it was. */
+/* The full-screen picture's hub: a thicker rim, the divider kept, and each pack as its edge
+ * once. Only the two paints change - the body keeps running, so putting the picture away
+ * restores the cassette exactly as it was. */
 void cassette_tapes_set_preview(bool on)
 {
     if (on == s_preview) return;
@@ -747,8 +748,6 @@ void cassette_tapes_set_preview(bool on)
     for (int i = 0; i < 2; i++) {
         if (s_rim[i])
             lv_obj_set_style_border_width(s_rim[i], on ? HUB_RIM_PREVIEW_W : HUB_RIM_W, 0);
-        for (int k = 0; k < 2; k++)
-            if (s_hub_spoke[i][k].obj) lv_obj_set_hidden(s_hub_spoke[i][k].obj, on);
         /* The pack's paint changed shape: it is not a size change, so repaint it whole. */
         if (s_pack[i]) lv_obj_invalidate(s_pack[i]);
     }
