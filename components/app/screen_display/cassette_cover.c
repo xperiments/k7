@@ -29,6 +29,9 @@
 
 #include "screen_caps.h"
 
+#include <math.h>
+#include <string.h>
+
 #include "lvgl.h"
 
 #include "cassette_card.h"
@@ -40,8 +43,10 @@ static lv_obj_t *s_print;          /* the print proper: 402x188 at +12,+20 */
 static lv_obj_t *s_img;            /* the Track picture, at the print's top-left */
 static lv_obj_t *s_fallback;       /* opaque fallback while the shared mask is not there */
 static lv_obj_t *s_window;         /* the porthole: the window's capsule, above the print */
-static lv_obj_t *s_slice;          /* its child - clip_corner rounds children, not the parent's own paint */
+static lv_obj_t *s_slice;          /* its child: the tape slice, cut to the capsule's shape */
 static void (*s_slice_draw)(lv_layer_t *layer);   /* the tapes' drawer, handed in by the view */
+static lv_image_dsc_t s_window_mask_dsc;          /* the capsule as A8, the slice's box */
+static uint8_t *s_window_mask;
 static lv_obj_t *s_rim;            /* the window's pill, over the print's cut edge */
 static const lv_image_dsc_t *s_dsc;
 static bool s_wanted;              /* the white page asked for the cover */
@@ -156,10 +161,55 @@ bool cassette_cover_is_shown(void)
     return s_wanted;
 }
 
-/* The porthole and its one child. The capsule is opaque and rounds its child's corners; the
- * child is transparent and does all the painting, through the tapes' drawer. Sized from the
- * Card's window, which is the Card's own rect - there is no Card and no window on a board
- * without the cover capability, and create() never reaches this then. */
+/* The window's capsule as an A8 mask: 255 inside the stadium, 0 outside, the ends sampled at
+ * the pixel centres so they land on the same grid as the rim's pill - the same arithmetic the
+ * Card's mask used. It is 291x87 (25,317 B) because the slice's box is the window, and it is
+ * built once.
+ *
+ * The slice is cut by this rather than by clip_corner on the capsule, and the difference is
+ * not taste: the window's radius is half its height, so clip_corner has no middle band to draw
+ * directly - it renders the whole child twice, into two 43-row ARGB layers of 50,052 B each,
+ * on every repaint. That is also why the first build flashed and starved the stream. A bitmap
+ * mask is the path the Card and the print have used since ADR 0039, and per repaint LVGL cuts
+ * it into 24 KB stripes that are only as large as the dirty area. */
+static void mask_build(int w, int h, int radius)
+{
+    const int stride = (w + 3) & ~3;   /* LVGL wants every A8 stride 4-byte aligned */
+    s_window_mask = lv_malloc((size_t)stride * h);
+    if (!s_window_mask) return;
+
+    memset(s_window_mask, 0, (size_t)stride * h);
+
+    const float rf = (float)radius;
+    const float cy = h / 2.0f;
+    for (int y = 0; y < h; y++) {
+        float dy = (y + 0.5f) - cy;
+        float dx2 = rf * rf - dy * dy;
+        if (dx2 <= 0.0f) continue;
+
+        float dx = sqrtf(dx2);
+        int x0 = (int)ceilf(rf - dx - 0.5f);
+        int x1 = (int)floorf((float)w - rf + dx - 0.5f);
+        if (x1 < x0) continue;
+        if (x0 < 0) x0 = 0;
+        if (x1 > w - 1) x1 = w - 1;
+        memset(s_window_mask + (size_t)y * stride + x0, 0xFF, (size_t)(x1 - x0 + 1));
+    }
+
+    memset(&s_window_mask_dsc, 0, sizeof s_window_mask_dsc);
+    s_window_mask_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+    s_window_mask_dsc.header.cf = LV_COLOR_FORMAT_A8;
+    s_window_mask_dsc.header.w = w;
+    s_window_mask_dsc.header.h = h;
+    s_window_mask_dsc.header.stride = stride;
+    s_window_mask_dsc.data_size = (uint32_t)(stride * h);
+    s_window_mask_dsc.data = s_window_mask;
+}
+
+/* The porthole and its one child. The capsule is opaque and is the window's ground; the child
+ * is transparent, carries the capsule's mask, and does all the painting through the tapes'
+ * drawer. Sized from the Card's window, which is the Card's own rect - there is no Card and no
+ * window on a board without the cover capability, and create() never reaches this then. */
 static void window_create(lv_obj_t *parent)
 {
     cassette_rect_t w = cassette_card_window();
@@ -167,7 +217,6 @@ static void window_create(lv_obj_t *parent)
 
     s_window = cassette_box(parent, w.x, w.y, w.w, w.h, CASSETTE_CARD_WINDOW_R, k_col_bg);
     lv_obj_set_style_pad_all(s_window, 0, 0);
-    lv_obj_set_style_clip_corner(s_window, true, 0);
     lv_obj_set_hidden(s_window, true);
 
     s_slice = lv_obj_create(s_window);
@@ -180,6 +229,12 @@ static void window_create(lv_obj_t *parent)
     lv_obj_set_scrollable(s_slice, false);
     lv_obj_set_clickable(s_slice, false);
     lv_obj_add_event_cb(s_slice, slice_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+
+    /* The mask is the child's box, which is why the child is the window's size and not the
+     * Card's: LVGL aligns a bitmap mask to the centre of its object and clears everything
+     * outside the mask's rectangle. */
+    mask_build(w.w, w.h, CASSETTE_CARD_WINDOW_R);
+    if (s_window_mask) lv_obj_set_style_bitmap_mask_src(s_slice, &s_window_mask_dsc, 0);
 }
 
 void cassette_cover_set_window_draw(void (*draw)(lv_layer_t *layer))
