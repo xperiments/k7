@@ -44,6 +44,13 @@ export function needsMeasurement(metadata: TrackMetadata, tagsOnly: boolean): bo
 
 export function tagAnalysis(track: TaggedTrack, metadata: TrackMetadata): Analysis {
   const bpm = metadata.bpm === undefined ? 0 : foldBpm(metadata.bpm);
+  /* XTAPE is the lossless record this App writes: it carries the model's mood probabilities
+   * and DEAM outputs, which the standard tags cannot. When it is there, the quick path keeps
+   * those values instead of presenting the file as only half-known. */
+  const stored = metadata.stored;
+  const moodTags = stored?.moodTags ?? null;
+  const moodLabel = stored?.moodLabel ?? metadata.mood ?? null;
+  const energy = stored?.energy ?? metadata.energy ?? null;
   return {
     schema: ANALYSIS_SCHEMA,
     track: { ...track, duration: 0 },
@@ -64,16 +71,16 @@ export function tagAnalysis(track: TaggedTrack, metadata: TrackMetadata): Analys
       source: 'metadata',
     },
     mood: {
-      tags: null,
-      label: metadata.mood ?? null,
-      // No mood tag means no mood, not a measured one: the row's flag stays clear and the
-      // player reads "not measured".
-      source: metadata.mood === undefined ? 'measured' : 'metadata',
-      valence: null,
-      arousal: null,
+      tags: moodTags,
+      label: moodLabel,
+      // No mood tag and no XTAPE means no mood, not a measured one: the row's flag stays
+      // clear and the player reads "not measured".
+      source: moodTags !== null || moodLabel !== null ? 'metadata' : 'measured',
+      valence: stored?.valence ?? null,
+      arousal: stored?.arousal ?? null,
     },
-    energy: metadata.energy ?? null,
-    energySource: metadata.energy === undefined ? null : 'metadata',
+    energy,
+    energySource: energy === null ? null : 'metadata',
     provenance: {
       analyzer: `tags ${ANALYZER_VERSION}`,
       modelSet: '',

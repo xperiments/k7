@@ -4,13 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { TagLib } from 'taglib-wasm';
 import { imageSize } from '../src/audio/covers';
 import { readTrackMetadata } from '../src/audio/metadata';
-import { writeAnalysisTags, writeTrackLabel } from '../src/audio/tagWriter';
+import { writeAnalysisTags, writeTrackLabel, writeTrackMetadata } from '../src/audio/tagWriter';
 import { sampleAnalysis } from './sampleAnalysis';
 
 const fixtures = {
   mp3: new URL('./fixtures/tagged.mp3', import.meta.url),
   flac: new URL('./fixtures/plain.flac', import.meta.url),
 };
+
+function fileOf(bytes: Uint8Array, name: string, type: string): File {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return new File([copy], name, { type });
+}
 
 function nativeValue(
   metadata: Awaited<ReturnType<typeof parseBlob>>,
@@ -58,6 +64,33 @@ describe('tag writing', () => {
       expect(metadata.stored?.key.camelot).toBe('8A');
       expect(metadata.stored?.moodTags?.relaxed).toBeCloseTo(0.7);
       expect(metadata.stored?.energy).toBeCloseTo(0.6);
+    });
+  }
+});
+
+describe('the automatic metadata write', () => {
+  for (const format of ['mp3', 'flac'] as const) {
+    it(`writes the measured tags to ${format.toUpperCase()} even without art, then leaves it`, async () => {
+      const type = format === 'mp3' ? 'audio/mpeg' : 'audio/flac';
+      const input = new Uint8Array(await readFile(fixtures[format]));
+      const file = fileOf(input, `plain.${format}`, type);
+
+      const first = await writeTrackMetadata(file, sampleAnalysis);
+      expect(first.kind).toBe('written');
+      const bytes = first.kind === 'written' ? first.bytes : input;
+
+      const written = fileOf(bytes, `done.${format}`, type);
+      const metadata = await readTrackMetadata(written);
+      expect(metadata.bpm).toBeCloseTo(128.4, 2);
+      expect(metadata.stored?.key.camelot).toBe('8A');
+      expect(metadata.stored?.moodTags?.relaxed).toBeCloseTo(0.7);
+      expect(metadata.stored?.energy).toBeCloseTo(0.6);
+
+      const again = await writeTrackMetadata(
+        fileOf(bytes, `done.${format}`, type),
+        sampleAnalysis,
+      );
+      expect(again.kind).toBe('complete');
     });
   }
 });
@@ -122,6 +155,42 @@ describe('the worn label picture', () => {
       expect(again.kind).toBe('complete');
     });
   }
+
+  it('writes the measured tags and the label in one pass', async () => {
+    const input = new Uint8Array(await readFile(fixtures.mp3));
+    const art = new Uint8Array(await readFile(coverAsset));
+    const taglib = await TagLib.initialize();
+    const withArt = await taglib.edit(input, (audio) => {
+      audio.setPictures([{ type: 'FrontCover', mimeType: 'image/jpeg', data: art }]);
+    });
+
+    const first = await writeTrackMetadata(
+      fileOf(withArt, 'art.mp3', 'audio/mpeg'),
+      sampleAnalysis,
+      undefined,
+      { render },
+    );
+    expect(first.kind).toBe('written');
+    const done = first.kind === 'written' ? first.bytes : withArt;
+
+    const parsed = await parseBlob(fileOf(done, 'done.mp3', 'audio/mpeg'), {
+      skipCovers: false,
+      duration: false,
+    });
+    const pictures = parsed.common.picture ?? [];
+    expect(pictures.map((picture) => picture.description ?? '')).toEqual(['', 'k7label']);
+    const metadata = await readTrackMetadata(fileOf(done, 'done.mp3', 'audio/mpeg'));
+    expect(metadata.bpm).toBeCloseTo(128.4, 2);
+    expect(metadata.stored?.key.camelot).toBe('8A');
+
+    const again = await writeTrackMetadata(
+      fileOf(done, 'done.mp3', 'audio/mpeg'),
+      sampleAnalysis,
+      undefined,
+      { render },
+    );
+    expect(again.kind).toBe('complete');
+  });
 
   it('replaces a label this build would not make any more', async () => {
     const input = new Uint8Array(await readFile(fixtures.mp3));

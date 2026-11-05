@@ -95,7 +95,7 @@
     --card-foreground: oklch(0.22 0.01 265);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.22 0.01 265);
-    --primary: oklch(0.58 0.13 70);
+    --primary: #F15A22;
     --primary-foreground: oklch(0.99 0 0);
     --secondary: oklch(0.96 0.004 90);
     --secondary-foreground: oklch(0.22 0.01 265);
@@ -133,13 +133,16 @@
 }
 
 .dark {
+    /* The theme toggle sets this class; native scrollbars, pickers and form controls follow
+     * it, which is the half of the palette CSS cannot paint itself. */
+    color-scheme: dark;
     --background: oklch(0.165 0.004 265);
     --foreground: oklch(0.93 0.012 90);
     --card: oklch(0.215 0.005 265);
     --card-foreground: oklch(0.93 0.012 90);
     --popover: oklch(0.235 0.005 265);
     --popover-foreground: oklch(0.93 0.012 90);
-    --primary: oklch(0.795 0.15 78);
+    --primary: #F15A22;
     --primary-foreground: oklch(0.22 0.03 70);
     --secondary: oklch(0.275 0.006 265);
     --secondary-foreground: oklch(0.93 0.012 90);
@@ -188,7 +191,7 @@
      * the text, the padding and the components together. 130% of the browser's 16 px is
      * 20.8 px. */
     font-size: 130%;
-    color-scheme: dark;
+    color-scheme: light;
     }
 
   /* Scrollbars, iOS-style: no channel, no buttons, and a thin rounded thumb that is not
@@ -233,6 +236,37 @@
  * the shelf with everything else.
  */
 @layer components {
+    /*
+     * The sidebar is drawn in one colour: the surface's 1px edge and every label, icon,
+     * count and wordmark inside it. `--sidebar-ink` is the one knob. This is the brand's
+     * warm orange, not a state, so light and dark share it.
+     *
+     * The `!important` is deliberate. The installed menu parts each set their own
+     * `text-sidebar-*` utility, and Tailwind declares the utilities layer after this one,
+     * so an ordinary rule would never reach the active, muted and icon variants.
+     */
+    div[data-sidebar='sidebar'] {
+        --sidebar-ink: var(--primary);
+        --sidebar-foreground: var(--sidebar-ink);
+        --sidebar-accent-foreground: var(--sidebar-ink);
+        --sidebar-ring: var(--sidebar-ink);
+        border: 1px solid var(--sidebar-ink);
+        border-radius: var(--radius-xl);
+        color: var(--sidebar-ink);
+    }
+
+    /*
+     * The wordmark is a black SVG loaded as an image, so `color` cannot reach it: paint the
+     * background in the current colour and clip it to the logo's own shape. The space is
+     * reserved by the element's size, exactly as the `<img class="size-16 object-contain">`
+     * did before.
+     */
+    .k7-sidebar-logo {
+        background-color: currentColor;
+        -webkit-mask: url('/icons/k7logo.svg') center / contain no-repeat;
+        mask: url('/icons/k7logo.svg') center / contain no-repeat;
+    }
+
     .k7-shelf {
         --cw: 13rem;
         --ch: calc(var(--cw) * 25 / 16);

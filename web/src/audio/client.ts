@@ -11,10 +11,17 @@ interface Pending {
   onStage?: (stage: Stage) => void;
 }
 
+interface Probe {
+  resolve: (ms: number) => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 export class AnalysisClient {
   private readonly worker: Worker;
   private sequence = 0;
   private readonly pending = new Map<string, Pending>();
+  private readonly probes = new Map<string, Probe>();
 
   constructor() {
     this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
@@ -62,7 +69,50 @@ export class AnalysisClient {
     });
   }
 
+  /**
+   * Ask the worker to run a small fixed workload and answer. This is the boot check: it
+   * proves the worker script starts and can post back, without loading the models the real
+   * analysis will need. A worker that does not answer in time is disposed by the caller.
+   */
+  probe(timeoutMs = 3000): Promise<number> {
+    const id = String(++this.sequence);
+    return new Promise<number>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (this.probes.delete(id)) {
+          reject(new Error('The analysis worker did not answer its start check.'));
+        }
+      }, timeoutMs);
+      this.probes.set(id, {
+        resolve: (ms) => {
+          clearTimeout(timer);
+          resolve(ms);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+        timer,
+      });
+      const message: WorkerRequest = { type: 'probe', id };
+      this.worker.postMessage(message);
+    });
+  }
+
+  /** Terminate the worker; anything the page was still waiting for fails. */
+  dispose(): void {
+    this.worker.terminate();
+    this.failAll('The analysis worker was stopped.');
+  }
+
   private handle(message: WorkerResponse): void {
+    if (message.type === 'probe-result') {
+      const probe = this.probes.get(message.id);
+      if (!probe) return;
+      this.probes.delete(message.id);
+      probe.resolve(message.ms);
+      return;
+    }
+
     const pending = this.pending.get(message.id);
     if (!pending) return;
 
@@ -86,6 +136,11 @@ export class AnalysisClient {
   }
 
   private failAll(message: string): void {
+    for (const probe of this.probes.values()) {
+      clearTimeout(probe.timer);
+      probe.reject(new Error(message));
+    }
+    this.probes.clear();
     for (const [id, pending] of this.pending) {
       this.pending.delete(id);
       pending.reject(new Error(message));

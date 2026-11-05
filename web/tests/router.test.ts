@@ -14,6 +14,7 @@ describe('the shell routes', () => {
     expect(parseRoute('#/playlists')).toEqual({ name: 'playlists' });
     expect(parseRoute('#/playlists/ask')).toEqual({ name: 'ask' });
     expect(parseRoute('#/media')).toEqual({ name: 'media' });
+    expect(parseRoute('#/media/drive')).toEqual({ name: 'drive', path: '' });
     expect(parseRoute('#/player')).toEqual({ name: 'player' });
     expect(parseRoute('#/settings')).toEqual({ name: 'settings' });
   });
@@ -35,6 +36,15 @@ describe('the shell routes', () => {
       name: 'video',
       id: 'dQw4w9WgXcQ',
     });
+    // A drive path is made of segments, and a segment can still carry a slash of its own.
+    expect(parseRoute('#/media/drive/Artist/Album')).toEqual({
+      name: 'drive',
+      path: 'Artist/Album',
+    });
+    expect(parseRoute('#/media/drive/AC%2FDC/Back%20In%20Black')).toEqual({
+      name: 'drive',
+      path: 'AC/DC/Back In Black',
+    });
   });
 
   it('anything else is the shell own not-found, and says which path', () => {
@@ -53,6 +63,9 @@ describe('the shell routes', () => {
       { name: 'ask' },
       { name: 'playlist', id: 'aaaa000000000001' },
       { name: 'media' },
+      { name: 'drive', path: '' },
+      { name: 'drive', path: 'Artist/Album' },
+      { name: 'drive', path: 'AC/DC/Back In Black' },
       { name: 'album', album: 'AC/DC - Back In Black' },
       { name: 'artist', artist: 'Miles Davis' },
       { name: 'video', id: 'dQw4w9WgXcQ' },

@@ -36,7 +36,7 @@ export function ProcessArea() {
     dismissNotice,
     dismissWeightError,
     mediaCount,
-    labelsPending,
+    metadataPending,
     lastSnapshot,
     saving,
     tagsOnly,
@@ -62,24 +62,27 @@ export function ProcessArea() {
   const percent = total > 0 ? (done / total) * 100 : 0;
   const queued = items.filter((item) => item.status === 'queued').length;
 
-  /* Measuring is not the end of the run: the labels are drawn and written afterwards, one
-   * at a time, and the image waits for them. One line, in the order the run finishes.
+  /* Measuring is not the end of the run: the measured tags and the label are written
+   * afterwards, one track at a time, and the image waits for them. One line, in the order
+   * the run finishes.
    *
    * The count is kept out of the live region: it changes with every label, and a status that
    * reads "12 left… 11 left… 10 left" is noise. The phase is announced once; the number is
    * for the eyes. */
   const runPhase =
-    labelsPending > 0 ? 'writing labels' : saving ? 'writing k7.db…' : busyStage;
+    metadataPending > 0 ? 'writing metadata' : saving ? 'writing k7.db…' : busyStage;
   const runCount =
-    labelsPending > 0 ? ` · ${plural(labelsPending, 'track')} left` : null;
+    metadataPending > 0 ? ` · ${plural(metadataPending, 'track')} left` : null;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-0.5">
           <h1 className="text-xl font-semibold tracking-tight">Process</h1>
-          <p className="text-sm text-muted-foreground">
-            Tempo, key, mood and energy from MP3 &amp; FLAC, measured in this browser.
+          <p className="max-w-prose text-sm text-muted-foreground">
+            Tempo, key, mood and energy from MP3 &amp; FLAC, measured in this browser. A card
+            opened read-write gets the values back as tags; a dropped folder can save a tagged
+            copy from its row.
           </p>
         </div>
         {modelSet ? (
@@ -258,13 +261,13 @@ export function ProcessArea() {
           <span>
             {saving
               ? 'writing k7.db…'
-              : labelsPending > 0
-                ? `labels still being written · ${plural(labelsPending, 'track')} left`
+              : metadataPending > 0
+                ? `metadata still being written · ${plural(metadataPending, 'track')} left`
                 : writtenAt
                   ? `k7.db written ${new Date(writtenAt).toLocaleTimeString()}`
                   : hasCardHandle
-                    ? 'k7.db is written when the run and its labels finish'
-                    : 'k7.db is written by a run on a card opened read-write'}
+                    ? 'k7.db is written when the run and its metadata finish'
+                    : 'k7.db and the file tags are written by a run on a card opened read-write'}
           </span>
           {lastSnapshot ? (
             <>

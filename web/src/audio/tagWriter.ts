@@ -34,6 +34,40 @@ function loadTaglib(): Promise<TagLib> {
   return taglibPromise;
 }
 
+async function writeTags(
+  taglib: TagLib,
+  input: Uint8Array,
+  tags: Record<string, string>,
+): Promise<Uint8Array> {
+  return taglib.edit(input, (audio) => {
+    for (const [key, value] of Object.entries(tags)) audio.setProperty(key, value);
+  });
+}
+
+/** Whether the file already carries exactly the values this analysis would write. */
+async function tagsDiffer(
+  taglib: TagLib,
+  input: Uint8Array,
+  tags: Record<string, string>,
+): Promise<boolean> {
+  const audio = await taglib.open(input);
+  try {
+    for (const [key, value] of Object.entries(tags)) {
+      try {
+        const current = audio.getProperty(key);
+        // A TagLib property is a list; this App writes one value and compares the first.
+        if ((current?.[0] ?? '') !== value) return true;
+      } catch {
+        // A property this format cannot read is one worth writing.
+        return true;
+      }
+    }
+    return false;
+  } finally {
+    audio.dispose();
+  }
+}
+
 /**
  * Writes standard tags plus the XTAPE manifest into a copy of the file and
  * returns the new bytes. Browsers cannot overwrite a dropped file in place;
@@ -45,11 +79,52 @@ export async function writeAnalysisTags(
 ): Promise<Uint8Array> {
   const taglib = await loadTaglib();
   const bytes = new Uint8Array(await file.arrayBuffer());
-  return taglib.edit(bytes, (audio) => {
-    for (const [key, value] of Object.entries(analysisTags(analysis))) {
-      audio.setProperty(key, value);
-    }
-  });
+  return writeTags(taglib, bytes, analysisTags(analysis));
+}
+
+/**
+ * Write the measured values and the worn label into one set of bytes, in as few edits as
+ * need the file. This is the automatic path for a card opened read-write: the standard tags
+ * (BPM, key, mood, energy) are what make a later run quick, and the XTAPE manifest is what
+ * lets this App read the whole measurement back instead of running the models again.
+ *
+ * `complete` means the file already says everything this analysis says and carries the label
+ * this build makes; `no-source` is impossible when the tags changed, because a file with no
+ * art still gets its tags. The caller writes the returned bytes to the card once.
+ */
+export async function writeTrackMetadata(
+  file: File,
+  analysis: Analysis,
+  pictures?: readonly EmbeddablePicture[],
+  options: { bytes?: Uint8Array; render?: LabelRenderer } = {},
+): Promise<LabelWrite> {
+  const taglib = await loadTaglib();
+  const input = options.bytes ?? new Uint8Array(await file.arrayBuffer());
+  const desired = analysisTags(analysis);
+
+  let tagsChanged = true;
+  try {
+    tagsChanged = await tagsDiffer(taglib, input, desired);
+  } catch {
+    tagsChanged = true;
+  }
+
+  if (!tagsChanged) {
+    const label = await writeTrackLabel(file, pictures, { ...options, bytes: input });
+    /* No art means no label will ever exist; the tags are already right, so there is nothing
+     * left to write. */
+    return label.kind === 'no-source' ? { kind: 'complete' } : label;
+  }
+
+  const tagged = await writeTags(taglib, input, desired);
+  /* The label is drawn from art and can fail on a bad encoder; the measured tags are not
+   * allowed to be lost with it. */
+  const label = await writeTrackLabel(file, pictures, { ...options, bytes: tagged }).catch(
+    () => null,
+  );
+  /* The label may be complete, may have no source to draw from, or may have failed; the tags
+   * themselves are still a write this pass owes the card. */
+  return label?.kind === 'written' ? label : { kind: 'written', bytes: tagged };
 }
 
 export type LabelWrite =

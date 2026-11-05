@@ -3,10 +3,12 @@ import {
   Disc3,
   ListMusic,
   MessageCircle,
+  Moon,
   Plug,
   RefreshCw,
   Settings as SettingsIcon,
   Sparkles,
+  Sun,
   Waves,
 } from 'lucide-react';
 import { cn } from 'cn';
@@ -52,6 +54,7 @@ import { InstallButton } from './InstallButton';
 import { useDrafts } from '../playlists/drafts';
 import { navigate, routeArea, routeHref, routePage, type Route } from './router';
 import { PlayerBar } from './PlayerBar';
+import { toggleTheme, useTheme } from './theme';
 
 /**
  * The shell: `c-sidebar-1`'s structure with this device's data in it.
@@ -120,7 +123,7 @@ function navGroups(drafts: number, tracks: number): NavGroup[] {
           href: routeHref({ name: 'media' }),
           label: 'Albums',
           icon: <Disc3 aria-hidden="true" />,
-          names: ['media', 'album', 'artist', 'video'],
+          names: ['media', 'album', 'artist', 'video', 'drive'],
         },
       ],
     },
@@ -206,14 +209,15 @@ function DeviceMenu({
               />
             }
           >
-            {/* The brand mark, not an icon: it is a wordmark, so it takes the slot and is
-             * inverted on the dark sidebar — the file is drawn in black. It is the button's
-             * name too, since the word that used to sit beside it is the wordmark itself. */}
-            <img
-              src="/icons/k7logo.svg"
-              alt="K7"
-              draggable={false}
-              className="size-16 shrink-0 object-contain dark:invert group-data-[collapsible=icon]:size-4!"
+            {/* The brand mark, not an icon: it is a wordmark, so it takes the slot. The file
+             * is drawn in black, so `k7-sidebar-logo` clips a current-colour fill to its
+             * shape and the mark takes the sidebar's ink like everything else. It is the
+             * button's name too, since the word that used to sit beside it is the wordmark
+             * itself. */}
+            <span
+              role="img"
+              aria-label="K7"
+              className="k7-sidebar-logo size-16 shrink-0 group-data-[collapsible=icon]:size-4!"
             />
             <span className="grid min-w-0 flex-1 text-left leading-tight">
               <span className="truncate text-xs text-sidebar-foreground/70">{subtitle}</span>
@@ -299,6 +303,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
   const { status, reachable } = useDeviceStatus();
   const link = useDeviceLink();
   const drafts = useDrafts();
+  const theme = useTheme();
   const card = Boolean(status?.card);
   const tracks = status?.tracks ?? 0;
 
@@ -321,6 +326,24 @@ export function Shell({ route, children }: { route: Route; children: React.React
         <SidebarFooter>
           <InstallButton />
           <SidebarMenu>
+            {/* The label is the action, not the state: the theme you are in is what the
+                whole page already says, and a button that reads "Dark theme" while dark
+                would be a switch that looks already thrown. */}
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                type="button"
+                onClick={toggleTheme}
+                aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+                tooltip={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+              >
+                {theme === 'dark' ? (
+                  <Sun aria-hidden="true" />
+                ) : (
+                  <Moon aria-hidden="true" />
+                )}
+                <span>{theme === 'dark' ? 'Light theme' : 'Dark theme'}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton
                 render={<a href={routeHref({ name: 'settings' })} />}

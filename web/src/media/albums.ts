@@ -29,6 +29,7 @@ import { measureableName } from '../domain/analysis';
 import { libraryStats, listLibrary, type LibraryListing } from '../device/mcp';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { listMedia, type CachedCover, type CachedMedia } from '../storage/media';
+import { foldPath } from './paths';
 
 export const UNKNOWN_ARTIST = 'Unknown artist';
 export const UNKNOWN_ALBUM = 'Unknown album';
@@ -93,9 +94,7 @@ export function albumOf(row: Pick<CachedMedia, 'artist' | 'album'>): {
  * device folds it too (`library_find`). Two sides that name one file differently by case are
  * naming one file, so a joined path is compared folded and kept as it arrived.
  */
-export function foldPath(path: string): string {
-  return path.toLowerCase();
-}
+export { foldPath } from './paths';
 
 function byText(left: string, right: string): number {
   return left.localeCompare(right, undefined, { sensitivity: 'base' });

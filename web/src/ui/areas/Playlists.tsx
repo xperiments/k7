@@ -258,9 +258,6 @@ export function PlaylistsArea() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <h1 className="text-xl font-semibold tracking-tight">Playlists</h1>
-          <p className="text-sm text-muted-foreground">
-            What the player holds, and what this browser has not sent yet.
-          </p>
         </div>
         <Button
           variant="outline"

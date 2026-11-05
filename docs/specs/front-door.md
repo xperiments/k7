@@ -228,6 +228,11 @@ The Queue, measured, written to the card by the run itself.
   queue always measures again.
 - **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
   page: it stays at the top while the rows scroll.
+- **The measurement goes into the files.** A card opened read-write gets each settled track's
+  standard tags — BPM, key, mood, energy — and the XTAPE manifest written into the file, with
+  the label, before the image is written. A later run, on this card or on those files copied to
+  another SD, reads BPM and key from the tags and skips the models; the manifest carries the
+  rest. A dropped folder is read-only, so its row menu still offers *save a tagged copy*.
 - **Rows:** gathered by album — *Album / Artist* as the heading, with its track count, in the
   order the card was walked — and one line each, ~32 px: name, the genre from the file's own
   tags, BPM, key, a mood word, and the format. The heading names the artist only when the
@@ -245,7 +250,7 @@ The Queue, measured, written to the card by the run itself.
   root — the directory holding `music/` — is accepted, and a `music` directory, a parent folder
   or a folder with no `music` in it is refused by name
   ([`card/shape.ts`](../../web/src/card/shape.ts)). A picker is the only path that can write the
-  image back; a dropped card is measured read-only.
+  image and the file tags back; a dropped card is measured read-only.
 - **States:** empty (no Queue: the drop zone *is* the empty state), loading (rows appear as they
   are found; `Skeleton` only for the manifest), error (models missing or a weight refused,
   inline, with what to do).
@@ -257,9 +262,12 @@ The Queue, measured, written to the card by the run itself.
 - `#/playlists` lists what the device holds (from `GET /api/playlists`, with the selected one
   marked) and this browser's Drafts. Creating one is a name; the lists reach the card with the
   next run's image, and an edit made while the card is still open rewrites it (ADR 0065).
-- `#/playlists/:id` is the editor: rows in order, drag to reorder, a "Sort by" menu that applies
-  a rule **once** — BPM rising, Camelot wheel, energy arc, artist/album, name — and an add
-  affordance that opens Media's tracks. Removing a row is a row action; nothing here is
+- `#/playlists/:id` is the editor, in two columns: the card's folders as a **source tree** on
+  the left, the draft's blocks on the right. A file adds one row; a folder adds one block that
+  carries every file under it and moves as a unit. A drag from the tree lands exactly where it
+  is dropped, a block reorders by drag (with arrow-key alternatives), and a folder block opens
+  to show its rows. The order is the author's: nothing re-sorts it. **Clear** empties the list
+  behind an inline confirmation, and removing a block is a block action; nothing here is
   destructive enough to need a dialog.
 - `#/playlists/ask` is **Ask**: a sentence, an **Intent** (the `library_search` filters the model
   produced), shown and editable, and then a search — run against the device's own MCP endpoint —

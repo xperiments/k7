@@ -71,8 +71,10 @@ Then open the printed URL, drop files or a folder, and wait for the cards.
 4. Decoding uses `OfflineAudioContext` once: mono 44.1 kHz for tempo/key, resampled in memory
    to 16 kHz for the models. Duration comes from the decoded samples, so MP3 encoder padding
    is handled.
-5. Three workers run in parallel, one track each, so the queue keeps the cores busy. A worker
-   runs Essentia.js (WASM) for Degara beats and `KeyExtractor` (when they are not tagged).
+5. An analysis worker pool runs one track per worker, so the queue keeps the cores busy. Its
+   size is auto-detected at boot — half the logical cores, capped by the memory the browser
+   reports, then checked by starting that many — and can be pinned in Settings. A worker runs
+   Essentia.js (WASM) for Degara beats and `KeyExtractor` (when they are not tagged).
    The multifeature tracker is not automatic any more: it costs 3.6 s against 0.67 s for the
    two, so it runs only when the user asks, and `tempo.suggestEscalation` says when that is
    worth doing.
@@ -86,16 +88,18 @@ Then open the printed URL, drop files or a folder, and wait for the cards.
 7. Results are cached by `sha256(file) : analyzer version : model set` and exported as JSON.
    Tagged fields carry `source: "metadata"` and a null confidence/strength; measured fields
    carry `source: "measured"`.
-8. Saving tags loads `taglib-wasm` on demand, writes the standard fields plus the `XTAPE`
-   manifest into a copy of the bytes, and downloads it. A saved copy's `XTAPE` tag takes
-   precedence over its standard tags on the next analysis.
+8. `taglib-wasm` loads on demand to write the standard fields — BPM, key, mood, energy — and
+   the `XTAPE` manifest. A card opened read-write gets them in place as each track settles, so
+   the next run reads them and skips the models; a dropped folder is read-only, so its row
+   menu writes a tagged copy instead. `XTAPE` takes precedence over the standard tags on the
+   next analysis.
 9. That same write puts the player's picture of the Track in the file: **k7label**, a
    402x188 JPEG (the print on the white page's Card) fitted cover-style from the Track's own
    art and passed through the worn-print shader (`src/audio/covers.ts`, `src/audio/worn.ts`).
-   A card opened read-write gets it in place as each Track settles; a dropped folder can only
-   get it in the saved copy. Every pass draws the label again and compares it with the
-   picture the file holds, byte for byte: a changed filter lands on the next pass, and a file
-   that already has the same picture is not rewritten.
+   A card opened read-write gets both the tags and the label in place as each Track settles; a
+   dropped folder can only get them in the saved copy. Every pass draws the label again and
+   compares it with the picture the file holds, byte for byte: a changed filter lands on the
+   next pass, and a file that already has the same picture is not rewritten.
    Pictures change a file's size and hash, so the row and the analysis are re-keyed to the
    bytes the card now holds. The 426x272 cassette picture is not written at the moment; a
    file that carries one from an earlier build keeps it, and it is never used as art.

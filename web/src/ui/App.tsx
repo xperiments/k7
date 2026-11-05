@@ -99,10 +99,15 @@ function AppContent() {
           {route.name === 'playlists' && <PlaylistsArea />}
           {route.name === 'playlist' && <PlaylistEditor id={route.id} />}
           {route.name === 'ask' && <AskArea />}
-          {route.name === 'media' && <MediaArea />}
-          {/* An album is not a page any more: its route turns the case on the shelf and the
-              tracks below it, so a link to one album still lands somewhere useful. */}
-          {route.name === 'album' && <MediaArea album={route.album} />}
+          {/* Media is one area with two views: the route chooses which from the same slot, so
+              the cache is read once while a reader walks between the shelf and the folders.
+              An album route turns the case on the shelf; a drive route opens its folder. */}
+          {(route.name === 'media' || route.name === 'album' || route.name === 'drive') && (
+            <MediaArea
+              album={route.name === 'album' ? route.album : undefined}
+              drive={route.name === 'drive' ? route.path : undefined}
+            />
+          )}
           {route.name === 'artist' && <ArtistArea artist={route.artist} />}
           {route.name === 'video' && <VideoArea id={route.id} />}
           {route.name === 'player' && <PlayerArea />}

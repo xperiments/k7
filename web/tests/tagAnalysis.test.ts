@@ -51,6 +51,37 @@ describe('a track the tags already answer for', () => {
     expect(slow.tempo.bpm).toBe(120);
   });
 
+  it('keeps the XTAPE record on the quick path', () => {
+    const analysis = tagAnalysis(track, {
+      bpm: 174,
+      key: tagged.key,
+      stored: {
+        version: 1,
+        bpm: 174,
+        key: tagged.key,
+        moodTags: {
+          happy: 0.1,
+          sad: 0.05,
+          aggressive: 0.1,
+          relaxed: 0.7,
+          party: 0.03,
+          danceable: 0.02,
+        },
+        moodLabel: 'Relaxed',
+        valence: 0.6,
+        arousal: 0.4,
+        energy: 0.5,
+      },
+    });
+    expect(analysis.mood.tags?.relaxed).toBeCloseTo(0.7);
+    expect(analysis.mood.label).toBe('Relaxed');
+    expect(analysis.mood.source).toBe('metadata');
+    expect(analysis.mood.valence).toBeCloseTo(0.6);
+    expect(analysis.mood.arousal).toBeCloseTo(0.4);
+    expect(analysis.energy).toBeCloseTo(0.5);
+    expect(analysis.energySource).toBe('metadata');
+  });
+
   it('keeps a mood tag and marks it as metadata', () => {
     const analysis = tagAnalysis(track, { ...tagged, mood: 'Happy', energy: 0.7 });
     expect(analysis.mood.label).toBe('Happy');

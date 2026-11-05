@@ -16,6 +16,7 @@ export type Route =
   | { name: 'playlist'; id: string }
   | { name: 'ask' }
   | { name: 'media' }
+  | { name: 'drive'; path: string }
   | { name: 'album'; album: string }
   | { name: 'artist'; artist: string }
   | { name: 'video'; id: string }
@@ -51,6 +52,11 @@ export function parseRoute(hash: string): Route {
       return { name: 'not-found', path };
     case 'media':
       if (parts.length === 1) return { name: 'media' };
+      /* Drive folders are paths, not ids: every segment after `drive` is one level. The
+       * root is `#/media/drive`, with no segments at all. */
+      if (parts[1] === 'drive') {
+        return { name: 'drive', path: parts.slice(2).map(decode).join('/') };
+      }
       if (parts.length === 3 && parts[1] === 'album')
         return { name: 'album', album: decode(parts[2]) };
       if (parts.length === 3 && parts[1] === 'artist')
@@ -73,6 +79,7 @@ export function routeArea(route: Route): 'Card' | 'Playlists' | 'Media' | 'Playe
     case 'ask':
       return 'Playlists';
     case 'media':
+    case 'drive':
     case 'album':
     case 'artist':
     case 'video':
@@ -97,6 +104,9 @@ export function routePage(route: Route): string {
       return 'Ask';
     case 'media':
       return 'Albums';
+    case 'drive':
+      // The whole drive is the page; a path in the address only says which folder to open.
+      return 'Drive';
     case 'album':
       return route.album;
     case 'artist':
@@ -123,6 +133,12 @@ export function routeHref(route: Route): string {
       return '#/playlists/ask';
     case 'media':
       return '#/media';
+    case 'drive':
+      // One segment per folder; the card's own names cannot carry a slash, so the address
+      // and the path are the same levels.
+      return route.path
+        ? `#/media/drive/${route.path.split('/').map(encodeURIComponent).join('/')}`
+        : '#/media/drive';
     case 'album':
       return `#/media/album/${encodeURIComponent(route.album)}`;
     case 'artist':

@@ -8,10 +8,11 @@ import {
   type ReactNode,
 } from 'react';
 import { AnalysisClient } from '../../audio/client';
+import { startWorkerPool, type WorkerCapacity } from '../../audio/workers';
 import { decodeFile, sha256Hex, trackFormat } from '../../audio/decode';
 import { loadManifest } from '../../audio/models';
 import { readTrackMetadata, type TrackTags } from '../../audio/metadata';
-import { downloadTaggedCopy, writeAnalysisTags, writeTrackLabel } from '../../audio/tagWriter';
+import { downloadTaggedCopy, writeAnalysisTags, writeTrackLabel, writeTrackMetadata } from '../../audio/tagWriter';
 import { coverSource, type EmbeddablePicture } from '../../audio/covers';
 import type { Analysis, ModelManifest } from '../../domain/analysis';
 import { snapshotPath } from '../../domain/snapshot';
@@ -42,6 +43,7 @@ function askPersistenceOnce(): void {
   void requestPersistence();
 }
 import { cacheKey } from '../../config';
+import { getSettings } from '../../settings';
 import { isWeightError } from '../../weights/errors';
 import { writeSnapshotToCard, type SnapshotDirectory } from '../cardWriter';
 import { readCardWithPicker, readOpenCard } from '../intake';
@@ -71,6 +73,8 @@ export interface AnalysisApi {
   items: QueueItem[];
   /** True while any worker holds a row. */
   busy: boolean;
+  /** The boot check's verdict on the worker pool; null until it has run. */
+  workers: WorkerCapacity | null;
   /**
    * Whether queued rows are being handed to the workers. True unless **Pause** was pressed:
    * a new queue always measures, and Pause holds the run it was pressed on until Resume.
@@ -97,11 +101,11 @@ export interface AnalysisApi {
   /** Covers and tags kept in this browser for the library views. */
   mediaCount: number;
   /**
-   * Tracks whose label is still being drawn and written into their file. The run is not
-   * over while this is above zero - the labels move sizes the image reports - and the page
-   * says so rather than leaving a full bar to mean "done".
+   * Tracks whose measured tags and label are still being written into their file. The run is
+   * not over while this is above zero - the writes move sizes the image reports - and the
+   * page says so rather than leaving a full bar to mean "done".
    */
-  labelsPending: number;
+  metadataPending: number;
   /** The image this browser built (and the player accepted, once `sentAt` is set). */
   lastSnapshot: StoredSnapshot | null;
   /** An image is being built, written or sent. */
@@ -175,11 +179,43 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [weightError, setWeightError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
-  /* Three workers, not one. Measuring is CPU-bound and a worker is a thread, so the queue
-   * used to leave every other core idle; the pool is what turns a whole card from a sequence
-   * into a few parallel lanes. Each worker loads its own model sessions, which is the price
-   * of the parallelism and the reason the pool is small. */
-  const [clients] = useState(() => Array.from({ length: 3 }, () => new AnalysisClient()));
+  /* The pool starts at boot. The setting is read once — auto (half the logical cores, capped
+   * by memory) or a pinned count — the app starts that many workers, and keeps the ones that
+   * answer a small probe. Each worker loads its own model sessions, which is the price of the
+   * parallelism and the reason auto stays small. A changed setting applies from the next
+   * reload; the Settings page says so. */
+  const [clients, setClients] = useState<AnalysisClient[]>([]);
+  const [workerCapacity, setWorkerCapacity] = useState<WorkerCapacity | null>(null);
+  const clientsRef = useRef<AnalysisClient[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void startWorkerPool(getSettings().workers)
+      .then((booted) => {
+        if (cancelled) {
+          for (const client of booted.clients) client.dispose();
+          return;
+        }
+        clientsRef.current = booted.clients;
+        setClients(booted.clients);
+        setWorkerCapacity(booted.capacity);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setNotice({
+          kind: 'error',
+          text: `The analysis workers could not start: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        });
+      });
+    return () => {
+      cancelled = true;
+      for (const client of clientsRef.current) client.dispose();
+      clientsRef.current = [];
+    };
+  }, []);
+
   const nextClient = useRef(0);
   const inFlight = useRef(0);
   const claimed = useRef(new Set<string>());
@@ -303,42 +339,63 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setItems((previous) =>
       previous.map((item) => (item.id === id ? { ...item, ...patch } : item)),
     );
-    if (patch.analysis !== undefined) setRunRevision((revision) => revision + 1);
+    const analysis = patch.analysis;
+    if (analysis !== undefined) {
+      /* The metadata queue reads this ref, not the last render: a deep analysis can land
+       * between the tag write being queued and its turn, and the file must end with the
+       * newest values. */
+      itemsRef.current = itemsRef.current.map((item) =>
+        item.id === id ? { ...item, analysis } : item,
+      );
+      setRunRevision((revision) => revision + 1);
+    }
   }, []);
 
-  /* One label write at a time. TagLib is one WASM module on the main thread, and a queue
+  /* One metadata write at a time. TagLib is one WASM module on the main thread, and a queue
    * that settles three tracks at once must not have three buffers editing it.
    *
-   * The count is what the image waits for: every label written changes its Track's size and
-   * hash, and the Snapshot carries that size, so an image written between two labels is an
-   * image written against a card that is still moving. */
-  const labelsQueue = useRef<Promise<void>>(Promise.resolve());
-  const [labelsPending, setLabelsPending] = useState(0);
+   * The count is what the image waits for: every tag and label written changes its Track's
+   * size and hash, and the Snapshot carries that size, so an image written between two
+   * writes is an image written against a card that is still moving. */
+  const metadataQueue = useRef<Promise<void>>(Promise.resolve());
+  const [metadataPending, setMetadataPending] = useState(0);
 
   /**
-   * The worn label the player prints, written into the file itself.
+   * The measured tags and the worn label, written into the file itself.
    *
    * Only a card this page opened read-write is touched, and only for a file the run read from
-   * it - a dropped folder has no handle to write through. Every Track is drawn again, so a
-   * filter that changed between builds reaches a card that was already processed; the file
-   * is only rewritten when the picture that comes out is not the one it already holds.
+   * it - a dropped folder has no handle to write through. The standard tags (BPM, key, mood,
+   * energy) and the XTAPE manifest are what make a later pass — on this card or a copy of it
+   * on another SD — read the measurement instead of running the models again. Every Track is
+   * also drawn again, so a filter that changed between builds reaches a card that was already
+   * processed; the writer only changes the bytes when a tag or the picture is not what this
+   * analysis would write.
    *
-   * Adding a picture changes the file's size and its whole-file hash, so the row and the
+   * A tag or picture changes the file's size and its whole-file hash, so the row and the
    * analysis are re-keyed to the bytes the card now holds: otherwise the next pass would
    * decide every written Track had changed and measure the library again.
    */
-  const commitLabel = useCallback(
-    (item: QueueItem, known: { pictures?: readonly EmbeddablePicture[]; row?: CachedMedia }) => {
+  const commitMetadata = useCallback(
+    (
+      item: QueueItem,
+      known: { pictures?: readonly EmbeddablePicture[]; row?: CachedMedia; analysis?: Analysis },
+    ) => {
       if (cardHandle === null || cardHandle.name === undefined) return;
       const root = cardHandle.name;
       if (!item.path.toLowerCase().startsWith(`${root.toLowerCase()}/`)) return;
 
       const handle = cardHandle;
       const scope = currentCardScope();
-      setLabelsPending((count) => count + 1);
-      labelsQueue.current = labelsQueue.current.then(async () => {
+      setMetadataPending((count) => count + 1);
+      metadataQueue.current = metadataQueue.current.then(async () => {
         try {
-          const result = await writeTrackLabel(item.file, known.pictures);
+          /* At its turn, not when it was queued: the newest analysis is what the file's tags
+           * must carry. */
+          const written =
+            itemsRef.current.find((each) => each.id === item.id)?.analysis ?? known.analysis;
+          const result = written
+            ? await writeTrackMetadata(item.file, written, known.pictures)
+            : await writeTrackLabel(item.file, known.pictures);
           if (result.kind === 'complete' || result.kind === 'no-source') return;
 
           const card = writableCard(handle);
@@ -348,12 +405,14 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
           const hash = await sha256Hex(result.bytes);
           /* The row as it stands now, not as it stood when this write started: a deep
-           * analysis may have landed while the card was being written. */
+           * analysis may have landed while the card was being written. What it says wins over
+           * the analysis whose tags were written. */
           const latest = itemsRef.current.find((each) => each.id === item.id) ?? item;
-          if (modelSet !== null && latest.analysis !== undefined) {
+          const current = latest.analysis ?? known.analysis;
+          if (modelSet !== null && current !== undefined) {
             const analysis: Analysis = {
-              ...latest.analysis,
-              track: { ...latest.analysis.track, size: fresh.size, hash },
+              ...current,
+              track: { ...current.track, size: fresh.size, hash },
             };
             await putCached(cacheKey(hash, modelSet), analysis);
             update(item.id, { analysis, file: fresh });
@@ -370,9 +429,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             });
           }
         } catch {
-          /* A card that refuses the write is still measured: the label is a convenience. */
+          /* A card that refuses the write is still measured; the tags only make a later pass
+           * quicker. */
         } finally {
-          setLabelsPending((count) => Math.max(0, count - 1));
+          setMetadataPending((count) => Math.max(0, count - 1));
         }
       });
     },
@@ -385,14 +445,25 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * whether or not its art could be kept.
    */
   const keepTrack = useCallback(
-    (item: QueueItem, hash: string) => {
-      void rememberMedia(item, hash).then((remembered) => {
-        if (remembered !== null) {
-          void commitLabel(item, { pictures: remembered.pictures, row: remembered.row });
-        }
-      });
+    (item: QueueItem, hash: string, analysis: Analysis) => {
+      /* The parse belongs to the same settle: until it finishes, the image must not be built,
+       * because the tag write that follows changes the file's size and hash. */
+      setMetadataPending((count) => count + 1);
+      void rememberMedia(item, hash)
+        .then((remembered) => {
+          /* The row and its art are a convenience; the tags are not. Even when the media
+           * parse fails, the writer can still open the file and put the measurement in it. */
+          void commitMetadata(item, {
+            pictures: remembered?.pictures,
+            row: remembered?.row,
+            analysis,
+          });
+        })
+        .finally(() => {
+          setMetadataPending((count) => Math.max(0, count - 1));
+        });
     },
-    [rememberMedia, commitLabel],
+    [rememberMedia, commitMetadata],
   );
 
   /**
@@ -443,7 +514,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             cached: true,
           });
           /* Nothing was read: the row says whether the file still needs the pictures. */
-          void commitLabel(item, { row: known.media });
+          void commitMetadata(item, { row: known.media, analysis: known.analysis });
           return;
         }
         update(item.id, { status: 'hashing', error: undefined });
@@ -478,7 +549,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           // known from another card while this card's shelf has never seen it. The row is
           // what Media joins on, so measuring it once here is what keeps "processed" from
           // being reported as "not measured".
-          keepTrack(item, hash);
+          keepTrack(item, hash, analysis);
           return;
         }
 
@@ -498,7 +569,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           await putCached(key, analysis);
         askPersistenceOnce();
           update(item.id, { status: 'tagged', analysis, stage: undefined });
-          keepTrack(item, hash);
+          keepTrack(item, hash, analysis);
           return;
         }
 
@@ -520,7 +591,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         await putCached(key, analysis);
         askPersistenceOnce();
         update(item.id, { status: 'done', analysis, stage: undefined });
-        keepTrack(item, hash);
+        keepTrack(item, hash, analysis);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (isWeightError(error)) setWeightError(message);
@@ -529,14 +600,14 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         claimed.current.delete(item.id);
       }
     },
-    [modelSet, update, tagsOnly, keepTrack, knownAnalysis, commitLabel],
+    [modelSet, update, tagsOnly, keepTrack, knownAnalysis, commitMetadata],
   );
 
   /* Keep every lane busy: claim as many queued items as there are free workers, hand each to
    * a different client, and let them finish in any order. The claim set exists because the
    * effect re-runs on every status change and would otherwise hand the same item out twice. */
   useEffect(() => {
-    if (!modelSet || !running) return;
+    if (!modelSet || !running || clients.length === 0) return;
     for (;;) {
       if (inFlight.current >= clients.length) break;
       const next = items.find(
@@ -746,16 +817,24 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const deepAnalyse = useCallback(
     async (item: QueueItem) => {
       if (!item.analysis || !modelSet || busy) return;
+      const client = clients[0];
+      if (!client) {
+        setNotice({ kind: 'error', text: 'The analysis workers are still starting; try again in a moment.' });
+        return;
+      }
       setBusy(true);
       try {
         update(item.id, { status: 'analysing', stage: 'deep' });
         const buffer = await item.file.arrayBuffer();
         const audio = await decodeFile(buffer);
-        const tempo = await clients[0].deep(audio);
+        const tempo = await client.deep(audio);
         const analysis = { ...item.analysis, tempo };
         await putCached(cacheKey(item.analysis.track.hash, modelSet), analysis);
         askPersistenceOnce();
         update(item.id, { status: 'done', analysis, stage: undefined, cached: false });
+        /* The file's XTAPE is now one tempo behind: rewrite the tags so the next pass reads
+         * the deep result too. */
+        void commitMetadata(item, { analysis });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (isWeightError(error)) setWeightError(message);
@@ -765,7 +844,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         setBusy(false);
       }
     },
-    [busy, clients, modelSet, update],
+    [busy, clients, modelSet, update, commitMetadata],
   );
 
   const saveTags = useCallback(
@@ -955,7 +1034,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * the end of a run any more: the label pass keeps rewriting files after the last measure,
    * and each of those writes moves a size the Snapshot reports. Waiting for both is what
    * turns a rewrite per label into one image at the end. */
-  const finished = settled && labelsPending === 0;
+  const finished = settled && metadataPending === 0;
   useEffect(() => {
     if (!cardHandle || !manifest || !finished || writing.current) return;
     const signature = `${runRevision}:${total}:${done}`;
@@ -1047,6 +1126,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const value: AnalysisApi = {
     items,
     busy,
+    workers: workerCapacity,
     running,
     pause,
     resume,
@@ -1060,7 +1140,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     dismissNotice: () => setNotice(null),
     dismissWeightError: () => setWeightError(null),
     mediaCount,
-    labelsPending,
+    metadataPending,
     lastSnapshot,
     saving,
     tagsOnly,

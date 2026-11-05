@@ -30,6 +30,18 @@ area and, sometimes, one thing in it. The App serves one document and knows no p
 exists only inside the App.
 _Avoid_: URL, link, path
 
+**Carousel**:
+Media's first view: the album shelf, the cases on their short ends with the selected one turned
+to face the reader. The name is the walk along the row; there is nothing that rotates, swipes or
+advances on a timer.
+_Avoid_: slider, gallery, carousel widget
+
+**Drive**:
+Media's second view: the card's folders as the tree their paths make, with the files the card
+holds under them. An album is a title its rows share; a folder is where the card put the files,
+and the two are not the same shape. `#/media/drive` is the card's `music` directory.
+_Avoid_: file browser, explorer, file tree
+
 ### The link
 
 **Link**:
@@ -220,13 +232,21 @@ untouched.
 _Avoid_: saved file, overwrite
 
 **Stored analysis**:
-The lossless analysis this app writes into a file's own tag and reads back instead of measuring
-again. Files tagged before the rename carry it under the old name and are still read.
+The lossless analysis this app writes into a file's own tags — automatically when a card is
+opened read-write — and reads back instead of measuring again. Files tagged before the rename
+carry it under the old name and are still read.
 _Avoid_: cache, saved result
 
 **Cached analysis**:
 An analysis reused because its content hash, analyzer version and model set all match.
 _Avoid_: saved result
+
+**Worker pool**:
+The analysis threads **Process** runs, each with its own copy of the models. Its size is a
+**Setting**: auto by default — half the logical cores, capped by the memory the browser
+reports — or a pinned count. At boot the App starts that many workers and keeps the ones that
+answer a small probe.
+_Avoid_: thread pool, concurrency, parallelism
 
 ### The library
 
@@ -245,6 +265,12 @@ _Avoid_: entry, item, slot
 A **Playlist** as this browser holds it, before it has been sent. It belongs to the user, not to a
 card.
 _Avoid_: unsaved, local copy, working set
+
+**Block**:
+One row of the Playlist editor's list: a Track, or a Folder carrying the Tracks it was added
+with. Moving a block moves everything it holds; the **Snapshot** still receives the flattened
+rows, so a block is an authoring idea and not a device one.
+_Avoid_: group, folder row, item
 
 **Cover**:
 The picture a Track carries, kept in this browser because the player serves paths and
@@ -286,9 +312,16 @@ machine that cannot tell anyone. Needs WebGPU, so the **Device copy** can never 
 _Avoid_: local model, offline model, embedded AI
 
 **Settings**:
-What this browser remembers for itself: the **Provider**, the model, and the Invidious
-**Instance**. Lost with site data, never written to the player.
+What this browser remembers for itself: the **Provider**, the model, the Invidious
+**Instance**, the light or dark palette, and the analysis worker count. Lost with site data,
+never written to the player.
 _Avoid_: preferences, config, options
+
+**Theme**:
+Which palette this browser wears: light by default, or dark from the toggle in the shell's
+footer. A presentation choice, not a mode of the App: it changes no route, no data and no
+request, and it is remembered in **Settings**.
+_Avoid_: dark mode, appearance, skin
 
 ### The videos
 
