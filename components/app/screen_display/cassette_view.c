@@ -92,9 +92,6 @@ static controls_t *s_controls;        /* the ladder: the level and the Menu */
 static groups_t s_groups;             /* which of the right bar's panels is up */
 static controls_state_t s_ctl;        /* its latest snapshot */
 static bool s_painted_white;          /* the page the screen is painted for */
-static cassette_frame_t s_frame_shown; /* the last frame applied: the window's slice reads it */
-static bool s_frame_shown_valid;
-static bool s_hubs_white_shown;        /* the hub ink the slice was last drawn with */
 
 /* ------------------------------------------------------------------ layout */
 
@@ -314,25 +311,18 @@ static void apply_frame(const cassette_frame_t *f)
     /* The hubs are white while the Cover is what the page shows: the spools read as plain
      * plastic and the artwork has the page's colour to itself. Asked every frame, because the
      * picture lands from the loader between frames; the setter ignores a repeated value. */
-    const bool hubs_white = cassette_cover_is_shown() && cassette_cover_has_picture();
-    cassette_tapes_set_hubs_white(hubs_white);
+    cassette_tapes_set_hubs_white(cassette_cover_is_shown() && cassette_cover_has_picture());
     cassette_tapes_set(f);
 
-    /* The window's slice is a second copy of the tape, so it is stale whenever the tape moved -
-     * the hub phase (25 Hz while playing), a fill change, the playing ink, or the hubs going
-     * white under a picture. A still Track invalidates nothing, which keeps a paused cassette
-     * free. */
-    if (hubs_white != s_hubs_white_shown || !s_frame_shown_valid ||
-        f->hub_frame[0] != s_frame_shown.hub_frame[0] ||
-        f->hub_frame[1] != s_frame_shown.hub_frame[1] ||
-        f->pack_fill[0] != s_frame_shown.pack_fill[0] ||
-        f->pack_fill[1] != s_frame_shown.pack_fill[1] ||
-        f->tape_ink != s_frame_shown.tape_ink) {
-        cassette_cover_window_invalidate();
-    }
-    s_hubs_white_shown = hubs_white;
-    s_frame_shown = *f;
-    s_frame_shown_valid = true;
+    /* The window's slice is a second copy of the tape, and LVGL cannot infer that a change
+     * under the Card is a change there: the tapes hand back the boxes this frame moved, and
+     * the cover invalidates exactly those. Invalidating the whole window instead rebuilt the
+     * capsule's two ARGB corner layers and redrew ten rings twice on every 40 ms tick, which
+     * starved the stream (2026-11-05). A spoke tick is a box a few dozen pixels across. */
+    lv_area_t dirty[CASSETTE_TAPES_SLICE_DIRTY_MAX];
+    int n = cassette_tapes_take_slice_dirty(dirty, CASSETTE_TAPES_SLICE_DIRTY_MAX);
+    for (int i = 0; i < n; i++) cassette_cover_window_invalidate_area(&dirty[i]);
+
     /* The meter is only alive while the EQ group is up; its module ignores a frame otherwise. */
     cassette_meter_set(f);
     cassette_levels_apply(f);

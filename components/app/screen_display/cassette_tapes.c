@@ -210,6 +210,127 @@ static void strand_set(int i)
     lv_obj_set_size(s_strand[i], x2 - x1 + 1 + 2 * pad, y2 - y1 + 1 + 2 * pad);
 }
 
+/* ------------------------------------------------------- the window's slice */
+
+/* What the slice above the Card has to repaint since the last take. The slice is a second
+ * copy of the tape, so LVGL cannot know that a change *under* the Card is a change there:
+ * the tapes record the screen rectangles a frame moved, and the view hands them to the cover.
+ *
+ * Sizing this generously is what cost the stream its audio the first time: invalidating the
+ * whole 291x87 capsule rebuilt two 50 KB ARGB corner layers and redrew ten rings twice on
+ * every 40 ms tick. A spoke tick is a box a few dozen pixels across. */
+#define SLICE_DIRTY_MAX CASSETTE_TAPES_SLICE_DIRTY_MAX
+static lv_area_t s_dirty[SLICE_DIRTY_MAX];
+static int s_dirty_n;
+static lv_area_t s_pack_box[2];         /* each pack's box as last placed */
+
+static void slice_dirty(const lv_area_t *a)
+{
+    if (!a || a->x2 < a->x1 || a->y2 < a->y1) return;
+
+    for (int i = 0; i < s_dirty_n; i++) {
+        if (s_dirty[i].x1 <= a->x1 && s_dirty[i].y1 <= a->y1 &&
+            s_dirty[i].x2 >= a->x2 && s_dirty[i].y2 >= a->y2) {
+            return;   /* already inside one of them */
+        }
+    }
+    if (s_dirty_n < SLICE_DIRTY_MAX) {
+        s_dirty[s_dirty_n++] = *a;
+        return;
+    }
+
+    /* More changes than the list holds: one window is cheaper than dropping one. */
+    if (s_window.w > 0 && s_window.h > 0) {
+        lv_area_t w = { s_window.x, s_window.y,
+                        s_window.x + s_window.w - 1, s_window.y + s_window.h - 1 };
+        s_dirty[0] = w;
+        s_dirty_n = 1;
+    }
+}
+
+int cassette_tapes_take_slice_dirty(lv_area_t *out, int max)
+{
+    if (!out || max <= 0) {
+        s_dirty_n = 0;
+        return 0;
+    }
+
+    int n = s_dirty_n < max ? s_dirty_n : max;
+    for (int i = 0; i < n; i++) out[i] = s_dirty[i];
+    s_dirty_n = 0;
+    return n;
+}
+
+/* The box the two spokes of hub `i` sweep through at `frame`, padded for the stroke and its
+ * caps. The old and the new frame are unioned by the caller, because a spoke that moved must
+ * repaint where it was as well as where it is. */
+static void spokes_box(int i, uint8_t frame, lv_area_t *a)
+{
+    double base = -(double)frame * k_hub_step;
+    int cx = SCX(HUB_X(i)), cy = SCY(HUB_Y);
+    int pad = HUB_SPOKE_W / 2 + 2;
+    int x1 = cx, x2 = cx, y1 = cy, y2 = cy;
+
+    for (int k = 0; k < 2; k++) {
+        double t = base + (k ? HUB_HALF_TURN : 0.0);
+        int px = cx + (int)lround(SC(HUB_SPOKE_R1) * cos(t));
+        int py = cy + (int)lround(SC(HUB_SPOKE_R1) * sin(t));
+        x1 = LV_MIN(x1, px);
+        x2 = LV_MAX(x2, px);
+        y1 = LV_MIN(y1, py);
+        y2 = LV_MAX(y2, py);
+    }
+
+    a->x1 = x1 - pad;
+    a->y1 = y1 - pad;
+    a->x2 = x2 + pad;
+    a->y2 = y2 + pad;
+}
+
+/* A hub's whole box: the rim's ring and the spokes. What a change of the hub's ink dirties. */
+static void hub_box(int i, lv_area_t *a)
+{
+    int d = SC(HUB_RING_D), cx = SCX(HUB_X(i)), cy = SCY(HUB_Y);
+    a->x1 = cx - d / 2 - HUB_RIM_W;
+    a->y1 = cy - d / 2 - HUB_RIM_W;
+    a->x2 = cx + d / 2 + HUB_RIM_W;
+    a->y2 = cy + d / 2 + HUB_RIM_W;
+}
+
+/* Whether a ring of radius `r`, `w` px wide, centred at (cx,cy), can meet the layer's clip
+ * area at all. Ten rings per pack, drawn once per band: a 12 px box next to one hub meets
+ * none of the other hub's, and none of the rings that pass outside it. Without this the slice
+ * creates two dozen draw tasks on every spoke tick and rasterises nothing. */
+static bool ring_in_clip(const lv_layer_t *layer, int cx, int cy, int r, int w)
+{
+    const lv_area_t *c = &layer->_clip_area;
+    int nx = LV_CLAMP(c->x1, cx, c->x2);
+    int ny = LV_CLAMP(c->y1, cy, c->y2);
+    long dx = nx - cx, dy = ny - cy;
+    long near2 = dx * dx + dy * dy;
+
+    long far2 = 0;
+    const int fx[2] = { c->x1, c->x2 };
+    const int fy[2] = { c->y1, c->y2 };
+    for (int i = 0; i < 2; i++) {
+        for (int k = 0; k < 2; k++) {
+            long ex = fx[i] - cx, ey = fy[k] - cy;
+            long d2 = ex * ex + ey * ey;
+            if (d2 > far2) far2 = d2;
+        }
+    }
+
+    long lo = r - w / 2 - 1, hi = r + w / 2 + 1;
+    return far2 >= lo * lo && near2 <= hi * hi;
+}
+
+/* Whether a box can meet the layer's clip area. */
+static bool box_in_clip(const lv_layer_t *layer, const lv_area_t *a)
+{
+    const lv_area_t *c = &layer->_clip_area;
+    return !(a->x2 < c->x1 || a->x1 > c->x2 || a->y2 < c->y1 || a->y1 > c->y2);
+}
+
 /* One polyline per side, as a single line draw task. lv_draw_line() copies the points, so
  * the array can live on the stack here. The window's slice draws the same polyline into
  * its own layer, so the body and the slice cannot disagree about where the tape runs. */
@@ -291,7 +412,7 @@ static void hub_draw(lv_layer_t *layer, int i)
     disc.bg_opa = LV_OPA_COVER;
     disc.radius = LV_RADIUS_CIRCLE;
     lv_area_t box = { cx - d / 2, cy - d / 2, cx - d / 2 + d - 1, cy - d / 2 + d - 1 };
-    lv_draw_rect(layer, &disc, &box);
+    if (box_in_clip(layer, &box)) lv_draw_rect(layer, &disc, &box);
 
     lv_draw_arc_dsc_t ring;
     lv_draw_arc_dsc_init(&ring);
@@ -304,7 +425,7 @@ static void hub_draw(lv_layer_t *layer, int i)
     ring.start_angle = 0;
     ring.end_angle = 360;
     ring.radius = (uint16_t)(d / 2 - HUB_RIM_W / 2);
-    lv_draw_arc(layer, &ring);
+    if (ring_in_clip(layer, cx, cy, d / 2, HUB_RIM_W)) lv_draw_arc(layer, &ring);
 
     /* The divider stops short of the centre and of the rim, exactly as spoke_set() places
      * it, so the slice's divider is the body's and not a second reading of the geometry. */
@@ -316,6 +437,13 @@ static void hub_draw(lv_layer_t *layer, int i)
         pts[0].y = (lv_value_precise_t)(cy + lround(SC(HUB_SPOKE_R0) * sin(t)));
         pts[1].x = (lv_value_precise_t)(cx + lround(SC(HUB_SPOKE_R1) * cos(t)));
         pts[1].y = (lv_value_precise_t)(cy + lround(SC(HUB_SPOKE_R1) * sin(t)));
+
+        int pad = HUB_SPOKE_W / 2 + 1;
+        lv_area_t sb = { (int)LV_MIN(pts[0].x, pts[1].x) - pad,
+                         (int)LV_MIN(pts[0].y, pts[1].y) - pad,
+                         (int)LV_MAX(pts[0].x, pts[1].x) + pad,
+                         (int)LV_MAX(pts[0].y, pts[1].y) + pad };
+        if (!box_in_clip(layer, &sb)) continue;
 
         lv_draw_line_dsc_t line;
         lv_draw_line_dsc_init(&line);
@@ -354,6 +482,7 @@ static void pack_draw_rings(lv_layer_t *layer, int i)
     if (gap < 1) gap = 1;
 
     for (int r = SC(s_pack_d[i]) / 2; r > SC(HUB_RING_D) / 2; r -= gap) {
+        if (!ring_in_clip(layer, dsc.center.x, dsc.center.y, r, PACK_RING_W)) continue;
         dsc.radius = (uint16_t)r;
         lv_draw_arc(layer, &dsc);
     }
@@ -420,17 +549,26 @@ static void pack_place(int i)
 
     lv_obj_set_size(s_pack[i], w, h);
     lv_obj_set_pos(s_pack[i], x, y);
+    lv_obj_get_coords(s_pack[i], &s_pack_box[i]);
 }
 
 /* The pack's fill is the outer radius, and the rings are drawn from it in
  * pack_draw_cb. A size change invalidates the pack's old and new boxes, and the
- * callback then draws every ring for the new radius, so nothing is left stale. */
+ * callback then draws every ring for the new radius, so nothing is left stale. The slice
+ * above the Card gets the union of the two boxes, which is what it must repaint. */
 static void pack_set(int i, int d)
 {
     if (d == s_pack_d[i]) return;
+
+    lv_area_t before = s_pack_box[i];
     s_pack_d[i] = d;
     pack_place(i);
     strand_set(i);
+
+    lv_area_t after = s_pack_box[i];
+    lv_area_t both = { LV_MIN(before.x1, after.x1), LV_MIN(before.y1, after.y1),
+                       LV_MAX(before.x2, after.x2), LV_MAX(before.y2, after.y2) };
+    slice_dirty(&both);
 }
 
 /* The pack area, and therefore the tape length on it, is proportional to the fill:
@@ -512,6 +650,8 @@ void cassette_tapes_place(cassette_pose_t pose)
 
 void cassette_tapes_set_window(cassette_rect_t window)
 {
+    const bool covered = window.w > 0 && window.h > 0;
+    const bool was_covered = s_window.w > 0 && s_window.h > 0;
     s_window = window;
 
     /* The clamp is a box change and nothing else, so it lands at once rather than on the
@@ -519,6 +659,19 @@ void cassette_tapes_set_window(cassette_rect_t window)
      * re-place, and create()'s own place() applies the window that is already held. */
     for (int i = 0; i < 2; i++)
         if (s_pack[i]) pack_place(i);
+
+    /* While the Card is up it covers the whole of both packs and both rims - they sit inside
+     * its 426x272 box at the Controls pose, which is the only pose Real has - so the body's
+     * reels are hidden and the slice above the Card is the only copy that is drawn. That is
+     * what keeps a 25 Hz spoke tick from re-rendering the Card and the porthole for a
+     * picture nobody can see, and a fill change from repainting the body at all. */
+    if (covered == was_covered) return;
+    for (int i = 0; i < 2; i++) {
+        if (s_pack[i]) lv_obj_set_hidden(s_pack[i], covered);
+        if (s_rim[i]) lv_obj_set_hidden(s_rim[i], covered);
+        for (int k = 0; k < 2; k++)
+            if (s_hub_spoke[i][k].obj) lv_obj_set_hidden(s_hub_spoke[i][k].obj, covered);
+    }
 }
 
 /* Push the tape's ink into the hub rims: the playing red at LV_OPA_COVER, the tape's own
@@ -532,6 +685,10 @@ static void tape_ink_apply(lv_opa_t ink)
         if (!s_rim[i]) continue;
         lv_obj_set_style_border_color(s_rim[i],
                                       lv_color_mix(k_col_tape_dark, k_col_tape, ink), 0);
+        /* The slice's rims carry the same ink. */
+        lv_area_t hb;
+        hub_box(i, &hb);
+        slice_dirty(&hb);
     }
 }
 
@@ -554,6 +711,10 @@ void cassette_tapes_set_hubs_white(bool white)
                 lv_obj_set_style_line_color(s_hub_spoke[i][k].obj,
                                             white ? k_col_hub_white : k_col_hub_ink, 0);
         }
+        /* The slice draws the same ink: its rims and spokes changed with the body's. */
+        lv_area_t hb;
+        hub_box(i, &hb);
+        slice_dirty(&hb);
     }
 }
 
@@ -576,6 +737,13 @@ void cassette_tapes_set(const cassette_frame_t *frame)
 
     for (int i = 0; i < 2; i++) {
         if (frame->hub_frame[i] != s_shown_hub[i]) {
+            /* Where the spoke was and where it now is: the slice must repaint both. */
+            lv_area_t was, now;
+            spokes_box(i, s_shown_hub[i], &was);
+            spokes_box(i, frame->hub_frame[i], &now);
+            lv_area_t both = { LV_MIN(was.x1, now.x1), LV_MIN(was.y1, now.y1),
+                               LV_MAX(was.x2, now.x2), LV_MAX(was.y2, now.y2) };
+            slice_dirty(&both);
             s_shown_hub[i] = frame->hub_frame[i];
             hub_frame_set(i, s_shown_hub[i]);
         }

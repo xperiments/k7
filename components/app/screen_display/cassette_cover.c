@@ -193,6 +193,13 @@ void cassette_cover_window_invalidate(void)
     if (s_window) lv_obj_invalidate(s_window);
 }
 
+void cassette_cover_window_invalidate_area(const lv_area_t *area)
+{
+    /* The child, not the capsule: the same area, but LVGL clips it to the child and the
+     * capsule's rounded-corner pass is then only as wide as the dirty strip. */
+    if (s_slice && area) lv_obj_invalidate_area(s_slice, area);
+}
+
 void cassette_cover_create(lv_obj_t *parent)
 {
     if (!parent || s_masked) return;

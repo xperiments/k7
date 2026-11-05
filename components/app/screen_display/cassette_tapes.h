@@ -78,6 +78,20 @@ void cassette_tapes_set(const cassette_frame_t *frame);
  * hubs. Called under the LVGL lock, like everything else on the screen. */
 void cassette_tapes_draw_slice(lv_layer_t *layer);
 
+/* How many rectangles one frame can report at once: two spokes and, on a fill change, two
+ * packs. A frame that needs more falls back to the whole window. */
+#define CASSETTE_TAPES_SLICE_DIRTY_MAX 4
+
+/* Take the screen rectangles the slice above the Card has to repaint since the last call -
+ * what a frame moved that LVGL cannot see for itself, because the change is under the Card.
+ * Up to `max` areas are written to `out` and the list is cleared; the view hands each to
+ * cassette_cover_window_invalidate_area(). Empty between frames that changed nothing.
+ *
+ * The list is deliberately narrow: a spoke tick is a box a few dozen pixels across and a
+ * fill change is one pack's box. Invalidating the whole window instead rebuilt the capsule's
+ * two ARGB corner layers on every tick and starved the stream (2026-11-05). */
+int cassette_tapes_take_slice_dirty(lv_area_t *out, int max);
+
 #ifdef __cplusplus
 }
 #endif

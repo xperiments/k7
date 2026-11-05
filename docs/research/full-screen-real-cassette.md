@@ -168,15 +168,18 @@ I artwork: artwork memory after the cover:  psram free 3101540 B, largest 308019
 ```
 
 `artwork_loader.c:564-570` prints these two lines; the values are this build's, 2026-11-05, and
-the mask would have been taken out of the same heap before them. Two consequences:
+the mask would have been taken out of the same heap before them. **With a card mounted** the same
+build reads `psram free 2933228 B` / `2466280 B` — the card's FAT, its buffers and the mounted
+library take ~600 KB — so the card is the case that matters, and it is the one below. Two
+consequences:
 
-- **A 384 KB mask fits**: 12 % of the 3.1 MB free after the cover, with a 3 MB largest block.
-  The note's earlier inference from `artwork_loader.c:12-27` ("two 464 KB buffers plus a band did
-  not fit") describes an older build; the comment is stale and should not be used to refuse the
-  mask without re-measuring.
-- **The largest block is the number that matters** (3,080,192 B after the cover): the mask is one
-  contiguous allocation, so fragmentation, not the total, is what would fail first — the same
-  lesson ADR 0004 records for Wi-Fi. A 424 KB mask is 14 % of that block.
+- **A 384 KB mask fits either way**: 16 % of the 2.4 MB free after the cover with a card in, and
+  the largest free block is still 2,424,832 B. The note's earlier inference from
+  `artwork_loader.c:12-27` ("two 464 KB buffers plus a band did not fit") describes an older
+  build; the comment is stale and should not be used to refuse the mask without re-measuring.
+- **The largest block is the number that matters**: the mask is one contiguous allocation, so
+  fragmentation, not the total, is what would fail first — the same lesson ADR 0004 records for
+  Wi-Fi. A 424 KB mask is 17 % of the card-in block.
 
 So the argument for the porthole is not "the mask cannot fit". It is "the mask is 384 KB of
 permanent PSRAM spent to make a hole that a clipped child can paint, and it costs 9 B per masked
@@ -242,17 +245,35 @@ gesture are untouched. What changed:
   its edge, and shown/hidden with `cassette_cover_set_shown()`.
 - **`cassette_card.c`** — `CARD_MASK 0`: `mask_build()` is not called, `cassette_card_mask()`
   returns NULL, and the Card is an ordinary opaque rounded rect. Flip to 1 for the A/B.
-- **`cassette_view.c`** — registers the drawer after `cassette_cover_create()`, and invalidates
-  the porthole when the frame it applies differs from the last one in hub phase, pack fill, tape
-  ink, or hub whiteness. A paused cassette invalidates nothing.
 
-**Verified:** `idf.py build` clean (no warnings), flashed to the Sunton board, boots, and the
-loader's PSRAM lines printed (§3.1). **Not verified:** the picture. The board reports
-`no card: home, touch blocked, the SD mark looping` — with no card in the slot the screen sits on
-the cardless home and Real is unreachable, so the porthole has not been looked at yet. Two open
-questions for the first look: does the capsule's edge sit exactly under the 7 px rim, and what
-does `render` do while the reels turn (the porthole is invalidated on every hub-frame change, so
-the clip_corner bands are rebuilt at up to 25 Hz).
+**The first build starved the stream and flashed the screen.** With the whole capsule invalidated
+on every frame that moved, the porthole rebuilt its two unbanded ARGB corner layers — 291×43×4 =
+50,052 B each — and redrew ten rings per pack twice per band, at up to 25 Hz. On a device whose
+HTTP stream shares core 0 and the PSRAM heap this is exactly the shape of a stall: the audio
+broke up, and the panel showed white repaints as frames could not be finished. This is the
+measurement §10 asked for, taken the hard way.
+
+The fix, in this commit:
+
+- **The tapes report what moved.** `cassette_tapes_take_slice_dirty()` hands the view up to four
+  screen rectangles per frame — the union of a spoke's old and new boxes (a few dozen pixels), one
+  pack's old and new box on a fill change, a hub's box when its ink changes — and the view
+  invalidates exactly those (`.c` §"the window's slice"). A frame that moves nothing invalidates
+  nothing.
+- **The slice culls by the layer's clip area.** `ring_in_clip()` compares a ring's radius with the
+  nearest and farthest distance from its hub to the dirty box, so a 12 px box next to one hub
+  creates no draw tasks for the other hub's ten rings, nor for the rings that pass outside it.
+- **The body's reels are hidden while the Card is up.** At the Controls pose both packs (Ø186)
+  and both rims (Ø88) sit entirely inside the Card's 426×272 box — that is the only pose Real
+  has — so `cassette_tapes_set_window()` hides them and the slice is the only copy drawn. A fill
+  change then repaints the slice and not the body, and the 25 Hz spoke tick cannot reach the Card
+  at all.
+
+**Verified:** `idf.py build` clean (no warnings), flashed to the Sunton board, boots with a card
+in, the loader's PSRAM lines printed (§3.1). **Not yet verified:** the picture itself — the
+capsule's edge under the 7 px rim has not been looked at — and whether the audio is clean at Real
+now. The next reading is a listen, and the frame line (`screen: 50 frames: worst N ms`) while the
+reels turn.
 
 ## 5. The tape and the hub: is anything drawing a full circle it could skip?
 

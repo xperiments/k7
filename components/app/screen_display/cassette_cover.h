@@ -77,6 +77,11 @@ void cassette_cover_set_window_draw(void (*draw)(lv_layer_t *layer));
  * fills or the ink - so a still Track costs nothing and a turning reel costs one capsule. */
 void cassette_cover_window_invalidate(void);
 
+/* The same, for one rectangle of the window: what the tapes report as moved since the last
+ * frame (cassette_tapes_take_slice_dirty). The area is in screen pixels and is clipped to the
+ * window. This is the path the reel ticks use - the whole-window call is for a rung change. */
+void cassette_cover_window_invalidate_area(const lv_area_t *area);
+
 
 #ifdef __cplusplus
 }
