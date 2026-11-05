@@ -18,7 +18,7 @@
  * to cut and the 116,416 B buffer is never allocated. CARD_MASK=1 brings the whole mask back
  * for the A/B this branch exists for; nothing else about the Card changes between the two.
  */
-#define CARD_MASK 0   /* 1 = the A8 mask and the cut window; 0 = the porthole above the print */
+#define CARD_MASK 1   /* 1 = the A8 mask and the cut window; 0 = the porthole above the print */
 
 #include "cassette_card.h"
 

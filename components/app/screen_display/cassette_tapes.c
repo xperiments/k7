@@ -650,8 +650,6 @@ void cassette_tapes_place(cassette_pose_t pose)
 
 void cassette_tapes_set_window(cassette_rect_t window)
 {
-    const bool covered = window.w > 0 && window.h > 0;
-    const bool was_covered = s_window.w > 0 && s_window.h > 0;
     s_window = window;
 
     /* The clamp is a box change and nothing else, so it lands at once rather than on the
@@ -659,18 +657,18 @@ void cassette_tapes_set_window(cassette_rect_t window)
      * re-place, and create()'s own place() applies the window that is already held. */
     for (int i = 0; i < 2; i++)
         if (s_pack[i]) pack_place(i);
+}
 
-    /* While the Card is up it covers the whole of both packs and both rims - they sit inside
-     * its 426x272 box at the Controls pose, which is the only pose Real has - so the body's
-     * reels are hidden and the slice above the Card is the only copy that is drawn. That is
-     * what keeps a 25 Hz spoke tick from re-rendering the Card and the porthole for a
-     * picture nobody can see, and a fill change from repainting the body at all. */
-    if (covered == was_covered) return;
+/* The body's reels are covered by something opaque, so stop drawing them. Only the cover's
+ * porthole asks for this, and only while it paints the window itself: while the Card cuts the
+ * window out with its mask, the tape under it is the picture, seen through the hole. */
+void cassette_tapes_set_body_hidden(bool hidden)
+{
     for (int i = 0; i < 2; i++) {
-        if (s_pack[i]) lv_obj_set_hidden(s_pack[i], covered);
-        if (s_rim[i]) lv_obj_set_hidden(s_rim[i], covered);
+        if (s_pack[i]) lv_obj_set_hidden(s_pack[i], hidden);
+        if (s_rim[i]) lv_obj_set_hidden(s_rim[i], hidden);
         for (int k = 0; k < 2; k++)
-            if (s_hub_spoke[i][k].obj) lv_obj_set_hidden(s_hub_spoke[i][k].obj, covered);
+            if (s_hub_spoke[i][k].obj) lv_obj_set_hidden(s_hub_spoke[i][k].obj, hidden);
     }
 }
 

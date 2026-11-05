@@ -270,10 +270,27 @@ The fix, in this commit:
   at all.
 
 **Verified:** `idf.py build` clean (no warnings), flashed to the Sunton board, boots with a card
-in, the loader's PSRAM lines printed (§3.1). **Not yet verified:** the picture itself — the
-capsule's edge under the 7 px rim has not been looked at — and whether the audio is clean at Real
-now. The next reading is a listen, and the frame line (`screen: 50 frames: worst N ms`) while the
-reels turn.
+in, the loader's PSRAM lines printed (§3.1).
+
+**Verdict, after two flashes on the board: the porthole loses to the mask.** With the reel
+turning, the window flashed **white** now and then — white meaning the print showed through, so
+the porthole itself had been skipped for that area, not just its slice. Cutting the slice with an
+A8 capsule mask instead of `clip_corner` made the flash smaller and rarer (the stadium had no
+middle band, so `clip_corner` rendered the whole child twice into two 43-row ARGB layers) but did
+not remove it. The mask design cannot do this: the tape is drawn **once**, under the Card, and the
+window is a hole — there is no second copy that a refresh can drop. The 25 Hz redraws disappear
+with it: a spoke tick redraws a small box of the body, and the Card's masked stripe over it, which
+is the arrangement that has shipped for months.
+
+So `CARD_MASK` is **1** on this branch, and the porthole is kept behind it at 0 for the record:
+`cassette_cover.c` builds no porthole while the Card has a mask, and only asks the tapes to hide
+the body's reels when it does. The memory the mask costs is the memory §3.1 measured it can
+afford: **2,350,008 B free after the cover with a card mounted**, of which a full-screen 384 KB
+mask is 16 %.
+
+**The lesson for the feature:** full-screen Real should be built on the mask, not on the porthole.
+The 116,416 B argument against the mask was an argument about proportion, and §3.1 says the
+proportion is affordable.
 
 ## 5. The tape and the hub: is anything drawing a full circle it could skip?
 
@@ -538,13 +555,10 @@ valid because the new bit is zero everywhere they tread.
    fingers on the panel, read `[GDBG] contacts=`. If it never prints 2, the feature is a
    panel/controller question and everything below is idle. Five minutes, no code. *MEASURED
    (board), to be recorded.*
-2. **The porthole, at the Controls pose only** (§4e): it is the one change that deletes the mask
-   rather than enlarging it, and it is testable at the size everything already is. Card without a
-   mask, a 291x87 capsule with `clip_corner` + `radius 43` above the print, a child drawing the
-   same rings, the existing 7 px rim on top. Two captures plus `CONFIG_LV_USE_PERF_MONITOR_LOG_MODE=y`
-   `render` ms (`lv_sysmon.c:358-375`; how to read it in `panel-rgb-lvgl-performance.md` §8). If the
-   picture is indistinguishable and `render` does not rise, the 116 KB is already free and a 384 KB
-   mask never has to be allocated.
+2. ~~**The porthole, at the Controls pose only.**~~ **Done, and it lost (§4.1).** It deletes the
+   mask, but it is a second copy of the tape, and the board showed the window flashing white while
+   the reels turned: rare, and smaller after the slice moved from `clip_corner` to an A8 capsule
+   mask, but not gone. The mask is the shipped design for a reason. Skip to 3.
 3. **One board reading of the tape's periodic spike**, before optimising it: open Real, play, watch
    `render` for a step every ~2 s — that is the fill change of §5.2. Small step: ten rings are fine
    and the answer to the tape question is "already done". Large step: the fix is the ring count, not

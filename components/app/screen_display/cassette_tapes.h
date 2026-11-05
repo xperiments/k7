@@ -59,6 +59,11 @@ void cassette_tapes_place(cassette_pose_t pose);
  * clears it with a zero rect. */
 void cassette_tapes_set_window(cassette_rect_t window);
 
+/* Hide the body's packs, rims and spokes: something opaque covers them and their 25 Hz ticks
+ * would only re-render it. The cover asks for this while its porthole paints the window; it
+ * never asks while the Card's mask cuts the window out and the tape under it is the picture. */
+void cassette_tapes_set_body_hidden(bool hidden);
+
 /* White hub lines while a Track's picture is printed on the Card, the tape's own inks
  * otherwise. The rim's border and both spokes go white; the rim's face keeps the playing red,
  * so the hub still reads as a spool and only its drawing changes. The rewind's ink fade leaves

@@ -36,6 +36,7 @@
 
 #include "cassette_card.h"
 #include "cassette_style.h"
+#include "cassette_tapes.h"
 #include "cassette_widgets.h"
 
 static lv_obj_t *s_masked;          /* the Card's rect: the object the shared mask is sized to */
@@ -144,7 +145,12 @@ void cassette_cover_set_shown(bool shown)
      * porthole follows the same bit: the tape shows through the window whether or not a
      * picture landed. */
     if (s_rim) lv_obj_set_hidden(s_rim, !shown);
-    if (s_window) lv_obj_set_hidden(s_window, !shown);
+    if (s_window) {
+        lv_obj_set_hidden(s_window, !shown);
+        /* The porthole is opaque and covers the body's reels outright; hide them so their
+         * 25 Hz ticks cannot re-render the Card and the porthole behind it. */
+        cassette_tapes_set_body_hidden(shown);
+    }
 
     s_wanted = shown;
     if (shown) cover_show();
@@ -212,6 +218,12 @@ static void mask_build(int w, int h, int radius)
  * window on a board without the cover capability, and create() never reaches this then. */
 static void window_create(lv_obj_t *parent)
 {
+    /* The Card cuts the window out with its own A8 mask, and the print is cut by the same
+     * buffer: the tape under them is the picture, seen through the hole, and there is nothing
+     * to paint here. The porthole exists only when that mask is off (CARD_MASK 0), which is
+     * the experiment this branch was opened for. */
+    if (cassette_card_mask() != NULL) return;
+
     cassette_rect_t w = cassette_card_window();
     if (w.w <= 0 || w.h <= 0) return;
 
