@@ -67,6 +67,16 @@ bool cassette_cover_is_shown(void);
  * body are one material (ADR 0040). The view sets them together. */
 void cassette_cover_set_inks(lv_color_t plastic, lv_color_t ink, lv_color_t label);
 
+/* The window's slice, as a draw callback: the view hands the tapes' drawer
+ * (cassette_tapes_draw_slice) here, so this module owns the porthole object and the tapes own
+ * the paint. Set once, before the page can reach Real; a NULL drawer paints nothing. */
+void cassette_cover_set_window_draw(void (*draw)(lv_layer_t *layer));
+
+/* The tape moved inside the window: the slice is stale. The view calls this after
+ * cassette_tapes_set() when the frame changed anything the window shows - the hub phase, the
+ * fills or the ink - so a still Track costs nothing and a turning reel costs one capsule. */
+void cassette_cover_window_invalidate(void);
+
 
 #ifdef __cplusplus
 }

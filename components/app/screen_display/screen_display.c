@@ -267,28 +267,73 @@ static void backlight_test_task(void *arg)
 }
 #endif
 
-/* The card's presence, drawn rather than reported: the SD mark over the cassette when
- * there is none. Polled at about 2 Hz - a card is pulled by hand, and the FAT and USB
- * stacks already know within a second whether it answers.
+/* The cardless screen takes no touch at all.
  *
- * It changes nothing else on the screen. The level is the Controls model's, and a removal
- * does not overrule a swipe the owner made; the mark is enough to say why nothing plays. */
+ * A full-bleed object above every part but the SD mark, with no style to draw and no
+ * callback: a press lands on it first and goes nowhere. It is what makes the rule true for
+ * the parts as well as for the screen - a swipe already under a finger when the card goes is
+ * reset, and every press after it finds the gate - so the ladder cannot be walked, a bar cell
+ * cannot be tapped on its way out, and the dial cannot be opened while the card is out. It is
+ * below the mark because the mark is the one thing the screen still has to say.
+ */
+static lv_obj_t *s_gate;
+
+static void gate_create(void)
+{
+    lv_obj_t *scr = lv_screen_active();
+    if (s_gate || !scr) return;
+
+    s_gate = lv_obj_create(scr);
+    lv_obj_remove_style_all(s_gate);
+    lv_obj_set_pos(s_gate, 0, 0);
+    lv_obj_set_size(s_gate, lv_obj_get_width(scr), lv_obj_get_height(scr));
+    lv_obj_set_style_bg_opa(s_gate, LV_OPA_TRANSP, 0);
+    lv_obj_set_scrollable(s_gate, false);
+    lv_obj_set_clickable(s_gate, true);
+    lv_obj_set_hidden(s_gate, true);
+}
+
+static void gate_set(bool blocked)
+{
+    if (!s_gate) return;
+    lv_obj_set_hidden(s_gate, !blocked);
+    /* The gate is above the parts from now on, but a press that started before it went up
+     * is still the pressed object's. Drop it, or its release could run one last intent. */
+    if (blocked) lv_indev_reset(NULL, NULL);
+}
+
+/* The card's presence, drawn rather than reported. A card that goes takes the screen home:
+ * the controls' ladder has nothing left to act on, so the picture returns to the entry view
+ * and stays there until the card does.
+ *
+ * The entries are polled every pass rather than on the old 2 Hz clock. `card_present` is a
+ * word app_services' watch task writes every two seconds, so reading it costs a load; the
+ * throttle was guarding a stat() that is not here. It also lets the walk home continue on
+ * every frame instead of one in twenty - the walk is a few rungs, and at 2 Hz it would take
+ * seconds.
+ */
 static void card_poll(void)
 {
     static bool known;
     static bool present;
-    static unsigned ticks;
 
-    if (known && (ticks++ % 20u) != 0) return;
     bool now = app_services_card_present();
-    if (known && now == present) return;
+    if (known && now == present) {
+        /* Still out: finish the walk home and keep it home. Nothing may take the screen
+         * off the entry view while there is no card to act on. */
+        if (!now) cassette_view_home();
+        return;
+    }
     known = true;
     present = now;
     card_mark_set(!now);
-    if (now)
+    gate_set(!now);
+    if (now) {
         ESP_LOGI(TAG, "card inserted: the cassette is back");
-    else
-        ESP_LOGW(TAG, "no card: showing the SD mark");
+    } else {
+        ESP_LOGW(TAG, "no card: home, touch blocked, the SD mark looping");
+        cassette_view_home();
+    }
 }
 
 /* How long the glass stays black after the last flash read was asked for. A Snapshot read is
@@ -641,6 +686,9 @@ esp_err_t screen_display_start(const char *music_dir)
                  esp_err_to_name(sc));
 #endif
     cassette_view_create();
+    /* Above the view and below the mark: the cardless screen's gate is built with the
+     * cassette, hidden, and shown by the screen task when the card goes. */
+    gate_create();
     card_mark_create(lv_screen_active());
     splash_destroy();
 #endif

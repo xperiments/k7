@@ -71,6 +71,13 @@ void cassette_tapes_set_hubs_white(bool white);
  * colour). Only what changed is written. A NULL frame is a no-op. */
 void cassette_tapes_set(const cassette_frame_t *frame);
 
+/* The window's slice: the packs' rings, the strands and both hubs, drawn into `layer` in
+ * screen coordinates. The white page's porthole calls this from its child's draw callback,
+ * with the layer clipped to the window's capsule - the body's own objects are below the
+ * Card and cannot be seen through it. Order is the body's, bottom first: packs, strands,
+ * hubs. Called under the LVGL lock, like everything else on the screen. */
+void cassette_tapes_draw_slice(lv_layer_t *layer);
+
 #ifdef __cplusplus
 }
 #endif

@@ -92,6 +92,9 @@ static controls_t *s_controls;        /* the ladder: the level and the Menu */
 static groups_t s_groups;             /* which of the right bar's panels is up */
 static controls_state_t s_ctl;        /* its latest snapshot */
 static bool s_painted_white;          /* the page the screen is painted for */
+static cassette_frame_t s_frame_shown; /* the last frame applied: the window's slice reads it */
+static bool s_frame_shown_valid;
+static bool s_hubs_white_shown;        /* the hub ink the slice was last drawn with */
 
 /* ------------------------------------------------------------------ layout */
 
@@ -311,8 +314,25 @@ static void apply_frame(const cassette_frame_t *f)
     /* The hubs are white while the Cover is what the page shows: the spools read as plain
      * plastic and the artwork has the page's colour to itself. Asked every frame, because the
      * picture lands from the loader between frames; the setter ignores a repeated value. */
-    cassette_tapes_set_hubs_white(cassette_cover_is_shown() && cassette_cover_has_picture());
+    const bool hubs_white = cassette_cover_is_shown() && cassette_cover_has_picture();
+    cassette_tapes_set_hubs_white(hubs_white);
     cassette_tapes_set(f);
+
+    /* The window's slice is a second copy of the tape, so it is stale whenever the tape moved -
+     * the hub phase (25 Hz while playing), a fill change, the playing ink, or the hubs going
+     * white under a picture. A still Track invalidates nothing, which keeps a paused cassette
+     * free. */
+    if (hubs_white != s_hubs_white_shown || !s_frame_shown_valid ||
+        f->hub_frame[0] != s_frame_shown.hub_frame[0] ||
+        f->hub_frame[1] != s_frame_shown.hub_frame[1] ||
+        f->pack_fill[0] != s_frame_shown.pack_fill[0] ||
+        f->pack_fill[1] != s_frame_shown.pack_fill[1] ||
+        f->tape_ink != s_frame_shown.tape_ink) {
+        cassette_cover_window_invalidate();
+    }
+    s_hubs_white_shown = hubs_white;
+    s_frame_shown = *f;
+    s_frame_shown_valid = true;
     /* The meter is only alive while the EQ group is up; its module ignores a frame otherwise. */
     cassette_meter_set(f);
     cassette_levels_apply(f);
@@ -431,6 +451,32 @@ static void screen_intent_cb(screen_intent_t intent, void *ctx)
     controls_apply(controls_handle(s_controls, controls_intent(intent), &facts));
 }
 
+/* The walk home, one step a call. The two modalities come first - a knob's edit owns the
+ * touch, and the Menu is a page over the chrome - then the level: the Peek goes straight to
+ * Initial, and Art and Real take the rung below, so Real needs two calls. A step is applied
+ * through the same callbacks a finger's intent uses, which keeps the guards, the pages and
+ * the room in one place. */
+void cassette_view_home(void)
+{
+    if (!s_controls) return;
+
+    controls_facts_t facts = facts_now();
+    if (facts.editing) {
+        knob_editor_close();
+        return;
+    }
+    if (s_ctl.menu) {
+        menu_close_intent(NULL);                       /* closes the Menu and nothing else */
+        return;
+    }
+    if (s_ctl.level == CONTROLS_LEVEL_PEEK) {
+        screen_intent_cb(SCREEN_INTENT_DOWN, NULL);    /* Peek -> Initial */
+        return;
+    }
+    if (s_ctl.level != CONTROLS_LEVEL_INITIAL)
+        screen_intent_cb(SCREEN_INTENT_UP, NULL);      /* Real -> Art -> Initial */
+}
+
 /* --------------------------------------------------------------- the dump scene */
 
 /* A diagnostic build's scene driver: it walks the ladder and picks a group (or the Menu) with
@@ -476,27 +522,13 @@ bool cassette_view_scene_ready(void)
 }
 
 /* One intent a tick, and the mode decides which one: the Menu closes on its close intent, a
- * knob's dial on its own close, and the level is a reading, so it says which rung to take next. */
+ * knob's dial on its own close, and the level is a reading, so it says which rung to take next.
+ * The walk itself is the screen's one `cassette_view_home()`, the same call the cardless screen
+ * makes; this only answers whether it has arrived. */
 static bool scene_return_to_initial(void)
 {
-    controls_facts_t facts = facts_now();
-    if (facts.editing) {
-        knob_editor_close();
-        return false;
-    }
-    if (s_ctl.menu) {
-        menu_close_intent(NULL);                       /* closes the Menu and nothing else */
-        return false;
-    }
-    if (s_ctl.level == CONTROLS_LEVEL_PEEK) {
-        screen_intent_cb(SCREEN_INTENT_DOWN, NULL);     /* Peek -> Initial */
-        return false;
-    }
-    if (s_ctl.level != CONTROLS_LEVEL_INITIAL) {
-        screen_intent_cb(SCREEN_INTENT_UP, NULL);       /* Real -> Art -> Initial */
-        return false;
-    }
-    return true;
+    cassette_view_home();
+    return !facts_now().editing && !s_ctl.menu && s_ctl.level == CONTROLS_LEVEL_INITIAL;
 }
 
 static void scene_tick(void)
@@ -631,15 +663,18 @@ void cassette_view_create(void)
     lv_obj_set_scrollable(s_cassette, false);
     lv_obj_set_clickable(s_cassette, false);
 
-    /* The stack, bottom to top: the tape body, the Card, the print, the window's rim. Each is
-     * created after the one below it, so nothing is raised at runtime. The peek and the two
-     * bars are screen children above the cassette. */
+    /* The stack, bottom to top: the tape body, the Card, the print, the porthole, the window's
+     * rim. Each is created after the one below it, so nothing is raised at runtime. The peek
+     * and the two bars are screen children above the cassette. */
     cassette_tapes_create(s_cassette);
 
     cassette_card_create(s_cassette);
 
-    /* The cover owns the print and the rim around its window, and both go above the Card. */
+    /* The cover owns the print, the window's porthole and the rim around it - all above the
+     * Card. The porthole paints the tape slice, and the drawer is the tapes': the cover owns
+     * the object, the tapes own the paint. */
     cassette_cover_create(s_cassette);
+    cassette_cover_set_window_draw(cassette_tapes_draw_slice);
     cassette_place();
 
     /* The peek is the screen's child, above the cassette's container. It is the only

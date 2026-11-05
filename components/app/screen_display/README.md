@@ -10,7 +10,12 @@ lights the backlight over it and holds it for `APP_UI_MARK_HOLD_MS`; and
 `screen_display_start()` replaces it with the cassette. Everything else is private:
 
 - `screen_display.c` — the three boot phases, the draw buffer, the serial dump and the task
-  that keeps the cassette current.
+  that keeps the cassette current. It also owns the cardless state: when a card goes it walks
+  the picture home with `cassette_view_home()`, raises the input gate (a full-bleed, transparent
+  object above every part but the SD mark) and lets the mark rise, so no gesture and no touch
+  reaches the screen while there is no card; a reinsertion drops the gate and the mark in one
+  frame. The presence read is a word app_services' watch task writes, so it is checked every
+  pass and the walk home runs a rung per frame instead of on a 2 Hz clock.
 - `splash.c` — the boot mark: the icon font's K7 glyph at 128 px tall in the palette's primary,
   centred on the palette's black. It is a glyph, not a bitmap, and it owns no geometry.
 - `screen_frame.c` — the diagnostics over HTTP, with `CONFIG_APP_UI_SCREEN_HTTP` on (off by
@@ -258,6 +263,12 @@ after the tape body and shown and hidden with the
   two-finger swipe is nothing at all; there is no latch any more.
   A tap is not an intent: next and previous are the DJ block's own cells, and the view
   drops every intent while a knob is in edit mode.
+- `card_mark.c` / `.h` — the cardless page's one mark: the icon font's SD glyph in
+  `k_col_primary`, its centre column 80 px right of the screen's, rising from below the panel
+  over 600 ms ease-out, resting 500 ms and repeating while the card is out; it drops in one
+  frame when the card returns. It is created after the view and above the input gate, so it is
+  the one thing still drawn while the card is out. A glyph the cut does not carry leaves the
+  page empty and logs it once.
 - `artwork_loader.c` — the card side of the peek's tags and the white page's cover. It
   locates the picture (an ID3 `APIC` or a FLAC `PICTURE`): the App's `k7label` when the
   file has one, else the front cover. A label is the print already (402x188) and is

@@ -1,7 +1,9 @@
 # A full-screen Real cassette: the mask's size, the two-finger swipe, and what the tape really costs per frame (2026-11-05)
 
-> **Status: proposal.** Nothing here is implemented. Two sections end in a measurement only the
-> board can settle; they are named, not guessed.
+> **Status: the porthole (§4e) is implemented on `ui/full-screen-real` with `CARD_MASK 0`
+> (`cassette_card.c`), and the firmware was flashed on 2026-11-05.** The full-screen pose, the
+> flag and the gesture are still proposals, and the two board measurements §10 asks for are
+> still owed — one of them now has a first reading (§3.1).
 
 Axis: **the owner wants Real's content — the Track's picture printed on the cassette, seen
 through the pill window — at the entry pose instead of the Controls pose, reached by a
@@ -13,12 +15,14 @@ claim against the source, and finds that the gesture was written, shipped and re
 `f6a1a4d` — but never confirmed with two fingers on the panel.**
 
 Read out of this repository, the LVGL 9.6.0 tree vendored into `managed_components/lvgl__lvgl/`,
-and the ADRs. No `idf.py` was run and nothing was flashed.
+and the ADRs; the porthole build was then flashed and its boot log read (§3.1). Everything else
+was read, not run.
 
 Four kinds of number appear and are never mixed:
 
-- **MEASURED (board)** — printed by the firmware on the panel. **This note contains none.** Where
-  it needs one it inherits it from `docs/research/panel-rgb-lvgl-performance.md` and says so.
+- **MEASURED (board)** — printed by the firmware on the panel. **One here, §3.1** (the loader's
+  PSRAM line on the porthole build). Where a second is needed it inherits from
+  `docs/research/panel-rgb-lvgl-performance.md` and says so.
 - **MEASURED (link)** — read out of a built artefact. **None here**; the two existing notes'
   link figures are quoted where needed.
 - **DOCUMENTED** — a line of source, a header, a Kconfig value or an ADR, cited `file:line`.
@@ -27,14 +31,17 @@ Four kinds of number appear and are never mixed:
 
 ## Bottom line
 
-1. **The mask is a resident cost, not a frame cost — and that is exactly why it is the
-   problem.** The A8 buffer is 116,416 B today (`cassette_card.c:28`, `:86`; ADR 0039). At the
-   design grid the Card's own box is 814x520 design px, so a full-screen Real wants **334,400 B
-   (760x440), 384,000 B (800x480) or 424,320 B (814x520)**. The cover buffer is 464,310 B
-   (`artwork_loader.c:22`) and the loader records that **two of those plus a band did not fit**
-   in the ~1.7 MB PSRAM free at screen start (`artwork_loader.c:12-27`, `:560-566`). A 384 KB
-   mask is 83 % of a second cover buffer: the owner's "memory constraints of the mask" is the
-   right worry, and it is residency, not redraw, that pays.
+1. **The mask is a resident cost, not a frame cost — and that is why it is worth refusing, but
+   it is not what makes the view impossible.** The A8 buffer is 116,416 B today
+   (`cassette_card.c:28`, `:86`; ADR 0039). At the design grid the Card's own box is 814x520
+   design px, so a full-screen Real wants **334,400 B (760x440), 384,000 B (800x480) or
+   424,320 B (814x520)** — 83 % of the 464,310 B cover buffer (`artwork_loader.c:22`). **The
+   board measures 3,568,488 B of PSRAM free before the cover and 3,101,540 B after it (§3.1),
+   so a 384 KB mask would fit on this build**; the loader's "two covers plus a band did not fit
+   in ~1.7 MB" line (`artwork_loader.c:12-27`, `:560-566`) is a record of an earlier
+   configuration and is stale. The owner's "memory constraints of the mask" is the right
+   instinct for the wrong reason: the mask fits, it is simply 384 KB spent to make a hole that
+   a clip can paint.
 2. **LVGL does not iterate the mask per frame, and does not allocate per draw either — it
    allocates per *band*, and walks only the invalidated area.** `apply_mask()` intersects the
    mask with the layer's own `buf_area` (`lv_draw_sw_img.c:1024-1032`) and loops over that
@@ -136,8 +143,9 @@ rendering machinery is a rounding error beside it.**
 
 ## 3. Three bills a full-screen Real would pay
 
-1. **Resident:** 334,400–424,320 B, permanently, on a heap with ~1.7 MB free at screen start and
-   a 464,310 B cover already in it (`artwork_loader.c:12-27`, `:560-570`).
+1. **Resident:** 334,400–424,320 B, permanently, beside the 464,310 B cover. The board's own
+   free-heap line (§3.1) says 3.1 MB is still free after the cover, so this fits — it is a bill,
+   not a wall.
 2. **Per invalidation that touches the Card:** 9 B per masked pixel. Controls pose, a fill
    change, clamped to the window: 25,317 px → 227,853 B. Full-screen, same change, clamped to
    the *entry* window: 118,192 px (two packs at 356x166) → 1,063,728 B on the Card, and the same
@@ -148,6 +156,31 @@ For scale: the whole-screen repaint already documented for this board is 1,536,0
 traffic per cycle (`docs/research/panel-rgb-lvgl-performance.md` §6, lever 7). One full-screen
 masked object's mask pass over its whole area is 384,000 × 9 = 3,456,000 B — **2.25x a
 full-screen RGB565 repaint**, before anything is drawn.
+
+### 3.1 MEASURED (board): the heap the mask would come out of
+
+The porthole build (no mask allocated, `CARD_MASK 0`) prints, on the Sunton board at boot with
+no card in the slot:
+
+```
+I artwork: artwork memory before the cover: psram free 3568488 B, largest 3538944 B
+I artwork: artwork memory after the cover:  psram free 3101540 B, largest 3080192 B
+```
+
+`artwork_loader.c:564-570` prints these two lines; the values are this build's, 2026-11-05, and
+the mask would have been taken out of the same heap before them. Two consequences:
+
+- **A 384 KB mask fits**: 12 % of the 3.1 MB free after the cover, with a 3 MB largest block.
+  The note's earlier inference from `artwork_loader.c:12-27` ("two 464 KB buffers plus a band did
+  not fit") describes an older build; the comment is stale and should not be used to refuse the
+  mask without re-measuring.
+- **The largest block is the number that matters** (3,080,192 B after the cover): the mask is one
+  contiguous allocation, so fragmentation, not the total, is what would fail first — the same
+  lesson ADR 0004 records for Wi-Fi. A 424 KB mask is 14 % of that block.
+
+So the argument for the porthole is not "the mask cannot fit". It is "the mask is 384 KB of
+permanent PSRAM spent to make a hole that a clipped child can paint, and it costs 9 B per masked
+pixel every time the picture or the tape under it is redrawn".
 
 ## 4. Five ways to get the window without a giant mask
 
@@ -191,6 +224,35 @@ mixes.** It pays with a painted capsule (the window stops being a hole and becom
 capsule — visually the same, because the backdrop behind the window is `k_col_bg` on both pages,
 `cassette_view.c:164-166`) and with the corner layers above. The 7 px rim already exists to cover
 the edge (`cassette_card.h:56-61`).
+
+### 4.1 Built on `ui/full-screen-real` (2026-11-05)
+
+The porthole is implemented at the **Controls pose only**; the full-screen pose, the flag and the
+gesture are untouched. What changed:
+
+- **`cassette_tapes.c/.h`** — the three draw bodies the body's objects used (`pack_draw_rings`,
+  `strand_draw`, and the new `hub_draw`) are now functions a layer can be handed, and one public
+  `cassette_tapes_draw_slice(layer)` paints packs, strands and both hubs in screen coordinates.
+  It reads the module's own state (`s_pack_d`, `s_shown_hub`, `s_tape_ink`, `s_hubs_white`), so
+  the slice cannot drift from the body: both go through the same functions.
+- **`cassette_cover.c/.h`** — owns the porthole (`s_window`, a `cassette_box` at the window rect
+  with radius 43 and `clip_corner`) and its one child `s_slice`, and exposes
+  `cassette_cover_set_window_draw()` (the view hands it `cassette_tapes_draw_slice`) and
+  `cassette_cover_window_invalidate()`. It is created before the rim, so the rim still covers
+  its edge, and shown/hidden with `cassette_cover_set_shown()`.
+- **`cassette_card.c`** — `CARD_MASK 0`: `mask_build()` is not called, `cassette_card_mask()`
+  returns NULL, and the Card is an ordinary opaque rounded rect. Flip to 1 for the A/B.
+- **`cassette_view.c`** — registers the drawer after `cassette_cover_create()`, and invalidates
+  the porthole when the frame it applies differs from the last one in hub phase, pack fill, tape
+  ink, or hub whiteness. A paused cassette invalidates nothing.
+
+**Verified:** `idf.py build` clean (no warnings), flashed to the Sunton board, boots, and the
+loader's PSRAM lines printed (§3.1). **Not verified:** the picture. The board reports
+`no card: home, touch blocked, the SD mark looping` — with no card in the slot the screen sits on
+the cardless home and Real is unreachable, so the porthole has not been looked at yet. Two open
+questions for the first look: does the capsule's edge sit exactly under the 7 px rim, and what
+does `render` do while the reels turn (the porthole is invalidated on every hub-frame change, so
+the clip_corner bands are rebuilt at up to 25 Hz).
 
 ## 5. The tape and the hub: is anything drawing a full circle it could skip?
 
@@ -388,8 +450,8 @@ chosen to round-trip; `t16_layout` pins the grid at all three poses and is the t
 - At the entry pose the print would be 768 px wide: the same buffer **upscaled 1.27x**, drawn into
   768x359 of visible print — **3.6x the pixels** (275,712 vs 75,576) on the renderer's most
   expensive path (scaled + anti-aliased), and visibly softer. A native buffer would be
-  768x490x2 = **752,640 B** — 1.6 cover buffers, which the loader's own note says did not fit
-  (`artwork_loader.c:22-27`, `:560-566`).
+  768x490x2 = **752,640 B** — 1.6 cover buffers, and §3.1's measurement says it would fit, at the
+  cost of a third of the free heap (`artwork_loader.c:22-27`).
 - No cheap middle exists: the loader fits *cover-style* to one fixed shape (`:66-69`), and ADR 0021
   already rejected decoding at the display width because it ties the buffer to a pose.
 
@@ -467,8 +529,9 @@ valid because the new bit is zero everywhere they tread.
    and the answer to the tape question is "already done". Large step: the fix is the ring count, not
    a window.
 4. **Only then** the full-screen Card: author the 760x440 rect on the design grid, pin it in
-   `t16_layout`, and choose between two masks (≈670 KB of PSRAM, which the loader's notes say will
-   not fit beside the cover) and the porthole (0 B).
+   `t16_layout`, and choose between two masks (≈670 KB of PSRAM — it fits, §3.1, but it is a
+   fifth of the free heap for a hole) and the porthole (0 B, already built at the Controls pose
+   on this branch).
 
 ## Sources
 

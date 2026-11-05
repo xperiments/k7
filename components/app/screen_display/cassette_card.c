@@ -12,16 +12,24 @@
  * used, so its caps agree with the frame's pill to the pixel. The window is 291x87 - wider
  * than it is tall - so only the horizontal case exists, and the static assert below keeps
  * it that way.
+ *
+ * **The mask is off on this branch.** The window is painted above the print by the cover's
+ * porthole (cassette_cover.c), so the Card is an ordinary opaque rounded rect with no hole
+ * to cut and the 116,416 B buffer is never allocated. CARD_MASK=1 brings the whole mask back
+ * for the A/B this branch exists for; nothing else about the Card changes between the two.
  */
+#define CARD_MASK 0   /* 1 = the A8 mask and the cut window; 0 = the porthole above the print */
+
 #include "cassette_card.h"
 
 #include "screen_caps.h"
 
-#include <math.h>
-#include <string.h>
-
 #include "cassette_style.h"
 #include "cassette_widgets.h"
+
+#if CARD_MASK
+#include <math.h>
+#include <string.h>
 
 /* LVGL wants every A8 stride aligned to 4 bytes; the mask's size is the object's size,
  * so this is also what makes it 116,416 B rather than 115,872. */
@@ -29,13 +37,17 @@
 
 _Static_assert(CASSETTE_CARD_WINDOW_W >= CASSETTE_CARD_WINDOW_H,
                "the Card's mask only cuts a stadium wider than it is tall");
+#endif
 
 static lv_obj_t *s_card;
 static lv_obj_t *s_plate;          /* the shell's trapezoid, drawn from one transparent object */
 static lv_color_t s_plate_ink;     /* its fill: the Card's ink, 30 % darker */
+#if CARD_MASK
 static lv_image_dsc_t s_mask_dsc;
 static uint8_t *s_mask;
+#endif
 
+#if CARD_MASK
 /* Zero the mask in a stadium centred on the window's box: a central band and two
  * semicircular ends whose radius is half the shorter side. The ends are sampled at the
  * pixel centres (y + 0.5), which is what keeps them on the same pixel grid as a rounded
@@ -100,6 +112,7 @@ static void mask_build(void)
     s_mask_dsc.data_size = (uint32_t)(stride * h);
     s_mask_dsc.data = s_mask;
 }
+#endif /* CARD_MASK */
 
 /* The front plate: a trapezoid, its top edge inset and its bottom edge the Card's own. LVGL has
  * no polygon, so it is two triangles drawn from one transparent object - the same trick the
@@ -141,11 +154,18 @@ void cassette_card_create(lv_obj_t *parent)
      * on one. Asked, not compiled out (screen_caps.h). */
     if (!screen_caps()->cover) return;
 
+#if CARD_MASK
     mask_build();
 
     s_card = cassette_box(parent, CASSETTE_CARD_X, CASSETTE_CARD_Y, CASSETTE_CARD_W,
                           CASSETTE_CARD_H, CASSETTE_CARD_R, k_col_cassette[0].plastic);
     if (s_mask) lv_obj_set_style_bitmap_mask_src(s_card, &s_mask_dsc, 0);
+#else
+    /* No mask and no hole: the cover's porthole paints the window above the print, so this is
+     * an ordinary opaque rounded rect and the tape behind it is simply covered. */
+    s_card = cassette_box(parent, CASSETTE_CARD_X, CASSETTE_CARD_Y, CASSETTE_CARD_W,
+                          CASSETTE_CARD_H, CASSETTE_CARD_R, k_col_cassette[0].plastic);
+#endif
 
     /* The plate: a child of the Card, below the print's bottom edge and inside the mask's
      * window, so it is neither clipped nor covered. */
@@ -183,7 +203,11 @@ void cassette_card_set_ink(lv_color_t ink)
 
 const lv_image_dsc_t *cassette_card_mask(void)
 {
+#if CARD_MASK
     return s_mask ? &s_mask_dsc : NULL;
+#else
+    return NULL;   /* no hole to cut: the porthole paints the window above the print */
+#endif
 }
 
 cassette_rect_t cassette_card_window(void)

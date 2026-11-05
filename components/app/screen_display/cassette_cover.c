@@ -39,11 +39,21 @@ static lv_obj_t *s_masked;          /* the Card's rect: the object the shared ma
 static lv_obj_t *s_print;          /* the print proper: 402x188 at +12,+20 */
 static lv_obj_t *s_img;            /* the Track picture, at the print's top-left */
 static lv_obj_t *s_fallback;       /* opaque fallback while the shared mask is not there */
+static lv_obj_t *s_window;         /* the porthole: the window's capsule, above the print */
+static lv_obj_t *s_slice;          /* its child - clip_corner rounds children, not the parent's own paint */
+static void (*s_slice_draw)(lv_layer_t *layer);   /* the tapes' drawer, handed in by the view */
 static lv_obj_t *s_rim;            /* the window's pill, over the print's cut edge */
 static const lv_image_dsc_t *s_dsc;
 static bool s_wanted;              /* the white page asked for the cover */
 
 static void cover_hide(void);
+
+/* The slice, in the porthole's child: the view gives the tapes' drawer, so this module owns
+ * the object and the tapes own the paint. */
+static void slice_draw_cb(lv_event_t *e)
+{
+    if (s_slice_draw) s_slice_draw(lv_event_get_layer(e));
+}
 
 /* The label is the print's paper: the row's `label` fill, cut by the same mask as a picture.
  * The row's `ink` is the colour a word would use; the label is wordless, so it is not read
@@ -125,8 +135,11 @@ void cassette_cover_set_image(const lv_image_dsc_t *dsc)
 void cassette_cover_set_shown(bool shown)
 {
     /* The window's rim is the Card's, not the print's: it is up whenever Real is, picture or
-     * no picture, and it goes with the page in one frame. The print is a cut either way. */
+     * no picture, and it goes with the page in one frame. The print is a cut either way. The
+     * porthole follows the same bit: the tape shows through the window whether or not a
+     * picture landed. */
     if (s_rim) lv_obj_set_hidden(s_rim, !shown);
+    if (s_window) lv_obj_set_hidden(s_window, !shown);
 
     s_wanted = shown;
     if (shown) cover_show();
@@ -141,6 +154,43 @@ bool cassette_cover_has_picture(void)
 bool cassette_cover_is_shown(void)
 {
     return s_wanted;
+}
+
+/* The porthole and its one child. The capsule is opaque and rounds its child's corners; the
+ * child is transparent and does all the painting, through the tapes' drawer. Sized from the
+ * Card's window, which is the Card's own rect - there is no Card and no window on a board
+ * without the cover capability, and create() never reaches this then. */
+static void window_create(lv_obj_t *parent)
+{
+    cassette_rect_t w = cassette_card_window();
+    if (w.w <= 0 || w.h <= 0) return;
+
+    s_window = cassette_box(parent, w.x, w.y, w.w, w.h, CASSETTE_CARD_WINDOW_R, k_col_bg);
+    lv_obj_set_style_pad_all(s_window, 0, 0);
+    lv_obj_set_style_clip_corner(s_window, true, 0);
+    lv_obj_set_hidden(s_window, true);
+
+    s_slice = lv_obj_create(s_window);
+    lv_obj_remove_style_all(s_slice);
+    lv_obj_set_style_bg_opa(s_slice, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_slice, 0, 0);
+    lv_obj_set_style_pad_all(s_slice, 0, 0);
+    lv_obj_set_pos(s_slice, 0, 0);
+    lv_obj_set_size(s_slice, w.w, w.h);
+    lv_obj_set_scrollable(s_slice, false);
+    lv_obj_set_clickable(s_slice, false);
+    lv_obj_add_event_cb(s_slice, slice_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+}
+
+void cassette_cover_set_window_draw(void (*draw)(lv_layer_t *layer))
+{
+    s_slice_draw = draw;
+}
+
+void cassette_cover_window_invalidate(void)
+{
+    /* Hidden, LVGL drops the invalidation; shown, the capsule and its child repaint. */
+    if (s_window) lv_obj_invalidate(s_window);
 }
 
 void cassette_cover_create(lv_obj_t *parent)
@@ -206,6 +256,14 @@ void cassette_cover_create(lv_obj_t *parent)
                           CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H,
                           CASSETTE_CARD_WINDOW_R, k_col_cassette[0].label);
     lv_obj_set_hidden(s_fallback, true);
+
+    /* The porthole: an opaque capsule at the window, carrying the tape slice in a child, so
+     * the Card no longer has to be masked to make a hole. clip_corner rounds a parent's
+     * *children*, not its own paint (lv_refr.c:118-129, :159-257), which is why the slice is a
+     * child; the capsule itself is k_col_bg - the back cover the tape stands on - so nothing
+     * behind it (the print, the fallback pill) can show through. The rim, built next, covers
+     * its edge, which is why the porthole is created before it. */
+    window_create(parent);
 
     /* The window's rim, last: 3 px of the Card's plastic on a 291x88 box with the window's
      * radius, a child of the cassette container rather than of the print, because the print is

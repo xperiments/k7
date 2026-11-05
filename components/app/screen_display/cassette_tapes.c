@@ -211,12 +211,10 @@ static void strand_set(int i)
 }
 
 /* One polyline per side, as a single line draw task. lv_draw_line() copies the points, so
- * the array can live on the stack here. */
-static void strand_draw_cb(lv_event_t *e)
+ * the array can live on the stack here. The window's slice draws the same polyline into
+ * its own layer, so the body and the slice cannot disagree about where the tape runs. */
+static void strand_draw(lv_layer_t *layer, int i)
 {
-    int i = (int)(intptr_t)lv_event_get_user_data(e);
-    lv_layer_t *layer = lv_event_get_layer(e);
-
     lv_point_precise_t pts[STRAND_POINTS_MAX];
     int n = strand_points(i, pts);
 
@@ -228,6 +226,11 @@ static void strand_draw_cb(lv_event_t *e)
     dsc.points = pts;
     dsc.point_cnt = n;
     lv_draw_line(layer, &dsc);
+}
+
+static void strand_draw_cb(lv_event_t *e)
+{
+    strand_draw(lv_event_get_layer(e), (int)(intptr_t)lv_event_get_user_data(e));
 }
 
 /* One half of the hub's divider: a 2 px radius from HUB_SPOKE_R0 to HUB_SPOKE_R1 at
@@ -273,17 +276,68 @@ static void hub_frame_set(int i, uint8_t frame)
                   a + (k ? HUB_HALF_TURN : 0.0));
 }
 
+/* A hub as the window's slice draws it: the disc, its rim and the two spokes, at the frame
+ * the body is showing. The body paints these with three kinds of object - a filled circle
+ * with a border, and two lv_line spokes - so that each invalidation stays in its own box.
+ * The slice has no objects of its own: it draws the same three things into its layer, whose
+ * clip is the window, so nothing outside the window is ever rasterised. */
+static void hub_draw(lv_layer_t *layer, int i)
+{
+    const int cx = SCX(HUB_X(i)), cy = SCY(HUB_Y), d = SC(HUB_RING_D);
+
+    lv_draw_rect_dsc_t disc;
+    lv_draw_rect_dsc_init(&disc);
+    disc.bg_color = k_col_hub_ring;
+    disc.bg_opa = LV_OPA_COVER;
+    disc.radius = LV_RADIUS_CIRCLE;
+    lv_area_t box = { cx - d / 2, cy - d / 2, cx - d / 2 + d - 1, cy - d / 2 + d - 1 };
+    lv_draw_rect(layer, &disc, &box);
+
+    lv_draw_arc_dsc_t ring;
+    lv_draw_arc_dsc_init(&ring);
+    ring.color = s_hubs_white ? k_col_hub_white
+                              : lv_color_mix(k_col_tape_dark, k_col_tape, s_tape_ink);
+    ring.width = HUB_RIM_W;
+    ring.opa = LV_OPA_COVER;
+    ring.center.x = cx;
+    ring.center.y = cy;
+    ring.start_angle = 0;
+    ring.end_angle = 360;
+    ring.radius = (uint16_t)(d / 2 - HUB_RIM_W / 2);
+    lv_draw_arc(layer, &ring);
+
+    /* The divider stops short of the centre and of the rim, exactly as spoke_set() places
+     * it, so the slice's divider is the body's and not a second reading of the geometry. */
+    double a = -(double)s_shown_hub[i] * k_hub_step;
+    for (int k = 0; k < 2; k++) {
+        double t = a + (k ? HUB_HALF_TURN : 0.0);
+        lv_point_precise_t pts[2];
+        pts[0].x = (lv_value_precise_t)(cx + lround(SC(HUB_SPOKE_R0) * cos(t)));
+        pts[0].y = (lv_value_precise_t)(cy + lround(SC(HUB_SPOKE_R0) * sin(t)));
+        pts[1].x = (lv_value_precise_t)(cx + lround(SC(HUB_SPOKE_R1) * cos(t)));
+        pts[1].y = (lv_value_precise_t)(cy + lround(SC(HUB_SPOKE_R1) * sin(t)));
+
+        lv_draw_line_dsc_t line;
+        lv_draw_line_dsc_init(&line);
+        line.color = s_hubs_white ? k_col_hub_white : k_col_hub_ink;
+        line.width = HUB_SPOKE_W;
+        line.opa = LV_OPA_COVER;
+        line.points = pts;
+        line.point_cnt = 2;
+        line.round_start = 1;
+        line.round_end = 1;
+        lv_draw_line(layer, &line);
+    }
+}
+
 /* A pack's rings: the outer circle at the pack's radius, then one every PACK_RING_GAP
  * px inwards until the hub rim, which covers anything under it. All of them come from
  * one object's draw callback rather than one object per circle: the count follows the
  * fill, so a circle-per-object would resize and invalidate a dozen boxes on every frame
  * the tape moves, while this invalidates the pack's box once. The rings are the only
  * paint - the object has no background - so the screen shows through between them. */
-static void pack_draw_cb(lv_event_t *e)
+static void pack_draw_rings(lv_layer_t *layer, int i)
 {
-    int i = (int)(intptr_t)lv_event_get_user_data(e);
-    lv_layer_t *layer = lv_event_get_layer(e);
-
     lv_draw_arc_dsc_t dsc;
     lv_draw_arc_dsc_init(&dsc);
     dsc.color = k_col_tape;
@@ -302,6 +356,26 @@ static void pack_draw_cb(lv_event_t *e)
     for (int r = SC(s_pack_d[i]) / 2; r > SC(HUB_RING_D) / 2; r -= gap) {
         dsc.radius = (uint16_t)r;
         lv_draw_arc(layer, &dsc);
+    }
+}
+
+static void pack_draw_cb(lv_event_t *e)
+{
+    pack_draw_rings(lv_event_get_layer(e), (int)(intptr_t)lv_event_get_user_data(e));
+}
+
+/* The window's slice: what the white page's Card used to show by having a hole cut in it.
+ * The Card is opaque now and the porthole above the print paints this instead, clipped to
+ * the window's capsule by its own object - so the same tape, one layer higher, and no A8
+ * mask anywhere. Order is the body's, bottom first: packs, strands, hubs. */
+void cassette_tapes_draw_slice(lv_layer_t *layer)
+{
+    if (!layer || !s_run) return;
+
+    for (int i = 0; i < 2; i++) {
+        pack_draw_rings(layer, i);
+        strand_draw(layer, i);
+        hub_draw(layer, i);
     }
 }
 

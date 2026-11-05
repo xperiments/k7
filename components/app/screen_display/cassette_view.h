@@ -45,6 +45,16 @@ void cassette_view_set_scale(int scale, int offset_x, int offset_y, uint32_t ms)
  * stay. The EQ's edit mode uses it: the cassette goes and the virtual knob appears. */
 void cassette_view_dim(bool dim);
 
+/* Walk the picture home to the entry view - the full cassette at Initial. It ends a knob's
+ * edit, closes the Menu, and takes the ladder down one rung per call: the Peek goes straight
+ * to Initial, and Art or Real takes the rung below it. One step per call rather than a loop,
+ * so the page flip and the pose animation keep the order the model's changed-mask gives them;
+ * a call on the settled entry view does nothing, which is what lets a caller repeat it until
+ * the screen is home (the cardless screen does, because the walk spans several frames).
+ *
+ * Called under the LVGL lock, like everything else on the screen. */
+void cassette_view_home(void);
+
 #if CONFIG_APP_UI_SERIAL_DUMP || CONFIG_APP_UI_SCREEN_HTTP
 /* The highest scene number the driver knows: 0 the entry view, 1 Art/Home, 2 Art/EQ, 3
  * Art/RGB, 4 the Menu, 5 Real/EQ, 6 the EQ's 3x dial, 7 the RGB effect's, 8 the Peek, 9
