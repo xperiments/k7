@@ -730,19 +730,44 @@ void cassette_tapes_set_body_hidden(bool hidden)
 /* Push the tape's ink into the hub rims: the playing red at LV_OPA_COVER, the tape's own
  * colour at LV_OPA_TRANSP. Only the border changes, so each rim invalidates its own
  * 168 px circle and nothing else. */
-static void tape_ink_apply(lv_opa_t ink)
+/* The hub's three paints - the disc, the rim and the divider marks - from the mode and the
+ * frame in force:
+ *
+ *   body     the disc is the hub's plastic, the rim carries the playing ink, the marks the
+ *            hub's own ink; with a picture printed on the Card the rim and marks go white.
+ *   preview  the whole hub is white - the disc too - because the window is the picture's and
+ *            not the cassette's. The marks stay the pack's dark red, or a white hub would be
+ *            a blank circle.
+ */
+static void hub_ink_apply(void)
 {
-    s_tape_ink = ink;
-    if (s_hubs_white) return;   /* the printed Cover owns the hubs' ink while it is up */
+    const lv_color_t disc = s_preview ? k_col_hub_white : k_col_hub_ring;
+    lv_color_t ring = s_preview ? k_col_hub_white
+                                : lv_color_mix(k_col_tape_dark, k_col_tape, s_tape_ink);
+    if (!s_preview && s_hubs_white) ring = k_col_hub_white;
+    const lv_color_t mark = s_preview ? k_col_tape_dark_preview
+                                      : (s_hubs_white ? k_col_hub_white : k_col_hub_ink);
+
     for (int i = 0; i < 2; i++) {
-        if (!s_rim[i]) continue;
-        lv_obj_set_style_border_color(s_rim[i],
-                                      lv_color_mix(k_col_tape_dark, k_col_tape, ink), 0);
-        /* The slice's rims carry the same ink. */
+        if (s_rim[i]) {
+            lv_obj_set_style_bg_color(s_rim[i], disc, 0);
+            lv_obj_set_style_border_color(s_rim[i], ring, 0);
+        }
+        for (int k = 0; k < HUB_SPOKE_MAX; k++) {
+            if (s_hub_spoke[i][k].obj)
+                lv_obj_set_style_line_color(s_hub_spoke[i][k].obj, mark, 0);
+        }
+        /* The slice above the Card draws the same hub. */
         lv_area_t hb;
         hub_box(i, &hb);
         slice_dirty(&hb);
     }
+}
+
+static void tape_ink_apply(lv_opa_t ink)
+{
+    s_tape_ink = ink;
+    hub_ink_apply();
 }
 
 /* White hub lines, or the tape's inks back: the rim's border and both spokes, which are the
@@ -751,24 +776,7 @@ void cassette_tapes_set_hubs_white(bool white)
 {
     if (white == s_hubs_white) return;
     s_hubs_white = white;
-
-    for (int i = 0; i < 2; i++) {
-        if (s_rim[i]) {
-            lv_obj_set_style_border_color(s_rim[i],
-                                          white ? k_col_hub_white
-                                                : lv_color_mix(k_col_tape_dark, k_col_tape,
-                                                               s_tape_ink), 0);
-        }
-        for (int k = 0; k < 2; k++) {
-            if (s_hub_spoke[i][k].obj)
-                lv_obj_set_style_line_color(s_hub_spoke[i][k].obj,
-                                            white ? k_col_hub_white : k_col_hub_ink, 0);
-        }
-        /* The slice draws the same ink: its rims and spokes changed with the body's. */
-        lv_area_t hb;
-        hub_box(i, &hb);
-        slice_dirty(&hb);
-    }
+    hub_ink_apply();
 }
 
 /* The full-screen picture's hub: a thicker rim, the divider kept, and each pack as its edge
@@ -797,6 +805,7 @@ void cassette_tapes_set_preview(bool on)
          * whole. */
         if (s_pack[i]) lv_obj_invalidate(s_pack[i]);
     }
+    hub_ink_apply();
     if (s_run) lv_obj_set_style_line_color(s_run, col, 0);
 }
 
