@@ -280,6 +280,9 @@ static http_result_t playlists_route(int fd, const http_request_t *req, void *ct
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
     }
+    /* The Snapshot is mapped flash: reading it while the panel scans displaces the picture, so
+     * the board takes the glass off first, exactly as it does for a page load (ADR 0047, 0055). */
+    if (s_cfg.page_service) s_cfg.page_service();
     uint32_t n = s_snapshot ? snapshot_lists(s_snapshot) : 0;
     size_t cap = 320 + (size_t)n * 320;
     char *body = malloc(cap);
@@ -317,6 +320,8 @@ static http_result_t playlists_route(int fd, const http_request_t *req, void *ct
 static http_result_t playlist_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
+    /* Reading the Snapshot below is a mapped-flash read; guard the scan first (ADR 0047, 0055). */
+    if (s_cfg.page_service) s_cfg.page_service();
     uint64_t id = 0;
     const char *suffix = req->path + strlen("/api/playlists/");
     if (!s_snapshot || !parse_hex64(suffix, strlen(suffix), &id)) {
@@ -395,6 +400,9 @@ static http_result_t select_route(int fd, const http_request_t *req, void *ctx)
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
     }
+    /* Resolving the choice reads the Snapshot (mapped flash) and writes NVS (flash); guard the
+     * scan first, as for a page load (ADR 0047, 0055). */
+    if (s_cfg.page_service) s_cfg.page_service();
     uint64_t id = 0;
     if (!body_list_id((const char *)req->body, req->body_len, &id)) {
         reply_json(fd, 400, "{\"ok\":false,\"error\":\"a body of {\\\"id\\\":\\\"<hex>\\\"} or {\\\"id\\\":null}\"}",
@@ -729,6 +737,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         .snapshot = s_snapshot,
         .snapshot_state = s_snapshot_state,
         .snapshot_reason = s_snapshot_reason,
+        .page_service = cfg->page_service,
     };
     e = mcp_start(&mcp);
     if (e != ESP_OK) return fail(report, e, "MCP endpoint");

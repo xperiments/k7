@@ -70,6 +70,7 @@ static mcp_local_ip_fn L_local_ip;
 static const char *L_app_origin = ""; /* the deployed App's origin, or "" */
 static mcp_rescan_fn L_rescan;
 static uint16_t L_port = 8000;
+static void (*page_service_fn)(void); /* screen guard for Snapshot reads; NULL where no panel */
 
 /* --------------------------------------------------------------- JSON read */
 
@@ -1510,6 +1511,13 @@ static http_result_t post_route(int fd, const http_request_t *req, void *ctx)
         }
         w_t tw = w_make(text, MCP_TEXT_MAX);
         bool ok = true;
+        /* These three tools read the Snapshot, which is mapped flash; the board takes the glass
+         * off first so the reads cannot displace the scan (ADR 0047, 0055). library_list and
+         * player_status read only the resident Library, so they leave the screen alone. */
+        if (strcmp(name, "library_stats") == 0 || strcmp(name, "library_search") == 0 ||
+            strcmp(name, "library_track") == 0) {
+            if (page_service_fn) page_service_fn();
+        }
         if (strcmp(name, "library_stats") == 0) {
             write_stats(&tw, lib);
         } else if (strcmp(name, "library_list") == 0) {
@@ -1588,6 +1596,7 @@ esp_err_t mcp_start(const mcp_cfg_t *cfg)
     SN = cfg->snapshot;
     SN_state = cfg->snapshot_state;
     SN_reason = cfg->snapshot_reason ? cfg->snapshot_reason : "";
+    page_service_fn = cfg->page_service;
     /* MCP is the app's endpoint: TLS listener (front door R1). */
     esp_err_t err = http_server_register_route_method_ex_on(HTTP_LISTENER_TLS, "/mcp", "POST",
                                                             post_route, NULL, mcp_body_error);

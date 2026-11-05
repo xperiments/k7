@@ -1,5 +1,16 @@
 # The measurements live in a flash partition, and are never resident
 
+> **Amended: Snapshot reads take the screen off the glass, like a page load.** The rule ADR 0055
+> establishes — the scan-out cannot survive any flash access — applies to the Snapshot's mapped
+> reads exactly as it did to the Shell's page reads: a query that reads the mapped partition is a
+> cache-line fetch on the bus the RGB DMA draws from, which displaces the picture. This is what
+> kept tearing the screen when the App at the public origin reloaded and fired a burst of
+> `/api/playlists` and `/mcp` calls at the device, while a Launcher reload was clean. The Snapshot
+> is not copied to PSRAM (the numbers in "Why flash and not PSRAM" still hold, and the copy is
+> what the owner rejected as too large); instead the routes and MCP tools that read it call
+> `page_service` first — the same black-and-re-establish guard ADR 0055 chose for page loads —
+> so the slip happens behind a black frame and the scan is re-established when the read is over.
+
 A design for this device proposed a custom binary music database on the card: fixed 64-byte
 track records, sorted BPM and year indexes, categorical bitsets, an inverted text index, opened
 by section offset and read from the SD card at query time. Its stated reason was that the
@@ -92,7 +103,9 @@ Two consequences follow, and both simplify the proposal:
   strains, and the prefetch experiment ([`docs/research/audio-decode-cost.md:69-77`](../research/audio-decode-cost.md)) already
   showed that a second card reader does not overlap — it sums.
 - **Load the Snapshot into PSRAM at boot.** Simple, and correct on a board with room; this one
-  does not have it, for the numbers above.
+  does not have it, for the numbers above. The amendment at the top keeps the mapped read but
+  hides it behind the same black-and-re-establish guard as a page load, because the copy is too
+  large.
 - **The proposal's full database, resident or mapped.** Names, dictionaries and a text index
   duplicated beside the Library's own, plus a rule for tracks that exist in one and not the
   other. Rejected: two descriptions of one truth, and a second search path to keep in step
