@@ -94,12 +94,18 @@ def main():
     port = free_port()
     proc = start(FIXTURES, port)
     try:
-        # No page: the paths the old Shell served are plain 404s now.
+        # No page, but a doorbell: the names a browser types or a bookmark holds are sent
+        # to the App (ADR 0067), and nothing else gains a route.
         for path in ("/", "/bridge", "/bridge/", "/index.html", "/app", "/app/"):
+            status, headers, _, _ = get(port, path)
+            check(f"{path} redirects", status, 302)
+            check(f"{path} names the App", headers.get("location"),
+                  "https://k7.xperiments.dev/#/player")
+        for path in ("/nope", "/apps", "/index.htm"):
             status, headers, _, body = get(port, path)
             check(f"{path} is a 404", status, 404)
             check(f"{path} says no such path", "no such path" in body, True)
-        status, headers, _, body = get(port, "/")
+        status, headers, _, body = get(port, "/nope")
         check("the 404 is the server's error page", headers.get("content-type"),
               "text/html; charset=utf-8")
         check("and it is not compressed", headers.get("content-encoding"), None)

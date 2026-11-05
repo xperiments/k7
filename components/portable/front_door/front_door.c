@@ -1,9 +1,10 @@
 /*
  * front_door - see include/front_door.h.
  *
- * One route and no state: `/api/status` answers the card state the App's views hang from.
- * The device serves no page, so `/` is a 404 like every other name that is not one of the
- * device's own: /library, /stream, the /api routes and /mcp.
+ * `/api/status` answers the card state the App's views hang from, and the device's address
+ * is a doorbell: it serves no page of its own (ADR 0067), so a browser that opens
+ * `http://k7.local` is sent to the App. Everything else that is not one of the device's own
+ * names - /library, /stream, the /api routes and /mcp - is a 404.
  */
 #include "front_door.h"
 
@@ -17,6 +18,13 @@
 #include "library.h"
 #include "mini_icecast.h"
 #include "playlist_select.h"
+
+/* The App is the only UI. The device's root answers 302 here; a development build sets the
+ * same string to the development origin (components/portable/front_door/Kconfig). The
+ * fallback is what a host build, which has no sdkconfig, compiles. */
+#ifndef CONFIG_FRONT_DOOR_LAUNCH_URL
+#define CONFIG_FRONT_DOOR_LAUNCH_URL "https://k7.xperiments.dev/#/player"
+#endif
 
 static const char *TAG = "front_door";
 
@@ -101,15 +109,35 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
     return HTTP_HANDLED;
 }
 
-/* A GET that names no route is a 404, with no page to fall back to. The table already
- * answers OPTIONS under /api/ for the hosted App's preflight, so without this catch-all an
- * unknown GET there would be a 405: the path exists for one method, but not as a resource.
- * `/` and `/bridge` land here too. */
-static http_result_t not_found_route(int fd, const http_request_t *req, void *ctx)
+/* The device's address is a doorbell. A browser that types it, or follows an old bookmark
+ * to the page the device used to serve, is sent to the App - which is the only UI (ADR
+ * 0067). Only exact names ring: everything else stays a 404, which is also what keeps an
+ * unknown GET under /api/ a 404 rather than the 405 the OPTIONS route would otherwise
+ * cause. */
+static http_result_t root_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
-    ESP_LOGI(TAG, "GET %s -> 404", req->path);
-    http_send_error(fd, 404, "no such path");
+    static const char *const doorbell[] = {"/", "/index.html", "/bridge", "/bridge/",
+                                           "/app", "/app/"};
+    bool ring = false;
+    for (size_t i = 0; i < sizeof doorbell / sizeof doorbell[0]; ++i) {
+        if (strcmp(req->path, doorbell[i]) == 0) {
+            ring = true;
+            break;
+        }
+    }
+
+    if (!ring) {
+        ESP_LOGI(TAG, "GET %s -> 404", req->path);
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
+
+    char headers[256];
+    snprintf(headers, sizeof headers, "Location: %s\r\nCache-Control: no-store\r\n",
+             CONFIG_FRONT_DOOR_LAUNCH_URL);
+    ESP_LOGI(TAG, "GET %s -> 302 %s", req->path, CONFIG_FRONT_DOOR_LAUNCH_URL);
+    http_send_headers(fd, 302, "text/plain", 0, headers);
     return HTTP_HANDLED;
 }
 
@@ -120,8 +148,9 @@ esp_err_t front_door_start(const front_door_cfg_t *cfg)
 
     esp_err_t e = http_server_register_route("/api/status", status_route, NULL);
     if (e != ESP_OK) return e;
-    e = http_server_register_route("/", not_found_route, NULL);
+    e = http_server_register_route("/", root_route, NULL);
     if (e != ESP_OK) return e;
-    ESP_LOGI(TAG, "/api/status is up; the device serves no page");
+    ESP_LOGI(TAG, "/api/status is up; the root sends a browser to %s",
+             CONFIG_FRONT_DOOR_LAUNCH_URL);
     return ESP_OK;
 }

@@ -19,8 +19,8 @@ refused, not scheduled.
   outside the device. It also holds the **Snapshot** — the measurements and the **Playlists**
   the app produced — and walks a selected Playlist when told to. Its only address,
   `http://k7.local`, serves the API and the stream — `/api/*`, `/mcp`, `/library`, `/stream` —
-  and no page at all ([ADR 0067](./docs/adr/0067-chrome-only-direct-to-the-device.md)).
-  Specified in
+  and no page at all; its root redirects a browser to the App
+  ([ADR 0067](./docs/adr/0067-chrome-only-direct-to-the-device.md)). Specified in
   [`docs/specs/sd-stream-server.md`](./docs/specs/sd-stream-server.md); its measurements are
   specified in [`docs/specs/snapshot.md`](./docs/specs/snapshot.md) and byte-defined in
   [`docs/specs/snapshot-format.md`](./docs/specs/snapshot-format.md).

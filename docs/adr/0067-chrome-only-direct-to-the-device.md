@@ -21,8 +21,10 @@ second window and a firmware partition.
   `ui/LocalNetworkGate.tsx` states the permission, asks for it, and retries. Denied or
   unsupported is a wall with instructions, never a silent fallback.
 - **The Launcher is removed** — `launcher.html`, `launcher.js`, `launcher/`, its type file, its
-  allowlist and the Shell build. The device serves no page: `/` and `/bridge` answer 404 like any
-  unknown path; `/library`, `/stream`, `/api/*` and `/mcp` are unchanged.
+  allowlist and the Shell build. The device serves no page: `/`, `/index.html`, `/bridge` and
+  `/app` answer 302 to the App (`FRONT_DOOR_LAUNCH_URL`, so the address is still a doorbell),
+  and every other unknown path is a 404. `/library`, `/stream`, `/api/*` and `/mcp` are
+  unchanged.
 - **The `frontdoor` partition leaves the table.** The firmware no longer packs a page, no longer
   flashes one, and no longer maps one into PSRAM at boot.
 - **Chrome is the supported browser.** Safari and Firefox implement no `local-network`

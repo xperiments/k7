@@ -1,0 +1,11 @@
+menu "Front door"
+
+config FRONT_DOOR_LAUNCH_URL
+    string "Where the device's address sends a browser"
+    default "https://k7.xperiments.dev/#/player"
+    help
+        The device serves no page of its own (ADR 0067), so its address is a doorbell:
+        GET / answers 302 to this URL. A development build points it at the development
+        origin, for example https://k7-dev.xperiments.dev:8000/#/player.
+
+endmenu

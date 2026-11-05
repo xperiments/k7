@@ -166,8 +166,8 @@ the flash.
    heuristic, the App's own **Install K7** button does the same in one click, and the result
    opens in its own window with no address bar. The 512 maskable icon is not cropped.
 4. The worker serves a reload with the network off.
-5. `k7.local` serves the API, not a page; the App asks for the `local-network` permission and,
-   once granted, the chip says connected.
+5. `k7.local` serves the API, not a page — its root redirects a browser to the App. The App
+   asks for the `local-network` permission and, once granted, the chip says connected.
 6. A card is picked, marked, measured, and `k7.db` written; the device flashes it and restarts.
 7. Deny the permission and reload: the gate blocks every area and says how to restore it.
 8. Open the App in a browser with no LNA API (Safari, Firefox): the same gate, naming Chrome.

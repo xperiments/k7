@@ -490,7 +490,8 @@ check_match "and still framed as an attachment" \
 
 group "routing and rejected setup"
 check_eq "an unknown path is a 404, not the stream" "$(curl -s -o /dev/null -w '%{http_code}' --path-as-is "$BASE/nope")" "404"
-check_eq "so is a file-ish path" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/index.html")" "404"
+check_eq "the address is a doorbell" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/")" "302"
+check_eq "and it names the App" "$(curl -s -D - -o /dev/null "$BASE/index.html" | tr -d '\r' | grep -i '^location:')" "Location: https://k7.xperiments.dev/#/player"
 check_eq "a non-GET method is refused" "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d x "$BASE/library")" "405"
 check_eq "the index is served" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/library")" "200"
 
