@@ -57,7 +57,7 @@ static const cassette_card_geometry_t k_card_layout[2] = {
       54, 216, 318, 56, 20 },
     { -8, -23, 814, 520, 23,
       128, 143, 556, 166, 83,
-      23, 38, 768, 359, 19,
+      39, 38, 736, 359, 19,   /* the print: 16 px in from each side of the Card */
       167, 13,
       103, 413, 607, 107, 38 },
 };
