@@ -155,6 +155,13 @@ static bool s_hubs_white;
  * stack. */
 static bool s_preview;
 
+/* The tape's paint for the mode in force: the cassette's own for the body, the owner's flat
+ * red for the full-screen picture. */
+static lv_color_t tape_colour(void)
+{
+    return s_preview ? k_col_tape_preview : k_col_tape;
+}
+
 /* ------------------------------------------------------------------ helpers */
 
 /* Lay the tape path for side `i` as one polyline: the external tangent from the pack to
@@ -350,7 +357,7 @@ static void strand_draw(lv_layer_t *layer, int i)
 
     lv_draw_line_dsc_t dsc;
     lv_draw_line_dsc_init(&dsc);
-    dsc.color = k_col_tape;
+    dsc.color = tape_colour();
     dsc.width = STRAND_W;
     dsc.opa = LV_OPA_COVER;
     dsc.points = pts;
@@ -477,7 +484,7 @@ static void pack_draw_rings(lv_layer_t *layer, int i)
 {
     lv_draw_arc_dsc_t dsc;
     lv_draw_arc_dsc_init(&dsc);
-    dsc.color = k_col_tape;
+    dsc.color = tape_colour();
     dsc.width = PACK_RING_W;
     dsc.opa = LV_OPA_COVER;
     dsc.center.x = SCX(HUB_X(i));
@@ -745,12 +752,16 @@ void cassette_tapes_set_preview(bool on)
     if (on == s_preview) return;
     s_preview = on;
 
+    const lv_color_t col = on ? k_col_tape_preview : k_col_tape;
     for (int i = 0; i < 2; i++) {
         if (s_rim[i])
             lv_obj_set_style_border_width(s_rim[i], on ? HUB_RIM_PREVIEW_W : HUB_RIM_W, 0);
-        /* The pack's paint changed shape: it is not a size change, so repaint it whole. */
+        if (s_roller[i]) lv_obj_set_style_border_color(s_roller[i], col, 0);
+        /* The pack's paint changed shape and ink: it is not a size change, so repaint it
+         * whole. */
         if (s_pack[i]) lv_obj_invalidate(s_pack[i]);
     }
+    if (s_run) lv_obj_set_style_line_color(s_run, col, 0);
 }
 
 /* Apply a model frame: only what changed is touched. */
