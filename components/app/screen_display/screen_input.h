@@ -49,6 +49,10 @@ typedef enum {
      * ladder each one takes. */
     SCREEN_INTENT_DOWN,
     SCREEN_INTENT_UP,
+    /* The two-finger vertical pair: Real's picture full screen, and back. Only the touch
+     * adapter can report these - it is the one place that sees two contacts. */
+    SCREEN_INTENT_FULL_ON,
+    SCREEN_INTENT_FULL_OFF,
 } screen_intent_t;
 
 /* One decision: a gesture on the screen itself, never on a part that owns its drags. `ctx`
@@ -59,3 +63,15 @@ typedef void (*screen_intent_cb_t)(screen_intent_t intent, void *ctx);
  * sink without registering the handler a second time, which would report every intent
  * twice. */
 void screen_input_attach(lv_obj_t *screen, screen_intent_cb_t on_intent, void *ctx);
+
+/* The touch adapter's two-finger swipe: the midpoint of the two contacts travelled by dx,dy
+ * panel pixels, negative dy up. It sets the latch for the rest of the touch - so the same
+ * touch cannot also take a rung - and reports FULL_ON (up) or FULL_OFF (down) when the travel
+ * is mostly vertical. A horizontal two-finger swipe is latched and reports nothing.
+ *
+ * The adapter is the only caller: screen_input never names the board (layering A2). */
+void screen_input_two_finger(int dx, int dy);
+
+/* Whether the touch in progress began as a two-finger gesture. Parts that act on a click ask
+ * this so the release of that touch is not also a tap. */
+bool screen_input_two_finger_seen(void);

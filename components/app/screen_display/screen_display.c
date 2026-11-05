@@ -59,6 +59,7 @@
 #include "panel_rgb.h"
 
 
+#include "screen_input.h"
 #include "touch_gt911.h"
 #endif
 
@@ -703,6 +704,10 @@ esp_err_t screen_display_start(const char *music_dir)
     if (touch_err != ESP_OK) {
         ESP_LOGW(TAG, "the touch controller did not start: %s; the screen still runs",
                  esp_err_to_name(touch_err));
+    } else {
+        /* The one place that may name the board hands the adapter's two contacts to the
+         * screen's policy: screen_input itself never names it (layering A2). */
+        touch_gt911_set_two_finger_cb(screen_input_two_finger);
     }
 #endif
 #if !CONFIG_APP_BOARD_SUNTON_8048S050C

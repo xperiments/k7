@@ -168,8 +168,12 @@ lights the backlight over it and holds it for `APP_UI_MARK_HOLD_MS`; and
 30 % darker than the plastic, drawn as two triangles from one transparent object. It is created
 after the tape body and shown and hidden with the
   Page in one frame, so on Real the tape shows only through the window; `set_ink()` is a cut,
-  never a colour animation. The mask is 426x272 and 116,416 B, built once at create - there
-  is no per-pose mask.
+  never a colour animation. The Card is drawn at two layouts, both in screen pixels and neither
+  scaling with the pose: the controls pose above, and the entry grid it was derived from
+  (-8,-23 814x520), where Real's picture fills the panel and bleeds off it. Each layout has its
+  own A8 mask - 116,416 B and 424,320 B, both built at create, so the full-screen switch never
+  allocates. `set_full(bool)` swaps the layout in one frame; there is still no mask that follows
+  a pose.
 - `cassette_cover.c` — the white page's print. `create(parent)` builds the container, the
   clip box and the label fill; a private `place()` applies the Card's shared mask and sizes
   the picture the first time the print is shown; `set_image(dsc)` takes the loader's one
@@ -256,8 +260,11 @@ after the tape body and shown and hidden with the
   A8 mask centred in it and tinted to suit - the cap's light ink on the primary plate,
   `k_col_bg` on the white one - so the mark sits at (34,26) on the screen.
 - `screen_input.c` — the touch policy: the screen's one-finger vertical gesture becomes one
-  `screen_intent_t`, DOWN or UP, and nothing else does. It names no screen and calls nothing
-  above itself; the view's sink maps the two into the Controls model, which owns the rungs.
+  `screen_intent_t`, DOWN or UP, and the adapter's two-finger vertical pair becomes FULL_ON or
+  FULL_OFF - the full-screen picture, up or down, which the view maps into the Controls model's
+  `full` flag. It names no screen and calls nothing above itself. A two-finger touch sets a latch
+  for the rest of the touch, so it cannot also take a rung; the latch is cleared by the next
+  press, and a horizontal pair is latched and reports nothing.
   The horizontal swipes are retired (ADR 0025): the drawer is Art, reached by a down swipe,
   and the only left swipe left is the Menu's Back, whose gesture the Pad keeps local. A
   two-finger swipe is nothing at all; there is no latch any more.
@@ -312,10 +319,11 @@ after the tape body and shown and hidden with the
   the backlight through 100/80/60/40/20/0 every five seconds, printing the level, so
   the PWM range can be checked without waiting for the sleep timer.
 - `touch_gt911.c` — the Sunton touch adapter: a GT911 on I2C0, polled every 10 ms and
-  bound to LVGL as the display's pointer. It reports the first point and nothing else: the
-  two-finger swipe and its midpoint detector are gone with the VU meter's old home
-  (ADR 0025). Next and previous are the left drawer's `<` and `>`, never a screen gesture or
-  a tap.
+  bound to LVGL as the display's pointer. It reports the first point to LVGL and reads the two
+  contacts itself for a two-finger swipe - the midpoint's travel, reported once per touch, as
+  ADR 0025's removed detector did. `screen_display.c` hands the adapter's callback to
+  `screen_input_two_finger()`: the policy layer never names the board (layering A2). Next and
+  previous are the left drawer's `<` and `>`, never a screen gesture or a tap.
 - `assets/labels/k7b.png` — the K7 mark in the controls header. It is greyscale with an
   alpha plane and only the alpha is exported, as `assets/header_logo.bin` (A8, 60x32),
   by `tools/convert_cassette_assets.py`; CMake embeds that blob and `cassette_header.c`

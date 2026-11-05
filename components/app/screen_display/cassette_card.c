@@ -42,9 +42,34 @@ _Static_assert(CASSETTE_CARD_WINDOW_W >= CASSETTE_CARD_WINDOW_H,
 static lv_obj_t *s_card;
 static lv_obj_t *s_plate;          /* the shell's trapezoid, drawn from one transparent object */
 static lv_color_t s_plate_ink;     /* its fill: the Card's ink, 30 % darker */
+static int s_layout;               /* 0 = the Controls pose, 1 = the entry grid */
+
+/* The two layouts. The first is the screen's own numbers, untouched since it shipped. The
+ * second is the design box those numbers were derived from: the Controls pose is this Card at
+ * 134/256, so the entry grid is the same Card at 256/256 - 814x520 at (-8,-23), which bleeds
+ * off every edge of the 800x480 panel exactly as it was drawn to. Its window is 556x166, the
+ * two hubs' band, and its print is 768x359. */
+static const cassette_card_geometry_t k_card_layout[2] = {
+    { 136, 82, 426, 272, 12,
+      67, 75, 291, 87, 43,
+      12, 20, 402, 188, 10,
+      88, 7,
+      54, 216, 318, 56, 20 },
+    { -8, -23, 814, 520, 23,
+      128, 143, 556, 166, 83,
+      23, 38, 768, 359, 19,
+      167, 13,
+      103, 413, 607, 107, 38 },
+};
+
+static const cassette_card_geometry_t *layout(void)
+{
+    return &k_card_layout[s_layout];
+}
+
 #if CARD_MASK
-static lv_image_dsc_t s_mask_dsc;
-static uint8_t *s_mask;
+static lv_image_dsc_t s_mask_dsc[2];
+static uint8_t *s_mask[2];
 #endif
 
 #if CARD_MASK
@@ -52,8 +77,8 @@ static uint8_t *s_mask;
  * semicircular ends whose radius is half the shorter side. The ends are sampled at the
  * pixel centres (y + 0.5), which is what keeps them on the same pixel grid as a rounded
  * LVGL box of the same radius. */
-static void mask_zero_stadium(int w, int h, int stride, int hx, int hy, int hw, int hh,
-                              int radius)
+static void mask_zero_stadium(uint8_t *buf, int w, int h, int stride,
+                              int hx, int hy, int hw, int hh, int radius)
 {
     int r = radius;
     if (r <= 0) return;
@@ -82,35 +107,33 @@ static void mask_zero_stadium(int w, int h, int stride, int hx, int hy, int hw, 
             px = 0;
         }
         if (px + n > w) n = w - px;
-        if (n > 0) memset(s_mask + (size_t)py * stride + px, 0, (size_t)n);
+        if (n > 0) memset(buf + (size_t)py * stride + px, 0, (size_t)n);
     }
 }
 
 /* Build the one mask both masked objects share. Failure leaves the Card a plain rectangle
  * with no window, which is the same fallback the Cover's mask had: the tape is then under
  * an opaque card, and the page still reads. */
-static void mask_build(void)
+static void mask_build(int i)
 {
-    int w = CASSETTE_CARD_W;
-    int h = CASSETTE_CARD_H;
-    int stride = MASK_STRIDE(w);
+    const cassette_card_geometry_t *g = &k_card_layout[i];
+    const int w = g->w, h = g->h;
+    const int stride = MASK_STRIDE(w);
 
-    s_mask = lv_malloc((size_t)stride * h);
-    if (!s_mask) return;
+    s_mask[i] = lv_malloc((size_t)stride * h);
+    if (!s_mask[i]) return;
 
-    memset(s_mask, 0xFF, (size_t)stride * h);
-    mask_zero_stadium(w, h, stride, CASSETTE_CARD_WINDOW_DX, CASSETTE_CARD_WINDOW_DY,
-                      CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H,
-                      CASSETTE_CARD_WINDOW_R);
+    memset(s_mask[i], 0xFF, (size_t)stride * h);
+    mask_zero_stadium(s_mask[i], w, h, stride, g->wx, g->wy, g->ww, g->wh, g->wr);
 
-    memset(&s_mask_dsc, 0, sizeof s_mask_dsc);
-    s_mask_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
-    s_mask_dsc.header.cf = LV_COLOR_FORMAT_A8;
-    s_mask_dsc.header.w = w;
-    s_mask_dsc.header.h = h;
-    s_mask_dsc.header.stride = stride;
-    s_mask_dsc.data_size = (uint32_t)(stride * h);
-    s_mask_dsc.data = s_mask;
+    memset(&s_mask_dsc[i], 0, sizeof s_mask_dsc[i]);
+    s_mask_dsc[i].header.magic = LV_IMAGE_HEADER_MAGIC;
+    s_mask_dsc[i].header.cf = LV_COLOR_FORMAT_A8;
+    s_mask_dsc[i].header.w = w;
+    s_mask_dsc[i].header.h = h;
+    s_mask_dsc[i].header.stride = stride;
+    s_mask_dsc[i].data_size = (uint32_t)(stride * h);
+    s_mask_dsc[i].data = s_mask[i];
 }
 #endif /* CARD_MASK */
 
@@ -124,8 +147,9 @@ static void plate_draw_cb(lv_event_t *e)
     lv_area_t a;
     lv_obj_get_coords(obj, &a);
 
-    const int top_l = a.x1 + CASSETTE_CARD_PLATE_INSET;
-    const int top_r = a.x2 - CASSETTE_CARD_PLATE_INSET;
+    const int inset = cassette_card_geometry()->pl_inset;
+    const int top_l = a.x1 + inset;
+    const int top_r = a.x2 - inset;
     const int bot_l = a.x1;
     const int bot_r = a.x2;
 
@@ -145,27 +169,47 @@ static void plate_draw_cb(lv_event_t *e)
     lv_draw_triangle(layer, &dsc);
 }
 
+/* Put the Card and its plate where layout `i` says they go, and give the Card that layout's
+ * mask. Called once at create() and again on the full-screen switch, in one frame. */
+static void layout_apply(int i)
+{
+    const cassette_card_geometry_t *g = &k_card_layout[i];
+    s_layout = i;
+
+    if (s_card) {
+        lv_obj_set_pos(s_card, g->x, g->y);
+        lv_obj_set_size(s_card, g->w, g->h);
+        lv_obj_set_style_radius(s_card, g->r, 0);
+#if CARD_MASK
+        lv_obj_set_style_bitmap_mask_src(s_card, s_mask[i] ? &s_mask_dsc[i] : NULL, 0);
+#endif
+    }
+
+    if (s_plate) {
+        lv_obj_set_pos(s_plate, g->plx, g->ply);
+        lv_obj_set_size(s_plate, g->plw, g->plh);
+        lv_obj_invalidate(s_plate);
+    }
+}
+
 void cassette_card_create(lv_obj_t *parent)
 {
     if (!parent || s_card) return;
 
     /* The Card is the white page's body, and the white page is a capability: a board with no
-     * touch and no card-side loader never reaches it, so it never spends the mask's 116,416 B
-     * on one. Asked, not compiled out (screen_caps.h). */
+     * touch and no card-side loader never reaches it, so it never spends a mask on one.
+     * Asked, not compiled out (screen_caps.h). */
     if (!screen_caps()->cover) return;
 
 #if CARD_MASK
-    mask_build();
-
-    s_card = cassette_box(parent, CASSETTE_CARD_X, CASSETTE_CARD_Y, CASSETTE_CARD_W,
-                          CASSETTE_CARD_H, CASSETTE_CARD_R, k_col_cassette[0].plastic);
-    if (s_mask) lv_obj_set_style_bitmap_mask_src(s_card, &s_mask_dsc, 0);
-#else
-    /* No mask and no hole: the cover's porthole paints the window above the print, so this is
-     * an ordinary opaque rounded rect and the tape behind it is simply covered. */
-    s_card = cassette_box(parent, CASSETTE_CARD_X, CASSETTE_CARD_Y, CASSETTE_CARD_W,
-                          CASSETTE_CARD_H, CASSETTE_CARD_R, k_col_cassette[0].plastic);
+    /* Both layouts' masks, here: 116,416 B and 424,320 B. The full one is built up front
+     * rather than on the gesture, which would otherwise carry a 424 KB allocation. */
+    mask_build(0);
+    mask_build(1);
 #endif
+
+    const cassette_card_geometry_t *g = &k_card_layout[0];
+    s_card = cassette_box(parent, g->x, g->y, g->w, g->h, g->r, k_col_cassette[0].plastic);
 
     /* The plate: a child of the Card, below the print's bottom edge and inside the mask's
      * window, so it is neither clipped nor covered. */
@@ -177,11 +221,26 @@ void cassette_card_create(lv_obj_t *parent)
     lv_obj_set_style_pad_all(s_plate, 0, 0);
     lv_obj_set_scrollable(s_plate, false);
     lv_obj_set_clickable(s_plate, false);
-    lv_obj_set_pos(s_plate, CASSETTE_CARD_PLATE_DX, CASSETTE_CARD_PLATE_DY);
-    lv_obj_set_size(s_plate, CASSETTE_CARD_PLATE_W, CASSETTE_CARD_PLATE_H);
     lv_obj_add_event_cb(s_plate, plate_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
 
+    layout_apply(0);
     lv_obj_set_hidden(s_card, true);
+}
+
+const cassette_card_geometry_t *cassette_card_geometry(void)
+{
+    return layout();
+}
+
+void cassette_card_set_full(bool full)
+{
+    if (!s_card || (full ? 1 : 0) == s_layout) return;
+    layout_apply(full ? 1 : 0);
+}
+
+bool cassette_card_is_full(void)
+{
+    return s_layout == 1;
 }
 
 void cassette_card_set_shown(bool shown)
@@ -204,7 +263,7 @@ void cassette_card_set_ink(lv_color_t ink)
 const lv_image_dsc_t *cassette_card_mask(void)
 {
 #if CARD_MASK
-    return s_mask ? &s_mask_dsc : NULL;
+    return s_mask[s_layout] ? &s_mask_dsc[s_layout] : NULL;
 #else
     return NULL;   /* no hole to cut: the porthole paints the window above the print */
 #endif
@@ -222,8 +281,7 @@ cassette_rect_t cassette_card_window(void)
         return none;
     }
 
-    cassette_rect_t r = { CASSETTE_CARD_X + CASSETTE_CARD_WINDOW_DX,
-                          CASSETTE_CARD_Y + CASSETTE_CARD_WINDOW_DY,
-                          CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H };
+    const cassette_card_geometry_t *g = layout();
+    cassette_rect_t r = { g->x + g->wx, g->y + g->wy, g->ww, g->wh };
     return r;
 }

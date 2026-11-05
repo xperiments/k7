@@ -77,23 +77,48 @@ void cassette_cover_set_inks(lv_color_t plastic, lv_color_t ink, lv_color_t labe
     if (s_rim) lv_obj_set_style_border_color(s_rim, plastic, 0);
 }
 
+/* Put the print, the fallback, the rim and the picture where the Card's layout says they go.
+ * Called from create(), from cover_show() and from a layout change; the mask is looked up
+ * each time because the Card owns it and one exists per layout. */
 static void cassette_cover_place(void)
 {
     if (!s_masked) return;
 
-    /* Lazy by necessity, not by taste: the Card - and with it the one A8 buffer both its
-     * objects are masked by - is created after this module, so the descriptor cannot be
-     * applied in create(). place() is where the print is about to be looked at. */
+    const cassette_card_geometry_t *g = cassette_card_geometry();
+
+    /* The container is the Card's rect, not the print's: LVGL aligns a bitmap mask to the
+     * centre of the object's area, so the two objects that share one buffer share a centre. */
+    lv_obj_set_pos(s_masked, g->x, g->y);
+    lv_obj_set_size(s_masked, g->w, g->h);
     const lv_image_dsc_t *mask = cassette_card_mask();
     lv_obj_set_style_bitmap_mask_src(s_masked, mask, 0);
     lv_obj_set_hidden(s_fallback, mask != NULL);
+
+    if (s_print) {
+        lv_obj_set_pos(s_print, g->px, g->py);
+        lv_obj_set_size(s_print, g->pw, g->ph);
+        lv_obj_set_style_radius(s_print, g->pr, 0);
+    }
+
+    if (s_fallback) {
+        lv_obj_set_pos(s_fallback, g->wx - g->px, g->wy - g->py);
+        lv_obj_set_size(s_fallback, g->ww, g->wh);
+        lv_obj_set_style_radius(s_fallback, g->wr, 0);
+    }
+
+    if (s_rim) {
+        lv_obj_set_pos(s_rim, g->x + g->wx, g->y + g->wy);
+        lv_obj_set_size(s_rim, g->ww, g->rim_h);
+        lv_obj_set_style_radius(s_rim, g->wr, 0);
+        lv_obj_set_style_border_width(s_rim, g->rim_w, 0);
+    }
 
     if (!s_wanted || !s_dsc) return;
 
     /* The width is the print's; the height is what that width makes of the source, so the
      * picture is never squeezed. The print clips whatever runs past its bottom. */
-    int w = CASSETTE_CARD_PRINT_W;
-    int ih = CASSETTE_CARD_PRINT_H;
+    int w = g->pw;
+    int ih = g->ph;
     if (s_dsc->header.w > 0) {
         ih = (int)(((int64_t)w * s_dsc->header.h + s_dsc->header.w / 2) /
                    s_dsc->header.w);
@@ -249,6 +274,16 @@ static void window_create(lv_obj_t *parent)
     if (s_window_mask) lv_obj_set_style_bitmap_mask_src(s_slice, &s_window_mask_dsc, 0);
 }
 
+/* The Card changed layout: put the print, the fallback and the rim on the new rect. The
+ * geometry is the Card's - this module reads it, it does not own it. */
+void cassette_cover_set_full(bool full)
+{
+    (void)full;
+    if (!s_masked) return;
+    cassette_cover_place();
+    if (s_wanted) lv_obj_set_hidden(s_masked, false);
+}
+
 void cassette_cover_set_window_draw(void (*draw)(lv_layer_t *layer))
 {
     s_slice_draw = draw;
@@ -281,6 +316,8 @@ void cassette_cover_create(lv_obj_t *parent)
      * object's area, so the two objects that share one buffer have to share a centre
      * (ADR 0039). Nothing here rounds or clips - the window is the mask's and the corners
      * are the print's. */
+    const cassette_card_geometry_t *g = cassette_card_geometry();
+
     s_masked = lv_obj_create(parent);
     lv_obj_remove_style_all(s_masked);
     lv_obj_set_style_bg_opa(s_masked, LV_OPA_TRANSP, 0);
@@ -288,8 +325,8 @@ void cassette_cover_create(lv_obj_t *parent)
     lv_obj_set_style_pad_all(s_masked, 0, 0);
     lv_obj_set_scrollable(s_masked, false);
     lv_obj_set_clickable(s_masked, false);
-    lv_obj_set_pos(s_masked, CASSETTE_CARD_X, CASSETTE_CARD_Y);
-    lv_obj_set_size(s_masked, CASSETTE_CARD_W, CASSETTE_CARD_H);
+    lv_obj_set_pos(s_masked, g->x, g->y);
+    lv_obj_set_size(s_masked, g->w, g->h);
 
     /* The print: frame[0]'s rect at the controls pose. Its corner is the owner's 2 px over
      * the frame's, so the picture reads as a loose label on the Card. The fade stays on the
@@ -300,14 +337,14 @@ void cassette_cover_create(lv_obj_t *parent)
     lv_obj_set_style_bg_opa(s_print, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_print, 0, 0);
     lv_obj_set_style_pad_all(s_print, 0, 0);
-    lv_obj_set_style_radius(s_print, CASSETTE_CARD_PRINT_R, 0);
+    lv_obj_set_style_radius(s_print, g->pr, 0);
     /* The picture's rounded corners are this clip, not the image's own radius: an image
      * cannot round its own draw. */
     lv_obj_set_style_clip_corner(s_print, true, 0);
     lv_obj_set_scrollable(s_print, false);
     lv_obj_set_clickable(s_print, false);
-    lv_obj_set_pos(s_print, CASSETTE_CARD_PRINT_DX, CASSETTE_CARD_PRINT_DY);
-    lv_obj_set_size(s_print, CASSETTE_CARD_PRINT_W, CASSETTE_CARD_PRINT_H);
+    lv_obj_set_pos(s_print, g->px, g->py);
+    lv_obj_set_size(s_print, g->pw, g->ph);
 
     s_img = lv_image_create(s_print);
     lv_obj_set_style_bg_opa(s_img, LV_OPA_TRANSP, 0);
@@ -324,11 +361,8 @@ void cassette_cover_create(lv_obj_t *parent)
     /* The fallback window: opaque, and hidden as soon as place() finds the shared mask. It is
      * the mask's stadium re-based on the print - the mask has it at (67,75) in the Card - so
      * the two are the same pill on the panel. */
-    s_fallback = cassette_box(s_print,
-                          CASSETTE_CARD_WINDOW_DX - CASSETTE_CARD_PRINT_DX,
-                          CASSETTE_CARD_WINDOW_DY - CASSETTE_CARD_PRINT_DY,
-                          CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_H,
-                          CASSETTE_CARD_WINDOW_R, k_col_cassette[0].label);
+    s_fallback = cassette_box(s_print, g->wx - g->px, g->wy - g->py, g->ww, g->wh,
+                              g->wr, k_col_cassette[0].label);
     lv_obj_set_hidden(s_fallback, true);
 
     /* The porthole: an opaque capsule at the window, carrying the tape slice in a child, so
@@ -344,12 +378,9 @@ void cassette_cover_create(lv_obj_t *parent)
      * masked to the window and the rim's bottom row lies on the Card just outside it. Drawn
      * after the print, it also covers the mask's last row of antialiasing, which is what makes
      * the cut edge read as a moulded rim instead of a soft one. */
-    s_rim = cassette_border_box(parent,
-                                CASSETTE_CARD_X + CASSETTE_CARD_WINDOW_DX,
-                                CASSETTE_CARD_Y + CASSETTE_CARD_WINDOW_DY,
-                                CASSETTE_CARD_WINDOW_W, CASSETTE_CARD_WINDOW_RIM_H,
-                                CASSETTE_CARD_WINDOW_R, k_col_bg, LV_OPA_TRANSP,
-                                k_col_cassette[0].plastic, CASSETTE_CARD_WINDOW_RIM_W);
+    s_rim = cassette_border_box(parent, g->x + g->wx, g->y + g->wy,
+                                g->ww, g->rim_h, g->wr, k_col_bg, LV_OPA_TRANSP,
+                                k_col_cassette[0].plastic, g->rim_w);
     lv_obj_set_hidden(s_rim, true);
 
     lv_obj_set_hidden(s_masked, true);

@@ -1,9 +1,10 @@
 # A full-screen Real cassette: the mask's size, the two-finger swipe, and what the tape really costs per frame (2026-11-05)
 
-> **Status: the porthole (§4e) is implemented on `ui/full-screen-real` with `CARD_MASK 0`
-> (`cassette_card.c`), and the firmware was flashed on 2026-11-05.** The full-screen pose, the
-> flag and the gesture are still proposals, and the two board measurements §10 asks for are
-> still owed — one of them now has a first reading (§3.1).
+> **Status: the porthole (§4e) was built, flashed and lost (§4.1); it is kept behind
+> `CARD_MASK 0` and off. The full-screen layout and the two-finger gesture are implemented on
+> `ui/full-screen-real` on the mask design, and the firmware was flashed on 2026-11-05
+> (ADR 0068).** The gesture's board measurement — does the panel report two contacts — is still
+> owed (§6.2); the mask's heap now has a board reading (§3.1).
 
 Axis: **the owner wants Real's content — the Track's picture printed on the cassette, seen
 through the pill window — at the entry pose instead of the Controls pose, reached by a
@@ -470,9 +471,11 @@ With `origin = (800 − 418)/2 − 51 = 140` and `(480 − 251)/2 − 20 = 94` (
 | Print | 148,102 402x188 | 15, 15, 768x359 |
 
 **814x520 is bigger than the 800x480 panel**: a pure pose scale hangs the Card off every edge (8 px
-left, 6 right, 23 top, 17 bottom). So "full screen" must be an *authored* rect — 760x440 is a
-comfortable fit (20 px margins), 800x480 is edge to edge with the radius clipped — and window,
-print, rim and plate must be re-derived with it. A trap worth naming: `cassette_len()` truncates,
+left, 6 right, 23 top, 17 bottom). **The implementation took that as the answer** (ADR 0068): the
+full-screen layout *is* the design box, bleeding off every edge as it was drawn to, with its own
+424,320 B mask, rather than a fitted 760x440 - which would have moved the window, the print and
+the plate to numbers no reference has. The window becomes 556x166 at (120,120), the band the two
+hubs sit in, and the pieces are re-derived from the same proportions. A trap worth naming: `cassette_len()` truncates,
 so 814×134/256 = 426.06 → 426 and 520×134/256 = 272.19 → 272 round-trip, but 166×134/256 =
 86.90 → **86, not 87**.
 Re-authoring in design units therefore moves the Controls pose by a pixel unless the numbers are

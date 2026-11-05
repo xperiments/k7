@@ -53,6 +53,10 @@ void cassette_cover_set_image(const lv_image_dsc_t *dsc);
  * is remembered, so a picture that lands after the down appears without a second swipe. */
 void cassette_cover_set_shown(bool shown);
 
+/* The Card changed layout (the entry grid, or back): re-place the print, the window's fallback
+ * and the rim from cassette_card_geometry(). Called with cassette_card_set_full(). */
+void cassette_cover_set_full(bool full);
+
 /* Whether a picture has landed for the current Track: the print is the Cover, not the drawn
  * label. The view asks so the hubs can go white while the artwork is what the page shows. */
 bool cassette_cover_has_picture(void);

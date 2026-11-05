@@ -14,6 +14,7 @@
 struct controls {
     controls_level_t level; /* the enum is the stack, bottom first: down is +1 */
     bool             menu;  /* only while the level is Art or Real */
+    bool             full;  /* Real's picture at the entry pose: only at Initial */
 };
 
 /* Whether the chrome - the drawer, the block, the bands, the window, the edge mark - is on
@@ -64,10 +65,12 @@ static void apply(controls_t *c, controls_intent_t intent, const controls_facts_
 {
     switch (intent) {
         case CONTROLS_INTENT_DOWN:
+            c->full = false;   /* the picture is a reading of Initial: the step takes it */
             c->level = lower(c->level, facts);
             break;
 
         case CONTROLS_INTENT_UP:
+            c->full = false;
             c->level = raise_level(c->level, facts);
             break;
 
@@ -80,6 +83,16 @@ static void apply(controls_t *c, controls_intent_t intent, const controls_facts_
         case CONTROLS_INTENT_MENU_CLOSE:
             /* Nothing to close: a close is only meaningful while the Menu is up, and the
              * modality above is the one place it can land. */
+            break;
+
+        case CONTROLS_INTENT_FULL_ON:
+            /* The entry pose and nothing over it: the picture takes the whole panel, so it
+             * cannot be asked for during a slide or from behind the Menu or a dial. */
+            if (c->level == CONTROLS_LEVEL_INITIAL && facts->at_entry_pose) c->full = true;
+            break;
+
+        case CONTROLS_INTENT_FULL_OFF:
+            c->full = false;
             break;
 
         case CONTROLS_INTENT_NONE:
@@ -110,6 +123,7 @@ controls_changed_t controls_handle(controls_t *c, controls_intent_t intent,
 
     const controls_level_t was_level = c->level;
     const bool was_menu = c->menu;
+    const bool was_full = c->full;
 
     if (f.editing) {
         /* The edit overlay is absolute: every intent is dropped. */
@@ -132,10 +146,18 @@ controls_changed_t controls_handle(controls_t *c, controls_intent_t intent,
      * wherever the level is written, instead of in the caller's discipline. */
     if (!chrome_out(c->level)) c->menu = false;
 
+    /* The full-screen picture is a reading of Initial, exactly as the Menu is a reading of
+     * the chrome: it cannot outlive the level it belongs to. Repaired here, like the Menu,
+     * so every write of the level keeps the invariant. */
+    if (c->level != CONTROLS_LEVEL_INITIAL) c->full = false;
+
     uint32_t mask = 0;
-    if ((c->level == CONTROLS_LEVEL_REAL) != (was_level == CONTROLS_LEVEL_REAL)) {
-        mask |= CONTROLS_CHANGED_PAGE;
-    }
+    /* The Page and the Cover are one reading: Real's rung, or the full-screen picture at
+     * Initial. The view applies the geometry first (FULL) and then the page and the print. */
+    const bool was_picture = (was_level == CONTROLS_LEVEL_REAL) || was_full;
+    const bool is_picture = (c->level == CONTROLS_LEVEL_REAL) || c->full;
+    if (is_picture != was_picture) mask |= CONTROLS_CHANGED_PAGE;
+    if (c->full != was_full) mask |= CONTROLS_CHANGED_FULL;
     if ((c->level == CONTROLS_LEVEL_PEEK) != (was_level == CONTROLS_LEVEL_PEEK)) {
         mask |= CONTROLS_CHANGED_PEEK;
     }
@@ -152,11 +174,12 @@ void controls_snapshot(const controls_t *c, controls_state_t *out)
 
     /* Initial, not a zeroed struct: the Peek is the enum's zero value, so a NULL model is
      * named explicitly rather than left as whatever the bits happened to be. */
-    controls_state_t s = { CONTROLS_LEVEL_INITIAL, CONTROLS_ROOM_ENTRY, false };
+    controls_state_t s = { CONTROLS_LEVEL_INITIAL, CONTROLS_ROOM_ENTRY, false, false };
     if (c) {
         s.level = c->level;
         s.room = room_of(c->level);
         s.menu = c->menu;
+        s.full = c->full;
     }
     *out = s;
 }

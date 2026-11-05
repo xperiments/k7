@@ -114,6 +114,8 @@ typedef enum {
     CONTROLS_INTENT_UP,           /* and one towards the Peek; closes the Menu if it is up */
     CONTROLS_INTENT_MENU_TAP,     /* the mode bar's cassette: the Menu's door, a toggle */
     CONTROLS_INTENT_MENU_CLOSE,   /* the Menu's own close: its Close row, the Pad's Back */
+    CONTROLS_INTENT_FULL_ON,      /* two fingers up at Initial: Real's picture, full screen */
+    CONTROLS_INTENT_FULL_OFF,     /* two fingers down: back to the full cassette */
 } controls_intent_t;
 
 /* The four screens, in the stack's order from the bottom: each value's successor is the
@@ -152,6 +154,10 @@ typedef struct {
     controls_level_t level;
     controls_room_t  room;
     bool             menu;
+    /* Real's picture at the entry pose: the full-screen cassette. It is a reading of Initial,
+     * exactly as the Menu is a reading of the chrome - orthogonal to the ladder, valid only
+     * while the level is Initial, and cleared by any step off it. */
+    bool             full;
 } controls_state_t;
 
 /* What the step changed, one bit per group the adapter applies. CONTROLS_CHANGED_NONE means
@@ -175,6 +181,9 @@ typedef enum {
     CONTROLS_CHANGED_SHOWN  = 1u << 2,
     CONTROLS_CHANGED_MENU   = 1u << 3,
     CONTROLS_CHANGED_ROOM   = 1u << 4,
+    /* The full-screen picture arrived or left. No ROOM bit with it: both sides are the entry
+     * pose, so the change is a cut - the Card, the print and the page, in one frame. */
+    CONTROLS_CHANGED_FULL   = 1u << 5,
 } controls_changed_t;
 
 typedef struct controls controls_t;

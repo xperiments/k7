@@ -132,6 +132,8 @@ static controls_intent_t controls_intent(screen_intent_t intent)
     switch (intent) {
         case SCREEN_INTENT_DOWN: return CONTROLS_INTENT_DOWN;
         case SCREEN_INTENT_UP: return CONTROLS_INTENT_UP;
+        case SCREEN_INTENT_FULL_ON: return CONTROLS_INTENT_FULL_ON;
+        case SCREEN_INTENT_FULL_OFF: return CONTROLS_INTENT_FULL_OFF;
         default: return CONTROLS_INTENT_NONE;
     }
 }
@@ -181,12 +183,20 @@ static void controls_apply(controls_changed_t changed)
     if (!changed || !s_controls) return;
     controls_snapshot(s_controls, &s_ctl);
 
+    if (changed & CONTROLS_CHANGED_FULL) {
+        /* The geometry first: page_set() clamps the packs to the Card's window, and the
+         * window is the layout's. Both layouts land in one frame - no pose animation, because
+         * both are the entry pose. */
+        cassette_card_set_full(s_ctl.full);
+        cassette_cover_set_full(s_ctl.full);
+    }
+
     if (changed & CONTROLS_CHANGED_PAGE) {
-        const bool real = s_ctl.level == CONTROLS_LEVEL_REAL;
-        page_set(real);
-        cassette_cover_set_shown(real);
-        /* The picture is Real's: ask for it now, not at boot. */
-        cassette_levels_set_cover_visible(real);
+        const bool picture = s_ctl.level == CONTROLS_LEVEL_REAL || s_ctl.full;
+        page_set(picture);
+        cassette_cover_set_shown(picture);
+        /* The picture is Real's, or the full-screen one's: ask for it now, not at boot. */
+        cassette_levels_set_cover_visible(picture);
     }
 
     if (changed & CONTROLS_CHANGED_PEEK) {

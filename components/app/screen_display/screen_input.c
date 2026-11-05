@@ -33,6 +33,12 @@ static void *s_ctx;
  * and report every intent twice. */
 static lv_obj_t *s_screen;
 
+/* One bit for the length of one touch: the adapter reports a two-finger swipe before LVGL's
+ * release, and the same touch must not also take a rung. Cleared by the next press. */
+static bool s_two_finger_seen;
+
+static void screen_pressed_cb(lv_event_t *e);
+
 static void report(screen_intent_t intent)
 {
     if (s_on_intent) s_on_intent(intent, s_ctx);
@@ -48,6 +54,8 @@ static void report(screen_intent_t intent)
 static void screen_gesture_cb(lv_event_t *e)
 {
     if (lv_event_get_target(e) != s_screen) return;
+    /* A two-finger touch is not the ladder's: the adapter has already reported it. */
+    if (s_two_finger_seen) return;
     lv_indev_t *indev = lv_indev_active();
     if (!indev) return;
     switch (lv_indev_get_gesture_dir(indev)) {
@@ -81,4 +89,32 @@ void screen_input_attach(lv_obj_t *screen, screen_intent_cb_t on_intent, void *c
     s_screen = screen;
 
     lv_obj_add_event_cb(screen, screen_gesture_cb, LV_EVENT_GESTURE, NULL);
+    lv_obj_add_event_cb(screen, screen_pressed_cb, LV_EVENT_PRESSED, NULL);
+}
+
+/* A new touch clears the latch the previous one left. */
+static void screen_pressed_cb(lv_event_t *e)
+{
+    (void)e;
+    s_two_finger_seen = false;
+}
+
+bool screen_input_two_finger_seen(void)
+{
+    return s_two_finger_seen;
+}
+
+void screen_input_two_finger(int dx, int dy)
+{
+    s_two_finger_seen = true;
+
+    /* Mostly vertical, or it is not the pair this screen knows. The latch is set either way:
+     * a two-finger touch is never a one-finger intent. */
+    int ax = dx < 0 ? -dx : dx;
+    int ay = dy < 0 ? -dy : dy;
+    if (ay <= ax) return;
+
+    ESP_LOGI(TAG, "two fingers %s: midpoint moved %d,%d", dy < 0 ? "up" : "down",
+             (int)dx, (int)dy);
+    report(dy < 0 ? SCREEN_INTENT_FULL_ON : SCREEN_INTENT_FULL_OFF);
 }
