@@ -104,4 +104,35 @@ describe('reading a card the user picks', () => {
     };
     expect(await readCardWithPicker(cancelled)).toEqual({ kind: 'cancelled' });
   });
+
+  it('ignores a second pick while the first is still open', async () => {
+    const card = folder('SDCARD', [
+      mark(CARD_ID),
+      folder('music', [folder('Aphex Twin', [track()])]),
+    ]);
+    let release!: (directory: SnapshotDirectory) => void;
+    let calls = 0;
+    const oneAtATime: DirectoryPicker = () => {
+      calls += 1;
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    };
+
+    const first = readCardWithPicker(oneAtATime);
+    expect(await readCardWithPicker(oneAtATime)).toEqual({ kind: 'cancelled' });
+    expect(calls).toBe(1);
+
+    release(card as unknown as SnapshotDirectory);
+    expect((await first).kind).toBe('read');
+  });
+
+  it('names a picker that is already active elsewhere', async () => {
+    const active: DirectoryPicker = async () => {
+      throw new Error(
+        "Failed to execute 'showDirectoryPicker' on 'Window': File picker already active.",
+      );
+    };
+    expect(await readCardWithPicker(active)).toEqual({ kind: 'busy' });
+  });
 });

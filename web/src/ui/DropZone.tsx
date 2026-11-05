@@ -50,36 +50,48 @@ interface DropZoneProps {
 export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZoneProps) {
   const [over, setOver] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [error, setError] = useState<Problem | null>(null);
   /* Said, not refused: a dropped card cannot carry a mark written by this page, and the
    * fingerprint scope it gets instead changes the moment a Track is added. */
   const [note, setNote] = useState<string | null>(null);
-  const inactive = disabled || scanning;
+  const inactive = disabled || scanning || picking;
   const pickable = cardPicker() !== undefined;
 
   const chooseCard = async () => {
     if (inactive) return;
     setError(null);
-    const picked = await readCardWithPicker();
-    switch (picked.kind) {
-      case 'read':
-        setNote(null);
-        onCard(picked.files, picked.skipped, picked.handle);
-        return;
-      case 'wrong':
-        setError({ title: 'That folder is not the card', text: picked.problem });
-        return;
-      case 'unsupported':
-        setError({
-          title: 'This browser cannot open a folder for writing',
-          text: 'The card has to be chosen read-write so k7.db can be written to it. A browser without the folder picker can only measure a dropped folder, read-only.',
-        });
-        return;
-      case 'failed':
-        setError({ title: 'Could not read the card', text: picked.message });
-        return;
-      case 'cancelled':
-        return;
+    setPicking(true);
+    try {
+      const picked = await readCardWithPicker();
+      switch (picked.kind) {
+        case 'read':
+          setNote(null);
+          onCard(picked.files, picked.skipped, picked.handle);
+          return;
+        case 'wrong':
+          setError({ title: 'That folder is not the card', text: picked.problem });
+          return;
+        case 'busy':
+          setError({
+            title: 'A folder picker is already open',
+            text: 'Finish or cancel it, then choose the card again.',
+          });
+          return;
+        case 'unsupported':
+          setError({
+            title: 'This browser cannot open a folder for writing',
+            text: 'The card has to be chosen read-write so k7.db can be written to it. A browser without the folder picker can only measure a dropped folder, read-only.',
+          });
+          return;
+        case 'failed':
+          setError({ title: 'Could not read the card', text: picked.message });
+          return;
+        case 'cancelled':
+          return;
+      }
+    } finally {
+      setPicking(false);
     }
   };
 

@@ -27,6 +27,8 @@ import { scanDirectoryHandle, type CardDirectoryHandle, type FoundFile } from '.
 export type Intake =
   | { kind: 'read'; files: FoundFile[]; skipped: number; handle: SnapshotDirectory }
   | { kind: 'cancelled' }
+  /** A picker is already open elsewhere; the page says so instead of blaming the card. */
+  | { kind: 'busy' }
   | { kind: 'unsupported' }
   | { kind: 'wrong'; problem: string }
   | { kind: 'failed'; message: string };
@@ -62,40 +64,67 @@ export async function readOpenCard(
   return { files: result.files, skipped: result.skipped };
 }
 
+/** The message a picker refusal carries, whichever kind of error the browser threw. */
+function failureMessage(failure: unknown): string {
+  if (failure instanceof Error) return failure.message;
+  if (failure && typeof failure === 'object' && 'message' in failure) {
+    return String((failure as { message: unknown }).message);
+  }
+  return String(failure);
+}
+
+/**
+ * Only one directory picker can be open in a browser. The latch is here, at the single entry,
+ * because "Choose card" and "Change card" can both be clicked before either dialog appears;
+ * the second call must not become a browser error. A picker that is already active for some
+ * other reason gets a distinct answer, so the page can say what to do rather than blame the
+ * card.
+ */
+let picking = false;
+
 /** Ask for the card, read it, and leave the Scope set for whatever runs next. */
 export async function readCardWithPicker(
   picker: DirectoryPicker | undefined = cardPicker(),
 ): Promise<Intake> {
-  let picked;
+  if (picking) return { kind: 'cancelled' };
+  picking = true;
   try {
-    picked = await pickCardDirectory(picker);
-  } catch (failure) {
-    return { kind: 'failed', message: failure instanceof Error ? failure.message : String(failure) };
-  }
-  if (picked.kind === 'unsupported') return { kind: 'unsupported' };
-  if (picked.kind === 'cancelled') return { kind: 'cancelled' };
+    let picked;
+    try {
+      picked = await pickCardDirectory(picker);
+    } catch (failure) {
+      const message = failureMessage(failure);
+      /* Another tab, or a picker this page lost track of, is already open. */
+      if (/file picker already active/i.test(message)) return { kind: 'busy' };
+      return { kind: 'failed', message };
+    }
+    if (picked.kind === 'unsupported') return { kind: 'unsupported' };
+    if (picked.kind === 'cancelled') return { kind: 'cancelled' };
 
-  try {
-    const directory = picked.directory;
-    const result = await scanDirectoryHandle(directory as unknown as CardDirectoryHandle);
-    // The card root is the only choice that can be written back: one level down is the music
-    // directory, one up is the card's parent, and neither can hold k7.db (K1).
-    const problem = cardShapeProblem(cardShapeOf(result.files.map((found) => found.path)));
-    if (problem !== null) return { kind: 'wrong', problem };
+    try {
+      const directory = picked.directory;
+      const result = await scanDirectoryHandle(directory as unknown as CardDirectoryHandle);
+      // The card root is the only choice that can be written back: one level down is the music
+      // directory, one up is the card's parent, and neither can hold k7.db (K1).
+      const problem = cardShapeProblem(cardShapeOf(result.files.map((found) => found.path)));
+      if (problem !== null) return { kind: 'wrong', problem };
 
-    // Identify the card before the run: the scope has to exist before the first cover is
-    // written, and a mark this App did not write is never overwritten (card-mark.md §4).
-    const identified = await identifyCard(directory as unknown as CardDirectory);
-    const scope =
-      identified === UNMARKED_CARD
-        ? fingerprintScope(await fingerprintOf(result.files))
-        : identified;
-    setCardScope(scope);
-    // Remembered so a reload can still read the card's own files (play, rescan): the handle
-    // survives storage, the permission is asked for again on the gesture that needs it.
-    await rememberCardHandle(scope, directory as unknown as FileSystemDirectoryHandle);
-    return { kind: 'read', files: result.files, skipped: result.skipped, handle: directory };
-  } catch (failure) {
-    return { kind: 'failed', message: failure instanceof Error ? failure.message : String(failure) };
+      // Identify the card before the run: the scope has to exist before the first cover is
+      // written, and a mark this App did not write is never overwritten (card-mark.md §4).
+      const identified = await identifyCard(directory as unknown as CardDirectory);
+      const scope =
+        identified === UNMARKED_CARD
+          ? fingerprintScope(await fingerprintOf(result.files))
+          : identified;
+      setCardScope(scope);
+      // Remembered so a reload can still read the card's own files (play, rescan): the handle
+      // survives storage, the permission is asked for again on the gesture that needs it.
+      await rememberCardHandle(scope, directory as unknown as FileSystemDirectoryHandle);
+      return { kind: 'read', files: result.files, skipped: result.skipped, handle: directory };
+    } catch (failure) {
+      return { kind: 'failed', message: failureMessage(failure) };
+    }
+  } finally {
+    picking = false;
   }
 }

@@ -789,6 +789,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       case 'wrong':
         setNotice({ kind: 'error', text: picked.problem });
         return;
+      case 'busy':
+        setNotice({
+          kind: 'error',
+          text: 'A folder picker is already open. Finish or cancel it, then choose the card again.',
+        });
+        return;
       case 'failed':
         setNotice({ kind: 'error', text: `Could not read the card: ${picked.message}` });
         return;

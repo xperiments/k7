@@ -197,11 +197,13 @@ export function ProcessArea() {
               variant="outline"
               size="sm"
               onClick={() => void rescanCard()}
-              disabled={busy || !canRescan}
+              disabled={busy || metadataPending > 0 || !canRescan}
               title={
-                canRescan
-                  ? 'Read this card again, now: tracks already measured are recognised, not measured twice'
-                  : 'No card is open in this page — use Change card'
+                metadataPending > 0
+                  ? 'Wait for the card to finish writing its tags and label'
+                  : canRescan
+                    ? 'Read this card again, now: tracks already measured are recognised, not measured twice'
+                    : 'No card is open in this page — use Change card'
               }
             >
               Rescan card
@@ -210,8 +212,12 @@ export function ProcessArea() {
               variant="outline"
               size="sm"
               onClick={() => void changeCard()}
-              disabled={busy}
-              title="Open another card; a run in flight is left alone"
+              disabled={busy || metadataPending > 0}
+              title={
+                metadataPending > 0
+                  ? 'Wait for the card to finish writing its tags and label'
+                  : 'Open another card; a run in flight is left alone'
+              }
             >
               Change card
             </Button>
