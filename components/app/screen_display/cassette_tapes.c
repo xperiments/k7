@@ -493,13 +493,25 @@ static void pack_draw_rings(lv_layer_t *layer, int i)
     dsc.end_angle = 360;
 
     /* The preview paints the tape's edge once: the rings are the pack's winding, and at the
-     * entry pose the window shows one edge, not ten. */
+     * entry pose the window shows one edge, not ten. Under that edge the circle is filled -
+     * the wound tape, in its darker red - so the pack reads as a body with an outline rather
+     * than as a hoop. The hub's disc is drawn over it by the rim object. */
     if (s_preview) {
         int r = SC(s_pack_d[i]) / 2;
-        if (r > SC(HUB_RING_D) / 2 && ring_in_clip(layer, dsc.center.x, dsc.center.y, r,
-                                                  PACK_RING_W)) {
-            dsc.radius = (uint16_t)r;
-            lv_draw_arc(layer, &dsc);
+        if (r > SC(HUB_RING_D) / 2) {
+            lv_draw_rect_dsc_t body;
+            lv_draw_rect_dsc_init(&body);
+            body.bg_color = k_col_tape_dark_preview;
+            body.bg_opa = LV_OPA_COVER;
+            body.radius = LV_RADIUS_CIRCLE;
+            lv_area_t box = { dsc.center.x - r, dsc.center.y - r,
+                              dsc.center.x + r - 1, dsc.center.y + r - 1 };
+            if (box_in_clip(layer, &box)) lv_draw_rect(layer, &body, &box);
+
+            if (ring_in_clip(layer, dsc.center.x, dsc.center.y, r, PACK_RING_W)) {
+                dsc.radius = (uint16_t)r;
+                lv_draw_arc(layer, &dsc);
+            }
         }
         return;
     }

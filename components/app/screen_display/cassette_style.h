@@ -40,6 +40,7 @@ extern const lv_color_t k_col_glass;
 /* The playing red: the hub's ring and divider, and the peek's ink. */
 extern const lv_color_t k_col_tape_dark;
 
+
 /* The tape's own body, and the dim end of the rewind fade: the hub ring cross-fades
  * from the playing red into this. */
 extern const lv_color_t k_col_tape;
@@ -48,6 +49,10 @@ extern const lv_color_t k_col_tape;
  * strands, the run and the rollers. The cassette's own tape is the table's plastic; this is
  * the preview's, and nothing else reads it. */
 extern const lv_color_t k_col_tape_preview;
+
+/* The wound tape under that edge: the same red, dark enough to read as the pack's body rather
+ * than as a second line. The preview fills each pack's circle with it. */
+extern const lv_color_t k_col_tape_dark_preview;
 extern const lv_color_t k_col_hub_ring;
 extern const lv_color_t k_col_hub_ink;
 
