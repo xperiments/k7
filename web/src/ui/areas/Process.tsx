@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { plural, shortHash } from '../format';
 import { DropZone } from '../DropZone';
 import { QueueList } from '../QueueList';
 import { useAnalysis } from '../state/analysis';
+import { restoreCoversFromDevice } from '../cardWriter';
 
 /**
  * Card → Process: the Queue, measured, with an explicit Send.
@@ -53,6 +54,30 @@ export function ProcessArea() {
     rescanCard,
     changeCard,
   } = useAnalysis();
+
+  const [restoringCovers, setRestoringCovers] = useState(false);
+  const [coverNote, setCoverNote] = useState<{ text: string; error: boolean } | null>(null);
+
+  /* The card-in-player path for the cover cache. The card-in-computer path is automatic on
+   * the pick; this one is a manual 8 MiB read from the SD card, so it is a click. */
+  const restoreCovers = async () => {
+    setRestoringCovers(true);
+    setCoverNote(null);
+    try {
+      const count = await restoreCoversFromDevice();
+      setCoverNote({
+        text: `${plural(count, 'cover')} restored from the player; open Media to see them`,
+        error: false,
+      });
+    } catch (error) {
+      setCoverNote({
+        text: error instanceof Error ? error.message : String(error),
+        error: true,
+      });
+    } finally {
+      setRestoringCovers(false);
+    }
+  };
 
   /* The switch's own id lands on Base UI's hidden input, so the label needs a second id for
    * the name: without it the control is announced as an unnamed switch. */
@@ -313,6 +338,24 @@ export function ProcessArea() {
       ) : (
         <QueueList />
       )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void restoreCovers()}
+          disabled={restoringCovers}
+        >
+          {restoringCovers ? 'Restoring…' : 'Restore covers from player'}
+        </Button>
+        {coverNote ? (
+          <span
+            className={`text-xs ${coverNote.error ? 'text-destructive' : 'text-muted-foreground'}`}
+          >
+            {coverNote.text}
+          </span>
+        ) : null}
+      </div>
 
       {mediaCount > 0 && (
         <p className="text-xs text-muted-foreground">

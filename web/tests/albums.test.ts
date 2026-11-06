@@ -137,12 +137,12 @@ describe('the album index', () => {
     expect(index.presence?.complete).toBe(true);
   });
 
-  it('keeps the cache whole when the listing was partial', () => {
+  it('shows only the albums the device still lists, even from a partial listing', () => {
     const index = indexOf(
       [row('a/01.mp3', 'Aphex Twin', 'Ambient Works'), row('a/02.mp3', 'Aphex Twin', 'Gone')],
       { ...deviceLists(['a/01.mp3']), complete: false },
     );
 
-    expect(index.albums).toHaveLength(2);
+    expect(index.albums.map((album) => album.album)).toEqual(['Ambient Works']);
   });
 });

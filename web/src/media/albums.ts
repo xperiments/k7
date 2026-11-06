@@ -29,6 +29,8 @@ import { measureableName } from '../domain/analysis';
 import { libraryStats, listLibrary, type LibraryListing } from '../device/mcp';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { listMedia, type CachedCover, type CachedMedia } from '../storage/media';
+import { presenceFromLibraryBlob } from '../device/libraryBlob';
+import { localRequest } from '../device/local';
 import { foldPath } from './paths';
 
 export const UNKNOWN_ARTIST = 'Unknown artist';
@@ -109,8 +111,11 @@ export function buildMediaIndex(
   cache: ReadonlyMap<string, CachedMedia>,
   presence: Presence | null,
 ): MediaIndex {
+  /* The device's own Library is the allowlist. A cache row whose path the card in the S3
+   * does not list belongs to another card (or to a file that has since gone) and must not
+   * invent an album here. With no device answer, the cache is the offline library. */
   const rows = [...cache.values()].filter(
-    (row) => !(presence?.complete ?? false) || presence?.paths.has(foldPath(row.path)),
+    (row) => presence === null || presence.paths.has(foldPath(row.path)),
   );
 
   // Keyed by the title alone: a second artist on the same title adds a name to the album it
@@ -189,13 +194,26 @@ export function presenceOf(listing: LibraryListing, expectedTracks: number): Pre
   return { paths, tracks: tracks.sort(byPath), unmeasurable: unmeasurable.sort(byPath), complete };
 }
 
-/** The listing, or `null` when the device did not answer -- the Media area then shows the cache. */
+/**
+ * The device's full Library, or `null` when it did not answer.
+ *
+ * `/api/library.bin` is the whole arena — every track on the card in the S3 — and is what lets
+ * the Media area tell "not on this card" from "past the 200-entry MCP cap". The listing is
+ * kept as a fallback for an older device or a route the network refuses; a partial listing is
+ * still an allowlist, so an unrelated album cannot come back.
+ */
 export async function fetchPresence(expectedTracks: number): Promise<Presence | null> {
   try {
-    const listing = await listLibrary('', { depth: 8, limit: PRESENCE_LIMIT });
-    return presenceOf(listing, expectedTracks);
+    const response = await localRequest('/api/library.bin', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`library blob: ${response.status}`);
+    return presenceFromLibraryBlob(new Uint8Array(await response.arrayBuffer()));
   } catch {
-    return null;
+    try {
+      const listing = await listLibrary('', { depth: 8, limit: PRESENCE_LIMIT });
+      return presenceOf(listing, expectedTracks);
+    } catch {
+      return null;
+    }
   }
 }
 

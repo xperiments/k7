@@ -393,6 +393,81 @@ static bool body_list_id(const char *body, size_t len, uint64_t *id)
 
 /* POST /api/playlists/select: tell the broadcast which Playlist to walk. The choice is
  * remembered; an id the image no longer holds is a 404, an empty one a 409. */
+/* ------------------------------------------------------------ cover archive */
+
+/* A 32 MiB ceiling is four times the largest archive a 10,000-cover image can make and
+ * far above the 8 MiB a 3,485-track card measured; a larger file is not ours. */
+#define COVERS_MAX_BYTES (32u * 1024u * 1024u)
+
+/* The archive is at the card root, the parent of the Music directory the services were
+ * started with (device: /sdcard/k7.covers; host: the fixture's root). */
+static void covers_path(char *out, size_t cap)
+{
+    const char *music = s_cfg.music_dir ? s_cfg.music_dir : "";
+    size_t len = strlen(music);
+    while (len > 1 && music[len - 1] == '/') len--;
+    const char *slash = NULL;
+    for (size_t i = len; i > 0; i--) {
+        if (music[i - 1] == '/') { slash = music + i - 1; break; }
+    }
+    if (!slash) {
+        snprintf(out, cap, "k7.covers");
+        return;
+    }
+    size_t parent = (size_t)(slash - music);
+    if (parent == 0) parent = 1; /* "/music" -> "/k7.covers" */
+    snprintf(out, cap, "%.*s/k7.covers", (int)parent, music);
+}
+
+/* GET /api/covers: the card's preprocessed cover archive, served verbatim. It is a cache
+ * written by the App, not by the device; reading it from the SD card touches no flash, so
+ * the panel's scan-out is not involved. A manual restore may take a few seconds of the SD
+ * bus while music is playing; that is the caller's decision. */
+static http_result_t covers_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)ctx;
+    if (strcmp(req->path, "/api/covers") != 0) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
+
+    char path[256];
+    covers_path(path, sizeof path);
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        http_send_error(fd, 404, "no cover archive on the card");
+        return HTTP_HANDLED;
+    }
+
+    long size = -1;
+    if (fseek(f, 0, SEEK_END) == 0) size = ftell(f);
+    if (size <= 0 || (unsigned long)size > COVERS_MAX_BYTES || fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        http_send_error(fd, size == 0 ? 404 : 413, "the cover archive is not usable");
+        return HTTP_HANDLED;
+    }
+
+    const char *headers =
+        "Content-Disposition: attachment; filename=\"k7.covers\"\r\n"
+        "Cache-Control: no-store\r\n";
+    http_send_timeout_ms(fd, 30000);
+    if (http_send_headers(fd, 200, "application/octet-stream", (size_t)size, headers) != ESP_OK) {
+        fclose(f);
+        return HTTP_HANDLED;
+    }
+
+    uint8_t buf[4096];
+    bool sent = true;
+    size_t got;
+    while ((got = fread(buf, 1, sizeof buf, f)) > 0) {
+        if (!http_send_all(fd, buf, got)) { sent = false; break; }
+    }
+    if (ferror(f)) sent = false;
+    fclose(f);
+    ESP_LOGI(TAG, "GET /api/covers -> %ld B%s", size, sent ? "" : " (client stopped)");
+    return HTTP_HANDLED;
+}
+
 static http_result_t select_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
@@ -755,6 +830,9 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
 
     e = http_server_register_route_method("/api/rescan", "POST", rescan_route, NULL);
     if (e != ESP_OK) return fail(report, e, "rescan endpoint");
+
+    e = http_server_register_route("/api/covers", covers_route, NULL);
+    if (e != ESP_OK) return fail(report, e, "covers endpoint");
 
     e = http_server_register_route("/api/playlists", playlists_route, NULL);
     if (e != ESP_OK) return fail(report, e, "playlists endpoint");

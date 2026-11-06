@@ -56,6 +56,7 @@ import {
 } from '../card/mark';
 import { UNSCOPED } from '../card/session';
 import { putCoverRecord } from '../storage/media';
+import { localRequest } from '../device/local';
 import { parseCoverArchive } from '../storage/coverArchive';
 
 /** The archive's name at the card root, beside k7.db, k7.card and k7.select. */
@@ -126,6 +127,29 @@ export async function writeSnapshotToCard(
   const writable = await handle.createWritable();
   await writable.write(bytes);
   await writable.close();
+}
+
+/**
+ * Read the cover archive from the player, for the case where the card is not in the computer.
+ *
+ * This is the manual path: 8 MiB over the same SD card the decoder is reading, so it is a
+ * deliberate action, never a page-load fetch. It goes through the device's `/api/covers`,
+ * which streams the archive from the card and touches no flash.
+ */
+export async function restoreCoversFromDevice(): Promise<number> {
+  const response = await localRequest('/api/covers', { cache: 'no-store' });
+  if (response.status === 404) throw new Error('the player has no cover archive on its card');
+  if (!response.ok) throw new Error(`the player refused the cover archive (${response.status})`);
+  const covers = parseCoverArchive(new Uint8Array(await response.arrayBuffer()));
+  for (const cover of covers) {
+    await putCoverRecord(cover.hash, {
+      bytes: cover.bytes,
+      format: cover.format,
+      width: cover.width,
+      height: cover.height,
+    });
+  }
+  return covers.length;
 }
 
 /**

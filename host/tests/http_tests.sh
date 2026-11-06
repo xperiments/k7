@@ -322,6 +322,29 @@ if [ -z "$BOARD_URL" ]; then
     fi
 fi
 
+group "T14c  the cover archive is served"
+mkdir -p "$TMP/covers-card/music"
+head -c 1234 /dev/zero > "$TMP/covers-card/k7.covers"
+if start_server "$TMP/covers-card/music" 18109 "$TMP/covers.log"; then
+    curl -s -D "$TMP/covershdr" -o "$TMP/covers.bin" "http://127.0.0.1:18109/api/covers"
+    CV_HDR=$(tr -d '\r' <"$TMP/covershdr")
+    CV_BYTES=$(wc -c <"$TMP/covers.bin" | tr -d ' ')
+    check_eq "GET /api/covers is a 200" "$(printf '%s' "$CV_HDR" | head -1 | awk '{print $2}')" "200"
+    check_match "and is typed application/octet-stream" "$CV_HDR" '^Content-Type: application/octet-stream$'
+    check_match "and carries a real Content-Length" "$CV_HDR" "^Content-Length: 1234$"
+    check_match "and is offered as an attachment" "$CV_HDR" '^Content-Disposition: attachment; filename="k7.covers"$'
+    if cmp -s "$TMP/covers.bin" "$TMP/covers-card/k7.covers"; then
+        ok "and the body is the card's file"
+    else
+        bad "the cover body differs from the file"
+    fi
+fi
+mkdir -p "$TMP/no-covers/music"
+if start_server "$TMP/no-covers/music" 18110 "$TMP/no-covers.log"; then
+    check_eq "a card without k7.covers is a 404" \
+        "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18110/api/covers")" "404"
+fi
+
 group "T15  POST /api/play selects a Track"
 if [ -z "$BOARD_URL" ]; then
     mkdir -p "$TMP/play/Album/Deep"

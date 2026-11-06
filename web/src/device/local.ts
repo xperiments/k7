@@ -49,6 +49,18 @@ interface LocalRequestInit extends RequestInit {
   targetAddressSpace?: 'local';
 }
 
+/**
+ * One request to the device, named absolutely and marked local so the browser asks for the
+ * `local-network` permission instead of refusing it as mixed content. The App's own device
+ * transport uses the same shape; callers that need a raw body (the library arena, the cover
+ * archive) use this instead of a bare `fetch`.
+ */
+export function localRequest(input: string, init?: RequestInit): Promise<Response> {
+  const absolute = input.startsWith('http') ? input : `${DEVICE_ORIGIN}${input}`;
+  const withSpace: LocalRequestInit = { ...init, mode: 'cors', targetAddressSpace: 'local' };
+  return fetch(absolute, withSpace);
+}
+
 export function createLocalDevice(options: LocalOptions = {}): LocalDevice {
   const pageFetch = options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
   const localFetch = (input: string, init?: RequestInit): Promise<Response> => {
