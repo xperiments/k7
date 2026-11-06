@@ -237,8 +237,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * replaces the row's picture with its content hash; it is best-effort and idempotent. */
   useEffect(() => {
     if (coversMigrated) return;
-    coversMigrated = true;
-    void migrateLegacyCovers(encodeCover).catch(() => undefined);
+    // The cache can shrink later; it must not compete with the worker pool's model load or
+    // the first rows of a run. Ten seconds is after both have started.
+    const timer = window.setTimeout(() => {
+      coversMigrated = true;
+      void migrateLegacyCovers(encodeCover).catch(() => undefined);
+    }, 10_000);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const inFlight = useRef(0);

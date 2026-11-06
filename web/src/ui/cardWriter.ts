@@ -147,9 +147,10 @@ export async function identifyCard(directory: CardDirectory): Promise<string> {
   }
   if (!isCardRoot(names)) return UNSCOPED;
 
-  // The covers are content-addressed and independent of the mark; take them before the run
-  // can ask for one. A card whose archive is absent or damaged just keeps the browser's own.
-  await restoreCoversFromCard(directory);
+  // The covers are a cache, never a gate on the pick: a large archive or a busy IndexedDB
+  // must not keep the run from starting. `ensureCover()` finds whatever has arrived; a row
+  // that races the restore may encode its cover once more, which is the safe direction.
+  void restoreCoversFromCard(directory).catch(() => 0);
 
   let text = '';
   try {

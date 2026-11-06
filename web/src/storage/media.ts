@@ -119,26 +119,49 @@ const DB_NAME = 'k7-media';
 const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<MediaDB>> | null = null;
+let openedDb: IDBPDatabase<MediaDB> | null = null;
 
-/** Open the store on first use, never at import: a module import must not need IndexedDB. */
+/**
+ * Open the store on first use, never at import: a module import must not need IndexedDB.
+ *
+ * The schema version is part of the deployed App. A tab still running the previous build
+ * holds the old version open, and `openDB` would wait on it forever — the run then looks
+ * stuck on a card it has already read. `blocking` closes such a connection and reloads it
+ * onto the new build; `blocked` names the case a tab too old to have the handler leaves.
+ */
 function database(): Promise<IDBPDatabase<MediaDB>> {
-  dbPromise ??= openDB<MediaDB>(DB_NAME, DB_VERSION, {
-  upgrade(db, oldVersion) {
-    if (oldVersion < 2) {
-      // v0/v1 held `media` with keyPath 'path' (or not at all). Recreate it: there is no
-      // scope to backfill, and doing so would be a guess about which card each row came
-      // from.
-      if (db.objectStoreNames.contains('media')) db.deleteObjectStore('media');
-    }
+  if (dbPromise) return dbPromise;
+  dbPromise = openDB<MediaDB>(DB_NAME, DB_VERSION, {
+    upgrade(db, oldVersion) {
+      if (oldVersion < 2) {
+        // v0/v1 held `media` with keyPath 'path' (or not at all). Recreate it: there is no
+        // scope to backfill, and doing so would be a guess about which card each row came
+        // from.
+        if (db.objectStoreNames.contains('media')) db.deleteObjectStore('media');
+      }
 
-    if (!db.objectStoreNames.contains('media')) {
-      const store = db.createObjectStore('media', { keyPath: ['scope', 'path'] });
-      // Listing one card's rows and counting them are both scope queries; the compound
-      // primary key alone would force a scan of every card.
-      store.createIndex('scope', 'scope');
-    }
+      if (!db.objectStoreNames.contains('media')) {
+        const store = db.createObjectStore('media', { keyPath: ['scope', 'path'] });
+        // Listing one card's rows and counting them are both scope queries; the compound
+        // primary key alone would force a scan of every card.
+        store.createIndex('scope', 'scope');
+      }
       if (!db.objectStoreNames.contains('covers')) db.createObjectStore('covers');
     },
+    blocking() {
+      // Another tab is moving k7-media to a newer version. This connection only holds that
+      // upgrade up; let it go and reload onto the build that owns the new schema.
+      openedDb?.close();
+      openedDb = null;
+      dbPromise = null;
+      if (typeof window !== 'undefined') window.location.reload();
+    },
+    blocked() {
+      console.warn('k7-media is held open by another tab; close every K7 tab and reload.');
+    },
+  }).then((db) => {
+    openedDb = db;
+    return db;
   });
   return dbPromise;
 }
