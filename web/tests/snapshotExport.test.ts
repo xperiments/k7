@@ -46,11 +46,14 @@ describe('building the snapshot for the player', () => {
     /* The header, read here rather than through the module's own writer. */
     expect(new TextDecoder().decode(bytes.subarray(0, 8))).toBe('K7SNAP\0\0');
     const view = new DataView(bytes.buffer);
-    expect(view.getUint16(8, true)).toBe(1);
-    expect(view.getUint16(10, true)).toBe(64);
+    expect(view.getUint16(8, true)).toBe(3);
+    expect(view.getUint16(10, true)).toBe(80);
     expect(view.getUint32(12, true)).toBe(bytes.length);
     expect(view.getUint32(16, true)).toBe(1);
     expect(view.getUint32(20, true)).toBe(32);
+    expect(view.getUint16(64, true)).toBe(0);
+    expect(view.getUint16(66, true)).toBe(32);
+    expect(view.getUint32(76, true)).toBe(view.getUint32(32, true));
     // The analyser version travels in the image as major*10000 + minor*100 + patch, and it
     // is the pipeline's own version — not the app release (ADR 0066).
     const [major = 0, minor = 0, patch = 0] = ANALYZER_VERSION.split('.').map(Number);
@@ -64,6 +67,9 @@ describe('building the snapshot for the player', () => {
     );
     expect(tracks).toBe(0);
     expect(skipped).toBe(1);
-    expect(bytes.length).toBe(64); // a header and nothing else
+    expect(bytes.length).toBe(80); // a version 3 header and nothing else
+    expect(new DataView(bytes.buffer).getUint16(8, true)).toBe(3);
+    expect(new DataView(bytes.buffer).getUint16(10, true)).toBe(80);
+    expect(new DataView(bytes.buffer).getUint16(64, true)).toBe(0); // list_count
   });
 });

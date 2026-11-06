@@ -27,21 +27,23 @@ refused at review, not queued behind other work.
   operation — the card in a reader, or a host tool. The device's only SD access is the
   read-only access the broadcast and the Library need: mount the card, scan it to build the
   Library, read a Track to encode it, read artwork for the display, read the **Update file**.
-  That is all of it but for the one delete below.
-- **The one delete.** After a **Snapshot** has been flashed and verified, the device deletes
-  the **Update file** it consumed and writes nothing else to the card: never a Track, never a
-  directory, never a repair. This is the smallest write that lets the card say what to do next
-  without the device keeping that state; it is recorded in ADR 0047.
+  That is all of it but for the two writes below.
+- **The two writes.** The device deletes the **Update file** it consumed once the **Snapshot**
+  has been flashed and verified; and it writes `k7.select`, the 32-byte record of the selected
+  **Playlist**, creating it at boot as id 0 when it is absent and rewriting it whenever that
+  choice changes, on its own task below the decoder. It writes nothing else to the card: never a
+  Track, never a directory, never a repair. These are the smallest writes that let the card say
+  what to do next without the device keeping that state; ADR 0047 is amended by ADR 0069.
 
 **What the premise does not forbid**, because the distinction is the point:
 
 - **The live stream** (`/stream`). It carries the station's continuously encoded MP3, not any
   stored Track's bytes.
-- **The device's own views.** `/api/library`, `/api/library.bin` and the opt-in
-  `/api/screen.bmp` are computed by the firmware, not read out of the card. `/api/library.bin`
-  is still sent with `Content-Disposition: attachment`, and that is fine: it is a photograph
-  of the index, not a Track. "Attachment" describes how a response is framed; the premise
-  bans what the bytes *are*, and these are not a Track.
+- **The device's own views.** `/api/library.bin` and the opt-in `/api/screen.bmp` are computed
+  by the firmware, not read out of the card. `/api/library.bin` is still sent with
+  `Content-Disposition: attachment`, and that is fine: it is a photograph of the index, not a
+  Track. "Attachment" describes how a response is framed; the premise bans what the bytes
+  *are*, and these are not a Track.
 - **The Index**, as a listing: names and sizes in broadcast order, with no links to bytes. It
   survives because it is the device's diagnostic surface when the card is missing.
 
@@ -49,8 +51,8 @@ Read literally, "all SD processing outside" would forbid the broadcast itself. I
 mean that. **SD processing** in the premise means operating on the card's content on someone
 else's behalf: adding, removing, renaming, rewriting, or shipping a Track out. Reading a Track
 to put it on air is the appliance's own job, and it is what the Library scan and the decoder
-do. Nothing else may read the card, and nothing may write it except the one **Update file**
-delete.
+do. Nothing else may read the card, and nothing may write it except the **Update file**'s delete
+and the `k7.select` record.
 
 ## Language
 
@@ -63,8 +65,8 @@ annotates its tracks and may carry **Playlists**, but it never lists the library
 _Avoid_: library root, media path
 
 **Library tree**:
-The directories and tracks under the music directory, as one ordered tree. The JSON view is a
-view of it, and the **broadcast order** is too unless a **Playlist** is selected.
+The directories and tracks under the music directory, as one ordered tree. The `/api/library.bin`
+view is a view of it, and the **broadcast order** is too unless a **Playlist** is selected.
 _Avoid_: file list, index
 
 **Track**:
@@ -95,16 +97,17 @@ _Avoid_: raw file, raw audio
 ### The snapshot
 
 **Snapshot**:
-What a host measured for a Library, delivered as one file and held in a flash partition. It
-annotates tracks that the Library already knows and may carry the host's **Playlists**; it never
-defines what the Library contains, and its absence changes nothing about what plays. The format
-and its reasoning are ADR 0047, amended by ADR 0051.
+What a host measured for a Library, delivered as one file, flashed into a partition and copied
+into PSRAM at boot, where queries read it. It annotates tracks that the Library already knows and
+may carry the host's **Playlists**; it never defines what the Library contains, and its absence
+changes nothing about what plays. The format and its reasoning are ADR 0047, amended by ADR 0051
+and 0069.
 _Avoid_: database, cache, index, library
 
 **Update file**:
-The one file at the card's root, `xtape.db`, that carries a Snapshot into the device. The
-device consumes it once — flash, verify, delete — and a card without one means "nothing to
-update", not "no Snapshot".
+The one file at the card's root, `k7.db`, that carries a Snapshot into the device. The device
+consumes it once — flash, verify, delete — and a card without one means "nothing to update", not
+"no Snapshot".
 _Avoid_: upload, seed, image
 
 **Track fingerprint**:
@@ -127,7 +130,7 @@ _Avoid_: detected (ambiguous between the two), corrected
 
 **Selected Playlist**:
 The one **Playlist** the broadcast is walking, or none. It is a choice, not a copy: the lists
-live in the Snapshot, and the selection is remembered by the device across a restart.
+live in the Snapshot, and the selection is remembered in the card's `k7.select` across a restart.
 _Avoid_: active playlist, current list, mode
 
 **Station format**:
@@ -532,13 +535,14 @@ _Avoid_: card flag, insertion status
 computer. The App stopped using it when the card replaced the network as the only way in
 ([ADR 0065](../adr/0065-the-card-is-the-only-way-to-the-player.md)); the route is still there.
 The image is validated before anything is erased and the device restarts afterwards. It is the
-one write the device accepts, and it carries measurements and **Playlists**, never a **Track**.
+one write the device accepts over HTTP, and it carries measurements and **Playlists**, never a
+**Track**.
 _Avoid_: file upload, flash endpoint
 
 **Playlist selection**:
 `POST /api/playlists/select`: the command that tells the broadcast which **Playlist** to walk,
-or `none`. Remembered across a restart; a selection naming a list the Snapshot no longer holds
-falls back to the library tree's order.
+or `none`. Written to `k7.select` at the card root and read back at boot; a selection naming a
+list the Snapshot no longer holds falls back to the library tree's order and clears the record.
 _Avoid_: switch, activate, load
 
 ### Build and licensing

@@ -33,8 +33,8 @@ esp_err_t screen_display_boot(void);
 
 /* Start the first clock (panel board), paint the boot mark, light the backlight and hold for
  * CONFIG_APP_UI_MARK_HOLD_MS before returning. Call once, **after** the services: by then
- * app_services_start() has mapped and validated the Snapshot, and Wi-Fi has read its NVS
- * out of flash, so the scan starts on a quiet bus and nothing displaces the
+ * app_services_start() has read and validated the Snapshot into PSRAM, and Wi-Fi has read
+ * its NVS out of flash, so the scan starts on a quiet bus and nothing displaces the
  * mark. Returns ESP_OK, or the reason the mark did not go up; the device still serves and
  * the screen stays dark. */
 esp_err_t screen_display_mark(void);
@@ -45,22 +45,6 @@ esp_err_t screen_display_mark(void);
  * the Artwork level stays empty. Call once, after `screen_display_mark()` has returned.
  * Returns ESP_OK, or the reason the cassette could not be built; the mark stays up. */
 esp_err_t screen_display_start(const char *music_dir);
-
-/* Flash is about to be read: take the picture off the glass until a moment after the last
- * call.
- *
- * A mapped-flash read (the Snapshot) takes the PSRAM bus from the panel's scan-out for a
- * couple of microseconds - enough for the LCD engine to consume pixels that are not there,
- * after which the DMA and the engine are permanently out of step and the whole picture sits
- * a band to one side (ADR 0055). So the screen goes black for the length of the read and is
- * re-established afterwards: the slip happens behind a black frame, where it cannot be seen,
- * and panel_rgb_reinit() puts the scan back before the picture returns.
- *
- * Cheap to call per read: the first call of a burst does the blacking and waits a frame for
- * it to land, the rest only extend the hold. The screen comes back by itself a second after
- * the last call. No-op on a build with no panel, and before the mark has started the first
- * clock. */
-void screen_display_page_service(void);
 
 #if CONFIG_APP_UI_SCREEN_HTTP
 /* Register the screen's HTTP diagnostics with the server: GET /api/screen.bmp, the

@@ -2,7 +2,7 @@
  * The device's library, read through MCP.
  *
  * The four `library_*` tools carry the titles and measurements a card's tags held, which is
- * the only place the device knows them (`/api/library` carries paths and sizes only). It is
+ * the only place the device knows them (`/api/library.bin` carries paths and sizes only). It is
  * one `POST /mcp` with a JSON-RPC body and no key, answered through the `Device` seam, so
  * this module never fetches.
  *

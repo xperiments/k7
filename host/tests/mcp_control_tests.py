@@ -2,12 +2,47 @@
 """Exercise the opt-in MCP control tools against a control build."""
 import json
 import socket
+import struct
 import sys
 import threading
 import time
 
 HOST, PORT, INITIAL = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
 FAIL = 0
+
+# GET /api/library.bin: a 64-byte header, then 32-byte nodes, the u32 child-edge
+# array, the u32 track index and the string table. Only what this test needs is
+# decoded here: the generation and a track's node id (its index in that array).
+LIB_MAGIC = 0x424C5458
+LIB_HEADER = struct.Struct("<IHH8IQ2IQ")
+LIB_NODE = struct.Struct("<QIIIHHBBHI")
+assert LIB_HEADER.size == 64 and LIB_NODE.size == 32
+
+
+def library_header(payload):
+    fields = LIB_HEADER.unpack_from(payload, 0)
+    if fields[0] != LIB_MAGIC:
+        raise ValueError(f"not a library blob: magic 0x{fields[0]:08x}")
+    return fields
+
+
+def library_generation(payload):
+    return library_header(payload)[9]
+
+
+def library_node(payload, name):
+    """(generation, node id) for the track called `name`, or None."""
+    _, _, _, _, node_count, edge_count, track_count, _, _, generation, _, _, _, _, _ = \
+        library_header(payload)
+    nodes_off = LIB_HEADER.size
+    strings_off = nodes_off + node_count * LIB_NODE.size + edge_count * 4 + track_count * 4
+    strings = payload[strings_off:]
+    for index in range(node_count):
+        _, name_off, _, _, _, name_len, kind, _, _, _ = LIB_NODE.unpack_from(
+            payload, nodes_off + index * LIB_NODE.size)
+        if kind == 1 and strings[name_off:name_off + name_len].decode("utf-8") == name:
+            return generation, index
+    return None
 
 
 def check(label, got, want):
@@ -114,21 +149,13 @@ def main():
     err, _ = tool("player_prev")
     check("prev is accepted", err, False)
 
-    # id + generation is the fast path; use the id the tree reports.
-    _, payload = request("GET", "/api/library")
-    lib = json.loads(payload)
-    def find(node, path):
-        if node.get("path") == path:
-            return node
-        for child in node.get("children", []):
-            got = find(child, path)
-            if got:
-                return got
-        return None
-    node = find(lib["tree"], "t0002.wav")
-    check("the tree has an id for t0002.wav", node is not None, True)
-    if node:
-        err, _ = tool("player_play", {"id": node["id"], "generation": lib["generation"]})
+    # id + generation is the fast path; use the id the blob reports.
+    _, payload = request("GET", "/api/library.bin")
+    found = library_node(payload, "t0002.wav")
+    check("the tree has an id for t0002.wav", found is not None, True)
+    if found:
+        generation, node_id = found
+        err, _ = tool("player_play", {"id": node_id, "generation": generation})
         check("id + generation is accepted", err, False)
         check("id + generation reaches the Track", wait_path("t0002.wav"), True)
 
@@ -154,8 +181,8 @@ def main():
     deadline = time.time() + 5
     gen = None
     while time.time() < deadline:
-        _, payload = request("GET", "/api/library")
-        gen = json.loads(payload)["generation"]
+        _, payload = request("GET", "/api/library.bin")
+        gen = library_generation(payload)
         if gen == 2:
             break
         time.sleep(0.1)

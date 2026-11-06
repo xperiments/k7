@@ -1,5 +1,13 @@
 # The measurements live in a flash partition, and are never resident
 
+> **Superseded in part by [ADR 0069](./0069-the-snapshot-is-resident-and-the-card-carries-the-selection.md).**
+> The Snapshot is now copied into PSRAM at boot and queries read that copy, so the "never
+> resident" rule and the black-frame guard this document's amendment added no longer apply. The
+> reason is the measurement this ADR did not have: format v3 takes the 3,485-track image from
+> 306 KB to 177 KB, and removing the Library JSON view frees 629,596 B for that card's Library.
+> The rest stands: the format, the Update file, the partition, the coverage and the card as the
+> source.
+
 > **Amended: the reload never reads the Snapshot, and the reads that remain are guarded.** The
 > rule ADR 0055 establishes — the scan-out cannot survive any flash access — applies to the
 > Snapshot's mapped reads exactly as it did to the Shell's page reads. The first thing that broke

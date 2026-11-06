@@ -2,12 +2,11 @@
 /*
  * snapshot - the measured music a host produced for this Library.
  *
- * One immutable image, validated once and then read in place: a 64-byte header (80 in
- * version 2, which adds the Playlists), one 32-byte row per track sorted by
- * fingerprint, and one UTF-8 string pool. Nothing is
- * copied, nothing is cached, and the module never touches a filesystem -- it is handed
- * a pointer and a length. On the device the pointer is the mapped `snapshot` partition
- * (ADR 0047); in the host tests it is a buffer.
+ * One immutable image, validated once and then read in place: an 80-byte header, one
+ * 32-byte row per track sorted by fingerprint, one interned UTF-8 string pool, and the
+ * lists. The module never copies, caches or touches a filesystem -- it is handed a
+ * pointer and a length. On the device the pointer is the PSRAM copy the appliance makes
+ * at boot (ADR 0069); in the host tests it is a buffer.
  *
  * The byte layout is docs/specs/snapshot-format.md. This header is the only interface
  * the rest of the firmware sees: the MCP layer asks whether a track matches a filter,
@@ -21,19 +20,12 @@
 extern "C" {
 #endif
 
-/* The header's first eight bytes. The product was renamed (ADR 0062) and the app writes
- * `K7SNAP` now; `XTAPESNP` is what a card or a previous app build may still send. The
- * field is eight bytes, so the shorter name is NUL-padded and a compare covers all eight -
- * never the C string, or "K7SNAPxx" would read as a Snapshot. */
+/* The header's first eight bytes: `K7SNAP`, NUL-padded to eight. This is the only magic
+ * format version 3 has; there is no legacy name and no version branch (format spec §12). */
 #define SNAPSHOT_MAGIC        "K7SNAP\0\0"
-#define SNAPSHOT_MAGIC_LEGACY "XTAPESNP"
-/* Version 1 has no list area and a 64-byte header; version 2 appends the lists and
- * grows the header to 80 bytes. The reader accepts both (format spec §12). */
-#define SNAPSHOT_VERSION_1    1u
-#define SNAPSHOT_VERSION_2    2u
-#define SNAPSHOT_VERSION      SNAPSHOT_VERSION_2
-#define SNAPSHOT_HEADER_SIZE  64u  /* version 1; version 2 is this plus 16 */
-#define SNAPSHOT_HEADER_SIZE_2 80u
+/* Format version 3 is the only version this project reads or writes. */
+#define SNAPSHOT_VERSION      3u
+#define SNAPSHOT_HEADER_SIZE  80u
 #define SNAPSHOT_ROW_SIZE     32u
 #define SNAPSHOT_LIST_SIZE    32u
 #define SNAPSHOT_LIST_ROW_SIZE 4u
@@ -41,9 +33,9 @@ extern "C" {
 #define SNAPSHOT_MAX_LIST_ROWS 8192u
 #define SNAPSHOT_MAX_BYTES    (2u * 1024u * 1024u)
 
-/* Unknown percentages are 0xFF and unknown BPM/key are 0; the accessors keep them
- * as they are rather than inventing a zero, because "0 BPM" and "not measured" are
- * different answers and only the caller knows which one to show. */
+/* Unknown percentages are exposed as 0xFF; the image stores 127 and the reader maps
+ * it. Unknown BPM/key are 0; the accessors keep the markers as they are rather than
+ * inventing a zero, because "0 BPM" and "not measured" are different answers. */
 #define SNAPSHOT_UNKNOWN_PCT  0xFFu
 
 typedef enum {
@@ -67,12 +59,15 @@ typedef struct {
     uint64_t created;
 } snapshot_list_t;
 
-/* One row, as read. `snapshot_find` fills it; every field is exactly what the image
- * holds, unknown markers included. */
+/* One row, as read. `snapshot_find` fills it; percentages are exposed as 0xFF when
+ * the image stores 127, and bpm_x10 is 0 (unknown) or 700..1800. */
 typedef struct {
     uint64_t fingerprint;
     uint32_t size;
-    uint32_t string_offset;
+    uint32_t title_offset;
+    uint32_t artist_offset;
+    uint32_t album_offset;
+    uint32_t genre_offset;
     uint16_t bpm_x10;
     uint8_t  key;
     uint8_t  energy;
@@ -108,10 +103,9 @@ typedef enum {
 
 /* ---------------------------------------------------------------- the image */
 
-/* Whether these first eight bytes are a magic this firmware reads: the current
- * `SNAPSHOT_MAGIC`, or `SNAPSHOT_MAGIC_LEGACY`. A caller that pre-checks a header (the
- * board's mapped partition) uses this instead of comparing the constants itself, so the
- * read-both rule lives in one place. */
+/* Whether these first eight bytes are the one magic this firmware reads, `K7SNAP`.
+ * A caller that pre-checks a header (the board's mapped partition) uses this instead of
+ * comparing the constant itself. */
 bool snapshot_magic_ok(const uint8_t *magic);
 
 /* Validate an image already in memory and take a reference to it. The image must
@@ -122,7 +116,7 @@ snapshot_result_t snapshot_open_why(const uint8_t *image, size_t size, snapshot_
                                     char *why, size_t why_size);
 void              snapshot_close(snapshot_t *s);
 
-/* 1 or 2; the image's own format version, which the accessors below depend on. */
+/* 3; the image's own format version (the only one this reader accepts). */
 uint16_t       snapshot_version(const snapshot_t *s);
 uint32_t       snapshot_rows(const snapshot_t *s);
 uint32_t       snapshot_generation(const snapshot_t *s);
@@ -142,9 +136,8 @@ const char *snapshot_row_string(const snapshot_t *s, const snapshot_row_t *row,
 
 /* ---------------------------------------------------------------- the lists */
 
-/* Playlists are version 2 only: a version 1 image reports zero and every accessor
- * below returns false or "". Lists are stored in ascending id order, so `find` is a
- * binary search. None of this resolves a row to a track -- that needs the Library,
+/* Playlists live in the same image. Lists are stored in ascending id order, so `find`
+ * is a binary search. None of this resolves a row to a track -- that needs the Library,
  * which this module never touches. */
 uint32_t snapshot_lists(const snapshot_t *s);
 bool     snapshot_list_at(const snapshot_t *s, uint32_t index, snapshot_list_t *out);

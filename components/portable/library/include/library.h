@@ -4,9 +4,8 @@
  *
  * The scan walks the Music directory recursively, accepts only Tracks whose name
  * passes the shared source-format rule, sorts each directory by name, and builds
- * one arena: the tree the HTTP surface looks up, the broadcast order, the prebuilt
- * JSON view and the binary view. Lookups walk the arena; they never touch the
- * filesystem.
+ * one arena: the tree the HTTP surface looks up, the broadcast order and the
+ * binary view. Lookups walk the arena; they never touch the filesystem.
  *
  * This module knows nothing about HTTP, the broadcast or the display. It is told
  * whether a card is present (a no-card generation is built without touching the
@@ -58,8 +57,7 @@ typedef struct {
     uint32_t    max_bytes; /* 0 = LIB_DEFAULT_MAX_BYTES */
     uint32_t    max_tracks;/* 0 = LIB_DEFAULT_MAX_TRACKS */
     uint32_t    max_path;  /* 0 = FILENAME_MAX; absolute path ceiling for the scan */
-    uint32_t    generation;/* 0 = 1; the number embedded in the JSON and blob */
-    bool        build_json;/* false builds only the binary view */
+    uint32_t    generation;/* 0 = 1; the number embedded in the blob */
 } library_cfg_t;
 
 /* Scan the Music directory and build one immutable generation. A missing or
@@ -131,8 +129,7 @@ lib_node_t   library_find(const library_t *lib, const char *relpath);
 lib_node_t   library_track_at(const library_t *lib, uint32_t track_index);
 uint32_t     library_track_index(const library_t *lib, lib_node_t n); /* LIB_NODE_NONE if not a track */
 
-/* The prebuilt views, valid until library_close(). */
-const char  *library_json(const library_t *lib, size_t *len); /* NULL when build_json was false */
+/* The prebuilt blob, valid until library_close(). */
 const void  *library_blob(const library_t *lib, size_t *len);
 
 /* Well-formed UTF-8. The scan uses this and skips a name that is not; exposed so

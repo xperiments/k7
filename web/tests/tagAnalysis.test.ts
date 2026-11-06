@@ -37,13 +37,19 @@ describe('a track the tags already answer for', () => {
       appSchema: 1,
       modelSet: 0x1234n,
     });
-    /* Row layout: fingerprint 0-7, size 8-11, string offset 12-15, bpm 16-17, key 18,
-     * energy 19, dance 20, valence 21, arousal 22, mood 23, confidence 24, flags 25. */
-    expect(bytes[64 + 25]).toBe(0x03); // tempo and key from metadata
-    for (const offset of [19, 20, 21, 22, 24]) {
-      expect(bytes[64 + offset]).toBe(0xff); // energy, dance, valence, arousal, confidence
+    /* Format §4: the 80-byte header comes first, then 32-byte rows. A row's
+     * measurements are one little-endian uint64 at offset 24: bpm_code 0..10,
+     * key 11..15, energy 16..22, danceability 23..29, valence 30..36,
+     * arousal 37..43, confidence 44..50, mood_bits 51..55, source_flags 56..61. */
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const word = view.getBigUint64(80 + 24, true);
+    expect(Number(word & 0x7ffn) + 699).toBe(1740); // 174 BPM, tagged
+    expect(Number((word >> 11n) & 0x1fn)).toBe(8); // 8A
+    for (const shift of [16n, 23n, 30n, 37n, 44n]) {
+      expect(Number((word >> shift) & 0x7fn)).toBe(127); // energy, dance, valence, arousal, confidence
     }
-    expect(bytes[64 + 23]).toBe(0); // no mood bits
+    expect(Number((word >> 51n) & 0x1fn)).toBe(0); // no mood bits
+    expect(Number((word >> 56n) & 0x3fn)).toBe(0x03); // tempo and key from metadata
   });
 
   it('folds a tag outside the presented range', () => {

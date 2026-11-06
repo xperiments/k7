@@ -102,7 +102,7 @@ int main(void)
                  write_silence_wav(three, TRACK_SECONDS);
     CHECK(wrote, "three long WAV tracks were written under %s", dir);
 
-    library_cfg_t lc = {.music_dir = dir, .build_json = false};
+    library_cfg_t lc = {.music_dir = dir};
     library_t *lib = NULL;
     CHECK_EQ(library_open(&lc, &lib), LIB_OK, "the transport Library opens");
     char order[3][MINI_ICECAST_STATUS_FILE_MAX];
@@ -180,7 +180,7 @@ int main(void)
         printf("FATAL: cannot create the second generation\n");
         return 1;
     }
-    library_cfg_t lc2 = {.music_dir = dir2, .build_json = false};
+    library_cfg_t lc2 = {.music_dir = dir2};
     library_t *lib2 = NULL;
     CHECK_EQ(library_open(&lc2, &lib2), LIB_OK, "the second generation opens");
     mini_icecast_set_library(lib2);

@@ -66,11 +66,15 @@ static void put(buf_t *b, const void *src, size_t n)
     memcpy(b->p + b->n, src, n);
     b->n += n;
 }
-static void put8(buf_t *b, uint8_t v) { put(b, &v, 1); }
 static void put16(buf_t *b, uint16_t v)
 {
     uint8_t t[2] = {(uint8_t)v, (uint8_t)(v >> 8)};
     put(b, t, 2);
+}
+static void put24(buf_t *b, uint32_t v)
+{
+    uint8_t t[3] = {(uint8_t)v, (uint8_t)(v >> 8), (uint8_t)(v >> 16)};
+    put(b, t, 3);
 }
 static void put32(buf_t *b, uint32_t v)
 {
@@ -83,6 +87,16 @@ static void put64(buf_t *b, uint64_t v)
     for (int i = 0; i < 8; i++) t[i] = (uint8_t)(v >> (8 * i));
     put(b, t, 8);
 }
+static uint64_t get64(const uint8_t *p)
+{
+    uint64_t v = 0;
+    for (int i = 7; i >= 0; i--) v = (v << 8) | p[i];
+    return v;
+}
+static void patch24(uint8_t *p, size_t at, uint32_t v)
+{
+    for (int i = 0; i < 3; i++) p[at + i] = (uint8_t)(v >> (8 * i));
+}
 static void patch32(uint8_t *p, size_t at, uint32_t v)
 {
     for (int i = 0; i < 4; i++) p[at + i] = (uint8_t)(v >> (8 * i));
@@ -91,72 +105,192 @@ static void patch64(uint8_t *p, size_t at, uint64_t v)
 {
     for (int i = 0; i < 8; i++) p[at + i] = (uint8_t)(v >> (8 * i));
 }
+/* Replace one field of the packed measurements word. The tests use this to write an
+ * out-of-range value the builder would never produce. */
+static void patch_field(uint8_t *img, size_t row_at, int shift, int width, uint64_t v)
+{
+    uint64_t mask = ((1ull << width) - 1ull) << shift;
+    uint64_t m = get64(img + row_at + 24);
+    patch64(img, row_at + 24, (m & ~mask) | ((v << shift) & mask));
+}
+
+static const char MAGIC[8] = {'K', '7', 'S', 'N', 'A', 'P', 0, 0};
+/* The wire values this test owns: the reader must not define the oracle. */
+#define IMG_VERSION 3u
+#define IMG_HEADER_SIZE 80u
+#define IMG_ROW_SIZE 32u
+#define IMG_LIST_SIZE 32u
+#define IMG_LIST_ROW_SIZE 4u
+#define IMG_MAX_LIST_ROWS 8192u
+#define FILE_UNKNOWN_PCT 127u
 
 typedef struct {
     uint64_t fp;
     uint32_t size;
-    uint32_t str_off;
-    uint16_t bpm;
-    uint8_t  key, energy, dance, valence, arousal, mood, conf, src;
+    uint32_t title_off, artist_off, album_off, genre_off;
+    uint16_t bpm_x10; /* 0 unknown, otherwise 700..1800 */
+    uint8_t  key, energy, dance, valence, arousal, mood, conf, src; /* file values */
 } row_t;
 
-/* header + rows + pool; the CRC is filled in last, so a caller that wants a bad CRC
- * can corrupt a byte afterwards. */
-static uint8_t *build_image(size_t *out_n, const row_t *rows, size_t n, const char *pool,
-                            size_t pool_n)
+static uint64_t pack_measurements(const row_t *r)
 {
+    uint64_t m = r->bpm_x10 ? (uint64_t)(r->bpm_x10 - 699u) : 0;
+    m |= ((uint64_t)r->key & 0x1F) << 11;
+    m |= ((uint64_t)r->energy & 0x7F) << 16;
+    m |= ((uint64_t)r->dance & 0x7F) << 23;
+    m |= ((uint64_t)r->valence & 0x7F) << 30;
+    m |= ((uint64_t)r->arousal & 0x7F) << 37;
+    m |= ((uint64_t)r->conf & 0x7F) << 44;
+    m |= ((uint64_t)r->mood & 0x1F) << 51;
+    m |= ((uint64_t)r->src & 0x3F) << 56;
+    return m;
+}
+
+static void put_row(buf_t *b, const row_t *r)
+{
+    put64(b, r->fp);
+    put32(b, r->size);
+    put24(b, r->title_off);
+    put24(b, r->artist_off);
+    put24(b, r->album_off);
+    put24(b, r->genre_off);
+    put64(b, pack_measurements(r));
+}
+
+/* One list, as the test builds it. The row tiling is computed by the builder, not
+ * given, so a test that wants a broken tiling patches the bytes afterwards. */
+typedef struct {
+    uint64_t        id;
+    const char     *name;
+    uint64_t        created;
+    const char *const *paths;
+    uint32_t        n;
+} list_t;
+
+/* A whole version 3 image: header, rows, pool, list records, list rows. The row
+ * strings are the caller's pool (offsets are into it); the list strings follow them,
+ * each list's name and then its paths, in list order. */
+static uint8_t *build_image_lists(size_t *out_n, const row_t *rows, size_t n,
+                                  const char *row_pool, size_t row_pool_n,
+                                  const list_t *lists, uint32_t nlists)
+{
+    uint32_t list_rows = 0;
+    for (uint32_t i = 0; i < nlists; i++) list_rows += lists[i].n;
+
+    size_t list_pool_n = 0;
+    for (uint32_t i = 0; i < nlists; i++) {
+        list_pool_n += strlen(lists[i].name) + 1;
+        for (uint32_t j = 0; j < lists[i].n; j++)
+            list_pool_n += strlen(lists[i].paths[j]) + 1;
+    }
+    size_t pool_n = row_pool_n + list_pool_n;
+
+    uint8_t *pool = malloc(pool_n ? pool_n : 1);
+    uint32_t *name_off = malloc(sizeof(uint32_t) * (nlists ? nlists : 1));
+    uint32_t *path_off = malloc(sizeof(uint32_t) * (list_rows ? list_rows : 1));
+    if (!pool || !name_off || !path_off) abort();
+
+    memcpy(pool, row_pool, row_pool_n);
+    size_t pn = row_pool_n;
+    uint32_t at = 0;
+    for (uint32_t i = 0; i < nlists; i++) {
+        name_off[i] = (uint32_t)pn;
+        size_t ln = strlen(lists[i].name) + 1;
+        memcpy(pool + pn, lists[i].name, ln);
+        pn += ln;
+        for (uint32_t j = 0; j < lists[i].n; j++) {
+            path_off[at] = (uint32_t)pn;
+            size_t pl = strlen(lists[i].paths[j]) + 1;
+            memcpy(pool + pn, lists[i].paths[j], pl);
+            pn += pl;
+            at++;
+        }
+    }
+
+    size_t total = IMG_HEADER_SIZE + n * IMG_ROW_SIZE + pool_n +
+                   (size_t)nlists * IMG_LIST_SIZE +
+                   (size_t)list_rows * IMG_LIST_ROW_SIZE;
+
     buf_t b = {0};
-    put(&b, SNAPSHOT_MAGIC, 8);
-    put16(&b, SNAPSHOT_VERSION_1);
-    put16(&b, SNAPSHOT_HEADER_SIZE);
-    put32(&b, (uint32_t)(SNAPSHOT_HEADER_SIZE + n * SNAPSHOT_ROW_SIZE + pool_n));
+    put(&b, MAGIC, 8);
+    put16(&b, IMG_VERSION);
+    put16(&b, IMG_HEADER_SIZE);
+    put32(&b, (uint32_t)total);
     put32(&b, (uint32_t)n);
-    put32(&b, SNAPSHOT_ROW_SIZE);
+    put32(&b, IMG_ROW_SIZE);
     put64(&b, 1767225600ull); /* 2026-01-01T00:00:00Z */
     put32(&b, (uint32_t)pool_n);
     put32(&b, 0); /* crc, patched below */
     put32(&b, 300);
     put32(&b, 1);
     put64(&b, 0x0123456789ABCDEFull);
-    put64(&b, 0);
+    put64(&b, 0); /* reserved 56..63 */
+    put16(&b, (uint16_t)nlists);
+    put16(&b, IMG_LIST_SIZE);
+    put16(&b, IMG_LIST_ROW_SIZE);
+    put16(&b, 0); /* reserved 70..71 */
+    put32(&b, list_rows);
+    put32(&b, (uint32_t)row_pool_n);
 
-    for (size_t i = 0; i < n; i++) {
-        const row_t *r = &rows[i];
-        put64(&b, r->fp);
-        put32(&b, r->size);
-        put32(&b, r->str_off);
-        put16(&b, r->bpm);
-        put8(&b, r->key);
-        put8(&b, r->energy);
-        put8(&b, r->dance);
-        put8(&b, r->valence);
-        put8(&b, r->arousal);
-        put8(&b, r->mood);
-        put8(&b, r->conf);
-        put8(&b, r->src);
-        for (int k = 0; k < 6; k++) put8(&b, 0);
-    }
+    for (size_t i = 0; i < n; i++) put_row(&b, &rows[i]);
     put(&b, pool, pool_n);
 
-    patch32(b.p, 36, crc32_ref(b.p + SNAPSHOT_HEADER_SIZE, b.n - SNAPSHOT_HEADER_SIZE));
+    at = 0;
+    for (uint32_t i = 0; i < nlists; i++) {
+        put64(&b, lists[i].id);
+        put32(&b, name_off[i]);
+        put32(&b, at);
+        put32(&b, lists[i].n);
+        put64(&b, lists[i].created);
+        put32(&b, 0);
+        at += lists[i].n;
+    }
+    for (uint32_t i = 0; i < list_rows; i++) put32(&b, path_off[i]);
+
+    patch32(b.p, 36, crc32_ref(b.p + IMG_HEADER_SIZE, b.n - IMG_HEADER_SIZE));
     *out_n = b.n;
+    free(pool);
+    free(name_off);
+    free(path_off);
     return b.p;
 }
 
-/* The pool of the common fixture: row 0 at offset 0, row 1 after it. */
+static uint8_t *build_image(size_t *out_n, const row_t *rows, size_t n, const char *pool,
+                            size_t pool_n)
+{
+    return build_image_lists(out_n, rows, n, pool, pool_n, NULL, 0);
+}
+
+static void fix_crc(uint8_t *image, size_t n)
+{
+    patch32(image, 36, crc32_ref(image + IMG_HEADER_SIZE, n - IMG_HEADER_SIZE));
+}
+
+/* The pool of the common fixture: row 0 at offset 0, row 1 after it. Each row names
+ * its four strings by their own offset. */
 static const char POOL[] =
     "Blue Monday\0New Order\0Power, Corruption & Lies\0electronic\0"
     "So What\0Miles Davis\0Kind of Blue\0jazz\0";
-#define POOL_ROW1_AT 58u /* the first four strings together */
+static const uint32_t POOL_ROW1_AT = 58u; /* the first four strings together */
 /* sizeof POOL counts the literal's own terminator, which is not part of the image. */
 #define POOL_N (sizeof POOL - 1u)
 
+#define POOL0_TITLE 0u
+#define POOL0_ARTIST 12u
+#define POOL0_ALBUM 22u
+#define POOL0_GENRE 47u
+#define POOL1_TITLE POOL_ROW1_AT
+#define POOL1_ARTIST (POOL_ROW1_AT + 8u)
+#define POOL1_ALBUM (POOL_ROW1_AT + 20u)
+#define POOL1_GENRE (POOL_ROW1_AT + 33u)
+
 static const row_t ROWS[] = {
-    {0x1111111111111111ull, 1000, 0, 1245, 8, 78, 61, 40, 78,
-     SNAPSHOT_MOOD_HAPPY | SNAPSHOT_MOOD_PARTY, 72, SNAPSHOT_SRC_VA_PRESENT},
-    {0x2222222222222222ull, 2000, POOL_ROW1_AT, 920, 5, SNAPSHOT_UNKNOWN_PCT, 40,
-     SNAPSHOT_UNKNOWN_PCT, 30, SNAPSHOT_MOOD_RELAXED, SNAPSHOT_UNKNOWN_PCT,
-     SNAPSHOT_SRC_BPM_TAGGED | SNAPSHOT_SRC_KEY_TAGGED},
+    {0x1111111111111111ull, 1000, POOL0_TITLE, POOL0_ARTIST, POOL0_ALBUM, POOL0_GENRE,
+     1245, 8, 78, 61, 40, 78, SNAPSHOT_MOOD_HAPPY | SNAPSHOT_MOOD_PARTY, 72,
+     SNAPSHOT_SRC_VA_PRESENT},
+    {0x2222222222222222ull, 2000, POOL1_TITLE, POOL1_ARTIST, POOL1_ALBUM, POOL1_GENRE,
+     920, 5, FILE_UNKNOWN_PCT, 40, FILE_UNKNOWN_PCT, 30, SNAPSHOT_MOOD_RELAXED,
+     FILE_UNKNOWN_PCT, SNAPSHOT_SRC_BPM_TAGGED | SNAPSHOT_SRC_KEY_TAGGED},
 };
 
 /* --------------------------------------------------------------- fixtures */
@@ -170,139 +304,26 @@ static snapshot_t *open_ok(const uint8_t *image, size_t n)
     return s;
 }
 
-/* ------------------------------------------------------------- version 2 */
-
-/* One list, as the test builds it. The row tiling is computed by the builder, not
- * given, so a test that wants a broken tiling patches the bytes afterwards. */
-typedef struct {
-    uint64_t        id;
-    const char     *name;
-    uint64_t        created;
-    const char *const *paths;
-    uint32_t        n;
-} v2list_t;
-
-static uint8_t *build_image_v2(size_t *out_n, const row_t *rows, size_t n,
-                               const char *row_pool, size_t row_pool_n,
-                               const v2list_t *lists, uint32_t nlists)
-{
-    uint32_t list_rows = 0;
-    for (uint32_t i = 0; i < nlists; i++) list_rows += lists[i].n;
-
-    size_t pool_cap = row_pool_n;
-    for (uint32_t i = 0; i < nlists; i++) {
-        pool_cap += strlen(lists[i].name) + 1;
-        for (uint32_t j = 0; j < lists[i].n; j++) pool_cap += strlen(lists[i].paths[j]) + 1;
-    }
-    uint8_t *pool = malloc(pool_cap);
-    uint32_t *name_off = malloc(sizeof(uint32_t) * (nlists ? nlists : 1));
-    uint32_t *path_off = malloc(sizeof(uint32_t) * (list_rows ? list_rows : 1));
-    if (!pool || !name_off || !path_off) abort();
-
-    size_t pn = 0;
-    memcpy(pool, row_pool, row_pool_n);
-    pn = row_pool_n;
-    for (uint32_t i = 0; i < nlists; i++) {
-        name_off[i] = (uint32_t)pn;
-        size_t ln = strlen(lists[i].name) + 1;
-        memcpy(pool + pn, lists[i].name, ln);
-        pn += ln;
-    }
-    /* paths, in list order, after all names (the format only requires list order) */
-    uint32_t at = 0;
-    for (uint32_t i = 0; i < nlists; i++) {
-        for (uint32_t j = 0; j < lists[i].n; j++) {
-            path_off[at] = (uint32_t)pn;
-            size_t ln = strlen(lists[i].paths[j]) + 1;
-            memcpy(pool + pn, lists[i].paths[j], ln);
-            pn += ln;
-            at++;
-        }
-    }
-
-    uint32_t total = (uint32_t)(SNAPSHOT_HEADER_SIZE_2 + n * SNAPSHOT_ROW_SIZE + pn +
-                                (size_t)nlists * SNAPSHOT_LIST_SIZE +
-                                (size_t)list_rows * SNAPSHOT_LIST_ROW_SIZE);
-
-    buf_t b = {0};
-    put(&b, SNAPSHOT_MAGIC, 8);
-    put16(&b, SNAPSHOT_VERSION_2);
-    put16(&b, SNAPSHOT_HEADER_SIZE_2);
-    put32(&b, total);
-    put32(&b, (uint32_t)n);
-    put32(&b, SNAPSHOT_ROW_SIZE);
-    put64(&b, 1767225600ull);
-    put32(&b, (uint32_t)pn);
-    put32(&b, 0); /* crc, patched below */
-    put32(&b, 300);
-    put32(&b, 2);
-    put64(&b, 0x0123456789ABCDEFull);
-    put64(&b, 0);
-    put16(&b, (uint16_t)nlists);
-    put16(&b, SNAPSHOT_LIST_SIZE);
-    put16(&b, SNAPSHOT_LIST_ROW_SIZE);
-    put16(&b, 0);
-    put32(&b, list_rows);
-    put32(&b, 0);
-
-    for (size_t i = 0; i < n; i++) {
-        const row_t *r = &rows[i];
-        put64(&b, r->fp);
-        put32(&b, r->size);
-        put32(&b, r->str_off);
-        put16(&b, r->bpm);
-        put8(&b, r->key);
-        put8(&b, r->energy);
-        put8(&b, r->dance);
-        put8(&b, r->valence);
-        put8(&b, r->arousal);
-        put8(&b, r->mood);
-        put8(&b, r->conf);
-        put8(&b, r->src);
-        for (int k = 0; k < 6; k++) put8(&b, 0);
-    }
-    put(&b, pool, pn);
-
-    uint32_t row_at = 0;
-    for (uint32_t i = 0; i < nlists; i++) {
-        put64(&b, lists[i].id);
-        put32(&b, name_off[i]);
-        put32(&b, row_at);
-        put32(&b, lists[i].n);
-        put64(&b, lists[i].created);
-        put32(&b, 0);
-        row_at += lists[i].n;
-    }
-    at = 0;
-    for (uint32_t i = 0; i < nlists; i++)
-        for (uint32_t j = 0; j < lists[i].n; j++, at++) put32(&b, path_off[at]);
-
-    patch32(b.p, 36, crc32_ref(b.p + SNAPSHOT_HEADER_SIZE_2, b.n - SNAPSHOT_HEADER_SIZE_2));
-    *out_n = b.n;
-    free(pool);
-    free(name_off);
-    free(path_off);
-    return b.p;
-}
+/* ------------------------------------------------------------- lists */
 
 /* Two lists over the two-row fixture: ids ascending, one row each. */
 static const char *const LIST1_PATHS[] = {"New Order/Power/x.mp3"};
 static const char *const LIST2_PATHS[] = {"Miles/Blue/y.flac"};
 
-static const v2list_t LISTS[] = {
+static const list_t LISTS[] = {
     {0xAAAA000000000001ull, "Late night", 1767225600ull, LIST1_PATHS, 1},
     {0xBBBB000000000002ull, "Morning", 1767225600ull, LIST2_PATHS, 1},
 };
 
-static void test_v2_lists(void)
+static void test_lists(void)
 {
     size_t n = 0;
-    uint8_t *img = build_image_v2(&n, ROWS, 2, POOL, POOL_N, LISTS, 2);
+    uint8_t *img = build_image_lists(&n, ROWS, 2, POOL, POOL_N, LISTS, 2);
 
     snapshot_t *s = open_ok(img, n);
-    CHECK(s != NULL, "a version 2 image opens");
+    CHECK(s != NULL, "a version 3 image with lists opens");
     if (!s) return;
-    CHECK_EQ(snapshot_version(s), 2, "version 2");
+    CHECK_EQ(snapshot_version(s), 3, "version 3");
     CHECK_EQ(snapshot_lists(s), 2, "two lists");
     CHECK_EQ(snapshot_list_rows_total(s), 2, "two list rows");
     CHECK_EQ(snapshot_rows(s), 2, "rows are still readable");
@@ -312,6 +333,8 @@ static void test_v2_lists(void)
     CHECK(strcmp(snapshot_list_name(s, &l), "Late night") == 0, "its name");
     CHECK_EQ(l.row_count, 1, "one row");
     CHECK(l.created == LISTS[0].created, "created");
+    /* Both list strings live after the row strings. */
+    CHECK(l.name_offset >= POOL_N, "a list name is in the list region");
 
     const char *path = NULL;
     CHECK(snapshot_list_row(s, &l, 0, &path), "read its row");
@@ -322,89 +345,134 @@ static void test_v2_lists(void)
     CHECK(!snapshot_list_find(s, 0, &l), "id zero is never a list");
     CHECK(!snapshot_list_find(s, 0xCCCC000000000003ull, &l), "an unknown id is not a list");
     CHECK(!snapshot_list_row(s, &l, 7, &path), "a row past the list is refused");
-    snapshot_close(s);
 
-    /* A version 1 image is still a version 1 image, with no lists. */
-    size_t v1n = 0;
-    uint8_t *v1 = build_image(&v1n, ROWS, 2, POOL, POOL_N);
-    snapshot_t *s1 = open_ok(v1, v1n);
-    CHECK(s1 != NULL, "a version 1 image still opens");
-    if (s1) {
-        CHECK_EQ(snapshot_version(s1), 1, "version 1");
-        CHECK_EQ(snapshot_lists(s1), 0, "no lists");
-        CHECK(!snapshot_list_at(s1, 0, &l), "list_at on v1");
-        CHECK(!snapshot_list_find(s1, LISTS[0].id, &l), "list_find on v1");
-        CHECK_EQ(snapshot_list_rows_total(s1), 0, "list rows on v1");
-        snapshot_close(s1);
-    }
-    free(v1);
+    /* The header records where the row strings end; the list strings follow it. */
+    CHECK_EQ(img[76] | (img[77] << 8), (int)POOL_N, "row_pool_size in the header");
+    snapshot_close(s);
     free(img);
 }
 
-static void test_v2_rejects(void)
+static void test_list_rejects(void)
 {
     size_t n = 0;
-    uint8_t *img = build_image_v2(&n, ROWS, 2, POOL, POOL_N, LISTS, 2);
+    uint8_t *img = build_image_lists(&n, ROWS, 2, POOL, POOL_N, LISTS, 2);
     uint8_t *bad = malloc(n);
     snapshot_t *s = NULL;
-    #define REOPEN() do { memcpy(bad, img, n); } while (0)
 
     /* The list area is the tail of the image: two records, then two rows. */
-    uint32_t lrows = (uint32_t)n - 2 * SNAPSHOT_LIST_ROW_SIZE;
-    uint32_t list1 = lrows - SNAPSHOT_LIST_SIZE;
-    uint32_t list0 = list1 - SNAPSHOT_LIST_SIZE;
+    uint32_t lrows = (uint32_t)n - 2 * IMG_LIST_ROW_SIZE;
+    uint32_t list1 = lrows - IMG_LIST_SIZE;
+    uint32_t list0 = list1 - IMG_LIST_SIZE;
 
     /* ids descending */
-    REOPEN();
+    memcpy(bad, img, n);
     patch64(bad, list0, 0xFFFF000000000000ull);
-    patch32(bad, 36, crc32_ref(bad + SNAPSHOT_HEADER_SIZE_2, n - SNAPSHOT_HEADER_SIZE_2));
+    fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "descending list ids refused");
 
     /* a second list that does not start where the first ended */
-    REOPEN();
+    memcpy(bad, img, n);
     patch32(bad, list1 + 12, 2);
-    patch32(bad, 36, crc32_ref(bad + SNAPSHOT_HEADER_SIZE_2, n - SNAPSHOT_HEADER_SIZE_2));
+    fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a tiling gap is refused");
 
     /* a list record whose reserved bytes are not zero */
-    REOPEN();
+    memcpy(bad, img, n);
     bad[list0 + 28] = 1;
-    patch32(bad, 36, crc32_ref(bad + SNAPSHOT_HEADER_SIZE_2, n - SNAPSHOT_HEADER_SIZE_2));
+    fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a list record's reserved byte is refused");
 
     /* the wrong list size */
-    REOPEN();
+    memcpy(bad, img, n);
     bad[66] = 31;
-    patch32(bad, 36, crc32_ref(bad + SNAPSHOT_HEADER_SIZE_2, n - SNAPSHOT_HEADER_SIZE_2));
+    fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a bad list size is refused");
 
-    /* a reserved byte in the version 2 half of the header */
-    REOPEN();
+    /* the wrong list row size */
+    memcpy(bad, img, n);
+    bad[68] = 3;
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a bad list row size is refused");
+
+    /* a reserved byte in the second half of the header */
+    memcpy(bad, img, n);
     bad[70] = 1;
-    patch32(bad, 36, crc32_ref(bad + SNAPSHOT_HEADER_SIZE_2, n - SNAPSHOT_HEADER_SIZE_2));
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "reserved v2 header bytes are refused");
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "reserved header bytes 70..71 refused");
 
     /* a name offset past the pool */
-    REOPEN();
-    patch32(bad, list0 + 8, (uint32_t)POOL_N + 0x1000u);
-    patch32(bad, 36, crc32_ref(bad + SNAPSHOT_HEADER_SIZE_2, n - SNAPSHOT_HEADER_SIZE_2));
+    memcpy(bad, img, n);
+    patch32(bad, list0 + 8, (uint32_t)POOL_N + 40u + 0x1000u);
+    fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a name outside the pool is refused");
 
+    /* a name offset that points into the row-string region */
+    memcpy(bad, img, n);
+    patch32(bad, list0 + 8, 0);
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID,
+          "a list name in the row region is refused");
+
+    /* a path offset that points into the row-string region */
+    memcpy(bad, img, n);
+    patch32(bad, lrows, 0);
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID,
+          "a list path in the row region is refused");
+
     /* a path offset past the pool */
-    REOPEN();
-    patch32(bad, lrows, (uint32_t)POOL_N + 0x1000u);
-    patch32(bad, 36, crc32_ref(bad + SNAPSHOT_HEADER_SIZE_2, n - SNAPSHOT_HEADER_SIZE_2));
+    memcpy(bad, img, n);
+    patch32(bad, lrows, (uint32_t)n);
+    fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a path outside the pool is refused");
 
-    /* a list count over the cap, with the sizes rewritten to agree */
-    REOPEN();
+    /* a list name that does not terminate inside the list region */
+    memcpy(bad, img, n);
+    bad[n - 1] = 'x';
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID,
+          "an unterminated list string is refused");
+
+    /* a list count over the cap */
+    memcpy(bad, img, n);
     bad[64] = 65;
-    patch32(bad, 36, crc32_ref(bad + SNAPSHOT_HEADER_SIZE_2, n - SNAPSHOT_HEADER_SIZE_2));
+    fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "more than 64 lists is refused");
+
+    /* more list rows than the image may hold */
+    memcpy(bad, img, n);
+    patch32(bad, 72, IMG_MAX_LIST_ROWS + 1u);
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "more than 8192 list rows is refused");
 
     free(bad);
     free(img);
-    #undef REOPEN
+}
+
+/* A row offset that names a string in the list region is invalid even when that
+ * string terminates there. */
+static void test_row_offset_into_list_region(void)
+{
+    size_t n = 0;
+    uint8_t *img = build_image_lists(&n, ROWS, 2, POOL, POOL_N, LISTS, 2);
+    uint8_t *bad = malloc(n);
+    snapshot_t *s = NULL;
+
+    memcpy(bad, img, n);
+    patch24(bad, IMG_HEADER_SIZE + 12, POOL_N); /* title -> first list name */
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID,
+          "a row string offset in the list region is refused");
+
+    /* the same offset one byte before the list region is fine */
+    memcpy(bad, img, n);
+    patch24(bad, IMG_HEADER_SIZE + 12, POOL_N - 6u); /* inside "jazz" */
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_OK, "a row string inside the row region opens");
+    snapshot_close(s);
+
+    free(bad);
+    free(img);
 }
 
 static void test_vectors(void)
@@ -425,6 +493,7 @@ static void test_validation(void)
 
     snapshot_t *s = open_ok(img, n);
     CHECK(s != NULL, "two-row image opens");
+    CHECK_EQ(snapshot_version(s), 3, "version 3");
     CHECK_EQ(snapshot_rows(s), 2, "rows");
     CHECK_EQ(snapshot_generation(s), 1767225600u, "generation");
     CHECK_EQ(snapshot_analyser(s), 300, "analyser");
@@ -439,13 +508,15 @@ static void test_validation(void)
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "bad magic refused");
     memcpy(bad, img, n);
 
-    /* version */
-    bad[8] = 3;
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "unknown version refused");
+    /* version 2 and 1 are refused: there is no compatibility path. */
+    bad[8] = 2;
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a version 2 image refused");
+    bad[8] = 1;
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a version 1 image refused");
     memcpy(bad, img, n);
 
     /* header size */
-    bad[10] = 32;
+    bad[10] = 64;
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "bad header size refused");
     memcpy(bad, img, n);
 
@@ -464,10 +535,23 @@ static void test_validation(void)
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "huge row count refused");
     memcpy(bad, img, n);
 
-    /* reserved header bytes, which the checksum does not cover */
+    /* row_pool_size larger than the whole pool */
+    patch32(bad, 76, (uint32_t)POOL_N + 1u);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a row pool past the pool refused");
     memcpy(bad, img, n);
+
+    /* reserved header bytes, which the checksum does not cover */
     bad[56] = 1;
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "reserved header refused");
+    memcpy(bad, img, n);
+    bad[63] = 1;
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "the last reserved header byte refused");
+    memcpy(bad, img, n);
+    bad[70] = 1;
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "reserved list header refused");
+    memcpy(bad, img, n);
+    bad[71] = 1;
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "the last reserved list byte refused");
     memcpy(bad, img, n);
 
     /* CRC */
@@ -480,47 +564,56 @@ static void test_validation(void)
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_OK, "restored image opens");
     snapshot_close(s);
 
-    /* rows out of order: swap the two rows' fingerprints, then fix the CRC */
+    /* rows out of order */
     memcpy(bad, img, n);
-    patch64(bad, 64, 0x9999999999999999ull);
-    patch32(bad, 36,
-            crc32_ref(bad + SNAPSHOT_HEADER_SIZE, n - SNAPSHOT_HEADER_SIZE));
+    patch64(bad, IMG_HEADER_SIZE, 0x9999999999999999ull);
+    fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "descending rows refused");
 
-    /* string offset outside the pool */
+    /* a string offset outside the row pool */
     memcpy(bad, img, n);
-    patch32(bad, 76, (uint32_t)POOL_N + 8);
-    patch32(bad, 36,
-            crc32_ref(bad + SNAPSHOT_HEADER_SIZE, n - SNAPSHOT_HEADER_SIZE));
+    patch24(bad, IMG_HEADER_SIZE + 12, (uint32_t)POOL_N);
+    fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "string offset refused");
 
     /* a string with no terminator inside the pool */
     memcpy(bad, img, n);
-    memset(bad + n - 1, 'x', 1);
-    patch32(bad, 36,
-            crc32_ref(bad + SNAPSHOT_HEADER_SIZE, n - SNAPSHOT_HEADER_SIZE));
+    bad[n - 1] = 'x';
+    fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "unterminated string refused");
 
-    /* out-of-range percentage */
+    /* a bpm code past 1101 */
     memcpy(bad, img, n);
-    bad[SNAPSHOT_HEADER_SIZE + 19] = 101;
-    patch32(bad, 36,
-            crc32_ref(bad + SNAPSHOT_HEADER_SIZE, n - SNAPSHOT_HEADER_SIZE));
+    patch_field(bad, IMG_HEADER_SIZE, 0, 11, 1102);
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a bpm past 1800 refused");
+
+    /* a key past 24 */
+    memcpy(bad, img, n);
+    patch_field(bad, IMG_HEADER_SIZE, 11, 5, 25);
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "key 25 refused");
+
+    /* percentages: 101 and 126 are out of range, 127 is the unknown marker */
+    memcpy(bad, img, n);
+    patch_field(bad, IMG_HEADER_SIZE, 16, 7, 101);
+    fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "energy 101 refused");
-
-    /* non-zero reserved in a row */
     memcpy(bad, img, n);
-    bad[SNAPSHOT_HEADER_SIZE + 26] = 1;
-    patch32(bad, 36,
-            crc32_ref(bad + SNAPSHOT_HEADER_SIZE, n - SNAPSHOT_HEADER_SIZE));
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "reserved refused");
-
-    /* a mood bit that is not defined */
+    patch_field(bad, IMG_HEADER_SIZE, 44, 7, 126);
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "confidence 126 refused");
     memcpy(bad, img, n);
-    bad[SNAPSHOT_HEADER_SIZE + 23] = 0x40;
-    patch32(bad, 36,
-            crc32_ref(bad + SNAPSHOT_HEADER_SIZE, n - SNAPSHOT_HEADER_SIZE));
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "undefined mood bit refused");
+    patch_field(bad, IMG_HEADER_SIZE, 16, 7, 127);
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_OK, "127 is a valid unknown percentage");
+    snapshot_close(s);
+
+    /* a source flag bit that is not defined (the top bits of the word) */
+    memcpy(bad, img, n);
+    patch_field(bad, IMG_HEADER_SIZE, 62, 2, 1);
+    fix_crc(bad, n);
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "reserved measurement bits refused");
 
     /* an empty image: header only, CRC over nothing */
     free(bad);
@@ -528,19 +621,19 @@ static void test_validation(void)
 
     size_t empty_n = 0;
     uint8_t *empty = build_image(&empty_n, NULL, 0, "", 0);
-    CHECK_EQ(empty_n, SNAPSHOT_HEADER_SIZE, "an empty image is a header");
+    CHECK_EQ(empty_n, IMG_HEADER_SIZE, "an empty image is a header");
     snapshot_t *e = NULL;
     CHECK(snapshot_open(empty, empty_n, &e) == SNAPSHOT_OK, "empty image opens");
     CHECK(e && snapshot_rows(e) == 0, "no rows");
+    CHECK(e && snapshot_lists(e) == 0, "no lists");
     snapshot_row_t none;
     CHECK(e && !snapshot_find(e, 1, 1, &none), "an empty image finds nothing");
     snapshot_close(e);
     free(empty);
 }
 
-/* ADR 0062: the app writes K7SNAP now, but a card or a previous app build may still send
- * XTAPESNP. Both open; the old name buys no leniency, and a third name is still refused. */
-static void test_magic_shim(void)
+/* The legacy magic and any other name are refused; only K7SNAP opens. */
+static void test_magic(void)
 {
     size_t n = 0;
     uint8_t *img = build_image(&n, ROWS, 2, POOL, POOL_N);
@@ -552,14 +645,9 @@ static void test_magic_shim(void)
     snapshot_close(s);
 
     memcpy(img, "XTAPESNP", 8);
-    CHECK(snapshot_open(img, n, &s) == SNAPSHOT_OK, "an image with the old magic opens");
-    snapshot_close(s);
+    CHECK(snapshot_open(img, n, &s) == SNAPSHOT_INVALID, "the legacy magic is refused");
 
-    img[8] = 3; /* format_version, still under the old magic */
-    CHECK(snapshot_open(img, n, &s) == SNAPSHOT_INVALID, "the old magic buys no leniency");
-    img[8] = SNAPSHOT_VERSION_1;
-
-    memcpy(img, "XTAPESNQ", 8);
+    memcpy(img, "K7SNAPq\0", 8);
     CHECK(snapshot_open(img, n, &s) == SNAPSHOT_INVALID, "a wrong magic is still refused");
 
     free(img);
@@ -585,6 +673,8 @@ static void test_lookup(void)
     CHECK(!snapshot_find(s, 0x3333333333333333ull, 1000, &row), "unknown fingerprint");
 
     CHECK(snapshot_find(s, 0x2222222222222222ull, 2000, &row), "second row found");
+    CHECK_EQ(row.energy, SNAPSHOT_UNKNOWN_PCT, "the file's 127 is exposed as 0xFF");
+    CHECK_EQ(row.confidence, SNAPSHOT_UNKNOWN_PCT, "confidence unknown");
     CHECK(strcmp(snapshot_row_string(s, &row, SNAPSHOT_STRING_TITLE), "So What") == 0,
           "title");
     CHECK(strcmp(snapshot_row_string(s, &row, SNAPSHOT_STRING_ARTIST), "Miles Davis") == 0,
@@ -593,6 +683,82 @@ static void test_lookup(void)
           "album");
     CHECK(strcmp(snapshot_row_string(s, &row, SNAPSHOT_STRING_GENRE), "jazz") == 0, "genre");
 
+    /* The first row's four own offsets find its four strings too. */
+    CHECK(snapshot_find(s, 0x1111111111111111ull, 1000, &row), "first row again");
+    CHECK(strcmp(snapshot_row_string(s, &row, SNAPSHOT_STRING_TITLE), "Blue Monday") == 0,
+          "row 0 title");
+    CHECK(strcmp(snapshot_row_string(s, &row, SNAPSHOT_STRING_ARTIST), "New Order") == 0,
+          "row 0 artist");
+    CHECK(strcmp(snapshot_row_string(s, &row, SNAPSHOT_STRING_ALBUM),
+                 "Power, Corruption & Lies") == 0,
+          "row 0 album");
+    CHECK(strcmp(snapshot_row_string(s, &row, SNAPSHOT_STRING_GENRE), "electronic") == 0,
+          "row 0 genre");
+
+    snapshot_close(s);
+    free(img);
+}
+
+/* Two rows may share one string offset, a 127 percentage round-trips as 0xFF, and the
+ * BPM code sits at both ends of its range. */
+static void test_shared_strings_predicates_and_bounds(void)
+{
+    static const char SHARED_POOL[] =
+        "Shared Title\0Shared Artist\0Shared Album\0rock\0jazz\0";
+    enum {
+        SH_TITLE = 0,
+        SH_ARTIST = 13,
+        SH_ALBUM = 27,
+        SH_ROCK = 40,
+        SH_JAZZ = 45,
+    };
+    static const row_t SHARED_ROWS[] = {
+        {0xAAAA000000000001ull, 100, SH_TITLE, SH_ARTIST, SH_ALBUM, SH_ROCK, 700, 24,
+         FILE_UNKNOWN_PCT, 0, 100, FILE_UNKNOWN_PCT, 0x1F, FILE_UNKNOWN_PCT, 0x3F},
+        {0xBBBB000000000002ull, 200, SH_TITLE, SH_ARTIST, SH_ALBUM, SH_JAZZ, 1800, 0,
+         0, 100, FILE_UNKNOWN_PCT, 0, 0x01, FILE_UNKNOWN_PCT, 0},
+    };
+    size_t n = 0;
+    uint8_t *img = build_image(&n, SHARED_ROWS, 2, SHARED_POOL, sizeof SHARED_POOL - 1u);
+
+    /* The builder wrote the file's own spelling of unknown, not the C marker. */
+    CHECK_EQ((int)((get64(img + IMG_HEADER_SIZE + 24) >> 16) & 0x7Fu), 127,
+             "the file stores 127 for unknown");
+    /* And both ends of the packed BPM range, as codes 1 and 1101. */
+    CHECK_EQ((int)(get64(img + IMG_HEADER_SIZE + 24) & 0x7FFu), 1, "bpm code 1");
+    CHECK_EQ((int)(get64(img + IMG_HEADER_SIZE + IMG_ROW_SIZE + 24) & 0x7FFu), 1101,
+             "bpm code 1101");
+
+    snapshot_t *s = open_ok(img, n);
+    if (!s) {
+        free(img);
+        return;
+    }
+    snapshot_row_t row;
+    CHECK(snapshot_find(s, SHARED_ROWS[0].fp, 100, &row), "the 700 BPM row");
+    CHECK_EQ(row.bpm_x10, 700, "the bottom of the BPM range");
+    CHECK_EQ(row.key, 24, "12B");
+    CHECK_EQ(row.energy, SNAPSHOT_UNKNOWN_PCT, "unknown energy");
+    CHECK_EQ(row.danceability, 0, "a measured zero");
+    CHECK_EQ(row.valence, 100, "the top percentage");
+    CHECK_EQ(row.arousal, SNAPSHOT_UNKNOWN_PCT, "unknown arousal");
+    CHECK_EQ(row.confidence, SNAPSHOT_UNKNOWN_PCT, "unknown confidence");
+    CHECK_EQ(row.mood_bits, 0x1F, "all five mood bits");
+    CHECK_EQ(row.source_flags, 0x3F, "all six source flags");
+    CHECK(strcmp(snapshot_row_string(s, &row, SNAPSHOT_STRING_TITLE), "Shared Title") == 0,
+          "the shared title");
+
+    CHECK(snapshot_find(s, SHARED_ROWS[1].fp, 200, &row), "the 1800 BPM row");
+    CHECK_EQ(row.bpm_x10, 1800, "the top of the BPM range");
+    CHECK_EQ(row.key, 0, "unknown key");
+    CHECK_EQ(row.energy, 0, "a measured zero is not unknown");
+    CHECK_EQ(row.danceability, 100, "the top danceability");
+    CHECK_EQ(row.valence, SNAPSHOT_UNKNOWN_PCT, "unknown valence");
+    CHECK_EQ(row.confidence, SNAPSHOT_UNKNOWN_PCT, "unknown confidence again");
+    CHECK(strcmp(snapshot_row_string(s, &row, SNAPSHOT_STRING_TITLE), "Shared Title") == 0,
+          "the same offset resolves for both rows");
+    CHECK(strcmp(snapshot_row_string(s, &row, SNAPSHOT_STRING_GENRE), "jazz") == 0,
+          "the second genre");
     snapshot_close(s);
     free(img);
 }
@@ -951,7 +1117,11 @@ static void test_many_rows(void)
         snprintf(path, sizeof path, "Artist/Album/%05d.mp3", i);
         rows[i].fp = snapshot_path_hash(path);
         rows[i].size = 1000u + (uint32_t)i;
-        rows[i].bpm = (uint16_t)(700 + i % 1100);
+        rows[i].title_off = 0;
+        rows[i].artist_off = 1;
+        rows[i].album_off = 2;
+        rows[i].genre_off = 3;
+        rows[i].bpm_x10 = (uint16_t)(700 + i % 1100);
         rows[i].key = (uint8_t)(1 + i % 24);
         rows[i].energy = (uint8_t)(i % 101);
         rows[i].dance = (uint8_t)(i % 101);
@@ -964,7 +1134,7 @@ static void test_many_rows(void)
 
     size_t n = 0;
     uint8_t *img = build_image(&n, rows, N, "\0\0\0\0", 4);
-    CHECK_EQ(n, SNAPSHOT_HEADER_SIZE + N * SNAPSHOT_ROW_SIZE + 4, "image size at 5,000 rows");
+    CHECK_EQ(n, IMG_HEADER_SIZE + N * IMG_ROW_SIZE + 4, "image size at 5,000 rows");
 
     snapshot_t *s = open_ok(img, n);
     if (s) {
@@ -973,7 +1143,7 @@ static void test_many_rows(void)
         for (int i = 0; i < N; i += 97) {
             snapshot_row_t row;
             if (snapshot_find(s, rows[i].fp, rows[i].size, &row) &&
-                row.bpm_x10 == rows[i].bpm)
+                row.bpm_x10 == rows[i].bpm_x10)
                 found++;
         }
         CHECK_EQ(found, (N + 96) / 97, "every sampled row is found");
@@ -989,14 +1159,16 @@ int main(void)
 {
     test_vectors();
     test_validation();
-    test_magic_shim();
+    test_magic();
     test_lookup();
+    test_shared_strings_predicates_and_bounds();
     test_keys();
     test_filters();
     test_hits();
     test_apply();
-    test_v2_lists();
-    test_v2_rejects();
+    test_lists();
+    test_list_rejects();
+    test_row_offset_into_list_region();
     test_many_rows();
     TEST_END();
 }

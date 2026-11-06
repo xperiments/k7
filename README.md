@@ -12,10 +12,10 @@ music over HTTP:
 It never **serves or accepts a Track**: there is no per-track endpoint, no WebDAV
 or SMB mount, and no way to write music to the card over the network — putting
 music on the card is done with the card in a reader, on a computer. Audio leaves
-only as the live stream. The index and the library views (`/api/library`,
-`/api/library.bin`, and the opt-in `/api/screen.bmp`) are computed by the
-firmware and are not Tracks; `/api/library.bin` is still offered as a file
-attachment, because it is a photograph of the index rather than a song.
+only as the live stream. The index, the library view (`/api/library.bin`) and the
+opt-in `/api/screen.bmp` are computed by the firmware and are not Tracks;
+`/api/library.bin` is still offered as a file attachment, because it is a
+photograph of the index rather than a song.
 
 Anything the card holds at any sample rate is decoded, resampled to one station
 rate and encoded to MP3 for the stream.
@@ -116,11 +116,11 @@ one line, and the error message names the component.
   or stereo. Files whose name begins with `.` are ignored (that is how macOS
   AppleDouble `._track.mp3` files are skipped).
 * FATFS long names are enabled up to 128 characters (`CONFIG_FATFS_MAX_LFN=128`).
-* The Library arena and its JSON live in PSRAM, with a **4 MiB byte budget** and a
-  20 000-track cap. At the cap the scan stops, `truncated` becomes true, and the
-  index/JSON say so; it does not reboot. A 64-track, 2.28 GB card measured
-  `scan=96 ms arena=6285 B json=12343 B`; a forced one-track cap logged
-  `truncated=1`. The boot scan is synchronous, with a 16 KB main-task stack.
+* The Library arena lives in PSRAM, with a **4 MiB byte budget** and a 20 000-track
+  cap. At the cap the scan stops, `truncated` becomes true, and the index says so;
+  it does not reboot. A 64-track, 2.28 GB card measured `scan=96 ms arena=6285 B`;
+  a forced one-track cap logged `truncated=1`. The boot scan is synchronous, with a
+  16 KB main-task stack.
 * The index uses that broadcast order; the live stream plays it in order, looping
   forever.
 
@@ -239,13 +239,12 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 |---|---|
 | `GET /library` | The index: every Track in the Library tree, in broadcast order, with its size, what is playing now, and a link to the stream. It is a listing, not a file browser: there is no link to a track's bytes. Also the device's diagnostic page when no card is mounted. `GET /` is the front door's page, and says so (503) in a firmware that carries none. |
 | `GET /stream` | The live stream: continuous `audio/mpeg` at the station rate and bit rate. Ask with `Icy-MetaData: 1` and the current track is interleaved every 16 000 encoded bytes. |
-| `GET /api/library` | The prebuilt Library JSON, with `state`, counts and a generation ETag. |
-| `GET /api/library.bin` | The same generation as an arena: versioned header, nodes, edges, track index and CRC. |
+| `GET /api/library.bin` | The Library generation as an arena: versioned header, nodes, edges, track index and CRC, with an ETag. |
 | `POST /api/play` | `{"path":"Album/song.mp3"}` selects any Track at the next chunk boundary. A bad path is a 404 and leaves the stream alone. |
 | `POST /api/rescan` | `{}` starts one asynchronous Library rescan; `202` when started, `409` when one is already running. The old generation stays readable; the broadcast parks on the idle bed for the scan, resumes the current Track, and switches to the new generation at its next pass. |
 | `GET /api/playlists` | The Playlists the Snapshot holds — `{id, name, created, rows}` — and `selected`, the list the broadcast is walking (or `null` for the Library's own order), plus `missing`, the rows the Library could not resolve. |
 | `GET /api/playlists/<id>` | One list's rows, as the Library's own paths. A hex id; anything else is a `404`. |
-| `POST /api/playlists/select` | `{"id":"<hex16>"}` tells the broadcast to walk that Playlist, `{"id":null}` returns it to the Library's order. Remembered in NVS; a `404` for an unknown id, a `409` for a list with no Track the Library can find. A `POST /api/play` for a Track outside the selected list drops the selection. |
+| `POST /api/playlists/select` | `{"id":"<hex16>"}` tells the broadcast to walk that Playlist, `{"id":null}` returns it to the Library's order. Written to `k7.select` at the card root; a `404` for an unknown id, a `409` for a list with no Track the Library can find. A `POST /api/play` for a Track outside the selected list drops the selection. |
 | `GET /api/status` | The Card state, the Library's count and generation, the order (`tree` or `list`, with the Playlist's `{id, name}`), and what the broadcast is playing: `title`, `path`, `elapsed_ms`, `duration_ms`. |
 | `POST /mcp` | MCP (2025-11-25): `initialize`, `ping`, `tools/list`, `tools/call` for `library_stats`, `library_list`, `library_search`, `library_track` and `player_status`. Read-only by default; a build with `XTAPE_MCP_CONTROL=1` adds `player_play`, `player_skip`, `player_prev` and `library_rescan`. |
 | anything else | `404`, or `405` for a known path with the wrong method. |
@@ -504,6 +503,9 @@ chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1*
 | Ten-minute rescan soak under stream load (ticket 13; historical, run before the download route was withdrawn) | 10 min with a listener, four rescans and repeated downloads: `starvation rebases: 0`, `asserts/overflows/reboots: 0`, encoder 52.9 %, internal minimum 66 043 -> 57 855 B, external 2 039 048 -> 2 079 160 B |
 | Main-task stack at the full card (ticket 13) | the first full scan overflowed the 6 144 B main stack; `CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384` fixed it and the same card then booted in 96 ms |
 | Library cap diagnostic (ticket 13) | a temporary `max_tracks=1` build logged `tracks=1 ... scan=7 ms arena=228 B json=424 B ... truncated=1`, so truncation is visible at the cap as well as under it |
+
+The `json=` figures in the ticket-13 rows predate ADR 0069, which removed the Library JSON view:
+the arena is now the only prebuilt view.
 
 The hour's result deserves stating precisely: **zero starvation rebases and zero
 faults in 59 minutes, with the encoder flat at 41.4 % of one core** (10 786 µs per
@@ -884,8 +886,8 @@ components/
       mini_icecast.c/.h     the decoded source (ice_decode, core 0), pacing, client list,
                             station status
     tone_eq/                the stream's three-band DJ EQ and trim, before the encoder
-    library/                the immutable tree, arena, JSON, broadcast order and lookup
-    library_http/           GET /api/library[.bin] from the prebuilt views
+    library/                the immutable tree, arena, broadcast order and lookup
+    library_http/           GET /api/library.bin from the prebuilt arena
     mini_files/             GET /library index: a listing, not a file browser
     cassette/               what the screen shows: reel phases, pack fills, tape ink, title
     artwork/                a Track's picture and text tags: ID3 APIC/TPE1/TIT2, FLAC
@@ -918,7 +920,7 @@ with no LVGL, no ESP-IDF and no card. The split between `portable/` and
 `app/` is itself a rule: every `.c` under `portable/` must be in `host/Makefile`,
 and no source under `app/` may be. The binary search for the seam is in
 `docs/adr/0003-extract-http-server-from-mini-icecast.md`; the boot-built Library
-tree, its arena, JSON, generation and leases are in
+tree, its arena, generation and leases are in
 [`docs/adr/0012-boot-built-library-arena.md`](docs/adr/0012-boot-built-library-arena.md).
 
 The services are composed once, in `app_services`, and both entry points call it:
@@ -1099,11 +1101,12 @@ listener's ICY client still sees the filename; the card is not re-read for the s
 
 ## Measured music: the Snapshot
 
-The card carries one optional file the firmware never writes: `xtape.db` at the card's root, a
-**Snapshot** of what a host measured for the Library. Put the card in a computer, let the
-analysis app measure the tracks, drop the file at the root, and put the card back. At boot the
-device flashes the file into its 2 MB `snapshot` partition, verifies it, deletes it, and answers
-`library_search` from the mapped bytes:
+The card carries one optional file the analysis app writes and the firmware never writes:
+`k7.db` at the card's root, a **Snapshot** of what a host measured for the Library. Put the card
+in a computer, let the analysis app measure the tracks, write the file at the root, and put the
+card back. At boot the device flashes the file into its 2 MB `snapshot` partition, verifies it,
+deletes it, and copies the image into PSRAM before the panel's first clock; `library_search`
+reads that copy:
 
 ```jsonc
 // tools/call library_search
@@ -1121,15 +1124,28 @@ Each result carries its measurements beside the track, `null` where nothing was 
 
 `library_stats` reports the **Coverage**: how many tracks the Snapshot describes, out of how
 many the card holds. A track with no row is unanalysed, never hidden — it still lists, plays and
-matches a name search, and it never matches a range. Nothing about the Snapshot is resident:
-queries read the mapped partition, and a boot with no update file touches the card once.
+matches a name search, and it never matches a range. Nothing about the Snapshot touches flash
+once boot is done: queries read the PSRAM copy, the partition is unmapped, and there is no
+black-frame guard because there is no flash read to hide. The image is format v3 — interned
+strings, 32-byte rows: **177 KB on the 3,485-track card**, down from 306 KB as v2, and ~260 KB at
+5,000 tracks. Removing the Library JSON view (only `/api/library.bin` remains) freed 629,596 B
+for that card's Library, 615 KiB at 5,000.
+
+The selected Playlist is remembered in `k7.select` at the card root, a 32-byte CRC'd record
+written by its own task below the decoder; NVS no longer holds it. That is the card's second kind
+of write, beside the update file's delete.
 
 The byte format is [`docs/specs/snapshot-format.md`](docs/specs/snapshot-format.md), the
 subsystem and its failure modes are [`docs/specs/snapshot.md`](docs/specs/snapshot.md), and the
-decision behind both is [ADR 0047](docs/adr/0047-the-snapshot-lives-in-flash-and-is-never-resident.md).
+decision behind both is [ADR 0047](docs/adr/0047-the-snapshot-lives-in-flash-and-is-never-resident.md),
+amended by [ADR 0051](docs/adr/0051-a-playlist-lives-in-the-snapshot.md) and superseded in part
+by [ADR 0069](docs/adr/0069-the-snapshot-is-resident-and-the-card-carries-the-selection.md).
 The host tier is tested end to end (`make -C host check` runs a real server against a generated
-image); the flash window and the update path are **board-tier pending** — no board has run
-them yet.
+image); the flash window, the PSRAM copy and the update path are **board-tier pending** — no
+board has run them yet.
+
+**Upgrading a v2 card:** flash the firmware first, then the App, then re-export the card. A v2
+image is refused, and the device serves without analysis until a v3 image is applied.
 
 ## The internal-RAM picture
 

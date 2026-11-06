@@ -94,12 +94,13 @@ void app_board_reboot_soon(uint32_t ms)
     (void)ms; /* the test starts the next process itself */
 }
 
+/* The image read from XTAPE_SNAPSHOT, held until app_board_snapshot_release(). */
+static uint8_t *image;
+static size_t   image_size;
+static bool     tried;
+
 const uint8_t *app_board_snapshot_image(size_t *size, const char **why, int *state)
 {
-    static uint8_t *image;
-    static size_t   image_size;
-    static bool     tried;
-
     if (state) *state = 1; /* SNAPSHOT_NO_PARTITION */
     if (tried) {
         if (size) *size = image_size;
@@ -139,4 +140,12 @@ const uint8_t *app_board_snapshot_image(size_t *size, const char **why, int *sta
     if (why) *why = "";
     if (state) *state = 0; /* SNAPSHOT_OK */
     return image;
+}
+
+void app_board_snapshot_release(void)
+{
+    free(image);
+    image = NULL;
+    image_size = 0;
+    tried = false; /* a later call reads XTAPE_SNAPSHOT again */
 }

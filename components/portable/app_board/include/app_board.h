@@ -55,9 +55,14 @@ esp_err_t app_board_mdns_start(const char *hostname, uint16_t port, const char *
 
 /* The Snapshot image this board can offer, and why not when it cannot: the mapped
  * `snapshot` partition on the device, a file named by XTAPE_SNAPSHOT on the host.
- * The pointer stays valid for the life of the process; the caller validates it. */
+ * The pointer stays valid until app_board_snapshot_release(); the caller validates it. */
 const uint8_t *app_board_snapshot_image(size_t *size, const char **why,
                                         int *state); /* state: snapshot_result_t */
+
+/* Drop the image app_board_snapshot_image() returned: the device unmaps the partition,
+ * the host frees its file buffer. Safe to call when nothing is mapped, and a later
+ * app_board_snapshot_image() maps the image again. */
+void app_board_snapshot_release(void);
 
 /* Whether the card answers right now. A stat of the mount point: the card is pulled by
  * hand, and this is the cheapest question the FAT layer can answer. */
@@ -87,8 +92,8 @@ typedef enum {
 
 /* Write an image that arrived over HTTP into the snapshot partition. The image is
  * validated in full - header, rows, checksum - before the first erase, so a refusal leaves
- * the running snapshot intact. The caller reboots afterwards: the reader holds a mapping,
- * and on this board a flash write disables the PSRAM the app is running from. */
+ * the running snapshot intact. The caller reboots afterwards: the reader holds a PSRAM
+ * copy, and on this board a flash write disables the PSRAM the app is running from. */
 app_board_flash_t app_board_snapshot_flash(const uint8_t *image, size_t len, char *why,
                                            size_t why_size);
 

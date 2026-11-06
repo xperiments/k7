@@ -25,12 +25,13 @@
 #include "esp_random.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
 
 #include "app_board.h"
-#include "flash_job.h"
 #include "app_services.h"
+#include "card_select.h"
 #include "mini_files.h"
 #include "mini_icecast.h"
 #include "screen_display.h"
@@ -42,45 +43,88 @@
 /* A card that will not mount is the most likely fault this hardware has, so a
  * failed mount is not fatal: the device stays on the network and retries. */
 
-/* The one NVS key the device keeps besides the Wi-Fi calibration. */
-static bool selection_load(uint64_t *id)
+static const char *TAG = "app";
+
+/* The selected Playlist lives on the card, beside the Snapshot: one 32-byte record at
+ * the card root whose id 0 means "no selection". The card is the only store - there is
+ * no NVS fallback - so a card that is out or read-only leaves the RAM choice standing
+ * for the session, and the writer logs that once rather than on every attempt. */
+#define SELECTION_PATH       "/sdcard/k7.select"
+#define SELECTION_TASK_STACK 4096
+#define SELECTION_TASK_PRIO  2 /* below the decoder (3) and the broadcast (6) */
+
+/* The latest id waiting to be written, length one: a newer choice replaces one that has
+ * not reached the card yet, which is the only behaviour that matters when two arrive
+ * close together. The writer is the only task that touches the file. */
+static QueueHandle_t s_selection_queue;
+
+/* Boot reads the remembered choice after the card mount: make sure the record exists,
+ * then read it. Any failure is "no choice", not a failed boot. */
+static bool selection_load_path(const char *path, uint64_t *id)
 {
-    nvs_handle_t h;
-    if (nvs_open("xtape", NVS_READONLY, &h) != ESP_OK) return false;
-    uint64_t v = 0;
-    esp_err_t e = nvs_get_u64(h, "playlist", &v);
-    nvs_close(h);
-    if (e != ESP_OK) return false;
-    *id = v;
+    if (!card_select_ensure(path)) {
+        ESP_LOGW(TAG, "cannot create %s (card absent or read-only); starting with no Playlist",
+                 path);
+        return false;
+    }
+    if (!card_select_load(path, id)) {
+        ESP_LOGW(TAG, "%s is not a valid selection record; starting with no Playlist", path);
+        return false;
+    }
     return true;
 }
 
-/* NVS is flash: on the writer task, where the stack is internal (flash_job.h). */
-typedef struct {
-    uint64_t id;
-    bool     ok;
-} nvs_save_t;
-
-static bool nvs_save(void *ctx)
+/* The store's load callback, with the card root's path bound here rather than passed
+ * through app_services: the store seam is portable and knows no filesystem. */
+static bool selection_load(uint64_t *id)
 {
-    nvs_save_t *job = (nvs_save_t *)ctx;
-    nvs_handle_t h;
-    if (nvs_open("xtape", NVS_READWRITE, &h) != ESP_OK) return false;
-    esp_err_t e = job->id ? nvs_set_u64(h, "playlist", job->id) : nvs_erase_key(h, "playlist");
-    if (e == ESP_ERR_NVS_NOT_FOUND) e = ESP_OK;
-    if (e == ESP_OK) e = nvs_commit(h);
-    nvs_close(h);
-    job->ok = e == ESP_OK;
-    return job->ok;
+    return selection_load_path(SELECTION_PATH, id);
 }
 
+/* Called from the broadcast task (a dropped order) and from the HTTP select route.
+ * Both callers may have their stack in PSRAM, so this only posts to the writer; it
+ * never opens, reads or writes the file itself. */
 static bool selection_save(uint64_t id)
 {
-    nvs_save_t job = {id, false};
-    return flash_job_run(nvs_save, &job) && job.ok;
+    if (!s_selection_queue) return false;
+    return xQueueOverwrite(s_selection_queue, &id) == pdTRUE;
 }
 
-static const char *TAG = "app";
+static void selection_writer(void *arg)
+{
+    (void)arg;
+    uint64_t id;
+    bool failing = false;
+    for (;;) {
+        if (xQueueReceive(s_selection_queue, &id, portMAX_DELAY) != pdTRUE) continue;
+        if (card_select_save(SELECTION_PATH, id)) {
+            if (failing)
+                ESP_LOGI(TAG, "the card takes the Playlist selection again");
+            failing = false;
+        } else if (!failing) {
+            /* Once per transition: a read-only or missing card would otherwise log on
+             * every order-dropped and every select for the life of the session. */
+            ESP_LOGW(TAG, "cannot write %s; the Playlist choice lasts this session only",
+                     SELECTION_PATH);
+            failing = true;
+        }
+    }
+}
+
+static bool selection_writer_start(void)
+{
+    if (s_selection_queue) return true;
+    s_selection_queue = xQueueCreate(1, sizeof(uint64_t));
+    if (!s_selection_queue) return false;
+    /* No capability caps: the default stack is internal DRAM, which is the point. */
+    if (xTaskCreate(selection_writer, "sel_write", SELECTION_TASK_STACK, NULL,
+                    SELECTION_TASK_PRIO, NULL) != pdPASS) {
+        vQueueDelete(s_selection_queue);
+        s_selection_queue = NULL;
+        return false;
+    }
+    return true;
+}
 
 /* At most `max` bytes of `s`, ending on a UTF-8 character boundary. Titles come off
  * the card with multi-byte characters in them, and a byte cut through one leaves the
@@ -110,6 +154,12 @@ void appliance_run(void)
     ESP_ERROR_CHECK(err);
 
     app_board_log_hardware();
+
+    /* The Playlist selection's writer exists before a route or the broadcast can ask
+     * for a write. A failure costs persistence, not the appliance: the RAM choice stands
+     * for this session and the reason is in the log. */
+    if (!selection_writer_start())
+        ESP_LOGE(TAG, "no Playlist selection writer; a choice lasts this session only");
 
     /* The station format is chosen from measurement, not preference, and the
      * measurement is surprising: the encoder's cost per frame is flat against
@@ -145,9 +195,9 @@ void appliance_run(void)
      * is that the broadcast never starves, and that is what the soak checks.
      * 32000 Hz / 96 kbps remains the documented fallback if headroom is ever
      * needed for something else. */
-    /* The chosen Playlist survives a power cut. NVS is the device's; the composition
-     * takes it as two callbacks so playlist_select stays portable (ADR 0051). An NVS
-     * that has never been written is "no choice", not an error. */
+    /* The chosen Playlist survives a power cut in the card's k7.select. The composition
+     * takes it as two callbacks so playlist_select stays portable (ADR 0051); a card
+     * that has never carried a record is "no choice", not an error. */
     app_services_cfg_t svc = {
         .music_dir = MUSIC_DIR,
         .station_name = STATION_NAME,
@@ -159,10 +209,6 @@ void appliance_run(void)
          * connection worker as soon as it is registered. */
         .max_clients = 4,
         .max_conns = 4,
-        /* The board takes the glass off while the network is being used: a Snapshot read,
-         * or a listener arriving on the stream. The slip those cause happens behind a black
-         * frame, and the scan is re-established before the picture returns (ADR 0055). */
-        .page_service = screen_display_page_service,
         .selection_load = selection_load,
         .selection_save = selection_save,
     };

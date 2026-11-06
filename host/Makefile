@@ -48,6 +48,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/rgb/include \
        -I$(ROOT)/components/portable/snapshot/include \
        -I$(ROOT)/components/portable/playlist_select/include \
+       -I$(ROOT)/components/portable/card_select/include \
        -I$(ROOT)/components/portable/flash_job/include \
        -I$(ROOT)/components/portable/front_door/include \
        -I$(ROOT)/components/portable/app_services/include \
@@ -106,6 +107,7 @@ PROD_SRC := \
   $(ROOT)/components/portable/mini_icecast/mi_shuffle.c \
   $(ROOT)/components/portable/snapshot/snapshot.c \
   $(ROOT)/components/portable/playlist_select/playlist_select.c \
+  $(ROOT)/components/portable/card_select/card_select.c \
   $(ROOT)/components/portable/flash_job/flash_job.c \
   $(ROOT)/components/portable/front_door/front_door.c \
   $(ROOT)/components/portable/app_services/app_services.c \
@@ -128,6 +130,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/rgb \
           $(ROOT)/components/portable/snapshot \
           $(ROOT)/components/portable/playlist_select \
+          $(ROOT)/components/portable/card_select \
           $(ROOT)/components/portable/flash_job \
           $(ROOT)/components/portable/front_door \
           $(ROOT)/components/portable/app_services \
@@ -158,7 +161,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t18_menu $(BIN)/t19_shuffle \
          $(BIN)/t21_button $(BIN)/t22_knob $(BIN)/t23_pad $(BIN)/t24_controls \
          $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline $(BIN)/t28_entrance \
-         $(BIN)/t29_snapshot $(BIN)/t30_playlist_select
+         $(BIN)/t29_snapshot $(BIN)/t30_playlist_select $(BIN)/t31_card_select
 
 .PHONY: all test integration layering check tools fixtures bench control control-check clean help
 
@@ -299,6 +302,10 @@ $(BIN)/t29_snapshot: $(OBJ)/snapshot.o $(OBJ)/t29_snapshot.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t30_playlist_select: $(OBJ)/playlist_select.o $(OBJ)/snapshot.o $(OBJ)/library.o $(OBJ)/audio_format.o $(OBJ)/shim.o $(OBJ)/t30_playlist_select.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t31_card_select: $(OBJ)/card_select.o $(OBJ)/t31_card_select.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

@@ -2,7 +2,7 @@
  * T30: playlist_select, host tier.
  *
  * The selection module is tested against a real Library built from a temporary tree and
- * a real version 2 Snapshot built byte by byte here, with the broadcast stubbed: this
+ * a real version 3 Snapshot built byte by byte here, with the broadcast stubbed: this
  * test is about resolution, refusal and remembering, not about audio. What the order
  * does once the broadcast has it is the integration suite's business (the hosting server
  * plus /api/playlists/select and the stream's own advance).
@@ -120,9 +120,10 @@ static void put64(uint8_t *p, size_t at, uint64_t v)
     for (int i = 0; i < 8; i++) p[at + i] = (uint8_t)(v >> (8 * i));
 }
 
-/* A version 2 image with no measurement rows and one list. The rows are paths; the
- * pool is the list's name followed by each path. */
-static uint8_t *build_v2(size_t *out_n, const char *name, uint64_t id, const char *const *paths,
+/* A version 3 image with no measurement rows and one list. There are no row
+ * strings, so `row_pool_size` is zero and the pool is the list's name followed by
+ * each path (spec §2, §7). */
+static uint8_t *build_v3(size_t *out_n, const char *name, uint64_t id, const char *const *paths,
                          uint32_t npaths)
 {
     size_t pool_n = strlen(name) + 1;
@@ -132,7 +133,7 @@ static uint8_t *build_v2(size_t *out_n, const char *name, uint64_t id, const cha
     if (!img) abort();
 
     memcpy(img, SNAPSHOT_MAGIC, 8);
-    put16(img, 8, 2);
+    put16(img, 8, SNAPSHOT_VERSION);
     put16(img, 10, 80);
     put32(img, 12, (uint32_t)total);
     put32(img, 16, 0);            /* no measurement rows */
@@ -146,7 +147,9 @@ static uint8_t *build_v2(size_t *out_n, const char *name, uint64_t id, const cha
     put16(img, 64, 1);            /* list_count */
     put16(img, 66, 32);
     put16(img, 68, 4);
+    put16(img, 70, 0);            /* reserved */
     put32(img, 72, npaths);
+    put32(img, 76, 0);            /* row_pool_size: no row strings */
 
     size_t at = 80;
     memcpy(img + at, name, strlen(name) + 1);
@@ -208,7 +211,7 @@ int main(void)
     file_at(root, "B/two.mp3", 20);
     file_at(root, "B/three.mp3", 30);
 
-    library_cfg_t cfg = {.music_dir = root, .build_json = false};
+    library_cfg_t cfg = {.music_dir = root};
     library_t *lib = NULL;
     CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "the fixture tree opens");
     CHECK_EQ(library_track_count(lib), 3, "three tracks");
@@ -217,7 +220,7 @@ int main(void)
     const char *const SOME[] = {"A/one.mp3", "B/gone.mp3"};
     static const char *const NONE[] = {NULL};
     size_t n = 0;
-    uint8_t *img = build_v2(&n, "Late night", 0xAAAA000000000001ull, ALL, 3);
+    uint8_t *img = build_v3(&n, "Late night", 0xAAAA000000000001ull, ALL, 3);
     snapshot_t *snap = NULL;
     CHECK_EQ(snapshot_open(img, n, &snap), SNAPSHOT_OK, "the image opens");
     CHECK_EQ(snapshot_lists(snap), 1, "one list");
@@ -267,7 +270,7 @@ int main(void)
 
     /* a row whose file is gone counts, and the rest still plays */
     size_t n2 = 0;
-    uint8_t *img2 = build_v2(&n2, "Half gone", 0xBBBB000000000002ull, SOME, 2);
+    uint8_t *img2 = build_v3(&n2, "Half gone", 0xBBBB000000000002ull, SOME, 2);
     snapshot_t *snap2 = NULL;
     CHECK_EQ(snapshot_open(img2, n2, &snap2), SNAPSHOT_OK, "the second image opens");
     CHECK_EQ(playlist_select_set(snap2, lib, 0xBBBB000000000002ull), PLAYLIST_SELECT_OK,
@@ -277,7 +280,7 @@ int main(void)
 
     /* an empty list is refused, and nothing is walking */
     size_t n3 = 0;
-    uint8_t *img3 = build_v2(&n3, "Empty", 0xCCCC000000000003ull, NONE, 0);
+    uint8_t *img3 = build_v3(&n3, "Empty", 0xCCCC000000000003ull, NONE, 0);
     snapshot_t *snap3 = NULL;
     CHECK_EQ(snapshot_open(img3, n3, &snap3), SNAPSHOT_OK, "the empty image opens");
     CHECK_EQ(playlist_select_set(snap3, lib, 0xCCCC000000000003ull), PLAYLIST_SELECT_EMPTY,
@@ -313,7 +316,7 @@ int main(void)
     /* a card that is out keeps the choice: the same image, a Library that cannot resolve a
      * row (an empty root) -- the walk stops, the selection does not (spec U3) */
     char *empty_root = temp_root();
-    library_cfg_t empty_cfg = {.music_dir = empty_root, .build_json = false};
+    library_cfg_t empty_cfg = {.music_dir = empty_root};
     library_t *empty_lib = NULL;
     CHECK_EQ(library_open(&empty_cfg, &empty_lib), LIB_OK, "the empty root opens");
     CHECK_EQ(playlist_select_set(snap, lib, 0xAAAA000000000001ull), PLAYLIST_SELECT_OK,

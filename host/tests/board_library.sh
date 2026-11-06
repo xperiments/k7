@@ -29,8 +29,8 @@ bad() { echo "  FAIL  $1"; FAIL=1; }
 line=$(grep -a 'library: state=' "$LOG" | tail -1)
 if [ -n "$line" ]; then
     ok "boot log: $line"
-    printf '%s' "$line" | grep -q 'scan=.* ms arena=.* B json=.* B psram=.* -> .* B truncated=' \
-        && ok "scan, arena, JSON, PSRAM and truncated are logged" \
+    printf '%s' "$line" | grep -q 'scan=.* ms arena=.* B psram=.* -> .* B truncated=' \
+        && ok "scan, arena, PSRAM and truncated are logged" \
         || bad "the boot log is missing a scan field"
 else
     bad "no Library boot line in the capture"
@@ -40,17 +40,10 @@ printf '%s\n' "$line" | grep -q 'truncated=0' && echo "  note  this card is not 
 
 n=0
 while [ "$n" -lt 50 ]; do
-    curl -s -o /dev/null --max-time 1 "$BASE/api/library" && break
+    curl -s -o /dev/null --max-time 1 "$BASE/api/library.bin" && break
     n=$((n + 1)); sleep .2
 done
-curl -s -o "$LOG.json" "$BASE/api/library" || bad "cannot fetch /api/library"
 curl -s -o "$LOG.bin" "$BASE/api/library.bin" || bad "cannot fetch /api/library.bin"
-$PY - "$LOG.json" <<'PY' && ok "JSON tree parses and has a generation/count" || bad "JSON tree is invalid"
-import json, sys
-d=json.load(open(sys.argv[1]))
-assert isinstance(d.get("generation"), int) and isinstance(d.get("count"), int)
-assert d["count"] > 0
-PY
 $PY "$HERE/check_library_bin.py" "$LOG.bin" /tmp --header-only \
     && ok "binary header, CRC and parentage verify" || bad "binary view failed"
 $PY "$HERE/board_mcp_tests.py" "$BASE" "xtape.local:8000" \

@@ -1,5 +1,11 @@
 # A Playlist lives in the Snapshot, and the broadcast can walk one
 
+> **Amended by [ADR 0069](./0069-the-snapshot-is-resident-and-the-card-carries-the-selection.md).**
+> The selected Playlist is no longer remembered in NVS. The device writes it to `k7.select` at
+> the card root, a 32-byte CRC'd record, asynchronously on a task below the decoder. The format
+> is v3 only, so the v1/v2 compatibility rules below no longer apply; the lists still live in
+> the Snapshot, and the selection is still a choice, not a copy.
+
 The front door grew a Playlists area, and a list had nowhere to live. The card is host-written
 by policy, the page the device serves cannot write it at all (plain HTTP, no directory picker —
 ADR 0049), and the device held no list of any kind: what it called its **Playlist** was the

@@ -40,9 +40,8 @@ function versionNumber(version: string): number {
  * is measured and shown, and simply not part of the card's Library. Titles come from the
  * files' own tags, because the player's text search is only as good as the names it has.
  *
- * `lists` are this browser's Playlists (ADR 0051). With none, the image is byte-identical
- * version 1 — the old format — so a page that has nothing to say about lists does not make
- * the device refuse an image over a section it did not need.
+ * `lists` are this browser's Playlists (ADR 0051). With none, the image is still a version
+ * 3 image with `list_count = 0`; the format has no version that omits the list area.
  */
 export async function buildSnapshotExport(
   items: readonly SnapshotItem[],

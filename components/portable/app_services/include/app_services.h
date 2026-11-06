@@ -41,9 +41,6 @@ typedef struct {
     uint32_t    library_max_bytes;  /* 0 = the library's default (4 MiB) */
     uint32_t    library_max_tracks; /* 0 = the library's default (20000) */
     const char *server_name;  /* HTTP Server: header; NULL = the server's default */
-    /* Called before a mapped-flash read (the Snapshot, a Playlist, MCP), so a board can
-     * take the screen off the glass for the duration of the read. NULL does nothing. */
-    void (*page_service)(void);
     /* The remembered Playlist selection (id, 0 for none). NULL means this build
      * remembers none: the choice then lives until reboot. Wired to NVS by the
      * appliance, left NULL by the host. */

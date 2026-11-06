@@ -144,21 +144,21 @@ static library_t *lib_from_cfg(library_cfg_t *cfg)
 
 static library_t *lib_from(const char *root)
 {
-    library_cfg_t cfg = {.music_dir = root, .build_json = false,
+    library_cfg_t cfg = {.music_dir = root,
                          .generation = library_next_generation()};
     return lib_from_cfg(&cfg);
 }
 
 static library_t *lib_from_capped(const char *root, uint32_t max_tracks)
 {
-    library_cfg_t cfg = {.music_dir = root, .build_json = false, .max_tracks = max_tracks,
+    library_cfg_t cfg = {.music_dir = root, .max_tracks = max_tracks,
                          .generation = library_next_generation()};
     return lib_from_cfg(&cfg);
 }
 
 static library_t *lib_no_card(const char *root)
 {
-    library_cfg_t cfg = {.music_dir = root, .build_json = false,
+    library_cfg_t cfg = {.music_dir = root,
                          .generation = library_next_generation()};
     library_t *lib = NULL;
     CHECK_EQ(library_open_no_card(&cfg, "test: no card", &lib), LIB_OK,
@@ -990,7 +990,7 @@ static void test_no_library(void)
     free(empty_root2);
 
     library_cfg_t bad_cfg = {.music_dir = "/definitely/not/a/xtape/music",
-                             .build_json = false, .generation = library_next_generation()};
+                             .generation = library_next_generation()};
     library_t *nodir = lib_from_cfg(&bad_cfg);
     CHECK_EQ(library_state(nodir), LIB_STATE_NO_DIR, "the bad fixture has no directory");
     note_case(nodir, 0, "Library error");

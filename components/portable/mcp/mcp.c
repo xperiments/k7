@@ -70,9 +70,8 @@ static mcp_local_ip_fn L_local_ip;
 static const char *L_app_origin = ""; /* the deployed App's origin, or "" */
 static mcp_rescan_fn L_rescan;
 static uint16_t L_port = 8000;
-static void (*page_service_fn)(void); /* screen guard for Snapshot reads; NULL where no panel */
 
-/* The Snapshot coverage, cached so `library_stats` never walks the mapped Snapshot per request.
+/* The Snapshot coverage, cached so `library_stats` never walks the whole Snapshot per request.
  * `mcp_refresh_coverage()` recomputes it at boot and on each rescan; the stored generation is the
  * published Library's, so a mismatch in `write_stats` means a publish slipped past and it walks once. */
 typedef struct {
@@ -603,7 +602,7 @@ static bool track_row(const library_t *lib, lib_node_t n, snapshot_row_t *row)
 
 /* Walk the Library against the Snapshot once and cache the coverage. Called only at boot and on
  * rescan (mcp_refresh_coverage), and defensively by write_stats if a publish slipped past - never
- * per request, because this walk is the mapped-flash read that displaced the panel. */
+ * per request, because this walk looks up every Track in the Library. */
 static void compute_coverage(const library_t *lib)
 {
     coverage.generation = lib ? library_generation(lib) : 0;
@@ -679,8 +678,8 @@ static void write_stats(w_t *w, const library_t *lib)
     }
     /* Coverage is the number that bounds every answer: it is counted against the
      * current Library, so a row for a track that no longer exists is not coverage. It is
-     * cached, because walking the mapped Snapshot on every request is what displaced the
-     * panel (ADR 0047, 0055): the cache is refreshed at boot and on rescan, and a generation
+     * cached, because walking every Track on every request would be the expensive thing
+     * a stats call does: the cache is refreshed at boot and on rescan, and a generation
      * mismatch means a publish slipped past, so it is walked once here rather than reported
      * stale. */
     unsigned tracks = library_track_count(lib);
@@ -1550,13 +1549,6 @@ static http_result_t post_route(int fd, const http_request_t *req, void *ctx)
         }
         w_t tw = w_make(text, MCP_TEXT_MAX);
         bool ok = true;
-        /* These two tools read the Snapshot, which is mapped flash; the board takes the glass
-         * off first so the reads cannot displace the scan (ADR 0047, 0055). library_stats reads
-         * the cached coverage, and library_list and player_status read only the resident Library,
-         * so those leave the screen alone. */
-        if (strcmp(name, "library_search") == 0 || strcmp(name, "library_track") == 0) {
-            if (page_service_fn) page_service_fn();
-        }
         if (strcmp(name, "library_stats") == 0) {
             write_stats(&tw, lib);
         } else if (strcmp(name, "library_list") == 0) {
@@ -1635,7 +1627,6 @@ esp_err_t mcp_start(const mcp_cfg_t *cfg)
     SN = cfg->snapshot;
     SN_state = cfg->snapshot_state;
     SN_reason = cfg->snapshot_reason ? cfg->snapshot_reason : "";
-    page_service_fn = cfg->page_service;
     /* MCP is the app's endpoint: TLS listener (front door R1). */
     esp_err_t err = http_server_register_route_method_ex_on(HTTP_LISTENER_TLS, "/mcp", "POST",
                                                             post_route, NULL, mcp_body_error);

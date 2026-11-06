@@ -152,7 +152,7 @@ if [ -s "$STARTUP_LOG" ]; then
     check_match "and names the encoder's state size" "$(tr -d '\r' <"$STARTUP_LOG")" '[0-9]+ B of state inside the vendored library'
     check_match "and reports which memory the ring took" "$(tr -d '\r' <"$STARTUP_LOG")" 'burst ring: .* in external memory'
     check_match "and which memory the encoder staging took" "$(tr -d '\r' <"$STARTUP_LOG")" 'staging buffers in external memory'
-    check_match "the library scan is logged with counts, bytes and memory" "$(tr -d '\r' <"$STARTUP_LOG")" 'library: state=[a-z_]+ tracks=[0-9]+ dirs=[0-9]+ bytes=[0-9]+ scan=[0-9]+ ms arena=[0-9]+ B json=[0-9]+ B psram=[0-9]+ -> [0-9]+ B'
+    check_match "the library scan is logged with counts, bytes and memory" "$(tr -d '\r' <"$STARTUP_LOG")" 'library: state=[a-z_]+ tracks=[0-9]+ dirs=[0-9]+ bytes=[0-9]+ scan=[0-9]+ ms arena=[0-9]+ B psram=[0-9]+ -> [0-9]+ B'
     if [ -n "$BOARD_URL" ]; then
         # These two come from the firmware's own bring-up, which the host build
         # does not compile: they only exist on the device.
@@ -202,20 +202,6 @@ check_match "and links the live stream" "$(cat "$TMP/index.html")" 'href="/strea
 check_match "and serves a content type a browser can render" "$(curl -s -D - -o /dev/null "$BASE/library")" 'Content-Type: text/html; charset=utf-8'
 
 group "T14  the prebuilt library is served without the card"
-curl -s -D "$TMP/libhdr" -o "$TMP/lib.json" "$BASE/api/library"
-LIB_HDR=$(tr -d '\r' <"$TMP/libhdr")
-LIB_BYTES=$(wc -c <"$TMP/lib.json" | tr -d ' ')
-check_eq "GET /api/library is a 200" "$(printf '%s' "$LIB_HDR" | head -1 | awk '{print $2}')" "200"
-check_match "and is typed application/json" "$LIB_HDR" '^Content-Type: application/json$'
-check_match "and carries a real Content-Length ($LIB_BYTES B)" "$LIB_HDR" "^Content-Length: $LIB_BYTES$"
-if $PY -m json.tool "$TMP/lib.json" >/dev/null 2>&1; then
-    ok "the body is valid JSON"
-else
-    bad "the body is not valid JSON"
-fi
-LIB_GEN=$($PY -c 'import json,sys; print(json.load(open(sys.argv[1]))["generation"])' "$TMP/lib.json")
-check_match "and names the generation ($LIB_GEN)" "$LIB_HDR" "^ETag: \"gen-$LIB_GEN\"$"
-LIB_ETAG=$(printf '%s\n' "$LIB_HDR" | sed -n 's/^ETag: //p')
 
 curl -s -D "$TMP/binhdr" -o "$TMP/lib.bin" "$BASE/api/library.bin"
 BIN_HDR=$(tr -d '\r' <"$TMP/binhdr")
@@ -223,7 +209,7 @@ BIN_BYTES=$(wc -c <"$TMP/lib.bin" | tr -d ' ')
 check_eq "GET /api/library.bin is a 200" "$(printf '%s' "$BIN_HDR" | head -1 | awk '{print $2}')" "200"
 check_match "and is typed application/octet-stream" "$BIN_HDR" '^Content-Type: application/octet-stream$'
 check_match "and carries a real Content-Length ($BIN_BYTES B)" "$BIN_HDR" "^Content-Length: $BIN_BYTES$"
-check_eq "and shares the JSON generation" "$(printf '%s\n' "$BIN_HDR" | sed -n 's/^ETag: //p')" "$LIB_ETAG"
+check_match "and names its generation" "$BIN_HDR" '^ETag: "gen-[0-9]*"$'
 check_match "and is offered as an attachment" "$BIN_HDR" '^Content-Disposition: attachment; filename="library.bin"$'
 if [ -n "$BOARD_URL" ]; then
     if $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/lib.bin" / --header-only >"$TMP/bin.out" 2>&1; then
@@ -236,8 +222,6 @@ elif $PY "$HOST_DIR/tests/check_library_bin.py" "$TMP/lib.bin" "$FIX" --state ok
 else
     bad "binary view: $(cat "$TMP/bin.out")"
 fi
-BIN_GEN=$(sed -n 's/.*generation \([0-9]*\).*/\1/p' "$TMP/bin.out" | head -1)
-check_eq "the binary header and the JSON body share generation" "$BIN_GEN" "$LIB_GEN"
 
 if [ -z "$BOARD_URL" ]; then
     # A single flipped byte must fail the independent CRC check.
@@ -249,36 +233,20 @@ if [ -z "$BOARD_URL" ]; then
         ok "a corrupted blob fails the independent CRC check"
     fi
 fi
-if [ -n "$BOARD_URL" ]; then
-    if $PY -c 'import json,sys; d=json.load(open(sys.argv[1])); assert all(k in d for k in ("root","generation","count","bytes","state","truncated","error","tree")); assert d["state"] in ("ok","empty","no_card","no_dir","error")' "$TMP/lib.json" 2>/dev/null; then
-        ok "board library JSON has the expected shape"
-    else
-        bad "board library JSON shape"
-    fi
-elif $PY "$HOST_DIR/tests/check_library.py" "$TMP/lib.json" "$FIX" --state ok >"$TMP/lib.out" 2>&1; then
-    ok "$(cat "$TMP/lib.out")"
-else
-    bad "library JSON: $(cat "$TMP/lib.out")"
-fi
 
 if [ -z "$BOARD_URL" ]; then
-    # The endpoint must answer from the boot-built JSON even after the file is gone.
+    # The binary view must answer from the boot-built arena even after the file is gone.
     mkdir -p "$TMP/frozen"
     cp -R "$FIX/." "$TMP/frozen/"
     if start_server "$TMP/frozen" 18101 "$TMP/frozen.log"; then
         curl -s -o "$TMP/frozen.bin.before" "http://127.0.0.1:18101/api/library.bin"
         rm -f "$TMP/frozen/tone-44100.flac"
-        curl -s -D "$TMP/frozenhdr" -o "$TMP/frozen.json" "http://127.0.0.1:18101/api/library"
         curl -s -o "$TMP/frozen.bin.after" "http://127.0.0.1:18101/api/library.bin"
         if cmp -s "$TMP/frozen.bin.before" "$TMP/frozen.bin.after"; then
             ok "the binary view is byte-identical after a post-boot deletion"
         else
             bad "the binary view changed after a post-boot deletion"
         fi
-        check_match "the JSON still lists a file deleted after boot" "$(cat "$TMP/frozen.json")" '"name":"tone-44100.flac"'
-        check_eq "and its Content-Length still matches the body" \
-            "$(tr -d '\r' <"$TMP/frozenhdr" | sed -n 's/^Content-Length: //p')" \
-            "$(wc -c <"$TMP/frozen.json" | tr -d ' ')"
         curl -s -o "$TMP/frozen.html" "http://127.0.0.1:18101/library"
         check_match "the index still lists the deleted file from the tree" "$(cat "$TMP/frozen.html")" 'tone-44100\.flac'
     fi
@@ -290,13 +258,6 @@ if [ -z "$BOARD_URL" ]; then
     cp "$FIX/tone-44100.wav" "$TMP/nested/Album/Deep/02 - Song.wav"
     cp "$FIX/tone-44100.mp3" "$TMP/nested/loose.mp3"
     if start_server "$TMP/nested" 18106 "$TMP/nested.log"; then
-        curl -s -o "$TMP/nested.json" "http://127.0.0.1:18106/api/library"
-        if $PY "$HOST_DIR/tests/check_library.py" "$TMP/nested.json" "$TMP/nested" --state ok >"$TMP/nested.out" 2>&1; then
-            ok "a nested tree matches os.walk() through /api/library"
-        else
-            bad "nested tree: $(cat "$TMP/nested.out")"
-        fi
-        check_match "and its paths use the tree, not the flat directory" "$(cat "$TMP/nested.json")" '"path":"Album/01 - Song.flac"'
         curl -s -o "$TMP/nested.html" "http://127.0.0.1:18106/library"
         if $PY "$HOST_DIR/tests/check_index.py" "$TMP/nested.html" "$TMP/nested" >"$TMP/nestedindex.out" 2>&1; then
             ok "$(cat "$TMP/nestedindex.out")"
@@ -317,13 +278,6 @@ if [ -z "$BOARD_URL" ]; then
 
     # Boot-time states: no card, no Music directory, empty, truncated.
     if start_no_card_server "$FIX" 18102 "$TMP/nocard.log"; then
-        code=$(curl -s -o "$TMP/nocard.json" -w '%{http_code}' "http://127.0.0.1:18102/api/library")
-        check_eq "no card is a 200, not a 500" "$code" "200"
-        if $PY "$HOST_DIR/tests/check_library.py" "$TMP/nocard.json" "$FIX" --state no_card >"$TMP/nocard.out" 2>&1; then
-            ok "no card is a diagnosable 200 with state no_card"
-        else
-            bad "no card state: $(cat "$TMP/nocard.out")"
-        fi
         check_match "and the boot log names it" "$(cat "$TMP/nocard.log")" 'library: state=no_card '
         curl -s -o "$TMP/nocard.html" "http://127.0.0.1:18102/library"
         check_match "the index says no card" "$(cat "$TMP/nocard.html")" 'No card mounted'
@@ -336,13 +290,6 @@ if [ -z "$BOARD_URL" ]; then
     fi
     mkdir -p "$TMP/no-music-parent"
     if start_server "$TMP/no-music-parent/missing" 18103 "$TMP/nodir.log"; then
-        code=$(curl -s -o "$TMP/nodir.json" -w '%{http_code}' "http://127.0.0.1:18103/api/library")
-        check_eq "missing directory is a 200, not a 500" "$code" "200"
-        if $PY "$HOST_DIR/tests/check_library.py" "$TMP/nodir.json" "$TMP/no-music-parent/missing" --state no_dir >"$TMP/nodir.out" 2>&1; then
-            ok "a missing Music directory is a diagnosable 200 with state no_dir"
-        else
-            bad "missing directory state: $(cat "$TMP/nodir.out")"
-        fi
         curl -s -o "$TMP/nodir.html" "http://127.0.0.1:18103/library"
         check_match "the index says the music directory is missing" "$(cat "$TMP/nodir.html")" 'No music directory'
         curl -s -o "$TMP/nodir.bin" "http://127.0.0.1:18103/api/library.bin"
@@ -354,13 +301,6 @@ if [ -z "$BOARD_URL" ]; then
     fi
     mkdir -p "$TMP/empty"
     if start_server "$TMP/empty" 18104 "$TMP/empty.log"; then
-        code=$(curl -s -o "$TMP/empty.json" -w '%{http_code}' "http://127.0.0.1:18104/api/library")
-        check_eq "an empty library is a 200" "$code" "200"
-        if $PY "$HOST_DIR/tests/check_library.py" "$TMP/empty.json" "$TMP/empty" --state empty >"$TMP/empty.out" 2>&1; then
-            ok "an empty Music directory is a diagnosable 200 with state empty"
-        else
-            bad "empty state: $(cat "$TMP/empty.out")"
-        fi
         curl -s -o "$TMP/empty.html" "http://127.0.0.1:18104/library"
         check_match "the index says there are no tracks" "$(cat "$TMP/empty.html")" 'contains no tracks'
         curl -s -o "$TMP/empty.bin" "http://127.0.0.1:18104/api/library.bin"
@@ -371,14 +311,6 @@ if [ -z "$BOARD_URL" ]; then
         fi
     fi
     if start_server "$FIX" 18105 "$TMP/trunc.log" --library-max-tracks 1; then
-        code=$(curl -s -o "$TMP/trunc.json" -w '%{http_code}' "http://127.0.0.1:18105/api/library")
-        check_eq "a truncated library is a 200" "$code" "200"
-        if $PY "$HOST_DIR/tests/check_library.py" "$TMP/trunc.json" "$FIX" --state ok --truncated >"$TMP/trunc.out" 2>&1; then
-            ok "a capped boot is a 200, state ok and truncated true"
-        else
-            bad "truncated view: $(cat "$TMP/trunc.out")"
-        fi
-        check_match "and the body says truncated" "$(cat "$TMP/trunc.json")" '"truncated":true'
         curl -s -o "$TMP/trunc.html" "http://127.0.0.1:18105/library"
         check_match "the index notes the truncation" "$(cat "$TMP/trunc.html")" 'truncated at 1 tracks'
         curl -s -o "$TMP/trunc.bin" "http://127.0.0.1:18105/api/library.bin"
@@ -415,7 +347,7 @@ PYX
         curl -s -o "$TMP/playing.html" "http://127.0.0.1:18107/library"
         check_match "the index now names the selected Track" "$(cat "$TMP/playing.html")" 'Now playing: <strong>two</strong>'
         check_eq "a POST to a GET-only route is a 405" \
-            "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' "http://127.0.0.1:18107/api/library")" "405"
+            "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' "http://127.0.0.1:18107/api/library.bin")" "405"
         check_eq "a POST to an unknown path is a 404" \
             "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' "http://127.0.0.1:18107/nope")" "404"
         check_eq "the live stream still answers after an unknown play" \
@@ -457,13 +389,9 @@ fi
 EMPTY="$TMP/rescan-empty"
 mkdir -p "$EMPTY"
 start_no_card_server "$EMPTY" "$((PORT + 3))" "$TMP/rescan-nocard.log"
-check_match "a card-less rescan stays no_card" \
-    "$(curl -s "http://127.0.0.1:$((PORT + 3))/api/library")" '"state":"no_card"'
 curl -s -o "$TMP/rescan-nocard.out" -X POST -H 'Content-Type: application/json' --data '{}' \
     "http://127.0.0.1:$((PORT + 3))/api/rescan"
 sleep 1
-check_match "and its new generation is still no_card" \
-    "$(curl -s "http://127.0.0.1:$((PORT + 3))/api/library")" '"generation":2.*"state":"no_card"'
 check_match "the card-less index stays diagnosable" \
     "$(curl -s "http://127.0.0.1:$((PORT + 3))/library")" "No card mounted"
 

@@ -131,9 +131,9 @@ def main():
         check("the index is at /library", status, 200)
         check("and is html", headers.get("content-type"), "text/html; charset=utf-8")
 
-        status, headers, _, _ = get(port, "/api/library")
+        status, headers, _, _ = get(port, "/api/library.bin")
         check("the library view answers", status, 200)
-        check("as json", headers.get("content-type"), "application/json")
+        check("as the binary view", headers.get("content-type"), "application/octet-stream")
     finally:
         stop(proc)
 

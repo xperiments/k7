@@ -2,19 +2,26 @@
 """Exercise rescan generations, leases and the broadcast switch.
 
 The caller starts a server over a mutable music directory with `initial` valid
-tracks. This script adds one, rescans, holds the old JSON response open while the
-new generation is published, and checks that the broadcast eventually sees the
+tracks. This script adds one, rescans, holds the old binary library view open while
+the new generation is published, and checks that the broadcast eventually sees the
 new count. A second pair of simultaneous rescans must produce exactly one 202 and
 one 409.
 """
 import json
 import socket
+import struct
 import sys
 import threading
 import time
 
 HOST, PORT, MUSIC, INITIAL = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4])
 FAIL = 0
+
+# The wire layout of GET /api/library.bin: a 64-byte header, then nodes, edges,
+# the track index and the string table. Only the header is read here.
+LIB_MAGIC = 0x424C5458
+LIB_HEADER = struct.Struct("<IHH8IQ2IQ")
+assert LIB_HEADER.size == 64
 
 
 def check(label, got, want):
@@ -50,9 +57,17 @@ def request(method, path, headers=None, body=None):
     return int(h.split(b"\r\n")[0].split()[1]), body
 
 
-def json_get(path):
-    status, body = request("GET", path)
-    return status, json.loads(body)
+def library_view(body):
+    """The header fields this suite reads: the generation and the track count."""
+    fields = LIB_HEADER.unpack_from(body, 0)
+    if fields[0] != LIB_MAGIC:
+        raise ValueError(f"not a library blob: magic 0x{fields[0]:08x}")
+    return {"generation": fields[9], "count": fields[6]}
+
+
+def library_get():
+    status, body = request("GET", "/api/library.bin")
+    return status, library_view(body)
 
 
 def rescan():
@@ -87,16 +102,16 @@ def wait_count(want, timeout=8.0):
 
 
 def main():
-    status, doc = json_get("/api/library")
+    status, doc = library_get()
     check("initial library is 200", status, 200)
     check("initial generation is 1", doc["generation"], 1)
     check("initial count", doc["count"], INITIAL)
 
-    # Hold an old JSON response without reading its body. Its lease must survive
-    # the publish below.
+    # Hold an old library view open without reading its body. Its lease must
+    # survive the publish below.
     slow = socket.create_connection((HOST, PORT), timeout=10)
     slow.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
-    slow.sendall(f"GET /api/library HTTP/1.0\r\nHost: {HOST}:{PORT}\r\n\r\n".encode())
+    slow.sendall(f"GET /api/library.bin HTTP/1.0\r\nHost: {HOST}:{PORT}\r\n\r\n".encode())
     head = b""
     while b"\r\n\r\n" not in head:
         head += slow.recv(1)
@@ -105,7 +120,7 @@ def main():
     for line in head.decode("latin1").split("\r\n"):
         if line.lower().startswith("content-length:"):
             length = int(line.split(":", 1)[1])
-    check("the old JSON is larger than socket buffers", length > 200000, True)
+    check("the old view is larger than socket buffers", length > 100000, True)
 
     with open(f"{MUSIC}/zz-new.wav", "wb") as f:
         f.write(open(f"{MUSIC}/t0000.wav", "rb").read())
@@ -114,7 +129,7 @@ def main():
     deadline = time.time() + 5
     current = None
     while time.time() < deadline:
-        _, current = json_get("/api/library")
+        _, current = library_get()
         if current["generation"] == 2:
             break
         time.sleep(0.05)
@@ -129,7 +144,7 @@ def main():
             break
         body += part
     slow.close()
-    old = json.loads(body)
+    old = library_view(body)
     check("the slow reader completes on the old bytes", old["generation"], 1)
     check("and still sees the old count", old["count"], INITIAL)
 

@@ -2,7 +2,7 @@
 """Playlists over HTTP: the image carries them, and the broadcast walks one.
 
 The lists live in the Snapshot (ADR 0051), so this starts a host server whose "partition"
-file already holds a version 2 image, then asks the routes the page uses. The walk itself
+file already holds a version 3 image, then asks the routes the page uses. The walk itself
 is the broadcast's business; what is proven here is that the choice is applied, that a
 pick outside the list ends it, and that every refusal is a refusal.
 
@@ -16,7 +16,7 @@ import sys
 import tempfile
 import time
 
-from snapshot_image import build_image, build_image_v2
+from snapshot_image import build_image
 
 SERVER = sys.argv[1]
 FIXTURES = sys.argv[2]
@@ -109,7 +109,7 @@ def main():
     work = tempfile.mkdtemp(prefix="xtpl")
     part = os.path.join(work, "snapshot.bin")
     with open(part, "wb") as f:
-        f.write(build_image_v2(rows(), [LATENIGHT, EMPTY]))
+        f.write(build_image(rows(), [LATENIGHT, EMPTY]))
     port = free_port()
     server = start(part, port)
     try:
@@ -190,7 +190,7 @@ def main():
         os.remove(part)
         os.rmdir(work)
 
-    # A version 1 image: no lists at all, and the routes say so rather than fail.
+    # An image with no lists at all: the routes say so rather than fail.
     work = tempfile.mkdtemp(prefix="xtpl1")
     part = os.path.join(work, "snapshot.bin")
     with open(part, "wb") as f:
@@ -199,7 +199,7 @@ def main():
     server = start(part, port)
     try:
         status, doc = request(port, "GET", "/api/playlists")
-        check("a v1 image answers", status, 200)
+        check("an image with no lists answers", status, 200)
         check("with no lists", doc["lists"], [])
         status, _ = request(port, "POST", "/api/playlists/select",
                             json.dumps({"id": f"{LATENIGHT['id']:016x}"}).encode())

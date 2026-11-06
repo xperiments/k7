@@ -49,7 +49,7 @@ int main(void)
         return 1;
     }
 
-    library_cfg_t lc = {.music_dir = dir, .build_json = false};
+    library_cfg_t lc = {.music_dir = dir};
     library_t *lib = NULL;
     if (library_open(&lc, &lib) != LIB_OK || !lib) {
         printf("FATAL: the Library did not open\n");

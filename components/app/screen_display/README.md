@@ -296,16 +296,14 @@ after the tape body and shown and hidden with the
   scan — is deliberately not called from `panel_rgb_start()`; `panel_rgb_scan_start()` does it
   after `app_services_start()`, so the boot's flash work happens on a dark panel. The LVGL
   refresh timer is paused until then, because an RGB flush waits for the panel's vsync and a
-  stopped engine never sends one. And the Shell is served out of its own flash partition, so a
-  page load is a burst of flash reads on the bus the scan-out shares.
-  `screen_display_page_service()` is the answer: it blacks both framebuffers for the length of
-  a page load, the slip happens behind a frame nobody can see, and a second after the last
-  request the screen task calls `panel_rgb_reinit()` to re-establish the frame boundary before
-  the picture returns. `panel_rgb_reinit()` is also called at the mark-to-cassette handover, so
-  a slip from anything that touched flash after the mark started is corrected before the
-  cassette. `panel_rgb_clear()` fills both black before the first clock, and the screen lights
-  the panel only after the boot mark is in both buffers. ADR 0055 has the measurements, the
-  three shapes tried, and the nine suspects they cleared.
+  stopped engine never sends one. Nothing at runtime reads flash while the scan runs: the Shell
+  is gone, the Snapshot is copied into PSRAM before the first clock, and the Playlist selection
+  is written to the SD card (ADR 0069). The black-frame guard that used to hide flash reads —
+  `screen_display_page_service()` — was removed with the last reader. `panel_rgb_reinit()` is
+  still called at the mark-to-cassette handover, so a slip from anything that touched flash
+  after the mark started is corrected before the cassette. `panel_rgb_clear()` fills both black
+  before the first clock, and the screen lights the panel only after the boot mark is in both
+  buffers. ADR 0055 has the measurements that established the rule.
 - `backlight.c` — the Sunton backlight on GPIO 2, now a 400 Hz, 8-bit LEDC duty rather than
   an on/off pin. It starts at `APP_UI_BACKLIGHT_AWAKE_PCT` (100% by default), then
   fades to 60% after 2 minutes, 30% after 5, and 0% after 10 with no touch, each step

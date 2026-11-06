@@ -114,26 +114,6 @@ static void file_at(const char *root, const char *rel, size_t size)
 
 /* --------------------------------------------------------------- helpers */
 
-static bool json_balanced(const char *s)
-{
-    int depth = 0;
-    bool in_string = false, escaped = false;
-    for (const char *p = s; *p; p++) {
-        if (in_string) {
-            if (escaped) escaped = false;
-            else if (*p == '\\') escaped = true;
-            else if (*p == '"') in_string = false;
-            continue;
-        }
-        if (*p == '"') in_string = true;
-        else if (*p == '{' || *p == '[') depth++;
-        else if (*p == '}' || *p == ']') {
-            depth--;
-            if (depth < 0) return false;
-        }
-    }
-    return depth == 0 && !in_string;
-}
 
 static uint32_t crc32_ref(const uint8_t *p, size_t n)
 {
@@ -215,7 +195,7 @@ static void test_utf8(void)
 static void test_empty_root(void)
 {
     char *root = temp_root();
-    library_cfg_t cfg = {.music_dir = root, .build_json = true};
+    library_cfg_t cfg = {.music_dir = root};
     library_t *lib = NULL;
     CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "empty root opens");
     CHECK(lib != NULL, "empty root produces a generation");
@@ -226,12 +206,6 @@ static void test_empty_root(void)
     CHECK_EQ(library_child_count(lib, library_root(lib)), 0, "root has no children");
 
     size_t len = 0;
-    const char *json = library_json(lib, &len);
-    CHECK(json != NULL && len > 0, "empty root still has JSON");
-    CHECK(json_balanced(json), "empty JSON is structurally valid: %.80s", json);
-    CHECK(strstr(json, "\"count\":0") != NULL, "empty JSON count");
-    CHECK(strstr(json, "\"truncated\":false") != NULL, "empty JSON truncated flag");
-
     const void *blob = library_blob(lib, &len);
     CHECK(blob != NULL && len >= DISK_HEADER_SIZE, "empty root still has a blob");
     const disk_header_t *h = blob;
@@ -245,24 +219,20 @@ static void test_empty_root(void)
 
 static void test_no_dir(void)
 {
-    library_cfg_t cfg = {.music_dir = "/definitely/not/a/xtape/library", .build_json = true};
+    library_cfg_t cfg = {.music_dir = "/definitely/not/a/xtape/library"};
     library_t *lib = NULL;
     CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "missing Music directory still opens");
     CHECK(lib != NULL, "missing Music directory produces a generation");
     CHECK_EQ(library_state(lib), LIB_STATE_NO_DIR, "missing Music directory state");
     CHECK_EQ(library_track_count(lib), 0, "missing Music directory has no tracks");
     CHECK(library_error(lib)[0] != 0, "missing Music directory has a diagnosis");
-    size_t len = 0;
-    const char *json = library_json(lib, &len);
-    CHECK(json != NULL && json_balanced(json), "missing Music directory JSON is valid");
-    CHECK(strstr(json, "\"state\":\"no_dir\"") != NULL, "missing Music directory JSON state");
     library_close(lib);
 }
 
 static void test_no_card(void)
 {
     char *root = temp_root();
-    library_cfg_t cfg = {.music_dir = root, .build_json = true};
+    library_cfg_t cfg = {.music_dir = root};
     library_t *lib = NULL;
     CHECK_EQ(library_open_no_card(&cfg, "host says no", &lib), LIB_OK, "no-card generation opens");
     CHECK(lib != NULL, "no-card generation exists");
@@ -270,10 +240,6 @@ static void test_no_card(void)
     CHECK_EQ(library_track_count(lib), 0, "no-card has no tracks");
     CHECK_EQ(library_node_count(lib), 1, "no-card has only the root node");
     CHECK(strstr(library_error(lib), "host says no") != NULL, "no-card carries the reason");
-    size_t len = 0;
-    const char *json = library_json(lib, &len);
-    CHECK(json != NULL && json_balanced(json), "no-card JSON is valid");
-    CHECK(strstr(json, "\"state\":\"no_card\"") != NULL, "no-card JSON state");
     library_close(lib);
     remove_tree(root);
     free(root);
@@ -313,7 +279,7 @@ static void test_main_tree(void)
     name129[LIB_NAME_MAX + 1] = 0;
     file_at(root, name129, 1);
 
-    library_cfg_t cfg = {.music_dir = root, .build_json = true};
+    library_cfg_t cfg = {.music_dir = root};
     library_t *lib = NULL;
     CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "tree opens");
     CHECK(lib != NULL, "tree generation exists");
@@ -380,15 +346,6 @@ static void test_main_tree(void)
     CHECK_EQ(rename(loose, moved), 0, "fixture rename");
     CHECK(has_name(lib, "loose.wav", LIB_TRACK), "lookup does not consult the filesystem");
 
-    size_t json_len = 0;
-    const char *json = library_json(lib, &json_len);
-    CHECK(json != NULL && json_len > 0, "tree has JSON");
-    CHECK(json_balanced(json), "tree JSON is structurally valid");
-    CHECK(strstr(json, "\"count\":5") != NULL, "JSON count");
-    CHECK(strstr(json, "\"state\":\"ok\"") != NULL, "JSON state");
-    CHECK(strstr(json, "\"truncated\":false") != NULL, "JSON truncated flag");
-    CHECK(strstr(json, "\"Caf\xc3\xa9.mp3\"") != NULL, "UTF-8 name is present verbatim");
-
     /* Independent blob reader. */
     size_t blob_len = 0;
     const void *blob = library_blob(lib, &blob_len);
@@ -427,23 +384,6 @@ static void test_main_tree(void)
     free(root);
 }
 
-static void test_json_escaping(void)
-{
-    char *root = temp_root();
-    file_at(root, "He said \"hi\".mp3", 7);
-    library_cfg_t cfg = {.music_dir = root, .build_json = true};
-    library_t *lib = NULL;
-    CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "quote-name tree opens");
-    size_t len = 0;
-    const char *json = library_json(lib, &len);
-    CHECK(json != NULL, "quote-name JSON exists");
-    CHECK(json_balanced(json), "escaped JSON is structurally valid");
-    CHECK(strstr(json, "He said \\\"hi\\\".mp3") != NULL,
-          "a quote in a name is escaped: %.160s", json);
-    library_close(lib);
-    remove_tree(root);
-    free(root);
-}
 
 static void test_truncation(void)
 {
@@ -454,17 +394,13 @@ static void test_truncation(void)
     file_at(root, "d.mp3", 1);
     file_at(root, "e.mp3", 1);
 
-    library_cfg_t cfg = {.music_dir = root, .max_tracks = 3, .build_json = true};
+    library_cfg_t cfg = {.music_dir = root, .max_tracks = 3};
     library_t *lib = NULL;
     CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "capped tree opens");
     CHECK_EQ(library_track_count(lib), 3, "track cap stops the scan at three");
     CHECK_EQ(library_state(lib), LIB_STATE_OK, "a capped tree is still ok");
     CHECK(library_truncated(lib), "track cap sets truncated");
     size_t len = 0;
-    const char *json = library_json(lib, &len);
-    CHECK(json_balanced(json), "truncated JSON is valid");
-    CHECK(strstr(json, "\"state\":\"ok\"") != NULL, "truncated JSON keeps the ok state");
-    CHECK(strstr(json, "\"truncated\":true") != NULL, "truncated JSON flag");
     const disk_header_t *h = library_blob(lib, &len);
     CHECK((h->flags & 0x2u) != 0, "blob truncated flag");
     library_close(lib);
@@ -477,8 +413,6 @@ static void test_truncation(void)
     CHECK_EQ(library_track_count(lib), 0, "byte cap stops before any track");
     CHECK_EQ(library_state(lib), LIB_STATE_EMPTY, "a byte-capped empty tree is empty");
     CHECK(library_truncated(lib), "byte cap sets truncated");
-    size_t capped_len = 0;
-    CHECK(library_json(lib, &capped_len) == NULL, "byte cap serves the binary view only");
     library_close(lib);
     remove_tree(root);
     free(root);
@@ -502,7 +436,7 @@ static void test_unreadable_dir(void)
         exit(1);
     }
 
-    library_cfg_t cfg = {.music_dir = root, .build_json = true};
+    library_cfg_t cfg = {.music_dir = root};
     library_t *lib = NULL;
     CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "tree with an unreadable dir opens");
     CHECK_EQ(library_track_count(lib), 1, "only the visible track is indexed");
@@ -568,7 +502,7 @@ static void test_deep_path(void)
     file_at(dir, "u.mp3", 3);
     file_at(dir, "over-long-file-name.mp3", 4);
 
-    library_cfg_t cfg = {.music_dir = root, .max_path = 256, .build_json = true};
+    library_cfg_t cfg = {.music_dir = root, .max_path = 256};
     library_t *lib = NULL;
     CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "deep tree opens");
     const char *rel = dir + strlen(root) + 1;
@@ -587,7 +521,7 @@ static void test_store(void)
 {
     char *root = temp_root();
     file_at(root, "a.wav", 3);
-    library_cfg_t cfg = {.music_dir = root, .build_json = true,
+    library_cfg_t cfg = {.music_dir = root,
                          .generation = library_next_generation()};
     library_t *one = NULL;
     CHECK_EQ(library_open(&cfg, &one), LIB_OK, "store generation one opens");
@@ -598,7 +532,7 @@ static void test_store(void)
     CHECK(held == one, "acquire returns the published generation");
     CHECK_EQ(library_refs(one), 2, "the publisher and the reader each hold a reference");
 
-    library_cfg_t cfg2 = {.music_dir = root, .build_json = true,
+    library_cfg_t cfg2 = {.music_dir = root,
                           .generation = library_next_generation()};
     library_t *two = NULL;
     CHECK_EQ(library_open(&cfg2, &two), LIB_OK, "store generation two opens");
@@ -624,7 +558,6 @@ int main(void)
     test_no_dir();
     test_no_card();
     test_main_tree();
-    test_json_escaping();
     test_truncation();
     test_unreadable_dir();
     test_deep_path();

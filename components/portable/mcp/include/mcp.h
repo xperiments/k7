@@ -37,10 +37,6 @@ typedef struct {
     const snapshot_t *snapshot;
     snapshot_result_t snapshot_state;
     const char      *snapshot_reason; /* "" when there is nothing to say */
-    /* Called before a tool reads the Snapshot, which is mapped flash: a board whose screen
-     * shares a bus with flash uses it to take the picture off the glass while the rows are
-     * read (ADR 0047, 0055). NULL where there is no panel. */
-    void (*page_service)(void);
 } mcp_cfg_t;
 
 /* Register GET/POST /mcp. Call before http_server_start(). */
@@ -48,7 +44,7 @@ esp_err_t mcp_start(const mcp_cfg_t *cfg);
 
 /* Recompute the cached Snapshot coverage against the currently published Library. Call once at
  * boot (after mcp_start, before the panel's first clock) and again after each rescan publishes a
- * generation, so `library_stats` never walks the mapped Snapshot on a request (ADR 0047, 0055). */
+ * generation, so `library_stats` never walks every Track on a request. */
 void mcp_refresh_coverage(void);
 
 #ifdef __cplusplus

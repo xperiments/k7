@@ -7,14 +7,12 @@ import type { Analysis, MoodTag } from './analysis';
  */
 const MUSIC_DIRECTORY = 'music';
 
-const HEADER_SIZE_V1 = 64;
-const HEADER_SIZE_V2 = 80;
+const HEADER_SIZE = 80;
+const FORMAT_VERSION = 3;
 const ROW_SIZE = 32;
-const FORMAT_VERSION_V1 = 1;
-const FORMAT_VERSION_V2 = 2;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
-/** Version 2's list record, list row, and the caps the format puts on them. */
+/** The list record, list row, and the caps the format puts on them. */
 const LIST_SIZE = 32;
 const LIST_ROW_SIZE = 4;
 const MAX_LISTS = 64;
@@ -22,7 +20,11 @@ const MAX_LIST_ROWS = 8192;
 /** A name is written NUL-terminated, so its UTF-8 bytes must stay under 64. */
 const MAX_LIST_NAME_BYTES = 63;
 
-const UNKNOWN_PERCENT = 0xff;
+/** Percentages are seven bits: `0..100`, with 127 as the one "unknown". */
+const UNKNOWN_PERCENT = 127;
+
+/** A row's four offsets are 24-bit, so the pool they index ends at `0xFFFFFF`. */
+const MAX_POOL_SIZE = 0xffffff;
 
 /** The folded tempo range the format accepts, in BPM and in BPM x 10. */
 const MIN_BPM = 70;
@@ -121,15 +123,14 @@ export interface SnapshotPlaylist {
   rows: readonly string[];
 }
 
-/** A list after validation, sorting and pool encoding: what the writer emits. */
+/** A list after validation and sorting: what the writer interns and emits. */
 interface PreparedList {
   id: bigint;
   createdAt: bigint;
-  /** `name\0path\0path\0...`, UTF-8, Tracks in the list's own order. */
-  strings: Uint8Array;
-  /** Each row's `path_offset`, relative to the start of this list's block. */
-  pathOffsets: number[];
-  rowCount: number;
+  /** The name, UTF-8, without its NUL terminator. */
+  name: Uint8Array;
+  /** Each row's path, UTF-8 and NUL-free, in the list's own order. */
+  paths: Uint8Array[];
 }
 
 interface SnapshotRow {
@@ -144,8 +145,8 @@ interface SnapshotRow {
   moodBits: number;
   confidence: number;
   sourceFlags: number;
-  /** `title\0artist\0album\0genre\0`, already UTF-8. */
-  strings: Uint8Array;
+  /** Title, artist, album and genre, UTF-8, in the format's order. */
+  strings: readonly Uint8Array[];
 }
 
 /** Half away from zero, which differs from `Math.round` for negative values. */
@@ -229,16 +230,36 @@ function sourceFlagsField(analysis: Analysis): number {
   return flags;
 }
 
-function encodeStrings(encoder: TextEncoder, values: readonly string[]): Uint8Array {
-  const parts = values.map((value) => encoder.encode(value));
-  const bytes = new Uint8Array(parts.reduce((length, part) => length + part.length + 1, 0));
-  let offset = 0;
-  for (const part of parts) {
-    bytes.set(part, offset);
-    // The terminator is the zero the array was allocated with.
-    offset += part.length + 1;
-  }
-  return bytes;
+/**
+ * A Map key that is the bytes exactly: one character per byte, so two strings
+ * that differ only where UTF-16 and UTF-8 disagree stay distinct.
+ */
+function byteKey(bytes: Uint8Array): string {
+  let key = '';
+  for (const byte of bytes) key += String.fromCharCode(byte);
+  return key;
+}
+
+/** A 24-bit little-endian field: a row's four pool offsets. */
+function writeUint24(bytes: Uint8Array, at: number, value: number): void {
+  bytes[at] = value & 0xff;
+  bytes[at + 1] = (value >>> 8) & 0xff;
+  bytes[at + 2] = (value >>> 16) & 0xff;
+}
+
+/** The row's `measurements` word, packed from bit 0 as format §4 lays it out. */
+function measurementWord(row: SnapshotRow): bigint {
+  let word = 0n;
+  word |= BigInt(row.bpmX10 === 0 ? 0 : row.bpmX10 - 699) & 0x7ffn;
+  word |= (BigInt(row.key) & 0x1fn) << 11n;
+  word |= (BigInt(row.energy) & 0x7fn) << 16n;
+  word |= (BigInt(row.danceability) & 0x7fn) << 23n;
+  word |= (BigInt(row.valence) & 0x7fn) << 30n;
+  word |= (BigInt(row.arousal) & 0x7fn) << 37n;
+  word |= (BigInt(row.confidence) & 0x7fn) << 44n;
+  word |= (BigInt(row.moodBits) & 0x1fn) << 51n;
+  word |= (BigInt(row.sourceFlags) & 0x3fn) << 56n;
+  return word;
 }
 
 function generationValue(seconds: number): bigint {
@@ -287,12 +308,9 @@ function toRow(track: SnapshotTrack, encoder: TextEncoder): SnapshotRow {
     moodBits: moodBitsField(track.analysis.mood.tags),
     confidence: measuredPercent(track.analysis.tempo.confidence),
     sourceFlags: sourceFlagsField(track.analysis),
-    strings: encodeStrings(encoder, [
-      track.title ?? '',
-      track.artist ?? '',
-      track.album ?? '',
-      track.genre ?? '',
-    ]),
+    strings: [track.title ?? '', track.artist ?? '', track.album ?? '', track.genre ?? ''].map(
+      (value) => encoder.encode(value),
+    ),
   };
 }
 
@@ -344,24 +362,10 @@ function assertListPath(path: string, where: string): void {
   }
 }
 
-/** Concatenate already-encoded strings, each followed by its NUL terminator. */
-function joinNulTerminated(parts: readonly Uint8Array[]): Uint8Array {
-  const bytes = new Uint8Array(
-    parts.reduce((length, part) => length + part.length + 1, 0),
-  );
-  let offset = 0;
-  for (const part of parts) {
-    bytes.set(part, offset);
-    // The terminator is the zero the array was allocated with.
-    offset += part.length + 1;
-  }
-  return bytes;
-}
-
 /**
- * Validate, order and encode the lists. Refusing here rather than writing a
- * truncated or out-of-order image is the format's rule (§10, §12): the device
- * checks these invariants and would reject the whole image anyway.
+ * Validate and order the lists. Refusing here rather than writing a truncated or
+ * out-of-order image is the format's rule (§8, §9, §10): the device checks these
+ * invariants and would reject the whole image anyway.
  */
 function prepareLists(
   lists: readonly SnapshotPlaylist[],
@@ -379,33 +383,19 @@ function prepareLists(
     if (list.name.includes('\0')) {
       throw new Error(`${where}: the name contains a NUL byte`);
     }
-    const nameBytes = encoder.encode(list.name);
-    if (nameBytes.length > MAX_LIST_NAME_BYTES) {
+    const name = encoder.encode(list.name);
+    if (name.length > MAX_LIST_NAME_BYTES) {
       throw new Error(
-        `${where}: the name is ${nameBytes.length} bytes; the format allows ${MAX_LIST_NAME_BYTES}`,
+        `${where}: the name is ${name.length} bytes; the format allows ${MAX_LIST_NAME_BYTES}`,
       );
     }
 
-    const parts: Uint8Array[] = [nameBytes];
-    const pathOffsets: number[] = [];
-    // The name comes first in the block, so the first path starts after it.
-    let offset = nameBytes.length + 1;
-
-    list.rows.forEach((path, rowIndex) => {
+    const paths = list.rows.map((path, rowIndex) => {
       assertListPath(path, `${where}, row ${rowIndex}`);
-      const pathBytes = encoder.encode(path);
-      parts.push(pathBytes);
-      pathOffsets.push(offset);
-      offset += pathBytes.length + 1;
+      return encoder.encode(path);
     });
 
-    return {
-      id,
-      createdAt: generationValue(list.createdAt),
-      strings: joinNulTerminated(parts),
-      pathOffsets,
-      rowCount: list.rows.length,
-    };
+    return { id, createdAt: generationValue(list.createdAt), name, paths };
   });
 
   prepared.sort((left, right) => compareUint64(left.id, right.id));
@@ -418,7 +408,7 @@ function prepareLists(
     }
   }
 
-  const listRows = prepared.reduce((count, list) => count + list.rowCount, 0);
+  const listRows = prepared.reduce((count, list) => count + list.paths.length, 0);
   if (listRows > MAX_LIST_ROWS) {
     throw new Error(`snapshot has ${listRows} Playlist rows; the format allows ${MAX_LIST_ROWS}`);
   }
@@ -427,10 +417,9 @@ function prepareLists(
 }
 
 /**
- * Builds the image. `lists` is the second argument rather than a field of
- * `SnapshotInput` so that a caller with no Playlists keeps the old call and the old
- * bytes: with none, the output is byte-identical version 1 (`header_size` 64, no list
- * area); with at least one, it is version 2 (`header_size` 80, §2 of the format).
+ * Builds a version 3 image, with or without Playlists. Rows are sorted by fingerprint
+ * and their four strings are interned by exact bytes in first-use order; the list
+ * area follows and is written even when there are no lists (`list_count` 0).
  */
 export function buildSnapshot(
   input: SnapshotInput,
@@ -449,54 +438,61 @@ export function buildSnapshot(
     }
   }
 
+  /* §7 and §10: one copy of each distinct string, in first-use order over the
+   * fingerprint-sorted rows (title, artist, album, genre for each row), keyed by the
+   * exact bytes. The row's four 3-byte offsets are final once this pass ends. */
+  const poolOffsets = new Map<string, number>();
+  const poolParts: Uint8Array[] = [];
+  let rowPoolSize = 0;
+  const rowBytes = new Uint8Array(rows.length * ROW_SIZE);
+  const rowView = new DataView(rowBytes.buffer);
+
+  rows.forEach((row, index) => {
+    const at = index * ROW_SIZE;
+    rowView.setBigUint64(at, row.fingerprint, true);
+    rowView.setUint32(at + 8, row.size, true);
+
+    row.strings.forEach((string, field) => {
+      const key = byteKey(string);
+      let offset = poolOffsets.get(key);
+      if (offset === undefined) {
+        offset = rowPoolSize;
+        poolOffsets.set(key, offset);
+        poolParts.push(string);
+        rowPoolSize += string.length + 1;
+        if (rowPoolSize > MAX_POOL_SIZE) {
+          throw new Error(
+            `the row string pool is ${rowPoolSize} bytes; 24-bit offsets end at ${MAX_POOL_SIZE}`,
+          );
+        }
+      }
+      // Row bytes 12, 15, 18 and 21: title, artist, album, genre.
+      writeUint24(rowBytes, at + 12 + field * 3, offset);
+    });
+
+    rowView.setBigUint64(at + 24, measurementWord(row), true);
+  });
+
   return assembleImage({
     generationSeconds: input.generationSeconds,
     analyserVersion: input.analyserVersion,
     appSchema: input.appSchema,
     modelSet: input.modelSet,
     rowCount: rows.length,
-    rowStringOffsets: (() => {
-      const offsets: number[] = [];
-      let at = 0;
-      for (const row of rows) {
-        offsets.push(at);
-        at += row.strings.length;
-      }
-      return offsets;
-    })(),
-    rowBytes: rows.length
-      ? (() => {
-          const bytes = new Uint8Array(rows.length * ROW_SIZE);
-          const rowView = new DataView(bytes.buffer);
-          rows.forEach((row, index) => {
-            const at = index * ROW_SIZE;
-            rowView.setBigUint64(at, row.fingerprint, true);
-            rowView.setUint32(at + 8, row.size, true);
-            rowView.setUint16(at + 16, row.bpmX10, true);
-            rowView.setUint8(at + 18, row.key);
-            rowView.setUint8(at + 19, row.energy);
-            rowView.setUint8(at + 20, row.danceability);
-            rowView.setUint8(at + 21, row.valence);
-            rowView.setUint8(at + 22, row.arousal);
-            rowView.setUint8(at + 23, row.moodBits);
-            rowView.setUint8(at + 24, row.confidence);
-            rowView.setUint8(at + 25, row.sourceFlags);
-          });
-          return bytes;
-        })()
-      : new Uint8Array(0),
-    rowPool: rows.length ? concatBytes(rows.map((row) => row.strings)) : new Uint8Array(0),
+    rowBytes,
+    rowPool: concatNulTerminated(poolParts),
     lists,
   });
 }
 
-/** The rows' strings, in order, as one buffer. */
-function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
-  const out = new Uint8Array(parts.reduce((n, part) => n + part.length, 0));
+/** Concatenate the strings, each followed by its NUL terminator. */
+function concatNulTerminated(parts: readonly Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((n, part) => n + part.length + 1, 0));
   let at = 0;
   for (const part of parts) {
     out.set(part, at);
-    at += part.length;
+    // The terminator is the zero the array was allocated with.
+    at += part.length + 1;
   }
   return out;
 }
@@ -506,33 +502,54 @@ interface Assembly {
   analyserVersion: number;
   appSchema: number;
   modelSet: bigint;
-  /** `rowCount * 32` bytes, with `string_offset` left for the writer to fill in. */
-  rowBytes: Uint8Array;
-  /** Each row's `string_offset`: its strings' position in `rowPool`. */
-  rowStringOffsets: readonly number[];
   rowCount: number;
-  /** Every row's four strings, concatenated in row order. */
+  /** `rowCount * 32` bytes, with the four 3-byte offsets already in place. */
+  rowBytes: Uint8Array;
+  /** `[0, row_pool_size)`: every row's interned strings, without list strings. */
   rowPool: Uint8Array;
   lists: readonly SnapshotPlaylist[];
 }
 
 /**
- * Write an image from parts that are already encoded. `buildSnapshot` uses it after
- * measuring, and `patchListArea` uses it to give an existing image new lists without
- * disturbing its rows: the list area lives at the end, so everything before it can be
- * copied verbatim and only the header's sizes and the CRC change.
+ * Write a version 3 image from parts that are already encoded. `buildSnapshot` uses
+ * it after measuring, and `patchListArea` uses it to give an existing image new
+ * lists without disturbing its rows: the list area lives at the end, so everything
+ * before it is written verbatim and only the sizes and the CRC change.
  */
 export function assembleImage(assembly: Assembly): Uint8Array<ArrayBuffer> {
   const encoder = new TextEncoder();
   const prepared = prepareLists(assembly.lists, encoder);
-  const version = prepared.length > 0 ? FORMAT_VERSION_V2 : FORMAT_VERSION_V1;
-  const headerSize = prepared.length > 0 ? HEADER_SIZE_V2 : HEADER_SIZE_V1;
 
-  const listsPoolSize = prepared.reduce((size, list) => size + list.strings.length, 0);
-  const poolSize = assembly.rowPool.length + listsPoolSize;
-  const listRowCount = prepared.reduce((count, list) => count + list.rowCount, 0);
+  if (assembly.rowBytes.length !== assembly.rowCount * ROW_SIZE) {
+    throw new Error(
+      `the rows are ${assembly.rowBytes.length} bytes; ${assembly.rowCount} rows are ${assembly.rowCount * ROW_SIZE}`,
+    );
+  }
+
+  /* §7: the list strings follow the row pool and are interned among themselves —
+   * never against a row string, which occupies the region before them. */
+  const rowPoolSize = assembly.rowPool.length;
+  const listPoolOffsets = new Map<string, number>();
+  const listPoolParts: Uint8Array[] = [];
+  let listPoolSize = 0;
+  const listRecords = prepared.map((list) => {
+    const intern = (bytes: Uint8Array): number => {
+      const key = byteKey(bytes);
+      const existing = listPoolOffsets.get(key);
+      if (existing !== undefined) return existing;
+      const offset = rowPoolSize + listPoolSize;
+      listPoolOffsets.set(key, offset);
+      listPoolParts.push(bytes);
+      listPoolSize += bytes.length + 1;
+      return offset;
+    };
+    return { nameOffset: intern(list.name), pathOffsets: list.paths.map(intern) };
+  });
+
+  const poolSize = rowPoolSize + listPoolSize;
+  const listRowCount = prepared.reduce((count, list) => count + list.paths.length, 0);
   const totalSize =
-    headerSize +
+    HEADER_SIZE +
     assembly.rowCount * ROW_SIZE +
     poolSize +
     prepared.length * LIST_SIZE +
@@ -543,7 +560,7 @@ export function assembleImage(assembly: Assembly): Uint8Array<ArrayBuffer> {
 
   const image = new Uint8Array(totalSize);
   const view = new DataView(image.buffer);
-  const poolStart = headerSize + assembly.rowCount * ROW_SIZE;
+  const poolStart = HEADER_SIZE + assembly.rowCount * ROW_SIZE;
   const listsStart = poolStart + poolSize;
   const listRowsStart = listsStart + prepared.length * LIST_SIZE;
 
@@ -553,8 +570,8 @@ export function assembleImage(assembly: Assembly): Uint8Array<ArrayBuffer> {
   for (let index = 0; index < magic.length; index += 1) {
     view.setUint8(index, magic.charCodeAt(index));
   }
-  view.setUint16(8, version, true);
-  view.setUint16(10, headerSize, true);
+  view.setUint16(8, FORMAT_VERSION, true);
+  view.setUint16(10, HEADER_SIZE, true);
   view.setUint32(12, totalSize, true);
   view.setUint32(16, assembly.rowCount, true);
   view.setUint32(20, ROW_SIZE, true);
@@ -566,47 +583,40 @@ export function assembleImage(assembly: Assembly): Uint8Array<ArrayBuffer> {
   // `reserved` at 56..64 stays zero; the buffer starts zeroed and is never
   // written there.
 
-  if (version === FORMAT_VERSION_V2) {
-    // §3.1: the list counts, then `reserved` at 70..72 and 76..80, both zero.
-    view.setUint16(64, prepared.length, true);
-    view.setUint16(66, LIST_SIZE, true);
-    view.setUint16(68, LIST_ROW_SIZE, true);
-    view.setUint32(72, listRowCount, true);
-  }
+  // §3, bytes 64..80: the list counts and `row_pool_size`.
+  view.setUint16(64, prepared.length, true);
+  view.setUint16(66, LIST_SIZE, true);
+  view.setUint16(68, LIST_ROW_SIZE, true);
+  // `reserved` at 70..72 stays zero.
+  view.setUint32(72, listRowCount, true);
+  view.setUint32(76, rowPoolSize, true);
 
-  image.set(assembly.rowBytes, headerSize);
-  assembly.rowStringOffsets.forEach((offset, index) => {
-    view.setUint32(headerSize + index * ROW_SIZE + 12, offset, true);
-  });
+  image.set(assembly.rowBytes, HEADER_SIZE);
   image.set(assembly.rowPool, poolStart);
+  image.set(concatNulTerminated(listPoolParts), poolStart + rowPoolSize);
 
-  // §7: the pool continues with each list's name and its rows' paths, in list order.
-  let listPoolOffset = assembly.rowPool.length;
   let listRowStart = 0;
   for (let index = 0; index < prepared.length; index += 1) {
     const list = prepared[index];
     const record = listsStart + index * LIST_SIZE;
 
     view.setBigUint64(record, list.id, true);
-    view.setUint32(record + 8, listPoolOffset, true);
+    view.setUint32(record + 8, listRecords[index].nameOffset, true);
     view.setUint32(record + 12, listRowStart, true);
-    view.setUint32(record + 16, list.rowCount, true);
+    view.setUint32(record + 16, list.paths.length, true);
     view.setBigUint64(record + 20, list.createdAt, true);
     // `reserved` at 28..32 stays zero.
 
-    image.set(list.strings, poolStart + listPoolOffset);
-
-    for (let rowIndex = 0; rowIndex < list.rowCount; rowIndex += 1) {
+    for (let rowIndex = 0; rowIndex < list.paths.length; rowIndex += 1) {
       const at = listRowsStart + (listRowStart + rowIndex) * LIST_ROW_SIZE;
-      view.setUint32(at, listPoolOffset + list.pathOffsets[rowIndex], true);
+      view.setUint32(at, listRecords[index].pathOffsets[rowIndex], true);
     }
 
-    listRowStart += list.rowCount;
-    listPoolOffset += list.strings.length;
+    listRowStart += list.paths.length;
   }
 
   // The CRC covers everything after the header, never the header that carries it.
-  view.setUint32(36, crc32(image.subarray(headerSize, totalSize)), true);
+  view.setUint32(36, crc32(image.subarray(HEADER_SIZE, totalSize)), true);
   return image;
 }
 
@@ -641,18 +651,16 @@ function camelotOf(key: number): string | null {
  */
 export function readImageMeasurements(image: Uint8Array): Map<string, ImageMeasurement> {
   const out = new Map<string, ImageMeasurement>();
-  if (image.length < HEADER_SIZE_V1) throw new Error('the image is shorter than its header');
+  if (image.length < HEADER_SIZE) throw new Error('the image is shorter than its header');
 
   const magic = String.fromCharCode(...image.subarray(0, 8));
-  if (magic !== 'K7SNAP\0\0' && magic !== 'XTAPESNP') throw new Error('this is not a Snapshot');
+  if (magic !== 'K7SNAP\0\0') throw new Error('this is not a Snapshot');
 
   const view = new DataView(image.buffer, image.byteOffset, image.byteLength);
   const version = view.getUint16(8, true);
-  if (version !== FORMAT_VERSION_V1 && version !== FORMAT_VERSION_V2) {
-    throw new Error(`unknown format version ${version}`);
-  }
+  if (version !== FORMAT_VERSION) throw new Error(`unknown format version ${version}`);
   const headerSize = view.getUint16(10, true);
-  if (headerSize !== (version === FORMAT_VERSION_V1 ? HEADER_SIZE_V1 : HEADER_SIZE_V2)) {
+  if (headerSize !== HEADER_SIZE) {
     throw new Error(`a version ${version} image has a ${headerSize}-byte header`);
   }
   if (view.getUint32(12, true) !== image.length) throw new Error('the image is not its stated length');
@@ -668,10 +676,12 @@ export function readImageMeasurements(image: Uint8Array): Map<string, ImageMeasu
     const at = headerSize + index * ROW_SIZE;
     const fingerprint = view.getBigUint64(at, true);
     const size = view.getUint32(at + 8, true);
-    const bpmX10 = view.getUint16(at + 16, true);
+    const word = view.getBigUint64(at + 24, true);
+    const bpmCode = Number(word & 0x7ffn);
+    const key = Number((word >> 11n) & 0x1fn);
     out.set(`${fingerprint.toString(16)}:${size}`, {
-      bpm: bpmX10 === 0 ? null : bpmX10 / 10,
-      key: camelotOf(view.getUint8(at + 18)),
+      bpm: bpmCode === 0 ? null : (bpmCode + 699) / 10,
+      key: camelotOf(key),
     });
   }
   return out;

@@ -17,8 +17,7 @@ import { sampleAnalysis } from './sampleAnalysis';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-const HEADER_SIZE = 64;
-const HEADER_SIZE_V2 = 80;
+const HEADER_SIZE = 80;
 const ROW_SIZE = 32;
 const LIST_SIZE = 32;
 const LIST_ROW_SIZE = 4;
@@ -68,8 +67,8 @@ function input(tracks: SnapshotTrack[], overrides: Partial<SnapshotInput> = {}):
 
 /**
  * The fixture every byte assertion uses. Its values are chosen so every field
- * has a distinct, unambiguous encoding: 124.54 BPM rounds to 1245, 0.784
- * energy to 78, and the string pool is 28 bytes.
+ * has a distinct, unambiguous encoding: 124.54 BPM rounds to 1245 (code 546),
+ * 0.784 energy to 78, and the four interned strings are 28 bytes.
  */
 function canonicalInput(): SnapshotInput {
   return input([
@@ -104,19 +103,36 @@ function readString(image: Uint8Array, offset: number): { value: string; next: n
   return { value: decoder.decode(image.subarray(offset, end)), next: end + 1 };
 }
 
-/** The four strings a row points at, read through the header's pool fields. */
+/** A 24-bit little-endian integer: the width of a row's four pool offsets. */
+function readUint24(bytes: Uint8Array, at: number): number {
+  return bytes[at] | (bytes[at + 1] << 8) | (bytes[at + 2] << 16);
+}
+
+/** The measurement word of one row, unpacked from bit 0 exactly as §4 lays it out. */
+function measurements(image: Uint8Array, index: number) {
+  const word = viewOf(image).getBigUint64(rowOffset(index) + 24, true);
+  return {
+    bpmCode: Number(word & 0x7ffn),
+    key: Number((word >> 11n) & 0x1fn),
+    energy: Number((word >> 16n) & 0x7fn),
+    danceability: Number((word >> 23n) & 0x7fn),
+    valence: Number((word >> 30n) & 0x7fn),
+    arousal: Number((word >> 37n) & 0x7fn),
+    confidence: Number((word >> 44n) & 0x7fn),
+    moodBits: Number((word >> 51n) & 0x1fn),
+    sourceFlags: Number((word >> 56n) & 0x3fn),
+    reservedBits: Number(word >> 62n),
+  };
+}
+
+/** The four strings a row points at, resolved through the pool's offset region. */
 function rowStrings(image: Uint8Array, index: number, headerSize = HEADER_SIZE): string[] {
   const view = viewOf(image);
   const poolStart = headerSize + view.getUint32(16, true) * ROW_SIZE;
-  let offset = poolStart + view.getUint32(rowOffset(index) + 12, true);
-
-  const values: string[] = [];
-  for (let part = 0; part < 4; part += 1) {
-    const { value, next } = readString(image, offset);
-    values.push(value);
-    offset = next;
-  }
-  return values;
+  const row = rowOffset(index, headerSize);
+  return [0, 1, 2, 3].map((field) =>
+    readString(image, poolStart + readUint24(image, row + 12 + field * 3)).value,
+  );
 }
 
 describe('reading an image back', () => {
@@ -158,7 +174,11 @@ describe('reading an image back', () => {
   });
 
   it('refuses what is not an image', () => {
-    expect(() => readImageMeasurements(new Uint8Array(64))).toThrow(/not a Snapshot/);
+    expect(() => readImageMeasurements(new Uint8Array(64))).toThrow(/shorter than its header/);
+
+    const wrongVersion = buildSnapshot(canonicalInput());
+    new DataView(wrongVersion.buffer).setUint16(8, 2, true);
+    expect(() => readImageMeasurements(wrongVersion)).toThrow(/unknown format version/);
   });
 });
 
@@ -212,14 +232,14 @@ describe('FNV-1a 64', () => {
 });
 
 describe('snapshot image', () => {
-  it('writes the header and one row', () => {
+  it('writes the version 3 header, one row, and an empty list area', () => {
     const image = buildSnapshot(canonicalInput());
     const view = viewOf(image);
 
     expect(decoder.decode(image.subarray(0, 8))).toBe('K7SNAP\0\0');
-    expect(view.getUint16(8, true)).toBe(1);
-    expect(view.getUint16(10, true)).toBe(64);
-    expect(image.byteLength).toBe(124);
+    expect(view.getUint16(8, true)).toBe(3);
+    expect(view.getUint16(10, true)).toBe(80);
+    expect(image.byteLength).toBe(140);
     expect(view.getUint32(12, true)).toBe(image.byteLength);
     expect(view.getUint32(16, true)).toBe(1);
     expect(view.getUint32(20, true)).toBe(32);
@@ -230,19 +250,37 @@ describe('snapshot image', () => {
     expect(view.getBigUint64(48, true)).toBe(0x0123456789abcdefn);
     expect(view.getBigUint64(56, true)).toBe(0n);
 
+    // §3: the list fields are written even when `list_count` is 0.
+    expect(view.getUint16(64, true)).toBe(0);
+    expect(view.getUint16(66, true)).toBe(32);
+    expect(view.getUint16(68, true)).toBe(4);
+    expect(view.getUint16(70, true)).toBe(0);
+    expect(view.getUint32(72, true)).toBe(0);
+    expect(view.getUint32(76, true)).toBe(28);
+
     const row = rowOffset(0);
     expect(view.getBigUint64(row, true)).toBe(0x1b664b4fc563e884n);
     expect(view.getBigUint64(row, true)).toBe(
       fnv1a64(encoder.encode('Artist/Album/01 - Track.mp3')),
     );
     expect(view.getUint32(row + 8, true)).toBe(4_000_000);
-    expect(view.getUint32(row + 12, true)).toBe(0);
-    expect(view.getUint16(row + 16, true)).toBe(1245);
-    expect(image[row + 18]).toBe(8);
-    expect(image[row + 23]).toBe(0x08);
-    expect(image[row + 24]).toBe(90);
-    expect(image[row + 25]).toBe(0x10);
-    expect(Array.from(image.subarray(row + 26, row + 32))).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(readUint24(image, row + 12)).toBe(0);
+    expect(readUint24(image, row + 15)).toBe(10);
+    expect(readUint24(image, row + 18)).toBe(17);
+    expect(readUint24(image, row + 21)).toBe(23);
+
+    expect(measurements(image, 0)).toEqual({
+      bpmCode: 546, // 124.5 x 10 - 699
+      key: 8, // 8A
+      energy: 78,
+      danceability: 50,
+      valence: 40,
+      arousal: 60,
+      confidence: 90,
+      moodBits: 0x08, // relaxed
+      sourceFlags: 0x10,
+      reservedBits: 0,
+    });
     expect(rowStrings(image, 0)).toEqual(['Track One', 'Artist', 'Album', 'Rock']);
   });
 
@@ -256,8 +294,27 @@ describe('snapshot image', () => {
       ]),
     );
 
-    expect(viewOf(image).getUint16(rowOffset(0) + 16, true)).toBe(1245);
-    expect(image[rowOffset(0) + 19]).toBe(78);
+    expect(measurements(image, 0).bpmCode).toBe(1245 - 699);
+    expect(measurements(image, 0).energy).toBe(78);
+  });
+
+  it('packs the BPM endpoints as 1 and 1101', () => {
+    const codeAt = (bpm: number): number =>
+      measurements(
+        buildSnapshot(
+          input([
+            track({
+              path: `CARD/music/bpm-${bpm}.mp3`,
+              analysis: analysis({ tempo: { bpm } }),
+            }),
+          ]),
+        ),
+        0,
+      ).bpmCode;
+
+    expect(codeAt(70)).toBe(1);
+    expect(codeAt(180)).toBe(1101);
+    expect(codeAt(124.5)).toBe(546);
   });
 
   it('writes unknown marks for a tagged mood with no model', () => {
@@ -269,18 +326,19 @@ describe('snapshot image', () => {
       energySource: null,
     });
     const image = buildSnapshot(input([track({ path: 'CARD/music/tagged.mp3', analysis: tagged })]));
-    const row = rowOffset(0);
 
-    expect(viewOf(image).getUint16(row + 16, true)).toBe(0);
-    expect(image[row + 18]).toBe(0);
-    expect(image[row + 19]).toBe(0xff);
-    expect(image[row + 20]).toBe(0xff);
-    expect(image[row + 21]).toBe(0xff);
-    expect(image[row + 22]).toBe(0xff);
-    expect(image[row + 23]).toBe(0);
-    expect(image[row + 24]).toBe(0xff);
-    expect(image[row + 25]).toBe(0x07);
-    expect(image[row + 25] & 0x10).toBe(0);
+    expect(measurements(image, 0)).toEqual({
+      bpmCode: 0,
+      key: 0,
+      energy: 127,
+      danceability: 127,
+      valence: 127,
+      arousal: 127,
+      confidence: 127,
+      moodBits: 0,
+      sourceFlags: 0x07,
+      reservedBits: 0,
+    });
   });
 
   it('sets mood bits at 0.5 and leaves danceability out', () => {
@@ -295,10 +353,9 @@ describe('snapshot image', () => {
     const image = buildSnapshot(
       input([track({ path: 'CARD/music/mood.mp3', analysis: analysis({ mood: { tags } }) })]),
     );
-    const row = rowOffset(0);
 
-    expect(image[row + 23]).toBe(0x01 | 0x02 | 0x08 | 0x10);
-    expect(image[row + 20]).toBe(90);
+    expect(measurements(image, 0).moodBits).toBe(0x01 | 0x02 | 0x08 | 0x10);
+    expect(measurements(image, 0).danceability).toBe(90);
   });
 
   it('records where each measurement came from', () => {
@@ -312,10 +369,9 @@ describe('snapshot image', () => {
     const image = buildSnapshot(
       input([track({ path: 'CARD/music/sources.mp3', analysis: measured })]),
     );
-    const row = rowOffset(0);
 
-    expect(image[row + 19]).toBe(70);
-    expect(image[row + 25]).toBe(0x01 | 0x02 | 0x08 | 0x10 | 0x20);
+    expect(measurements(image, 0).energy).toBe(70);
+    expect(measurements(image, 0).sourceFlags).toBe(0x01 | 0x02 | 0x08 | 0x10 | 0x20);
   });
 
   it('maps Camelot codes to the format values', () => {
@@ -337,7 +393,7 @@ describe('snapshot image', () => {
           }),
         ]),
       );
-      expect(image[rowOffset(0) + 18]).toBe(expected);
+      expect(measurements(image, 0).key).toBe(expected);
     }
   });
 
@@ -359,14 +415,38 @@ describe('snapshot image', () => {
     expect(view.getBigUint64(rowOffset(1), true)).toBe(fingerprints[1]);
   });
 
-  it('stamps the header with a CRC over the rows and pool', () => {
+  it('interns the row strings and lets two rows share one offset', () => {
+    const shared = { artist: 'Shared Artist', album: 'Shared Album', genre: 'House' };
+    const image = buildSnapshot(
+      input([
+        track({ path: 'CARD/music/A/one.mp3', title: 'One', ...shared }),
+        track({ path: 'CARD/music/B/two.mp3', title: 'Two', ...shared }),
+      ]),
+    );
+    const view = viewOf(image);
+
+    // 'One', 'Two', 'Shared Artist', 'Shared Album', 'House', each NUL-terminated.
+    expect(view.getUint32(32, true)).toBe(4 + 4 + 14 + 13 + 6);
+    expect(image.byteLength).toBe(80 + 2 * 32 + 41);
+
+    const offsets = [0, 1].map((index) =>
+      [0, 1, 2, 3].map((field) => readUint24(image, rowOffset(index) + 12 + field * 3)),
+    );
+    const first = offsets[0];
+    const second = offsets[1];
+
+    expect(first[0]).not.toBe(second[0]); // two different titles
+    for (const field of [1, 2, 3]) expect(first[field]).toBe(second[field]);
+    expect(new Set([...first, ...second]).size).toBe(5);
+    expect(rowStrings(image, 0).slice(1)).toEqual(rowStrings(image, 1).slice(1));
+  });
+
+  it('stamps the header with the CRC over the rows and the row pool', () => {
     const image = buildSnapshot(canonicalInput());
 
-    // Python: zlib.crc32(row + pool) over the fixture assembled from the
-    // format, independently of buildSnapshot. The post-header bytes are
-    // 32 + 28.
-    expect(crc32(image.subarray(HEADER_SIZE))).toBe(0x17ef7ef3);
-    expect(viewOf(image).getUint32(36, true)).toBe(0x17ef7ef3);
+    // Independently assembled from §3/§4: 32 row bytes + 28 pool bytes, CRC 0xd71cec22.
+    expect(crc32(image.subarray(HEADER_SIZE))).toBe(0xd71cec22);
+    expect(viewOf(image).getUint32(36, true)).toBe(0xd71cec22);
   });
 
   it('refuses two tracks with the same relative path', () => {
@@ -407,13 +487,15 @@ describe('snapshot image', () => {
 });
 
 /* ------------------------------------------------------------------ *
- * Format version 2: Playlists (§10 of docs/specs/snapshot-format.md)
+ * Lists (§8 of docs/specs/snapshot-format.md)
  * ------------------------------------------------------------------ */
 
-interface V2Areas {
+interface ImageAreas {
   headerSize: number;
+  rowCount: number;
   poolStart: number;
   poolSize: number;
+  rowPoolSize: number;
   listCount: number;
   listRows: number;
   listsStart: number;
@@ -421,7 +503,7 @@ interface V2Areas {
 }
 
 /** The five regions, read back through the header exactly as the C reader would. */
-function v2Areas(image: Uint8Array): V2Areas {
+function areas(image: Uint8Array): ImageAreas {
   const view = viewOf(image);
   const headerSize = view.getUint16(10, true);
   const rowCount = view.getUint32(16, true);
@@ -432,8 +514,10 @@ function v2Areas(image: Uint8Array): V2Areas {
   const listsStart = poolStart + poolSize;
   return {
     headerSize,
+    rowCount,
     poolStart,
     poolSize,
+    rowPoolSize: view.getUint32(76, true),
     listCount,
     listRows,
     listsStart,
@@ -443,7 +527,7 @@ function v2Areas(image: Uint8Array): V2Areas {
 
 function listRecord(image: Uint8Array, index: number) {
   const view = viewOf(image);
-  const at = v2Areas(image).listsStart + index * LIST_SIZE;
+  const at = areas(image).listsStart + index * LIST_SIZE;
   return {
     id: view.getBigUint64(at, true),
     nameOffset: view.getUint32(at + 8, true),
@@ -457,13 +541,13 @@ function listRecord(image: Uint8Array, index: number) {
 /** One 4-byte list row: a path offset into the pool, and nothing else. */
 function listRow(image: Uint8Array, index: number) {
   const view = viewOf(image);
-  const at = v2Areas(image).listRowsStart + index * LIST_ROW_SIZE;
+  const at = areas(image).listRowsStart + index * LIST_ROW_SIZE;
   return { pathOffset: view.getUint32(at, true), bytes: Array.from(image.subarray(at, at + 4)) };
 }
 
 /** A pool string at an offset relative to the pool, as both offsets in a record are. */
 function poolString(image: Uint8Array, relativeOffset: number): string {
-  return readString(image, v2Areas(image).poolStart + relativeOffset).value;
+  return readString(image, areas(image).poolStart + relativeOffset).value;
 }
 
 function playlist(
@@ -475,12 +559,12 @@ function playlist(
 
 describe('snapshot images with Playlists', () => {
   /**
-   * The v2 fixture. Its numbers are worked out from the format rather than from the
-   * writer: the canonical track's four strings are 28 bytes, the name is 12 with its
-   * NUL, the two paths are 28 and 29, so the pool is 97 and the image is
+   * The fixture. Its numbers are worked out from the format rather than from the
+   * writer: the canonical track's four interned strings are 28 bytes, the name is 12
+   * with its NUL, the two paths are 28 and 29, so the pool is 97 and the image is
    * 80 + 32 + 97 + 32 + 2*4 = 249.
    */
-  function v2Input(): [SnapshotInput, SnapshotPlaylist[]] {
+  function listInput(): [SnapshotInput, SnapshotPlaylist[]] {
     return [
       canonicalInput(),
       [
@@ -493,13 +577,13 @@ describe('snapshot images with Playlists', () => {
     ];
   }
 
-  it('writes the version 2 header and the list counts at their offsets', () => {
-    const [input, lists] = v2Input();
+  it('writes the version 3 header and the list area at its offsets', () => {
+    const [input, lists] = listInput();
     const image = buildSnapshot(input, lists);
     const view = viewOf(image);
 
     expect(decoder.decode(image.subarray(0, 8))).toBe('K7SNAP\0\0');
-    expect(view.getUint16(8, true)).toBe(2);
+    expect(view.getUint16(8, true)).toBe(3);
     expect(view.getUint16(10, true)).toBe(80);
     expect(image.byteLength).toBe(249);
     expect(view.getUint32(12, true)).toBe(249);
@@ -508,31 +592,29 @@ describe('snapshot images with Playlists', () => {
     expect(view.getUint32(32, true)).toBe(97);
     expect(view.getBigUint64(56, true)).toBe(0n);
 
-    // §3.1, bytes 64..80.
+    // §3, bytes 64..80.
     expect(view.getUint16(64, true)).toBe(1);
     expect(view.getUint16(66, true)).toBe(32);
     expect(view.getUint16(68, true)).toBe(4);
     expect(view.getUint16(70, true)).toBe(0);
     expect(view.getUint32(72, true)).toBe(2);
-    expect(view.getUint32(76, true)).toBe(0);
+    expect(view.getUint32(76, true)).toBe(28);
 
-    // The CRC starts at the end of the header, which is now 80 bytes.
-    expect(view.getUint32(36, true)).toBe(crc32(image.subarray(HEADER_SIZE_V2)));
-    expect(view.getUint32(36, true)).not.toBe(crc32(image.subarray(HEADER_SIZE)));
+    expect(view.getUint32(36, true)).toBe(crc32(image.subarray(HEADER_SIZE)));
   });
 
-  it('keeps the version 1 header bytes 0..56 apart from the version and size', () => {
-    const [input] = v2Input();
-    const v1 = buildSnapshot(input);
-    const v2 = buildSnapshot(input, v2Input()[1]);
+  it('keeps the row, its strings and the provenance apart from the list area', () => {
+    const [input, lists] = listInput();
+    const noLists = buildSnapshot(input);
+    const withLists = buildSnapshot(input, lists);
 
-    // 0..8 magic, 20..32 row size and generation, 40..56 provenance.
-    expect(Array.from(v2.subarray(0, 8))).toEqual(Array.from(v1.subarray(0, 8)));
-    expect(Array.from(v2.subarray(20, 24))).toEqual(Array.from(v1.subarray(20, 24)));
-    expect(Array.from(v2.subarray(24, 32))).toEqual(Array.from(v1.subarray(24, 32)));
-    expect(Array.from(v2.subarray(40, 56))).toEqual(Array.from(v1.subarray(40, 56)));
-    // The row itself is byte-identical: the header grew, the row did not.
-    expect(Array.from(v2.subarray(80, 112))).toEqual(Array.from(v1.subarray(64, 96)));
+    // 0..12 magic, version and header size; 16..32 row count, row size, generation;
+    // 40..64 provenance and reserved. Only the sizes, the list fields and the CRC move.
+    expect(Array.from(withLists.subarray(0, 12))).toEqual(Array.from(noLists.subarray(0, 12)));
+    expect(Array.from(withLists.subarray(16, 32))).toEqual(Array.from(noLists.subarray(16, 32)));
+    expect(Array.from(withLists.subarray(40, 64))).toEqual(Array.from(noLists.subarray(40, 64)));
+    // The rows and the whole row pool are byte-identical, at the same offsets.
+    expect(Array.from(withLists.subarray(80, 140))).toEqual(Array.from(noLists.subarray(80, 140)));
   });
 
   it('tiles the list records and rows in id order', () => {
@@ -551,15 +633,15 @@ describe('snapshot images with Playlists', () => {
       }),
     ];
     const image = buildSnapshot(input([]), lists);
-    const areas = v2Areas(image);
+    const imageAreas = areas(image);
 
-    expect(areas.headerSize).toBe(HEADER_SIZE_V2);
-    expect(areas.listCount).toBe(2);
-    expect(areas.listRows).toBe(3);
+    expect(imageAreas.headerSize).toBe(HEADER_SIZE);
+    expect(imageAreas.listCount).toBe(2);
+    expect(imageAreas.listRows).toBe(3);
     expect(image.byteLength).toBe(
-      areas.headerSize + areas.poolSize + 2 * LIST_SIZE + 3 * LIST_ROW_SIZE,
+      imageAreas.headerSize + imageAreas.poolSize + 2 * LIST_SIZE + 3 * LIST_ROW_SIZE,
     );
-    expect(areas.listRowsStart + areas.listRows * LIST_ROW_SIZE).toBe(image.byteLength);
+    expect(imageAreas.listRowsStart + imageAreas.listRows * LIST_ROW_SIZE).toBe(image.byteLength);
 
     const first = listRecord(image, 0);
     const second = listRecord(image, 1);
@@ -572,7 +654,7 @@ describe('snapshot images with Playlists', () => {
     expect(first.rowCount).toBe(1);
     expect(second.rowStart).toBe(first.rowStart + first.rowCount);
     expect(second.rowCount).toBe(2);
-    expect(second.rowStart + second.rowCount).toBe(areas.listRows);
+    expect(second.rowStart + second.rowCount).toBe(imageAreas.listRows);
 
     expect(first.created).toBe(1_700_000_002n);
     expect(second.created).toBe(1_700_000_001n);
@@ -589,6 +671,27 @@ describe('snapshot images with Playlists', () => {
       expect(stored.bytes).toHaveLength(4);
       expect(poolString(image, stored.pathOffset)).toBe(expectedPaths[index]);
     }
+  });
+
+  it('interns list strings among themselves and never with a row string', () => {
+    const image = buildSnapshot(canonicalInput(), [
+      playlist({ id: 1n, name: 'Artist', rows: ['Shared/p.mp3'] }),
+      playlist({ id: 2n, name: 'Other', rows: ['Shared/p.mp3'] }),
+    ]);
+    const imageAreas = areas(image);
+    const first = listRecord(image, 0);
+    const second = listRecord(image, 1);
+
+    // The row pool's 'Artist' at offset 10 is not reused: 'Artist\0' is 7 more bytes,
+    // then the first list's path ('Shared/p.mp3\0', 13), then 'Other\0' (6); the
+    // second list's repeated path reuses the first list's offset.
+    expect(imageAreas.rowPoolSize).toBe(28);
+    expect(imageAreas.poolSize).toBe(28 + 7 + 13 + 6);
+    expect(first.nameOffset).toBe(28);
+    expect(second.nameOffset).toBe(48);
+    expect(listRow(image, 0).pathOffset).toBe(35);
+    expect(listRow(image, 1).pathOffset).toBe(35);
+    expect(poolString(image, 35)).toBe('Shared/p.mp3');
   });
 
   it('writes a row for a Track the Snapshot has no measurements for', () => {
@@ -629,18 +732,22 @@ describe('snapshot images with Playlists', () => {
     expect(Array.from(again)).toEqual(Array.from(forwards));
   });
 
-  it('keeps writing version 1 when there are no Playlists', () => {
+  it('still writes version 3, with list_count 0, when there are no Playlists', () => {
     const implicit = buildSnapshot(canonicalInput());
     const explicit = buildSnapshot(canonicalInput(), []);
     const view = viewOf(implicit);
 
     expect(Array.from(explicit)).toEqual(Array.from(implicit));
-    expect(view.getUint16(8, true)).toBe(1);
-    expect(view.getUint16(10, true)).toBe(64);
-    expect(implicit.byteLength).toBe(124);
-    // The canonical fixture's CRC and length, unchanged from before version 2.
-    expect(view.getUint32(36, true)).toBe(0x17ef7ef3);
-    expect(crc32(implicit.subarray(HEADER_SIZE))).toBe(0x17ef7ef3);
+    expect(view.getUint16(8, true)).toBe(3);
+    expect(view.getUint16(10, true)).toBe(80);
+    expect(view.getUint16(64, true)).toBe(0);
+    expect(view.getUint16(66, true)).toBe(32);
+    expect(view.getUint16(68, true)).toBe(4);
+    expect(view.getUint32(72, true)).toBe(0);
+    expect(view.getUint32(76, true)).toBe(28);
+    expect(implicit.byteLength).toBe(140);
+    expect(view.getUint32(36, true)).toBe(crc32(implicit.subarray(HEADER_SIZE)));
+    expect(view.getUint32(36, true)).toBe(0xd71cec22);
   });
 
   it('refuses two lists with one id, and an id of zero', () => {

@@ -40,6 +40,8 @@ static atomic_bool s_rescan_running;
 static pthread_mutex_t s_card_lock = PTHREAD_MUTEX_INITIALIZER;
 static volatile bool s_card_present;
 static snapshot_t *s_snapshot;
+/* The PSRAM copy the Snapshot reads in place; owned for the life of the process. */
+static uint8_t *s_snapshot_copy;
 static snapshot_result_t s_snapshot_state = SNAPSHOT_NO_PARTITION;
 static char s_snapshot_reason[96];
 static char s_card_error[160];
@@ -71,7 +73,6 @@ static void rescan_task(void *arg)
         .max_bytes = s_cfg.library_max_bytes,
         .max_tracks = s_cfg.library_max_tracks,
         .generation = library_next_generation(),
-        .build_json = true,
     };
     int64_t t0 = esp_timer_get_time();
     uint32_t psram_before = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
@@ -100,9 +101,8 @@ static void rescan_task(void *arg)
         uint32_t gen = library_generation(next);
         unsigned tracks = library_track_count(next);
         unsigned dirs = library_dir_count(next);
-        size_t arena_len = 0, json_len = 0;
+        size_t arena_len = 0;
         (void)library_blob(next, &arena_len);
-        (void)library_json(next, &json_len);
         int64_t scan_ms = (esp_timer_get_time() - t0) / 1000;
         if (library_publish(next)) {
             /* The indices the walk was given describe the old generation; re-resolve. */
@@ -110,12 +110,12 @@ static void rescan_task(void *arg)
             /* The coverage follows the published generation, so it is re-walked once here on a
              * card change - never per `library_stats` request. This runs on core 0 with the panel
              * scanning, so a rescan still slips the picture for its flash reads; that is a card
-             * event, not the page reload the cache removes (ADR 0047, 0055). */
+             * event, not the per-request walk the cache removes. */
             mcp_refresh_coverage();
             ESP_LOGI(TAG, "library rescan: generation %u, tracks=%u dirs=%u, "
-                          "scan=%lld ms, arena=%u B json=%u B, psram %u -> %u B",
+                          "scan=%lld ms, arena=%u B, psram %u -> %u B",
                      (unsigned)gen, tracks, dirs, (long long)scan_ms,
-                     (unsigned)arena_len, (unsigned)json_len, (unsigned)psram_before,
+                     (unsigned)arena_len, (unsigned)psram_before,
                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         } else {
             ESP_LOGE(TAG, "library rescan: publish refused");
@@ -208,7 +208,7 @@ static http_result_t snapshot_route(int fd, const http_request_t *req, void *ctx
     http_send_headers(fd, status, "application/json", len, "Cache-Control: no-store\r\n");
     http_send_all(fd, body, len);
 
-    /* The reader holds a mapping of the old image, and the write that just happened ran
+    /* The reader holds a PSRAM copy of the old image, and the write that just happened ran
      * with the PSRAM cache off. A restart is the cheap, certain way to serve the new one. */
     if (r == APP_BOARD_FLASH_OK) app_board_reboot_soon(1500);
     return HTTP_HANDLED;
@@ -285,9 +285,6 @@ static http_result_t playlists_route(int fd, const http_request_t *req, void *ct
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
     }
-    /* The Snapshot is mapped flash: reading it while the panel scans displaces the picture, so
-     * the board takes the glass off first (ADR 0047, 0055). */
-    if (s_cfg.page_service) s_cfg.page_service();
     uint32_t n = s_snapshot ? snapshot_lists(s_snapshot) : 0;
     size_t cap = 320 + (size_t)n * 320;
     char *body = malloc(cap);
@@ -325,8 +322,6 @@ static http_result_t playlists_route(int fd, const http_request_t *req, void *ct
 static http_result_t playlist_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
-    /* Reading the Snapshot below is a mapped-flash read; guard the scan first (ADR 0047, 0055). */
-    if (s_cfg.page_service) s_cfg.page_service();
     uint64_t id = 0;
     const char *suffix = req->path + strlen("/api/playlists/");
     if (!s_snapshot || !parse_hex64(suffix, strlen(suffix), &id)) {
@@ -405,9 +400,6 @@ static http_result_t select_route(int fd, const http_request_t *req, void *ctx)
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
     }
-    /* Resolving the choice reads the Snapshot (mapped flash) and writes NVS (flash); guard the
-     * scan first (ADR 0047, 0055). */
-    if (s_cfg.page_service) s_cfg.page_service();
     uint64_t id = 0;
     if (!body_list_id((const char *)req->body, req->body_len, &id)) {
         reply_json(fd, 400, "{\"ok\":false,\"error\":\"a body of {\\\"id\\\":\\\"<hex>\\\"} or {\\\"id\\\":null}\"}",
@@ -622,19 +614,37 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
                 ESP_LOGI(TAG, "snapshot: %s; queries answer without measurements",
                          s_snapshot_reason);
         } else {
-            char open_why[96] = {0};
-            s_snapshot_state = snapshot_open_why(img, snap_size, &s_snapshot, open_why,
-                                                 sizeof open_why);
-            if (s_snapshot_state == SNAPSHOT_OK) {
-                ESP_LOGI(TAG, "snapshot: %u rows, generation %u, analyser %u",
-                         (unsigned)snapshot_rows(s_snapshot),
-                         (unsigned)snapshot_generation(s_snapshot),
-                         (unsigned)snapshot_analyser(s_snapshot));
-            } else {
-                snprintf(s_snapshot_reason, sizeof s_snapshot_reason, "%s",
-                         open_why[0] ? open_why : "the image is unusable");
+            /* The Snapshot is resident: copy the image into PSRAM, give the mapping back,
+             * and hand the copy to the reader for the life of the process. On a failed
+             * allocation the device answers without measurements rather than fall back to
+             * a mapping the panel's scan-out would share a bus with. */
+            uint8_t *copy = heap_caps_malloc(snap_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (!copy) {
+                app_board_snapshot_release();
+                s_snapshot_state = SNAPSHOT_NO_MEM;
+                snprintf(s_snapshot_reason, sizeof s_snapshot_reason,
+                         "not enough PSRAM for the %u-byte image", (unsigned)snap_size);
                 ESP_LOGE(TAG, "snapshot: %s; queries answer without measurements",
                          s_snapshot_reason);
+            } else {
+                memcpy(copy, img, snap_size);
+                app_board_snapshot_release();
+                char open_why[96] = {0};
+                s_snapshot_state = snapshot_open_why(copy, snap_size, &s_snapshot, open_why,
+                                                     sizeof open_why);
+                if (s_snapshot_state == SNAPSHOT_OK) {
+                    s_snapshot_copy = copy;
+                    ESP_LOGI(TAG, "snapshot: %u rows, generation %u, analyser %u",
+                             (unsigned)snapshot_rows(s_snapshot),
+                             (unsigned)snapshot_generation(s_snapshot),
+                             (unsigned)snapshot_analyser(s_snapshot));
+                } else {
+                    heap_caps_free(copy);
+                    snprintf(s_snapshot_reason, sizeof s_snapshot_reason, "%s",
+                             open_why[0] ? open_why : "the image is unusable");
+                    ESP_LOGE(TAG, "snapshot: %s; queries answer without measurements",
+                             s_snapshot_reason);
+                }
             }
         }
     }
@@ -650,7 +660,6 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         .max_bytes = cfg->library_max_bytes,
         .max_tracks = cfg->library_max_tracks,
         .generation = library_next_generation(),
-        .build_json = true,
     };
     lib_result_t lr = card.music_dir
                           ? library_open(&library_cfg, &s_library)
@@ -660,22 +669,21 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     if (lr != LIB_OK || !s_library) {
         /* A failed generation must not take the device off the network. The
          * file surface still serves its diagnostic page; the broadcast idles and
-         * /api/library is unavailable until the next boot/rescan. */
-        ESP_LOGE(TAG, "library: cannot build a generation (%s); /api/library is unavailable"
+         * /api/library.bin is unavailable until the next boot/rescan. */
+        ESP_LOGE(TAG, "library: cannot build a generation (%s); /api/library.bin is unavailable"
                       " (scan %lld ms, psram %u -> %u B)",
                  lr == LIB_INVALID_ARG ? "invalid argument" : "out of memory",
                  (long long)scan_ms, (unsigned)psram_before, (unsigned)psram_after);
     } else {
-        size_t arena_len = 0, json_len = 0;
+        size_t arena_len = 0;
         (void)library_blob(s_library, &arena_len);
-        (void)library_json(s_library, &json_len);
         ESP_LOGI(TAG, "library: state=%s tracks=%u dirs=%u bytes=%llu scan=%lld ms "
-                      "arena=%u B json=%u B psram=%u -> %u B truncated=%d",
+                      "arena=%u B psram=%u -> %u B truncated=%d",
                  library_state_name(library_state(s_library)),
                  (unsigned)library_track_count(s_library),
                  (unsigned)library_dir_count(s_library),
                  (unsigned long long)library_total_bytes(s_library), (long long)scan_ms,
-                 (unsigned)arena_len, (unsigned)json_len, (unsigned)psram_before,
+                 (unsigned)arena_len, (unsigned)psram_before,
                  (unsigned)psram_after, library_truncated(s_library) ? 1 : 0);
         library_publish(s_library);
     }
@@ -736,14 +744,13 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         .snapshot = s_snapshot,
         .snapshot_state = s_snapshot_state,
         .snapshot_reason = s_snapshot_reason,
-        .page_service = cfg->page_service,
     };
     e = mcp_start(&mcp);
     if (e != ESP_OK) return fail(report, e, "MCP endpoint");
 
-    /* The Snapshot coverage is walked once here, at boot, against the Library just published and
-     * before the panel's first clock - the walk reads mapped flash, and doing it on every
-     * `library_stats` request is what displaced the screen on a reload (ADR 0047, 0055). */
+    /* The Snapshot coverage is walked once here, at boot, against the Library just published:
+     * the walk looks up every Track, and doing it on every `library_stats` request would walk
+     * the whole Library per reload. */
     mcp_refresh_coverage();
 
     e = http_server_register_route_method("/api/rescan", "POST", rescan_route, NULL);

@@ -290,11 +290,15 @@ bool app_board_snapshot_pending(void)
 
 /* --- the image, mapped ------------------------------------------------- */
 
+/* The mapping the caller holds until app_board_snapshot_release(): one at a time, because
+ * the image is copied once at boot and the upload path owns the partition afterwards. */
+static const uint8_t *mapped;
+static size_t         mapped_size;
+static esp_partition_mmap_handle_t mapped_handle;
+
 const uint8_t *app_board_snapshot_image(size_t *size, const char **why, int *state)
 {
-    static const uint8_t *mapped;
-    static size_t         mapped_size;
-    static char           err[96];
+    static char err[96];
 
     if (mapped) {
         if (size) *size = mapped_size;
@@ -345,9 +349,19 @@ const uint8_t *app_board_snapshot_image(size_t *size, const char **why, int *sta
     }
     mapped = (const uint8_t *)ptr;
     mapped_size = total;
+    mapped_handle = handle;
     if (state) *state = SNAPSHOT_OK;
     if (size) *size = mapped_size;
     return mapped;
+}
+
+void app_board_snapshot_release(void)
+{
+    if (!mapped) return;
+    esp_partition_munmap(mapped_handle);
+    mapped = NULL;
+    mapped_size = 0;
+    mapped_handle = 0;
 }
 
 /* --- the update -------------------------------------------------------- */
