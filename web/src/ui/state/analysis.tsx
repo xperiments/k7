@@ -15,13 +15,27 @@ import { loadManifest } from '../../audio/models';
 import { readTrackMetadata, type TrackTags } from '../../audio/metadata';
 import { downloadTaggedCopy, METADATA_WRITE_VERSION, writeAnalysisTags, writeTrackLabel } from '../../audio/tagWriter';
 import { coverSource, type EmbeddablePicture } from '../../audio/covers';
+import { encodeCover } from '../../audio/avif';
 import type { Analysis, ModelManifest } from '../../domain/analysis';
 import { snapshotPath } from '../../domain/snapshot';
 import { needsMeasurement, tagAnalysis } from '../../domain/tagAnalysis';
 import { newId } from '../../lib/id';
 import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
 import { patchListArea } from '../../playlists/image';
-import { countMedia, getMedia, listMedia, measuredHash, putMedia, tagsOf, writeCurrent, type CachedMedia } from '../../storage/media';
+import {
+  countMedia,
+  ensureCover,
+  getCoverRecords,
+  getMedia,
+  listMedia,
+  measuredHash,
+  migrateLegacyCovers,
+  putMedia,
+  tagsOf,
+  writeCurrent,
+  type CachedMedia,
+} from '../../storage/media';
+import { buildCoverArchive } from '../../storage/coverArchive';
 import { cardRefFor, currentCardScope, subscribeCardScope } from '../../card/session';
 import { readCardFile as readFileFromCard, type CardRoot } from '../../card/read';
 import { isNotReadable, openReadable, withReadable } from '../../card/readable';
@@ -38,6 +52,9 @@ import { requestPersistence } from '../../storage/persist';
 
 /** O5: the first analysis is when persistence is worth asking the browser for. */
 let persistenceAsked = false;
+
+/** One pass per page load: the v2 rows' raw covers are moved to the shared AVIF store. */
+let coversMigrated = false;
 function askPersistenceOnce(): void {
   if (persistenceAsked) return;
   persistenceAsked = true;
@@ -215,6 +232,15 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  /* A settled card is never opened again by a scan, so its v2 rows would keep every copy of
+   * the art. The migration reads the bytes already in IndexedDB, encodes the distinct ones and
+   * replaces the row's picture with its content hash; it is best-effort and idempotent. */
+  useEffect(() => {
+    if (coversMigrated) return;
+    coversMigrated = true;
+    void migrateLegacyCovers(encodeCover).catch(() => undefined);
+  }, []);
+
   const inFlight = useRef(0);
   const claimed = useRef(new Set<string>());
   /* A client holds its Track until the worker has also written the tags and the label and the
@@ -367,16 +393,23 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           data: picture.data,
         }));
         // The Track's own front cover, never the worn label this App adds.
-        const cover = coverSource(pictures) ?? pictures[0];
+        const cover = coverSource(pictures);
+        const coverHash = cover
+          ? await ensureCover(
+              {
+                bytes: new Uint8Array(cover.data) as Uint8Array<ArrayBuffer>,
+                format: cover.mimeType ?? 'image/jpeg',
+              },
+              encodeCover,
+            )
+          : undefined;
         const row: CachedMedia = {
           path,
           title: parsed.common.title ?? '',
           artist: parsed.common.artist ?? '',
           album: parsed.common.album ?? '',
           genre: parsed.common.genre?.[0] ?? '',
-          cover: cover
-            ? { bytes: new Uint8Array(cover.data), format: cover.mimeType ?? 'image/jpeg' }
-            : undefined,
+          coverHash,
           at: new Date().toISOString(),
           size: source.size,
           mtime: source.lastModified,
@@ -1085,6 +1118,31 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         }
         await writeSnapshotToCard(cardHandle, bytes);
         const scope = currentCardScope();
+
+        /* The card carries the browser's cover cache too, so a new browser (or this one after
+         * its storage is cleared) can take the preprocessed art from the card instead of
+         * reading it out of every audio file again. The list-only write changes no covers. */
+        if (mode === 'run') {
+          try {
+            const rows = await listMedia(scope);
+            const hashes = [
+              ...new Set(rows.map((row) => row.coverHash).filter((hash): hash is string => !!hash)),
+            ];
+            if (hashes.length > 0) {
+              const records = await getCoverRecords(hashes);
+              const archive = buildCoverArchive(
+                hashes.flatMap((hash) => {
+                  const record = records.get(hash);
+                  return record ? [{ hash, ...record }] : [];
+                }),
+              );
+              await writeSnapshotToCard(cardHandle, archive, 'k7.covers');
+            }
+          } catch (error) {
+            console.warn('the cover archive was not written to the card', error);
+          }
+        }
+
         const stored: StoredSnapshot = {
           scope,
           card: cardRefFor(scope),

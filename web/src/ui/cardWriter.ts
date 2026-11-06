@@ -55,6 +55,38 @@ import {
   serialiseCardMark,
 } from '../card/mark';
 import { UNSCOPED } from '../card/session';
+import { putCoverRecord } from '../storage/media';
+import { parseCoverArchive } from '../storage/coverArchive';
+
+/** The archive's name at the card root, beside k7.db, k7.card and k7.select. */
+export const COVERS_NAME = 'k7.covers';
+
+/**
+ * Seed the content-addressed cover store from the card's `k7.covers`, when it has one.
+ *
+ * A card that has been through a scan carries the preprocessed art for every distinct cover,
+ * so a browser that does not have the cache (a new one, or this one after its storage was
+ * cleared) can take it from the card instead of decoding and encoding every picture again.
+ * Best effort: a missing, older or damaged archive is not a reason to refuse the card.
+ */
+export async function restoreCoversFromCard(directory: CardDirectory): Promise<number> {
+  try {
+    const handle = await directory.getFileHandle(COVERS_NAME);
+    const file = await handle.getFile();
+    const covers = parseCoverArchive(new Uint8Array(await file.arrayBuffer()));
+    for (const cover of covers) {
+      await putCoverRecord(cover.hash, {
+        bytes: cover.bytes,
+        format: cover.format,
+        width: cover.width,
+        height: cover.height,
+      });
+    }
+    return covers.length;
+  } catch {
+    return 0;
+  }
+}
 
 /**
  * A card root whose mark is absent-and-unwritable, foreign or newer: identity falls back to
@@ -114,6 +146,10 @@ export async function identifyCard(directory: CardDirectory): Promise<string> {
     return UNSCOPED;
   }
   if (!isCardRoot(names)) return UNSCOPED;
+
+  // The covers are content-addressed and independent of the mark; take them before the run
+  // can ask for one. A card whose archive is absent or damaged just keeps the browser's own.
+  await restoreCoversFromCard(directory);
 
   let text = '';
   try {
