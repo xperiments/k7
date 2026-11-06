@@ -202,8 +202,37 @@ export function presenceOf(listing: LibraryListing, expectedTracks: number): Pre
  * the Media area tell "not on this card" from "past the 200-entry MCP cap". The listing is
  * kept as a fallback for an older device or a route the network refuses; a partial listing is
  * still an allowlist, so an unrelated album cannot come back.
+ *
+ * One request per image, not one per mount. Media, an Artist page and the Playlist editor all
+ * ask for this; each used to start its own 105 KB transfer, and the device has four HTTP
+ * connection slots. A route change — or two such views alive at once — filled them, so the
+ * device declined the next status poll and the 105 KB send competed with playback. The answer
+ * is shared by generation and track count; a failed answer is not cached, so a later mount can
+ * retry.
  */
-export async function fetchPresence(expectedTracks: number): Promise<Presence | null> {
+interface PresenceRequest {
+  key: string;
+  answer: Promise<Presence | null>;
+}
+
+let presenceRequest: PresenceRequest | null = null;
+
+export function fetchPresence(
+  expectedTracks: number,
+  generation: number,
+): Promise<Presence | null> {
+  const key = `${generation}:${expectedTracks}`;
+  if (presenceRequest?.key === key) return presenceRequest.answer;
+
+  const answer = loadPresence(expectedTracks);
+  presenceRequest = { key, answer };
+  void answer.then((presence) => {
+    if (presence === null && presenceRequest?.key === key) presenceRequest = null;
+  });
+  return answer;
+}
+
+async function loadPresence(expectedTracks: number): Promise<Presence | null> {
   try {
     const response = await localRequest('/api/library.bin', { cache: 'no-store' });
     if (!response.ok) throw new Error(`library blob: ${response.status}`);
@@ -286,7 +315,7 @@ export function useMediaIndex(): MediaIndexState {
       return;
     }
     let cancelled = false;
-    void fetchPresence(tracks).then((answer) => {
+    void fetchPresence(tracks, generation).then((answer) => {
       if (!cancelled) setPresence(answer);
     }).catch(() => {
       if (!cancelled) setPresence(null);
