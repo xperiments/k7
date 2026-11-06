@@ -3,6 +3,7 @@ import { parseStatus, parseStatusText } from '../src/device/status';
 
 const valid = {
   card: true,
+  mark: 'f0b1c2d3-e4f5-4a6b-8c9d-0e1f2a3b4c5d',
   tracks: 12,
   generation: 3,
   library: 'sha256:abc',
@@ -20,6 +21,7 @@ const valid = {
  * milliseconds, the view formats them. */
 const parsed = {
   card: true,
+  mark: 'f0b1c2d3-e4f5-4a6b-8c9d-0e1f2a3b4c5d',
   tracks: 12,
   generation: 3,
   library: 'sha256:abc',
@@ -36,6 +38,13 @@ const parsed = {
 describe('the device status contract', () => {
   it('reads the card state, the library and what is playing', () => {
     expect(parseStatus(valid)).toEqual(parsed);
+  });
+
+  it('reads the card mark, and an absent one as no mark', () => {
+    expect(parseStatus(valid)?.mark).toBe('f0b1c2d3-e4f5-4a6b-8c9d-0e1f2a3b4c5d');
+    const { mark: _mark, ...beforeTheMark } = valid;
+    expect(parseStatus(beforeTheMark)?.mark).toBeNull();
+    expect(parseStatus({ ...valid, mark: 42 })?.mark).toBeNull();
   });
 
   it('accepts a card that is out with nothing playing', () => {

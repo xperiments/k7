@@ -39,6 +39,9 @@ typedef struct {
     char playlist_name[200];
     char raw_name[96];
     char playlist_json[320];
+    char mark_raw[44];
+    char mark_escaped[80];
+    char mark_json[84];
 } status_buffers_t;
 
 static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
@@ -72,6 +75,15 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
 
     bool card = F.card_present ? F.card_present() : false;
 
+    /* The card's own name, when it carries one. Read once by the callback, not on this
+     * route: a status poll must not become a card read. */
+    if (F.card_mark && F.card_mark(b->mark_raw, sizeof b->mark_raw)) {
+        http_json_escape(b->mark_escaped, sizeof b->mark_escaped, b->mark_raw);
+        snprintf(b->mark_json, sizeof b->mark_json, "\"%s\"", b->mark_escaped);
+    } else {
+        snprintf(b->mark_json, sizeof b->mark_json, "null");
+    }
+
     /* The choice and the walk are different facts: a card that is out keeps the choice
      * (it comes back with the card) while nothing is walking. */
     bool walking = playlist_select_walking();
@@ -88,11 +100,11 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
     }
 
     int n = snprintf(b->body, sizeof b->body,
-                     "{\"card\":%s,\"tracks\":%u,\"generation\":%u,\"library\":\"%s\","
+                     "{\"card\":%s,\"mark\":%s,\"tracks\":%u,\"generation\":%u,\"library\":\"%s\","
                      "\"order\":\"%s\",\"playlist\":%s,"
                      "\"playing\":{\"title\":\"%s\",\"path\":\"%s\",\"elapsed_ms\":%u,"
                      "\"duration_ms\":%u}}",
-                     card ? "true" : "false", tracks, generation, state,
+                     card ? "true" : "false", b->mark_json, tracks, generation, state,
                      playlist ? "list" : "tree", b->playlist_json, b->title, b->path,
                      (unsigned)b->st.elapsed_ms, (unsigned)b->st.duration_ms);
     if (lib) library_release(lib);

@@ -45,6 +45,8 @@ static uint8_t *s_snapshot_copy;
 static snapshot_result_t s_snapshot_state = SNAPSHOT_NO_PARTITION;
 static char s_snapshot_reason[96];
 static char s_card_error[160];
+/* The card's k7.card id, read at mount; empty when the card has no usable mark. */
+static char s_card_id[40];
 
 /* The selection's persistence, as the injected store playlist_select takes. */
 static bool selection_load(void *ctx, uint64_t *id)
@@ -399,9 +401,9 @@ static bool body_list_id(const char *body, size_t len, uint64_t *id)
  * far above the 8 MiB a 3,485-track card measured; a larger file is not ours. */
 #define COVERS_MAX_BYTES (32u * 1024u * 1024u)
 
-/* The archive is at the card root, the parent of the Music directory the services were
- * started with (device: /sdcard/k7.covers; host: the fixture's root). */
-static void covers_path(char *out, size_t cap)
+/* The card root is the parent of the Music directory the services were started with
+ * (device: /sdcard; host: the fixture's root). */
+static void card_root_path(char *out, size_t cap)
 {
     const char *music = s_cfg.music_dir ? s_cfg.music_dir : "";
     size_t len = strlen(music);
@@ -411,12 +413,78 @@ static void covers_path(char *out, size_t cap)
         if (music[i - 1] == '/') { slash = music + i - 1; break; }
     }
     if (!slash) {
-        snprintf(out, cap, "k7.covers");
+        out[0] = 0;
         return;
     }
     size_t parent = (size_t)(slash - music);
-    if (parent == 0) parent = 1; /* "/music" -> "/k7.covers" */
-    snprintf(out, cap, "%.*s/k7.covers", (int)parent, music);
+    if (parent == 0) parent = 1; /* "/music" -> "/" */
+    snprintf(out, cap, "%.*s", (int)parent, music);
+}
+
+static void card_file_path(char *out, size_t cap, const char *name)
+{
+    char root[224];
+    card_root_path(root, sizeof root);
+    if (root[0] == 0) snprintf(out, cap, "%s", name);
+    else if (strcmp(root, "/") == 0) snprintf(out, cap, "/%s", name);
+    else snprintf(out, cap, "%s/%s", root, name);
+}
+
+static void covers_path(char *out, size_t cap)
+{
+    card_file_path(out, cap, "k7.covers");
+}
+
+/* A mark id is the canonical UUID shape the App writes. A file with our name and anything
+ * else is not a name the page can use; it is reported as no mark, never repaired. */
+static bool mark_id_valid(const char *s, size_t len)
+{
+    if (len != 36) return false;
+    for (size_t i = 0; i < len; i++) {
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            if (s[i] != '-') return false;
+        } else if (!((s[i] >= '0' && s[i] <= '9') || (s[i] >= 'a' && s[i] <= 'f') ||
+                     (s[i] >= 'A' && s[i] <= 'F'))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Read the mark at mount, not on every status poll: the card can vanish, and the App polls
+ * status every few seconds. The result is copied under the same lock the card state uses. */
+static void card_mark_refresh(void)
+{
+    char id[40] = {0};
+    char path[256];
+    card_file_path(path, sizeof path, "k7.card");
+    FILE *f = fopen(path, "rb");
+    if (f) {
+        char buf[256];
+        size_t n = fread(buf, 1, sizeof buf - 1, f);
+        fclose(f);
+        buf[n] = 0;
+        const char *key = strstr(buf, "\"id\"");
+        if (key) {
+            const char *p = strchr(key + 4, ':');
+            if (p) {
+                p++;
+                while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+                if (*p == '"') {
+                    p++;
+                    const char *end = strchr(p, '"');
+                    size_t len = end ? (size_t)(end - p) : 0;
+                    if (end && mark_id_valid(p, len) && len < sizeof id) {
+                        memcpy(id, p, len);
+                        id[len] = 0;
+                    }
+                }
+            }
+        }
+    }
+    pthread_mutex_lock(&s_card_lock);
+    snprintf(s_card_id, sizeof s_card_id, "%s", id);
+    pthread_mutex_unlock(&s_card_lock);
 }
 
 /* GET /api/covers: the card's preprocessed cover archive, served verbatim. It is a cache
@@ -525,6 +593,18 @@ static bool front_door_card_present(void)
     return s_card_present;
 }
 
+/* The status route asks for a copy, not a pointer: the card watcher can replace the mark
+ * between two polls, and the reply must carry one whole id. */
+static bool front_door_card_mark(char *out, size_t cap)
+{
+    bool known;
+    pthread_mutex_lock(&s_card_lock);
+    known = s_card_id[0] != 0;
+    if (known && out && cap) snprintf(out, cap, "%s", s_card_id);
+    pthread_mutex_unlock(&s_card_lock);
+    return known;
+}
+
 void app_services_card_state(bool present, const char *mount_error)
 {
     pthread_mutex_lock(&s_card_lock);
@@ -594,6 +674,7 @@ static void card_watch_task(void *arg)
             app_board_card_t card = app_board_card_mount(s_cfg.music_dir);
             if (!card.music_dir) continue; /* it will be tried again next tick */
             app_services_card_state(true, NULL);
+            card_mark_refresh();
             mini_files_set_card(card.music_dir, NULL);
             ESP_LOGI(TAG, "card inserted: %s; rescanning", card.music_dir);
             removals = 0;
@@ -604,6 +685,7 @@ static void card_watch_task(void *arg)
             app_services_card_state(false, "the card was removed");
             mini_files_set_card(NULL, "the card was removed");
             app_board_card_forget();
+            card_mark_refresh();
             app_services_rescan();
         }
     }
@@ -660,6 +742,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
                  card.mount_error ? card.mount_error : "");
     }
     app_services_card_state(card.music_dir != NULL, card.mount_error);
+    card_mark_refresh();
     if (!card.music_dir) {
         ESP_LOGE(TAG, "no card mounted: %s", card.mount_error ? card.mount_error : "unknown error");
         ESP_LOGE(TAG, "the device will still serve on the network; the index will say why");
@@ -778,6 +861,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
      * only route the front door registers; `/` is the listener's 404. */
     front_door_cfg_t door = {
         .card_present = front_door_card_present,
+        .card_mark = front_door_card_mark,
     };
     e = front_door_start(&door);
     if (e != ESP_OK) return fail(report, e, "front door");

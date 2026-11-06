@@ -44,3 +44,11 @@ gets a fresh fingerprint, so the old scope is orphaned rather than misapplied.
   visit is unscoped, which is the behaviour the App shipped with — degraded, not broken.
 - **Orphaned scopes accumulate.** `clearMedia` exists for a "Forget this card" action the
   Settings area does not offer yet; the mark's spec asks for one (§P3).
+
+
+## Update
+
+The premise above — "nothing in `/api/status` that names the card" — is no longer true. The
+device reads `k7.card` at mount and reports its id as `mark` in `/api/status` (card-mark.md
+D1). When the player is reachable and names its card, Media reads that card's scope instead of
+the browser's last pick; the remembered scope is still the offline and unmarked-card answer.

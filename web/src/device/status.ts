@@ -18,6 +18,12 @@ export interface PlayingPlaylist {
 
 export interface DeviceStatus {
   card: boolean;
+  /**
+   * The id in the card's `k7.card`, when the device could read a usable mark. This is the
+   * name the browser's card-scoped stores hang from; `null` on an unmarked card or a
+   * firmware that does not report one.
+   */
+  mark: string | null;
   tracks: number;
   generation: number;
   library: string;
@@ -78,11 +84,15 @@ export function parseStatus(value: unknown): DeviceStatus | null {
   const generation = finiteNumber(value.generation);
   if (tracks === undefined || generation === undefined) return null;
 
+  const mark =
+    typeof value.mark === 'string' && value.mark.length > 0 ? value.mark : null;
+
   /* A firmware that predates the order fields reports neither; the library's order is
    * then the truthful reading, not an error. */
   const playlist = parsePlaylist(value.playlist);
   return {
     card: value.card,
+    mark,
     tracks,
     generation,
     library: value.library,

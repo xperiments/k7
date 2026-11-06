@@ -23,6 +23,9 @@ extern "C" {
 typedef struct {
     /* The Card state, as the App asks for it. NULL reads as "no card". */
     bool (*card_present)(void);
+    /* The card's `k7.card` id, when it has one. Writes a NUL-terminated copy; false means
+     * no mark. The callback owns the read: the status route must not touch the card. */
+    bool (*card_mark)(char *out, size_t cap);
 } front_door_cfg_t;
 
 /* Register `/api/status`. Call before http_server_start(). */

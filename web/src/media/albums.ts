@@ -30,6 +30,7 @@ import { libraryStats, listLibrary, type LibraryListing } from '../device/mcp';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { listMedia, type CachedCover, type CachedMedia } from '../storage/media';
 import { presenceFromLibraryBlob } from '../device/libraryBlob';
+import { scopeFor } from '../card/mark';
 import { localRequest } from '../device/local';
 import { foldPath } from './paths';
 
@@ -249,7 +250,13 @@ export interface MediaIndexState {
  */
 export function useMediaIndex(): MediaIndexState {
   const { status, reachable } = useDeviceStatus();
-  const scope = useCardScope();
+  /* When the player names its card, the Media area reads that card's own scope, not the
+   * last card this browser picked. The S3 can hold a different card, and the two must not
+   * borrow each other's names and covers; an unmarked card falls back to the pick, and an
+   * offline device to the scope the browser remembers. */
+  const pickedScope = useCardScope();
+  const scope =
+    reachable && status?.card && status.mark ? scopeFor({ id: status.mark }) : pickedScope;
   const [cache, setCache] = useState<Map<string, CachedMedia> | null>(null);
   const [presence, setPresence] = useState<Presence | null>(null);
   const [deviceImage, setDeviceImage] = useState<DeviceImage | null>(null);

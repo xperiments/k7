@@ -10,9 +10,11 @@ Usage: front_door_tests.py SERVER FIXTURES_DIR
 """
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 
 SERVER = sys.argv[1]
@@ -117,6 +119,7 @@ def main():
         check("and is never cached", headers.get("cache-control"), "no-store")
         status_doc = json.loads(body)
         check("it reports the card the host always has", status_doc.get("card"), True)
+        check("an unmarked card reports no mark", status_doc.get("mark"), None)
         check("it counts the fixture tracks", status_doc.get("tracks", 0) > 0, True)
         check("it reports what is playing", "playing" in status_doc, True)
 
@@ -136,6 +139,24 @@ def main():
         check("as the binary view", headers.get("content-type"), "application/octet-stream")
     finally:
         stop(proc)
+
+    # The card's own name, read from the mark beside the Music directory. A marked card gets
+    # its id in the status; it is a name, not a credential, and the route only reports it.
+    mark_id = "f0b1c2d3-e4f5-4a6b-8c9d-0e1f2a3b4c5d"
+    root = tempfile.mkdtemp(prefix="k7-mark-")
+    try:
+        shutil.copytree(os.path.abspath(FIXTURES), os.path.join(root, "music"))
+        with open(os.path.join(root, "k7.card"), "w", encoding="utf-8") as fh:
+            json.dump({"v": 1, "id": mark_id, "created": "2026-11-06T22:00:00Z"}, fh)
+        marked_port = free_port()
+        marked = start(os.path.join(root, "music"), marked_port)
+        try:
+            status_doc = json.loads(get(marked_port, "/api/status")[3])
+            check("the status names the card's mark", status_doc.get("mark"), mark_id)
+        finally:
+            stop(marked)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
     print(f"front door: {'FAILED' if FAIL else 'ok'} ({FAIL} failures)")
     return 1 if FAIL else 0

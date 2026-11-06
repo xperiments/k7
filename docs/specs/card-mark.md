@@ -11,7 +11,8 @@ prepared?"* and never *"is this card allowed to do this?"* — the second questi
 on this device, which has no authentication at all.
 
 **Status:** the mark, the policy, the fingerprint and the scoped stores are built and tested.
-The device does not read the mark yet (D1), and §7's Update-file shim is in the firmware.
+The device reads the mark at mount and reports its id in `/api/status` (`mark`); §7's
+Update-file shim is in the firmware.
 
 ---
 
@@ -129,7 +130,7 @@ a card that could never keep them is not a card whose covers can be trusted acro
 
 ## 6. The device reads it, later
 
-**D1. Read-only, and additive.** The device may read `k7.card` at mount and report it in
+**D1. Read-only, and additive.** The device reads `k7.card` at mount and reports it in
 `status` as `mark` (the id, or null). It never writes, repairs or deletes a mark. The global
 premise stands: the only card write the device performs is deleting the Update file it has
 already flashed.

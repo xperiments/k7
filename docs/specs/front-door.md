@@ -137,10 +137,10 @@ selected and the Track is not in it, the selection is **dropped** — the walk i
 reply's `order` and the next `/api/status` say so. This is the one implicit mode change, and it
 is the honest reading of "play this now".
 
-**S1.** `GET /api/status` reports the **Card state**, the Library's count and generation, what is
-Playing (`title`, `path`, `elapsed_ms`, `duration_ms`), and the order: `order` is `"tree"` or
-`"list"`, and `playlist` is `{"id","name"}` or `null`. It is `no-store` and answers only on its
-own path.
+**S1.** `GET /api/status` reports the **Card state**, the card's mark (`mark`: the `k7.card`
+id, or `null`), the Library's count and generation, what is Playing (`title`, `path`,
+`elapsed_ms`, `duration_ms`), and the order: `order` is `"tree"` or `"list"`, and `playlist` is
+`{"id","name"}` or `null`. It is `no-store` and answers only on its own path.
 
 **U4.** There is **no TLS**. No certificate is compiled in, no trust step exists, and a browser
 shows "Not secure" and no interstitial. The consequences are accepted, not hidden: no service
