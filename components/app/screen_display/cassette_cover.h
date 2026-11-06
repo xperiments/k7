@@ -20,6 +20,10 @@
  * The picture is scaled to the print's width and pinned to its top; its height follows from the
  * source's aspect and the print clips whatever runs past its bottom.
  *
+ * The two-finger full-screen pose does not print the picture: it prints the Track's label
+ * background colour, and the picture is hidden. The window, rim and tape slice are the Card's,
+ * not the picture's, and remain.
+ *
  * The Card's ink is not read from the picture: it is the table's plastic, and the label's ink is
  * the same row's (ADR 0040). The view hands both over when the Track changes.
  *

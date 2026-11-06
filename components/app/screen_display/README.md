@@ -184,7 +184,10 @@ after the tape body and shown and hidden with the
   and nowhere else. The picture sits at +12,+20 in a 402x188 clip box, frame 0 with its radius plus 2 px
   and `clip_corner`, scaled to frame 0's width and top-aligned, so its height follows from
   its aspect and the box clips the rest. A pose that is not the controls pose does not show
-  it; the print is cut in and out, never faded, so it lands with the page flip.
+  it; the print is cut in and out, never faded, so it lands with the page flip. The
+  two-finger full-screen pose prints the row's label background colour, not the picture:
+  the image is hidden and the print is the label fill, while the Card's window, rim and
+  tape slice remain.
 - `cassette_menu.c` / `.h` — the Menu's view. `create(screen, cassette)` builds five row
   slots inside the window and the Pad's panel value; `open(white)`, `close()`,
   `update(status)` and `set_tags(group, song)` are the view's calls, and the right bar's M

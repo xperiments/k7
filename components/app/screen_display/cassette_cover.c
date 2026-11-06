@@ -51,6 +51,7 @@ static uint8_t *s_window_mask;
 static lv_obj_t *s_rim;            /* the window's pill, over the print's cut edge */
 static const lv_image_dsc_t *s_dsc;
 static bool s_wanted;              /* the white page asked for the cover */
+static bool s_full;                /* the two-finger full-screen pose: label fill, no picture */
 
 static void cover_hide(void);
 
@@ -150,8 +151,9 @@ void cassette_cover_set_image(const lv_image_dsc_t *dsc)
     if (s_img) {
         if (dsc) lv_image_set_src(s_img, dsc);
         /* Hidden rather than cleared: the loader's last descriptor stays put, and a print
-         * with no picture must not keep drawing it. */
-        lv_obj_set_hidden(s_img, dsc == NULL);
+         * with no picture must not keep drawing it. The full-screen pose is label-only even
+         * when a picture is in hand. */
+        lv_obj_set_hidden(s_img, dsc == NULL || s_full);
     }
     if (!dsc) {
         /* The loader's verdict for this Track: no picture. The label fill is the print. */
@@ -184,7 +186,9 @@ void cassette_cover_set_shown(bool shown)
 
 bool cassette_cover_has_picture(void)
 {
-    return s_dsc != NULL;
+    /* The full-screen pose prints the label fill, so there is no picture on the page even
+     * when the loader has one; the hubs follow the same answer. */
+    return s_dsc != NULL && !s_full;
 }
 
 bool cassette_cover_is_shown(void)
@@ -278,7 +282,11 @@ static void window_create(lv_obj_t *parent)
  * geometry is the Card's - this module reads it, it does not own it. */
 void cassette_cover_set_full(bool full)
 {
-    (void)full;
+    s_full = full;
+    /* The two-finger pose is the label's background colour, not the Track's picture: hide
+     * the image so the print's label fill is what shows. The window, rim and tape slice are
+     * the Card's, not the picture's, and stay. */
+    if (s_img) lv_obj_set_hidden(s_img, s_dsc == NULL || s_full);
     if (!s_masked) return;
     cassette_cover_place();
     if (s_wanted) lv_obj_set_hidden(s_masked, false);
