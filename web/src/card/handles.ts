@@ -111,9 +111,8 @@ export async function ensureAccess(
 }
 
 /**
- * Whether the grant is **already** there, without asking for it. A page load cannot prompt —
- * a prompt needs a person's click — so this is what a reload may ask itself: if the answer is
- * yes, the card can be read straight away; if it is 'prompt', only a gesture can get it.
+ * Whether the grant is **already** there, without asking for it. A prompt needs a person's
+ * click, so a caller that is not a gesture may ask this to decide whether it can read.
  */
 export async function queryAccess(
   handle: FileSystemDirectoryHandle,

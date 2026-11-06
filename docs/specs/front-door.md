@@ -214,18 +214,20 @@ The Queue, measured, written to the card by the run itself.
   mark, or a fingerprint when it has none), and the one fact that matters after it — *k7.db
   written 12:34*. There is nothing to send: the image is written to the card when the run
   finishes, and again when a Playlist changes while the card is still open (ADR 0065). What the
-  header does offer is intake, because a card changes under the page: **Rescan card** walks the
-  card this page holds open again — the tracks it already has are recognised, not measured
-  twice — and **Change card** opens the picker, replacing the queue with the new card's and the
-  Scope with it. Clear, asked in place, is the last action. The handle is remembered per Scope
-  (`card/handles.ts`), so a reload does not lose the card: Rescan asks for the read-write grant
-  again on the click, which is the only moment a browser will show the prompt.
-- **A reload picks the card up and measures it.** When the browser still reports the grant as
-  given (`queryAccess`, which never prompts), the load walks the card and the run starts: the
-  card being in the computer is the fact, and most rows are recognised from the card's own record
-  in milliseconds, so a reload continues rather than repeats. A **Pause** in the header holds the
-  run (the rows already handed out finish, nothing new is claimed) and becomes **Resume**; a new
-  queue always measures again.
+  header does offer is intake, because a card changes under the page: while the Queue has rows,
+  **Rescan card** walks the card this page holds open again — the tracks it already has are
+  recognised, not measured twice — and **Change card** opens the picker, replacing the queue with
+  the new card's and the Scope with it. Clear, asked in place, is the last action. The handle is
+  remembered per Scope (`card/handles.ts`), so a reload does not lose the card: Rescan asks for
+  the read-write grant again on the click, which is the only moment a browser will show the
+  prompt.
+- **A reload does not read the card.** A remembered handle is not a reason to walk the card: that
+  is a run, and a run is asked for. The empty Queue carries **Rescan card** beside *Choose card*
+  (the drop zone is that state), so the first click after a reload asks for the grant and starts
+  the read; most rows are recognised from the card's own record in milliseconds, so a resumed run
+  continues rather than repeats. A **Pause** in the header holds a run in flight (the rows
+  already handed out finish, nothing new is claimed) and becomes **Resume**; a new queue always
+  measures again.
 - **Progress:** one bar for the whole run, the count, and what is in flight. It is a run, not a
   page: it stays at the top while the rows scroll.
 - **The measurement goes into the files.** A card opened read-write gets each settled track's
@@ -251,9 +253,10 @@ The Queue, measured, written to the card by the run itself.
   or a folder with no `music` in it is refused by name
   ([`card/shape.ts`](../../web/src/card/shape.ts)). A picker is the only path that can write the
   image and the file tags back; a dropped card is measured read-only.
-- **States:** empty (no Queue: the drop zone *is* the empty state), loading (rows appear as they
-  are found; `Skeleton` only for the manifest), error (models missing or a weight refused,
-  inline, with what to do).
+- **States:** empty (no Queue: the drop zone *is* the empty state, carrying **Choose card** and,
+  when this browser remembers one, **Rescan card**), loading (rows appear as they are found;
+  `Skeleton` only for the manifest), error (models missing or a weight refused, inline, with what
+  to do).
 - **Device work:** the run builds `k7.db` — rows from the Queue, lists from the Playlists
   Drafts — keeps it as the **last image**, and writes it to the card (ADR 0065).
 

@@ -31,7 +31,6 @@ import {
   ensureAccess,
   ensureRead,
   forgetCardHandle,
-  queryAccess,
 } from '../../card/handles';
 import { loadSnapshot, saveSnapshot, type StoredSnapshot } from '../../storage/snapshots';
 import { clearCache, getCached, putCached } from '../../storage/cache';
@@ -157,10 +156,8 @@ const AnalysisContext = createContext<AnalysisApi | null>(null);
 export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [busy, setBusy] = useState(false);
-  /* Held only by a load-time read; every other intake starts a run. */
+  /* Every intake starts a run; Pause is the only thing that holds it. */
   const [running, setRunning] = useState(true);
-  /** The Scope the page already tried to pick up on load, so a failure is not a loop. */
-  const reconnected = useRef<string | null>(null);
   const [manifest, setManifest] = useState<ModelManifest | null>(null);
   const modelSet = manifest?.modelSet ?? null;
   const [saving, setSaving] = useState(false);
@@ -799,44 +796,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  /**
-   * The card a reload left behind: the handle is remembered, the grant usually is not, and the
-   * browser will not prompt without a person. So a load **asks itself** — `queryAccess` never
-   * prompts — and when the answer is already yes it walks the card and measures it, which is
-   * what "the card is still in the computer" should mean. Pause is what stops it; a load is not
-   * a question, and a button in front of the run it was about to do was one click of nothing.
-   */
-  useEffect(() => {
-    if (storedHandle === null || items.length > 0 || busy) return;
-    const scope = currentCardScope();
-    if (reconnected.current === scope) return;
-    reconnected.current = scope;
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        if (!(await queryAccess(storedHandle, 'read'))) return;
-        if (cancelled) return;
-        if (await queryAccess(storedHandle, 'readwrite')) {
-          setCardHandle(storedHandle as unknown as SnapshotDirectory);
-        }
-        const read = await readOpenCard(storedHandle as unknown as SnapshotDirectory);
-        if (cancelled || 'problem' in read) return;
-        acceptIntake(read.files, read.skipped, true);
-        setNotice({
-          kind: 'success',
-          text: `The card this browser remembers is in: ${plural(read.files.length, 'file')} read, measuring them now.`,
-        });
-      } catch {
-        /* The card is out, or the handle no longer points at it: nothing to say on load. */
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [storedHandle, items.length, busy, acceptIntake]);
-
   const addFound = useCallback(
     (found: FoundFile[], skipped: number, readOnly = false) =>
       acceptIntake(found, skipped, false, readOnly),
@@ -848,6 +807,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * the card; look again" without reloading the page or picking the folder a second time. The
    * handle comes from this visit's pick, or from the one the browser remembers for the card —
    * in which case the click is also where the grant is asked for again.
+   *
+   * A load does not do this on its own. The handle outliving a reload is not a reason to walk
+   * the card and start measuring: that is a run, and a run is asked for. The empty Queue offers
+   * this act as a button, which is where the click that can prompt for the grant lives.
    */
   const rescanCard = useCallback(async () => {
     let handle = cardHandle;

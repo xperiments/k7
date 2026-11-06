@@ -193,21 +193,25 @@ export function ProcessArea() {
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void rescanCard()}
-              disabled={busy || metadataPending > 0 || !canRescan}
-              title={
-                metadataPending > 0
-                  ? 'Wait for the card to finish writing its tags and label'
-                  : canRescan
-                    ? 'Read this card again, now: tracks already measured are recognised, not measured twice'
-                    : 'No card is open in this page — use Change card'
-              }
-            >
-              Rescan card
-            </Button>
+            {/* While the Queue is empty, the drop zone below carries the rescan: one
+                action per state, and that is where a reload lands. */}
+            {items.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void rescanCard()}
+                disabled={busy || metadataPending > 0 || !canRescan}
+                title={
+                  metadataPending > 0
+                    ? 'Wait for the card to finish writing its tags and label'
+                    : canRescan
+                      ? 'Read this card again, now: tracks already measured are recognised, not measured twice'
+                      : 'No card is open in this page — use Change card'
+                }
+              >
+                Rescan card
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -290,9 +294,9 @@ export function ProcessArea() {
         <div className="flex flex-col gap-2">
           {lastSnapshot ? (
             <p className="text-xs text-muted-foreground">
-              The queue lives in this page, so a reload empties it. What the card holds is the
-              image the last run wrote; read the card again to measure what is new — nothing
-              already measured is measured twice.
+              The queue lives in this page, so a reload empties it — and does not read the card
+              on its own. What the card holds is the image the last run wrote; read the card
+              again to measure what is new — nothing already measured is measured twice.
             </p>
           ) : null}
           <DropZone
@@ -302,6 +306,8 @@ export function ProcessArea() {
             }
             onFiles={(found, skipped) => addFound(found, skipped, true)}
             onCard={addCard}
+            onRescan={canRescan ? () => void rescanCard() : undefined}
+            rescanDisabled={busy || metadataPending > 0}
           />
         </div>
       ) : (

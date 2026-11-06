@@ -33,6 +33,13 @@ interface DropZoneProps {
   onFiles: (found: FoundFile[], skipped: number) => void;
   /** The card, opened read-write: measurable and writable. */
   onCard: (found: FoundFile[], skipped: number, handle: SnapshotDirectory) => void;
+  /**
+   * Read the card this browser remembers again. Present only when there is one to read: a
+   * reload does not scan on its own, so this is the empty state's way back to the Queue.
+   */
+  onRescan?: () => void;
+  /** A run is still writing into the card, so the rescan would race it. */
+  rescanDisabled?: boolean;
 }
 
 /**
@@ -44,10 +51,18 @@ interface DropZoneProps {
  * ends at a download rather than at the card.
  *
  * The intake is also the empty state of the queue below it, which is why it carries the
- * one action ("Choose card") and the queue adds no second empty of its own.
+ * actions: "Choose card" for a pick, and "Rescan card" when this browser still remembers the
+ * one it worked on. A reload does not read that card by itself; the run starts on the click.
  */
 
-export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZoneProps) {
+export function DropZone({
+  disabled,
+  disabledReason,
+  onFiles,
+  onCard,
+  onRescan,
+  rescanDisabled = false,
+}: DropZoneProps) {
   const [over, setOver] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -169,11 +184,25 @@ export function DropZone({ disabled, disabledReason, onFiles, onCard }: DropZone
         </EmptyDescription>
       </EmptyHeader>
 
-      {pickable && !scanning && (
+      {!scanning && (pickable || onRescan) && (
         <EmptyContent>
-          <Button onClick={() => void chooseCard()} disabled={inactive}>
-            Choose card
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {pickable && (
+              <Button onClick={() => void chooseCard()} disabled={inactive}>
+                Choose card
+              </Button>
+            )}
+            {onRescan && (
+              <Button
+                variant="outline"
+                onClick={onRescan}
+                disabled={inactive || rescanDisabled}
+                title="Read the card this browser remembers again; a reload does not scan it, and nothing already measured is measured twice"
+              >
+                Rescan card
+              </Button>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground">or drop a folder — dropping is read-only</p>
         </EmptyContent>
       )}
