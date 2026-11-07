@@ -139,6 +139,12 @@ static struct {
      * exist because the encoder's cost alone does not say which stage starves a
      * hi-res FLAC, and the board's log is the only place that split is visible. */
     volatile uint32_t  dec_ms, dec_io_ms, rs_ms, eq_ms;
+    /* Audio seconds the source produced in the same window, and the wall time the
+     * broadcast spent with the ring empty. The first turns the decode line into a cost
+     * per audio-second - the number that says whether an expensive source or a busy
+     * core 0 is what keeps the ring short; the second is the direct evidence that the
+     * broadcast was input-starved, where `rebases` only says the clock moved. */
+    volatile uint32_t  dec_audio_us, ring_wait_ms;
     mi_burst_t        *burst;         /* history for a client connecting mid-track */
     TaskHandle_t       broadcast_handle; /* for the stack-headroom telemetry */
     mi_enc_t          *enc;
@@ -815,6 +821,9 @@ static void src_task(void *arg)
         uint64_t io1 = mi_dec_io_us(j->dec);
         S.dec_ms += (uint32_t)((esp_timer_get_time() - t0) / 1000);
         S.dec_io_ms += (uint32_t)((io1 - io0) / 1000);
+        /* Audio time, not frames: the source rate is the Track's own and a window can
+         * span a Track change. Microseconds so the per-read truncation cannot add up. */
+        if (j->hz) S.dec_audio_us += (uint32_t)(((uint64_t)n * 1000000u) / j->hz);
         if (n == 0) break;
         const uint8_t *p = (const uint8_t *)pcm;
         size_t bytes = n * 4;
@@ -924,8 +933,10 @@ static void stream_file(const char *path)
         size_t got = mi_ring_get(j.fifo, in, sizeof in);
         if (got == 0) {
             if (j.eof) break;
+            int64_t w0 = esp_timer_get_time();
             (void)xSemaphoreTake(j.data, pdMS_TO_TICKS(20));
             vTaskDelay(1); /* a stale hint must not spin the broadcast task */
+            S.ring_wait_ms += (uint32_t)((esp_timer_get_time() - w0) / 1000);
             continue;
         }
         xSemaphoreGive(j.space);
@@ -1357,23 +1368,34 @@ static void telemetry_task(void *arg)
          * line low by less than a millisecond, never attributes it to the wrong
          * stage. */
         uint32_t dec = S.dec_ms, io = S.dec_io_ms, rs = S.rs_ms, eq = S.eq_ms;
+        uint32_t audio_us = S.dec_audio_us, waited = S.ring_wait_ms;
         S.dec_ms = 0;
         S.dec_io_ms = 0;
         S.rs_ms = 0;
         S.eq_ms = 0;
-        ESP_LOGI(TAG, "decode %" PRIu32 " ms (of which SD %" PRIu32 " ms), resample %" PRIu32
-                      " ms, tone %" PRIu32 " ms = %.1f%% / %.1f%% / %.1f%% of one core",
-                 dec, io, rs, eq, 100.0 * (double)(dec - (io < dec ? io : dec)) / TELEMETRY_PERIOD_MS,
+        S.dec_audio_us = 0;
+        S.ring_wait_ms = 0;
+        /* The decoder's cost per *audio* second, not per wall second: the wall figure
+         * falls whenever the task is preempted, so it cannot say whether the source is
+         * expensive or core 0 was taken from it. This one can. */
+        double decoded_s = (double)audio_us / 1000000.0;
+        double dec_cpu_s = (double)(dec - (io < dec ? io : dec)) / 1000.0;
+        ESP_LOGI(TAG, "decode %" PRIu32 " ms (of which SD %" PRIu32 " ms), decoded %.1f s "
+                      "= %.2f core-s per audio-second, resample %" PRIu32 " ms, tone %" PRIu32
+                      " ms = %.1f%% / %.1f%% / %.1f%% of one core",
+                 dec, io, decoded_s, decoded_s > 0.0 ? dec_cpu_s / decoded_s : 0.0,
+                 rs, eq, 100.0 * dec_cpu_s * 1000.0 / TELEMETRY_PERIOD_MS,
                  100.0 * (double)rs / TELEMETRY_PERIOD_MS,
                  100.0 * (double)eq / TELEMETRY_PERIOD_MS);
         /* The largest single free block is reported next to the free total because
          * it is the number that actually constrains this firmware: esp_wifi_init()
          * needs roughly 25 KB of contiguous DMA-capable internal RAM, and a
          * fragmented heap with plenty free can still fail to produce it. */
-        ESP_LOGI(TAG, "memory: internal %u B free (largest block %u B), external %u B free; starvation rebases %" PRIu32,
+        ESP_LOGI(TAG, "memory: internal %u B free (largest block %u B), external %u B free; "
+                      "starvation rebases %" PRIu32 ", ring starved %" PRIu32 " ms",
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), S.rebases);
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), S.rebases, waited);
         /* The other half of fit: how much stack the deepest tasks have left. */
         /* The broadcast's own high-water mark, not this task's: the old line
          * passed NULL, which asks about the task doing the asking. */

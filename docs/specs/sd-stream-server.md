@@ -353,6 +353,33 @@ promise needs to stop overstating itself.
 > raw PCM - an FFT, a second sink - gets an interface designed for it then, rather than an
 > unused hook kept for a hypothetical one.
 
+### 4.5 A Track boundary does not rebase
+
+The decoded-audio ring is per Track (ADR 0041): it is created when a Track starts and freed
+when it stops, so at a boundary it is empty, and the broadcast's only producer is the
+`ice_decode` task on core 0. A measured boundary on the board (station 44.1 kHz / 256 kbps,
+one client) produced audio at **50.2 %** of real time for 11 s and logged **five** starvation
+rebases; the decoder needed 0.72 core-seconds per wall-second of the same core whose screen
+was redrawing 42 % of the panel, and the cassette's rewind — clocked by the very audio it was
+losing — stretched from 8 s to 13.9 s of wall, drawing ~2× the frames it was designed to. The
+arithmetic, and the two independent clocks that agree on it, are in
+[`docs/research/icecast-track-change-starvation.md`](../research/icecast-track-change-starvation.md).
+
+**Requirement E6.** A Track boundary must not starve the broadcast. The boundary is the one
+moment the decoded ring is empty by construction, so the station must keep the source task fed:
+the screen yields the core while the broadcast is behind (`mini_icecast_lag_ms()` above the
+station's own threshold), and the reel change is bounded by the wall clock so it cannot
+lengthen itself. The screen-side decisions are
+[ADR 0070](../adr/0070-the-reel-change-yields-to-the-broadcast.md); the station's side is the
+telemetry below.
+
+**Requirement E7 — the boundary is visible in the log.** The 60-second telemetry carries
+`decoded N s = X core-s per audio-second` and `ring starved N ms` beside the existing
+starvation-rebase count. The first separates an expensive source from a preempted task; the
+second is the direct evidence that the broadcast was waiting for audio rather than for a
+socket. A boundary run with `ring starved 0 ms` and zero rebases is the acceptance evidence for
+E6.
+
 ---
 
 ## 5. Defects to fix
@@ -554,7 +581,7 @@ host result transfers.
 | T9 | **Withdrawn** | (was download concurrency; route removed) | — | — |
 | T9b | **Withdrawn** | (was decoder/download contention; route removed) | — | — |
 | T10 | Card absent (R8) | Boot with the card removed | **board only** | Wi-Fi associates, `GET /` returns a diagnostic page, log shows the mount error; card inserted later is picked up by the background retry |
-| T11 | CPU and memory (F4) | 1-hour soak with one client on `/stream` | **board only** | Encoder < 35 % of one core; free heap stable over the hour; zero starvation rebases logged. The host analogue is T11h below |
+| T11 | CPU and memory (F4) | 1-hour soak with one client on `/stream` | **board only** | Encoder < 35 % of one core; free heap stable over the hour; zero starvation rebases logged, `ring starved 0 ms`, and the run must cross at least one Track boundary (§4.5 E6) — `board_soak.sh` reports how many it crossed and says so when it crossed none. The host analogue is T11h below |
 | T11h | Encoder cost, host baseline | Time the encode loop with `clock_gettime(CLOCK_MONOTONIC)` over ≥ 1 M frames on the host | **host only** | Recorded as a baseline for scaling, **not** as a pass/fail. Host MHz tells you nothing about S3 MHz (see §10.7) |
 | T12 | Format validation (F1/F2) | Start the server with `out_hz = 44101`, and with `out_hz = 8000, bitrate = 64` | **both** | First fails loudly; second starts and logs MPEG-2.5 (`shine_check_config` returned 0, accepted per E1) |
 | T13 | Case sensitivity (bonus) | **Withdrawn** (it requested a Track by path) | — | — |

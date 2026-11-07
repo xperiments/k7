@@ -13,7 +13,10 @@
  * and ends on the one normal play shows when the window closes, so the reels never
  * jump. That window is the only place the module departs from the tape geometry:
  * the reverse spin is a perceptual rate, not v/r, because a real rewind would be
- * hundreds of revolutions in less time than the art can show.
+ * hundreds of revolutions in less time than the art can show. The window closes on
+ * whichever of the two clocks is later - the track's elapsed or the wall - so a
+ * starving broadcast cannot stretch it, and its packs move in a fixed number of
+ * steps because each one redraws most of the panel on the core the decoder needs.
  */
 #include "cassette.h"
 
@@ -47,6 +50,7 @@ struct cassette {
      * that is also what makes a change during a window restart without a jump. */
     bool     rewinding;
     uint32_t rewind_t0_ms;      /* the elapsed the window opened at */
+    uint32_t rewind_wall0_ms;   /* and the wall clock it opened at: the window is bounded by both */
     uint32_t rewind_q0;         /* the position the packs were showing, 0..1000 */
     float    rewind_offset[2];  /* revolutions still to unwind, whole + fraction */
     uint32_t shown_q;           /* the position the packs are showing, 0..1000 */
@@ -118,6 +122,25 @@ static float rewind_tape_ink(uint16_t rewind_permille)
     if (elapsed > fade_in_at)
         return (float)(elapsed - fade_in_at) / (float)CASSETTE_REWIND_FADE_MS;
     return 0.0f;
+}
+
+/* The pack position the window draws. A pack's fill is what resizes its box and redraws
+ * its rings, strand and VU, which is the window's one large cost: at the poll rate that
+ * is ~200 resizes over the 8 s, each one ~42 % of the panel. On the board that redraw
+ * competes with the source task on core 0 and starves the broadcast, so the window moves
+ * the packs in CASSETTE_REWIND_PACK_STEPS steps instead of every frame. The step is
+ * anchored on both ends - `left` 1 is q0 exactly, `left` 0 is q1 exactly - because the
+ * window must start on the fill already on screen and land on the fill normal play shows.
+ * The hubs keep the smooth `left`: their slices are a few hundred pixels, not a pack. */
+static uint32_t rewind_pack_q(uint32_t q0, uint32_t q1, float left)
+{
+    if (q0 == q1) return q1;
+    float done = 1.0f - left;
+    if (done <= 0.0f) return q0;
+    if (done >= 1.0f) return q1;
+    int32_t k = (int32_t)lroundf(done * (float)CASSETTE_REWIND_PACK_STEPS);
+    int32_t dq = (int32_t)q1 - (int32_t)q0;
+    return (uint32_t)((int32_t)q0 + (dq * k) / (int32_t)CASSETTE_REWIND_PACK_STEPS);
 }
 
 /* The art frame for a phase. The reverse spin carries a whole number of revolutions,
@@ -260,6 +283,7 @@ void cassette_reset(cassette_t *c)
     c->peak_r = 0.0f;
     c->rewinding = false;
     c->rewind_t0_ms = 0;
+    c->rewind_wall0_ms = 0;
     c->rewind_q0 = 0;
     memset(c->rewind_offset, 0, sizeof c->rewind_offset);
     c->shown_q = 0;
@@ -413,6 +437,7 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
     if (track_change) {
         c->rewinding = true;
         c->rewind_t0_ms = elapsed;
+        c->rewind_wall0_ms = now_ms;
         c->rewind_q0 = from_q;
         for (int i = 0; i < 2; i++) {
             float f = from_phase[i] - c->phase[i];
@@ -420,9 +445,14 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
         }
     }
     /* The window is half-open: the step that reaches CASSETTE_REWIND_MS is already
-     * normal play. A status that stops playing has no side to rewind, and a window
-     * frozen by a paused clock would never close. */
-    uint32_t since = elapsed > c->rewind_t0_ms ? elapsed - c->rewind_t0_ms : 0;
+     * normal play. It closes on whichever clock is later, because 8 s is a promise in
+     * both directions: the audio clock alone let a starving broadcast stretch the window
+     * to ~16 s, and the wall clock alone would cut it short on a fast one. A status that
+     * stops playing has no side to rewind, and a window frozen by a paused clock would
+     * never close. */
+    uint32_t since_audio = elapsed > c->rewind_t0_ms ? elapsed - c->rewind_t0_ms : 0;
+    uint32_t since_wall = now_ms - c->rewind_wall0_ms;
+    uint32_t since = since_wall > since_audio ? since_wall : since_audio;
     if (c->rewinding && (!c->frame.playing || since >= CASSETTE_REWIND_MS))
         c->rewinding = false;
 
@@ -438,8 +468,7 @@ const cassette_frame_t *cassette_step(cassette_t *c, const mini_icecast_status_t
         float p = (float)since / (float)CASSETTE_REWIND_MS;
         if (p > 1.0f) p = 1.0f;
         float left = 1.0f - rewind_ease(p); /* the share of the rewind still to run */
-        q = (uint32_t)((float)c->shown_permille +
-                       ((float)c->rewind_q0 - (float)c->shown_permille) * left + 0.5f);
+        q = rewind_pack_q(c->rewind_q0, c->shown_permille, left);
         for (int i = 0; i < 2; i++) disp[i] = c->phase[i] + c->rewind_offset[i] * left;
         c->frame.rewind_permille = (uint16_t)(p * 1000.0f + 0.5f);
     }

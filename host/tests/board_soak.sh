@@ -15,6 +15,10 @@
 #   * free memory in both classes stable across the run         (T11)
 #   * no assert, stack overflow or reboot                       (T11)
 #
+# It also reports how many Track boundaries the run crossed: the boundary is the one
+# moment the decoded ring is empty by construction, so a run that never crossed one
+# has not exercised the starvation path and says so.
+#
 # All judgement comes from the device's log, which is the only place these numbers
 # exist: the host cannot measure a 240 MHz Xtensa with Wi-Fi running.
 set -u
@@ -90,7 +94,17 @@ sleep 1
 
 lines=$(tr -d '\r' <"$LOG")
 
-rebases=$(printf '%s\n' "$lines" | grep -c 'starved for' || true)
+rebases=$(printf '%s\n' "$lines" | sed -n 's/.*starvation rebases \([0-9]*\).*/\1/p' | tail -1)
+# The log prints only rebases #1-#5 and every 25th (mini_icecast.c), so counting
+# "starved for" lines caps at five and would call a badly starving run "5". The
+# telemetry's cumulative counter is the device's own number; fall back to the lines
+# only when no telemetry line was captured.
+[ -n "$rebases" ] || rebases=$(printf '%s\n' "$lines" | grep -c 'starved for' || true)
+ring_starved=$(printf '%s\n' "$lines" | sed -n 's/.*ring starved \([0-9]*\) ms.*/\1/p' | tail -1)
+# A Track boundary is the one moment the decoded ring is empty by construction, so
+# it is the only place the boundary assertion means anything. The run reports what it
+# covered rather than assuming it covered one.
+boundaries=$(printf '%s\n' "$lines" | grep -c 'now playing:' || true)
 crashes=$(printf '%s\n' "$lines" | grep -cE 'assert failed|stack overflow|Rebooting' || true)
 rescans=$(printf '%s\n' "$lines" | grep -c 'library rescan: generation' || true)
 scan_faults=$(printf '%s\n' "$lines" | grep -cE 'library rescan:.*failed|stack overflow in task main' || true)
@@ -105,11 +119,18 @@ printf '  encoder: %s frames, last reading %s%% of one core\n' "${frames:-none}"
 printf '  memory at the start: %s\n' "${first_mem:-none}"
 printf '  memory at the end:   %s\n' "${last_mem:-none}"
 printf '  starvation rebases: %s\n' "$rebases"
+printf '  ring starved: %s ms\n' "${ring_starved:-no telemetry}"
+printf '  Track boundaries crossed: %s\n' "$boundaries"
 printf '  rescans published: %s\n' "$rescans"
 printf '  asserts/overflows/reboots: %s\n' "$crashes"
 
 [ "$crashes" = "0" ] || { echo "FAIL: the device reported a fault"; FAIL=1; }
 [ "$rebases" = "0" ] || { echo "FAIL: $rebases starvation rebase(s)"; FAIL=1; }
+# The boundary is the path this soak exists to prove: a run that never crossed one
+# says so, rather than reporting a zero that was never tested.
+if [ "$boundaries" = "0" ]; then
+    echo "  note  no Track boundary in this run: the boundary path is not exercised"
+fi
 if [ "$RESCAN" = 1 ]; then
     [ "$scan_faults" = "0" ] || { echo "FAIL: a rescan reported a fault"; FAIL=1; }
     [ "$rescans" -ge 2 ] || { echo "FAIL: fewer than two rescans published"; FAIL=1; }

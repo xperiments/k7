@@ -98,6 +98,15 @@ static bool s_frame_live;
  * before it drew anything again. */
 #define UI_REST_MAX_MS 500
 
+/* The broadcast's lag at which the screen starts giving the core back, and the rest it
+ * takes while it is behind. A Track boundary is the one moment the decoded ring is empty
+ * and the screen's redraw is at its heaviest; measured on the board, the two together ran
+ * the stream at half real time for eleven seconds and rebased the clock five times. The
+ * threshold is above the jitter the pacer's 1.5 s lead absorbs, so a healthy stream never
+ * trips it, and the rest is a step down in cadence, not a stop. */
+#define UI_LAG_YIELD_MS 150
+#define UI_LAG_REST_MS  120
+
 /* A whole frame of our own, on the board with no panel: the console dump reads it, and so
  * does the HTTP capture, so it is kept whenever either diagnostic is compiled in. */
 #if !CONFIG_APP_BOARD_SUNTON_8048S050C && \
@@ -350,6 +359,7 @@ static void screen_task(void *arg)
      * that never runs is otherwise indistinguishable from a task that has nothing to do. */
     ESP_LOGI(TAG, "screen task running on core %d", (int)xPortGetCoreID());
     for (;;) {
+        int64_t t0 = esp_timer_get_time();
         /* No lv_tick_inc() here. The panel path is ticked by the port's own esp_timer,
          * and the headless path by lv_tick_set_cb(tick_ms). Incrementing it in both
          * places ran every LVGL timer - refresh, reels, sysmon, scroll - at twice
@@ -401,7 +411,10 @@ static void screen_task(void *arg)
         }
 #endif
 
-        int64_t t0 = esp_timer_get_time();
+        /* `t0` is at the top of the pass, before the status poll, so a frame the port
+         * task (priority 4) preempts measures the preemption too - which is the cost this
+         * controller exists to price. Taken after the work it measured 0 every time, so
+         * the rest was always the floor and a 100 ms frame was followed by 40 ms of rest. */
         int frame_ms = (int)((esp_timer_get_time() - t0) / 1000);
         /* What a frame costs decides the cadence below, and the first one also draws the
          * whole screen - the cassette image included - which decides whether the
@@ -432,6 +445,15 @@ static void screen_task(void *arg)
         int rest = frame_ms * 3;
         if (rest < UI_FRAME_MS) rest = UI_FRAME_MS;
         if (rest > UI_REST_MAX_MS) rest = UI_REST_MAX_MS;   /* a slow frame must not freeze it */
+        /* And give the core back while the broadcast is behind. The decoder shares this
+         * core, below the port's priority, and at a Track boundary its ring is empty: the
+         * screen's worst redraw and the stream's worst moment are the same second, and the
+         * audio loses. `lag_ms` is the broadcast's own measure of the debt, written by the
+         * broadcast task and read here without a lock (mini_icecast.c's contract); the
+         * artwork loader backs off on it in the same way. The frame's own rest bounds this
+         * above, so a slow frame still gets to draw. */
+        if (mini_icecast_lag_ms() > UI_LAG_YIELD_MS && rest < UI_LAG_REST_MS)
+            rest = UI_LAG_REST_MS;
 #if CONFIG_APP_BOARD_SUNTON_8048S050C
         /* Keep the fade's cadence steady through a slow frame. It is a duty step, not
          * a full redraw, so the longer screen rest is the expensive part. */

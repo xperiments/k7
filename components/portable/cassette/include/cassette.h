@@ -64,12 +64,25 @@ extern "C" {
  * the bar snaps to the new position and the label names the new song. The VU data still
  * follows the new audio from the first frame, but the view cross-fades the tape's red
  * edge to the tape's own colour and fades the meters out for the window, so nothing is
- * metered while the tape winds back. */
+ * metered while the tape winds back.
+ *
+ * The window is bounded by two clocks and closes on whichever is later: the new track's
+ * elapsed and the wall clock. The elapsed alone is the audio's own, so a starving
+ * broadcast stretches the window with it (measured on the board: 7 s of tape took 13.9 s
+ * of wall); the wall alone would cut a fast stream's window short. Its packs also move in
+ * CASSETTE_REWIND_PACK_STEPS steps rather than on every poll, because each pack move
+ * redraws ~42 % of the panel on the core the decoder shares with the screen. */
 #define CASSETTE_REWIND_MS      8000
 /* The ring dims over the window's first second and returns over its last. */
 #define CASSETTE_REWIND_FADE_MS 1000
 #define CASSETTE_REWIND_EASE_MS 1200
 #define CASSETTE_REWIND_REVS    11.0f
+/* How many steps the window's pack travel is divided into. Each step resizes both pack
+ * boxes and redraws their rings, strands and VU: ~42 % of the panel per step. At the
+ * panel's 25 Hz that was ~200 of them across the window; 24 keep the migration readable
+ * and cost about a tenth as much. A step is anchored on the window's two ends, so
+ * neither end moves, and the hubs still turn on every poll. */
+#define CASSETTE_REWIND_PACK_STEPS 24
 /* A track whose status has no duration still needs a side for the reel fill. */
 #define CASSETTE_NOMINAL_SIDE_MS 1800000u  /* 30 min */
 

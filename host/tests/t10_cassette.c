@@ -302,11 +302,15 @@ static void test_rewind(void)
 
     /* The window, at the panel's cadence. It is half-open: the step that reaches
      * CASSETTE_REWIND_MS is the first one of normal play. */
-    uint32_t early_delta = 0, late_delta = 0;
+    uint16_t fill_4000 = 0, fill_6000 = 0;
     uint16_t prev_takeup = f->pack_fill[1];
     uint16_t prev_supply = f->pack_fill[0];
     uint8_t prev_hub0 = f->hub_frame[0];
     int hub_changes = 0, hub_steps = 0;
+    /* The packs move in CASSETTE_REWIND_PACK_STEPS, so the fills are a staircase: count
+     * the risers, which is the number of times the panel pays for a pack redraw. A riser
+     * smaller than 3 is the new song's own position creeping on under the window. */
+    int pack_moves = 0;
     for (uint32_t t = 40; t < CASSETTE_REWIND_MS; t += 40) {
         b = mkstatus("Song B", "b.mp3", t, side, 0.3f);
         f = cassette_step(c, &b, now += 40);
@@ -317,12 +321,13 @@ static void test_rewind(void)
         CHECK(f->pack_fill[1] <= prev_takeup + 2, "the take-up pack only empties (%u ms)", (unsigned)t);
         CHECK(f->pack_fill[0] + 2 >= prev_supply, "the supply pack only fills (%u ms)", (unsigned)t);
         CHECK(f->rewind_permille <= 1000, "the window's progress stays in range");
+        if ((int)prev_takeup - (int)f->pack_fill[1] >= 3) pack_moves++;
         if (t < CASSETTE_REWIND_MS - CASSETTE_REWIND_EASE_MS) {
             hub_steps++;
             if (f->hub_frame[0] != prev_hub0) hub_changes++;
         }
-        if (t == 440) early_delta = (uint32_t)(prev_takeup - f->pack_fill[1]);
-        if (t == CASSETTE_REWIND_MS - 40) late_delta = (uint32_t)(prev_takeup - f->pack_fill[1]);
+        if (t == 4000) fill_4000 = f->pack_fill[1];
+        if (t == 6000) fill_6000 = f->pack_fill[1];
         prev_takeup = f->pack_fill[1];
         prev_supply = f->pack_fill[0];
         prev_hub0 = f->hub_frame[0];
@@ -331,8 +336,17 @@ static void test_rewind(void)
      * and still traceable. */
     CHECK(hub_changes >= hub_steps - 2, "the hubs change frame almost every step (%d of %d)",
           hub_changes, hub_steps);
-    CHECK(early_delta > late_delta * 2, "the transport decelerates into the end (%u then %u)",
-          (unsigned)early_delta, (unsigned)late_delta);
+    /* The tape migration is a staircase, not a smear: at most one riser per step, which
+     * is what makes the window affordable on the decoder's core. */
+    CHECK(pack_moves <= CASSETTE_REWIND_PACK_STEPS, "the packs move %d times, not on every frame",
+          pack_moves);
+    CHECK(pack_moves >= CASSETTE_REWIND_PACK_STEPS / 2, "but they do move (%d steps)", pack_moves);
+    /* The deceleration is in the tail: the first half of the window winds through far
+     * more tape than the last quarter, whichever step it happens to fall on. */
+    uint32_t first_delta = (uint32_t)(old_fill[1] - fill_4000);
+    uint32_t last_delta = (uint32_t)(fill_6000 - f->pack_fill[1]);
+    CHECK(first_delta > last_delta * 2, "the transport decelerates into the end (%u then %u)",
+          (unsigned)first_delta, (unsigned)last_delta);
 
     /* The window closes on the next step, and what it lands on is what normal play
      * would have drawn for the same track at the same position. A second model that
@@ -402,6 +416,65 @@ static void test_rewind(void)
     f = cassette_step(c, &empty, now += 40);
     CHECK(!f->rewinding, "a stop closes the window");
     CHECK(!f->playing, "and the screen shows nothing playing");
+
+    cassette_free(c);
+}
+
+/* The window is bounded by two clocks and closes on whichever is later: the new track's
+ * elapsed and the wall. On the board the elapsed alone let a starving broadcast stretch
+ * the window to 13.9 s of wall for 7 s of tape, and the stretched window drew ~2x the
+ * frames - the redraw that was starving the broadcast in the first place. The wall alone
+ * would cut a fast stream's window short, so it is neither one on its own. */
+static void test_rewind_closes_on_the_clock(void)
+{
+    const uint32_t side = 180000; /* a three-minute side */
+    cassette_t *c = cassette_new(36, 0);
+    CHECK(c != NULL, "the window's clock model starts");
+    if (!c) return;
+
+    uint32_t now = 0;
+    mini_icecast_status_t a = mkstatus("Song A", "a.mp3", side, side, 0.3f);
+    cassette_step(c, &a, now);
+    mini_icecast_status_t b = mkstatus("Song B", "b.mp3", 0, side, 0.3f);
+    const cassette_frame_t *f = cassette_step(c, &b, now += 40);
+    CHECK(f->rewinding, "the change opens the window");
+    uint32_t opened_at = now;
+
+    /* Eight seconds of wall, and the audio clock only reached six: a broadcast that is
+     * starving. The window is not allowed to follow it. */
+    for (uint32_t t = 40; t < 6000; t += 40) {
+        b = mkstatus("Song B", "b.mp3", t, side, 0.3f);
+        f = cassette_step(c, &b, now += 40);
+    }
+    CHECK(f->rewinding, "the window is still open while the wall clock is short of it");
+    b = mkstatus("Song B", "b.mp3", 6000, side, 0.3f);
+    f = cassette_step(c, &b, opened_at + CASSETTE_REWIND_MS);
+    CHECK(!f->rewinding, "the window closes on the wall clock when the audio is slow");
+
+    /* ... and lands where play would put the packs at that position, so the closing frame
+     * is still not a jump. */
+    cassette_t *ref = cassette_new(36, 0);
+    CHECK(ref != NULL, "the reference model starts");
+    if (ref) {
+        mini_icecast_status_t r = mkstatus("Song B", "b.mp3", 6000, side, 0.3f);
+        const cassette_frame_t *rf = cassette_step(ref, &r, 0);
+        CHECK_EQ(f->pack_fill[0], rf->pack_fill[0], "the wall-closed window lands on the playing fill");
+        CHECK_EQ(f->pack_fill[1], rf->pack_fill[1], "both packs do");
+        cassette_free(ref);
+    }
+
+    /* The other direction: a status that jumps ahead of the wall closes the window on the
+     * audio clock, which is what a stream that is running fast looks like. */
+    cassette_reset(c);
+    now = 0;
+    a = mkstatus("Song A", "a.mp3", side, side, 0.3f);
+    cassette_step(c, &a, now);
+    b = mkstatus("Song B", "b.mp3", 0, side, 0.3f);
+    f = cassette_step(c, &b, now += 40);
+    CHECK(f->rewinding, "the change opens the window");
+    b = mkstatus("Song B", "b.mp3", CASSETTE_REWIND_MS, side, 0.3f);
+    f = cassette_step(c, &b, now += 40); /* 80 ms of wall, 8 s of audio */
+    CHECK(!f->rewinding, "and closes on the audio clock when the wall is behind");
 
     cassette_free(c);
 }
@@ -588,6 +661,7 @@ int main(void)
     test_reset();
     test_vu();
     test_rewind();
+    test_rewind_closes_on_the_clock();
     test_rewind_tape_ink();
     test_times();
     test_ink_seed();
