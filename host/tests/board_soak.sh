@@ -1,7 +1,7 @@
 #!/bin/sh
 # Board soak: T11 (encoder cost and memory over time), optionally under a scan.
 #
-#   sh host/tests/board_soak.sh <base-url> <serial-port> <minutes>
+#   sh host/tests/board_soak.sh <base-url> <serial-port> <minutes> [max-cost]
 #
 # Set RESCAN=1 to POST /api/rescan once a minute during the soak. That is the
 # ticket-13 path: a scan sharing the card with the broadcast.
@@ -23,16 +23,25 @@
 # exist: the host cannot measure a 240 MHz Xtensa with Wi-Fi running.
 set -u
 
-BASE=${1:?usage: board_soak.sh <base-url> <serial-port> <minutes>}
+BASE=${1:?usage: board_soak.sh <base-url> <serial-port> <minutes> [max-cost]}
 SERIAL_PORT=${2:?}
 MINUTES=${3:-60}
 # The bound the encoder's cost is held to. The specification proposes 35% (F4); a
 # configuration chosen for quality rather than headroom can be held to its own
 # bound instead, and says so on the command line rather than being silently
-# exempted.
-MAX_COST=${MAX_COST:-35}
+# exempted. It is a fourth argument as well as an environment variable: typed after
+# the minutes as `MAX_COST=70` it is a word to the shell, not an assignment, and the
+# run would quietly be judged at 35 and fail.
+MAX_COST=${4:-${MAX_COST:-35}}
 RESCAN=${RESCAN:-0}
 HERE=$(dirname "$0")
+
+case $MINUTES in
+    '' | *[!0-9]*) echo "minutes must be a whole number, got '$MINUTES'" >&2; exit 2 ;;
+esac
+case $MAX_COST in
+    '' | *[!0-9.]*) echo "max-cost must be a number, got '$MAX_COST'" >&2; exit 2 ;;
+esac
 
 # serial_log.py needs pyserial. The ESP-IDF python environment has it; a bare
 # python3 usually does not. Find one that can import it rather than failing later.
@@ -141,7 +150,8 @@ if [ -n "$cost" ]; then
         if [ "$MAX_COST" = "35" ] && awk "BEGIN{exit !($cost < 70)}"; then
             echo "      (35% is the specification's target, which no format offers at"
             echo "       44.1 kHz or 32 kHz; this station is configured for quality, so"
-            echo "       judge it with MAX_COST=70 — see the README's station format.)"
+            echo "       judge it with a fourth argument: ... <minutes> 70 — see the"
+            echo "       README's station format.)"
         fi
         FAIL=1
     }

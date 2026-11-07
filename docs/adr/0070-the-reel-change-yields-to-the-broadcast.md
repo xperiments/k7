@@ -74,9 +74,14 @@ Nothing changes in the decoder, the encoder or their priorities: ADR 0041 stands
   audio stalls, on the audio clock when the wall is behind, at most one pack move per step, and
   the closing frame is still the reference frame.
 - The telemetry now carries `decoded N s = X core-s per audio-second` and `ring starved N ms`,
-  so the next disagreement about this path is settled by a number. If the decoded cost turns out
-  to be 0.85 or more per audio-second, the screen fix cannot be enough and the follow-up is a
-  decode pre-roll or a ring-driven priority boost, which would need its own ADR against 0041.
+  so the next disagreement about this path is settled by a number. Measured after the change —
+  15 minutes, four Track boundaries, one client — the device logged **zero rebases**, a ring
+  wait of **0–39 ms** summed per minute, the window's ink at **7.0 s** (7 037 / 6 941 / 7 084 /
+  7 037 ms), and the decoder at **0.32–0.36** core-seconds per audio-second. That last figure
+  settles the question the research note left open: the source needs about a third of a core,
+  so the 0.72 the old line reported was the task *off* the CPU, not the decoder working. No
+  pre-roll and no priority change are needed; the encoder stayed at 64 %, which is the station
+  format's cost and not this path's.
 - `host/tests/board_soak.sh` reads the rebase count from the telemetry (the log prints only
   rebases #1–#5 and every 25th, so counting lines capped at five) and reports how many Track
   boundaries the run crossed, because a soak that never crosses one has not tested this path.

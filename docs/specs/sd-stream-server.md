@@ -380,6 +380,13 @@ second is the direct evidence that the broadcast was waiting for audio rather th
 socket. A boundary run with `ring starved 0 ms` and zero rebases is the acceptance evidence for
 E6.
 
+**[measured, T11]** A 15-minute run on the board with one client crossed four Track boundaries:
+zero starvation rebases, ring waits of 0–39 ms per minute, the reel change's ink back to 7.0 s
+of wall, and the decoder at **0.32–0.36** core-seconds per audio-second — so the source needs
+about a third of core 0 and the deficit this section describes was contention, not decode. The
+encoder read 63.9–64.3 %, which is the configured 256 kbps format's cost (F4's 35 % target is
+for the recommended 128 kbps) and is not this path's.
+
 ---
 
 ## 5. Defects to fix

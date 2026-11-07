@@ -347,6 +347,28 @@ Written after this note, and not evidence for it:
 - The two counters this note asked for — decoded audio seconds and the ring wait — are in the
   60-second telemetry, and the soak now reads its rebase count from there and reports how many
   Track boundaries the run crossed (`docs/specs/sd-stream-server.md` §4.5, E6/E7).
-- The open question stands until the board run: `decoded N s = X core-s per audio-second` is
-  the number that says whether the source or the contention is the larger half.
+
+## What the board then showed
+
+The same board, 15 minutes with one client, five Tracks of the same 44.1 kHz library and four
+boundaries between them (`board_soak.sh`, capture kept at the time of writing):
+
+| | before | after |
+|---|---|---|
+| starvation rebases | 5 in one boundary | **0** |
+| time the broadcast waited on an empty ring | (not measured) | **0–39 ms**, summed per minute |
+| the rewind's ink, dim → red | 13 925 ms | **7 037 / 6 941 / 7 084 / 7 037 ms** |
+| decoder, core-seconds per audio-second | 0.78 (the note's 0.72, per wall second) | **0.32–0.36** |
+| encoder | 64.9 % | 63.9–64.3 %, untouched |
+| Track opens | unknown | 88–201 ms |
+
+The last row of numbers is the answer to this note's open question, with one caveat: the Tracks
+are not the same ones (these are MP3s of the same rate), so it is not a strict A/B. It is still
+decisive, because a stage that costs 0.36 of a core cannot have cost 0.78: more than half of
+what the old `dec_ms` counted was the task off the CPU, not the decoder working. The source was
+never expensive; core 0 was being taken from it. That rules out the pre-roll and priority
+follow-ups the note listed — the screen fix is enough.
+
+The rewind is now within a poll of its 7 s ink window, which is the other half of the same
+finding: the window no longer takes its length from the audio it is losing.
 
