@@ -519,10 +519,13 @@ def check_editor():
     errors = []
 
     carried = {(f["name"], f["px"]) for f in load_fonts(ROOT / "assets" / "labels")}
-    m = re.search(r"const SHEET_FONTS=\[(.*?)\];", html, re.S)
+    # the editor is a hand-formatted page and gets reformatted; the tables are found by their
+    # declaration, not by their layout, so a reindent or a change of quote style cannot hide them
+    m = re.search(r"SHEET_FONTS\s*=\s*\[(.*?)\]\s*;", html, re.S)
     if not m:
         return [f"{EDITOR}: no SHEET_FONTS table"]
-    pairs = [(name, int(px)) for name, px in re.findall(r"\['([^']+)',(\d+)\]", m.group(1))]
+    pairs = [(name, int(px)) for name, px in
+             re.findall(r"\[\s*['\"]([^'\"]+)['\"]\s*,\s*(\d+)\s*\]", m.group(1))]
     if not pairs:
         errors.append(f"{EDITOR}: SHEET_FONTS is empty")
     for pair in pairs:
@@ -530,19 +533,21 @@ def check_editor():
             errors.append(f"{EDITOR}: offers {pair[0]!r} at {pair[1]} px, "
                           f"which assets/labels/fonts.json does not carry")
 
-    d = re.search(r"function defaultTpl\(\).*?fonts:\{(.*?)\},slots", html, re.S)
+    d = re.search(r"function\s+defaultTpl\s*\(\s*\)\s*\{.*?fonts:\s*\{(.*?)\}\s*,\s*slots", html, re.S)
     if not d:
         errors.append(f"{EDITOR}: no defaultTpl font roles")
     else:
-        for role, name, px in re.findall(r"(\w+):\{ff:'([^']+)',px:(\d+)\}", d.group(1)):
+        for role, name, px in re.findall(
+                r"(\w+)\s*:\s*\{\s*ff\s*:\s*['\"]([^'\"]+)['\"]\s*,\s*px\s*:\s*(\d+)",
+                d.group(1)):
             if (name, int(px)) not in pairs:
                 errors.append(f"{EDITOR}: defaults the {role} role to {name!r} at {px} px, "
                               f"which it does not offer")
 
-    m = re.search(r"const SLOTS=\[(.*?)\];", html, re.S)
+    m = re.search(r"SLOTS\s*=\s*\[(.*?)\]\s*;", html, re.S)
     if not m:
         return errors + [f"{EDITOR}: no SLOTS table"]
-    offered = re.findall(r"id:'([^']+)'", m.group(1))
+    offered = re.findall(r"id\s*:\s*['\"]([^'\"]+)['\"]", m.group(1))
     for name in offered:
         if name not in SLOT_NAMES:
             errors.append(f'{EDITOR}: offers the slot "{name}", which the vocabulary does not carry')
