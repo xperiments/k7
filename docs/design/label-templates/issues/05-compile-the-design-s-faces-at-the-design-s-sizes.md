@@ -69,3 +69,8 @@ converted ... k_font[] falls back to Montserrat".
   script is `font:barlow78`), `k_label_font[]` in `cassette_label.c`, the designer's
   `SHEET_FONTS` and both designs. The sheet itself is unchanged in size and CRC - it
   stores a font's index, not its size - so this is a recompile and a re-pack.
+- The title face then moved from 24 px to 32 px the same way: `fonts.json` and its symbol,
+  `font_archivo_narrow_600_32.c` in place of the 24 px file, the `package.json` script
+  `font:archivo32`, `k_label_font[]`, the builder's `SHEET_FONTS` and title default, both
+  designs, the spec's example and table, and `THIRD_PARTY_NOTICES`. The sheet's bytes are
+  unchanged again - an index, not a size - so it is a recompile and a re-pack.

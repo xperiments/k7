@@ -28,7 +28,7 @@
   "fonts": {
     "title": {
       "ff": "Archivo Narrow 600",
-      "px": 24
+      "px": 32
     },
     "numeral": {
       "ff": "Barlow Condensed 700",

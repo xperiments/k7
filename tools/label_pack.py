@@ -558,13 +558,13 @@ def check_editor():
 
 def selftest():
     fonts = [{"name": "Jura", "px": 20, "symbol": "jura_20"},
-             {"name": "Archivo Narrow 600", "px": 24, "symbol": "archivo_narrow_600_24"}]
+             {"name": "Archivo Narrow 600", "px": 32, "symbol": "archivo_narrow_600_32"}]
     good = {
         "v": 1, "id": "label.self", "name": "Self", "space": {"w": 748, "h": 359},
         "aperture": {"x": 95, "y": 101, "w": 556, "h": 166, "r": 83},
         "inks": {"paper": "#F2EDE3", "ink": "#24211D", "rule": "#B9AC8E",
                  "band": ["#C68B2E", "#A24E2C", "#8A5D34", "#6B7A2F"]},
-        "fonts": {"title": {"ff": "Archivo Narrow 600", "px": 24},
+        "fonts": {"title": {"ff": "Archivo Narrow 600", "px": 32},
                   "numeral": {"ff": "Jura", "px": 20},
                   "caption": {"ff": "Jura", "px": 20}},
         "slots": {"song_title": {"max": 24}},
