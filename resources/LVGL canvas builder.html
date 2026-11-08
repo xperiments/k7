@@ -161,8 +161,8 @@ const SZ={rect:[160,100],square:[100,100],circle:[120,120],text:[200,24]};
 let objs=[
  {id:1,type:'rect',name:'',x:20,y:20,w:708,h:319,color:'#1f2937',r:16},
  {id:2,type:'circle',name:'',x:50,y:60,w:200,h:200,color:'#ff5b1f'},
- {id:3,type:'text',name:'title',x:280,y:60,w:420,text:'Hello LVGL',font:36,tc:'#ffffff',fr:'title'},
- {id:4,type:'text',name:'value',x:280,y:150,w:400,text:'42 °C',font:48,tc:'#ff5b1f',fr:'numeral'}
+ {id:3,type:'text',name:'song_title',x:280,y:60,w:420,text:'',sim:'Neon Skyline',font:36,tc:'#ffffff',fr:'title'},
+ {id:4,type:'text',name:'bpm',x:280,y:150,w:400,text:'',sim:'124',font:48,tc:'#ff5b1f',fr:'numeral'}
 ];
 let sel=null,tool='select',run=false,Z=1,nid=4,drag=null,rs=false,rv={};
 let cur=null,undo=[],redo=[],lastT=0,clip=null,rotM=false,ra=null,FONTS=[];
@@ -184,6 +184,19 @@ const SLOTS=[
   {id:'mood',label:'Mood',sim:'relaxed',max:12}
 ];
 const slotOf=id=>SLOTS.find(s=>s.id===id)||null;
+// the faces a label may use, at the sizes the sheet carries them: assets/labels/fonts.json is the
+// table and tools/label_pack.py refuses a pair it does not carry. These are the three the editor
+// can draw, so the role pickers offer exactly them and a design cannot ask for a face the sheet
+// cannot compile: the packer's refusal arrives at Export instead of at the build
+// (docs/specs/label-templates.md §2).
+const SHEET_FONTS=[
+  ['Archivo Narrow 600',24],['Barlow Condensed 700',64],['IBM Plex Mono 500',18]
+];
+const sheetFaces=[...new Set(SHEET_FONTS.map(f=>f[0]))];
+// the Card's window in design coordinates (cassette-card.md): the one aperture a file may name
+const WIN={x:95,y:101,w:556,h:166,r:83};
+const sheetSizes=ff=>SHEET_FONTS.filter(f=>f[0]===ff).map(f=>f[1]).sort((a,b)=>a-b);
+const onSheet=(ff,px)=>SHEET_FONTS.some(f=>f[0]===ff&&f[1]===px);
 const simOf=id=>(tpl&&tpl.sim&&tpl.sim[id]!==undefined)?tpl.sim[id]:(slotOf(id)?slotOf(id).sim:'');
 const simText=o=>o.static?o.text:(o.sim!==undefined&&o.sim!==''?o.sim:simOf(o.name));
 let maskCfg=null,selMask=false;   // LayerMask: principal rounded clip group (null = removed)
@@ -315,8 +328,12 @@ function renderInsp(){
   if(!sel){
     ih.textContent='Template';
     const col=(k,l,v)=>`<label>${l}<input data-tp="${k}" type="color" value="${v}"></label>`;
-    const ffOpts=cur=>`<option value="">Montserrat</option>`+FONTS.map(f=>`<option value="${h(f.name)}"${f.name===cur?' selected':''}>${h(f.name)}</option>`).join('');
-    const fonts=FROLES.map(k=>`<label>${k} face<select data-tp="ff:${k}">${ffOpts(tpl.fonts[k].ff)}</select></label><label>${k} size px<input data-tp="px:${k}" type="number" value="${tpl.fonts[k].px}"></label>`).join('');
+    const fonts=FROLES.map(k=>{
+      const cur=tpl.fonts[k]&&onSheet(tpl.fonts[k].ff,tpl.fonts[k].px)?tpl.fonts[k]:defaultTpl().fonts[k];
+      const sizes=sheetSizes(cur.ff);
+      return `<label>${k} face<select data-tp="ff:${k}">${sheetFaces.map(f=>`<option value="${h(f)}"${f===cur.ff?' selected':''}>${h(f)}</option>`).join('')}</select></label>`
+        +`<label>${k} size px<select data-tp="px:${k}">${sizes.map(n=>`<option value="${n}"${n===cur.px?' selected':''}>${n}</option>`).join('')}</select></label>`;
+    }).join('');
     fields.innerHTML=`<label>Id<input data-tp="id" value="${h(tpl.id)}"></label><label>Name<input data-tp="name" value="${h(tpl.name)}"></label>`
       +(maskCfg?col('paper','Paper (LayerMask)',maskCfg.color):'')
       +col('ink','Ink',tpl.inks.ink)+[0,1,2,3].map(i=>col('band'+i,'Band '+i,tpl.inks.band[i])).join('')+col('rule','Rule',tpl.inks.rule)
@@ -352,7 +369,6 @@ function renderInsp(){
       +`<label>Align<select data-k="align"${D}>${['left','center','right'].map(a=>`<option${alignOf(sel)===a?' selected':''}>${a}</option>`).join('')}</select></label>`;
     if(sel.name&&tpl.slots[sel.name])x2+=`<label>Max chars for "${h(sel.name)}"<input data-slotmax type="number" value="${tpl.slots[sel.name].max}"${D}></label>`;
   }
-  x2+=`<label style="flex-direction:row;align-items:center;gap:6px"><input data-bl type="checkbox" ${sel.bleed?'checked':''}${D}> Bleed (may extend past the space)</label>`;
   fields.innerHTML=s+x2;
 }
 
@@ -531,12 +547,17 @@ fields.addEventListener('input',e=>{
     else if(k==='ink')tpl.inks.ink=t.value;else if(k==='rule')tpl.inks.rule=t.value;
     else if(k==='paper'){if(maskCfg)maskCfg.color=t.value}
     else if(k.startsWith('band'))tpl.inks.band[+k.slice(4)]=t.value;
-    else if(k.startsWith('ff:'))tpl.fonts[k.slice(3)].ff=t.value;
+    else if(k.startsWith('ff:')){
+      // a face change keeps the role on a pair the sheet carries, and re-renders the size list
+      const r=k.slice(3),sizes=sheetSizes(t.value);
+      tpl.fonts[r].ff=t.value;
+      if(!sizes.includes(tpl.fonts[r].px))tpl.fonts[r].px=sizes[0]||tpl.fonts[r].px;
+      commit(true);refresh();return;
+    }
     else if(k.startsWith('px:'))tpl.fonts[k.slice(3)].px=+t.value||0;
     commit(true);if(M&&run)lvBuild();else drawStage();return;
   }
   if(t.dataset.ap!==undefined){if(sel&&!sel.locked){objs.forEach(o=>{if(o!==sel)delete o.ap});if(t.checked&&sel.type!=='text')sel.ap=true;else delete sel.ap;commit(false);refresh()}return}
-  if(t.dataset.bl!==undefined){if(sel&&!sel.locked){if(t.checked)sel.bleed=true;else delete sel.bleed;commit(false);refresh()}return}
   if(t.dataset.slotmax!==undefined){if(sel&&sel.name&&tpl.slots[sel.name]){tpl.slots[sel.name].max=+t.value||0;commit(true)}return}
   if(t.dataset.mm!==undefined){if(sel)setMembers([sel],t.checked);return}
   if(t.dataset.mk&&maskCfg){maskCfg[t.dataset.mk]=t.dataset.mk==='radius'?(+t.value||0):t.value;commit(true);drawStage();return}
@@ -831,7 +852,12 @@ $('open').onchange=async e=>{
   if(!f)return;
   try{
     const txt=await f.text();const d=JSON.parse(txt);
-    if(Array.isArray(d.prims)){newDoc();tplImport(txt);return}
+    if(Array.isArray(d.prims)){
+      // a file the editor refuses must not leave the tab it was opened into behind
+      const back=ACTIVE;newDoc();
+      try{tplImport(txt)}catch(e){DOCS.pop();ACTIVE=back;applyDoc(DOCS[back]);updBtns();refresh();renderTabs();persist();throw e}
+      return;
+    }
     if(!Array.isArray(d.objs))throw new Error('no objs');
     newDoc({w:d.w,h:d.h,bg:d.bg||'#ffffff',objs:d.objs,groups:d.groups||[],mask:d.mask||null,nid:Math.max(0,...d.objs.map(o=>o.id))},f.name.replace(/\.lvgl\.json$|\.json$/,''));
   }catch(err){alert('Not a layout file: '+err.message)}
@@ -839,13 +865,23 @@ $('open').onchange=async e=>{
 };
 
 // ---- label template: the document is the model; JSON, validation, import and C are views of it ----
-// documents made before the font roles were set keep the old Montserrat defaults: move them to the current ones
+// documents made before the font roles were set keep the old Montserrat defaults: move them to
+// the current ones. A role whose face and size are not a pair the sheet carries cannot be packed
+// (assets/labels/fonts.json has no such face), so it is reset to the role's default here instead
+// of being refused at export. The old caption default - Archivo Narrow 600 at 18 px - is the one
+// such design that exists, and it becomes IBM Plex Mono 500 at 18, the sheet's only 18 px face.
 function migrateFonts(){
   if(tpl&&!tpl.sim)tpl.sim={};
   const f=tpl&&tpl.fonts;
-  if(f&&FROLES.every(k=>f[k]&&f[k].ff===''))tpl.fonts=defaultTpl().fonts;
+  if(!f)return;
+  if(FROLES.every(k=>f[k]&&f[k].ff===''))tpl.fonts=defaultTpl().fonts;
+  const d=defaultTpl().fonts;
+  for(const k of FROLES){
+    const r=tpl.fonts[k]||{};
+    if(!onSheet(r.ff,r.px))tpl.fonts[k]={...d[k]};
+  }
 }
-function defaultTpl(){return{id:'label.untitled',name:'Untitled',inks:{ink:'#151515',band:['#c68b2e','#a24e2c','#8a5d34','#6b7a2f'],rule:'#8e7e4a'},fonts:{title:{ff:'Archivo Narrow 600',px:24},numeral:{ff:'Barlow Condensed 700',px:64},caption:{ff:'Archivo Narrow 600',px:18}},slots:{},sim:{}}}
+function defaultTpl(){return{id:'label.untitled',name:'Untitled',inks:{ink:'#151515',band:['#c68b2e','#a24e2c','#8a5d34','#6b7a2f'],rule:'#8e7e4a'},fonts:{title:{ff:'Archivo Narrow 600',px:24},numeral:{ff:'Barlow Condensed 700',px:64},caption:{ff:'IBM Plex Mono 500',px:18}},slots:{},sim:{}}}
 const ROLES=['paper','ink','band.0','band.1','band.2','band.3','rule'];
 const FROLES=['title','numeral','caption'];
 const SLOT_RE=/^[a-z][a-z0-9_]*$/;
@@ -872,8 +908,15 @@ function tplBuild(){
   const colourOf=(o,tag,c)=>{c=c.toLowerCase();const r=roleOf(c);if(r)(sameAsRole[r]=sameAsRole[r]||[]).push(tag);else literal.push({tag,note:o.note});return c};
   if(!/^label\.[a-z0-9][a-z0-9-]*$/.test(tpl.id))errs.push(`id "${tpl.id}" must look like label.my-name`);
   if(ap&&!paperOn)errs.push('aperture: needs a LayerMask (the paper it cuts)');
+  // the aperture is the Card's window, not the design's (docs/specs/label-templates.md §1): the
+  // mask already cuts it, so the file either omits it or names exactly that window - the editor's
+  // object is a placement aid, and a second shape would be a second source of truth.
   const AB=ap?{x:Math.round(ap.x),y:Math.round(ap.y),w:Math.round(ap.w),h:Math.round(ap.h)}:null;
-  if(AB&&(AB.x<0||AB.y<0||AB.x+AB.w>W0||AB.y+AB.h>H0))errs.push('aperture: outside the space');
+  if(AB&&(AB.x!==WIN.x||AB.y!==WIN.y||AB.w!==WIN.w||AB.h!==WIN.h||Math.round(ap.r||0)!==WIN.r))
+    errs.push(`aperture: the Card's window is ${WIN.x},${WIN.y} ${WIN.w}x${WIN.h} r${WIN.r}, not ${AB.x},${AB.y} ${AB.w}x${AB.h} r${Math.round(ap.r||0)}`);
+  // a role's face and size are the design's, but only the sheet's pairs exist as compiled fonts
+  FROLES.forEach(k=>{const f=tpl.fonts[k]||{};
+    if(!onSheet(f.ff,f.px))errs.push(`font role ${k} is "${f.ff||'(none)'}" ${f.px||0} px, and assets/labels/fonts.json carries ${SHEET_FONTS.map(([ff,px])=>`${ff} ${px}`).join(', ')}`)});
   if(paperOn)prims.push({t:'rect',x:0,y:0,w:W0,h:H0,r:Math.round(maskCfg.radius||0),fill:'paper',still:true});
   objs.forEach(o=>{
     if(o.ap)return;
@@ -894,8 +937,7 @@ function tplBuild(){
       pr.color='ink';
       pr.align=alignOf(o);
       if(o.static)pr.text=o.text||'';else{pr.preview=simText(o);const mx=tpl.slots[o.name]&&tpl.slots[o.name].max;if(mx&&pr.preview.length>mx)errs.push(`${tag}: simulated value "${pr.preview}" is longer than ${mx} characters`)}
-      if(o.bleed)pr.bleed=true;
-      if(!o.bleed&&(X<0||Y<0||X+Wd>W0||Y>H0))errs.push(`${tag}: outside the space (tick Bleed to allow it)`);
+      if(X<0||Y<0||X+Wd>W0||Y>H0)errs.push(`${tag}: outside the ${W0}x${H0} space, which the print clips`);
       prims.push(pr);
     }else{
       const pr={t:'rect',x:X,y:Y,w:Wd,h:Ht};
@@ -904,8 +946,7 @@ function tplBuild(){
       if(o.role){if(!ROLES.includes(o.role))errs.push(`${tag}: unknown role ${o.role}`);pr.fill=o.role}
       else errs.push(`${tag}: choose a role (paper, band.0-3 or rule)`);
       pr.still=true;
-      if(o.bleed)pr.bleed=true;
-      if(!o.bleed&&(X<0||Y<0||X+Wd>W0||Y+Ht>H0))errs.push(`${tag}: outside the space (tick Bleed to allow it)`);
+      if(X<0||Y<0||X+Wd>W0||Y+Ht>H0)errs.push(`${tag}: outside the ${W0}x${H0} space, which the print clips`);
       if(AB&&X<=AB.x&&Y<=AB.y&&X+Wd>=AB.x+AB.w&&Y+Ht>=AB.y+AB.h)errs.push(`${tag}: its box covers the whole aperture`);
       prims.push(pr);
     }
@@ -916,7 +957,11 @@ function tplBuild(){
   if(literal.length>1)errs.push(`${literal.length} layers use their own colour (${literal.map(x=>x.tag).join(', ')}). A template may have one; give the others a role`);
   else if(literal.length===1){const n=(literal[0].note||'').trim();if(!n)errs.push(`${literal[0].tag} uses its own colour: add a note explaining why (Note field in the inspector)`);else noteList.push(n)}
   Object.keys(tpl.slots).forEach(k=>{if(!seen[k])errs.push(`slot "${k}" is declared but no dynamic text uses it`)});
-  const doc={v:1,id:tpl.id,name:tpl.name,space:{w:W0,h:H0},aperture:AB?{x:AB.x,y:AB.y,w:AB.w,h:AB.h,r:Math.round(ap.r||0)}:null,slots:{}};
+  const doc={v:1,id:tpl.id,name:tpl.name,space:{w:W0,h:H0}};
+  // the aperture is absent when the design has none: a null is not the window, and the packer
+  // reads "no key" and "exactly the window" as the only two answers (label-templates.md §2).
+  if(AB)doc.aperture={x:AB.x,y:AB.y,w:AB.w,h:AB.h,r:Math.round(ap.r||0)};
+  doc.slots={};
   // the colourway and the typography travel with the design: a prim names a role, and a role's
   // colour and face are the design's, not the firmware's (docs/specs/label-templates.md §2).
   // paper is the LayerMask's colour and is null when the design has no mask.
@@ -944,6 +989,12 @@ function tplImport(text){
     if(Array.isArray(d.inks.band))tpl.inks.band=d.inks.band.slice(0,4);
   }
   if(d.fonts)for(const k of FROLES)if(d.fonts[k])tpl.fonts[k]={ff:d.fonts[k].ff,px:d.fonts[k].px};
+  // a file the sheet cannot compile is refused here, not carried until Export (label-templates.md §2)
+  FROLES.forEach(k=>{const f=tpl.fonts[k]||{};
+    if(!onSheet(f.ff,f.px))throw new Error(`font role ${k} is "${f.ff}" ${f.px} px, and the sheet carries ${SHEET_FONTS.map(([ff,px])=>`${ff} ${px}`).join(', ')}`)});
+  if(d.aperture&&(d.aperture.x!==WIN.x||d.aperture.y!==WIN.y||d.aperture.w!==WIN.w||
+     d.aperture.h!==WIN.h||(d.aperture.r||0)!==WIN.r))
+    throw new Error(`aperture ${d.aperture.x},${d.aperture.y} ${d.aperture.w}x${d.aperture.h} r${d.aperture.r||0} is not the Card's window ${WIN.x},${WIN.y} ${WIN.w}x${WIN.h} r${WIN.r}`);
   $('cw').value=d.space.w;$('ch').value=d.space.h;
   Object.keys(d.slots).forEach(k=>{tpl.slots[k]={max:d.slots[k].max}});
   const note=(d.notes&&d.notes[0])||'';
@@ -961,13 +1012,11 @@ function tplImport(text){
       if(!isStatic)o.sim=p.preview;
       if(p.rot)o.rot=p.rot;
       if(p.color==='ink')o.role='ink';else throw new Error(`text colour "${p.color}" is not a role`);
-      if(p.bleed)o.bleed=true;
       out.push(mk(o));
     }else{
       const o={id:++id,type:'rect',name:'',x:p.x,y:p.y,w:p.w,h:p.h,r:p.r||0,color:'#1f2937'};
       if(p.rot)o.rot=p.rot;
       if(ROLES.includes(p.fill))o.role=p.fill;else throw new Error(`fill "${p.fill}" is not a role`);
-      if(p.bleed)o.bleed=true;
       out.push(mk(o));
     }
   });

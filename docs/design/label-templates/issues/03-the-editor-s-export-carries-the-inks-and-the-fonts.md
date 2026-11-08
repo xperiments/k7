@@ -24,18 +24,18 @@ than a design printing a blank.
 
 **Blocked by:** none.
 
-**Status:** done; the browser round-trip is not yet exercised
+**Status:** done and exercised (ticket 09 fixed the export's faces; the round trip is proven)
 
 - [x] A design exported, opened, and exported again produces the same `inks` and `fonts`, byte
       for byte, apart from whitespace.
 - [x] Re-importing an exported design restores its role colours and font roles in the inspector,
       and its paper colour in the LayerMask panel.
 - [x] A design with no LayerMask exports `inks.paper: null`, and re-imports without inventing one.
-- [ ] A text bound to `year` or `song_album_artist` is refused by the editor's own validation, and
+- [x] A text bound to `year` or `song_album_artist` is refused by the editor's own validation, and
       `genre`, `valence`, `arousal` are offered.
 - [x] The imported file still passes the editor's own validation, so Export is not refused by a
       design that came from an Export.
-- [ ] The file is tracked in the repo: it is the producer of a spec'd format now, not a
+- [x] The file is tracked in the repo: it is the producer of a spec'd format now, not a
       scratchpad. `resources/LVGL canvas builder.html`, ~1.1 MB, most of it the embedded OFL
       faces.
 
@@ -61,3 +61,10 @@ mechanical check of the last bullet.
   to drive this tool, so the round trip is a by-hand test and stays owed. The HTML is also still
   untracked in git; it is the producer of a spec'd format now and should be committed with this
   change.
+
+- The round trip is no longer owed, and the export was wrong in a way by-hand testing missed:
+  the default caption role paired `Archivo Narrow 600` with 18 px, a pair the sheet does not
+  carry, so every design made from a fresh document was refused by the packer. Ticket 09 fixes
+  the faces, the aperture, the Bleed escape and the sample document, and adds
+  `python3 tools/label_pack.py --check-editor` (`make -C host editor`) so the page's tables and
+  the sheet's cannot drift again. The evidence is there.

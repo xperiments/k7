@@ -23,9 +23,10 @@ radius 83** in these coordinates.
   children, and a design that promises more than the panel does is a lie the packer will not
   tell.
 - **The aperture is the Card's window, not the design's.** The editor's `aperture` must be
-  absent, or exactly `(95, 101, 556, 166, r 83)`; the packer refuses anything else. It is not
-  stored in the sheet: the Card's mask already cuts the window, in both layouts, and a second
-  cut would be a second source of truth.
+  absent, or exactly `(95, 101, 556, 166, r 83)`; the packer refuses anything else, and so does
+  the editor at Export and at Open - the window is the Card's, and an aperture object is only a
+  placement aid. It is not stored in the sheet: the Card's mask already cuts the window, in both
+  layouts, and a second cut would be a second source of truth.
 - **Rotation is honoured**: `rot10` is tenths of a degree about the object's own centre
   (`transform_pivot` = width/2, height/2). A rotated object costs a layer per paint.
 
@@ -43,9 +44,9 @@ the packer uses; the rest are the editor's.
   "aperture": { "x": 95, "y": 101, "w": 556, "h": 166, "r": 83 },
   "inks": { "paper": "#F5F1E6", "ink": "#242424", "rule": "#8E7E4A",
             "band": ["#C68B2E", "#A24E2C", "#8A5D34", "#6B7A2F"] },
-  "fonts": { "title":   { "ff": "Archivo Narrow", "px": 24 },
-             "numeral": { "ff": "Barlow Condensed", "px": 64 },
-             "caption": { "ff": "IBM Plex Mono", "px": 18 } },
+  "fonts": { "title":   { "ff": "Archivo Narrow 600", "px": 24 },
+             "numeral": { "ff": "Barlow Condensed 700", "px": 64 },
+             "caption": { "ff": "IBM Plex Mono 500", "px": 18 } },
   "slots": { "song_title": { "max": 24 } },
   "notes": ["the spike is the one literal colour: it is the sleeve's, not the sheet's"],
   "prims": [
@@ -63,6 +64,12 @@ the packer uses; the rest are the editor's.
   which is why a prim names a role and not a colour. `paper` is the LayerMask's colour and is
   `null` when the design has no mask; a prim that fills with `paper` then has no colour, and the
   packer refuses it.
+- **A font role is one of the sheet's pairs.** `ff` and `px` must be a pair
+  [`assets/labels/fonts.json`](../../assets/labels/fonts.json) carries: the sheet addresses a
+  font by its index in that table, and the packer refuses a pair it does not. A label's faces are
+  the three the editor embeds — `Archivo Narrow 600` at 24, `Barlow Condensed 700` at 64 and
+  `IBM Plex Mono 500` at 18 — and it offers only those, because a face it cannot draw is a face it
+  cannot show. A role is a face *and* a size, not a face with a size typed beside it.
 - **`prims` are painted in order**, first at the back. `still: true` means nothing animates it.
 - **A `rect`** has `x, y, w, h, r?, rot?, fill` and, for the one literal colour a design may
   use, `fill` is a `#RRGGBB` instead of a role, and `notes` must say why.

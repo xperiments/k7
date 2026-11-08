@@ -9,6 +9,7 @@ something else.
     python3 tools/label_pack.py assets/labels build/      # write the sheet and label_fonts.h
     python3 tools/label_pack.py assets/labels build/ --check   # validate, write, then re-read
     python3 tools/label_pack.py --selftest
+    python3 tools/label_pack.py --check-editor   # the editor's tables against this file's
 
 Standard library only: the firmware build runs this, and the build has no network.
 """
@@ -48,6 +49,9 @@ SLOT_NAMES = {
 
 ID_RE = re.compile(r"^label\.[a-z0-9][a-z0-9-]*$")
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+ROOT = Path(__file__).resolve().parent.parent
+EDITOR = ROOT / "resources" / "LVGL canvas builder.html"
 
 
 class PackError(Exception):
@@ -431,6 +435,18 @@ def main(argv):
     if "--selftest" in flags:
         return selftest()
 
+    if "--check-editor" in flags:
+        try:
+            errors = check_editor()
+        except PackError as exc:
+            errors = exc.errors
+        for line in errors:
+            print(f"label_pack: {line}", file=sys.stderr)
+        if errors:
+            return 1
+        print("label_pack: the editor offers the sheet's faces and the vocabulary's slots")
+        return 0
+
     if len(args) != 2:
         print(__doc__.strip().splitlines()[0], file=sys.stderr)
         print("usage: label_pack.py <assets/labels> <out-dir> [--check]", file=sys.stderr)
@@ -454,6 +470,52 @@ def main(argv):
     (out / "label_sheet.bin").write_bytes(blob)
     (out / "label_fonts.h").write_text(font_header, encoding="utf-8")
     return 0
+
+
+def check_editor():
+    """The editor's tables are this file's, and a drift between them is silent.
+
+    `resources/LVGL canvas builder.html` is a standalone page, so it repeats the Slot
+    vocabulary, the faces the sheet carries and the three role defaults
+    (docs/specs/label-templates.md §2). When they drift, Export succeeds and the build refuses
+    the file - or the page offers a field the Snapshot cannot fill, and the design prints
+    nothing. Neither is visible until a design is packed, so the packer checks the page with
+    its own tables: `make -C host check` runs this.
+    """
+    html = EDITOR.read_text(encoding="utf-8")
+    errors = []
+
+    carried = {(f["name"], f["px"]) for f in load_fonts(ROOT / "assets" / "labels")}
+    m = re.search(r"const SHEET_FONTS=\[(.*?)\];", html, re.S)
+    if not m:
+        return [f"{EDITOR}: no SHEET_FONTS table"]
+    pairs = [(name, int(px)) for name, px in re.findall(r"\['([^']+)',(\d+)\]", m.group(1))]
+    if not pairs:
+        errors.append(f"{EDITOR}: SHEET_FONTS is empty")
+    for pair in pairs:
+        if pair not in carried:
+            errors.append(f"{EDITOR}: offers {pair[0]!r} at {pair[1]} px, "
+                          f"which assets/labels/fonts.json does not carry")
+
+    d = re.search(r"function defaultTpl\(\).*?fonts:\{(.*?)\},slots", html, re.S)
+    if not d:
+        errors.append(f"{EDITOR}: no defaultTpl font roles")
+    else:
+        for role, name, px in re.findall(r"(\w+):\{ff:'([^']+)',px:(\d+)\}", d.group(1)):
+            if (name, int(px)) not in pairs:
+                errors.append(f"{EDITOR}: defaults the {role} role to {name!r} at {px} px, "
+                              f"which it does not offer")
+
+    m = re.search(r"const SLOTS=\[(.*?)\];", html, re.S)
+    if not m:
+        return errors + [f"{EDITOR}: no SLOTS table"]
+    offered = re.findall(r"id:'([^']+)'", m.group(1))
+    for name in offered:
+        if name not in SLOT_NAMES:
+            errors.append(f'{EDITOR}: offers the slot "{name}", which the vocabulary does not carry')
+    for name in sorted(SLOT_NAMES - set(offered)):
+        errors.append(f'{EDITOR}: is missing the slot "{name}"')
+    return errors
 
 
 def selftest():

@@ -168,7 +168,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t29_snapshot $(BIN)/t30_playlist_select $(BIN)/t31_card_select \
          $(BIN)/t32_label
 
-.PHONY: all test integration layering check tools fixtures bench control control-check clean help
+.PHONY: all test integration layering editor check tools fixtures bench control control-check clean help
 
 all: $(SERVER)
 
@@ -345,7 +345,13 @@ integration: $(SERVER)
 layering:
 	@ROOT=$(ROOT) sh $(HERE)/tests/layering.sh
 
-check: test layering integration
+# The LVGL canvas builder repeats the sheet's faces and the Slot vocabulary, and a drift is
+# silent until a design is packed (the export passes, the build refuses). The packer owns both
+# tables, so it checks the page against them.
+editor:
+	@$(PYTHON) $(ROOT)/tools/label_pack.py --check-editor
+
+check: test layering integration editor
 
 fixtures:
 	@$(MAKE) -C $(HERE)/fixtures
