@@ -46,6 +46,7 @@ li.mskrow{border-bottom:1px solid var(--line)}
 .maskbox{position:absolute;left:0;top:0;overflow:hidden}
 li.drop-into{box-shadow:inset 0 0 0 2px var(--acc)}
 li.multi{outline:1px dashed var(--acc);outline-offset:-2px}
+.o.multi{outline:1px dashed var(--acc);outline-offset:2px}
 .tw{display:inline-block;width:14px;opacity:.6}
 li.drop-above{box-shadow:inset 0 2px 0 var(--acc)}
 li.drop-below{box-shadow:inset 0 -2px 0 var(--acc)}
@@ -224,7 +225,7 @@ const pt=e=>{const r=stage.getBoundingClientRect();return{x:(e.clientX-r.left)/Z
 
 function el(o,i){
   const d=document.createElement('div');
-  d.className='o'+(o===sel&&!run?' sel':'')+(o.locked?' lock':'')+(o.ap?' ap':'');
+  d.className='o'+(o===sel&&!run?' sel':'')+(o!==sel&&selSet.has(o.id)&&!run?' multi':'')+(o.locked?' lock':'')+(o.ap?' ap':'');
   d.dataset.i=i;
   const s=d.style;
   s.left=o.x+'px';s.top=o.y+'px';s.width=o.w+'px';s.zIndex=i;
@@ -255,11 +256,17 @@ function drawStage(){
   objs.forEach((o,i)=>{const e=el(o,i);if(maskCfg&&o.m){if(!mb){mb=mkBox();nodes.push(mb)}mb.append(e)}else nodes.push(e)});
   if(maskCfg&&!mb)nodes.unshift(mkBox());
   stage.replaceChildren(...nodes);
-  if(sel&&!run&&!sel.locked){
-    const g=V(sel),b=RT(g,g.hw,g.hhs),t=RT(g,0,-g.hhs-24);
+  if(sel&&!run){
     const mk=(cls,p,data)=>{const d=document.createElement('div');d.className=cls;d.dataset[data]='1';d.style.left=(p.x-6)+'px';d.style.top=(p.y-6)+'px';stage.append(d)};
-    mk('hd',{x:g.cx+b.x,y:g.cy+b.y},'resize');
-    mk('hd rot',{x:g.cx+t.x,y:g.cy+t.y},'rot');
+    const mem=selMembers();
+    if(mem.length>1){
+      // one grip on the selection's box, and no resize: a group has no single w/h to resize
+      if(!mem.some(o=>o.locked)){const b=selBounds(mem);mk('hd rot',{x:b.cx,y:b.y0-24},'rot')}
+    }else if(!sel.locked){
+      const g=V(sel),b=RT(g,g.hw,g.hhs),t=RT(g,0,-g.hhs-24);
+      mk('hd',{x:g.cx+b.x,y:g.cy+b.y},'resize');
+      mk('hd rot',{x:g.cx+t.x,y:g.cy+t.y},'rot');
+    }
   }
 }
 
@@ -498,7 +505,7 @@ function end(){if(drag||rs||rotM){drag=null;gDrag=null;rs=false;rotM=false;commi
 stage.addEventListener('pointerdown',e=>{
   if(run)return;
   const p=pt(e);
-  if(e.target.dataset.rot){rotM=true;stage.setPointerCapture(e.pointerId);return}
+  if(e.target.dataset.rot){rotM=rotCtx(p);if(rotM)stage.setPointerCapture(e.pointerId);return}
   if(e.target.dataset.resize){
     rs=true;const g=V(sel),b=RT(g,g.hw,g.hhs);ra={x:g.cx-b.x,y:g.cy-b.y};
     stage.setPointerCapture(e.pointerId);return}
@@ -506,7 +513,6 @@ stage.addEventListener('pointerdown',e=>{
   const d=e.target.closest('.o');
   if(!d){sel=null;selSet=new Set();selGroup=null;refresh();return}
   const hit=objs[+d.dataset.i];
-  if(selGroup&&hit.g!==selGroup)selGroup=null;
   // Cmd (or Ctrl, or Shift) adds to the selection from the canvas too: without it a canvas
   // click always replaces the selection, so Group could only ever be reached from the list.
   if(e.ctrlKey||e.metaKey||e.shiftKey){
@@ -514,17 +520,28 @@ stage.addEventListener('pointerdown',e=>{
     selSet.has(hit.id)?selSet.delete(hit.id):selSet.add(hit.id);
     sel=hit;drag=null;gDrag=null;selGroup=null;refresh();return;
   }
-  sel=hit;selSet=new Set();
-  const gm=selGroup&&sel.g===selGroup?objs.filter(o=>o.g===selGroup):[];
-  gDrag=gm.length>1&&!gm.some(o=>o.locked)?{ox:sel.x,oy:sel.y,m:gm.filter(o=>o!==sel).map(o=>({o,x:o.x,y:o.y}))}:null;
-  if(!sel.locked&&!gm.some(o=>o.locked))drag={dx:p.x-sel.x,dy:p.y-sel.y};
+  // a click on a layer that is already part of the selection keeps the selection, so it can be
+  // dragged or rotated as one; a click anywhere else starts a new one
+  const inSel=hit===sel||selSet.has(hit.id)||(selGroup&&hit.g===selGroup);
+  if(!inSel){sel=hit;selSet=new Set();selGroup=null}else sel=hit;
+  const mem=selMembers();
+  gDrag=mem.length>1&&!mem.some(o=>o.locked)?{ox:sel.x,oy:sel.y,m:mem.filter(o=>o!==sel).map(o=>({o,x:o.x,y:o.y}))}:null;
+  if(!sel.locked&&!mem.some(o=>o.locked))drag={dx:p.x-sel.x,dy:p.y-sel.y};
   stage.setPointerCapture(e.pointerId);
   refresh();
 });
 stage.addEventListener('pointermove',e=>{
   if(rotM){
-    const p=pt(e),g=V(sel);
-    sel.rot=Math.round((Math.atan2(p.y-g.cy,p.x-g.cx)*180/Math.PI+90+360)%360);
+    const p=pt(e);
+    let deg=(Math.atan2(p.y-rotM.cy,p.x-rotM.cx)-rotM.a0)*180/Math.PI;
+    if(e.shiftKey)deg=Math.round(deg/15)*15;   /* Shift turns in 15 degree steps */
+    const r=deg*Math.PI/180,cos=Math.cos(r),sin=Math.sin(r);
+    for(const m of rotM.mem){
+      const o=m.o,mcx=m.x+o.w/2,mcy=m.y+m.h/2,dx=mcx-rotM.cx,dy=mcy-rotM.cy;
+      o.x=Math.round(rotM.cx+dx*cos-dy*sin-o.w/2);
+      o.y=Math.round(rotM.cy+dx*sin+dy*cos-m.h/2);
+      o.rot=Math.round(((m.rot+deg)%360+360)%360);
+    }
     drawStage();return;
   }
   if(rs){
@@ -713,6 +730,34 @@ function moveBlock(a,b,insertAt,flag,gid){
 }
 function moveLayer(s,insertAt){moveBlock(s,s,insertAt)}
 function selIds(){return selSet.size?[...selSet]:(sel?[sel.id]:[])}
+// What a canvas drag or a rotate acts on: the whole group when one is selected as a group (its
+// header was clicked), otherwise every layer in the selection (Cmd-click keeps several). A
+// single layer is the same answer either way.
+function selMembers(){
+  if(selGroup&&sel&&sel.g===selGroup)return objs.filter(o=>o.g===selGroup);
+  const ids=selIds();
+  return objs.filter(o=>ids.includes(o.id));
+}
+// The selection's own box: the pivot a group turns about, and where the rotate handle sits.
+function selBounds(mem){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const o of mem){
+    const hh=o.h||24;
+    x0=Math.min(x0,o.x);y0=Math.min(y0,o.y);x1=Math.max(x1,o.x+o.w);y1=Math.max(y1,o.y+hh);
+  }
+  return {x0,y0,x1,y1,cx:(x0+x1)/2,cy:(y0+y1)/2};
+}
+// A rotate drag: every unlocked member of the selection, turned by the same delta about the
+// selection's centre. Each prim keeps its own angle (the sheet stores rot10 per prim), so a
+// group turns by orbiting its members and adding the angle to each - which is exactly what the
+// print can express.
+function rotCtx(p){
+  const mem=selMembers().filter(o=>!o.locked);
+  if(!mem.length)return null;
+  const b=selBounds(mem);
+  return {cx:b.cx,cy:b.cy,a0:Math.atan2(p.y-b.cy,p.x-b.cx),
+          mem:mem.map(o=>({o,x:o.x,y:o.y,h:o.h||24,rot:o.rot||0}))};
+}
 // Why the current selection cannot become a group, or '' when it can. The button is disabled and
 // titled with this, and groupSel() says it out loud, so Ctrl+G never fails without a reason.
 function groupWhy(){
@@ -832,8 +877,8 @@ $('del').onclick=delSel;
 // arrow keys nudge the selected layer: 1px, or 10px with Shift. A selected group moves as a whole.
 function nudgeSel(dx,dy){
   if(!sel||sel.locked)return;
-  const mem=selGroup&&sel.g===selGroup?objs.filter(o=>o.g===selGroup):[sel];
-  if(mem.some(o=>o.locked))return;
+  const mem=selMembers();
+  if(!mem.length||mem.some(o=>o.locked))return;
   mem.forEach(o=>{o.x+=dx;o.y+=dy});
   commit(true);refresh();
 }
