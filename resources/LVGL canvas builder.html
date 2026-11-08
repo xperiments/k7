@@ -18,7 +18,9 @@ aside{background:var(--panel);padding:12px;overflow:auto;min-height:0}
 main{grid-area:main;overflow:auto;display:flex;padding:24px;min-height:0}
 h3{font-size:11px;font-weight:600;margin:0 0 10px;opacity:.55}
 #box{position:relative;margin:auto;flex:none}
-#stage{position:absolute;left:0;top:0;transform-origin:0 0;box-shadow:0 0 0 1px var(--line),0 10px 30px rgba(0,0,0,.14)}
+#stage{position:absolute;transform-origin:0 0;overflow:visible;box-shadow:0 0 0 1px var(--line),0 10px 30px rgba(0,0,0,.14)}
+#stage.outside{box-shadow:0 0 0 1px var(--acc),0 10px 30px rgba(0,0,0,.14)}
+#stage.outside .maskbox{overflow:visible}
 .o{transform-origin:0 0;position:absolute;box-sizing:border-box;cursor:move;user-select:none;touch-action:none;white-space:pre-wrap;line-height:1.2}
 .o.sel{outline:2px solid var(--acc);outline-offset:2px}
 .o.ap{outline:1px dashed var(--acc);outline-offset:-1px}
@@ -91,6 +93,7 @@ main{min-height:60vh}
 <label>H <input id="ch" type="number" value="359" min="1"></label>
 <label>Canvas <input id="bg" type="color" value="#ffffff"></label>
 <label>Zoom <select id="zoom"><option value="0.5">50%</option><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.5">150%</option></select></label>
+<button id="out" title="Show what lies outside the print: the mask still cuts it on the panel">Outside</button>
 <span style="flex:1"></span>
 <button id="undo" title="Undo (Ctrl+Z)">Undo</button><button id="redo" title="Redo (Ctrl+Shift+Z)">Redo</button><button id="copy" title="Copy (Ctrl+C)">Copy</button><button id="paste" title="Paste in place (Ctrl+V)">Paste</button>
 <button id="run">Run</button>
@@ -167,6 +170,10 @@ let objs=[
 ];
 let sel=null,tool='select',run=false,Z=1,nid=4,drag=null,rs=false,rv={};
 let cur=null,undo=[],redo=[],lastT=0,clip=null,rotM=false,ra=null,FONTS=[];
+// Show what lies outside the print: the mask clips the DOM to the paper, which hides the part of
+// a rotated or oversized layer that will not print. On by default - the print's edge is marked -
+// and off gives the exact cut.
+let outside=true;
 let groups=[],selSet=new Set(),gDrag=null,dragBlk=null,selGroup=null;   // selGroup: the group selected as a whole (its header)
 // the fixed list of dynamic fields: exactly what a Snapshot row can fill, and the sim is what
 // the device would print for it (docs/specs/label-templates.md §5). year and album_artist are
@@ -247,9 +254,13 @@ function V(o){
 const RT=(g,vx,vy)=>({x:vx*g.c-vy*g.s,y:vx*g.s+vy*g.c});
 function drawStage(){
   const w=W(),hh=H();
-  stage.style.cssText=`width:${w}px;height:${hh}px;background:${$('bg').value};transform:scale(${Z})`;
-  box.style.width=w*Z+'px';box.style.height=hh*Z+'px';
-  stage.className=run?'run':'';
+  // P is the pasteboard: the box is the print plus this much room on every side, and the stage
+  // (the print) is inset by it, so a layer that spills is drawn there instead of being cut off
+  // by the workspace's edge.
+  const P=80;
+  stage.style.cssText=`left:${P}px;top:${P}px;width:${w}px;height:${hh}px;background:${$('bg').value};transform:scale(${Z})`;
+  box.style.width=w*Z+2*P+'px';box.style.height=hh*Z+2*P+'px';
+  stage.className=(run?'run':'')+(outside?' outside':'');
   stage.hidden=!!(run&&M);
   const mkBox=()=>{const mb=document.createElement('div');mb.className='maskbox';mb.style.cssText=`width:${w}px;height:${hh}px;border-radius:${maskCfg.radius}px;background:${maskCfg.color}${apOf()?`;clip-path:path(evenodd,"${apPath()}")`:''}`;return mb};
   const nodes=[];let mb=null;
@@ -922,6 +933,8 @@ addEventListener('keydown',e=>{
 
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
 $('zoom').onchange=e=>{Z=+e.target.value;drawStage()};
+$('out').onclick=()=>{outside=!outside;drawStage();try{localStorage.setItem('lvgl-canvas.outside',outside?'1':'0')}catch(e){}}
+try{if(localStorage.getItem('lvgl-canvas.outside')==='0')outside=false}catch(e){}
 ['cw','ch','bg'].forEach(i=>$(i).addEventListener('input',()=>{commit(true);refresh()}));
 
 $('run').onclick=()=>{
