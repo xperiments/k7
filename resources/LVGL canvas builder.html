@@ -285,7 +285,9 @@ function renderList(){
   }
   list.innerHTML=rows.join('')||'<li style="opacity:.5">Empty canvas</li>';
   const ids=selIds(),selObjs=objs.filter(o=>ids.includes(o.id));
-  $('grp').disabled=ids.length<2;
+  const grpWhy=groupWhy();
+  $('grp').disabled=!!grpWhy;
+  $('grp').title=grpWhy?'Cannot group: '+grpWhy:'Group selected layers (Ctrl+G)';
   $('ungrp').disabled=!objs.some(o=>o.g&&ids.includes(o.id));
   $('mask').textContent=maskCfg?'Remove LayerMask':'Add LayerMask';
   $('tomask').disabled=!maskCfg||!selObjs.length;
@@ -505,6 +507,13 @@ stage.addEventListener('pointerdown',e=>{
   if(!d){sel=null;selSet=new Set();selGroup=null;refresh();return}
   const hit=objs[+d.dataset.i];
   if(selGroup&&hit.g!==selGroup)selGroup=null;
+  // Cmd (or Ctrl, or Shift) adds to the selection from the canvas too: without it a canvas
+  // click always replaces the selection, so Group could only ever be reached from the list.
+  if(e.ctrlKey||e.metaKey||e.shiftKey){
+    if(!selSet.size&&sel)selSet.add(sel.id);
+    selSet.has(hit.id)?selSet.delete(hit.id):selSet.add(hit.id);
+    sel=hit;drag=null;gDrag=null;selGroup=null;refresh();return;
+  }
   sel=hit;selSet=new Set();
   const gm=selGroup&&sel.g===selGroup?objs.filter(o=>o.g===selGroup):[];
   gDrag=gm.length>1&&!gm.some(o=>o.locked)?{ox:sel.x,oy:sel.y,m:gm.filter(o=>o!==sel).map(o=>({o,x:o.x,y:o.y}))}:null;
@@ -609,7 +618,7 @@ list.addEventListener('click',e=>{
   const li=e.target.closest('li[data-i]');if(!li)return;
   const o=objs[+li.dataset.i];
   if(e.target.closest('.lk')){toggleLock(o);return}
-  if(e.ctrlKey||e.metaKey){if(!selSet.size&&sel)selSet.add(sel.id);selSet.has(o.id)?selSet.delete(o.id):selSet.add(o.id);sel=o;refresh();return}
+  if(e.ctrlKey||e.metaKey||e.shiftKey){if(!selSet.size&&sel)selSet.add(sel.id);selSet.has(o.id)?selSet.delete(o.id):selSet.add(o.id);sel=o;refresh();return}
   selSet=new Set();sel=o;refresh();
 });
 list.addEventListener('dblclick',e=>{
@@ -704,10 +713,24 @@ function moveBlock(a,b,insertAt,flag,gid){
 }
 function moveLayer(s,insertAt){moveBlock(s,s,insertAt)}
 function selIds(){return selSet.size?[...selSet]:(sel?[sel.id]:[])}
-function groupSel(){
+// Why the current selection cannot become a group, or '' when it can. The button is disabled and
+// titled with this, and groupSel() says it out loud, so Ctrl+G never fails without a reason.
+function groupWhy(){
   const ids=selIds(),mem=objs.filter(o=>ids.includes(o.id));
-  if(mem.length<2)return;
-  if(maskCfg&&new Set(mem.map(m=>!!m.m)).size>1)return;
+  if(mem.length<2)return 'grouping needs two or more layers - Cmd-click them in the Layers list';
+  if(maskCfg&&new Set(mem.map(m=>!!m.m)).size>1)return 'a group cannot mix layers inside and outside the LayerMask';
+  const topIdx=Math.max(...mem.map(m=>objs.indexOf(m)));
+  const rest=objs.filter(o=>!mem.includes(o));
+  const ins=objs.slice(0,topIdx).filter(o=>!mem.includes(o)).length;
+  const block=objs.filter(o=>mem.includes(o));
+  const nextG=[...rest.slice(0,ins),...block,...rest.slice(ins)];
+  if(maskCfg&&!maskContig(nextG,o=>!!o.m))return 'grouping these would split the LayerMask run in two';
+  return '';
+}
+function groupSel(){
+  const why=groupWhy();
+  if(why){alert('Cannot group: '+why);return}
+  const ids=selIds(),mem=objs.filter(o=>ids.includes(o.id));
   const topIdx=Math.max(...mem.map(m=>objs.indexOf(m)));
   const rest=objs.filter(o=>!mem.includes(o));
   const ins=objs.slice(0,topIdx).filter(o=>!mem.includes(o)).length;
@@ -715,7 +738,6 @@ function groupSel(){
   mem.forEach(m=>{m.g=gid});
   const block=objs.filter(o=>mem.includes(o));
   const nextG=[...rest.slice(0,ins),...block,...rest.slice(ins)];
-  if(maskCfg&&!maskContig(nextG,o=>!!o.m))return;
   objs=nextG;
   groups=groups.filter(g=>objs.some(o=>o.g===g.id));
   groups.push({id:gid,name:`Group ${groups.length+1}`,collapsed:false});
