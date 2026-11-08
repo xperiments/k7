@@ -316,7 +316,7 @@ static void test_hub_anchor(void)
 
     cassette_pose_t entry = cassette_pose_entry();
     cassette_hub_anchor(entry, 0, true, &x, &y);
-    CHECK_EQ(x, 210, "at rest the supply hub is on its design column");
+    CHECK_EQ(x, 208, "at rest the supply hub is on its design column");
     CHECK_EQ(y, 122, "and the top of its 168 px rim is 84 px up from y=206");
     cassette_hub_anchor(entry, 0, false, &x, &y);
     CHECK_EQ(y, 290, "the bottom rim is 84 px the other way");
@@ -325,14 +325,14 @@ static void test_hub_anchor(void)
 
     cassette_pose_t peek = cassette_pose_peek();
     cassette_hub_anchor(peek, 0, true, &x, &y);
-    CHECK_EQ(x, 251, "at the peek pose the hub's column is 251");
+    CHECK_EQ(x, 249, "at the peek pose the hub's column is 249");
     CHECK_EQ(y, 87, "the top rim is where the song's tether ends");
     cassette_hub_anchor(peek, 0, false, &x, &y);
     CHECK_EQ(y, 217, "the bottom rim is where the group's ends");
 
     cassette_pose_t controls = cassette_pose_controls();
     cassette_hub_anchor(controls, 0, true, &x, &y);
-    CHECK_EQ(x, 249, "at the controls pose the same hub scales to 249");
+    CHECK_EQ(x, 248, "at the controls pose the same hub scales to 248");
     CHECK_EQ(y, 158, "top");
     cassette_hub_anchor(controls, 0, false, &x, &y);
     CHECK_EQ(y, 244, "bottom");
@@ -340,7 +340,7 @@ static void test_hub_anchor(void)
     CHECK_EQ(x, 450, "and the take-up hub to 450");
 
     cassette_hub_anchor(controls, 7, true, &x, &y);
-    CHECK_EQ(x, 249, "an index off the two hubs reads as the first");
+    CHECK_EQ(x, 248, "an index off the two hubs reads as the first");
 }
 
 static void test_tape(void)

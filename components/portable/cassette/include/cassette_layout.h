@@ -186,7 +186,7 @@ cassette_rect_t cassette_screen_rect(cassette_pose_t pose, cassette_rect_t desig
 /* The two hubs, on the design grid, and the rim's diameter. The tape body draws its packs,
  * its rims and its spokes from these numbers; the Peek's tethers end on them. */
 enum {
-    CASSETTE_HUB_X0     = 210,   /* the supply hub: 216 - 6 */
+    CASSETTE_HUB_X0     = 208,   /* the supply hub: 216 - 8 */
     CASSETTE_HUB_X1     = 594,   /* the take-up one: 600 - 8 + 2 */
     CASSETTE_HUB_Y      = 206,
     CASSETTE_HUB_RING_D = 168,
