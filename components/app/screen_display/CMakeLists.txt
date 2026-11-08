@@ -3,9 +3,9 @@
 # the Card - and asks screen_caps() whether this build has them (screen_caps.h). What is
 # selected here is only the hardware: the RGB panel, its GT911, and the pin its backlight
 # hangs from (with a no-op adapter on the board that has none).
-set(screen_srcs "screen_display.c" "splash.c" "cassette_view.c" "cassette_tapes.c" "cassette_meter.c" "cassette_levels.c" "cassette_bars.c" "cassette_buttons.c" "cassette_eq.c" "cassette_header.c" "cassette_footer.c" "cassette_window.c" "cassette_style.c" "cassette_widgets.c" "screen_input.c" "lvgl_mem.c" "font_jura_36.c" "font_jura_28.c" "font_jura_20.c" "font_xtape_24.c" "font_xtape_36.c" "font_xtape_logo_128.c" "font_xtape_sd_128.c" "card_mark.c" "cassette_button.c" "cassette_pad.c" "knob_editor.c" "knob_panel.c" "chrome_entrance.c" "cassette_home.c" "cassette_rgb.c" "knob_cell.c" "cassette_card.c" "screen_caps.c" "cassette_peek.c" "cassette_cover.c" "cassette_menu.c" "artwork_loader.c")
-set(screen_reqs mini_icecast cassette knob_model controls groups rgb artwork menu app_services app_board library esp_timer esp_lcd esp_driver_gpio esp_driver_ledc app_update esp_app_format)
-set(screen_priv ".")
+set(screen_srcs "screen_display.c" "splash.c" "cassette_view.c" "cassette_tapes.c" "cassette_meter.c" "cassette_levels.c" "cassette_bars.c" "cassette_buttons.c" "cassette_eq.c" "cassette_header.c" "cassette_footer.c" "cassette_window.c" "cassette_style.c" "cassette_widgets.c" "screen_input.c" "lvgl_mem.c" "font_jura_36.c" "font_jura_28.c" "font_jura_20.c" "font_xtape_24.c" "font_xtape_36.c" "font_xtape_logo_128.c" "font_xtape_sd_128.c" "font_archivo_narrow_600_24.c" "font_barlow_condensed_700_64.c" "font_ibm_plex_mono_500_18.c" "card_mark.c" "cassette_button.c" "cassette_pad.c" "knob_editor.c" "knob_panel.c" "chrome_entrance.c" "cassette_home.c" "cassette_rgb.c" "knob_cell.c" "cassette_card.c" "screen_caps.c" "cassette_peek.c" "cassette_cover.c" "cassette_label.c" "cassette_menu.c" "artwork_loader.c")
+set(screen_reqs mini_icecast cassette knob_model controls groups rgb artwork menu app_services app_board library label esp_timer esp_lcd esp_driver_gpio esp_driver_ledc app_update esp_app_format)
+set(screen_priv "." "${CMAKE_CURRENT_BINARY_DIR}")
 # LVGL vendors TJpgDec but does not export its header. The loader calls it directly: LVGL's
 # image decoder wants a file or the memfs driver, and its band-at-a-time interface does not
 # produce the single fitted buffer the cover needs. CMAKE_SOURCE_DIR is the build directory
@@ -42,3 +42,25 @@ idf_component_register(SRCS ${screen_srcs}
                        PRIV_INCLUDE_DIRS ${screen_priv}
                        REQUIRES ${screen_reqs}
                        EMBED_FILES "assets/header_logo.bin")
+
+# The Label sheet is packed here, at build time, from assets/labels/ (ADR 0071): the sheet the
+# firmware reads in place can never be older than the designs it was made from. The packer
+# refuses rather than substitutes, so a design that does not fit the panel is a build failure.
+set(label_packer "${CMAKE_CURRENT_LIST_DIR}/../../../tools/label_pack.py")
+set(label_designs "${CMAKE_CURRENT_LIST_DIR}/../../../assets/labels")
+set(label_sheet "${CMAKE_CURRENT_BINARY_DIR}/label_sheet.bin")
+file(GLOB label_json CONFIGURE_DEPENDS "${label_designs}/*.json")
+
+add_custom_command(
+    OUTPUT "${label_sheet}" "${CMAKE_CURRENT_BINARY_DIR}/label_fonts.h"
+    COMMAND python3 "${label_packer}" "${label_designs}" "${CMAKE_CURRENT_BINARY_DIR}"
+    DEPENDS ${label_json} "${label_packer}"
+    COMMENT "Packing the label sheet from assets/labels/"
+    VERBATIM)
+add_custom_target(label_sheet ALL DEPENDS "${label_sheet}")
+
+# The sheet's bytes become _binary_label_sheet_bin_start / _end in the app component, and the
+# view opens them with label_open(). The target depends on the packing, so a build can never
+# link a sheet older than the designs.
+add_dependencies(${COMPONENT_LIB} label_sheet)
+target_add_binary_data(${COMPONENT_LIB} "${label_sheet}" BINARY)

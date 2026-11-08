@@ -586,6 +586,8 @@ static http_result_t select_route(int fd, const http_request_t *req, void *ctx)
 
 bool app_services_card_present(void) { return s_card_present; }
 
+const snapshot_t *app_services_snapshot(void) { return s_snapshot; }
+
 /* The front door asks the question through a callback so it need not depend on this
  * module - the composition depends on both, and the arrow stays one-way. */
 static bool front_door_card_present(void)

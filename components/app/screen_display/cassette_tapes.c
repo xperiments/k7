@@ -69,18 +69,21 @@ static cassette_rect_t s_window;
 /* The full-screen picture's hub: a thick white rim on the same disc. At the entry pose the hub
  * is 168 px across, so 16 px is the weight the owner asked for after looking at the window
  * there; it leaves 68 px of plastic inside it. */
-#define HUB_RIM_PREVIEW_W 16
+#define HUB_RIM_PREVIEW_W 8
 #define HUB_SPOKE_W 4
 #define HUB_SPOKE_R0 66    /* the divider stops short of the centre and of the rim (82); */
 #define HUB_SPOKE_R1 72    /* together they cut the box it invalidates ~7x on 0..84 */
 
-/* The full-screen picture's divider: four marks at 90 degrees, twice the body's weight - the
- * teeth a hub has when the window is 556 px across and the hub 168. They stop at 62 so an
+/* The full-screen picture's divider: two marks, opposite one another, as the body's are. Each
+ * mark is its own line object, so a tick refreshes one rectangle per mark - four at this pose
+ * against eight when the preview drew four - and the count of refreshed rectangles, not their
+ * pixels, is what a reel tick costs (cassette-card.md, "The reel tick"). A little heavier than
+ * the body's 2 px because the window is 556 px across and the hub 168. They stop at 62 so an
  * 8 px stroke's round cap (4 px) lands at 66, just inside the 16 px rim's inner edge at 68. */
-#define HUB_SPOKE_PREVIEW_COUNT 4
-#define HUB_SPOKE_PREVIEW_W 8
+#define HUB_SPOKE_PREVIEW_COUNT 2
+#define HUB_SPOKE_PREVIEW_W 4
 #define HUB_SPOKE_PREVIEW_R0 50
-#define HUB_SPOKE_PREVIEW_R1 62
+#define HUB_SPOKE_PREVIEW_R1 56
 #define HUB_SPOKE_MAX 4
 
 /* One frame's angle, and half a turn, where the opposite spoke sits. The model's
@@ -778,9 +781,9 @@ void cassette_tapes_set_hubs_white(bool white)
     hub_ink_apply();
 }
 
-/* The full-screen picture's hub: a thicker rim, the divider kept, and each pack as its edge
- * once. Only the two paints change - the body keeps running, so putting the picture away
- * restores the cassette exactly as it was. */
+/* The full-screen picture's hub: a thicker rim, the marks kept, and each pack as its edge once.
+ * Only the two paints change - the body keeps running, so putting the picture away restores the
+ * cassette exactly as it was. */
 void cassette_tapes_set_preview(bool on)
 {
     if (on == s_preview) return;
@@ -791,8 +794,8 @@ void cassette_tapes_set_preview(bool on)
         if (s_rim[i])
             lv_obj_set_style_border_width(s_rim[i], on ? HUB_RIM_PREVIEW_W : HUB_RIM_W, 0);
         if (s_roller[i]) lv_obj_set_style_border_color(s_roller[i], col, 0);
-        /* The body's divider is two marks, the preview's four: show what the mode uses, and
-         * re-place the hub so the marks come back at the right weight and length. */
+        /* The body's divider is two marks; show what the mode uses, and re-place the hub so the
+         * marks come back at the right weight and length. */
         for (int k = 0; k < HUB_SPOKE_MAX; k++) {
             if (!s_hub_spoke[i][k].obj) continue;
             lv_obj_set_style_line_width(s_hub_spoke[i][k].obj,

@@ -22,6 +22,7 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "snapshot.h"   /* the handle app_services_snapshot() borrows */
 
 #ifdef __cplusplus
 extern "C" {
@@ -86,6 +87,12 @@ void app_services_card_state(bool present, const char *mount_error);
 /* Whether the card answers right now. The screen draws its SD mark from this, and every
  * rescan reads it, so one flag answers "is there a library" for both. */
 bool app_services_card_present(void);
+
+/* The opened Snapshot, or NULL when this device has none (no partition, no image, or an
+ * image that did not validate). Borrowed, not owned: an update replaces the image, so a
+ * caller copies what it needs within the step that asked. The screen asks once per Track
+ * change for the row a Slot prints from (docs/specs/label-templates.md §5). */
+const snapshot_t *app_services_snapshot(void);
 
 #ifdef __cplusplus
 }

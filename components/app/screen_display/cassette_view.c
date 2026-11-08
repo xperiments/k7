@@ -37,6 +37,8 @@
  * Called under the LVGL lock, like everything else on the screen.
  */
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "esp_log.h"
 #include "lvgl.h"
@@ -63,9 +65,13 @@
 #include "cassette_tapes.h"
 #include "cassette_view.h"
 #include "mini_icecast.h"
+#include "label_values.h"
+#include "library.h"
+#include "app_services.h"
 #include "screen_input.h"
 
 #include "cassette_cover.h"
+#include "cassette_label.h"
 #include "cassette_menu.h"
 
 static const char *TAG = "screen";
@@ -168,6 +174,20 @@ static void page_set(bool white)
      * cover on the white page. The Cover is the model's wish, applied after this by COVER. */
 }
 
+/* The packed Label sheet, embedded at build time (components/app/screen_display/CMakeLists.txt,
+ * ADR 0071): every design assets/labels/ holds, read in place by the label module. */
+extern const uint8_t label_sheet_bin_start[] asm("_binary_label_sheet_bin_start");
+extern const uint8_t label_sheet_bin_end[] asm("_binary_label_sheet_bin_end");
+
+/* What the label was last printed for, so a Track change is the only thing that re-resolves
+ * its row: the seed picks the design and the path picks the values, and both are compared. */
+static uint32_t s_label_seed = UINT32_MAX;
+static char     s_label_path[LIB_PATH_MAX];
+
+/* The last frame the model produced, so a pose change can draw the tape once against the new
+ * window: a tick redraws a hub only when the model moved it (cassette_view.c, apply_frame). */
+static const cassette_frame_t *s_last_frame;
+
 static bool chrome_shown_now(void);
 static void groups_install(void);
 static void groups_latch(void);
@@ -190,6 +210,12 @@ static void controls_apply(controls_changed_t changed)
         cassette_card_set_full(s_ctl.full);
         cassette_cover_set_full(s_ctl.full);
         cassette_tapes_set_preview(s_ctl.full);
+        /* The design is the two-finger pose's: the print is the Cover's at the Controls pose,
+         * and one frame after the layout changes the other one is up. */
+        cassette_label_set_pose(s_ctl.full);
+        /* The window just changed under the tape, and the next tick that draws a hub may be
+         * tens of milliseconds away: draw the frame the model last produced against it now. */
+        if (s_last_frame) cassette_tapes_set(s_last_frame);
     }
 
     if (changed & CONTROLS_CHANGED_PAGE) {
@@ -323,7 +349,14 @@ static void apply_frame(const cassette_frame_t *f)
      * plastic and the artwork has the page's colour to itself. Asked every frame, because the
      * picture lands from the loader between frames; the setter ignores a repeated value. */
     cassette_tapes_set_hubs_white(cassette_cover_is_shown() && cassette_cover_has_picture());
+
+    /* Every frame is offered, at both poses. The tapes early-out per hub: a tick whose hub
+     * frame did not change draws nothing, and the model advances a hub about ten times a second
+     * (20 frames a revolution, 1.5-3 s a revolution), so only ~10 of 25 passes a second
+     * actually redraw. A slower tick here bought 9-15 ms against 11-21 and made the rotation
+     * jump, which read as a different speed from the Controls pose's. */
     cassette_tapes_set(f);
+    s_last_frame = f;
 
     /* The window's slice is a second copy of the tape, and LVGL cannot infer that a change
      * under the Card is a change there: the tapes hand back the boxes this frame moved, and
@@ -675,6 +708,10 @@ void cassette_view_create(void)
      * Card. The porthole paints the tape slice, and the drawer is the tapes': the cover owns
      * the object, the tapes own the paint. */
     cassette_cover_create(s_cassette);
+    /* The label prints inside the Cover's print, above the picture: same box, same mask, same
+     * clip. It is created after the cover so it draws over the picture the pose hides. */
+    cassette_label_create(cassette_cover_print(), label_sheet_bin_start,
+                          (size_t)(label_sheet_bin_end - label_sheet_bin_start));
     cassette_cover_set_window_draw(cassette_tapes_draw_slice);
     cassette_place();
 
@@ -756,6 +793,22 @@ void cassette_view_update(const mini_icecast_status_t *st)
 #endif
     const cassette_frame_t *f = cassette_step(s_model, st, lv_tick_get());
     apply_frame(f);
+
+    /* The design and its values follow the Track: the seed picks the design and the path picks
+     * the Snapshot row, and a Track change is the only thing that moves either. */
+    if (f) {
+        const char *path = st ? st->path : "";
+        if (f->ink_seed != s_label_seed || strcmp(path, s_label_path) != 0) {
+            s_label_seed = f->ink_seed;
+            snprintf(s_label_path, sizeof s_label_path, "%s", path);
+
+            const library_t *lib = library_acquire();
+            label_values_t values;
+            label_values_fill(&values, lib, app_services_snapshot(), path);
+            if (lib) library_release(lib);
+            cassette_label_update(f->ink_seed, &values);
+        }
+    }
 
     /* The peek's host keeps the status for the tag request and makes it itself; this
      * is a string compare on the frames that do not change it. */

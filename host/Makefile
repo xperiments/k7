@@ -52,6 +52,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/flash_job/include \
        -I$(ROOT)/components/portable/front_door/include \
        -I$(ROOT)/components/portable/app_services/include \
+       -I$(ROOT)/components/portable/label/include \
        -I$(ROOT)/components/portable/app_board/include \
        -I$(ROOT)/components/portable/dr_libs/include \
        -I$(ROOT)/components/portable/shine/src/lib \
@@ -111,6 +112,8 @@ PROD_SRC := \
   $(ROOT)/components/portable/flash_job/flash_job.c \
   $(ROOT)/components/portable/front_door/front_door.c \
   $(ROOT)/components/portable/app_services/app_services.c \
+  $(ROOT)/components/portable/label/label.c \
+  $(ROOT)/components/portable/label/label_values.c \
   $(SHINE_SRC)
 
 vpath %.c $(ROOT)/components/portable/http_server \
@@ -134,6 +137,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/flash_job \
           $(ROOT)/components/portable/front_door \
           $(ROOT)/components/portable/app_services \
+          $(ROOT)/components/portable/label \
           $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
 
@@ -161,7 +165,8 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t18_menu $(BIN)/t19_shuffle \
          $(BIN)/t21_button $(BIN)/t22_knob $(BIN)/t23_pad $(BIN)/t24_controls \
          $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline $(BIN)/t28_entrance \
-         $(BIN)/t29_snapshot $(BIN)/t30_playlist_select $(BIN)/t31_card_select
+         $(BIN)/t29_snapshot $(BIN)/t30_playlist_select $(BIN)/t31_card_select \
+         $(BIN)/t32_label
 
 .PHONY: all test integration layering check tools fixtures bench control control-check clean help
 
@@ -298,6 +303,10 @@ $(BIN)/t27_timeline: $(OBJ)/timeline.o $(OBJ)/t27_timeline.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t29_snapshot: $(OBJ)/snapshot.o $(OBJ)/t29_snapshot.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t32_label: $(OBJ)/label.o $(OBJ)/label_values.o $(OBJ)/snapshot.o $(OBJ)/library.o $(OBJ)/audio_format.o $(OBJ)/shim.o $(OBJ)/t32_label.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

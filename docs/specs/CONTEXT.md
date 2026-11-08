@@ -432,9 +432,11 @@ _Avoid_: album art, portada
 The white page's cassette: one tinted rounded rectangle, 426x272 at (136,82), radius 12, drawn
 above the tape and under the **Cover**, which it carries at +12,+20. It has no picture of its
 own; its colours are a row of the palette table - a plastic, the label's fill and the ink it
-would print in - picked from the Track's path. Nothing is read off a picture (ADR 0040). The
-label is wordless: with no Cover, the print is the row's label fill. It and the Cover's container share one A8 mask, whose 291x87 pill
-window at (203,157) is the only place the tape shows through. Shown and hidden with the
+would print in - picked from the Track's path. Nothing is read off a picture (ADR 0040). With
+no Cover the print is the row's label fill, wordless, at the Controls pose; at the two-finger
+pose it is the Track's **Label template**, whose own paper, ink and bands print there
+(ADR 0071). It and the Cover's container share one A8 mask, whose 291x87 pill
+window at (203,157) - 556x166 at the entry grid - is the only place the tape shows through. Shown and hidden with the
 **Page**; it exists at the Controls pose and nowhere else. It is the body the screen never had:
 the label and the outer frame are the same rectangle, so there was nothing to colour.
 _Avoid_: plate, carcase
@@ -446,6 +448,30 @@ the **label**, above the Card: cinta < Card < label. The window is a real transp
 both, so the tape shows through it. The up swipe turns it off with the Page; every way off Real
 hides it. It is part of Real, not a Level of its own and not the removed Label cover.
 _Avoid_: artwork screen, Case, portada
+
+**Label template**:
+The design the two-finger pose prints on the Card's print: a 748x359 `label-template v1` file in
+`assets/labels/`, authored in the LVGL canvas builder. Its prims are rects and texts coloured by
+role - paper, ink, rule, band 0..3 - its texts bound to **Slots** or fixed, and its paper cut at
+the **Window** by the Card's own mask. A Track's template is `ink_seed % template_count`, the
+same seed that picks its palette row, so shell and design always pair (ADR 0071). The layout is
+in [`label-templates.md`](./label-templates.md).
+_Avoid_: skin, theme, label design, cover
+
+**Label sheet**:
+Every **Label template** in the build, packed into one binary: `label_sheet.bin`, written by
+`tools/label_pack.py`, embedded in the image and read in place - a pointer and a length, never
+copied, never parsed at runtime. One sheet, one CRC, one format version; the templates are
+addressed by index. It is not the parked **Sheet**, which was a Level's overlay.
+_Avoid_: pack, blob, bundle
+
+**Slot**:
+One of the eleven fields a **Label template**'s text can be bound to, filled from the playing
+Track's **Snapshot** row: `song_title`, `song_artist`, `song_album`, `genre`, `bpm`,
+`musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood` - the editor's own ids. A
+slot carries a `max`, the most characters the design allows, and an unknown value prints nothing.
+The vocabulary is the Snapshot's, not the editor's: `year` and `album_artist` are not on it.
+_Avoid_: field, variable, token, placeholder
 
 **Peek**:
 The bottom **Level**: raised by an up swipe from **Initial**, and put away by a down swipe. It

@@ -1,0 +1,42 @@
+{
+  "v": 1,
+  "id": "label.k7-reference",
+  "name": "K7 reference",
+  "space": { "w": 748, "h": 359 },
+  "aperture": { "x": 95, "y": 101, "w": 556, "h": 166, "r": 83 },
+  "inks": {
+    "paper": "#F2EDE3",
+    "ink": "#24211D",
+    "rule": "#B9AC8E",
+    "band": ["#C68B2E", "#A24E2C", "#8A5D34", "#6B7A2F"]
+  },
+  "fonts": {
+    "title": { "ff": "Archivo Narrow 600", "px": 24 },
+    "numeral": { "ff": "Barlow Condensed 700", "px": 64 },
+    "caption": { "ff": "IBM Plex Mono 500", "px": 18 }
+  },
+  "slots": {
+    "bpm": { "max": 3 },
+    "mood": { "max": 12 },
+    "musical_key": { "max": 3 },
+    "song_artist": { "max": 24 },
+    "song_title": { "max": 24 }
+  },
+  "notes": [
+    "the spine mark is the one literal colour: it is the sleeve's, not the sheet's"
+  ],
+  "prims": [
+    { "t": "rect", "x": 0, "y": 0, "w": 748, "h": 359, "r": 19, "fill": "paper", "still": true },
+    { "t": "rect", "x": 0, "y": 0, "w": 748, "h": 96, "r": 0, "fill": "band.0", "still": true },
+    { "t": "rect", "x": 0, "y": 96, "w": 748, "h": 5, "r": 0, "fill": "rule", "still": true },
+    { "t": "rect", "x": 0, "y": 267, "w": 748, "h": 4, "r": 0, "fill": "rule", "still": true },
+    { "t": "rect", "x": 0, "y": 271, "w": 748, "h": 88, "r": 0, "fill": "band.1", "still": true },
+    { "t": "rect", "x": 700, "y": 292, "w": 20, "h": 20, "r": 3, "fill": "#C63A2E", "still": true },
+    { "t": "text", "slot": "bpm", "x": 24, "y": 10, "w": 300, "font": "numeral", "color": "ink", "align": "left", "preview": "124" },
+    { "t": "text", "text": "SIDE A", "x": 500, "y": 16, "w": 220, "font": "caption", "color": "ink", "align": "right" },
+    { "t": "text", "slot": "musical_key", "x": 500, "y": 46, "w": 220, "font": "caption", "color": "ink", "align": "right", "preview": "8A" },
+    { "t": "text", "slot": "song_title", "x": 32, "y": 282, "w": 500, "font": "title", "color": "ink", "align": "left", "preview": "Neon Skyline" },
+    { "t": "text", "slot": "song_artist", "x": 32, "y": 318, "w": 440, "font": "caption", "color": "ink", "align": "left", "preview": "The Analog Sons" },
+    { "t": "text", "slot": "mood", "x": 500, "y": 318, "w": 220, "font": "caption", "color": "ink", "align": "right", "preview": "relaxed" }
+  ]
+}

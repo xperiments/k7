@@ -64,6 +64,15 @@ centre it by eye and do not derive it from the print; it is frame[1]'s interior,
 
 ## The mask
 
+> **The window is cut by the mask; `CARD_MASK 1` ships.** The porthole (`CARD_MASK 0`) was
+> rebuilt and measured while chasing the two-finger pose's cost: its capsule and its A8 stadium
+> mask now follow the layout (291x87 r43 at the Controls pose, 556x166 r83 at the entry grid,
+> the mask buffer reused across the two). At the *Controls* window it is cheap; at the entry
+> grid's 556x166 it measured **slower than the cut** - 20-60 ms a pass against 11-21 - because a
+> tick then dirties areas inside a window four times the size, and each refreshed area is a
+> masked layer plus a panel flush whatever its pixels. It stays behind the flag, with the
+> layout-following capsule kept, for the record and for the next attempt.
+
 One buffer, one descriptor, two objects.
 
 - **426x272, A8, stride 428** (`MASK_SIZE(w) = (w + 3) & ~3`), so **116,416 B**. It is 255
@@ -86,10 +95,16 @@ One buffer, one descriptor, two objects.
 
 ## The label
 
-When the Track carries no picture, the print is the row's **label fill**: one plain, opaque
-colour on the same 402x188 box, cut by the same A8 mask as a picture, so the window is still the
-mask's window and the tape still shows through it. There are no words on it. The row's **ink** is
-the colour a word would use; the column stays in the table, but nothing prints it.
+The print has two tenants. At the **Controls pose** it is the Track's **Cover**, or - when the
+Track carries no picture - the row's **label fill**: one plain, opaque colour on the same
+402x188 box, cut by the same A8 mask as a picture, so the window is still the mask's window and
+the tape still shows through it. There are no words on it. The row's **ink** is the colour a
+word would use; the column stays in the table, but nothing prints it.
+
+At the **two-finger pose** the print is the Track's **Label template**: the design's own
+748x359 space, its paper, ink and bands, its texts bound to slots, all inside the same print box
+and cut by the same mask (ADR 0071, [`label-templates.md`](./label-templates.md)). The row's
+ink is not printed there either: the design's six role colours are its own.
 
 The label is not the Card's plastic. It is its own rectangle at the print's box, so a light label
 on a dark shell reads as a label rather than as bare plastic; the 12/20/64 px mat around it is
@@ -97,11 +112,11 @@ the plastic.
 
 ## The ink
 
-| | |
-|---|---|
-| Card ink | the row's **plastic** |
-| Label fill | the row's **label** |
-| Label ink | the row's **ink** - carried, not printed |
+| | Controls pose | Two-finger pose |
+|---|---|---|
+| Card ink | the row's **plastic** | the row's **plastic** |
+| Label fill | the row's **label** | the design's **paper** |
+| Label ink | the row's **ink** - carried, not printed | the design's **ink** |
 
 `k_col_cassette[]` in `cassette_style.c` is the whole palette (ADR 0040): one row per cassette,
 `{ plastic, ink, label }`, with `k_col_cassette_count` as its length. Adding a cassette is adding
@@ -136,6 +151,32 @@ a row - nothing else changes, and nothing is derived.
 The hubs animate at 25 Hz and the Card is a masked layer over them, so the tick must not
 invalidate anything the Card would have to re-render.
 
+**Both poses offer every frame; the tapes early-out per hub.** A tick whose model hub frame did
+not change draws nothing, and the model advances a hub about ten times a second (20 frames a
+revolution, 1.5-3 s a revolution), so roughly ten of the twenty-five passes a second redraw. A
+slower tick at the pose (8 Hz) bought 9-15 ms against 11-21 and made the rotation step, which read
+as a different speed from the Controls pose's - so it was removed.
+What a tick costs is not its pixels and not its content: it is the *number* of refreshed
+rectangles, each of which is a layer pass plus a panel flush. Measured on the panel, per pass of
+the screen task with the pose up:
+
+| configuration | pose, per pass |
+|---|---|
+| the masked cut, tick every frame (25 Hz) | 11-21 ms, worst 89-243 |
+| ...with each mark's own sweep invalidated (8 small boxes, 4.5-20K px) | 20-60 ms |
+| ...with one box per hub (2 boxes, 48-60K px) | 46 ms, worst 360 |
+| ...with the preview's marks moved inboard, r20-r40 | 12 ms - no better |
+| ...with two marks on the preview's hub instead of four, at 8 Hz | one refreshed rectangle per mark. That number is now moot: the pose has no preview mode, and it draws the body's two marks. Measured 22-33 ms, against 9-15 for the four-mark 8 Hz run - the spread between runs, not between configurations, so the mechanism is recorded rather than a claimed win |
+| the porthole over the entry grid's 556x166 | 20-60 ms |
+| the window rendered into its own RGB565 canvas, one rectangle invalidated per tick | 17 ms at the Controls pose (was 8-10) and 29-40 at the pose: `lv_canvas_finish_layer` dispatches through the draw units, which costs more than the masked composite it replaced |
+| ...with the pose's rest capped at the floor instead of 3x the frame | 21-30 ms of work, passes 91-109 - no better, so the cap was reverted: it only moves the same rendering into more, shorter passes |
+| **the masked cut, tick at 8 Hz** | **9-15 ms**, the same work per pass as the Controls pose; the cadence is 50-125 ms because `rest = 3 x frame` follows the occasional heavy frame, and a Track boundary at the pose is one 60-850 ms frame (rewind + Card ink + the label's re-text together) |
+
+The last row is why the tick is limited rather than fixed, and the drift in it is unexplained by
+this change: it is owed a profile. What the numbers do establish is that the label is not the
+cost - with it removed the pose measured the same - and that neither halving the areas nor
+halving the ticks buys the pose its smoothness back.
+
 - `pack_place()` **clamps each pack's box to the window** - (203,157) 291x87 - whenever the Card
   is up. Nothing moves: `pack_draw_cb` draws its rings from `SCX/SCY(k_hub[i])`, the hub's
   screen centre, not from the object's box, and `lv_obj_redraw()` truncates the layer to the
@@ -168,6 +209,10 @@ separate colour: the frame and the body are one material, only the print is anot
 - **`cassette_cover.c`** - the container becomes 426x272 at the Card's rect and the print is
   clipped at +12,+20. It stops reading `cassette_tapes_frame_rect()` for its geometry and stops
   building its own mask; it asks the Card for the descriptor and shows and hides by a cut.
+- **`cassette_label.c` / `.h`** - the two-finger print: the selected **Label template** as LVGL
+  objects inside the print, built once per template and re-texted per Track, hidden with the
+  pose. It owns no geometry either: the print's box is the Card's
+  ([`label-templates.md`](./label-templates.md)).
 - **`cassette_tapes.c`** - `pack_place()` gains the clamp; `raise_frames()` and
   `set_cover_print()` go, since the Cover only ever shows on this page and the frames are under
   the Card.
@@ -182,14 +227,18 @@ separate colour: the frame and the body are one material, only the print is anot
 
 | | |
 |---|---|
-| PSRAM | mask **116,416 B**, replacing 75,952 B → **+40,464 B** |
+| PSRAM | the Card's two A8 masks: **116,416 B** at the Controls pose and **424,320 B** at the entry grid. The porthole's window masks (25,317 B and 92,296 B) are built instead only when `CARD_MASK 0` |
 | flash | **0 B** - no art is embedded; the fifteen-label, 1.13 MB idea is gone |
 | layers | the Card and the print each draw into a banded ARGB layer; `CONFIG_LV_DRAW_LAYER_SIMPLE_BUF_SIZE = 24576` gives about 14 rows at 426 px, so ~24 KB transient |
 | tick | the invalidated area drops to ≤ 25,317 px, and nothing outside the window is repainted |
 
 ## Still open
 
-- Whether the label's ink column earns its place before a word is printed on it. It is carried
-  in every row, and nothing reads it.
+- Whether the label's ink column earns its place at the Controls pose, before a word is printed
+  on it. It is carried in every row, and there it prints nothing; at the two-finger pose the
+  ink is the design's own.
 - The five rows are a first cut, not a measurement: they are what a 426x272 mat and a cream
   label look like on the white page, and they are the thing most likely to want tuning there.
+- How a **Label template**'s palette meets a row's plastic: a design's paper is fixed, so the
+  shell is the only variable, and the pairing is the hash's. Whether the two together read well
+  is a judgement on the panel, not an arithmetic one.

@@ -76,7 +76,7 @@ void cassette_tapes_set_hubs_white(bool white);
  * colour). Only what changed is written. A NULL frame is a no-op. */
 void cassette_tapes_set(const cassette_frame_t *frame);
 
-/* The full-screen picture is up: draw the hubs with a thick rim - divider and all - and each
+/* The full-screen picture is up: draw the hubs with a thick rim - the marks kept - and each
  * pack as the tape's edge once instead of the ring stack. The body is not rebuilt, so the
  * cassette comes back exactly as it was. */
 void cassette_tapes_set_preview(bool on);

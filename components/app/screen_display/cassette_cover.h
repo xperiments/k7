@@ -69,6 +69,11 @@ bool cassette_cover_has_picture(void);
  * clears it, so the cover can be asked for while the decode is still running. */
 bool cassette_cover_is_shown(void);
 
+/* The print proper: the 402x188 box at +12,+20 at the Controls pose, and the same box at the
+ * entry grid. A part that prints on it - cassette_label - adds its objects there, so the
+ * geometry stays in one place. NULL before create(), or on a board with no cover capability. */
+lv_obj_t *cassette_cover_print(void);
+
 /* The print's colours, from the row the plastic came from: the label's fill (the print when the
  * Track has no picture), the ink a word would use (the label is wordless), and the plastic the
  * window's rim is drawn in - the cassette is moulded around its window, so the frame and the

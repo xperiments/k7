@@ -69,5 +69,24 @@ the internal RAM that Wi-Fi's DMA buffers need. See
 docs/research/radio-player-memory-and-lvgl.md.
 
 --------------------------------------------------------------------------------
-libshine's own dependencies
+Archivo Narrow, Barlow Condensed, IBM Plex Mono - the label faces
 --------------------------------------------------------------------------------
+Location      assets/fonts/archivo-narrow-600.ttf,
+              assets/fonts/barlow-condensed-700.ttf and
+              assets/fonts/ibm-plex-mono-500.ttf. These are the bytes the LVGL
+              canvas builder embeds as base64 in resources/LVGL canvas
+              builder.html, written out by tools/extract_builder_fonts.py.
+Faces         Archivo Narrow 600 at 24 px, Barlow Condensed 700 at 64 px and
+              IBM Plex Mono 500 at 18 px, compiled by lv_font_conv into
+              components/app/screen_display/font_<face>_<px>.c (4 bpp, Latin,
+              Latin-1 and the punctuation range the other fonts use).
+Licence       SIL Open Font License, Version 1.1 (OFL-1.1), which permits the
+              fonts to be embedded and redistributed with this software.
+Copyright     Archivo Narrow: 2019 The Archivo Narrow Project Authors
+              (https://github.com/Omnibus-Type/ArchivoNarrow)
+              Barlow Condensed: 2017 The Barlow Project Authors
+              (https://github.com/jpt/barlow)
+              IBM Plex Mono: 2017 IBM Corp. All rights reserved.
+Licence text  LICENSES/OFL-1.1.txt
+Modifications none to the embedded bytes; the .c files are glyph conversions
+              of them, not edits to the font software.
