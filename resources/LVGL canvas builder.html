@@ -565,22 +565,13 @@ stage.addEventListener('pointermove',e=>{
     drawStage();return;
   }
   if(!drag)return;
+  // a drag is free: the pasteboard is where a layer can be put outside the print, and what will
+  // not print is the packer's refusal at build ("outside the 748x359 space"), not a wall here.
+  // A clamp used to pin the layer to the print, which read as a broken drag the moment a turned
+  // or full-width layer could not fit inside it.
   const p=pt(e);
   const starts=gDrag?[{o:sel,x:gDrag.ox,y:gDrag.oy},...gDrag.m]:[{o:sel,x:drag.x0,y:drag.y0}];
-  // the reach of the whole selection: a delta every layer can take and still be inside the
-  // print as drawn, so one layer at the edge stops the drag where it would leave it
-  let loX=-Infinity,hiX=Infinity,loY=-Infinity,hiY=Infinity;
-  for(const s of starts){
-    const e=halfExtents(s.o),cx=s.x+s.o.w/2,cy=s.y+(s.o.h||24)/2;
-    loX=Math.max(loX,e.x-cx);hiX=Math.min(hiX,W()-e.x-cx);
-    loY=Math.max(loY,e.y-cy);hiY=Math.min(hiY,H()-e.y-cy);
-  }
-  let dx=p.x-drag.dx-drag.x0,dy=p.y-drag.dy-drag.y0;
-  // an axis on which the selection cannot fit at all (a 748 px band turned 90 degrees is taller
-  // than the 359 px print) has no inside to stay in, so it is not constrained there
-  dx=loX<=hiX?Math.min(Math.max(dx,loX),hiX):dx;
-  dy=loY<=hiY?Math.min(Math.max(dy,loY),hiY):dy;
-  dx=Math.round(dx);dy=Math.round(dy);
+  const dx=Math.round(p.x-drag.dx-drag.x0),dy=Math.round(p.y-drag.dy-drag.y0);
   for(const s of starts){s.o.x=s.x+dx;s.o.y=s.y+dy}
   drawStage();
 });
@@ -775,14 +766,6 @@ function selBounds(mem){
 // selection's centre. Each prim keeps its own angle (the sheet stores rot10 per prim), so a
 // group turns by orbiting its members and adding the angle to each - which is exactly what the
 // print can express.
-// A layer's half extents as drawn, rotation included. The unrotated box is the wrong one to
-// clamp a drag with: a 748 px band turned 90 degrees is 42 px wide on screen, and clamping it by
-// its 748 px width pins it to x=0 so it cannot be moved at all.
-function halfExtents(o){
-  const a=(o.rot||0)*Math.PI/180,cs=Math.abs(Math.cos(a)),sn=Math.abs(Math.sin(a));
-  const w=o.w,hh=o.h||24;
-  return {x:(w*cs+hh*sn)/2,y:(w*sn+hh*cs)/2};
-}
 function rotCtx(p){
   const mem=selMembers().filter(o=>!o.locked);
   if(!mem.length)return null;
