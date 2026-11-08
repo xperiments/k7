@@ -86,3 +86,7 @@ table in §7 — the packer's contract, arriving early.
   and slots.
 - That design (15 prims, 2 slots, paper `#bfb4a4`) is `assets/labels/label.retro-a.json`; it
   packs at 504 B alone and the sheet is 920 B with the reference. The firmware builds it.
+
+- The designs themselves moved to `assets/labels/templates/` and `make -C host editor` now runs
+  the packer's selftest too: the folder is the set, every `*.json` in it is packed, a stray file
+  or the Export's `labels.json` manifest fails naming itself, and a dot-name is not a design.

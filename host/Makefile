@@ -345,10 +345,11 @@ integration: $(SERVER)
 layering:
 	@ROOT=$(ROOT) sh $(HERE)/tests/layering.sh
 
-# The LVGL canvas builder repeats the sheet's faces and the Slot vocabulary, and a drift is
-# silent until a design is packed (the export passes, the build refuses). The packer owns both
-# tables, so it checks the page against them.
+# The packer's own test, and its check that the LVGL canvas builder repeats the sheet's faces and
+# the Slot vocabulary: a drift there is silent until a design is packed (the export passes, the
+# build refuses). The packer owns both tables, so it checks the page against them.
 editor:
+	@$(PYTHON) $(ROOT)/tools/label_pack.py --selftest
 	@$(PYTHON) $(ROOT)/tools/label_pack.py --check-editor
 
 check: test layering integration editor

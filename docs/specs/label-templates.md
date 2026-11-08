@@ -2,8 +2,8 @@
 
 The cassette's **Label template** is the design the two-finger screen prints on the Card's
 print. It is authored in the LVGL canvas builder (`resources/LVGL canvas builder.html`), stored
-as `label-template v1` JSON in `assets/labels/`, packed at build into one **Label sheet**, and
-read in place by `components/portable/label/`. [ADR 0071](../adr/0071-the-two-finger-screen-prints-a-packed-label-sheet.md)
+as `label-template v1` JSON in `assets/labels/templates/`, packed at build into one **Label
+sheet**, and read in place by `components/portable/label/`. [ADR 0071](../adr/0071-the-two-finger-screen-prints-a-packed-label-sheet.md)
 records why the device does not parse the JSON; this document is the contract the editor, the
 packer and the reader all speak.
 
@@ -81,8 +81,11 @@ the packer uses; the rest are the editor's.
 
 ## 3. The sheet — `label_sheet.bin`
 
-One file for every design in `assets/labels/`, little-endian throughout, no padding, no
-structure aliasing: the reader takes a pointer and a length and never copies.
+One file for every design in `assets/labels/templates/`, little-endian throughout, no padding,
+no structure aliasing: the reader takes a pointer and a length and never copies. The folder is
+the set: **every `*.json` in it is packed**, in id order, and a file that is not a design fails
+the build naming itself - a design left out silently would print the wrong label with no line
+saying why.
 
 ```text
 header        32 B
@@ -282,7 +285,8 @@ Named per design and per layer; the build fails, nothing is dropped.
 | a slot whose `max` is 0 or over 96 | the resolver carries 96; the design may not ask for more |
 | more than 48 prims, 16 slots or 32 designs | a bounded build, a bounded repaint, a bounded sheet |
 | the same `id` twice | selection would be ambiguous |
-| no designs at all | nothing to embed |
+| no designs at all in `assets/labels/templates/` | nothing to embed |
+| a file in `templates/` that is not a design (the Export's `labels.json`, say) | it would be a design nobody wrote |
 
 ## 8. Costs
 

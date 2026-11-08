@@ -49,3 +49,8 @@ the image building and ticket 08 seeing the design on the panel.
   generated `label_sheet.bin.S` object and `liblabel.a`.
 - A packer failure fails the build: the packer's exit code is the command's, and a design that
   does not validate writes nothing, so there is no stale sheet to fall back on.
+
+- The build glob follows the designs into `assets/labels/templates/` (`CONFIGURE_DEPENDS` over
+  `templates/*.json`), and `fonts.json` is an explicit `DEPENDS` now that it is outside the glob:
+  editing the font table repacks the sheet instead of quietly reusing the old one. The build log
+  reads `Packing the label sheet from assets/labels/templates/`.

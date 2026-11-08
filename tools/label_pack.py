@@ -7,6 +7,7 @@ design that does not fit the panel is a build failure, not a design that quietly
 something else.
 
     python3 tools/label_pack.py assets/labels build/      # write the sheet and label_fonts.h
+                                                          # (reads templates/*.json and fonts.json)
     python3 tools/label_pack.py assets/labels build/ --check   # validate, write, then re-read
     python3 tools/label_pack.py --selftest
     python3 tools/label_pack.py --check-editor   # the editor's tables against this file's
@@ -18,6 +19,7 @@ import json
 import re
 import struct
 import sys
+import tempfile
 import zlib
 from pathlib import Path
 
@@ -31,6 +33,12 @@ SLOT_SIZE = 8
 SPACE_W, SPACE_H = 748, 359
 # The Card's window in the design's own space: (95,101) 556x166, radius 83.
 APERTURE = (95, 101, 556, 166, 83)
+
+# The designs sit in their own folder: assets/labels/ also holds the K7 art (k7logo.png,
+# cover.jpg), and a sheet is packed from templates/ alone. Every *.json in it is a design -
+# nothing is skipped silently - and fonts.json stays at the root because it is the sheet's font
+# table, not a design.
+TEMPLATES = "templates"
 
 PRIM_MAX = 48
 SLOT_MAX = 16
@@ -292,7 +300,7 @@ def pack_sheet(designs, fonts):
     """Every design -> the sheet's bytes and the font header's text. Raises PackError."""
     errors = []
     if not designs:
-        raise PackError(["no designs: assets/labels/ has no label.*.json to pack"])
+        raise PackError([f"no designs: assets/labels/{TEMPLATES}/ has no *.json to pack"])
     if len(designs) > TEMPLATE_MAX:
         raise PackError([f"{len(designs)} designs, more than the {TEMPLATE_MAX} a sheet holds"])
 
@@ -416,13 +424,38 @@ def load_fonts(src):
 
 
 def load_designs(src):
+    """Every *.json in <src>/templates is a design; a file that is not one is an error.
+
+    Nothing is skipped silently: a design left in the folder and not packed would be a Track
+    that prints the wrong label and no line saying why. A name starting with a dot is not a
+    design (the Export's zip, a .DS_Store or an AppleDouble sidecar), which is the one thing
+    ignored, and it is ignored by name rather than by guessing.
+    """
+    root = Path(src) / TEMPLATES
+    paths = sorted(p for p in root.glob("*.json") if not p.name.startswith("."))
+    if not paths:
+        raise PackError([f"no designs: {root} has no *.json to pack"])
+
     errors = []
     designs = []
-    for path in sorted(Path(src).glob("label.*.json")):
+    for path in paths:
         try:
-            designs.append(json.loads(path.read_text(encoding="utf-8")))
+            design = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             errors.append(f"{path}: {exc}")
+            continue
+        if not isinstance(design, dict):
+            errors.append(f"{path}: not a JSON object, so not a design")
+            continue
+        if "templates" in design and "prims" not in design:
+            errors.append(f"{path}: that is the Export's labels.json manifest, not a design; "
+                          f"copy its label.*.json files into {root}")
+            continue
+        if not all(k in design for k in ("v", "id", "space", "prims")):
+            errors.append(f"{path}: not a label-template v1 design (it needs v, id, space and "
+                          f"prims; the editor's Export writes one, its Save writes a document)")
+            continue
+        designs.append(design)
     if errors:
         raise PackError(errors)
     return designs
@@ -556,6 +589,37 @@ def selftest():
     summary = verify_sheet(blob)
     assert "1 designs, 4 prims, 1 slots" in summary, summary
     assert "LABEL_FONT_JURA_20 0" in header and "LABEL_FONT_COUNT 2" in header
+
+    # a folder is the set: every *.json in templates/ is a design, a stray file fails naming
+    # itself, the Export's manifest says what it is, and a dot-name is not a design
+    with tempfile.TemporaryDirectory() as d:
+        templates = Path(d) / TEMPLATES
+        templates.mkdir()
+        try:
+            load_designs(d)
+            raise SystemExit("selftest: an empty templates/ was accepted")
+        except PackError as exc:
+            assert "no *.json" in exc.errors[0], exc.errors
+
+        (templates / "label.self.json").write_text(json.dumps(good))
+        (templates / ".DS_Store").write_text("junk")
+        (templates / "._label.self.json").write_text("junk")
+        assert [x["id"] for x in load_designs(d)] == ["label.self"], "the dot-names were read"
+
+        (templates / "labels.json").write_text(json.dumps({"v": 1, "templates": []}))
+        try:
+            load_designs(d)
+            raise SystemExit("selftest: the Export's manifest was accepted as a design")
+        except PackError as exc:
+            assert "labels.json manifest" in exc.errors[0], exc.errors
+
+        (templates / "labels.json").unlink()
+        (templates / "label.stray.json").write_text(json.dumps({"hello": 1}))
+        try:
+            load_designs(d)
+            raise SystemExit("selftest: a file that is not a design was accepted")
+        except PackError as exc:
+            assert "not a label-template v1 design" in exc.errors[0], exc.errors
 
     expect_refusal(lambda d: d.update(space={"w": 800, "h": 359}), "space is 800x359")
     expect_refusal(lambda d: d["prims"][0].update(x=400), "outside the 748x359 print")

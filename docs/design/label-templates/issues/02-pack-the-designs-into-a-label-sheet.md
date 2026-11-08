@@ -67,3 +67,10 @@ face. The C side is ticket 01's `t32_label`.
   the resolver carries and the view never has to cut a value the sheet allowed.
 - Refusals were run against the real design as well as synthetic ones: a broken aperture and a
   prim outside the print both fail, write nothing, and name the design and the layer.
+
+- The designs moved out of `assets/labels/` into `assets/labels/templates/`: the folder also
+  holds the K7 art (`k7logo.png`, `cover.jpg`, `k7b.png`), and a sheet is packed from
+  `templates/*.json` alone. The folder is the set - every `*.json` in it is packed, a file that
+  is not a design fails the build naming itself, and the Export's `labels.json` manifest gets its
+  own message - so adding a design is saving a file, not registering one. `fonts.json` stays at
+  the root: it is the sheet's font table, not a design.

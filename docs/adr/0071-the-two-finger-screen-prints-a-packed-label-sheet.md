@@ -12,8 +12,10 @@ directory off the card at play, generate C per design, or carry the design as a 
 
 ## Decision
 
-- **A design is a `label-template v1` JSON file** in `assets/labels/`, written by the editor and
-  kept in git: the editable, diffable record. It is not parsed by the firmware.
+- **A design is a `label-template v1` JSON file** in `assets/labels/templates/`, written by the
+  editor and kept in git: the editable, diffable record. Every `*.json` there is packed; the
+  folder is the set, so adding a design is saving a file into it. It is not parsed by the
+  firmware.
 - **`tools/label_pack.py` packs every design into one binary sheet** — `label_sheet.bin` — at
   build time, and the sheet is embedded in the image and **read in place**: a pointer and a
   length, no copy, no allocation, no RAM. The byte layout is
