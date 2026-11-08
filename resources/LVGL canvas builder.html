@@ -526,7 +526,7 @@ stage.addEventListener('pointerdown',e=>{
   if(!inSel){sel=hit;selSet=new Set();selGroup=null}else sel=hit;
   const mem=selMembers();
   gDrag=mem.length>1&&!mem.some(o=>o.locked)?{ox:sel.x,oy:sel.y,m:mem.filter(o=>o!==sel).map(o=>({o,x:o.x,y:o.y}))}:null;
-  if(!sel.locked&&!mem.some(o=>o.locked))drag={dx:p.x-sel.x,dy:p.y-sel.y};
+  if(!sel.locked&&!mem.some(o=>o.locked))drag={dx:p.x-sel.x,dy:p.y-sel.y,x0:sel.x,y0:sel.y};
   stage.setPointerCapture(e.pointerId);
   refresh();
 });
@@ -555,9 +555,22 @@ stage.addEventListener('pointermove',e=>{
   }
   if(!drag)return;
   const p=pt(e);
-  sel.x=Math.round(Math.min(Math.max(0,p.x-drag.dx),W()-sel.w));
-  sel.y=Math.round(Math.min(Math.max(0,p.y-drag.dy),H()-(sel.h||24)));
-  if(gDrag){const dx=sel.x-gDrag.ox,dy=sel.y-gDrag.oy;gDrag.m.forEach(m=>{m.o.x=m.x+dx;m.o.y=m.y+dy})}
+  const starts=gDrag?[{o:sel,x:gDrag.ox,y:gDrag.oy},...gDrag.m]:[{o:sel,x:drag.x0,y:drag.y0}];
+  // the reach of the whole selection: a delta every layer can take and still be inside the
+  // print as drawn, so one layer at the edge stops the drag where it would leave it
+  let loX=-Infinity,hiX=Infinity,loY=-Infinity,hiY=Infinity;
+  for(const s of starts){
+    const e=halfExtents(s.o),cx=s.x+s.o.w/2,cy=s.y+(s.o.h||24)/2;
+    loX=Math.max(loX,e.x-cx);hiX=Math.min(hiX,W()-e.x-cx);
+    loY=Math.max(loY,e.y-cy);hiY=Math.min(hiY,H()-e.y-cy);
+  }
+  let dx=p.x-drag.dx-drag.x0,dy=p.y-drag.dy-drag.y0;
+  // an axis on which the selection cannot fit at all (a 748 px band turned 90 degrees is taller
+  // than the 359 px print) has no inside to stay in, so it is not constrained there
+  dx=loX<=hiX?Math.min(Math.max(dx,loX),hiX):dx;
+  dy=loY<=hiY?Math.min(Math.max(dy,loY),hiY):dy;
+  dx=Math.round(dx);dy=Math.round(dy);
+  for(const s of starts){s.o.x=s.x+dx;s.o.y=s.y+dy}
   drawStage();
 });
 stage.addEventListener('pointerup',end);
@@ -751,6 +764,14 @@ function selBounds(mem){
 // selection's centre. Each prim keeps its own angle (the sheet stores rot10 per prim), so a
 // group turns by orbiting its members and adding the angle to each - which is exactly what the
 // print can express.
+// A layer's half extents as drawn, rotation included. The unrotated box is the wrong one to
+// clamp a drag with: a 748 px band turned 90 degrees is 42 px wide on screen, and clamping it by
+// its 748 px width pins it to x=0 so it cannot be moved at all.
+function halfExtents(o){
+  const a=(o.rot||0)*Math.PI/180,cs=Math.abs(Math.cos(a)),sn=Math.abs(Math.sin(a));
+  const w=o.w,hh=o.h||24;
+  return {x:(w*cs+hh*sn)/2,y:(w*sn+hh*cs)/2};
+}
 function rotCtx(p){
   const mem=selMembers().filter(o=>!o.locked);
   if(!mem.length)return null;
