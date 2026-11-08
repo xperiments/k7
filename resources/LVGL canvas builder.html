@@ -94,9 +94,9 @@ main{min-height:60vh}
 <button id="undo" title="Undo (Ctrl+Z)">Undo</button><button id="redo" title="Redo (Ctrl+Shift+Z)">Redo</button><button id="copy" title="Copy (Ctrl+C)">Copy</button><button id="paste" title="Paste in place (Ctrl+V)">Paste</button>
 <button id="run">Run</button>
 <label class="btn" title="Upload a TTF/OTF font to preview it">Font<input id="fontup" type="file" accept=".ttf,.otf"></label>
-<button id="save">Save</button>
+<button id="save" title="Save the editor document (.lvgl.json): reopens here, and is not a label template">Save document</button>
 <label class="btn">Open<input id="open" type="file" accept=".json,application/json"></label>
-<button id="exp" title="Export the template JSON, labels.json and PNG preview">Export</button><button id="copyc" title="Copy the C generated from this template">Copy C</button>
+<button id="expt" title="Save this design as label-template v1 JSON: the file assets/labels/ takes">Template JSON</button><button id="exp" title="Export every open template as a zip: its JSON, labels.json and a PNG preview each">Export all</button><button id="copyc" title="Copy the C generated from this template">Copy C</button>
 </header>
 
 <aside id="layers">
@@ -859,7 +859,10 @@ $('open').onchange=async e=>{
       return;
     }
     if(!Array.isArray(d.objs))throw new Error('no objs');
-    newDoc({w:d.w,h:d.h,bg:d.bg||'#ffffff',objs:d.objs,groups:d.groups||[],mask:d.mask||null,nid:Math.max(0,...d.objs.map(o=>o.id))},f.name.replace(/\.lvgl\.json$|\.json$/,''));
+    // the document's tpl travels with it: the inks, font roles, slots and sims are the design's,
+    // and without it a saved design reopens in the default colourway (ticket 09)
+    newDoc({w:d.w,h:d.h,bg:d.bg||'#ffffff',objs:d.objs,groups:d.groups||[],mask:d.mask||null,
+            nid:Math.max(0,...d.objs.map(o=>o.id)),tpl:d.tpl||null},f.name.replace(/\.lvgl\.json$|\.json$/,''));
   }catch(err){alert('Not a layout file: '+err.message)}
   finally{e.target.value=''}
 };
@@ -1266,6 +1269,15 @@ async function exportAll(){
   await saveFile('label-templates.zip',makeZip(entries));
   switchDoc(back);
 }
+// the packer's input: one file per design, named label.<id>.json, exactly tplBuild's doc
+// (docs/specs/label-templates.md §2). Export all packs every open template with its PNG; this is
+// the single file assets/labels/ takes, and it refuses what the packer would refuse.
+async function exportOne(){
+  const r=tplBuild();
+  if(r.errs.length){alert('Cannot save the template:\n'+r.errs.join('\n'));return}
+  await saveFile(r.doc.id+'.json',tplText(r.doc));
+}
+$('expt').onclick=()=>exportOne().catch(e=>alert('Save failed: '+(e&&e.message||e)));
 $('exp').onclick=()=>exportAll().catch(e=>alert('Export failed: '+(e&&e.message||e)));
 $('copyc').onclick=()=>{try{copyC()}catch(e){alert('Copy C failed: '+(e&&e.message||e))}};
 

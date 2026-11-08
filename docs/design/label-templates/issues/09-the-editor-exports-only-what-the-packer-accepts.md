@@ -41,6 +41,8 @@ compares the page's `SHEET_FONTS`, its role defaults and its `SLOTS` with the pa
 - [x] A prim outside 748x359 is refused with its layer named, Bleed or not.
 - [x] `label_pack.py --check-editor` reports a face, a default, a missing slot and an added slot
       correctly, and passes on the page as shipped.
+- [x] The packer's input is one button: `Template JSON` writes `label.<id>.json`, and a saved
+      document reopens with its own inks, faces and slots instead of the default colourway.
 
 **Files:** `resources/LVGL canvas builder.html` (`SHEET_FONTS`, `defaultTpl`, `migrateFonts`,
 `tplBuild`, `tplImport`, the Template panel, the Open handler), `tools/label_pack.py`
@@ -70,3 +72,17 @@ table in §7 — the packer's contract, arriving early.
   leave an empty document behind.
 - `--check-editor` was proved against four mutants of the page (a face, a default, an added slot,
   a missing slot); each is named by the check, and the page as shipped passes.
+
+- The first real design made with the page showed a second half of this: the toolbar's **Save**
+  writes the editor document (`RETRO-A.lvgl.json`, `{v,w,h,bg,objs,groups,mask,tpl}`) and
+  **Export** writes the template JSON, and nothing said which was which - the file that reached
+  `assets/labels/` was the document, which the packer does not read. The buttons are now `Save
+  document`, `Template JSON` and `Export all`, and `Template JSON` writes the single
+  `label.<id>.json` from `tplBuild` without the zip.
+- Opening a saved document dropped its `tpl`: only `{w,h,bg,objs,groups,mask,nid}` were handed
+  to `newDoc`, so a design reopened in the default inks - the RETRO-A bands came back as
+  `#c68b2e #a24e2c #8a5d34 #6b7a2f` instead of `#9e2a35 #b58329 #789b3d #3b8b7f`. The document
+  now carries its `tpl` through Open, and the same file survives the round trip in inks, fonts
+  and slots.
+- That design (15 prims, 2 slots, paper `#bfb4a4`) is `assets/labels/label.retro-a.json`; it
+  packs at 504 B alone and the sheet is 920 B with the reference. The firmware builds it.
