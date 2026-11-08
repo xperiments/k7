@@ -24,7 +24,7 @@ LV_FONT_DECLARE(jura_20);
 LV_FONT_DECLARE(jura_28);
 LV_FONT_DECLARE(jura_36);
 LV_FONT_DECLARE(archivo_narrow_600_24);
-LV_FONT_DECLARE(barlow_condensed_700_64);
+LV_FONT_DECLARE(barlow_condensed_700_78);
 LV_FONT_DECLARE(ibm_plex_mono_500_18);
 
 static const char *TAG = "label";
@@ -37,7 +37,7 @@ static const lv_font_t *const k_label_font[LABEL_FONT_COUNT] = {
     &jura_28,
     &jura_36,
     &archivo_narrow_600_24,
-    &barlow_condensed_700_64,
+    &barlow_condensed_700_78,
     &ibm_plex_mono_500_18,
 };
 

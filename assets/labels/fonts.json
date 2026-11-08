@@ -4,7 +4,7 @@
     { "name": "Jura", "px": 28, "symbol": "jura_28" },
     { "name": "Jura", "px": 36, "symbol": "jura_36" },
     { "name": "Archivo Narrow 600", "px": 24, "symbol": "archivo_narrow_600_24" },
-    { "name": "Barlow Condensed 700", "px": 64, "symbol": "barlow_condensed_700_64" },
+    { "name": "Barlow Condensed 700", "px": 78, "symbol": "barlow_condensed_700_78" },
     { "name": "IBM Plex Mono 500", "px": 18, "symbol": "ibm_plex_mono_500_18" }
   ]
 }

@@ -45,7 +45,7 @@ the packer uses; the rest are the editor's.
   "inks": { "paper": "#F5F1E6", "ink": "#242424", "rule": "#8E7E4A",
             "band": ["#C68B2E", "#A24E2C", "#8A5D34", "#6B7A2F"] },
   "fonts": { "title":   { "ff": "Archivo Narrow 600", "px": 24 },
-             "numeral": { "ff": "Barlow Condensed 700", "px": 64 },
+             "numeral": { "ff": "Barlow Condensed 700", "px": 78 },
              "caption": { "ff": "IBM Plex Mono 500", "px": 18 } },
   "slots": { "song_title": { "max": 24 } },
   "notes": ["the spike is the one literal colour: it is the sleeve's, not the sheet's"],
@@ -67,7 +67,7 @@ the packer uses; the rest are the editor's.
 - **A font role is one of the sheet's pairs.** `ff` and `px` must be a pair
   [`assets/labels/fonts.json`](../../assets/labels/fonts.json) carries: the sheet addresses a
   font by its index in that table, and the packer refuses a pair it does not. A label's faces are
-  the three the editor embeds — `Archivo Narrow 600` at 24, `Barlow Condensed 700` at 64 and
+  the three the editor embeds — `Archivo Narrow 600` at 24, `Barlow Condensed 700` at 78 and
   `IBM Plex Mono 500` at 18 — and it offers only those, because a face it cannot draw is a face it
   cannot show. A role is a face *and* a size, not a face with a size typed beside it.
 - **`prims` are painted in order**, first at the back. `still: true` means nothing animates it.
@@ -187,7 +187,7 @@ Type is compiled, so the designs' faces are chosen from a table rather than name
              { "name": "Jura", "px": 28, "symbol": "jura_28" },
              { "name": "Jura", "px": 36, "symbol": "jura_36" },
              { "name": "Archivo Narrow 600", "px": 24, "symbol": "archivo_narrow_600_24" },
-             { "name": "Barlow Condensed 700", "px": 64, "symbol": "barlow_condensed_700_64" },
+             { "name": "Barlow Condensed 700", "px": 78, "symbol": "barlow_condensed_700_78" },
              { "name": "IBM Plex Mono 500", "px": 18, "symbol": "ibm_plex_mono_500_18" } ] }
 ```
 

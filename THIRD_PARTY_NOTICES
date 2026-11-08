@@ -76,7 +76,7 @@ Location      assets/fonts/archivo-narrow-600.ttf,
               assets/fonts/ibm-plex-mono-500.ttf. These are the bytes the LVGL
               canvas builder embeds as base64 in resources/LVGL canvas
               builder.html, written out by tools/extract_builder_fonts.py.
-Faces         Archivo Narrow 600 at 24 px, Barlow Condensed 700 at 64 px and
+Faces         Archivo Narrow 600 at 24 px, Barlow Condensed 700 at 78 px and
               IBM Plex Mono 500 at 18 px, compiled by lv_font_conv into
               components/app/screen_display/font_<face>_<px>.c (4 bpp, Latin,
               Latin-1 and the punctuation range the other fonts use).

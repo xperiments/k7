@@ -12,7 +12,7 @@
   },
   "fonts": {
     "title": { "ff": "Archivo Narrow 600", "px": 24 },
-    "numeral": { "ff": "Barlow Condensed 700", "px": 64 },
+    "numeral": { "ff": "Barlow Condensed 700", "px": 78 },
     "caption": { "ff": "IBM Plex Mono 500", "px": 18 }
   },
   "slots": {
