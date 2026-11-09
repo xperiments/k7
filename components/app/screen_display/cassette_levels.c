@@ -41,7 +41,9 @@ static bool s_cover_visible;
  * cover are both one request away. A new Track drops the previous picture at once - the
  * loader decodes into the one buffer, so it must not be drawn while it is written - and
  * then asks for the new tags and picture together. */
-/* The cover is Real's, not the cassette's: ask only while the white page is up. The
+/* The cover is the Controls pose's, not the cassette's: ask only at Real with the
+ * two-finger pose down. At the two-finger pose the print is the Label template, so a
+ * k7label decode there would read the card for a picture the screen never shows. The
  * label fill shows at once and the picture cuts in over it when the decode finishes;
  * an empty frame for the whole read was worse than the label. */
 static void request_cover(void)

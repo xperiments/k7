@@ -38,6 +38,7 @@
  */
 #include <stdint.h>
 #include <stdio.h>
+
 #include <string.h>
 
 #include "esp_log.h"
@@ -203,6 +204,13 @@ static void controls_apply(controls_changed_t changed)
     if (!changed || !s_controls) return;
     controls_snapshot(s_controls, &s_ctl);
 
+    /* The white page is Real's, or the two-finger pose's; the Cover's picture is only the
+     * Controls pose's. At the two-finger pose the print is the Label template, so asking the
+     * artwork loader for the Track's k7label there would read the card for a picture the
+     * screen never shows. */
+    const bool white_page = s_ctl.level == CONTROLS_LEVEL_REAL || s_ctl.full;
+    const bool cover = s_ctl.level == CONTROLS_LEVEL_REAL && !s_ctl.full;
+
     if (changed & CONTROLS_CHANGED_FULL) {
         /* The geometry first: page_set() clamps the packs to the Card's window, and the
          * window is the layout's. Both layouts land in one frame - no pose animation, because
@@ -213,17 +221,20 @@ static void controls_apply(controls_changed_t changed)
         /* The design is the two-finger pose's: the print is the Cover's at the Controls pose,
          * and one frame after the layout changes the other one is up. */
         cassette_label_set_pose(s_ctl.full);
+        /* FULL can change without PAGE: the level stays Real while the print switches from
+         * the picture to the template, so the cover request has to follow it here. */
+        cassette_levels_set_cover_visible(cover);
         /* The window just changed under the tape, and the next tick that draws a hub may be
          * tens of milliseconds away: draw the frame the model last produced against it now. */
         if (s_last_frame) cassette_tapes_set(s_last_frame);
     }
 
     if (changed & CONTROLS_CHANGED_PAGE) {
-        const bool picture = s_ctl.level == CONTROLS_LEVEL_REAL || s_ctl.full;
-        page_set(picture);
-        cassette_cover_set_shown(picture);
-        /* The picture is Real's, or the full-screen one's: ask for it now, not at boot. */
-        cassette_levels_set_cover_visible(picture);
+        page_set(white_page);
+        cassette_cover_set_shown(white_page);
+        /* The picture is the Controls pose's: ask for it now, not at boot, and not while
+         * the two-finger pose's template is the print. */
+        cassette_levels_set_cover_visible(cover);
     }
 
     if (changed & CONTROLS_CHANGED_PEEK) {

@@ -104,7 +104,10 @@ word would use; the column stays in the table, but nothing prints it.
 At the **two-finger pose** the print is the Track's **Label template**: the design's own
 748x359 space, its paper, ink and bands, its texts bound to slots, all inside the same print box
 and cut by the same mask (ADR 0071, [`label-templates.md`](./label-templates.md)). The row's
-ink is not printed there either: the design's six role colours are its own.
+ink is not printed there either: the design's role colours are its own. **The Cover's picture is
+not read or shown there.** The artwork loader is asked for the Track's `k7label` only at the
+Controls pose; when the two-finger pose is up the print is the template, and decoding a picture
+the screen never shows would be a card read for nothing.
 
 The label is not the Card's plastic. It is its own rectangle at the print's box, so a light label
 on a dark shell reads as a label rather than as bare plastic; the 12/20/64 px mat around it is
