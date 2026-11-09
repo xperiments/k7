@@ -439,7 +439,8 @@ typedef struct {
 } srow_t;
 
 /* A one-row Snapshot image, laid out by the test: header, row, pool. */
-static uint8_t *build_snapshot(size_t *n_out, const srow_t *r, uint32_t size)
+static uint8_t *build_snapshot(size_t *n_out, const srow_t *r, uint32_t size,
+                               const char *row_path)
 {
     tbuf_t pool = {0};
     uint32_t off[4];
@@ -470,7 +471,7 @@ static uint8_t *build_snapshot(size_t *n_out, const srow_t *r, uint32_t size)
     put32(&b, 0);                 /* list rows */
     put32(&b, (uint32_t)pool.n);  /* row pool size */
 
-    put64(&b, snapshot_path_hash("music/x.mp3"));
+    put64(&b, snapshot_path_hash(row_path));
     put32(&b, size);
     put24(&b, off[0]);
     put24(&b, off[1]);
@@ -498,7 +499,7 @@ static uint8_t *build_snapshot(size_t *n_out, const srow_t *r, uint32_t size)
 static void values_of(srow_t *row, label_values_t *v, uint32_t size)
 {
     size_t n = 0;
-    uint8_t *img = build_snapshot(&n, row, size);
+    uint8_t *img = build_snapshot(&n, row, size, "music/x.mp3");
     snapshot_t *sn = NULL;
 
     if (snapshot_open(img, n, &sn) != SNAPSHOT_OK) {
@@ -509,6 +510,35 @@ static void values_of(srow_t *row, label_values_t *v, uint32_t size)
     snapshot_row_t r;
     CHECK(snapshot_find(sn, snapshot_path_hash("music/x.mp3"), size, &r), "the row is found");
     label_values_apply(v, sn, &r);
+    snapshot_close(sn);
+    free(img);
+}
+
+/* macOS hands a card's names out decomposed (NFD) and FATFS reads the same card composed (NFC),
+ * so an image built on a Mac is keyed on bytes the device never sees. The join tries the path as
+ * given and then once more with the accents decomposed, and the size must still agree. */
+static void test_row_for_normalisation(void)
+{
+    srow_t row = {
+        .title = "Cafe", .artist = "Manu", .album = "Tres", .genre = "Jazz",
+        .bpm_x10 = 1200, .key = 1, .energy = 70, .dance = 60, .valence = 50, .arousal = 40,
+        .mood = 1,
+    };
+    size_t n = 0;
+    uint8_t *img = build_snapshot(&n, &row, 4242,
+                                 "music/Cafe\xCC\x81/01 - Sole\xCC\x81" "a.mp3");  /* NFD */
+    CHECK(img != NULL, "the NFD fixture built");
+    snapshot_t *sn = NULL;
+    CHECK(snapshot_open(img, n, &sn) == SNAPSHOT_OK, "the NFD image opens");
+
+    snapshot_row_t got;
+    CHECK(label_row_for(sn, "music/Caf\xC3\xA9/01 - Sol\xC3\xA9" "a.mp3", 4242, &got),
+          "a composed path finds a decomposed row");
+    CHECK(!label_row_for(sn, "music/Caf\xC3\xA9/01 - Sol\xC3\xA9" "a.mp3", 4243, &got),
+          "the size still has to agree");
+    CHECK(!label_row_for(sn, "music/Other/x.mp3", 4242, &got), "a different path does not");
+    CHECK(!label_row_for(NULL, "music/x.mp3", 4242, &got), "no snapshot, no row");
+
     snapshot_close(sn);
     free(img);
 }
@@ -575,6 +605,7 @@ int main(void)
     test_reader();
     test_refusals();
     test_cut();
+    test_row_for_normalisation();
     test_values();
     TEST_END();
 }

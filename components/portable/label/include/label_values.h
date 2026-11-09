@@ -38,6 +38,16 @@ typedef struct {
     char text[LABEL_SLOT_COUNT][LABEL_VALUE_MAX + 1];
 } label_values_t;
 
+/* The Snapshot row for a Track's path and size, or false when the image has none.
+ *
+ * It tries the path as the card gives it, then - once, and only when the first misses - with
+ * the Latin-1 accented letters decomposed. macOS hands a card's names out decomposed (NFD)
+ * while FATFS reads the same card composed (NFC), so an image built on a Mac hashes different
+ * bytes for the same Track; the size must still agree, so it is the same file either way.
+ * (docs/specs/label-templates.md §5) */
+bool label_row_for(const snapshot_t *snap, const char *relpath, uint32_t size,
+                   snapshot_row_t *row);
+
 /* Every slot empty. */
 void label_values_clear(label_values_t *v);
 

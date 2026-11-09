@@ -220,8 +220,16 @@ show path, no second source. The row is found once per Track change, in RAM:
 status.path -> library_find() -> library_size() -> snapshot_path_hash() -> snapshot_find()
 ```
 
-A Track with no row (an unanalysed card, a file replaced under the same name) leaves every slot
-empty: the design prints its paper, bands and rules with blank text.
+The fingerprint is over the path's **bytes**, and macOS hands a card's names out decomposed
+(NFD) while FATFS reads the same card composed (NFC), so an image built on a Mac is keyed on
+bytes the device never sees. The join therefore tries the path as the card gives it and, only if
+that misses, once more with the Latin-1 accented letters decomposed; the size must agree either
+way, so it is the same file. It is a tolerance, not a normalisation: the analyser should hash
+the composed form, and an image that does makes the second try unnecessary.
+
+A Track with no row (an unanalysed card, a file replaced under the same name, or a fingerprint
+that disagrees) leaves every slot empty: the design prints its paper, bands and rules with blank
+text, and the screen says which half of the join missed.
 
 | Slot | Value | Unknown |
 |---|---|---|
