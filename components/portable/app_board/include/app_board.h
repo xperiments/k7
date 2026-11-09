@@ -64,9 +64,13 @@ const uint8_t *app_board_snapshot_image(size_t *size, const char **why,
  * app_board_snapshot_image() maps the image again. */
 void app_board_snapshot_release(void);
 
-/* Whether the card answers right now. A stat of the mount point: the card is pulled by
- * hand, and this is the cheapest question the FAT layer can answer. */
-bool app_board_card_present(void);
+/* One health probe of the mounted card. This is a directory read of the music
+ * directory, not a cached mount flag: the FAT layer answers it from the card, so it
+ * fails with EIO when the card stops answering, ETIMEDOUT when the FATFS volume lock
+ * could not be taken within CONFIG_FATFS_TIMEOUT_MS, ENOENT when the card answered but
+ * the directory is not on it, and ENODEV when nothing is mounted. `*err` is that errno (0 when it succeeded); the
+ * caller decides which failures mean the card has gone. */
+bool app_board_card_probe(int *err);
 
 /* Give up the mount after the card has gone, so a reinsert can mount again. Best-effort:
  * a card that was pulled mid-write may leave the volume unable to unmount, and a reboot

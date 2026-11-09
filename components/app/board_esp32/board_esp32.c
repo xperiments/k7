@@ -6,6 +6,7 @@
  * services composition (components/portable/app_services) calls the four functions in
  * app_board.h and knows none of it. The host build has the other adapter.
  */
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -263,10 +264,24 @@ static const char *snapshot_update_file(struct stat *st)
 
 #define SNAPSHOT_UPDATE_PART 0x40
 
-bool app_board_card_present(void)
+bool app_board_card_probe(int *err)
 {
+    if (err) *err = 0;
+    if (!s_card) {
+        if (err) *err = ENODEV;
+        return false;
+    }
+
+    /* A directory read, not a mount-point stat: the VFS answers "/sdcard" itself, so
+     * only a path under it makes the FAT layer ask the card. Failure is the errno the
+     * VFS mapped from FATFS - EIO for a card that did not answer, ETIMEDOUT for the
+     * volume lock, ENOENT for a missing directory - which is what lets the caller tell
+     * one bad transaction from a card that has gone. */
     struct stat st;
-    return s_card != NULL && stat(MOUNT_POINT "/music", &st) == 0;
+    errno = 0;
+    if (stat(MOUNT_POINT "/music", &st) == 0) return true;
+    if (err && errno) *err = errno;
+    return false;
 }
 
 void app_board_card_forget(void)

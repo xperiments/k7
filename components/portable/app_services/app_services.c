@@ -7,6 +7,7 @@
  */
 #include "app_services.h"
 
+#include <errno.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -656,40 +657,86 @@ esp_err_t app_services_check(const app_services_cfg_t *cfg, char *err, size_t er
  * boot mount only covers the first one, so a card that goes and returns would otherwise
  * leave the device serving a library whose bytes are gone, with no way back but a reboot.
  *
- * This polls the board twice a second - a stat of the mount point, which the FAT layer
- * answers without touching the card - and does on every transition what the boot does:
- * forget the volume, publish the no-card generation, and on the way back mount, tell the
- * file surface and rescan. The update file is not its business: the appliance reboots for
- * that, because applying one needs the window before the panel. */
-#define CARD_WATCH_MS 2000
+ * The probe is a directory read of the music directory, not a cached mount flag - the
+ * board has no card-detect line, so asking the volume is the only question there is. It
+ * can fail for a card that has gone *and* for a card that was merely busy (one read
+ * error, or the FATFS volume lock not taken before its timeout), so one failure is not a
+ * removal: three in a row are. The other direction cannot be probed at all - an unmounted
+ * volume cannot be stat'ed - so the watcher tries the mount again every few seconds.
+ * That is also why the state cannot be "the result of the last probe": the mount has to
+ * be attempted for a card to be seen to arrive. The update file is not its business: the
+ * appliance reboots for that, because applying one needs the window before the panel. */
+#define CARD_WATCH_MS        2000
+#define CARD_FAILURES        3
+#define CARD_MOUNT_RETRY_MS  5000
 
 static void card_watch_task(void *arg)
 {
     (void)arg;
-    unsigned removals = 0;
+    unsigned failures = 0;
+    int64_t next_mount = 0; /* try at once: the boot may have had no card */
+
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(CARD_WATCH_MS));
-        bool now = app_board_card_present();
-        if (now == s_card_present) continue;
+        int64_t now_ms = esp_timer_get_time() / 1000;
 
-        if (now) {
+        if (!app_services_card_present()) {
+            failures = 0;
+            if (now_ms < next_mount) continue;
+            next_mount = now_ms + CARD_MOUNT_RETRY_MS;
+
             app_board_card_t card = app_board_card_mount(s_cfg.music_dir);
-            if (!card.music_dir) continue; /* it will be tried again next tick */
+            if (!card.music_dir) {
+                /* Keep the index's reason current: a cardless boot's mount error is
+                 * not the one the retry is seeing now. */
+                mini_files_set_card(NULL, card.mount_error);
+                ESP_LOGW(TAG, "still no card: %s; retrying in %u s",
+                         card.mount_error ? card.mount_error : "unknown error",
+                         CARD_MOUNT_RETRY_MS / 1000);
+                continue;
+            }
             app_services_card_state(true, NULL);
             card_mark_refresh();
             mini_files_set_card(card.music_dir, NULL);
             ESP_LOGI(TAG, "card inserted: %s; rescanning", card.music_dir);
-            removals = 0;
             app_services_rescan();
-        } else {
-            if (removals++ == 0)
-                ESP_LOGW(TAG, "the card was removed; the index will say so until it returns");
-            app_services_card_state(false, "the card was removed");
-            mini_files_set_card(NULL, "the card was removed");
-            app_board_card_forget();
-            card_mark_refresh();
-            app_services_rescan();
+            continue;
         }
+
+        /* A scan owns the card while it walks it, and the VFS readdir/stat cache is
+         * not safe for a stat beside a readdir. A probe that cannot have the card
+         * waits for the next tick: the transition is not urgent enough to race a scan. */
+        if (!mini_files_card_lock(0)) continue;
+        int err = 0;
+        bool answered = app_board_card_probe(&err);
+        mini_files_card_unlock();
+        if (answered) {
+            failures = 0;
+            continue;
+        }
+        if (err == ENOENT) {
+            /* The volume answered and the path is not on it. That is a Library state
+             * (no_dir), not a card removal: keep the mount and let the scan say so. */
+            failures = 0;
+            continue;
+        }
+        if (++failures < CARD_FAILURES) {
+            ESP_LOGW(TAG, "the card did not answer (%s); %u of %u before it counts as gone",
+                     err ? strerror(err) : "no error", failures, (unsigned)CARD_FAILURES);
+            continue;
+        }
+
+        failures = 0;
+        char why[96];
+        snprintf(why, sizeof why, "the card stopped answering (%s)",
+                 err ? strerror(err) : "no error");
+        ESP_LOGW(TAG, "%s; the index will say so until it returns", why);
+        app_services_card_state(false, why);
+        mini_files_set_card(NULL, why);
+        app_board_card_forget();
+        card_mark_refresh();
+        app_services_rescan();
+        next_mount = now_ms + CARD_MOUNT_RETRY_MS;
     }
 }
 

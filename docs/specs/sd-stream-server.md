@@ -489,8 +489,11 @@ parks the broadcast on the idle bed (and resumes the Track) to keep the 5.4.4 VF
 cache safe; parking is reference-counted, so one owner's unpark cannot release another's.
 
 **Requirement G2.** A card that arrives after boot is mounted by the retry task, which starts
-a rescan; both the index and the broadcast recover without a reboot. A boot without a card
-publishes a `no_card` generation, and a rescan while still card-less keeps that state.
+a rescan; both the index and the broadcast recover without a reboot. A card that stops
+answering while the device runs is given up only after repeated failed probes — the probe is a
+card access, and one failure is not a removal — and it is mounted again when it returns. A
+boot without a card publishes a `no_card` generation, and a rescan while still card-less keeps
+that state.
 
 ### 6.6 `POST /mcp` — read-only MCP
 

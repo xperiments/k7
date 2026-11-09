@@ -341,6 +341,8 @@ integration: $(SERVER)
 	@$(PYTHON) $(HERE)/tests/upload_tests.py $(SERVER) $(HERE)/fixtures
 	@echo "--- playlists over HTTP"
 	@$(PYTHON) $(HERE)/tests/playlist_tests.py $(SERVER) $(HERE)/fixtures
+	@echo "--- the card watcher"
+	@$(PYTHON) $(HERE)/tests/card_watch_tests.py $(SERVER) $(HERE)/fixtures
 
 layering:
 	@ROOT=$(ROOT) sh $(HERE)/tests/layering.sh

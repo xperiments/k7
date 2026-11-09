@@ -40,8 +40,8 @@ Per-query card access; device-side analysis; a text index or any other built ind
 Snapshot updates (each image is complete); embeddings or vector similarity; a
 `find_similar_tracks` tool; editing a Snapshot on the device — a new list arrives only as a new
 image; MCP tools over Playlists (the page reads them at `/api/playlists`, and an agent that should
-read them is a later decision); detecting a card swapped under a running device (unchanged from
-today — the retry task only covers a card that was absent at boot).
+read them is a later decision); detecting a card swapped under a running device (the stream
+server's card state; the Snapshot is in flash and does not follow the card).
 
 ---
 

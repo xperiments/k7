@@ -9,19 +9,45 @@
  */
 #include "app_board.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 esp_err_t app_board_net_start(uint16_t http_port) { (void)http_port; return ESP_OK; }
 
+/* The host card, with the board's semantics: a card is present only while it is
+ * mounted, so the watcher has to try a mount to see one arrive. Three switches let
+ * the integration suite drive what a plain directory cannot:
+ *
+ *   XTAPE_HOST_NO_CARD        the always-out switch the cardless acceptance tests use
+ *   XTAPE_HOST_CARD_FILE      a one-word file, "in" or "out", re-read on every probe
+ *                             and mount, so a test can eject and reinsert a card
+ *   XTAPE_HOST_CARD_FAIL_FILE when the file exists, the next probe fails with EIO and
+ *                             the file is removed - one transient, not a removal
+ */
+static bool s_mounted;
+
+static bool host_card_in_slot(void)
+{
+    if (getenv("XTAPE_HOST_NO_CARD")) return false;
+    const char *path = getenv("XTAPE_HOST_CARD_FILE");
+    if (!path || !path[0]) return true; /* no script: the normal host card */
+    FILE *f = fopen(path, "r");
+    if (!f) return true; /* a script that has gone is not an ejected card */
+    char word[8] = {0};
+    bool in = fgets(word, sizeof word, f) && strncmp(word, "out", 3) != 0;
+    fclose(f);
+    return in;
+}
+
 app_board_card_t app_board_card_mount(const char *expected_music_dir)
 {
-    /* A host-only switch for the cardless acceptance case; the firmware has no
-     * equivalent because its SD slot is the hardware. */
-    if (getenv("XTAPE_HOST_NO_CARD")) {
-        app_board_card_t none = {.music_dir = NULL, .mount_error = "host: no card requested"};
+    if (!host_card_in_slot()) {
+        app_board_card_t none = {.music_dir = NULL, .mount_error = "host: no card in the slot"};
         return none;
     }
+    s_mounted = true;
     app_board_card_t card = {.music_dir = expected_music_dir, .mount_error = NULL};
     return card;
 }
@@ -50,10 +76,32 @@ void app_board_log_hardware(void) { }
 /* The host has no partition, so the Snapshot is a file: XTAPE_SNAPSHOT names it and
  * the integration test points it at a generated image. Absent is the normal host
  * state, not an error. */
-/* The host card is a path that never goes away, and it never carries an update file: the
- * host exercises the snapshot through XTAPE_SNAPSHOT, not through the card. */
-bool app_board_card_present(void) { return getenv("XTAPE_HOST_NO_CARD") == NULL; }
-void app_board_card_forget(void) { }
+/* The host card never carries an update file: the host exercises the snapshot
+ * through XTAPE_SNAPSHOT, not through the card. */
+bool app_board_card_probe(int *err)
+{
+    if (err) *err = 0;
+    if (!s_mounted) {
+        if (err) *err = ENODEV;
+        return false;
+    }
+    const char *fail = getenv("XTAPE_HOST_CARD_FAIL_FILE");
+    if (fail && fail[0]) {
+        FILE *f = fopen(fail, "r");
+        if (f) {
+            fclose(f);
+            remove(fail);
+            if (err) *err = EIO;
+            return false;
+        }
+    }
+    if (!host_card_in_slot()) {
+        if (err) *err = EIO;
+        return false;
+    }
+    return true;
+}
+void app_board_card_forget(void) { s_mounted = false; }
 bool app_board_snapshot_pending(void) { return false; }
 
 /* The host's partition is the file XTAPE_SNAPSHOT names. Written whole or not at all:
