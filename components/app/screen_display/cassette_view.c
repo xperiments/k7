@@ -803,8 +803,19 @@ void cassette_view_update(const mini_icecast_status_t *st)
             snprintf(s_label_path, sizeof s_label_path, "%s", path);
 
             const library_t *lib = library_acquire();
+            const snapshot_t *snap = app_services_snapshot();
             label_values_t values;
-            label_values_fill(&values, lib, app_services_snapshot(), path);
+            label_values_fill(&values, lib, snap, path);
+            /* The slots are joined on the path and the file's size, so an empty design is worth
+             * one line: it says which half of the join missed (label-templates.md 5). */
+            if (path[0] && !label_values_get(&values, "song_title")[0] &&
+                !label_values_get(&values, "song_artist")[0]) {
+                lib_node_t n = lib ? library_find(lib, path) : LIB_NODE_NONE;
+                ESP_LOGW(TAG, "no label values for %s: library %s, size %u, snapshot %s",
+                         path, n == LIB_NODE_NONE ? "misses it" : "has it",
+                         n == LIB_NODE_NONE ? 0u : (unsigned)library_size(lib, n),
+                         snap ? "open" : "none");
+            }
             if (lib) library_release(lib);
             cassette_label_update(f->ink_seed, &values);
         }
