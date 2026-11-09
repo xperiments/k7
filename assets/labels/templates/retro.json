@@ -1,7 +1,7 @@
 {
   "v": 1,
-  "id": "label.retro-a",
-  "name": "Retro A",
+  "id": "label.untitled",
+  "name": "Untitled",
   "space": {
     "w": 748,
     "h": 359
@@ -106,9 +106,9 @@
     },
     {
       "t": "text",
-      "x": 64,
-      "y": 0,
-      "w": 200,
+      "x": 81,
+      "y": -6,
+      "w": 38,
       "font": "numeral",
       "color": "ink",
       "align": "left",
@@ -118,7 +118,7 @@
       "t": "text",
       "x": 19,
       "y": 14,
-      "w": 200,
+      "w": 45,
       "font": "caption",
       "color": "ink",
       "align": "left",
@@ -127,8 +127,8 @@
     {
       "t": "text",
       "x": 648,
-      "y": 2,
-      "w": 100,
+      "y": -5,
+      "w": 71,
       "font": "numeral",
       "color": "ink",
       "align": "left",
@@ -148,7 +148,7 @@
       "t": "text",
       "slot": "song_title",
       "x": 107,
-      "y": 279,
+      "y": 272,
       "w": 524,
       "font": "title",
       "color": "ink",
@@ -159,7 +159,7 @@
       "t": "text",
       "x": 28,
       "y": 286,
-      "w": 70,
+      "w": 55,
       "font": "caption",
       "color": "ink",
       "align": "left",
@@ -168,8 +168,8 @@
     {
       "t": "text",
       "slot": "song_artist",
-      "x": 144,
-      "y": 12,
+      "x": 134,
+      "y": 7,
       "w": 480,
       "font": "title",
       "color": "ink",
@@ -179,13 +179,22 @@
     {
       "t": "text",
       "slot": "song_artist",
-      "x": 144,
-      "y": 46,
+      "x": 134,
+      "y": 53,
       "w": 480,
       "font": "title",
       "color": "ink",
       "align": "center",
       "preview": "The Analog Sons"
+    },
+    {
+      "t": "rect",
+      "x": 324,
+      "y": 50,
+      "w": 100,
+      "h": 2,
+      "fill": "rule",
+      "still": true
     }
   ]
 }

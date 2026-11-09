@@ -100,16 +100,19 @@ static bool prim_ok(const label_sheet_t *s, uint16_t i)
     if (font > LABEL_FONT_CAPTION || align > LABEL_ALIGN_RIGHT) return false;
     if (rot > 3599u) return false;
 
-    /* The print clips, so a prim outside it would simply lose part of itself: the packer
-     * refuses that and the reader does not accept it either. */
-    if (x < 0 || y < 0 || (int32_t)x + (int32_t)w > (int32_t)LABEL_SPACE_W ||
-        y >= (int32_t)LABEL_SPACE_H)
-        return false;
-
     if (kind == LABEL_RECT) {
+        /* A rect is its box, so a rect outside the print would simply lose part of itself: the
+         * packer refuses that and the reader does not accept it either. */
+        if (x < 0 || y < 0 || (int32_t)x + (int32_t)w > (int32_t)LABEL_SPACE_W ||
+            y >= (int32_t)LABEL_SPACE_H)
+            return false;
         if (h == 0 || (int32_t)y + (int32_t)h > (int32_t)LABEL_SPACE_H) return false;
         if (text != 0xFFFFFFFFu) return false;
     } else {
+        /* A text is a layout box plus ink, and this reader has no shaper: a line box above the
+         * print with its ink inside it prints correctly. The editor measures the ink and refuses
+         * it when the ink leaves the print (label-templates.md 1), so only the fields are checked
+         * here. */
         if (fill != LABEL_FILL_INK) return false;   /* v1 has one text colour */
         if (!string_in(s->pool, s->pool_size, text)) return false;
     }

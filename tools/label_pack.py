@@ -192,9 +192,11 @@ def pack_design(design, font_index, pool):
     for i, prim in enumerate(prims, 1):
         tag = f"{did}: {_tag(prim, i)}"
         kind = prim.get("t")
-        x = _int(prim.get("x"), f"{tag}: x", errors)
-        y = _int(prim.get("y"), f"{tag}: y", errors)
-        w = _int(prim.get("w"), f"{tag}: w", errors, lo=1)
+        # x and y are int16 in the sheet, w and h uint16: a value the record cannot hold is a
+        # refusal here, not a struct.error while packing
+        x = _int(prim.get("x"), f"{tag}: x", errors, lo=-32768, hi=32767)
+        y = _int(prim.get("y"), f"{tag}: y", errors, lo=-32768, hi=32767)
+        w = _int(prim.get("w"), f"{tag}: w", errors, lo=1, hi=65535)
         rot = _int(prim.get("rot", 0), f"{tag}: rot", errors, lo=-360, hi=360, default=0)
         # A rect is its box. A text is a layout box plus ink: the print clips the ink, and the
         # packer has no shaper, so it cannot know where the ink is - the editor measures it and
@@ -204,7 +206,7 @@ def pack_design(design, font_index, pool):
             errors.append(f"{tag}: outside the {SPACE_W}x{SPACE_H} print, which clips it")
 
         if kind == "rect":
-            h = _int(prim.get("h"), f"{tag}: h", errors, lo=1)
+            h = _int(prim.get("h"), f"{tag}: h", errors, lo=1, hi=65535)
             r = _int(prim.get("r", 0), f"{tag}: r", errors, lo=0, default=0)
             if y + h > SPACE_H:
                 errors.append(f"{tag}: outside the {SPACE_W}x{SPACE_H} print, which clips it")

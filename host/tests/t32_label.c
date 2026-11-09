@@ -204,6 +204,15 @@ static uint8_t *mutate(size_t at, uint32_t value, size_t width, size_t *n_out)
     return s;
 }
 
+static bool opens(const uint8_t *blob, size_t n)
+{
+    label_sheet_t *s = NULL;
+    char why[96];
+    if (label_open_why(blob, n, 3, &s, why, sizeof why) != LABEL_OK) return false;
+    label_close(s);
+    return true;
+}
+
 static bool refuses(const uint8_t *blob, size_t n, const char *needle)
 {
     label_sheet_t *s = NULL;
@@ -360,8 +369,16 @@ static void test_refusals(void)
     CHECK(refuses(b, n, "prim"), "text offset out of the pool");
     free(b);
 
-    b = mutate(P_AT(0) + 4, 700, 2, &n);         /* x 700 + w 748 leaves the print */
-    CHECK(refuses(b, n, "prim"), "prim outside the print");
+    b = mutate(P_AT(0) + 4, 700, 2, &n);         /* a rect: x 700 + w 748 leaves the print */
+    CHECK(refuses(b, n, "prim"), "a rect outside the print is refused");
+    free(b);
+
+    b = mutate(P_AT(2) + 6, (uint16_t)-10, 2, &n);  /* a text's line box above the print */
+    CHECK(opens(b, n), "a text above the print's edge opens: its ink is what clips");
+    free(b);
+
+    b = mutate(P_AT(2) + 4, 700, 2, &n);         /* a text whose box runs past the right edge */
+    CHECK(opens(b, n), "a text's box past the edge opens too");
     free(b);
 
     b = mutate(S_AT(0) + 4, 0, 1, &n);           /* slot max 0 */
