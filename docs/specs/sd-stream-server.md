@@ -491,9 +491,12 @@ cache safe; parking is reference-counted, so one owner's unpark cannot release a
 **Requirement G2.** A card that arrives after boot is mounted by the retry task, which starts
 a rescan; both the index and the broadcast recover without a reboot. A card that stops
 answering while the device runs is given up only after repeated failed probes — the probe is a
-card access, and one failure is not a removal — and it is mounted again when it returns. A
-boot without a card publishes a `no_card` generation, and a rescan while still card-less keeps
-that state.
+card access, and one failure is not a removal — and it is mounted again when it returns. Before
+the volume is forgotten the watcher closes the card's file gate and stops the broadcast's
+current Track, then waits for the decoder and the artwork loader to close every file; a card
+unmounted under an open file is a FATFS use-after-free (a `dir_find` on the freed volume, not a
+read error). A boot without a card publishes a `no_card` generation, and a rescan while still
+card-less keeps that state.
 
 ### 6.6 `POST /mcp` — read-only MCP
 

@@ -28,6 +28,7 @@
 struct mi_dec {
     mi_fmt_t kind;
     FILE    *f;
+    bool     card_guarded; /* the card gate is held until mi_dec_close() */
     uint32_t hz;
     int      ch;
     uint64_t io_us; /* wall time blocked in fread(), so decode CPU can be separated */
@@ -41,6 +42,15 @@ struct mi_dec {
         drwav   wav;
     } u;
 };
+
+static bool (*s_card_begin)(void);
+static void (*s_card_end)(void);
+
+void mi_dec_set_card_hooks(bool (*begin)(void), void (*end)(void))
+{
+    s_card_begin = begin;
+    s_card_end = end;
+}
 
 static size_t cb_read(void *ud, void *out, size_t n)
 {
@@ -167,6 +177,14 @@ mi_dec_t *mi_dec_open(const char *path)
     if (!d) return NULL;
     d->kind = kind;
 
+    /* Hold the card for the file's whole life, not just fopen(): the watcher unmounts only
+     * after every holder has closed, and FATFS cannot survive an unmount under an open FIL. */
+    if (s_card_begin && !s_card_begin()) {
+        free(d);
+        return NULL;
+    }
+    d->card_guarded = s_card_begin != NULL;
+
     bool ok = false;
     d->f = fopen(path, "rb");
     if (!d->f) goto out;
@@ -281,5 +299,7 @@ void mi_dec_close(mi_dec_t *d)
         fclose(d->f);
     }
     free(d->tmp);
+    bool guarded = d->card_guarded;
     free(d);
+    if (guarded && s_card_end) s_card_end();
 }

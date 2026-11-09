@@ -11,6 +11,10 @@
 
 typedef struct mi_dec mi_dec_t;
 
+/* The card file's lifetime, set once by mini_icecast_start(): begin() is called before the
+ * file is opened and end() after it is closed. NULL disables the gate. */
+void      mi_dec_set_card_hooks(bool (*begin)(void), void (*end)(void));
+
 mi_dec_t *mi_dec_open(const char *path); /* NULL if unsupported extension / unreadable / corrupt */
 uint32_t  mi_dec_hz(const mi_dec_t *d);
 

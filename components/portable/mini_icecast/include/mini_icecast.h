@@ -69,6 +69,11 @@ typedef struct {
     uint32_t    metaint;       /* bytes of audio between ICY metadata blocks, default 16000 */
     uint32_t    lead_ms;       /* how far ahead of real time we send, default 1500 */
     uint32_t    burst_ms;      /* history sent on connect, default 500, in external memory if present */
+    /* The card file's lifetime, supplied by the composition: begin() before a decoder opens
+     * the card and end() after it closes. The watcher closes the gate before unmounting, so
+     * a pulled card cannot free the FATFS volume under an open file. NULL means no gate. */
+    bool      (*card_use_begin)(void);
+    void      (*card_use_end)(void);
 } mini_icecast_cfg_t;
 
 /* Check a configuration without starting anything.

@@ -892,6 +892,11 @@ static void stream_file(const char *path)
         ESP_LOGW(TAG, "cannot decode %s (unsupported or corrupt): skipping", path);
         xSemaphoreTake(j.done, portMAX_DELAY);
         src_job_free(&j);
+        /* A card that cannot open files (pulled, or its gate closed while the watcher
+         * unmounts) makes every Track fail at once. A pass that retried them back to back
+         * would spin the broadcast task and starve the watcher that is trying to recover
+         * the card; this is a card event, not a hot loop. */
+        vTaskDelay(pdMS_TO_TICKS(50));
         return;
     }
     /* A source above the budget would not starve this Track alone: it would starve the
@@ -1423,6 +1428,7 @@ esp_err_t mini_icecast_check_station(const mini_icecast_cfg_t *cfg, char *err, s
 esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
 {
     if (!cfg) return ESP_ERR_INVALID_ARG;
+    mi_dec_set_card_hooks(cfg->card_use_begin, cfg->card_use_end);
 
     /* Resolve once, before anything is allocated: a format that cannot be
      * served is refused without touching the heap or the network. */

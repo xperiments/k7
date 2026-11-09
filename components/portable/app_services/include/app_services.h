@@ -88,6 +88,19 @@ void app_services_card_state(bool present, const char *mount_error);
  * rescan reads it, so one flag answers "is there a library" for both. */
 bool app_services_card_present(void);
 
+/* A card file's lifetime: call begin() before opening a file and end() after closing it.
+ * The watcher closes this gate before it forgets the volume, so a card that is pulled
+ * cannot be unmounted under a decoder or the artwork loader - FATFS's dir_find then runs
+ * on a freed volume and panics. The gate is open before start(). */
+bool app_services_card_use_begin(void);
+void app_services_card_use_end(void);
+
+/* Close the gate and wait for every open card file to close, for up to wait_ms. False on
+ * timeout, in which case the volume must be left mounted. resume() opens it again after a
+ * mount. */
+bool app_services_card_quiesce(uint32_t wait_ms);
+void app_services_card_resume(void);
+
 /* The opened Snapshot, or NULL when this device has none (no partition, no image, or an
  * image that did not validate). Borrowed, not owned: an update replaces the image, so a
  * caller copies what it needs within the step that asked. The screen asks once per Track

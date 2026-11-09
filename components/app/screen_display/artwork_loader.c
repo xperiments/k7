@@ -53,6 +53,7 @@
 #include "freertos/task.h"
 #include "lvgl.h"
 
+#include "app_services.h"
 #include "artwork.h"
 #include "cassette_view.h"
 #include "mini_icecast.h"
@@ -404,6 +405,10 @@ static void render_tags(const char *track_path, mi_fmt_t fmt, uint32_t seq)
 
     if (track_path[0] && fmt != MI_FMT_NONE) {
         card_wait();
+        if (!app_services_card_use_begin()) {
+            ESP_LOGI(TAG, "%s: card closed; no tags", track_path);
+            goto tags_done;
+        }
 
         char path[sizeof s_music_dir + LIB_PATH_MAX + 2];
         snprintf(path, sizeof path, "%s/%s", s_music_dir, track_path);
@@ -427,6 +432,8 @@ static void render_tags(const char *track_path, mi_fmt_t fmt, uint32_t seq)
         } else {
             ESP_LOGW(TAG, "%s: cannot open the Track; no tags", track_path);
         }
+        app_services_card_use_end();
+tags_done:
     }
 
     if (seq != current_seq()) {
@@ -452,6 +459,10 @@ static void render_art(const char *track_path, mi_fmt_t fmt, uint32_t seq)
         int64_t t_wait = esp_timer_get_time();
         card_wait();
         wait_ms = (uint64_t)((esp_timer_get_time() - t_wait) / 1000);
+        if (!app_services_card_use_begin()) {
+            ESP_LOGI(TAG, "%s: card closed; no cover", track_path);
+            goto art_done;
+        }
 
         char path[sizeof s_music_dir + LIB_PATH_MAX + 2];
         snprintf(path, sizeof path, "%s/%s", s_music_dir, track_path);
@@ -497,6 +508,8 @@ static void render_art(const char *track_path, mi_fmt_t fmt, uint32_t seq)
             }
             fclose(f);
         }
+        app_services_card_use_end();
+art_done:
     }
 
     /* A newer request has replaced this one: throw the result away instead of showing
