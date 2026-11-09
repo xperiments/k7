@@ -47,7 +47,8 @@ the packer uses; the rest are the editor's.
   "space": { "w": 748, "h": 359 },
   "aperture": { "x": 95, "y": 101, "w": 556, "h": 166, "r": 83 },
   "inks": { "paper": "#F5F1E6", "ink": "#242424", "rule": "#8E7E4A",
-            "band": ["#C68B2E", "#A24E2C", "#8A5D34", "#6B7A2F"] },
+            "band": ["#C68B2E", "#A24E2C", "#8A5D34", "#6B7A2F",
+                     "#3B6E8F", "#7A3B52", "#B9AC8E", "#2F4B3A"] },
   "fonts": { "title":   { "ff": "Archivo Narrow 600", "px": 32 },
              "numeral": { "ff": "Barlow Condensed 700", "px": 78 },
              "caption": { "ff": "IBM Plex Mono 500", "px": 18 } },
@@ -62,14 +63,16 @@ the packer uses; the rest are the editor's.
 }
 ```
 
-- **A text prints in the ink or in one of the four bands.** `color` is `ink` (the default) or
-  `band.0`..`band.3`, so the type that sits on a band can print in that band's own colour; the
+- **A text prints in the ink or in one of the eight bands.** `color` is `ink` (the default) or
+  `band.0`..`band.7`, so the type that sits on a band can print in that band's own colour; the
   paper is refused because there is nothing to read against it, and the one literal colour is a
-  rect's. The editor offers those five in the text's Colour control, and `ink` when none is set.
+  rect's. The editor offers those nine in the text's Colour control, and `ink` when none is set.
 - **`inks` and `fonts` are the design's, not the firmware's.** The editor used to keep them out
   of the export; without them a design is shapes with no colourway, so both are part of the
-  file. The seven colours are exactly the roles — `paper`, `ink`, `rule` and `band[0..3]` —
-  which is why a prim names a role and not a colour. `paper` is the LayerMask's colour and is
+  file. The eleven colours are exactly the roles — `paper`, `ink`, `rule` and `band[0..7]` —
+  which is why a prim names a role and not a colour. A design may declare four to eight bands:
+  the sheet always carries eight slots, and a design that declares four leaves the rest `0`.
+  `paper` is the LayerMask's colour and is
   `null` when the design has no mask; a prim that fills with `paper` then has no colour, and the
   packer refuses it.
 - **A font role is one of the sheet's pairs.** `ff` and `px` must be a pair
@@ -107,13 +110,13 @@ saying why.
 
 ```text
 header        32 B
-templates     template_count x 48 B, ascending by id
+templates     template_count x 64 B, ascending by id
 prims         prim_count x 24 B, flat; a template's slice starts at its prim_start
 slots         slot_count x 8 B, flat; a template's slice starts at its slot_start
 string pool   pool_size B, UTF-8, NUL-terminated; every offset is relative to its start
 ```
 
-`total_size == 32 + 48 * template_count + 24 * prim_count + 8 * slot_count + pool_size`, checked
+`total_size == 32 + 64 * template_count + 24 * prim_count + 8 * slot_count + pool_size`, checked
 rather than assumed.
 
 ### 3.1 Header (32 bytes)
@@ -121,7 +124,7 @@ rather than assumed.
 | Offset | Size | Field | Value |
 |---|---|---|---|
 | 0 | 8 | `magic` | `K7LBL`, NUL-padded to 8 |
-| 8 | 2 | `version` | `1` |
+| 8 | 2 | `version` | `2` |
 | 10 | 2 | `header_size` | `32` |
 | 12 | 4 | `total_size` | the file's whole length |
 | 16 | 4 | `crc32` | CRC-32/IEEE over `[32, total_size)` |
@@ -132,7 +135,7 @@ rather than assumed.
 | 28 | 2 | `slot_count` | total, `<= 32 * 16` |
 | 30 | 2 | `pool_size` | bytes |
 
-### 3.2 Template (48 bytes)
+### 3.2 Template (64 bytes)
 
 | Offset | Size | Field | Notes |
 |---|---|---|---|
@@ -152,14 +155,18 @@ rather than assumed.
 | 32 | 4 | `band[1]` | |
 | 36 | 4 | `band[2]` | |
 | 40 | 4 | `band[3]` | |
-| 44 | 4 | `reserved` | `0` |
+| 44 | 4 | `band[4]` | |
+| 48 | 4 | `band[5]` | |
+| 52 | 4 | `band[6]` | |
+| 56 | 4 | `band[7]` | |
+| 60 | 4 | `reserved` | `0` |
 
 ### 3.3 Prim (24 bytes)
 
 | Offset | Size | Field | Notes |
 |---|---|---|---|
 | 0 | 1 | `kind` | `0` rect, `1` static text, `2` slot text |
-| 1 | 1 | `fill` | `0` paper, `1` ink, `2` rule, `3..6` band 0..3, `7` literal |
+| 1 | 1 | `fill` | `0` paper, `1` ink, `2` rule, `3..10` band 0..7, `11` literal |
 | 2 | 1 | `font` | `0` title, `1` numeral, `2` caption; `0` for a rect |
 | 3 | 1 | `align` | `0` left, `1` center, `2` right; `0` for a rect |
 | 4 | 2 | `x` | signed |
@@ -169,9 +176,9 @@ rather than assumed.
 | 12 | 2 | `r` | rect only; `0` for a text |
 | 14 | 2 | `rot10` | tenths of a degree, `0..3599` |
 | 16 | 4 | `text_offset` | static text or Slot name; `0xFFFFFFFF` for a rect |
-| 20 | 4 | `literal_colour` | RGB888; only read when `fill == 7` |
+| 20 | 4 | `literal_colour` | RGB888; only read when `fill == 11` |
 
-`fill == 1` (ink) is the only colour a text may carry in v1.
+A text may carry the ink or any of the eight bands; the paper and the literal colour are refused.
 
 ### 3.4 Slot (8 bytes)
 
@@ -190,7 +197,7 @@ built apart, which is a bug, not a state.
 
 The reader refuses the whole sheet — and the screen falls back to the flat palette fill — when:
 
-`magic` is not `K7LBL`, `version` is not 1, `header_size` is not 32, `total_size` disagrees with
+`magic` is not `K7LBL`, `version` is not 2, `header_size` is not 32, `total_size` disagrees with
 the counts, the CRC disagrees, `space_*` is not 748x359, a count is past its cap, a template's
 `prim_start + prim_count` or `slot_start + slot_count` runs past its array, a prim's
 `text_offset` is past `pool_size`, a string is not NUL-terminated inside the pool, or a font index
@@ -299,6 +306,8 @@ Named per design and per layer; the build fails, nothing is dropped.
 |---|---|
 | `v` is not 1 | a different format |
 | `space` is not 748x359 | the print is one box |
+| `inks.band` has fewer than 4 or more than 8 colours | the sheet carries eight slots; the first four are required |
+| a prim names `band.N` with `N` past the design's own list | there is no colour to print |
 | the aperture is neither absent nor `(95,101,556,166,r83)` | the window is the Card's |
 | a coordinate outside int16, or a size outside uint16 | the record cannot hold it |
 | a prim with no role and no literal colour, or an unknown role | what would it paint? |

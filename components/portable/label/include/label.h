@@ -22,9 +22,9 @@ extern "C" {
 
 /* The only magic this reader accepts: `K7LBL`, NUL-padded to eight bytes. */
 #define LABEL_MAGIC        "K7LBL\0\0\0"
-#define LABEL_VERSION      1u
+#define LABEL_VERSION      2u   /* the template record carries eight bands */
 #define LABEL_HEADER_SIZE  32u
-#define LABEL_TEMPLATE_SIZE 48u
+#define LABEL_TEMPLATE_SIZE 64u
 #define LABEL_PRIM_SIZE    24u
 #define LABEL_SLOT_SIZE    8u
 
@@ -35,6 +35,10 @@ extern "C" {
 #define LABEL_PRIM_MAX     48u
 #define LABEL_SLOT_MAX     16u
 #define LABEL_TEMPLATE_MAX 32u
+
+/* The band palette a design carries. A design may declare four to eight of them; the
+ * sheet always has eight slots, and an undeclared one reads as 0. */
+#define LABEL_BAND_COUNT   8u
 
 /* The longest a resolved slot value can be; a design's slot `max` is bounded by this too,
  * so the view never has to truncate a value it was handed. */
@@ -65,6 +69,10 @@ typedef enum {
     LABEL_FILL_BAND1,
     LABEL_FILL_BAND2,
     LABEL_FILL_BAND3,
+    LABEL_FILL_BAND4,
+    LABEL_FILL_BAND5,
+    LABEL_FILL_BAND6,
+    LABEL_FILL_BAND7,
     LABEL_FILL_LITERAL,     /* the one literal colour a design may use; see `literal` */
 } label_fill_t;
 
@@ -102,9 +110,10 @@ typedef struct {
     uint8_t     max;
 } label_slot_t;
 
-/* A design's six role colours, RGB888 in the low 24 bits. */
+/* A design's role colours, RGB888 in the low 24 bits: paper, ink, rule and the eight
+ * bands. A band the design did not declare is 0. */
 typedef struct {
-    uint32_t paper, ink, rule, band[4];
+    uint32_t paper, ink, rule, band[LABEL_BAND_COUNT];
 } label_inks_t;
 
 /* ---------------------------------------------------------------- the sheet */

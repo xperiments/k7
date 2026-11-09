@@ -65,6 +65,10 @@ static lv_color_t fill_colour(const label_inks_t *inks, uint8_t fill, uint32_t l
     case LABEL_FILL_BAND1: return lv_color_hex(inks->band[1]);
     case LABEL_FILL_BAND2: return lv_color_hex(inks->band[2]);
     case LABEL_FILL_BAND3: return lv_color_hex(inks->band[3]);
+    case LABEL_FILL_BAND4: return lv_color_hex(inks->band[4]);
+    case LABEL_FILL_BAND5: return lv_color_hex(inks->band[5]);
+    case LABEL_FILL_BAND6: return lv_color_hex(inks->band[6]);
+    case LABEL_FILL_BAND7: return lv_color_hex(inks->band[7]);
     default: return lv_color_hex(literal);
     }
 }

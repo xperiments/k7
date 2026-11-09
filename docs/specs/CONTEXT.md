@@ -452,7 +452,7 @@ _Avoid_: artwork screen, Case, portada
 **Label template**:
 The design the two-finger pose prints on the Card's print: a 748x359 `label-template v1` file in
 `assets/labels/templates/`, authored in the LVGL canvas builder. Its prims are rects and texts coloured by
-role - paper, ink, rule, band 0..3 - its texts bound to **Slots** or fixed, and its paper cut at
+role — paper, ink, rule and band 0..7 — its texts bound to **Slots** or fixed, and its paper cut at
 the **Window** by the Card's own mask. A Track's template is `ink_seed % template_count`, the
 same seed that picks its palette row, so shell and design always pair (ADR 0071). The layout is
 in [`label-templates.md`](./label-templates.md).

@@ -91,10 +91,10 @@ static void patch32(uint8_t *p, size_t at, uint32_t v)
 
 /* ------------------------------------------------------------ sheet builder */
 
-#define T_AT(t)        (32u + 48u * (size_t)(t))
-#define P_AT(i)        (32u + 48u * 2u + 24u * (size_t)(i))
-#define S_AT(i)        (32u + 48u * 2u + 24u * 5u + 8u * (size_t)(i))
-#define POOL_AT         (32u + 48u * 2u + 24u * 5u + 8u * 2u)
+#define T_AT(t)        (32u + 64u * (size_t)(t))
+#define P_AT(i)        (32u + 64u * 2u + 24u * (size_t)(i))
+#define S_AT(i)        (32u + 64u * 2u + 24u * 5u + 8u * (size_t)(i))
+#define POOL_AT         (32u + 64u * 2u + 24u * 5u + 8u * 2u)
 
 enum {
     POOL_NIGHT = 0,
@@ -147,6 +147,10 @@ static void put_template(tbuf_t *b, uint32_t name, uint16_t prim_start, uint16_t
     put32(b, 0xA24E2C);      /* band 1 */
     put32(b, 0x8A5D34);      /* band 2 */
     put32(b, 0x6B7A2F);      /* band 3 */
+    put32(b, 0x3B6E8F);      /* band 4 */
+    put32(b, 0x7A3B52);      /* band 5 */
+    put32(b, 0xB9AC8E);      /* band 6 */
+    put32(b, 0x2F4B3A);      /* band 7 */
     put32(b, 0);             /* reserved */
 }
 
@@ -156,7 +160,7 @@ static uint8_t *build_sheet(size_t *n_out)
 {
     tbuf_t b = {0};
     put(&b, "K7LBL\0\0\0", 8);
-    put16(&b, 1);              /* version */
+    put16(&b, 2);              /* version */
     put16(&b, 32);             /* header size */
     put32(&b, 0);              /* total, patched */
     put32(&b, 0);              /* crc, patched */
@@ -295,6 +299,7 @@ static void test_reader(void)
     CHECK_EQ(inks.rule, 0xB9AC8E, "rule");
     CHECK_EQ(inks.band[0], 0xC68B2E, "band 0");
     CHECK_EQ(inks.band[3], 0x6B7A2F, "band 3");
+    CHECK_EQ(inks.band[7], 0x2F4B3A, "band 7");
 
     CHECK_EQ(label_font(s, 0, LABEL_FONT_TITLE), 0, "title face");
     CHECK_EQ(label_font(s, 0, LABEL_FONT_NUMERAL), 1, "numeral face");
@@ -316,8 +321,8 @@ static void test_refusals(void)
     CHECK(refuses(b, n, "magic"), "bad magic");
     free(b);
 
-    b = mutate(8, 2, 2, &n);
-    CHECK(refuses(b, n, "version 1"), "version 2");
+    b = mutate(8, 1, 2, &n);
+    CHECK(refuses(b, n, "version 2"), "version 1");
     free(b);
 
     b = mutate(10, 40, 2, &n);
@@ -353,7 +358,7 @@ static void test_refusals(void)
     CHECK(refuses(b, n, "prim"), "prim kind out of range");
     free(b);
 
-    b = mutate(P_AT(0) + 1, 8, 1, &n);           /* fill 8 */
+    b = mutate(P_AT(0) + 1, 12, 1, &n);          /* fill 12, past the literal colour */
     CHECK(refuses(b, n, "prim"), "prim fill out of range");
     free(b);
 
@@ -367,6 +372,10 @@ static void test_refusals(void)
 
     b = mutate(P_AT(2) + 1, LABEL_FILL_BAND1, 1, &n);  /* a text on a band */
     CHECK(opens(b, n), "a text may print in a band's colour");
+    free(b);
+
+    b = mutate(P_AT(2) + 1, LABEL_FILL_BAND7, 1, &n);  /* the eighth band */
+    CHECK(opens(b, n), "a text may print in the last band's colour");
     free(b);
 
     b = mutate(P_AT(2) + 16, POOL_N + 4, 4, &n); /* text offset past the pool */

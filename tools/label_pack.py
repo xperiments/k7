@@ -24,9 +24,10 @@ import zlib
 from pathlib import Path
 
 MAGIC = b"K7LBL\0\0\0"
-VERSION = 1
+DESIGN_VERSION = 1
+SHEET_VERSION = 2
 HEADER_SIZE = 32
-TEMPLATE_SIZE = 48
+TEMPLATE_SIZE = 64
 PRIM_SIZE = 24
 SLOT_SIZE = 8
 
@@ -44,10 +45,12 @@ PRIM_MAX = 48
 SLOT_MAX = 16
 TEMPLATE_MAX = 32
 
-ROLE_INDEX = {"paper": 0, "ink": 1, "rule": 2, "band.0": 3, "band.1": 4, "band.2": 5, "band.3": 6}
-FILL_LITERAL = 7
+BAND_MAX = 8
+ROLE_INDEX = {"paper": 0, "ink": 1, "rule": 2}
+ROLE_INDEX.update({f"band.{i}": 3 + i for i in range(BAND_MAX)})
+FILL_LITERAL = 3 + BAND_MAX
 FONT_ROLES = ("title", "numeral", "caption")
-TEXT_ROLES = ("ink", "band.0", "band.1", "band.2", "band.3")
+TEXT_ROLES = ("ink",) + tuple(f"band.{i}" for i in range(BAND_MAX))
 ALIGN_INDEX = {"left": 0, "center": 1, "right": 2}
 
 # The device's vocabulary: one table, shared with the editor's SLOTS and the reader.
@@ -121,8 +124,8 @@ def pack_design(design, font_index, pool):
     did = design.get("id")
     before = len(errors)
 
-    if design.get("v") != VERSION:
-        errors.append(f"{did}: v is not {VERSION}")
+    if design.get("v") != DESIGN_VERSION:
+        errors.append(f"{did}: v is not {DESIGN_VERSION}")
 
     space = design.get("space") or {}
     if (space.get("w"), space.get("h")) != (SPACE_W, SPACE_H):
@@ -143,10 +146,13 @@ def pack_design(design, font_index, pool):
     ink = _hex(inks.get("ink"), f"{did}: inks.ink", errors)
     rule = _hex(inks.get("rule"), f"{did}: inks.rule", errors)
     band = inks.get("band")
-    if not isinstance(band, list) or len(band) != 4:
-        errors.append(f"{did}: inks.band must be four colours")
+    if not isinstance(band, list) or not 4 <= len(band) <= BAND_MAX:
+        errors.append(f"{did}: inks.band must be four to eight colours")
         band = ["#000000"] * 4
+    band_declared = len(band)
     band = [_hex(c, f"{did}: inks.band[{i}]", errors) for i, c in enumerate(band)]
+    # The sheet always has eight slots; a design that declares four leaves the rest 0.
+    band += [0] * (BAND_MAX - len(band))
 
     fonts = design.get("fonts")
     if not isinstance(fonts, dict):
@@ -209,6 +215,8 @@ def pack_design(design, font_index, pool):
             literal = 0
             if fill in ROLE_INDEX:
                 fill_index = ROLE_INDEX[fill]
+                if fill.startswith("band.") and int(fill[5:]) >= band_declared:
+                    errors.append(f"{tag}: fill {fill} is past this design's {band_declared} bands")
                 if fill == "paper" and paper is None:
                     errors.append(f"{tag}: fills with paper, and this design has no paper colour")
             elif isinstance(fill, str) and HEX_RE.match(fill):
@@ -227,7 +235,7 @@ def pack_design(design, font_index, pool):
             errors.append(f"{tag}: t must be rect or text")
             continue
 
-        # A text prints in the ink or in one of the four bands; the paper has nothing to read
+        # A text prints in the ink or in one of the eight bands; the paper has nothing to read
         # against it, and the one literal colour is a rect's (label-templates.md 2).
         color = prim.get("color")
         if color not in TEXT_ROLES:
@@ -235,6 +243,8 @@ def pack_design(design, font_index, pool):
             fill_index = ROLE_INDEX["ink"]
         else:
             fill_index = ROLE_INDEX[color]
+            if color.startswith("band.") and int(color[5:]) >= band_declared:
+                errors.append(f"{tag}: colour {color} is past this design's {band_declared} bands")
         role = prim.get("font")
         if role not in FONT_ROLES:
             errors.append(f"{tag}: font {role!r} is not title, numeral or caption")
@@ -339,18 +349,19 @@ def pack_sheet(designs, fonts):
              + SLOT_SIZE * len(slots) + len(pool_bytes))
     body = bytearray()
     for t in templates:
+        # 16 B of name/counts/fonts, the eleven role colours (paper, ink, rule, eight
+        # bands), then the four reserved bytes: 64 B.
         body += struct.pack(
-            "<IHHHHBBBBIIIIIIII",
+            "<IHHHHBBBB11II",
             t["name"], t["prim_start"], t["prim_count"], t["slot_start"], t["slot_count"],
             t["font"][0], t["font"][1], t["font"][2], 0,
-            t["inks"][0], t["inks"][1], t["inks"][2], t["inks"][3], t["inks"][4],
-            t["inks"][5], t["inks"][6], 0)
+            *t["inks"], 0)
     body += b"".join(prims)
     body += b"".join(slots)
     body += pool_bytes
 
     header = struct.pack(
-        "<8sHHIIHHHHHH", MAGIC, VERSION, HEADER_SIZE, total, zlib.crc32(bytes(body)),
+        "<8sHHIIHHHHHH", MAGIC, SHEET_VERSION, HEADER_SIZE, total, zlib.crc32(bytes(body)),
         SPACE_W, SPACE_H, len(templates), len(prims), len(slots), len(pool_bytes))
     assert len(header) == HEADER_SIZE and len(body) == total - HEADER_SIZE
 
@@ -374,8 +385,8 @@ def verify_sheet(blob):
      templates, prims, slots, pool_size) = struct.unpack_from("<8sHHIIHHHHHH", blob, 0)
     if magic != MAGIC:
         errors.append("magic is not K7LBL")
-    if version != VERSION:
-        errors.append(f"version is {version}, not {VERSION}")
+    if version != SHEET_VERSION:
+        errors.append(f"version is {version}, not {SHEET_VERSION}")
     if header_size != HEADER_SIZE:
         errors.append(f"header_size is {header_size}, not {HEADER_SIZE}")
     want = HEADER_SIZE + TEMPLATE_SIZE * templates + PRIM_SIZE * prims + SLOT_SIZE * slots + pool_size
@@ -390,7 +401,7 @@ def verify_sheet(blob):
     pool_start = total - pool_size
     for i in range(templates):
         (_, p_start, p_count, s_start, s_count, *_) = struct.unpack_from(
-            "<IHHHHBBBBIIIIIIII", blob, HEADER_SIZE + i * TEMPLATE_SIZE)
+            "<IHHHHBBBB11II", blob, HEADER_SIZE + i * TEMPLATE_SIZE)
         if p_start + p_count > prims or s_start + s_count > slots:
             errors.append(f"template {i} runs past its arrays")
     for i in range(prims):
@@ -479,7 +490,7 @@ def main(argv):
             print(f"label_pack: {line}", file=sys.stderr)
         if errors:
             return 1
-        print("label_pack: the editor offers the sheet's faces and the vocabulary's slots")
+        print("label_pack: the editor offers the sheet's faces, bands and slots")
         return 0
 
     if len(args) != 2:
@@ -555,6 +566,21 @@ def check_editor():
             errors.append(f'{EDITOR}: offers the slot "{name}", which the vocabulary does not carry')
     for name in sorted(SLOT_NAMES - set(offered)):
         errors.append(f'{EDITOR}: is missing the slot "{name}"')
+
+    # The band palette is the sheet's eight slots, and the editor's role tables are what
+    # offers them. A page that still offers four would export a design the panel cannot
+    # paint past band 3.
+    m = re.search(r"function\s+defaultTpl\s*\(\s*\)\s*\{.*?band:\s*\[(.*?)\]", html, re.S)
+    if not m:
+        errors.append(f"{EDITOR}: no defaultTpl band palette")
+    else:
+        colours = re.findall(r"['\"]#[0-9A-Fa-f]{6}['\"]", m.group(1))
+        if len(colours) != BAND_MAX:
+            errors.append(f"{EDITOR}: defaults {len(colours)} bands, not {BAND_MAX}")
+    for table in ("TEXT_ROLES", "ROLES"):
+        m = re.search(rf"\b{table}\s*=\s*\[(.*?)\]\s*;", html, re.S)
+        if not m or "band.7" not in m.group(1):
+            errors.append(f"{EDITOR}: {table} does not carry band.7")
     return errors
 
 
@@ -565,7 +591,8 @@ def selftest():
         "v": 1, "id": "label.self", "name": "Self", "space": {"w": 748, "h": 359},
         "aperture": {"x": 95, "y": 101, "w": 556, "h": 166, "r": 83},
         "inks": {"paper": "#F2EDE3", "ink": "#24211D", "rule": "#B9AC8E",
-                 "band": ["#C68B2E", "#A24E2C", "#8A5D34", "#6B7A2F"]},
+                 "band": ["#C68B2E", "#A24E2C", "#8A5D34", "#6B7A2F",
+                          "#3B6E8F", "#7A3B52", "#B9AC8E", "#2F4B3A"]},
         "fonts": {"title": {"ff": "Archivo Narrow 600", "px": 32},
                   "numeral": {"ff": "Jura", "px": 20},
                   "caption": {"ff": "Jura", "px": 20}},
@@ -639,6 +666,19 @@ def selftest():
     expect_refusal(lambda d: d.update(notes=[]), "no note says why")
     expect_refusal(lambda d: d["prims"].append({"t": "rect", "x": 0, "y": 0, "w": 4, "h": 4,
                                                "fill": "#111111"}), "may have one")
+    expect_refusal(lambda d: d["inks"].update(band=["#000000"] * 3), "four to eight")
+    expect_refusal(lambda d: d["inks"].update(band=["#000000"] * 9), "four to eight")
+
+    # A design may keep four bands; a prim may not name a band it did not declare.
+    short = json.loads(json.dumps(good))
+    short["inks"]["band"] = short["inks"]["band"][:4]
+    short["prims"][0]["fill"] = "band.4"
+    try:
+        pack_sheet([short], fonts)
+        raise SystemExit("selftest: an undeclared band was accepted")
+    except PackError as exc:
+        if not any("past this design's 4 bands" in e for e in exc.errors):
+            raise SystemExit(f"selftest: expected the undeclared band, got {exc.errors}")
     print("label_pack: selftest ok")
     return 0
 

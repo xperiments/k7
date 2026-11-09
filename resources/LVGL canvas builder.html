@@ -93,6 +93,20 @@
         margin: auto;
         flex: none;
       }
+      #screen {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform-origin: 0 0;
+        box-shadow:
+          0 0 0 1px var(--line),
+          0 10px 30px rgba(0, 0, 0, 0.14);
+      }
+      #screen canvas {
+        position: absolute;
+        left: 25px;
+        top: 19px;
+      }
       #stage {
         position: absolute;
         transform-origin: 0 0;
@@ -418,9 +432,8 @@
       <button data-t="square">Square</button>
       <button data-t="circle">Circle</button>
       <button data-t="text">Text</button>
-      <label>W <input id="cw" type="number" value="748" min="1" /></label>
-      <label>H <input id="ch" type="number" value="359" min="1" /></label>
-      <label>Canvas <input id="bg" type="color" value="#ffffff" /></label>
+      <span title="The print's box on the panel: fixed at 748x359">748 × 359</span>
+      <label>Screen 800×480 <input id="bg" type="color" value="#ffffff" /></label>
       <label
         >Zoom
         <select id="zoom">
@@ -500,6 +513,10 @@
           <option value="band.1">band.1</option>
           <option value="band.2">band.2</option>
           <option value="band.3">band.3</option>
+          <option value="band.4">band.4</option>
+          <option value="band.5">band.5</option>
+          <option value="band.6">band.6</option>
+          <option value="band.7">band.7</option>
           <option value="rule">rule</option>
         </select>
       </div>
@@ -507,8 +524,10 @@
 
     <main>
       <div id="box">
-        <div id="stage"></div>
-        <canvas id="lv" hidden></canvas>
+        <div id="screen" hidden>
+          <div id="stage"></div>
+          <canvas id="lv" hidden></canvas>
+        </div>
       </div>
     </main>
 
@@ -1562,6 +1581,7 @@
     <script>
       const $ = (id) => document.getElementById(id);
       const stage = $("stage"),
+        screenBox = $("screen"),
         box = $("box"),
         list = $("list"),
         fields = $("ifields"),
@@ -1761,8 +1781,16 @@
           .catch(() => {});
       }
 
-      const W = () => +$("cw").value || 748,
-        H = () => +$("ch").value || 359;
+      // The label is the print's box, fixed by the panel: 748x359 at (25,19) in the 800x480
+      // screen. The editor no longer offers another size; the packer would refuse it.
+      const PRINT_W = 748,
+        PRINT_H = 359,
+        SCREEN_W = 800,
+        SCREEN_H = 480,
+        PRINT_X = 25,
+        PRINT_Y = 19;
+      const W = () => PRINT_W,
+        H = () => PRINT_H;
       const h = (s) =>
         String(s).replace(
           /[&<>"]/g,
@@ -1881,11 +1909,24 @@
         // (the print) is inset by it, so a layer that spills is drawn there instead of being cut off
         // by the workspace's edge.
         const P = 80;
-        stage.style.cssText = `left:${P}px;top:${P}px;width:${w}px;height:${hh}px;background:${$("bg").value};transform:scale(${Z})`;
-        box.style.width = w * Z + 2 * P + "px";
-        box.style.height = hh * Z + 2 * P + "px";
+        const screenMode = run && M;
+        screenBox.style.left = screenMode ? "0px" : P + "px";
+        screenBox.style.top = screenMode ? "0px" : P + "px";
+        screenBox.style.width = SCREEN_W + "px";
+        screenBox.style.height = SCREEN_H + "px";
+        screenBox.style.background = $("bg").value;
+        screenBox.style.transform = screenMode ? "none" : `scale(${Z})`;
+        screenBox.hidden = false;
+        // The print sits at its real place on the panel: (25,19), 748x359.
+        stage.style.cssText = `left:${PRINT_X}px;top:${PRINT_Y}px;width:${w}px;height:${hh}px;background:${$("bg").value}`;
+        box.style.width = screenMode
+          ? SCREEN_W + "px"
+          : SCREEN_W * Z + 2 * P + "px";
+        box.style.height = screenMode
+          ? SCREEN_H + "px"
+          : SCREEN_H * Z + 2 * P + "px";
         stage.className = (run ? "run" : "") + (outside ? " outside" : "");
-        stage.hidden = !!(run && M);
+        stage.hidden = screenMode;
         const mkBox = () => {
           const mb = document.createElement("div");
           mb.className = "maskbox";
@@ -2005,7 +2046,7 @@
           if (maskCfg) maskCfg.color = c;
         } else if (r === "ink") tpl.inks.ink = c;
         else if (r === "rule") tpl.inks.rule = c;
-        else if (/^band\.[0-3]$/.test(r)) tpl.inks.band[+r.slice(5)] = c;
+        else if (/^band\.[0-7]$/.test(r)) tpl.inks.band[+r.slice(5)] = c;
       }
       const roleRow = (r, D) =>
         `<label>Colour of role "${r}" <span style="opacity:.55">(every layer with this role)</span><input data-rc="${r}" type="color" value="${roleColor(r)}"${D}></label>` +
@@ -2056,7 +2097,7 @@
             `<label>Id<input data-tp="id" value="${h(tpl.id)}"></label><label>Name<input data-tp="name" value="${h(tpl.name)}"></label>` +
             (maskCfg ? col("paper", "Paper (LayerMask)", maskCfg.color) : "") +
             col("ink", "Ink", tpl.inks.ink) +
-            [0, 1, 2, 3]
+            [0, 1, 2, 3, 4, 5, 6, 7]
               .map((i) => col("band" + i, "Band " + i, tpl.inks.band[i]))
               .join("") +
             col("rule", "Rule", tpl.inks.rule) +
@@ -2218,9 +2259,16 @@
           if (!ROLES.includes(o.role)) o.role = nearestRole(o.color);
         });
       }
+      // A document saved before the palette had eight bands carries four: pad the rest from
+      // the current default so the template panel has a colour for every control.
+      function migrateBands() {
+        if (!tpl || !tpl.inks) return;
+        const d = defaultTpl().inks.band;
+        const b = Array.isArray(tpl.inks.band) ? tpl.inks.band.slice(0, 8) : [];
+        while (b.length < 8) b.push(d[b.length]);
+        tpl.inks.band = b;
+      }
       function applyDoc(d) {
-        $("cw").value = d.data.w;
-        $("ch").value = d.data.h;
         $("bg").value = d.data.bg;
         objs = d.data.objs;
         nid = d.data.nid || 0;
@@ -2230,6 +2278,7 @@
         fixMask();
         tpl = d.data.tpl || defaultTpl();
         migrateFonts();
+        migrateBands();
         normalizeRoles();
         undo = d.undo;
         redo = d.redo;
@@ -2402,8 +2451,6 @@
       }
       function restore(s) {
         const d = JSON.parse(s);
-        $("cw").value = d.w;
-        $("ch").value = d.h;
         $("bg").value = d.bg;
         objs = d.objs;
         groups = d.groups || [];
@@ -3409,12 +3456,10 @@
         if (localStorage.getItem("lvgl-canvas.outside") === "0")
           outside = false;
       } catch (e) {}
-      ["cw", "ch", "bg"].forEach((i) =>
-        $(i).addEventListener("input", () => {
-          commit(true);
-          refresh();
-        }),
-      );
+      $("bg").addEventListener("input", () => {
+        commit(true);
+        refresh();
+      });
 
       $("run").onclick = () => {
         run = !run;
@@ -3517,7 +3562,16 @@
           name: "Untitled",
           inks: {
             ink: "#151515",
-            band: ["#c68b2e", "#a24e2c", "#8a5d34", "#6b7a2f"],
+            band: [
+              "#c68b2e",
+              "#a24e2c",
+              "#8a5d34",
+              "#6b7a2f",
+              "#3b6e8f",
+              "#7a3b52",
+              "#b9ac8e",
+              "#2f4b3a",
+            ],
             rule: "#8e7e4a",
           },
           fonts: {
@@ -3529,9 +3583,19 @@
           sim: {},
         };
       }
-      // A text may print in the ink or in any of the four bands: a label whose bands carry
+      // A text may print in the ink or in any of the eight bands: a label whose bands carry
       // their own type (label-templates.md §2).
-      const TEXT_ROLES = ["ink", "band.0", "band.1", "band.2", "band.3"];
+      const TEXT_ROLES = [
+        "ink",
+        "band.0",
+        "band.1",
+        "band.2",
+        "band.3",
+        "band.4",
+        "band.5",
+        "band.6",
+        "band.7",
+      ];
       const ROLES = [
         "paper",
         "ink",
@@ -3539,6 +3603,10 @@
         "band.1",
         "band.2",
         "band.3",
+        "band.4",
+        "band.5",
+        "band.6",
+        "band.7",
         "rule",
       ];
       const FROLES = ["title", "numeral", "caption"];
@@ -3554,7 +3622,7 @@
             ? tpl.inks.ink
             : r === "rule"
               ? tpl.inks.rule
-              : /^band\.[0-3]$/.test(r || "")
+              : /^band\.[0-7]$/.test(r || "")
                 ? tpl.inks.band[+r.slice(5)]
                 : null;
       const fillOf = (o) =>
@@ -3703,7 +3771,7 @@
             if (o.rot) pr.rot = Math.round(o.rot);
             pr.font = FROLES.includes(o.fr) ? o.fr : "caption";
             if (!TEXT_ROLES.includes(o.role))
-              errs.push(`${tag}: text colour must be ink or one of the four bands`);
+              errs.push(`${tag}: text colour must be ink or one of the eight bands`);
             pr.color = TEXT_ROLES.includes(o.role) ? o.role : "ink";
             pr.align = alignOf(o);
             if (o.static) pr.text = o.text || "";
@@ -3720,7 +3788,7 @@
               if (!ROLES.includes(o.role))
                 errs.push(`${tag}: unknown role ${o.role}`);
               pr.fill = o.role;
-            } else errs.push(`${tag}: choose a role (paper, band.0-3 or rule)`);
+            } else errs.push(`${tag}: choose a role (paper, band.0-7 or rule)`);
             pr.still = true;
             /* A rect may bleed past the print: the print crops it, and the canvas marks what
              * will be cut (ADR 0072). Only a record the sheet cannot hold is refused, and that
@@ -3783,7 +3851,7 @@
           paper: maskCfg ? maskCfg.color : null,
           ink: tpl.inks.ink,
           rule: tpl.inks.rule,
-          band: tpl.inks.band.slice(0, 4),
+          band: tpl.inks.band.slice(0, 8),
         };
         doc.fonts = {
           title: { ff: tpl.fonts.title.ff, px: tpl.fonts.title.px },
@@ -3810,8 +3878,11 @@
         if (d.inks) {
           if (d.inks.ink) tpl.inks.ink = d.inks.ink;
           if (d.inks.rule) tpl.inks.rule = d.inks.rule;
-          if (Array.isArray(d.inks.band))
-            tpl.inks.band = d.inks.band.slice(0, 4);
+          if (Array.isArray(d.inks.band)) {
+            const b = d.inks.band.slice(0, 8);
+            while (b.length < 8) b.push(defaultTpl().inks.band[b.length]);
+            tpl.inks.band = b;
+          }
         }
         if (d.fonts)
           for (const k of FROLES)
@@ -3836,8 +3907,10 @@
           throw new Error(
             `aperture ${d.aperture.x},${d.aperture.y} ${d.aperture.w}x${d.aperture.h} r${d.aperture.r || 0} is not the Card's window ${WIN.x},${WIN.y} ${WIN.w}x${WIN.h} r${WIN.r}`,
           );
-        $("cw").value = d.space.w;
-        $("ch").value = d.space.h;
+        if (!d.space || d.space.w !== W() || d.space.h !== H())
+          throw new Error(
+            `space is ${d.space ? `${d.space.w}x${d.space.h}` : "missing"}, not ${W()}x${H()}`,
+          );
         Object.keys(d.slots).forEach((k) => {
           tpl.slots[k] = { max: d.slots[k].max };
         });
@@ -3884,7 +3957,7 @@
             if (TEXT_ROLES.includes(p.color)) o.role = p.color;
             else
               throw new Error(
-                `text colour "${p.color}" is not ink or one of the four bands`,
+                `text colour "${p.color}" is not ink or one of the eight bands`,
               );
             out.push(mk(o));
           } else {
@@ -3955,7 +4028,7 @@
               ? "inks->ink"
               : c === "rule"
                 ? "inks->rule"
-                : /^band\.[0-3]$/.test(c)
+                : /^band\.[0-7]$/.test(c)
                   ? `inks->band[${c.slice(5)}]`
                   : `lv_color_hex(0x${c.slice(1).toUpperCase()})`;
         const notes = (t.notes || [])
@@ -4093,7 +4166,7 @@ ${
 typedef struct {
     lv_color_t paper;
     lv_color_t ink;
-    lv_color_t band[4];
+    lv_color_t band[8];
     lv_color_t rule;
 } label_inks_t;
 
@@ -4424,8 +4497,10 @@ void ui_destroy(void)
           hh = H();
         if (lv.width !== w) lv.width = w;
         if (lv.height !== hh) lv.height = hh;
-        lv.style.width = w * Z + "px";
-        lv.style.height = hh * Z + "px";
+        lv.style.left = PRINT_X + "px";
+        lv.style.top = PRINT_Y + "px";
+        lv.style.width = w + "px";
+        lv.style.height = hh + "px";
         regFonts();
         CALL(
           "lvp_begin",
