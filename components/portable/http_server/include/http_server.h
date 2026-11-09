@@ -47,7 +47,11 @@ extern "C" {
 #define HTTP_UPLOAD_MAX (256u * 1024u)
 #define HTTP_QUERY_MAX 256 /* raw (percent-encoded) query string, without the ? */
 #define HTTP_HEADER_MAX 1024
-#define HTTP_MAX_ROUTES 18 /* the appliance's fourteen, plus the screen's two diagnostics */
+/* The appliance registers seventeen (the stream, play, the front door's two, MCP's three,
+ * the app's eight, library.bin, /library); the screen's two diagnostics make nineteen. The
+ * table had 18, so a screen-HTTP build failed the last registration with ESP_ERR_NO_MEM and
+ * never started its listener - the capture build could not serve at all. */
+#define HTTP_MAX_ROUTES 20
 #define HTTP_LISTEN_BACKLOG 16
 #define HTTP_MAX_CONNS 6
 
