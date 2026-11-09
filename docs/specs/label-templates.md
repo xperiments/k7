@@ -19,9 +19,13 @@ print's top-left. On the panel that box is (25,19) 748x359 — the Card at (-8,-
 by its print offset (+33,+42) — and the Card's A8 mask cuts the window at **(95,101) 556x166,
 radius 83** in these coordinates.
 
-- **Every prim is inside 748x359.** The packer refuses one that is not: the print clips its
-  children, and a design that promises more than the panel does is a lie the packer will not
-  tell.
+- **Every prim's ink is inside 748x359.** A `rect` *is* its box, so the packer refuses one that
+  leaves the print: it clips its children, and a design that promises more than the panel does is
+  a lie the packer will not tell. A `text` is a layout box plus ink - the line box carries air
+  above the capitals and below the baseline, and the print clips only the ink - so the packer
+  does not judge a text's box, having no shaper to measure it; the editor measures a static
+  text's ink and refuses it when the ink leaves the print, and holds a slot text to its whole
+  box, which is the promise to hold the longest value it can print.
 - **The aperture is the Card's window, not the design's.** The editor's `aperture` must be
   absent, or exactly `(95, 101, 556, 166, r 83)`; the packer refuses anything else, and so does
   the editor at Export and at Open - the window is the Card's, and an aperture object is only a
@@ -277,7 +281,8 @@ Named per design and per layer; the build fails, nothing is dropped.
 | `v` is not 1 | a different format |
 | `space` is not 748x359 | the print is one box |
 | the aperture is neither absent nor `(95,101,556,166,r83)` | the window is the Card's |
-| a prim outside 748x359 (bleed or not) | the print clips |
+| a `rect` outside 748x359 | the print clips it |
+| a static text whose measured ink leaves 748x359 | the print clips it; the editor is the only side that can measure |
 | a prim with no role and no literal colour, or an unknown role | what would it paint? |
 | a `paper` prim when `inks.paper` is `null` | there is no paper without a mask |
 | more than one literal colour, or one with no `note` | the sheet is role-coloured |

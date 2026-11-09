@@ -196,7 +196,11 @@ def pack_design(design, font_index, pool):
         y = _int(prim.get("y"), f"{tag}: y", errors)
         w = _int(prim.get("w"), f"{tag}: w", errors, lo=1)
         rot = _int(prim.get("rot", 0), f"{tag}: rot", errors, lo=-360, hi=360, default=0)
-        if x < 0 or y < 0 or x + w > SPACE_W or y >= SPACE_H:
+        # A rect is its box. A text is a layout box plus ink: the print clips the ink, and the
+        # packer has no shaper, so it cannot know where the ink is - the editor measures it and
+        # refuses a text whose ink leaves the print before the file is written
+        # (docs/specs/label-templates.md 1). A rect is still checked here.
+        if kind == "rect" and (x < 0 or y < 0 or x + w > SPACE_W):
             errors.append(f"{tag}: outside the {SPACE_W}x{SPACE_H} print, which clips it")
 
         if kind == "rect":

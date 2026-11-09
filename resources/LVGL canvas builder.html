@@ -3054,13 +3054,36 @@
       // What a canvas drag or a rotate acts on: the whole group when one is selected as a group (its
       // header was clicked), otherwise every layer in the selection (Cmd-click keeps several). A
       // single layer is the same answer either way.
-      // The print clips at 0..748 x 0..359, so a layer whose box leaves it fails Export and the
-      // build ("outside the 748x359 space"). This is that same test, so the editor can mark the
-      // layer before anyone presses Export: a text is checked on its origin, a rect on its height.
+      // A static text's ink, measured: the line box carries air above the capitals and below the
+      // baseline, and the print clips the ink, not the air. Returns the ink's top and bottom in
+      // design coordinates, or null for a slot text (its value is only previewed, so its promise
+      // is the whole box).
+      function textInk(o) {
+        if (o.type !== "text" || !o.static || !(o.text || "").trim()) return null;
+        mctx = mctx || document.createElement("canvas").getContext("2d");
+        mctx.font = `${pxOf(o)}px "${ffOf(o)}", sans-serif`;
+        const m = mctx.measureText(o.text);
+        const asc =
+          m.fontBoundingBoxAscent !== undefined
+            ? m.fontBoundingBoxAscent
+            : pxOf(o) * 0.8;
+        const inkAsc = m.actualBoundingBoxAscent || asc;
+        const inkDesc = m.actualBoundingBoxDescent || 0;
+        const top = o.y + (asc - inkAsc);
+        return { top, bottom: top + inkAsc + inkDesc };
+      }
+      // The print clips at 0..748 x 0..359, so a layer that leaves it fails Export and the build
+      // ("outside the 748x359 space"). This is that same test, so the editor can mark the layer
+      // before anyone presses Export: a rect is its box, a static text is its ink, a slot text is
+      // the box that promises to hold the longest value it can print.
       function outOfSpace(o) {
         if (o.ap) return false;
-        const hh = o.type === "text" ? 0 : o.h || 0;
-        return o.x < 0 || o.y < 0 || o.x + o.w > W() || o.y + hh > H();
+        if (o.type === "text") {
+          if (o.x < 0 || o.x + o.w > W()) return true;
+          const ink = textInk(o);
+          return ink ? ink.top < 0 || ink.bottom > H() : o.y < 0 || o.y > H();
+        }
+        return o.x < 0 || o.y < 0 || o.x + o.w > W() || o.y + (o.h || 0) > H();
       }
 
       function selMembers() {
@@ -3701,7 +3724,12 @@
                   `${tag}: simulated value "${pr.preview}" is longer than ${mx} characters`,
                 );
             }
-            if (X < 0 || Y < 0 || X + Wd > W0 || Y > H0)
+            const ink = textInk(o);
+            if (
+              X < 0 ||
+              X + Wd > W0 ||
+              (ink ? ink.top < 0 || ink.bottom > H0 : Y < 0 || Y > H0)
+            )
               errs.push(
                 `${tag}: outside the ${W0}x${H0} space at x ${X}, y ${Y}, w ${Wd}, which the print clips`,
               );
