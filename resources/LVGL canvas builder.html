@@ -248,6 +248,13 @@
         outline: 1px dashed var(--acc);
         outline-offset: 2px;
       }
+      li.out {
+        color: #c23b66;
+      }
+      .o.out {
+        outline: 2px dashed #c23b66;
+        outline-offset: 2px;
+      }
       .tw {
         display: inline-block;
         width: 14px;
@@ -1784,6 +1791,7 @@
           "o" +
           (o === sel && !run ? " sel" : "") +
           (o !== sel && selSet.has(o.id) && !run ? " multi" : "") +
+          (outOfSpace(o) && !run ? " out" : "") +
           (o.locked ? " lock" : "") +
           (o.ap ? " ap" : "");
         d.dataset.i = i;
@@ -1901,7 +1909,7 @@
           ? '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>'
           : '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5-.5"/></svg>';
       function rowHTML(o, i, gid) {
-        return `<li data-i="${i}" data-lo="${i}" data-hi="${i}"${gid ? ` data-gid="${gid}"` : ""} draggable="${o.locked ? "false" : "true"}" class="${o === sel ? "on" : ""}${selSet.has(o.id) ? " multi" : ""}${gid ? " ing" : ""}${o.m && maskCfg ? " mk" : ""}">${o.type === "text" ? "T" : o.type === "circle" ? "◯" : "▭"}  ${h(o.label || o.name || o.type + " " + o.id)}${o.name ? ' <small style="opacity:.55">input</small>' : ""}<span class="lk${o.locked ? " on" : ""}" title="${o.locked ? "Unlock" : "Lock"}">${LOCK(!!o.locked)}</span></li>`;
+        return `<li data-i="${i}" data-lo="${i}" data-hi="${i}"${gid ? ` data-gid="${gid}"` : ""} draggable="${o.locked ? "false" : "true"}" class="${outOfSpace(o) ? "out " : ""}${o === sel ? "on" : ""}${selSet.has(o.id) ? " multi" : ""}${gid ? " ing" : ""}${o.m && maskCfg ? " mk" : ""}">${o.type === "text" ? "T" : o.type === "circle" ? "◯" : "▭"}  ${h(o.label || o.name || o.type + " " + o.id)}${o.name ? ' <small style="opacity:.55">input</small>' : ""}<span class="lk${o.locked ? " on" : ""}" title="${o.locked ? "Unlock" : "Lock"}">${LOCK(!!o.locked)}</span></li>`;
       }
       function renderList() {
         const rows = [],
@@ -3021,6 +3029,15 @@
       // What a canvas drag or a rotate acts on: the whole group when one is selected as a group (its
       // header was clicked), otherwise every layer in the selection (Cmd-click keeps several). A
       // single layer is the same answer either way.
+      // The print clips at 0..748 x 0..359, so a layer whose box leaves it fails Export and the
+      // build ("outside the 748x359 space"). This is that same test, so the editor can mark the
+      // layer before anyone presses Export: a text is checked on its origin, a rect on its height.
+      function outOfSpace(o) {
+        if (o.ap) return false;
+        const hh = o.type === "text" ? 0 : o.h || 0;
+        return o.x < 0 || o.y < 0 || o.x + o.w > W() || o.y + hh > H();
+      }
+
       function selMembers() {
         if (selGroup && sel && sel.g === selGroup)
           return objs.filter((o) => o.g === selGroup);
@@ -3661,7 +3678,7 @@
             }
             if (X < 0 || Y < 0 || X + Wd > W0 || Y > H0)
               errs.push(
-                `${tag}: outside the ${W0}x${H0} space, which the print clips`,
+                `${tag}: outside the ${W0}x${H0} space at x ${X}, y ${Y}, w ${Wd}, which the print clips`,
               );
             prims.push(pr);
           } else {
@@ -3677,7 +3694,7 @@
             pr.still = true;
             if (X < 0 || Y < 0 || X + Wd > W0 || Y + Ht > H0)
               errs.push(
-                `${tag}: outside the ${W0}x${H0} space, which the print clips`,
+                `${tag}: outside the ${W0}x${H0} space at x ${X}, y ${Y}, w ${Wd}, which the print clips`,
               );
             if (
               AB &&
