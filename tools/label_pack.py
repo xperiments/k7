@@ -251,11 +251,6 @@ def pack_design(design, font_index, pool):
                 offset = pool.add(name)
             else:
                 used_slots.add(name)
-                preview = prim.get("preview") or ""
-                if len(preview) > slot_max[name]:
-                    errors.append(
-                        f'{tag}: the preview "{preview}" is longer than its slot\'s '
-                        f"{slot_max[name]} characters")
                 offset = pool.add(name)
             kind_index = 2
         elif "text" in prim:

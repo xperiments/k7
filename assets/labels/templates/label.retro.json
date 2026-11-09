@@ -8,13 +8,13 @@
   },
   "slots": {
     "song_title": {
-      "max": 24
+      "max": 96
     },
     "song_artist": {
-      "max": 24
+      "max": 96
     },
     "song_album": {
-      "max": 24
+      "max": 96
     }
   },
   "inks": {

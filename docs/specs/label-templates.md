@@ -51,7 +51,7 @@ the packer uses; the rest are the editor's.
   "fonts": { "title":   { "ff": "Archivo Narrow 600", "px": 32 },
              "numeral": { "ff": "Barlow Condensed 700", "px": 78 },
              "caption": { "ff": "IBM Plex Mono 500", "px": 18 } },
-  "slots": { "song_title": { "max": 24 } },
+  "slots": { "song_title": { "max": 96 } },
   "notes": ["the spike is the one literal colour: it is the sleeve's, not the sheet's"],
   "prims": [
     { "t": "rect", "x": 0, "y": 0, "w": 748, "h": 359, "r": 19,
@@ -84,8 +84,14 @@ the packer uses; the rest are the editor's.
   editor measures the ink and writes that, moving `x` by the difference so the glyphs do not
   move. The box is the design's, not a bound: the print crops whatever leaves it (ADR 0072), and
   a box that hugs its text is what keeps the canvas honest about where the ink is.
-- **`preview`** is the editor's simulated value: it is validated against the slot's `max` at
-  export, and ignored by the packer.
+- **`preview`** is the editor's simulated value, and only that: the packer ignores it and the
+  editor does not bound it. A longer real value is wrapped to the text's `w` and cropped by the
+  print like anything else (ADR 0072).
+- **A slot's `max` is the resolver's ceiling, not a design choice.** `label_values` carries 96
+  characters per slot, so the editor writes `max: 96` for every slot a text uses and offers no
+  control for it; a design imported with a smaller `max` is raised to the ceiling, because the
+  box is where the layout is decided. The field stays in the file because the slot record carries
+  it and the panel cuts a value there.
 
 ## 3. The sheet — `label_sheet.bin`
 
@@ -251,6 +257,7 @@ The names are the editor's `SLOTS`, one table in both places: `song_title`, `son
 why the editor's simulations are `8A` and `relaxed` rather than `A min` and `Warm`.
 
 - **A value is cut at its slot's `max` characters**, on a character boundary — never mid-UTF-8 —
+  (96 in every design the editor writes: the ceiling is the resolver's, not the design's)
   and only then wrapped: the label's `w` is the wrap width, so a longer title grows downward
   inside the design's own box, exactly as the editor previews it.
 - `year` and `song_album_artist` are **not** in this vocabulary. The editor's field list is the
@@ -295,10 +302,9 @@ Named per design and per layer; the build fails, nothing is dropped.
 | more than one literal colour, or one with no `note` | the sheet is role-coloured |
 | a text whose `color` is not `ink` | v1's one text colour |
 | an unknown Slot name, a slot a text uses but does not declare, or a declared slot no text uses | the vocabulary is one table |
-| a `max` the `preview` already exceeds | the design does not fit its own bound |
 | a font role not in `fonts.json` | the glyphs are not compiled |
 | a design with no prims, or a text with neither a slot nor a static text | there is nothing to draw |
-| a slot whose `max` is 0 or over 96 | the resolver carries 96; the design may not ask for more |
+| a slot whose `max` is 0 or over 96 | the resolver carries 96; the editor writes that |
 | more than 48 prims, 16 slots or 32 designs | a bounded build, a bounded repaint, a bounded sheet |
 | the same `id` twice | selection would be ambiguous |
 | no designs at all in `assets/labels/templates/` | nothing to embed |

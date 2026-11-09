@@ -1691,6 +1691,9 @@
         { id: "mood", label: "Mood", sim: "relaxed", max: 12 },
       ];
       const slotOf = (id) => SLOTS.find((s) => s.id === id) || null;
+      // The resolver's LABEL_VALUE_MAX: the most a slot can print. A design no longer chooses a
+      // smaller cap - its box is where the layout is decided (label-templates.md §5).
+      const SLOT_CEILING = 96;
       // the faces a label may use, at the sizes the sheet carries them: assets/labels/fonts.json is the
       // table and tools/label_pack.py refuses a pair it does not carry. These are the three the editor
       // can draw, so the role pickers offer exactly them and a design cannot ask for a face the sheet
@@ -1991,18 +1994,8 @@
       // a dynamic text picks one of the listed fields; the simulated value is what it shows
       const slotSelect = (o, D) =>
         `<label>Field<select data-k="name"${D}><option value="">choose a field…</option>${SLOTS.map((s) => `<option value="${s.id}"${s.id === o.name ? " selected" : ""}>${s.label}</option>`).join("")}</select></label>`;
-      const simInput = (o) => {
-        const s = slotOf(o.name),
-          mx = s ? (tpl.slots[o.name] || { max: s.max }).max : 0,
-          v = o.sim !== undefined ? o.sim : "";
-        const len = (v || simOf(o.name)).length;
-        return (
-          `<label>Test value (empty = ${h(simOf(o.name)) || "field default"})<input data-k="sim" type="text" value="${h(v)}" placeholder="${h(simOf(o.name))}"></label>` +
-          (mx && len > mx
-            ? `<div style="font-size:12px;color:#c23b66;margin:-6px 0 10px">${len} characters: longer than the ${mx} allowed, export will refuse it</div>`
-            : "")
-        );
-      };
+      const simInput = (o) =>
+        `<label>Test value (empty = ${h(simOf(o.name)) || "field default"})<input data-k="sim" type="text" value="${h(o.sim !== undefined ? o.sim : "")}" placeholder="${h(simOf(o.name))}"></label>`;
       // a layer shows its role's colour; the colours themselves are set in the template panel (globals)
       const roleChip = (o, D) =>
         `<div style="display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:12px">Colour <span style="display:inline-block;width:22px;height:14px;border:1px solid var(--line);background:${roleColor(o.role) || "transparent"}"></span><span style="opacity:.6">from role ${o.role || "(none)"}</span></div>`;
@@ -2132,8 +2125,8 @@
           x2 +=
             `<label>Font role<select data-k="fr"${D}>${optsOf(FROLES, sel.fr)}</select></label>` +
             `<label>Align<select data-k="align"${D}>${["left", "center", "right"].map((a) => `<option${alignOf(sel) === a ? " selected" : ""}>${a}</option>`).join("")}</select></label>`;
-          if (sel.name && tpl.slots[sel.name])
-            x2 += `<label>Max chars for "${h(sel.name)}"<input data-slotmax type="number" value="${tpl.slots[sel.name].max}"${D}></label>`;
+          /* No max-chars field: a slot carries the resolver's ceiling and the text's box is
+           * what the design decides (label-templates.md §5). */
         }
         fields.innerHTML = s + x2;
       }
@@ -2703,13 +2696,6 @@
             else delete sel.ap;
             commit(false);
             refresh();
-          }
-          return;
-        }
-        if (t.dataset.slotmax !== undefined) {
-          if (sel && sel.name && tpl.slots[sel.name]) {
-            tpl.slots[sel.name].max = +t.value || 0;
-            commit(true);
           }
           return;
         }
@@ -3595,8 +3581,9 @@
         objs.forEach((o) => {
           if (o.type === "text" && !o.static && slotOf(o.name)) {
             used[o.name] = 1;
-            if (!tpl.slots[o.name])
-              tpl.slots[o.name] = { max: slotOf(o.name).max };
+            /* The resolver carries LABEL_VALUE_MAX (96) and the panel cuts there; the editor
+             * offers no choice, and a design imported with a smaller max is raised to it. */
+            tpl.slots[o.name] = { max: SLOT_CEILING };
           }
         });
         Object.keys(tpl.slots).forEach((k) => {
@@ -3716,14 +3703,7 @@
             pr.color = "ink";
             pr.align = alignOf(o);
             if (o.static) pr.text = o.text || "";
-            else {
-              pr.preview = simText(o);
-              const mx = tpl.slots[o.name] && tpl.slots[o.name].max;
-              if (mx && pr.preview.length > mx)
-                errs.push(
-                  `${tag}: simulated value "${pr.preview}" is longer than ${mx} characters`,
-                );
-            }
+            else pr.preview = simText(o);
             /* A text may bleed past the print: the print crops its ink, and the canvas marks
              * what will be cut (ADR 0072). Nothing is refused on position. */
             prims.push(pr);
