@@ -42,9 +42,9 @@ config APP_UI_SCREEN_HTTP
         request copies 768 KB into PSRAM before it streams.
 
 config APP_UI_DUMP_SCENE
-    int "Scene the dump is taken in (0 = entry, 1 = Art/Empty, 2 = Art/EQ, 3 = Art/RGB, 4 = Art/Menu, 5 = Real/EQ, 6 = Art/EQ with the 3x dial open, 7 = Art/RGB with the effect dial open, 8 = the Peek, 9 = Real/RGB)"
+    int "Scene the dump is taken in (0 = entry, 1 = Art/Empty, 2 = Art/EQ, 3 = Art/RGB, 4 = Art/Menu, 5 = Real/EQ, 6 = Art/EQ with the 3x dial open, 7 = Art/RGB with the effect dial open, 8 = the Peek, 9 = Real/RGB, 10 = the two-finger pose)"
     depends on APP_UI_SERIAL_DUMP || APP_UI_SCREEN_HTTP
-    range 0 9
+    range 0 10
     default 0
     help
         The dump is taken at whatever the screen is showing four seconds after boot,
@@ -74,6 +74,57 @@ config APP_UI_MARK_HOLD_MS
         The dwell starts when the mark is actually lit, not when the panel is created. 0
         removes it: the cassette follows the mark immediately. It does not affect how long
         the boot takes before the panel's first clock - that is the services' time.
+
+config APP_UI_PACK_ANNULUS
+    bool "Dirty only the band a two-finger fill moves, not the pack's whole box (experimental)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default n
+    help
+        The annulus invalidation from docs/research/cassette-render-cost.md: at the two-finger
+        pose the pack is one filled body with one edge, so a fill change only dirties the band
+        between the old and new edge. It makes the fill frame about 4x cheaper (369 -> 87 ms)
+        and the live draw 30% smaller, with the edge still moving every bar step.
+
+        Parked, not shipping: a rewind showed a rectangular seam and a tab on the pack in a
+        photograph, while captures of the same build through a Track change were clean. Until
+        that is reproduced and understood, the shipping path is the full-box invalidation.
+
+config APP_UI_RENDER_BENCH
+    bool "Measure the cost of drawing each cassette area (panel board)"
+    depends on APP_BOARD_SUNTON_8048S050C
+    default n
+    help
+        A diagnostic, not a feature. A few seconds after the screen is built
+        (BENCH_START_MS, 40 s in the source) the view is frozen on the cassette, and
+        one area at a time is dirtied - a hub's spokes, a pack's rings, a strand, the
+        label, the Card and its mask, the window, the whole tape body, the whole panel -
+        plus the two real animation steps (a hub tick and a tape-fill tick)
+        and the frame the two-finger pose costs. Each is timed from LVGL's own render and
+        flush events, split into the draw and the panel wait, and printed as one `bench:`
+        line. The default entry screen runs first, then the two-finger pose.
+
+        It stops the station updates and, if the performance monitor is built, pauses it,
+        so a sample's frame is the frame the bench asked for. At the end the view is live
+        again. Leave it off: it prints about sixty lines and spends most of a minute at the
+        two-finger pose's mask draw.
+
+        The numbers are only comparable on the same build, the same panel and the same
+        content (the label's texts, the fills the tape held when it froze).
+
+config APP_UI_RENDER_BENCH_LIVE
+    bool "Measure the live animation frames instead of the per-area sweep"
+    depends on APP_UI_RENDER_BENCH
+    default n
+    help
+        The sweep prices one area per frame. This prices the frames the screen really
+        draws: it enters the two-finger pose, lets the animation run for 60 s and labels
+        every rendered frame with what it carried - a hub tick, a tape-fill change, an
+        ink change, a label change, or a combination. One `bench: live` line per
+        combination gives its frame count, mean draw, total draw and share of the
+        window, plus the window's frame count and mean cycle.
+
+        Use it to decide whether changing an animation's cadence pays: the sweep says
+        what one fill costs, this says how often it is paid and against what else.
 
 # The RGB panel has no reset line on this board, so what happens between power-on and
 # its first clock is a hardware behaviour worth a knob.

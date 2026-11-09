@@ -58,8 +58,9 @@ void cassette_view_home(void);
 #if CONFIG_APP_UI_SERIAL_DUMP || CONFIG_APP_UI_SCREEN_HTTP
 /* The highest scene number the driver knows: 0 the entry view, 1 Art/Home, 2 Art/EQ, 3
  * Art/RGB, 4 the Menu, 5 Real/EQ, 6 the EQ's 3x dial, 7 the RGB effect's, 8 the Peek, 9
- * Real/RGB. The HTTP route validates against this, so the two cannot disagree. */
-#define CASSETTE_SCENE_MAX 9
+ * Real/RGB, and 10 the two-finger pose. The HTTP route validates against this, so the
+ * two cannot disagree. */
+#define CASSETTE_SCENE_MAX 10
 
 /* Aim the diagnostic scene driver at scene 0..CASSETTE_SCENE_MAX. It walks home to the entry
  * view first, then pushes the chrome up with the intents a finger would send, one step a

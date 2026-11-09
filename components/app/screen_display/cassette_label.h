@@ -17,6 +17,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "sdkconfig.h"
+
 #include "lvgl.h"
 
 #include "label_values.h"
@@ -40,6 +42,14 @@ void cassette_label_update(uint32_t ink_seed, const label_values_t *values);
 
 /* How many designs the embedded sheet carries; 0 when it did not open. */
 uint16_t cassette_label_templates(void);
+
+#if CONFIG_APP_UI_RENDER_BENCH
+/* The render bench's fixture and its Track change. Blank slots draw almost nothing, so the
+ * bench prints a sample title into every field once the two-finger pose is up; the text
+ * step then dirties every text object, which is what set_texts() does for a new Track. */
+void cassette_label_bench_fill(void);
+void cassette_label_bench_texts(void);
+#endif
 
 #ifdef __cplusplus
 }

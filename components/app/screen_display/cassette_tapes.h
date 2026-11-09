@@ -27,6 +27,8 @@
  *
  * Called under the LVGL lock, like everything else on the screen.
  */
+#include "sdkconfig.h"
+
 #include "lvgl.h"
 
 #include "cassette.h"
@@ -101,6 +103,17 @@ void cassette_tapes_draw_slice(lv_layer_t *layer);
  * fill change is one pack's box. Invalidating the whole window instead rebuilt the capsule's
  * two ARGB corner layers on every tick and starved the stream (2026-11-05). */
 int cassette_tapes_take_slice_dirty(lv_area_t *out, int max);
+
+#if CONFIG_APP_UI_RENDER_BENCH
+/* The render bench's window on the body (cassette_bench.h): where an object sits now, and
+ * the real hub tick without the packs, so the two animations are priced apart. */
+bool cassette_tapes_pack_box(int i, lv_area_t *out);
+bool cassette_tapes_strand_box(int i, lv_area_t *out);
+void cassette_tapes_bench_hub_tick(void);
+void cassette_tapes_bench_pack_body(bool on);
+uint8_t cassette_tapes_bench_take_dirty(void);
+void cassette_tapes_bench_annulus(bool on);
+#endif
 
 #ifdef __cplusplus
 }

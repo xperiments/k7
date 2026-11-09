@@ -51,6 +51,7 @@
 #include "groups.h"
 #include "cassette_buttons.h"
 #include "cassette_card.h"
+#include "cassette_bench.h"
 #include "cassette_home.h"
 #include "cassette_eq.h"
 #include "cassette_rgb.h"
@@ -99,6 +100,9 @@ static controls_t *s_controls;        /* the ladder: the level and the Menu */
 static groups_t s_groups;             /* which of the right bar's panels is up */
 static controls_state_t s_ctl;        /* its latest snapshot */
 static bool s_painted_white;          /* the page the screen is painted for */
+#if CONFIG_APP_UI_RENDER_BENCH
+static uint32_t s_bench_changed;      /* what the live bench's next frame will carry */
+#endif
 
 /* ------------------------------------------------------------------ layout */
 
@@ -346,6 +350,9 @@ static void apply_frame(const cassette_frame_t *f)
     /* The cassette follows the Track: its path picks a row of the table, and the row is the
      * plastic and the label's ink together (ADR 0040). Nothing is read off the picture. */
     if (f->ink_changed) {
+#if CONFIG_APP_UI_RENDER_BENCH
+        s_bench_changed |= CASSETTE_BENCH_CH_INK;
+#endif
         const uint32_t n = (uint32_t)k_col_cassette_count;
         const uint32_t row = n ? (f->ink_seed % n) : 0;
         const cassette_ink_t *ink = &k_col_cassette[row];
@@ -601,6 +608,13 @@ static void scene_tick(void)
             screen_intent_cb(SCREEN_INTENT_UP, NULL);    /* Initial -> Peek */
             break;
         }
+        if (s_scene == 10) {
+            /* The two-finger pose: Initial plus the Card, the label and the tape's preview
+             * inks. There is no other way to photograph its window without a finger. */
+            s_scene_step = 5;
+            screen_intent_cb(SCREEN_INTENT_FULL_ON, NULL);
+            break;
+        }
         s_scene_step = 1;
         screen_intent_cb(SCREEN_INTENT_DOWN, NULL);      /* Initial -> Art */
         break;
@@ -662,6 +676,10 @@ static void scene_tick(void)
     case 4:
         if (!pose_is(s_pose, cassette_pose_peek())) break;   /* the Peek's slide has landed */
         s_scene_step = SCENE_DONE;
+        break;
+
+    case 5:
+        if (s_ctl.full) s_scene_step = SCENE_DONE;
         break;
 
     default:
@@ -798,6 +816,9 @@ void cassette_view_create(void)
 
 void cassette_view_update(const mini_icecast_status_t *st)
 {
+    /* The render bench owns the screen while it runs: a station update would invalidate
+     * the title, the footer and the meter between its samples. */
+    if (cassette_bench_frozen()) return;
     if (!s_model) return;
 #if CONFIG_APP_UI_SERIAL_DUMP || CONFIG_APP_UI_SCREEN_HTTP
     scene_tick();
@@ -829,6 +850,9 @@ void cassette_view_update(const mini_icecast_status_t *st)
             }
             if (lib) library_release(lib);
             cassette_label_update(f->ink_seed, &values);
+#if CONFIG_APP_UI_RENDER_BENCH
+            s_bench_changed |= CASSETTE_BENCH_CH_LABEL;
+#endif
         }
     }
 
@@ -867,6 +891,202 @@ void cassette_view_update(const mini_icecast_status_t *st)
     }
 #endif
 }
+
+/* ------------------------------------------------------------------ bench */
+
+#if CONFIG_APP_UI_RENDER_BENCH
+/* The view's half of the render bench (cassette_bench.h): the poses, the two real
+ * animation steps, and the boxes the composition knows. Nothing here runs in a normal
+ * build. */
+
+static volatile bool s_bench_frozen;
+static cassette_frame_t s_bench_frame;
+static bool s_bench_frame_ok;
+
+void cassette_bench_freeze(bool on)
+{
+    s_bench_frozen = on;
+}
+
+bool cassette_bench_frozen(void)
+{
+    return s_bench_frozen;
+}
+
+void cassette_bench_pose(int pose)
+{
+    screen_intent_cb(pose ? SCREEN_INTENT_FULL_ON : SCREEN_INTENT_FULL_OFF, NULL);
+#if !CONFIG_APP_UI_RENDER_BENCH_LIVE
+    /* The label is blank when the card is out, and a blank field draws almost nothing: the
+     * sweep's fixture puts a title in every slot so the label is the one a Track would print.
+     * The live bench leaves the real Track's label alone. */
+    if (pose) cassette_label_bench_fill();
+#endif
+    if (!pose) {
+        cassette_tapes_bench_annulus(true);
+        cassette_tapes_bench_pack_body(true);
+    }
+}
+
+void cassette_bench_annulus(bool on)
+{
+    cassette_tapes_bench_annulus(on);
+}
+
+/* What the frame the live bench just measured carried. The tape body wrote its two bits as
+ * it mutated; the ink and the label were written by the view. */
+uint32_t cassette_bench_take_changes(void)
+{
+    uint32_t m = s_bench_changed;
+    s_bench_changed = 0;
+    const uint8_t d = cassette_tapes_bench_take_dirty();
+    if (d & 1) m |= CASSETTE_BENCH_CH_HUB;
+    if (d & 2) m |= CASSETTE_BENCH_CH_FILL;
+    return m;
+}
+
+/* The window's slice is a second reading of the tape, and it is above the Card: the
+ * bench steps a change below it exactly as apply_frame() does, then hands the boxes the
+ * slice has to repaint to the cover. */
+static void bench_slice_flush(void)
+{
+    lv_area_t dirty[CASSETTE_TAPES_SLICE_DIRTY_MAX];
+    int n = cassette_tapes_take_slice_dirty(dirty, CASSETTE_TAPES_SLICE_DIRTY_MAX);
+    for (int i = 0; i < n; i++) cassette_cover_window_invalidate_area(&dirty[i]);
+}
+
+/* The real tape step: both packs change diameter by 40 permille, alternating around the
+ * fill the screen held when the bench froze, which the model's own pack_diameter() turns
+ * into a ring change. The strands follow the new radius, exactly as playback's do. */
+static bool bench_fill_tick(void)
+{
+    if (!s_bench_frame_ok) {
+        if (!s_last_frame) return false;
+        s_bench_frame = *s_last_frame;
+        s_bench_frame_ok = true;
+    }
+    for (int i = 0; i < 2; i++) {
+        uint16_t fill = s_bench_frame.pack_fill[i];
+        s_bench_frame.pack_fill[i] = (uint16_t)(fill > 500 ? fill - 40 : fill + 40);
+    }
+    cassette_tapes_set(&s_bench_frame);
+    return true;
+}
+
+static void bench_rect(cassette_bench_rect_t *r, int x, int y, int w, int h)
+{
+    r->x1 = x;
+    r->y1 = y;
+    r->x2 = x + w - 1;
+    r->y2 = y + h - 1;
+}
+
+int cassette_bench_step(cassette_bench_step_t step, cassette_bench_rect_t *rects, int max)
+{
+    if (!rects || max < 1) return -1;
+
+    /* The two A/B steps are the only ones that leave the preview's wound body out; every
+     * other step puts it back, and the setter repaints the packs only when it changes. */
+    cassette_tapes_bench_pack_body(step != CASSETTE_BENCH_TAPE_FILL_BORDER &&
+                                   step != CASSETTE_BENCH_PACK_BORDER);
+
+    lv_area_t a;
+    cassette_rect_t tape;
+
+    switch (step) {
+    case CASSETTE_BENCH_HUB_TICK:
+        cassette_tapes_bench_hub_tick();
+        bench_slice_flush();
+        return 0;
+
+    case CASSETTE_BENCH_TAPE_FILL:
+    case CASSETTE_BENCH_TAPE_FILL_BORDER:
+        if (!bench_fill_tick()) return -1;
+        bench_slice_flush();
+        return 0;
+
+    case CASSETTE_BENCH_HUB_RIM_LEFT:
+    case CASSETTE_BENCH_HUB_RIM_RIGHT: {
+        const int i = step == CASSETTE_BENCH_HUB_RIM_RIGHT ? 1 : 0;
+        const int d = cassette_len(s_pose, CASSETTE_HUB_RING_D);
+        const int cx = cassette_x(s_pose, i ? CASSETTE_HUB_X1 : CASSETTE_HUB_X0);
+        const int cy = cassette_y(s_pose, CASSETTE_HUB_Y);
+        bench_rect(&rects[0], cx - d / 2 - 2, cy - d / 2 - 2, d + 4, d + 4);
+        return 1;
+    }
+
+    case CASSETTE_BENCH_PACK_LEFT:
+    case CASSETTE_BENCH_PACK_RIGHT:
+        if (!cassette_tapes_pack_box(step == CASSETTE_BENCH_PACK_RIGHT, &a)) return -1;
+        rects[0] = (cassette_bench_rect_t){ a.x1, a.y1, a.x2, a.y2 };
+        return 1;
+
+    case CASSETTE_BENCH_PACK_BORDER:
+        if (!s_ctl.full) return -1;
+        if (!cassette_tapes_pack_box(0, &a)) return -1;
+        rects[0] = (cassette_bench_rect_t){ a.x1, a.y1, a.x2, a.y2 };
+        return 1;
+
+    case CASSETTE_BENCH_STRAND_LEFT:
+    case CASSETTE_BENCH_STRAND_RIGHT:
+        if (!cassette_tapes_strand_box(step == CASSETTE_BENCH_STRAND_RIGHT, &a)) return -1;
+        rects[0] = (cassette_bench_rect_t){ a.x1, a.y1, a.x2, a.y2 };
+        return 1;
+
+    case CASSETTE_BENCH_LABEL:
+        /* The print is the label's container, and it is the two-finger pose's alone: at
+         * Initial the whole print is hidden, and a rect there would only measure the tape. */
+        if (!s_ctl.full || !cassette_cover_print()) return -1;
+        lv_obj_get_coords(cassette_cover_print(), &a);
+        rects[0] = (cassette_bench_rect_t){ a.x1, a.y1, a.x2, a.y2 };
+        return 1;
+
+    case CASSETTE_BENCH_LABEL_TEXT:
+        if (!s_ctl.full) return -1;
+        cassette_label_bench_texts();
+        return 0;
+
+    case CASSETTE_BENCH_CARD: {
+        if (!s_ctl.full) return -1;
+        const cassette_card_geometry_t *g = cassette_card_geometry();
+        if (!g || g->w <= 0) return -1;
+        bench_rect(&rects[0], g->x, g->y, g->w, g->h);
+        return 1;
+    }
+
+    case CASSETTE_BENCH_WINDOW:
+        if (!s_ctl.full) return -1;
+        tape = cassette_card_window();
+        if (tape.w <= 0 || tape.h <= 0) return -1;
+        bench_rect(&rects[0], tape.x, tape.y, tape.w, tape.h);
+        return 1;
+
+    case CASSETTE_BENCH_TAPE_BODY:
+        tape = cassette_screen_rect(s_pose, cassette_tape_ink());
+        if (tape.w <= 0 || tape.h <= 0) return -1;
+        bench_rect(&rects[0], tape.x, tape.y, tape.w, tape.h);
+        return 1;
+
+    case CASSETTE_BENCH_SCREEN:
+        bench_rect(&rects[0], 0, 0, CASSETTE_DESIGN_W, CASSETTE_DESIGN_H);
+        return 1;
+
+    default:
+        return -1;
+    }
+}
+
+const char *cassette_bench_step_name(cassette_bench_step_t step)
+{
+    static const char *const k_name[CASSETTE_BENCH_STEP_COUNT] = {
+        "hub-tick", "tape-fill", "tape-fill-border", "hub-rim-left", "hub-rim-right",
+        "pack-left", "pack-right", "pack-border", "strand-left", "strand-right", "label",
+        "label-text", "card", "window", "tape-body", "screen",
+    };
+    if (step < 0 || step >= CASSETTE_BENCH_STEP_COUNT) return "?";
+    return k_name[step];
+}
+#endif /* CONFIG_APP_UI_RENDER_BENCH */
 
 /* ------------------------------------------------------------------ hand-off */
 

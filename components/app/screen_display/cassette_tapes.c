@@ -61,6 +61,12 @@ static cassette_rect_t s_window;
 #define PACK_MAX_D 356
 #define PACK_RING_GAP 10
 #define PACK_RING_W 1
+/* The two-finger pose is a preview: its pack is one body with one edge, and a fill change
+ * there costs the whole masked box. The diameter steps in 8 px instead of 2, so a tape move
+ * redraws it a quarter as often (a 44 s Track: ~0.5 draws/s instead of ~1). The default
+ * screen keeps the even-pixel step: its ring stack shows a 4 px radius jump as a broken
+ * ring. 4 here is the conservative setting; 8 is the one that pays. */
+#define PACK_PREVIEW_STEP 8
 
 /* The drawn hub: a rim with a divided circle turning inside it. The frame count is the
  * angular resolution of the animation. */
@@ -69,7 +75,7 @@ static cassette_rect_t s_window;
 /* The full-screen picture's hub: a thick white rim on the same disc. At the entry pose the hub
  * is 168 px across, so 16 px is the weight the owner asked for after looking at the window
  * there; it leaves 68 px of plastic inside it. */
-#define HUB_RIM_PREVIEW_W 8
+#define HUB_RIM_PREVIEW_W 24
 #define HUB_SPOKE_W 4
 #define HUB_SPOKE_R0 66    /* the divider stops short of the centre and of the rim (82); */
 #define HUB_SPOKE_R1 72    /* together they cut the box it invalidates ~7x on 0..84 */
@@ -81,9 +87,9 @@ static cassette_rect_t s_window;
  * the body's 2 px because the window is 556 px across and the hub 168. They stop at 62 so an
  * 8 px stroke's round cap (4 px) lands at 66, just inside the 16 px rim's inner edge at 68. */
 #define HUB_SPOKE_PREVIEW_COUNT 2
-#define HUB_SPOKE_PREVIEW_W 4
-#define HUB_SPOKE_PREVIEW_R0 50
-#define HUB_SPOKE_PREVIEW_R1 56
+#define HUB_SPOKE_PREVIEW_W 8
+#define HUB_SPOKE_PREVIEW_R0 36
+#define HUB_SPOKE_PREVIEW_R1 40
 #define HUB_SPOKE_MAX 4
 
 /* One frame's angle, and half a turn, where the opposite spoke sits. The model's
@@ -131,6 +137,13 @@ typedef struct {
 
 static hub_spoke_t s_hub_spoke[2][HUB_SPOKE_MAX];
 static lv_obj_t *s_pack[2], *s_strand[2];  /* the packs, and the two side tape paths */
+/* The path the strand objects were last sized for. The draw uses this copy, never the live
+ * fill: the annulus path re-sizes the strand only every 8 px, and a draw that recomputed
+ * from the live fill would paint a new path clipped to the old box - a stroke per frame
+ * that only a full-box invalidation would erase. That is exactly the fan that appeared
+ * during a rewind. */
+static lv_point_precise_t s_strand_pts[2][STRAND_POINTS_MAX];
+static int s_strand_n[2];
 static lv_obj_t *s_roller[2];               /* the two rollers under the tape */
 static lv_obj_t *s_run;                    /* the horizontal run between the rollers */
 static lv_point_precise_t s_run_pts[2];
@@ -140,6 +153,14 @@ static lv_obj_t *s_rim[2];                  /* the 168 px hub circle the rewind 
  * overscan. On a diagnostic framebuffer they would be magenta lines round a cassette, so the
  * build asks screen_caps()->panel_borders and builds none. */
 static lv_obj_t *s_frame[2];
+#if CONFIG_APP_UI_RENDER_BENCH
+/* The render bench's A/B. The preview normally paints a wound body under the edge;
+ * `false` draws only the edge, which is the cost question the owner asked. */
+static bool s_bench_pack_body = true;
+/* What the live bench's frame carried: 1 a hub tick, 2 a pack change. Written by the
+ * mutation and taken by the view once per rendered frame. */
+static uint8_t s_bench_dirty;
+#endif
 static const struct { int x, y, w, h; } k_chip[3] = {
     { 120, 440, 50, 20 },
     { 360, 430, 80, 30 },
@@ -148,6 +169,7 @@ static const struct { int x, y, w, h; } k_chip[3] = {
 #define CHIP_R 8
 static lv_obj_t *s_chip[3];
 static int      s_pack_d[2];      /* px, so a redraw happens only when it changes */
+static int      s_strand_d[2] = { -1, -1 };  /* the diameter the strand was last placed for */
 static uint8_t  s_shown_hub[2];   /* the animation frame currently on screen */
 /* The ink currently on the rims, at the resolution the border mix takes: tape_ink 1 is
  * LV_OPA_COVER. Like the view's cache it starts full, so a first frame that is not a reel
@@ -222,8 +244,9 @@ static int strand_points(int i, lv_point_precise_t *pts)
  * change repaints two narrow sides, not the whole bottom. */
 static void strand_set(int i)
 {
-    lv_point_precise_t pts[STRAND_POINTS_MAX];
-    int n = strand_points(i, pts);
+    lv_point_precise_t *pts = s_strand_pts[i];
+    const int n = strand_points(i, pts);
+    s_strand_n[i] = n;
     int pad = STRAND_W / 2 + 1;
     int x1 = (int)pts[0].x, x2 = x1, y1 = (int)pts[0].y, y2 = y1;
 
@@ -236,6 +259,9 @@ static void strand_set(int i)
 
     lv_obj_set_pos(s_strand[i], x1 - pad, y1 - pad);
     lv_obj_set_size(s_strand[i], x2 - x1 + 1 + 2 * pad, y2 - y1 + 1 + 2 * pad);
+    /* The box may be the same size while the path inside it moved: make the draw happen. */
+    lv_obj_invalidate(s_strand[i]);
+    s_strand_d[i] = s_pack_d[i];
 }
 
 /* ------------------------------------------------------- the window's slice */
@@ -364,16 +390,15 @@ static bool box_in_clip(const lv_layer_t *layer, const lv_area_t *a)
  * its own layer, so the body and the slice cannot disagree about where the tape runs. */
 static void strand_draw(lv_layer_t *layer, int i)
 {
-    lv_point_precise_t pts[STRAND_POINTS_MAX];
-    int n = strand_points(i, pts);
-
+    /* The points the object was last sized for, not the live fill: a partial redraw has to
+     * draw the same path the box describes, or every frame leaves a stroke behind. */
     lv_draw_line_dsc_t dsc;
     lv_draw_line_dsc_init(&dsc);
     dsc.color = tape_colour();
     dsc.width = STRAND_W;
     dsc.opa = LV_OPA_COVER;
-    dsc.points = pts;
-    dsc.point_cnt = n;
+    dsc.points = s_strand_pts[i];
+    dsc.point_cnt = (uint32_t)s_strand_n[i];
     lv_draw_line(layer, &dsc);
 }
 
@@ -517,14 +542,21 @@ static void pack_draw_rings(lv_layer_t *layer, int i)
     if (s_preview) {
         int r = SC(s_pack_d[i]) / 2;
         if (r > SC(HUB_RING_D) / 2) {
-            lv_draw_rect_dsc_t body;
-            lv_draw_rect_dsc_init(&body);
-            body.bg_color = k_col_tape_dark_preview;
-            body.bg_opa = LV_OPA_COVER;
-            body.radius = LV_RADIUS_CIRCLE;
-            lv_area_t box = { dsc.center.x - r, dsc.center.y - r,
-                              dsc.center.x + r - 1, dsc.center.y + r - 1 };
-            if (box_in_clip(layer, &box)) lv_draw_rect(layer, &body, &box);
+            bool body = true;
+#if CONFIG_APP_UI_RENDER_BENCH
+            /* The bench's A/B: a hoop instead of a wound body, to price the fill. */
+            body = s_bench_pack_body;
+#endif
+            if (body) {
+                lv_draw_rect_dsc_t b;
+                lv_draw_rect_dsc_init(&b);
+                b.bg_color = k_col_tape_dark_preview;
+                b.bg_opa = LV_OPA_COVER;
+                b.radius = LV_RADIUS_CIRCLE;
+                lv_area_t box = { dsc.center.x - r, dsc.center.y - r,
+                                  dsc.center.x + r - 1, dsc.center.y + r - 1 };
+                if (box_in_clip(layer, &box)) lv_draw_rect(layer, &b, &box);
+            }
 
             if (ring_in_clip(layer, dsc.center.x, dsc.center.y, r, PACK_RING_W)) {
                 dsc.radius = (uint16_t)r;
@@ -566,6 +598,18 @@ void cassette_tapes_draw_slice(lv_layer_t *layer)
     }
 }
 
+/* At the two-finger pose the pack is one filled body with one edge, so a fill change only
+ * moves the band between the old and the new radius; the pack's box is held at the maximum
+ * and only that band is dirtied (`pack_set_annulus`). At the default screen the pack is a
+ * stack of rings and every ring moves with the radius, so that path is the full box. The
+ * bench's live A/B can force the old path with `s_bench_base`. */
+#if CONFIG_APP_UI_RENDER_BENCH
+static bool s_bench_base;
+#define PACK_ANNULUS (s_preview && !s_bench_base)
+#elif CONFIG_APP_UI_PACK_ANNULUS
+#define PACK_ANNULUS (s_preview)
+#endif
+
 /* Where the pack sits and how big it is, for the diameter the fill last gave it. It is
  * split from pack_set() so a scale change can re-place a pack whose fill has not moved.
  *
@@ -579,7 +623,13 @@ void cassette_tapes_draw_slice(lv_layer_t *layer)
  * frame - which is the one cost the window exists to remove. */
 static void pack_place(int i)
 {
+#if CONFIG_APP_UI_RENDER_BENCH || CONFIG_APP_UI_PACK_ANNULUS
+    /* The annulus path keeps the box at the maximum, so a fill change never has to resize
+     * it; the strips in pack_set_annulus() are the only dirt. */
+    int sd = SC(PACK_ANNULUS ? (PACK_MAX_D + 2 * (PACK_RING_W + 2)) : s_pack_d[i]);
+#else
     int sd = SC(s_pack_d[i]);
+#endif
     int x = SCX(HUB_X(i)) - sd / 2, y = SCY(HUB_Y) - sd / 2;
     int w = sd, h = sd;
 
@@ -614,9 +664,80 @@ static void pack_place(int i)
  * pack_draw_cb. A size change invalidates the pack's old and new boxes, and the
  * callback then draws every ring for the new radius, so nothing is left stale. The slice
  * above the Card gets the union of the two boxes, which is what it must repaint. */
+#if CONFIG_APP_UI_RENDER_BENCH || CONFIG_APP_UI_PACK_ANNULUS
+/* One fill change, priced as the band it moves: the union of the old and new outer edge
+ * (two circles' squares minus the smaller one, i.e. four strips), clipped to the Card's
+ * window, with the inner boundary pulled in by the ring's width so the ring at the new
+ * radius is inside the dirt. The pack's box stays at the maximum, so LVGL never resizes
+ * it and the inner rings are not repainted. */
+static bool area_intersect(lv_area_t *out, const lv_area_t *a, const lv_area_t *b)
+{
+    out->x1 = LV_MAX(a->x1, b->x1);
+    out->y1 = LV_MAX(a->y1, b->y1);
+    out->x2 = LV_MIN(a->x2, b->x2);
+    out->y2 = LV_MIN(a->y2, b->y2);
+    return out->x1 <= out->x2 && out->y1 <= out->y2;
+}
+
+static void pack_set_annulus(int i, int d)
+{
+    const int was = s_pack_d[i];
+    s_pack_d[i] = d;
+
+    const int cx = SCX(HUB_X(i)), cy = SCY(HUB_Y);
+    const int ro = SC(LV_MAX(was, d)) / 2;
+    const int ri = SC(LV_MIN(was, d)) / 2;
+    const int pad = PACK_RING_W + 2;
+
+    /* Both boundaries are padded: the inner one so the ring at the new radius is inside
+     * the dirt, the outer one so the stroke at the old radius is. Without the outer pad
+     * each shrinking step leaves the old edge's own pixel behind; a rewind stacks them
+     * into a fan of arcs. */
+    lv_area_t outer = { cx - ro - pad, cy - ro - pad, cx + ro + pad, cy + ro + pad };
+    lv_area_t inner = { cx - ri + pad, cy - ri + pad, cx + ri - pad, cy + ri - pad };
+    if (inner.x2 < inner.x1 || inner.y2 < inner.y1) {
+        inner = (lv_area_t){ 0, 0, -1, -1 };
+    }
+
+    lv_area_t strips[4] = {
+        { outer.x1, outer.y1, outer.x2, inner.y1 - 1 },
+        { outer.x1, inner.y2 + 1, outer.x2, outer.y2 },
+        { outer.x1, inner.y1, inner.x1 - 1, inner.y2 },
+        { inner.x2 + 1, inner.y1, outer.x2, inner.y2 },
+    };
+    for (int k = 0; k < 4; k++) {
+        lv_area_t a = strips[k];
+        if (a.x2 < a.x1 || a.y2 < a.y1) continue;
+        if (s_window.w > 0 && s_window.h > 0) {
+            const lv_area_t w = { s_window.x, s_window.y,
+                                  s_window.x + s_window.w - 1,
+                                  s_window.y + s_window.h - 1 };
+            if (!area_intersect(&a, &a, &w)) continue;
+        }
+        lv_obj_invalidate_area(s_pack[i], &a);
+    }
+
+    /* The strand's tangent moves a pixel or two a bar; re-placing it every bar would put
+     * two full polyline boxes in every fill. It is 1-2 px stale between 8 px steps. */
+    if (s_strand_d[i] < 0 || LV_ABS(d - s_strand_d[i]) >= 8) strand_set(i);
+}
+#endif
+
 static void pack_set(int i, int d)
 {
     if (d == s_pack_d[i]) return;
+#if CONFIG_APP_UI_RENDER_BENCH
+    s_bench_dirty |= 2;
+#endif
+#if CONFIG_APP_UI_RENDER_BENCH || CONFIG_APP_UI_PACK_ANNULUS
+    /* Only the preview's pack is a body with one edge: the body's interior is uniform,
+     * so the band the edge moves through is all that changed. The default screen's ring
+     * stack shifts every ring with the radius, and its full-box invalidation stays. */
+    if (PACK_ANNULUS) {
+        pack_set_annulus(i, d);
+        return;
+    }
+#endif
 
     lv_area_t before = s_pack_box[i];
     s_pack_d[i] = d;
@@ -636,7 +757,15 @@ static int pack_diameter(uint16_t fill)
 {
     double min = PACK_MIN_D, max = PACK_MAX_D;
     double d = sqrt(min * min + (max * max - min * min) * (double)fill / 1000.0);
-    return cassette_even((int)lround(d));
+    const int px = (int)lround(d);
+
+    /* The preview's coarser step is anchored at the minimum, so the grid ends at 352 -
+     * four pixels short of the full pack, which is a 2 px radius. Keeping the exact 356
+     * would need a hysteresis gate in pack_set() instead. */
+    if (s_preview) {
+        return PACK_MIN_D + ((px - PACK_MIN_D) / PACK_PREVIEW_STEP) * PACK_PREVIEW_STEP;
+    }
+    return cassette_even(px);
 }
 
 /* ------------------------------------------------------------------ layout */
@@ -803,9 +932,12 @@ void cassette_tapes_set_preview(bool on)
             lv_obj_set_hidden(s_hub_spoke[i][k].obj, k >= (on ? HUB_SPOKE_PREVIEW_COUNT : 2));
         }
         if (s_rim[i]) hub_frame_set(i, s_shown_hub[i]);
-        /* The pack's paint changed shape and ink: it is not a size change, so repaint it
-         * whole. */
-        if (s_pack[i]) lv_obj_invalidate(s_pack[i]);
+        /* The pack's paint changed shape and ink, and the annulus path moves its box to
+         * the maximum (or back): re-place it whole, not just repaint it. */
+        if (s_pack[i]) {
+            pack_place(i);
+            lv_obj_invalidate(s_pack[i]);
+        }
     }
     hub_ink_apply();
     if (s_run) lv_obj_set_style_line_color(s_run, col, 0);
@@ -839,6 +971,9 @@ void cassette_tapes_set(const cassette_frame_t *frame)
             slice_dirty(&both);
             s_shown_hub[i] = frame->hub_frame[i];
             hub_frame_set(i, s_shown_hub[i]);
+#if CONFIG_APP_UI_RENDER_BENCH
+            s_bench_dirty |= 1;
+#endif
         }
     }
 
@@ -941,3 +1076,74 @@ void cassette_tapes_create(lv_obj_t *parent)
     /* The body is built: put it where the pose it holds says it goes. */
     cassette_tapes_place(s_pose);
 }
+
+#if CONFIG_APP_UI_RENDER_BENCH
+/* ------------------------------------------------------------------ bench */
+
+/* The preview's body is the bench's one visual switch: `false` leaves the pack a hoop.
+ * Only a preview change of it repaints; the reel tick's own boxes are not enlarged. */
+/* `on` is the annulus (the shipping path); false is the old full-box path, for the live
+ * A/B's base window. The box changes between the current diameter and the maximum, so the
+ * switch repaints both packs and both strands whole; the steady state is strips only. */
+void cassette_tapes_bench_annulus(bool on)
+{
+    if (s_bench_base == !on) return;
+    s_bench_base = !on;
+    for (int i = 0; i < 2; i++) {
+        pack_place(i);
+        strand_set(i);
+    }
+}
+
+uint8_t cassette_tapes_bench_take_dirty(void)
+{
+    uint8_t d = s_bench_dirty;
+    s_bench_dirty = 0;
+    return d;
+}
+
+void cassette_tapes_bench_pack_body(bool on)
+{
+    if (!s_preview) on = true;
+    if (on == s_bench_pack_body) return;
+    s_bench_pack_body = on;
+    for (int i = 0; i < 2; i++) {
+        if (s_pack[i]) lv_obj_invalidate(s_pack[i]);
+    }
+}
+
+/* The bench's two boxes: what an object occupies right now. The packs are the clamped box
+ * while the Card is up, which is the box a fill change actually dirties. */
+bool cassette_tapes_pack_box(int i, lv_area_t *out)
+{
+    if (i < 0 || i > 1 || !s_pack[i] || !out) return false;
+    lv_obj_get_coords(s_pack[i], out);
+    return true;
+}
+
+bool cassette_tapes_strand_box(int i, lv_area_t *out)
+{
+    if (i < 0 || i > 1 || !s_strand[i] || !out) return false;
+    lv_obj_get_coords(s_strand[i], out);
+    return true;
+}
+
+/* One model tick of the hubs and nothing else: the same two writes cassette_tapes_set()
+ * makes when a hub frame changed, including the slice's dirty box (the window's copy of
+ * the hub is above the Card and cannot see the body move). */
+void cassette_tapes_bench_hub_tick(void)
+{
+    for (int i = 0; i < 2; i++) {
+        if (!s_rim[i]) continue;
+        const uint8_t next = (uint8_t)((s_shown_hub[i] + 1) % HUB_FRAME_COUNT);
+        lv_area_t was, now;
+        spokes_box(i, s_shown_hub[i], &was);
+        spokes_box(i, next, &now);
+        lv_area_t both = { LV_MIN(was.x1, now.x1), LV_MIN(was.y1, now.y1),
+                           LV_MAX(was.x2, now.x2), LV_MAX(was.y2, now.y2) };
+        slice_dirty(&both);
+        s_shown_hub[i] = next;
+        hub_frame_set(i, next);
+    }
+}
+#endif /* CONFIG_APP_UI_RENDER_BENCH */

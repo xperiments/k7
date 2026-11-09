@@ -247,3 +247,22 @@ uint16_t cassette_label_templates(void)
 {
     return s_sheet ? label_templates(s_sheet) : 0;
 }
+
+#if CONFIG_APP_UI_RENDER_BENCH
+void cassette_label_bench_fill(void)
+{
+    for (uint16_t i = 0; i < s_text_count; i++) {
+        if (!s_text[i].slot || !s_text[i].obj) continue;
+        char buf[LABEL_VALUE_MAX + 1];
+        label_cut("El Sol De Verano", s_text[i].max, buf, sizeof buf);
+        lv_label_set_text(s_text[i].obj, buf);
+    }
+}
+
+void cassette_label_bench_texts(void)
+{
+    for (uint16_t i = 0; i < s_text_count; i++) {
+        if (s_text[i].obj) lv_obj_invalidate(s_text[i].obj);
+    }
+}
+#endif

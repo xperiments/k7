@@ -45,6 +45,7 @@
 #include "artwork_loader.h"
 #include "card_mark.h"
 #include "cassette_view.h"
+#include "cassette_bench.h"
 #include "app_services.h"
 #include "lvgl_mem.h"
 #include "screen_capture.h"
@@ -326,6 +327,10 @@ static void card_poll(void)
 {
     static bool known;
     static bool present;
+
+    /* The render bench owns the screen while it measures; a card arriving mid-run would
+     * walk the picture home under it. */
+    if (cassette_bench_frozen()) return;
 
     bool now = app_services_card_present();
     if (known && now == present) {
@@ -647,6 +652,9 @@ esp_err_t screen_display_start(const char *music_dir)
                  esp_err_to_name(sc));
 #endif
     cassette_view_create();
+    /* The render bench's clock, after the view it measures exists. A no-op in every
+     * normal build (CONFIG_APP_UI_RENDER_BENCH). */
+    render_bench_init(s_disp);
     /* Above the view and below the mark: the cardless screen's gate is built with the
      * cassette, hidden, and shown by the screen task when the card goes. */
     gate_create();
