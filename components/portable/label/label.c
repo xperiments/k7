@@ -101,12 +101,10 @@ static bool prim_ok(const label_sheet_t *s, uint16_t i)
     if (rot > 3599u) return false;
 
     if (kind == LABEL_RECT) {
-        /* A rect is its box, so a rect outside the print would simply lose part of itself: the
-         * packer refuses that and the reader does not accept it either. */
-        if (x < 0 || y < 0 || (int32_t)x + (int32_t)w > (int32_t)LABEL_SPACE_W ||
-            y >= (int32_t)LABEL_SPACE_H)
-            return false;
-        if (h == 0 || (int32_t)y + (int32_t)h > (int32_t)LABEL_SPACE_H) return false;
+        /* A rect may sit outside the print: the print crops it, and the editor marks what will
+         * be cut (label-templates.md 1, ADR 0072). Only a record that says nothing - a zero
+         * height, a rect carrying a text offset - is refused. */
+        if (h == 0) return false;
         if (text != 0xFFFFFFFFu) return false;
     } else {
         /* A text is a layout box plus ink, and this reader has no shaper: a line box above the

@@ -370,7 +370,7 @@ static void test_refusals(void)
     free(b);
 
     b = mutate(P_AT(0) + 4, 700, 2, &n);         /* a rect: x 700 + w 748 leaves the print */
-    CHECK(refuses(b, n, "prim"), "a rect outside the print is refused");
+    CHECK(opens(b, n), "a rect outside the print opens: the print crops it (ADR 0072)");
     free(b);
 
     b = mutate(P_AT(2) + 6, (uint16_t)-10, 2, &n);  /* a text's line box above the print */

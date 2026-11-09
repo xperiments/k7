@@ -198,18 +198,12 @@ def pack_design(design, font_index, pool):
         y = _int(prim.get("y"), f"{tag}: y", errors, lo=-32768, hi=32767)
         w = _int(prim.get("w"), f"{tag}: w", errors, lo=1, hi=65535)
         rot = _int(prim.get("rot", 0), f"{tag}: rot", errors, lo=-360, hi=360, default=0)
-        # A rect is its box. A text is a layout box plus ink: the print clips the ink, and the
-        # packer has no shaper, so it cannot know where the ink is - the editor measures it and
-        # refuses a text whose ink leaves the print before the file is written
-        # (docs/specs/label-templates.md 1). A rect is still checked here.
-        if kind == "rect" and (x < 0 or y < 0 or x + w > SPACE_W):
-            errors.append(f"{tag}: outside the {SPACE_W}x{SPACE_H} print, which clips it")
-
+        # A prim may sit outside the print: the print crops it, and the editor marks what will
+        # be cut (docs/specs/label-templates.md 1, ADR 0072). Position is not refused here; what
+        # the sheet cannot hold - an int16 coordinate, a uint16 size - is refused above.
         if kind == "rect":
             h = _int(prim.get("h"), f"{tag}: h", errors, lo=1, hi=65535)
             r = _int(prim.get("r", 0), f"{tag}: r", errors, lo=0, default=0)
-            if y + h > SPACE_H:
-                errors.append(f"{tag}: outside the {SPACE_W}x{SPACE_H} print, which clips it")
             fill = prim.get("fill")
             literal = 0
             if fill in ROLE_INDEX:
@@ -633,7 +627,10 @@ def selftest():
             assert "not a label-template v1 design" in exc.errors[0], exc.errors
 
     expect_refusal(lambda d: d.update(space={"w": 800, "h": 359}), "space is 800x359")
-    expect_refusal(lambda d: d["prims"][0].update(x=400), "outside the 748x359 print")
+    # a design may bleed past the print; the print crops it (ADR 0072)
+    bleed = json.loads(json.dumps(good))
+    bleed["prims"][0].update(x=400)
+    pack_sheet([bleed], fonts)
     expect_refusal(lambda d: d["prims"][2].update(font="numeral2"), "font 'numeral2'")
     expect_refusal(lambda d: d["prims"][2].update(slot="year"), "not a slot in the vocabulary")
     expect_refusal(lambda d: d["fonts"].update(title={"ff": "Nope", "px": 12}), "does not carry")

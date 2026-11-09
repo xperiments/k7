@@ -249,10 +249,10 @@
         outline-offset: 2px;
       }
       li.out {
-        color: #c23b66;
+        color: #8d8b84;
       }
       .o.out {
-        outline: 2px dashed #c23b66;
+        outline: 2px dashed #8d8b84;
         outline-offset: 2px;
       }
       .tw {
@@ -3072,10 +3072,10 @@
         const top = o.y + (asc - inkAsc);
         return { top, bottom: top + inkAsc + inkDesc };
       }
-      // The print clips at 0..748 x 0..359, so a layer that leaves it fails Export and the build
-      // ("outside the 748x359 space"). This is that same test, so the editor can mark the layer
-      // before anyone presses Export: a rect is its box, a static text is its ink, a slot text is
-      // the box that promises to hold the longest value it can print.
+      // The print clips at 0..748 x 0..359, so a layer that leaves it is cropped - a drawing
+      // fact, not an error: the editor marks it grey so the bleed can be seen while it is drawn,
+      // and Export writes it all the same (ADR 0072). A rect is its box, a static text is its
+      // ink, a slot text is the box that promises to hold the longest value it can print.
       function outOfSpace(o) {
         if (o.ap) return false;
         if (o.type === "text") {
@@ -3724,15 +3724,8 @@
                   `${tag}: simulated value "${pr.preview}" is longer than ${mx} characters`,
                 );
             }
-            const ink = textInk(o);
-            if (
-              X < 0 ||
-              X + Wd > W0 ||
-              (ink ? ink.top < 0 || ink.bottom > H0 : Y < 0 || Y > H0)
-            )
-              errs.push(
-                `${tag}: outside the ${W0}x${H0} space at x ${X}, y ${Y}, w ${Wd}, which the print clips`,
-              );
+            /* A text may bleed past the print: the print crops its ink, and the canvas marks
+             * what will be cut (ADR 0072). Nothing is refused on position. */
             prims.push(pr);
           } else {
             const pr = { t: "rect", x: X, y: Y, w: Wd, h: Ht };
@@ -3745,10 +3738,9 @@
               pr.fill = o.role;
             } else errs.push(`${tag}: choose a role (paper, band.0-3 or rule)`);
             pr.still = true;
-            if (X < 0 || Y < 0 || X + Wd > W0 || Y + Ht > H0)
-              errs.push(
-                `${tag}: outside the ${W0}x${H0} space at x ${X}, y ${Y}, w ${Wd}, which the print clips`,
-              );
+            /* A rect may bleed past the print: the print crops it, and the canvas marks what
+             * will be cut (ADR 0072). Only a record the sheet cannot hold is refused, and that
+             * is the packer's int16/uint16 check. */
             if (
               AB &&
               X <= AB.x &&

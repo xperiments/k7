@@ -19,13 +19,13 @@ print's top-left. On the panel that box is (25,19) 748x359 — the Card at (-8,-
 by its print offset (+33,+42) — and the Card's A8 mask cuts the window at **(95,101) 556x166,
 radius 83** in these coordinates.
 
-- **Every prim's ink is inside 748x359.** A `rect` *is* its box, so the packer refuses one that
-  leaves the print: it clips its children, and a design that promises more than the panel does is
-  a lie the packer will not tell. A `text` is a layout box plus ink - the line box carries air
-  above the capitals and below the baseline, and the print clips only the ink - so the packer
-  does not judge a text's box, having no shaper to measure it; the editor measures a static
-  text's ink and refuses it when the ink leaves the print, and holds a slot text to its whole
-  box, which is the promise to hold the longest value it can print.
+- **A prim may bleed past 748x359, and the print crops it.** A design is drawn the way a sleeve
+  is - bands to the page edge and past it, a tick above the top - so position is not validated:
+  the label container is the print's box and LVGL clips its children to it, and what the panel
+  prints is the design intersected with the print. The editor marks a layer that leaves the print
+  with a grey dashed outline, and its row grey in the layer list, so the bleed is visible while
+  it is drawn. The only positional refusals are the record's: `x` and `y` are int16, `w` and `h`
+  uint16 (ADR 0072).
 - **The aperture is the Card's window, not the design's.** The editor's `aperture` must be
   absent, or exactly `(95, 101, 556, 166, r 83)`; the packer refuses anything else, and so does
   the editor at Export and at Open - the window is the Card's, and an aperture object is only a
@@ -82,8 +82,8 @@ the packer uses; the rest are the editor's.
   `slot` (a Slot name, dynamic) or `text` (static, at the back of the same array). Its `w` is a
   box: for a slot it must hold the longest value the slot can print, and for a static string the
   editor measures the ink and writes that, moving `x` by the difference so the glyphs do not
-  move. The print's bounds test is this box, so a static text's box hugging its text is what
-  keeps an empty tail from failing the build.
+  move. The box is the design's, not a bound: the print crops whatever leaves it (ADR 0072), and
+  a box that hugs its text is what keeps the canvas honest about where the ink is.
 - **`preview`** is the editor's simulated value: it is validated against the slot's `max` at
   export, and ignored by the packer.
 
@@ -289,8 +289,7 @@ Named per design and per layer; the build fails, nothing is dropped.
 | `v` is not 1 | a different format |
 | `space` is not 748x359 | the print is one box |
 | the aperture is neither absent nor `(95,101,556,166,r83)` | the window is the Card's |
-| a `rect` outside 748x359 | the print clips it |
-| a static text whose measured ink leaves 748x359 | the print clips it; the editor is the only side that can measure |
+| a coordinate outside int16, or a size outside uint16 | the record cannot hold it |
 | a prim with no role and no literal colour, or an unknown role | what would it paint? |
 | a `paper` prim when `inks.paper` is `null` | there is no paper without a mask |
 | more than one literal colour, or one with no `note` | the sheet is role-coloured |

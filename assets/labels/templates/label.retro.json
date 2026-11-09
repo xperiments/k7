@@ -1,7 +1,7 @@
 {
   "v": 1,
-  "id": "label.untitled",
-  "name": "Untitled",
+  "id": "label.retro",
+  "name": "retro",
   "space": {
     "w": 748,
     "h": 359
@@ -11,6 +11,9 @@
       "max": 24
     },
     "song_artist": {
+      "max": 24
+    },
+    "song_album": {
       "max": 24
     }
   },
@@ -106,8 +109,8 @@
     },
     {
       "t": "text",
-      "x": 81,
-      "y": -6,
+      "x": 64,
+      "y": 3,
       "w": 38,
       "font": "numeral",
       "color": "ink",
@@ -117,7 +120,7 @@
     {
       "t": "text",
       "x": 19,
-      "y": 14,
+      "y": 23,
       "w": 45,
       "font": "caption",
       "color": "ink",
@@ -126,8 +129,8 @@
     },
     {
       "t": "text",
-      "x": 648,
-      "y": -5,
+      "x": 626,
+      "y": 3,
       "w": 71,
       "font": "numeral",
       "color": "ink",
@@ -169,7 +172,7 @@
       "t": "text",
       "slot": "song_artist",
       "x": 134,
-      "y": 7,
+      "y": 14,
       "w": 480,
       "font": "title",
       "color": "ink",
@@ -178,23 +181,33 @@
     },
     {
       "t": "text",
-      "slot": "song_artist",
+      "slot": "song_album",
       "x": 134,
-      "y": 53,
+      "y": 51,
       "w": 480,
       "font": "title",
       "color": "ink",
       "align": "center",
-      "preview": "The Analog Sons"
+      "preview": "Night Drive"
     },
     {
       "t": "rect",
       "x": 324,
-      "y": 50,
+      "y": 52,
       "w": 100,
       "h": 2,
       "fill": "rule",
       "still": true
+    },
+    {
+      "t": "text",
+      "x": 698,
+      "y": 23,
+      "w": 34,
+      "font": "caption",
+      "color": "ink",
+      "align": "left",
+      "text": "MIN"
     }
   ]
 }
