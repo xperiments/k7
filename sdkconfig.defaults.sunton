@@ -60,3 +60,11 @@ CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
 # ~155 KB free (~77 KB contiguous) with the encoder state already in PSRAM, which is
 # enough for the ~25-50 KB Wi-Fi needs; the boot log says if it is not.
 # CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP is not set
+
+# The Cover's JPEG decoder. components/app/screen_display/artwork_loader.c calls TJpgDec
+# directly (jd_prepare/jd_decomp) rather than through LVGL's image API, and
+# screen_display/CMakeLists.txt puts its private include directory on the path. LVGL's
+# Kconfig defaults the decoder off, so a fresh build from these defaults failed in
+# artwork_loader.c with "unknown type name 'JDEC'". The sprite/asset decoders are not on
+# that path; this one is, and it has to be stated.
+CONFIG_LV_USE_TJPGD=y
