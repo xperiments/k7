@@ -62,6 +62,10 @@ the packer uses; the rest are the editor's.
 }
 ```
 
+- **A text prints in the ink or in one of the four bands.** `color` is `ink` (the default) or
+  `band.0`..`band.3`, so the type that sits on a band can print in that band's own colour; the
+  paper is refused because there is nothing to read against it, and the one literal colour is a
+  rect's. The editor offers those five in the text's Colour control, and `ink` when none is set.
 - **`inks` and `fonts` are the design's, not the firmware's.** The editor used to keep them out
   of the export; without them a design is shapes with no colourway, so both are part of the
   file. The seven colours are exactly the roles — `paper`, `ink`, `rule` and `band[0..3]` —
@@ -77,8 +81,8 @@ the packer uses; the rest are the editor's.
 - **`prims` are painted in order**, first at the back. `still: true` means nothing animates it.
 - **A `rect`** has `x, y, w, h, r?, rot?, fill` and, for the one literal colour a design may
   use, `fill` is a `#RRGGBB` instead of a role, and `notes` must say why.
-- **A `text`** has `x, y, w, rot?`, `font` (`title`/`numeral`/`caption`), `color` (`ink` in
-  v1 — the editor refuses any other), `align` (`left`/`center`/`right`), and either
+- **A `text`** has `x, y, w, rot?`, `font` (`title`/`numeral`/`caption`), `color`, `align`
+  (`left`/`center`/`right`), and either
   `slot` (a Slot name, dynamic) or `text` (static, at the back of the same array). Its `w` is a
   box: for a slot it must hold the longest value the slot can print, and for a static string the
   editor measures the ink and writes that, moving `x` by the difference so the glyphs do not
@@ -300,7 +304,7 @@ Named per design and per layer; the build fails, nothing is dropped.
 | a prim with no role and no literal colour, or an unknown role | what would it paint? |
 | a `paper` prim when `inks.paper` is `null` | there is no paper without a mask |
 | more than one literal colour, or one with no `note` | the sheet is role-coloured |
-| a text whose `color` is not `ink` | v1's one text colour |
+| a text whose `color` is `paper` or a literal | nothing to read against it, and the literal is a rect's |
 | an unknown Slot name, a slot a text uses but does not declare, or a declared slot no text uses | the vocabulary is one table |
 | a font role not in `fonts.json` | the glyphs are not compiled |
 | a design with no prims, or a text with neither a slot nor a static text | there is nothing to draw |

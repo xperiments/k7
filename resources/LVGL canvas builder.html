@@ -2124,7 +2124,8 @@
         if (!isRect) {
           x2 +=
             `<label>Font role<select data-k="fr"${D}>${optsOf(FROLES, sel.fr)}</select></label>` +
-            `<label>Align<select data-k="align"${D}>${["left", "center", "right"].map((a) => `<option${alignOf(sel) === a ? " selected" : ""}>${a}</option>`).join("")}</select></label>`;
+            `<label>Align<select data-k="align"${D}>${["left", "center", "right"].map((a) => `<option${alignOf(sel) === a ? " selected" : ""}>${a}</option>`).join("")}</select></label>` +
+            `<label>Colour<select data-k="role"${D}>${TEXT_ROLES.map((r) => `<option value="${r}"${(sel.role || "ink") === r ? " selected" : ""}>${r}</option>`).join("")}</select></label>`;
           /* No max-chars field: a slot carries the resolver's ceiling and the text's box is
            * what the design decides (label-templates.md §5). */
         }
@@ -2207,7 +2208,7 @@
         objs.forEach((o) => {
           if (o.ap) return;
           if (o.type === "text") {
-            o.role = "ink";
+            if (!TEXT_ROLES.includes(o.role)) o.role = "ink";
             if (o.s && o.s !== 1) {
               o.w = Math.round(o.w * o.s);
               delete o.s;
@@ -3528,6 +3529,9 @@
           sim: {},
         };
       }
+      // A text may print in the ink or in any of the four bands: a label whose bands carry
+      // their own type (label-templates.md §2).
+      const TEXT_ROLES = ["ink", "band.0", "band.1", "band.2", "band.3"];
       const ROLES = [
         "paper",
         "ink",
@@ -3698,9 +3702,9 @@
               : { t: "text", slot: o.name || "", x: X, y: Y, w: Wd };
             if (o.rot) pr.rot = Math.round(o.rot);
             pr.font = FROLES.includes(o.fr) ? o.fr : "caption";
-            if (o.role !== "ink")
-              errs.push(`${tag}: text colour must be the ink role`);
-            pr.color = "ink";
+            if (!TEXT_ROLES.includes(o.role))
+              errs.push(`${tag}: text colour must be ink or one of the four bands`);
+            pr.color = TEXT_ROLES.includes(o.role) ? o.role : "ink";
             pr.align = alignOf(o);
             if (o.static) pr.text = o.text || "";
             else pr.preview = simText(o);
@@ -3877,8 +3881,11 @@
             if (isStatic) o.static = true;
             if (!isStatic) o.sim = p.preview;
             if (p.rot) o.rot = p.rot;
-            if (p.color === "ink") o.role = "ink";
-            else throw new Error(`text colour "${p.color}" is not a role`);
+            if (TEXT_ROLES.includes(p.color)) o.role = p.color;
+            else
+              throw new Error(
+                `text colour "${p.color}" is not ink or one of the four bands`,
+              );
             out.push(mk(o));
           } else {
             const o = {
@@ -4573,7 +4580,7 @@ void ui_destroy(void)
             return;
           }
           if (o.type === "text") {
-            if (v === "ink") o.role = "ink";
+            if (TEXT_ROLES.includes(v)) o.role = v;
             return;
           }
           if (v !== "ink") o.role = v;

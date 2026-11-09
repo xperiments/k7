@@ -47,6 +47,7 @@ TEMPLATE_MAX = 32
 ROLE_INDEX = {"paper": 0, "ink": 1, "rule": 2, "band.0": 3, "band.1": 4, "band.2": 5, "band.3": 6}
 FILL_LITERAL = 7
 FONT_ROLES = ("title", "numeral", "caption")
+TEXT_ROLES = ("ink", "band.0", "band.1", "band.2", "band.3")
 ALIGN_INDEX = {"left": 0, "center": 1, "right": 2}
 
 # The device's vocabulary: one table, shared with the editor's SLOTS and the reader.
@@ -226,8 +227,14 @@ def pack_design(design, font_index, pool):
             errors.append(f"{tag}: t must be rect or text")
             continue
 
-        if prim.get("color") != "ink":
-            errors.append(f"{tag}: colour {prim.get('color')!r} is not the ink role")
+        # A text prints in the ink or in one of the four bands; the paper has nothing to read
+        # against it, and the one literal colour is a rect's (label-templates.md 2).
+        color = prim.get("color")
+        if color not in TEXT_ROLES:
+            errors.append(f"{tag}: colour {color!r} is not ink or a band")
+            fill_index = ROLE_INDEX["ink"]
+        else:
+            fill_index = ROLE_INDEX[color]
         role = prim.get("font")
         if role not in FONT_ROLES:
             errors.append(f"{tag}: font {role!r} is not title, numeral or caption")
@@ -265,7 +272,7 @@ def pack_design(design, font_index, pool):
             continue
 
         out_prims.append(struct.pack(
-            "<BBBBhhHHHhII", kind_index, 1, font, align, x, y, w, 0, 0,
+            "<BBBBhhHHHhII", kind_index, fill_index, font, align, x, y, w, 0, 0,
             round(rot * 10) % 3600, offset, 0))
 
     for name in slot_max:

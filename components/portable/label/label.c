@@ -111,7 +111,8 @@ static bool prim_ok(const label_sheet_t *s, uint16_t i)
          * print with its ink inside it prints correctly. The editor measures the ink and refuses
          * it when the ink leaves the print (label-templates.md 1), so only the fields are checked
          * here. */
-        if (fill != LABEL_FILL_INK) return false;   /* v1 has one text colour */
+        /* The ink or any of the four bands: a text may print on a band in its own colour. */
+        if (fill < LABEL_FILL_INK || fill > LABEL_FILL_BAND3) return false;
         if (!string_in(s->pool, s->pool_size, text)) return false;
     }
     return true;

@@ -361,8 +361,12 @@ static void test_refusals(void)
     CHECK(refuses(b, n, "prim"), "rect with a text offset");
     free(b);
 
-    b = mutate(P_AT(2) + 1, LABEL_FILL_PAPER, 1, &n);  /* a text that is not ink */
-    CHECK(refuses(b, n, "prim"), "text colour not ink");
+    b = mutate(P_AT(2) + 1, LABEL_FILL_PAPER, 1, &n);  /* a text in the paper's colour */
+    CHECK(refuses(b, n, "prim"), "a text in the paper's colour is refused");
+    free(b);
+
+    b = mutate(P_AT(2) + 1, LABEL_FILL_BAND1, 1, &n);  /* a text on a band */
+    CHECK(opens(b, n), "a text may print in a band's colour");
     free(b);
 
     b = mutate(P_AT(2) + 16, POOL_N + 4, 4, &n); /* text offset past the pool */
