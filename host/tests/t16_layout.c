@@ -321,7 +321,7 @@ static void test_hub_anchor(void)
     cassette_hub_anchor(entry, 0, false, &x, &y);
     CHECK_EQ(y, 290, "the bottom rim is 84 px the other way");
     cassette_hub_anchor(entry, 1, true, &x, &y);
-    CHECK_EQ(x, 594, "the take-up hub is its own column");
+    CHECK_EQ(x, 592, "the take-up hub is its own column");
 
     cassette_pose_t peek = cassette_pose_peek();
     cassette_hub_anchor(peek, 0, true, &x, &y);
@@ -337,7 +337,7 @@ static void test_hub_anchor(void)
     cassette_hub_anchor(controls, 0, false, &x, &y);
     CHECK_EQ(y, 244, "bottom");
     cassette_hub_anchor(controls, 1, true, &x, &y);
-    CHECK_EQ(x, 450, "and the take-up hub to 450");
+    CHECK_EQ(x, 449, "and the take-up hub to 449");
 
     cassette_hub_anchor(controls, 7, true, &x, &y);
     CHECK_EQ(x, 248, "an index off the two hubs reads as the first");

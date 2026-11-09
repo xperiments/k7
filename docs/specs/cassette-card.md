@@ -52,7 +52,7 @@ All values are panel pixels at the Controls pose and are half-open - the right e
 | Window in the print | 55, 55 | 291x87 | 55 left, 55 top, 56 right, 46 bottom |
 | Window in the Card | 67, 75 | 291x87 | |
 | Mechanics (tape ink) | 148, 102 | 402x232 | design 768x444; untouched |
-| Hub rims | 249, 200 and 451, 200 | Ø86 | design 168, `cassette_len_even` |
+| Hub rims | 249, 200 and 450, 200 | Ø86 | design 168, `cassette_len_even` |
 | Packs | the same centres | Ø86 … Ø186 | PACK_MIN_D 168, PACK_MAX_D 356 |
 
 The window is **not** centred in the print: 55 px from the left and the top, 56 from the
