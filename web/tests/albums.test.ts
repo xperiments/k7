@@ -2,8 +2,11 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import {
   albumsOf,
+  artistOf,
   buildMediaIndex,
+  byArtistThenAlbum,
   findAlbum,
+  letterOf,
   presenceOf,
   type Presence,
   UNKNOWN_ALBUM,
@@ -144,5 +147,50 @@ describe('the album index', () => {
     );
 
     expect(index.albums.map((album) => album.album)).toEqual(['Ambient Works']);
+  });
+});
+
+/**
+ * The shelf's abecedary files an album under the artist a person would look for: the first
+ * name a compilation carries, and that name's first letter without its accent or the quote
+ * that comes before it.
+ */
+describe('the artist an album files under', () => {
+  it('takes the first name a compilation carries', () => {
+    const index = indexOf([
+      row('comp/01.mp3', 'Brian Eno', 'Ambient Works'),
+      row('comp/02.mp3', 'Aphex Twin', 'Ambient Works'),
+    ]);
+
+    expect(artistOf(index.albums[0])).toBe('Aphex Twin');
+  });
+
+  it('walks the shelf by artist, then album', () => {
+    const index = indexOf([
+      row('a/01.mp3', 'Frank Zappa', 'Hot Rats'),
+      row('b/01.mp3', 'Aphex Twin', 'Selected Ambient Works'),
+      row('c/01.mp3', 'Aphex Twin', 'Ambient Works'),
+      row('d/01.mp3', 'Brian Eno', 'Another Green World'),
+    ]);
+
+    expect([...index.albums].sort(byArtistThenAlbum).map((album) => album.album)).toEqual([
+      'Ambient Works',
+      'Selected Ambient Works',
+      'Another Green World',
+      'Hot Rats',
+    ]);
+  });
+
+  it('folds the accent and skips what comes before the word', () => {
+    expect(letterOf('Ásgeir')).toBe('A');
+    expect(letterOf('“Weird Al” Yankovic')).toBe('W');
+    expect(letterOf('…And You Will Know Us by the Trail of Dead')).toBe('A');
+    expect(letterOf('  aphex twin')).toBe('A');
+  });
+
+  it('files a name with no letter to start it under #', () => {
+    expect(letterOf('1989')).toBe('#');
+    expect(letterOf('( )')).toBe('#');
+    expect(letterOf('')).toBe('#');
   });
 });

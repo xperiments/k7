@@ -1,8 +1,8 @@
-import { useCallback, useRef, type CSSProperties } from 'react';
+import { useCallback, useMemo, useRef, type CSSProperties } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import type { Album } from '../media/albums';
+import { artistOf, letterOf, type Album } from '../media/albums';
 import { CassetteFront, hueOf } from './cassette';
 import { plural } from './format';
 
@@ -75,79 +75,84 @@ export function AlbumShelf({
 
   return (
     <section className="flex flex-col items-center gap-3" aria-label="Albums">
-      <div
-        className="k7-shelf"
-        role="group"
-        aria-roledescription="album shelf"
-        tabIndex={0}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowRight') {
-            event.preventDefault();
-            go(1);
-          } else if (event.key === 'ArrowLeft') {
-            event.preventDefault();
-            go(-1);
-          }
-        }}
-        onPointerDown={(event) => {
-          dragFrom.current = event.clientX;
-          dragged.current = false;
-        }}
-        onPointerUp={(event) => {
-          const from = dragFrom.current;
-          dragFrom.current = null;
-          if (from === null) return;
-          const dx = event.clientX - from;
-          dragged.current = Math.abs(dx) > 10;
-          if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
-        }}
-        onPointerCancel={() => {
-          dragFrom.current = null;
-        }}
-      >
-        <div className="k7-shelf-row">
-          {albums.map((album, index) => {
-            const distance = index - at;
-            if (Math.abs(distance) > WINDOW) return null;
-            const activeCase = distance === 0;
-            return (
-              <div
-                key={album.album}
-                className="k7-shelf-item"
-                style={{ transform: placeAt(distance) }}
-              >
-                <button
-                  type="button"
-                  className="k7-case"
-                  data-active={activeCase}
-                  style={{ '--hue': `${hueOf(album.album)}deg` } as CSSProperties}
-                  aria-label={`${album.album} — ${byline(album)}`}
-                  aria-current={activeCase ? 'true' : undefined}
-                  onClick={() => {
-                    if (dragged.current) {
-                      dragged.current = false;
-                      return;
-                    }
-                    onSelect(index);
-                  }}
+      {/* The abecedary stands beside the stage and the height of it: the letters are the
+          shelf's own index, not a control the page put down next to it. */}
+      <div className="flex w-full min-w-0 items-stretch gap-2">
+        <AlphabetIndex albums={albums} selected={at} onSelect={onSelect} />
+        <div
+          className="k7-shelf min-w-0 flex-1"
+          role="group"
+          aria-roledescription="album shelf"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowRight') {
+              event.preventDefault();
+              go(1);
+            } else if (event.key === 'ArrowLeft') {
+              event.preventDefault();
+              go(-1);
+            }
+          }}
+          onPointerDown={(event) => {
+            dragFrom.current = event.clientX;
+            dragged.current = false;
+          }}
+          onPointerUp={(event) => {
+            const from = dragFrom.current;
+            dragFrom.current = null;
+            if (from === null) return;
+            const dx = event.clientX - from;
+            dragged.current = Math.abs(dx) > 10;
+            if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+          }}
+          onPointerCancel={() => {
+            dragFrom.current = null;
+          }}
+        >
+          <div className="k7-shelf-row">
+            {albums.map((album, index) => {
+              const distance = index - at;
+              if (Math.abs(distance) > WINDOW) return null;
+              const activeCase = distance === 0;
+              return (
+                <div
+                  key={album.album}
+                  className="k7-shelf-item"
+                  style={{ transform: placeAt(distance) }}
                 >
-                  <span className="k7-face k7-front">
-                    <CaseCover album={album} />
-                    <span className="k7-frame" aria-hidden="true" />
-                    <span className="k7-sheen" aria-hidden="true" />
-                  </span>
-                  <span className="k7-face k7-back" aria-hidden="true" />
-                  <span className="k7-face k7-side k7-right" aria-hidden="true" />
-                  <span className="k7-face k7-side k7-left" aria-hidden="true">
-                    <span className="k7-spine">
-                      {album.album} · {byline(album)}
+                  <button
+                    type="button"
+                    className="k7-case"
+                    data-active={activeCase}
+                    style={{ '--hue': `${hueOf(album.album)}deg` } as CSSProperties}
+                    aria-label={`${album.album} — ${byline(album)}`}
+                    aria-current={activeCase ? 'true' : undefined}
+                    onClick={() => {
+                      if (dragged.current) {
+                        dragged.current = false;
+                        return;
+                      }
+                      onSelect(index);
+                    }}
+                  >
+                    <span className="k7-face k7-front">
+                      <CaseCover album={album} />
+                      <span className="k7-frame" aria-hidden="true" />
+                      <span className="k7-sheen" aria-hidden="true" />
                     </span>
-                    <span className="k7-frame" />
-                  </span>
-                </button>
-              </div>
-            );
-          })}
+                    <span className="k7-face k7-back" aria-hidden="true" />
+                    <span className="k7-face k7-side k7-right" aria-hidden="true" />
+                    <span className="k7-face k7-side k7-left" aria-hidden="true">
+                      <span className="k7-spine">
+                        {album.album} · {byline(album)}
+                      </span>
+                      <span className="k7-frame" />
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -178,6 +183,112 @@ export function AlbumShelf({
         </Button>
       </div>
     </section>
+  );
+}
+
+/** The letters the abecedary draws. `#` is appended only when an artist files under it. */
+const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+
+/**
+ * The shelf's abecedary: the artists' initials down the left edge of the row, one button per
+ * letter, which turns the first album by an artist that files under it.
+ *
+ * All twenty-six letters are drawn even where this library has none for one of them. The
+ * column is an index, and an index that re-forms as the library changes is one a reader has
+ * to read again every time; a letter with no artist is dimmed and inert instead of jumping
+ * somewhere it does not belong.
+ *
+ * There is one tab stop, on the letter of the artist behind the case that is turned, and the
+ * arrows walk the letters that exist. A shelf with twenty initials behind it would otherwise
+ * put twenty tab stops between the search box and the row.
+ */
+function AlphabetIndex({
+  albums,
+  selected,
+  onSelect,
+}: {
+  albums: Album[];
+  selected: number;
+  onSelect: (index: number) => void;
+}) {
+  /* One pass over the shelf: the first album under each letter, and how many there are, which
+   * is what a screen reader hears for a letter it cannot see the row behind. */
+  const filing = useMemo(() => {
+    const first = new Map<string, number>();
+    const counts = new Map<string, number>();
+    albums.forEach((album, index) => {
+      const letter = letterOf(artistOf(album));
+      if (!first.has(letter)) first.set(letter, index);
+      counts.set(letter, (counts.get(letter) ?? 0) + 1);
+    });
+    return { first, counts };
+  }, [albums]);
+
+  const buttons = useRef(new Map<string, HTMLButtonElement>());
+  const current = albums[selected] ? letterOf(artistOf(albums[selected])) : null;
+  const present = LETTERS.filter((letter) => filing.first.has(letter));
+  if (present.length === 0) return null;
+  const stop = current !== null && filing.first.has(current) ? current : present[0];
+
+  const jump = (letter: string) => {
+    const at = filing.first.get(letter);
+    if (at !== undefined) onSelect(at);
+  };
+
+  const step = (letter: string, delta: number) => {
+    const at = present.indexOf(letter);
+    const next = present[Math.min(Math.max(0, at + delta), present.length - 1)];
+    if (next === undefined) return;
+    jump(next);
+    buttons.current.get(next)?.focus();
+  };
+
+  return (
+    <nav aria-label="Artists by letter" className="flex w-6 shrink-0 flex-col justify-between">
+      {[...LETTERS, ...(filing.first.has('#') ? ['#'] : [])].map((letter) => {
+        const has = filing.first.has(letter);
+        const active = letter === current;
+        return (
+          <button
+            key={letter}
+            type="button"
+            ref={(node) => {
+              if (node) buttons.current.set(letter, node);
+              else buttons.current.delete(letter);
+            }}
+            disabled={!has}
+            tabIndex={letter === stop ? 0 : -1}
+            aria-current={active ? 'true' : undefined}
+            aria-label={`${letter} — ${plural(filing.counts.get(letter) ?? 0, 'album')}`}
+            className={`flex w-full items-center justify-center rounded-full text-xs leading-none outline-none transition-colors select-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none ${
+              active
+                ? 'bg-muted font-semibold text-foreground'
+                : has
+                  ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-muted-foreground/40'
+            }`}
+            onClick={() => jump(letter)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                step(letter, 1);
+              } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                step(letter, -1);
+              } else if (event.key === 'Home') {
+                event.preventDefault();
+                step(letter, -present.length);
+              } else if (event.key === 'End') {
+                event.preventDefault();
+                step(letter, present.length);
+              }
+            }}
+          >
+            {letter}
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 

@@ -94,6 +94,12 @@ function navGroups(drafts: number, tracks: number): NavGroup[] {
           names: ['process'],
           badge: tracks > 0 ? String(tracks) : undefined,
         },
+                {
+          href: routeHref({ name: 'media' }),
+          label: 'Albums',
+          icon: <Disc3 aria-hidden="true" />,
+          names: ['media', 'album', 'artist', 'video', 'drive'],
+        },
       ],
     },
     {
@@ -115,18 +121,18 @@ function navGroups(drafts: number, tracks: number): NavGroup[] {
         },
       ],
     },
-    {
-      id: 'media',
-      label: 'Media',
-      items: [
-        {
-          href: routeHref({ name: 'media' }),
-          label: 'Albums',
-          icon: <Disc3 aria-hidden="true" />,
-          names: ['media', 'album', 'artist', 'video', 'drive'],
-        },
-      ],
-    },
+    // {
+    //   id: 'media',
+    //   label: 'Media',
+    //   items: [
+    //     {
+    //       href: routeHref({ name: 'media' }),
+    //       label: 'Albums',
+    //       icon: <Disc3 aria-hidden="true" />,
+    //       names: ['media', 'album', 'artist', 'video', 'drive'],
+    //     },
+    //   ],
+    // },
   ];
 }
 

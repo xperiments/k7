@@ -93,6 +93,46 @@ export function albumOf(row: Pick<CachedMedia, 'artist' | 'album'>): {
 }
 
 /**
+ * The artist an album files under: the first of the names its rows carry.
+ *
+ * `Album.artists` is sorted, so this is stable across visits. An album by one artist files
+ * under that artist; a compilation files under the first name it names, rather than under a
+ * name of its own it does not have.
+ */
+export function artistOf(album: Album): string {
+  return album.artists[0] ?? UNKNOWN_ARTIST;
+}
+
+/**
+ * The letter a name files under, for the shelf's abecedary.
+ *
+ * It is the name's first letter, with the accents folded away so `Ásgeir` sits with `A` and
+ * not in a bucket of its own, and with leading punctuation skipped so an artist that writes
+ * itself in quotes is filed by the word inside them. A name that does not begin with a Latin
+ * letter -- a year, a symbol -- files under `#`, which is where a lettered index puts
+ * everything that is not one of its letters.
+ */
+export function letterOf(name: string): string {
+  const plain = name
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/^[^\p{L}\p{N}]+/u, '');
+  const first = plain.charAt(0).toUpperCase();
+  return /^[A-Z]$/.test(first) ? first : '#';
+}
+
+/**
+ * The order the Carousel walks: who made it, then what it is called.
+ *
+ * The alphabet down the shelf's edge is the artists' initials, so the row has to group by
+ * artist for a letter to lead anywhere; the album title is only the tie-break inside one
+ * name.
+ */
+export function byArtistThenAlbum(left: Album, right: Album): number {
+  return byText(artistOf(left), artistOf(right)) || byText(left.album, right.album);
+}
+
+/**
  * A path folded the way the card's filesystem is: case is not information on FAT32, and the
  * device folds it too (`library_find`). Two sides that name one file differently by case are
  * naming one file, so a joined path is compared folded and kept as it arrived.

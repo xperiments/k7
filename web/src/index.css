@@ -91,7 +91,7 @@
 :root {
     --background: oklch(0.985 0.003 90);
     --foreground: oklch(0.22 0.01 265);
-    --card: oklch(1 0 0);
+    --card: oklch(.5 0 0);
     --card-foreground: oklch(0.22 0.01 265);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.22 0.01 265);
@@ -114,12 +114,12 @@
     --chart-4: oklch(0.55 0.19 27);
     --chart-5: oklch(0.5 0.01 265);
     --radius: 0.625rem;
-    --sidebar: oklch(0.975 0.003 90);
+    --sidebar:  oklch(0.22 0.01 265);
     --sidebar-foreground: oklch(0.22 0.01 265);
-    --sidebar-primary: oklch(0.58 0.13 70);
+    --sidebar-primary: oklch(0.795 0.15 78);
     --sidebar-primary-foreground: oklch(0.99 0 0);
-    --sidebar-accent: oklch(0.95 0.01 85);
-    --sidebar-accent-foreground: oklch(0.22 0.01 265);
+    --sidebar-accent: oklch(0.3 0.008 265);
+    --sidebar-accent-foreground: oklch(0.93 0.012 90);
     --sidebar-border: oklch(0.91 0.005 265);
     --sidebar-ring: oklch(0.58 0.13 70);
     --success: oklch(0.6 0.08 180);
@@ -136,7 +136,7 @@
     /* The theme toggle sets this class; native scrollbars, pickers and form controls follow
      * it, which is the half of the palette CSS cannot paint itself. */
     color-scheme: dark;
-    --background: oklch(0.165 0.004 265);
+    --background: #222;
     --foreground: oklch(0.93 0.012 90);
     --card: oklch(0.215 0.005 265);
     --card-foreground: oklch(0.93 0.012 90);

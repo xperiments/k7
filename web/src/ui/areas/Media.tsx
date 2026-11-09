@@ -13,7 +13,12 @@ import {
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMediaIndex, type Album, type MediaIndexState } from '../../media/albums';
+import {
+  byArtistThenAlbum,
+  useMediaIndex,
+  type Album,
+  type MediaIndexState,
+} from '../../media/albums';
 import { AlbumDetail } from '../album-detail';
 import { AlbumShelf } from '../album-shelf';
 import { Cover } from '../cover';
@@ -156,14 +161,19 @@ function ShelfView({
   const applied = useRef<string | null>(null);
 
   const needle = query.trim().toLowerCase();
+  /* The Carousel walks artists, not album titles: the abecedary down the shelf's edge is the
+   * artists' initials, and a letter only leads somewhere if the rows are grouped by who made
+   * them. The title is the tie-break inside one name. */
   const albums = useMemo(
     () =>
-      (state.index?.albums ?? []).filter(
-        (entry) =>
-          !needle ||
-          entry.album.toLowerCase().includes(needle) ||
-          entry.artists.some((artist) => artist.toLowerCase().includes(needle)),
-      ),
+      (state.index?.albums ?? [])
+        .filter(
+          (entry) =>
+            !needle ||
+            entry.album.toLowerCase().includes(needle) ||
+            entry.artists.some((artist) => artist.toLowerCase().includes(needle)),
+        )
+        .sort(byArtistThenAlbum),
     [state.index, needle],
   );
 
@@ -189,6 +199,14 @@ function ShelfView({
 
   const active = albums.length > 0 ? albums[Math.min(selected, albums.length - 1)] : null;
 
+  /* The tracks are the scroll region and they belong to the turned case, so a jump along the
+   * row — a letter, a case, an arrow — shows the new album from its top rather than from
+   * wherever the last one was left. */
+  const tracks = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    tracks.current?.scrollTo({ top: 0 });
+  }, [active?.album]);
+
   const hasAlbums = (state.index?.albums.length ?? 0) > 0;
   const nothingMatches = state.index !== null && needle.length > 0 && albums.length === 0;
 
@@ -208,7 +226,7 @@ function ShelfView({
           not flex centring — are what places it, because auto margins collapse to nothing
           when the content is taller than the column, where centring would clip the first
           row. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+      <div ref={tracks} className="flex min-h-0 flex-1 flex-col overflow-auto">
         <div className="m-auto flex w-full flex-col gap-4">
           {state.loading ? (
             <div className="flex justify-center py-6">
