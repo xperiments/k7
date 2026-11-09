@@ -1846,7 +1846,32 @@
         x: vx * g.c - vy * g.s,
         y: vx * g.s + vy * g.c,
       });
+      let mctx = null;
+      // A dynamic text's box is a promise - it has to hold the longest value the slot can print -
+      // but a static string has nothing to hold beyond its own ink. So a static text's box is
+      // measured and its layer moved by the same amount, which leaves the glyphs where they were
+      // and makes the box, the selection and the "outside the print" mark hug the text.
+      function fitStaticText() {
+        let dirty = false;
+        for (const o of objs) {
+          if (o.type !== "text" || !o.static) continue;
+          const txt = o.text || "";
+          if (!txt.trim()) continue;
+          mctx = mctx || document.createElement("canvas").getContext("2d");
+          mctx.font = `${pxOf(o)}px "${ffOf(o)}", sans-serif`;
+          const ink = Math.ceil(mctx.measureText(txt).width) + 1;
+          if (Math.abs(ink - o.w) < 1) continue;
+          const d = o.w - ink, a = alignOf(o);
+          if (a === "center") o.x = Math.round(o.x + d / 2);
+          else if (a === "right") o.x = Math.round(o.x + d);
+          o.w = ink;
+          dirty = true;
+        }
+        return dirty;
+      }
+
       function drawStage() {
+        if (!run) fitStaticText();
         const w = W(),
           hh = H();
         // P is the pasteboard: the box is the print plus this much room on every side, and the stage
@@ -2082,7 +2107,7 @@
             `<label>Kind<select data-k="kind"${D}><option value="static"${dyn ? "" : " selected"}>Static text</option><option value="dynamic"${dyn ? " selected" : ""}>Dynamic text (set from code)</option></select></label>` +
             (dyn ? slotSelect(sel, D) : "") +
             (dyn ? simInput(sel) : F2("text", "Text", sel.text, "text")) +
-            F2("w", "Wrap width", sel.w) +
+            (dyn ? F2("w", "Wrap width", sel.w) : `<label>Width<span style="opacity:.7">${sel.w} (fitted to the text)</span></label>`) +
             roleChip(sel, D);
         } else {
           s +=

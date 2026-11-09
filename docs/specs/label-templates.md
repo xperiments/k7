@@ -75,7 +75,11 @@ the packer uses; the rest are the editor's.
   use, `fill` is a `#RRGGBB` instead of a role, and `notes` must say why.
 - **A `text`** has `x, y, w, rot?`, `font` (`title`/`numeral`/`caption`), `color` (`ink` in
   v1 — the editor refuses any other), `align` (`left`/`center`/`right`), and either
-  `slot` (a Slot name, dynamic) or `text` (static, at the back of the same array).
+  `slot` (a Slot name, dynamic) or `text` (static, at the back of the same array). Its `w` is a
+  box: for a slot it must hold the longest value the slot can print, and for a static string the
+  editor measures the ink and writes that, moving `x` by the difference so the glyphs do not
+  move. The print's bounds test is this box, so a static text's box hugging its text is what
+  keeps an empty tail from failing the build.
 - **`preview`** is the editor's simulated value: it is validated against the slot's `max` at
   export, and ignored by the packer.
 
