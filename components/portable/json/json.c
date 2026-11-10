@@ -253,6 +253,9 @@ int json_tok_member(const char *body, const json_tok_t *t, int nt, int obj, cons
 
 bool json_tok_unescape(const char *body, const json_tok_t *t, char *out, size_t cap)
 {
+    /* A string's token has no quotes in it; anything else is not a string, and copying its
+     * bytes would let `{"path":42}` read as the path "42". */
+    if (t->type != JSON_TOK_STRING) return false;
     size_t n = 0;
     for (int i = t->start; i < t->end; i++) {
         unsigned char c = (unsigned char)body[i];

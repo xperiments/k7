@@ -10,6 +10,7 @@
  * the audio producer plus the client fan-out, and it plugs into the HTTP layer
  * by registering one route.
  */
+#include "json.h"
 #include "mini_icecast.h"
 
 #include <math.h>
@@ -294,117 +295,16 @@ typedef enum {
  * must not close the fd when this returns MINI_ICECAST_REGISTERED. */
 static mini_icecast_register_result_t mini_icecast_register_client(int fd, bool want_icy_metadata);
 
-static const char *json_ws(const char *p)
-{
-    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
-    return p;
-}
-
-static bool json_utf8(uint32_t cp, char *out, size_t *n, size_t cap)
-{
-    if (cp < 0x80) {
-        if (*n + 1 >= cap) return false;
-        out[(*n)++] = (char)cp;
-    } else if (cp < 0x800) {
-        if (*n + 2 >= cap) return false;
-        out[(*n)++] = (char)(0xC0 | (cp >> 6));
-        out[(*n)++] = (char)(0x80 | (cp & 0x3F));
-    } else if (cp < 0x10000) {
-        if (*n + 3 >= cap) return false;
-        out[(*n)++] = (char)(0xE0 | (cp >> 12));
-        out[(*n)++] = (char)(0x80 | ((cp >> 6) & 0x3F));
-        out[(*n)++] = (char)(0x80 | (cp & 0x3F));
-    } else {
-        if (*n + 4 >= cap) return false;
-        out[(*n)++] = (char)(0xF0 | (cp >> 18));
-        out[(*n)++] = (char)(0x80 | ((cp >> 12) & 0x3F));
-        out[(*n)++] = (char)(0x80 | ((cp >> 6) & 0x3F));
-        out[(*n)++] = (char)(0x80 | (cp & 0x3F));
-    }
-    return true;
-}
-
-static bool json_string(const char **pp, char *out, size_t cap)
-{
-    const char *p = *pp;
-    if (*p++ != '"') return false;
-    size_t n = 0;
-    while (*p && *p != '"') {
-        unsigned char c = (unsigned char)*p++;
-        if (c < 0x20) return false;
-        if (c != '\\') {
-            if (n + 1 >= cap) return false;
-            out[n++] = (char)c;
-            continue;
-        }
-        c = (unsigned char)*p++;
-        switch (c) {
-        case '"': case '\\': case '/': out[n++] = (char)c; break;
-        case 'b': out[n++] = '\b'; break;
-        case 'f': out[n++] = '\f'; break;
-        case 'n': out[n++] = '\n'; break;
-        case 'r': out[n++] = '\r'; break;
-        case 't': out[n++] = '\t'; break;
-        case 'u': {
-            uint32_t cp = 0;
-            for (int i = 0; i < 4; i++) {
-                char h = *p++;
-                int v = (h >= '0' && h <= '9') ? h - '0'
-                      : (h >= 'a' && h <= 'f') ? h - 'a' + 10
-                      : (h >= 'A' && h <= 'F') ? h - 'A' + 10 : -1;
-                if (v < 0) return false;
-                cp = cp * 16 + (uint32_t)v;
-            }
-            if (cp >= 0xD800 && cp <= 0xDBFF && p[0] == '\\' && p[1] == 'u') {
-                uint32_t low = 0;
-                const char *q = p + 2;
-                for (int i = 0; i < 4; i++) {
-                    char h = *q++;
-                    int v = (h >= '0' && h <= '9') ? h - '0'
-                          : (h >= 'a' && h <= 'f') ? h - 'a' + 10
-                          : (h >= 'A' && h <= 'F') ? h - 'A' + 10 : -1;
-                    if (v < 0) return false;
-                    low = low * 16 + (uint32_t)v;
-                }
-                if (low < 0xDC00 || low > 0xDFFF) return false;
-                cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
-                p = q;
-            } else if (cp >= 0xD800 && cp <= 0xDFFF) {
-                return false;
-            }
-            if (cp < 0x20) return false;
-            if (!json_utf8(cp, out, &n, cap)) return false;
-            break;
-        }
-        default: return false;
-        }
-        if (n + 1 >= cap) return false;
-    }
-    if (*p != '"') return false;
-    out[n] = 0;
-    *pp = p + 1;
-    return true;
-}
-
-/* The body is exactly {"path":"..."}; unknown keys are refused rather than
- * silently ignored, so a typo cannot look like a successful play request. */
+/* `{"path": "..."}`, the only body this device accepts besides /mcp's. The object is parsed
+ * by the shared reader, so the unescaping is the same one every other reply and request uses. */
 static bool json_play_path(const char *body, char *out, size_t cap)
 {
-    const char *p = json_ws(body);
-    if (*p++ != '{') return false;
-    p = json_ws(p);
-    if (*p == '}') return false;
-    char key[32];
-    if (!json_string(&p, key, sizeof key)) return false;
-    if (strcmp(key, "path") != 0) return false;
-    p = json_ws(p);
-    if (*p++ != ':') return false;
-    p = json_ws(p);
-    if (!json_string(&p, out, cap)) return false;
-    p = json_ws(p);
-    if (*p++ != '}') return false;
-    p = json_ws(p);
-    return *p == 0;
+    json_tok_t tok[16];
+    int nt = 0;
+    if (!json_parse(body, tok, 16, &nt) || nt == 0) return false;
+    if (tok[0].type != JSON_TOK_OBJECT) return false;
+    int path = json_tok_member(body, tok, nt, 0, "path");
+    return path >= 0 && json_tok_unescape(body, &tok[path], out, cap);
 }
 
 static void send_json(int fd, int status, const char *body)
