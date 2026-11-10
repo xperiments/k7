@@ -38,7 +38,7 @@ import { formatDuration } from './format';
 import { navigate, routeHref } from './router';
 import { rememberVideo } from './areas/Video';
 import { usePlayback } from './playback';
-import { useAnalysis } from './state/analysis';
+import { useCardReader } from './state/analysis';
 
 /**
  * One album: the cache rows it is made of, the measurements the device answers for them,
@@ -391,7 +391,7 @@ function TrackRow({
 
 export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexState }) {
   const playback = usePlayback();
-  const { readCardFile } = useAnalysis();
+  const readCardFile = useCardReader();
   const scope = useCardScope();
   const [imageRows, setImageRows] = useState<Map<string, ImageMeasurement> | null>(null);
   const [measurements, setMeasurements] = useState<Map<string, McpTrack | null> | null>(null);

@@ -24,7 +24,7 @@ import {
 import { FileTree } from './file-tree';
 import { usePlayback } from './playback';
 import { navigate, routeHref } from './router';
-import { useAnalysis } from './state/analysis';
+import { useCardReader } from './state/analysis';
 
 /**
  * Media's second view: the card's own folders, browsed the way a drive is.
@@ -107,7 +107,7 @@ export function DriveView({
   query: string;
 }) {
   const playback = usePlayback();
-  const { readCardFile } = useAnalysis();
+  const readCardFile = useCardReader();
   const [notice, setNotice] = useState<Notice | null>(null);
 
   /* The same rows the shelf is made of, read as a tree. The cache holds the names and the

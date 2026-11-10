@@ -30,7 +30,7 @@ import {
   type Settings,
 } from '../../settings';
 import { plural } from '../format';
-import { useAnalysis } from '../state/analysis';
+import { useWorkerCapacity } from '../state/analysis';
 
 /**
  * What this browser remembers for itself.
@@ -233,7 +233,7 @@ function NoticeLine({ notice }: { notice: Notice }) {
 }
 
 export function SettingsArea() {
-  const { workers: capacity } = useAnalysis();
+  const capacity = useWorkerCapacity();
   const [saved, setSaved] = useState<Settings>(() => getSettings());
 
   const suggested = capacity?.suggested ?? autoWorkerCount();

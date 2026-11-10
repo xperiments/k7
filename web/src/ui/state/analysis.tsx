@@ -88,8 +88,6 @@ export interface AnalysisApi {
   items: QueueItem[];
   /** True while any worker holds a row. */
   busy: boolean;
-  /** The boot check's verdict on the worker pool; null until it has run. */
-  workers: WorkerCapacity | null;
   /**
    * Whether queued rows are being handed to the workers. True unless **Pause** was pressed:
    * a new queue always measures, and Pause holds the run it was pressed on until Resume.
@@ -152,8 +150,6 @@ export interface AnalysisApi {
    * handle when this page has one, the queue's own file when it does not. `null` means the
    * card is not here: nothing can be played from it.
    */
-  readCardFile: (path: string) => Promise<File | null>;
-
   retry: (item: QueueItem) => void;
   deepAnalyse: (item: QueueItem) => Promise<void>;
   saveTags: (item: QueueItem) => Promise<void>;
@@ -166,6 +162,27 @@ export interface AnalysisApi {
 }
 
 const AnalysisContext = createContext<AnalysisApi | null>(null);
+
+/**
+ * The worker pool's boot verdict, in a context of its own.
+ *
+ * Exactly one consumer wants it — Settings prints the pool size — and it is decided once, at
+ * boot. In the wide value it sat beside the queue, so Settings re-rendered every time a
+ * Track settled, to draw a number that had not changed.
+ */
+const WorkersContext = createContext<WorkerCapacity | null | undefined>(undefined);
+
+/**
+ * Reading the card's bytes, in a context of its own.
+ *
+ * The two Media views need this and nothing else from the run. In the wide value they
+ * re-rendered on every patch to a row for a function whose identity never had to move — and
+ * did, because it closed over the queue to fall back on. It reads the queue through a ref
+ * now, so its identity follows the card and not the run.
+ */
+const CardReaderContext = createContext<((path: string) => Promise<File | null>) | undefined>(
+  undefined,
+);
 
 export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<QueueItem[]>([]);
@@ -1094,6 +1111,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     await clearCache();
   }, []);
 
+  /* The queue, for the reader's fallback, without making the reader's identity follow every
+   * row that settles: a Media view must not re-render because a Track was measured. */
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
   const readCardFile = useCallback(
     async (path: string): Promise<File | null> => {
       let handle = cardHandle;
@@ -1112,10 +1134,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           // A handle can be revoked under the page; the queue below is the second door.
         }
       }
-      const measured = items.find((item) => snapshotPath(item.path) === path);
+      const measured = itemsRef.current.find((item) => snapshotPath(item.path) === path);
       return measured?.file ?? null;
     },
-    [cardHandle, items, storedHandle],
+    [cardHandle, storedHandle],
   );
 
   const pause = useCallback(() => setRunning(false), []);
@@ -1124,7 +1146,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const value: AnalysisApi = {
     items,
     busy,
-    workers: workerCapacity,
     running,
     pause,
     resume,
@@ -1151,7 +1172,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     changeCard,
     hasCardHandle: cardHandle !== null,
     canRescan: cardHandle !== null || storedHandle !== null,
-    readCardFile,
     retry,
     deepAnalyse,
     saveTags,
@@ -1160,7 +1180,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     clearAll,
   };
 
-  return <AnalysisContext.Provider value={value}>{children}</AnalysisContext.Provider>;
+  return (
+    <AnalysisContext.Provider value={value}>
+      <WorkersContext.Provider value={workerCapacity}>
+        <CardReaderContext.Provider value={readCardFile}>{children}</CardReaderContext.Provider>
+      </WorkersContext.Provider>
+    </AnalysisContext.Provider>
+  );
 }
 
 /** The analysis state. Throws outside the provider, which is a mounting mistake, not a state. */
@@ -1168,4 +1194,18 @@ export function useAnalysis(): AnalysisApi {
   const value = useContext(AnalysisContext);
   if (!value) throw new Error('useAnalysis must be used inside <AnalysisProvider>');
   return value;
+}
+
+/** The worker pool's verdict. Does not re-render when the run moves. */
+export function useWorkerCapacity(): WorkerCapacity | null {
+  const value = useContext(WorkersContext);
+  if (value === undefined) throw new Error('useWorkerCapacity must be used inside <AnalysisProvider>');
+  return value;
+}
+
+/** The card's bytes by path. Does not re-render when the run moves. */
+export function useCardReader(): (path: string) => Promise<File | null> {
+  const read = useContext(CardReaderContext);
+  if (!read) throw new Error('useCardReader must be used inside <AnalysisProvider>');
+  return read;
 }
