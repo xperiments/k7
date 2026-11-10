@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "app_board.h"
+#include "card_path.h"
 #include "card_use.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -23,6 +24,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "http_server.h"
+#include "covers_http.h"
 #include "http_json.h"
 #include "json.h"
 #include "library.h"
@@ -32,6 +34,7 @@
 #include "mini_files.h"
 #include "mini_icecast.h"
 #include "snapshot.h"
+#include "snapshot_http.h"
 #include "front_door.h"
 #include "flash_job.h"
 #include "playlist_select.h"
@@ -152,204 +155,7 @@ static void rescan_task(void *arg)
  * preflight this device never answers. A form post cannot forge one either. That is the
  * whole CSRF story, and it is cheaper than a token the user would have to type. */
 
-/* The flash write, on the writer task: an HTTP worker's stack is PSRAM, and a write
- * disables the cache the stack lives behind (flash_job.h). */
-typedef struct {
-    const uint8_t  *image;
-    size_t          len;
-    char           *why;
-    size_t          why_size;
-    app_board_flash_t result;
-} snapshot_flash_t;
 
-static bool flash_snapshot(void *ctx)
-{
-    snapshot_flash_t *job = (snapshot_flash_t *)ctx;
-    job->result = app_board_snapshot_flash(job->image, job->len, job->why, job->why_size);
-    return true;
-}
-
-static http_result_t snapshot_route(int fd, const http_request_t *req, void *ctx)
-{
-    (void)ctx;
-    if (strcmp(req->path, "/api/snapshot") != 0) {
-        http_send_error(fd, 404, "no such path");
-        return HTTP_HANDLED;
-    }
-    if (strcmp(req->content_type, "application/octet-stream") != 0) {
-        http_send_error(fd, 415, "the snapshot must be application/octet-stream");
-        return HTTP_HANDLED;
-    }
-
-    /* The image is validated here, before the seam is asked to write it: the host's
-     * partition is a file and the device's is flash, and neither should be the place where
-     * "is this a snapshot" is answered. Opening it is the validation. */
-    char why[128] = {0};
-    snapshot_t *snap = NULL;
-    snapshot_result_t valid = snapshot_open_why(req->body, req->body_len, &snap, why, sizeof why);
-    if (snap) snapshot_close(snap);
-    snapshot_flash_t job = {req->body, req->body_len, why, sizeof why, APP_BOARD_FLASH_INVALID};
-    app_board_flash_t r;
-    if (valid != SNAPSHOT_OK)
-        r = APP_BOARD_FLASH_INVALID;
-    else if (!flash_job_run(flash_snapshot, &job))
-        r = APP_BOARD_FLASH_FAILED;
-    else
-        r = job.result;
-    int status;
-    switch (r) {
-    case APP_BOARD_FLASH_OK: status = 200; break;
-    case APP_BOARD_FLASH_INVALID: status = 400; break;
-    case APP_BOARD_FLASH_NO_PARTITION: status = 503; break;
-    default: status = 500; break;
-    }
-    char body[320];
-    json_writer_t w = json_writer_make(body, sizeof body);
-    if (r == APP_BOARD_FLASH_OK) {
-        json_printf(&w, "{\"applied\":true,\"bytes\":%u}", (unsigned)req->body_len);
-    } else {
-        /* `why` is the validator's sentence, and it is data: it goes through the writer's
-         * escaping rather than between two quotes with %s. */
-        json_puts(&w, "{\"applied\":false,\"error\":\"");
-        json_escaped(&w, why);
-        json_puts(&w, "\"}");
-    }
-    http_json_send_writer(fd, status, &w, "Cache-Control: no-store\r\n");
-
-    /* The reader holds a PSRAM copy of the old image, and the write that just happened ran
-     * with the PSRAM cache off. A restart is the cheap, certain way to serve the new one. */
-    if (r == APP_BOARD_FLASH_OK) app_board_reboot_soon(1500);
-    return HTTP_HANDLED;
-}
-
-#define COVERS_MAX_BYTES (32u * 1024u * 1024u)
-
-/* The card root is the parent of the Music directory the services were started with
- * (device: /sdcard; host: the fixture's root). */
-static void card_root_path(char *out, size_t cap)
-{
-    const char *music = s_cfg.music_dir ? s_cfg.music_dir : "";
-    size_t len = strlen(music);
-    while (len > 1 && music[len - 1] == '/') len--;
-    const char *slash = NULL;
-    for (size_t i = len; i > 0; i--) {
-        if (music[i - 1] == '/') { slash = music + i - 1; break; }
-    }
-    if (!slash) {
-        out[0] = 0;
-        return;
-    }
-    size_t parent = (size_t)(slash - music);
-    if (parent == 0) parent = 1; /* "/music" -> "/" */
-    snprintf(out, cap, "%.*s", (int)parent, music);
-}
-
-static void card_file_path(char *out, size_t cap, const char *name)
-{
-    char root[224];
-    card_root_path(root, sizeof root);
-    if (root[0] == 0) snprintf(out, cap, "%s", name);
-    else if (strcmp(root, "/") == 0) snprintf(out, cap, "/%s", name);
-    else snprintf(out, cap, "%s/%s", root, name);
-}
-
-static void covers_path(char *out, size_t cap)
-{
-    card_file_path(out, cap, "k7.covers");
-}
-
-/* A mark id is the canonical UUID shape the App writes. A file with our name and anything
- * else is not a name the page can use; it is reported as no mark, never repaired. */
-static bool mark_id_valid(const char *s, size_t len)
-{
-    if (len != 36) return false;
-    for (size_t i = 0; i < len; i++) {
-        if (i == 8 || i == 13 || i == 18 || i == 23) {
-            if (s[i] != '-') return false;
-        } else if (!((s[i] >= '0' && s[i] <= '9') || (s[i] >= 'a' && s[i] <= 'f') ||
-                     (s[i] >= 'A' && s[i] <= 'F'))) {
-            return false;
-        }
-    }
-    return true;
-}
-
-/* Read the mark at mount, not on every status poll: the card can vanish, and the App polls
- * status every few seconds. The result is copied under the same lock the card state uses. */
-static void card_mark_refresh(void)
-{
-    char id[40] = {0};
-    char path[256];
-    card_file_path(path, sizeof path, "k7.card");
-    FILE *f = fopen(path, "rb");
-    if (f) {
-        char buf[256];
-        size_t n = fread(buf, 1, sizeof buf - 1, f);
-        fclose(f);
-        buf[n] = 0;
-        json_tok_t tok[24];
-        int nt = 0;
-        if (json_parse(buf, tok, 24, &nt) && nt > 0 && tok[0].type == JSON_TOK_OBJECT) {
-            int at = json_tok_member(buf, tok, nt, 0, "id");
-            if (at >= 0 && json_tok_unescape(buf, &tok[at], id, sizeof id)
-                && !mark_id_valid(id, strlen(id))) {
-                id[0] = 0;
-            }
-        }
-    }
-    pthread_mutex_lock(&s_card_lock);
-    snprintf(s_card_id, sizeof s_card_id, "%s", id);
-    pthread_mutex_unlock(&s_card_lock);
-}
-
-/* GET /api/covers: the card's preprocessed cover archive, served verbatim. It is a cache
- * written by the App, not by the device; reading it from the SD card touches no flash, so
- * the panel's scan-out is not involved. A manual restore may take a few seconds of the SD
- * bus while music is playing; that is the caller's decision. */
-static http_result_t covers_route(int fd, const http_request_t *req, void *ctx)
-{
-    (void)ctx;
-    if (strcmp(req->path, "/api/covers") != 0) {
-        http_send_error(fd, 404, "no such path");
-        return HTTP_HANDLED;
-    }
-
-    char path[256];
-    covers_path(path, sizeof path);
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        http_send_error(fd, 404, "no cover archive on the card");
-        return HTTP_HANDLED;
-    }
-
-    long size = -1;
-    if (fseek(f, 0, SEEK_END) == 0) size = ftell(f);
-    if (size <= 0 || (unsigned long)size > COVERS_MAX_BYTES || fseek(f, 0, SEEK_SET) != 0) {
-        fclose(f);
-        http_send_error(fd, size == 0 ? 404 : 413, "the cover archive is not usable");
-        return HTTP_HANDLED;
-    }
-
-    const char *headers =
-        "Content-Disposition: attachment; filename=\"k7.covers\"\r\n"
-        "Cache-Control: no-store\r\n";
-    http_send_timeout_ms(fd, 30000);
-    if (http_send_headers(fd, 200, "application/octet-stream", (size_t)size, headers) != ESP_OK) {
-        fclose(f);
-        return HTTP_HANDLED;
-    }
-
-    uint8_t buf[4096];
-    bool sent = true;
-    size_t got;
-    while ((got = fread(buf, 1, sizeof buf, f)) > 0) {
-        if (!http_send_all(fd, buf, got)) { sent = false; break; }
-    }
-    if (ferror(f)) sent = false;
-    fclose(f);
-    ESP_LOGI(TAG, "GET /api/covers -> %ld B%s", size, sent ? "" : " (client stopped)");
-    return HTTP_HANDLED;
-}
 
 static http_result_t rescan_route(int fd, const http_request_t *req, void *ctx)
 {
@@ -466,6 +272,48 @@ static bool card_drain_files(void)
 {
     mini_icecast_skip();
     return card_use_quiesce(CARD_DRAIN_MS);
+}
+
+static bool mark_id_valid(const char *s, size_t len)
+{
+    if (len != 36) return false;
+    for (size_t i = 0; i < len; i++) {
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            if (s[i] != '-') return false;
+        } else if (!((s[i] >= '0' && s[i] <= '9') || (s[i] >= 'a' && s[i] <= 'f') ||
+                     (s[i] >= 'A' && s[i] <= 'F'))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Read the mark at mount, not on every status poll: the card can vanish, and the App polls
+ * status every few seconds. The result is copied under the same lock the card state uses. */
+static void card_mark_refresh(void)
+{
+    char id[40] = {0};
+    char path[256];
+    card_path_file(path, sizeof path, "k7.card");
+    FILE *f = fopen(path, "rb");
+    if (f) {
+        char buf[256];
+        size_t n = fread(buf, 1, sizeof buf - 1, f);
+        fclose(f);
+        buf[n] = 0;
+        json_tok_t tok[24];
+        int nt = 0;
+        if (json_parse(buf, tok, 24, &nt) && nt > 0 && tok[0].type == JSON_TOK_OBJECT) {
+            int at = json_tok_member(buf, tok, nt, 0, "id");
+            if (at >= 0 && json_tok_unescape(buf, &tok[at], id, sizeof id)
+                && !mark_id_valid(id, strlen(id))) {
+                id[0] = 0;
+            }
+        }
+    }
+    pthread_mutex_lock(&s_card_lock);
+    snprintf(s_card_id, sizeof s_card_id, "%s", id);
+    pthread_mutex_unlock(&s_card_lock);
 }
 
 static void card_watch_task(void *arg)
@@ -589,6 +437,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     if (report) *report = local;
     if (!cfg || !cfg->music_dir) return ESP_ERR_INVALID_ARG;
     s_cfg = *cfg;
+    card_path_init(cfg->music_dir);
     if (card_use_init() != CARD_USE_OK) return fail(report, ESP_ERR_NO_MEM, "card file gate");
     /* The writer exists before any route can be reached. */
     if (!flash_job_start()) return fail(report, ESP_ERR_NO_MEM, "flash writer task");
@@ -795,16 +644,14 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     e = http_server_register_route_method("/api/rescan", "POST", rescan_route, NULL);
     if (e != ESP_OK) return fail(report, e, "rescan endpoint");
 
-    e = http_server_register_route("/api/covers", covers_route, NULL);
+    e = covers_http_start();
     if (e != ESP_OK) return fail(report, e, "covers endpoint");
 
     e = playlist_http_start(app_services_snapshot);
     if (e != ESP_OK) return fail(report, e, "playlist endpoints");
 
-    e = http_server_register_route_method("/api/snapshot", "POST", snapshot_route, NULL);
+    e = snapshot_http_start();
     if (e != ESP_OK) return fail(report, e, "snapshot endpoint");
-    e = http_server_route_body_limit("/api/snapshot", "POST", HTTP_UPLOAD_MAX);
-    if (e != ESP_OK) return fail(report, e, "snapshot upload limit");
 
     /* CORS preflight for the App's origin. Local Network Access, as specified, would let
      * https://k7.xperiments.dev fetch this device over plain HTTP once the user grants the
