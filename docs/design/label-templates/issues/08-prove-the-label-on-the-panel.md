@@ -26,6 +26,9 @@ to check the drawing meanwhile, but the ticket stays open.
 
 **Blocked by:** 06, 07 — and the gesture, above.
 
+**The frame is in this ticket's folder.** What the boxes still want is the log line and the
+tick's measurement; the picture is no longer one of them.
+
 **Status:** open, but the open question is answered — **on 2026-11-10 the owner pressed two
 fingers on the Sunton and the design drew.** The gesture is reachable and the picture is right,
 which is what ADR 0071 recorded as owed and what this ticket was blocked on.
@@ -35,8 +38,13 @@ observation: the `[GDBG] contacts=2` line, a frame, and the reel tick's measurem
 is in doubt now; none of them has been captured.
 
 - [ ] `[GDBG] contacts=2` on the log from two fingers. *(or this ticket stays open)*
-- [ ] A photograph or a `tools/capture_screens.py` frame of the two-finger pose showing the
-      design, attached to this ticket.
+- [x] A photograph or a `tools/capture_screens.py` frame of the two-finger pose showing the
+      design, attached to this ticket. **Done:** `08-two-finger-pose-2026-11-10.png`, captured
+      off the panel with `tools/screen_over_http.py capture --scenes 10` (scene 10 is the pose;
+      it is driven by an intent, so no finger was needed). It shows the design's paper, its four
+      bands, the rules, `SIDE B`, the artist and the title where the design put them, and the
+      reels turning through the Card's window. The numeral is **Barlow Condensed**, which is
+      ticket 05's face on the glass rather than in the sheet.
 - [ ] The reel tick does not repaint the print: measured (a dirty-area log or the frame's own
       timing), not assumed.
 - [ ] A Track change and a design change both land in one frame, seen on the panel.

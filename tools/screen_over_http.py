@@ -8,7 +8,7 @@ The board has to be built with CONFIG_APP_UI_SCREEN_HTTP=y (screen_display's Kco
 default). That build serves two routes:
 
     GET  /api/screen.bmp    the 800x480 frame as a 24-bit bottom-up BMP, 1,152,054 bytes
-    POST /api/scene?n=N     re-aims the diagnostic scene driver, N = 0..9, and answers once
+    POST /api/scene?n=N     re-aims the diagnostic scene driver, N = 0..10, and answers once
                             the picture it asks for is on the screen (the route waits for the
                             scene's own script, so a capture never photographs the walk to it)
 
@@ -96,7 +96,7 @@ def pil():
 # step - the device answers 400 to a scene above this.
 WIDTH, HEIGHT = 800, 480
 BMP_BYTES = 54 + WIDTH * HEIGHT * 3
-MAX_SCENE = 9
+MAX_SCENE = 10
 
 SCENE_NAMES = {
     0: "entry view",
@@ -109,6 +109,10 @@ SCENE_NAMES = {
     7: "RGB dial",
     8: "Peek",
     9: "Real/RGB",
+    # The two-finger pose, which is the only way to photograph the label without a finger.
+    # Opt-in: `--scenes 10`, not part of the default set, because what it draws depends on the
+    # Track that is playing and on the design its ink seed lands on.
+    10: "two-finger pose",
 }
 
 # Scenes that are photographed but not diffed, and why. Everything not named here is compared.
@@ -469,7 +473,8 @@ def main():
                          help="the board's front door, e.g. 192.168.1.69:8000")
     capture.add_argument("--out", required=True, metavar="DIR",
                          help="directory to write scene<N>.bmp into (created if missing)")
-    capture.add_argument("--scenes", default=",".join(str(n) for n in range(MAX_SCENE + 1)),
+    # 0..9 by default; scene 10 is the two-finger pose and is asked for by name.
+    capture.add_argument("--scenes", default=",".join(str(n) for n in range(MAX_SCENE)),
                          metavar="LIST",
                          help=f"comma separated, 0..{MAX_SCENE} (default: all of them)")
     capture.add_argument("--timeout", type=float, default=60.0, metavar="SECONDS",
