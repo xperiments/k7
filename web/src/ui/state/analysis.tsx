@@ -10,16 +10,16 @@ import {
 import { AnalysisClient } from '../../audio/client';
 import type { FinalizeResult } from '../../audio/protocol';
 import { startWorkerPool, type WorkerCapacity } from '../../audio/workers';
-import { decodeFile, sha256Hex, trackFormat } from '../../audio/decode';
+import { decodeFile, trackFormat } from '../../audio/decode';
 import { loadManifest } from '../../audio/models';
-import { readTrackMetadata, type TrackTags } from '../../audio/metadata';
+import { readTrackMetadata } from '../../audio/metadata';
 import { downloadTaggedCopy, METADATA_WRITE_VERSION, writeAnalysisTags, writeTrackLabel } from '../../audio/tagWriter';
 import { coverSource, type EmbeddablePicture } from '../../audio/covers';
 import { encodeCover } from '../../audio/avif';
 import type { Analysis, ModelManifest } from '../../domain/analysis';
 import { snapshotPath } from '../../domain/snapshot';
-import { needsMeasurement, tagAnalysis } from '../../domain/tagAnalysis';
 import { newId } from '../../lib/id';
+import { runItem } from '../../queue/run';
 import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
 import { patchListArea } from '../../playlists/image';
 import {
@@ -28,11 +28,8 @@ import {
   getCoverRecords,
   getMedia,
   listMedia,
-  measuredHash,
   migrateLegacyCovers,
   putMedia,
-  tagsOf,
-  writeCurrent,
   type CachedMedia,
 } from '../../storage/media';
 import { buildCoverArchive } from '../../storage/coverArchive';
@@ -553,194 +550,38 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     [cardHandle, modelSet, rememberMedia, update, reopenItem],
   );
 
-  /**
-   * The analysis *and the row's tags* for a file this browser has already measured, or null.
-   *
-   * The card's own record decides it: the media row stores the file's path, size,
-   * modification time and content hash, so a re-scan can name the Track without reading a
-   * byte. A file whose size or mtime moved is a different file and is measured again; a row
-   * from before those fields existed has neither, and is measured once more rather than
-   * guessed at.
-   */
-  const knownAnalysis = useCallback(
-    async (
-      item: QueueItem,
-    ): Promise<{ analysis: Analysis; tags: TrackTags; media: CachedMedia } | null> => {
-      if (!modelSet) return null;
-      const path = snapshotPath(item.path);
-      if (path === null) return null;
-      const media = await getMedia(currentCardScope(), path).catch(() => undefined);
-      const hash = measuredHash(media, item.file);
-      if (hash === null || media === undefined) return null;
-      const cached = await getCached(cacheKey(hash, modelSet)).catch(() => null);
-      if (!cached) return null;
-      return {
-        analysis: {
-          ...cached,
-          track: { ...cached.track, name: item.name, path: item.path, size: item.file.size, hash },
-        },
-        // The row was never opened, so its tags come from the record, not from the file.
-        tags: tagsOf(media),
-        media,
-      };
-    },
-    [modelSet],
-  );
-
+  /* The road itself is `queue/run.ts`: the transitions, the cache, the tags and the two ways
+   * a Track settles or fails. What stays here is everything that is the provider's — the
+   * state the patches land in, the sentence a paused run shows, and the worker client. */
   const processItem = useCallback(
     async (item: QueueItem, client: AnalysisClient) => {
       if (!modelSet) return;
-      try {
-        /* Already measured, and the card still holds the same bytes: nothing to read. */
-        const known = await knownAnalysis(item);
-        if (known !== null) {
-          update(item.id, {
-            status: 'done',
-            analysis: known.analysis,
-            tags: known.tags,
-            cached: true,
+      await runItem(item, client, {
+        modelSet,
+        tagsOnly,
+        update,
+        read: readItem,
+        readTags: readTrackMetadata,
+        decode: decodeFile,
+        getCached: async (key) => (await getCached(key)) ?? null,
+        putCached,
+        getMedia: (path) => getMedia(currentCardScope(), path),
+        putMedia: (row) => putMedia(currentCardScope(), row),
+        finalize: finalizeTrack,
+        settled: askPersistenceOnce,
+        weightError: setWeightError,
+        paused: () => {
+          setRunning(false);
+          setNotice({
+            kind: 'error',
+            text: 'The card stopped handing back its files. Rescan the card, then press Resume; the run is paused where it stopped.',
           });
-          /* The row and the file are both settled: a finalize recorded exactly this writer
-           * after it last ran, so there is nothing to open, draw or write. Without that
-           * record (an older row, or a card that was read-only) the file may still need its
-           * tags and label, so the lane does that work once. */
-          if (!writeCurrent(known.media, known.analysis.track.hash, METADATA_WRITE_VERSION)) {
-            await finalizeTrack(
-              item,
-              client,
-              known.analysis,
-              known.analysis.track.hash,
-              known.media,
-            );
-          }
-          return;
-        }
-        update(item.id, { status: 'hashing', error: undefined });
-        /* The queue's File is the scan's snapshot. A long run outlives it (the App's own tag
-         * writes included), so this read reopens the card's file when the browser says the
-         * snapshot is dead, and every later read uses the file those bytes came from. */
-        const { file: source, bytes } = await readItem(item);
-        const buffer = bytes.buffer;
-        const hash = await sha256Hex(bytes);
-        const key = cacheKey(hash, modelSet);
-
-        update(item.id, { status: 'decoding' });
-
-        /* The file's own tags are read before the cache is consulted. They are not part of a
-         * stored analysis — the Process row shows the genre, and a cached Track would
-         * otherwise be the one row without it — and the Snapshot export reuses them instead
-         * of re-reading the file. */
-        const metadata = await readTrackMetadata(source);
-        update(item.id, { tags: metadata.tags });
-
-        const cached = await getCached(key);
-        if (cached) {
-          // Identity is the content hash; the file may have been found at a different path.
-          const analysis: Analysis = {
-            ...cached,
-            track: {
-              ...cached.track,
-              name: item.name,
-              path: item.path,
-              size: source.size,
-              hash,
-            },
-          };
-          update(item.id, { status: 'done', analysis, cached: true });
-          /* The analysis is keyed by the content's hash, not by the card: this file may be
-           * known from another card while this card's shelf has never seen it. The row is
-           * what Media joins on, so measuring it once here is what keeps "processed" from
-           * being reported as "not measured".
-           *
-           * A row that already records this exact file and this build's finalize is settled
-           * even though the fast path above missed it (its mtime is not the one the row
-           * kept); refreshing the record is enough, and the next load takes the fast path. */
-          const path = snapshotPath(item.path);
-          const media =
-            path === null
-              ? undefined
-              : await getMedia(currentCardScope(), path).catch(() => undefined);
-          if (writeCurrent(media, hash, METADATA_WRITE_VERSION)) {
-            if (
-              media !== undefined &&
-              (media.size !== source.size || media.mtime !== source.lastModified)
-            ) {
-              await putMedia(currentCardScope(), {
-                ...media,
-                size: source.size,
-                mtime: source.lastModified,
-                at: new Date().toISOString(),
-              });
-            }
-            return;
-          }
-          await finalizeTrack({ ...item, file: source }, client, analysis, hash);
-          return;
-        }
-
-        /* A track whose tags already carry BPM and key needs no inference: the row is built
-         * from the tags and the fields they cannot carry stay unknown. */
-        if (!needsMeasurement(metadata, tagsOnly)) {
-          const analysis = tagAnalysis(
-            {
-              name: source.name,
-              path: item.path,
-              size: source.size,
-              format: item.format,
-              hash,
-            },
-            metadata,
-          );
-          await putCached(key, analysis);
-        askPersistenceOnce();
-          update(item.id, { status: 'tagged', analysis, stage: undefined });
-          await finalizeTrack({ ...item, file: source }, client, analysis, hash);
-          return;
-        }
-
-        const need44k = metadata.bpm === undefined || metadata.key === undefined;
-        const audio = await decodeFile(buffer, need44k);
-        update(item.id, { status: 'analysing', stage: undefined });
-        const analysis = await client.analyze(
-          {
-            name: source.name,
-            path: item.path,
-            size: source.size,
-            format: item.format,
-            hash,
-          },
-          audio,
-          metadata,
-          (stage) => update(item.id, { stage }),
-        );
-        await putCached(key, analysis);
-        askPersistenceOnce();
-        update(item.id, { status: 'done', analysis, stage: undefined });
-        await finalizeTrack({ ...item, file: source }, client, analysis, hash);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (isWeightError(error)) setWeightError(message);
-        /* A snapshot the card would not hand back means the run has lost the card, not that
-         * one track is bad. Three in a row is the card, and the run pauses once instead of
-         * painting every remaining row as an error. */
-        if (isNotReadable(error)) {
-          unreadable.current += 1;
-          if (unreadable.current >= 3) {
-            setRunning(false);
-            setNotice({
-              kind: 'error',
-              text: 'The card stopped handing back its files. Rescan the card, then press Resume; the run is paused where it stopped.',
-            });
-          }
-        } else {
-          unreadable.current = 0;
-        }
-        update(item.id, { status: 'error', error: message });
-      } finally {
-        claimed.current.delete(item.id);
-      }
+        },
+        unreadable,
+        released: (id) => claimed.current.delete(id),
+      });
     },
-    [modelSet, update, tagsOnly, finalizeTrack, knownAnalysis, readItem],
+    [modelSet, update, tagsOnly, finalizeTrack, readItem],
   );
 
   /* Keep every lane busy with one Track at a time. A client is free only when its last
