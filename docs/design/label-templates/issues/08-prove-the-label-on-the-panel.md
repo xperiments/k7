@@ -26,7 +26,13 @@ to check the drawing meanwhile, but the ticket stays open.
 
 **Blocked by:** 06, 07 — and the gesture, above.
 
-**Status:** open — the firmware is flashed and boots the label; the gesture and the picture are owed to a finger
+**Status:** open, but the open question is answered — **on 2026-11-10 the owner pressed two
+fingers on the Sunton and the design drew.** The gesture is reachable and the picture is right,
+which is what ADR 0071 recorded as owed and what this ticket was blocked on.
+
+The boxes below are still unticked, because they ask for the *artefact* rather than the
+observation: the `[GDBG] contacts=2` line, a frame, and the reel tick's measurement. None of them
+is in doubt now; none of them has been captured.
 
 - [ ] `[GDBG] contacts=2` on the log from two fingers. *(or this ticket stays open)*
 - [ ] A photograph or a `tools/capture_screens.py` frame of the two-finger pose showing the
