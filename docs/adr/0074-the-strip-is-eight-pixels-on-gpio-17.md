@@ -23,15 +23,21 @@ cannot share a board, and this record says which way that is decided: the strip 
 - **Eight WS2812B pixels in one string**, data on GPIO 17, GRB order, 800 kHz, supplied at
   5 V. Eight is what the fitted strip has; a second strip changes one constant.
 - **The driver is RMT**, through Espressif's `espressif/led_strip` managed component, in a new
-  board-only component `components/app/led_strip/`. It is not portable and never will be: the
-  arithmetic that is worth pinning already lives in `components/portable/rgb`.
+  board-only component `components/app/strip/` - `strip`, because `led_strip` is the
+  dependency's own component name and two of them would be one too many. It is not portable and
+  never will be: the arithmetic that is worth pinning already lives in
+  `components/portable/rgb`.
+- **It installs through the screen's public header**, `screen_display_rgb_publish()`, which
+  forwards to the panel's private `cassette_rgb_set_publish()`. The alternative was to move
+  `cassette_rgb.h` into `screen_display/include/`, which would publish the whole panel - its
+  cells, its banks, its pulse - to serve one hook.
 - **The strip has its own 30 Hz clock**, a 33 ms task, and does not ride LVGL. The screen
   task's cadence is adaptive - it rests at least three times its own frame cost, which on this
   part has been over 100 ms for a full-screen invalidation (`screen_display.c:443`) - so a
   strip that rode it would run the chase at whatever pace the screen left behind.
 - **The frame comes from `rgb_frame(state, now_ms, level, px, 8)`.** The state is the last one
-  `cassette_rgb_set_publish()` handed over; `now_ms` is `esp_timer_get_time() / 1000`;
-  `level` is **`max(level_l, level_r)`** from `mini_icecast_status()`, sampled on the tick.
+  `screen_display_rgb_publish()` handed over; `now_ms` is `esp_timer_get_time() / 1000`;
+  `level` is **`max(level_l, level_r)`** from `mini_icecast_levels()`, sampled on the tick.
 - **Brightness stays the last stage**, applied to what the effect produced. That order is
   already `rgb.h`'s and this record does not move it.
 - **The frame is written every tick**, whether or not it changed. 8 px x 24 bits is 192 bits
@@ -78,6 +84,5 @@ cannot share a board, and this record says which way that is decided: the strip 
   the backlight's ladder; whether it should dim with the screen is the spec's open item, and
   dimming it on a timer would contradict the knob that set it.
 
-**Status:** accepted, no code yet. The spec is
-[`docs/specs/led-strip.md`](../specs/led-strip.md); the implementation is FW-03 on the Kanvas
-board.
+**Status:** accepted and implemented in `components/app/strip/`; the board proof - the effects
+on the strip - is FW-03's review. The spec is [`docs/specs/led-strip.md`](../specs/led-strip.md).

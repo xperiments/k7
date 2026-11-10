@@ -225,11 +225,24 @@
     {
       "id": "FW-03",
       "title": "The strip lights: eight WS2812B pixels on GPIO 17 at 30 Hz",
-      "state": "proposed",
+      "state": "review",
       "group": "FW",
+      "yolo": true,
       "at": "2026-11-10T13:56:39Z",
       "by": "deepseek",
-      "desc": "The RGB group's knobs light the case: eight WS2812B pixels on GPIO 17 follow the three channels, the brightness and all six effects, and the LEVEL effect follows the broadcast's level.\n\nFinished means the firmware builds for `sunton`, flashes, and the strip shows OFF dark, SOLID the colour the knobs say, BRI dimming without a hue shift, BREATHE, RAINBOW turning, CHASE lapping, and LEVEL following the VU meter - with the host suite still green.\n\nThe shape is ADR 0074 and `docs/specs/led-strip.md`: a board-only `components/app/led_strip/` driving RMT through `espressif/led_strip`, installing `cassette_rgb_set_publish()`, with its own 33 ms tick calling `rgb_frame()` and `level = max(level_l, level_r)` from the broadcast status.\n\nCheck the wiring before flashing: 3.3 V data into a 5 V WS2812B is below the part's 3.5 V threshold, so supply the strip at 4.5 V or add a level shifter; eight white pixels draw about 0.5 A from the 5 V rail."
+      "desc": "The RGB group's knobs light the case: eight WS2812B pixels on GPIO 17 follow the three channels, the brightness and all six effects, and the LEVEL effect follows the broadcast's level.\n\nFinished means the firmware builds for `sunton`, flashes, and the strip shows OFF dark, SOLID the colour the knobs say, BRI dimming without a hue shift, BREATHE, RAINBOW turning, CHASE lapping, and LEVEL following the VU meter - with the host suite still green.\n\nThe shape is ADR 0074 and `docs/specs/led-strip.md`: a board-only `components/app/led_strip/` driving RMT through `espressif/led_strip`, installing `cassette_rgb_set_publish()`, with its own 33 ms tick calling `rgb_frame()` and `level = max(level_l, level_r)` from the broadcast status.\n\nCheck the wiring before flashing: 3.3 V data into a 5 V WS2812B is below the part's 3.5 V threshold, so supply the strip at 4.5 V or add a level shifter; eight white pixels draw about 0.5 A from the 5 V rail.",
+      "notes": [
+        {
+          "at": "2026-11-10T14:25:06Z",
+          "by": "deepseek",
+          "text": "Plan: add components/app/led_strip (RMT via espressif/led_strip), install cassette_rgb_set_publish() after the screen builds, 33 ms task calling rgb_frame() with max(level_l, level_r). Then build sunton, flash, and prove the effects from the log plus your eyes."
+        },
+        {
+          "at": "2026-11-10T14:33:54Z",
+          "by": "deepseek",
+          "text": "The strip is wired: the RGB group drives eight WS2812B pixels on GPIO 17 at 30 Hz, on their own task, and LEVEL follows the broadcast's level.\n\nVerified: `make -C host check` green; `sunton` builds; flashed; 25 s of a playing track logged no fault, with `strip: 8 WS2812B pixels on GPIO 17, 30 Hz` at boot.\n\nWhat to check - the strip starts dark, because the effect knob's neutral is OFF:\n- Tap the mode bar's `led` button, turn Effect off OFF, pick SOLID: the colour the three knobs say.\n- Turn BRI down: it should dim without the hue turning.\n- BREATHE, RAINBOW, CHASE: the three animated effects.\n- LEVEL: with a track playing, the strip should follow it.\n\nIf nothing lights at all, suspect the data level first: 3.3 V into a 5 V WS2812B is below its 3.5 V threshold - supply the strip at 4.5 V or put a 74AHCT125 in the line."
+        }
+      ]
     }
   ]
 }

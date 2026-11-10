@@ -248,7 +248,8 @@ fed through a level shifter; and eight pixels at full white draw about 0.5 A fro
 The state, the six effects and the 30 Hz frame are
 [`docs/specs/led-strip.md`](docs/specs/led-strip.md); ADR
 [0074](docs/adr/0074-the-strip-is-eight-pixels-on-gpio-17.md) is the decision, and the driver is
-not in the firmware yet.
+`components/app/strip`. It starts dark: the RGB group's effect knob is neutral at OFF, so pick an
+effect with the mode bar's `led` button to see it.
 
 ## Using it
 

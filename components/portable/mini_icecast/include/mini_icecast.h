@@ -137,6 +137,12 @@ uint32_t  mini_icecast_lag_ms(void);
 
 void      mini_icecast_status(mini_icecast_status_t *out);
 
+/* The broadcast's level, 0..1 per channel. The same two fields the status carries, without the
+ * status's lock and its title copies: the strip samples this 30 times a second, and it has no
+ * use for a Track's name. Written by the broadcast task per chunk; a 32-bit float load or store
+ * is atomic on this core, so neither side needs the lock (see the status struct's comment). */
+void      mini_icecast_levels(float *left, float *right);
+
 /* Park the broadcast's card access: the station stops reading the SD and plays a
  * quiet noise bed instead, so a rescan can have the whole bus. Parking is also
  * how the scan avoids the IDF 5.4 VFS readdir/stat cache race.

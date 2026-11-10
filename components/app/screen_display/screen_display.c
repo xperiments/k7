@@ -44,6 +44,7 @@
 
 #include "artwork_loader.h"
 #include "card_mark.h"
+#include "cassette_rgb.h"
 #include "cassette_view.h"
 #include "cassette_bench.h"
 #include "app_services.h"
@@ -822,3 +823,10 @@ uint16_t *screen_capture_frame(int *w, int *h)
 #endif
 }
 #endif
+
+/* --------------------------------------------------------- the strip's seam */
+
+void screen_display_rgb_publish(screen_rgb_publish_t cb, void *ctx)
+{
+    cassette_rgb_set_publish(cb, ctx);
+}

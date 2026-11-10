@@ -1,0 +1,13 @@
+version: "1.0.0"
+description: "The addressable strip: eight WS2812B pixels on GPIO 17, driven over RMT at 30 Hz."
+license: "MIT"
+targets:
+  - esp32s3
+dependencies:
+  idf: ">=5.4"
+
+  ## The RMT encoder for a WS2812's bit timing, from the vendor. v3 is the API this is written
+  ## against: a colour-component format instead of the older pixel-format enum, and the same
+  ## `led_strip_set_pixel` / `led_strip_refresh` pair. It is the one dependency the strip adds;
+  ## the rest is the RMT driver and the state that already exists.
+  espressif/led_strip: "^3.0.0"

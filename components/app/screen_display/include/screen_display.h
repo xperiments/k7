@@ -15,6 +15,8 @@
  */
 #include "esp_err.h"
 
+#include "rgb.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -45,6 +47,16 @@ esp_err_t screen_display_mark(void);
  * the Artwork level stays empty. Call once, after `screen_display_mark()` has returned.
  * Returns ESP_OK, or the reason the cassette could not be built; the mark stays up. */
 esp_err_t screen_display_start(const char *music_dir);
+
+/* Where the RGB group's state goes: the strip's adapter (`components/app/strip`) installs here,
+ * and nothing else does. `cb` is called with the whole state after every knob move, and once
+ * when it is installed; NULL clears it.
+ *
+ * Call it after `screen_display_start()`: the cassette's create clears the hook, so an install
+ * before the panel exists would be wiped. The panel's own seam is `cassette_rgb_set_publish()`,
+ * private to this component; this is the same call for the board. */
+typedef void (*screen_rgb_publish_t)(const rgb_state_t *state, void *ctx);
+void screen_display_rgb_publish(screen_rgb_publish_t cb, void *ctx);
 
 #if CONFIG_APP_UI_SCREEN_HTTP
 /* Register the screen's HTTP diagnostics with the server: GET /api/screen.bmp, the

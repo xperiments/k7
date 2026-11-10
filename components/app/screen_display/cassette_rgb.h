@@ -21,9 +21,10 @@
  * a rework; this panel only carries the new knob vocabulary (ADR 0027).
  *
  * The knobs' values are this panel's and survive a swap; what they *publish* is rgb.h's state.
- * There is no strip in the firmware yet, so the seam is `cassette_rgb_set_publish()`: the board
- * installs a hook (or does not), and every move hands it the whole state. A hook installed late is
- * called once with the values that are already there.
+ * The seam is `cassette_rgb_set_publish()`: the board installs a hook (or does not), and every
+ * move hands it the whole state. A hook installed late is called once with the values that are
+ * already there. The board's hook is `components/app/strip`, reached through
+ * `screen_display_rgb_publish()` so it need not know this header.
  *
  * Private to screen_display. The grid, the dials, the handlers and the editor's bank are
  * knob_panel's, shared with the EQ group; what is here is this group's table - its cell map, its
@@ -47,7 +48,7 @@ extern "C" {
 void cassette_rgb_create(void);
 
 /* Where the strip's state goes. `cb` is called with the whole state after every move, and once
- * when it is installed; NULL installs nothing (the default: there is no strip driver yet). */
+ * when it is installed; NULL installs nothing (the default: no light has claimed it). */
 typedef void (*cassette_rgb_publish_t)(const rgb_state_t *state, void *ctx);
 void cassette_rgb_set_publish(cassette_rgb_publish_t cb, void *ctx);
 

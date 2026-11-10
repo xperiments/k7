@@ -1657,6 +1657,12 @@ void mini_icecast_status(mini_icecast_status_t *out)
     out->level_r = S.level_r;
 }
 
+void mini_icecast_levels(float *left, float *right)
+{
+    if (left) *left = S.level_l;
+    if (right) *right = S.level_r;
+}
+
 size_t mini_icecast_now_playing(char *out, size_t out_size)
 {
     if (!out || !out_size) return 0;

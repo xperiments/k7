@@ -35,6 +35,7 @@
 #include "mini_files.h"
 #include "mini_icecast.h"
 #include "screen_display.h"
+#include "strip.h"
 
 #define MUSIC_DIR    "/sdcard/music"
 #define STATION_NAME "ESP32 Radio"
@@ -292,6 +293,12 @@ void appliance_run(void)
             ESP_LOGE(TAG, "the screen did not start: %s; the device still serves",
                      esp_err_to_name(screen_err));
         }
+
+        /* The light on the case: eight pixels on GPIO 17 with their own 30 Hz clock. It comes
+         * after the cassette because the RGB panel's create clears the publish hook, so an
+         * install before it would be wiped. A failure is logged by the module and is not fatal -
+         * the device still serves, and the knobs still hold what they were set to. */
+        (void)strip_start();
     }
 
     /* A card that failed to mount at boot, a card pulled while running and a card put
