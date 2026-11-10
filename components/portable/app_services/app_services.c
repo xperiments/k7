@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "app_board.h"
+#include "card_use.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -45,10 +46,6 @@ static volatile bool s_card_present;
 /* The card's file lifetime. The gate is a mutex + a binary "idle" semaphore rather than a
  * pthread condition: the decoder and the artwork loader call it from FreeRTOS tasks, and
  * the watcher waits here while the card is being pulled. */
-static SemaphoreHandle_t s_use_gate;
-static SemaphoreHandle_t s_use_idle;
-static int  s_use_users;
-static bool s_use_closed;
 static snapshot_t *s_snapshot;
 /* The PSRAM copy the Snapshot reads in place; owned for the life of the process. */
 static uint8_t *s_snapshot_copy;
@@ -593,46 +590,6 @@ static http_result_t select_route(int fd, const http_request_t *req, void *ctx)
 
 bool app_services_card_present(void) { return s_card_present; }
 
-bool app_services_card_use_begin(void)
-{
-    if (!s_use_gate) return true; /* before start(): nothing to close yet */
-    xSemaphoreTake(s_use_gate, portMAX_DELAY);
-    bool ok = !s_use_closed;
-    if (ok) s_use_users++;
-    xSemaphoreGive(s_use_gate);
-    return ok;
-}
-
-void app_services_card_use_end(void)
-{
-    if (!s_use_gate) return;
-    xSemaphoreTake(s_use_gate, portMAX_DELAY);
-    bool zero = false;
-    if (s_use_users > 0 && --s_use_users == 0) zero = true;
-    xSemaphoreGive(s_use_gate);
-    if (zero) xSemaphoreGive(s_use_idle);
-}
-
-bool app_services_card_quiesce(uint32_t wait_ms)
-{
-    if (!s_use_gate) return true;
-    /* A give from a previous close is not this close's. */
-    while (xSemaphoreTake(s_use_idle, 0) == pdTRUE) { }
-    xSemaphoreTake(s_use_gate, portMAX_DELAY);
-    s_use_closed = true;
-    bool zero = s_use_users == 0;
-    xSemaphoreGive(s_use_gate);
-    if (zero) return true;
-    return xSemaphoreTake(s_use_idle, pdMS_TO_TICKS(wait_ms)) == pdTRUE;
-}
-
-void app_services_card_resume(void)
-{
-    if (!s_use_gate) return;
-    xSemaphoreTake(s_use_gate, portMAX_DELAY);
-    s_use_closed = false;
-    xSemaphoreGive(s_use_gate);
-}
 
 const snapshot_t *app_services_snapshot(void) { return s_snapshot; }
 
@@ -726,7 +683,7 @@ esp_err_t app_services_check(const app_services_cfg_t *cfg, char *err, size_t er
 static bool card_drain_files(void)
 {
     mini_icecast_skip();
-    return app_services_card_quiesce(CARD_DRAIN_MS);
+    return card_use_quiesce(CARD_DRAIN_MS);
 }
 
 static void card_watch_task(void *arg)
@@ -768,7 +725,7 @@ static void card_watch_task(void *arg)
                 continue;
             }
             app_services_card_state(true, NULL);
-            app_services_card_resume();
+            card_use_resume();
             card_mark_refresh();
             mini_files_set_card(card.music_dir, NULL);
             ESP_LOGI(TAG, "card inserted: %s; rescanning", card.music_dir);
@@ -850,12 +807,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     if (report) *report = local;
     if (!cfg || !cfg->music_dir) return ESP_ERR_INVALID_ARG;
     s_cfg = *cfg;
-    if (!s_use_gate) {
-        s_use_gate = xSemaphoreCreateMutex();
-        s_use_idle = xSemaphoreCreateBinary();
-        if (!s_use_gate || !s_use_idle)
-            return fail(report, ESP_ERR_NO_MEM, "card file gate");
-    }
+    if (card_use_init() != CARD_USE_OK) return fail(report, ESP_ERR_NO_MEM, "card file gate");
     /* The writer exists before any route can be reached. */
     if (!flash_job_start()) return fail(report, ESP_ERR_NO_MEM, "flash writer task");
     playlist_select_store_t store = {NULL, selection_load, selection_save};
@@ -1026,8 +978,8 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
         .metaint = cfg->metaint,
         .lead_ms = cfg->lead_ms,
         .burst_ms = cfg->burst_ms,
-        .card_use_begin = app_services_card_use_begin,
-        .card_use_end = app_services_card_use_end,
+        .card_use_begin = card_use_begin,
+        .card_use_end = card_use_end,
     };
     e = mini_icecast_start(&ice);
     if (e != ESP_OK) return fail(report, e, "broadcast");

@@ -34,6 +34,7 @@ LDLIBS := -lpthread -lm
 INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/http_server/include \
        -I$(ROOT)/components/portable/json/include \
+       -I$(ROOT)/components/portable/card_use/include \
        -I$(ROOT)/components/portable/audio_format/include \
        -I$(ROOT)/components/portable/library/include \
        -I$(ROOT)/components/portable/library_http/include \
@@ -117,10 +118,12 @@ PROD_SRC := \
   $(ROOT)/components/portable/label/label.c \
   $(ROOT)/components/portable/label/label_values.c \
   $(ROOT)/components/portable/json/json.c \
+  $(ROOT)/components/portable/card_use/card_use.c \
   $(SHINE_SRC)
 
 vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/json \
+          $(ROOT)/components/portable/card_use \
           $(ROOT)/components/portable/audio_format \
           $(ROOT)/components/portable/library \
           $(ROOT)/components/portable/library_http \
@@ -150,7 +153,7 @@ BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
-SVC_OBJ := $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o
+SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/http_loop.o $(OBJ)/http_backend_single.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o
@@ -170,7 +173,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t21_button $(BIN)/t22_knob $(BIN)/t23_pad $(BIN)/t24_controls \
          $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline $(BIN)/t28_entrance \
          $(BIN)/t29_snapshot $(BIN)/t30_playlist_select $(BIN)/t31_card_select \
-         $(BIN)/t32_label $(BIN)/t34_json
+         $(BIN)/t32_label $(BIN)/t34_json $(BIN)/t35_card_use
 
 .PHONY: all test integration layering label check tools fixtures bench control control-check clean help
 
@@ -307,6 +310,10 @@ $(BIN)/t27_timeline: $(OBJ)/timeline.o $(OBJ)/t27_timeline.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t29_snapshot: $(OBJ)/snapshot.o $(OBJ)/t29_snapshot.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t35_card_use: $(OBJ)/card_use.o $(OBJ)/shim.o $(OBJ)/t35_card_use.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

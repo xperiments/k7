@@ -4,7 +4,7 @@
 # selected here is only the hardware: the RGB panel, its GT911, and the pin its backlight
 # hangs from (with a no-op adapter on the board that has none).
 set(screen_srcs "screen_display.c" "splash.c" "cassette_view.c" "cassette_tapes.c" "cassette_meter.c" "cassette_levels.c" "cassette_bars.c" "cassette_buttons.c" "cassette_eq.c" "cassette_header.c" "cassette_footer.c" "cassette_window.c" "cassette_style.c" "cassette_widgets.c" "screen_input.c" "lvgl_mem.c" "font_jura_36.c" "font_jura_28.c" "font_jura_20.c" "font_xtape_24.c" "font_xtape_36.c" "font_xtape_logo_128.c" "font_xtape_sd_128.c" "font_archivo_narrow_600_32.c" "font_barlow_condensed_700_78.c" "font_ibm_plex_mono_500_18.c" "card_mark.c" "cassette_button.c" "cassette_pad.c" "knob_editor.c" "knob_panel.c" "chrome_entrance.c" "cassette_home.c" "cassette_rgb.c" "knob_cell.c" "cassette_card.c" "screen_caps.c" "cassette_peek.c" "cassette_cover.c" "cassette_label.c" "cassette_menu.c" "artwork_loader.c" "render_bench.c")
-set(screen_reqs mini_icecast cassette knob_model controls groups rgb artwork menu app_services app_board library label esp_timer esp_lcd esp_driver_gpio esp_driver_ledc app_update esp_app_format)
+set(screen_reqs mini_icecast cassette knob_model controls groups rgb artwork menu app_services card_use app_board library label esp_timer esp_lcd esp_driver_gpio esp_driver_ledc app_update esp_app_format)
 set(screen_priv "." "${CMAKE_CURRENT_BINARY_DIR}")
 # LVGL vendors TJpgDec but does not export its header. The loader calls it directly: LVGL's
 # image decoder wants a file or the memfs driver, and its band-at-a-time interface does not
