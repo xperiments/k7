@@ -358,6 +358,111 @@ static void test_tape(void)
     CHECK_EQ(cassette_tape_centre_y(), 238, "on both axes");
 }
 
+/* ------------------------------------------------------------------- packs */
+
+/* A pack's diameter is a square-root law: it grows fast while the pack is small and slowly
+ * as it fills, so two packs of the same fill are the same width and the last of a full side
+ * is not a hairline. This was `cassette_tapes.c`'s, behind the draw calls. */
+static void test_pack_diameter(void)
+{
+    /* The ends are the range the pack may occupy on its side. */
+    CHECK_EQ(cassette_pack_diameter(0, 168, 356, 0), 168, "an empty pack is the minimum");
+    CHECK_EQ(cassette_pack_diameter(1000, 168, 356, 0), 356, "a full one the maximum");
+
+    /* Even, so two packs of one fill draw the same width: the tapes are pixels. */
+    for (uint16_t fill = 0; fill <= 1000; fill += 25) {
+        int d = cassette_pack_diameter(fill, 168, 356, 0);
+        CHECK(d % 2 == 0, "fill %u is an even diameter: %d", (unsigned)fill, d);
+        CHECK(d >= 168 && d <= 356, "fill %u stays in range: %d", (unsigned)fill, d);
+    }
+
+    /* Monotonic: a fuller pack is never smaller. The square root is what makes the first
+     * third of the fill most of the size, which is how a tape looks. */
+    int previous = 0;
+    for (uint16_t fill = 0; fill <= 1000; fill += 10) {
+        int d = cassette_pack_diameter(fill, 168, 356, 0);
+        CHECK(d >= previous, "fill %u does not shrink", (unsigned)fill);
+        previous = d;
+    }
+    /* Half the fill is well past half the diameter - that is the whole point of the law. */
+    CHECK(cassette_pack_diameter(500, 168, 356, 0) > (168 + 356) / 2,
+          "half a pack is more than half the width");
+
+    /* The preview's grid is anchored at the minimum and steps coarsely; it ends short of the
+     * maximum on purpose (four pixels, which is a 2 px radius). */
+    CHECK_EQ(cassette_pack_diameter(0, 168, 356, 8), 168, "the preview starts on the anchor");
+    CHECK_EQ(cassette_pack_diameter(1000, 168, 356, 8), 352, "and ends one step short");
+    for (uint16_t fill = 0; fill <= 1000; fill += 7) {
+        int d = cassette_pack_diameter(fill, 168, 356, 8);
+        CHECK((d - 168) % 8 == 0, "fill %u lands on the preview grid: %d", (unsigned)fill, d);
+    }
+}
+
+/* ----------------------------------------------------------------- plaques */
+
+/* Which plaque goes where, for a group of one to six. This was `knob_editor.c`'s, inside the
+ * function that also moved the LVGL objects. */
+static void test_plaque_anchor(void)
+{
+    const cassette_plaque_geom_t g = {.cx = 400, .cy = 200, .pad = 24, .width = 456,
+                                      .step = 76, .top = 116};
+    int x = 0, y = 0;
+    cassette_plaque_at_t at = CASSETTE_PLAQUE_CENTRE;
+
+    /* One: the median, above the dial. */
+    cassette_plaque_anchor(0, 1, &g, &x, &y, &at);
+    CHECK_EQ(x, 400, "a lone plaque is centred");
+    CHECK_EQ(y, 200 - 116, "and sits above the dial");
+    CHECK_EQ(at, CASSETTE_PLAQUE_CENTRE, "as the centre");
+
+    /* Two: one each side, level with the centre - one plaque is not a column. */
+    cassette_plaque_anchor(0, 2, &g, &x, &y, &at);
+    CHECK_EQ(x, 24, "the first of two is on the left");
+    CHECK_EQ(y, 200, "level with the centre");
+    CHECK_EQ(at, CASSETTE_PLAQUE_LEFT, "and says so");
+    cassette_plaque_anchor(1, 2, &g, &x, &y, &at);
+    CHECK_EQ(x, 456 - 24, "the second is on the right");
+    CHECK_EQ(y, 200, "level too");
+    CHECK_EQ(at, CASSETTE_PLAQUE_RIGHT, "and says so");
+
+    /* Three: the median plus one each side, level with the centre. */
+    cassette_plaque_anchor(1, 3, &g, &x, &y, &at);
+    CHECK_EQ(at, CASSETTE_PLAQUE_CENTRE, "the middle of three is the median");
+    CHECK_EQ(y, 200 - 116, "above the dial");
+    cassette_plaque_anchor(0, 3, &g, &x, &y, &at);
+    CHECK_EQ(y, 200, "the pair beside it is level with the centre");
+    CHECK_EQ(at, CASSETTE_PLAQUE_LEFT, "the first on the left");
+
+    /* Five: two each side, at half a step because two is not enough for a column. */
+    cassette_plaque_anchor(0, 5, &g, &x, &y, &at);
+    CHECK_EQ(at, CASSETTE_PLAQUE_LEFT, "five starts on the left");
+    CHECK_EQ(y, 200 + 38, "half a step below the centre");
+    cassette_plaque_anchor(1, 5, &g, &x, &y, &at);
+    CHECK_EQ(x, 24, "both left plaques share the column");
+    CHECK_EQ(y, 200 - 38, "the second one above it");
+    cassette_plaque_anchor(3, 5, &g, &x, &y, &at);
+    CHECK_EQ(x, 456 - 24, "the fourth is the right column's first");
+    CHECK_EQ(y, 200 - 38, "above the centre");
+    cassette_plaque_anchor(4, 5, &g, &x, &y, &at);
+    CHECK_EQ(y, 200 + 38, "and the last below it");
+
+    /* Six: three each side, a full step apart, so the two columns straddle the middle. */
+    cassette_plaque_anchor(0, 6, &g, &x, &y, &at);
+    CHECK_EQ(y, 200 + 76, "six spreads a whole step");
+    cassette_plaque_anchor(1, 6, &g, &x, &y, &at);
+    CHECK_EQ(y, 200, "the middle of the column is level");
+    cassette_plaque_anchor(2, 6, &g, &x, &y, &at);
+    CHECK_EQ(y, 200 - 76, "and the last above it");
+    cassette_plaque_anchor(5, 6, &g, &x, &y, &at);
+    CHECK_EQ(at, CASSETTE_PLAQUE_RIGHT, "the sixth is the right column's last");
+
+    /* Nothing out of range reaches the objects. */
+    cassette_plaque_anchor(0, 0, &g, &x, &y, &at);
+    CHECK_EQ(x, 0, "no plaques means no anchor");
+    cassette_plaque_anchor(9, 5, &g, &x, &y, &at);
+    CHECK_EQ(x, 0, "and an index past the end is not placed");
+}
+
 int main(void)
 {
     test_identity();
@@ -376,6 +481,8 @@ int main(void)
     test_timeline();
     test_tape();
     test_hub_anchor();
+    test_pack_diameter();
+    test_plaque_anchor();
 
     TEST_END();
 }

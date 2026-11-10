@@ -30,47 +30,10 @@
 extern "C" {
 #endif
 
-/* The Card's geometry, in panel pixels at the Controls pose. The window - the one opening
- * through which the tape shows - is expressed from the Card's corner; on the panel it is
- * (203,157). */
+/* The one number the Card's geometry left behind. Everything else about the box - its
+ * corner, the print, the window, the rim, the plate - is in `k_card_layout`, the table that
+ * actually draws it; this enum used to repeat all of it, and nothing read the copy. */
 enum {
-    CASSETTE_CARD_X  = 136,
-    CASSETTE_CARD_Y  = 82,
-    CASSETTE_CARD_W  = 426,
-    CASSETTE_CARD_H  = 272,
-    CASSETTE_CARD_R  = 12,
-
-    /* Where the print - and the label fill - sits inside the Card. It is frame[0]'s
-     * rect at the Controls pose: 402x188 at (148,102). */
-    CASSETTE_CARD_PRINT_DX = 12,
-    CASSETTE_CARD_PRINT_DY = 20,
-    CASSETTE_CARD_PRINT_W  = 402,
-    CASSETTE_CARD_PRINT_H  = 188,
-    CASSETTE_CARD_PRINT_R  = 10,   /* the frame's 8 px corner, plus the owner's 2 */
-
-    /* The window: frame[1]'s interior, the largest pill the print's height allows. */
-    CASSETTE_CARD_WINDOW_DX = 67,
-    CASSETTE_CARD_WINDOW_DY = 75,
-    CASSETTE_CARD_WINDOW_W  = 291,
-    CASSETTE_CARD_WINDOW_H  = 87,
-    CASSETTE_CARD_WINDOW_R  = 43,  /* min(W, H) / 2: the largest pill the box allows */
-
-    /* The rim around the window: 7 px of the Card's own plastic, the same 43 px radius, on a
-     * 291x88 box - the window's 87 plus the row its bottom stroke lands on. It is drawn over
-     * the print's cut edge, so it hides the mask's last row of antialiasing and reads as the
-     * shell's moulding rather than as a line. */
-    CASSETTE_CARD_WINDOW_RIM_W = 7,
-    CASSETTE_CARD_WINDOW_RIM_H = 88,
-
-    /* The shell's front plate: a trapezoid cut into the plastic below the print, filled 30 %
-     * darker than it. Its bottom edge is the Card's own and its top edge is inset by
-     * PLATE_INSET on each side. The numbers are the reference cassette's, measured against the
-     * Card's box; there is no outline, only the fill. */
-    CASSETTE_CARD_PLATE_DX  = 54,
-    CASSETTE_CARD_PLATE_DY  = 216,
-    CASSETTE_CARD_PLATE_W   = 318,
-    CASSETTE_CARD_PLATE_H   = 56,
-    CASSETTE_CARD_PLATE_INSET = 20,
     CASSETTE_CARD_PLATE_DARKEN = LV_OPA_30,
 };
 

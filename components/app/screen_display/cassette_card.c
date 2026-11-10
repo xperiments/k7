@@ -34,9 +34,6 @@
 /* LVGL wants every A8 stride aligned to 4 bytes; the mask's size is the object's size,
  * so this is also what makes it 116,416 B rather than 115,872. */
 #define MASK_STRIDE(w) (((w) + 3) & ~3)
-
-_Static_assert(CASSETTE_CARD_WINDOW_W >= CASSETTE_CARD_WINDOW_H,
-               "the Card's mask only cuts a stadium wider than it is tall");
 #endif
 
 static lv_obj_t *s_card;
@@ -49,6 +46,9 @@ static int s_layout;               /* 0 = the Controls pose, 1 = the entry grid 
  * 134/256, so the entry grid is the same Card at 256/256 - 814x520 at (-8,-23), which bleeds
  * off every edge of the 800x480 panel exactly as it was drawn to. Its window is 556x166, the
  * two hubs' band, and its print is 768x359. */
+/* The window has to be wider than it is tall: the mask cuts a stadium, and `mask_zero_stadium`
+ * takes its radius from the shorter side. That used to be a `_Static_assert` over a copy of
+ * these numbers; the copy is gone, and a `_Static_assert` cannot read a `const` table. */
 static const cassette_card_geometry_t k_card_layout[2] = {
     { 136, 82, 426, 272, 12,
       67, 75, 291, 87, 43,

@@ -201,6 +201,47 @@ enum {
  * pair of coordinates on every animation step, and t16 pins it like the rest of the grid. */
 void cassette_hub_anchor(cassette_pose_t pose, int index, bool top, int *x, int *y);
 
+/* ---------------------------------------------------------------- packs */
+
+/* The outer ring's diameter for a fill of 0..1000: the pack rings the hub at both ends of a
+ * side. The law is a square root, so the discs grow fast when the pack is small and slowly
+ * when it is nearly full - a pack that grew linearly looks empty until it is almost full.
+ *
+ * `step` decides the rounding. At the entry grid it is 0, and the diameter is rounded to an
+ * even pixel so two packs of the same fill are the same width; in the small preview a coarser
+ * `step` quantises it instead, anchored at `min_d`, because a step at every pixel there is a
+ * layout that never settles.
+ */
+int cassette_pack_diameter(uint16_t fill, int min_d, int max_d, int step);
+
+/* ---------------------------------------------------------------- plaques */
+
+/* Which side of the dial a knob's readout sits on, and whether it is the median above it. */
+typedef enum {
+    CASSETTE_PLAQUE_LEFT = 0,
+    CASSETTE_PLAQUE_CENTRE,
+    CASSETTE_PLAQUE_RIGHT,
+} cassette_plaque_at_t;
+
+/* The dial a set of plaques is arranged around, in screen pixels. These are the board's
+ * numbers; this module only decides which plaque goes where. */
+typedef struct {
+    int cx, cy;   /* the dial's centre */
+    int pad;      /* how far in from the panel's edge a side column sits */
+    int width;    /* the panel's width, for the right-hand column */
+    int step;     /* the distance between two plaques in one column */
+    int top;      /* how far above the centre the median plaque sits */
+} cassette_plaque_geom_t;
+
+/* Where plaque `index` of `count` sits, and which side it reads on.
+ *
+ * An odd count puts one plaque above the dial and shares the rest evenly between a column on
+ * each side; the left column reads upwards, because the arc does. This is the rule the knob
+ * editor used to keep to itself, behind `lv_obj_set_pos`; it is arithmetic on two integers,
+ * so it belongs where a test can reach it. */
+void cassette_plaque_anchor(int index, int count, const cassette_plaque_geom_t *g,
+                            int *x, int *y, cassette_plaque_at_t *at);
+
 #ifdef __cplusplus
 }
 #endif

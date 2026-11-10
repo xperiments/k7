@@ -5,6 +5,7 @@
  */
 #include "cassette_layout.h"
 
+#include <math.h>
 #include <stddef.h>
 
 static int clamp_scale(int scale)
@@ -236,4 +237,61 @@ void cassette_hub_anchor(cassette_pose_t pose, int index, bool top, int *x, int 
     int r = cassette_len(pose, CASSETTE_HUB_RING_D) / 2;
     *x = cassette_x(pose, index ? CASSETTE_HUB_X1 : CASSETTE_HUB_X0);
     *y = cassette_y(pose, CASSETTE_HUB_Y) + (top ? -r : r);
+}
+
+/* ------------------------------------------------------------------ packs */
+
+int cassette_pack_diameter(uint16_t fill, int min_d, int max_d, int step)
+{
+    if (fill > 1000) fill = 1000;
+    if (max_d < min_d) max_d = min_d;
+    double min = min_d, max = max_d;
+    double d = sqrt(min * min + (max * max - min * min) * (double)fill / 1000.0);
+    int px = (int)lround(d);
+    if (step > 0) {
+        /* The preview's coarser grid is anchored at the minimum, so the last step ends short
+         * of the full pack: keeping the exact maximum would need a hysteresis gate in the
+         * setter instead, which is a worse trade than four pixels. */
+        return min_d + ((px - min_d) / step) * step;
+    }
+    return cassette_even(px);
+}
+
+/* ---------------------------------------------------------------- plaques */
+
+void cassette_plaque_anchor(int index, int count, const cassette_plaque_geom_t *g,
+                            int *x, int *y, cassette_plaque_at_t *at)
+{
+    if (!g || count <= 0 || index < 0 || index >= count) {
+        if (x) *x = 0;
+        if (y) *y = 0;
+        if (at) *at = CASSETTE_PLAQUE_CENTRE;
+        return;
+    }
+    int odd = count % 2;
+    int sides = (count - odd) / 2;
+
+    if (odd && index == sides) { /* the median, above the dial */
+        if (x) *x = g->cx;
+        if (y) *y = g->cy - g->top;
+        if (at) *at = CASSETTE_PLAQUE_CENTRE;
+        return;
+    }
+
+    bool left = index < sides;
+    int row = left ? index : index - sides - odd;
+    int dy = 0;
+    if (left) {
+        /* The left column reads upwards, because the arc does: its first value is at 7:30
+         * and the last one it holds is at 10:30. */
+        if (sides == 2) dy = (row == 0) ? g->step / 2 : -g->step / 2;
+        else if (sides >= 3) dy = (1 - row) * g->step;
+    } else {
+        if (sides == 2) dy = (row == 0) ? -g->step / 2 : g->step / 2;
+        else if (sides >= 3) dy = (row - 1) * g->step;
+    }
+
+    if (x) *x = left ? g->pad : g->width - g->pad;
+    if (y) *y = g->cy + dy;
+    if (at) *at = left ? CASSETTE_PLAQUE_LEFT : CASSETTE_PLAQUE_RIGHT;
 }

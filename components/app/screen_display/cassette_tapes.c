@@ -755,17 +755,10 @@ static void pack_set(int i, int d)
  * radius. An even diameter keeps the outer circle symmetric on the pixel grid. */
 static int pack_diameter(uint16_t fill)
 {
-    double min = PACK_MIN_D, max = PACK_MAX_D;
-    double d = sqrt(min * min + (max * max - min * min) * (double)fill / 1000.0);
-    const int px = (int)lround(d);
-
-    /* The preview's coarser step is anchored at the minimum, so the grid ends at 352 -
-     * four pixels short of the full pack, which is a 2 px radius. Keeping the exact 356
-     * would need a hysteresis gate in pack_set() instead. */
-    if (s_preview) {
-        return PACK_MIN_D + ((px - PACK_MIN_D) / PACK_PREVIEW_STEP) * PACK_PREVIEW_STEP;
-    }
-    return cassette_even(px);
+    /* The law and the two roundings are `cassette_layout`'s: this file knows the pack's range
+     * and whether the preview is up, and nothing else about the shape. */
+    return cassette_pack_diameter(fill, PACK_MIN_D, PACK_MAX_D,
+                                  s_preview ? PACK_PREVIEW_STEP : 0);
 }
 
 /* ------------------------------------------------------------------ layout */

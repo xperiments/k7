@@ -251,32 +251,23 @@ static void plaque_draw(int slot, const char *text, bool on, int x, int cy, plaq
  * side of it, three at the top, the middle and the bottom. */
 static void slot_anchor(int index, int count, int *x, int *cy, plaque_at_t *at)
 {
-    int odd = count % 2;
-    int sides = (count - odd) / 2;
-
-    if (odd && index == sides) {              /* the median, above the dial */
-        *x = BIG_CX;
-        *cy = BIG_CY - SLOT_TOP;
-        *at = PLAQUE_AT_CENTRE;
-        return;
-    }
-
-    bool left = (index < sides);
-    int row = left ? index : index - sides - odd;
-    int dy = 0;
-    if (left) {
-        /* The left column reads upwards, because the arc does: its first value is at 7:30 and
-         * the last one it holds is at 10:30. */
-        if (sides == 2) dy = (row == 0) ? SLOT_STEP / 2 : -SLOT_STEP / 2;
-        else if (sides >= 3) dy = (1 - row) * SLOT_STEP;
-    } else {
-        if (sides == 2) dy = (row == 0) ? -SLOT_STEP / 2 : SLOT_STEP / 2;
-        else if (sides >= 3) dy = (row - 1) * SLOT_STEP;
-    }
-
-    *x = left ? BIG_PAD : BIG_W - BIG_PAD;
-    *cy = BIG_CY + dy;
-    *at = left ? PLAQUE_AT_LEFT : PLAQUE_AT_RIGHT;
+    /* Which plaque goes where is `cassette_layout`'s rule; the dial's numbers are this
+     * panel's. */
+    /* Not `static const`: the dial's centre is a macro over other macros, and only an
+     * automatic initializer may take it. */
+    const cassette_plaque_geom_t geom = {
+        .cx = BIG_CX,
+        .cy = BIG_CY,
+        .pad = BIG_PAD,
+        .width = BIG_W,
+        .step = SLOT_STEP,
+        .top = SLOT_TOP,
+    };
+    cassette_plaque_at_t side = CASSETTE_PLAQUE_CENTRE;
+    cassette_plaque_anchor(index, count, &geom, x, cy, &side);
+    *at = side == CASSETTE_PLAQUE_LEFT     ? PLAQUE_AT_LEFT
+          : side == CASSETTE_PLAQUE_RIGHT ? PLAQUE_AT_RIGHT
+                                           : PLAQUE_AT_CENTRE;
 }
 
 /* The labels a knob prints: one per marked position the panel asked for. Fewer than three - a
