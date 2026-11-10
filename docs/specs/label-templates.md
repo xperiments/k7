@@ -76,8 +76,9 @@ the packer uses; the rest are the editor's.
   `null` when the design has no mask; a prim that fills with `paper` then has no colour, and the
   packer refuses it.
 - **A font role is one of the sheet's pairs.** `ff` and `px` must be a pair
-  [`assets/labels/fonts.json`](../../assets/labels/fonts.json) carries: the sheet addresses a
-  font by its index in that table, and the packer refuses a pair it does not. A label's faces are
+  [`assets/labels/vocabulary.json`](../../assets/labels/vocabulary.json) carries: the sheet
+  addresses a font by its index in that table, and the packer refuses a pair it does not. A
+  label's faces are
   the three the editor embeds — `Archivo Narrow 600` at 32, `Barlow Condensed 700` at 78 and
   `IBM Plex Mono 500` at 18 — and it offers only those, because a face it cannot draw is a face it
   cannot show. A role is a face *and* a size, not a face with a size typed beside it.
@@ -203,22 +204,49 @@ the counts, the CRC disagrees, `space_*` is not 748x359, a count is past its cap
 `text_offset` is past `pool_size`, a string is not NUL-terminated inside the pool, or a font index
 is past the font table.
 
-## 4. The font table — `assets/labels/fonts.json`
+## 4. The vocabulary — `assets/labels/vocabulary.json`
 
-Type is compiled, so the designs' faces are chosen from a table rather than named freely:
+What a design may say, and the bounds the sheet and the panel hold it to, is one committed
+file. The editor and the firmware do not each keep a copy of it:
 
 ```json
-{ "fonts": [ { "name": "Jura", "px": 20, "symbol": "jura_20" },
-             { "name": "Jura", "px": 28, "symbol": "jura_28" },
-             { "name": "Jura", "px": 36, "symbol": "jura_36" },
-             { "name": "Archivo Narrow 600", "px": 32, "symbol": "archivo_narrow_600_32" },
-             { "name": "Barlow Condensed 700", "px": 78, "symbol": "barlow_condensed_700_78" },
-             { "name": "IBM Plex Mono 500", "px": 18, "symbol": "ibm_plex_mono_500_18" } ] }
+{ "v": 1,
+  "space": { "w": 748, "h": 359 },
+  "aperture": { "x": 95, "y": 101, "w": 556, "h": 166, "r": 83 },
+  "bands": 8, "value": 96,
+  "limits": { "prims": 48, "slots": 16, "templates": 32 },
+  "coords": { "x": [-32768, 32767], "y": [-32768, 32767],
+              "w": [1, 65535], "h": [1, 65535] },
+  "slots": [ { "id": "song_title", "label": "Song Title", "sim": "Neon Skyline" }, … ],
+  "fonts": [ { "name": "Jura", "px": 20, "symbol": "jura_20" }, … ],
+  "defaults": { "fonts": { "title": { "ff": "Archivo Narrow 600", "px": 32 }, … } } }
 ```
 
-The first three are what the screen already compiles; the last three are the editor's own faces,
-converted by the ticket that adds them. The table is the contract the packer checks against, not
-a claim about what the current image links.
+- **`slots`** is the vocabulary of §5, in the resolver's order: `id` is what a design names,
+  `label` is what the editor's field list shows, and `sim` is the value the editor previews
+  with, which is what the device would print for that Slot.
+- **`fonts`** is the sheet's font table. The first three rows are what the screen already
+  compiles; the last three are the editor's own faces. `"editor": true` marks the faces the
+  canvas builder offers — the ones it embeds and can draw. A face it cannot draw is a face it
+  cannot show, so a role picker never offers one.
+- **`space`, `aperture`, `bands`, `value`, `limits` and `coords`** are the numbers the packer
+  used to hold alone. `coords` is what a prim's record can say — `x` and `y` int16, `w` and `h`
+  uint16 — which is a refusal, not a clamp (ADR 0072).
+- **`defaults.fonts`** is the face roles a new design starts with.
+
+Two copies are generated from it, and both are committed:
+
+- **`components/portable/label/include/label_vocab.h`** carries the space, the limits and the
+  Slot list. The list is one macro, expanded twice: the enum the resolver indexes and the names
+  the sheet carries cannot disagree, because they are the same list.
+- **The `VOCAB` block in `resources/LVGL canvas builder.html`**, between its generated markers.
+  The page is one self-contained file — it is opened from disk and sometimes published — so the
+  table is inlined rather than fetched from a sibling.
+
+`tools/label_pack.py --generate-vocabulary` writes both; `--check-vocabulary` refuses them when
+they are stale, and `make -C host label` runs it. The check also compares the bytes of the faces
+the page embeds with `assets/fonts/`: a page that draws a face the build cannot compile would
+show the designer glyphs the panel does not have.
 
 - **The packer's font index is the table's index**, and it also writes `label_fonts.h` with
   `#define LABEL_FONT_<SLUG> <index>` and `LABEL_FONT_COUNT`, so the app's
@@ -226,7 +254,7 @@ a claim about what the current image links.
 - **A face or size not in the table is refused**, naming the design and the role: a design
   cannot quietly wear a different face on the panel than in the editor.
 - Adding a face is adding a converted font (a committed `font_<face>_<px>.c`, like
-  `font_jura_36.c`) and a table row. The 4 MB app partition carries 1.81 MB today.
+  `font_jura_36.c`) and a `fonts` row. The 4 MB app partition carries 1.81 MB today.
 
 ## 5. Slots: what the panel puts in them
 
@@ -262,7 +290,8 @@ text, and the screen says which half of the join missed.
 | `arousal` | `0..100` | `""` when `0xFF` |
 | `mood` | `snapshot_mood_name()` of the lowest set bit, in the image's order: happy, sad, aggressive, relaxed, party | `""` when no bit is set |
 
-The names are the editor's `SLOTS`, one table in both places: `song_title`, `song_artist`,
+The names are the vocabulary's `slots` (§4), generated into the editor's field list and the
+firmware's resolver: `song_title`, `song_artist`,
 `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`,
 `mood`. A design's `preview` in the editor is what the device would print for that slot, which is
 why the editor's simulations are `8A` and `relaxed` rather than `A min` and `Warm`.
@@ -302,6 +331,12 @@ by the print's own box exactly as a picture is.
 
 Named per design and per layer; the build fails, nothing is dropped.
 
+The editor refuses the same list at Export and at Open, before a file reaches the folder, and
+it refuses the §4 caps too (`limits`, `coords`, `space`, `aperture`): a design the sheet cannot
+hold says so while it is being drawn, rather than at `./tools/build.sh`. The two validators
+answer to different readers at different moments — that is why there are two — but the facts
+they refuse by are one table.
+
 | Refusal | Why |
 |---|---|
 | `v` is not 1 | a different format |
@@ -315,7 +350,7 @@ Named per design and per layer; the build fails, nothing is dropped.
 | more than one literal colour, or one with no `note` | the sheet is role-coloured |
 | a text whose `color` is `paper` or a literal | nothing to read against it, and the literal is a rect's |
 | an unknown Slot name, a slot a text uses but does not declare, or a declared slot no text uses | the vocabulary is one table |
-| a font role not in `fonts.json` | the glyphs are not compiled |
+| a font role not in `vocabulary.json` | the glyphs are not compiled |
 | a design with no prims, or a text with neither a slot nor a static text | there is nothing to draw |
 | a slot whose `max` is 0 or over 96 | the resolver carries 96; the editor writes that |
 | more than 48 prims, 16 slots or 32 designs | a bounded build, a bounded repaint, a bounded sheet |

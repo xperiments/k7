@@ -18,21 +18,9 @@
 extern "C" {
 #endif
 
-/* The one table, in the editor's own ids. The packer refuses a name that is not here. */
-typedef enum {
-    LABEL_SLOT_SONG_TITLE = 0,
-    LABEL_SLOT_SONG_ARTIST,
-    LABEL_SLOT_SONG_ALBUM,
-    LABEL_SLOT_GENRE,
-    LABEL_SLOT_BPM,
-    LABEL_SLOT_MUSICAL_KEY,
-    LABEL_SLOT_ENERGY,
-    LABEL_SLOT_DANCEABILITY,
-    LABEL_SLOT_VALENCE,
-    LABEL_SLOT_AROUSAL,
-    LABEL_SLOT_MOOD,
-    LABEL_SLOT_COUNT,
-} label_slot_id_t;
+/* The one table, in the editor's own ids. `label_slot_id_t` and LABEL_SLOT_COUNT are
+ * generated into label_vocab.h from assets/labels/vocabulary.json, which the packer refuses
+ * a name of, so this file does not restate them. */
 
 typedef struct {
     char text[LABEL_SLOT_COUNT][LABEL_VALUE_MAX + 1];

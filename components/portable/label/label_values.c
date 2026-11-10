@@ -16,9 +16,12 @@
 
 /* ---------------------------------------------------------------- the table */
 
+/* The names are the generated list's, indexed by the generated enum: one table, expanded
+ * twice, so a Slot cannot be added to the enum and left out of the names. */
 static const char *const k_slot_names[LABEL_SLOT_COUNT] = {
-    "song_title", "song_artist", "song_album", "genre", "bpm", "musical_key",
-    "energy", "danceability", "valence", "arousal", "mood",
+#define LABEL_SLOT_NAME(id, name) [id] = name,
+    LABEL_SLOT_LIST(LABEL_SLOT_NAME)
+#undef LABEL_SLOT_NAME
 };
 
 const char *label_values_name(label_slot_id_t id)

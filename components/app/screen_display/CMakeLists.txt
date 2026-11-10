@@ -56,7 +56,7 @@ file(GLOB label_json CONFIGURE_DEPENDS "${label_templates}/*.json")
 add_custom_command(
     OUTPUT "${label_sheet}" "${CMAKE_CURRENT_BINARY_DIR}/label_fonts.h"
     COMMAND python3 "${label_packer}" "${label_designs}" "${CMAKE_CURRENT_BINARY_DIR}"
-    DEPENDS ${label_json} "${label_designs}/fonts.json" "${label_packer}"
+    DEPENDS ${label_json} "${label_designs}/vocabulary.json" "${label_packer}"
     COMMENT "Packing the label sheet from assets/labels/templates/"
     VERBATIM)
 add_custom_target(label_sheet ALL DEPENDS "${label_sheet}")

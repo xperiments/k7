@@ -6,11 +6,13 @@ sheet it writes, §7 is the list of things it refuses. It refuses rather than su
 design that does not fit the panel is a build failure, not a design that quietly prints
 something else.
 
-    python3 tools/label_pack.py assets/labels build/      # write the sheet and label_fonts.h
-                                                          # (reads templates/*.json and fonts.json)
+    python3 tools/label_pack.py assets/labels build/      # write the sheet, label_fonts.h and the
+                                                          # manifest (reads templates/*.json)
     python3 tools/label_pack.py assets/labels build/ --check   # validate, write, then re-read
     python3 tools/label_pack.py --selftest
-    python3 tools/label_pack.py --check-editor   # the editor's tables against this file's
+    python3 tools/label_pack.py --generate-vocabulary   # write label_vocab.h and the editor's block
+    python3 tools/label_pack.py --check-vocabulary      # both current, and the faces the page
+                                                        # embeds are the files the build compiles
 
 Standard library only: the firmware build runs this, and the build has no network.
 """
@@ -31,39 +33,50 @@ TEMPLATE_SIZE = 64
 PRIM_SIZE = 24
 SLOT_SIZE = 8
 
-SPACE_W, SPACE_H = 748, 359
-# The Card's window in the design's own space: (95,101) 556x166, radius 83.
-APERTURE = (95, 101, 556, 166, 83)
-
 # The designs sit in their own folder: assets/labels/ also holds the K7 art (k7logo.png,
 # cover.jpg), and a sheet is packed from templates/ alone. Every *.json in it is a design -
-# nothing is skipped silently - and fonts.json stays at the root because it is the sheet's font
-# table, not a design.
+# nothing is skipped silently - and vocabulary.json stays at the root because it is the
+# vocabulary and the font table, not a design.
 TEMPLATES = "templates"
-
-PRIM_MAX = 48
-SLOT_MAX = 16
-TEMPLATE_MAX = 32
-
-BAND_MAX = 8
-ROLE_INDEX = {"paper": 0, "ink": 1, "rule": 2}
-ROLE_INDEX.update({f"band.{i}": 3 + i for i in range(BAND_MAX)})
-FILL_LITERAL = 3 + BAND_MAX
-FONT_ROLES = ("title", "numeral", "caption")
-TEXT_ROLES = ("ink",) + tuple(f"band.{i}" for i in range(BAND_MAX))
-ALIGN_INDEX = {"left": 0, "center": 1, "right": 2}
-
-# The device's vocabulary: one table, shared with the editor's SLOTS and the reader.
-SLOT_NAMES = {
-    "song_title", "song_artist", "song_album", "genre", "bpm", "musical_key",
-    "energy", "danceability", "valence", "arousal", "mood",
-}
-
-ID_RE = re.compile(r"^label\.[a-z0-9][a-z0-9-]*$")
-HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 ROOT = Path(__file__).resolve().parent.parent
 EDITOR = ROOT / "resources" / "LVGL canvas builder.html"
+VOCABULARY = "vocabulary.json"
+VOCAB_HEADER = ROOT / "components" / "portable" / "label" / "include" / "label_vocab.h"
+BLOCK_OPEN = "// <generated:label-vocabulary>"
+BLOCK_CLOSE = "// </generated:label-vocabulary>"
+
+# The table itself. The format's limits and the Slot vocabulary are the format's, not a
+# property of the directory being packed, so they are read once here from the repository's
+# copy; the faces are the directory's, and load_fonts reads them from the one being packed.
+VOCAB = json.loads((ROOT / "assets" / "labels" / VOCABULARY).read_text(encoding="utf-8"))
+
+SPACE_W, SPACE_H = VOCAB["space"]["w"], VOCAB["space"]["h"]
+# The Card's window in the design's own space: (95,101) 556x166, radius 83.
+APERTURE = tuple(VOCAB["aperture"][k] for k in ("x", "y", "w", "h", "r"))
+# What a prim's record can hold, as the editor must refuse it too: x and y are int16, w and h
+# uint16 (ADR 0072 - position beyond the print is not refused, only what the bytes cannot say).
+COORD = VOCAB["coords"]
+
+PRIM_MAX = VOCAB["limits"]["prims"]
+SLOT_MAX = VOCAB["limits"]["slots"]
+TEMPLATE_MAX = VOCAB["limits"]["templates"]
+VALUE_MAX = VOCAB["value"]
+
+BAND_MAX = VOCAB["bands"]
+ROLE_INDEX = {"paper": 0, "ink": 1, "rule": 2}
+ROLE_INDEX.update({f"band.{i}": 3 + i for i in range(BAND_MAX)})
+FILL_LITERAL = 3 + BAND_MAX
+FONT_ROLES = tuple(VOCAB["defaults"]["fonts"])
+TEXT_ROLES = ("ink",) + tuple(f"band.{i}" for i in range(BAND_MAX))
+ALIGN_INDEX = {"left": 0, "center": 1, "right": 2}
+
+# The device's vocabulary: one table, generated into the editor and the reader.
+SLOT_NAMES = [slot["id"] for slot in VOCAB["slots"]]
+
+ID_RE = re.compile(r"^label\.[a-z0-9][a-z0-9-]*$")
+HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+SLOT_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class PackError(Exception):
@@ -165,7 +178,7 @@ def pack_design(design, font_index, pool):
         if key not in font_index:
             errors.append(
                 f"{did}: font role {role} is {key[0]!r} {key[1]!r}, "
-                f"which assets/labels/fonts.json does not carry")
+                f"which assets/labels/vocabulary.json does not carry")
             font_ids.append(0)
         else:
             font_ids.append(font_index[key])
@@ -181,10 +194,10 @@ def pack_design(design, font_index, pool):
         if name not in SLOT_NAMES:
             errors.append(f'{did}: slot "{name}" is not in the vocabulary')
             continue
-        # 96 is LABEL_VALUE_MAX: a design cannot ask for more than the resolver carries, so
-        # the view never has to cut a value the sheet allowed.
+        # VALUE_MAX is LABEL_VALUE_MAX: a design cannot ask for more than the resolver carries,
+        # so the view never has to cut a value the sheet allowed.
         slot_max[name] = _int((spec or {}).get("max"), f'{did}: slot "{name}".max',
-                              errors, lo=1, hi=96)
+                              errors, lo=1, hi=VALUE_MAX)
 
     prims = design.get("prims")
     if not isinstance(prims, list) or not prims:
@@ -201,15 +214,15 @@ def pack_design(design, font_index, pool):
         kind = prim.get("t")
         # x and y are int16 in the sheet, w and h uint16: a value the record cannot hold is a
         # refusal here, not a struct.error while packing
-        x = _int(prim.get("x"), f"{tag}: x", errors, lo=-32768, hi=32767)
-        y = _int(prim.get("y"), f"{tag}: y", errors, lo=-32768, hi=32767)
-        w = _int(prim.get("w"), f"{tag}: w", errors, lo=1, hi=65535)
+        x = _int(prim.get("x"), f"{tag}: x", errors, *COORD["x"])
+        y = _int(prim.get("y"), f"{tag}: y", errors, *COORD["y"])
+        w = _int(prim.get("w"), f"{tag}: w", errors, *COORD["w"])
         rot = _int(prim.get("rot", 0), f"{tag}: rot", errors, lo=-360, hi=360, default=0)
         # A prim may sit outside the print: the print crops it, and the editor marks what will
         # be cut (docs/specs/label-templates.md 1, ADR 0072). Position is not refused here; what
         # the sheet cannot hold - an int16 coordinate, a uint16 size - is refused above.
         if kind == "rect":
-            h = _int(prim.get("h"), f"{tag}: h", errors, lo=1, hi=65535)
+            h = _int(prim.get("h"), f"{tag}: h", errors, *COORD["h"])
             r = _int(prim.get("r", 0), f"{tag}: r", errors, lo=0, default=0)
             fill = prim.get("fill")
             literal = 0
@@ -390,7 +403,7 @@ def pack_sheet(designs, fonts):
     assert len(header) == HEADER_SIZE and len(body) == total - HEADER_SIZE
 
     font_header = (
-        "/* Generated by tools/label_pack.py from assets/labels/fonts.json. Do not edit.\n"
+        "/* Generated by tools/label_pack.py from assets/labels/vocabulary.json. Do not edit.\n"
         " * The sheet names a font by its index here; the app's k_label_font[] is this table. */\n"
         "#pragma once\n\n"
         + "".join(f"#define LABEL_FONT_{f['symbol'].upper()} {i}\n"
@@ -448,7 +461,13 @@ def verify_sheet(blob):
 
 
 def load_fonts(src):
-    path = Path(src) / "fonts.json"
+    """The sheet's font table: the faces the build compiles, in index order.
+
+    The table lives in the same vocabulary file as the Slots and the limits, because a face
+    that the editor offers and the build cannot compile is exactly the drift it exists to
+    stop. `editor: true` marks the faces the canvas builder offers and can draw.
+    """
+    path = Path(src) / VOCABULARY
     data = json.loads(path.read_text(encoding="utf-8"))
     fonts = data.get("fonts")
     if not isinstance(fonts, list) or not fonts:
@@ -505,16 +524,27 @@ def main(argv):
     if "--selftest" in flags:
         return selftest()
 
-    if "--check-editor" in flags:
+    if "--generate-vocabulary" in flags:
         try:
-            errors = check_editor()
+            written = generate_vocabulary()
+        except PackError as exc:
+            for line in exc.errors:
+                print(f"label_pack: {line}", file=sys.stderr)
+            return 1
+        for path in written:
+            print(f"label_pack: wrote {path.relative_to(ROOT)}")
+        return 0
+
+    if "--check-vocabulary" in flags:
+        try:
+            errors = check_vocabulary()
         except PackError as exc:
             errors = exc.errors
         for line in errors:
             print(f"label_pack: {line}", file=sys.stderr)
         if errors:
             return 1
-        print("label_pack: the editor offers the sheet's faces, bands and slots")
+        print("label_pack: the vocabulary, its generated copies and the page's faces agree")
         return 0
 
     if len(args) != 2:
@@ -543,69 +573,268 @@ def main(argv):
     return 0
 
 
-def check_editor():
-    """The editor's tables are this file's, and a drift between them is silent.
+def vocabulary_errors(v):
+    """The table is hand-edited, so it is checked before anything is generated from it.
 
-    `resources/LVGL canvas builder.html` is a standalone page, so it repeats the Slot
-    vocabulary, the faces the sheet carries and the three role defaults
-    (docs/specs/label-templates.md §2). When they drift, Export succeeds and the build refuses
-    the file - or the page offers a field the Snapshot cannot fill, and the design prints
-    nothing. Neither is visible until a design is packed, so the packer checks the page with
-    its own tables: `make -C host check` runs this.
+    A duplicate Slot or a default font role naming a pair the sheet does not carry would
+    otherwise reach the header and the page as a design nobody can pack.
     """
-    html = EDITOR.read_text(encoding="utf-8")
     errors = []
+    if v.get("v") != 1:
+        errors.append(f"{VOCABULARY}: v is {v.get('v')}, not 1")
 
-    carried = {(f["name"], f["px"]) for f in load_fonts(ROOT / "assets" / "labels")}
-    # the editor is a hand-formatted page and gets reformatted; the tables are found by their
-    # declaration, not by their layout, so a reindent or a change of quote style cannot hide them
-    m = re.search(r"SHEET_FONTS\s*=\s*\[(.*?)\]\s*;", html, re.S)
+    space = v.get("space") or {}
+    if not isinstance(space.get("w"), int) or not isinstance(space.get("h"), int):
+        errors.append(f"{VOCABULARY}: space needs integer w and h")
+
+    bands = v.get("bands")
+    if not isinstance(bands, int) or not 4 <= bands <= 8:
+        errors.append(f"{VOCABULARY}: bands is {bands!r}; a design declares four to eight")
+
+    if not isinstance(v.get("value"), int) or not 1 <= v["value"] <= 255:
+        errors.append(f"{VOCABULARY}: value is {v.get('value')!r}, not 1..255")
+
+    limits = v.get("limits") or {}
+    for key in ("prims", "slots", "templates"):
+        if not isinstance(limits.get(key), int) or limits[key] < 1:
+            errors.append(f"{VOCABULARY}: limits.{key} is {limits.get(key)!r}, not a positive int")
+
+    coords = v.get("coords") or {}
+    for axis in ("x", "y", "w", "h"):
+        pair = coords.get(axis)
+        if (not isinstance(pair, list) or len(pair) != 2
+                or not all(isinstance(n, int) for n in pair) or pair[1] < pair[0]):
+            errors.append(f"{VOCABULARY}: coords.{axis} is {pair!r}, not [lo, hi]")
+
+    seen = set()
+    for i, slot in enumerate(v.get("slots") or []):
+        sid = slot.get("id")
+        if not isinstance(sid, str) or not SLOT_ID_RE.match(sid):
+            errors.append(f'{VOCABULARY}: slot {i} id {sid!r} is not a lowercase identifier')
+            continue
+        if sid in seen:
+            errors.append(f'{VOCABULARY}: slot "{sid}" is listed twice')
+        seen.add(sid)
+        for key in ("label", "sim"):
+            if not isinstance(slot.get(key), str):
+                errors.append(f'{VOCABULARY}: slot "{sid}" needs a string {key}')
+    if not v.get("slots"):
+        errors.append(f"{VOCABULARY}: no slots")
+    if len(v.get("slots") or []) > SLOT_MAX:
+        errors.append(f"{VOCABULARY}: {len(v['slots'])} slots, more than the {SLOT_MAX} a sheet holds")
+
+    symbols, pairs = set(), set()
+    for i, font in enumerate(v.get("fonts") or []):
+        name, px, symbol = font.get("name"), font.get("px"), font.get("symbol")
+        if not isinstance(name, str) or not isinstance(px, int) or not isinstance(symbol, str):
+            errors.append(f"{VOCABULARY}: font {i} needs name, px and symbol")
+            continue
+        if symbol in symbols:
+            errors.append(f'{VOCABULARY}: font symbol "{symbol}" is used twice')
+        if (name, px) in pairs:
+            errors.append(f'{VOCABULARY}: {name} at {px} px is listed twice')
+        symbols.add(symbol)
+        pairs.add((name, px))
+    if not v.get("fonts"):
+        errors.append(f"{VOCABULARY}: no fonts")
+
+    offered = [f"{name} {px}" for name, px in pairs if _is_editor_face(v, name, px)]
+    if not offered:
+        errors.append(f'{VOCABULARY}: no font carries "editor": true, so the page offers none')
+
+    defaults = (v.get("defaults") or {}).get("fonts") or {}
+    if set(defaults) != set(FONT_ROLES):
+        errors.append(f"{VOCABULARY}: defaults.fonts names {sorted(defaults)}, not {list(FONT_ROLES)}")
+    for role, face in defaults.items():
+        if (face.get("ff"), face.get("px")) not in pairs:
+            errors.append(f'{VOCABULARY}: defaults.fonts.{role} is {face.get("ff")!r} at '
+                          f'{face.get("px")!r}, which the sheet does not carry')
+        elif not _is_editor_face(v, face.get("ff"), face.get("px")):
+            errors.append(f'{VOCABULARY}: defaults.fonts.{role} is not an editor face, so the '
+                          f'page cannot draw the design it starts')
+    return errors
+
+
+def _is_editor_face(v, name, px):
+    return any(f.get("name") == name and f.get("px") == px and f.get("editor")
+               for f in v.get("fonts") or [])
+
+
+def vocab_header(v):
+    """The vocabulary as the firmware sees it: the limits, and the one Slot list.
+
+    Committed rather than generated at build time, like the font_*.c files: the portable
+    component compiles on the host too, and `make -C host` has no Python in it.
+    """
+    rows = [
+        "/* Generated by tools/label_pack.py from assets/labels/vocabulary.json. Do not edit.",
+        " *",
+        " * The label vocabulary: what a design may say, and the bounds the sheet and the panel",
+        " * hold it to. `make -C host label` refuses this file when it and the vocabulary",
+        " * disagree, so the editor, the packer and the firmware read one table.",
+        " *",
+        " * The Slot list is one list: the enum the resolver indexes and the names the sheet",
+        " * carries are both expansions of it, so a Slot cannot exist in one and not the other.",
+        " */",
+        "#pragma once",
+        "",
+        f"#define LABEL_SPACE_W       {v['space']['w']}u",
+        f"#define LABEL_SPACE_H       {v['space']['h']}u",
+        f"#define LABEL_BAND_COUNT    {v['bands']}u",
+        f"#define LABEL_VALUE_MAX     {v['value']}u",
+        f"#define LABEL_PRIM_MAX      {v['limits']['prims']}u",
+        f"#define LABEL_SLOT_MAX      {v['limits']['slots']}u",
+        f"#define LABEL_TEMPLATE_MAX  {v['limits']['templates']}u",
+        "",
+        "#define LABEL_SLOT_LIST(X) \\",
+    ]
+    slots = v["slots"]
+    for i, s in enumerate(slots):
+        tail = "" if i == len(slots) - 1 else " \\"
+        rows.append(f'    X(LABEL_SLOT_{s["id"].upper()}, "{s["id"]}"){tail}')
+    rows += [
+        "",
+        "typedef enum {",
+        "#define LABEL_SLOT_ENUM(id, name) id,",
+        "    LABEL_SLOT_LIST(LABEL_SLOT_ENUM)",
+        "#undef LABEL_SLOT_ENUM",
+        "    LABEL_SLOT_COUNT",
+        "} label_slot_id_t;",
+    ]
+    return "\n".join(rows) + "\n"
+
+
+def vocab_block(v):
+    """The vocabulary as the canvas builder reads it, markers included.
+
+    The page is one self-contained file - it is opened from disk and sometimes published - so
+    the table is inlined rather than fetched from a sibling. Written as a hand-shaped literal
+    rather than dumped JSON, because this block is committed and read in review.
+    """
+    def js(value):
+        return json.dumps(value, ensure_ascii=False)
+
+    sp, ap, lm = v["space"], v["aperture"], v["limits"]
+    cd, df = v["coords"], v["defaults"]["fonts"]
+    rows = [
+        "      " + BLOCK_OPEN,
+        "      // tools/label_pack.py writes this from assets/labels/vocabulary.json, and",
+        "      // `make -C host label` refuses it when it is stale. Do not edit: the vocabulary",
+        "      // is the source, and this is the page's copy of it.",
+        "      const VOCAB = {",
+        f"        space: {{ w: {sp['w']}, h: {sp['h']} }},",
+        f"        aperture: {{ x: {ap['x']}, y: {ap['y']}, w: {ap['w']}, h: {ap['h']}, "
+        f"r: {ap['r']} }},",
+        f"        bands: {v['bands']},",
+        f"        value: {v['value']},",
+        f"        limits: {{ prims: {lm['prims']}, slots: {lm['slots']}, "
+        f"templates: {lm['templates']} }},",
+        "        coords: {",
+    ]
+    for axis in ("x", "y", "w", "h"):
+        lo, hi = cd[axis]
+        rows.append(f"          {axis}: [{lo}, {hi}],")
+    rows += ["        },", "        slots: ["]
+    for slot in v["slots"]:
+        rows.append(f"          {{ id: {js(slot['id'])}, label: {js(slot['label'])}, "
+                    f"sim: {js(slot['sim'])} }},")
+    rows += ["        ],", "        fonts: ["]
+    for font in v["fonts"]:
+        extra = ', editor: true' if font.get("editor") else ""
+        rows.append(f"          {{ name: {js(font['name'])}, px: {font['px']}, "
+                    f"symbol: {js(font['symbol'])}{extra} }},")
+    rows += ["        ],", "        defaults: { fonts: {"]
+    for role, face in df.items():
+        rows.append(f"          {role}: {{ ff: {js(face['ff'])}, px: {face['px']} }},")
+    rows += ["        } },", "      };", "      " + BLOCK_CLOSE]
+    return "\n".join(rows) + "\n"
+
+
+def block_span(html):
+    """The character span of the generated block, markers included."""
+    i, j = html.find(BLOCK_OPEN), html.find(BLOCK_CLOSE)
+    if i < 0 or j < 0 or j < i:
+        raise PackError([f"{EDITOR}: no {BLOCK_OPEN} ... {BLOCK_CLOSE} block to write"])
+    start = html.rfind("\n", 0, i) + 1
+    end = html.find("\n", j)
+    return start, (len(html) if end < 0 else end + 1)
+
+
+def _faces(html):
+    """The faces the page embeds, as (name, sha256 of the bytes, the font file it is).
+
+    The page is how a design is judged, so a face it draws that the build does not compile
+    would show the designer glyphs the panel cannot print - which is what ticket 05 set out
+    to stop. The bytes are compared, not the name.
+    """
+    import base64
+    import hashlib
+
+    m = re.search(r"const BUILTIN_FONTS\s*=\s*\[(.*?)\];", html, re.S)
     if not m:
-        return [f"{EDITOR}: no SHEET_FONTS table"]
-    pairs = [(name, int(px)) for name, px in
-             re.findall(r"\[\s*['\"]([^'\"]+)['\"]\s*,\s*(\d+)\s*\]", m.group(1))]
-    if not pairs:
-        errors.append(f"{EDITOR}: SHEET_FONTS is empty")
-    for pair in pairs:
-        if pair not in carried:
-            errors.append(f"{EDITOR}: offers {pair[0]!r} at {pair[1]} px, "
-                          f"which assets/labels/fonts.json does not carry")
+        return [], ["the page has no BUILTIN_FONTS table"]
+    by_hash = {}
+    for path in sorted((ROOT / "assets" / "fonts").glob("*.ttf")):
+        by_hash[hashlib.sha256(path.read_bytes()).hexdigest()] = path.name
+    out = []
+    for entry in re.finditer(r"\{([^{}]*?)\}", m.group(1), re.S):
+        body = entry.group(1)
+        name = re.search(r'name:\s*"([^"]+)"', body)
+        b64 = re.search(r'b64:\s*"([^"]+)"', body)
+        if not name or not b64:
+            continue
+        digest = hashlib.sha256(base64.b64decode(b64.group(1))).hexdigest()
+        out.append((name.group(1), digest, by_hash.get(digest)))
+    return out, []
 
-    d = re.search(r"function\s+defaultTpl\s*\(\s*\)\s*\{.*?fonts:\s*\{(.*?)\}\s*,\s*slots", html, re.S)
-    if not d:
-        errors.append(f"{EDITOR}: no defaultTpl font roles")
-    else:
-        for role, name, px in re.findall(
-                r"(\w+)\s*:\s*\{\s*ff\s*:\s*['\"]([^'\"]+)['\"]\s*,\s*px\s*:\s*(\d+)",
-                d.group(1)):
-            if (name, int(px)) not in pairs:
-                errors.append(f"{EDITOR}: defaults the {role} role to {name!r} at {px} px, "
-                              f"which it does not offer")
 
-    m = re.search(r"SLOTS\s*=\s*\[(.*?)\]\s*;", html, re.S)
-    if not m:
-        return errors + [f"{EDITOR}: no SLOTS table"]
-    offered = re.findall(r"id\s*:\s*['\"]([^'\"]+)['\"]", m.group(1))
-    for name in offered:
-        if name not in SLOT_NAMES:
-            errors.append(f'{EDITOR}: offers the slot "{name}", which the vocabulary does not carry')
-    for name in sorted(SLOT_NAMES - set(offered)):
-        errors.append(f'{EDITOR}: is missing the slot "{name}"')
+def generate_vocabulary():
+    """Write label_vocab.h and the page's block. Returns the two paths written."""
+    v = VOCAB
+    errors = vocabulary_errors(v)
+    if errors:
+        raise PackError(errors)
+    header = vocab_header(v)
+    VOCAB_HEADER.parent.mkdir(parents=True, exist_ok=True)
+    VOCAB_HEADER.write_text(header, encoding="utf-8")
+    html = EDITOR.read_text(encoding="utf-8")
+    start, end = block_span(html)
+    EDITOR.write_text(html[:start] + vocab_block(v) + html[end:], encoding="utf-8")
+    return [VOCAB_HEADER, EDITOR]
 
-    # The band palette is the sheet's eight slots, and the editor's role tables are what
-    # offers them. A page that still offers four would export a design the panel cannot
-    # paint past band 3.
-    m = re.search(r"function\s+defaultTpl\s*\(\s*\)\s*\{.*?band:\s*\[(.*?)\]", html, re.S)
-    if not m:
-        errors.append(f"{EDITOR}: no defaultTpl band palette")
-    else:
-        colours = re.findall(r"['\"]#[0-9A-Fa-f]{6}['\"]", m.group(1))
-        if len(colours) != BAND_MAX:
-            errors.append(f"{EDITOR}: defaults {len(colours)} bands, not {BAND_MAX}")
-    for table in ("TEXT_ROLES", "ROLES"):
-        m = re.search(rf"\b{table}\s*=\s*\[(.*?)\]\s*;", html, re.S)
-        if not m or "band.7" not in m.group(1):
-            errors.append(f"{EDITOR}: {table} does not carry band.7")
+
+def check_vocabulary():
+    """Everything the vocabulary generates is current, and the page draws only compiled faces."""
+    v = VOCAB
+    errors = vocabulary_errors(v)
+    header = vocab_header(v)
+    if not VOCAB_HEADER.exists():
+        errors.append(f"{VOCAB_HEADER}: missing; run --generate-vocabulary")
+    elif VOCAB_HEADER.read_text(encoding="utf-8") != header:
+        errors.append(f"{VOCAB_HEADER}: stale; run --generate-vocabulary")
+
+    html = EDITOR.read_text(encoding="utf-8")
+    try:
+        start, end = block_span(html)
+    except PackError as exc:
+        return errors + exc.errors
+    if html[start:end] != vocab_block(v):
+        errors.append(f"{EDITOR}: the generated block is stale; run --generate-vocabulary")
+
+    faces, face_errors = _faces(html)
+    errors += face_errors
+    offered = {(f["name"], f["px"]) for f in v["fonts"] if f.get("editor")}
+    for name, digest, path in faces:
+        if path is None:
+            errors.append(f'{EDITOR}: embeds {name!r}, whose bytes match no file in '
+                          f'assets/fonts/ - a face the build cannot compile')
+        shown = [(n, px) for n, px in offered if n == name]
+        if not shown:
+            errors.append(f'{EDITOR}: embeds {name!r}, which no font in {VOCABULARY} offers '
+                          f'with "editor": true')
+    embedded = {name for name, _, _ in faces}
+    for name, _px in sorted(offered - {o for o in offered if o[0] in embedded}):
+        errors.append(f'{EDITOR}: offers {name!r} but does not embed it, so it cannot draw it')
     return errors
 
 

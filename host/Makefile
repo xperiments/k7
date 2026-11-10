@@ -358,7 +358,7 @@ layering:
 LABEL_OUT    := $(BUILD)/label
 LABEL_SHEET  := $(LABEL_OUT)/label_sheet.bin
 LABEL_HEADER := $(LABEL_OUT)/label_fonts.h
-LABEL_INPUTS := $(ROOT)/assets/labels/fonts.json $(ROOT)/tools/label_pack.py \
+LABEL_INPUTS := $(ROOT)/assets/labels/vocabulary.json $(ROOT)/tools/label_pack.py \
                 $(wildcard $(ROOT)/assets/labels/templates/*.json)
 
 # One recipe writes all three files - the sheet, the font header and the manifest - and make
@@ -380,7 +380,7 @@ $(BIN)/t33_label_sheet: $(OBJ)/label.o $(OBJ)/t33_label_sheet.o
 
 label: $(BIN)/t33_label_sheet
 	@$(PYTHON) $(ROOT)/tools/label_pack.py --selftest
-	@$(PYTHON) $(ROOT)/tools/label_pack.py --check-editor
+	@$(PYTHON) $(ROOT)/tools/label_pack.py --check-vocabulary
 	@$(BIN)/t33_label_sheet $(LABEL_OUT)
 
 check: test layering integration label

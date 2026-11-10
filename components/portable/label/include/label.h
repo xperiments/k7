@@ -16,6 +16,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "label_vocab.h" /* generated: the space, the limits and the Slot list */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -28,21 +30,9 @@ extern "C" {
 #define LABEL_PRIM_SIZE    24u
 #define LABEL_SLOT_SIZE    8u
 
-/* The design's space: the print at the entry grid. */
-#define LABEL_SPACE_W      748u
-#define LABEL_SPACE_H      359u
-
-#define LABEL_PRIM_MAX     48u
-#define LABEL_SLOT_MAX     16u
-#define LABEL_TEMPLATE_MAX 32u
-
-/* The band palette a design carries. A design may declare four to eight of them; the
- * sheet always has eight slots, and an undeclared one reads as 0. */
-#define LABEL_BAND_COUNT   8u
-
-/* The longest a resolved slot value can be; a design's slot `max` is bounded by this too,
- * so the view never has to truncate a value it was handed. */
-#define LABEL_VALUE_MAX    96u
+/* LABEL_SPACE_W/H, LABEL_BAND_COUNT, LABEL_VALUE_MAX, LABEL_PRIM_MAX, LABEL_SLOT_MAX and
+ * LABEL_TEMPLATE_MAX are label_vocab.h's: the editor refuses a design by the same numbers,
+ * and `make -C host label` fails when the two copies of that table disagree. */
 
 typedef enum {
     LABEL_OK = 0,
