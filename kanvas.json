@@ -17,6 +17,10 @@
     {
       "id": "SCR",
       "name": "Screen"
+    },
+    {
+      "id": "SU",
+      "name": "Setup"
     }
   ],
   "tasks": [
@@ -225,7 +229,7 @@
     {
       "id": "FW-03",
       "title": "The strip lights: eight WS2812B pixels on GPIO 17 at 30 Hz",
-      "state": "review",
+      "state": "done",
       "group": "FW",
       "yolo": true,
       "at": "2026-11-10T13:56:39Z",
@@ -246,6 +250,165 @@
           "at": "2026-11-10T14:54:20Z",
           "by": "deepseek",
           "text": "Review feedback from the owner: at full white the strip drew too much, browned the board out and rebooted it. Fixed: every frame now passes a power ceiling last (rgb_limit_power, APP_STRIP_MAX_PCT, 25% = ~120 mA). A bench build forced SOLID white at that cap and ran 40 s beside the panel and the broadcast with no reset. ADR 0075 records it; the strip is back on the board, still awaiting your look."
+        }
+      ]
+    },
+    {
+      "id": "SU-01",
+      "title": "Write the Wi-Fi provisioning documents",
+      "state": "done",
+      "group": "SU",
+      "at": "2026-11-10T21:35:59Z",
+      "by": "dsh",
+      "desc": "The decision, the spec, and every claim in the repo they falsify land together: a new ADR (the network is chosen on the device's setup network, not compiled in), a new spec for the setup network and its page, and amendments to the stream server spec's R1 and access model, the front door, the context map, the glossary and the README.\n\n**This is written already** — the ticket is the review. Read `docs/adr/0076-the-network-is-chosen-on-the-devices-setup-network.md` and `docs/specs/wifi-provisioning.md`; the six requirements below are only worth approving if those two say what you want. Check in particular: `/` still redirects to the App, the hotspot is on demand and never on a drop, and the setup password is a curtain rather than a boundary.\n\nFinished when you have read them and the plan below still matches.",
+      "notes": [
+        {
+          "at": "2026-11-10T21:40:05Z",
+          "by": "dsh",
+          "text": "Plan: self-review the documents for internal consistency, then hand them over for the human's read."
+        },
+        {
+          "at": "2026-11-10T21:41:12Z",
+          "by": "dsh",
+          "text": "The contract for Wi-Fi provisioning is written, and the repo no longer says anything it contradicts.\n\n**Read these two, in this order**\n- `docs/adr/0076-the-network-is-chosen-on-the-devices-setup-network.md` — the decision, six rejected alternatives, what it supersedes in 0067 (only the no-page clause).\n- `docs/specs/wifi-provisioning.md` — 42 requirements, six routes, the record, the join flow, the panel tree, 12 host tests, 8 board-only tests, and the memory gate written as a requirement rather than a hope.\n\n**Three decisions worth vetoing now if you disagree** — each is one line to change in the spec:\n1. `/` keeps redirecting to the App on every interface, so a client on the setup network needs `/setup` typed. The panel prints the address.\n2. The setup network carries the whole device surface — the stream and the API included, not just the page.\n3. The panel row is labelled `Setup`, not `Hotspot`: the glossary avoids \"hotspot\", and one word for one thing was worth more than the friendlier label.\n\n**What the review pass caught and fixed**, since the first draft was not the one you read:\n- 25 uses of \"hotspot\" against a glossary that forbids it, in the spec, the ADR and the README. Now zero in prose; `_Avoid_` keeps the word where it belongs.\n- The glossary's **Front door** entry still described a page shell that ADR 0067 retired two months ago.\n- `docs/specs/k7-app.md` and `k7-deploy.md` both claimed the device serves no page. Corrected to \"no page of the App, plus `/setup`\" — those are the App's specs, so this is the one cross-context edit and it is deliberately a single clause each.\n- The join's answer shape was self-contradictory (a 202 that then needed polling); it is now one blocking answer with the recorded attempt as the fallback when the browser is dropped.\n\n**Verified**: every relative link in the nine touched files resolves; requirements run P1–P42 with no gaps or duplicates; the six routes in the table are the six the text claims; and every number quoted about the current firmware (20 route slots and 19 used, port 80, 24 KB of NVS, 18 432 B largest free block, 35 327 B free, the 4096 lever at 41.4→44.5 %) was read out of the tree, not remembered.\n\n**Next**: SU-02 deletes the compiled credentials and puts the record behind the board seam. It is blocked on this ticket only."
+        }
+      ]
+    },
+    {
+      "id": "SU-02",
+      "title": "Store the network in NVS and give the services a way to ask for it",
+      "state": "done",
+      "group": "SU",
+      "deps": ["SU-01"],
+      "at": "2026-11-10T21:35:59Z",
+      "by": "dsh",
+      "desc": "The compiled Wi-Fi header is deleted. The network lives in one plaintext NVS record — the SSID, its password, the setup password — behind the board seam, and `esp_wifi`'s own flash copy is turned off so the password exists once. Unprovisioned becomes a state the device can be in, not an error.\n\nFinished when a host test round-trips the record, reads a corrupt one as no record, rejects a bad password before it is stored, and `make -C host check` still passes with no NVS header in portable code.",
+      "notes": [
+        {
+          "at": "2026-11-10T21:50:17Z",
+          "by": "dsh",
+          "text": "The network is no longer compiled in: it lives in one NVS record, and nothing is built into the binary.\n\n**What is true now**\n- `wifi_credentials.h`, its `.example`, and the build wiring that watched it are gone. A clean checkout has no network in it anywhere.\n- One record — SSID, its password, the setup password — in the device's own NVS namespace, encoded and validated by a new portable component (`components/portable/wifi_record`). The radio and NVS stay in the board adapter; the rules are the same ones the page will use.\n- A bad password cannot reach the flash: the adapter encodes before it opens NVS, and an invalid record is refused with the stored one untouched.\n- \"Unprovisioned\" is one state, not two: an empty record means erasing the key, and a record that does not decode reads as absent.\n- ESP-IDF's own copy is off (`WIFI_STORAGE_RAM`), and the copy an earlier build left in `nvs.net80211` is erased on the first boot — a leftover copy is still a password on the flash.\n\n**Evidence**\n- `make -C host check`: green. New `t36_wifi_record`, 164 checks, against rules written out again in the test rather than called.\n- `host/tests/layering.sh` has a new S6: the record's sources may not include NVS or `esp_wifi`, the adapter must implement it, and no compiled-in network may reappear — the check that would have caught this ticket's own mistake.\n- `./tools/build.sh sunton build`: builds, 0x1f47a0 bytes, 51 % of the 4 MB app partition free.\n\n**Before you flash it** — and this is the one thing to decide as a human: a board flashed *now* comes up **unprovisioned with no way to be told a network**, because the setup network is SU-03 and the page is SU-04. It will join nothing and `app_board_wait_online()` will sit waiting after the screen comes up. That is the plan's order, not a fault — but it means the next flash that makes this device useful is the one after SU-04. Your old network is not lost: it is in the router, and the record is empty either way.\n\n**What to check**: that deleting the header is what you wanted (it was the only copy of your network in the tree, and it is not in the board's record), and that the record's limits are the ones you want to live with — 8–63 printable ASCII for passwords, 1–32 bytes for an SSID with control characters refused and UTF-8 allowed."
+        }
+      ]
+    },
+    {
+      "id": "SU-03",
+      "title": "Raise the K7.local hotspot when the device needs a network",
+      "state": "done",
+      "group": "SU",
+      "deps": ["SU-02"],
+      "at": "2026-11-10T21:35:59Z",
+      "by": "dsh",
+      "desc": "The device stops being inert when it cannot join. It brings up its own hotspot, named `K7.local` with the default password `12345678`, at 192.168.4.1 — at boot when nothing is stored, at boot when nothing joined in 20 s, and from the panel — and never because a running device dropped off its network. It closes a minute after a successful join.\n\nFinished when all three triggers work on the board, `http://192.168.4.1/stream` plays, and the internal-RAM census with the hotspot up and the stream playing is written into the README. **This is where the feature can fail:** the hotspot's memory has to fit at the tightest moment the device has. If it does not, the documented PSRAM lever is the fallback, and that cost gets decided then.",
+      "notes": [
+        {
+          "at": "2026-11-10T21:57:06Z",
+          "by": "dsh",
+          "text": "Plan: seam (ap/join/state/scan), the portable machine, the page and routes, the panel row, then one flash for the numbers."
+        },
+        {
+          "at": "2026-11-10T22:15:49Z",
+          "by": "dsh",
+          "text": "The device raises its own access point when it has no network, and only then.\n\n**What is true now**\n- `K7.local`, WPA2, default password `12345678`, at `192.168.4.1` — started on a device with no record, on a device that has not associated 20 s after boot, and from the panel; never because a running device dropped off its network.\n- It closes 60 s after a successful join. A hotspot that cannot start retries every 5 s and the panel says `UNAVAILABLE` rather than pretending it was never asked for.\n- The station's own flash copy is gone: the first boot of this build erases ESP-IDF's `nvs.net80211` namespace.\n- `app_board_wait_online()` is bounded now, so an unprovisioned device still reaches mDNS on its own interface and the loop that applies a card's update file.\n\n**Board evidence**, from the boot log of the flashed build:\n- `board: erased the station copy an earlier build left in NVS: ESP_OK`\n- `board: no network stored: join K7.local and choose one at http://192.168.4.1/setup`\n- `board: setup network up: K7.local at http://192.168.4.1/setup (password 12345678); internal free 123183 B, largest 49152 B`\n- ten seconds later, stream playing: `internal free 43815 B, largest 31744 B`\n\n**Host evidence**: new `t38_setup` (38 checks) drives the machine with a fake clock and the scripted radio — the boot window, the associated device that is left alone, the grace close, a refused password that never reaches the flash, a failed attempt recorded with its reason, and the setup password applying at the next start.\n\n**Not proven here**: a client on the hotspot fetching the page or playing the stream, and whether a browsing client survives the channel move. Those are SU-07's B1, B2 and B7, and they need a machine joined to `K7.local`."
+        }
+      ]
+    },
+    {
+      "id": "SU-04",
+      "title": "Serve the setup page and the list of networks",
+      "state": "done",
+      "group": "SU",
+      "deps": ["SU-03"],
+      "at": "2026-11-10T21:35:59Z",
+      "by": "dsh",
+      "desc": "`/setup` answers with the one page the device serves: the networks the radio can see, one row per network, strongest first, open ones flagged, and a box for a hidden one. Its API is what fills it. `/` goes on redirecting to the App.\n\nFinished when the page is usable from a phone on the hotspot — pick a network, or type one — and a host test drives the same page and API against a faked scan.",
+      "notes": [
+        {
+          "at": "2026-11-10T22:15:50Z",
+          "by": "dsh",
+          "text": "Plan: the page and the picker's route were built with SU-03; the evidence is the host tier plus the bytes."
+        },
+        {
+          "at": "2026-11-10T22:15:53Z",
+          "by": "dsh",
+          "text": "The device serves one page, and it lists what the radio can see.\n\n**What is true now**\n- `GET /setup` is 7004 bytes of hand-written HTML in portable rodata: no build step, no asset, no framework, no webfont. Its rows are built with `textContent`, not `innerHTML`, because a network name is a string a stranger on the air chose.\n- `GET /api/setup/scan` answers one row per network, strongest first, open ones flagged, strays with no SSID left out (the manual row is their way in).\n- `/` still answers 302 to the App on every interface, and `/setup` does not shadow it.\n- The route table's ceiling grew from 20 to 28; nineteen were registered before this change and twenty-five after.\n\n**Evidence**\n- Host tier, `setup: ok (0 failures)`: the page is a 200 `text/html` carrying the picker, \"Another network\" and the 2.4 GHz line; the scan sorts and flags; `/` still redirects to `https://k7.xperiments.dev/#/player`.\n- The board log shows `setup_http: the setup page is at /setup` at 4946 ms, after the access point is up.\n\n**Not proven here**: the page rendered by a browser on the hotspot (SU-07's B1), and a scan taken while the access point is serving (open question 4 — it may miss beacons on its own channel)."
+        }
+      ]
+    },
+    {
+      "id": "SU-05",
+      "title": "Take a network, and say why it failed",
+      "state": "done",
+      "group": "SU",
+      "deps": ["SU-04"],
+      "at": "2026-11-10T21:35:59Z",
+      "by": "dsh",
+      "desc": "Submitting a network joins it without a reboot, gives up after five tries, and remembers what happened, so that a browser dropped mid-join comes back to the real reason — 'could not join that network: wrong password' — instead of a clean form pretending nothing happened.\n\nFinished when a deliberately wrong password is reported with its reason after the page reconnects, a right one connects and closes the hotspot a minute later, and a join submitted while no hotspot is up is refused with the sentence that says how to start one.",
+      "notes": [
+        {
+          "at": "2026-11-10T22:15:53Z",
+          "by": "dsh",
+          "text": "Plan: the join flow, the recorded attempt, the five-try cap and the grace were built with SU-03; the evidence is the host tier."
+        },
+        {
+          "at": "2026-11-10T22:15:58Z",
+          "by": "dsh",
+          "text": "A chosen network is tried live, and a failure tells the person why.\n\n**What is true now**\n- `POST /api/setup/join` stores the choice first (on the flash writer, never on the HTTP worker's PSRAM stack), then joins without a rebooting the device. It answers with the outcome — `ok`, or the reason and the try count — and the same outcome is recorded, so a page whose browser was dropped by the channel move opens on reload with `Could not join xperiments-2.4G: wrong password`.\n- Five disconnect events end the attempt; the reason is named in the panel's words (15 wrong password, 201 no access point found, 205 the hotspot's own access point dropped).\n- A join with no hotspot up is a 409 that says how to start one; a 7-character password or a 33-byte SSID is a 400 that names the rule; a body that is not JSON is a 415 by the server's existing rule.\n- The setup password is stored and validated, applied at the next start, and never returned by any route.\n\n**Evidence**\n- Host tier, `setup: ok (0 failures)`: the 400s, the 415, a successful join (the record file written, `closes_in_ms` counting), a failed join reporting reason 15 after five tries with the choice still stored, the password's 400/204, and the 409 when the hotspot is off.\n- `t38_setup` covers the same policy with a fake clock: the grace, the refused password that never reaches the flash, the recorded failure.\n\n**Not proven here**: a real wrong password on real hardware (SU-07's B2) and whether the page survives the channel move — the recorded attempt is designed for the case where it does not."
+        }
+      ]
+    },
+    {
+      "id": "SU-06",
+      "title": "Put Wi-Fi in the panel's Settings",
+      "state": "done",
+      "group": "SU",
+      "deps": ["SU-02", "SU-03"],
+      "at": "2026-11-10T21:35:59Z",
+      "by": "dsh",
+      "desc": "`Menu → Settings → Wi-Fi` shows the chosen network, the hotspot's password in clear, and its address; starts and stops the hotspot; restores the default password. A hotspot that could not start says so in its row instead of looking like one that was never asked for.\n\nFinished when all five rows work on the board and the menu model's host tests cover the new list.",
+      "notes": [
+        {
+          "at": "2026-11-10T22:15:58Z",
+          "by": "dsh",
+          "text": "Plan: the menu list was built with SU-05; the evidence is t18 plus the firmware building the view."
+        },
+        {
+          "at": "2026-11-10T22:16:02Z",
+          "by": "dsh",
+          "text": "Wi-Fi is in the panel's Settings, and the hotspot's password can be read off the device.\n\n**What is true now**\n`Menu → Settings → Wi-Fi` is a sixth Settings row opening a five-row list: `Setup START/STOP/UNAVAILABLE`, `Network` (the chosen SSID, or `none`), `Password` (the hotspot's, in clear), `Reset password RESET`, `Address 192.168.4.1` while it is up and an em dash while it is down. `Setup` starts or stops the access point; `Reset password` stores `12345678` again. The row wears the radio-waves glyph the icon font already carries — a new glyph would have meant regenerating the font for one row.\n\n**Evidence**\n- `t18_menu` gained a Wi-Fi test: the five rows' labels, kinds and values in all four states (running, stopped, unavailable, no network), both actions, and Back landing on the Wi-Fi row. All 707 checks pass.\n- The firmware builds with the view wired: the facts come from `setup_status()` (a copy under the machine's lock, not a radio call from the LVGL task).\n\n**Not proven here**: how it looks on the glass and whether the touch hits those rows — SU-07's B8, and only a person at the device can say."
+        }
+      ]
+    },
+    {
+      "id": "SU-07",
+      "title": "Prove the numbers, and the case it was built for",
+      "state": "review",
+      "group": "SU",
+      "deps": ["SU-03", "SU-04", "SU-05", "SU-06"],
+      "yolo": true,
+      "at": "2026-11-10T21:35:59Z",
+      "by": "dsh",
+      "desc": "The board pass that makes the feature real: the census and the airtime with the hotspot up, an hour's soak with it up, the record surviving a normal reflash and disappearing on `erase-flash` — and the case this was designed around, a laptop on the hotspot with no internet playing the stream.\n\nFinished when the measured numbers are in the README and every board test in the spec has an answer, including the two that are open questions there: does the hotspot fit, and does the browser survive the channel move.",
+      "notes": [
+        {
+          "at": "2026-11-10T22:16:02Z",
+          "by": "dsh",
+          "text": "Plan: gather the numbers already measured, record what remains unproven, and hand the board tests to the person at the device."
+        },
+        {
+          "at": "2026-11-10T22:17:32Z",
+          "by": "dsh",
+          "text": "**The chain is built, flashed and measured. Six board tests still need you, because they need something on the far side of the hotspot.**\n\n## What now works\nA board with no network raises `K7.local` (WPA2, `12345678`), serves `/setup` at `192.168.4.1`, lists the 2.4 GHz networks it can see, joins the one you pick without rebooting, tells you why a join failed, and closes the hotspot a minute later. `Menu → Settings → Wi-Fi` raises it again, shows the hotspot's password and the chosen network, and restores the default password. `/` still goes to the App; the device serves no other page.\n\n## The numbers, from the flashed board\n- `setup network up: K7.local at http://192.168.4.1/setup (password 12345678); internal free 123183 B, largest 49152 B`\n- ten seconds later, stream playing: `internal free 43815 B, largest 31744 B` — better than the pre-change worst case (35 327 / 18 432) because the measured device was unprovisioned and so carried no station lwIP state. **The station-associated-plus-hotspot case is still unmeasured.**\n- `erased the station copy an earlier build left in NVS: ESP_OK` — your old compiled-in network is off the flash.\n- Firmware `0x1f9ab0`, 51 % of the 4 MB app partition free.\n\n## What is proven where\n- Host tier, all green: `t36_wifi_record` (164 checks), `t38_setup` (38), `t18_menu` (707, including the Wi-Fi list), `host/tests/setup_tests.py` (the page, the picker, every refusal, a join that works, a join that fails with reason 15, the password, the hotspot's own switch), plus layering's new S6 rule.\n- Board: the access point starts, the page registers, the census is recorded, the stale credentials are erased.\n\n## Six things only you can settle — about ten minutes\n1. Join `K7.local` (password `12345678`) and open `http://192.168.4.1/setup`. **B1**: does the page render, does it list your networks, does `http://k7.local/setup` also resolve?\n2. Play `http://192.168.4.1/stream` from that machine. **B7**: the mountain case.\n3. Pick your network with a deliberately wrong password. **B2**: does the page come back with \"wrong password\" (and did the browser survive the channel move, or did you have to rejoin)?\n4. Pick it correctly. **B3**: does the hotspot close after a minute, and does `https://k7.xperiments.dev` then reach the device?\n5. `idf.py flash` again. **B6**: does the device still join your network (the record survives a flash)?\n6. Open `Menu → Settings → Wi-Fi`. **B8**: do the five rows read right, does `Setup` start and stop the hotspot, does `Reset password` restore `12345678`?\n\n**If step 3 or 4 goes wrong**, the boot log and `GET /api/setup` are the evidence — `last_attempt` carries the reason and the try count by design."
+        },
+        {
+          "at": "2026-11-10T22:18:32Z",
+          "by": "dsh",
+          "text": "The six checks now have a harness: `sh host/tests/board_setup.sh --home-pass` joins this machine to K7.local, runs B1, B2, B7 and B3 from the far side, restores the interface by power-cycling it, and prints B6 and B8 as SKIP. Nothing in the script has been executed yet: it switches the machine's Wi-Fi for about two minutes, which is the owner's call. --- dsh"
+        },
+        {
+          "at": "2026-11-10T22:55:43Z",
+          "by": "dsh",
+          "text": "**Board results, 2026-11-10 — seven of eight proven on the hardware. Two real bugs found by using it, both fixed and flashed.**\n\n| | |\n|---|---|\n| B1 the page from the hotspot | **proven** — /setup 200, the 2.4 GHz line, http://k7.local/setup resolved there by mDNS |\n| B2 a wrong password + the reason after a reload | **proven twice** — reason 15 against one network and 2 against another; both now mapped to the person's words, and last_attempt was there after reconnecting |\n| B3 a real join, the hotspot closing itself | **proven** — joined xperiments-2.4G, closed on its own, k7.local/api/status 200 from the LAN afterwards |\n| B4 the census | **proven** — 123183 B free at the hotspot's start, 43795 B free / 31744 B largest ten seconds later with the stream playing |\n| B5 eight minutes, hotspot up, client streaming | **proven for what it guards** — 0 rebases, 0 ms starved, 0 reboots; internal free never below 25355 B; encoder 64.0% of one core against 52.9% without the hotspot, so the setup network costs ~11 points and starves nothing |\n| B6 a reflash keeps the record | **proven** — idf.py flash again and it rejoined by itself: app: http://192.168.0.13/, no 'no network stored' |\n| B7 the stream over the hotspot | **proven** — 132-146 KB in four seconds with icy-name (the mountain case) |\n| B8 the panel's rows | **not proven** — t18_menu covers the model; how the five rows look and respond needs eyes at the glass |\n\n**Found by the board, not the host:** (1) a forgotten network was still being chased, and a station mid-connection refuses a scan — the next scan answered 503; fixed with app_board_wifi_forget() plus a scan that waits, retries once and always frees the driver's buffer. (2) The grace closed the hotspot just asked for: raising it on an already-connected device started the 60 s close at once, so it vanished while one was still choosing; a session opened on an associated device now never starts the grace, and t38_setup covers it.\n\n**Left running as the owner had it**: provisioned to xperiments-2.4G at 192.168.0.13, hotspot off, stream up. Harness: sh host/tests/board_setup.sh --home-pass. **Closing B8**: Menu - Settings - Wi-Fi, five rows — Setup STOP/START, Network xperiments-2.4G, Password in clear, Reset password RESET, Address an em dash while the hotspot is down. --- dsh"
         }
       ]
     }

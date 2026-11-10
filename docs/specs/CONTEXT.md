@@ -527,6 +527,50 @@ line. It starts the services and the **Screen display**; it is never a
 source of truth.
 _Avoid_: main, firmware
 
+### The network
+
+**Home network**:
+The Wi-Fi network the device joins. One, chosen on the **Setup page** and stored in NVS; it is
+never compiled into the firmware (ADR 0076).
+_Avoid_: the network, station network, STA network, LAN, Wi-Fi network
+
+**Network password**:
+The **Home network**'s passphrase. Entered once on the **Setup page**, stored, and never returned
+by a route or drawn on the panel.
+_Avoid_: credential, Wi-Fi password, key
+
+**Setup network**:
+The device's own WPA2 access point, named `K7.local`, which exists only while the device is being
+told which network to join — at boot when **unprovisioned**, at boot when no association was made
+within 20 s, and on demand from the Menu. It is a network, not a mode, and it closes 60 s after a
+successful join (ADR 0076).
+_Avoid_: soft AP, hotspot, config network, AP mode, provisioning network
+
+**Setup password**:
+The **Setup network**'s passphrase. `12345678` until changed on the **Setup page**; shown on the
+panel and restorable from it. It keeps a neighbour off the setup network and defends nothing
+beyond it —
+a curtain, not a boundary.
+_Avoid_: AP password, admin password, hotspot key
+
+**Setup page**:
+The one page the device serves, `GET /setup`, on every interface: it lists what the radio can see
+and takes a **Home network** and its **Network password**. It is not the App; the device serves no
+product page (ADR 0067), and it exists because provisioning must survive with no network and no
+cached shell (ADR 0076).
+_Avoid_: provisioning page, captive portal, config UI, admin page
+
+**Unprovisioned**:
+The device's state when no **Home network** is stored. Not an error: the **Setup network** is
+raised and the device waits.
+_Avoid_: unconfigured, blank, factory
+
+**Join attempt**:
+One try at associating with a **Home network**, with its recorded outcome — the network, the
+result, the disconnect reason and the number of tries. The **Setup page** reports the last one, so
+a browser dropped mid-flow still learns why a join failed.
+_Avoid_: connection, connect result, retry
+
 ### Clients and access
 
 **Client**:
@@ -553,10 +597,12 @@ _Avoid_: unauthenticated, public, insecure
 ### The front door
 
 **Front door**:
-The page the device serves at `http://xtape.local`, its only address and port, and the app
-behind it: one shell with four areas. It is the network's way in, as the **Cassette screen** is
-the panel's. Plain HTTP, with no certificate and no trust step (ADR 0049). The page's own
-vocabulary is the front door context's — see [`web/CONTEXT.md`](../../web/CONTEXT.md).
+The device's listener at `http://k7.local`, its only address and port, and the API it carries:
+`/api/*`, `/mcp`, `/library` and `/stream`. It serves **no product page** (ADR 0067): `/`,
+`/index.html`, `/bridge` and `/app` answer 302 to the App, and every unknown path is a 404. The
+one page it does serve is the **Setup page**, which exists precisely because the App cannot be
+reached when there is no network (ADR 0076). Plain HTTP, with no certificate and no trust step
+(ADR 0049).
 _Avoid_: web UI, dashboard, admin page
 
 **Card state**:

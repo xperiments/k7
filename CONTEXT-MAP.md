@@ -17,11 +17,14 @@ refused, not scheduled.
   microSD card and broadcasts it over HTTP as a live MP3 stream, with an index that lists it.
   A global premise forbids serving or accepting a Track, so all SD content processing happens
   outside the device. It also holds the **Snapshot** — the measurements and the **Playlists**
-  the app produced — and walks a selected Playlist when told to. Its only address,
+  the app produced — and walks a selected Playlist when told to. Its own address,
   `http://k7.local`, serves the API and the stream — `/api/*`, `/mcp`, `/library`, `/stream` —
-  and no page at all; its root redirects a browser to the App
-  ([ADR 0067](./docs/adr/0067-chrome-only-direct-to-the-device.md)). Specified in
-  [`docs/specs/sd-stream-server.md`](./docs/specs/sd-stream-server.md); its measurements are
+  and no product page; its root redirects a browser to the App
+  ([ADR 0067](./docs/adr/0067-chrome-only-direct-to-the-device.md)). It also carries its own
+  **Setup network**, `K7.local`, and the one **Setup page** it serves, so a device with no
+  network is still a device that can be given one ([ADR 0076](./docs/adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)).
+  Specified in [`docs/specs/sd-stream-server.md`](./docs/specs/sd-stream-server.md) and
+  [`docs/specs/wifi-provisioning.md`](./docs/specs/wifi-provisioning.md); its measurements are
   specified in [`docs/specs/snapshot.md`](./docs/specs/snapshot.md) and byte-defined in
   [`docs/specs/snapshot-format.md`](./docs/specs/snapshot-format.md).
 - [K7 app](./web/CONTEXT.md) — the application at `https://k7.xperiments.dev`. It measures

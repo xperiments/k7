@@ -147,6 +147,36 @@ else
     printf '  ok    no *_host.c fork of any component source\n'
 fi
 
+printf '\nS6  the Wi-Fi record is portable; NVS and esp_wifi stay in the adapter\n'
+# ADR 0076: the credentials are not compiled in and the rules are testable. The record's
+# bytes and its validation live in a portable component, so the host test exercises the
+# rules the device enforces; the store (NVS) and the radio are the adapter's alone.
+for f in "$ROOT"/components/portable/wifi_record/*.c \
+         "$ROOT"/components/portable/wifi_record/include/*.h \
+         "$ROOT"/components/portable/app_board/include/*.h; do
+    absent "$f" '#include.*(nvs\.h|nvs_flash\.h|esp_wifi\.h)' \
+           'no NVS or radio header: '"$(basename "$f")"
+done
+# Only the sources: a header's prose may name what the adapter does (app_board.h explains
+# esp_wifi_init()'s memory appetite, wifi_record.h why its type is not wifi_config_t).
+for f in "$ROOT"/components/portable/wifi_record/*.c; do
+    absent "$f" '(nvs_open|nvs_set_blob|nvs_get_blob|esp_wifi_[a-z]\()' \
+           'no store or radio call: '"$(basename "$f")"
+done
+if grep -q 'app_board_wifi_record_load' "$ROOT/components/app/board_esp32/board_esp32.c"; then
+    printf '  ok    the board adapter implements the portable record\n'
+else
+    printf '  FAIL  the board adapter does not implement the portable record\n'
+    fail=1
+fi
+if grep -rq 'WIFI_SSID\|wifi_credentials' "$ROOT/components" "$ROOT/main" 2>/dev/null; then
+    printf '  FAIL  a compiled-in network is still reachable in the source\n'
+    grep -rn 'WIFI_SSID\|wifi_credentials' "$ROOT/components" "$ROOT/main" | sed 's/^/        /'
+    fail=1
+else
+    printf '  ok    no compiled-in network anywhere in the source\n'
+fi
+
 printf '\nS5  the source-format authority sits below the broadcast and the file surface\n'
 # audio_format is a leaf: it must not learn about the components that consume it,
 # in source or in its component dependency list. The library component lands in

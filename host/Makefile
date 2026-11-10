@@ -62,6 +62,8 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/app_services/include \
        -I$(ROOT)/components/portable/label/include \
        -I$(ROOT)/components/portable/app_board/include \
+       -I$(ROOT)/components/portable/wifi_record/include \
+       -I$(ROOT)/components/portable/setup/include \
        -I$(ROOT)/components/portable/dr_libs/include \
        -I$(ROOT)/components/portable/shine/src/lib \
        -I$(HERE) \
@@ -122,6 +124,9 @@ PROD_SRC := \
   $(ROOT)/components/portable/app_services/app_services.c \
   $(ROOT)/components/portable/label/label.c \
   $(ROOT)/components/portable/label/label_values.c \
+  $(ROOT)/components/portable/wifi_record/wifi_record.c \
+  $(ROOT)/components/portable/setup/setup.c \
+  $(ROOT)/components/portable/setup/setup_http.c \
   $(ROOT)/components/portable/json/json.c \
   $(ROOT)/components/portable/card_use/card_use.c \
   $(ROOT)/components/portable/card_path/card_path.c \
@@ -156,6 +161,8 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/snapshot \
           $(ROOT)/components/portable/playlist_select \
           $(ROOT)/components/portable/card_select \
+          $(ROOT)/components/portable/wifi_record \
+          $(ROOT)/components/portable/setup \
           $(ROOT)/components/portable/flash_job \
           $(ROOT)/components/portable/front_door \
           $(ROOT)/components/portable/app_services \
@@ -168,7 +175,7 @@ BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
-SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/card_path.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/snapshot_http.o $(OBJ)/covers_http.o $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o
+SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/card_path.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/snapshot_http.o $(OBJ)/covers_http.o $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o $(OBJ)/setup.o $(OBJ)/setup_http.o $(OBJ)/wifi_record.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/http_loop.o $(OBJ)/http_backend_single.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o
@@ -188,7 +195,8 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t21_button $(BIN)/t22_knob $(BIN)/t23_pad $(BIN)/t24_controls \
          $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline $(BIN)/t28_entrance \
          $(BIN)/t29_snapshot $(BIN)/t30_playlist_select $(BIN)/t31_card_select \
-         $(BIN)/t32_label $(BIN)/t34_json $(BIN)/t35_card_use
+         $(BIN)/t32_label $(BIN)/t34_json $(BIN)/t35_card_use \
+         $(BIN)/t36_wifi_record $(BIN)/t38_setup
 
 .PHONY: all test integration layering label check tools fixtures bench control control-check clean help
 
@@ -348,6 +356,14 @@ $(BIN)/t31_card_select: $(OBJ)/card_select.o $(OBJ)/t31_card_select.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
+$(BIN)/t36_wifi_record: $(OBJ)/wifi_record.o $(OBJ)/t36_wifi_record.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t38_setup: $(OBJ)/setup.o $(OBJ)/wifi_record.o $(OBJ)/flash_job.o $(OBJ)/board_host.o $(OBJ)/shim.o $(OBJ)/t38_setup.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
 $(BIN)/t28_entrance: $(OBJ)/entrance.o $(OBJ)/t28_entrance.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
@@ -367,6 +383,8 @@ integration: $(SERVER)
 	@$(PYTHON) $(HERE)/tests/snapshot_tests.py $(SERVER) $(HERE)/fixtures
 	@echo "--- the front door"
 	@$(PYTHON) $(HERE)/tests/front_door_tests.py $(SERVER) $(HERE)/fixtures
+	@echo "--- the setup page and its API"
+	@$(PYTHON) $(HERE)/tests/setup_tests.py $(SERVER) $(HERE)/fixtures
 	@echo "--- the snapshot upload"
 	@$(PYTHON) $(HERE)/tests/upload_tests.py $(SERVER) $(HERE)/fixtures
 	@echo "--- playlists over HTTP"

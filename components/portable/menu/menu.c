@@ -40,6 +40,7 @@ typedef enum {
     LIST_STATION,
     LIST_LIBRARY,
     LIST_ABOUT,
+    LIST_WIFI,
 } menu_list_t;
 
 typedef struct {
@@ -60,7 +61,19 @@ static const fixed_row_t k_settings_rows[] = {
     {"Station", MENU_ICON_STATION, MENU_ROW_SUBMENU},
     {"Library", MENU_ICON_LIBRARY, MENU_ROW_SUBMENU},
     {"Rescan", MENU_ICON_RESCAN, MENU_ROW_ACTION},
+    {"Wi-Fi", MENU_ICON_WIFI, MENU_ROW_SUBMENU},
     {"About", MENU_ICON_ABOUT, MENU_ROW_SUBMENU},
+};
+
+/* The setup network's list: what it is, its password, and the two acts (ADR 0076,
+ * wifi-provisioning.md P34). Every value is short enough for MENU_VALUE_MAX except a long
+ * setup password, which the view ellipsizes like any other label. */
+static const fixed_row_t k_wifi_rows[] = {
+    {"Setup", MENU_ICON_WIFI, MENU_ROW_ACTION},
+    {"Network", MENU_ICON_LIBRARY, MENU_ROW_VALUE},
+    {"Password", MENU_ICON_SETTINGS, MENU_ROW_VALUE},
+    {"Reset password", MENU_ICON_RESCAN, MENU_ROW_ACTION},
+    {"Address", MENU_ICON_BOARD, MENU_ROW_VALUE},
 };
 
 struct menu {
@@ -79,6 +92,9 @@ struct menu {
     char         version_buf[MENU_FACTS_MAX];
     char         board_buf[MENU_FACTS_MAX];
     char         partition_buf[MENU_FACTS_MAX];
+    char         network_buf[MENU_FACTS_MAX];
+    char         setup_pass_buf[MENU_FACTS_MAX];
+    char         hotspot_addr_buf[MENU_FACTS_MAX];
 
     char     status_path[LIB_PATH_MAX];
     mi_fmt_t status_format;
@@ -132,6 +148,13 @@ static void facts_copy(menu_t *m, const menu_facts_t *facts)
     m->facts.shuffle_on = facts->shuffle_on;
     m->facts.rescanning = facts->rescanning;
     m->facts.backlight = facts->backlight;
+    m->facts.hotspot_on = facts->hotspot_on;
+    m->facts.hotspot_failed = facts->hotspot_failed;
+    copy_opt(m->network_buf, sizeof m->network_buf, facts->network, &m->facts.network);
+    copy_opt(m->setup_pass_buf, sizeof m->setup_pass_buf, facts->setup_password,
+             &m->facts.setup_password);
+    copy_opt(m->hotspot_addr_buf, sizeof m->hotspot_addr_buf, facts->hotspot_address,
+             &m->facts.hotspot_address);
     copy_opt(m->version_buf, sizeof m->version_buf, facts->version, &m->facts.version);
     copy_opt(m->board_buf, sizeof m->board_buf, facts->board, &m->facts.board);
     copy_opt(m->partition_buf, sizeof m->partition_buf, facts->partition, &m->facts.partition);
@@ -261,6 +284,7 @@ static int list_count(const menu_t *m)
     switch (m->list) {
     case LIST_ROOT: return (int)(sizeof k_root_rows / sizeof k_root_rows[0]);
     case LIST_SETTINGS: return (int)(sizeof k_settings_rows / sizeof k_settings_rows[0]);
+    case LIST_WIFI: return (int)(sizeof k_wifi_rows / sizeof k_wifi_rows[0]);
     case LIST_STATION: return 3;
     case LIST_LIBRARY: return 5;
     case LIST_ABOUT: return 3;
@@ -308,6 +332,7 @@ static void build_title(menu_t *m)
     case LIST_STATION: snprintf(m->title, sizeof m->title, "Station"); return;
     case LIST_LIBRARY: snprintf(m->title, sizeof m->title, "Library"); return;
     case LIST_ABOUT: snprintf(m->title, sizeof m->title, "About"); return;
+    case LIST_WIFI: snprintf(m->title, sizeof m->title, "Wi-Fi"); return;
     case LIST_BROWSE: break;
     }
 
@@ -411,6 +436,38 @@ static void build_settings_row(const menu_t *m, int index, menu_row_t *r)
     }
 }
 
+static void build_wifi_row(const menu_t *m, int index, menu_row_t *r)
+{
+    if (index < 0 || index >= (int)(sizeof k_wifi_rows / sizeof k_wifi_rows[0])) return;
+    build_fixed(&k_wifi_rows[index], r);
+    switch (index) {
+    case 0: /* Setup: the state, and the act */
+        snprintf(r->value, sizeof r->value, "%s",
+                 m->facts.hotspot_failed ? "UNAVAILABLE" : m->facts.hotspot_on ? "STOP" : "START");
+        break;
+    case 1: /* Network: what the device will try */
+        snprintf(r->value, sizeof r->value, "%s",
+                 (m->facts.network && m->facts.network[0]) ? m->facts.network : "none");
+        break;
+    case 2: /* Password: in clear, the panel is the only way back to it */
+        snprintf(r->value, sizeof r->value, "%s",
+                 (m->facts.setup_password && m->facts.setup_password[0])
+                     ? m->facts.setup_password
+                     : "12345678");
+        break;
+    case 3: /* Reset password: an act, and the row says what it does */
+        snprintf(r->value, sizeof r->value, "RESET");
+        break;
+    case 4: /* Address: only meaningful while the hotspot is up */
+        snprintf(r->value, sizeof r->value, "%s",
+                 (m->facts.hotspot_address && m->facts.hotspot_address[0])
+                     ? m->facts.hotspot_address
+                     : MENU_EM_DASH);
+        break;
+    default: break;
+    }
+}
+
 static void build_track_row(const menu_t *m, lib_node_t node, menu_row_t *r)
 {
     r->kind = MENU_ROW_TRACK;
@@ -507,6 +564,9 @@ static void build_row(const menu_t *m, int index, menu_row_t *r)
         break;
     case LIST_SETTINGS:
         build_settings_row(m, index, r);
+        break;
+    case LIST_WIFI:
+        build_wifi_row(m, index, r);
         break;
     case LIST_TRACKS:
         if (tracks_empty(m)) build_note(m, r);
@@ -665,7 +725,11 @@ static bool facts_same(const menu_t *m, const menu_facts_t *f)
     }
     return m->facts.shuffle_on == f->shuffle_on && m->facts.rescanning == f->rescanning &&
            m->facts.backlight == f->backlight && same_text(m->facts.version, f->version) &&
-           same_text(m->facts.board, f->board) && same_text(m->facts.partition, f->partition);
+           same_text(m->facts.board, f->board) && same_text(m->facts.partition, f->partition) &&
+           m->facts.hotspot_on == f->hotspot_on &&
+           m->facts.hotspot_failed == f->hotspot_failed && same_text(m->facts.network, f->network) &&
+           same_text(m->facts.setup_password, f->setup_password) &&
+           same_text(m->facts.hotspot_address, f->hotspot_address);
 }
 
 void menu_update(menu_t *m, const library_t *lib, const menu_facts_t *facts,
@@ -851,7 +915,15 @@ menu_action_t menu_activate(menu_t *m)
         case 3:
             if (m->facts.rescanning) return MENU_ACTION_NONE;
             return MENU_ACTION_RESCAN;
-        case 4: enter_list(m, LIST_ABOUT); break;
+        case 4: enter_list(m, LIST_WIFI); break;
+        case 5: enter_list(m, LIST_ABOUT); break;
+        default: break;
+        }
+        break;
+    case LIST_WIFI:
+        switch (m->band) {
+        case 0: return MENU_ACTION_WIFI_TOGGLE;
+        case 3: return MENU_ACTION_WIFI_RESET;
         default: break;
         }
         break;
@@ -899,6 +971,10 @@ bool menu_back(menu_t *m)
         m->band = 2;
         break;
     case LIST_ABOUT:
+        m->list = LIST_SETTINGS;
+        m->band = 5;
+        break;
+    case LIST_WIFI:
         m->list = LIST_SETTINGS;
         m->band = 4;
         break;

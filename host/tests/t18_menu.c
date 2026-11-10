@@ -387,6 +387,72 @@ static void test_root_rows(void)
     free(root);
 }
 
+static void test_wifi_list(void)
+{
+    const library_t *lib = NULL;
+    menu_facts_t facts = facts_plain();
+    facts.network = "xperiments-2.4G";
+    facts.setup_password = "newpass99";
+    facts.hotspot_on = true;
+    facts.hotspot_address = "192.168.4.1";
+    menu_t *m = menu_open_with(lib, &facts);
+
+    menu_step(m, 3);                  /* Settings */
+    menu_activate(m);                 /* push Settings */
+    menu_step(m, 4);                  /* the Wi-Fi row */
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Wi-Fi is not an action");
+    want_str(menu_title(m), "Wi-Fi", "Wi-Fi title");
+    CHECK_EQ(menu_count(m), 5, "the Wi-Fi list has five rows");
+
+    menu_row_t r[MENU_ROWS];
+    read_rows(m, r);
+    want_label(&r[0], "Setup", "Wi-Fi row 0 label");
+    want_kind(&r[0], MENU_ROW_ACTION, "Wi-Fi row 0 kind");
+    want_value(&r[0], "STOP", "a running hotspot offers STOP");
+    want_label(&r[1], "Network", "Wi-Fi row 1 label");
+    want_kind(&r[1], MENU_ROW_VALUE, "Wi-Fi row 1 kind");
+    want_value(&r[1], "xperiments-2.4G", "the chosen network is named");
+    want_label(&r[2], "Password", "Wi-Fi row 2 label");
+    want_value(&r[2], "newpass99", "the setup password is shown in clear");
+    want_label(&r[3], "Reset password", "Wi-Fi row 3 label");
+    want_kind(&r[3], MENU_ROW_ACTION, "Wi-Fi row 3 kind");
+    want_value(&r[3], "RESET", "the reset row says RESET");
+    want_label(&r[4], "Address", "Wi-Fi row 4 label");
+    want_value(&r[4], "192.168.4.1", "the address is shown while the hotspot is up");
+
+    CHECK_EQ(menu_activate(m), MENU_ACTION_WIFI_TOGGLE, "the Setup row toggles the hotspot");
+    menu_step(m, 3);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_WIFI_RESET, "the Reset row resets the password");
+
+    /* The three other states of the Setup row. */
+    facts.hotspot_on = false;
+    facts.hotspot_address = NULL;
+    menu_update(m, lib, &facts, NULL);
+    menu_step(m, -3);
+    read_rows(m, r);
+    want_value(&r[0], "START", "a stopped hotspot offers START");
+    want_value(&r[4], "\xe2\x80\x94", "and the address is an em dash");
+
+    facts.hotspot_failed = true;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[0], "UNAVAILABLE", "a hotspot that could not start says so");
+
+    /* A device with no network names none. */
+    facts.network = NULL;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "none", "no chosen network reads as none");
+
+    /* Back returns to the row that opened the list. */
+    /* menu_back() answers only "did this close the Menu"; going up a level is false. */
+    menu_back(m);
+    want_str(menu_title(m), "Settings", "and lands in Settings");
+    CHECK_EQ(menu_band(m), 4, "on the Wi-Fi row");
+
+    menu_free(m);
+}
+
 static void test_settings_rows(void)
 {
     char *root = make_tree();
@@ -398,7 +464,7 @@ static void test_settings_rows(void)
     CHECK_EQ(menu_band(m), 3, "the band is on Settings");
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
     want_str(menu_title(m), "Settings", "Settings title");
-    CHECK_EQ(menu_count(m), 5, "Settings has five rows");
+    CHECK_EQ(menu_count(m), 6, "Settings has six rows");
     CHECK_EQ(menu_band(m), 0, "a pushed list starts at its first row");
     CHECK_EQ(menu_position(m), 1, "Settings position 1");
 
@@ -427,10 +493,10 @@ static void test_settings_rows(void)
     CHECK(!r[3].chevron, "Rescan has no chevron");
     CHECK(r[3].enabled, "Rescan is live when it is not running");
 
-    want_label(&r[4], "About", "Settings row 4 label");
-    want_icon(&r[4], MENU_ICON_ABOUT, "Settings row 4 icon");
+    want_label(&r[4], "Wi-Fi", "Settings row 4 label");
+    want_icon(&r[4], MENU_ICON_WIFI, "Settings row 4 icon");
     want_kind(&r[4], MENU_ROW_SUBMENU, "Settings row 4 kind");
-    CHECK(r[4].chevron, "About wears a chevron");
+    CHECK(r[4].chevron, "Wi-Fi wears a chevron");
 
     /* Backlight cycles Auto -> 100 -> 60 -> 30 -> Auto, in place. */
     CHECK_EQ(menu_activate(m), MENU_ACTION_BACKLIGHT, "Backlight returns its action");
@@ -619,8 +685,8 @@ static void test_about_rows(void)
 
     menu_step(m, 3);
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
-    menu_step(m, 4);
-    CHECK_EQ(menu_band(m), 4, "the band is on About");
+    menu_step(m, 5);
+    CHECK_EQ(menu_band(m), 4, "the band is on About (screen row 4 of 5, list row 5 of 6)");
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening About is not an action");
     want_str(menu_title(m), "About", "About title");
     CHECK_EQ(menu_count(m), 3, "About has three rows");
@@ -1341,6 +1407,7 @@ int main(void)
     test_clean_name();
     test_root_rows();
     test_settings_rows();
+    test_wifi_list();
     test_station_rows();
     test_library_rows();
     test_about_rows();

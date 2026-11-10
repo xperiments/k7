@@ -26,6 +26,7 @@
 
 #include "esp_app_desc.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_ota_ops.h"
 #include "lvgl.h"
 
@@ -42,6 +43,7 @@
 #include "cassette_layout.h"
 #include "cassette_style.h"
 #include "cassette_widgets.h"
+#include "setup.h"
 #include "cassette_window.h"
 #include "library.h"
 #include "menu.h"
@@ -147,6 +149,10 @@ static icon_glyph_t icon_of(menu_icon_t icon, bool shuffle_on)
             return (icon_glyph_t){ CASSETTE_ICON_LOOP, CASSETTE_ICON_LOOP_CP };
         case MENU_ICON_ABOUT:
             return (icon_glyph_t){ CASSETTE_ICON_K7LOGO, CASSETTE_ICON_K7LOGO_CP };
+        case MENU_ICON_WIFI:
+            /* Radio waves, which the icon font already carries: a new glyph would mean
+             * regenerating the font for one row. */
+            return (icon_glyph_t){ CASSETTE_ICON_RADIO, CASSETTE_ICON_RADIO_CP };
         case MENU_ICON_FIRMWARE:
             return (icon_glyph_t){ CASSETTE_ICON_MICRO_CHIP, CASSETTE_ICON_MICRO_CHIP_CP };
         case MENU_ICON_BOARD:
@@ -166,6 +172,11 @@ static bool icon_available(uint32_t cp)
     return lv_font_get_glyph_dsc(&xtape_24, &d, cp, 0);
 }
 
+static uint32_t now_ms(void)
+{
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
+
 static menu_facts_t build_facts(void)
 {
     menu_facts_t f;
@@ -176,6 +187,15 @@ static menu_facts_t build_facts(void)
     f.version = s_version;
     f.board = s_board;
     f.partition = s_partition;
+    /* The setup network, as the machine sees it (ADR 0076). A copy, not a call from this
+     * task into the radio: setup_status() takes the machine's lock and reads the cache. */
+    static setup_status_t setup;
+    setup_status(&setup);
+    f.hotspot_on = setup.session;
+    f.hotspot_failed = setup.ap_failed;
+    f.network = setup.provisioned ? setup.network : NULL;
+    f.setup_password = setup.password;
+    f.hotspot_address = setup.session ? SETUP_NETWORK_IP : NULL;
     return f;
 }
 
@@ -297,6 +317,18 @@ static void activate(void)
             break;
         case MENU_ACTION_SHUFFLE:
             mini_icecast_shuffle_set(!mini_icecast_shuffle_enabled());
+            break;
+        case MENU_ACTION_WIFI_TOGGLE: {
+            setup_status_t st;
+            setup_status(&st);
+            if (st.session) setup_session_stop(now_ms());
+            else if (!setup_session_start(now_ms()))
+                ESP_LOGW(TAG, "the setup network did not start");
+            break;
+        }
+        case MENU_ACTION_WIFI_RESET:
+            if (!setup_set_password("12345678", now_ms()))
+                ESP_LOGW(TAG, "the default setup password was not stored");
             break;
         case MENU_ACTION_CLOSE:
             request_close();

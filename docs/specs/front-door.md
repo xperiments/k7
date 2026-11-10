@@ -4,7 +4,11 @@
 > [ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md): the device serves no page and
 > packs no Shell, and `/`, `/index.html`, `/bridge` and `/app` now answer 302 to the App. The
 > routes and contracts in §2 are the device's API and still hold; everything below about
-> serving a page does not.
+> serving a page does not. The **one** page the device serves is `GET /setup`, which exists so a
+> device with no network can be given one — specified in
+> [`wifi-provisioning.md`](./wifi-provisioning.md) and decided by
+> [ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md). `/` still
+> redirects to the App on every interface, the setup network included.
 
 **Goal.** `http://xtape.local` is the one address and the one page. It is a small app with a
 sidebar: **Card**, **Playlists**, **Media**, **Player**. The Card area measures a card in the

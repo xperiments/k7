@@ -3,9 +3,11 @@
 **Goal.** K7 is the App — one secure origin, **installable from Chrome in one click as an
 app**, offline-capable, and useful with no player in the room. It reaches the device at
 `http://k7.local` with its own `fetch`, gated on the browser's `local-network` permission: no
-second window, no second document, no page on the device
-([ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md)). The device is a gateway, not the
-runtime.
+second window, no second document, and no page it needs the device to serve — the device's one
+page is the setup page, which exists only for a device that has no network yet
+([ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md),
+[ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)). The device is a
+gateway, not the runtime.
 
 The page the device used to serve is gone: **Front door**, **Launcher**, **Device copy**,
 **Shell** and **Bridge** are retired words.
@@ -30,7 +32,8 @@ served does not — and [`sd-stream-server.md`](./sd-stream-server.md); the Imag
 | | **App** |
 |---|---|
 | Origin | `https://k7.xperiments.dev` |
-| Served by | Vercel, with headers; the device serves no page |
+| Served by | Vercel, with headers; the device serves no page of the App (`/setup` is the one
+page it serves, and only for provisioning) |
 | Secure context | yes |
 | Owns | library processing, card writes, the PWA, WebGPU, every view |
 | Never | serves a Track, accepts a Track upload |

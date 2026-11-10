@@ -16,6 +16,118 @@
 
 esp_err_t app_board_net_start(uint16_t http_port) { (void)http_port; return ESP_OK; }
 
+/* The network record, which has no radio behind it here. By default it lives in this
+ * process's memory, so a unit test can round-trip it; XTAPE_HOST_WIFI names a file
+ * instead, which is how the integration tests give the server a network and read back
+ * what it stored. An absent file is an unprovisioned device, the same way an absent
+ * record is one on the board. */
+static bool s_record_has;
+static wifi_record_t s_record;
+
+static const char *host_record_path(void)
+{
+    const char *path = getenv("XTAPE_HOST_WIFI");
+    return (path && path[0]) ? path : NULL;
+}
+
+bool app_board_wifi_record_load(wifi_record_t *out)
+{
+    if (!out) return false;
+    wifi_record_clear(out);
+
+    const char *path = host_record_path();
+    if (path) {
+        FILE *f = fopen(path, "rb");
+        if (!f) return false;
+        uint8_t blob[WIFI_RECORD_BLOB_MAX];
+        size_t len = fread(blob, 1, sizeof blob, f);
+        fclose(f);
+        return wifi_record_decode(out, blob, len);
+    }
+    if (!s_record_has) return false;
+    *out = s_record;
+    return true;
+}
+
+esp_err_t app_board_wifi_record_save(const wifi_record_t *rec)
+{
+    if (!rec) return ESP_ERR_INVALID_ARG;
+
+    uint8_t blob[WIFI_RECORD_BLOB_MAX];
+    size_t len = wifi_record_encode(rec, blob, sizeof blob);
+    if (len == 0 && wifi_record_provisioned(rec)) return ESP_ERR_INVALID_ARG;
+
+    const char *path = host_record_path();
+    if (!wifi_record_provisioned(rec)) {
+        s_record_has = false;
+        wifi_record_clear(&s_record);
+        if (path) remove(path); /* a file that is not there is not an error */
+        return ESP_OK;
+    }
+    s_record = *rec;
+    s_record_has = true;
+    if (path) {
+        FILE *f = fopen(path, "wb");
+        if (!f) return ESP_FAIL;
+        size_t wrote = fwrite(blob, 1, len, f);
+        fclose(f);
+        if (wrote != len) return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+/* The setup password: beside the record when the test names a file, in this process
+ * otherwise - the same two shapes as the record itself. */
+static char s_setup_password[64];
+
+static bool host_password_path(char *out, size_t cap)
+{
+    const char *path = host_record_path();
+    if (!path) return false;
+    snprintf(out, cap, "%s.ap", path);
+    return true;
+}
+
+bool app_board_setup_password_load(char *out, size_t cap)
+{
+    if (!out || cap == 0) return false;
+    out[0] = '\0';
+    char path[512];
+    if (host_password_path(path, sizeof path)) {
+        FILE *f = fopen(path, "rb");
+        if (!f) return false;
+        char buf[80] = {0};
+        size_t got = fread(buf, 1, sizeof buf - 1, f);
+        fclose(f);
+        buf[got] = '\0';
+        while (got && (buf[got - 1] == '\n' || buf[got - 1] == '\r')) buf[--got] = '\0';
+        if (!wifi_record_valid_password(buf)) return false;
+        snprintf(out, cap, "%s", buf);
+        return true;
+    }
+    if (!s_setup_password[0]) return false;
+    snprintf(out, cap, "%s", s_setup_password);
+    return true;
+}
+
+esp_err_t app_board_setup_password_save(const char *password)
+{
+    if (!password) return ESP_ERR_INVALID_ARG;
+    if (*password && !wifi_record_valid_password(password)) return ESP_ERR_INVALID_ARG;
+    snprintf(s_setup_password, sizeof s_setup_password, "%s", password);
+    char path[512];
+    if (host_password_path(path, sizeof path)) {
+        if (!*password) { remove(path); return ESP_OK; }
+        FILE *f = fopen(path, "wb");
+        if (!f) return ESP_FAIL;
+        size_t len = strlen(password);
+        size_t wrote = fwrite(password, 1, len, f);
+        fclose(f);
+        return wrote == len ? ESP_OK : ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
 /* The host card, with the board's semantics: a card is present only while it is
  * mounted, so the watcher has to try a mount to see one arrive. Three switches let
  * the integration suite drive what a plain directory cannot:
@@ -196,4 +308,119 @@ void app_board_snapshot_release(void)
     image = NULL;
     image_size = 0;
     tried = false; /* a later call reads XTAPE_SNAPSHOT again */
+}
+
+/* The radio, scripted. The setup machine's policy is exercised through these knobs by the
+ * integration tests; without them the fake behaves like a board that joins anything.
+ *
+ *   XTAPE_HOST_WIFI_JOIN   "ok" (default) or "fail:<reason>[:<disconnects>]"
+ *   XTAPE_HOST_WIFI_SCAN   a file of "ssid|rssi|secure(0/1)" lines, the picker's list
+ *   XTAPE_HOST_AP_FAIL     set: the setup network cannot start
+ *   XTAPE_HOST_AP_STATE    a file the fake writes "on"/"off" to, so a test sees the radio
+ */
+static app_board_wifi_t s_radio;
+static bool s_ap_on;
+
+void app_board_wifi_state(app_board_wifi_t *out)
+{
+    if (!out) return;
+    *out = s_radio;
+}
+
+static void host_ap_note(void)
+{
+    const char *path = getenv("XTAPE_HOST_AP_STATE");
+    if (!path || !*path) return;
+    FILE *f = fopen(path, "wb");
+    if (!f) return;
+    fputs(s_ap_on ? "on" : "off", f);
+    fclose(f);
+}
+
+void app_board_wifi_forget(void)
+{
+    memset(&s_radio, 0, sizeof s_radio);
+}
+
+esp_err_t app_board_setup_ap(bool on)
+{
+    if (on == s_ap_on) return ESP_OK;
+    if (on && getenv("XTAPE_HOST_AP_FAIL")) {
+        host_ap_note();
+        return ESP_FAIL;
+    }
+    s_ap_on = on;
+    host_ap_note();
+    return ESP_OK;
+}
+
+esp_err_t app_board_wifi_join(const char *ssid, const char *pass)
+{
+    (void)pass;
+    if (!ssid || !wifi_record_valid_ssid(ssid)) return ESP_ERR_INVALID_ARG;
+
+    s_radio.disconnects = 0;
+    s_radio.last_reason = 0;
+    const char *script = getenv("XTAPE_HOST_WIFI_JOIN");
+    if (!script || strcmp(script, "ok") == 0) {
+        s_radio.associated = true;
+        snprintf(s_radio.ip, sizeof s_radio.ip, "%s", "192.168.0.44");
+        return ESP_OK;
+    }
+    int reason = 0, disconnects = 0;
+    if (strncmp(script, "fail:", 5) == 0) {
+        reason = atoi(script + 5);
+        const char *colon = strchr(script + 5, ':');
+        disconnects = colon ? atoi(colon + 1) : 0;
+    }
+    if (disconnects <= 0) disconnects = 5;
+    s_radio.associated = false;
+    s_radio.disconnects = disconnects;
+    s_radio.last_reason = reason;
+    s_radio.ip[0] = '\0';
+    return ESP_OK;
+}
+
+int app_board_wifi_scan(app_board_scan_t *out, int max, uint32_t timeout_ms)
+{
+    (void)timeout_ms;
+    if (!out || max <= 0) return -1;
+
+    const char *path = getenv("XTAPE_HOST_WIFI_SCAN");
+    int count = 0;
+    if (!path || !*path) {
+        const app_board_scan_t fixed[] = {
+            {"xperiments-2.4G", -41, true},
+            {"Cafe Guest", -66, false},
+            {"neighbour-5g", -80, true},
+        };
+        for (size_t i = 0; i < sizeof fixed / sizeof fixed[0] && count < max; i++)
+            out[count++] = fixed[i];
+        return count;
+    }
+
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    char line[160];
+    while (count < max && fgets(line, sizeof line, f)) {
+        char *bar1 = strchr(line, '|');
+        if (!bar1) continue;
+        *bar1 = '\0';
+        char *bar2 = strchr(bar1 + 1, '|');
+        if (!bar2) continue;
+        *bar2 = '\0';
+        if (line[0] == '\0') continue;
+        snprintf(out[count].ssid, sizeof out[count].ssid, "%s", line);
+        out[count].rssi = (int8_t)atoi(bar1 + 1);
+        out[count].secure = atoi(bar2 + 1) != 0;
+        count++;
+    }
+    fclose(f);
+    for (int i = 1; i < count; i++) { /* strongest first, as the board sorts it */
+        app_board_scan_t row = out[i];
+        int k = i - 1;
+        while (k >= 0 && out[k].rssi < row.rssi) { out[k + 1] = out[k]; k--; }
+        out[k + 1] = row;
+    }
+    return count;
 }

@@ -22,12 +22,13 @@ rate and encoded to MP3 for the stream.
 
 > ## Read this before you deploy it
 >
-> **This firmware serves a live stream, an analysis web app, the index, the
-> library API and a read-only MCP endpoint to anyone who can reach it, all on
-> port 80 over plain HTTP, and its Wi-Fi credentials are compiled into the
-> binary.** There is no authentication
-> anywhere: not on the index, not on the stream, and not on `/api/play` or
-> `/mcp`. (`/stream` deliberately stays open even if auth is ever
+> **This firmware serves a live stream, the index, the library API, a read-only
+> MCP endpoint and one setup page to anyone who can reach it, all on port 80 over
+> plain HTTP. Its Wi-Fi setup network `K7.local` has a default password of `12345678`,
+> and the network's password is stored on the device in plaintext.** There is no
+> authentication
+> anywhere: not on the index, not on the stream, not on `/setup`, and not on
+> `/api/play` or `/mcp`. (`/stream` deliberately stays open even if auth is ever
 > added — car head units and hardware players cannot send credentials in a stream
 > URL.)
 >
@@ -68,18 +69,20 @@ idf.py build
 idf.py -p /dev/tty.usbserial-XXXX flash monitor
 ```
 
-Before the first build, put your network in place:
+There is nothing to edit before the first build: **the network is chosen on the device, not compiled
+in** ([`docs/specs/wifi-provisioning.md`](./docs/specs/wifi-provisioning.md), [ADR 0076](./docs/adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)).
 
-```bash
-cp components/app/board_esp32/wifi_credentials.h.example components/app/board_esp32/wifi_credentials.h
-$EDITOR components/app/board_esp32/wifi_credentials.h        # your SSID and password
-```
+1. Power the device up with no network stored. It raises the setup network **`K7.local`**, with the
+   default password `12345678`.
+2. Join it from a phone or a laptop and open **`http://192.168.4.1/setup`** — or
+   `http://k7.local/setup` where mDNS works. Pick your network from the list, or type its name, and
+   give its password.
+3. The device joins, and the setup network closes after a minute. `Menu → Settings → Wi-Fi` on the
+   panel shows the chosen network, the setup network's password and its address, and can raise it
+   again without a reflash or a power cycle.
 
-That header is **gitignored**, so a real network password never enters version
-control, while still being compiled into the binary. A clean checkout builds
-without it (the log warns that the device will not join a network). There is no
-runtime provisioning mechanism: changing the credentials means editing the header
-and reflashing (a deliberate deferral, not an oversight).
+The choice is stored in NVS, so `idf.py flash` keeps it. `idf.py erase-flash` does not — the device
+comes back **unprovisioned**, which is the same state a new board arrives in.
 
 `sdkconfig.defaults` sets the flash size to 16 MB and the application partition to
 1.5 MB, matching the N16R8 class of module. If your board has a different flash
@@ -452,7 +455,11 @@ Four things the host cannot establish, by construction:
    35 % of one core with no starvation rebases over an hour's soak; the device logs
    its measured cost once a minute (`encoder: N frames, X us/frame = Y % of one
    core`).
-2. **Memory fit** with Wi-Fi, lwIP, the decoder and the encoder all live.
+2. **Memory fit** with Wi-Fi, lwIP, the decoder and the encoder all live — and, while
+   the **Setup network** is up, with the access point's own allocation on top of
+   them, which lands at the tightest moment the device has. The census is taken with
+   the setup network up and the stream playing, and the number is recorded here, not on the
+   host ([`docs/specs/wifi-provisioning.md`](./docs/specs/wifi-provisioning.md) §9).
 3. **microSD contention and timing** — a macOS file read says nothing about the
    SDMMC bus.
 4. **FATFS behaviour** — case sensitivity, long-name limits, and the AppleDouble
@@ -512,7 +519,17 @@ chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1*
 | A mounted but empty card is distinguishable from an absent one | `card on SPI: CS 10, CLK 12, MOSI 11, MISO 13`, then `/sdcard/music does not exist` |
 | No card: the device degrades instead of aborting (R8/T10) | `no card mounted: ESP_ERR_TIMEOUT (0x107)` then `the device will still serve on the network` |
 | Card retries are paced, not a tight loop (T10) | `still no card: ...; retrying in 5 s`, one line per attempt |
-| A wrong SSID is diagnosable rather than silent | `Wi-Fi: cannot join ... (reason 201), attempt 1; check components/app/board_esp32/wifi_credentials.h` |
+| A wrong SSID is diagnosable rather than silent | `Wi-Fi: cannot join ... (reason 201), attempt 1; join K7.local and choose a network at http://192.168.4.1/setup` |
+| The setup network comes up on a device with no network (SU-03) | `setup network up: K7.local at http://192.168.4.1/setup (password 12345678); internal free 123183 B, largest 49152 B`, preceded by `erased the station copy an earlier build left in NVS: ESP_OK` |
+| It fits, with the stream playing (SU-07/P40) | ten seconds later: `memory with the setup network up and the stream playing: internal free 43815 B, largest 31744 B` — an **unprovisioned** device, so the station's own lwIP state is not part of that pair; the on-demand case (station associated *and* hotspot up) is not measured |
+| The page, from a client on the hotspot (SU-07/B1) | `sh host/tests/board_setup.sh`: `/setup` 200 with the 2.4 GHz line, `http://k7.local/setup` resolved there by mDNS |
+| The stream over the hotspot (SU-07/B7) | 132–146 KB in four seconds, `icy-name` present — the mountain case |
+| A real wrong password, and the reason after a reload (SU-07/B2) | `{"ok":false,"reason":15,"tries":5,"why":"wrong password"}`, then `last_attempt` in `GET /api/setup`; against another network the reason was **2** (auth refused), also mapped |
+| A real join, and the hotspot closing itself (SU-07/B3) | `the device joined xperiments-2.4G`, `the hotspot closed on its own`, then `http://k7.local/api/status` 200 from the LAN |
+| The record survives a reflash (SU-07/B6) | after `idf.py flash`: `board: app: http://192.168.0.13/` with no `no network stored` line |
+| An on-demand hotspot on a connected device (SU-07) | `POST /api/setup/ap {"on":true}` → 204; `"state":"setup"`, the LAN address unchanged, `"closes_in_ms":0` — it stays until it is stopped |
+| Eight minutes with the hotspot up and a client streaming (SU-07/B5) | **0 starvation rebases, 0 ms ring-starved, 0 reboots**; internal free never below 25 355 B; the encoder at **64.0 %** of one core against 52.9 % without the hotspot — the setup network costs about 11 points on this material, and stops nothing |
+| The setup page and its API, end to end (SU-04/SU-05) | host tier: `setup: ok (0 failures)` — the page, the picker, the 400s, a join that works, a join that fails with reason 15, the password and the hotspot's own switch |
 | The HTTP surface, end to end | `BOARD_URL=http://192.168.0.44:8000 sh host/tests/http_tests.sh`: **80 passed, 0 failed** in the run recorded here, three runs in a row with no reboot in between; the download checks in that run were withdrawn with the route |
 | ICY metadata at the advertised interval (T5) | `metadata block at exactly 16000: StreamTitle='...' (2 blocks, 32 bytes)` |
 | A refused station format serves nothing (T12) | with `out_hz = 44101`: `station format refused: station rate 44101 Hz is not one the encoder accepts; use one of ...`, then `not serving: ESP_ERR_INVALID_ARG`, and no listener, no Wi-Fi, no reboot |
@@ -807,9 +824,8 @@ tier on its own:
 Two things are needed first, and neither is in the repository:
 
 ```bash
-cp components/app/board_esp32/wifi_credentials.h.example components/app/board_esp32/wifi_credentials.h
-$EDITOR components/app/board_esp32/wifi_credentials.h                 # SSID and password; gitignored
 idf.py -p /dev/cu.usbserial-834430 flash
+# then join K7.local (password 12345678) and open http://192.168.4.1/setup to pick a network
 
 # and, on the card, a music directory holding the corpus:
 mkdir -p /Volumes/YOURCARD/music
@@ -917,7 +933,7 @@ components/
     shine/                  vendored toots/shine MP3 encoder (LGPL-2.0-only)
   app/                      firmware only: the entry policy, the board adapter and the screen
     appliance/              the entry policy: station format, card retry, console
-    board_esp32/            Wi-Fi, SPI card mount, hardware census; credentials live here
+    board_esp32/            Wi-Fi, the setup network, SPI card mount, hardware census
     screen_display/         panel and touch bring-up, LVGL's PSRAM allocator, the cassette
                             composition and its parts (bars, tapes, meter, levels, peek,
                             buttons, eq, input)
@@ -1204,8 +1220,14 @@ to PSRAM and takes internal free from 35 327 B to **154 643 B** (largest block 1
   WebDAV/SMB mount and no upload path; see the premise at the top. Music goes onto the
   card with the card in a reader. The index views are still fetchable — they are the
   device's own summary, not a song.
-* **No Wi-Fi provisioning UI** and no OTA updates; discovery is the fixed
-  `xtape.local`, so two devices on one LAN collide. Credentials are compiled in.
+* **Wi-Fi provisioning is proven from the device's side, not yet from the far side of the
+  hotspot.** The board raises `K7.local` and logs it; the page, its API and the join flow are
+  driven end to end on the host tier. Nobody has yet fetched `http://192.168.4.1/setup` from a
+  client joined to that network, played the stream over it, or watched a browsing client
+  survive the channel move. A device that has never been provisioned also serves nothing on a
+  LAN until it is.
+* **No OTA updates.** Wi-Fi *is* provisioned on the device itself: the `K7.local` setup network and
+  `http://192.168.4.1/setup` choose the network, and `Menu → Settings → Wi-Fi` raises it again. Discovery is still the fixed `k7.local`, so two devices on one LAN collide.
 * **Card removal is not hot-detected.** If the card is pulled after boot, reads start
   failing, the broadcast skips the Track, and the Library stays stale until you rescan
   (`POST /api/rescan`) or reboot.

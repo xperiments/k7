@@ -1,8 +1,9 @@
 # SD stream server: specification
 
-**Goal.** An ESP32-S3 devkit, flashed with this firmware, joins Wi-Fi with hardcoded
-credentials, reads an audio library off a microSD card, and broadcasts it over HTTP: one
-continuous live MP3 stream plus an index that lists the library.
+**Goal.** An ESP32-S3 devkit, flashed with this firmware, joins Wi-Fi, reads an audio library off
+a microSD card, and broadcasts it over HTTP: one continuous live MP3 stream plus an index that
+lists the library. Which network it joins is chosen on its own setup network — never compiled in
+([`wifi-provisioning.md`](./wifi-provisioning.md), [ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)).
 
 > **Amended 2026-10-31 by the global premise.** `docs/specs/CONTEXT.md` now states that this
 > device never serves or accepts a Track: all SD content processing happens outside it. R7 (the `/music/<path>` download), D5, D6 and tests T7, T8, T9, T9b and
@@ -48,7 +49,7 @@ flagged so they can be disproved on hardware.
 
 | # | Requirement |
 |---|---|
-| R1 | Boot on an ESP32-S3 devkit **with PSRAM**, join Wi-Fi using credentials compiled into the source |
+| R1 | Boot on an ESP32-S3 devkit **with PSRAM**, join Wi-Fi — the network chosen once on the device's **Setup network** and stored in NVS, never compiled in ([`wifi-provisioning.md`](./wifi-provisioning.md), [ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)) |
 | R2 | Mount the microSD card over 1-bit SDMMC at `/sdcard` |
 | R3 | Decode `.mp3`, `.flac`, `.wav` — any sample rate — from the Library tree |
 | R4 | Resample everything to one station rate and encode to **MP3** |
@@ -61,8 +62,9 @@ flagged so they can be disproved on hardware.
 
 Opus, Vorbis, Ogg, WebM, Matroska, AAC — the plan's §1 removes all of them and this
 specification reinstates none. Also excluded: TLS, HTTP authentication, transcode-on-demand,
-range/seek support, OTA updates, and any runtime mechanism for changing Wi-Fi credentials (a
-deliberate deferral, recorded in §11). By the global premise, every Track-serving or
+range/seek support, OTA updates, and a captive portal for provisioning (the one page the device
+serves is [`wifi-provisioning.md`](./wifi-provisioning.md)'s, reached by typing the address the
+panel prints). By the global premise, every Track-serving or
 Track-upload surface is excluded too: per-Track GET, a WebDAV/SMB/FTP mount, PUT and
 multipart. (mDNS advertisement of `_mcp._tcp` is part of the MCP surface, not general service
 discovery.)
@@ -533,13 +535,16 @@ A request without `Origin` is accepted even with a different `Host`.
 reach port 8000**. There is no authentication, by decision and not by omission.
 
 The reasoning: the card holds audio you own, the device is intended for your own LAN, and any
-auth scheme needs a credential store that contradicts R1's "hardcoded for now" deferral. The
-cost is stated rather than hidden:
+auth scheme needs a credential store and a way to give a person the credential — for a stream that
+hardware players must be able to open with a bare URL (A2). The store the device does keep is for
+Wi-Fi, not for people ([`wifi-provisioning.md`](./wifi-provisioning.md)). The cost is stated rather
+than hidden:
 
 **Requirement A1.** The README must state, in the deployment section and not in a footnote,
 that this firmware serves a live stream, an unauthenticated index listing and unauthenticated
-control endpoints, that the Wi-Fi credentials are compiled into the binary, and that it must
-not be placed on an untrusted network or port-forwarded.
+control endpoints, that the home network's password is stored on the device in plaintext, that
+the setup page at `/setup` is open to anyone who can reach it, and that the device must not be
+placed on an untrusted network or port-forwarded.
 
 **Requirement A2.** `/stream` stays open even if auth is added later. Hardware players, car
 head units and VLC cannot supply Basic credentials in a stream URL, and closing it would
@@ -816,9 +821,11 @@ These are genuinely unresolved and should not be treated as settled by this docu
    build-breaking prerequisite. Read the module marking (N8R8 → typically OCT) or try both.
 4. **`shine` audio quality versus LAME.** Real, acknowledged, and unavoidable at this power
    budget — `shine` is the only fixed-point MP3 encoder that fits.
-5. **Wi-Fi credential provisioning.** Deferred by decision. The current edit-the-source-and-reflash
-   path means a credentials change is a full rebuild; the natural follow-up is NVS + a captive
-   portal or a build-time `Kconfig` string. Not in this scope.
+5. **Wi-Fi credential provisioning.** Resolved, not deferred: the network is chosen on the
+   device's own setup network and stored in NVS ([`wifi-provisioning.md`](./wifi-provisioning.md),
+   [ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)). Two questions
+   that document leaves open — whether the access point fits the internal-RAM census, and whether a
+   client survives the channel move — are its §11, not this one's.
 6. **Whether real target clients (car head unit, hardware internet radio) accept this stream.**
    MP3 removes the format question that killed endless-WAV, but an hour of smoke testing
    against the actual clients is still worth spending.

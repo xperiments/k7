@@ -3,16 +3,17 @@
  * app_board - what the services need from the board, and nothing else.
  *
  * The seam exists because it already has two real adapters: the ESP32-S3 board
- * (components/app/board_esp32/board_esp32.c: Wi-Fi credentials, the SPI card mount,
- * the hardware census) and the host build (host/board_host.c: no network, the
- * fixture directory always mounted). The composition and the appliance call this and
- * know nothing about GPIOs, esp_wifi or FAT.
+ * (components/app/board_esp32/board_esp32.c: the Wi-Fi record and the setup network,
+ * the SPI card mount, the hardware census) and the host build (host/board_host.c: no
+ * radio, a record kept in memory or a file, the fixture directory always mounted). The
+ * composition and the appliance call this and know nothing about GPIOs, esp_wifi or NVS.
  */
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "wifi_record.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,6 +48,80 @@ void app_board_log_hardware(void);
 /* The current station IPv4 address, without the port. False until Wi-Fi has an
  * address (the host adapter always has 127.0.0.1). */
 bool app_board_local_ip(char *out, size_t out_size);
+
+/* The network this device joins, as stored. False means **unprovisioned**: no record,
+ * or one that no longer decodes, and `out` is cleared so the caller never sees a
+ * half-record. The device stores this itself (NVS on the board, memory or a file on the
+ * host); nothing compiles a network in. ADR 0076, wifi-provisioning.md §5. */
+bool app_board_wifi_record_load(wifi_record_t *out);
+
+/* Store the network. The record is validated by its own codec before anything is
+ * written, so an invalid one is ESP_ERR_INVALID_ARG and the stored record is untouched.
+ * A *valid* record with an empty SSID erases the stored one - "forget this network" -
+ * rather than storing a record that means unprovisioned, because there is only one way
+ * for the device to be unprovisioned. */
+esp_err_t app_board_wifi_record_save(const wifi_record_t *rec);
+
+/* The setup network's password, in its own key rather than in the network's record: a
+ * device can carry one before it has a network at all, and "unprovisioned" has to keep
+ * meaning exactly one thing (wifi-provisioning.md P25). Absent or empty means the default,
+ * WIFI_RECORD_DEFAULT_SETUP_PASSWORD; `_save("")` restores it. */
+bool app_board_setup_password_load(char *out, size_t cap);
+esp_err_t app_board_setup_password_save(const char *password);
+
+/* --------------------------------------------------------------- the radio
+ *
+ * What the setup machine needs and nothing more: whether the station is associated,
+ * what the radio has done since the last join, how to ask for the setup network, how to
+ * try a network, and what the radio can see. The policy - when the setup network is up,
+ * how many attempts, the grace window - is portable (components/portable/setup) and
+ * host-tested; this is only the machinery it drives. */
+/* The setup network's identity, named once: the adapter starts an access point with
+ * these, and the page prints them. (The address is the pass point's default lease; it
+ * is written down because a person types it.) */
+#define SETUP_NETWORK_SSID "K7.local"
+#define SETUP_NETWORK_IP   "192.168.4.1"
+
+/* How long the device tries its stored network at boot before the setup network appears
+ * (wifi-provisioning.md P9). Not a tuning knob: it is the point where "the router is slow"
+ * stops being the explanation. */
+#define SETUP_BOOT_WINDOW_MS 20000
+
+typedef struct {
+    bool associated;   /* the station has an address */
+    int  disconnects;  /* disconnect events since app_board_wifi_join(), 0 before one */
+    int  last_reason;  /* the most recent one's reason code, 0 when there has been none */
+    char ip[16];       /* the station's address, "" when it has none */
+} app_board_wifi_t;
+
+/* A reading of the radio, never a wait. */
+void app_board_wifi_state(app_board_wifi_t *out);
+
+/* Try `ssid` with `pass` (empty for an open network) and return once the attempt is
+ * under way: association arrives through app_board_wifi_state(). The disconnect counter
+ * and the last reason start again from zero, so an attempt's failures can be counted. */
+esp_err_t app_board_wifi_join(const char *ssid, const char *pass);
+
+/* Stop trying: drop the station's configuration and any association attempt. What a
+ * forgotten network needs (wifi-provisioning.md P24) - without it the radio keeps retrying
+ * the network that was just erased, and a retrying station refuses a scan. */
+void app_board_wifi_forget(void);
+
+/* Raise or drop the setup network, `K7.local` at 192.168.4.1 (ADR 0076). Idempotent:
+ * asking for the state it is already in is not an error. A failure is the caller's to
+ * report and retry - on this board it means the radio could not allocate. */
+esp_err_t app_board_setup_ap(bool on);
+
+/* One row per network the radio can see, strongest first. Returns the count, or -1 when
+ * the scan could not run (busy, out of memory, the radio down). Blocking, bounded by
+ * `timeout_ms`: about two seconds of airtime for the band. */
+typedef struct {
+    char ssid[WIFI_RECORD_SSID_MAX + 1];
+    int8_t rssi;
+    bool secure; /* anything but WIFI_AUTH_OPEN */
+} app_board_scan_t;
+#define APP_BOARD_SCAN_MAX 24
+int app_board_wifi_scan(app_board_scan_t *out, int max, uint32_t timeout_ms);
 
 /* Advertise `hostname.local` and `_mcp._tcp` with the endpoint TXT records. The
  * appliance calls this after the HTTP listener is up and Wi-Fi has an address;

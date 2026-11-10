@@ -36,6 +36,8 @@
 #include "snapshot.h"
 #include "snapshot_http.h"
 #include "front_door.h"
+#include "setup.h"
+#include "setup_http.h"
 #include "flash_job.h"
 #include "playlist_select.h"
 #include "playlist_http.h"
@@ -461,6 +463,14 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     esp_err_t e = app_board_net_start(cfg->port);
     if (e != ESP_OK) return fail(report, e, "network");
 
+    /* The setup network's policy starts here, right after the radio: a device with no
+     * network raises its own access point before anything else can go wrong, and the tick
+     * task is what decides the boot window, the grace close and the retries. It is not a
+     * failure if the access point cannot start - the machine keeps asking and the panel
+     * says so (wifi-provisioning.md P35). */
+    setup_init();
+    setup_start_task();
+
     /* 3. The card. A missing card is a report, not a failure (R8). */
     app_board_card_t card = app_board_card_mount(cfg->music_dir);
     if (report) {
@@ -652,6 +662,10 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
 
     e = snapshot_http_start();
     if (e != ESP_OK) return fail(report, e, "snapshot endpoint");
+
+    /* The one page the device serves, and the routes behind it (ADR 0076). */
+    e = setup_http_start();
+    if (e != ESP_OK) return fail(report, e, "setup page");
 
     /* CORS preflight for the App's origin. Local Network Access, as specified, would let
      * https://k7.xperiments.dev fetch this device over plain HTTP once the user grants the

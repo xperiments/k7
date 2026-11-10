@@ -1,7 +1,8 @@
 # Deploying K7
 
 **Goal.** One artifact from one repository: the **App** at `https://k7.xperiments.dev`. The
-device serves no page — it answers the API and the stream, and the App reaches it directly over
+device serves no page of the App — it answers the API and the stream, plus `/setup` for
+a device that has no network yet, and the App reaches it directly over
 the local network once a person grants the `local-network` permission (ADR 0067). A development
 origin, `https://k7-dev.xperiments.dev:8000`, exists so connected mode can be tested against the
 same shape it ships in — real TLS, no warning, a genuine secure context.
@@ -135,7 +136,9 @@ shape: worker, headers and all.
 | The App (Vercel) | `npm run build` | trusts `http://k7.local`; the `local-network` permission is asked for at first render |
 
 **D13. There is no device artifact.** ADR 0067 removed the Launcher and the Shell: the firmware
-packs no page, `/` and `/bridge` answer 404, and the App at its own origin is the only UI.
+packs no page of the App, `/` and `/bridge` answer 404 (to the App, since 0067), and the App at its
+own origin is the only UI. The one page the firmware serves is `GET /setup`
+([ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)).
 
 **D14. A shipping build refuses a development origin.** The deployed artifact fails the check if
 the development origin's string appears anywhere in `dist`.

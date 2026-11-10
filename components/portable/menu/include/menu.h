@@ -53,6 +53,7 @@ typedef enum {
     MENU_ICON_FIRMWARE,  /* About's three value rows */
     MENU_ICON_BOARD,
     MENU_ICON_PARTITION,
+    MENU_ICON_WIFI,      /* Settings' Wi-Fi row and the setup network's own list */
 } menu_icon_t;
 
 typedef enum {
@@ -83,6 +84,8 @@ typedef enum {
     MENU_ACTION_BACKLIGHT, /* menu_action_backlight() is the new percent (0 = Auto) */
     MENU_ACTION_SHUFFLE,   /* toggle the mode (ADR 0023) */
     MENU_ACTION_CLOSE,     /* the view should close the Menu */
+    MENU_ACTION_WIFI_TOGGLE, /* start the setup network, or stop it */
+    MENU_ACTION_WIFI_RESET,  /* restore the default setup password */
 } menu_action_t;
 
 /* What the view knows and the model cannot: the board's facts and the settings' current
@@ -94,6 +97,15 @@ typedef struct {
     const char *version;
     const char *board;
     const char *partition;
+    /* The setup network (ADR 0076). `network` is the chosen home network, NULL when the
+     * device has none; `setup_password` is the hotspot's password, in clear, because the
+     * panel is the only place it can be read back; `hotspot_address` is non-NULL only while
+     * the hotspot is up. */
+    bool        hotspot_on;
+    bool        hotspot_failed;
+    const char *network;
+    const char *setup_password;
+    const char *hotspot_address;
 } menu_facts_t;
 
 typedef struct menu menu_t;

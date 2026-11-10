@@ -8,6 +8,7 @@
  */
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -26,6 +27,7 @@
 #include "esp_wifi.h"
 
 #include "mdns.h"
+#include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
@@ -34,21 +36,11 @@
 
 #include "app_board.h"
 
-/* The credentials are compiled in, as the specification requires, but they live in
- * a gitignored header so a real network password does not end up in version
- * control. Copy components/app/board_esp32/wifi_credentials.h.example to
- * wifi_credentials.h and fill it in; the placeholders below keep a clean checkout
- * building. */
-#if defined(__has_include)
-#if __has_include("wifi_credentials.h")
-#include "wifi_credentials.h"
-#endif
-#endif
-#ifndef WIFI_SSID
-#define WIFI_SSID "your-ssid"
-#define WIFI_PASS "your-password"
-#warning "components/app/board_esp32/wifi_credentials.h is missing: the device will not join a network (see README)"
-#endif
+/* No network is compiled in: the one this device joins lives in an NVS record and is
+ * chosen on the device's own setup network (ADR 0076). The record's bytes and its rules
+ * are portable (components/portable/wifi_record); this file owns the store and the radio.
+ * It is the only flash write that carries a password, and it is plaintext - see the
+ * record's own header for why that is stated rather than lamented. */
 
 /* The card is wired over SPI, not the 1-bit SDMMC the specification's §2.3
  * assumed (which read the pins off the original example rather than off this
@@ -72,6 +64,13 @@ static const char *TAG = "board";
 
 static EventGroupHandle_t wifi_ev;
 static int wifi_attempts;
+static bool s_provisioned;
+static char s_ssid[WIFI_RECORD_SSID_MAX + 1];
+static bool s_got_ip;
+static int s_disconnects;
+static int s_last_reason;
+static bool s_ap_on;
+static esp_netif_t *s_ap_netif;
 static uint16_t s_http_port = 8000;
 static char s_local_ip[16];
 
@@ -79,24 +78,50 @@ static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     (void)arg;
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
+        /* Unprovisioned is a state, not a failure: there is no network to dial, so the
+         * station stays up and silent until a person chooses one. */
+        if (s_provisioned) esp_wifi_connect();
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
+        if (!s_provisioned) return;
+        s_got_ip = false;
+        s_disconnects++;
+        s_last_reason = ((wifi_event_sta_disconnected_t *)data)->reason;
         /* Retrying in silence makes a mistyped SSID look like a dead device, and
          * this device is meant to be diagnosable. First failure, then every tenth,
          * so the log stays bounded. */
         wifi_event_sta_disconnected_t *e = data;
         if (++wifi_attempts == 1 || wifi_attempts % 10 == 0)
             ESP_LOGW(TAG, "Wi-Fi: cannot join \"%s\" (reason %d), attempt %d; "
-                          "check components/app/board_esp32/wifi_credentials.h",
-                     WIFI_SSID, e->reason, wifi_attempts);
+                          "join K7.local and choose a network at http://192.168.4.1/setup",
+                     s_ssid, e->reason, wifi_attempts);
         esp_wifi_connect();
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
+        s_got_ip = true;
         ip_event_got_ip_t *e = data;
         snprintf(s_local_ip, sizeof s_local_ip, IPSTR, IP2STR(&e->ip_info.ip));
         ESP_LOGI(TAG, "app: http://" IPSTR "/  stream: http://" IPSTR "/stream",
                  IP2STR(&e->ip_info.ip), IP2STR(&e->ip_info.ip));
         xEventGroupSetBits(wifi_ev, 1);
     }
+}
+
+/* An earlier build compiled the network in, and ESP-IDF persisted that station
+ * configuration into its own NVS namespace on the first boot. The record is the only copy
+ * now, so the old one is erased: wifi-provisioning.md P24 says the flash holds the
+ * password once, and a leftover copy is still a password on the flash. Opening READONLY
+ * first keeps this from creating the namespace it is trying to remove; a device that
+ * never ran the old build has nothing there and costs one failed open. */
+static void erase_stale_station_copy(void)
+{
+    nvs_handle_t h;
+    if (nvs_open("nvs.net80211", NVS_READONLY, &h) != ESP_OK) return;
+    nvs_close(h);
+    if (nvs_open("nvs.net80211", NVS_READWRITE, &h) != ESP_OK) return;
+    esp_err_t e = nvs_erase_all(h);
+    if (e == ESP_OK) e = nvs_commit(h);
+    nvs_close(h);
+    ESP_LOGW(TAG, "erased the station copy an earlier build left in NVS: %s",
+             esp_err_to_name(e));
 }
 
 esp_err_t app_board_net_start(uint16_t http_port)
@@ -111,11 +136,30 @@ esp_err_t app_board_net_start(uint16_t http_port)
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_evt, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, wifi_evt, NULL));
 
-    wifi_config_t wc = {0};
-    strlcpy((char *)wc.sta.ssid, WIFI_SSID, sizeof wc.sta.ssid);
-    strlcpy((char *)wc.sta.password, WIFI_PASS, sizeof wc.sta.password);
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wc));
+    erase_stale_station_copy();
+
+    /* The record is the only copy on the flash. ESP-IDF would otherwise persist the
+     * station configuration into its own NVS namespace on the first boot, and the two
+     * copies would then disagree about which one is the truth. */
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+
+    wifi_record_t rec;
+    s_provisioned = app_board_wifi_record_load(&rec);
+    if (s_provisioned) {
+        snprintf(s_ssid, sizeof s_ssid, "%s", rec.ssid);
+        /* WIFI_AUTH_OPEN as the threshold is deliberate: it admits an open network and
+         * every PSK/SAE mode above it, and the record's validation has already decided
+         * that the password is well formed. */
+        wifi_config_t wc = {0};
+        strlcpy((char *)wc.sta.ssid, rec.ssid, sizeof wc.sta.ssid);
+        strlcpy((char *)wc.sta.password, rec.pass, sizeof wc.sta.password);
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wc));
+    } else {
+        ESP_LOGW(TAG, "no network stored: join K7.local and choose one at "
+                      "http://192.168.4.1/setup");
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    }
     ESP_ERROR_CHECK(esp_wifi_start());
     esp_wifi_set_ps(WIFI_PS_NONE); /* modem sleep adds latency spikes: bad for streaming */
     return ESP_OK;
@@ -128,7 +172,11 @@ const char *app_board_name(void)
 
 void app_board_wait_online(void)
 {
-    if (wifi_ev) xEventGroupWaitBits(wifi_ev, 1, pdFALSE, pdTRUE, portMAX_DELAY);
+    if (!wifi_ev) return;
+    /* Bounded, and that is the change: an unprovisioned device has no address coming, and
+     * waiting forever would keep it from mDNS on its own setup network and from the loop
+     * that applies a card's update file. The setup machine owns what happens next. */
+    xEventGroupWaitBits(wifi_ev, 1, pdFALSE, pdTRUE, pdMS_TO_TICKS(SETUP_BOOT_WINDOW_MS + 5000));
 }
 
 bool app_board_local_ip(char *out, size_t out_size)
@@ -136,6 +184,279 @@ bool app_board_local_ip(char *out, size_t out_size)
     if (!out || !out_size || !s_local_ip[0]) return false;
     snprintf(out, out_size, "%s", s_local_ip);
     return true;
+}
+
+/* The record. NVS validates the blob's own checksum on read, so a failure here is
+ * "there is no usable record", which is the unprovisioned state - never a partial one. */
+bool app_board_wifi_record_load(wifi_record_t *out)
+{
+    if (!out) return false;
+    wifi_record_clear(out);
+
+    nvs_handle_t h;
+    if (nvs_open(WIFI_RECORD_NAMESPACE, NVS_READONLY, &h) != ESP_OK) return false;
+    uint8_t blob[WIFI_RECORD_BLOB_MAX];
+    size_t len = sizeof blob;
+    esp_err_t e = nvs_get_blob(h, WIFI_RECORD_KEY, blob, &len);
+    nvs_close(h);
+    if (e != ESP_OK) return false;
+    return wifi_record_decode(out, blob, len);
+}
+
+esp_err_t app_board_wifi_record_save(const wifi_record_t *rec)
+{
+    if (!rec) return ESP_ERR_INVALID_ARG;
+
+    /* Encode first: a record the codec refuses is never opened, never erased and never
+     * written, so a bad password cannot reach the flash or take a good record with it. */
+    uint8_t blob[WIFI_RECORD_BLOB_MAX];
+    size_t len = wifi_record_encode(rec, blob, sizeof blob);
+    if (len == 0 && wifi_record_provisioned(rec)) return ESP_ERR_INVALID_ARG;
+
+    nvs_handle_t h;
+    esp_err_t e = nvs_open(WIFI_RECORD_NAMESPACE, NVS_READWRITE, &h);
+    if (e != ESP_OK) return e;
+
+    if (!wifi_record_provisioned(rec)) {
+        /* "Forget this network": the record goes, and absence is the one way to be
+         * unprovisioned. Erasing a key that is not there is not an error. */
+        e = nvs_erase_key(h, WIFI_RECORD_KEY);
+        if (e == ESP_ERR_NVS_NOT_FOUND) e = ESP_OK;
+    } else {
+        e = nvs_set_blob(h, WIFI_RECORD_KEY, blob, len);
+    }
+    if (e == ESP_OK) e = nvs_commit(h);
+    nvs_close(h);
+    return e;
+}
+
+/* The setup network's password: a string key beside the network's record (P25). */
+#define SETUP_PASSWORD_KEY "ap"
+
+bool app_board_setup_password_load(char *out, size_t cap)
+{
+    if (!out || cap == 0) return false;
+    out[0] = '\0';
+    nvs_handle_t h;
+    if (nvs_open(WIFI_RECORD_NAMESPACE, NVS_READONLY, &h) != ESP_OK) return false;
+    size_t len = cap;
+    esp_err_t e = nvs_get_str(h, SETUP_PASSWORD_KEY, out, &len);
+    nvs_close(h);
+    if (e != ESP_OK || !wifi_record_valid_password(out)) {
+        out[0] = '\0';
+        return false;
+    }
+    return true;
+}
+
+esp_err_t app_board_setup_password_save(const char *password)
+{
+    if (!password) return ESP_ERR_INVALID_ARG;
+    if (*password && !wifi_record_valid_password(password)) return ESP_ERR_INVALID_ARG;
+
+    nvs_handle_t h;
+    esp_err_t e = nvs_open(WIFI_RECORD_NAMESPACE, NVS_READWRITE, &h);
+    if (e != ESP_OK) return e;
+    if (*password) {
+        e = nvs_set_str(h, SETUP_PASSWORD_KEY, password);
+    } else {
+        e = nvs_erase_key(h, SETUP_PASSWORD_KEY);
+        if (e == ESP_ERR_NVS_NOT_FOUND) e = ESP_OK;
+    }
+    if (e == ESP_OK) e = nvs_commit(h);
+    nvs_close(h);
+    return e;
+}
+
+/* ----------------------------------------------------------------- the radio */
+
+void app_board_wifi_state(app_board_wifi_t *out)
+{
+    if (!out) return;
+    memset(out, 0, sizeof *out);
+    out->associated = s_got_ip;
+    out->disconnects = s_disconnects;
+    out->last_reason = s_last_reason;
+    if (s_got_ip) snprintf(out->ip, sizeof out->ip, "%s", s_local_ip);
+}
+
+esp_err_t app_board_wifi_join(const char *ssid, const char *pass)
+{
+    if (!ssid || !wifi_record_valid_ssid(ssid)) return ESP_ERR_INVALID_ARG;
+    if (pass && *pass && !wifi_record_valid_password(pass)) return ESP_ERR_INVALID_ARG;
+
+    s_disconnects = 0;
+    s_last_reason = 0;
+    s_got_ip = false;
+
+    wifi_config_t wc = {0};
+    strlcpy((char *)wc.sta.ssid, ssid, sizeof wc.sta.ssid);
+    strlcpy((char *)wc.sta.password, pass ? pass : "", sizeof wc.sta.password);
+
+    (void)esp_wifi_disconnect(); /* not associated is not an error here */
+    esp_err_t e = esp_wifi_set_config(WIFI_IF_STA, &wc);
+    if (e != ESP_OK) return e;
+
+    s_provisioned = true;
+    snprintf(s_ssid, sizeof s_ssid, "%s", ssid);
+    return esp_wifi_connect();
+}
+
+/* The census P40 asks for: with the setup network up AND the stream playing. The
+ * access point starts before the encoder takes its ~96 KB, so the honest number is a
+ * second one, ten seconds later, when the broadcast is live. One line, once per start. */
+static void census_with_stream(void *arg)
+{
+    (void)arg;
+    ESP_LOGI(TAG, "memory with the setup network up and the stream playing: internal free %u B, "
+                  "largest %u B",
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+}
+
+static void census_in_ten_seconds(void)
+{
+    static esp_timer_handle_t once;
+    const esp_timer_create_args_t args = {
+        .callback = census_with_stream,
+        .name = "census",
+    };
+    if (!once && esp_timer_create(&args, &once) != ESP_OK) return;
+    if (once) esp_timer_start_once(once, 10 * 1000 * 1000);
+}
+
+void app_board_wifi_forget(void)
+{
+    wifi_config_t empty = {0}; /* an empty SSID is not a network: the station idles */
+    (void)esp_wifi_disconnect();
+    (void)esp_wifi_set_config(WIFI_IF_STA, &empty);
+    s_provisioned = false;
+    s_got_ip = false;
+    s_disconnects = 0;
+    s_last_reason = 0;
+    s_ssid[0] = '\0';
+}
+
+esp_err_t app_board_setup_ap(bool on)
+{
+    if (on == s_ap_on) return ESP_OK;
+
+    if (on) {
+        if (!s_ap_netif) {
+            s_ap_netif = esp_netif_create_default_wifi_ap();
+            if (!s_ap_netif) return ESP_ERR_NO_MEM;
+        }
+        wifi_record_t rec;
+        const char *pass = app_board_wifi_record_load(&rec)
+                               ? wifi_record_setup_password(&rec)
+                               : WIFI_RECORD_DEFAULT_SETUP_PASSWORD;
+        wifi_config_t ap = {0};
+        strlcpy((char *)ap.ap.ssid, SETUP_NETWORK_SSID, sizeof ap.ap.ssid);
+        ap.ap.ssid_len = (uint8_t)strlen(SETUP_NETWORK_SSID);
+        strlcpy((char *)ap.ap.password, pass, sizeof ap.ap.password);
+        ap.ap.authmode = WIFI_AUTH_WPA2_PSK;
+        ap.ap.max_connection = 4;
+        ap.ap.channel = 1;
+
+        esp_err_t e = esp_wifi_set_mode(WIFI_MODE_APSTA);
+        if (e != ESP_OK) return e;
+        e = esp_wifi_set_config(WIFI_IF_AP, &ap);
+        if (e != ESP_OK) return e;
+        /* Already started is not a failure: switching the mode restarts the radio. */
+        e = esp_wifi_start();
+        if (e != ESP_OK && e != ESP_ERR_WIFI_STATE) return e;
+        /* The census the specification demands at the exact moment it demands it
+         * (wifi-provisioning.md P40): the access point's allocation lands after the
+         * encoder's, which is the tightest the device ever is. */
+        ESP_LOGI(TAG, "setup network up: %s at http://%s/setup (password %s); "
+                      "internal free %u B, largest %u B",
+                 SETUP_NETWORK_SSID, SETUP_NETWORK_IP, pass,
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+        s_ap_on = true;
+        census_in_ten_seconds();
+        return ESP_OK;
+    }
+
+    esp_err_t e = esp_wifi_set_mode(WIFI_MODE_STA);
+    if (e != ESP_OK) return e;
+    s_ap_on = false;
+    ESP_LOGI(TAG, "setup network down");
+    /* The station was disconnected by the mode change; the retry loop takes it back. */
+    if (s_provisioned) (void)esp_wifi_connect();
+    return ESP_OK;
+}
+
+int app_board_wifi_scan(app_board_scan_t *out, int max, uint32_t timeout_ms)
+{
+    (void)timeout_ms; /* esp_wifi_scan_start(blocking) is bounded by the scan's own time */
+    if (!out || max <= 0) return -1;
+
+    wifi_scan_config_t sc = {0};
+    sc.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+    sc.scan_time.active.min = 60;
+    sc.scan_time.active.max = 120; /* 13 channels at <=120 ms: about 1.6 s */
+    /* A station that is mid-connection refuses a scan (ESP_ERR_WIFI_STATE). The person
+     * asking for one is in front of the device, so a short wait and a second try is the
+     * right answer - and it is what a join that has just failed leaves behind. */
+    esp_err_t se = esp_wifi_scan_start(&sc, true);
+    if (se != ESP_OK) {
+        vTaskDelay(pdMS_TO_TICKS(250));
+        se = esp_wifi_scan_start(&sc, true);
+        if (se != ESP_OK) {
+            ESP_LOGW(TAG, "scan refused: %s", esp_err_to_name(se));
+            return -1;
+        }
+    }
+
+    uint16_t n = 0;
+    if (esp_wifi_scan_get_ap_num(&n) != ESP_OK) return -1;
+    if (n == 0) {
+        /* The driver keeps the scan's buffer until the records are read, even when there
+         * are none: skipping this made the *next* scan fail with ESP_ERR_WIFI_STATE. */
+        uint16_t none = 0;
+        (void)esp_wifi_scan_get_ap_records(&none, NULL);
+        return 0;
+    }
+    if (n > 32) n = 32;
+
+    wifi_ap_record_t *found = heap_caps_malloc(n * sizeof *found, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!found) found = malloc(n * sizeof *found);
+    if (!found) return -1;
+    uint16_t got = n;
+    if (esp_wifi_scan_get_ap_records(&got, found) != ESP_OK) {
+        free(found);
+        return -1;
+    }
+
+    /* One row per network, not per BSSID: several access points broadcast one SSID, and a
+     * person is picking a network. The strongest wins, and the list is sorted by signal.
+     * A hidden network is left out: the page's "other network" row is its way in. */
+    int count = 0;
+    for (uint16_t i = 0; i < got && count < max; i++) {
+        if (found[i].ssid[0] == '\0') continue;
+        const char *ssid = (const char *)found[i].ssid;
+        int at = -1;
+        for (int k = 0; k < count; k++)
+            if (strcmp(out[k].ssid, ssid) == 0) { at = k; break; }
+        if (at >= 0) {
+            if (found[i].rssi <= out[at].rssi) continue;
+        } else {
+            at = count++;
+            snprintf(out[at].ssid, sizeof out[at].ssid, "%s", ssid);
+        }
+        out[at].rssi = found[i].rssi;
+        out[at].secure = found[i].authmode != WIFI_AUTH_OPEN;
+    }
+    free(found);
+
+    for (int i = 1; i < count; i++) { /* insertion sort, strongest first */
+        app_board_scan_t row = out[i];
+        int k = i - 1;
+        while (k >= 0 && out[k].rssi < row.rssi) { out[k + 1] = out[k]; k--; }
+        out[k + 1] = row;
+    }
+    return count;
 }
 
 esp_err_t app_board_mdns_start(const char *hostname, uint16_t port, const char *path)
