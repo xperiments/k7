@@ -346,6 +346,10 @@ void app_board_wifi_forget(void)
 esp_err_t app_board_setup_ap(bool on)
 {
     if (on == s_ap_on) return ESP_OK;
+    /* A start the tests can make slow: it is what a real esp_wifi_set_mode() costs, and it
+     * is the window in which a lock held across the call would freeze the panel. */
+    const char *ap_ms = getenv("XTAPE_HOST_AP_MS");
+    if (on && ap_ms && *ap_ms) usleep((useconds_t)(atoi(ap_ms) * 1000));
     if (on && getenv("XTAPE_HOST_AP_FAIL")) {
         host_ap_note();
         return ESP_FAIL;

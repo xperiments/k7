@@ -275,7 +275,16 @@ Settings
 **P35. A setup network that cannot start says so in the row** — `UNAVAILABLE` — and the firmware retries
 every 5 s with a throttled log line, rather than giving up. The retry is the same posture as the
 station's reconnect loop: a transient failure recovers, and a permanent one is diagnosable on the
-panel instead of looking like a device with no setup mode.
+panel instead of looking like a device with no setup mode. The row says `UNAVAILABLE` continuously
+between retries, not for only part of each one.
+
+**P35a. Raising the access point never happens under the machine's lock.** `esp_wifi_set_mode()`
+restarts the radio and takes a few hundred milliseconds, and the panel asks for a status copy
+twenty-five times a second; a lock held across the start freezes the glass at the moment someone
+presses Setup. The state is read and written under the lock on either side of the call, and two
+callers racing is harmless because starting an access point that is already up is not an error.
+`t38_setup` measures it: a status copy completes in under 150 ms while the fake radio spends 400 ms
+starting.
 
 **P36. Nothing else on the device announces setup mode.** Not the cassette screen, not the header,
 not the strip — the strip carries the broadcast's colour under ADR 0074 and 0075's power cap, and

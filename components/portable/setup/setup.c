@@ -92,10 +92,25 @@ static bool save_password_job(void *ctx)
 
 /* --------------------------------------------------------------- the access point */
 
-static void try_start_session(uint32_t now)
+/* Raises the access point. **Called with the lock released**: esp_wifi_set_mode() restarts
+ * the radio, which takes a few hundred milliseconds, and setup_status() runs on the panel's
+ * task twenty-five times a second - a lock held across the restart freezes the glass at the
+ * moment someone presses Setup. The state is read and written under the lock on either side
+ * of the call; two callers racing is harmless because starting an access point that is
+ * already up is not an error. */
+static void start_session_now(uint32_t now)
 {
-    if (M.session) return;
-    if (app_board_setup_ap(true) == ESP_OK) {
+    lock();
+    if (M.session) {
+        unlock();
+        return;
+    }
+    unlock();
+
+    esp_err_t e = app_board_setup_ap(true);
+
+    lock();
+    if (e == ESP_OK) {
         app_board_wifi_t radio;
         app_board_wifi_state(&radio);
         M.session = true;
@@ -110,6 +125,7 @@ static void try_start_session(uint32_t now)
         ESP_LOGE(TAG, "the setup network did not start; asking again in %d ms",
                  (int)SETUP_AP_RETRY_MS);
     }
+    unlock();
 }
 
 static void stop_session(void)
@@ -133,8 +149,9 @@ void setup_init(void)
     if (!app_board_setup_password_load(M.rec.setup_pass, sizeof M.rec.setup_pass))
         M.rec.setup_pass[0] = '\0';
     M.boot_deadline_ms = now_ms() + SETUP_BOOT_WINDOW_MS;
-    if (!M.provisioned) try_start_session(now_ms());
+    bool wants = !M.provisioned;
     unlock();
+    if (wants) start_session_now(now_ms());
 }
 
 void setup_tick(uint32_t now)
@@ -143,10 +160,11 @@ void setup_tick(uint32_t now)
     app_board_wifi_state(&radio);
 
     lock();
+    bool wants = false;
     if (!M.session && !M.joining && !M.ap_failed) {
         /* P9: the two boot triggers. Neither is "the network went away later" (P10). */
-        if (!M.provisioned) try_start_session(now);
-        else if (!radio.associated && reached(now, M.boot_deadline_ms)) try_start_session(now);
+        if (!M.provisioned) wants = true;
+        else if (!radio.associated && reached(now, M.boot_deadline_ms)) wants = true;
     }
 
     /* A station that associates on its own, while a session is up, counts as joined
@@ -162,11 +180,14 @@ void setup_tick(uint32_t now)
         ESP_LOGI(TAG, "setup network closed: the device is on its network");
     }
 
+    /* The retry leaves ap_failed standing until a start succeeds: clearing it first made the
+     * panel's row flicker back to START for the few hundred milliseconds of every attempt. */
     if (M.ap_failed && reached(now, M.ap_retry_at_ms)) {
-        M.ap_failed = false;
-        try_start_session(now);
+        M.ap_retry_at_ms = now + SETUP_AP_RETRY_MS;
+        wants = true;
     }
     unlock();
+    if (wants) start_session_now(now);
 }
 
 void setup_start_task(void)
@@ -181,8 +202,8 @@ void setup_start_task(void)
 
 bool setup_session_start(uint32_t now)
 {
+    start_session_now(now);
     lock();
-    try_start_session(now);
     bool ok = M.session;
     unlock();
     return ok;
@@ -301,8 +322,9 @@ bool setup_forget_network(uint32_t now)
     snprintf(M.rec.setup_pass, sizeof M.rec.setup_pass, "%s", rec.setup_pass);
     M.provisioned = false;
     M.has_attempt = false;
-    if (!M.session && !M.joining) try_start_session(now);
+    bool wants = !M.session && !M.joining;
     unlock();
+    if (wants) start_session_now(now);
     return true;
 }
 
@@ -336,11 +358,10 @@ void setup_record_changed(uint32_t now)
     lock();
     M.rec = rec;
     M.provisioned = provisioned;
-    if (!provisioned && !M.session && !M.joining) {
-        M.ap_failed = false;
-        try_start_session(now);
-    }
+    bool wants = !provisioned && !M.session && !M.joining;
+    if (wants) M.ap_failed = false;
     unlock();
+    if (wants) start_session_now(now);
 }
 
 void setup_status(setup_status_t *out)

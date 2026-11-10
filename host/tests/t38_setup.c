@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "app_board.h"
@@ -218,6 +220,49 @@ static void test_setup_password(void)
     CHECK(strcmp(ap_state(), "on") == 0, "the running hotspot was not restarted");
 }
 
+/* The panel asks setup_status() twenty-five times a second while someone is pressing Setup.
+ * The radio's start takes a few hundred milliseconds, and it must not be spent holding the
+ * machine's lock: that is a frozen screen at the exact moment the person is looking at it.
+ * The fake radio can be made slow, so the claim is measurable rather than asserted. */
+static volatile bool s_starting;
+
+static void *start_the_radio(void *arg)
+{
+    (void)arg;
+    setup_session_start(*(uint32_t *)arg);
+    s_starting = false;
+    return NULL;
+}
+
+static void test_status_waits_for_no_radio(void)
+{
+    fresh_device("ok");
+    store_network("xperiments-2.4G", "viernes13");
+    setenv("XTAPE_HOST_AP_MS", "400", 1);
+    setenv("XTAPE_HOST_AP_FAIL", "1", 1); /* so the start is attempted, not skipped */
+    setup_init();
+    setup_tick(now_ms() + 1000);
+
+    uint32_t now = now_ms();
+    pthread_t th;
+    s_starting = true;
+    pthread_create(&th, NULL, start_the_radio, &now);
+    usleep(50 * 1000); /* let it get into the radio call */
+
+    struct timespec a, b;
+    clock_gettime(CLOCK_MONOTONIC, &a);
+    setup_status_t st;
+    setup_status(&st);
+    clock_gettime(CLOCK_MONOTONIC, &b);
+    long ms = (b.tv_sec - a.tv_sec) * 1000 + (b.tv_nsec - a.tv_nsec) / 1000000;
+    CHECK(ms < 150, "a status copy is not waiting on the radio (%ld ms while it starts)", ms);
+    CHECK(s_starting, "and the radio really was still starting");
+
+    pthread_join(th, NULL);
+    unsetenv("XTAPE_HOST_AP_MS");
+    unsetenv("XTAPE_HOST_AP_FAIL");
+}
+
 int main(void)
 {
     printf("t38: setup\n");
@@ -229,6 +274,7 @@ int main(void)
     test_failed_attempt_is_recorded();
     test_on_demand_while_connected();
     test_setup_password();
+    test_status_waits_for_no_radio();
 
     remove(s_record);
     remove(s_ap);
