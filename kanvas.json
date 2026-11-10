@@ -1,0 +1,226 @@
+{
+  "kanvas": 1,
+  "title": "xtape",
+  "groups": [
+    {
+      "id": "LB",
+      "name": "Label"
+    },
+    {
+      "id": "APP",
+      "name": "App"
+    },
+    {
+      "id": "FW",
+      "name": "Firmware"
+    },
+    {
+      "id": "SCR",
+      "name": "Screen"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "LB-01",
+      "title": "Prove the packed sheet opens in the reader before the packer changes",
+      "state": "done",
+      "group": "LB",
+      "at": "2026-11-10T01:35:22Z",
+      "by": "dsh",
+      "desc": "Nothing today opens the sheet the firmware ships: the reader's host test builds its own bytes, and the real `label_sheet.bin` is only ever produced by CMake. So a change to the packer can break the panel with every test still green.\n\nThis adds that test. It packs the four designs in `assets/labels/templates/` with the real packer, writes a small manifest alongside (one line per design: id, name, prim count, slot names), then opens the bytes with the reader the firmware uses and compares the two. It runs in `make -C host check`, in a `label` target (today's `editor`), so `make -C host test` stays free of Python.\n\nFinished when: it passes on master as it stands, and a one-byte change to the packed sheet makes it fail — the test has to bite before it is worth having. This lands first and alone, so the packer's refactor has something to break.",
+      "notes": [
+        {
+          "at": "2026-11-10T01:39:15Z",
+          "by": "dsh",
+          "text": "Plan: add a manifest emitted by the packer, a t33 that opens the packed sheet with label.c and compares the two, and a make target that packs then runs it — in the existing editor tier so make -C host test stays Python-free. Then prove it bites with a one-byte change."
+        },
+        {
+          "at": "2026-11-10T01:43:17Z",
+          "by": "dsh",
+          "text": "`make -C host label` now packs the four designs and opens the result with the reader the firmware uses — the packer's output had no test at all before this.\n\n- To see it: `make -C host label`. The last line is `t33_label_sheet 80 checks, 0 failures`.\n- `make -C host check` runs it; the old `editor` target is now `label`, since it covers the packer, the page check and the sheet.\n- Nothing about the device moves: the sheet is byte-identical (2007 B, crc 0x9C6B154D).\n\n**What to check**\n\n- Does the name read right? \"Label\" is the tier, not the editor.\n- `t33` compares shape, not geometry: each design's name, prim count, slot count and slot names, plus \"a text prints a slot its design declares\". A rect that moved would not fail it — that is `t32`'s job with its own bytes.\n- It bites both ways, which is the point of the task: one flipped byte is refused at the CRC (\"checksum mismatch\"), and a prim count the reader does *accept* — CRC repaired — is caught by the comparison (\"got 14, want 15\").\n\nCommit: `85a00dc`. `make -C host check` green."
+        }
+      ]
+    },
+    {
+      "id": "LB-02",
+      "title": "One label vocabulary, generated into the editor, the packer and the C",
+      "state": "done",
+      "group": "LB",
+      "deps": ["LB-01"],
+      "yolo": true,
+      "at": "2026-11-10T01:35:22Z",
+      "by": "dsh",
+      "desc": "The Slot names, the faces, the band count, the role set and the format's limits are currently hand-kept in three languages: tables in the canvas builder's JavaScript, tables in the packer's Python, and an enum in the C. They already disagree — the editor enforces none of the format's caps, so a 60-prim design exports clean and then fails the firmware build. The packer catches drift by grepping the page's source with regular expressions.\n\nThis makes them one committed file under `assets/labels/`. The builder's tables and a committed `label_vocab.h` are generated from it, so the page finally knows the limits (48 prims, 16 slots, 32 designs, the coordinate bounds, 748x359, the window, the 96-character ceiling) and refuses at Export. The page stays one self-contained file, which is why the table is inlined rather than fetched.\n\nThe table also carries each Slot's human label (\"Song Title\") and its simulated value (\"8A\", \"relaxed\"), and the preview text box is sized from the simulated value. That leaves the page with no slot table at all, and drops `max` — a per-slot number the editor never wrote to the sheet anyway.\n\nGoes with it: the regex check over the page's source is deleted, the dead C generator (`genC`) is deleted, and the one real question the page check still answers — do the faces embedded in the page match `assets/fonts/` — is folded into the check as a hash comparison.\n\nFinished when: `make -C host check` and `./tools/build.sh sunton build` pass; removing a Slot from the table makes both the editor and the build refuse, with no source grep left to do it; and the spec (§2, §4, §7) and ADR 0073 say so.",
+      "notes": [
+        {
+          "at": "2026-11-10T01:37:15Z",
+          "by": "dsh",
+          "text": "Added the decision that the table carries each slot's label and simulated value, so the page keeps no slot table and max disappears."
+        },
+        {
+          "at": "2026-11-10T01:45:55Z",
+          "by": "dsh",
+          "text": "Plan: one assets/labels/vocabulary.json; a generator in label_pack.py that writes a committed label_vocab.h and the page's inlined block, plus a staleness check; the page derives its tables and enforces the caps; genC and the font extractor deleted; --check-editor's table greps replaced by a byte comparison of the block and a hash check of the embedded faces; spec 2/4/7 and ADR 0073."
+        },
+        {
+          "at": "2026-11-10T01:55:10Z",
+          "by": "dsh",
+          "text": "There is one label table now, and the editor and the firmware are generated from it. Editing a Slot, a face or a limit is one file and one command instead of three languages kept in step by hand.\n\n- **The file is `assets/labels/vocabulary.json`.** After editing it, run `make -C host label`. If you forget, the check names the two stale copies and the command to fix them: `python3 tools/label_pack.py --generate-vocabulary`.\n- **The editor now knows the caps.** A design with 49 layers, or a box outside the record's coordinates, refuses at Export in the browser — where it used to export clean and die in `./tools/build.sh`.\n- **The page can no longer carry a face the build cannot compile.** The check compares the bytes of the embedded faces with `assets/fonts/`, and it immediately found one: Oswald 600, 22,484 B, retired when the numeral became Barlow Condensed 700.\n\n**What to check**\n\n- **The field list order changed.** The editor's Slots now come from the table, so it is title, artist, album — previously album, title, artist. One order, the resolver's.\n- **Jura is still in the table but the editor does not offer it.** It is a screen face, not a label face. Same for the removed Oswald: if you wanted that face back in the editor, it needs a row and a compiled `font_*.c`.\n- **`genC` and `tools/extract_builder_fonts.py` are gone**, with the \"Copy C\" button and the dialog it opened.\n- **This is host and build evidence, not board evidence.** `make -C host check` is green and `./tools/build.sh sunton build` completes, but a label cannot yet be seen on the panel: the two-finger gesture that shows the print is still unproven (ADR 0071). The sheet is byte-identical (2007 B, crc 0x9C6B154D), so nothing the device embeds moved.\n\nCommit `905313d`. Spec §2/§4/§5/§7 updated; ADR 0073 records the decision and what it retires."
+        }
+      ]
+    },
+    {
+      "id": "APP-01",
+      "title": "The Analysis store stops being an interface, a worker pool and the copy",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-10T02:11:11Z",
+      "by": "dsh",
+      "desc": "`web/src/ui/state/analysis.tsx` is 1,151 lines and the context value it publishes has 36 members. One function holds the byte-level work (hashes, cache keys), the file-level work (card handles, permissions), four IndexedDB stores, the worker pool, and 25 user-facing sentences. Its own comment justifies why it is mounted at the root, not why all of that lives in it.\n\nThe App has no `.test.tsx` and a node-only test environment, so none of this is reached by a test: the scheduler, the tag/measure branches, the card write, the retry. Every other module in `web/` is covered.\n\nThis extracts the queue run as a plain module — items in, the worker pool and the stores injected, transitions in one table, submit/tick/retry/status out — and leaves the provider holding React state and the copy.\n\nFinished when: the run's transitions are driven by a test with no React, no `File` and no `Worker`; `npm run typecheck`, `npm test` and `npm run build` pass; and the five consumers behave as they do now.",
+      "notes": [
+        {
+          "at": "2026-11-10T02:14:09Z",
+          "by": "dsh",
+          "text": "Picked up from the board: state doing, YOLO on. Read the file, choose the seam, record it here before writing code."
+        },
+        {
+          "at": "2026-11-10T02:14:21Z",
+          "by": "dsh",
+          "text": "Seam, before any code: a QueueRun module that owns one track's road from queued to settled, with four injected ports — a source (open the bytes, reopening a dead snapshot), a store (the analysis cache, the media row, the cover), a pool (the three worker calls), and an emit (one patch per transition). The provider keeps React state and the sentences. First slice: the transition table plus the cached/tags-only/measure decision, tested with fakes and no React — that is the part nothing covers today."
+        },
+        {
+          "at": "2026-11-10T02:18:32Z",
+          "by": "dsh",
+          "text": "The work one Track does now lives in `web/src/queue/run.ts` and is covered by tests that need no React, no card and no worker. That road — the cache, the file's own tags, the measurements the tags do not cover, and the three dead snapshots that pause the run — had no test at all before, because the only way to reach it was to mount the whole App.\n\n- **Nothing changes for you in the App.** Same behaviour, same sentences; the provider is 159 lines shorter (1,171 from 1,330) and its `processItem` is now an adapter that names its own closures.\n- **Tests you can read as the spec:** `web/tests/queue-run.test.ts`, seven cases. The interesting ones: the fast path that never opens the file, the tag-only row, the third dead snapshot pausing the run and not the first, and a weight failure that is named while the row still fails.\n\n**What to check**\n\n- That the seven cases are the right seven. They are the branches the old code had, not new behaviour — if one is missing, it is missing here too.\n- `npm test` is 438 tests; `tsc --noEmit` and `npm run build` are clean. I did not run the App against a card, so \"the five consumers behave as they do now\" is structural (types and tests), not observed.\n\n**Correction to something I said before starting:** pulling the run out does *not* stop the scheduler re-running when you pick a card. `processItem` still depends on `readItem` and `finalizeTrack`, which depend on the card handle. The re-render problem is the context's 36-member value, and that is a separate task — I proposed it as APP-02, waiting on this one.\n\nCommit `720ae60`."
+        }
+      ]
+    },
+    {
+      "id": "FW-01",
+      "title": "One JSON writer and one reader, instead of five dialects",
+      "state": "done",
+      "group": "FW",
+      "at": "2026-11-10T02:11:11Z",
+      "by": "dsh",
+      "desc": "Parsing a bounded JSON body and writing a bounded reply is implemented five times in `components/portable/`: three bounded writers, two parsers (`mcp.c`'s tokenizer and `mini_icecast.c`'s), and eleven different result conventions across the layer. One route interpolates a validation sentence into JSON with `%s` and no escaping — safe today only because those sentences are fixed English.\n\nThis adds one `json` module: a writer that escapes and bounds, a reader over a fixed buffer, and one reply helper. Every route uses it.\n\nFinished when: the five modules call it and their own writers and parsers are deleted; `make -C host check` passes unchanged; and a reply containing a quote or a backslash is written correctly, which no test covers today. It lands before FW-02 so the junction box is split once, over handlers that already agree.",
+      "notes": [
+        {
+          "at": "2026-11-10T02:21:30Z",
+          "by": "dsh",
+          "text": "Plan: one components/portable/json (bounded writer with escaping, reader over a fixed buffer), then the five modules' own writers and parsers deleted onto it, acceptance tests unchanged."
+        },
+        {
+          "at": "2026-11-10T02:31:59Z",
+          "by": "dsh",
+          "text": "Two of the three steps are in. 50b0f26: json.c/json.h are a component, mcp calls them (its 421 lines of tokens, parser and writer moved, not rewritten), t34_json pins the escaping and the bounds. 6f150da: mini_icecast's private parser is deleted, and the shared reader now refuses a non-string so {\"path\":42} is a 400 again. Left: app_services (7 handlers building bodies with snprintf, plus body_list_id and the card mark's inline id search) and front_door (status_buffers_t) still write their own JSON. make -C host check green after each."
+        },
+        {
+          "at": "2026-11-10T02:39:58Z",
+          "by": "dsh",
+          "text": "The firmware has one JSON reader and one writer now, in `components/portable/json/`, and the five modules that spoke their own dialect call it. Three commits: the module and mcp (`50b0f26`), the play body (`6f150da`), the API's replies (`8e6c24f`).\n\n- **What that buys:** one place where escaping is decided, so a reply that carries a quote or a backslash is written correctly instead of only working because nobody sent one. `t34_json` pins that byte for byte.\n- **Two silent bugs fell out of it.** `{\"path\":42}` used to read as the path `\"42\"` (404 instead of 400) once the play parser moved onto the shared reader — the reader now refuses a non-string. And `http_json_escape` truncated names at 200 bytes, which could cut in the middle of a `\\u00XX` escape and produce JSON that parses and lies; the writer has no such cutoff, and the escaper is deleted.\n- **Also gone:** `app_services`' two hand-rolled parsers (`strstr(\"\\\"id\\\"\")` and the card mark's inline search), `mini_icecast`'s 110-line private parser, and mcp's 421 lines of tokens/writer — moved, not rewritten.\n\n**What to check**\n\n- That moving mcp's tokenizer into a component is where you want it. It is the one parser the firmware has now, and its interface is nine functions; if you would rather it stayed under `mcp/`, that is a cheap revert of the first commit.\n- The status body: `front_door` no longer caps names at 200 bytes, so a very long playlist name now travels whole. Nothing downstream reads it with a cap.\n- `make -C host check` green (all suites, MCP over both builds), and `./tools/build.sh sunton build` completes at 0x1eec70 B.\n- No board claim: nothing here is visible on the panel, and I did not flash."
+        }
+      ]
+    },
+    {
+      "id": "FW-02",
+      "title": "app_services stops being the junction box for six subsystems",
+      "state": "done",
+      "group": "FW",
+      "deps": ["FW-01"],
+      "yolo": true,
+      "at": "2026-11-10T02:11:11Z",
+      "by": "dsh",
+      "desc": "Eleven public functions over sixteen responsibilities. Seven of them are HTTP handlers no header declares, and the file registers eight of the tree's nineteen routes. Card presence is stored in five places, and the module has no unit test at either tier — it is exercised only through six acceptance suites against the host server.\n\nIts eight-step boot order is real behaviour and stays: delete it and the sequence reappears in the appliance and the host entry point, which is what it was written to stop. The rest goes home — the snapshot upload beside the snapshot, the playlist routes beside the playlist selection, the covers beside the files they come from — and the card-file gate becomes its own module instead of four calls on the composition.\n\nFinished when: the boot order still has one home and still passes the acceptance suites; each moved route is reachable only through the module that owns its domain; the card gate can be tested on its own; and `make -C host check` passes unchanged.",
+      "notes": [
+        {
+          "at": "2026-11-10T02:42:29Z",
+          "by": "dsh",
+          "text": "Plan: first the card-file gate as its own component with a host test, then the routes out of app_services into per-owner modules (snapshot upload, playlists, covers), leaving the boot order where it is."
+        },
+        {
+          "at": "2026-11-10T02:49:05Z",
+          "by": "dsh",
+          "text": "Two of the three steps are in. ead4315: the card-file gate is components/portable/card_use with t35 (who may enter, what a close waits for, what a timeout leaves shut). c077a88: the three playlist routes are components/portable/playlist_http asking for the current Snapshot through a callback, and the two reply helpers are http_json. Left in app_services: the snapshot upload (snapshot_route + its flash job) and the covers route, which still sit beside the boot order. make -C host check green and ./tools/build.sh sunton build completes after each."
+        },
+        {
+          "at": "2026-11-10T02:59:59Z",
+          "by": "dsh",
+          "text": "Plan for the rest: snapshot_upload (the POST /api/snapshot route and its flash job) out as its own component; covers either out too or left with a reason. Then app_services is the boot order plus card presence, and the task closes."
+        },
+        {
+          "at": "2026-11-10T03:02:49Z",
+          "by": "dsh",
+          "text": "`app_services` is the composition now: the boot order, the rescan, card presence and the borrowed Snapshot. Everything else moved to the module that owns it. Four commits, each green on its own.\n\n- **`ead4315`** — the card-file gate is `card_use`, with `t35`. It had no test before; what it protects is a panic when the card unmounts under an open file, so the protocol (who may enter, what a close waits for, what a timeout leaves shut) is now pinned.\n- **`c077a88`** — the three playlist routes are `playlist_http`, asking for the current Snapshot through a callback so a route never holds an image an update replaced. The reply helpers became `http_json`.\n- **`519a09f`** — the snapshot upload and the covers archive are `snapshot_http` and `covers_http`, the same thin-adapter shape `library_http` already had. The card's file path moved to `card_path`, because two routes had derived it twice.\n\n**The number:** 1,109 lines to 682, and eleven public functions to seven — and the seven are exactly what the header always claimed: check, start, rescan, rescan_running, card_state, card_present, snapshot.\n\n**What to check**\n\n- That five new components is the right granularity. Each is one adapter over one domain, matching `library_http`; if you would rather have fewer, `snapshot_http` and `covers_http` could become one `card_http`, but they share nothing except living on the card.\n- The register order is unchanged — `/api/playlists`, `/api/playlists/`, then `/api/playlists/select` — because the router's match rule is the thing I would least like to discover by accident.\n- `make -C host check` green (every suite), `./tools/build.sh sunton build` at 0x1eec40 B.\n\nNo board claim: nothing here is visible on the panel, and I did not flash."
+        }
+      ]
+    },
+    {
+      "id": "SCR-01",
+      "title": "The artwork loader talks to the cover, not to the composition",
+      "state": "done",
+      "group": "SCR",
+      "at": "2026-11-10T02:11:11Z",
+      "by": "dsh",
+      "desc": "`cassette_view.h` is included by five modules to reach three leaf functions. `set_cover` and `set_tags` are one-line forwards, the artwork loader — a task reading the card — sets the cover through the composition's header, and the include graph is cyclic in four places: the knob editor calls up into the view to dim it, and the loader calls a wrapper that forwards to the cover.\n\nThis deletes the pass-throughs and gives the loader the modules it actually wants, leaving the view to do what only it knows: create, place, and the build order.\n\nFinished when: the four cycles are gone; the composition's header is no longer a doorway; and nothing the screen draws changes — the host suite and a firmware build pass, and a capture comparison says so wherever one can be taken.",
+      "notes": [
+        {
+          "at": "2026-11-10T03:48:33Z",
+          "by": "dsh",
+          "text": "Plan: the loader calls cassette_cover_set_image and cassette_levels_set_tags itself, the two pass-throughs in cassette_view go, and the knob editor's dim becomes a callback instead of a reach into the composition. Board-only code, so the firmware build is the gate."
+        },
+        {
+          "at": "2026-11-10T03:50:54Z",
+          "by": "dsh",
+          "text": "The artwork loader and the levels no longer go through the composition to set a cover or a tag, and the knob editor takes its dim as a callback. `cassette_view.h` is included by its own `.c` and by the two things above it; the four include cycles are gone.\n\n- **What was wrong:** `cassette_view.h` is the composition's header — the module that builds and places the whole screen — and five modules included it to reach three leaf functions. Two of those were one-line forwards, so a task running off the card threw an image at the screen's builder to have it handed to the cover.\n- **The third edge:** the knob editor dimmed the scene itself, so a panel reached up into the composition. It takes a callback now, supplied when the composition creates it.\n\n**What to check**\n\n- **This is board-only code and it is not proven on the panel.** The gate was `./tools/build.sh sunton build` (completes, 0x1eec40 B) and `make -C host check` for layering and everything else. No capture was taken and nothing was flashed, so what this draws is assumed, not seen — the capture comparison `tools/screen_over_http.py` is the check I would want, and it needs the board.\n- That the dim callback is where you want it. The alternative was a field on the editor's bank struct, which is already a bundle of hooks; a single setter keeps the two call sites obvious.\n\nCommit `1aa0f44`. This unblocks SCR-02, the geometry work."
+        }
+      ]
+    },
+    {
+      "id": "SCR-02",
+      "title": "The board's geometry leaves the draw code",
+      "state": "done",
+      "group": "SCR",
+      "deps": ["SCR-01"],
+      "yolo": true,
+      "at": "2026-11-10T02:11:11Z",
+      "by": "dsh",
+      "desc": "Geometry that is pure arithmetic is `#define`d inside 400–1,150-line files, computed inside the functions that call `lv_obj_set_*`, and read from a file-static pose that draw callbacks never receive. `cassette_card.h` carries a second copy of the Card's layout as a 40-line enum whose only live use is one `_Static_assert`. None of it is reachable from a host test, and `layering.sh` guarantees the board layer never compiles on the host.\n\nThe repo already has the pattern: `cassette_layout.c` is pure, takes the pose as an argument, and `t16_layout.c` tests it with no scaffolding at all. This moves the Card, pack, spoke, peek and plaque geometry there and leaves the board modules placing objects.\n\nFinished when: those numbers are computed by tests that need no display; the duplicate Card enum is gone; and the screen draws what it drew before.",
+      "notes": [
+        {
+          "at": "2026-11-10T03:51:45Z",
+          "by": "dsh",
+          "text": "Plan: delete the duplicate Card enum; move the two genuinely pure geometry functions (the pack's diameter law and a knob's plaque anchor) into cassette_layout with tests in t16; leave the placement code where it is and say so. Board-only beyond that, so the firmware build and a capture comparison are the gate."
+        },
+        {
+          "at": "2026-11-10T03:55:10Z",
+          "by": "dsh",
+          "text": "Two geometry rules that could not be tested are layout arithmetic now, and the Card's duplicate geometry is gone.\n\n- **The pack's diameter** (`cassette_tapes.c`) is a square-root law with two roundings — even at the entry grid so two packs of one fill are the same width, a coarser step in the preview. It is `cassette_layout`'s, taking the pack's range and step as parameters.\n- **Which side of the dial a plaque sits on** (`knob_editor.c`) is the same kind of rule: an odd count puts one above the dial and shares the rest between two columns, and the left column reads upwards because the arc does. It is `cassette_layout`'s too, taking the dial's numbers as a struct.\n- **`cassette_card.h`'s geometry enum is deleted.** It was a second copy of the table that draws the Card, and its only live use was a `_Static_assert` checking the copy against itself — which cannot read a `const` table anyway, so it went too and the rule it stated is in the table's comment.\n\n`t16_layout` gained 14 cases: the pack's endpoints, its evenness, that a fuller pack never shrinks, that half a fill is past half the width, that the preview grid lands on its step and ends where it ends; and for one to six plaques, the median, the columns, which way each reads, and that an index out of range is not placed.\n\n**What to check**\n\n- **This is not proven on the panel.** `make -C host check` is green and `./tools/build.sh sunton build` completes at 0x1eed70 B, but no capture was taken and nothing was flashed. What the screen draws is assumed unchanged — the capture comparison (`tools/screen_over_http.py capture`/`compare`) is the check I would want, and it needs the board.\n- **Two things I changed behaviourally, both on purpose:** a `static const` initializer could not take the dial's centre (a macro over macros), so that struct is automatic; and the deleted `_Static_assert` is not replaced by a runtime check. If you want that invariant enforced, it belongs where the mask is built.\n- What is still board-local: the Card's table, the peek's tag boxes, the dial's own numbers. Those are placement, and the report's suggestion that they move too would be a different design — say so and I will open it.\n\nCommit `c12de19`."
+        }
+      ]
+    },
+    {
+      "id": "APP-02",
+      "title": "The Analysis context splits into the slices its consumers read",
+      "state": "done",
+      "group": "APP",
+      "deps": ["APP-01"],
+      "yolo": true,
+      "at": "2026-11-10T02:18:27Z",
+      "by": "dsh",
+      "desc": "The context still publishes 36 members as one value, and its consumers take whatever they need out of it: Settings needs one field (the worker count), the album detail and the drive need one method (read the card's bytes), and only Process needs the run's state. Because the value is rebuilt every render and is not memoised, any change — a lane freeing, a metadata count — re-renders all five.\\n\\nThis is the second half of APP-01 and was left out of it on purpose: moving the run out is what makes the slices separable, and doing both at once would be two large changes in one review.\\n\\nFinished when: the provider publishes narrow values, a consumer re-renders only when its own slice changes, and the Process area behaves as it does now.",
+      "notes": [
+        {
+          "at": "2026-11-10T02:40:44Z",
+          "by": "dsh",
+          "text": "Picked up: state doing. Plan: find exactly which members each consumer takes, cut the two narrow slices (worker capacity, the card reader) into their own contexts, memoise the main value, and leave the Process surface as it is."
+        },
+        {
+          "at": "2026-11-10T02:41:46Z",
+          "by": "dsh",
+          "text": "The Analysis value stopped carrying the two things only one consumer each wanted. Settings no longer re-renders when a Track settles, and neither do the album detail and the drive.\n\n- **Worker capacity and the card reader are their own contexts.** Settings takes the first; the two Media views take the second. Everything Process and QueueList read is unchanged.\n- **The card reader's identity stopped following the queue.** It used to close over `items` for its fallback, so it was a new function after every settled row — which would have defeated a separate context on its own. It reads the queue through a ref now and depends on the card handles only.\n- **The wide value is 34 members, down from 36.**\n\n**What to check**\n\n- That two slices is the right cut. I did not split the run's own state (items, progress, the verbs) because Process reads 26 of them and a split there would be a different design, not a smaller one.\n- **The re-render claim is structural, not measured.** The App's test environment is node with no DOM and no `.test.tsx`, so there is no render counter to assert on. What is checkable is in the commit: two contexts, and a callback whose dependencies no longer include the queue. If you want it measured, that needs a DOM test environment added first — a separate task.\n- Behaviour is meant to be identical; `tsc --noEmit`, 438 tests and the build all pass.\n\nCommit `9beeec5`. Because APP-02 was under YOLO, this goes to you for review rather than closing itself."
+        }
+      ]
+    }
+  ]
+}

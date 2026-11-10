@@ -129,3 +129,5 @@ the record.
 ---
 
 This file is shared too: change it at the integrating session, not from inside a lane.
+
+ Plan and track work on the Kanvas board; follow .agents/skills/kanvas/SKILL.md.
