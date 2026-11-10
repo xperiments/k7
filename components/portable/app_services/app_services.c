@@ -22,6 +22,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "http_server.h"
+#include "json.h"
 #include "library.h"
 #include "library_http.h"
 #include "mcp.h"
@@ -151,6 +152,24 @@ static void rescan_task(void *arg)
  * not a CORS-safelisted type, so a page on another origin cannot send it without a
  * preflight this device never answers. A form post cannot forge one either. That is the
  * whole CSRF story, and it is cheaper than a token the user would have to type. */
+static void reply_json(int fd, int status, const char *body, const char *cache)
+{
+    size_t len = strlen(body);
+    http_send_headers(fd, status, "application/json", len, cache);
+    http_send_all(fd, body, len);
+}
+
+/* A body built by a bounded writer. A writer that overflowed leaves half a document, and
+ * half a document is worse than an error: it is JSON that parses and lies. */
+static void reply_writer(int fd, int status, const json_writer_t *w, const char *cache)
+{
+    if (!json_ok(w)) {
+        http_send_error(fd, 500, "the reply did not fit");
+        return;
+    }
+    reply_json(fd, status, w->p, cache);
+}
+
 /* The flash write, on the writer task: an HTTP worker's stack is PSRAM, and a write
  * disables the cache the stack lives behind (flash_job.h). */
 typedef struct {
@@ -196,28 +215,24 @@ static http_result_t snapshot_route(int fd, const http_request_t *req, void *ctx
     else
         r = job.result;
     int status;
-    char body[256];
     switch (r) {
-    case APP_BOARD_FLASH_OK:
-        status = 200;
-        snprintf(body, sizeof body, "{\"applied\":true,\"bytes\":%u}", (unsigned)req->body_len);
-        break;
-    case APP_BOARD_FLASH_INVALID:
-        status = 400;
-        snprintf(body, sizeof body, "{\"applied\":false,\"error\":\"%s\"}", why);
-        break;
-    case APP_BOARD_FLASH_NO_PARTITION:
-        status = 503;
-        snprintf(body, sizeof body, "{\"applied\":false,\"error\":\"%s\"}", why);
-        break;
-    default:
-        status = 500;
-        snprintf(body, sizeof body, "{\"applied\":false,\"error\":\"%s\"}", why);
-        break;
+    case APP_BOARD_FLASH_OK: status = 200; break;
+    case APP_BOARD_FLASH_INVALID: status = 400; break;
+    case APP_BOARD_FLASH_NO_PARTITION: status = 503; break;
+    default: status = 500; break;
     }
-    size_t len = strlen(body);
-    http_send_headers(fd, status, "application/json", len, "Cache-Control: no-store\r\n");
-    http_send_all(fd, body, len);
+    char body[320];
+    json_writer_t w = json_writer_make(body, sizeof body);
+    if (r == APP_BOARD_FLASH_OK) {
+        json_printf(&w, "{\"applied\":true,\"bytes\":%u}", (unsigned)req->body_len);
+    } else {
+        /* `why` is the validator's sentence, and it is data: it goes through the writer's
+         * escaping rather than between two quotes with %s. */
+        json_puts(&w, "{\"applied\":false,\"error\":\"");
+        json_escaped(&w, why);
+        json_puts(&w, "\"}");
+    }
+    reply_writer(fd, status, &w, "Cache-Control: no-store\r\n");
 
     /* The reader holds a PSRAM copy of the old image, and the write that just happened ran
      * with the PSRAM cache off. A restart is the cheap, certain way to serve the new one. */
@@ -233,21 +248,12 @@ static http_result_t rescan_route(int fd, const http_request_t *req, void *ctx)
         return HTTP_HANDLED;
     }
     esp_err_t e = app_services_rescan();
-    const char *body;
-    int status;
-    if (e == ESP_OK) {
-        status = 202;
-        body = "{\"ok\":true}";
-    } else if (e == ESP_ERR_INVALID_STATE) {
-        status = 409;
-        body = "{\"ok\":false,\"error\":\"a scan is already running\"}";
-    } else {
-        status = 500;
-        body = "{\"ok\":false,\"error\":\"cannot start the scan\"}";
-    }
-    size_t len = strlen(body);
-    http_send_headers(fd, status, "application/json", len, NULL);
-    http_send_all(fd, body, len);
+    if (e == ESP_OK)
+        reply_json(fd, 202, "{\"ok\":true}", NULL);
+    else if (e == ESP_ERR_INVALID_STATE)
+        reply_json(fd, 409, "{\"ok\":false,\"error\":\"a scan is already running\"}", NULL);
+    else
+        reply_json(fd, 500, "{\"ok\":false,\"error\":\"cannot start the scan\"}", NULL);
     return HTTP_HANDLED;
 }
 
@@ -257,12 +263,6 @@ static http_result_t rescan_route(int fd, const http_request_t *req, void *ctx)
 /* The page reads the Playlists the Snapshot holds; the broadcast walks one of them.
  * These routes are the read side and the one command, and nothing here writes flash:
  * a new list arrives as a new image (ADR 0051). */
-static void reply_json(int fd, int status, const char *body, const char *cache)
-{
-    size_t len = strlen(body);
-    http_send_headers(fd, status, "application/json", len, cache);
-    http_send_all(fd, body, len);
-}
 
 
 static void id_hex(char out[17], uint64_t id)
@@ -303,28 +303,32 @@ static http_result_t playlists_route(int fd, const http_request_t *req, void *ct
         http_send_error(fd, 500, "out of memory");
         return HTTP_HANDLED;
     }
+    json_writer_t w = json_writer_make(body, cap);
     uint64_t selected = playlist_select_current();
-    char sel[17] = {0};
-    if (selected) id_hex(sel, selected);
-    int at = snprintf(body, cap,
-                      "{\"selected\":%s%s%s,\"walking\":%s,\"missing\":%u,\"lists\":[",
-                      selected ? "\"" : "", selected ? sel : "null", selected ? "\"" : "",
-                      playlist_select_walking() ? "true" : "false",
-                      (unsigned)playlist_select_missing());
-    for (uint32_t i = 0; i < n && at > 0 && (size_t)at < cap; i++) {
+    json_puts(&w, "{\"selected\":");
+    if (selected) {
+        char sel[17] = {0};
+        id_hex(sel, selected);
+        json_printf(&w, "\"%s\"", sel);
+    } else {
+        json_puts(&w, "null");
+    }
+    json_printf(&w, ",\"walking\":%s,\"missing\":%u,\"lists\":[",
+                playlist_select_walking() ? "true" : "false",
+                (unsigned)playlist_select_missing());
+    for (uint32_t i = 0; i < n; i++) {
         snapshot_list_t l;
         if (!snapshot_list_at(s_snapshot, i, &l)) continue;
         char id[17];
-        char name[200];
         id_hex(id, l.id);
-        http_json_escape(name, sizeof name, snapshot_list_name(s_snapshot, &l));
-        at += snprintf(body + at, cap - (size_t)at,
-                       "%s{\"id\":\"%s\",\"name\":\"%s\",\"created\":%llu,\"rows\":%u}",
-                       i ? "," : "", id, name, (unsigned long long)l.created,
-                       (unsigned)l.row_count);
+        json_printf(&w, "%s{\"id\":\"%s\",\"name\":\"", i ? "," : "", id);
+        /* The name is data: escaped into the document, not into a fixed buffer first. */
+        json_escaped(&w, snapshot_list_name(s_snapshot, &l));
+        json_printf(&w, "\",\"created\":%llu,\"rows\":%u}", (unsigned long long)l.created,
+                    (unsigned)l.row_count);
     }
-    if (at > 0 && (size_t)at + 64 < cap) at += snprintf(body + at, cap - (size_t)at, "]}");
-    reply_json(fd, 200, body, "Cache-Control: no-cache\r\n");
+    json_puts(&w, "]}");
+    reply_writer(fd, 200, &w, "Cache-Control: no-cache\r\n");
     free(body);
     return HTTP_HANDLED;
 }
@@ -352,30 +356,28 @@ static http_result_t playlist_route(int fd, const http_request_t *req, void *ctx
         if (snapshot_list_row(s_snapshot, &l, i, &path) && path) cap += strlen(path) * 2 + 8;
     }
     char *body = malloc(cap);
-    /* A path is escaped into twice its bytes, and LIB_PATH_MAX alone is a kilobyte: on the
-     * connection worker's stack that was the second half of its overflow. */
-    char *escaped = malloc((size_t)LIB_PATH_MAX * 2);
-    if (!body || !escaped) {
-        free(body);
-        free(escaped);
+    if (!body) {
         http_send_error(fd, 500, "out of memory");
         return HTTP_HANDLED;
     }
+    json_writer_t w = json_writer_make(body, cap);
     char id_hexed[17];
-    char name[200];
     id_hex(id_hexed, id);
-    http_json_escape(name, sizeof name, snapshot_list_name(s_snapshot, &l));
-    int at = snprintf(body, cap, "{\"id\":\"%s\",\"name\":\"%s\",\"rows\":[", id_hexed, name);
-    for (uint32_t i = 0; i < l.row_count && at > 0 && (size_t)at < cap; i++) {
+    json_printf(&w, "{\"id\":\"%s\",\"name\":\"", id_hexed);
+    json_escaped(&w, snapshot_list_name(s_snapshot, &l));
+    json_puts(&w, "\",\"rows\":[");
+    for (uint32_t i = 0; i < l.row_count; i++) {
         const char *path = NULL;
         if (!snapshot_list_row(s_snapshot, &l, i, &path)) continue;
-        http_json_escape(escaped, (size_t)LIB_PATH_MAX * 2, path);
-        at += snprintf(body + at, cap - (size_t)at, "%s\"%s\"", i ? "," : "", escaped);
+        /* The path is escaped straight into the document: no second buffer, and no
+         * LIB_PATH_MAX cut in the middle of an escape. */
+        json_puts(&w, i ? ",\"" : "\"");
+        json_escaped(&w, path);
+        json_puts(&w, "\"");
     }
-    if (at > 0 && (size_t)at + 32 < cap) at += snprintf(body + at, cap - (size_t)at, "]}");
-    reply_json(fd, 200, body, "Cache-Control: no-cache\r\n");
+    json_puts(&w, "]}");
+    reply_writer(fd, 200, &w, "Cache-Control: no-cache\r\n");
     free(body);
-    free(escaped);
     return HTTP_HANDLED;
 }
 
@@ -383,23 +385,24 @@ static http_result_t playlist_route(int fd, const http_request_t *req, void *ctx
  * field, and a parser for one field is not an invitation to accept more. */
 static bool body_list_id(const char *body, size_t len, uint64_t *id)
 {
-    if (!body || !len) return false;
-    const char *p = strstr(body, "\"id\"");
-    if (!p || (size_t)(p - body) >= len) return false;
-    p += 4;
-    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
-    if (*p != ':') return false;
-    p++;
-    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
-    if (strncmp(p, "null", 4) == 0) {
+    (void)len;
+    json_tok_t tok[16];
+    int nt = 0;
+    if (!json_parse(body, tok, 16, &nt) || nt == 0) return false;
+    if (tok[0].type != JSON_TOK_OBJECT) return false;
+    int at = json_tok_member(body, tok, nt, 0, "id");
+    if (at < 0) return false;
+    if (tok[at].type == JSON_TOK_PRIMITIVE) {
+        /* `{"id":null}` is "no list": the choice goes back to the tree order. Read from the
+         * token's own bytes, because a primitive is not a string and unescaping refuses it. */
+        int n = tok[at].end - tok[at].start;
+        if (n != 4 || memcmp(body + tok[at].start, "null", 4) != 0) return false;
         *id = 0;
         return true;
     }
-    if (*p != '"') return false;
-    p++;
-    const char *end = strchr(p, '"');
-    if (!end) return false;
-    return parse_hex64(p, (size_t)(end - p), id);
+    char hex[17];
+    if (!json_tok_unescape(body, &tok[at], hex, sizeof hex)) return false;
+    return parse_hex64(hex, strlen(hex), id);
 }
 
 /* POST /api/playlists/select: tell the broadcast which Playlist to walk. The choice is
@@ -473,21 +476,13 @@ static void card_mark_refresh(void)
         size_t n = fread(buf, 1, sizeof buf - 1, f);
         fclose(f);
         buf[n] = 0;
-        const char *key = strstr(buf, "\"id\"");
-        if (key) {
-            const char *p = strchr(key + 4, ':');
-            if (p) {
-                p++;
-                while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
-                if (*p == '"') {
-                    p++;
-                    const char *end = strchr(p, '"');
-                    size_t len = end ? (size_t)(end - p) : 0;
-                    if (end && mark_id_valid(p, len) && len < sizeof id) {
-                        memcpy(id, p, len);
-                        id[len] = 0;
-                    }
-                }
+        json_tok_t tok[24];
+        int nt = 0;
+        if (json_parse(buf, tok, 24, &nt) && nt > 0 && tok[0].type == JSON_TOK_OBJECT) {
+            int at = json_tok_member(buf, tok, nt, 0, "id");
+            if (at >= 0 && json_tok_unescape(buf, &tok[at], id, sizeof id)
+                && !mark_id_valid(id, strlen(id))) {
+                id[0] = 0;
             }
         }
     }
@@ -580,16 +575,19 @@ static http_result_t select_route(int fd, const http_request_t *req, void *ctx)
     default: status = 500; error = "cannot select"; break;
     }
     char body[256];
-    if (error)
-        snprintf(body, sizeof body, "{\"ok\":false,\"error\":\"%s\"}", error);
-    else if (id) {
+    json_writer_t w = json_writer_make(body, sizeof body);
+    if (error) {
+        json_puts(&w, "{\"ok\":false,\"error\":\"");
+        json_escaped(&w, error);
+        json_puts(&w, "\"}");
+    } else if (id) {
         char hexed[17];
         id_hex(hexed, id);
-        snprintf(body, sizeof body, "{\"ok\":true,\"order\":\"list\",\"selected\":\"%s\"}", hexed);
+        json_printf(&w, "{\"ok\":true,\"order\":\"list\",\"selected\":\"%s\"}", hexed);
     } else {
-        snprintf(body, sizeof body, "{\"ok\":true,\"order\":\"tree\",\"selected\":null}");
+        json_puts(&w, "{\"ok\":true,\"order\":\"tree\",\"selected\":null}");
     }
-    reply_json(fd, status, body, "Cache-Control: no-store\r\n");
+    reply_writer(fd, status, &w, "Cache-Control: no-store\r\n");
     return HTTP_HANDLED;
 }
 

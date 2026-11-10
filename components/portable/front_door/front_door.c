@@ -7,6 +7,7 @@
  * names - /library, /stream, the /api routes and /mcp - is a 404.
  */
 #include "front_door.h"
+#include "json.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,18 +31,12 @@ static const char *TAG = "front_door";
 
 static front_door_cfg_t F;
 
-/* One allocation instead of seven stack buffers (see the route's comment). */
+/* One allocation instead of the route's frames: the broadcast's own status struct carries
+ * 1.4 KB of strings, and that plus this route is what overflowed a connection worker. The
+ * body is built by a bounded writer, so the pieces no longer need buffers of their own. */
 typedef struct {
     mini_icecast_status_t st;
     char body[1536];
-    char title[200];
-    char path[200];
-    char playlist_name[200];
-    char raw_name[96];
-    char playlist_json[320];
-    char mark_raw[44];
-    char mark_escaped[80];
-    char mark_json[84];
 } status_buffers_t;
 
 static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
@@ -70,53 +65,55 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
         return HTTP_HANDLED;
     }
     mini_icecast_status(&b->st);
-    http_json_escape(b->title, sizeof b->title, b->st.title);
-    http_json_escape(b->path, sizeof b->path, b->st.path);
-
     bool card = F.card_present ? F.card_present() : false;
 
+    json_writer_t w = json_writer_make(b->body, sizeof b->body);
+    json_puts(&w, "{\"card\":");
+    json_puts(&w, card ? "true" : "false");
+    json_puts(&w, ",\"mark\":");
     /* The card's own name, when it carries one. Read once by the callback, not on this
      * route: a status poll must not become a card read. */
-    if (F.card_mark && F.card_mark(b->mark_raw, sizeof b->mark_raw)) {
-        http_json_escape(b->mark_escaped, sizeof b->mark_escaped, b->mark_raw);
-        snprintf(b->mark_json, sizeof b->mark_json, "\"%s\"", b->mark_escaped);
+    char mark[64];
+    if (F.card_mark && F.card_mark(mark, sizeof mark)) {
+        json_puts(&w, "\"");
+        json_escaped(&w, mark);
+        json_puts(&w, "\"");
     } else {
-        snprintf(b->mark_json, sizeof b->mark_json, "null");
+        json_puts(&w, "null");
     }
-
-    /* The choice and the walk are different facts: a card that is out keeps the choice
-     * (it comes back with the card) while nothing is walking. */
+    /* The choice and the walk are different facts: a card that is out keeps the choice (it
+     * comes back with the card) while nothing is walking. */
     bool walking = playlist_select_walking();
     uint64_t playlist = walking ? playlist_select_current() : 0;
+    json_printf(&w, ",\"tracks\":%u,\"generation\":%u,\"library\":\"%s\",\"order\":\"%s\","
+                "\"playlist\":", tracks, generation, state, playlist ? "list" : "tree");
     if (playlist) {
         char id[17] = {0};
+        char raw[96];
         snprintf(id, sizeof id, "%016llx", (unsigned long long)playlist);
-        playlist_select_name(b->raw_name, sizeof b->raw_name);
-        http_json_escape(b->playlist_name, sizeof b->playlist_name, b->raw_name);
-        snprintf(b->playlist_json, sizeof b->playlist_json,
-                 "{\"id\":\"%s\",\"name\":\"%s\"}", id, b->playlist_name);
+        playlist_select_name(raw, sizeof raw);
+        json_printf(&w, "{\"id\":\"%s\",\"name\":\"", id);
+        json_escaped(&w, raw);
+        json_puts(&w, "\"}");
     } else {
-        snprintf(b->playlist_json, sizeof b->playlist_json, "null");
+        json_puts(&w, "null");
     }
-
-    int n = snprintf(b->body, sizeof b->body,
-                     "{\"card\":%s,\"mark\":%s,\"tracks\":%u,\"generation\":%u,\"library\":\"%s\","
-                     "\"order\":\"%s\",\"playlist\":%s,"
-                     "\"playing\":{\"title\":\"%s\",\"path\":\"%s\",\"elapsed_ms\":%u,"
-                     "\"duration_ms\":%u}}",
-                     card ? "true" : "false", b->mark_json, tracks, generation, state,
-                     playlist ? "list" : "tree", b->playlist_json, b->title, b->path,
-                     (unsigned)b->st.elapsed_ms, (unsigned)b->st.duration_ms);
+    json_puts(&w, ",\"playing\":{\"title\":\"");
+    json_escaped(&w, b->st.title);
+    json_puts(&w, "\",\"path\":\"");
+    json_escaped(&w, b->st.path);
+    json_printf(&w, "\",\"elapsed_ms\":%u,\"duration_ms\":%u}}",
+                (unsigned)b->st.elapsed_ms, (unsigned)b->st.duration_ms);
     if (lib) library_release(lib);
-    if (n < 0 || n >= (int)sizeof b->body) {
+    if (!json_ok(&w)) {
         free(b);
         http_send_error(fd, 500, "status too large");
         return HTTP_HANDLED;
     }
 
-    if (http_send_headers(fd, 200, "application/json", (size_t)n,
+    if (http_send_headers(fd, 200, "application/json", w.n,
                           "Cache-Control: no-store\r\n") == ESP_OK)
-        http_send_all(fd, b->body, (size_t)n);
+        http_send_all(fd, b->body, w.n);
     free(b);
     return HTTP_HANDLED;
 }
