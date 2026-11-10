@@ -296,8 +296,9 @@ def pack_design(design, font_index, pool):
     if len(errors) > before:
         raise PackError(errors)
 
+    slot_names = sorted(slot_max)
     slot_records = [struct.pack("<IB3x", pool.add(name), slot_max[name])
-                    for name in sorted(slot_max)]
+                    for name in slot_names]
     fields = {
         "name": pool.add(design.get("name") or design["id"]),
         "prim_count": len(out_prims),
@@ -305,11 +306,33 @@ def pack_design(design, font_index, pool):
         "font": font_ids,
         "inks": (paper or 0, ink, rule, *band),
     }
-    return fields, out_prims, slot_records
+    # The slot names travel back with the records, in the order they were packed, so the
+    # manifest below is derived from the same list the sheet is - not from the design's
+    # JSON key order, which is neither sorted nor what the reader will see.
+    return fields, out_prims, slot_records, slot_names
+
+
+def manifest_text(rows):
+    """The sheet as its inputs describe it, for a reader to be checked against.
+
+    Written beside the sheet and read by host/tests/t33_label_sheet.c, which opens the bytes
+    with the reader the firmware ships and compares the two. It is a second opinion derived
+    from the designs, not a re-reading of the blob: a manifest read back out of the sheet
+    would agree with it whatever the packer did.
+
+    Tab-separated, and the design's name is the last field so a name containing a tab only
+    makes the name longer. The slots are comma-joined: a Slot's name is an identifier.
+    """
+    lines = ["label_manifest\t1", f"count\t{len(rows)}"]
+    for i, (name, prim_count, slot_names) in enumerate(rows):
+        lines.append(f"{i}\t{prim_count}\t{len(slot_names)}\t{','.join(slot_names)}\t{name}")
+    return "\n".join(lines) + "\n"
 
 
 def pack_sheet(designs, fonts):
-    """Every design -> the sheet's bytes and the font header's text. Raises PackError."""
+    """Every design -> the sheet's bytes, the font header's text, and the manifest.
+
+    Raises PackError."""
     errors = []
     if not designs:
         raise PackError([f"no designs: assets/labels/{TEMPLATES}/ has no *.json to pack"])
@@ -328,10 +351,10 @@ def pack_sheet(designs, fonts):
             errors.append(f"{did}: duplicate id")
         ids.add(did)
 
-    templates, prims, slots = [], [], []
+    templates, prims, slots, rows = [], [], [], []
     for design in ordered:
         try:
-            fields, tp, ts = pack_design(design, font_index, pool)
+            fields, tp, ts, slot_names = pack_design(design, font_index, pool)
         except PackError as exc:
             errors.extend(exc.errors)
             continue
@@ -340,6 +363,7 @@ def pack_sheet(designs, fonts):
         prims.extend(tp)
         slots.extend(ts)
         templates.append(fields)
+        rows.append((design.get("name") or design["id"], len(tp), slot_names))
 
     if errors:
         raise PackError(errors)
@@ -372,7 +396,7 @@ def pack_sheet(designs, fonts):
         + "".join(f"#define LABEL_FONT_{f['symbol'].upper()} {i}\n"
                   for i, f in enumerate(fonts))
         + f"\n#define LABEL_FONT_COUNT {len(fonts)}\n")
-    return bytes(header) + bytes(body), font_header
+    return bytes(header) + bytes(body), font_header, manifest_text(rows)
 
 
 def verify_sheet(blob):
@@ -501,7 +525,7 @@ def main(argv):
     try:
         fonts = load_fonts(src)
         designs = load_designs(src)
-        blob, font_header = pack_sheet(designs, fonts)
+        blob, font_header, manifest = pack_sheet(designs, fonts)
         summary = verify_sheet(blob)
     except PackError as exc:
         for line in exc.errors:
@@ -515,6 +539,7 @@ def main(argv):
     out.mkdir(parents=True, exist_ok=True)
     (out / "label_sheet.bin").write_bytes(blob)
     (out / "label_fonts.h").write_text(font_header, encoding="utf-8")
+    (out / "label_manifest.txt").write_text(manifest, encoding="utf-8")
     return 0
 
 
@@ -619,10 +644,14 @@ def selftest():
             raise SystemExit(f"selftest: expected {needle!r}, got {exc.errors}")
         raise SystemExit(f"selftest: expected a refusal containing {needle!r}")
 
-    blob, header = pack_sheet([good], fonts)
+    blob, header, manifest = pack_sheet([good], fonts)
     summary = verify_sheet(blob)
     assert "1 designs, 4 prims, 1 slots" in summary, summary
     assert "LABEL_FONT_JURA_20 0" in header and "LABEL_FONT_COUNT 2" in header
+    # The manifest is what t33 compares the opened sheet against, so its shape is part of
+    # the packer's contract: index, prim count, slot count, the packed slot names, the name.
+    assert manifest == ("label_manifest\t1\ncount\t1\n"
+                        "0\t4\t1\tsong_title\tSelf\n"), repr(manifest)
 
     # a folder is the set: every *.json in templates/ is a design, a stray file fails naming
     # itself, the Export's manifest says what it is, and a dot-name is not a design

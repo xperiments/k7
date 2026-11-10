@@ -11,7 +11,8 @@
 #   make -C host            build the runnable server
 #   make -C host test       build and run the unit tests (no board, no network)
 #   make -C host integration run the HTTP acceptance tests against the server
-#   make -C host check      both of the above
+#   make -C host label      pack the real label designs, then open the sheet with the reader
+#   make -C host check      all of the above
 #   make -C host tools      build the measurement/one-shot tools
 #   make -C host fixtures   (re)generate the fixture corpus with ffmpeg
 #   make -C host bench      host encoder-cost baseline (T11h)
@@ -168,7 +169,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t29_snapshot $(BIN)/t30_playlist_select $(BIN)/t31_card_select \
          $(BIN)/t32_label
 
-.PHONY: all test integration layering editor check tools fixtures bench control control-check clean help
+.PHONY: all test integration layering label check tools fixtures bench control control-check clean help
 
 all: $(SERVER)
 
@@ -347,14 +348,42 @@ integration: $(SERVER)
 layering:
 	@ROOT=$(ROOT) sh $(HERE)/tests/layering.sh
 
-# The packer's own test, and its check that the LVGL canvas builder repeats the sheet's faces and
-# the Slot vocabulary: a drift there is silent until a design is packed (the export passes, the
-# build refuses). The packer owns both tables, so it checks the page against them.
-editor:
+# The label sheet, end to end: the packer's own test, its check that the LVGL canvas builder
+# repeats the sheet's faces and the Slot vocabulary, and the reader opening the sheet the
+# packer just wrote. That last one is the seam the other two cannot cross - t32 builds its own
+# bytes, and the page check reads source text - so before it, a change to the packer could
+# break the panel with every test still green.
+#
+# This is the one tier that runs the packer, which is why `make test` stays free of Python.
+LABEL_OUT    := $(BUILD)/label
+LABEL_SHEET  := $(LABEL_OUT)/label_sheet.bin
+LABEL_HEADER := $(LABEL_OUT)/label_fonts.h
+LABEL_INPUTS := $(ROOT)/assets/labels/fonts.json $(ROOT)/tools/label_pack.py \
+                $(wildcard $(ROOT)/assets/labels/templates/*.json)
+
+# One recipe writes all three files - the sheet, the font header and the manifest - and make
+# 3.81 has no grouped targets, so naming both outputs here can run it twice. It is idempotent
+# and costs about 50 ms.
+$(LABEL_SHEET) $(LABEL_HEADER): $(LABEL_INPUTS)
+	@mkdir -p $(LABEL_OUT)
+	$(PYTHON) $(ROOT)/tools/label_pack.py $(ROOT)/assets/labels $(LABEL_OUT)
+
+# t33 includes the generated label_fonts.h, so it needs the packer's output on its include path
+# and as a prerequisite: the font table it compiles has to be the one the sheet was packed with.
+$(OBJ)/t33_label_sheet.o: tests/t33_label_sheet.c $(LABEL_HEADER)
+	@mkdir -p $(OBJ)
+	$(CC) $(CFLAGS) -I$(LABEL_OUT) $(INC) -c $< -o $@
+
+$(BIN)/t33_label_sheet: $(OBJ)/label.o $(OBJ)/t33_label_sheet.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+label: $(BIN)/t33_label_sheet
 	@$(PYTHON) $(ROOT)/tools/label_pack.py --selftest
 	@$(PYTHON) $(ROOT)/tools/label_pack.py --check-editor
+	@$(BIN)/t33_label_sheet $(LABEL_OUT)
 
-check: test layering integration editor
+check: test layering integration label
 
 fixtures:
 	@$(MAKE) -C $(HERE)/fixtures
