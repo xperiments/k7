@@ -749,9 +749,12 @@ The RGB group's side is `components/portable/rgb`: three channels 0..100, a brig
 and one effect from OFF/SOLID/BREATHE/RAINBOW/CHASE/LEVEL. Brightness is applied **last**, to
 whatever the effect produced, so turning the strip down keeps its hues. `rgb_frame()` fills a
 pixel buffer from `(state, now_ms, level, n)` and is pure, so every effect is pinned by
-`host/tests/t25_rgb`. The firmware has no strip driver yet - no pin, chipset or count is
-decided - so `cassette_rgb_set_publish()` is the seam: the panel hands the whole state to
-whatever the board installs, and a hook installed late is called once with the current values.
+`host/tests/t25_rgb`. The firmware has no strip driver yet, but the pin, the chipset and the
+count are decided - eight WS2812B pixels on GPIO 17, and a 30 Hz clock of their own
+([`docs/specs/led-strip.md`](../../../docs/specs/led-strip.md), ADR
+[0074](../../../docs/adr/0074-the-strip-is-eight-pixels-on-gpio-17.md)) - so
+`cassette_rgb_set_publish()` is the seam: the panel hands the whole state to whatever the board
+installs, and a hook installed late is called once with the current values.
 
 ## The VU meter
 

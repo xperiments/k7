@@ -233,6 +233,23 @@ is what holds it there, at Kconfig's ceiling of 131072 bytes — just above the
 95 880 B the encoder needs. The startup log reports the difference it makes:
 `encoder: 102408 B of internal RAM taken`.
 
+### The strip
+
+The addressable light is **eight WS2812B pixels**, data on **GPIO 17**, supplied at 5 V. On the
+Sunton 8048S050C that is one of the four pins the panel, the touch, the card and the console
+leave free - 0, 17, 43, 44 - and the other three are the BOOT strap and the console's UART pair
+([`docs/research/server/s15-i2s-dac-output.md`](docs/research/server/s15-i2s-dac-output.md)
+§6.3). The bare N16R8 devkit's recommended I²S pinout takes 17 for BCK, so a strip and that DAC
+cannot share a board.
+
+Two wiring facts belong here rather than in the spec: the data line is 3.3 V while a 5 V
+WS2812B's datasheet threshold is 0.7 x VDD = 3.5 V, so the strip is either supplied at 4.5 V or
+fed through a level shifter; and eight pixels at full white draw about 0.5 A from the 5 V rail.
+The state, the six effects and the 30 Hz frame are
+[`docs/specs/led-strip.md`](docs/specs/led-strip.md); ADR
+[0074](docs/adr/0074-the-strip-is-eight-pixels-on-gpio-17.md) is the decision, and the driver is
+not in the firmware yet.
+
 ## Using it
 
 | URL | What it does |

@@ -221,6 +221,15 @@
           "text": "The Analysis value stopped carrying the two things only one consumer each wanted. Settings no longer re-renders when a Track settles, and neither do the album detail and the drive.\n\n- **Worker capacity and the card reader are their own contexts.** Settings takes the first; the two Media views take the second. Everything Process and QueueList read is unchanged.\n- **The card reader's identity stopped following the queue.** It used to close over `items` for its fallback, so it was a new function after every settled row — which would have defeated a separate context on its own. It reads the queue through a ref now and depends on the card handles only.\n- **The wide value is 34 members, down from 36.**\n\n**What to check**\n\n- That two slices is the right cut. I did not split the run's own state (items, progress, the verbs) because Process reads 26 of them and a split there would be a different design, not a smaller one.\n- **The re-render claim is structural, not measured.** The App's test environment is node with no DOM and no `.test.tsx`, so there is no render counter to assert on. What is checkable is in the commit: two contexts, and a callback whose dependencies no longer include the queue. If you want it measured, that needs a DOM test environment added first — a separate task.\n- Behaviour is meant to be identical; `tsc --noEmit`, 438 tests and the build all pass.\n\nCommit `9beeec5`. Because APP-02 was under YOLO, this goes to you for review rather than closing itself."
         }
       ]
+    },
+    {
+      "id": "FW-03",
+      "title": "The strip lights: eight WS2812B pixels on GPIO 17 at 30 Hz",
+      "state": "proposed",
+      "group": "FW",
+      "at": "2026-11-10T13:56:39Z",
+      "by": "deepseek",
+      "desc": "The RGB group's knobs light the case: eight WS2812B pixels on GPIO 17 follow the three channels, the brightness and all six effects, and the LEVEL effect follows the broadcast's level.\n\nFinished means the firmware builds for `sunton`, flashes, and the strip shows OFF dark, SOLID the colour the knobs say, BRI dimming without a hue shift, BREATHE, RAINBOW turning, CHASE lapping, and LEVEL following the VU meter - with the host suite still green.\n\nThe shape is ADR 0074 and `docs/specs/led-strip.md`: a board-only `components/app/led_strip/` driving RMT through `espressif/led_strip`, installing `cassette_rgb_set_publish()`, with its own 33 ms tick calling `rgb_frame()` and `level = max(level_l, level_r)` from the broadcast status.\n\nCheck the wiring before flashing: 3.3 V data into a 5 V WS2812B is below the part's 3.5 V threshold, so supply the strip at 4.5 V or add a level shifter; eight white pixels draw about 0.5 A from the 5 V rail."
     }
   ]
 }

@@ -328,6 +328,14 @@ its disc, its ring or its plate inside and, for a button, inks the carcase's rin
 press.
 _Avoid_: button, tile, box
 
+**Strip**:
+The addressable light of the device: eight WS2812B pixels on GPIO 17, showing the state the
+**RGB group**'s knobs publish. It is not a **Bar**, a **Panel** or part of the **Page**, and no
+part of the screen owns it; its state outlives the chrome. The count, the pin, the supply and
+the 30 Hz tick are in [`led-strip.md`](./led-strip.md), and the decision is
+[ADR 0074](../adr/0074-the-strip-is-eight-pixels-on-gpio-17.md).
+_Avoid_: LED tape, neopixel, backlight (that is the panel's)
+
 **Menu**:
 A mode of the **Controls**, not a Level or a screen of its own: the cassette area gives way to
 a list of destinations and the DJ block gives way to the **Pad**, while the **Transport
