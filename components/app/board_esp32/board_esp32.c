@@ -387,9 +387,8 @@ esp_err_t app_board_setup_ap(bool on)
     return ESP_OK;
 }
 
-int app_board_wifi_scan(app_board_scan_t *out, int max, uint32_t timeout_ms)
+int app_board_wifi_scan(app_board_scan_t *out, int max)
 {
-    (void)timeout_ms; /* esp_wifi_scan_start(blocking) is bounded by the scan's own time */
     if (!out || max <= 0) return -1;
 
     wifi_scan_config_t sc = {0};

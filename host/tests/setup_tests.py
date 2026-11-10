@@ -224,6 +224,31 @@ def main():
     finally:
         stop(proc)
 
+    # --- one scan at a time (P22): the second request is a 429, not a queued scan
+    port = free_port()
+    env_slow = dict(env)
+    env_slow.update({"XTAPE_HOST_WIFI": os.path.join(tmp, "wifi3.bin"), "XTAPE_HOST_SCAN_MS": "700"})
+    proc = start(port, env_slow)
+    try:
+        import threading
+        results = []
+        lock = threading.Lock()
+
+        def one_scan():
+            code, _, _ = get(port, "/api/setup/scan")
+            with lock:
+                results.append(code)
+
+        threads = [threading.Thread(target=one_scan) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        results.sort()
+        check("two scans at once: one runs, one is refused", results, [200, 429])
+    finally:
+        stop(proc)
+
     # --- a join that fails, on a device that had no network
     record2 = os.path.join(tmp, "wifi2.bin")
     port = free_port()

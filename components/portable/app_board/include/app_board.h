@@ -113,15 +113,16 @@ void app_board_wifi_forget(void);
 esp_err_t app_board_setup_ap(bool on);
 
 /* One row per network the radio can see, strongest first. Returns the count, or -1 when
- * the scan could not run (busy, out of memory, the radio down). Blocking, bounded by
- * `timeout_ms`: about two seconds of airtime for the band. */
+ * the scan could not run (a station mid-connection, out of memory, the radio down).
+ * Blocking, and bounded by the scan's own configuration - about 1.6 s of airtime for the
+ * band - rather than by a timer here: there is no second timeout to disagree with it. */
 typedef struct {
     char ssid[WIFI_RECORD_SSID_MAX + 1];
     int8_t rssi;
     bool secure; /* anything but WIFI_AUTH_OPEN */
 } app_board_scan_t;
 #define APP_BOARD_SCAN_MAX 24
-int app_board_wifi_scan(app_board_scan_t *out, int max, uint32_t timeout_ms);
+int app_board_wifi_scan(app_board_scan_t *out, int max);
 
 /* Advertise `hostname.local` and `_mcp._tcp` with the endpoint TXT records. The
  * appliance calls this after the HTTP listener is up and Wi-Fi has an address;

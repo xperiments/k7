@@ -118,8 +118,10 @@ walking to it.
 setup one. The setup password is shown on the panel, where the person physically is. A read-only
 field that lies about being write-only is worse than an empty one.
 
-**P18. The scan is one blocking request with a 5 s ceiling** (`GET /api/setup/scan`), and its
-result is cached until the next scan, so a reload is instant. The page shows "Scanning…" rather
+**P18. The scan is one blocking request** (`GET /api/setup/scan`), bounded by the scan's own
+configuration — about 1.6 s of airtime for the band — and **one at a time**: a second request while
+one is running is a `429`, because the radio is doing the work and a queue of scans would only make
+the first slower. The page shows "Scanning…" rather
 than an empty list that fills itself later. A scan costs about two seconds of airtime — up to 13 channels
 at ~120 ms — and briefly interrupts an associated station and the stream; the page says so when the
 device is already joined.
@@ -134,9 +136,9 @@ device does not refuse a network its owner asked for.
 
 ## 4. The routes
 
-Six registrations on the existing listener. The route table's ceiling (`HTTP_MAX_ROUTES`, 20) grows
-to **28**; nineteen are registered today, and the comment above that constant records the build
-that failed because it did not.
+**Seven** registrations on the existing listener. The route table's ceiling (`HTTP_MAX_ROUTES`, 20)
+grows to **28**; nineteen were registered before this change and twenty-six are after it, and the
+comment above that constant records the build that failed because a registration did not fit.
 
 | Route | Method | Body | Answer |
 |---|---|---|---|
@@ -146,6 +148,7 @@ that failed because it did not.
 | `/api/setup/join` | POST | `{"ssid","password"}` | the outcome, or a refusal (blocks ≤25 s) |
 | `/api/setup/ap` | POST | `{"on":true\|false}` | `204` |
 | `/api/setup/ap-password` | POST | `{"password"}` | `204`, applied at the next start |
+| `/api/setup/forget` | POST | `{}` | `204`: the network is erased, the setup password is not |
 
 **P21. `GET /api/setup` answers:**
 
@@ -193,6 +196,12 @@ own origin, so no CORS header is involved.
 build already has that copy: the first boot after this change erases ESP-IDF's `nvs.net80211`
 namespace, because a leftover copy is still a password on the flash. The record is written before
 a join is attempted, so a power cut in the middle cannot leave a half-provisioned device.
+
+**Forgetting.** The record is also erased on request: `POST /api/setup/forget` drops it, the radio
+stops retrying it, and a device left with no record raises the setup network again (P9). The setup
+password is its own key (P25) and survives — a device can forget a network and keep its hotspot's
+password, which is the reason the two are not one blob. Without this, a failed attempt (whose choice
+is stored first, above) leaves a device chasing a network nobody wants at every boot.
 
 **P25. Two keys in that namespace, not one blob.** `rec` holds the home network — magic `K7WF`,
 format version, the SSID (≤32 bytes), its password (≤63) and the lengths. `ap` holds the setup
@@ -344,7 +353,8 @@ or B8 — a cable and eyes are the only instruments those have.
 | H9 | `GET /` still answers 302 to the App while the setup network is up, and `/setup` is not shadowed by it | host |
 | H10 | Five failed attempts stop the retries and the state says so | host |
 | H11 | The record's codec round-trips, and wrong magic/version/short blobs read as no record | host |
-| H12 | The reason mapping names 15, 201, 205 and the fallback | host |
+| H12 | The reason mapping names 2, 4, 15, 201, 205 and the fallback | host |
+| H13 | Two scans at once: one answers, the other is a 429 | host |
 | B1 | Unprovisioned boot: the setup network appears, `192.168.4.1/setup` and `k7.local/setup` both answer, the panel shows the password | **board only** |
 | B2 | A wrong password reports reason 15 on reload after the channel move | **board only** |
 | B3 | A successful join closes the setup network after 60 s and the App then reaches the device on the LAN | **board only** |

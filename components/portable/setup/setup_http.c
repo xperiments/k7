@@ -295,8 +295,18 @@ static http_result_t scan_route(int fd, const http_request_t *req, void *ctx)
         return HTTP_HANDLED;
     }
 
+    /* One scan at a time (P22): a second request while one is running is a 429, not a
+     * second radio trip stacking up behind the first. The flag is the only shared state on
+     * this route, and a plain bool is enough because the worst case is one extra refusal. */
+    static volatile bool scanning;
+    if (scanning) {
+        http_json_send(fd, 429, "{\"networks\":[],\"why\":\"a scan is already running\"}", NULL);
+        return HTTP_HANDLED;
+    }
+    scanning = true;
     static app_board_scan_t found[APP_BOARD_SCAN_MAX];
-    int n = app_board_wifi_scan(found, APP_BOARD_SCAN_MAX, 5000);
+    int n = app_board_wifi_scan(found, APP_BOARD_SCAN_MAX);
+    scanning = false;
     if (n < 0) {
         http_json_send(fd, 503, "{\"networks\":[],\"why\":\"the scan could not run\"}", NULL);
         return HTTP_HANDLED;

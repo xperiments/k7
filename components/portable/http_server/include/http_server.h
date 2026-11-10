@@ -49,7 +49,7 @@ extern "C" {
 #define HTTP_HEADER_MAX 1024
 /* The appliance registers seventeen (the stream, play, the front door's two, MCP's three,
  * the app's eight, library.bin, /library); the screen's two diagnostics make nineteen, and
- * the setup page and its five routes make twenty-five. The table had 18 once, so a
+ * the setup page and its six routes make twenty-six. The table had 18 once, so a
  * screen-HTTP build failed the last registration with ESP_ERR_NO_MEM and never started its
  * listener - the capture build could not serve at all. Headroom is cheap; a dead listener is
  * not. */

@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 esp_err_t app_board_net_start(uint16_t http_port) { (void)http_port; return ESP_OK; }
 
@@ -381,10 +382,13 @@ esp_err_t app_board_wifi_join(const char *ssid, const char *pass)
     return ESP_OK;
 }
 
-int app_board_wifi_scan(app_board_scan_t *out, int max, uint32_t timeout_ms)
+int app_board_wifi_scan(app_board_scan_t *out, int max)
 {
-    (void)timeout_ms;
     if (!out || max <= 0) return -1;
+
+    /* A scan the tests can make slow, so "one at a time" is observable (a 429). */
+    const char *delay = getenv("XTAPE_HOST_SCAN_MS");
+    if (delay && *delay) usleep((useconds_t)(atoi(delay) * 1000));
 
     const char *path = getenv("XTAPE_HOST_WIFI_SCAN");
     int count = 0;
