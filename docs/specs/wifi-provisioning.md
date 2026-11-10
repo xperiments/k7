@@ -93,7 +93,7 @@ That is why P30 records the attempt rather than trusting the page's connection.
 ## 3. The setup page
 
 **P15.** `GET /setup` answers `text/html; charset=utf-8` with one hand-written page, held in
-portable rodata, **no external asset, no webfont, no framework, no build step** — **7422 bytes** measured (the page a browser on the hotspot fetched)
+portable rodata, **no external asset, no webfont, no framework, no build step** — **7520 bytes** measured (the page a browser on the hotspot fetched)
 of HTML with an inline style block and the script that drives the five routes. It is served on every
 interface, including the LAN, so a person on the network can reconfigure a working device without
 walking to it.
