@@ -241,6 +241,11 @@
           "at": "2026-11-10T14:33:54Z",
           "by": "deepseek",
           "text": "The strip is wired: the RGB group drives eight WS2812B pixels on GPIO 17 at 30 Hz, on their own task, and LEVEL follows the broadcast's level.\n\nVerified: `make -C host check` green; `sunton` builds; flashed; 25 s of a playing track logged no fault, with `strip: 8 WS2812B pixels on GPIO 17, 30 Hz` at boot.\n\nWhat to check - the strip starts dark, because the effect knob's neutral is OFF:\n- Tap the mode bar's `led` button, turn Effect off OFF, pick SOLID: the colour the three knobs say.\n- Turn BRI down: it should dim without the hue turning.\n- BREATHE, RAINBOW, CHASE: the three animated effects.\n- LEVEL: with a track playing, the strip should follow it.\n\nIf nothing lights at all, suspect the data level first: 3.3 V into a 5 V WS2812B is below its 3.5 V threshold - supply the strip at 4.5 V or put a 74AHCT125 in the line."
+        },
+        {
+          "at": "2026-11-10T14:54:20Z",
+          "by": "deepseek",
+          "text": "Review feedback from the owner: at full white the strip drew too much, browned the board out and rebooted it. Fixed: every frame now passes a power ceiling last (rgb_limit_power, APP_STRIP_MAX_PCT, 25% = ~120 mA). A bench build forced SOLID white at that cap and ran 40 s beside the panel and the broadcast with no reset. ADR 0075 records it; the strip is back on the board, still awaiting your look."
         }
       ]
     }

@@ -245,6 +245,9 @@ cannot share a board.
 Two wiring facts belong here rather than in the spec: the data line is 3.3 V while a 5 V
 WS2812B's datasheet threshold is 0.7 x VDD = 3.5 V, so the strip is either supplied at 4.5 V or
 fed through a level shifter; and eight pixels at full white draw about 0.5 A from the 5 V rail.
+That half an amp browned the board out the first time the light showed white, so the firmware
+caps every frame at a quarter of its power - about 120 mA, `APP_STRIP_MAX_PCT` in menuconfig -
+and the strip is deliberately dimmer than the part can go until it has a supply of its own.
 The state, the six effects and the 30 Hz frame are
 [`docs/specs/led-strip.md`](docs/specs/led-strip.md); ADR
 [0074](docs/adr/0074-the-strip-is-eight-pixels-on-gpio-17.md) is the decision, and the driver is

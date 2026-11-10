@@ -21,8 +21,15 @@
  * `level` is the louder channel, not the average: a mono strip has no stereo image to preserve,
  * and averaging would halve a hard-panned track. The LEVEL effect clamps what it is given, but
  * the sample is normalised here so a NaN from an idle encoder cannot reach the colour arithmetic.
+ *
+ * The frame is capped last, at CONFIG_APP_STRIP_MAX_PCT of full power. Full white is ~480 mA for
+ * eight pixels, and it browned this board out: the cap is ~120 mA at its default quarter. It is a
+ * ceiling on the current, so no effect can step around it - not a per-frame budget, which would
+ * leave the brightness knob dead above the point where the budget binds.
  */
 #include "strip.h"
+
+#include "sdkconfig.h"
 
 #include "esp_err.h"
 #include "esp_log.h"
@@ -44,6 +51,11 @@
 #define STRIP_GPIO      17
 #define STRIP_PIXELS    8
 #define STRIP_PERIOD_MS 33
+
+/* A WS2812B channel at full is 20 mA, so a pixel at full white is 60 mA and the whole strip is
+ * 480 mA. The cap is the share of that the board is allowed to draw (Kconfig), and the log line
+ * states the resulting figure. */
+#define STRIP_MA_PER_PIXEL_WHITE 60
 
 #define STRIP_TASK_STACK 3072
 #define STRIP_TASK_PRIO  2 /* below the screen's 3 and the port's 4, which may preempt a tick */
@@ -93,6 +105,7 @@ static void strip_task(void *arg)
 
         uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
         int n = rgb_frame(&state, now_ms, strip_level(), px, STRIP_PIXELS);
+        rgb_limit_power(px, n, CONFIG_APP_STRIP_MAX_PCT);
         for (int i = 0; i < n; i++)
             led_strip_set_pixel(s_strip, (uint32_t)i, px[i].r, px[i].g, px[i].b);
         led_strip_refresh(s_strip);
@@ -140,7 +153,8 @@ bool strip_start(void)
 
     screen_display_rgb_publish(strip_publish, NULL);
     s_started = true;
-    ESP_LOGI(TAG, "%d WS2812B pixels on GPIO %d, %d Hz", STRIP_PIXELS, STRIP_GPIO,
-             1000 / STRIP_PERIOD_MS);
+    int ma = STRIP_PIXELS * STRIP_MA_PER_PIXEL_WHITE * CONFIG_APP_STRIP_MAX_PCT / 100;
+    ESP_LOGI(TAG, "%d WS2812B pixels on GPIO %d, %d Hz, capped at %d%% (about %d mA at white)",
+             STRIP_PIXELS, STRIP_GPIO, 1000 / STRIP_PERIOD_MS, CONFIG_APP_STRIP_MAX_PCT, ma);
     return true;
 }

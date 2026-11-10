@@ -1,0 +1,19 @@
+menu "Strip"
+
+config APP_STRIP_MAX_PCT
+    int "The strip's power ceiling, as a percent of full"
+    range 0 100
+    default 25
+    help
+        Eight WS2812B pixels at full white draw about 480 mA - 60 mA each, 20 mA a
+        channel. On this board that was enough to brown it out: the strip lit at full
+        white and the device rebooted under the audio load.
+
+        The ceiling is the last stage of the frame, after the effect and the brightness,
+        so no effect and no knob position can ask for more than this share of full
+        power. It caps the current rather than the display: 25% is about 120 mA for
+        eight pixels at white, and a single colour at the same 25% is a third of that.
+
+        Raise it if the strip has its own supply with headroom; drop it if the board
+        still resets. The measured figure is in docs/specs/led-strip.md, "Power".
+endmenu

@@ -19,6 +19,12 @@ It runs on its own clock rather than LVGL's, because the screen task's cadence i
 rests at least three times its own frame cost, over 100 ms for a full-screen invalidation) and
 would drag the chase with it.
 
+Every frame passes a power ceiling last: `rgb_limit_power()` keeps `CONFIG_APP_STRIP_MAX_PCT`
+(25% by default) of every channel, about 120 mA for eight pixels at white. Full white is
+~480 mA, and that browned the board out on its first build. The ceiling is a current limit, so
+the brightness knob still dims over its whole range underneath it, and a strip with its own
+supply can be given more from menuconfig.
+
 ## Wiring
 
 - **Data into a 5 V WS2812B is the one thing to check.** The part's datasheet threshold is

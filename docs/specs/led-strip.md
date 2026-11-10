@@ -39,6 +39,27 @@ a board without one of them moving.
   the five-volt rail's problem, not the GPIO's.
 - The strip's supply is not the board's 3.3 V rail.
 
+## Power
+
+Eight pixels at full white are about 480 mA - 60 mA a pixel, 20 mA a channel - and that
+browned out this board: the first build that showed its full white rebooted the device under
+the audio load. So the light has a ceiling.
+
+`rgb_limit_power()` is the frame's last stage, after the effect and the brightness. It keeps
+`CONFIG_APP_STRIP_MAX_PCT` of every channel - **25% by default**, about **120 mA** for eight
+pixels at white - and no effect, no brightness and no frame can go above it. The ceiling is a
+current limit, not a display setting: a single colour at the same 25% is about 40 mA, and the
+brightness knob stays a working dimmer underneath it.
+
+A per-frame current budget - which lets a dim colour through untouched and clamps only the
+bright ones - was rejected: above the point where the budget binds, the brightness knob stops
+doing anything, and a light whose knob has a dead top half is worse than one that is quieter
+than it could be.
+
+The ceiling is Kconfig (`APP_STRIP_MAX_PCT`), so a strip with its own supply can be given more
+without touching the code. The wiring cure is separate and still the owner's: a bulk capacitor
+across the strip's supply, and a supply that is not the board's own USB port.
+
 ## What it shows
 
 The state is the owner's setting and outlives the panel: hiding the chrome or leaving the RGB

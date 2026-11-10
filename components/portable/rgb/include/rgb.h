@@ -70,6 +70,19 @@ bool rgb_set_effect(rgb_state_t *s, rgb_effect_t effect);
  * non-positive count writes nothing and returns 0. */
 int rgb_frame(const rgb_state_t *s, uint32_t now_ms, float level, rgb_pixel_t *out, int n);
 
+/* Cap a frame's power: keep `percent` (0..100, clamped) of every channel, so 100 leaves the frame
+ * untouched and 25 keeps a quarter of it. This is the **last** stage, after the effect and the
+ * brightness, so the ceiling holds whatever the effect drew - the reason it is here and not a
+ * lower maximum inside rgb_frame().
+ *
+ * It exists because eight WS2812B pixels at full white are about 480 mA (60 mA each, 20 mA a
+ * channel), which is enough to brown out the board they share. The ceiling is a property of the
+ * light, not of one effect: it has to hold for RAINBOW's brightest pixel and for a LEVEL that
+ * spikes, and a per-frame current model would make the brightness knob dead above the point
+ * where the model binds. A NULL buffer or a non-positive count is a no-op. Returns the clamped
+ * percent. */
+int rgb_limit_power(rgb_pixel_t *px, int n, int percent);
+
 #ifdef __cplusplus
 }
 #endif

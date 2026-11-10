@@ -214,6 +214,48 @@ static void test_frame_edges(void)
     CHECK_EQ(rgb_frame(&s, 0, 0.0f, px, N), N, "and a real frame writes every pixel");
 }
 
+/* The ceiling exists because the strip browned out the board at full white: eight pixels at full
+ * white are ~480 mA, and a quarter of that is ~120 mA. The cap is the last stage, so it holds for
+ * whatever the effect drew, and it keeps the ratio between the channels - a dimmed red is still
+ * red. */
+static void test_power_cap(void)
+{
+    rgb_pixel_t px[N];
+    rgb_state_t s = fresh();
+    s.effect = RGB_EFFECT_SOLID;
+
+    CHECK_EQ(rgb_frame(&s, 0, 0.0f, px, N), N, "a white frame");
+    CHECK_EQ(rgb_limit_power(px, N, 100), 100, "a hundred percent is the cap that does nothing");
+    CHECK_EQ(px[0].r, 255, "and leaves full white alone");
+    CHECK_EQ(px[N - 1].g, 255, "on every pixel");
+
+    CHECK_EQ(rgb_frame(&s, 0, 0.0f, px, N), N, "a white frame");
+    CHECK_EQ(rgb_limit_power(px, N, 25), 25, "a quarter is applied");
+    CHECK_EQ(px[0].r, 64, "a quarter of 255 rounds to 64");
+    CHECK_EQ(px[3].b, 64, "on every channel of every pixel");
+
+    CHECK_EQ(rgb_frame(&s, 0, 0.0f, px, N), N, "a white frame");
+    CHECK_EQ(rgb_limit_power(px, N, 0), 0, "no power is no light");
+    CHECK(px[0].r == 0 && px[0].g == 0 && px[0].b == 0, "and the frame is black");
+
+    /* The ratio survives: this is a dimmer, not a desaturator. */
+    rgb_set_channel(&s, 0, 79);
+    rgb_set_channel(&s, 1, 39);
+    rgb_set_channel(&s, 2, 20);
+    CHECK_EQ(rgb_frame(&s, 0, 0.0f, px, N), N, "a warm frame");
+    rgb_limit_power(px, N, 25);
+    CHECK_EQ(px[0].r, 50, "the strongest channel is a quarter");
+    CHECK_EQ(px[0].g, 25, "the middle one too");
+    CHECK_EQ(px[0].b, 13, "and so is the smallest");
+
+    /* The cap clamps rather than wrapping. */
+    CHECK_EQ(rgb_limit_power(px, N, 250), 100, "over a hundred clamps to a hundred");
+    CHECK_EQ(rgb_limit_power(px, N, -5), 0, "and under zero clamps to none");
+
+    CHECK_EQ(rgb_limit_power(NULL, N, 25), 25, "no buffer is a no-op");
+    CHECK_EQ(rgb_limit_power(px, 0, 25), 25, "no pixels is a no-op");
+}
+
 int main(void)
 {
     test_init_and_clamps();
@@ -224,6 +266,7 @@ int main(void)
     test_chase();
     test_level();
     test_frame_edges();
+    test_power_cap();
 
     TEST_END();
 }

@@ -205,3 +205,16 @@ int rgb_frame(const rgb_state_t *s, uint32_t now_ms, float level, rgb_pixel_t *o
     }
     return n;
 }
+
+int rgb_limit_power(rgb_pixel_t *px, int n, int percent)
+{
+    int pct = clamp_int(percent, 0, CHANNEL_MAX);
+    if (!px || n <= 0) return pct;
+
+    for (int i = 0; i < n; i++) {
+        px[i].r = (uint8_t)((px[i].r * pct + 50) / 100);
+        px[i].g = (uint8_t)((px[i].g * pct + 50) / 100);
+        px[i].b = (uint8_t)((px[i].b * pct + 50) / 100);
+    }
+    return pct;
+}

@@ -1,5 +1,10 @@
 # The strip is eight WS2812B pixels on GPIO 17, refreshed at 30 Hz
 
+**Amended by [ADR 0075](./0075-the-strip-is-capped-at-a-quarter-of-its-power.md):** every frame
+now passes a power ceiling after the brightness, because full white browned the board out. The
+pixels, the pin, the 30 Hz clock and the level source are unchanged; what changed is how much of
+the frame may reach the wire.
+
 The RGB group has had a state and no light since ADR 0026. `components/portable/rgb` owns the
 three channels, the brightness and the six effects, `rgb_frame()` turns them into pixels, and
 `t25_rgb` pins every effect on the host - but the panel's publish hook had nothing to publish
