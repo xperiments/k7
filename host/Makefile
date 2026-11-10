@@ -33,6 +33,7 @@ LDLIBS := -lpthread -lm
 
 INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/http_server/include \
+       -I$(ROOT)/components/portable/json/include \
        -I$(ROOT)/components/portable/audio_format/include \
        -I$(ROOT)/components/portable/library/include \
        -I$(ROOT)/components/portable/library_http/include \
@@ -115,9 +116,11 @@ PROD_SRC := \
   $(ROOT)/components/portable/app_services/app_services.c \
   $(ROOT)/components/portable/label/label.c \
   $(ROOT)/components/portable/label/label_values.c \
+  $(ROOT)/components/portable/json/json.c \
   $(SHINE_SRC)
 
 vpath %.c $(ROOT)/components/portable/http_server \
+          $(ROOT)/components/portable/json \
           $(ROOT)/components/portable/audio_format \
           $(ROOT)/components/portable/library \
           $(ROOT)/components/portable/library_http \
@@ -142,7 +145,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/shine/src/lib \
           $(HERE) $(HERE)/shim $(HERE)/tools $(HERE)/tests
 
-CORE_OBJ := $(OBJ)/audio_format.o $(OBJ)/library.o $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_ring.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(OBJ)/tone_eq.o $(SHINE_OBJ) $(OBJ)/shim.o
+CORE_OBJ := $(OBJ)/json.o $(OBJ)/audio_format.o $(OBJ)/library.o $(OBJ)/mi_encode.o $(OBJ)/mi_decode.o $(OBJ)/mi_ring.o $(OBJ)/mi_resample.o $(OBJ)/mi_station.o $(OBJ)/tone_eq.o $(SHINE_OBJ) $(OBJ)/shim.o
 BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
@@ -167,7 +170,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t21_button $(BIN)/t22_knob $(BIN)/t23_pad $(BIN)/t24_controls \
          $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline $(BIN)/t28_entrance \
          $(BIN)/t29_snapshot $(BIN)/t30_playlist_select $(BIN)/t31_card_select \
-         $(BIN)/t32_label
+         $(BIN)/t32_label $(BIN)/t34_json
 
 .PHONY: all test integration layering label check tools fixtures bench control control-check clean help
 
@@ -304,6 +307,10 @@ $(BIN)/t27_timeline: $(OBJ)/timeline.o $(OBJ)/t27_timeline.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t29_snapshot: $(OBJ)/snapshot.o $(OBJ)/t29_snapshot.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t34_json: $(OBJ)/json.o $(OBJ)/t34_json.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
