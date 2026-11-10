@@ -21,7 +21,7 @@
 
 #include "cassette.h"
 #include "cassette_peek.h"
-#include "cassette_view.h"
+#include "cassette_cover.h"
 #include "artwork_loader.h"
 #include "mini_icecast.h"
 
@@ -50,7 +50,7 @@ static void request_cover(void)
 {
     if (!s_have_status || !s_status.path[0] || s_status.format == MI_FMT_NONE) return;
     if (artwork_loader_cover_answered(s_status.path, s_status.format)) return;
-    cassette_view_set_cover(NULL);
+    cassette_cover_set_image(NULL);
     artwork_loader_request(s_status.path, s_status.format);
 }
 
@@ -64,13 +64,13 @@ static void track_request(void)
     snprintf(s_track_path, sizeof s_track_path, "%s", s_status.path);
     cassette_peek_set_path(s_status.path);
     if (!s_status.path[0] || s_status.format == MI_FMT_NONE) {
-        cassette_view_set_cover(NULL);
+        cassette_cover_set_image(NULL);
         return;
     }
     ESP_LOGI(TAG, "track request: %s (fmt %d)", s_status.path, (int)s_status.format);
     /* The new Track's names are not the old Track's: clear them so the peek falls back to
      * the path/filename until the loader answers. */
-    cassette_view_set_tags("", "");
+    cassette_levels_set_tags("", "");
     /* Each level asks for what it shows, and only when it is up. The loader remembers
      * its answer, so closing and reopening a level does not read the card again. */
     if (s_peek_visible) artwork_loader_request_tags(s_status.path, s_status.format);

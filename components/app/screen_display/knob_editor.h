@@ -89,6 +89,10 @@ void knob_editor_double_tap(int id);
  * point the press began on, so the value follows the finger and not the cell. A 6 px dead
  * zone keeps a tap a tap - and a drag is never a tap, so the click that ends one is dropped;
  * 2 px of travel is one value step. */
+/* What to do to the scene while a group is being edited. The composition passes its own
+ * dim; the editor does not reach into the composition to find it. */
+void knob_editor_set_dim(void (*dim)(bool));
+
 void knob_editor_drag_begin(int id);
 void knob_editor_drag_update(void);
 void knob_editor_drag_end(void);

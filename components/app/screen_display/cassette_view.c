@@ -764,6 +764,7 @@ void cassette_view_create(void)
      * today, the RGB group next). It is a screen child above everything the panels build. */
     knob_editor_create(scr);
     knob_editor_set_bar(knob_bar_claim, knob_bar_release, NULL);
+    knob_editor_set_dim(cassette_view_dim);
 
     /* The three groups' panel values. They build no object; their cells are the bar's, built
      * when a value is installed. */
@@ -1089,13 +1090,3 @@ const char *cassette_bench_step_name(cassette_bench_step_t step)
 #endif /* CONFIG_APP_UI_RENDER_BENCH */
 
 /* ------------------------------------------------------------------ hand-off */
-
-void cassette_view_set_cover(const lv_image_dsc_t *dsc)
-{
-    cassette_cover_set_image(dsc);
-}
-
-void cassette_view_set_tags(const char *group, const char *song)
-{
-    cassette_levels_set_tags(group, song);
-}

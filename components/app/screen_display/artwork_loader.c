@@ -56,7 +56,8 @@
 #include "app_services.h"
 #include "card_use.h"
 #include "artwork.h"
-#include "cassette_view.h"
+#include "cassette_cover.h"
+#include "cassette_levels.h"
 #include "mini_icecast.h"
 
 /* Vendored inside LVGL; its private include directory is named by CMakeLists.txt. */
@@ -381,7 +382,7 @@ static void apply_cover(uint32_t seq, bool have)
 {
     if (!s_art_buf) return;
     if (!lvgl_port_lock(1000)) return;
-    if (seq == current_seq()) cassette_view_set_cover(have ? &s_art_dsc : NULL);
+    if (seq == current_seq()) cassette_cover_set_image(have ? &s_art_dsc : NULL);
     lvgl_port_unlock();
 }
 
@@ -390,7 +391,7 @@ static void apply_cover(uint32_t seq, bool have)
 static void apply_tags(const artwork_tags_t *tags)
 {
     if (!lvgl_port_lock(1000)) return;
-    cassette_view_set_tags(tags->group, tags->song);
+    cassette_levels_set_tags(tags->group, tags->song);
     lvgl_port_unlock();
 }
 
@@ -650,7 +651,7 @@ static void request(const char *track_path, mi_fmt_t format, bool art, bool tags
          * report on this Track. Say so now - no picture - or the white page would wait on one
          * that cannot come and hold its print empty instead of printing the label fill. */
         if (lvgl_port_lock(1000)) {
-            if (seq == current_seq()) cassette_view_set_cover(NULL);
+            if (seq == current_seq()) cassette_cover_set_image(NULL);
             lvgl_port_unlock();
         }
         return;

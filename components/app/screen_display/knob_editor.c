@@ -24,7 +24,6 @@
 #include "cassette_layout.h"
 #include "cassette_pad.h"
 #include "cassette_style.h"
-#include "cassette_view.h"
 #include "cassette_widgets.h"
 #include "knob_cell.h"
 
@@ -446,6 +445,13 @@ void knob_editor_drag_end(void)
 static void apply_effect(knob_edit_effect_t fx);
 static void open_timer_cb(lv_timer_t *t);
 static void begin_edit(int id);
+static void (*s_dim)(bool);
+
+void knob_editor_set_dim(void (*dim)(bool))
+{
+    s_dim = dim;
+}
+
 static void end_edit(int id);
 
 static void close_timer(void)
@@ -589,7 +595,7 @@ static void begin_edit(int id)
         lv_obj_set_hidden(s_container, false);
         lv_obj_move_foreground(s_container);
     }
-    cassette_view_dim(true);
+    if (s_dim) s_dim(true);
 }
 
 /* And the close: `id` is the knob the model closed, which it has already forgotten. The Pad
@@ -603,7 +609,7 @@ static void end_edit(int id)
     s_pad_dy = 0;
     value_timer_close();
     if (s_container) lv_obj_set_hidden(s_container, true);
-    cassette_view_dim(false);
+    if (s_dim) s_dim(false);
     if (s_bar_release) s_bar_release(s_bar_ctx);
 }
 
