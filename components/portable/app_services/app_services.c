@@ -23,6 +23,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "http_server.h"
+#include "http_json.h"
 #include "json.h"
 #include "library.h"
 #include "library_http.h"
@@ -34,6 +35,7 @@
 #include "front_door.h"
 #include "flash_job.h"
 #include "playlist_select.h"
+#include "playlist_http.h"
 
 static const char *TAG = "app";
 
@@ -149,23 +151,6 @@ static void rescan_task(void *arg)
  * not a CORS-safelisted type, so a page on another origin cannot send it without a
  * preflight this device never answers. A form post cannot forge one either. That is the
  * whole CSRF story, and it is cheaper than a token the user would have to type. */
-static void reply_json(int fd, int status, const char *body, const char *cache)
-{
-    size_t len = strlen(body);
-    http_send_headers(fd, status, "application/json", len, cache);
-    http_send_all(fd, body, len);
-}
-
-/* A body built by a bounded writer. A writer that overflowed leaves half a document, and
- * half a document is worse than an error: it is JSON that parses and lies. */
-static void reply_writer(int fd, int status, const json_writer_t *w, const char *cache)
-{
-    if (!json_ok(w)) {
-        http_send_error(fd, 500, "the reply did not fit");
-        return;
-    }
-    reply_json(fd, status, w->p, cache);
-}
 
 /* The flash write, on the writer task: an HTTP worker's stack is PSRAM, and a write
  * disables the cache the stack lives behind (flash_job.h). */
@@ -229,7 +214,7 @@ static http_result_t snapshot_route(int fd, const http_request_t *req, void *ctx
         json_escaped(&w, why);
         json_puts(&w, "\"}");
     }
-    reply_writer(fd, status, &w, "Cache-Control: no-store\r\n");
+    http_json_send_writer(fd, status, &w, "Cache-Control: no-store\r\n");
 
     /* The reader holds a PSRAM copy of the old image, and the write that just happened ran
      * with the PSRAM cache off. A restart is the cheap, certain way to serve the new one. */
@@ -237,177 +222,6 @@ static http_result_t snapshot_route(int fd, const http_request_t *req, void *ctx
     return HTTP_HANDLED;
 }
 
-static http_result_t rescan_route(int fd, const http_request_t *req, void *ctx)
-{
-    (void)ctx;
-    if (strcmp(req->path, "/api/rescan") != 0) {
-        http_send_error(fd, 404, "no such path");
-        return HTTP_HANDLED;
-    }
-    esp_err_t e = app_services_rescan();
-    if (e == ESP_OK)
-        reply_json(fd, 202, "{\"ok\":true}", NULL);
-    else if (e == ESP_ERR_INVALID_STATE)
-        reply_json(fd, 409, "{\"ok\":false,\"error\":\"a scan is already running\"}", NULL);
-    else
-        reply_json(fd, 500, "{\"ok\":false,\"error\":\"cannot start the scan\"}", NULL);
-    return HTTP_HANDLED;
-}
-
-
-/* ---------------------------------------------------------------- playlists */
-
-/* The page reads the Playlists the Snapshot holds; the broadcast walks one of them.
- * These routes are the read side and the one command, and nothing here writes flash:
- * a new list arrives as a new image (ADR 0051). */
-
-
-static void id_hex(char out[17], uint64_t id)
-{
-    snprintf(out, 17, "%016llx", (unsigned long long)id);
-}
-
-static bool parse_hex64(const char *s, size_t n, uint64_t *out)
-{
-    if (!s || n == 0 || n > 16) return false;
-    uint64_t v = 0;
-    for (size_t i = 0; i < n; i++) {
-        char c = s[i];
-        int d;
-        if (c >= '0' && c <= '9') d = c - '0';
-        else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;
-        else if (c >= 'A' && c <= 'F') d = c - 'A' + 10;
-        else return false;
-        v = (v << 4) | (uint64_t)d;
-    }
-    *out = v;
-    return true;
-}
-
-/* GET /api/playlists: what the image holds and which one is walking. A device with no
- * Snapshot answers an empty list rather than an error: "no lists" is true. */
-static http_result_t playlists_route(int fd, const http_request_t *req, void *ctx)
-{
-    (void)ctx;
-    if (strcmp(req->path, "/api/playlists") != 0) {
-        http_send_error(fd, 404, "no such path");
-        return HTTP_HANDLED;
-    }
-    uint32_t n = s_snapshot ? snapshot_lists(s_snapshot) : 0;
-    size_t cap = 320 + (size_t)n * 320;
-    char *body = malloc(cap);
-    if (!body) {
-        http_send_error(fd, 500, "out of memory");
-        return HTTP_HANDLED;
-    }
-    json_writer_t w = json_writer_make(body, cap);
-    uint64_t selected = playlist_select_current();
-    json_puts(&w, "{\"selected\":");
-    if (selected) {
-        char sel[17] = {0};
-        id_hex(sel, selected);
-        json_printf(&w, "\"%s\"", sel);
-    } else {
-        json_puts(&w, "null");
-    }
-    json_printf(&w, ",\"walking\":%s,\"missing\":%u,\"lists\":[",
-                playlist_select_walking() ? "true" : "false",
-                (unsigned)playlist_select_missing());
-    for (uint32_t i = 0; i < n; i++) {
-        snapshot_list_t l;
-        if (!snapshot_list_at(s_snapshot, i, &l)) continue;
-        char id[17];
-        id_hex(id, l.id);
-        json_printf(&w, "%s{\"id\":\"%s\",\"name\":\"", i ? "," : "", id);
-        /* The name is data: escaped into the document, not into a fixed buffer first. */
-        json_escaped(&w, snapshot_list_name(s_snapshot, &l));
-        json_printf(&w, "\",\"created\":%llu,\"rows\":%u}", (unsigned long long)l.created,
-                    (unsigned)l.row_count);
-    }
-    json_puts(&w, "]}");
-    reply_writer(fd, 200, &w, "Cache-Control: no-cache\r\n");
-    free(body);
-    return HTTP_HANDLED;
-}
-
-/* GET /api/playlists/<id>: one list's rows, as the Library's own paths. */
-static http_result_t playlist_route(int fd, const http_request_t *req, void *ctx)
-{
-    (void)ctx;
-    uint64_t id = 0;
-    const char *suffix = req->path + strlen("/api/playlists/");
-    if (!s_snapshot || !parse_hex64(suffix, strlen(suffix), &id)) {
-        http_send_error(fd, 404, "no such list");
-        return HTTP_HANDLED;
-    }
-    snapshot_list_t l;
-    if (!snapshot_list_find(s_snapshot, id, &l)) {
-        http_send_error(fd, 404, "no such list");
-        return HTTP_HANDLED;
-    }
-    /* Exact enough: the paths are read once to size the body, so a list of long paths
-     * cannot ask for a buffer the device cannot give. */
-    size_t cap = 320;
-    for (uint32_t i = 0; i < l.row_count; i++) {
-        const char *path = NULL;
-        if (snapshot_list_row(s_snapshot, &l, i, &path) && path) cap += strlen(path) * 2 + 8;
-    }
-    char *body = malloc(cap);
-    if (!body) {
-        http_send_error(fd, 500, "out of memory");
-        return HTTP_HANDLED;
-    }
-    json_writer_t w = json_writer_make(body, cap);
-    char id_hexed[17];
-    id_hex(id_hexed, id);
-    json_printf(&w, "{\"id\":\"%s\",\"name\":\"", id_hexed);
-    json_escaped(&w, snapshot_list_name(s_snapshot, &l));
-    json_puts(&w, "\",\"rows\":[");
-    for (uint32_t i = 0; i < l.row_count; i++) {
-        const char *path = NULL;
-        if (!snapshot_list_row(s_snapshot, &l, i, &path)) continue;
-        /* The path is escaped straight into the document: no second buffer, and no
-         * LIB_PATH_MAX cut in the middle of an escape. */
-        json_puts(&w, i ? ",\"" : "\"");
-        json_escaped(&w, path);
-        json_puts(&w, "\"");
-    }
-    json_puts(&w, "]}");
-    reply_writer(fd, 200, &w, "Cache-Control: no-cache\r\n");
-    free(body);
-    return HTTP_HANDLED;
-}
-
-/* The id out of {"id":"<hex>"} or {"id":null}. Deliberately small: the body has one
- * field, and a parser for one field is not an invitation to accept more. */
-static bool body_list_id(const char *body, size_t len, uint64_t *id)
-{
-    (void)len;
-    json_tok_t tok[16];
-    int nt = 0;
-    if (!json_parse(body, tok, 16, &nt) || nt == 0) return false;
-    if (tok[0].type != JSON_TOK_OBJECT) return false;
-    int at = json_tok_member(body, tok, nt, 0, "id");
-    if (at < 0) return false;
-    if (tok[at].type == JSON_TOK_PRIMITIVE) {
-        /* `{"id":null}` is "no list": the choice goes back to the tree order. Read from the
-         * token's own bytes, because a primitive is not a string and unescaping refuses it. */
-        int n = tok[at].end - tok[at].start;
-        if (n != 4 || memcmp(body + tok[at].start, "null", 4) != 0) return false;
-        *id = 0;
-        return true;
-    }
-    char hex[17];
-    if (!json_tok_unescape(body, &tok[at], hex, sizeof hex)) return false;
-    return parse_hex64(hex, strlen(hex), id);
-}
-
-/* POST /api/playlists/select: tell the broadcast which Playlist to walk. The choice is
- * remembered; an id the image no longer holds is a 404, an empty one a 409. */
-/* ------------------------------------------------------------ cover archive */
-
-/* A 32 MiB ceiling is four times the largest archive a 10,000-cover image can make and
- * far above the 8 MiB a 3,485-track card measured; a larger file is not ours. */
 #define COVERS_MAX_BYTES (32u * 1024u * 1024u)
 
 /* The card root is the parent of the Music directory the services were started with
@@ -537,56 +351,24 @@ static http_result_t covers_route(int fd, const http_request_t *req, void *ctx)
     return HTTP_HANDLED;
 }
 
-static http_result_t select_route(int fd, const http_request_t *req, void *ctx)
+static http_result_t rescan_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
-    if (strcmp(req->path, "/api/playlists/select") != 0) {
+    if (strcmp(req->path, "/api/rescan") != 0) {
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
     }
-    uint64_t id = 0;
-    if (!body_list_id((const char *)req->body, req->body_len, &id)) {
-        reply_json(fd, 400, "{\"ok\":false,\"error\":\"a body of {\\\"id\\\":\\\"<hex>\\\"} or {\\\"id\\\":null}\"}",
-                   "Cache-Control: no-store\r\n");
-        return HTTP_HANDLED;
-    }
-    if (id && !s_snapshot) {
-        reply_json(fd, 503, "{\"ok\":false,\"error\":\"no Snapshot on this device\"}",
-                   "Cache-Control: no-store\r\n");
-        return HTTP_HANDLED;
-    }
-    const library_t *lib = library_acquire();
-    playlist_select_result_t r = playlist_select_set(s_snapshot, lib, id);
-    if (lib) library_release(lib);
-
-    int status;
-    const char *error = NULL;
-    switch (r) {
-    case PLAYLIST_SELECT_OK: status = 200; break;
-    case PLAYLIST_SELECT_NO_SNAPSHOT: status = 503; error = "no Snapshot on this device"; break;
-    case PLAYLIST_SELECT_NOT_FOUND: status = 404; error = "no such list"; break;
-    case PLAYLIST_SELECT_EMPTY:
-        status = 409;
-        error = "that list has no Track this Library can find";
-        break;
-    default: status = 500; error = "cannot select"; break;
-    }
-    char body[256];
-    json_writer_t w = json_writer_make(body, sizeof body);
-    if (error) {
-        json_puts(&w, "{\"ok\":false,\"error\":\"");
-        json_escaped(&w, error);
-        json_puts(&w, "\"}");
-    } else if (id) {
-        char hexed[17];
-        id_hex(hexed, id);
-        json_printf(&w, "{\"ok\":true,\"order\":\"list\",\"selected\":\"%s\"}", hexed);
-    } else {
-        json_puts(&w, "{\"ok\":true,\"order\":\"tree\",\"selected\":null}");
-    }
-    reply_writer(fd, status, &w, "Cache-Control: no-store\r\n");
+    esp_err_t e = app_services_rescan();
+    if (e == ESP_OK)
+        http_json_send(fd, 202, "{\"ok\":true}", NULL);
+    else if (e == ESP_ERR_INVALID_STATE)
+        http_json_send(fd, 409, "{\"ok\":false,\"error\":\"a scan is already running\"}", NULL);
+    else
+        http_json_send(fd, 500, "{\"ok\":false,\"error\":\"cannot start the scan\"}", NULL);
     return HTTP_HANDLED;
 }
+
+
 
 bool app_services_card_present(void) { return s_card_present; }
 
@@ -1016,14 +798,8 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     e = http_server_register_route("/api/covers", covers_route, NULL);
     if (e != ESP_OK) return fail(report, e, "covers endpoint");
 
-    e = http_server_register_route("/api/playlists", playlists_route, NULL);
-    if (e != ESP_OK) return fail(report, e, "playlists endpoint");
-
-    e = http_server_register_route("/api/playlists/", playlist_route, NULL);
-    if (e != ESP_OK) return fail(report, e, "playlist endpoint");
-
-    e = http_server_register_route_method("/api/playlists/select", "POST", select_route, NULL);
-    if (e != ESP_OK) return fail(report, e, "playlist select endpoint");
+    e = playlist_http_start(app_services_snapshot);
+    if (e != ESP_OK) return fail(report, e, "playlist endpoints");
 
     e = http_server_register_route_method("/api/snapshot", "POST", snapshot_route, NULL);
     if (e != ESP_OK) return fail(report, e, "snapshot endpoint");

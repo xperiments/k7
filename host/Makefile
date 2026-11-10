@@ -35,6 +35,8 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/http_server/include \
        -I$(ROOT)/components/portable/json/include \
        -I$(ROOT)/components/portable/card_use/include \
+       -I$(ROOT)/components/portable/http_json/include \
+       -I$(ROOT)/components/portable/playlist_http/include \
        -I$(ROOT)/components/portable/audio_format/include \
        -I$(ROOT)/components/portable/library/include \
        -I$(ROOT)/components/portable/library_http/include \
@@ -119,11 +121,15 @@ PROD_SRC := \
   $(ROOT)/components/portable/label/label_values.c \
   $(ROOT)/components/portable/json/json.c \
   $(ROOT)/components/portable/card_use/card_use.c \
+  $(ROOT)/components/portable/http_json/http_json.c \
+  $(ROOT)/components/portable/playlist_http/playlist_http.c \
   $(SHINE_SRC)
 
 vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/json \
           $(ROOT)/components/portable/card_use \
+          $(ROOT)/components/portable/http_json \
+          $(ROOT)/components/portable/playlist_http \
           $(ROOT)/components/portable/audio_format \
           $(ROOT)/components/portable/library \
           $(ROOT)/components/portable/library_http \
@@ -153,7 +159,7 @@ BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
-SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o
+SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/http_loop.o $(OBJ)/http_backend_single.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o
