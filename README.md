@@ -526,7 +526,8 @@ chip revision v0.2), flashed over the USB-UART bridge and run on **ESP-IDF v6.1*
 
 | What | Evidence |
 |---|---|
-| Builds and flashes from a clean checkout | `idf.py build && idf.py -p PORT flash`: the current app is `0x2fa490` (3.12 MB) in the 4 MB factory partition, 26 % free |
+| Builds and flashes from a clean checkout | `idf.py build && idf.py -p PORT flash`: the 0.5.0 app is `0x1fa1b0` (2,073,008 B) in the 4 MB factory partition, 51 % free |
+| The released parts keep the record | 2026-11-11: the 0.5.0 parts written at `0x0`/`0x8000`/`0x10000` in 34.0 s; the board rejoined `xperiments-2.4G` from NVS, booted `snapshot: 1502 rows`, and logs `App version: 0.5.0` |
 | 8 MB PSRAM in octal mode at 80 MHz | `esp_psram: Found 8MB PSRAM device`, `Speed: 80MHz`, `SPI SRAM memory test OK` |
 | Every allocation this project makes takes the external-memory path (P2/P3) | `staging buffers in external memory`, `burst ring: 20098 B (~500 ms of audio) in external memory` |
 | The encoder's state is measured, not assumed | `102408 B of internal RAM taken (the encoder's own state)`, and `95880 B of state inside the vendored library` - 16 B less than the host's 95896, because the struct holds three pointers |

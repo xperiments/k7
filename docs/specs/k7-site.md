@@ -275,6 +275,18 @@ flashed from a browser, and the timings below are not yet measured.
 | B6 | Safari and Firefox on the Site: the honest sentence, the manual path, and no dead flash control |
 | B7 | Install from the Site in Chrome: the icon opens at `/app` in its own window with no address bar, and a link to `/` stays in a tab |
 
+**Measured on the board, 2026-11-11** — the **released parts written over USB by `esptool`,
+not by the Site** (the browser's port chooser needs a person at the machine), 460800 baud:
+
+| # | Result |
+|---|---|
+| B2 | **proven** — 2,073,008 B at `0x10000` written in **34.0 s** (488.4 kbit/s, 1,290,565 B compressed), hash verified, hard reset. The board rejoined **`xperiments-2.4G`** from its stored record; at boot it logged `snapshot: 1502 rows` and `App version: 0.5.0`, and `/api/status` still answered with the same card mark and 1,495 tracks. |
+| B1, B3–B7 | **not run** — a bare board (this one is provisioned), an erase (it would strand this board off its network), a non-S3 or 8 MB module, the browser's chooser, Safari/Firefox, and the deployed origin. |
+| — | The Site and `/app` were rendered in headless Chrome: the flash card offered **Connect a board**, the install card offered **Install K7**, and `/app` showed its Local Network Access gate. |
+
+The browser's own write is still unproven; the bytes are the same three parts at the same
+three offsets, which is what B2 above exercised.
+
 ---
 
 ## 7. Open questions
@@ -283,8 +295,8 @@ flashed from a browser, and the timings below are not yet measured.
    **Answered on 2026-11-11:** it is a **CH340** (`1a86:7523`), enumerated by macOS as
    `usbserial-8344440`. macOS had the driver; Windows may need WCH's, and the page's recovery
    copy names it.
-2. **What baud rate does that bridge sustain?** The flash time is not measured; the page should
-   not claim a speed the cable cannot carry.
+2. **What baud rate does that bridge sustain?** **Measured 2026-11-11:** asked for 460800, the
+   CH340 carried **488.4 kbit/s** effective; the 2,073,008 B app took 34.0 s.
 3. **Can the installed firmware's version be read before writing?** `esp_app_desc_t` sits at
    `0x10000 + 0x20`, so a read of 256 bytes would name it. Not in v1; the confirmation names what
    will be written, not what is there.
