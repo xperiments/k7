@@ -11,12 +11,12 @@ The origin does not move: `xperiments.dev` and its certificate are the ones alre
 the root ([ADR 0078](../adr/0078-the-site-owns-the-root-and-the-app-moves-to-app.md)) and how the
 firmware reaches a board ([ADR 0079](../adr/0079-the-firmware-is-flashed-in-parts-from-the-browser.md)).
 
-**Status:** S1–S9, R1–R6 and D1–D4 are built; **K7 0.5.0 is released** (`web/firmware.json`
-and `web/public/firmware/0.5.0/`: `bootloader.bin` 21,120 B, `partition-table.bin` 3,072 B,
-`sd_stream_server.bin` 2,073,008 B). The Site's own page is still its first shape — the hero
-slot, the flash and the install are SI-03/SI-04 — and **no board has been flashed from a
-browser**. The two ADRs are 0078 and 0079. The sizes in §3 are the released bytes; no timing in
-§6 is measured yet.
+**Status:** S1–S9, R1–R6, D1–D4 and the flash section (F1–F12) are built; **K7 0.5.0 is
+released** (`web/firmware.json` and `web/public/firmware/0.5.0/`: `bootloader.bin` 21,120 B,
+`partition-table.bin` 3,072 B, `sd_stream_server.bin` 2,073,008 B). The flash's rules are tested
+over a fake board and a fake origin — **not on hardware**, and **no board has been flashed from
+a browser**. The hero slot and the install section are SI-04. The two ADRs are 0078 and 0079.
+The sizes in §3 are the released bytes; no timing in §6 is measured yet.
 
 **Vocabulary:** [`web/CONTEXT.md`](../../web/CONTEXT.md) — **Site**, **Flash**, **Install**. The
 App is [`k7-app.md`](./k7-app.md); the deployment is [`k7-deploy.md`](./k7-deploy.md); the

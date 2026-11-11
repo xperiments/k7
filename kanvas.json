@@ -424,7 +424,7 @@
     {
       "id": "SI-01",
       "title": "The origin serves two documents: the Site at / and the App at /app",
-      "state": "review",
+      "state": "done",
       "group": "SI",
       "yolo": true,
       "at": "2026-11-11T01:38:45Z",
@@ -446,7 +446,7 @@
     {
       "id": "SI-02",
       "title": "A firmware release is a version, a manifest and three committed parts",
-      "state": "review",
+      "state": "done",
       "group": "SI",
       "yolo": true,
       "at": "2026-11-11T01:38:45Z",
@@ -468,12 +468,25 @@
     {
       "id": "SI-03",
       "title": "The flasher writes three parts and never a merged image",
-      "state": "todo",
+      "state": "review",
       "group": "SI",
       "deps": ["SI-01", "SI-02"],
+      "yolo": true,
       "at": "2026-11-11T01:38:45Z",
       "by": "dsh",
-      "desc": "The page that puts K7 on a board from Chrome: it checks the chip is an ESP32-S3 and the flash is 16 MB, confirms the version, then writes bootloader, partition table and app at 0x0/0x8000/0x10000 and never the gaps — so a reflash keeps the stored WiFi network and the device's Snapshot. Erase is a separate, explicit choice.\n\nFinished when a fake serial transport proves every refusal and the happy path, and a real board flashes from the deployed Site."
+      "desc": "The page that puts K7 on a board from Chrome: it checks the chip is an ESP32-S3 and the flash is 16 MB, confirms the version, then writes bootloader, partition table and app at 0x0/0x8000/0x10000 and never the gaps — so a reflash keeps the stored WiFi network and the device's Snapshot. Erase is a separate, explicit choice.\n\nFinished when a fake serial transport proves every refusal and the happy path, and a real board flashes from the deployed Site.",
+      "notes": [
+        {
+          "at": "2026-11-11T02:02:10Z",
+          "by": "dsh",
+          "text": "Plan: a FlashDevice seam with esptool-js behind it, the state machine and its rules in web/src/site/flash/, a fake device for the tests, and the ReUI section."
+        },
+        {
+          "at": "2026-11-11T02:07:10Z",
+          "by": "dsh",
+          "text": "The Site can flash a board from Chrome or Edge. Below the hero: the prerequisites, a port\npicker, the board's identity (USB id, chip, flash size) and the version, then a confirmation\nbefore anything is written. It writes the bootloader, the partition table and the app at\n0x0/0x8000/0x10000 — never the gaps — and offers erase only as its own destructive choice.\nAfter a flash it gives the three setup steps; without Web Serial it says so and shows the\nmanual path, with the esptool command generated from `firmware.json`.\n\nVerified: 18 new tests over a fake board and a fake origin (wrong chip, 8 MB, no write before\nconfirmation, part order and offsets, erase only when chosen, hash mismatch, every cause);\n`npm run typecheck`; `npm test` (460); `npm run build` — the Site bundle carries esptool.\n\nNot verified, and what needs you: **a real board**. The port chooser, the actual write, the\n\"do not unplug\" progress and the BOOT-button retry are SI-06's board pass. The failure copy is\nworth reading as a person would, especially the erase warning."
+        }
+      ]
     },
     {
       "id": "SI-04",
@@ -488,12 +501,25 @@
     {
       "id": "SI-05",
       "title": "The worker serves the App and stays out of the Site's way",
-      "state": "todo",
+      "state": "review",
       "group": "SI",
       "deps": ["SI-01"],
+      "yolo": true,
       "at": "2026-11-11T01:38:45Z",
       "by": "dsh",
-      "desc": "The PWA's worker is retargeted: it caches `/app` and answers navigation only there, so a navigation to `/` always goes to the network.\n\nFinished when the App still loads offline, the Site can never be served from a stale cache, and an existing install opens `/app`."
+      "desc": "The PWA's worker is retargeted: it caches `/app` and answers navigation only there, so a navigation to `/` always goes to the network.\n\nFinished when the App still loads offline, the Site can never be served from a stale cache, and an existing install opens `/app`.",
+      "notes": [
+        {
+          "at": "2026-11-11T02:02:10Z",
+          "by": "dsh",
+          "text": "Plan: register the worker from the Site, give the shell cache a new shape, and prove the artifact's shell list in CI."
+        },
+        {
+          "at": "2026-11-11T02:07:10Z",
+          "by": "dsh",
+          "text": "The worker is the App's: its shell list is `/app.html` and the Site is never in it, its cache\nname carries the shell's shape as well as the version (so an old `/-as-shell` cache is dropped\non activate), and the Site registers the worker itself so an install offered on `/` has one.\nCI now proves the artifact: `check-shell.mjs` fails if `shell.json` misses `/app.html`, names\n`/index.html` or `/`, or if either document is absent from `dist`.\n\nVerified: `npm run build`; `check-shell` ok (80 assets, `/app.html`, no Site); `check-manifest`\nok; `npm run typecheck`; `npm test` (460).\n\nNot verified, and what needs a browser: the offline reload of `/app`, the navigation to `/`\ngoing to the network, and an existing install opening `/app`. Those are SI-06's checks; the\nheaders can only be checked on the deployed origin."
+        }
+      ]
     },
     {
       "id": "SI-06",
