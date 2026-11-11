@@ -558,6 +558,11 @@
           "at": "2026-11-11T02:33:46Z",
           "by": "dsh",
           "text": "Question: The serial port is held by a Python process (PID 66793). May I stop it to flash the board — and do you want to press Connect in Chrome yourself on the local preview, or have me flash the 0.5.0 bytes with esptool?"
+        },
+        {
+          "at": "2026-11-11T02:55:30Z",
+          "by": "dsh",
+          "text": "Approved, and done: the Python monitor was stopped and the released parts were written by\nesptool at 460800.\n\nResult (B2): 2,073,008 B at 0x10000 in 34.0 s, 488.4 kbit/s, 1,290,565 B compressed, hash\nverified, hard reset. The board rejoined `xperiments-2.4G` from its stored NVS record without\nre-provisioning, logged `App version: 0.5.0` and `snapshot: 1502 rows`, and `/api/status`\nanswers with the same card mark and 1,495 tracks.\n\nStill open: the browser's own write (the port chooser needs a person at Chrome — the preview\nis being served for that), Safari/Firefox, a bare board, a wrong board, the erase, and the\ndeployed origin, which still serves the old build (`/app` 404)."
         }
       ]
     }
