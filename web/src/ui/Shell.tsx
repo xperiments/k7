@@ -426,6 +426,21 @@ export function Shell({ route, children }: { route: Route; children: React.React
 
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0"
+                aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
+                aria-expanded={!collapsed}
+                onClick={toggleRail}
+              >
+                {collapsed ? (
+                  <PanelLeftOpen aria-hidden="true" />
+                ) : (
+                  <PanelLeftClose aria-hidden="true" />
+                )}
+              </Button>
               <Breadcrumb className="min-w-0">
                 <BreadcrumbList className="flex-nowrap">
                   {area ? (
@@ -445,21 +460,6 @@ export function Shell({ route, children }: { route: Route; children: React.React
                 {!reachable ? (
                   <span className="text-xs text-muted-foreground">device unreachable</span>
                 ) : null}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0"
-                  aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
-                  aria-expanded={!collapsed}
-                  onClick={toggleRail}
-                >
-                  {collapsed ? (
-                    <PanelLeftOpen aria-hidden="true" />
-                  ) : (
-                    <PanelLeftClose aria-hidden="true" />
-                  )}
-                </Button>
               </div>
             </header>
 

@@ -329,7 +329,7 @@ string it should end up with.
 
 ```tsx
 const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-foreground/45 bg-transparent font-light tracking-wide text-foreground outline-none transition-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 aria-pressed:border-primary aria-pressed:text-primary aria-expanded:bg-foreground/10 data-[pressed]:border-primary data-[pressed]:text-primary data-[selected]:border-primary data-[selected]:text-primary [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:stroke-[1.25]',
+  'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-foreground/45 bg-transparent font-light tracking-wide text-foreground outline-none transition-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 aria-pressed:border-primary aria-pressed:text-primary data-[pressed]:border-primary data-[pressed]:text-primary data-[selected]:border-primary data-[selected]:text-primary [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:stroke-[1.25]',
   {
     variants: {
       variant: {
@@ -370,7 +370,7 @@ buttons** — a plaque with a circular dome holding the icon at its left and the
 exception to the pill rule); the install control is a dome button in the rail's footer. In the
 default state the button is outlined and transparent, with a neutral icon and label; the current
 one fills only its dome with the secondary and turns its icon dark, while the button, its border
-and the label stay neutral. The rail collapses to its icons: the toggle at the right of the stage
+and the label stay neutral. The rail collapses to its icons: the toggle at the left of the stage
 header hides the labels, the group rules and the counts, narrows the rail to w-16, and remembers
 the choice in this browser. No `K7Shell`. **[ADR]**
 
