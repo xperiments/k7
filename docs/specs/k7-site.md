@@ -279,9 +279,10 @@ flashed from a browser, and the timings below are not yet measured.
 
 ## 7. Open questions
 
-1. **Which USB-UART bridge does the shipping board carry, and does it need a driver?** The
-   repository records only "a separate USB-UART bridge" (`usbserial-834430`); the page's recovery
-   copy should name the driver if one is needed on Windows or macOS.
+1. **Which USB-UART bridge does the shipping board carry, and does it need a driver?**
+   **Answered on 2026-11-11:** it is a **CH340** (`1a86:7523`), enumerated by macOS as
+   `usbserial-8344440`. macOS had the driver; Windows may need WCH's, and the page's recovery
+   copy names it.
 2. **What baud rate does that bridge sustain?** The flash time is not measured; the page should
    not claim a speed the cable cannot carry.
 3. **Can the installed firmware's version be read before writing?** `esp_app_desc_t` sits at

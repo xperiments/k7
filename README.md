@@ -42,7 +42,7 @@ rate and encoded to MP3 for the stream.
 
 ## Contents
 
-- [Build and flash](#build-and-flash)
+- [Install K7 on a board](#install-k7-on-a-board)
 - [The card](#the-card)
 - [Hardware: pins, button, PSRAM](#hardware-pins-button-psram)
 - [Using it](#using-it)
@@ -55,7 +55,22 @@ rate and encoded to MP3 for the stream.
 
 ---
 
-## Build and flash
+## Install K7 on a board
+
+The normal way is the Site: open **`https://k7.xperiments.dev/`** in Chrome or Edge on a
+computer, plug the board in with a USB-C cable that carries data, and press **Connect a
+board**. It reads the chip and the flash, refuses anything that is not an ESP32-S3 with
+16 MB, and writes the bootloader, the partition table and the app at `0x0`, `0x8000` and
+`0x10000` — never a merged image, so the stored WiFi network and the Snapshot survive.
+Erasing is a separate, explicit choice ([`docs/specs/k7-site.md`](./docs/specs/k7-site.md)).
+If no port appears, the board's USB bridge is a CH340 (`1a86:7523`): macOS usually already has
+a driver for it, Windows may need WCH's, and a charge-only cable is the other common cause.
+
+After it restarts, give it a network: join **`K7.local`** (the default password is
+`12345678`), open **`http://192.168.4.1/setup`**, and choose the network. The rest of this
+section is the developer path, for building and flashing from source.
+
+### Build and flash from source
 
 Builds and runs on ESP-IDF **6.1** (the version the board tier below was run on)
 and on **5.4.4**; the component metadata asks for `idf: ">=5.4"`. The `esp32s3`
@@ -83,12 +98,13 @@ in** ([`docs/specs/wifi-provisioning.md`](./docs/specs/wifi-provisioning.md), [A
    panel shows the chosen network, the setup network's password and its address, and can raise it
    again without a reflash or a power cycle.
 
-The choice is stored in NVS, so `idf.py flash` keeps it. `idf.py erase-flash` does not — the device
-comes back **unprovisioned**, which is the same state a new board arrives in.
+The choice is stored in NVS, so `idf.py flash` keeps it — and so does the Site's flash, which
+writes the same three parts and never the gaps. `idf.py erase-flash` does not: the device comes
+back **unprovisioned**, which is the same state a new board arrives in.
 
 `sdkconfig.defaults` sets the flash size to 16 MB and the application partition to
-1.5 MB, matching the N16R8 class of module. If your board has a different flash
-size, change `CONFIG_ESPTOOLPY_FLASHSIZE_16MB` there before the first build.
+4 MB (`partitions.csv`), matching the N16R8 class of module. If your board has a different
+flash size, change `CONFIG_ESPTOOLPY_FLASHSIZE_16MB` there before the first build.
 
 `sdkconfig.defaults` is applied on the first build; `idf.py menuconfig` edits the
 result afterwards. If you change `sdkconfig.defaults`, delete `sdkconfig` (or run
