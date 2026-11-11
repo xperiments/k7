@@ -604,7 +604,7 @@
     {
       "id": "LK-02",
       "title": "The tokens, the stylesheet and the primitives are the K7 base",
-      "state": "review",
+      "state": "done",
       "group": "LK",
       "deps": ["LK-01"],
       "yolo": true,
@@ -627,12 +627,20 @@
     {
       "id": "LK-03",
       "title": "The shell wears the K7 ink and the stage is framed",
-      "state": "todo",
+      "state": "doing",
       "group": "LK",
       "deps": ["LK-02"],
+      "yolo": true,
       "at": "2026-11-11T03:47:23Z",
       "by": "dsh",
-      "desc": "The sidebar keeps its structure (device menu, install, two nav groups with counts, collapse) and takes the K7 treatment: logo tile, outlined rows with the current row filled, count chips, Settings in the footer, a 1px frame and 5px gutters around the stage, and the PlayerBar as the footer bar. No K7Shell, no navigation changes. Done when every route renders under the same frame, keyboard focus and the collapse mode still work, and a screenshot at desktop and at 800x480 shows one shell."
+      "desc": "The sidebar keeps its structure (device menu, install, two nav groups with counts, collapse) and takes the K7 treatment: logo tile, outlined rows with the current row filled, count chips, Settings in the footer, a 1px frame and 5px gutters around the stage, and the PlayerBar as the footer bar. No K7Shell, no navigation changes. Done when every route renders under the same frame, keyboard focus and the collapse mode still work, and a screenshot at desktop and at 800x480 shows one shell.",
+      "notes": [
+        {
+          "at": "2026-11-11T04:09:33Z",
+          "by": "dsh",
+          "text": "Plan: the K7 shell with the reference's dome buttons (a circular icon dome in a 2x-wide pill with a label), a filled logo tile, micro-label group chips, the stage framed and the PlayerBar as the footer bar. Then typecheck, test, build and a screenshot."
+        }
+      ]
     },
     {
       "id": "LK-04",
@@ -660,6 +668,7 @@
       "state": "todo",
       "group": "LK",
       "deps": ["LK-02"],
+      "yolo": true,
       "at": "2026-11-11T03:47:23Z",
       "by": "dsh",
       "desc": "The front door at / becomes the K7 page: near-black, one accent, line-art hero (the panel drawing, or live K7 art if it earns its place), flash and install sections in the K7 language, footer as the licence trail, and the browser chrome and icons following the dark palette. Content imagery, including a future device photograph, is allowed. Done when / renders K7, install and flash still work, and the page passes the same greps as the App."

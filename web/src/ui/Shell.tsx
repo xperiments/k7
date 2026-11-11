@@ -29,21 +29,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
 } from '@/components/ui/sidebar';
+import { Badge } from '@/components/reui/badge';
 import { DEVICE_ORIGIN } from '../config';
 import { connectToDevice, getDevice, isProbing, useDeviceLink } from '../device/device';
 import type { Link } from '../device/transport';
@@ -201,104 +192,123 @@ function DeviceMenu({
       : 'no card in the player';
 
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <SidebarMenuButton
-                size="lg"
-                className="h-auto aria-expanded:bg-primary/15"
-              />
-            }
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            aria-label="The player"
+            title={subtitle}
+            className="grid size-12 shrink-0 place-items-center rounded-panel border border-primary bg-primary text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          />
+        }
+      >
+        <span aria-hidden="true" className="k7-sidebar-logo size-8" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="bottom" align="start" className="w-64">
+        {/* Base UI's group is what a group label reads its context from: a bare
+         * `DropdownMenuLabel` throws "MenuGroupContext is missing" and takes the popup —
+         * and the page — down with it (Base UI error #31). Radix allows it; this is not
+         * Radix. The error text is on the trigger's subtitle, not in here. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            {link === 'none' ? 'The device' : `The device · ${deviceFacts}`}
+          </DropdownMenuLabel>
+          {link === 'none' ? (
+            <DropdownMenuItem onClick={() => void connect()}>
+              <Plug aria-hidden="true" />
+              {connecting ? 'Waiting for Chrome…' : 'Connect a player'}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            render={<a href={stream} target="_blank" rel="noopener noreferrer" />}
           >
-            {/* The brand mark, not an icon: it is a wordmark, so it takes the slot. The file
-             * is drawn in black, so `k7-sidebar-logo` clips a current-colour fill to its
-             * shape and the mark takes the sidebar's ink like everything else. It is the
-             * button's name too, since the word that used to sit beside it is the wordmark
-             * itself. */}
-            <span
-              role="img"
-              aria-label="K7"
-              className="k7-sidebar-logo size-16 shrink-0 group-data-[collapsible=icon]:size-4!"
-            />
-            <span className="grid min-w-0 flex-1 text-left leading-tight">
-              <span className="truncate text-xs text-sidebar-foreground/85">{subtitle}</span>
-            </span>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="bottom" align="start" className="w-64">
-            {/* Base UI's group is what a group label reads its context from: a bare
-             * `DropdownMenuLabel` throws "MenuGroupContext is missing" and takes the popup —
-             * and the page — down with it (Base UI error #31). Radix allows it; this is not
-             * Radix. The error text is on the trigger's subtitle, not in here. */}
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>
-                {link === 'none' ? 'The device' : `The device · ${deviceFacts}`}
-              </DropdownMenuLabel>
-              {link === 'none' ? (
-                <DropdownMenuItem onClick={() => void connect()}>
-                  <Plug aria-hidden="true" />
-                  {connecting ? 'Waiting for Chrome…' : 'Connect a player'}
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem
-                render={<a href={stream} target="_blank" rel="noopener noreferrer" />}
-              >
-                <Waves aria-hidden="true" />
-                Open the live stream
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                render={<a href={`${DEVICE_ORIGIN}/library`} target="_blank" rel="noopener noreferrer" />}
-              >
-                <Disc3 aria-hidden="true" />
-                Open the library index
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void copyMcp()}>
-                <Sparkles aria-hidden="true" />
-                {copied ? 'Copied the MCP endpoint' : 'Copy the MCP endpoint'}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={rescan}>
-                <RefreshCw aria-hidden="true" />
-                Rescan the player&apos;s library
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarMenuItem>
-    </SidebarMenu>
+            <Waves aria-hidden="true" />
+            Open the live stream
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            render={<a href={`${DEVICE_ORIGIN}/library`} target="_blank" rel="noopener noreferrer" />}
+          >
+            <Disc3 aria-hidden="true" />
+            Open the library index
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void copyMcp()}>
+            <Sparkles aria-hidden="true" />
+            {copied ? 'Copied the MCP endpoint' : 'Copy the MCP endpoint'}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={rescan}>
+            <RefreshCw aria-hidden="true" />
+            Rescan the player&apos;s library
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** The K7 control: a pill twice the dome's width, a circular dome with the icon, a label. */
+function RailItem({
+  href,
+  label,
+  icon,
+  active,
+  badge,
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  badge?: string;
+}) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        render={<a href={href} aria-current={active ? 'page' : undefined} />}
+        isActive={active}
+        tooltip={label}
+        className="h-10 w-fit min-w-24 gap-2.5 rounded-full border border-primary p-1 pr-3 text-sm hover:bg-primary/15 data-active:bg-primary data-active:text-primary-foreground"
+      >
+        <span
+          aria-hidden="true"
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground group-data-[active=true]/menu-button:bg-background group-data-[active=true]/menu-button:text-primary [&_svg]:size-4 [&_svg]:stroke-[1.25]"
+        >
+          {icon}
+        </span>
+        <span className="truncate">{label}</span>
+        {badge ? (
+          <span className="ml-1 rounded-full bg-primary px-1.5 text-xs font-medium tabular-nums text-primary-foreground group-data-[active=true]/menu-button:bg-background group-data-[active=true]/menu-button:text-primary">
+            {badge}
+          </span>
+        ) : null}
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
 function Nav({ groups, route }: { groups: NavGroup[]; route: Route }) {
   return (
-    <>
+    <nav aria-label="Areas" className="flex flex-col gap-3">
       {groups.map((group) => (
-        <SidebarGroup key={group.id}>
-          <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {group.items.map((item) => {
-                const active = item.names.includes(route.name);
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      render={<a href={item.href} aria-current={active ? 'page' : undefined} />}
-                      isActive={active}
-                      tooltip={item.label}
-                    >
-                      {item.icon}
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                    {item.badge ? <SidebarMenuBadge>{item.badge}</SidebarMenuBadge> : null}
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <div key={group.id} className="flex flex-col gap-1.5">
+          <Badge size="xs" className="ml-3 self-start">
+            {group.label}
+          </Badge>
+          <SidebarMenu className="gap-1.5">
+            {group.items.map((item) => (
+              <RailItem
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                icon={item.icon}
+                active={item.names.includes(route.name)}
+                badge={item.badge}
+              />
+            ))}
+          </SidebarMenu>
+        </div>
       ))}
-    </>
+    </nav>
   );
 }
 
@@ -317,63 +327,68 @@ export function Shell({ route, children }: { route: Route; children: React.React
   const area = routeArea(route);
 
   return (
-    <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden">
-      <Sidebar variant="inset" collapsible="icon">
-        <SidebarHeader>
-          <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
-          <InstallButton />
-        </SidebarHeader>
-        <SidebarContent role="navigation" aria-label="Areas">
-          <Nav groups={groups} route={route} />
-        </SidebarContent>
-        <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                render={<a href={routeHref({ name: 'settings' })} />}
-                isActive={route.name === 'settings'}
-                tooltip="Settings"
+    <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden p-1">
+      <div className="flex h-full w-full flex-col gap-1 rounded-panel border border-primary p-1">
+        <div className="flex min-h-0 flex-1 gap-1">
+          <aside className="flex w-52 shrink-0 flex-col gap-3 border-r border-primary p-2">
+            <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
+            <div className="min-h-0 flex-1 overflow-auto">
+              <Nav groups={groups} route={route} />
+            </div>
+            <div className="flex flex-col items-start gap-1.5">
+              <InstallButton />
+              <a
+                href={routeHref({ name: 'settings' })}
+                aria-current={route.name === 'settings' ? 'page' : undefined}
+                className={cn(
+                  'flex h-10 w-fit min-w-24 items-center gap-2.5 rounded-full border border-primary p-1 pr-3 text-sm text-primary outline-none hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  route.name === 'settings' && 'bg-primary text-primary-foreground',
+                )}
               >
-                <SettingsIcon aria-hidden="true" />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]',
+                    route.name === 'settings' && 'bg-background text-primary',
+                  )}
+                >
+                  <SettingsIcon aria-hidden="true" />
+                </span>
                 <span>Settings</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-          {/* <p className="px-2 pb-1 text-xs text-sidebar-foreground/60">
-            Models CC BY-NC 4.0 · AGPL-3.0
-          </p> */}
-        </SidebarFooter>
-      </Sidebar>
+              </a>
+            </div>
+          </aside>
 
-      <SidebarInset className="min-w-0 overflow-hidden">
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Breadcrumb className="min-w-0">
-            <BreadcrumbList className="flex-nowrap">
-              {area ? (
-                <>
-                  <BreadcrumbItem className="min-w-0">
-                    <span className="truncate text-sm text-muted-foreground">{area}</span>
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+              <Breadcrumb className="min-w-0">
+                <BreadcrumbList className="flex-nowrap">
+                  {area ? (
+                    <>
+                      <BreadcrumbItem className="min-w-0">
+                        <span className="truncate text-sm text-muted-foreground">{area}</span>
+                      </BreadcrumbItem>
+                      <BreadcrumbSeparator />
+                    </>
+                  ) : null}
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="truncate">{routePage(route)}</BreadcrumbPage>
                   </BreadcrumbItem>
-                  <BreadcrumbSeparator />
-                </>
-              ) : null}
-              <BreadcrumbItem>
-                <BreadcrumbPage className="truncate">{routePage(route)}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-          <div className="ml-auto flex items-center gap-2">
-            {!reachable ? (
-              <span className="text-xs text-muted-foreground">device unreachable</span>
-            ) : null}
-          </div>
-        </header>
+                </BreadcrumbList>
+              </Breadcrumb>
+              <div className="ml-auto flex items-center gap-2">
+                {!reachable ? (
+                  <span className="text-xs text-muted-foreground">device unreachable</span>
+                ) : null}
+              </div>
+            </header>
 
-        <div className={cn('min-h-0 flex-1 overflow-auto')}>{children}</div>
+            <div className="min-h-0 flex-1 overflow-auto">{children}</div>
+          </main>
+        </div>
 
         <PlayerBar />
-      </SidebarInset>
+      </div>
     </SidebarProvider>
   );
 }

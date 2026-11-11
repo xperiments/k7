@@ -349,21 +349,21 @@ small text in the same colour, not a badge.
 
 ### 5.1 The shell
 
-**K17. The sidebar stays; it wears the K7 ink, and the stage is framed.** The structure is the
-one built from `c-sidebar-1` and ADR 0052: the device menu and install in the header, two nav
-groups with count badges, Settings in the footer, the collapsible inset, and the PlayerBar
-across the bottom. No `K7Shell` and no three-button rail: the App has four destinations, a device
-menu and an install control, and a rail of three circles would either drop them or invent a menu
-the guide does not specify. **[ADR]**
+**K17. The shell is one frame: a rail of dome buttons, the stage, the footer bar.** The device
+menu is the filled logo tile at the top of the rail; the destinations and Settings are **dome
+buttons** — a pill twice the dome's width, a circular dome holding the icon at its left, the
+label beside it; the install control is a dome button in the rail's footer. The current one fills
+and its dome inverts to the background with an accent icon. The rail does not collapse: the shell
+is one frame at every width. No `K7Shell`. **[ADR]**
 
-- The frame is 1px accent, panel radius, 5px padding and 5px gutters; the sidebar, its header and
-  the footer bar sit in it and do not move.
+- The frame is 1px accent, panel radius, 5px padding and 5px gutters; a 1px line divides the rail
+  from the stage, and the footer bar spans the frame below both.
 - The logo tile is a solid accent square with `k7logo.svg` painted in the background colour — the
   reference's tile is filled, not outlined — and its wordmark is the only bold text in the system.
-- Nav rows are outlined; the current one is a filled bar with dark text and icon. Counts are
-  micro-label chips. Collapse keeps working.
-- The PlayerBar is the footer bar: the footer pill's geometry where it is a bar, and its scrub
-  is the K7 progress treatment (solid to the playhead, dim after).
+- Counts are micro-label chips inside the pill; each nav group's label is a micro-label chip above
+  its buttons.
+- The PlayerBar is the footer bar: a panel across the frame's bottom, its scrub solid to the
+  playhead and dim after.
 
 ### 5.2 The kit
 
@@ -373,7 +373,7 @@ component.
 
 | Guide | In this repo |
 | --- | --- |
-| 5.1 Shell, 5.2 NavButton | The sidebar, re-inked (K17); no `K7Shell`, no rail |
+| 5.1 Shell, 5.2 NavButton | The frame, the filled logo tile and the dome button (K17); no `K7Shell` |
 | 5.3 FooterPill / ProgressPill | The PlayerBar (§5.1) |
 | 5.4 MenuList / MenuRow | The row style (K16) in the sidebar, menus and tables |
 | 5.5 ModePills | Single-select groups drawn as filled/outlined pills |

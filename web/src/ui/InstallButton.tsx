@@ -23,19 +23,22 @@ export function InstallButton() {
   if (state === 'installable') {
     return (
       <Button
-        
-        size="sm"
-        className="w-full justify-start gap-2"
+        className="h-10 w-fit min-w-24 justify-start gap-2.5 rounded-full border border-primary p-1 pr-3 font-light"
         onClick={() => void promptInstallNow()}
       >
-        <MonitorDown aria-hidden="true" />
+        <span
+          aria-hidden="true"
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]"
+        >
+          <MonitorDown aria-hidden="true" />
+        </span>
         Install K7
       </Button>
     );
   }
 
   return (
-    <p className="px-2 text-xs text-sidebar-foreground/70">
+    <p className="px-2 text-xs text-muted-foreground">
       This browser does not install apps. Chrome and Edge do.
     </p>
   );
