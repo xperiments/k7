@@ -313,7 +313,33 @@ export function Shell({ route, children }: { route: Route; children: React.React
                   <TooltipContent side="right">Hide the sidebar</TooltipContent>
                 </Tooltip>
               </header>
-            ) : null}
+            ) : (
+              <header
+                className={cn(
+                  'flex h-12 shrink-0 items-center border-b px-2',
+                  compact && 'justify-center',
+                )}
+              >
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        onClick={toggleRail}
+                        aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
+                        aria-expanded={!collapsed}
+                        className="grid size-9 shrink-0 place-items-center rounded-panel text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      >
+                        <span aria-hidden="true" className="k7-sidebar-logo size-7" />
+                      </button>
+                    }
+                  />
+                  <TooltipContent side="right">
+                    {collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
+                  </TooltipContent>
+                </Tooltip>
+              </header>
+            )}
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-2">
             <div className="min-h-0 flex-1 overflow-auto">
               <Nav groups={groups} route={route} collapsed={compact} />
@@ -354,22 +380,24 @@ export function Shell({ route, children }: { route: Route; children: React.React
 
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      onClick={toggleRailForViewport}
-                      aria-label={railLabel}
-                      aria-expanded={railExpanded}
-                      className="grid size-9 shrink-0 place-items-center rounded-panel text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                    >
-                      <span aria-hidden="true" className="k7-sidebar-logo size-7" />
-                    </button>
-                  }
-                />
-                <TooltipContent side="bottom">{railLabel}</TooltipContent>
-              </Tooltip>
+              {isMobile ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        onClick={toggleRailForViewport}
+                        aria-label={railLabel}
+                        aria-expanded={railExpanded}
+                        className="grid size-9 shrink-0 place-items-center rounded-panel text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      >
+                        <span aria-hidden="true" className="k7-sidebar-logo size-7" />
+                      </button>
+                    }
+                  />
+                  <TooltipContent side="bottom">{railLabel}</TooltipContent>
+                </Tooltip>
+              ) : null}
               <Breadcrumb className="min-w-0">
                 <BreadcrumbList className="flex-nowrap">
                   {area ? (

@@ -364,25 +364,25 @@ small text in the same colour, not a badge.
 
 
 **K17. The shell is one frame: a rail of dome buttons, the stage, the footer bar.** The logo at
-the left of the stage header toggles the rail; below 768px the rail is a drawer over the stage
-and the same logo opens it; the destinations and Settings are **dome buttons** — a plaque with a circular dome holding the icon at its left and the label beside it,
+the top of the rail toggles it above 768px; below 768px the rail is a drawer, opened by the
+logo in the stage header and closed by the logo at its top; the destinations and Settings are **dome buttons** — a plaque with a circular dome holding the icon at its left and the label beside it,
 6px corners, full width of the rail and stacked flush with a shared 1px edge (the one shape
 exception to the pill rule); the install control is a dome button in the rail's footer. In the
 default state the button is outlined and transparent, with a neutral icon and label; the current
 one fills only its dome with the secondary and turns its icon dark, while the button, its border
-and the label stay neutral. Above 768px the rail rests collapsed to its icons: the header logo
+and the label stay neutral. Above 768px the rail rests collapsed to its icons: the top logo
 is the toggle, the labels, the group rules and the counts go `sr-only`, the rail narrows to
 `w-16`, and the icons carry tooltips — the logo, every row, Install and Settings — after a
 two-second hover. Expanding it is the remembered choice; the first visit is collapsed. Below
-768px the rail is hidden; the logo opens it as the collapsed rail over the stage, with a
-backdrop behind it and the mark at the drawer's top to close it. No `K7Shell`. **[ADR]**
+768px the rail is hidden; the stage header's logo opens it as the collapsed rail over the
+stage, with a backdrop behind it and the mark at the drawer's top to close it. No `K7Shell`. **[ADR]**
 
 - The frame is 1px neutral line, panel radius, 5px padding and 5px gutters; a 1px line divides
   the rail from the stage, the rail runs the frame's full height, and the footer bar is the
   content's footer inside the stage column.
 - The logo is the accent wordmark on the page's dark ground — the inverse of the reference's filled
-  tile, with no tile fill — and its wordmark is the only bold text in the system. It sits at the start of the stage header, at the K7 mark's own size, and the rail has no
-  header of its own.
+  tile, with no tile fill — and its wordmark is the only bold text in the system. It sits at the top of the rail above 768px — centred when the rail is collapsed — and at the
+  top of the drawer below it; the stage header carries the mark only as the drawer's opener.
 - Counts are accent numbers at the end of the row; each nav group's label is the uppercase word in
   the dim neutral followed by a 1px neutral rule to the rail's edge — no pill, no border.
 - The PlayerBar is the content's footer: a strip at the stage column's bottom, under a 1px top
