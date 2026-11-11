@@ -108,10 +108,7 @@ export function AlbumShelf({
       className="flex select-none flex-col items-center gap-3"
       aria-label="Albums"
     >
-      {/* The abecedary stands beside the stage and the height of it: the letters are the
-          shelf's own index, not a control the page put down next to it. */}
       <div className="flex w-full min-w-0 items-stretch gap-2">
-        <AlphabetIndex albums={albums} selected={at} onSelect={onSelect} />
         <div
           className="k7-shelf min-w-0 flex-1"
           role="group"
@@ -236,7 +233,7 @@ const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
  * arrows walk the letters that exist. A shelf with twenty initials behind it would otherwise
  * put twenty tab stops between the search box and the row.
  */
-function AlphabetIndex({
+export function AlphabetIndex({
   albums,
   selected,
   onSelect,
@@ -278,7 +275,12 @@ function AlphabetIndex({
   };
 
   return (
-    <nav aria-label="Artists by letter" className="flex w-6 shrink-0 flex-col justify-between">
+    /* The full height of the stage, not of the shelf: one plaque per letter, a circle with
+     * the letter inside, like the rail's collapsed rows. */
+    <nav
+      aria-label="Artists by letter"
+      className="absolute inset-y-4 left-4 z-10 flex w-12 flex-col overflow-y-auto [&>button+button]:-mt-px sm:inset-y-6 sm:left-6"
+    >
       {[...LETTERS, ...(filing.first.has('#') ? ['#'] : [])].map((letter) => {
         const has = filing.first.has(letter);
         const active = letter === current;
@@ -294,12 +296,8 @@ function AlphabetIndex({
             tabIndex={letter === stop ? 0 : -1}
             aria-current={active ? 'true' : undefined}
             aria-label={`${letter} — ${plural(filing.counts.get(letter) ?? 0, 'album')}`}
-            className={`flex w-full items-center justify-center rounded-full text-xs leading-none outline-none transition-colors select-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none ${
-              active
-                ? 'bg-muted font-semibold text-foreground'
-                : has
-                  ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  : 'text-muted-foreground/40'
+            className={`flex min-h-0 flex-1 items-center justify-center rounded-[6px] border border-foreground/45 bg-transparent p-0 leading-none outline-none transition-colors select-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none ${
+              has ? 'hover:bg-foreground/10' : 'opacity-40'
             }`}
             onClick={() => jump(letter)}
             onKeyDown={(event) => {
@@ -318,7 +316,15 @@ function AlphabetIndex({
               }
             }}
           >
-            {letter}
+            <span
+              className={`flex size-4 items-center justify-center rounded-full border border-foreground/45 text-xs leading-none ${
+                active
+                  ? 'bg-secondary font-medium text-secondary-foreground'
+                  : 'text-foreground'
+              }`}
+            >
+              {letter}
+            </span>
           </button>
         );
       })}

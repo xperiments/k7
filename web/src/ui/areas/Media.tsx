@@ -21,7 +21,7 @@ import {
   type MediaIndexState,
 } from '../../media/albums';
 import { AlbumDetail } from '../album-detail';
-import { AlbumShelf } from '../album-shelf';
+import { AlbumShelf, AlphabetIndex } from '../album-shelf';
 import { Cover } from '../cover';
 import { DriveView } from '../drive';
 import { plural } from '../format';
@@ -267,6 +267,9 @@ function ShelfView({
       )}
     >
       {shelfVisible ? (
+        <AlphabetIndex albums={albums} selected={selected} onSelect={setSelected} />
+      ) : null}
+      {shelfVisible ? (
         <aside
           ref={shelf}
           className="flex min-h-0 flex-1 flex-col justify-center"
@@ -337,7 +340,7 @@ export function MediaView({
       className={
         readingDrive
           ? 'mx-auto flex w-full flex-col gap-4 px-4 py-6 sm:px-6'
-          : 'flex h-full min-h-0 flex-col gap-3 p-4 sm:gap-4 sm:p-6'
+          : 'relative flex h-full min-h-0 flex-col gap-3 pb-4 pl-20 pr-4 pt-4 sm:gap-4 sm:pb-6 sm:pl-24 sm:pr-6 sm:pt-6'
       }
     >
       <header className="flex flex-wrap items-center justify-end gap-x-6 gap-y-3">
