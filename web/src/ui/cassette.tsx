@@ -19,7 +19,18 @@ export function CassetteFront({ cover, initial }: { cover: CachedCover | null; i
   return (
     <>
       {url ? (
-        <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />
+        <>
+          <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />
+          {/* The unblended copy: mix-blend-mode cannot be interpolated, so the turned
+              case fades this one in over the multiplied face. */}
+          <img
+            src={url}
+            alt=""
+            aria-hidden="true"
+            className="k7-front-plain absolute inset-0 h-full w-full object-cover"
+            draggable={false}
+          />
+        </>
       ) : (
         <span className="k7-cover-fallback" aria-hidden="true">
           {initial}

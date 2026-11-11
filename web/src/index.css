@@ -423,9 +423,16 @@
         mix-blend-mode: multiply;
     }
 
-    /* The turned case shows its own colours; only the spines blend into the case. */
-    .k7-case[data-active='true'] .k7-front img {
+    /* The turned case shows its own colours; only the spines blend into the case. The
+       unblended copy fades over the blended one — mix-blend-mode itself cannot interpolate. */
+    .k7-front img.k7-front-plain {
         mix-blend-mode: normal;
+        opacity: 0;
+        transition: opacity 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .k7-case[data-active='true'] .k7-front img.k7-front-plain {
+        opacity: 1;
     }
 
     .k7-back {
