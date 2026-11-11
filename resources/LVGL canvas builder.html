@@ -1749,6 +1749,20 @@
           : o.sim !== undefined && o.sim !== ""
             ? o.sim
             : simOf(o.name);
+      // A new design's bands. More than the sheet carries, so the vocabulary's band count is
+      // what decides how many a design starts with. It sits above the first defaultTpl()
+      // call because defaultTpl() reads it: a const read before its declaration is a TDZ
+      // ReferenceError, and the whole page dies with it.
+      const DEFAULT_BANDS = [
+        "#c68b2e",
+        "#a24e2c",
+        "#8a5d34",
+        "#6b7a2f",
+        "#3b6e8f",
+        "#7a3b52",
+        "#b9ac8e",
+        "#2f4b3a",
+      ];
       let maskCfg = null,
         selMask = false; // LayerMask: principal rounded clip group (null = removed)
       let tpl = defaultTpl(); // label template: id, name, colour roles, font roles, slots
@@ -3555,18 +3569,7 @@
           if (!onSheet(r.ff, r.px)) tpl.fonts[k] = { ...d[k] };
         }
       }
-      // A new design's bands. More than the sheet carries, so the vocabulary's band count is
-      // what decides how many a design starts with.
-      const DEFAULT_BANDS = [
-        "#c68b2e",
-        "#a24e2c",
-        "#8a5d34",
-        "#6b7a2f",
-        "#3b6e8f",
-        "#7a3b52",
-        "#b9ac8e",
-        "#2f4b3a",
-      ];
+      // The design a document starts from: its id, name, inks, font roles, slots and sims.
       function defaultTpl() {
         return {
           id: "label.untitled",
