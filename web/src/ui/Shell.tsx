@@ -267,7 +267,7 @@ function RailItem({
         render={<a href={href} aria-current={active ? 'page' : undefined} />}
         isActive={active}
         tooltip={label}
-        className="h-10 w-fit min-w-24 gap-2.5 rounded-full border border-primary p-1 pr-3 text-sm hover:bg-primary/15 data-active:bg-primary data-active:text-primary-foreground"
+        className="h-10 w-fit min-w-24 gap-2.5 rounded-[6px] border border-primary p-1 pr-3 text-sm hover:bg-primary/15 data-active:bg-primary data-active:text-primary-foreground"
       >
         <span
           aria-hidden="true"
@@ -294,7 +294,7 @@ function Nav({ groups, route }: { groups: NavGroup[]; route: Route }) {
           <Badge size="xs" className="ml-3 self-start">
             {group.label}
           </Badge>
-          <SidebarMenu className="gap-1.5">
+          <SidebarMenu className="gap-0 [&>li+li]:-mt-px">
             {group.items.map((item) => (
               <RailItem
                 key={item.href}
@@ -335,13 +335,13 @@ export function Shell({ route, children }: { route: Route; children: React.React
             <div className="min-h-0 flex-1 overflow-auto">
               <Nav groups={groups} route={route} />
             </div>
-            <div className="flex flex-col items-start gap-1.5">
+            <div className="flex flex-col items-start gap-0 [&>*+*]:-mt-px">
               <InstallButton />
               <a
                 href={routeHref({ name: 'settings' })}
                 aria-current={route.name === 'settings' ? 'page' : undefined}
                 className={cn(
-                  'flex h-10 w-fit min-w-24 items-center gap-2.5 rounded-full border border-primary p-1 pr-3 text-sm text-primary outline-none hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  'flex h-10 w-fit min-w-24 items-center gap-2.5 rounded-[6px] border border-primary p-1 pr-3 text-sm text-primary outline-none hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   route.name === 'settings' && 'bg-primary text-primary-foreground',
                 )}
               >

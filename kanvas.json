@@ -644,6 +644,11 @@
           "at": "2026-11-11T04:13:00Z",
           "by": "dsh",
           "text": "The shell is K7: one frame, the rail, the stage, the footer bar.\n\n- The device menu is the filled accent logo tile, with the K7 mark painted dark into it.\n- Navigation is the dome button you asked for: a pill with a circular dome holding the icon and the label beside it. The current one fills and its dome inverts to the background. Process, Albums, Playlists and Chat use it, and so do Install and Settings; group labels are micro-label chips above their buttons.\n- The PlayerBar is a panel across the frame's bottom.\n- The rail no longer collapses, because the dome pills carry labels; there is still no K7Shell.\n\nVerified: npm run typecheck, npm test, npm run build, the spec's greps, and screenshots at 1440x1000 and 800x480. The Local Network bypass used to reach the shell for the screenshots was reverted.\n\nWhat to check: the dome and its active inversion, the filled logo tile, the footer bar. At 800x480 the rail's lower groups scroll, which is the one thing I would change next if it matters.\n\nLK-05 is still blocked by LK-04 on the board; accepting this unblocks LK-04."
+        },
+        {
+          "at": "2026-11-11T04:26:20Z",
+          "by": "dsh",
+          "text": "Revised on review: the dome stays circular; the plaque it sits in is 6px (not a pill), and the buttons sit flush with a shared 1px edge — sidebar and footer. The spec's K17 records the exception."
         }
       ]
     },

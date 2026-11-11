@@ -106,7 +106,7 @@ every proportion holds. The panel radius is `0.4375rem` (7px at a 16px root, abo
 | --- | --- |
 | Stroke | 1px everywhere, never thicker |
 | Panel radius | `0.4375rem` |
-| Pills, chips, inputs | fully round (`rounded-full`) |
+| Pills, chips, inputs | fully round (`rounded-full`); the sidebar's dome buttons are 6px |
 | Circle controls | icon buttons where a control is a circle; navigation stays rows |
 | Gutter | 5px (`gap-1`) |
 | Icon stroke | 1.25 (lucide `strokeWidth`) |
@@ -351,10 +351,11 @@ small text in the same colour, not a badge.
 
 **K17. The shell is one frame: a rail of dome buttons, the stage, the footer bar.** The device
 menu is the filled logo tile at the top of the rail; the destinations and Settings are **dome
-buttons** — a pill twice the dome's width, a circular dome holding the icon at its left, the
-label beside it; the install control is a dome button in the rail's footer. The current one fills
-and its dome inverts to the background with an accent icon. The rail does not collapse: the shell
-is one frame at every width. No `K7Shell`. **[ADR]**
+buttons** — a plaque with a circular dome holding the icon at its left and the label beside it,
+6px corners and stacked flush with a shared 1px edge (the one shape exception to the pill rule);
+the install control is a dome button in the rail's footer. The current one fills and its dome
+inverts to the background with an accent icon. The rail does not collapse: the shell is one frame
+at every width. No `K7Shell`. **[ADR]**
 
 - The frame is 1px accent, panel radius, 5px padding and 5px gutters; a 1px line divides the rail
   from the stage, and the footer bar spans the frame below both.
