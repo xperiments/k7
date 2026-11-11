@@ -3,13 +3,7 @@ import {
   Disc3,
   ListMusic,
   MessageCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plug,
-  RefreshCw,
   Settings as SettingsIcon,
-  Sparkles,
-  Waves,
 } from 'lucide-react';
 import { cn } from 'cn';
 
@@ -22,23 +16,11 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
 } from '@/components/ui/sidebar';
-import { DEVICE_ORIGIN } from '../config';
-import { connectToDevice, getDevice, isProbing, useDeviceLink } from '../device/device';
-import type { Link } from '../device/transport';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { InstallButton } from './InstallButton';
 import { useDrafts } from '../playlists/drafts';
@@ -123,129 +105,6 @@ function navGroups(drafts: number, tracks: number): NavGroup[] {
     //   ],
     // },
   ];
-}
-
-function DeviceMenu({
-  link,
-  card,
-  tracks,
-  reachable,
-}: {
-  link: Link;
-  card: boolean;
-  tracks: number;
-  reachable: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  const [connectError, setConnectError] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState(false);
-  const stream = `${DEVICE_ORIGIN}/stream`;
-
-  const copyMcp = async () => {
-    try {
-      await navigator.clipboard.writeText(`${DEVICE_ORIGIN}/mcp`);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* a page without the clipboard permission simply does not copy */
-    }
-  };
-
-  /* Connecting is a click: it asks for Local Network Access and reaches the player directly.
-   * Nothing opens a window, so a browser that blocks popups has nothing to block. */
-  const connect = async () => {
-    setConnectError(null);
-    setConnecting(true);
-    try {
-      await connectToDevice();
-    } catch (error) {
-      setConnectError(
-        error instanceof Error ? error.message : 'Chrome blocked local network access.',
-      );
-    } finally {
-      setConnecting(false);
-    }
-  };
-
-  const rescan = () => {
-    void getDevice()
-      .request('rescan')
-      .catch(() => {
-        /* the state the menu would report is the poll's job, not this click's */
-      });
-  };
-
-  const subtitle =
-    connecting
-      ? 'asking for local network access…'
-      : isProbing()
-      ? 'looking for the player…'
-      : link === 'local'
-      ? 'connected on your network'
-      : (connectError ?? 'no player — connect');
-
-  /* What the player reports, as opposed to how this page reaches it: the link is the
-   * subtitle's fact, these are the device's (S5's first two facts, named apart). */
-  const deviceFacts = !reachable
-    ? 'device unreachable'
-    : card
-      ? `${tracks} tracks in the player`
-      : 'no card in the player';
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <button
-            type="button"
-            aria-label="The player"
-            title={subtitle}
-            className="grid size-10 shrink-0 place-items-center rounded-panel bg-transparent text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          />
-        }
-      >
-        <span aria-hidden="true" className="k7-sidebar-logo size-8" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="bottom" align="start" className="w-64">
-        {/* Base UI's group is what a group label reads its context from: a bare
-         * `DropdownMenuLabel` throws "MenuGroupContext is missing" and takes the popup —
-         * and the page — down with it (Base UI error #31). Radix allows it; this is not
-         * Radix. The error text is on the trigger's subtitle, not in here. */}
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>
-            {link === 'none' ? 'The device' : `The device · ${deviceFacts}`}
-          </DropdownMenuLabel>
-          {link === 'none' ? (
-            <DropdownMenuItem onClick={() => void connect()}>
-              <Plug aria-hidden="true" />
-              {connecting ? 'Waiting for Chrome…' : 'Connect a player'}
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuItem
-            render={<a href={stream} target="_blank" rel="noopener noreferrer" />}
-          >
-            <Waves aria-hidden="true" />
-            Open the live stream
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            render={<a href={`${DEVICE_ORIGIN}/library`} target="_blank" rel="noopener noreferrer" />}
-          >
-            <Disc3 aria-hidden="true" />
-            Open the library index
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => void copyMcp()}>
-            <Sparkles aria-hidden="true" />
-            {copied ? 'Copied the MCP endpoint' : 'Copy the MCP endpoint'}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={rescan}>
-            <RefreshCw aria-hidden="true" />
-            Rescan the player&apos;s library
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 }
 
 /** The K7 control: a pill twice the dome's width, a circular dome with the icon, a label. */
@@ -348,9 +207,7 @@ function Nav({
 
 export function Shell({ route, children }: { route: Route; children: React.ReactNode }) {
   const { status, reachable } = useDeviceStatus();
-  const link = useDeviceLink();
   const drafts = useDrafts();
-  const card = Boolean(status?.card);
   const tracks = status?.tracks ?? 0;
 
   /* There is no "Now playing" entry: the bar at the bottom of every area *is* the player, so
@@ -398,7 +255,16 @@ export function Shell({ route, children }: { route: Route; children: React.React
                 collapsed && 'justify-center',
               )}
             >
-              <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
+              <button
+                type="button"
+                onClick={toggleRail}
+                aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
+                aria-expanded={!collapsed}
+                title={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
+                className="grid size-10 shrink-0 place-items-center rounded-panel bg-transparent text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <span aria-hidden="true" className="k7-sidebar-logo size-8" />
+              </button>
             </header>
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-2">
             <div className="min-h-0 flex-1 overflow-auto">
@@ -431,21 +297,6 @@ export function Shell({ route, children }: { route: Route; children: React.React
 
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="shrink-0"
-                aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
-                aria-expanded={!collapsed}
-                onClick={toggleRail}
-              >
-                {collapsed ? (
-                  <PanelLeftOpen aria-hidden="true" />
-                ) : (
-                  <PanelLeftClose aria-hidden="true" />
-                )}
-              </Button>
               <Breadcrumb className="min-w-0">
                 <BreadcrumbList className="flex-nowrap">
                   {area ? (

@@ -363,9 +363,8 @@ small text in the same colour, not a badge.
 ### 5.1 The shell
 
 
-**K17. The shell is one frame: a rail of dome buttons, the stage, the footer bar.** The device
-menu is the filled logo tile at the top of the rail; the destinations and Settings are **dome
-buttons** — a plaque with a circular dome holding the icon at its left and the label beside it,
+**K17. The shell is one frame: a rail of dome buttons, the stage, the footer bar.** The logo at
+the top of the rail is the collapse toggle; the destinations and Settings are **dome buttons** — a plaque with a circular dome holding the icon at its left and the label beside it,
 6px corners, full width of the rail and stacked flush with a shared 1px edge (the one shape
 exception to the pill rule); the install control is a dome button in the rail's footer. In the
 default state the button is outlined and transparent, with a neutral icon and label; the current
