@@ -294,7 +294,7 @@ export function MediaView({
     <div
       className={
         readingDrive
-          ? 'mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6'
+          ? 'mx-auto flex w-full flex-col gap-4 px-4 py-6 sm:px-6'
           : 'flex h-full min-h-0 flex-col gap-3 p-4 sm:gap-4 sm:p-6'
       }
     >

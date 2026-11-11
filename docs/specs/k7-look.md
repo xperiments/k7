@@ -7,7 +7,7 @@ screen is not restyled one by one; and it is one look for both documents, becaus
 share one stylesheet and one set of primitives.
 
 **Status.** The base is in (LK-02): the tokens, the dark-only documents and the installed
-primitives. LK-03 to LK-07 finish the shell, the screens, the Site and the verification; until
+primitives; the palette was then split into a primary and a secondary by ADR 0081. LK-03 to LK-07 finish the shell, the screens, the Site and the verification; until
 they land, the screens keep their pre-K7 layouts and their state words are still backed by token
 names that resolve to the accent. The calls this repository took against the guide that preceded
 this file are recorded in
@@ -41,9 +41,11 @@ tile, the footer pill and the filled rows are what carry over.
 
 **Hard constraints.**
 
-- Only two hues exist: the near-black background and the one orange accent, plus its alpha
-  variants and one very dark brown-orange for recessed wells. No other colour anywhere,
-  including error, success and warning states.
+- One hue and one neutral: the orange accent (the **primary**) and a light neutral ink (the
+  **secondary**), on a near-black page, plus alpha variants and one recessed well. The accent
+  marks the brand, chips, the current segment, filled actions and the scrollbar; the neutral
+  carries text, control outlines, panel lines and the rail's current dome. No other colour
+  anywhere, including error, success and warning states. **[ADR 0081]**
 - Dark theme only. Both documents carry `class="dark"` on `<html>`; there is no light palette and
   no theme control. **[ADR]**
 - No shadows, gradients, blur, glow, photos, rounded photo thumbnails or multi-colour charts, in
@@ -61,8 +63,10 @@ tile, the footer pill and the filled rows are what carry over.
 ## 1. The visual rules
 
 **K1. Outline = available, fill = current.** Anything the user can choose is an outline. The one
-thing currently selected, active or on is solid orange with dark text or icon. This applies to
-navigation, tabs, filters, toggles, menu rows, chips, radio and checkbox states.
+thing currently selected, active or on is a fill with dark text or icon: the accent for a
+segment, a chip, a menu row or a filled action, and the neutral for the rail's current dome.
+This applies to navigation, tabs, filters, toggles, menu rows, chips, radio and checkbox
+states.
 
 **K2. Hierarchy comes only from outline vs fill, size and spacing.** No colour, weight, shadow or
 elevation tricks.
@@ -83,19 +87,23 @@ repo does either.
 
 ### 2.1 Values
 
-The firmware's values are the source of truth where they exist: `components/app/screen_display/`
-draws the panel with `COL_BLACK 0x111111` and `COL_PRIMARY 0xF15A22`, and the App's accent is
-already `#F15A22`. The guide's `#121212` and `#ff5a1f` were its estimates of the same things.
-**[ADR]**
+The accent is the firmware's: `components/app/screen_display/` draws the panel with
+`COL_PRIMARY 0xF15A22`, and the App uses it. The page is `#17181a`, the near-black of the
+reference capture; the guide's `#121212` was its estimate. The neutral ink and the line have no
+firmware value to borrow — they are the secondary the product was missing. **[ADR 0081]**
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--k7-bg` | `#111111` | Screen background |
-| `--k7-accent` | `#F15A22` | Strokes, text, icons, active fills |
-| `--k7-accent-dim` | accent at 42% | Inactive ticks, empty progress, decorative strokes |
-| `--k7-accent-faint` | accent at 18% | Hover tint, skeletons |
-| `--k7-well` | `#2a0f05` | Recessed fills (wells, inset panels) |
-| `--k7-on-accent` | `--k7-bg` | Text and icons on solid orange |
+| `--k7-bg` | `#17181a` | Page background |
+| `--k7-accent` | `#F15A22` | Brand, chips, current segment, filled action, scrollbar |
+| `--k7-ink` | `#a6a8a8` | Text, control outlines, tree and menu rows |
+| `--k7-ink-dim` | `#858787` | Secondary text, inactive icons |
+| `--k7-line` | `#2e3030` | Panel edges, dividers |
+| `--k7-surface` | `#222425` | Hover surface |
+| `--k7-well` | `#121314` | Recessed fills (wells, inset panels) |
+| `--k7-accent-dim` | accent at 42% | Decorative ticks, empty meters (never text) |
+| `--k7-accent-faint` | accent at 18% | Tints |
+| `--k7-on-accent` | `#111111` | Text and icons on the accent |
 
 **K6. The geometry is rem, not px.** The guide's pixel values are measurements of a 16px-root
 document; this App sets `html { font-size: 130% }`, so the same rem value renders 30% larger and
@@ -111,11 +119,10 @@ every proportion holds. The panel radius is `0.4375rem` (7px at a 16px root, abo
 | Gutter | 5px (`gap-1`) |
 | Icon stroke | 1.25 (lucide `strokeWidth`) |
 
-**K7. Contrast.** Accent on the background is about 5.6:1 and passes for text. Dark on accent
-also passes. The dim accent (42%) does **not** pass for informational text: use it only for
-decoration, empty states of meters and disabled items. Secondary text is accent at **90%**
-(about 4.7:1), not the guide's 70% (about 3.3:1, which fails AA at this app's sizes) and not
-85% (4.3:1, which fails too — measured on the firmware's #F15A22).
+**K7. Contrast.** Measured on `#17181a`: the accent is 5.3:1, the neutral ink 7.4:1 and the dim
+neutral 4.9:1 — all pass for text. Dark on the accent is 5.6:1. The 42% accent (1.9:1) is
+decoration only and never informational text. The guide's 70% (3.3:1) and 85% (4.3:1) both fail;
+the neutral replaces them.
 
 **K8. One typeface, one weight.** Jura, self-hosted (`web/public/fonts/`), the same face the
 device's LVGL build embeds. Weight 300 for everything; hierarchy comes from size only. Headings
@@ -134,34 +141,38 @@ the lines below are added to them. Both documents (`web/index.html` and `web/app
 
 ```css
 :root {
-  --k7-bg: #111111;
+  --k7-bg: #17181a;
   --k7-accent: #F15A22;
+  --k7-ink: #a6a8a8;
+  --k7-ink-dim: #858787;
+  --k7-line: #2e3030;
+  --k7-surface: #222425;
+  --k7-well: #121314;
+  --k7-on-accent: #111111;
   --k7-accent-dim: color-mix(in srgb, var(--k7-accent) 42%, transparent);
   --k7-accent-faint: color-mix(in srgb, var(--k7-accent) 18%, transparent);
-  --k7-well: #2a0f05;
-  --k7-on-accent: var(--k7-bg);
   --k7-font: 'Jura', ui-sans-serif, system-ui, sans-serif;
 }
 
 :root, .dark {
   --background: var(--k7-bg);
-  --foreground: var(--k7-accent);
+  --foreground: var(--k7-ink);
   --card: var(--k7-bg);
-  --card-foreground: var(--k7-accent);
+  --card-foreground: var(--k7-ink);
   --popover: var(--k7-bg);
-  --popover-foreground: var(--k7-accent);
+  --popover-foreground: var(--k7-ink);
   --primary: var(--k7-accent);
   --primary-foreground: var(--k7-on-accent);
-  --secondary: transparent;
-  --secondary-foreground: var(--k7-accent);
+  --secondary: var(--k7-ink-dim);
+  --secondary-foreground: var(--k7-on-accent);
   --muted: var(--k7-well);
-  --muted-foreground: color-mix(in srgb, var(--k7-accent) 90%, transparent);
-  --accent: var(--k7-accent);
-  --accent-foreground: var(--k7-on-accent);
+  --muted-foreground: var(--k7-ink-dim);
+  --accent: var(--k7-surface);
+  --accent-foreground: var(--k7-ink);
   --destructive: var(--k7-accent);
   --destructive-foreground: var(--k7-on-accent);
-  --border: var(--k7-accent);
-  --input: var(--k7-accent);
+  --border: var(--k7-line);
+  --input: var(--k7-line);
   --ring: var(--k7-accent);
   --radius: 0.4375rem;
   --chart-1: var(--k7-accent);
@@ -170,21 +181,21 @@ the lines below are added to them. Both documents (`web/index.html` and `web/app
   --chart-4: var(--k7-accent);
   --chart-5: var(--k7-accent-dim);
   --sidebar: var(--k7-bg);
-  --sidebar-foreground: var(--k7-accent);
+  --sidebar-foreground: var(--k7-ink);
   --sidebar-primary: var(--k7-accent);
   --sidebar-primary-foreground: var(--k7-on-accent);
-  --sidebar-accent: var(--k7-accent);
-  --sidebar-accent-foreground: var(--k7-on-accent);
-  --sidebar-border: var(--k7-accent);
+  --sidebar-accent: var(--k7-surface);
+  --sidebar-accent-foreground: var(--k7-ink);
+  --sidebar-border: var(--k7-line);
   --sidebar-ring: var(--k7-accent);
-  /* No second hue: the state names survive only while an installed file still reads one. */
-  --success: var(--k7-accent);
-  --success-foreground: var(--k7-accent);
-  --info: var(--k7-accent);
-  --info-foreground: var(--k7-accent);
-  --warning: var(--k7-accent);
-  --warning-foreground: var(--k7-accent);
-  --invert: var(--k7-accent);
+  /* State is a word now: the names resolve to the neutral if a file still reads one. */
+  --success: var(--k7-ink-dim);
+  --success-foreground: var(--k7-ink);
+  --info: var(--k7-ink-dim);
+  --info-foreground: var(--k7-ink);
+  --warning: var(--k7-ink-dim);
+  --warning-foreground: var(--k7-ink);
+  --invert: var(--k7-ink);
   --invert-foreground: var(--k7-bg);
   color-scheme: dark;
 }
@@ -192,6 +203,10 @@ the lines below are added to them. Both documents (`web/index.html` and `web/app
 @theme inline {
   --color-k7-bg: var(--k7-bg);
   --color-k7-accent: var(--k7-accent);
+  --color-k7-ink: var(--k7-ink);
+  --color-k7-ink-dim: var(--k7-ink-dim);
+  --color-k7-line: var(--k7-line);
+  --color-k7-surface: var(--k7-surface);
   --color-k7-dim: var(--k7-accent-dim);
   --color-k7-faint: var(--k7-accent-faint);
   --color-k7-well: var(--k7-well);
@@ -205,12 +220,12 @@ the lines below are added to them. Both documents (`web/index.html` and `web/app
 @layer base {
   html, body {
     background: var(--k7-bg);
-    color: var(--k7-accent);
+    color: var(--k7-ink);
     font-family: var(--k7-font);
     font-weight: 300;
     letter-spacing: 0.02em;
   }
-  *, *::before, *::after { border-color: var(--k7-accent); }
+  *, *::before, *::after { border-color: var(--k7-line); }
   :focus-visible { outline: 2px solid var(--k7-accent); outline-offset: 2px; }
 }
 ```
@@ -279,32 +294,32 @@ if one is.
 
 | Component | K7 treatment |
 | --- | --- |
-| Button | Outlined pill. `default` = outline. `solid` = filled accent (the current/primary action only). `ghost` = no border until hover, then 1px border. `destructive` = identical to default (no red). `link` = underline, accent. Icon buttons are circles |
-| Badge | Pill outline. The filled variant is the micro-label chip (uppercase, weight 500, `text-xs`) |
-| Card | 1px accent outline, panel radius, transparent background, no shadow, `p-3`. Title weight 300 |
-| Input / Textarea / Select trigger | Transparent, 1px outline, `rounded-full` (textarea: panel radius), placeholder `text-primary/50`, focus is a 2px accent ring |
-| Label / Form description | Accent text, description at 90% |
-| Checkbox | 16px square, 4px radius, outline. Checked is filled with a dark check |
-| Radio | Outlined circle. Checked is a filled inner dot |
-| Switch | Pill track outline. Checked is a filled track with the thumb in the background colour. Unchecked thumb is accent at 50% |
-| Toggle / ToggleGroup | Pills, spaced with `gap-1.5` (not joined segments). On is filled |
-| Tabs | Trigger is a pill. Active is filled. The list has no background or border; the underline indicator is removed |
-| Slider | 1px track at accent 40%, range in solid accent, thumb a 14px outlined circle on the background (filled while dragging) |
-| Progress | 4px pill, solid to the value, dim after |
-| Select / Dropdown / Context / Menubar / Command items | Row style: icon + label + right chevron or value. Highlighted or selected is a full-width filled accent bar with dark text, 4px radius |
-| Popover / Dropdown / Select / HoverCard content | Panel: background, 1px outline, panel radius, no shadow |
+| Button | Outlined pill in the neutral ink (`border-foreground/45 text-foreground`). `default` = outline. `solid` = accent fill with dark text (the primary action only). `ghost` = no border until hover, then a 1px neutral border. `destructive` = identical to default (no red). `link` = underline, neutral. Icon buttons are circles |
+| Badge | Pill outline in the neutral. The filled variant is the accent micro-label chip (uppercase, weight 500, `text-xs`) |
+| Card | 1px neutral line (`border-border`), panel radius, transparent background, no shadow, `p-3`. Title weight 300 |
+| Input / Textarea / Select trigger | Transparent, 1px neutral outline (`border-foreground/40`), `rounded-full` (textarea: panel radius), text in the neutral ink, placeholder `text-foreground/50`, focus is a 2px accent ring |
+| Label / Form description | Neutral text; the description at the dim neutral (`text-muted-foreground`) |
+| Checkbox | 16px square, 4px radius, neutral outline. Checked is an accent fill with a dark check |
+| Radio | Neutral outlined circle. Checked is a filled accent inner dot |
+| Switch | Pill track in the neutral outline. Checked is an accent track with the thumb in the background colour. Unchecked thumb is the neutral at 50% |
+| Toggle / ToggleGroup | Pills, spaced with `gap-1.5` (not joined segments). On is an accent fill |
+| Tabs | Trigger is a pill. Active is an accent fill. The list has no background or border; the underline indicator is removed |
+| Slider | 1px track at neutral 40%, range in the accent, thumb a 14px outlined circle on the background (filled while dragging) |
+| Progress | 4px pill, accent to the value, neutral after |
+| Select / Dropdown / Context / Menubar / Command items | Row style: icon + label + right chevron or value. Highlighted or selected is a full-width filled neutral bar with dark text, 4px radius |
+| Popover / Dropdown / Select / HoverCard content | Panel: background, 1px neutral line, panel radius, no shadow |
 | Dialog / Sheet / AlertDialog | Panel as above. Overlay is `bg-background/80`, no `backdrop-blur`. Close is a circle icon button |
-| Tooltip | Small outlined pill on the background, accent text, no arrow fill |
-| Table | No zebra, no filled header. Rows separated by `border-b border-primary/30`. Header text `text-primary/90`. Selected row is a filled bar |
-| Accordion / Collapsible | Each item an outlined panel. An open item's header is a filled bar only when it is the current selection; otherwise it stays outline. Chevron icon, no rotation easing |
-| Alert | Outlined panel with a line icon. All variants identical (no colours) |
+| Tooltip | Small outlined pill in the neutral, neutral text, no arrow fill |
+| Table | No zebra, no filled header. Rows separated by `border-b border-border`. Header text `text-muted-foreground`. Selected row is a filled neutral bar |
+| Accordion / Collapsible | Each item an outlined panel. An open item's header is an accent fill only when it is the current selection; otherwise it stays outline. Chevron icon, no rotation easing |
+| Alert | Outlined panel in the neutral line with a line icon. All variants identical (no colours) |
 | Sonner / Toast | Outlined panel on the background, pill action button |
 | Avatar | Outlined circle with initials or a line icon. A content portrait is §5.4 |
-| Skeleton | `bg-primary/15`, no pulse |
-| Separator | 1px `bg-primary/40` |
-| Breadcrumb / Pagination | Accent text, chevrons as line icons. Current page is a filled pill |
-| Calendar | Day cells are circles. Selected is a filled circle, today is an outlined circle, outside days at 42% |
-| Sidebar | The App's shell then re-inked (§5.1): logo tile, outlined rows, the current row filled, count chips |
+| Skeleton | `bg-foreground/10`, no pulse |
+| Separator | 1px `bg-foreground/20` |
+| Breadcrumb / Pagination | Neutral text, chevrons as line icons; the current page is the neutral ink. A filled pill only where it is a control |
+| Calendar | Day cells are circles. Selected is an accent filled circle, today is a neutral outlined circle, outside days at 42% |
+| Sidebar | The rail (§5.1): the logo tile in the accent, the rows and domes in the neutral, the current dome filled with the secondary, count chips in the accent |
 | Navigation Menu | Pill triggers, panel content |
 | Scroll Area | Thin scrollbar, accent thumb |
 
@@ -313,14 +328,14 @@ string it should end up with.
 
 ```tsx
 const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-primary bg-transparent font-light tracking-wide text-primary outline-none transition-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-selected:bg-primary aria-selected:text-primary-foreground data-[pressed]:bg-primary data-[pressed]:text-primary-foreground data-[selected]:bg-primary data-[selected]:text-primary-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:stroke-[1.25]',
+  'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-foreground/45 bg-transparent font-light tracking-wide text-foreground outline-none transition-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-expanded:bg-foreground/10 data-[pressed]:bg-primary data-[pressed]:text-primary-foreground data-[selected]:bg-primary data-[selected]:text-primary-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:stroke-[1.25]',
   {
     variants: {
       variant: {
-        default: 'hover:bg-primary/15',
+        default: 'hover:bg-foreground/10',
         solid: 'bg-primary text-primary-foreground',
-        ghost: 'border-transparent hover:border-primary',
-        destructive: 'hover:bg-primary/15',
+        ghost: 'border-transparent hover:border-foreground/45',
+        destructive: 'hover:bg-foreground/10',
         link: 'rounded-none border-transparent underline underline-offset-4',
       },
       size: {
@@ -335,37 +350,34 @@ const buttonVariants = cva(
 )
 ```
 
-**K16. Row reference.** Menu rows, sidebar rows and table rows share it.
+**K16. Row reference.** Menu rows, rail rows and table rows share it.
 
 ```tsx
-const row = 'flex items-center gap-2.5 rounded-[4px] px-2.5 py-1.5 text-primary outline-none data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground aria-selected:bg-primary aria-selected:text-primary-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]'
+const row = 'flex items-center gap-2.5 rounded-[4px] px-2.5 py-1.5 text-foreground outline-none data-[highlighted]:bg-foreground data-[highlighted]:text-background data-[state=checked]:bg-foreground data-[state=checked]:text-background aria-selected:bg-foreground aria-selected:text-background [&_svg]:size-4 [&_svg]:stroke-[1.25]'
 ```
 
 Put a trailing value (for example `OFF`) or a chevron at the far right with `ml-auto`. Values are
 small text in the same colour, not a badge.
 
----
-
-## 5. The shell, the kit and the exceptions
-
 ### 5.1 The shell
+
 
 **K17. The shell is one frame: a rail of dome buttons, the stage, the footer bar.** The device
 menu is the filled logo tile at the top of the rail; the destinations and Settings are **dome
 buttons** — a plaque with a circular dome holding the icon at its left and the label beside it,
 6px corners, full width of the rail and stacked flush with a shared 1px edge (the one shape
 exception to the pill rule); the install control is a dome button in the rail's footer. In the
-default state the button is outlined and transparent, with an accent icon and label; the current
-one fills only its dome and turns the dome's icon dark, while the button, its border and the label
-keep their accent. The rail does not collapse: the shell is one frame at every width. No
+default state the button is outlined and transparent, with a neutral icon and label; the current
+one fills only its dome with the secondary and turns its icon dark, while the button, its border
+and the label stay neutral. The rail does not collapse: the shell is one frame at every width. No
 `K7Shell`. **[ADR]**
 
-- The frame is 1px accent, panel radius, 5px padding and 5px gutters; a 1px line divides the rail
-  from the stage, and the footer bar spans the frame below both.
+- The frame is 1px neutral line, panel radius, 5px padding and 5px gutters; a 1px line divides
+  the rail from the stage, and the footer bar spans the frame below both.
 - The logo tile is a solid accent square with `k7logo.svg` painted in the background colour — the
   reference's tile is filled, not outlined — and its wordmark is the only bold text in the system.
-- Counts are micro-label chips at the end of the row; each nav group's label is a micro-label chip
-  above its buttons.
+- Counts are accent micro-label chips at the end of the row; each nav group's label is a
+  micro-label chip above its buttons.
 - The PlayerBar is the footer bar: a panel across the frame's bottom, its scrub solid to the
   playhead and dim after.
 
@@ -495,10 +507,12 @@ decoration grep reads as utilities.
 ### 9.2 Visual checklist
 
 - [ ] Background is flat near-black; no gradients or images in chrome.
-- [ ] Every visible stroke is 1px and orange, or its dim variant.
-- [ ] Every text, icon and border is orange or dark-on-orange. No white, no grey.
+- [ ] Every visible stroke is 1px — the accent on the brand and primary controls, the neutral
+      line on panels and rows.
+- [ ] Text and icons are the neutral ink; orange appears only on the brand, chips, current
+      segments, filled actions and the scrollbar.
 - [ ] In every list, tab group, nav and toggle set, exactly one item is filled and the rest are
-      outlined.
+      outlined — the accent for a segment or chip, the neutral for the rail's dome.
 - [ ] Buttons, inputs, chips and toggles are pills. Panels use the panel radius. Circle controls
       are circles.
 - [ ] The shell (frame, sidebar, footer bar) is identical on every screen.
@@ -514,7 +528,7 @@ decoration grep reads as utilities.
 - [ ] Every keyboard interaction still works, and every focusable element shows the 2px accent
       focus ring.
 - [ ] Screen-reader roles and labels are unchanged; composites expose the right roles.
-- [ ] Informational text uses accent or 90% accent, never the 42% dim.
+- [ ] Informational text uses the neutral ink (7.4:1) or its dim (4.9:1), never the 42% accent.
 - [ ] Reduced motion disables rotation and transitions.
 - [ ] The App works at desktop and at 800x480, and the Site at both.
 - [ ] The production build size did not grow meaningfully (fonts and SVG only).
@@ -532,7 +546,8 @@ decoration grep reads as utilities.
 
 **Do:** use outline and fill for state; keep gutters at 5px; put one micro-label chip on each
 module; reuse the same three or four shapes; use `currentColor` for all SVG; keep text at weight
-300.
+300; keep the orange for the brand and the current choice, and let everything else be the neutral
+ink.
 
 **Don't:** add a second hue for errors or success; add shadows, glow or blur; use filled cards;
 use bold headings; mix radii; use photos in chrome; animate with easing; introduce a gradient

@@ -23,12 +23,12 @@ export function InstallButton() {
   if (state === 'installable') {
     return (
       <Button
-        className="h-10 w-full justify-start gap-2.5 rounded-[6px] border border-primary p-1 pr-3 font-light"
+        className="h-10 w-full justify-start gap-2.5 rounded-[6px] border border-foreground/45 p-1 pr-3 font-light"
         onClick={() => void promptInstallNow()}
       >
         <span
           aria-hidden="true"
-          className="grid size-8 shrink-0 place-items-center rounded-full border border-primary bg-transparent text-primary [&_svg]:size-4 [&_svg]:stroke-[1.25]"
+          className="grid size-8 shrink-0 place-items-center rounded-full border border-foreground/45 bg-transparent text-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]"
         >
           <MonitorDown aria-hidden="true" />
         </span>

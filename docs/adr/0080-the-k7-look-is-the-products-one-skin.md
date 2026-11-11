@@ -1,5 +1,9 @@
 # The K7 look is the product's one skin, and ReUI is its component source
 
+> **Superseded in part by [ADR 0081](./0081-the-look-has-a-primary-and-a-secondary.md):** the
+> one-hue rule is replaced by a primary and a secondary. The dark-only skin, the coverflow
+> exception, content images and ReUI as the component source still stand.
+
 The App at `/app` and the Site at `/` share one `web/src/index.css` and one set of installed
 primitives, but they were carrying two ideas of themselves: a light, warm-paper palette carried
 over from the hand-written stylesheet (the App is a library on a page, not the device's OLED), a

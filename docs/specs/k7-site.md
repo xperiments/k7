@@ -119,7 +119,7 @@ prevent. An installed window sees *Open the app* instead of the control.
 distribution of LGPL-2.0 `shine`, and the public source plus the notices are what keeps the
 relink path real ([`THIRD_PARTY_NOTICES`](../../THIRD_PARTY_NOTICES)).
 
-**S15. The Site wears the K7 look.** One near-black page, one accent, outline/fill state, Jura,
+**S15. The Site wears the K7 look.** One near-black page, an orange primary and a neutral ink, outline/fill state, Jura,
 micro-label chips at `text-xs`, mechanical motion — [`k7-look.md`](./k7-look.md) is the contract
 and names the exceptions (content images). Components stay installed ReUI files, edited in place
 where the spec says so; spacing is `gap-*` and hover is `transition-colors` where the spec does

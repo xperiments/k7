@@ -765,8 +765,22 @@
           "at": "2026-11-11T05:21:08Z",
           "by": "dsh",
           "text": "LK-07 report — the K7 look is verified.\n\nChecks (npm run check:look), before → after:\n- hard-coded colours 2 → 0\n- Tailwind palette utilities 8 → 0\n- shadows/gradients/blur 8 → 0\n- wrong radii and weights 28 → 0\n- raster images in chrome 2 → 0\n\nGates: typecheck, 466 tests, build.\n\nScreenshots: the Site at 1440 and 800; the App at 1440 for Process, Media, Drive, Playlists, Ask, Settings, Player and NotFound, and at 800 for Process, Media and Settings. Album, artist, video and the playlist editor need a card or the player, so they are code-verified but not screenshotted.\n\nContrast (measured on the firmware's #F15A22): accent 5.6:1; dark on accent 5.6:1; secondary text 90% 4.74:1; dim 42% 1.9:1, decoration only. The measuring found one real defect: the spec's 85% secondary was 4.31:1 and failed AA — it is 90% now, and the spec records the measured numbers.\n\nReduced motion: a global rule now makes transitions and rotation effectively none.\n\nBuild: dist 12 MB in 96 files; the app's JS is 400 kB (134 kB gzipped) and the CSS 68 kB. No new fonts or dependencies.\n\nToken tuned: --muted-foreground 85 → 90, for the measured reason above.\n\nWhat could not follow the rules: the coverflow and content images, both the spec's exceptions; at 800x480 the rail scrolls one row to reach Ask (the groups' chips hide below 560 px tall, which helped); the data-dependent routes are code-verified only.\n\nChanged files by step: LK-01 spec/ADR/docs; LK-02 theme, primitives, both documents; LK-03 shell; LK-04 four areas; LK-05 remaining routes; LK-06 Site + icons; LK-07 the check script, reduced motion and the contrast fix."
+        },
+        {
+          "at": "2026-11-11T15:44:27Z",
+          "by": "dsh",
+          "text": "The palette changed after this report (ADR 0081, LK-08): the page is #17181a, the accent 5.3:1, the neutral ink 7.4:1 and its dim 4.9:1. The check:look suite is still 0 across, and Process, Media, Settings and the Site were re-shot on the two-tone palette. The report's one-hue sentences are superseded."
         }
       ]
+    },
+    {
+      "id": "LK-08",
+      "title": "The look gets a primary and a secondary",
+      "state": "proposed",
+      "group": "LK",
+      "at": "2026-11-11T15:36:57Z",
+      "by": "dsh",
+      "desc": "Orange stays the primary — the brand tile, chips, active segments (Carousel/Drive, mood pills), filled actions and the scrollbar. A light neutral becomes the secondary — body text, control outlines, panel borders, muted text, and the active nav dome, as the screenshot shows. Background near-black. This supersedes ADR 0080's one-hue premise with a new ADR and updates the spec's K7, K14 and K17."
     }
   ]
 }

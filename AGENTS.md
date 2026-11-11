@@ -115,10 +115,12 @@ cd web && npm run typecheck && npm test && npm run build
 
 ## The app's UI
 
-[`docs/specs/k7-look.md`](./docs/specs/k7-look.md) is the UI contract: one near-black page, one
-accent, outline for what is available and fill for what is current, and the exceptions it names
-(the coverflow, content images). It governs colour, shape, type, state and motion, and
-[ADR 0080](./docs/adr/0080-the-k7-look-is-the-products-one-skin.md) records why.
+[`docs/specs/k7-look.md`](./docs/specs/k7-look.md) is the UI contract: a near-black page, an
+orange primary and a neutral ink, outline for what is available and fill for what is current, and
+the exceptions it names (the coverflow, content images). It governs colour, shape, type, state and
+motion. [ADR 0080](./docs/adr/0080-the-k7-look-is-the-products-one-skin.md) records the skin, and
+[ADR 0081](./docs/adr/0081-the-look-has-a-primary-and-a-secondary.md) the primary and the
+secondary.
 
 The ReUI skill is installed under `.agents/skills/reui` and is loaded before any UI work. ReUI is
 the component source: components are installed rather than hand-rolled, and its rules — the

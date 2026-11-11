@@ -77,7 +77,7 @@ const FAILURE: Record<FailureCause, { title: string; body: string }> = {
 
 function ManualPath() {
   return (
-    <details className="min-w-0 rounded-panel border border-primary px-4 py-3">
+    <details className="min-w-0 rounded-panel border border-border px-4 py-3">
       <summary className="cursor-pointer text-sm font-light">Use another tool</summary>
       <p className="mt-3 text-xs text-muted-foreground">
         Download the three parts and write them with esptool. The offsets and the sizes are

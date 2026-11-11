@@ -184,7 +184,7 @@ function WorkingRow({ item }: { item: QueueItem }) {
       <span className="min-w-0 flex-1 truncate text-sm" title={item.path}>
         {displayName(item.name)}
       </span>
-      {isWorking(item) && <Spinner aria-hidden="true" className="size-3.5 text-primary" />}
+      {isWorking(item) && <Spinner aria-hidden="true" className="size-3.5 text-foreground" />}
       <span className="shrink-0 text-xs text-muted-foreground">{statusWord(item)}</span>
     </div>
   );

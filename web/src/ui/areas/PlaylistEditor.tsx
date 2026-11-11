@@ -595,7 +595,7 @@ function Editor({ draft }: { draft: Draft }) {
               <CardContent className="p-0">
                 {draft.entries.length === 0 ? (
                   <div
-                    className={cn('p-4', overEmpty && 'bg-primary/15')}
+                    className={cn('p-4', overEmpty && 'bg-foreground/10')}
                     onDragOver={(event) => {
                       // Prevent the browser's own "open the dropped file" for anything that
                       // is not a library drag; only a library drag gets a copy cursor.
@@ -735,7 +735,7 @@ function Editor({ draft }: { draft: Draft }) {
                     <div
                       className={cn(
                         'flex items-center gap-2 border-t px-3 py-2.5 text-xs text-muted-foreground',
-                        overEnd && 'bg-primary/15 text-foreground',
+                        overEnd && 'bg-foreground/10 text-foreground',
                       )}
                       onDragOver={(event) => {
                         event.preventDefault();

@@ -93,7 +93,7 @@ function DeviceRow({
     <li
       className={cn(
         'flex flex-wrap items-center gap-2 border-b py-2.5 last:border-b-0',
-        chosen && 'border-primary bg-primary px-2.5 text-primary-foreground',
+        chosen && 'border-foreground bg-secondary px-2.5 text-secondary-foreground',
       )}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -102,14 +102,14 @@ function DeviceRow({
           {walking ? (
             <Badge
               variant="success-light"
-              className={cn(chosen && 'border-background bg-background text-primary')}
+              className={cn(chosen && 'border-background bg-background text-foreground')}
             >
               Walking
             </Badge>
           ) : chosen ? (
             <Badge
               variant="warning-light"
-              className={cn(chosen && 'border-background bg-background text-primary')}
+              className={cn(chosen && 'border-background bg-background text-foreground')}
             >
               Waiting for the card
             </Badge>
@@ -118,7 +118,7 @@ function DeviceRow({
         <span
           className={cn(
             'text-xs tabular-nums',
-            chosen ? 'text-primary-foreground/80' : 'text-muted-foreground',
+            chosen ? 'text-secondary-foreground/80' : 'text-muted-foreground',
           )}
         >
           {plural(list.rows, 'track')} · made {created(list.created)}
@@ -126,7 +126,7 @@ function DeviceRow({
       </div>
       <Button
         variant="outline"
-        className={cn(chosen && 'border-background text-primary-foreground hover:bg-background/10')}
+        className={cn(chosen && 'border-background text-secondary-foreground hover:bg-background/10')}
         size="sm"
         disabled={walking || disabled}
         onClick={() => onWalk(list.id)}

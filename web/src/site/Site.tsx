@@ -23,7 +23,7 @@ export function Site() {
             aria-label="K7"
             className="flex items-center gap-2 hover:text-foreground"
           >
-            <span aria-hidden="true" className="k7-logo size-7" />
+            <span aria-hidden="true" className="k7-logo size-7 text-primary" />
           </a>
           <a
             href="/app"

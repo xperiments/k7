@@ -107,36 +107,43 @@
  * is the one preserved surface (K19).
  */
 :root {
-    --k7-bg: #201010;
-    --k7-accent:rgb(232, 51, 0);
+    --k7-bg: #17181a;
+    --k7-accent: #F15A22;
+    --k7-ink: #a6a8a8;
+    --k7-ink-dim: #858787;
+    --k7-line: #2e3030;
+    --k7-surface: #222425;
+    --k7-well: #121314;
+    --k7-on-accent: #111111;
     --k7-accent-dim: color-mix(in srgb, var(--k7-accent) 42%, transparent);
     --k7-accent-faint: color-mix(in srgb, var(--k7-accent) 18%, transparent);
-    --k7-well: #2a0f05;
-    --k7-on-accent: var(--k7-bg);
     --k7-font: 'Jura', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* Dark is the only palette; both documents set class="dark" on <html>. */
+/* Dark is the only palette; both documents set class="dark" on <html>.
+ * Orange is the primary: the brand, the chips, the current segment and the filled action.
+ * The neutral ink is the secondary: text, control outlines, panel lines and the rail's
+ * current dome (docs/specs/k7-look.md, ADR 0081). */
 :root, .dark {
     color-scheme: dark;
     --background: var(--k7-bg);
-    --foreground: var(--k7-accent);
+    --foreground: var(--k7-ink);
     --card: var(--k7-bg);
-    --card-foreground: var(--k7-accent);
+    --card-foreground: var(--k7-ink);
     --popover: var(--k7-bg);
-    --popover-foreground: var(--k7-accent);
+    --popover-foreground: var(--k7-ink);
     --primary: var(--k7-accent);
     --primary-foreground: var(--k7-on-accent);
-    --secondary: transparent;
-    --secondary-foreground: var(--k7-accent);
+    --secondary: var(--k7-ink-dim);
+    --secondary-foreground: var(--k7-on-accent);
     --muted: var(--k7-well);
-    --muted-foreground: color-mix(in srgb, var(--k7-accent) 90%, transparent);
-    --accent: var(--k7-accent);
-    --accent-foreground: var(--k7-on-accent);
+    --muted-foreground: var(--k7-ink-dim);
+    --accent: var(--k7-surface);
+    --accent-foreground: var(--k7-ink);
     --destructive: var(--k7-accent);
     --destructive-foreground: var(--k7-on-accent);
-    --border: var(--k7-accent);
-    --input: var(--k7-accent);
+    --border: var(--k7-line);
+    --input: var(--k7-line);
     --ring: var(--k7-accent);
     --radius: 0.4375rem;
     --chart-1: var(--k7-accent);
@@ -145,21 +152,20 @@
     --chart-4: var(--k7-accent);
     --chart-5: var(--k7-accent-dim);
     --sidebar: var(--k7-bg);
-    --sidebar-foreground: var(--k7-accent);
+    --sidebar-foreground: var(--k7-ink);
     --sidebar-primary: var(--k7-accent);
     --sidebar-primary-foreground: var(--k7-on-accent);
-    --sidebar-accent: var(--k7-accent);
-    --sidebar-accent-foreground: var(--k7-on-accent);
-    --sidebar-border: var(--k7-accent);
+    --sidebar-accent: var(--k7-surface);
+    --sidebar-accent-foreground: var(--k7-ink);
+    --sidebar-border: var(--k7-line);
     --sidebar-ring: var(--k7-accent);
-    /* No second hue: the state names survive only while an installed file still reads one. */
-    --success: var(--k7-accent);
-    --success-foreground: var(--k7-accent);
-    --info: var(--k7-accent);
-    --info-foreground: var(--k7-accent);
-    --warning: var(--k7-accent);
-    --warning-foreground: var(--k7-accent);
-    --invert: var(--k7-accent);
+    --success: var(--k7-ink-dim);
+    --success-foreground: var(--k7-ink);
+    --info: var(--k7-ink-dim);
+    --info-foreground: var(--k7-ink);
+    --warning: var(--k7-ink-dim);
+    --warning-foreground: var(--k7-ink);
+    --invert: var(--k7-ink);
     --invert-foreground: var(--k7-bg);
 }
 
@@ -181,13 +187,13 @@
 
   html, body {
     background: var(--k7-bg);
-    color: var(--k7-accent);
+    color: var(--k7-ink);
     font-weight: 300;
     letter-spacing: 0.02em;
     }
 
   *, *::before, *::after {
-    border-color: var(--k7-accent);
+    border-color: var(--k7-line);
     }
 
   ::selection {
@@ -199,7 +205,7 @@
    * buttons. `scrollbar-width`/`scrollbar-color` are the same two answers for Firefox. */
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--k7-accent-dim) transparent;
+    scrollbar-color: var(--k7-accent) transparent;
     }
   ::-webkit-scrollbar {
     width: 6px;
@@ -210,7 +216,7 @@
     background: transparent;
     }
   ::-webkit-scrollbar-thumb {
-    background: var(--k7-accent-dim);
+    background: var(--k7-accent);
     border-radius: 999px;
     }
 

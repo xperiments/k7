@@ -4,7 +4,7 @@ import { cn } from "cn"
 
 const alertVariants = cva(
   [
-    "relative w-full text-sm border border-primary bg-transparent text-primary has-[>svg]:grid-cols-[calc(var(--spacing)*3)_1fr] grid-cols-[0_1fr] grid gap-y-0.5 items-center [&>svg:not([class*=size-])]:size-4 [&_svg]:stroke-[1.25]",
+    "relative w-full text-sm border border-border bg-transparent text-foreground has-[>svg]:grid-cols-[calc(var(--spacing)*3)_1fr] grid-cols-[0_1fr] grid gap-y-0.5 items-center [&>svg:not([class*=size-])]:size-4 [&_svg]:stroke-[1.25]",
     "has-[>[data-slot=alert-title]+[data-slot=alert-description]]:[&_[data-slot=alert-action]]:sm:row-end-3",
     "has-[>[data-slot=alert-title]+[data-slot=alert-description]]:items-start",
     "has-[>[data-slot=alert-title]+[data-slot=alert-description]]:[&_svg]:translate-y-0.5",

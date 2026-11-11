@@ -43,7 +43,7 @@ const rules = [
   },
   {
     id: 'palette',
-    what: 'Tailwind palette utilities (one hue, semantic tokens)',
+    what: 'Tailwind palette utilities (semantic tokens only)',
     pattern:
       /(bg|text|border|ring|fill|stroke|from|to|via|outline|divide|shadow)-(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|white|black)(-[0-9]+)?/,
   },

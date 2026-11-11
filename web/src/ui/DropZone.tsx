@@ -151,8 +151,8 @@ export function DropZone({
     <Empty
       aria-busy={scanning}
       className={cn(
-        'border border-primary/60 py-8 transition-colors',
-        over && !inactive && 'border-primary bg-primary/15',
+        'border border-foreground/40 py-8 transition-colors',
+        over && !inactive && 'border-foreground bg-foreground/10',
         inactive && 'opacity-60',
       )}
       onDragOver={(event) => {

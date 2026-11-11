@@ -267,11 +267,11 @@ function RailItem({
         render={<a href={href} aria-current={active ? 'page' : undefined} />}
         isActive={active}
         tooltip={label}
-        className="h-10 w-full gap-2.5 rounded-[6px] border border-primary bg-transparent p-1 pr-3 text-sm text-primary hover:bg-primary/15 active:bg-primary/15 data-active:bg-transparent data-active:text-primary"
+        className="h-12 w-full gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground hover:bg-foreground/10 active:bg-foreground/10 data-active:bg-transparent data-active:text-foreground"
       >
         <span
           aria-hidden="true"
-          className="grid size-8 shrink-0 place-items-center rounded-full border border-primary bg-transparent text-primary group-data-[active]/menu-button:bg-primary group-data-[active]/menu-button:text-primary-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]"
+          className="grid size-8 shrink-0 place-items-center rounded-full border border-foreground/45 bg-transparent text-foreground group-data-[active]/menu-button:bg-secondary group-data-[active]/menu-button:text-secondary-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]"
         >
           {icon}
         </span>
@@ -328,9 +328,9 @@ export function Shell({ route, children }: { route: Route; children: React.React
 
   return (
     <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden p-1">
-      <div className="flex h-full w-full flex-col gap-1 rounded-panel border border-primary p-1">
+      <div className="flex h-full w-full flex-col gap-1 rounded-panel border border-border p-1">
         <div className="flex min-h-0 flex-1 gap-1">
-          <aside className="flex w-52 shrink-0 flex-col gap-3 border-r border-primary p-2">
+          <aside className="flex w-52 shrink-0 flex-col gap-3 border-r border-border p-2">
             <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
             <div className="min-h-0 flex-1 overflow-auto">
               <Nav groups={groups} route={route} />
@@ -341,14 +341,14 @@ export function Shell({ route, children }: { route: Route; children: React.React
                 href={routeHref({ name: 'settings' })}
                 aria-current={route.name === 'settings' ? 'page' : undefined}
                 className={cn(
-                  'flex h-10 w-full items-center gap-2.5 rounded-[6px] border border-primary bg-transparent p-1 pr-3 text-sm text-primary outline-none hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  'flex h-10 w-full items-center gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-1 pr-3 text-sm text-foreground outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                 )}
               >
                 <span
                   aria-hidden="true"
                   className={cn(
-                    'grid size-8 shrink-0 place-items-center rounded-full border border-primary bg-transparent text-primary [&_svg]:size-4 [&_svg]:stroke-[1.25]',
-                    route.name === 'settings' && 'bg-primary text-primary-foreground',
+                    'grid size-8 shrink-0 place-items-center rounded-full border border-foreground/45 bg-transparent text-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]',
+                    route.name === 'settings' && 'bg-secondary text-secondary-foreground',
                   )}
                 >
                   <SettingsIcon aria-hidden="true" />
