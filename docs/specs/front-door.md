@@ -2,8 +2,9 @@
 
 > **The page half of this document is retired** by
 > [ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md): the device serves no page and
-> packs no Shell, and `/`, `/index.html`, `/bridge` and `/app` now answer 302 to the App. The
-> routes and contracts in §2 are the device's API and still hold; everything below about
+> packs no Shell, and `/`, `/index.html`, `/bridge` and `/app` now answer 302 to the App at
+> `https://k7.xperiments.dev/app#/player` ([ADR 0078](../adr/0078-the-site-owns-the-root-and-the-app-moves-to-app.md)).
+> The routes and contracts in §2 are the device's API and still hold; everything below about
 > serving a page does not. The **one** page the device serves is `GET /setup`, which exists so a
 > device with no network can be given one — specified in
 > [`wifi-provisioning.md`](./wifi-provisioning.md) and decided by

@@ -1,7 +1,8 @@
 # Deploying K7
 
-**Goal.** One artifact from one repository: the **App** at `https://k7.xperiments.dev`. The
-device serves no page of the App — it answers the API and the stream, plus `/setup` for
+**Goal.** One artifact from one repository, two documents at `https://k7.xperiments.dev`: the
+**Site** at `/` and the **App** at `/app` ([`k7-site.md`](./k7-site.md)). The device serves no
+page of either — it answers the API and the stream, plus `/setup` for
 a device that has no network yet, and the App reaches it directly over
 the local network once a person grants the `local-network` permission (ADR 0067). A development
 origin, `https://k7-dev.xperiments.dev:8000`, exists so connected mode can be tested against the
@@ -15,6 +16,11 @@ no Vercel project points at it, and no certificate or DNS record has been create
 ## 1. Production: Vercel
 
 **D1. Project settings.** Root directory `web`, build command `npm run build`, output `dist`.
+The build emits two documents: `index.html`, the Site, and `app.html`, the App.
+
+**D1a. One rewrite serves the App at `/app`.** `/app` → `/app.html`, with the browser's address
+bar keeping `/app`; the development origin answers the same path through a middleware
+(k7-site.md D2). Nothing else is rewritten: the App has no server routes, only hash paths.
 
 **D2. Domains.** `k7.xperiments.dev` is added to the project; Vercel issues and renews the
 certificate. `www.xperiments.dev` stays where it is — a different project, unaffected.
@@ -38,7 +44,7 @@ GitHub Pages cannot set response headers at all, so it cannot do D4, D5 or D6. V
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
-      "source": "/(sw.js|index.html|manifest.webmanifest|shell.json|weights.lock.json|models.lock.json)",
+      "source": "/(sw.js|index.html|app.html|manifest.webmanifest|shell.json|weights.lock.json|models.lock.json)",
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     },
     {
@@ -54,10 +60,11 @@ GitHub Pages cannot set response headers at all, so it cannot do D4, D5 or D6. V
 }
 ```
 
-**D4. `no-cache` on the worker and the entry is the update mechanism.** `sw.js` deliberately
+**D4. `no-cache` on the worker and the entries is the update mechanism.** `sw.js` deliberately
 does not `skipWaiting`; the browser must revalidate it on every navigation, or a new version
-waits until the CDN's TTL expires. `index.html`, the manifest and the two lock files are the
-same fact.
+waits until the CDN's TTL expires. `index.html`, `app.html`, the manifest and the lock files are
+the same fact. The Site is the page that names a firmware version and offers its flash; a cached
+copy of it offers a version the origin may no longer serve.
 
 **D4a. The manifest must be served as JSON, not as an opaque file.**
 `/manifest.webmanifest` carries `application/manifest+json` (Vercel's default for the
@@ -133,15 +140,20 @@ shape: worker, headers and all.
 
 | | Command | What it bakes in |
 |---|---|---|
-| The App (Vercel) | `npm run build` | trusts `http://k7.local`; the `local-network` permission is asked for at first render |
+| The Site and the App (Vercel) | `npm run build` | trusts `http://k7.local`; the `local-network` permission is asked for at first render; the Site's firmware version and hashes come from `firmware.json`; the parts under `public/firmware/<version>/` ship with the deploy |
 
 **D13. There is no device artifact.** ADR 0067 removed the Launcher and the Shell: the firmware
-packs no page of the App, `/` and `/bridge` answer 404 (to the App, since 0067), and the App at its
-own origin is the only UI. The one page the firmware serves is `GET /setup`
-([ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)).
+packs no page of the Site or the App, `/` and `/bridge` answer 302 to the App at `/app`, and the
+App at `/app` is the only UI a browser is sent to. The one page the firmware serves is `GET
+/setup` ([ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)).
 
 **D14. A shipping build refuses a development origin.** The deployed artifact fails the check if
 the development origin's string appears anywhere in `dist`.
+
+**D15. A shipping build refuses a Flash it cannot serve.** The Site may name only a firmware
+version whose parts are present in `web/public/firmware/<version>/`, and every part's size and
+sha256 must match `firmware.json` (k7-site.md R4). A deploy that forgets the binaries fails
+before it can offer a button that 404s.
 
 ---
 
@@ -151,7 +163,7 @@ Three jobs, all on a pull request:
 
 | Job | What it runs |
 |---|---|
-| `web` | `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, the artifact guard (D14), and a manifest shape check — `id`, `name`/`short_name`, `start_url`, `scope`, `display`, `theme_color`, and 192/512/512-maskable icons — so A9 cannot regress silently |
+| `web` | `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, the artifact guard (D14), the firmware manifest guard (D15, k7-site.md R4), and a manifest shape check — `id`, `name`/`short_name`, `start_url: "/app"`, `scope: "/app"`, `display`, `theme_color`, and 192/512/512-maskable icons — so A9 cannot regress silently |
 | `host` | `make -C host check` — the device's own fixtures, including the two Update-file names |
 | `e2e` | documented but commented until a Playwright dependency lands: one status round trip from the App's origin to `http://k7.local` with the `local-network` permission granted |
 
@@ -162,18 +174,24 @@ the flash.
 
 ## 7. First run, in order
 
-1. `k7.xperiments.dev` serves the App; `curl -sI` shows no `COOP`, `no-cache` on `/sw.js`,
-   `immutable` on `/assets/`.
-2. The App reports `isSecureContext: true`, a registered worker and `navigator.gpu`.
-3. It installs: Chrome shows the omnibox install icon on the first visit after the engagement
-   heuristic, the App's own **Install K7** button does the same in one click, and the result
-   opens in its own window with no address bar. The 512 maskable icon is not cropped.
-4. The worker serves a reload with the network off.
-5. `k7.local` serves the API, not a page — its root redirects a browser to the App. The App
-   asks for the `local-network` permission and, once granted, the chip says connected.
-6. A card is picked, marked, measured, and `k7.db` written; the device flashes it and restarts.
-7. Deny the permission and reload: the gate blocks every area and says how to restore it.
-8. Open the App in a browser with no LNA API (Safari, Firefox): the same gate, naming Chrome.
+1. `k7.xperiments.dev/` serves the Site and `/app` serves the App; `curl -sI` shows no `COOP`,
+   `no-cache` on `/`, `/app.html` and `/sw.js`, `immutable` on `/assets/`, and
+   `application/manifest+json` on the manifest.
+2. The Site offers the flash only in Chrome or Edge on a computer, and the install only where
+   `local-network` can answer; Safari and Firefox get a sentence and the manual flash path.
+3. The App reports `isSecureContext: true`, a registered worker and `navigator.gpu`.
+4. It installs from either document: Chrome shows the omnibox install icon on the first visit
+   after the engagement heuristic, the **Install K7** control does the same in one click, and the
+   result opens at `/app` in its own window with no address bar. The 512 maskable icon is not
+   cropped.
+5. The worker serves `/app` with the network off; a navigation to `/` goes to the network.
+6. The Site flashes a bare board from this origin, naming a version that `firmware.json` carries
+   and Chrome's own Web Serial picker chose (k7-site.md B1).
+7. `k7.local` serves the API, not a page — its root redirects a browser to `/app#/player`. The
+   App asks for the `local-network` permission and, once granted, the chip says connected.
+8. A card is picked, marked, measured, and `k7.db` written; the device flashes it and restarts.
+9. Deny the permission and reload: the gate blocks every area and says how to restore it.
+10. Open the App in a browser with no LNA API (Safari, Firefox): the same gate, naming Chrome.
 
 ---
 

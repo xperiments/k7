@@ -21,6 +21,10 @@
     {
       "id": "SU",
       "name": "Setup"
+    },
+    {
+      "id": "SI",
+      "name": "Site"
     }
   ],
   "tasks": [
@@ -416,6 +420,73 @@
           "text": "**Scope change, owner's call: the setup surface now exists only while the hotspot does (ADR 0077, commit d5b5e6f).**\n\n`GET /setup` and all seven `/api/setup*` routes answer only while a session is up; with no session they are 404 on every interface. Measured on the flashed board with the hotspot down: /setup 404, /api/setup 404, /api/setup/scan 404, while /api/status 200 and /stream 200. Host tier: H5 and H14 assert it.\n\n**Two consequences for this ticket's checks:** (1) `host/tests/board_setup.sh` can no longer raise the hotspot itself — it now says 'raise it from Menu - Settings - Wi-Fi - Setup, or use a device with no network'; B1/B2/B3/B7 need the hotspot up before the harness runs. (2) **B8 is now load-bearing rather than cosmetic**: on a healthy, provisioned device the panel's Setup row is the only way to get a hotspot back short of a power cycle. --- dsh"
         }
       ]
+    },
+    {
+      "id": "SI-01",
+      "title": "The origin serves two documents: the Site at / and the App at /app",
+      "state": "doing",
+      "group": "SI",
+      "yolo": true,
+      "at": "2026-11-11T01:38:45Z",
+      "by": "dsh",
+      "desc": "k7.xperiments.dev stops being only the App. `/` becomes the public Site and the App moves to `/app`; the manifest keeps its identity (id: /) but starts at `/app`, and the device's doorbell follows to `/app#/player`.\n\nFinished when `/` and `/app` both render, the App's hash routes still work, Chrome still installs one K7 that opens `/app`, and the board's 302 names `/app#/player`.",
+      "notes": [
+        {
+          "at": "2026-11-11T01:44:00Z",
+          "by": "dsh",
+          "text": "Plan: split the Vite build into index.html (Site) and app.html (App at /app); rewrite /app on Vercel and in dev; manifest start_url/scope /app; device 302 to /app#/player; gate links to the Site."
+        }
+      ]
+    },
+    {
+      "id": "SI-02",
+      "title": "A firmware release is a version, a manifest and three committed parts",
+      "state": "todo",
+      "group": "SI",
+      "yolo": true,
+      "at": "2026-11-11T01:38:45Z",
+      "by": "dsh",
+      "desc": "A release that can actually ship: `VERSION` in the image and the panel's About, `./tools/build.sh sunton release` writing `web/firmware.json` and the three parts under `web/public/firmware/<version>/`, and CI refusing a manifest that does not match the bytes.\n\nFinished when a clone with no ESP-IDF deploys a Site whose flasher works, and a dirty or untagged tree cannot release."
+    },
+    {
+      "id": "SI-03",
+      "title": "The flasher writes three parts and never a merged image",
+      "state": "todo",
+      "group": "SI",
+      "deps": ["SI-01", "SI-02"],
+      "at": "2026-11-11T01:38:45Z",
+      "by": "dsh",
+      "desc": "The page that puts K7 on a board from Chrome: it checks the chip is an ESP32-S3 and the flash is 16 MB, confirms the version, then writes bootloader, partition table and app at 0x0/0x8000/0x10000 and never the gaps — so a reflash keeps the stored WiFi network and the device's Snapshot. Erase is a separate, explicit choice.\n\nFinished when a fake serial transport proves every refusal and the happy path, and a real board flashes from the deployed Site."
+    },
+    {
+      "id": "SI-04",
+      "title": "The Site's page: hero, flash section, install and footer",
+      "state": "todo",
+      "group": "SI",
+      "deps": ["SI-01", "SI-02", "SI-03"],
+      "at": "2026-11-11T01:38:45Z",
+      "by": "dsh",
+      "desc": "What a stranger sees at k7.xperiments.dev: the product sentence, the device's own screen as the hero, the flash, and an install offered only where the App can run — Safari and phones are told to use Chrome, not given a dead icon.\n\nFinished when `/` reads as a product page, the install control follows the capability, and the footer carries the source and the notices."
+    },
+    {
+      "id": "SI-05",
+      "title": "The worker serves the App and stays out of the Site's way",
+      "state": "todo",
+      "group": "SI",
+      "deps": ["SI-01"],
+      "at": "2026-11-11T01:38:45Z",
+      "by": "dsh",
+      "desc": "The PWA's worker is retargeted: it caches `/app` and answers navigation only there, so a navigation to `/` always goes to the network.\n\nFinished when the App still loads offline, the Site can never be served from a stale cache, and an existing install opens `/app`."
+    },
+    {
+      "id": "SI-06",
+      "title": "Prove the flash and the install on the board and the real origin",
+      "state": "todo",
+      "group": "SI",
+      "deps": ["SI-01", "SI-02", "SI-03", "SI-04", "SI-05"],
+      "at": "2026-11-11T01:38:45Z",
+      "by": "dsh",
+      "desc": "The pass that turns the spec into evidence: flash a bare board, reflash a working one and show the WiFi record and the Snapshot survive, erase and recover, refuse a wrong chip and an 8 MB module, and check the Site in Safari and Firefox. Records the flash time and baud rate, answers the bridge-driver question, and updates the README's flashing section."
     }
   ]
 }

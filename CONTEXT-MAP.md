@@ -19,7 +19,7 @@ refused, not scheduled.
   outside the device. It also holds the **Snapshot** — the measurements and the **Playlists**
   the app produced — and walks a selected Playlist when told to. Its own address,
   `http://k7.local`, serves the API and the stream — `/api/*`, `/mcp`, `/library`, `/stream` —
-  and no product page; its root redirects a browser to the App
+  and no product page; its root redirects a browser to the App at `/app`
   ([ADR 0067](./docs/adr/0067-chrome-only-direct-to-the-device.md)). It also carries its own
   **Setup network**, `K7.local`, and the one **Setup page** it serves, so a device with no
   network is still a device that can be given one ([ADR 0076](./docs/adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)).
@@ -27,13 +27,19 @@ refused, not scheduled.
   [`docs/specs/wifi-provisioning.md`](./docs/specs/wifi-provisioning.md); its measurements are
   specified in [`docs/specs/snapshot.md`](./docs/specs/snapshot.md) and byte-defined in
   [`docs/specs/snapshot-format.md`](./docs/specs/snapshot-format.md).
-- [K7 app](./web/CONTEXT.md) — the application at `https://k7.xperiments.dev`. It measures
-  Tracks, authors Playlists, browses the library from either the device or its own **Last
-  image**, and writes the card's **Update file** and its **Card mark**. It reaches the device
-  directly over Local Network Access, gated on the `local-network` permission, and only in
-  Chrome ([ADR 0067](./docs/adr/0067-chrome-only-direct-to-the-device.md)). The App is the
-  producer of the **Snapshot** the stream server answers its queries from. Specified in
-  [`docs/specs/k7-app.md`](./docs/specs/k7-app.md); deployment in
+- [K7 app](./web/CONTEXT.md) — the Site at `https://k7.xperiments.dev/` and the application at
+  `/app` on it. The **App** measures Tracks, authors Playlists, browses the library from either
+  the device or its own **Last image**, and writes the card's **Update file** and its **Card
+  mark**. It reaches the device directly over Local Network Access, gated on the
+  `local-network` permission, and only in Chrome
+  ([ADR 0067](./docs/adr/0067-chrome-only-direct-to-the-device.md)). The App is the producer of
+  the **Snapshot** the stream server answers its queries from. The **Site** is public: it offers
+  the App's **Install** and the player's firmware **Flash**, the latter over USB rather than the
+  network — the only browser surface that writes a board
+  ([ADR 0078](./docs/adr/0078-the-site-owns-the-root-and-the-app-moves-to-app.md),
+  [ADR 0079](./docs/adr/0079-the-firmware-is-flashed-in-parts-from-the-browser.md)). Specified in
+  [`docs/specs/k7-app.md`](./docs/specs/k7-app.md) and
+  [`docs/specs/k7-site.md`](./docs/specs/k7-site.md); deployment in
   [`docs/specs/k7-deploy.md`](./docs/specs/k7-deploy.md).
 - [Radio player](./docs/research/01-library-architecture.md) — an ESP32-S3 that consumes
   someone else's internet radio stream and plays it out to a DAC over I2S. Researched in

@@ -1,17 +1,35 @@
 # K7
 
-The application at `https://k7.xperiments.dev`. It measures a card's tracks, authors the
-Playlists a Snapshot carries, browses the library from the player or from its own last run, and
-reaches the player directly over the local network. The device is a different context — see
-[`CONTEXT-MAP.md`](../CONTEXT-MAP.md).
+The application at `/app` on `https://k7.xperiments.dev`, and the Site at `/` that offers it. It
+measures a card's tracks, authors the Playlists a Snapshot carries, browses the library from the
+player or from its own last run, and reaches the player directly over the local network. The
+device is a different context — see [`CONTEXT-MAP.md`](../CONTEXT-MAP.md).
 
 ## Language
+
+### The site
+
+**Site**:
+The public page at the origin's root: what K7 is, the player's firmware **Flash**, and the App's
+**Install**. It never talks to the player — the board is written over USB, not the network.
+_Avoid_: website, landing page, front page, home, portal, front door (that is the device's HTTP
+surface)
+
+**Flash**:
+Writing the player's firmware over its USB connection, from the Site. A first install and a
+re-flash are the same act; only an **Erase** differs, and an erase is its own explicit choice.
+_Avoid_: install, upload, burn, update (the card's **Update file** is a different thing)
+
+**Install**:
+Adding the App to a launcher or home screen, where it opens in its own window. Offered only where
+the App can run, which is Chrome.
+_Avoid_: flash, download, save, add to home screen (that is the gesture, not the act)
 
 ### The application
 
 **App**:
-The application at the HTTPS origin: its areas, its stores, its worker, and everything it
-computes. Opened from its installed icon or by hand.
+The application at `/app` on the HTTPS origin: its areas, its stores, its worker, and everything
+it computes. Opened from its installed icon or by hand.
 _Avoid_: website, frontend, web app, launcher
 
 **Weights**:

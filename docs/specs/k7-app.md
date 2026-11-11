@@ -1,10 +1,12 @@
 # K7: a secure application that reaches the player directly
 
-**Goal.** K7 is the App — one secure origin, **installable from Chrome in one click as an
-app**, offline-capable, and useful with no player in the room. It reaches the device at
+**Goal.** K7 is the App at `/app` on one secure origin — **installable from Chrome in one click
+as an app**, offline-capable, and useful with no player in the room. The origin's root is the
+**Site**, which offers the App's install and flashes the player's firmware
+([`k7-site.md`](./k7-site.md)). The App reaches the device at
 `http://k7.local` with its own `fetch`, gated on the browser's `local-network` permission: no
-second window, no second document, and no page it needs the device to serve — the device's one
-page is the setup page, which exists only for a device that has no network yet
+second window, no second document of its own, and no page it needs the device to serve — the
+device's one page is the setup page, which exists only for a device that has no network yet
 ([ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md),
 [ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)). The device is a
 gateway, not the runtime.
@@ -14,8 +16,10 @@ The page the device used to serve is gone: **Front door**, **Launcher**, **Devic
 
 **Status:** M1–M3 are built and tested in this repository — the card's mark and the scoped
 stores, installability, and the one offline weights store with a gated prefetch. Not deployed
-and not flashed. M4 is partly built: the direct transport exists; the Library's image source and
-the local Provider do not, so `#/media`, `#/playlists` and Ask still read the player only.
+and not flashed. The Site and the `/app` split are specified in
+[`k7-site.md`](./k7-site.md) and not built. M4 is partly built: the direct transport exists; the
+Library's image source and the local Provider do not, so `#/media`, `#/playlists` and Ask still
+read the player only.
 
 **Vocabulary:** [`web/CONTEXT.md`](../../web/CONTEXT.md). The device's own API is
 [`front-door.md`](./front-door.md) §2 — its routes and contracts still hold, the page it once
@@ -31,15 +35,15 @@ served does not — and [`sd-stream-server.md`](./sd-stream-server.md); the Imag
 
 | | **App** |
 |---|---|
-| Origin | `https://k7.xperiments.dev` |
+| Address | `https://k7.xperiments.dev/app` — the Site owns `/` ([`k7-site.md`](./k7-site.md)) |
 | Served by | Vercel, with headers; the device serves no page of the App (`/setup` is the one
 page it serves, and only for provisioning) |
 | Secure context | yes |
 | Owns | library processing, card writes, the PWA, WebGPU, every view |
 | Never | serves a Track, accepts a Track upload |
 
-**A1. One artifact.** `npm run build` produces the App; there is no device packaging to keep in
-step with it.
+**A1. One artifact.** `npm run build` produces the Site and the App from one build; there is no
+device packaging to keep in step with it.
 
 **A2. The App reaches the device over the local network.** `fetch('http://k7.local/api/…')` from
 the HTTPS origin, allowed because LNA §2.5 exempts a `.local` host from mixed content once the
@@ -49,7 +53,9 @@ the HTTPS origin, allowed because LNA §2.5 exempts a `.local` host from mixed c
 **A3. The permission is asked for, and the App is refused until it is answered.**
 `ui/LocalNetworkGate.tsx` blocks every area until
 `navigator.permissions.query({name: 'local-network'})` is `granted`; a denial, or a browser with
-no such API, gets a wall with instructions, never a fallback.
+no such API, gets a wall with instructions, never a fallback. The wall also points at the Site's
+flash section for a person who has no player yet
+([`k7-site.md`](./k7-site.md) S7).
 
 ---
 
@@ -108,27 +114,30 @@ features it forbids, instead of failing at the first call.
 ### Install
 
 **A9. The App must install from Chrome as an app, not as a bookmark.** Chrome's own criteria,
-all of which the deployment must satisfy on `https://k7.xperiments.dev` and nowhere else: a
-manifest served from the App's origin with `id: "/"`, `name` and `short_name` "K7",
-`start_url: "/"` within `scope: "/"`, `display: "standalone"`, `theme_color`,
-`background_color`, a 192 and a 512 icon, and a 512 icon with `purpose: "maskable"` so an
-Android launcher does not crop the cassette; and a registered service worker with a `fetch`
-handler — which the App has for its own reasons.
+all of which the deployment must satisfy on the App's origin and nowhere else: a manifest served
+from that origin with `id: "/"`, `name` and `short_name` "K7", `start_url: "/app"` within
+`scope: "/app"`, `display: "standalone"`, `theme_color`, `background_color`, a 192 and a 512
+icon, and a 512 icon with `purpose: "maskable"` so an Android launcher does not crop the
+cassette; and a registered service worker with a `fetch` handler — which the App has for its own
+reasons.
 
 **A10. Installing must be one click, offered where it can work.** `beforeinstallprompt` is
 captured and replayed from an explicit **Install K7** control; `appinstalled` and
-`display-mode: standalone` hide it once it is done; Safari gets the Share → Add to Home Screen
-sentence and Firefox an honest "this browser does not install apps". An optional wide
-`screenshot` in the manifest buys the richer install dialog.
+`display-mode: standalone` hide it once it is done. It is offered only where the App can run —
+`navigator.permissions.query({name: 'local-network'})` is anything but `unsupported` — so Safari,
+Firefox and every iOS browser get a sentence naming Chrome instead of an icon that opens a wall.
+An optional wide `screenshot` in the manifest buys the richer install dialog.
 
 **A11. The installed window is the normal case, not a downgrade.** An installed App has no
 opener, and it does not need one: it reaches the device with its own `fetch`. Installing must be
 presented as the recommended way to use K7, and **Connect** as what makes it work with a player.
 
 **A12. The manifest is revalidated, never inferred.** It is served `no-cache` with the worker
-and the entry ([`k7-deploy.md`](./k7-deploy.md) D4): a manifest is how Chrome decides what is
-installed, so a stale one is an install that never sees new icons. `id` stays `/` at the new
-origin — changing it is a different app to Chrome, and leaves the old install behind.
+and both entries ([`k7-deploy.md`](./k7-deploy.md) D4), and linked by the Site and the App alike:
+a manifest is how Chrome decides what is installed, so a stale one is an install that never sees
+new icons or the new start. `id` stays `/` — changing it is a different app to Chrome, and leaves
+the old install behind; `start_url` and `scope` are `/app`, so the installed window is the App and
+the Site stays a page of the website ([ADR 0078](../adr/0078-the-site-owns-the-root-and-the-app-moves-to-app.md)).
 
 **A13. Installability is a deployment acceptance test.** Checked on the real origin, by hand,
 once per release, with a Vercel preview expected to refuse: Chrome's
@@ -275,7 +284,7 @@ makes that a deployment requirement, not a nicety.
 
 | | The App |
 |---|---|
-| Entry | `index.html` is the App; `start_url: "/"` |
+| Entries | `index.html` is the Site, `app.html` is the App; the manifest's `start_url` is `/app` within `scope: "/app"` |
 | Compression | plain; the host gzips |
 | Weights | fetched from jsDelivr at the pinned tag |
 | Local Provider | included, lazy chunk |
