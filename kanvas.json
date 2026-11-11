@@ -491,7 +491,7 @@
     {
       "id": "SI-04",
       "title": "The Site's page: hero, flash section, install and footer",
-      "state": "review",
+      "state": "done",
       "group": "SI",
       "deps": ["SI-01", "SI-02", "SI-03"],
       "at": "2026-11-11T01:38:45Z",
@@ -536,12 +536,30 @@
     {
       "id": "SI-06",
       "title": "Prove the flash and the install on the board and the real origin",
-      "state": "todo",
+      "state": "doing",
       "group": "SI",
       "deps": ["SI-01", "SI-02", "SI-03", "SI-04", "SI-05"],
+      "yolo": true,
       "at": "2026-11-11T01:38:45Z",
       "by": "dsh",
-      "desc": "The pass that turns the spec into evidence: flash a bare board, reflash a working one and show the WiFi record and the Snapshot survive, erase and recover, refuse a wrong chip and an 8 MB module, and check the Site in Safari and Firefox. Records the flash time and baud rate, answers the bridge-driver question, and updates the README's flashing section."
+      "desc": "The pass that turns the spec into evidence: flash a bare board, reflash a working one and show the WiFi record and the Snapshot survive, erase and recover, refuse a wrong chip and an 8 MB module, and check the Site in Safari and Firefox. Records the flash time and baud rate, answers the bridge-driver question, and updates the README's flashing section.",
+      "notes": [
+        {
+          "at": "2026-11-11T02:33:42Z",
+          "by": "dsh",
+          "text": "Evidence gathered before the hardware pass, on the built artifact served from\n`https://127.0.0.1:4174` (vite preview, mkcert origin) in headless Chrome 156+:\n\n- `/` renders the Site: the hero sentence, the panel render, the flash card with **Connect a\n  board** (headless Chrome exposes Web Serial), the install card with **Install K7**\n  (`beforeinstallprompt` fired, `local-network` answerable), and the footer's source and\n  notices links.\n- `/app` renders the App's document and its Local Network Access gate (\"Chrome needs your\n  permission\"), so the split serves both in a real browser.\n\nThe deployed origin is **old**: `https://k7.xperiments.dev/app` is 404 and its manifest still\nsays `start_url: \"/\"`, so the live-origin and header checks cannot run until it is deployed.\n\nThe bridge is a CH340 (`1a86:7523`), enumerated as `usbserial-8344440`. The port is held by a\nPython process (PID 66793), so the flash itself — CLI or browser — has not been run."
+        },
+        {
+          "at": "2026-11-11T02:33:46Z",
+          "by": "dsh",
+          "text": "Plan: render the Site and the App in a real browser, then prove the flash and the NVS record on the board, then the live-origin checks."
+        },
+        {
+          "at": "2026-11-11T02:33:46Z",
+          "by": "dsh",
+          "text": "Question: The serial port is held by a Python process (PID 66793). May I stop it to flash the board — and do you want to press Connect in Chrome yourself on the local preview, or have me flash the 0.5.0 bytes with esptool?"
+        }
+      ]
     }
   ]
 }
