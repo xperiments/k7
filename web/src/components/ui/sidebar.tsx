@@ -589,7 +589,7 @@ function SidebarMenuBadge({
       data-slot="sidebar-menu-badge"
       data-sidebar="menu-badge"
       className={cn(
-        "pointer-events-none absolute right-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-primary bg-transparent px-1.5 text-xs font-medium text-primary uppercase tabular-nums select-none group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-primary-foreground peer-data-[size=default]/menu-button:top-1.5 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1 peer-data-active/menu-button:text-primary-foreground",
+        "pointer-events-none absolute right-1 flex h-5 min-w-5 items-center justify-center px-1 text-xs font-medium text-primary tabular-nums tabular-nums select-none group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-primary-foreground peer-data-[size=default]/menu-button:top-1.5 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1 peer-data-active/menu-button:text-primary-foreground",
         className
       )}
       {...props}

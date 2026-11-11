@@ -34,7 +34,6 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from '@/components/ui/sidebar';
-import { Badge } from '@/components/reui/badge';
 import { DEVICE_ORIGIN } from '../config';
 import { connectToDevice, getDevice, isProbing, useDeviceLink } from '../device/device';
 import type { Link } from '../device/transport';
@@ -277,7 +276,7 @@ function RailItem({
         </span>
         <span className="truncate">{label}</span>
         {badge ? (
-          <span className="ml-auto rounded-full border border-primary bg-transparent px-1.5 text-xs font-medium tabular-nums text-primary">
+          <span className="ml-auto text-xs font-medium tabular-nums text-primary">
             {badge}
           </span>
         ) : null}
@@ -291,9 +290,12 @@ function Nav({ groups, route }: { groups: NavGroup[]; route: Route }) {
     <nav aria-label="Areas" className="flex flex-col gap-3">
       {groups.map((group) => (
         <div key={group.id} className="flex flex-col gap-3">
-          <Badge size="xs" className="self-start [@media(max-height:560px)]:hidden">
-            {group.label}
-          </Badge>
+          <div className="flex w-full min-w-0 items-center gap-2 [@media(max-height:560px)]:hidden">
+            <span className="shrink-0 text-xs font-medium tracking-[0.12em] uppercase text-primary">
+              {group.label}
+            </span>
+            <span aria-hidden="true" className="h-px min-w-0 flex-1 bg-primary/40" />
+          </div>
           <SidebarMenu className="gap-0 [&>li+li]:-mt-px">
             {group.items.map((item) => (
               <RailItem
