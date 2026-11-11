@@ -392,7 +392,12 @@ export function Shell({ route, children }: { route: Route; children: React.React
               collapsed ? 'w-16' : 'w-52',
             )}
           >
-            <header className="flex h-12 shrink-0 items-center border-b px-2">
+            <header
+              className={cn(
+                'flex h-12 shrink-0 items-center border-b px-2',
+                collapsed && 'justify-center',
+              )}
+            >
               <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
             </header>
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-2">
