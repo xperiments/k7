@@ -52,7 +52,8 @@ _Avoid_: URL, link, path
 Media's first view: the album shelf, the cases on their short ends with the selected one turned
 to face the reader. The name is the walk along the row; there is nothing that rotates, swipes or
 advances on a timer. The shelf has the whole stage; clicking a case opens that album's tracks
-beside it — the rail's first letter or genre is level with the shelf's top — walking the
+beside it — the shelf is centred under the header and grows to fill a tall stage while the rail's
+first letter or genre starts at the stage's top — walking the
 row with the arrows keeps them open, and a click outside, Escape or
 the floating button at the panel's top-left closes them. The left/right arrow keys walk the row from anywhere in the Media view — a text
 field keeps its own arrows — and the pointer drags the row through the cases, each crossed

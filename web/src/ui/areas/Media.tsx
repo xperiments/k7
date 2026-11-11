@@ -231,7 +231,7 @@ function ShelfView({
       )}
     >
       {shelfVisible ? (
-        <aside ref={shelf} className="flex min-h-0 min-w-0 flex-1 flex-col justify-start pt-8">
+        <aside ref={shelf} className="flex min-h-0 min-w-0 flex-1 flex-col justify-center pt-8">
           <AlbumShelf
             albums={albums}
             selected={selected}

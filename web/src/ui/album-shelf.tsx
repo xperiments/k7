@@ -81,7 +81,7 @@ export function AlbumShelf({
       if (parent.clientHeight === 0) return;
       setFit((current) => {
         const natural = el.getBoundingClientRect().height / current;
-        return Math.min(1, parent.clientHeight / natural);
+        return Math.min(1.4, parent.clientHeight / natural);
       });
     };
     const observer = new ResizeObserver(fitToStage);
