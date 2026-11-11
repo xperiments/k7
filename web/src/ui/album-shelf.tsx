@@ -237,10 +237,13 @@ export function AlphabetIndex({
   albums,
   selected,
   onSelect,
+  onJump,
 }: {
   albums: Album[];
   selected: number;
   onSelect: (index: number) => void;
+  /** A letter asked for its first album: the page may walk there rather than jump. */
+  onJump?: (index: number) => void;
 }) {
   /* One pass over the shelf: the first album under each letter, and how many there are, which
    * is what a screen reader hears for a letter it cannot see the row behind. */
@@ -295,7 +298,7 @@ export function AlphabetIndex({
 
   const jump = (letter: string) => {
     const at = filing.first.get(letter);
-    if (at !== undefined) onSelect(at);
+    if (at !== undefined) (onJump ?? onSelect)(at);
   };
 
   const step = (letter: string, delta: number) => {

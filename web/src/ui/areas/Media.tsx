@@ -15,7 +15,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  artistOf,
   byArtistThenAlbum,
+  letterOf,
   useMediaIndex,
   type Album,
   type MediaIndexState,
@@ -359,6 +361,58 @@ export function MediaView({
 
   const active = albums.length > 0 ? albums[Math.min(selected, albums.length - 1)] : null;
 
+  /* A letter does not teleport the row: the selection walks case by case at a step the eye
+   * can follow, and a letter with more than ten cases is crossed at its tenth so a jump
+   * across the alphabet does not become a minute long. Any direct choice stops the walk. */
+  const walk = useRef<number | null>(null);
+  const stopWalk = () => {
+    if (walk.current !== null) {
+      window.clearInterval(walk.current);
+      walk.current = null;
+    }
+  };
+  useEffect(() => stopWalk, []);
+  const selectNow = (index: number) => {
+    stopWalk();
+    setSelected(index);
+  };
+  const jumpToLetter = (target: number) => {
+    stopWalk();
+    let at = selected;
+    if (at === target || albums.length === 0) return;
+    const direction = target > at ? 1 : -1;
+    let letter = letterOf(artistOf(albums[at]));
+    let inLetter = 0;
+    walk.current = window.setInterval(() => {
+      if (at === target) {
+        stopWalk();
+        return;
+      }
+      let next = at + direction;
+      if (next < 0 || next >= albums.length) {
+        stopWalk();
+        return;
+      }
+      const nextLetter = letterOf(artistOf(albums[next]));
+      if (nextLetter !== letter) {
+        letter = nextLetter;
+        inLetter = 0;
+      }
+      inLetter += 1;
+      if (inLetter > 10 && next !== target) {
+        while (
+          next + direction >= 0 &&
+          next + direction < albums.length &&
+          letterOf(artistOf(albums[next + direction])) === letter
+        ) {
+          next += direction;
+        }
+      }
+      at = next;
+      setSelected(at);
+    }, 140);
+  };
+
   if (readingDrive) {
     return (
       <div className="mx-auto flex w-full flex-col gap-4 px-4 py-6 sm:px-6">
@@ -377,13 +431,18 @@ export function MediaView({
           state={state}
           albums={albums}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={selectNow}
           active={active}
           query={query}
           onClear={() => setQuery('')}
         />
       </div>
-      <AlphabetIndex albums={albums} selected={selected} onSelect={setSelected} />
+      <AlphabetIndex
+        albums={albums}
+        selected={selected}
+        onSelect={selectNow}
+        onJump={jumpToLetter}
+      />
     </div>
   );
 }
