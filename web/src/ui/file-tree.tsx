@@ -246,7 +246,7 @@ export function FileTree({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium">{data.name}</span>
+          <span className="text-sm font-light">{data.name}</span>
           <span className="text-xs text-muted-foreground tabular-nums">{summary}</span>
         </div>
         <div className="flex items-center gap-1">

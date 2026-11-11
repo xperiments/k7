@@ -270,7 +270,7 @@ function LookupResults({
                   loading="lazy"
                   className="aspect-video w-full bg-muted object-cover"
                 />
-                <span className="line-clamp-2 text-sm font-medium">{video.title}</span>
+                <span className="line-clamp-2 text-sm font-light">{video.title}</span>
                 <span className="truncate text-xs text-muted-foreground">
                   {video.channel}
                   {video.duration > 0 ? ` · ${formatDuration(video.duration)}` : ''}
@@ -339,7 +339,7 @@ function TrackRow({
   return (
     <li className="flex flex-col gap-2 border-b py-2 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium">{label}</span>
+        <span className="truncate text-sm font-light">{label}</span>
         {/* <span className="truncate text-xs text-muted-foreground">{row.path}</span> */}
       </div>
       <div className="flex shrink-0 items-center gap-2">

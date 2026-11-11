@@ -505,7 +505,7 @@ function Editor({ draft }: { draft: Draft }) {
         <section aria-labelledby="sources-heading" className="flex min-w-0 flex-col gap-3 lg:min-h-0">
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-0.5">
-              <h2 id="sources-heading" className="text-sm font-medium">
+              <h2 id="sources-heading" className="text-sm font-light">
                 Sources
               </h2>
               <p className="text-xs text-muted-foreground">
@@ -556,7 +556,7 @@ function Editor({ draft }: { draft: Draft }) {
         >
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div className="flex flex-col gap-0.5">
-              <h2 id="playlist-heading" className="text-sm font-medium">
+              <h2 id="playlist-heading" className="text-sm font-light">
                 Playlist
               </h2>
               <p className="text-xs text-muted-foreground tabular-nums" role="status">
@@ -569,7 +569,7 @@ function Editor({ draft }: { draft: Draft }) {
             <div className="flex flex-wrap items-center gap-1">
               {confirmingClear ? (
                 <>
-                  <Button variant="destructive" size="sm" onClick={clearAll}>
+                  <Button variant="solid" size="sm" onClick={clearAll}>
                     Clear {plural(draft.rows.length, 'track')}
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setConfirmingClear(false)}>
@@ -595,7 +595,7 @@ function Editor({ draft }: { draft: Draft }) {
               <CardContent className="p-0">
                 {draft.entries.length === 0 ? (
                   <div
-                    className={cn('p-4', overEmpty && 'bg-primary/5')}
+                    className={cn('p-4', overEmpty && 'bg-primary/15')}
                     onDragOver={(event) => {
                       // Prevent the browser's own "open the dropped file" for anything that
                       // is not a library drag; only a library drag gets a copy cursor.
@@ -689,7 +689,7 @@ function Editor({ draft }: { draft: Draft }) {
                                     className="size-4 shrink-0 text-muted-foreground"
                                   />
                                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                    <span className="truncate text-sm font-medium" title={entry.path}>
+                                    <span className="truncate text-sm font-light" title={entry.path}>
                                       {entry.name}
                                     </span>
                                     <div className="flex min-w-0 items-center gap-2">
@@ -735,7 +735,7 @@ function Editor({ draft }: { draft: Draft }) {
                     <div
                       className={cn(
                         'flex items-center gap-2 border-t px-3 py-2.5 text-xs text-muted-foreground',
-                        overEnd && 'bg-primary/5 text-foreground',
+                        overEnd && 'bg-primary/15 text-foreground',
                       )}
                       onDragOver={(event) => {
                         event.preventDefault();

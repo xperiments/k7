@@ -88,7 +88,7 @@ export function VideoArea({ id }: { id: string }) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 flex-col gap-2 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <h1 className="truncate text-sm font-medium">{title}</h1>
+          <h1 className="truncate text-sm font-light">{title}</h1>
           <p className="truncate text-xs text-muted-foreground">
             {info?.channel ? `${info.channel} · plays here` : 'Plays here, on YouTube’s player'}
           </p>

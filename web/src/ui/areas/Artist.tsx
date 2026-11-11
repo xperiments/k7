@@ -64,7 +64,7 @@ export function ArtistArea({ artist }: { artist: string }) {
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button size="sm" onClick={() => navigate(routeHref({ name: 'media' }))}>
+            <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'media' }))}>
               Back to Media
             </Button>
           </EmptyContent>

@@ -88,7 +88,7 @@ function NoLibrary({ reachable }: { reachable: boolean }) {
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
+        <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
           Open Process
         </Button>
       </EmptyContent>

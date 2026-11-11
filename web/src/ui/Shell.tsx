@@ -291,7 +291,7 @@ function Nav({ groups, route }: { groups: NavGroup[]; route: Route }) {
     <nav aria-label="Areas" className="flex flex-col gap-3">
       {groups.map((group) => (
         <div key={group.id} className="flex flex-col gap-1.5">
-          <Badge size="xs" className="ml-3 self-start">
+          <Badge size="xs" className="self-start">
             {group.label}
           </Badge>
           <SidebarMenu className="gap-0 [&>li+li]:-mt-px">
@@ -342,14 +342,13 @@ export function Shell({ route, children }: { route: Route; children: React.React
                 aria-current={route.name === 'settings' ? 'page' : undefined}
                 className={cn(
                   'flex h-10 w-full items-center gap-2.5 rounded-[6px] border border-primary bg-transparent p-1 pr-3 text-sm text-primary outline-none hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                  
                 )}
               >
                 <span
                   aria-hidden="true"
                   className={cn(
                     'grid size-8 shrink-0 place-items-center rounded-full border border-primary bg-transparent text-primary [&_svg]:size-4 [&_svg]:stroke-[1.25]',
-                    
+                    route.name === 'settings' && 'bg-primary text-primary-foreground',
                   )}
                 >
                   <SettingsIcon aria-hidden="true" />

@@ -490,7 +490,7 @@ export function SettingsArea() {
           ) : null}
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={saveProvider}>
+            <Button variant="solid" size="sm" onClick={saveProvider}>
               Save
             </Button>
             <Button
@@ -598,7 +598,7 @@ export function SettingsArea() {
           </Field>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={saveInstance}>
+            <Button variant="solid" size="sm" onClick={saveInstance}>
               Save
             </Button>
             <Button
