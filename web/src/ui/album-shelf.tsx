@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, type CSSProperties } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -65,6 +65,27 @@ export function AlbumShelf({
   onOpen?: () => void;
 }) {
   const dragFrom = useRef<number | null>(null);
+  const section = useRef<HTMLElement>(null);
+  /* The shelf has a natural height; when the stage is shorter than it, the whole carousel —
+   * cases, letters, arrows and the name — is scaled down together so nothing is pushed
+   * under the header or past the player. `zoom` (not transform) so the layout shrinks too. */
+  const [fit, setFit] = useState(1);
+  useLayoutEffect(() => {
+    const el = section.current;
+    const parent = el?.parentElement;
+    if (!el || !parent) return;
+    const fitToStage = () => {
+      if (parent.clientHeight === 0) return;
+      setFit((current) => {
+        const natural = el.getBoundingClientRect().height / current;
+        return Math.min(1, parent.clientHeight / natural);
+      });
+    };
+    const observer = new ResizeObserver(fitToStage);
+    observer.observe(parent);
+    fitToStage();
+    return () => observer.disconnect();
+  }, []);
   /* A drag ends with a click on whatever case the finger left; that click must not also
    * select it, or the row moves twice for one gesture. */
   const dragged = useRef(false);
@@ -81,7 +102,12 @@ export function AlbumShelf({
   if (!active) return null;
 
   return (
-    <section className="flex select-none flex-col items-center gap-3" aria-label="Albums">
+    <section
+      ref={section}
+      style={{ zoom: fit } as CSSProperties}
+      className="flex select-none flex-col items-center gap-3"
+      aria-label="Albums"
+    >
       {/* The abecedary stands beside the stage and the height of it: the letters are the
           shelf's own index, not a control the page put down next to it. */}
       <div className="flex w-full min-w-0 items-stretch gap-2">

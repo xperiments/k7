@@ -269,10 +269,7 @@ function ShelfView({
       {shelfVisible ? (
         <aside
           ref={shelf}
-          className={cn(
-            'min-h-0',
-            open ? 'lg:self-center' : 'flex flex-1 flex-col justify-center',
-          )}
+          className="flex min-h-0 flex-1 flex-col justify-center"
         >
           <AlbumShelf
             albums={albums}
