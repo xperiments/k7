@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, Disc3, FolderOpen, LayoutGrid } from 'lucide-react';
+import { Disc3, FolderOpen, LayoutGrid, PanelLeftOpen } from 'lucide-react';
 import { cn } from 'cn';
 
 import { Button } from '@/components/ui/button';
@@ -251,7 +251,7 @@ function ShelfView({
               className="absolute top-2 left-2 z-10 bg-background"
               onClick={() => setOpen(false)}
             >
-              <ChevronLeft aria-hidden="true" />
+              <PanelLeftOpen aria-hidden="true" />
             </Button>
             <div ref={tracks} className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
               <div className="m-auto flex w-full flex-col gap-4">
