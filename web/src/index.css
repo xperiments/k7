@@ -464,7 +464,7 @@
         display: flex;
         align-items: flex-end;
         justify-content: center;
-        padding-bottom: 0.9rem;
+        padding-bottom: 1.15rem;
         overflow: clip;
         transform: rotateY(-90deg) translateZ(calc(var(--cw) / 2));
         background: black;
