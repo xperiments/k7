@@ -1,10 +1,15 @@
 import { createRoot } from 'react-dom/client';
 import { registerServiceWorker } from '../pwa';
+import { startInstallWatch } from '../ui/installStore';
 import { Site } from './Site';
 import '../index.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root');
+
+/* Before the first render: Chrome can fire `beforeinstallprompt` before the install
+ * section exists, and the event can only be heard, not read back (A10). */
+startInstallWatch(window);
 
 createRoot(root).render(<Site />);
 
