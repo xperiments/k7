@@ -44,7 +44,7 @@ GitHub Pages cannot set response headers at all, so it cannot do D4, D5 or D6. V
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
-      "source": "/(sw.js|index.html|app.html|manifest.webmanifest|shell.json|weights.lock.json|models.lock.json)",
+      "source": "/(sw.js|index|index.html|app|app.html|manifest.webmanifest|shell.json|weights.lock.json|models.lock.json)",
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     },
     {
@@ -60,7 +60,9 @@ GitHub Pages cannot set response headers at all, so it cannot do D4, D5 or D6. V
 }
 ```
 
-**D4. `no-cache` on the worker and the entries is the update mechanism.** `sw.js` deliberately
+**D4. `no-cache` on the worker and the entries is the update mechanism.** The list names
+`/app` as well as `/app.html`: a rewrite keeps the request path, and a header rule is matched
+against that path, so the document's own address needs the entry. `sw.js` deliberately
 does not `skipWaiting`; the browser must revalidate it on every navigation, or a new version
 waits until the CDN's TTL expires. `index.html`, `app.html`, the manifest and the lock files are
 the same fact. The Site is the page that names a firmware version and offers its flash; a cached

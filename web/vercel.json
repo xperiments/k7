@@ -23,7 +23,7 @@
       ]
     },
     {
-      "source": "/(sw.js|index.html|app.html|manifest.webmanifest|shell.json|weights.lock.json|models.lock.json)",
+      "source": "/(sw.js|index|index.html|app|app.html|manifest.webmanifest|shell.json|weights.lock.json|models.lock.json)",
       "headers": [
         {
           "key": "Cache-Control",
