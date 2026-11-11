@@ -563,6 +563,11 @@
           "at": "2026-11-11T02:55:30Z",
           "by": "dsh",
           "text": "Approved, and done: the Python monitor was stopped and the released parts were written by\nesptool at 460800.\n\nResult (B2): 2,073,008 B at 0x10000 in 34.0 s, 488.4 kbit/s, 1,290,565 B compressed, hash\nverified, hard reset. The board rejoined `xperiments-2.4G` from its stored NVS record without\nre-provisioning, logged `App version: 0.5.0` and `snapshot: 1502 rows`, and `/api/status`\nanswers with the same card mark and 1,495 tracks.\n\nStill open: the browser's own write (the port chooser needs a person at Chrome — the preview\nis being served for that), Safari/Firefox, a bare board, a wrong board, the erase, and the\ndeployed origin, which still serves the old build (`/app` 404)."
+        },
+        {
+          "at": "2026-11-11T03:02:28Z",
+          "by": "dsh",
+          "text": "The browser flash's missing reboot is fixed: esptool-js's hard reset only releases RTS, and the\nwrite had left it released, so the board stayed in the stub. The flasher now makes an edge\n(assert EN 150 ms, release) before disconnecting; F13 and T11 record it, and the sequence\npushed by hand over the CH340 booted the board (`App version: 0.5.0`).\n\nWhile reading the boot log after that flash, two things are true of the board: it is\n**unprovisioned** (`no network stored`, `K7.local` up) and its **Snapshot partition holds no\nimage**. A parts-only write cannot do that — it took a full-chip erase, i.e. the \"Erase and\ninstall fresh\" choice. The card's music is untouched. This is B1/B3's state, but it needs the\nowner's WiFi password to re-provision."
         }
       ]
     }
