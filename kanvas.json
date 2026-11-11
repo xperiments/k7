@@ -468,7 +468,7 @@
     {
       "id": "SI-03",
       "title": "The flasher writes three parts and never a merged image",
-      "state": "review",
+      "state": "done",
       "group": "SI",
       "deps": ["SI-01", "SI-02"],
       "yolo": true,
@@ -491,17 +491,29 @@
     {
       "id": "SI-04",
       "title": "The Site's page: hero, flash section, install and footer",
-      "state": "todo",
+      "state": "review",
       "group": "SI",
       "deps": ["SI-01", "SI-02", "SI-03"],
       "at": "2026-11-11T01:38:45Z",
       "by": "dsh",
-      "desc": "What a stranger sees at k7.xperiments.dev: the product sentence, the device's own screen as the hero, the flash, and an install offered only where the App can run — Safari and phones are told to use Chrome, not given a dead icon.\n\nFinished when `/` reads as a product page, the install control follows the capability, and the footer carries the source and the notices."
+      "desc": "What a stranger sees at k7.xperiments.dev: the product sentence, the device's own screen as the hero, the flash, and an install offered only where the App can run — Safari and phones are told to use Chrome, not given a dead icon.\n\nFinished when `/` reads as a product page, the install control follows the capability, and the footer carries the source and the notices.",
+      "notes": [
+        {
+          "at": "2026-11-11T02:13:03Z",
+          "by": "dsh",
+          "text": "Plan: a hero with the panel render in a slot, the install section gated on runnability, the footer's licence links, and the install watch started at the Site's boot."
+        },
+        {
+          "at": "2026-11-11T02:14:25Z",
+          "by": "dsh",
+          "text": "The Site reads as the product now: a header, the hero (the sentence and the panel's cassette\ndrawer in a media slot a photograph can replace), the flash, the install, and a footer with\nthe source and the third-party notices — no analytics, no third-party script.\n\nThe install follows whether the App can *run*, not whether it can install. Safari, Firefox and\nevery phone get the sentence naming Chrome and no control; a Chromium without a prompt yet\ngets the address-bar sentence; installed gets Open; installable gets Install. The decision is\none pure function with five tests, and the Site starts the install watch at boot.\n\nVerified: `npm run typecheck`; `npm test` (465); `npm run build`; `check-shell` and\n`check-manifest`; `/site/panel.png` ships.\n\nNot verified, and what needs a browser: the actual look, the anchor scroll, the install\nprompt and the Safari sentence. That is SI-06. Worth your eye: the hero composition, and\nwhether the install copy says enough for a first-time visitor."
+        }
+      ]
     },
     {
       "id": "SI-05",
       "title": "The worker serves the App and stays out of the Site's way",
-      "state": "review",
+      "state": "done",
       "group": "SI",
       "deps": ["SI-01"],
       "yolo": true,
