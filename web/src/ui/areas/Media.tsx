@@ -340,10 +340,10 @@ export function MediaView({
           : 'flex h-full min-h-0 flex-col gap-3 p-4 sm:gap-4 sm:p-6'
       }
     >
-      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <h1 className="text-xl font-light tracking-tight">Media</h1>
+      <header className="flex flex-wrap items-center justify-end gap-x-6 gap-y-3">
         {/* The view and the search are the header's two controls: beside each other when
-            there is room for them, stacked under the title when there is not. */}
+            there is room for them, stacked when there is not. The area's name is the
+            breadcrumb above, so the page has no title of its own. */}
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
           <ViewSwitch view={readingDrive ? 'drive' : 'carousel'} />
           <div className="flex w-full flex-col gap-1 sm:w-64">
