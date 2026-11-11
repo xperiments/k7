@@ -19,14 +19,15 @@ stores, installability, and the one offline weights store with a gated prefetch.
 and not flashed. The `/app` split is built; the Site at `/` is its first shape
 ([`k7-site.md`](./k7-site.md)). M4 is partly built: the direct transport exists; the
 Library's image source and the local Provider do not, so `#/media`, `#/playlists` and Ask still
-read the player only.
+read the player only. The K7 look is specified in [`k7-look.md`](./k7-look.md); LK-02 to LK-07
+apply it to the App.
 
 **Vocabulary:** [`web/CONTEXT.md`](../../web/CONTEXT.md). The device's own API is
 [`front-door.md`](./front-door.md) §2 — its routes and contracts still hold, the page it once
 served does not — and [`sd-stream-server.md`](./sd-stream-server.md); the Image is
 [`snapshot-format.md`](./snapshot-format.md); the card's mark is
-[`card-mark.md`](./card-mark.md). The origin decision is
-[ADR 0057](../adr/0057-the-app-lives-at-a-public-origin.md); the direct transport is
+[`card-mark.md`](./card-mark.md). Its look is [`k7-look.md`](./k7-look.md). The origin decision
+is [ADR 0057](../adr/0057-the-app-lives-at-a-public-origin.md); the direct transport is
 [ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md).
 
 ---

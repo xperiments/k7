@@ -331,15 +331,9 @@ _Avoid_: local model, offline model, embedded AI
 
 **Settings**:
 What this browser remembers for itself: the **Provider**, the model, the Invidious
-**Instance**, the light or dark palette, and the analysis worker count. Lost with site data,
-never written to the player.
+**Instance**, and the analysis worker count. Lost with site data, never written to the
+player.
 _Avoid_: preferences, config, options
-
-**Theme**:
-Which palette this browser wears: light by default, or dark from the toggle in the shell's
-footer. A presentation choice, not a mode of the App: it changes no route, no data and no
-request, and it is remembered in **Settings**.
-_Avoid_: dark mode, appearance, skin
 
 ### The videos
 

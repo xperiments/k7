@@ -115,10 +115,17 @@ cd web && npm run typecheck && npm test && npm run build
 
 ## The app's UI
 
-The ReUI skill is installed under `.agents/skills/reui` and is loaded before any UI work. Its
-rules — semantic tokens, the spacing scale, the motion durations, the components as shipped —
-are not optional, and components are installed rather than hand-rolled. The directory belongs to
-the skill's own installer: do not edit it, and do not vendor it.
+[`docs/specs/k7-look.md`](./docs/specs/k7-look.md) is the UI contract: one near-black page, one
+accent, outline for what is available and fill for what is current, and the exceptions it names
+(the coverflow, content images). It governs colour, shape, type, state and motion, and
+[ADR 0080](./docs/adr/0080-the-k7-look-is-the-products-one-skin.md) records why.
+
+The ReUI skill is installed under `.agents/skills/reui` and is loaded before any UI work. ReUI is
+the component source: components are installed rather than hand-rolled, and its rules — the
+spacing scale, the text floor, accessibility — still hold where the K7 spec is silent. The spec
+names every edit to an installed file; nothing in `components/ui` or `components/reui` is
+restyled outside it. The skill directory belongs to its own installer: do not edit it, and do not
+vendor it.
 
 ## Tracking
 

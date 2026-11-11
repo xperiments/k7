@@ -25,6 +25,10 @@
     {
       "id": "SI",
       "name": "Site"
+    },
+    {
+      "id": "LK",
+      "name": "Look"
     }
   ],
   "tasks": [
@@ -536,7 +540,7 @@
     {
       "id": "SI-06",
       "title": "Prove the flash and the install on the board and the real origin",
-      "state": "doing",
+      "state": "done",
       "group": "SI",
       "deps": ["SI-01", "SI-02", "SI-03", "SI-04", "SI-05"],
       "yolo": true,
@@ -575,6 +579,88 @@
           "text": "Confirmed by the owner: the erase was chosen deliberately, so the missing Snapshot and NVS\nrecord are the erase working, not a bug. No code change needed for that.\n\nThe board is therefore in its first-run state: `K7.local` up at 192.168.4.1, no stored\nnetwork, no Snapshot. The setup page could not be checked from this machine — its Wi-Fi is\nunassociated (Ethernet carries the host) and the harness's joins to `K7.local` did not take —\nso B1's `/setup` answer stays with the owner's phone, where re-provisioning happens anyway.\n\nRemaining for this task: the browser flash retry to prove the reset edge (F13) end to end,\nand the deployed origin (`/app` 404 until it is deployed)."
         }
       ]
+    },
+    {
+      "id": "LK-01",
+      "title": "The K7 look is a spec, an ADR and three amendments",
+      "state": "done",
+      "group": "LK",
+      "at": "2026-11-11T03:47:22Z",
+      "by": "dsh",
+      "desc": "Land docs/specs/k7-look.md from the guide, with the decisions taken here written into it: the firmware's values where it has them (#F15A22, #111111), 12px micro-labels, secondary text at 85%, the coverflow as the preserved surface, content images allowed, no unused device kit. Add ADR 0080 for the two hard-to-reverse calls (dark only, one hue; ReUI demoted to component source) and amend AGENTS.md's UI paragraph, k7-site.md S15 and the CONTEXT.md Theme entry. Done when the spec is linked, ADR 0080 exists, and no document still promises a light theme or an untouchable ReUI look.",
+      "notes": [
+        {
+          "at": "2026-11-11T03:48:40Z",
+          "by": "dsh",
+          "text": "Plan: copy the guide into docs/specs/k7-look.md with the decisions taken in the grilling; add ADR 0080; amend AGENTS.md, k7-site.md S15 and CONTEXT.md; link the spec; check no document still promises a light theme."
+        },
+        {
+          "at": "2026-11-11T03:53:32Z",
+          "by": "dsh",
+          "text": "The K7 look is a contract now, not a guide in a Downloads folder.\n\n- docs/specs/k7-look.md: the guide adapted to this repo — the firmware's #F15A22 and #111111 and Jura, 12px chips, secondary text at 85%, one hue with state in fill/words, the coverflow preserved, content images allowed, no K7Shell, no device kit. The reference sheet is linked at docs/images/screens/contact-sheet.png, and the logo tile is corrected to the sheet's filled accent square (the guide had it outlined).\n- ADR 0080 records why the App and the Site wear one dark skin and why ReUI is now the component source.\n- Amended: AGENTS.md's UI paragraph, k7-site.md S15 and its status, k7-app.md's pointer, CONTEXT-MAP, and web/CONTEXT.md's Theme entry (retired).\n\nWhat to check: read §0 (the order and the hard constraints) and §5 (the exceptions). The one call worth your eye is the logo tile — filled accent with a dark wordmark, per the reference.\n\nVerified: every relative link in the changed documents resolves, and no document still promises a light palette or \"components as shipped\". Docs only, so no host or web test applies."
+        }
+      ]
+    },
+    {
+      "id": "LK-02",
+      "title": "The tokens, the stylesheet and the primitives are the K7 base",
+      "state": "todo",
+      "group": "LK",
+      "deps": ["LK-01"],
+      "yolo": true,
+      "at": "2026-11-11T03:47:23Z",
+      "by": "dsh",
+      "desc": "One stylesheet is shared by the Site and the App, so this is the base both wear: the K7 palette, the shadow kill, the 7px panel radius, pills, scrollbars, selection, focus, disabled; then the installed primitives in components/ui and components/reui (Button, Card, Input, Select, menu rows, Table, Tabs, Progress, Skeleton, Separator, Dialog/Sheet/Tooltip, Badge, Alert, Avatar) restyled onto outline/fill, one hue and a 1.25 icon stroke, with overlays retimed to linear 100ms or a cut. Done when every primitive renders in default, hover, focus, active and disabled on a K7 page, no raw colour lives outside the theme file, and the spec's greps pass outside its documented exceptions."
+    },
+    {
+      "id": "LK-03",
+      "title": "The shell wears the K7 ink and the stage is framed",
+      "state": "todo",
+      "group": "LK",
+      "deps": ["LK-02"],
+      "at": "2026-11-11T03:47:23Z",
+      "by": "dsh",
+      "desc": "The sidebar keeps its structure (device menu, install, two nav groups with counts, collapse) and takes the K7 treatment: logo tile, outlined rows with the current row filled, count chips, Settings in the footer, a 1px frame and 5px gutters around the stage, and the PlayerBar as the footer bar. No K7Shell, no navigation changes. Done when every route renders under the same frame, keyboard focus and the collapse mode still work, and a screenshot at desktop and at 800x480 shows one shell."
+    },
+    {
+      "id": "LK-04",
+      "title": "The four nav areas become K7 screens",
+      "state": "todo",
+      "group": "LK",
+      "deps": ["LK-03"],
+      "at": "2026-11-11T03:47:23Z",
+      "by": "dsh",
+      "desc": "Process, Media, Playlists and Ask are re-laid out in the K7 language: outlined modules with micro-label titles, pill controls, filled rows for the current thing, and empty, loading and error states in K7. The coverflow stays exactly as it is. Copy, props, routing and behaviour keep working. Done when each area renders in all three states, the coverflow is unchanged in its own surface, and keyboard and screen-reader roles are as they were."
+    },
+    {
+      "id": "LK-05",
+      "title": "The remaining routes become K7 screens",
+      "state": "todo",
+      "group": "LK",
+      "deps": ["LK-04"],
+      "at": "2026-11-11T03:47:23Z",
+      "by": "dsh",
+      "desc": "Settings, Artist, Video, album detail, the playlist editor, drive and not-found get the same treatment, including Settings' forms (labels left, pill inputs, K7 switch and toggle groups) and the state pills that replace the old success/warning badges. Done when no route renders a ReUI-shaped control, every state is covered, and typecheck and tests pass."
+    },
+    {
+      "id": "LK-06",
+      "title": "The Site becomes a K7 page",
+      "state": "todo",
+      "group": "LK",
+      "deps": ["LK-02"],
+      "at": "2026-11-11T03:47:23Z",
+      "by": "dsh",
+      "desc": "The front door at / becomes the K7 page: near-black, one accent, line-art hero (the panel drawing, or live K7 art if it earns its place), flash and install sections in the K7 language, footer as the licence trail, and the browser chrome and icons following the dark palette. Content imagery, including a future device photograph, is allowed. Done when / renders K7, install and flash still work, and the page passes the same greps as the App."
+    },
+    {
+      "id": "LK-07",
+      "title": "The K7 look is verified and reported",
+      "state": "todo",
+      "group": "LK",
+      "deps": ["LK-04", "LK-05", "LK-06"],
+      "at": "2026-11-11T03:47:23Z",
+      "by": "dsh",
+      "desc": "Run the spec's verification as a script: the grep suite with its documented exceptions, a screenshot of every screen at desktop and 800x480, contrast and focus checks, reduced motion, and a build-size comparison. Report changed files by step, before and after grep counts, anything that could not follow the rules and why, and any token tuned. Done when every checklist box has evidence and typecheck, tests and build pass."
     }
   ]
 }

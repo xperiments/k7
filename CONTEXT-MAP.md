@@ -39,7 +39,8 @@ refused, not scheduled.
   ([ADR 0078](./docs/adr/0078-the-site-owns-the-root-and-the-app-moves-to-app.md),
   [ADR 0079](./docs/adr/0079-the-firmware-is-flashed-in-parts-from-the-browser.md)). Specified in
   [`docs/specs/k7-app.md`](./docs/specs/k7-app.md) and
-  [`docs/specs/k7-site.md`](./docs/specs/k7-site.md); deployment in
+  [`docs/specs/k7-site.md`](./docs/specs/k7-site.md); its look in
+  [`docs/specs/k7-look.md`](./docs/specs/k7-look.md); deployment in
   [`docs/specs/k7-deploy.md`](./docs/specs/k7-deploy.md).
 - [Radio player](./docs/research/01-library-architecture.md) — an ESP32-S3 that consumes
   someone else's internet radio stream and plays it out to a DAC over I2S. Researched in

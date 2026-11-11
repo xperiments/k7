@@ -1,0 +1,530 @@
+# The K7 look: one near-black page, one accent, line art
+
+**Goal.** The App at `/app` and the Site at `/` are one instrument drawn as a technical
+schematic: a thin orange outline on near-black, one hue, outline for what is available and fill
+for what is current. The look is carried by the theme tokens and the installed primitives, so a
+screen is not restyled one by one; and it is one look for both documents, because `/` and `/app`
+share one stylesheet and one set of primitives.
+
+**Status.** Specified. LK-02 to LK-07 move the App and the Site onto it; until they land, the
+stylesheet still carries a light palette and the shell still has a theme toggle. The calls this
+repository took against the guide that preceded this file are recorded in
+[ADR 0080](../adr/0080-the-k7-look-is-the-products-one-skin.md) and marked **[ADR]** below.
+
+**Reference.** The ten scene drawings in [`docs/images/screens/`](../images/screens/), all of them
+in [`contact-sheet.png`](../images/screens/contact-sheet.png): scenes 0–4 and 6–8 are the K7 look;
+scenes 5 and 9 are the grey "Real" takes and are not. The sheet is a device drawing, so its rail,
+knobs and meters are the kit §5 says this App does not build; the ink, the frame, the filled logo
+tile, the footer pill and the filled rows are what carry over.
+
+**Vocabulary:** [`web/CONTEXT.md`](../../web/CONTEXT.md) — **App**, **Site**, **Area**,
+**Route**. The App is specified in [`k7-app.md`](./k7-app.md), the Site in
+[`k7-site.md`](./k7-site.md).
+
+---
+
+## 0. Read this first
+
+**The order of work.** The tasks that carry it are named in brackets.
+
+1. Audit the codebase. **[LK-02]**
+2. Install the tokens. **[LK-02]**
+3. Set the global CSS. **[LK-02]**
+4. Restyle the primitives in `web/src/components/ui` and `web/src/components/reui`. **[LK-02]**
+5. The shell. **[LK-03]**
+6. The screens. **[LK-04, LK-05]**
+7. Icons, images and assets. **[LK-04, LK-05, LK-06]**
+8. Motion. **[LK-02, LK-03]**
+9. Clean up and verify. **[LK-07]**
+
+**Hard constraints.**
+
+- Only two hues exist: the near-black background and the one orange accent, plus its alpha
+  variants and one very dark brown-orange for recessed wells. No other colour anywhere,
+  including error, success and warning states.
+- Dark theme only. Both documents carry `class="dark"` on `<html>`; there is no light palette and
+  no theme control. **[ADR]**
+- No shadows, gradients, blur, glow, photos, rounded photo thumbnails or multi-colour charts, in
+  UI chrome. Two exceptions: the coverflow (§5.3), and content images (§5.4). **[ADR]**
+- Change visuals only. Do not change props, behaviour, routing, data flow, or accessibility
+  semantics. Keep every Base UI / Radix `data-*` and `aria-*` attribute the components already
+  expose, because the styling hooks onto them.
+- Installed components are owned code. Edit them in place in `web/src/components/ui` and
+  `web/src/components/reui` rather than wrapping them. **[ADR]**
+- When something in this guide does not fit a component, apply §1 and note the decision in the
+  final report.
+
+---
+
+## 1. The visual rules
+
+**K1. Outline = available, fill = current.** Anything the user can choose is an outline. The one
+thing currently selected, active or on is solid orange with dark text or icon. This applies to
+navigation, tabs, filters, toggles, menu rows, chips, radio and checkbox states.
+
+**K2. Hierarchy comes only from outline vs fill, size and spacing.** No colour, weight, shadow or
+elevation tricks.
+
+**K3. Constant shell, swappable stage.** The frame, the sidebar and the footer bar never move.
+Only the stage and the optional side panel change between screens.
+
+**K4. Everything is a module in its own outlined cell.** Gutters are tight and even (5px).
+Nothing floats without an outline unless it is plain text on the background.
+
+**K5. No texture and no gradient, except the coverflow's own (§5.3).** The guide's speaker-grille
+dot matrix is a device drawing; no screen in the App or the Site uses one, so nothing in this
+repo does either.
+
+---
+
+## 2. The tokens
+
+### 2.1 Values
+
+The firmware's values are the source of truth where they exist: `components/app/screen_display/`
+draws the panel with `COL_BLACK 0x111111` and `COL_PRIMARY 0xF15A22`, and the App's accent is
+already `#F15A22`. The guide's `#121212` and `#ff5a1f` were its estimates of the same things.
+**[ADR]**
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `--k7-bg` | `#111111` | Screen background |
+| `--k7-accent` | `#F15A22` | Strokes, text, icons, active fills |
+| `--k7-accent-dim` | accent at 42% | Inactive ticks, empty progress, decorative strokes |
+| `--k7-accent-faint` | accent at 18% | Hover tint, skeletons |
+| `--k7-well` | `#2a0f05` | Recessed fills (wells, inset panels) |
+| `--k7-on-accent` | `--k7-bg` | Text and icons on solid orange |
+
+**K6. The geometry is rem, not px.** The guide's pixel values are measurements of a 16px-root
+document; this App sets `html { font-size: 130% }`, so the same rem value renders 30% larger and
+every proportion holds. The panel radius is `0.4375rem` (7px at a 16px root, about 9px here); the
+5px gutter is `gap-1` (about 5.2px here). Do not convert these to px to "correct" them.
+
+| Metric | Value |
+| --- | --- |
+| Stroke | 1px everywhere, never thicker |
+| Panel radius | `0.4375rem` |
+| Pills, chips, inputs | fully round (`rounded-full`) |
+| Circle controls | icon buttons where a control is a circle; navigation stays rows |
+| Gutter | 5px (`gap-1`) |
+| Icon stroke | 1.25 (lucide `strokeWidth`) |
+
+**K7. Contrast.** Accent on the background is about 6:1 and passes for text. Dark on accent
+also passes. The dim accent (42%) does **not** pass for informational text: use it only for
+decoration, empty states of meters and disabled items. Secondary text is accent at **85%**
+(about 4.7:1), not the guide's 70% (about 3.5:1, which fails AA at this app's sizes).
+
+**K8. One typeface, one weight.** Jura, self-hosted (`web/public/fonts/`), the same face the
+device's LVGL build embeds. Weight 300 for everything; hierarchy comes from size only. Headings
+are not bold. The only 500 is the micro-label chip. Numbers use `tabular-nums`.
+
+**K9. Micro-labels are chips.** Uppercase, weight 500, on a solid accent pill with dark text,
+at `text-xs` — the ReUI floor, 12px at a 16px root and about 15.6px here. Nothing in the App is
+below `text-xs`; the guide's 9–10px chips were device geometry. **[ADR]**
+
+### 2.2 The stylesheet
+
+This block replaces the `:root` and `.dark` palettes in [`web/src/index.css`](../../web/src/index.css).
+The font faces above it and the existing `@theme inline` mappings of the semantic colours stay;
+the lines below are added to them. Both documents (`web/index.html` and `web/app.html`) carry
+`class="dark"` on `<html>`, so the `dark:` utilities in installed components resolve.
+
+```css
+:root {
+  --k7-bg: #111111;
+  --k7-accent: #F15A22;
+  --k7-accent-dim: color-mix(in srgb, var(--k7-accent) 42%, transparent);
+  --k7-accent-faint: color-mix(in srgb, var(--k7-accent) 18%, transparent);
+  --k7-well: #2a0f05;
+  --k7-on-accent: var(--k7-bg);
+  --k7-font: 'Jura', ui-sans-serif, system-ui, sans-serif;
+}
+
+:root, .dark {
+  --background: var(--k7-bg);
+  --foreground: var(--k7-accent);
+  --card: var(--k7-bg);
+  --card-foreground: var(--k7-accent);
+  --popover: var(--k7-bg);
+  --popover-foreground: var(--k7-accent);
+  --primary: var(--k7-accent);
+  --primary-foreground: var(--k7-on-accent);
+  --secondary: transparent;
+  --secondary-foreground: var(--k7-accent);
+  --muted: var(--k7-well);
+  --muted-foreground: color-mix(in srgb, var(--k7-accent) 85%, transparent);
+  --accent: var(--k7-accent);
+  --accent-foreground: var(--k7-on-accent);
+  --destructive: var(--k7-accent);
+  --destructive-foreground: var(--k7-on-accent);
+  --border: var(--k7-accent);
+  --input: var(--k7-accent);
+  --ring: var(--k7-accent);
+  --radius: 0.4375rem;
+  --chart-1: var(--k7-accent);
+  --chart-2: var(--k7-accent-dim);
+  --chart-3: var(--k7-accent-faint);
+  --chart-4: var(--k7-accent);
+  --chart-5: var(--k7-accent-dim);
+  --sidebar: var(--k7-bg);
+  --sidebar-foreground: var(--k7-accent);
+  --sidebar-primary: var(--k7-accent);
+  --sidebar-primary-foreground: var(--k7-on-accent);
+  --sidebar-accent: var(--k7-accent);
+  --sidebar-accent-foreground: var(--k7-on-accent);
+  --sidebar-border: var(--k7-accent);
+  --sidebar-ring: var(--k7-accent);
+  /* No second hue: the state names survive only while an installed file still reads one. */
+  --success: var(--k7-accent);
+  --success-foreground: var(--k7-accent);
+  --info: var(--k7-accent);
+  --info-foreground: var(--k7-accent);
+  --warning: var(--k7-accent);
+  --warning-foreground: var(--k7-accent);
+  --invert: var(--k7-accent);
+  --invert-foreground: var(--k7-bg);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-k7-bg: var(--k7-bg);
+  --color-k7-accent: var(--k7-accent);
+  --color-k7-dim: var(--k7-accent-dim);
+  --color-k7-faint: var(--k7-accent-faint);
+  --color-k7-well: var(--k7-well);
+  --font-sans: var(--k7-font);
+  --radius-panel: 0.4375rem;
+  /* Kill every built-in shadow utility. */
+  --shadow-2xs: none; --shadow-xs: none; --shadow-sm: none; --shadow-md: none;
+  --shadow-lg: none; --shadow-xl: none; --shadow-2xl: none;
+}
+
+@layer base {
+  html, body {
+    background: var(--k7-bg);
+    color: var(--k7-accent);
+    font-family: var(--k7-font);
+    font-weight: 300;
+    letter-spacing: 0.02em;
+  }
+  *, *::before, *::after { border-color: var(--k7-accent); }
+  :focus-visible { outline: 2px solid var(--k7-accent); outline-offset: 2px; }
+}
+```
+
+**K10. Delete the light palette and the control that chose it.** `web/src/ui/theme.ts`, the
+`startTheme()` call in `web/src/main.tsx`, the footer button in `web/src/ui/Shell.tsx`, the
+palette sentence in `web/CONTEXT.md`'s **Settings** entry and the light `:root` block all go. The
+`meta[name="theme-color"]` in both documents becomes `#111111`. **[ADR]**
+
+**K11. Global rules.** Delete any `body` gradient or background image. Scrollbars are thin, with
+an accent thumb on the background track. Selection is accent on dark
+(`::selection { background: var(--k7-accent); color: var(--k7-bg); }`). Disabled is `opacity-40`
+plus `pointer-events-none`, never grey.
+
+---
+
+## 3. The procedure
+
+### 3.1 Audit
+
+1. List every file in `web/src/components/ui` and `web/src/components/reui`, and every custom
+   component under `web/src/ui`. Record which installed components the App and the Site use.
+2. Run the greps in §9.1 and save the counts as a baseline.
+3. Note where the theme is set: `web/index.html`, `web/app.html`, `web/src/main.tsx`,
+   `web/src/ui/theme.ts`. Tailwind is v4, installed through `@tailwindcss/vite`; `components.json`
+   is `base-nova` (Base UI), so selection attributes are `data-[pressed]`, `data-[selected]`,
+   `data-[checked]` and `data-[state=…]`, not Radix's `data-[state=on]`.
+4. List every route and map it to a pattern in §6. A route with no match is the shell plus the
+   modules its content needs.
+
+### 3.2 The rest
+
+1. **Tokens** (§2): replace the palettes, force dark, delete the switcher.
+2. **Global** (§2.2 K11): scrollbars, selection, disabled.
+3. **Primitives** (§4): work top to bottom; after each, render it in every state (default, hover,
+   focus-visible, active/selected, disabled) before moving on.
+4. **The shell** (§5.1).
+5. **The screens** (§6): one area at a time; the coverflow stays as it is.
+6. **Icons, images, assets** (§7).
+7. **Motion** (§8).
+8. **Verify** (§9): no report until every box is checked.
+
+---
+
+## 4. The primitives
+
+**K12. Installed files are the look.** Edit `web/src/components/ui/*` and
+`web/src/components/reui/*` in place. Keep each component's props, its `render` prop, and every
+`data-*` and `aria-*` attribute; the styling hooks onto them. Never wrap an installed component to
+change its look, and never hand-roll one it already provides. ReUI's rules still hold where this
+spec is silent: `gap-*` spacing, nothing below `text-xs`, the accessibility the component ships.
+An edited file is a fork of that file's look: a later `shadcn add` over it would overwrite it, so
+an update is a manual diff. **[ADR]**
+
+**K13. The general recipe.** `border border-primary bg-transparent text-primary shadow-none`.
+Selected/active/on flips to `bg-primary text-primary-foreground`. Hover never changes hue:
+`hover:bg-primary/15` on outline items, and no hover change on filled items. No `transition-colors`
+above 100ms, and no easing (§8).
+
+**K14. The mapping.**
+
+The table is the whole guide; this App installs only the rows it uses — Button, Badge, Card,
+Input, the menus, the overlay, Tooltip, Alert, Avatar, Skeleton, Separator, Switch, Breadcrumb,
+Progress and Sidebar. A row that names a component not installed here is the treatment to apply
+if one is.
+
+| Component | K7 treatment |
+| --- | --- |
+| Button | Outlined pill. `default` = outline. `solid` = filled accent (the current/primary action only). `ghost` = no border until hover, then 1px border. `destructive` = identical to default (no red). `link` = underline, accent. Icon buttons are circles |
+| Badge | Pill outline. The filled variant is the micro-label chip (uppercase, weight 500, `text-xs`) |
+| Card | 1px accent outline, panel radius, transparent background, no shadow, `p-3`. Title weight 300 |
+| Input / Textarea / Select trigger | Transparent, 1px outline, `rounded-full` (textarea: panel radius), placeholder `text-primary/50`, focus is a 2px accent ring |
+| Label / Form description | Accent text, description at 85% |
+| Checkbox | 16px square, 4px radius, outline. Checked is filled with a dark check |
+| Radio | Outlined circle. Checked is a filled inner dot |
+| Switch | Pill track outline. Checked is a filled track with the thumb in the background colour. Unchecked thumb is accent at 50% |
+| Toggle / ToggleGroup | Pills, spaced with `gap-1.5` (not joined segments). On is filled |
+| Tabs | Trigger is a pill. Active is filled. The list has no background or border; the underline indicator is removed |
+| Slider | 1px track at accent 40%, range in solid accent, thumb a 14px outlined circle on the background (filled while dragging) |
+| Progress | 4px pill, solid to the value, dim after |
+| Select / Dropdown / Context / Menubar / Command items | Row style: icon + label + right chevron or value. Highlighted or selected is a full-width filled accent bar with dark text, 4px radius |
+| Popover / Dropdown / Select / HoverCard content | Panel: background, 1px outline, panel radius, no shadow |
+| Dialog / Sheet / AlertDialog | Panel as above. Overlay is `bg-background/80`, no `backdrop-blur`. Close is a circle icon button |
+| Tooltip | Small outlined pill on the background, accent text, no arrow fill |
+| Table | No zebra, no filled header. Rows separated by `border-b border-primary/30`. Header text `text-primary/85`. Selected row is a filled bar |
+| Accordion / Collapsible | Each item an outlined panel. An open item's header is a filled bar only when it is the current selection; otherwise it stays outline. Chevron icon, no rotation easing |
+| Alert | Outlined panel with a line icon. All variants identical (no colours) |
+| Sonner / Toast | Outlined panel on the background, pill action button |
+| Avatar | Outlined circle with initials or a line icon. A content portrait is §5.4 |
+| Skeleton | `bg-primary/15`, no pulse |
+| Separator | 1px `bg-primary/40` |
+| Breadcrumb / Pagination | Accent text, chevrons as line icons. Current page is a filled pill |
+| Calendar | Day cells are circles. Selected is a filled circle, today is an outlined circle, outside days at 42% |
+| Sidebar | The App's shell then re-inked (§5.1): logo tile, outlined rows, the current row filled, count chips |
+| Navigation Menu | Pill triggers, panel content |
+| Scroll Area | Thin scrollbar, accent thumb |
+
+**K15. Button reference.** The App's Button keeps its `render` prop and its cva; this is the class
+string it should end up with.
+
+```tsx
+const buttonVariants = cva(
+  'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-primary bg-transparent font-light tracking-wide text-primary outline-none transition-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-selected:bg-primary aria-selected:text-primary-foreground data-[pressed]:bg-primary data-[pressed]:text-primary-foreground data-[selected]:bg-primary data-[selected]:text-primary-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:stroke-[1.25]',
+  {
+    variants: {
+      variant: {
+        default: 'hover:bg-primary/15',
+        solid: 'bg-primary text-primary-foreground',
+        ghost: 'border-transparent hover:border-primary',
+        destructive: 'hover:bg-primary/15',
+        link: 'rounded-none border-transparent underline underline-offset-4',
+      },
+      size: {
+        sm: 'h-7 px-3 text-xs',
+        default: 'h-9 px-4 text-sm',
+        lg: 'h-11 px-6 text-base',
+        icon: 'size-10 p-0',
+      },
+    },
+    defaultVariants: { variant: 'default', size: 'default' },
+  }
+)
+```
+
+**K16. Row reference.** Menu rows, sidebar rows and table rows share it.
+
+```tsx
+const row = 'flex items-center gap-2.5 rounded-[4px] px-2.5 py-1.5 text-primary outline-none data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground aria-selected:bg-primary aria-selected:text-primary-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]'
+```
+
+Put a trailing value (for example `OFF`) or a chevron at the far right with `ml-auto`. Values are
+small text in the same colour, not a badge.
+
+---
+
+## 5. The shell, the kit and the exceptions
+
+### 5.1 The shell
+
+**K17. The sidebar stays; it wears the K7 ink, and the stage is framed.** The structure is the
+one built from `c-sidebar-1` and ADR 0052: the device menu and install in the header, two nav
+groups with count badges, Settings in the footer, the collapsible inset, and the PlayerBar
+across the bottom. No `K7Shell` and no three-button rail: the App has four destinations, a device
+menu and an install control, and a rail of three circles would either drop them or invent a menu
+the guide does not specify. **[ADR]**
+
+- The frame is 1px accent, panel radius, 5px padding and 5px gutters; the sidebar, its header and
+  the footer bar sit in it and do not move.
+- The logo tile is a solid accent square with `k7logo.svg` painted in the background colour — the
+  reference's tile is filled, not outlined — and its wordmark is the only bold text in the system.
+- Nav rows are outlined; the current one is a filled bar with dark text and icon. Counts are
+  micro-label chips. Collapse keeps working.
+- The PlayerBar is the footer bar: the footer pill's geometry where it is a bar, and its scrub
+  is the K7 progress treatment (solid to the playhead, dim after).
+
+### 5.2 The kit
+
+**K18. The App builds no new K7 component kit.** The guide's §5 pieces are the device's; here the
+installed primitives carry the look, and a composite is a variant in an installed file, not a new
+component.
+
+| Guide | In this repo |
+| --- | --- |
+| 5.1 Shell, 5.2 NavButton | The sidebar, re-inked (K17); no `K7Shell`, no rail |
+| 5.3 FooterPill / ProgressPill | The PlayerBar (§5.1) |
+| 5.4 MenuList / MenuRow | The row style (K16) in the sidebar, menus and tables |
+| 5.5 ModePills | Single-select groups drawn as filled/outlined pills |
+| 5.6 Knob, 5.7 VuMeter, 5.8 SpeakerGrille | Not built: no screen in the App or the Site has a knob, a meter or a grille |
+| 5.9 StatePill | The Badge's filled variant, carrying the state's word |
+| 5.10 CassetteArt | The coverflow's own case, preserved (§5.3) |
+
+### 5.3 The coverflow
+
+**K19. The album shelf is the one preserved surface.** `web/src/ui/album-shelf.tsx` and the
+`.k7-shelf` / `.k7-case` / `.k7-mini` rules in `web/src/index.css` keep their drawing, their
+`hueOf` case colours, their 3D geometry, their masks and their 300ms
+`cubic-bezier(0.22, 1, 0.36, 1)` turn. They are not re-drawn as line art, not monochromed, and
+not retimed. The stage around them is K7. **[ADR]**
+
+### 5.4 Content images
+
+**K20. An image that is content keeps its colour; an image that is chrome does not exist.** Album
+covers (the 422px AVIF cache) and the Site's hero (the panel drawing, or a future device
+photograph in S11's slot) are content: they render in full colour inside an outlined frame, with
+no shadow, no rounded thumbnail and no grayscale or multiply blend. UI chrome is 1px line art and
+SVG in `currentColor`; there is no raster logo, icon or decorative photograph. **[ADR]**
+
+---
+
+## 6. The screens
+
+**K21. Every area is the shell plus modules.** One outline per module, one micro-label chip at
+the module's top-left as its title, and the current thing filled.
+
+| Area | Pattern |
+| --- | --- |
+| Process | A column of outlined panels: the drop zone, the queue rows, the run controls. The queue's running state is a filled row and a filled action |
+| Media | The coverflow exactly as it is (§5.3), with the album detail, artist and video routes as outlined panels around it |
+| Playlists | The list as rows; the editor as panels (search, blocks, actions); the current block is filled |
+| Ask | The prompt is a pill input; the intent is a panel of rows and controls; errors are K22 |
+| Settings | A column of outlined panels, one per group. Labels left, controls right, pill inputs |
+| Player | The device's facts as modules; the primary action is one filled pill |
+| Site | See [`k7-site.md`](./k7-site.md): the hero, the flash section and the install section are modules, and the footer is the licence trail |
+
+**K22. States are shape and words, not hue.** Every data region has an empty state (with one
+action), a loading state (a `Skeleton` in the real layout) and an error state (a retry, plus a
+sentence naming the failure). An error or a warning is a filled bar or panel with a line icon and
+its word — "Unmarked card", "The provider did not answer" — never a second colour. A destructive
+confirm is a panel whose action is the filled variant (the `AlertDialog` treatment, K14). **[ADR]**
+
+---
+
+## 7. Icons, images and assets
+
+**K23. One icon library, one stroke.** Lucide, `strokeWidth={1.25}` everywhere (a global
+`[&_svg]:stroke-[1.25]` or a wrapper), `currentColor`, line style only. No filled, duotone,
+coloured or emoji icon. The rail glyphs of the device are not this App's icons; the sidebar's
+icons are the ones the areas already use.
+
+**K24. No charts, and the rule if one arrives.** The App has no charting dependency. A chart
+added later follows the guide: `var(--chart-1)` strokes at 1px, no fills, no gradients, no dots
+unless a point is selected, grid at 42% with `1 4` dash, series separated by dim vs solid or
+dashes rather than hue, and axes at `text-primary/85` and `text-xs`.
+
+**K25. Assets.** The logo and every glyph are SVG in `currentColor`, inlined where CSS variables
+must reach them (the sidebar logo uses a mask for that reason). Covers and the Site's hero are
+content (§5.4). No external font or CSS: Jura is self-hosted and preloaded.
+
+---
+
+## 8. Motion
+
+**K26. Mechanical.** Nothing eased, bouncy, blurred or faded. Overlays cut, or fade opacity 0→1
+over at most 100ms linear; `zoom-in-*`, `slide-in-*` and `animate-in` are removed, as is
+`backdrop-blur`. `Skeleton` does not pulse. `transition-all` and `transition-shadow` become
+`transition-colors` or nothing. Hover is an instant ink swap, or at most 100ms linear. The
+spinner stays: it is feedback, not decoration. The one exception is the coverflow's 300ms curve
+(K19). **[ADR]**
+
+**K27. Reduced motion means none.** Under `prefers-reduced-motion: reduce`, no transition and no
+rotation; not a calmer fade.
+
+**K28. Scene changes are cuts.** Changing route swaps the stage and keeps the shell; there is no
+page transition and no entrance animation.
+
+---
+
+## 9. Verification
+
+### 9.1 Automated checks
+
+All must return zero hits outside the exceptions named below.
+
+```bash
+# Hard-coded colours (the theme file and the coverflow rules are the exceptions).
+grep -rnE '#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|oklch\(' web/src --include=*.tsx --include=*.ts --include=*.css \
+  | grep -v 'index.css'
+
+# Tailwind palette colours.
+grep -rnE '(bg|text|border|ring|fill|stroke|from|to|via|outline|divide|shadow)-(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|white|black)(-[0-9]+)?' web/src
+
+# Forbidden decoration.
+grep -rnE 'shadow-|bg-gradient|from-|to-|via-|backdrop-blur|blur-|drop-shadow|ring-offset-[0-9]' web/src
+
+# Wrong radii and weights.
+grep -rnE 'rounded-(lg|xl|2xl|3xl)|font-(semibold|bold)' web/src
+
+# Raster images in UI chrome.
+grep -rnE '<img|next/image|\.(png|jpg|jpeg|webp)' web/src
+```
+
+**Allowed exceptions:** `shadow-none`, the coverflow's rules in `index.css` (its masks, its
+shading and its hues), `font-medium` on the micro-label chip, the focus ring offset in the
+button, the cover images and the Site's hero (`<img>` for content), and the theme file itself.
+
+### 9.2 Visual checklist
+
+- [ ] Background is flat near-black; no gradients or images in chrome.
+- [ ] Every visible stroke is 1px and orange, or its dim variant.
+- [ ] Every text, icon and border is orange or dark-on-orange. No white, no grey.
+- [ ] In every list, tab group, nav and toggle set, exactly one item is filled and the rest are
+      outlined.
+- [ ] Buttons, inputs, chips and toggles are pills. Panels use the panel radius. Circle controls
+      are circles.
+- [ ] The shell (frame, sidebar, footer bar) is identical on every screen.
+- [ ] No shadows or blurs, including on dialogs, dropdowns and toasts.
+- [ ] Typography is weight 300; the only bolder text is the chip and the logo wordmark.
+- [ ] Charts, if any, have no colours beyond accent, dim and faint.
+- [ ] Disabled items are dimmed, not grey.
+- [ ] The coverflow is unchanged in its own surface, and the stage around it is K7.
+- [ ] Content images are in colour and in an outlined frame.
+
+### 9.3 Behavioural checklist
+
+- [ ] Every keyboard interaction still works, and every focusable element shows the 2px accent
+      focus ring.
+- [ ] Screen-reader roles and labels are unchanged; composites expose the right roles.
+- [ ] Informational text uses accent or 85% accent, never the 42% dim.
+- [ ] Reduced motion disables rotation and transitions.
+- [ ] The App works at desktop and at 800x480, and the Site at both.
+- [ ] The production build size did not grow meaningfully (fonts and SVG only).
+
+### 9.4 Final report
+
+1. The changed files, grouped by step.
+2. Before/after counts for every grep in §9.1.
+3. Components or screens that could not follow the rules, the reason and the closest compromise.
+4. Any token tuned, and why.
+
+---
+
+## 10. Do and don't
+
+**Do:** use outline and fill for state; keep gutters at 5px; put one micro-label chip on each
+module; reuse the same three or four shapes; use `currentColor` for all SVG; keep text at weight
+300.
+
+**Don't:** add a second hue for errors or success; add shadows, glow or blur; use filled cards;
+use bold headings; mix radii; use photos in chrome; animate with easing; introduce a gradient
+other than the coverflow's own.
