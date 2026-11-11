@@ -3,12 +3,12 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-foreground/45 bg-transparent font-light tracking-wide text-foreground outline-none select-none transition-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-expanded:bg-foreground/10 data-[pressed]:bg-primary data-[pressed]:text-primary-foreground data-[selected]:bg-primary data-[selected]:text-primary-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg]:stroke-[1.25]",
+  "group/button inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-foreground/45 bg-transparent font-light tracking-wide text-foreground outline-none select-none transition-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 aria-pressed:border-primary aria-pressed:text-primary aria-expanded:bg-foreground/10 data-[pressed]:border-primary data-[pressed]:text-primary data-[selected]:border-primary data-[selected]:text-primary [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg]:stroke-[1.25]",
   {
     variants: {
       variant: {
         default: "hover:bg-foreground/10",
-        solid: "bg-primary text-primary-foreground",
+        solid: "border-primary bg-transparent text-primary hover:bg-primary/10",
         outline: "hover:bg-foreground/10",
         secondary: "hover:bg-foreground/10",
         ghost: "border-transparent hover:border-foreground/45",

@@ -68,7 +68,7 @@ static const char PAGE[] =
     "border:1px solid #2e3030;border-radius:7px;background:#121314;color:#a6a8a8}\n"
     "input::placeholder{color:#858787}\n"
     "button{margin-top:.6rem;padding:.6rem 1rem;font-size:1rem;border-radius:7px;"
-    "border:1px solid #F15A22;background:#F15A22;color:#111111;width:100%;font-weight:300}\n"
+    "border:1px solid #F15A22;background:transparent;color:#F15A22;width:100%;font-weight:300}\n"
     "button.alt{background:transparent;color:#a6a8a8;border-color:#5a5c5c}\n"
     "button:disabled{opacity:.45}\n"
     "small{display:block;margin-top:.5rem;color:#858787;font-size:.78rem}\n"

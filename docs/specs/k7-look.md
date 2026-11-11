@@ -44,7 +44,7 @@ tile, the footer pill and the filled rows are what carry over.
 
 - One hue and one neutral: the orange accent (the **primary**) and a light neutral ink (the
   **secondary**), on a near-black page, plus alpha variants and one recessed well. The accent
-  marks the brand, chips, the current segment, filled actions and the scrollbar; the neutral
+  marks the brand, chips, the current button's border and text, and the scrollbar; the neutral
   carries text, control outlines, panel lines and the rail's current dome. No other colour
   anywhere, including error, success and warning states. **[ADR 0081]**
 - Dark theme only. Both documents carry `class="dark"` on `<html>`; there is no light palette and
@@ -63,11 +63,11 @@ tile, the footer pill and the filled rows are what carry over.
 
 ## 1. The visual rules
 
-**K1. Outline = available, fill = current.** Anything the user can choose is an outline. The one
-thing currently selected, active or on is a fill with dark text or icon: the accent for a
-segment, a chip, a menu row or a filled action, and the neutral for the rail's current dome.
-This applies to navigation, tabs, filters, toggles, menu rows, chips, radio and checkbox
-states.
+**K1. A control is an outline; a current mark is a fill.** A button is an outline — the accent
+outline when it is the primary action or the current segment, the neutral outline otherwise. A
+chip, a menu row, a list row and the rail's dome are fills when current: the accent for a chip,
+the neutral for the rest, with dark text. This applies to navigation, tabs, filters, toggles,
+menu rows, chips, radio and checkbox states.
 
 **K2. Hierarchy comes only from outline vs fill, size and spacing.** No colour, weight, shadow or
 elevation tricks.
@@ -96,7 +96,7 @@ firmware value to borrow — they are the secondary the product was missing. **[
 | Token | Value | Use |
 | --- | --- | --- |
 | `--k7-bg` | `#17181a` | Page background |
-| `--k7-accent` | `#F15A22` | Brand, chips, current segment, filled action, scrollbar |
+| `--k7-accent` | `#F15A22` | Brand, chips, a current button's border and text, scrollbar |
 | `--k7-ink` | `#a6a8a8` | Text, control outlines, tree and menu rows |
 | `--k7-ink-dim` | `#858787` | Secondary text, inactive icons |
 | `--k7-line` | `#2e3030` | Panel edges, dividers |
@@ -295,7 +295,7 @@ if one is.
 
 | Component | K7 treatment |
 | --- | --- |
-| Button | Outlined pill in the neutral ink (`border-foreground/45 text-foreground`). `default` = outline. `solid` = accent fill with dark text (the primary action only). `ghost` = no border until hover, then a 1px neutral border. `destructive` = identical to default (no red). `link` = underline, neutral. Icon buttons are circles |
+| Button | Outlined pill in the neutral ink (`border-foreground/45 text-foreground`). `default` = outline. `solid` = accent outline, border and text (the primary action only; the name is historical). `ghost` = no border until hover, then a 1px neutral border. `destructive` = identical to default (no red). `link` = underline, neutral. Icon buttons are circles. The fill is reserved for chips, rows and the rail's dome |
 | Badge | Pill with no border: the filled variant is the accent micro-label chip (uppercase, weight 500, `text-xs`), the quiet variants a neutral tint |
 | Card | 1px neutral line (`border-border`), panel radius, transparent background, no shadow, `p-3`. Title weight 300 |
 | Input / Textarea / Select trigger | Transparent, 1px neutral outline (`border-foreground/40`), `rounded-full` (textarea: panel radius), text in the neutral ink, placeholder `text-foreground/50`, focus is a 2px accent ring |
@@ -303,8 +303,8 @@ if one is.
 | Checkbox | 16px square, 4px radius, neutral outline. Checked is an accent fill with a dark check |
 | Radio | Neutral outlined circle. Checked is a filled accent inner dot |
 | Switch | Pill track in the neutral outline. Checked is an accent track with the thumb in the background colour. Unchecked thumb is the neutral at 50% |
-| Toggle / ToggleGroup | Pills, spaced with `gap-1.5` (not joined segments). On is an accent fill |
-| Tabs | Trigger is a pill. Active is an accent fill. The list has no background or border; the underline indicator is removed |
+| Toggle / ToggleGroup | Pills, spaced with `gap-1.5` (not joined segments). On is an accent outline |
+| Tabs | Trigger is a pill. Active is an accent outline. The list has no background or border; the underline indicator is removed |
 | Slider | 1px track at neutral 40%, range in the accent, thumb a 14px outlined circle on the background (filled while dragging) |
 | Progress | 4px pill, accent to the value, neutral after |
 | Select / Dropdown / Context / Menubar / Command items | Row style: icon + label + right chevron or value. Highlighted or selected is a full-width filled neutral bar with dark text, 4px radius |
@@ -312,7 +312,7 @@ if one is.
 | Dialog / Sheet / AlertDialog | Panel as above. Overlay is `bg-background/80`, no `backdrop-blur`. Close is a circle icon button |
 | Tooltip | Small outlined pill in the neutral, neutral text, no arrow fill |
 | Table | No zebra, no filled header. Rows separated by `border-b border-border`. Header text `text-muted-foreground`. Selected row is a filled neutral bar |
-| Accordion / Collapsible | Each item an outlined panel. An open item's header is an accent fill only when it is the current selection; otherwise it stays outline. Chevron icon, no rotation easing |
+| Accordion / Collapsible | Each item an outlined panel. An open item's header is an accent outline only when it is the current selection; otherwise it stays neutral. Chevron icon, no rotation easing |
 | Alert | Outlined panel in the neutral line with a line icon. All variants identical (no colours) |
 | Sonner / Toast | Outlined panel on the background, pill action button |
 | Avatar | Outlined circle with initials or a line icon. A content portrait is §5.4 |
@@ -329,12 +329,12 @@ string it should end up with.
 
 ```tsx
 const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-foreground/45 bg-transparent font-light tracking-wide text-foreground outline-none transition-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-expanded:bg-foreground/10 data-[pressed]:bg-primary data-[pressed]:text-primary-foreground data-[selected]:bg-primary data-[selected]:text-primary-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:stroke-[1.25]',
+  'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-foreground/45 bg-transparent font-light tracking-wide text-foreground outline-none transition-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 aria-pressed:border-primary aria-pressed:text-primary aria-expanded:bg-foreground/10 data-[pressed]:border-primary data-[pressed]:text-primary data-[selected]:border-primary data-[selected]:text-primary [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:stroke-[1.25]',
   {
     variants: {
       variant: {
         default: 'hover:bg-foreground/10',
-        solid: 'bg-primary text-primary-foreground',
+        solid: 'border-primary bg-transparent text-primary hover:bg-primary/10',
         ghost: 'border-transparent hover:border-foreground/45',
         destructive: 'hover:bg-foreground/10',
         link: 'rounded-none border-transparent underline underline-offset-4',

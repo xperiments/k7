@@ -135,7 +135,7 @@ export function VideoArea({ id }: { id: string }) {
           >
             <img src={poster} alt="" className="size-full object-contain" />
             <span className="absolute inset-0 flex items-center justify-center bg-background/40 group-hover:bg-background/20">
-              <span className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <span className="flex size-14 items-center justify-center rounded-full border border-primary bg-transparent text-primary">
                 <Play aria-hidden="true" className="size-6" />
               </span>
             </span>

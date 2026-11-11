@@ -14,7 +14,8 @@ measures 4.9:1 where the guide's 70% and 85% accents measured 3.3 and 4.3.
 ## Decision
 
 - **The orange is the primary.** It marks the brand tile, the chips, the current segment (the
-  Carousel/Drive switch, a mood pill, a tab), a filled action, the scrollbar and the focus ring.
+  Carousel/Drive switch, a mood pill, a tab) as an outline, a primary action's border and text,
+  the scrollbar and the focus ring.
 - **The neutral ink is the secondary.** It carries text, control outlines, tree and menu rows,
   panel lines, dividers and the rail's current dome; its dim tone carries secondary text.
 - **The tokens:** `#17181a` page, `#F15A22` accent, `#a6a8a8` ink, `#858787` dim, `#2e3030` line,
