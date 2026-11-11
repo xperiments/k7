@@ -462,7 +462,7 @@
 
     .k7-left {
         display: flex;
-        align-items: center;
+        align-items: flex-end;
         justify-content: center;
         overflow: clip;
         transform: rotateY(-90deg) translateZ(calc(var(--cw) / 2));
