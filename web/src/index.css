@@ -286,8 +286,6 @@
         height: calc(var(--ch) + 0.5rem);
         overflow: clip;
         perspective: 90rem;
-        touch-action: pan-y;
-        cursor: grab;
         /* The row does not end at the column's edge: it fades into the page there, so a
            shelf that continues past the fold reads as continuing rather than as cut. The
            mask fades the cases themselves, which is why there is no overlay to click
@@ -340,10 +338,6 @@
        be taller than the case. */
     .k7-mini .k7-cover-fallback {
         font-size: 1rem;
-    }
-
-    .k7-shelf:active {
-        cursor: grabbing;
     }
 
     .k7-shelf:focus-visible {

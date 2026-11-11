@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -64,7 +64,6 @@ export function AlbumShelf({
   /** A clicked case (not an arrow, not a letter): the caller may open its tracks. */
   onOpen?: () => void;
 }) {
-  const dragFrom = useRef<number | null>(null);
   const section = useRef<HTMLElement>(null);
   /* The shelf has a natural height; when the stage is shorter than it, the whole carousel —
    * cases, letters, arrows and the name — is scaled down together so nothing is pushed
@@ -86,10 +85,6 @@ export function AlbumShelf({
     fitToStage();
     return () => observer.disconnect();
   }, []);
-  /* A drag ends with a click on whatever case the finger left; that click must not also
-   * select it, or the row moves twice for one gesture. */
-  const dragged = useRef(false);
-
   const count = albums.length;
   const at = Math.min(selected, Math.max(0, count - 1));
   const active = albums[at];
@@ -98,6 +93,21 @@ export function AlbumShelf({
     (delta: number) => onSelect(Math.min(Math.max(0, at + delta), Math.max(0, count - 1))),
     [at, count, onSelect],
   );
+
+  /* The arrows walk the shelf from anywhere in the Media view, not only while it holds the
+   * focus; a text field keeps its own arrows, and the pointer no longer drags the row. */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      event.preventDefault();
+      go(event.key === 'ArrowLeft' ? -1 : 1);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [go]);
 
   if (!active) return null;
 
@@ -114,30 +124,6 @@ export function AlbumShelf({
           role="group"
           aria-roledescription="album shelf"
           tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowRight') {
-              event.preventDefault();
-              go(1);
-            } else if (event.key === 'ArrowLeft') {
-              event.preventDefault();
-              go(-1);
-            }
-          }}
-          onPointerDown={(event) => {
-            dragFrom.current = event.clientX;
-            dragged.current = false;
-          }}
-          onPointerUp={(event) => {
-            const from = dragFrom.current;
-            dragFrom.current = null;
-            if (from === null) return;
-            const dx = event.clientX - from;
-            dragged.current = Math.abs(dx) > 10;
-            if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
-          }}
-          onPointerCancel={() => {
-            dragFrom.current = null;
-          }}
         >
           <div className="k7-shelf-row">
             {albums.map((album, index) => {
@@ -158,10 +144,6 @@ export function AlbumShelf({
                     aria-label={`${album.album} — ${byline(album)}`}
                     aria-current={activeCase ? 'true' : undefined}
                     onClick={() => {
-                      if (dragged.current) {
-                        dragged.current = false;
-                        return;
-                      }
                       onSelect(index);
                       onOpen?.();
                     }}

@@ -53,7 +53,8 @@ Media's first view: the album shelf, the cases on their short ends with the sele
 to face the reader. The name is the walk along the row; there is nothing that rotates, swipes or
 advances on a timer. The shelf has the whole stage; clicking a case opens that album's tracks
 beside it, walking the row with the arrows keeps them open, and a click outside (or Escape)
-closes them. A letter in the index walks every case of the row to that artist's first album rather than
+closes them. The left/right arrow keys walk the row from anywhere in the Media view — a text
+field keeps its own arrows — and the pointer no longer drags the shelf. A letter in the index walks every case of the row to that artist's first album rather than
 teleporting; the walk takes about a second within a letter and up to three across the
 alphabet. The index can instead file the shelf by **genre** — an album's most common genre
 tag — and then the rail's rows are the genre names. Choosing a genre narrows the shelf to
