@@ -29,6 +29,17 @@ static uint32_t now_ms(void)
     return (uint32_t)(esp_timer_get_time() / 1000);
 }
 
+/* The whole setup surface — the page and all seven routes — exists only while the setup
+ * network does (ADR 0077). Outside that window these paths are 404, exactly like any other
+ * path this device does not serve, so a device sitting happily on its LAN has no page that
+ * can rewrite its network. */
+static bool surface_open(void)
+{
+    setup_status_t st;
+    setup_status(&st);
+    return st.session;
+}
+
 /* -------------------------------------------------------------------- the page */
 
 static const char PAGE[] =
@@ -195,6 +206,10 @@ static const char PAGE[] =
 static http_result_t page_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
+    if (!surface_open()) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
     if (strcmp(req->path, "/setup") != 0) {
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
@@ -231,6 +246,10 @@ static bool tok_is(const char *body, const json_tok_t *t, const char *want)
 static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
+    if (!surface_open()) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
     if (strcmp(req->path, "/api/setup") != 0) {
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
@@ -294,6 +313,10 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
 static http_result_t scan_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
+    if (!surface_open()) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
     if (strcmp(req->path, "/api/setup/scan") != 0) {
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
@@ -337,6 +360,10 @@ static http_result_t scan_route(int fd, const http_request_t *req, void *ctx)
 static http_result_t join_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
+    if (!surface_open()) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
     if (strcmp(req->path, "/api/setup/join") != 0) {
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
@@ -393,6 +420,10 @@ static http_result_t join_route(int fd, const http_request_t *req, void *ctx)
 static http_result_t ap_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
+    if (!surface_open()) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
     if (strcmp(req->path, "/api/setup/ap") != 0) {
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
@@ -427,6 +458,10 @@ static http_result_t ap_route(int fd, const http_request_t *req, void *ctx)
 static http_result_t ap_password_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
+    if (!surface_open()) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
     if (strcmp(req->path, "/api/setup/ap-password") != 0) {
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;
@@ -449,6 +484,10 @@ static http_result_t ap_password_route(int fd, const http_request_t *req, void *
 static http_result_t forget_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
+    if (!surface_open()) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
     if (strcmp(req->path, "/api/setup/forget") != 0) {
         http_send_error(fd, 404, "no such path");
         return HTTP_HANDLED;

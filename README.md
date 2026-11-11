@@ -30,7 +30,9 @@ rate and encoded to MP3 for the stream.
 > anywhere: not on the index, not on the stream, not on `/setup`, and not on
 > `/api/play` or `/mcp`. (`/stream` deliberately stays open even if auth is ever
 > added — car head units and hardware players cannot send credentials in a stream
-> URL.)
+> URL.) The setup page and its API are the exception in the other
+> direction: they exist only while the `K7.local` hotspot is up, so a device on your LAN
+> serves no page that can rewrite its network.
 >
 > That is a deliberate choice for a LAN appliance holding audio you own. It is
 > **not** safe on an untrusted network, and it must **not** be port-forwarded or

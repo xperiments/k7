@@ -75,8 +75,12 @@ they were still choosing.) It also closes when a person taps
 `STOP` on the panel or `Stop setup` on the page. It does **not** close while a join attempt is
 failing — the person is still there.
 
-**P12. It is not filtered.** `/stream`, `/api/*`, `/mcp`, `/library` and `GET /` answer on it
-exactly as on the LAN. The setup password is a curtain, not a boundary (§8).
+**P12. It is not filtered — except for the setup surface, which exists only while it does.**
+`/stream`, `/api/*`, `/mcp`, `/library` and `GET /` answer on the setup network exactly as on the LAN.
+The **setup page and all seven `/api/setup*` routes** answer only while a session is up; with no
+session they are `404` on every interface ([ADR 0077](../adr/0077-the-setup-surface-exists-only-while-its-hotspot-does.md)),
+so a device that is working has no page anywhere that can rewrite its network. The setup password is a
+curtain, not a boundary (§8).
 
 **P13. mDNS is not restarted for it.** `app_board_mdns_start()` runs after
 `app_board_wait_online()` as it does today; in setup mode that call returns when the boot window
@@ -94,9 +98,8 @@ That is why P30 records the attempt rather than trusting the page's connection.
 
 **P15.** `GET /setup` answers `text/html; charset=utf-8` with one hand-written page, held in
 portable rodata, **no external asset, no webfont, no framework, no build step** — **7520 bytes** measured (the page a browser on the hotspot fetched)
-of HTML with an inline style block and the script that drives the five routes. It is served on every
-interface, including the LAN, so a person on the network can reconfigure a working device without
-walking to it.
+of HTML with an inline style block and the script that drives the route table below. It is served
+**only while the setup network is up** (P12), on whichever interface asks.
 
 **P16. What it shows, in order:**
 
@@ -170,7 +173,7 @@ field, and neither is any password.
 | Condition | Answer |
 |---|---|
 | A 7- or 64-character password, or a 0- or 33-byte SSID | `400` naming the rule |
-| A join submitted with no setup session | `409`, "start it: Menu → Settings → Wi-Fi → Setup" |
+| A join submitted with no setup session | `404`: the whole surface is gone (P12, ADR 0077). The `409` the caller returns for this case is unreachable through HTTP and stays as a race guard |
 | A scan already running | `429`, "a scan is already running" |
 | A body that is not `application/json` | `415`, by the existing body rule |
 | A join while one is already in flight | `409` |
@@ -299,11 +302,12 @@ network. This is the cost of P5 and it is accepted, not hidden.
 
 ## 8. Access model
 
-**P38.** The setup network carries the whole device surface (§2, P12), and the setup page is
-reachable from the LAN as well. So `/setup` is an unauthenticated page that can point the device at
-a rogue access point or lock it off its own network. Anyone who can already reach port 80 owns the
-broadcast, so this is not a new *privilege* — but it is a new *capability*, and it is stated here
-beside the access model's existing admissions rather than discovered later.
+**P38.** The setup network carries the whole device surface (§2, P12); the **setup surface itself**
+exists only while that network does. So the device's one page that can point it at a rogue access
+point or lock it off its own network is reachable only during a session — and it is still
+unauthenticated for whoever is on the hotspot. This is not a new *privilege* on the LAN (anyone who can
+reach port 80 owns the broadcast), but it is a *capability*, and it is deliberately confined to the
+window it was built for ([ADR 0077](../adr/0077-the-setup-surface-exists-only-while-its-hotspot-does.md)).
 
 **P39. The setup password is a privacy curtain, not a security boundary.** It keeps a neighbour
 from casually joining the speaker's setup network. It defends nothing against a person who can reach the
@@ -355,7 +359,7 @@ or B8 — a cable and eyes are the only instruments those have.
 | H2 | `GET /api/setup` with no record says `unprovisioned`, and with a record names the SSID | host |
 | H3 | The scan list collapses two BSSIDs of one SSID to the stronger, sorts by signal, flags open networks, and never carries a password | host |
 | H4 | A join with a 7-character password is a 400 naming the rule; a 33-byte SSID likewise | host |
-| H5 | A join with no session is a 409 naming the Menu path; a second concurrent join is a 409 | host |
+| H5 | With no session, `/setup`, `/api/setup`, `/api/setup/scan`, the join and the hotspot's own switch are all **404** on every interface (ADR 0077); a second concurrent join is a 409 | host |
 | H6 | A failed join (fake reason 15) is reported by `GET /api/setup` as `last_attempt`, with the try count, and the page renders it | host |
 | H7 | A successful join writes the record, starts the grace timer, and the state reports `joined`; the clock's 60 s later reports no session | host |
 | H8 | A new setup password is accepted, validated, never returned by any route, and applied only at the next session | host |
@@ -364,6 +368,7 @@ or B8 — a cable and eyes are the only instruments those have.
 | H11 | The record's codec round-trips, and wrong magic/version/short blobs read as no record | host |
 | H12 | The reason mapping names 2, 4, 15, 201, 205 and the fallback | host |
 | H13 | Two scans at once: one answers, the other is a 429 | host |
+| H14 | Raising the hotspot from a client that is not on it is a 404 — the panel is the only way in on a healthy device | host |
 | B1 | Unprovisioned boot: the setup network appears, `192.168.4.1/setup` and `k7.local/setup` both answer, the panel shows the password | **board only** |
 | B2 | A wrong password reports reason 15 on reload after the channel move | **board only** |
 | B3 | A successful join closes the setup network after 60 s and the App then reaches the device on the LAN | **board only** |

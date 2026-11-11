@@ -197,16 +197,6 @@ def main():
         check("but never returned", "newpass99" in body, False)
 
         # --- the hotspot's own switch
-        status, _, _ = request(port, "POST", "/api/setup/ap", {"on": False})
-        check("the hotspot can be stopped", status, 204)
-        check("and the radio agrees", open(ap_state).read(), "off")
-        status, _, body = request(port, "POST", "/api/setup/join",
-                                  {"ssid": "xperiments-2.4G", "password": "viernes13"})
-        check("a join with no hotspot is a 409", status, 409)
-        check("and says how to start one", "Settings" in body, True)
-        status, _, _ = request(port, "POST", "/api/setup/ap", {"on": True})
-        check("it can be started again", status, 204)
-        check("and the radio agrees", open(ap_state).read(), "on")
         status, _, _ = request(port, "POST", "/api/setup/ap", {"on": "yes"})
         check("a non-boolean on is a 400", status, 400)
 
@@ -221,6 +211,22 @@ def main():
         check("with the hotspot still up", st["hotspot"]["up"], True)
         with open(record + ".ap") as f:
             check("and the hotspot password untouched", f.read(), "newpass99")
+        status, _, _ = request(port, "POST", "/api/setup/ap", {"on": False})
+        check("the hotspot can be stopped", status, 204)
+        check("and the radio agrees", open(ap_state).read(), "off")
+
+        # ADR 0077: with the hotspot down the whole surface is gone, from every interface.
+        # A device sitting on its LAN serves no page that can rewrite its network.
+        for path in ("/setup", "/api/setup", "/api/setup/scan"):
+            code, _, _ = get(port, path)
+            check(f"with the hotspot down {path} is a 404", code, 404)
+        code, _, _ = request(port, "POST", "/api/setup/join",
+                             {"ssid": "xperiments-2.4G", "password": "viernes13"})
+        check("and a join with no hotspot is a 404 too", code, 404)
+        code, _, _ = request(port, "POST", "/api/setup/ap", {"on": True})
+        check("nor can the LAN raise the hotspot: that is the panel's job", code, 404)
+
+
     finally:
         stop(proc)
 

@@ -3,6 +3,10 @@
 #
 #   sh host/tests/board_setup.sh [--home-pass] [--iface en0]
 #
+# The hotspot must already be up: on a healthy device nothing on the network can raise it
+# (ADR 0077), so raise it from Menu - Settings - Wi-Fi - Setup first, or run this against a
+# device that has no network and raised its own.
+#
 # **This script changes the machine's Wi-Fi.** It joins the device's `K7.local` hotspot,
 # runs the checks that can only be made from a client on that network (B1, B2, B7), offers
 # B3 if you give it your network's password, and then puts the interface back by cycling
@@ -119,7 +123,7 @@ for attempt in 1 2 3; do
     sleep 5
 done
 if [ "$JOINED" -ne 1 ] && ! networksetup -getairportnetwork "$IFACE" 2>/dev/null | grep -q "$AP"; then
-    bad "could not join $AP: is the device up, and is this the hotspot's password?"
+    bad "could not join $AP: raise it from Menu - Settings - Wi-Fi - Setup, or use a device with no network"
     restore
     exit 1
 fi

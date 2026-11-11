@@ -554,8 +554,9 @@ a curtain, not a boundary.
 _Avoid_: AP password, admin password, hotspot key
 
 **Setup page**:
-The one page the device serves, `GET /setup`, on every interface: it lists what the radio can see
-and takes a **Home network** and its **Network password**. It is not the App; the device serves no
+The one page the device serves, `GET /setup`, and only while the **Setup network** is up: it lists
+what the radio can see and takes a **Home network** and its **Network password**. Outside that window
+it does not exist, on any interface. It is not the App; the device serves no
 product page (ADR 0067), and it exists because provisioning must survive with no network and no
 cached shell (ADR 0076).
 _Avoid_: provisioning page, captive portal, config UI, admin page
