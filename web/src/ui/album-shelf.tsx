@@ -89,12 +89,19 @@ export function AlbumShelf({
     fitToStage();
     return () => observer.disconnect();
   }, []);
-  /* The pointer drags the row with it and the release snaps to the case nearest the centre;
-   * a press that never moved is a click on the case. */
-  const [dragX, setDragX] = useState(0);
-  const [dragging, setDragging] = useState(false);
+  /* The pointer drags the row *through* the cases: every case crossed turns the selection,
+   * so the 3D follows the hand; the release lands on the nearest one. A press that never
+   * moved is a click on the case. */
   const dragStart = useRef<number | null>(null);
+  const dragStartAt = useRef(0);
+  const dragTarget = useRef(0);
+  const dragRem = useRef(16);
   const dragged = useRef(false);
+  const stepsFor = (dx: number) => {
+    const r = -dx / dragRem.current;
+    if (Math.abs(r) < FIRST_STEP / 2) return 0;
+    return Math.sign(r) * (1 + Math.round((Math.abs(r) - FIRST_STEP) / SPINE_STEP));
+  };
 
   const count = albums.length;
   const at = Math.min(selected, Math.max(0, count - 1));
@@ -138,48 +145,43 @@ export function AlbumShelf({
           onDragStart={(event) => event.preventDefault()}
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId);
+            const root = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+            dragRem.current = root * fit;
             dragStart.current = event.clientX;
+            dragStartAt.current = at;
+            dragTarget.current = at;
             dragged.current = false;
-            setDragging(true);
           }}
           onPointerMove={(event) => {
             if (dragStart.current === null) return;
             const dx = event.clientX - dragStart.current;
             if (Math.abs(dx) > 10) dragged.current = true;
-            setDragX(dx);
+            const target = Math.min(
+              Math.max(0, dragStartAt.current + stepsFor(dx)),
+              Math.max(0, count - 1),
+            );
+            if (target === dragTarget.current) return;
+            dragTarget.current = target;
+            onSelect(target);
           }}
           onPointerUp={(event) => {
             const from = dragStart.current;
             dragStart.current = null;
-            if (from === null) {
-              setDragging(false);
-              return;
+            if (from === null) return;
+            const target = Math.min(
+              Math.max(0, dragStartAt.current + stepsFor(event.clientX - from)),
+              Math.max(0, count - 1),
+            );
+            if (target !== dragTarget.current) {
+              dragTarget.current = target;
+              onSelect(target);
             }
-            const dx = event.clientX - from;
-            const root = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-            const rem = root * fit;
-            const r = -dx / rem;
-            let steps = 0;
-            if (Math.abs(r) >= FIRST_STEP / 2) {
-              steps = Math.sign(r) * (1 + Math.round((Math.abs(r) - FIRST_STEP) / SPINE_STEP));
-            }
-            onSelect(Math.min(Math.max(0, at + steps), Math.max(0, count - 1)));
-            setDragX(0);
-            setDragging(false);
           }}
           onPointerCancel={() => {
             dragStart.current = null;
-            setDragX(0);
-            setDragging(false);
           }}
         >
-          <div
-            className="k7-shelf-row"
-            style={{
-              transform: dragX !== 0 ? `translateX(${dragX}px)` : undefined,
-              transition: dragging ? 'none' : undefined,
-            }}
-          >
+          <div className="k7-shelf-row">
             {albums.map((album, index) => {
               const distance = index - at;
               if (Math.abs(distance) > WINDOW) return null;
