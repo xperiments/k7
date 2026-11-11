@@ -136,7 +136,7 @@ def main():
         status, headers, _ = get(port, "/")
         check("/ still redirects to the App", status, 302)
         check("/ names the App", headers.get("location"),
-              "https://k7.xperiments.dev/#/player")
+              "https://k7.xperiments.dev/app#/player")
 
         # --- the state, before anything is chosen
         status, _, body = get(port, "/api/setup")

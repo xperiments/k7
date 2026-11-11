@@ -161,6 +161,21 @@ export function LocalNetworkGate({ children }: { children: React.ReactNode }) {
               </Button>
             </>
           ) : null}
+
+          {/* No player yet is a different problem from no permission: the Site flashes one,
+              and a new tab leaves a standalone window for a browser with an address bar. */}
+          <p className="text-xs text-muted-foreground">
+            No player yet?{' '}
+            <a
+              href="/"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-4 transition-colors hover:text-foreground"
+            >
+              Flash one
+            </a>
+            .
+          </p>
         </CardContent>
       </Card>
     </div>

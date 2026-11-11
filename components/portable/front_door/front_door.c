@@ -24,7 +24,7 @@
  * same string to the development origin (components/portable/front_door/Kconfig). The
  * fallback is what a host build, which has no sdkconfig, compiles. */
 #ifndef CONFIG_FRONT_DOOR_LAUNCH_URL
-#define CONFIG_FRONT_DOOR_LAUNCH_URL "https://k7.xperiments.dev/#/player"
+#define CONFIG_FRONT_DOOR_LAUNCH_URL "https://k7.xperiments.dev/app#/player"
 #endif
 
 static const char *TAG = "front_door";

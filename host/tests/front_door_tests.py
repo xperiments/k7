@@ -102,7 +102,7 @@ def main():
             status, headers, _, _ = get(port, path)
             check(f"{path} redirects", status, 302)
             check(f"{path} names the App", headers.get("location"),
-                  "https://k7.xperiments.dev/#/player")
+                  "https://k7.xperiments.dev/app#/player")
         for path in ("/nope", "/apps", "/index.htm"):
             status, headers, _, body = get(port, path)
             check(f"{path} is a 404", status, 404)

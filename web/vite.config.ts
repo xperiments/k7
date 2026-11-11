@@ -83,6 +83,26 @@ function noWorkerInDevelopment(): Plugin {
 }
 
 /**
+ * `/app` is the App's address, not a file: the build emits `app.html` and Vercel rewrites the
+ * path (k7-site.md D2). The dev and preview servers need the same rewrite, or the App's own
+ * address is the one URL on the origin that 404s.
+ */
+function appPath(): Plugin {
+  const rewrite = (req: { url?: string }, _res: unknown, next: () => void): void => {
+    const [path, query] = (req.url ?? '').split('?');
+    if (path === '/app' || path === '/app/') {
+      req.url = `/app.html${query ? `?${query}` : ''}`;
+    }
+    next();
+  };
+  return {
+    name: 'k7-app-path',
+    configureServer(server) { server.middlewares.use(rewrite); },
+    configurePreviewServer(server) { server.middlewares.use(rewrite); },
+  };
+}
+
+/**
  * No `COOP` and no `COEP`, deliberately (ADR 0058).
  *
  * `Cross-Origin-Opener-Policy: same-origin` would make this document cross-origin isolated,
@@ -181,7 +201,10 @@ function shellOutputs(cdnWeights: boolean): Plugin {
       // by the install rather than by an offline reload.
       const assets = Array.from(
         new Set([
-          '/index.html',
+          /* The App's document, not the Site's: the worker is the App's offline shell, and
+           * `/` is a website that must always be fresh (k7-site.md S5). `emitted` carries
+           * both documents, so the Site is dropped here rather than in the worker. */
+          '/app.html',
           '/manifest.webmanifest',
           '/icons/icon-192.png',
           '/icons/icon-512.png',
@@ -190,7 +213,7 @@ function shellOutputs(cdnWeights: boolean): Plugin {
            * the first paint, not after a fetch that fails. */
           '/icons/k7logo.svg',
           '/weights.lock.json',
-          ...emitted.map((file) => `/${file}`),
+          ...emitted.filter((file) => file !== 'index.html').map((file) => `/${file}`),
         ]),
       );
       await writeFile(
@@ -221,6 +244,7 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       noWorkerInDevelopment(),
+      appPath(),
       taglibWithoutDynamicCode(),
       shellOutputs(cdnWeights),
     ],
@@ -239,6 +263,14 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
+      /* Two documents, one artifact (k7-site.md D1): `index.html` is the Site at `/`,
+       * `app.html` is the App, which Vercel and the dev server serve at `/app`. */
+      rollupOptions: {
+        input: {
+          site: resolve(root, 'index.html'),
+          app: resolve(root, 'app.html'),
+        },
+      },
     },
     worker: { format: 'es' },
     test: {

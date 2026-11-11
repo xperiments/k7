@@ -33,17 +33,18 @@ function isShellAsset(pathname) {
 
 async function shellAssets() {
   // The build writes this list from the files it actually emitted, so dynamically imported
-  // chunks (the worker, TagLib) are precached too, not just what index.html names.
+  // chunks (the worker, TagLib) are precached too, not just what app.html names. `/` is the
+  // Site, not the App, and is deliberately absent: it must always come from the network.
   try {
     const response = await fetch('/shell.json', { cache: 'no-store' });
-    if (!response.ok) return ['/', '/index.html'];
+    if (!response.ok) return ['/app.html'];
     const shell = await response.json();
     const assets = Array.isArray(shell.assets)
       ? shell.assets.filter((asset) => typeof asset === 'string')
       : [];
-    return Array.from(new Set(['/', '/index.html', ...assets]));
+    return Array.from(new Set(['/app.html', ...assets]));
   } catch {
-    return ['/', '/index.html'];
+    return ['/app.html'];
   }
 }
 
@@ -79,11 +80,11 @@ async function shellNavigation(request) {
   const cache = await caches.open(SHELL_CACHE);
   try {
     const response = await fetch(request);
-    if (response.ok) await cache.put('/index.html', response.clone());
+    if (response.ok) await cache.put('/app.html', response.clone());
     return response;
   } catch {
     // The device is off: the shell still opens and says so.
-    return (await cache.match('/index.html')) ?? Response.error();
+    return (await cache.match('/app.html')) ?? Response.error();
   }
 }
 
@@ -116,9 +117,16 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
-    // `/stream` and `/library` are the device's own surfaces; the stream must never be
-    // mistaken for the shell and written over the cached index.
-    if (url.pathname !== '/' && url.pathname !== '/index.html') return;
+    // The App is the only navigation this worker owns (k7-site.md S5). `/` is the Site and
+    // goes to the network, and `/stream` and `/library` are the device's own surfaces: the
+    // stream must never be mistaken for the shell and written over the cached document.
+    if (
+      url.pathname !== '/app' &&
+      url.pathname !== '/app/' &&
+      url.pathname !== '/app.html'
+    ) {
+      return;
+    }
     event.respondWith(shellNavigation(request));
     return;
   }

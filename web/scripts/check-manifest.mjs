@@ -65,20 +65,22 @@ for (const field of ['name', 'short_name']) {
   }
 }
 
-// A9: start_url "/" within scope "/".
+// A9/A12: the App's address is `/app`, and the installed window owns only that (ADR 0078).
+// `id` stays "/", so this is the same app to Chrome; `scope` "/" would let it swallow the
+// Site at `/`.
 const scopePath = text(manifest.scope) ? pathname(manifest.scope) : null;
 if (!text(manifest.scope)) {
-  fail('scope is missing (A9: "/")');
-} else if (scopePath !== '/') {
-  fail(`scope is "${manifest.scope}", A9 requires "/"`);
+  fail('scope is missing (A9: "/app")');
+} else if (scopePath !== '/app') {
+  fail(`scope is "${manifest.scope}", A9 requires "/app"`);
 }
 
 if (!text(manifest.start_url)) {
-  fail('start_url is missing (A9: "/")');
+  fail('start_url is missing (A9: "/app")');
 } else {
   const startPath = pathname(manifest.start_url);
-  if (startPath !== '/') {
-    fail(`start_url is "${manifest.start_url}", A9 requires "/" within scope "/"`);
+  if (startPath !== '/app') {
+    fail(`start_url is "${manifest.start_url}", A9 requires "/app" within scope "/app"`);
   } else if (scopePath !== null && !startPath.startsWith(scopePath)) {
     fail(`start_url "${manifest.start_url}" is outside scope "${manifest.scope}" (A9)`);
   }
@@ -134,6 +136,6 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `check-manifest: ok — ${label} is installable (id "/", start_url "/" in scope "/", ` +
+  `check-manifest: ok — ${label} is installable (id "/", start_url "/app" in scope "/app", ` +
     'display "standalone", 192, 512 and 512 maskable icons)',
 );
