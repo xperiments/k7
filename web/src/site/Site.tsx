@@ -1,13 +1,15 @@
+import { Flash } from './Flash';
+
 /**
  * The Site's first shape: the product's sentence, and the App's address.
  *
  * This document exists so that `/` is the product's page and `/app` is the App (ADR 0078).
- * The hero's slot, the flash and the install are the next tickets; until they land, the Site
- * says what K7 is and links to the one thing it can offer.
+ * The hero's photo slot, the install and the footer are the next ticket; until they land,
+ * the Site says what K7 is, offers the flash and links to the App.
  */
 export function Site() {
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background px-6 py-16 text-foreground">
+    <main className="flex min-h-dvh flex-col items-center gap-8 bg-background px-6 py-16 text-foreground">
       <img
         src="/icons/k7logo.svg"
         alt="K7"
@@ -27,6 +29,10 @@ export function Site() {
       >
         Open K7
       </a>
+
+      <div id="flash" className="w-full max-w-2xl">
+        <Flash />
+      </div>
     </main>
   );
 }
