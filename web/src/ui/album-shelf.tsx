@@ -240,7 +240,7 @@ export function AlbumShelf({
                     <span className="k7-face k7-side k7-right" aria-hidden="true" />
                     <span className="k7-face k7-side k7-left" aria-hidden="true">
                       <span className="k7-spine">
-                        {album.album} · {byline(album)}
+                        {byline(album)} - {album.album}
                       </span>
                       <span className="k7-frame" />
                     </span>
