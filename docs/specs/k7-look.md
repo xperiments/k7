@@ -1,17 +1,18 @@
-# The K7 look: one near-black page, one accent, line art
+# The K7 look: one near-black page, a primary and a secondary, line art
 
 **Goal.** The App at `/app` and the Site at `/` are one instrument drawn as a technical
-schematic: a thin orange outline on near-black, one hue, outline for what is available and fill
-for what is current. The look is carried by the theme tokens and the installed primitives, so a
-screen is not restyled one by one; and it is one look for both documents, because `/` and `/app`
-share one stylesheet and one set of primitives.
+schematic: a thin line on near-black, an orange primary and a neutral ink, outline for what is
+available and fill for what is current. The look is carried by the theme tokens and the installed
+primitives, so a screen is not restyled one by one; and it is one look for both documents, because
+`/` and `/app` share one stylesheet and one set of primitives. The device's one page, the Wi-Fi
+setup at `/setup`, carries the same palette by hand in its inline stylesheet
+(`components/portable/setup/setup_http.c`) — it has no stylesheet to share.
 
-**Status.** The base is in (LK-02): the tokens, the dark-only documents and the installed
-primitives; the palette was then split into a primary and a secondary by ADR 0081. LK-03 to LK-07 finish the shell, the screens, the Site and the verification; until
-they land, the screens keep their pre-K7 layouts and their state words are still backed by token
-names that resolve to the accent. The calls this repository took against the guide that preceded
-this file are recorded in
-[ADR 0080](../adr/0080-the-k7-look-is-the-products-one-skin.md) and marked **[ADR]** below.
+**Status.** Built: the tokens (LK-02), the shell (LK-03), the screens (LK-04, LK-05) and the Site
+(LK-06); the palette was split into a primary and a secondary by ADR 0081, and the setup page
+follows by hand. LK-07 is the verification. The calls this repository took against the guide that
+preceded this file are recorded in [ADR 0080](../adr/0080-the-k7-look-is-the-products-one-skin.md)
+and [ADR 0081](../adr/0081-the-look-has-a-primary-and-a-secondary.md), and marked **[ADR]** below.
 
 **Reference.** The ten scene drawings in [`docs/images/screens/`](../images/screens/), all of them
 in [`contact-sheet.png`](../images/screens/contact-sheet.png): scenes 0–4 and 6–8 are the K7 look;

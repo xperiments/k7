@@ -97,9 +97,11 @@ That is why P30 records the attempt rather than trusting the page's connection.
 ## 3. The setup page
 
 **P15.** `GET /setup` answers `text/html; charset=utf-8` with one hand-written page, held in
-portable rodata, **no external asset, no webfont, no framework, no build step** — **7520 bytes** measured (the page a browser on the hotspot fetched)
+portable rodata, **no external asset, no webfont, no framework, no build step** — **7,684 bytes** measured (the page string; 7,520 before the K7 palette)
 of HTML with an inline style block and the script that drives the route table below. It is served
-**only while the setup network is up** (P12), on whichever interface asks.
+**only while the setup network is up** (P12), on whichever interface asks. The page wears the K7
+look ([`k7-look.md`](./k7-look.md)): the same accent, neutral ink and line, written into its
+inline stylesheet.
 
 **P16. What it shows, in order:**
 

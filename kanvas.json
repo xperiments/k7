@@ -780,7 +780,14 @@
       "group": "LK",
       "at": "2026-11-11T15:36:57Z",
       "by": "dsh",
-      "desc": "Orange stays the primary — the brand tile, chips, active segments (Carousel/Drive, mood pills), filled actions and the scrollbar. A light neutral becomes the secondary — body text, control outlines, panel borders, muted text, and the active nav dome, as the screenshot shows. Background near-black. This supersedes ADR 0080's one-hue premise with a new ADR and updates the spec's K7, K14 and K17."
+      "desc": "Orange stays the primary — the brand tile, chips, active segments (Carousel/Drive, mood pills), filled actions, the scrollbar and the focus ring. A light neutral becomes the secondary — body text, control outlines, panel borders, muted text, and the active nav dome, as the screenshot shows. The device's setup page at /setup carries the same palette by hand in its inline stylesheet, and the Site's hero and install sections follow through the shared tokens. This supersedes ADR 0080's one-hue premise with ADR 0081 and updates the spec's K7, K14 and K17.",
+      "notes": [
+        {
+          "at": "2026-11-11T15:51:39Z",
+          "by": "dsh",
+          "text": "The device's setup page and the Site's hero/install sections are in scope."
+        }
+      ]
     }
   ]
 }
