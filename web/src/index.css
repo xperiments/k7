@@ -484,6 +484,11 @@
         color: oklch(0.93 0.012 90);
     }
 
+    /* The group is the smaller half of the spine's read: group - album. */
+    .k7-spine-group {
+        font-size: 0.7em;
+    }
+
     /* The case's moulding: a dark frame with a light inner line, and the only part of the
      * face that survives a cover that is the same colour as the case. */
     .k7-frame {
