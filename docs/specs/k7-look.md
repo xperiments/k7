@@ -370,9 +370,9 @@ buttons** — a plaque with a circular dome holding the icon at its left and the
 exception to the pill rule); the install control is a dome button in the rail's footer. In the
 default state the button is outlined and transparent, with a neutral icon and label; the current
 one fills only its dome with the secondary and turns its icon dark, while the button, its border
-and the label stay neutral. The rail collapses to its icons: the toggle in its header hides the
-labels, the group rules and the counts, narrows the rail to the domes, and remembers the choice in
-this browser. No `K7Shell`. **[ADR]**
+and the label stay neutral. The rail collapses to its icons: the toggle at the right of the stage
+header hides the labels, the group rules and the counts, narrows the rail to w-16, and remembers
+the choice in this browser. No `K7Shell`. **[ADR]**
 
 - The frame is 1px neutral line, panel radius, 5px padding and 5px gutters; a 1px line divides
   the rail from the stage, the rail runs the frame's full height, and the footer bar is the

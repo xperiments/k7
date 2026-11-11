@@ -389,26 +389,11 @@ export function Shell({ route, children }: { route: Route; children: React.React
           <aside
             className={cn(
               'flex shrink-0 flex-col border-r border-border',
-              collapsed ? 'w-20' : 'w-52',
+              collapsed ? 'w-16' : 'w-52',
             )}
           >
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2">
+            <header className="flex h-12 shrink-0 items-center border-b px-2">
               <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="ml-auto shrink-0"
-                aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
-                aria-expanded={!collapsed}
-                onClick={toggleRail}
-              >
-                {collapsed ? (
-                  <PanelLeftOpen aria-hidden="true" />
-                ) : (
-                  <PanelLeftClose aria-hidden="true" />
-                )}
-              </Button>
             </header>
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-2">
             <div className="min-h-0 flex-1 overflow-auto">
@@ -460,6 +445,21 @@ export function Shell({ route, children }: { route: Route; children: React.React
                 {!reachable ? (
                   <span className="text-xs text-muted-foreground">device unreachable</span>
                 ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0"
+                  aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
+                  aria-expanded={!collapsed}
+                  onClick={toggleRail}
+                >
+                  {collapsed ? (
+                    <PanelLeftOpen aria-hidden="true" />
+                  ) : (
+                    <PanelLeftClose aria-hidden="true" />
+                  )}
+                </Button>
               </div>
             </header>
 
