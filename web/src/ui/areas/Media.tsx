@@ -94,7 +94,15 @@ export function AlbumGrid({ albums }: { albums: Album[] }) {
  * rather than tabs because each view is a place — the back button walks between them and an
  * address can be shared — and `aria-current` is what tells a reader which one is open.
  */
-function ViewSwitch({ view }: { view: 'carousel' | 'drive' }) {
+function ViewSwitch({
+  view,
+  grouping,
+  onGrouping,
+}: {
+  view: 'carousel' | 'drive';
+  grouping?: Grouping;
+  onGrouping?: (next: Grouping) => void;
+}) {
   return (
     <nav aria-label="Media view" className="flex items-center gap-1">
       <Button
@@ -107,6 +115,28 @@ function ViewSwitch({ view }: { view: 'carousel' | 'drive' }) {
         <LayoutGrid aria-hidden="true" />
         Carousel
       </Button>
+      {grouping && onGrouping ? (
+        <>
+          <span aria-hidden="true" className="mx-1 h-4 w-px bg-foreground/20" />
+          <Button
+            size="sm"
+            variant={grouping === 'artist' ? 'solid' : 'default'}
+            aria-pressed={grouping === 'artist'}
+            onClick={() => onGrouping('artist')}
+          >
+            A–Z
+          </Button>
+          <Button
+            size="sm"
+            variant={grouping === 'genre' ? 'solid' : 'default'}
+            aria-pressed={grouping === 'genre'}
+            onClick={() => onGrouping('genre')}
+          >
+            Genres
+          </Button>
+        </>
+      ) : null}
+      <span aria-hidden="true" className="mr-1 ml-3 h-4 w-px bg-foreground/20" />
       <Button
         variant={view === 'drive' ? 'solid' : 'default'}
         size="sm"
@@ -313,27 +343,11 @@ function MediaHeader({
   return (
     <header className="flex flex-wrap items-center justify-end gap-x-6 gap-y-3">
       <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-        <ViewSwitch view={readingDrive ? 'drive' : 'carousel'} />
-        {!readingDrive && grouping && onGrouping ? (
-          <div className="flex shrink-0 items-center gap-1">
-            <Button
-              size="sm"
-              variant={grouping === 'artist' ? 'solid' : 'default'}
-              aria-pressed={grouping === 'artist'}
-              onClick={() => onGrouping('artist')}
-            >
-              A–Z
-            </Button>
-            <Button
-              size="sm"
-              variant={grouping === 'genre' ? 'solid' : 'default'}
-              aria-pressed={grouping === 'genre'}
-              onClick={() => onGrouping('genre')}
-            >
-              Genres
-            </Button>
-          </div>
-        ) : null}
+        <ViewSwitch
+          view={readingDrive ? 'drive' : 'carousel'}
+          grouping={grouping}
+          onGrouping={onGrouping}
+        />
         <div className="flex w-full min-w-0 flex-col gap-1 sm:w-64">
           <label htmlFor={searchId} className="sr-only">
             {placeholder}
