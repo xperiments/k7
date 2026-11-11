@@ -53,8 +53,8 @@ Media's first view: the album shelf, the cases on their short ends with the sele
 to face the reader. The name is the walk along the row; there is nothing that rotates, swipes or
 advances on a timer. The shelf has the whole stage; clicking a case opens that album's tracks
 beside it, walking the row with the arrows keeps them open, and a click outside (or Escape)
-closes them. A letter in the index walks the row to that artist's first album at a readable
-step — at most ten cases per letter — rather than teleporting.
+closes them. A letter in the index walks every case of the row to that artist's first album rather than
+teleporting.
 _Avoid_: slider, gallery, carousel widget
 
 **Drive**:
