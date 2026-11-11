@@ -331,7 +331,7 @@ _Avoid_: local model, offline model, embedded AI
 
 **Settings**:
 What this browser remembers for itself: the **Provider**, the model, the Invidious
-**Instance**, and the analysis worker count. Lost with site data, never written to the
+**Instance**, the analysis worker count, and whether the rail is collapsed. Lost with site data, never written to the
 player.
 _Avoid_: preferences, config, options
 

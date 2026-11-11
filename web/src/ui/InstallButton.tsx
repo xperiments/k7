@@ -2,6 +2,7 @@ import { MonitorDown } from 'lucide-react';
 import { useSyncExternalStore } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { installSnapshot, onInsecureOrigin, promptInstallNow, subscribeInstall } from './installStore';
 
 /**
@@ -15,7 +16,7 @@ import { installSnapshot, onInsecureOrigin, promptInstallNow, subscribeInstall }
  * - **unknown** renders nothing: a Chromium that has not fired `beforeinstallprompt` yet
  *   would answer `unavailable` if pressed.
  */
-export function InstallButton() {
+export function InstallButton({ compact = false }: { compact?: boolean }) {
   const state = useSyncExternalStore(subscribeInstall, installSnapshot, installSnapshot);
 
   if (onInsecureOrigin() || state === 'installed' || state === 'unknown') return null;
@@ -23,7 +24,10 @@ export function InstallButton() {
   if (state === 'installable') {
     return (
       <Button
-        className="h-10 w-full justify-start gap-2.5 rounded-[6px] border border-foreground/45 p-1 pr-3 font-light"
+        className={cn(
+          'h-10 w-full justify-start gap-2.5 rounded-[6px] border border-foreground/45 p-1 pr-3 font-light',
+          compact && 'justify-center px-1',
+        )}
         onClick={() => void promptInstallNow()}
       >
         <span
@@ -32,10 +36,12 @@ export function InstallButton() {
         >
           <MonitorDown aria-hidden="true" />
         </span>
-        Install K7
+        <span className={cn(compact && 'sr-only')}>Install K7</span>
       </Button>
     );
   }
+
+  if (compact) return null;
 
   return (
     <p className="px-2 text-xs text-muted-foreground">

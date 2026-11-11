@@ -3,6 +3,8 @@ import {
   Disc3,
   ListMusic,
   MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plug,
   RefreshCw,
   Settings as SettingsIcon,
@@ -253,20 +255,31 @@ function RailItem({
   icon,
   active,
   badge,
+  collapsed,
 }: {
   href: string;
   label: string;
   icon: React.ReactNode;
   active: boolean;
   badge?: string;
+  collapsed: boolean;
 }) {
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        render={<a href={href} aria-current={active ? 'page' : undefined} />}
+        render={
+          <a
+            href={href}
+            aria-label={label}
+            aria-current={active ? 'page' : undefined}
+          />
+        }
         isActive={active}
         tooltip={label}
-        className="h-12 w-full gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground hover:bg-foreground/10 active:bg-foreground/10 data-active:bg-transparent data-active:text-foreground"
+        className={cn(
+          'h-12 w-full gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground hover:bg-foreground/10 active:bg-foreground/10 data-active:bg-transparent data-active:text-foreground',
+          collapsed && 'justify-center px-0',
+        )}
       >
         <span
           aria-hidden="true"
@@ -274,9 +287,14 @@ function RailItem({
         >
           {icon}
         </span>
-        <span className="truncate">{label}</span>
+        <span className={cn('truncate', collapsed && 'sr-only')}>{label}</span>
         {badge ? (
-          <span className="ml-auto text-xs font-medium tabular-nums text-primary">
+          <span
+            className={cn(
+              'ml-auto text-xs font-medium tabular-nums text-primary',
+              collapsed && 'sr-only',
+            )}
+          >
             {badge}
           </span>
         ) : null}
@@ -285,12 +303,25 @@ function RailItem({
   );
 }
 
-function Nav({ groups, route }: { groups: NavGroup[]; route: Route }) {
+function Nav({
+  groups,
+  route,
+  collapsed,
+}: {
+  groups: NavGroup[];
+  route: Route;
+  collapsed: boolean;
+}) {
   return (
     <nav aria-label="Areas" className="flex flex-col gap-3">
       {groups.map((group) => (
         <div key={group.id} className="flex flex-col gap-3">
-          <div className="flex w-full min-w-0 items-center gap-2 [@media(max-height:560px)]:hidden">
+          <div
+            className={cn(
+              'flex w-full min-w-0 items-center gap-2 [@media(max-height:560px)]:hidden',
+              collapsed && 'hidden',
+            )}
+          >
             <span className="shrink-0 text-xs font-medium tracking-[0.12em] uppercase text-muted-foreground">
               {group.label}
             </span>
@@ -305,6 +336,7 @@ function Nav({ groups, route }: { groups: NavGroup[]; route: Route }) {
                 icon={item.icon}
                 active={item.names.includes(route.name)}
                 badge={item.badge}
+                collapsed={collapsed}
               />
             ))}
           </SidebarMenu>
@@ -328,25 +360,68 @@ export function Shell({ route, children }: { route: Route; children: React.React
 
   const area = routeArea(route);
 
+  /* The rail's width is this browser's, like the old theme: remembered so a reload does not
+   * throw the workspace back open. */
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('k7.rail.v1') === 'collapsed';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleRail = () => {
+    setCollapsed((open) => {
+      const next = !open;
+      try {
+        localStorage.setItem('k7.rail.v1', next ? 'collapsed' : 'open');
+      } catch {
+        /* a browser that refuses storage keeps it for this page's life */
+      }
+      return next;
+    });
+  };
+
   return (
     <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden p-1">
       <div className="flex h-full w-full flex-col gap-1 rounded-panel">
         <div className="flex min-h-0 flex-1 gap-1">
-          <aside className="flex w-52 shrink-0 flex-col border-r border-border">
+          <aside
+            className={cn(
+              'flex shrink-0 flex-col border-r border-border',
+              collapsed ? 'w-20' : 'w-52',
+            )}
+          >
             <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2">
               <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="ml-auto shrink-0"
+                aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
+                aria-expanded={!collapsed}
+                onClick={toggleRail}
+              >
+                {collapsed ? (
+                  <PanelLeftOpen aria-hidden="true" />
+                ) : (
+                  <PanelLeftClose aria-hidden="true" />
+                )}
+              </Button>
             </header>
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-2">
             <div className="min-h-0 flex-1 overflow-auto">
-              <Nav groups={groups} route={route} />
+              <Nav groups={groups} route={route} collapsed={collapsed} />
             </div>
             <div className="flex flex-col gap-0 [&>*+*]:-mt-px">
-              <InstallButton />
+              <InstallButton compact={collapsed} />
               <a
                 href={routeHref({ name: 'settings' })}
                 aria-current={route.name === 'settings' ? 'page' : undefined}
                 className={cn(
                   'flex h-10 w-full items-center gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-1 pr-3 text-sm text-foreground outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  collapsed && 'justify-center px-0',
                 )}
               >
                 <span
@@ -358,7 +433,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
                 >
                   <SettingsIcon aria-hidden="true" />
                 </span>
-                <span>Settings</span>
+                <span className={cn(collapsed && 'sr-only')}>Settings</span>
               </a>
             </div>
             </div>
