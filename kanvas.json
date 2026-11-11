@@ -793,6 +793,15 @@
           "text": "The accent buttons are outlines now, not fills."
         }
       ]
+    },
+    {
+      "id": "LB-03",
+      "title": "The label editor is proven to boot before it is used",
+      "state": "proposed",
+      "group": "LB",
+      "at": "2026-11-11T20:18:31Z",
+      "by": "agent",
+      "desc": "The canvas builder is one 4,400-line self-contained page with no test at all. 905313d left a const below the first call that reads it, so the page threw at load and painted nothing — no stage, no layers, no simulated slot values — and every host check stayed green. This proposes the missing seam: a headless-Chrome smoke check (the page is opened with a fresh profile, the stage must render and the default slot values must be on it) run by `make -C host label`, skipping loudly when no Chrome is installed. Done when the check fails on 905313d and passes on 365ed8f."
     }
   ]
 }
