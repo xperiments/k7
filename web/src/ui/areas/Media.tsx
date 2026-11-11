@@ -146,64 +146,25 @@ function NoAlbums({ reachable }: { reachable: boolean }) {
  */
 function ShelfView({
   state,
-  album,
+  albums,
+  selected,
+  onSelect,
+  active,
   query,
   onClear,
 }: {
   state: MediaIndexState;
-  /** The album the route names, when the address came from a link to one. */
-  album?: string;
+  albums: Album[];
+  selected: number;
+  onSelect: (index: number) => void;
+  active: Album | null;
   query: string;
   onClear: () => void;
 }) {
-  const [selected, setSelected] = useState(0);
   const [open, setOpen] = useState(false);
-  /* The route's album is applied once, when it arrives: a search that keeps it visible must
-   * not drag the selection back to it after the reader has moved on. */
-  const applied = useRef<string | null>(null);
-
-  const needle = query.trim().toLowerCase();
-  /* The Carousel walks artists, not album titles: the abecedary down the shelf's edge is the
-   * artists' initials, and a letter only leads somewhere if the rows are grouped by who made
-   * them. The title is the tie-break inside one name. */
-  const albums = useMemo(
-    () =>
-      (state.index?.albums ?? [])
-        .filter(
-          (entry) =>
-            !needle ||
-            entry.album.toLowerCase().includes(needle) ||
-            entry.artists.some((artist) => artist.toLowerCase().includes(needle)),
-        )
-        .sort(byArtistThenAlbum),
-    [state.index, needle],
-  );
-
-  /* A route that names an album turns it; a search that hides the selection falls back to
-   * the first case rather than to a case that is no longer on the shelf. Leaving the album
-   * route clears the marker, so a later link to the same album turns it again rather than
-   * being taken for the turn already done. */
-  useEffect(() => {
-    if (album === undefined) {
-      applied.current = null;
-      return;
-    }
-    if (applied.current === album) return;
-    const at = albums.findIndex((entry) => entry.album === album);
-    if (at < 0) return;
-    applied.current = album;
-    setSelected(at);
-  }, [album, albums]);
-
-  useEffect(() => {
-    setSelected((at) => Math.min(at, Math.max(0, albums.length - 1)));
-  }, [albums]);
-
-  const active = albums.length > 0 ? albums[Math.min(selected, albums.length - 1)] : null;
 
   /* The tracks are the scroll region and they belong to the turned case, so a jump along the
-   * row — a letter, a case, an arrow — shows the new album from its top rather than from
-   * wherever the last one was left. */
+   * row — a letter, a case, an arrow — shows the new album from its top. */
   const tracks = useRef<HTMLDivElement>(null);
   const shelf = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -231,8 +192,7 @@ function ShelfView({
   }, [open]);
 
   const hasAlbums = (state.index?.albums.length ?? 0) > 0;
-  const nothingMatches = state.index !== null && needle.length > 0 && albums.length === 0;
-
+  const nothingMatches = state.index !== null && query.trim().length > 0 && albums.length === 0;
   const shelfVisible = !state.loading && hasAlbums && !nothingMatches && active !== null;
 
   /* The shelf is the page: full width, floating in the middle of the stage. A case click
@@ -267,17 +227,11 @@ function ShelfView({
       )}
     >
       {shelfVisible ? (
-        <AlphabetIndex albums={albums} selected={selected} onSelect={setSelected} />
-      ) : null}
-      {shelfVisible ? (
-        <aside
-          ref={shelf}
-          className="flex min-h-0 flex-1 flex-col justify-center"
-        >
+        <aside ref={shelf} className="flex min-h-0 flex-1 flex-col justify-center">
           <AlbumShelf
             albums={albums}
             selected={selected}
-            onSelect={setSelected}
+            onSelect={onSelect}
             onOpen={() => setOpen(true)}
           />
         </aside>
@@ -310,6 +264,41 @@ export function MediaArea({ album, drive }: { album?: string; drive?: string } =
  * handed a tree without a card, a player or a store: the preview harness does exactly that,
  * and so would a test of the two views.
  */
+/** The view switch and the search, shared by the two views so they agree on the box. */
+function MediaHeader({
+  readingDrive,
+  query,
+  onQuery,
+  searchId,
+}: {
+  readingDrive: boolean;
+  query: string;
+  onQuery: (value: string) => void;
+  searchId: string;
+}) {
+  const placeholder = readingDrive ? 'Search the drive' : 'Search albums';
+  return (
+    <header className="flex flex-wrap items-center justify-end gap-x-6 gap-y-3">
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+        <ViewSwitch view={readingDrive ? 'drive' : 'carousel'} />
+        <div className="flex w-full flex-col gap-1 sm:w-64">
+          <label htmlFor={searchId} className="sr-only">
+            {placeholder}
+          </label>
+          <Input
+            id={searchId}
+            type="search"
+            value={query}
+            placeholder={placeholder}
+            autoComplete="off"
+            onChange={(event) => onQuery(event.target.value)}
+          />
+        </div>
+      </div>
+    </header>
+  );
+}
+
 export function MediaView({
   state,
   album,
@@ -331,45 +320,71 @@ export function MediaView({
     setQuery('');
   }, [drive]);
 
-  const placeholder = readingDrive ? 'Search the drive' : 'Search albums';
+  const needle = query.trim().toLowerCase();
+  /* The Carousel walks artists, not album titles: the abecedary is the artists' initials,
+   * and a letter only leads somewhere if the rows are grouped by who made them. The title
+   * is the tie-break inside one name. */
+  const albums = useMemo(
+    () =>
+      (state.index?.albums ?? [])
+        .filter(
+          (entry) =>
+            !needle ||
+            entry.album.toLowerCase().includes(needle) ||
+            entry.artists.some((artist) => artist.toLowerCase().includes(needle)),
+        )
+        .sort(byArtistThenAlbum),
+    [state.index, needle],
+  );
 
-  return (
-    /* The shelf keeps its own scroll region so the case stays in view; the Drive is a page
-       that scrolls in the shell, because a folder list has no fixed thing above it to keep. */
-    <div
-      className={
-        readingDrive
-          ? 'mx-auto flex w-full flex-col gap-4 px-4 py-6 sm:px-6'
-          : 'relative flex h-full min-h-0 flex-col gap-3 pb-4 pl-20 pr-4 pt-4 sm:gap-4 sm:pb-6 sm:pl-24 sm:pr-6 sm:pt-6'
-      }
-    >
-      <header className="flex flex-wrap items-center justify-end gap-x-6 gap-y-3">
-        {/* The view and the search are the header's two controls: beside each other when
-            there is room for them, stacked when there is not. The area's name is the
-            breadcrumb above, so the page has no title of its own. */}
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
-          <ViewSwitch view={readingDrive ? 'drive' : 'carousel'} />
-          <div className="flex w-full flex-col gap-1 sm:w-64">
-            <label htmlFor={searchId} className="sr-only">
-              {placeholder}
-            </label>
-            <Input
-              id={searchId}
-              type="search"
-              value={query}
-              placeholder={placeholder}
-              autoComplete="off"
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </div>
-        </div>
-      </header>
+  const [selected, setSelected] = useState(0);
+  /* The route's album is applied once, when it arrives: a search that keeps it visible must
+   * not drag the selection back to it after the reader has moved on. */
+  const applied = useRef<string | null>(null);
+  useEffect(() => {
+    if (album === undefined) {
+      applied.current = null;
+      return;
+    }
+    if (applied.current === album) return;
+    const at = albums.findIndex((entry) => entry.album === album);
+    if (at < 0) return;
+    applied.current = album;
+    setSelected(at);
+  }, [album, albums]);
 
-      {readingDrive ? (
+  useEffect(() => {
+    setSelected((at) => Math.min(at, Math.max(0, albums.length - 1)));
+  }, [albums]);
+
+  const active = albums.length > 0 ? albums[Math.min(selected, albums.length - 1)] : null;
+
+  if (readingDrive) {
+    return (
+      <div className="mx-auto flex w-full flex-col gap-4 px-4 py-6 sm:px-6">
+        <MediaHeader readingDrive query={query} onQuery={setQuery} searchId={searchId} />
         <DriveView state={state} path={drive} query={query} />
-      ) : (
-        <ShelfView state={state} album={album} query={query} onClear={() => setQuery('')} />
-      )}
+      </div>
+    );
+  }
+
+  /* The rail and the page are siblings, so the letters have the stage's height; the page's
+     header and the shelf own the rest. */
+  return (
+    <div className="flex h-full min-h-0 gap-3 p-4 sm:gap-4 sm:p-6">
+      <AlphabetIndex albums={albums} selected={selected} onSelect={setSelected} />
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <MediaHeader readingDrive={false} query={query} onQuery={setQuery} searchId={searchId} />
+        <ShelfView
+          state={state}
+          albums={albums}
+          selected={selected}
+          onSelect={setSelected}
+          active={active}
+          query={query}
+          onClear={() => setQuery('')}
+        />
+      </div>
     </div>
   );
 }

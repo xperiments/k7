@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { artistOf, letterOf, type Album } from '../media/albums';
@@ -256,10 +256,39 @@ export function AlphabetIndex({
   }, [albums]);
 
   const buttons = useRef(new Map<string, HTMLButtonElement>());
+  const list = useRef<HTMLDivElement>(null);
   const current = albums[selected] ? letterOf(artistOf(albums[selected])) : null;
-  const present = LETTERS.filter((letter) => filing.first.has(letter));
-  if (present.length === 0) return null;
-  const stop = current !== null && filing.first.has(current) ? current : present[0];
+  /* Only the letters that lead somewhere; a dim row for an absent artist is noise. */
+  const letters = [...LETTERS, ...(filing.first.has('#') ? ['#'] : [])].filter((letter) =>
+    filing.first.has(letter),
+  );
+  if (letters.length === 0) return null;
+  const stop = current !== null && filing.first.has(current) ? current : letters[0];
+
+  /* The rail is the stage's height; when the letters are more than it, the two arrows walk
+   * the list, and the buttons that would not fit are reached by that scroll instead. */
+  const [overflow, setOverflow] = useState(false);
+  const [atTop, setAtTop] = useState(true);
+  const [atEnd, setAtEnd] = useState(true);
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    const update = () => {
+      setOverflow(el.scrollHeight > el.clientHeight + 1);
+      setAtTop(el.scrollTop <= 0);
+      setAtEnd(el.scrollHeight <= el.clientHeight + el.scrollTop + 1);
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    el.addEventListener('scroll', update, { passive: true });
+    update();
+    return () => {
+      observer.disconnect();
+      el.removeEventListener('scroll', update);
+    };
+  }, [letters.length]);
+
+  const scroll = (direction: number) => list.current?.scrollBy({ top: direction * 108 });
 
   const jump = (letter: string) => {
     const at = filing.first.get(letter);
@@ -267,67 +296,91 @@ export function AlphabetIndex({
   };
 
   const step = (letter: string, delta: number) => {
-    const at = present.indexOf(letter);
-    const next = present[Math.min(Math.max(0, at + delta), present.length - 1)];
+    const at = letters.indexOf(letter);
+    const next = letters[Math.min(Math.max(0, at + delta), letters.length - 1)];
     if (next === undefined) return;
     jump(next);
     buttons.current.get(next)?.focus();
   };
 
   return (
-    /* The full height of the stage, not of the shelf: one plaque per letter, a circle with
-     * the letter inside, like the rail's collapsed rows. */
+    /* The full height of the stage, not of the shelf: one square plaque per letter, a
+     * circle with the letter inside, like the rail's collapsed rows; the arrows walk the
+     * letters that do not fit. */
     <nav
       aria-label="Artists by letter"
-      className="absolute inset-y-4 left-4 z-10 flex w-12 flex-col overflow-y-auto [&>button+button]:-mt-px sm:inset-y-6 sm:left-6"
+      className="relative flex h-full w-8 shrink-0 flex-col"
     >
-      {[...LETTERS, ...(filing.first.has('#') ? ['#'] : [])].map((letter) => {
-        const has = filing.first.has(letter);
-        const active = letter === current;
-        return (
-          <button
-            key={letter}
-            type="button"
-            ref={(node) => {
-              if (node) buttons.current.set(letter, node);
-              else buttons.current.delete(letter);
-            }}
-            disabled={!has}
-            tabIndex={letter === stop ? 0 : -1}
-            aria-current={active ? 'true' : undefined}
-            aria-label={`${letter} — ${plural(filing.counts.get(letter) ?? 0, 'album')}`}
-            className={`flex min-h-0 flex-1 items-center justify-center rounded-[6px] border border-foreground/45 bg-transparent p-0 leading-none outline-none transition-colors select-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none ${
-              has ? 'hover:bg-foreground/10' : 'opacity-40'
-            }`}
-            onClick={() => jump(letter)}
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowDown') {
-                event.preventDefault();
-                step(letter, 1);
-              } else if (event.key === 'ArrowUp') {
-                event.preventDefault();
-                step(letter, -1);
-              } else if (event.key === 'Home') {
-                event.preventDefault();
-                step(letter, -present.length);
-              } else if (event.key === 'End') {
-                event.preventDefault();
-                step(letter, present.length);
-              }
-            }}
-          >
-            <span
-              className={`flex size-4 items-center justify-center rounded-full border border-foreground/45 text-xs leading-none ${
-                active
-                  ? 'bg-secondary font-medium text-secondary-foreground'
-                  : 'text-foreground'
-              }`}
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="outline"
+        aria-label="Scroll the letters up"
+        disabled={atTop}
+        onClick={() => scroll(-1)}
+        className={`absolute top-0 left-0 z-10 ${overflow ? '' : 'invisible'}`}
+      >
+        <ChevronUp aria-hidden="true" />
+      </Button>
+      <div
+        ref={list}
+        className="flex h-full flex-col items-center gap-1 overflow-y-auto"
+      >
+        {letters.map((letter) => {
+          const active = letter === current;
+          return (
+            <button
+              key={letter}
+              type="button"
+              ref={(node) => {
+                if (node) buttons.current.set(letter, node);
+                else buttons.current.delete(letter);
+              }}
+              tabIndex={letter === stop ? 0 : -1}
+              aria-current={active ? 'true' : undefined}
+              aria-label={`${letter} — ${plural(filing.counts.get(letter) ?? 0, 'album')}`}
+              className="flex size-8 shrink-0 items-center justify-center rounded-[6px] border border-foreground/45 bg-transparent p-0 leading-none outline-none transition-colors select-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => jump(letter)}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  step(letter, 1);
+                } else if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  step(letter, -1);
+                } else if (event.key === 'Home') {
+                  event.preventDefault();
+                  step(letter, -letters.length);
+                } else if (event.key === 'End') {
+                  event.preventDefault();
+                  step(letter, letters.length);
+                }
+              }}
             >
-              {letter}
-            </span>
-          </button>
-        );
-      })}
+              <span
+                className={`flex size-5 items-center justify-center rounded-full border border-foreground/45 text-xs leading-none ${
+                  active
+                    ? 'bg-secondary font-medium text-secondary-foreground'
+                    : 'text-foreground'
+                }`}
+              >
+                {letter}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="outline"
+        aria-label="Scroll the letters down"
+        disabled={atEnd}
+        onClick={() => scroll(1)}
+        className={`absolute bottom-0 left-0 z-10 ${overflow ? '' : 'invisible'}`}
+      >
+        <ChevronDown aria-hidden="true" />
+      </Button>
     </nav>
   );
 }
