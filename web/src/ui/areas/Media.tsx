@@ -133,7 +133,7 @@ function ViewSwitch({
             className="h-5 px-1.5"
             onClick={() => onGrouping('genre')}
           >
-            GENRE
+            Genre
           </Button>
         </>
       ) : null}
