@@ -295,7 +295,7 @@ if one is.
 | Component | K7 treatment |
 | --- | --- |
 | Button | Outlined pill in the neutral ink (`border-foreground/45 text-foreground`). `default` = outline. `solid` = accent fill with dark text (the primary action only). `ghost` = no border until hover, then a 1px neutral border. `destructive` = identical to default (no red). `link` = underline, neutral. Icon buttons are circles |
-| Badge | Pill outline in the neutral. The filled variant is the accent micro-label chip (uppercase, weight 500, `text-xs`) |
+| Badge | Pill with no border: the filled variant is the accent micro-label chip (uppercase, weight 500, `text-xs`), the quiet variants a neutral tint |
 | Card | 1px neutral line (`border-border`), panel radius, transparent background, no shadow, `p-3`. Title weight 300 |
 | Input / Textarea / Select trigger | Transparent, 1px neutral outline (`border-foreground/40`), `rounded-full` (textarea: panel radius), text in the neutral ink, placeholder `text-foreground/50`, focus is a 2px accent ring |
 | Label / Form description | Neutral text; the description at the dim neutral (`text-muted-foreground`) |
