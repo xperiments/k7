@@ -568,6 +568,11 @@
           "at": "2026-11-11T03:02:28Z",
           "by": "dsh",
           "text": "The browser flash's missing reboot is fixed: esptool-js's hard reset only releases RTS, and the\nwrite had left it released, so the board stayed in the stub. The flasher now makes an edge\n(assert EN 150 ms, release) before disconnecting; F13 and T11 record it, and the sequence\npushed by hand over the CH340 booted the board (`App version: 0.5.0`).\n\nWhile reading the boot log after that flash, two things are true of the board: it is\n**unprovisioned** (`no network stored`, `K7.local` up) and its **Snapshot partition holds no\nimage**. A parts-only write cannot do that — it took a full-chip erase, i.e. the \"Erase and\ninstall fresh\" choice. The card's music is untouched. This is B1/B3's state, but it needs the\nowner's WiFi password to re-provision."
+        },
+        {
+          "at": "2026-11-11T03:14:38Z",
+          "by": "dsh",
+          "text": "Confirmed by the owner: the erase was chosen deliberately, so the missing Snapshot and NVS\nrecord are the erase working, not a bug. No code change needed for that.\n\nThe board is therefore in its first-run state: `K7.local` up at 192.168.4.1, no stored\nnetwork, no Snapshot. The setup page could not be checked from this machine — its Wi-Fi is\nunassociated (Ethernet carries the host) and the harness's joins to `K7.local` did not take —\nso B1's `/setup` answer stays with the owner's phone, where re-provisioning happens anyway.\n\nRemaining for this task: the browser flash retry to prove the reset edge (F13) end to end,\nand the deployed origin (`/app` 404 until it is deployed)."
         }
       ]
     }
