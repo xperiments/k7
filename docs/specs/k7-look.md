@@ -377,8 +377,8 @@ and the label stay neutral. The rail does not collapse: the shell is one frame a
   the rail from the stage, and the footer bar spans the frame below both.
 - The logo tile is a solid accent square with `k7logo.svg` painted in the background colour — the
   reference's tile is filled, not outlined — and its wordmark is the only bold text in the system.
-- Counts are accent numbers at the end of the row; each nav group's label is the uppercase word
-  followed by a 1px accent rule to the rail's edge — no pill, no border.
+- Counts are accent numbers at the end of the row; each nav group's label is the uppercase word in
+  the dim neutral followed by a 1px neutral rule to the rail's edge — no pill, no border.
 - The PlayerBar is the footer bar: a panel across the frame's bottom, its scrub solid to the
   playhead and dim after.
 

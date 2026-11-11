@@ -291,10 +291,10 @@ function Nav({ groups, route }: { groups: NavGroup[]; route: Route }) {
       {groups.map((group) => (
         <div key={group.id} className="flex flex-col gap-3">
           <div className="flex w-full min-w-0 items-center gap-2 [@media(max-height:560px)]:hidden">
-            <span className="shrink-0 text-xs font-medium tracking-[0.12em] uppercase text-primary">
+            <span className="shrink-0 text-xs font-medium tracking-[0.12em] uppercase text-muted-foreground">
               {group.label}
             </span>
-            <span aria-hidden="true" className="h-px min-w-0 flex-1 bg-primary/40" />
+            <span aria-hidden="true" className="h-px min-w-0 flex-1 bg-foreground/20" />
           </div>
           <SidebarMenu className="gap-0 [&>li+li]:-mt-px">
             {group.items.map((item) => (
