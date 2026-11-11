@@ -669,6 +669,11 @@
           "at": "2026-11-11T04:39:46Z",
           "by": "dsh",
           "text": "Active state settled: button border accent and no fill, dome filled accent, dome icon dark, label accent."
+        },
+        {
+          "at": "2026-11-11T04:42:56Z",
+          "by": "dsh",
+          "text": "The selected dome now actually fills: the group variant required data-active='true' but the button sets a bare data-active, so the active dome classes never applied. The presence selector fixes it."
         }
       ]
     },
