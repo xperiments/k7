@@ -259,7 +259,8 @@ export function Shell({ route, children }: { route: Route; children: React.React
     });
   };
 
-  const compact = collapsed && !mobileOpen;
+  /* The drawer is always the collapsed rail; the desktop follows the remembered state. */
+  const compact = isMobile || collapsed;
   const railExpanded = isMobile ? mobileOpen : !collapsed;
   const railLabel = isMobile
     ? mobileOpen
@@ -288,12 +289,31 @@ export function Shell({ route, children }: { route: Route; children: React.React
         <div className="flex min-h-0 flex-1 gap-1">
           <aside
             className={cn(
-              'flex w-52 shrink-0 flex-col border-r border-border',
+              'flex shrink-0 flex-col border-r border-border',
+              compact ? 'w-16' : 'w-52',
               'max-[767px]:absolute max-[767px]:inset-y-0 max-[767px]:left-0 max-[767px]:z-40 max-[767px]:bg-background',
-              compact && 'min-[768px]:w-16',
               mobileOpen ? '' : 'max-[767px]:hidden',
             )}
           >
+            {isMobile ? (
+              <header className="flex h-12 shrink-0 items-center justify-center border-b px-2">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        onClick={() => setMobileOpen(false)}
+                        aria-label="Hide the sidebar"
+                        className="grid size-9 shrink-0 place-items-center rounded-panel text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      >
+                        <span aria-hidden="true" className="k7-sidebar-logo size-7" />
+                      </button>
+                    }
+                  />
+                  <TooltipContent side="right">Hide the sidebar</TooltipContent>
+                </Tooltip>
+              </header>
+            ) : null}
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-2">
             <div className="min-h-0 flex-1 overflow-auto">
               <Nav groups={groups} route={route} collapsed={compact} />

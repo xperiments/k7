@@ -374,7 +374,8 @@ and the label stay neutral. Above 768px the rail rests collapsed to its icons: t
 is the toggle, the labels, the group rules and the counts go `sr-only`, the rail narrows to
 `w-16`, and the icons carry tooltips — the logo, every row, Install and Settings — after a
 two-second hover. Expanding it is the remembered choice; the first visit is collapsed. Below
-768px the rail is hidden and the logo opens it over the stage with a backdrop. No `K7Shell`. **[ADR]**
+768px the rail is hidden; the logo opens it as the collapsed rail over the stage, with a
+backdrop behind it and the mark at the drawer's top to close it. No `K7Shell`. **[ADR]**
 
 - The frame is 1px neutral line, panel radius, 5px padding and 5px gutters; a 1px line divides
   the rail from the stage, the rail runs the frame's full height, and the footer bar is the
