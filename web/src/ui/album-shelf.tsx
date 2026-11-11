@@ -51,11 +51,14 @@ export function AlbumShelf({
   albums,
   selected,
   onSelect,
+  onOpen,
 }: {
   albums: Album[];
   /** Which case is turned; the page owns it because the tracks below belong to it. */
   selected: number;
   onSelect: (index: number) => void;
+  /** A clicked case (not an arrow, not a letter): the caller may open its tracks. */
+  onOpen?: () => void;
 }) {
   const dragFrom = useRef<number | null>(null);
   /* A drag ends with a click on whatever case the finger left; that click must not also
@@ -133,6 +136,7 @@ export function AlbumShelf({
                         return;
                       }
                       onSelect(index);
+                      onOpen?.();
                     }}
                   >
                     <span className="k7-face k7-front">

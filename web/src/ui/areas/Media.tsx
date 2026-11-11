@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Disc3, FolderOpen, LayoutGrid, ListMusic } from 'lucide-react';
+import { Disc3, FolderOpen, LayoutGrid } from 'lucide-react';
 import { cn } from 'cn';
 
 import { Button } from '@/components/ui/button';
@@ -149,17 +149,15 @@ function ShelfView({
   album,
   query,
   onClear,
-  showTracks,
 }: {
   state: MediaIndexState;
   /** The album the route names, when the address came from a link to one. */
   album?: string;
   query: string;
   onClear: () => void;
-  /** The song column is opt-in: the carousel is the page until it is asked for. */
-  showTracks: boolean;
 }) {
   const [selected, setSelected] = useState(0);
+  const [open, setOpen] = useState(false);
   /* The route's album is applied once, when it arrives: a search that keeps it visible must
    * not drag the selection back to it after the reader has moved on. */
   const applied = useRef<string | null>(null);
@@ -207,19 +205,40 @@ function ShelfView({
    * row — a letter, a case, an arrow — shows the new album from its top rather than from
    * wherever the last one was left. */
   const tracks = useRef<HTMLDivElement>(null);
+  const shelf = useRef<HTMLElement>(null);
   useEffect(() => {
     tracks.current?.scrollTo({ top: 0 });
   }, [active?.album]);
+
+  /* The tracks are a side panel, not a route: a pointer outside the shelf or the panel
+   * closes them, and Escape does the same from the keyboard. */
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (shelf.current?.contains(target) || tracks.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
   const hasAlbums = (state.index?.albums.length ?? 0) > 0;
   const nothingMatches = state.index !== null && needle.length > 0 && albums.length === 0;
 
   const shelfVisible = !state.loading && hasAlbums && !nothingMatches && active !== null;
 
-  /* With the tracks hidden, the shelf has the whole stage and floats in the middle of it;
-     with them shown, the pair is the old two-column grid and the tracks own the scroll. The
-     loading, empty and no-match states are the page's, not the song column's, so they show
-     whether or not the column is. */
+  /* The shelf is the page: full width, floating in the middle of the stage. A case click
+     opens its tracks to one side, and the arrows keep walking the row with the panel open.
+     The loading, empty and no-match states are the page's, not the panel's, so they show
+     whether or not it is. */
   const notice = state.loading ? (
     <div className="flex justify-center py-6">
       <Skeleton className="aspect-[16/25] w-40" />
@@ -244,22 +263,28 @@ function ShelfView({
     <div
       className={cn(
         'flex min-h-0 flex-1 flex-col gap-4',
-        showTracks && shelfVisible && 'lg:grid lg:grid-cols-2 lg:gap-6',
+        open && shelfVisible && 'lg:grid lg:grid-cols-2 lg:gap-6',
       )}
     >
       {shelfVisible ? (
         <aside
+          ref={shelf}
           className={cn(
             'min-h-0',
-            showTracks ? 'lg:self-center' : 'flex flex-1 flex-col justify-center',
+            open ? 'lg:self-center' : 'flex flex-1 flex-col justify-center',
           )}
         >
-          <AlbumShelf albums={albums} selected={selected} onSelect={setSelected} />
+          <AlbumShelf
+            albums={albums}
+            selected={selected}
+            onSelect={setSelected}
+            onOpen={() => setOpen(true)}
+          />
         </aside>
       ) : null}
 
       {shelfVisible ? (
-        showTracks ? (
+        open ? (
           <div ref={tracks} className="flex min-h-0 flex-1 flex-col overflow-auto">
             <div className="m-auto flex w-full flex-col gap-4">
               <AlbumDetail album={active!} state={state} />
@@ -296,7 +321,6 @@ export function MediaView({
 }) {
   const readingDrive = drive !== undefined;
   const [query, setQuery] = useState('');
-  const [showTracks, setShowTracks] = useState(false);
   const searchId = useId();
 
   /* A search is about what is on screen: another view, or another folder a link names,
@@ -325,17 +349,6 @@ export function MediaView({
             there is room for them, stacked under the title when there is not. */}
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
           <ViewSwitch view={readingDrive ? 'drive' : 'carousel'} />
-          {!readingDrive ? (
-            <Button
-              size="sm"
-              variant={showTracks ? 'solid' : 'default'}
-              aria-pressed={showTracks}
-              onClick={() => setShowTracks((shown) => !shown)}
-            >
-              <ListMusic aria-hidden="true" />
-              Tracks
-            </Button>
-          ) : null}
           <div className="flex w-full flex-col gap-1 sm:w-64">
             <label htmlFor={searchId} className="sr-only">
               {placeholder}
@@ -355,13 +368,7 @@ export function MediaView({
       {readingDrive ? (
         <DriveView state={state} path={drive} query={query} />
       ) : (
-        <ShelfView
-          state={state}
-          album={album}
-          query={query}
-          onClear={() => setQuery('')}
-          showTracks={showTracks}
-        />
+        <ShelfView state={state} album={album} query={query} onClear={() => setQuery('')} />
       )}
     </div>
   );
