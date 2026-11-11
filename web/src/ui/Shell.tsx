@@ -267,7 +267,7 @@ function RailItem({
         render={<a href={href} aria-current={active ? 'page' : undefined} />}
         isActive={active}
         tooltip={label}
-        className="h-10 w-full gap-2.5 rounded-[6px] border border-primary bg-transparent p-1 pr-3 text-sm text-primary hover:bg-primary/15 active:bg-primary/15 data-active:bg-transparent data-active:text-primary"
+        className="h-10 w-full gap-2.5 rounded-[6px] border border-primary bg-transparent p-1 pr-3 text-sm text-primary hover:bg-primary/15 active:bg-primary/15 data-active:bg-primary data-active:text-primary-foreground"
       >
         <span
           aria-hidden="true"
@@ -342,7 +342,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
                 aria-current={route.name === 'settings' ? 'page' : undefined}
                 className={cn(
                   'flex h-10 w-full items-center gap-2.5 rounded-[6px] border border-primary bg-transparent p-1 pr-3 text-sm text-primary outline-none hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                  route.name === 'settings' && 'text-primary',
+                  route.name === 'settings' && 'bg-primary text-primary-foreground',
                 )}
               >
                 <span

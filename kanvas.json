@@ -659,6 +659,11 @@
           "at": "2026-11-11T04:35:42Z",
           "by": "dsh",
           "text": "The button states are now the requested pair: default has an outlined transparent dome and an accent label; selected fills only the dome and turns its icon dark, while the plaque, its border and the label stay put."
+        },
+        {
+          "at": "2026-11-11T04:37:59Z",
+          "by": "dsh",
+          "text": "Selected state corrected: the button fills accent and its icon and label are dark. A dark label cannot read on the transparent row, so the fill is what makes 'text black' possible."
         }
       ]
     },

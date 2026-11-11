@@ -354,9 +354,9 @@ menu is the filled logo tile at the top of the rail; the destinations and Settin
 buttons** — a plaque with a circular dome holding the icon at its left and the label beside it,
 6px corners, full width of the rail and stacked flush with a shared 1px edge (the one shape
 exception to the pill rule); the install control is a dome button in the rail's footer. In the
-default state the dome is outlined and transparent with an accent icon; the current one fills
-only its dome and turns the dome's icon dark, while the plaque, its border and the label do not
-change. The rail does not collapse: the shell is one frame at every width. No `K7Shell`. **[ADR]**
+default state the button is outlined and transparent, with an accent icon and label; the current
+one fills the button accent and turns the icon and the label dark, the dome sitting inside the
+fill. The rail does not collapse: the shell is one frame at every width. No `K7Shell`. **[ADR]**
 
 - The frame is 1px accent, panel radius, 5px padding and 5px gutters; a 1px line divides the rail
   from the stage, and the footer bar spans the frame below both.
