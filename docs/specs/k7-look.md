@@ -63,11 +63,11 @@ tile, the footer pill and the filled rows are what carry over.
 
 ## 1. The visual rules
 
-**K1. A control is an outline; a current mark is a fill.** A button is an outline — the accent
-outline when it is the primary action or the current segment, the neutral outline otherwise. A
-chip, a menu row, a list row and the rail's dome are fills when current: the accent for a chip,
-the neutral for the rest, with dark text. This applies to navigation, tabs, filters, toggles,
-menu rows, chips, radio and checkbox states.
+**K1. A control is an outline; a current mark is a fill.** A button and a chip are outlines — the
+accent outline when it is the primary action, the current segment or a micro-label; the neutral
+outline otherwise. A menu row, a list row and the rail's dome are neutral fills when current,
+with dark text. This applies to navigation, tabs, filters, toggles, menu rows, chips, radio and
+checkbox states.
 
 **K2. Hierarchy comes only from outline vs fill, size and spacing.** No colour, weight, shadow or
 elevation tricks.
@@ -129,8 +129,8 @@ the neutral replaces them.
 device's LVGL build embeds. Weight 300 for everything; hierarchy comes from size only. Headings
 are not bold. The only 500 is the micro-label chip. Numbers use `tabular-nums`.
 
-**K9. Micro-labels are chips.** Uppercase, weight 500, on a solid accent pill with dark text,
-at `text-xs` — the ReUI floor, 12px at a 16px root and about 15.6px here. Nothing in the App is
+**K9. Micro-labels are chips.** Uppercase, weight 500, on an outlined accent pill with accent
+text, at `text-xs` — the ReUI floor, 12px at a 16px root and about 15.6px here. Nothing in the App is
 below `text-xs`; the guide's 9–10px chips were device geometry. **[ADR]**
 
 ### 2.2 The stylesheet
@@ -296,7 +296,7 @@ if one is.
 | Component | K7 treatment |
 | --- | --- |
 | Button | Outlined pill in the neutral ink (`border-foreground/45 text-foreground`). `default` = outline. `solid` = accent outline, border and text (the primary action only; the name is historical). `ghost` = no border until hover, then a 1px neutral border. `destructive` = identical to default (no red). `link` = underline, neutral. Icon buttons are circles. The fill is reserved for chips, rows and the rail's dome |
-| Badge | Pill with no border: the filled variant is the accent micro-label chip (uppercase, weight 500, `text-xs`), the quiet variants a neutral tint |
+| Badge | Pill outline: the accent variant is the micro-label chip (accent border and text, uppercase, weight 500, `text-xs`); the quiet variants a neutral border and text. No fill |
 | Card | 1px neutral line (`border-border`), panel radius, transparent background, no shadow, `p-3`. Title weight 300 |
 | Input / Textarea / Select trigger | Transparent, 1px neutral outline (`border-foreground/40`), `rounded-full` (textarea: panel radius), text in the neutral ink, placeholder `text-foreground/50`, focus is a 2px accent ring |
 | Label / Form description | Neutral text; the description at the dim neutral (`text-muted-foreground`) |
@@ -377,7 +377,7 @@ and the label stay neutral. The rail does not collapse: the shell is one frame a
   the rail from the stage, and the footer bar spans the frame below both.
 - The logo tile is a solid accent square with `k7logo.svg` painted in the background colour — the
   reference's tile is filled, not outlined — and its wordmark is the only bold text in the system.
-- Counts are accent micro-label chips at the end of the row; each nav group's label is a
+- Counts are accent-outlined micro-label chips at the end of the row; each nav group's label is a
   micro-label chip above its buttons.
 - The PlayerBar is the footer bar: a panel across the frame's bottom, its scrub solid to the
   playhead and dim after.
@@ -511,7 +511,7 @@ decoration grep reads as utilities.
 - [ ] Every visible stroke is 1px — the accent on the brand and primary controls, the neutral
       line on panels and rows.
 - [ ] Text and icons are the neutral ink; orange appears only on the brand, chips, current
-      segments, filled actions and the scrollbar.
+      segments, primary actions and the scrollbar — as borders and text, never as a button fill.
 - [ ] In every list, tab group, nav and toggle set, exactly one item is filled and the rest are
       outlined — the accent for a segment or chip, the neutral for the rail's dome.
 - [ ] Buttons, inputs, chips and toggles are pills. Panels use the panel radius. Circle controls

@@ -277,7 +277,7 @@ function RailItem({
         </span>
         <span className="truncate">{label}</span>
         {badge ? (
-          <span className="ml-auto rounded-full bg-primary px-1.5 text-xs font-medium tabular-nums text-primary-foreground">
+          <span className="ml-auto rounded-full border border-primary bg-transparent px-1.5 text-xs font-medium tabular-nums text-primary">
             {badge}
           </span>
         ) : null}
@@ -328,7 +328,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
 
   return (
     <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden p-1">
-      <div className="flex h-full w-full flex-col gap-1 rounded-panel border border-border p-1">
+      <div className="flex h-full w-full flex-col gap-1 rounded-panel">
         <div className="flex min-h-0 flex-1 gap-1">
           <aside className="flex w-52 shrink-0 flex-col gap-3 border-r border-border p-2">
             <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
