@@ -285,6 +285,8 @@
         width: 100%;
         height: calc(var(--ch) + 0.5rem);
         overflow: clip;
+        touch-action: pan-y;
+        cursor: grab;
         perspective: 90rem;
         /* The row does not end at the column's edge: it fades into the page there, so a
            shelf that continues past the fold reads as continuing rather than as cut. The
@@ -345,10 +347,15 @@
         outline-offset: 4px;
     }
 
+    .k7-shelf:active {
+        cursor: grabbing;
+    }
+
     .k7-shelf-row {
         position: absolute;
         inset: 0;
         transform-style: preserve-3d;
+        transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     .k7-shelf-item {
@@ -510,6 +517,7 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
+        .k7-shelf-row,
         .k7-shelf-item,
         .k7-case {
             transition: none;

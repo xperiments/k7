@@ -23,6 +23,10 @@ import { plural } from './format';
 
 /** How far either side of the selection the row is built; the rest is off the shelf. */
 const WINDOW = 10;
+/** The same geometry as `--cw`, `--cd`, `--cg` and the selected gap in `index.css`, in rem:
+ *  the selected case's neighbour, then each spine after it. */
+const FIRST_STEP = 9.7;
+const SPINE_STEP = 3.25;
 
 function byline(album: Album): string {
   return album.artists.length === 1 ? album.artists[0] : plural(album.artists.length, 'artist');
@@ -85,6 +89,13 @@ export function AlbumShelf({
     fitToStage();
     return () => observer.disconnect();
   }, []);
+  /* The pointer drags the row with it and the release snaps to the case nearest the centre;
+   * a press that never moved is a click on the case. */
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef<number | null>(null);
+  const dragged = useRef(false);
+
   const count = albums.length;
   const at = Math.min(selected, Math.max(0, count - 1));
   const active = albums[at];
@@ -124,8 +135,51 @@ export function AlbumShelf({
           role="group"
           aria-roledescription="album shelf"
           tabIndex={0}
+          onDragStart={(event) => event.preventDefault()}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            dragStart.current = event.clientX;
+            dragged.current = false;
+            setDragging(true);
+          }}
+          onPointerMove={(event) => {
+            if (dragStart.current === null) return;
+            const dx = event.clientX - dragStart.current;
+            if (Math.abs(dx) > 10) dragged.current = true;
+            setDragX(dx);
+          }}
+          onPointerUp={(event) => {
+            const from = dragStart.current;
+            dragStart.current = null;
+            if (from === null) {
+              setDragging(false);
+              return;
+            }
+            const dx = event.clientX - from;
+            const root = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+            const rem = root * fit;
+            const r = -dx / rem;
+            let steps = 0;
+            if (Math.abs(r) >= FIRST_STEP / 2) {
+              steps = Math.sign(r) * (1 + Math.round((Math.abs(r) - FIRST_STEP) / SPINE_STEP));
+            }
+            onSelect(Math.min(Math.max(0, at + steps), Math.max(0, count - 1)));
+            setDragX(0);
+            setDragging(false);
+          }}
+          onPointerCancel={() => {
+            dragStart.current = null;
+            setDragX(0);
+            setDragging(false);
+          }}
         >
-          <div className="k7-shelf-row">
+          <div
+            className="k7-shelf-row"
+            style={{
+              transform: dragX !== 0 ? `translateX(${dragX}px)` : undefined,
+              transition: dragging ? 'none' : undefined,
+            }}
+          >
             {albums.map((album, index) => {
               const distance = index - at;
               if (Math.abs(distance) > WINDOW) return null;
@@ -144,6 +198,10 @@ export function AlbumShelf({
                     aria-label={`${album.album} — ${byline(album)}`}
                     aria-current={activeCase ? 'true' : undefined}
                     onClick={() => {
+                      if (dragged.current) {
+                        dragged.current = false;
+                        return;
+                      }
                       onSelect(index);
                       onOpen?.();
                     }}
