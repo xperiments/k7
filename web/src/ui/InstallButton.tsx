@@ -2,6 +2,7 @@ import { MonitorDown } from 'lucide-react';
 import { useSyncExternalStore } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { installSnapshot, onInsecureOrigin, promptInstallNow, subscribeInstall } from './installStore';
 
@@ -23,21 +24,30 @@ export function InstallButton({ compact = false }: { compact?: boolean }) {
 
   if (state === 'installable') {
     return (
-      <Button
-        className={cn(
-          'h-12 w-full justify-start gap-2.5 rounded-[6px] border border-foreground/45 p-2 font-light',
-          compact && 'justify-center px-2',
-        )}
-        onClick={() => void promptInstallNow()}
-      >
-        <span
-          aria-hidden="true"
-          className="grid size-8 shrink-0 place-items-center rounded-full border border-foreground/45 bg-transparent text-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]"
-        >
-          <MonitorDown aria-hidden="true" />
-        </span>
-        <span className={cn(compact && 'sr-only')}>Install K7</span>
-      </Button>
+      <Tooltip disabled={!compact}>
+        <TooltipTrigger
+          render={
+            <Button
+              className={cn(
+                'h-12 w-full justify-start gap-2.5 rounded-[6px] border border-foreground/45 p-2 font-light',
+                compact && 'justify-center px-2',
+              )}
+              onClick={() => void promptInstallNow()}
+            >
+              <span
+                aria-hidden="true"
+                className="grid size-8 shrink-0 place-items-center rounded-full border border-foreground/45 bg-transparent text-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]"
+              >
+                <MonitorDown aria-hidden="true" />
+              </span>
+              <span className={cn(compact && 'sr-only')}>Install K7</span>
+            </Button>
+          }
+        />
+        <TooltipContent side="right" hidden={!compact}>
+          Install K7
+        </TooltipContent>
+      </Tooltip>
     );
   }
 

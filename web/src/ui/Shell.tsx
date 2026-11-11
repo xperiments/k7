@@ -26,6 +26,12 @@ import { InstallButton } from './InstallButton';
 import { useDrafts } from '../playlists/drafts';
 import { navigate, routeArea, routeHref, routePage, type Route } from './router';
 import { PlayerBar } from './PlayerBar';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 /**
  * The shell: `c-sidebar-1`'s structure with this device's data in it.
@@ -134,7 +140,7 @@ function RailItem({
           />
         }
         isActive={active}
-        tooltip={label}
+        tooltip={collapsed ? { children: label, hidden: false } : undefined}
         className={cn(
           'h-12 w-full gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground hover:bg-foreground/10 active:bg-foreground/10 data-active:bg-transparent data-active:text-foreground',
           collapsed && 'justify-center px-2',
@@ -221,9 +227,11 @@ export function Shell({ route, children }: { route: Route; children: React.React
    * throw the workspace back open. */
   const [collapsed, setCollapsed] = useState(() => {
     try {
-      return localStorage.getItem('k7.rail.v1') === 'collapsed';
+      const stored = localStorage.getItem('k7.rail.v1');
+      /* Icons only is the resting state; expanding it is the choice. */
+      return stored === null ? true : stored === 'collapsed';
     } catch {
-      return false;
+      return true;
     }
   });
 
@@ -241,6 +249,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
 
   return (
     <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden p-1">
+      <TooltipProvider>
       <div className="flex h-full w-full flex-col gap-1 rounded-panel">
         <div className="flex min-h-0 flex-1 gap-1">
           <aside
@@ -255,16 +264,24 @@ export function Shell({ route, children }: { route: Route; children: React.React
                 collapsed && 'justify-center',
               )}
             >
-              <button
-                type="button"
-                onClick={toggleRail}
-                aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
-                aria-expanded={!collapsed}
-                title={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
-                className="grid size-10 shrink-0 place-items-center rounded-panel bg-transparent text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              >
-                <span aria-hidden="true" className="k7-sidebar-logo size-8" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      onClick={toggleRail}
+                      aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
+                      aria-expanded={!collapsed}
+                      className="grid size-10 shrink-0 place-items-center rounded-panel bg-transparent text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    >
+                      <span aria-hidden="true" className="k7-sidebar-logo size-8" />
+                    </button>
+                  }
+                />
+                <TooltipContent side="right">
+                  {collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
+                </TooltipContent>
+              </Tooltip>
             </header>
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-2">
             <div className="min-h-0 flex-1 overflow-auto">
@@ -272,25 +289,34 @@ export function Shell({ route, children }: { route: Route; children: React.React
             </div>
             <div className="flex flex-col gap-0 [&>*+*]:-mt-px">
               <InstallButton compact={collapsed} />
-              <a
-                href={routeHref({ name: 'settings' })}
-                aria-current={route.name === 'settings' ? 'page' : undefined}
-                className={cn(
-                  'flex h-12 w-full items-center gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                  collapsed && 'justify-center px-2',
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'grid size-8 shrink-0 place-items-center rounded-full border border-foreground/45 bg-transparent text-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]',
-                    route.name === 'settings' && 'bg-secondary text-secondary-foreground',
-                  )}
-                >
-                  <SettingsIcon aria-hidden="true" />
-                </span>
-                <span className={cn(collapsed && 'sr-only')}>Settings</span>
-              </a>
+              <Tooltip disabled={!collapsed}>
+                <TooltipTrigger
+                  render={
+                    <a
+                      href={routeHref({ name: 'settings' })}
+                      aria-current={route.name === 'settings' ? 'page' : undefined}
+                      className={cn(
+                        'flex h-12 w-full items-center gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                        collapsed && 'justify-center px-2',
+                      )}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'grid size-8 shrink-0 place-items-center rounded-full border border-foreground/45 bg-transparent text-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]',
+                          route.name === 'settings' && 'bg-secondary text-secondary-foreground',
+                        )}
+                      >
+                        <SettingsIcon aria-hidden="true" />
+                      </span>
+                      <span className={cn(collapsed && 'sr-only')}>Settings</span>
+                    </a>
+                  }
+                />
+                <TooltipContent side="right" hidden={!collapsed}>
+                  Settings
+                </TooltipContent>
+              </Tooltip>
             </div>
             </div>
           </aside>
@@ -324,6 +350,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
           </main>
         </div>
       </div>
+      </TooltipProvider>
     </SidebarProvider>
   );
 }
