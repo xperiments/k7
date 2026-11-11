@@ -15,7 +15,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  artistOf,
   byArtistThenAlbum,
+  letterOf,
   useMediaIndex,
   type Album,
   type MediaIndexState,
@@ -360,7 +362,9 @@ export function MediaView({
   const active = albums.length > 0 ? albums[Math.min(selected, albums.length - 1)] : null;
 
   /* A letter does not teleport the row: the selection walks every case to the artist's
-   * first album, fast enough to read as one move. Any direct choice stops the walk. */
+   * first album. The walk takes longer the further the letter is — one second for a step
+   * within a letter, three for a crossing of the alphabet — so the step is the duration
+   * divided by the cases. Any direct choice stops it. */
   const walk = useRef<number | null>(null);
   const stopWalk = () => {
     if (walk.current !== null) {
@@ -378,6 +382,12 @@ export function MediaView({
     let at = selected;
     if (at === target || albums.length === 0) return;
     const direction = target > at ? 1 : -1;
+    const from = letterOf(artistOf(albums[at])).charCodeAt(0);
+    const to = letterOf(artistOf(albums[target])).charCodeAt(0);
+    const letters = Math.min(26, Math.abs(to - from));
+    const duration = Math.min(3000, Math.max(1000, 1000 + (letters / 26) * 2000));
+    const steps = Math.max(1, Math.abs(target - at));
+    const step = Math.max(4, Math.round(duration / steps));
     walk.current = window.setInterval(() => {
       if (at === target) {
         stopWalk();
@@ -390,7 +400,7 @@ export function MediaView({
       }
       at = next;
       setSelected(at);
-    }, 50);
+    }, step);
   };
 
   if (readingDrive) {

@@ -54,7 +54,8 @@ to face the reader. The name is the walk along the row; there is nothing that ro
 advances on a timer. The shelf has the whole stage; clicking a case opens that album's tracks
 beside it, walking the row with the arrows keeps them open, and a click outside (or Escape)
 closes them. A letter in the index walks every case of the row to that artist's first album rather than
-teleporting.
+teleporting; the walk takes about a second within a letter and up to three across the
+alphabet.
 _Avoid_: slider, gallery, carousel widget
 
 **Drive**:
