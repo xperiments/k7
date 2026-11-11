@@ -10,7 +10,7 @@ no second hue for any state, dark only, and the installed components edited in p
 wrapped. Neither idea survives the other, and the shared stylesheet means "App only" is not a
 cheaper option — it is a scoping exercise across every primitive.
 
-Two facts settled it. The K7 system has no light expression: the accent on white is about 3.1:1,
+Two facts settled it. The K7 system has no light expression: the accent on white is about 3.4:1,
 so a light K7 would need a different hue, which its first rule forbids. And the guide's component
 table (pill buttons, outlined transparent cards, filled menu rows, pill inputs) cannot be
 delivered through tokens alone in the installed files.

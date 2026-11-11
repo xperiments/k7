@@ -111,10 +111,11 @@ every proportion holds. The panel radius is `0.4375rem` (7px at a 16px root, abo
 | Gutter | 5px (`gap-1`) |
 | Icon stroke | 1.25 (lucide `strokeWidth`) |
 
-**K7. Contrast.** Accent on the background is about 6:1 and passes for text. Dark on accent
+**K7. Contrast.** Accent on the background is about 5.6:1 and passes for text. Dark on accent
 also passes. The dim accent (42%) does **not** pass for informational text: use it only for
-decoration, empty states of meters and disabled items. Secondary text is accent at **85%**
-(about 4.7:1), not the guide's 70% (about 3.5:1, which fails AA at this app's sizes).
+decoration, empty states of meters and disabled items. Secondary text is accent at **90%**
+(about 4.7:1), not the guide's 70% (about 3.3:1, which fails AA at this app's sizes) and not
+85% (4.3:1, which fails too — measured on the firmware's #F15A22).
 
 **K8. One typeface, one weight.** Jura, self-hosted (`web/public/fonts/`), the same face the
 device's LVGL build embeds. Weight 300 for everything; hierarchy comes from size only. Headings
@@ -154,7 +155,7 @@ the lines below are added to them. Both documents (`web/index.html` and `web/app
   --secondary: transparent;
   --secondary-foreground: var(--k7-accent);
   --muted: var(--k7-well);
-  --muted-foreground: color-mix(in srgb, var(--k7-accent) 85%, transparent);
+  --muted-foreground: color-mix(in srgb, var(--k7-accent) 90%, transparent);
   --accent: var(--k7-accent);
   --accent-foreground: var(--k7-on-accent);
   --destructive: var(--k7-accent);
@@ -282,7 +283,7 @@ if one is.
 | Badge | Pill outline. The filled variant is the micro-label chip (uppercase, weight 500, `text-xs`) |
 | Card | 1px accent outline, panel radius, transparent background, no shadow, `p-3`. Title weight 300 |
 | Input / Textarea / Select trigger | Transparent, 1px outline, `rounded-full` (textarea: panel radius), placeholder `text-primary/50`, focus is a 2px accent ring |
-| Label / Form description | Accent text, description at 85% |
+| Label / Form description | Accent text, description at 90% |
 | Checkbox | 16px square, 4px radius, outline. Checked is filled with a dark check |
 | Radio | Outlined circle. Checked is a filled inner dot |
 | Switch | Pill track outline. Checked is a filled track with the thumb in the background colour. Unchecked thumb is accent at 50% |
@@ -294,7 +295,7 @@ if one is.
 | Popover / Dropdown / Select / HoverCard content | Panel: background, 1px outline, panel radius, no shadow |
 | Dialog / Sheet / AlertDialog | Panel as above. Overlay is `bg-background/80`, no `backdrop-blur`. Close is a circle icon button |
 | Tooltip | Small outlined pill on the background, accent text, no arrow fill |
-| Table | No zebra, no filled header. Rows separated by `border-b border-primary/30`. Header text `text-primary/85`. Selected row is a filled bar |
+| Table | No zebra, no filled header. Rows separated by `border-b border-primary/30`. Header text `text-primary/90`. Selected row is a filled bar |
 | Accordion / Collapsible | Each item an outlined panel. An open item's header is a filled bar only when it is the current selection; otherwise it stays outline. Chevron icon, no rotation easing |
 | Alert | Outlined panel with a line icon. All variants identical (no colours) |
 | Sonner / Toast | Outlined panel on the background, pill action button |
@@ -435,7 +436,7 @@ icons are the ones the areas already use.
 **K24. No charts, and the rule if one arrives.** The App has no charting dependency. A chart
 added later follows the guide: `var(--chart-1)` strokes at 1px, no fills, no gradients, no dots
 unless a point is selected, grid at 42% with `1 4` dash, series separated by dim vs solid or
-dashes rather than hue, and axes at `text-primary/85` and `text-xs`.
+dashes rather than hue, and axes at `text-primary/90` and `text-xs`.
 
 **K25. Assets.** The logo and every glyph are SVG in `currentColor`, inlined where CSS variables
 must reach them (the sidebar logo uses a mask for that reason). Covers and the Site's hero are
@@ -513,7 +514,7 @@ decoration grep reads as utilities.
 - [ ] Every keyboard interaction still works, and every focusable element shows the 2px accent
       focus ring.
 - [ ] Screen-reader roles and labels are unchanged; composites expose the right roles.
-- [ ] Informational text uses accent or 85% accent, never the 42% dim.
+- [ ] Informational text uses accent or 90% accent, never the 42% dim.
 - [ ] Reduced motion disables rotation and transitions.
 - [ ] The App works at desktop and at 800x480, and the Site at both.
 - [ ] The production build size did not grow meaningfully (fonts and SVG only).

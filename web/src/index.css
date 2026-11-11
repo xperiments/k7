@@ -107,8 +107,8 @@
  * is the one preserved surface (K19).
  */
 :root {
-    --k7-bg: #111111;
-    --k7-accent: #F15A22;
+    --k7-bg: #201010;
+    --k7-accent:rgb(232, 51, 0);
     --k7-accent-dim: color-mix(in srgb, var(--k7-accent) 42%, transparent);
     --k7-accent-faint: color-mix(in srgb, var(--k7-accent) 18%, transparent);
     --k7-well: #2a0f05;
@@ -130,7 +130,7 @@
     --secondary: transparent;
     --secondary-foreground: var(--k7-accent);
     --muted: var(--k7-well);
-    --muted-foreground: color-mix(in srgb, var(--k7-accent) 85%, transparent);
+    --muted-foreground: color-mix(in srgb, var(--k7-accent) 90%, transparent);
     --accent: var(--k7-accent);
     --accent-foreground: var(--k7-on-accent);
     --destructive: var(--k7-accent);
@@ -213,6 +213,16 @@
     background: var(--k7-accent-dim);
     border-radius: 999px;
     }
+
+  /* K27: reduced motion means none — no transition and no rotation, not a calmer fade. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 /*

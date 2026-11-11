@@ -290,8 +290,8 @@ function Nav({ groups, route }: { groups: NavGroup[]; route: Route }) {
   return (
     <nav aria-label="Areas" className="flex flex-col gap-3">
       {groups.map((group) => (
-        <div key={group.id} className="flex flex-col gap-1.5">
-          <Badge size="xs" className="self-start">
+        <div key={group.id} className="flex flex-col gap-3">
+          <Badge size="xs" className="self-start [@media(max-height:560px)]:hidden">
             {group.label}
           </Badge>
           <SidebarMenu className="gap-0 [&>li+li]:-mt-px">
