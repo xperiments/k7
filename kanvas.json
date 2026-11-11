@@ -627,7 +627,7 @@
     {
       "id": "LK-03",
       "title": "The shell wears the K7 ink and the stage is framed",
-      "state": "review",
+      "state": "done",
       "group": "LK",
       "deps": ["LK-02"],
       "yolo": true,
@@ -680,43 +680,93 @@
     {
       "id": "LK-04",
       "title": "The four nav areas become K7 screens",
-      "state": "todo",
+      "state": "done",
       "group": "LK",
       "deps": ["LK-03"],
+      "yolo": true,
       "at": "2026-11-11T03:47:23Z",
       "by": "dsh",
-      "desc": "Process, Media, Playlists and Ask are re-laid out in the K7 language: outlined modules with micro-label titles, pill controls, filled rows for the current thing, and empty, loading and error states in K7. The coverflow stays exactly as it is. Copy, props, routing and behaviour keep working. Done when each area renders in all three states, the coverflow is unchanged in its own surface, and keyboard and screen-reader roles are as they were."
+      "desc": "Process, Media, Playlists and Ask are re-laid out in the K7 language: outlined modules with micro-label titles, pill controls, filled rows for the current thing, and empty, loading and error states in K7. The coverflow stays exactly as it is. Copy, props, routing and behaviour keep working. Done when each area renders in all three states, the coverflow is unchanged in its own surface, and keyboard and screen-reader roles are as they were.",
+      "notes": [
+        {
+          "at": "2026-11-11T04:54:11Z",
+          "by": "dsh",
+          "text": "Plan: restyle Process, Media, Playlists and Ask in the K7 language — outlined panels, pill controls, one filled action per state, rows that fill when current, empty/loading/error states — leaving the coverflow untouched. Then typecheck, test, build, greps and screenshots of each area."
+        },
+        {
+          "at": "2026-11-11T04:58:04Z",
+          "by": "dsh",
+          "text": "Process, Media, Playlists and Ask are K7 now.\n\n- Process: a solid outlined drop zone with a filled Choose card; Resume and the clear confirm are filled; the queue's album headers and dividers take the K7 weights and rules.\n- Media: Carousel or Drive is filled when current; the empty state is a solid panel with Open Process filled; the coverflow is untouched.\n- Playlists: the chosen device list is a filled row with an inverted badge and button; create, retry and the delete confirm are filled; names are weight 300.\n- Ask: ask, run and create are filled, a mood pill fills when on, and the intent is pill inputs.\n- The nav's \"Chat\" is now \"Ask\", matching the glossary, and NotFound names the routes that exist.\n\nVerified: npm run typecheck, npm test, npm run build, the spec's greps, and a screenshot of each area.\n\nWhat to check: the four screens with a player or a card connected — the chosen Playlists row and the queue rows need a device or files to appear. The empty and error states are what the screenshots show."
+        }
+      ]
     },
     {
       "id": "LK-05",
       "title": "The remaining routes become K7 screens",
-      "state": "todo",
+      "state": "done",
       "group": "LK",
       "deps": ["LK-04"],
       "at": "2026-11-11T03:47:23Z",
       "by": "dsh",
-      "desc": "Settings, Artist, Video, album detail, the playlist editor, drive and not-found get the same treatment, including Settings' forms (labels left, pill inputs, K7 switch and toggle groups) and the state pills that replace the old success/warning badges. Done when no route renders a ReUI-shaped control, every state is covered, and typecheck and tests pass."
+      "desc": "Settings, Artist, Video, album detail, the playlist editor, drive and not-found get the same treatment, including Settings' forms (labels left, pill inputs, K7 switch and toggle groups) and the state pills that replace the old success/warning badges. Done when no route renders a ReUI-shaped control, every state is covered, and typecheck and tests pass.",
+      "notes": [
+        {
+          "at": "2026-11-11T05:04:38Z",
+          "by": "dsh",
+          "text": "Plan: restyle Settings, Artist, Video, album detail, the playlist editor, drive and not-found — filled primary actions, rows that fill when current, light weights, outlined panels — then typecheck, test, build, greps and a screenshot of each route."
+        },
+        {
+          "at": "2026-11-11T05:06:24Z",
+          "by": "dsh",
+          "text": "Settings, Artist, Video, album detail, the playlist editor, Drive and not-found are K7.\n\n- Settings: the two saves are filled; the forms keep their pill inputs and the K7 switch; and the Settings item in the rail now shows its active dome.\n- Artist, Drive and the editor's empty states each have one filled action.\n- Video, album and tree titles are weight 300; the editor's headings too; its clear confirm is filled.\n\nVerified: npm run typecheck, npm test, npm run build, the spec's greps, and screenshots of Settings and the Drive empty state.\n\nWhat to check: Artist, album detail, Video and the playlist editor need a card or a player to render, so the screenshots only cover their empty states; the code follows the same rules. LK-07 is the verification pass after this."
+        }
+      ]
     },
     {
       "id": "LK-06",
       "title": "The Site becomes a K7 page",
-      "state": "todo",
+      "state": "done",
       "group": "LK",
       "deps": ["LK-02"],
       "yolo": true,
       "at": "2026-11-11T03:47:23Z",
       "by": "dsh",
-      "desc": "The front door at / becomes the K7 page: near-black, one accent, line-art hero (the panel drawing, or live K7 art if it earns its place), flash and install sections in the K7 language, footer as the licence trail, and the browser chrome and icons following the dark palette. Content imagery, including a future device photograph, is allowed. Done when / renders K7, install and flash still work, and the page passes the same greps as the App."
+      "desc": "The front door at / becomes the K7 page: near-black, one accent, line-art hero (the panel drawing, or live K7 art if it earns its place), flash and install sections in the K7 language, footer as the licence trail, and the browser chrome and icons following the dark palette. Content imagery, including a future device photograph, is allowed. Done when / renders K7, install and flash still work, and the page passes the same greps as the App.",
+      "notes": [
+        {
+          "at": "2026-11-11T04:51:04Z",
+          "by": "dsh",
+          "text": "Plan: screenshot the whole Site, fix the sections that are still pre-K7 (flash states, install, footer, manifest chrome), keep the content hero, then typecheck, test, build, the greps and a final screenshot."
+        },
+        {
+          "at": "2026-11-11T04:53:25Z",
+          "by": "dsh",
+          "text": "The Site is K7 from the page to the installed icon.\n\n- The page: near-black, one accent, outlined panels, weight 300 headings, and one filled action per state — Flash a board, Connect a board, Flash K7, the erase confirm, the retry after a failure, and Open K7 when the app is already installed.\n- The browser chrome follows: the manifest's theme and background are #111111, and the PWA icons are regenerated from the K7 colours (accent line art on near-black) instead of the old amber.\n- The hero keeps the panel's own drawing in its slot, which the spec allows as content.\n\nVerified: npm run typecheck, npm test, npm run build, the spec's greps, and screenshots at 1440 and 800 wide.\n\nWhat to check: the idle flash panel and the install panel on the real origin; the flash's port, progress, done and failure states need a board, and the install state needs a Chrome that offers the prompt. The icon now in the manifest is the cassette in accent.\n\nLK-07 still waits on LK-04 and LK-05."
+        }
+      ]
     },
     {
       "id": "LK-07",
       "title": "The K7 look is verified and reported",
-      "state": "todo",
+      "state": "review",
       "group": "LK",
       "deps": ["LK-04", "LK-05", "LK-06"],
+      "yolo": true,
       "at": "2026-11-11T03:47:23Z",
       "by": "dsh",
-      "desc": "Run the spec's verification as a script: the grep suite with its documented exceptions, a screenshot of every screen at desktop and 800x480, contrast and focus checks, reduced motion, and a build-size comparison. Report changed files by step, before and after grep counts, anything that could not follow the rules and why, and any token tuned. Done when every checklist box has evidence and typecheck, tests and build pass."
+      "desc": "Run the spec's verification as a script: the grep suite with its documented exceptions, a screenshot of every screen at desktop and 800x480, contrast and focus checks, reduced motion, and a build-size comparison. Report changed files by step, before and after grep counts, anything that could not follow the rules and why, and any token tuned. Done when every checklist box has evidence and typecheck, tests and build pass.",
+      "notes": [
+        {
+          "at": "2026-11-11T05:14:01Z",
+          "by": "dsh",
+          "text": "Plan: add the one missing rule (reduced motion), write the spec's grep suite as a script, get before/after counts from the pre-K7 tree, screenshot every reachable route at desktop and 800x480, measure the build and the contrast, then report."
+        },
+        {
+          "at": "2026-11-11T05:21:08Z",
+          "by": "dsh",
+          "text": "LK-07 report — the K7 look is verified.\n\nChecks (npm run check:look), before → after:\n- hard-coded colours 2 → 0\n- Tailwind palette utilities 8 → 0\n- shadows/gradients/blur 8 → 0\n- wrong radii and weights 28 → 0\n- raster images in chrome 2 → 0\n\nGates: typecheck, 466 tests, build.\n\nScreenshots: the Site at 1440 and 800; the App at 1440 for Process, Media, Drive, Playlists, Ask, Settings, Player and NotFound, and at 800 for Process, Media and Settings. Album, artist, video and the playlist editor need a card or the player, so they are code-verified but not screenshotted.\n\nContrast (measured on the firmware's #F15A22): accent 5.6:1; dark on accent 5.6:1; secondary text 90% 4.74:1; dim 42% 1.9:1, decoration only. The measuring found one real defect: the spec's 85% secondary was 4.31:1 and failed AA — it is 90% now, and the spec records the measured numbers.\n\nReduced motion: a global rule now makes transitions and rotation effectively none.\n\nBuild: dist 12 MB in 96 files; the app's JS is 400 kB (134 kB gzipped) and the CSS 68 kB. No new fonts or dependencies.\n\nToken tuned: --muted-foreground 85 → 90, for the measured reason above.\n\nWhat could not follow the rules: the coverflow and content images, both the spec's exceptions; at 800x480 the rail scrolls one row to reach Ask (the groups' chips hide below 560 px tall, which helped); the data-dependent routes are code-verified only.\n\nChanged files by step: LK-01 spec/ADR/docs; LK-02 theme, primitives, both documents; LK-03 shell; LK-04 four areas; LK-05 remaining routes; LK-06 Site + icons; LK-07 the check script, reduced motion and the contrast fix."
+        }
+      ]
     }
   ]
 }
