@@ -231,7 +231,7 @@ function ShelfView({
       )}
     >
       {shelfVisible ? (
-        <aside ref={shelf} className="flex min-h-0 min-w-0 flex-1 flex-col justify-center">
+        <aside ref={shelf} className="flex min-h-0 min-w-0 flex-1 flex-col justify-start pt-8">
           <AlbumShelf
             albums={albums}
             selected={selected}
@@ -515,18 +515,20 @@ export function MediaView({
     );
   }
 
-  /* The rail is the stage's right edge, with the page's header and shelf to its left. */
+  /* The header spans the stage; the rail and the shelf share the row under it. The rail is
+   * padded by its top arrow's height, and the shelf by the same, so the first letter (or
+   * genre) starts level with the shelf's top. */
   return (
-    <div className="flex h-full min-h-0 gap-3 p-4 sm:gap-4 sm:p-6">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-        <MediaHeader
-          readingDrive={false}
-          query={query}
-          onQuery={setQuery}
-          searchId={searchId}
-          grouping={grouping}
-          onGrouping={changeGrouping}
-        />
+    <div className="flex h-full min-h-0 flex-col gap-3 p-4 sm:gap-4 sm:p-6">
+      <MediaHeader
+        readingDrive={false}
+        query={query}
+        onQuery={setQuery}
+        searchId={searchId}
+        grouping={grouping}
+        onGrouping={changeGrouping}
+      />
+      <div className="flex min-h-0 min-w-0 flex-1 gap-3">
         <ShelfView
           state={state}
           albums={albums}
@@ -536,13 +538,13 @@ export function MediaView({
           query={query}
           onClear={() => setQuery('')}
         />
+        <IndexRail
+          groups={groups}
+          current={currentKey}
+          variant={grouping === 'artist' ? 'letter' : 'name'}
+          onJump={jumpToGroup}
+        />
       </div>
-      <IndexRail
-        groups={groups}
-        current={currentKey}
-        variant={grouping === 'artist' ? 'letter' : 'name'}
-        onJump={jumpToGroup}
-      />
     </div>
   );
 }
