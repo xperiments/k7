@@ -262,11 +262,11 @@ export function AlphabetIndex({
   const letters = [...LETTERS, ...(filing.first.has('#') ? ['#'] : [])].filter((letter) =>
     filing.first.has(letter),
   );
-  if (letters.length === 0) return null;
-  const stop = current !== null && filing.first.has(current) ? current : letters[0];
 
   /* The rail is the stage's height; when the letters are more than it, the two arrows walk
-   * the list, and the buttons that would not fit are reached by that scroll instead. */
+   * the list, and the buttons that would not fit are reached by that scroll instead. These
+   * hooks stay above the empty return: the library arrives after the first render, and the
+   * hook order may not change when it does. */
   const [overflow, setOverflow] = useState(false);
   const [atTop, setAtTop] = useState(true);
   const [atEnd, setAtEnd] = useState(true);
@@ -289,6 +289,9 @@ export function AlphabetIndex({
   }, [letters.length]);
 
   const scroll = (direction: number) => list.current?.scrollBy({ top: direction * 108 });
+
+  if (letters.length === 0) return null;
+  const stop = current !== null && filing.first.has(current) ? current : letters[0];
 
   const jump = (letter: string) => {
     const at = filing.first.get(letter);
