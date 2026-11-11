@@ -128,8 +128,30 @@ export function letterOf(name: string): string {
  * artist for a letter to lead anywhere; the album title is only the tie-break inside one
  * name.
  */
+/** The genre an album files under: the most common tag among its rows, or `Unknown`. */
+export function genreOf(album: Album): string {
+  const counts = new Map<string, number>();
+  for (const row of album.rows) {
+    const genre = row.genre?.trim();
+    if (genre) counts.set(genre, (counts.get(genre) ?? 0) + 1);
+  }
+  let best = 'Unknown';
+  let most = 0;
+  for (const [genre, count] of counts) {
+    if (count > most) {
+      best = genre;
+      most = count;
+    }
+  }
+  return best;
+}
+
 export function byArtistThenAlbum(left: Album, right: Album): number {
   return byText(artistOf(left), artistOf(right)) || byText(left.album, right.album);
+}
+
+export function byGenreThenAlbum(left: Album, right: Album): number {
+  return byText(genreOf(left), genreOf(right)) || byArtistThenAlbum(left, right);
 }
 
 /**

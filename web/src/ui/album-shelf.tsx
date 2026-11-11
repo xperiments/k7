@@ -1,8 +1,8 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { artistOf, letterOf, type Album } from '../media/albums';
+import type { Album } from '../media/albums';
 import { CassetteFront, hueOf } from './cassette';
 import { plural } from './format';
 
@@ -217,9 +217,6 @@ export function AlbumShelf({
   );
 }
 
-/** The letters the abecedary draws. `#` is appended only when an artist files under it. */
-const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
-
 /**
  * The shelf's abecedary: the artists' initials down the left edge of the row, one button per
  * letter, which turns the first album by an artist that files under it.
@@ -233,43 +230,31 @@ const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
  * arrows walk the letters that exist. A shelf with twenty initials behind it would otherwise
  * put twenty tab stops between the search box and the row.
  */
-export function AlphabetIndex({
-  albums,
-  selected,
-  onSelect,
+export interface IndexGroup {
+  key: string;
+  label: string;
+  first: number;
+  count: number;
+}
+
+/**
+ * The stage's index rail: the artists' initials (the letters) or the genres, one plaque per
+ * group, at the stage's full height. The buttons that do not fit are reached by the arrows,
+ * and the list hides its bar. A name rail is wider, because a genre is not one character.
+ */
+export function IndexRail({
+  groups,
+  current,
+  variant,
   onJump,
 }: {
-  albums: Album[];
-  selected: number;
-  onSelect: (index: number) => void;
-  /** A letter asked for its first album: the page may walk there rather than jump. */
-  onJump?: (index: number) => void;
+  groups: IndexGroup[];
+  current: string | null;
+  variant: 'letter' | 'name';
+  onJump: (first: number) => void;
 }) {
-  /* One pass over the shelf: the first album under each letter, and how many there are, which
-   * is what a screen reader hears for a letter it cannot see the row behind. */
-  const filing = useMemo(() => {
-    const first = new Map<string, number>();
-    const counts = new Map<string, number>();
-    albums.forEach((album, index) => {
-      const letter = letterOf(artistOf(album));
-      if (!first.has(letter)) first.set(letter, index);
-      counts.set(letter, (counts.get(letter) ?? 0) + 1);
-    });
-    return { first, counts };
-  }, [albums]);
-
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const list = useRef<HTMLDivElement>(null);
-  const current = albums[selected] ? letterOf(artistOf(albums[selected])) : null;
-  /* Only the letters that lead somewhere; a dim row for an absent artist is noise. */
-  const letters = [...LETTERS, ...(filing.first.has('#') ? ['#'] : [])].filter((letter) =>
-    filing.first.has(letter),
-  );
-
-  /* The rail is the stage's height; when the letters are more than it, the two arrows walk
-   * the list, and the buttons that would not fit are reached by that scroll instead. These
-   * hooks stay above the empty return: the library arrives after the first render, and the
-   * hook order may not change when it does. */
   const [overflow, setOverflow] = useState(false);
   const [atTop, setAtTop] = useState(true);
   const [atEnd, setAtEnd] = useState(true);
@@ -289,39 +274,37 @@ export function AlphabetIndex({
       observer.disconnect();
       el.removeEventListener('scroll', update);
     };
-  }, [letters.length]);
+  }, [groups.length]);
 
   const scroll = (direction: number) => list.current?.scrollBy({ top: direction * 108 });
 
-  if (letters.length === 0) return null;
-  const stop = current !== null && filing.first.has(current) ? current : letters[0];
+  if (groups.length === 0) return null;
+  const stop =
+    current !== null && groups.some((group) => group.key === current)
+      ? current
+      : groups[0].key;
 
-  const jump = (letter: string) => {
-    const at = filing.first.get(letter);
-    if (at !== undefined) (onJump ?? onSelect)(at);
-  };
-
-  const step = (letter: string, delta: number) => {
-    const at = letters.indexOf(letter);
-    const next = letters[Math.min(Math.max(0, at + delta), letters.length - 1)];
+  const jump = (group: IndexGroup) => onJump(group.first);
+  const step = (key: string, delta: number) => {
+    const at = groups.findIndex((group) => group.key === key);
+    const next = groups[Math.min(Math.max(0, at + delta), groups.length - 1)];
     if (next === undefined) return;
     jump(next);
-    buttons.current.get(next)?.focus();
+    buttons.current.get(next.key)?.focus();
   };
 
   return (
-    /* The full height of the stage, not of the shelf: one square plaque per letter, a
-     * circle with the letter inside, like the rail's collapsed rows; the arrows walk the
-     * letters that do not fit. */
     <nav
-      aria-label="Artists by letter"
-      className="flex h-full w-8 shrink-0 flex-col items-center gap-1"
+      aria-label={variant === 'letter' ? 'Artists by letter' : 'Albums by genre'}
+      className={`flex h-full shrink-0 flex-col items-center gap-1 ${
+        variant === 'letter' ? 'w-8' : 'w-28'
+      }`}
     >
       <Button
         type="button"
         size="icon-sm"
         variant="outline"
-        aria-label="Scroll the letters up"
+        aria-label="Scroll the index up"
         disabled={atTop}
         onClick={() => scroll(-1)}
         className={overflow ? '' : 'invisible'}
@@ -332,46 +315,56 @@ export function AlphabetIndex({
         ref={list}
         className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {letters.map((letter) => {
-          const active = letter === current;
+        {groups.map((group) => {
+          const active = group.key === current;
           return (
             <button
-              key={letter}
+              key={group.key}
               type="button"
               ref={(node) => {
-                if (node) buttons.current.set(letter, node);
-                else buttons.current.delete(letter);
+                if (node) buttons.current.set(group.key, node);
+                else buttons.current.delete(group.key);
               }}
-              tabIndex={letter === stop ? 0 : -1}
+              tabIndex={group.key === stop ? 0 : -1}
               aria-current={active ? 'true' : undefined}
-              aria-label={`${letter} — ${plural(filing.counts.get(letter) ?? 0, 'album')}`}
-              className="flex size-8 shrink-0 items-center justify-center rounded-[6px] border border-foreground/45 bg-transparent p-0 leading-none outline-none transition-colors select-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => jump(letter)}
+              aria-label={`${group.label} — ${plural(group.count, 'album')}`}
+              className={`flex shrink-0 items-center rounded-[6px] border border-foreground/45 leading-none outline-none transition-colors select-none focus-visible:ring-2 focus-visible:ring-ring ${
+                variant === 'letter'
+                  ? 'size-8 justify-center p-0'
+                  : 'h-8 w-full justify-start px-2'
+              } ${
+                variant === 'name' && active
+                  ? 'bg-secondary text-secondary-foreground'
+                  : 'hover:bg-foreground/10'
+              }`}
+              onClick={() => jump(group)}
               onKeyDown={(event) => {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
-                  step(letter, 1);
+                  step(group.key, 1);
                 } else if (event.key === 'ArrowUp') {
                   event.preventDefault();
-                  step(letter, -1);
+                  step(group.key, -1);
                 } else if (event.key === 'Home') {
                   event.preventDefault();
-                  step(letter, -letters.length);
+                  step(group.key, -groups.length);
                 } else if (event.key === 'End') {
                   event.preventDefault();
-                  step(letter, letters.length);
+                  step(group.key, groups.length);
                 }
               }}
             >
-              <span
-                className={`flex size-5 items-center justify-center rounded-full border border-foreground/45 text-xs leading-none ${
-                  active
-                    ? 'bg-secondary font-medium text-secondary-foreground'
-                    : 'text-foreground'
-                }`}
-              >
-                {letter}
-              </span>
+              {variant === 'letter' ? (
+                <span
+                  className={`flex size-5 items-center justify-center rounded-full border border-foreground/45 text-xs leading-none ${
+                    active ? 'bg-secondary font-medium text-secondary-foreground' : 'text-foreground'
+                  }`}
+                >
+                  {group.label}
+                </span>
+              ) : (
+                <span className="truncate text-xs leading-none">{group.label}</span>
+              )}
             </button>
           );
         })}
@@ -380,7 +373,7 @@ export function AlphabetIndex({
         type="button"
         size="icon-sm"
         variant="outline"
-        aria-label="Scroll the letters down"
+        aria-label="Scroll the index down"
         disabled={atEnd}
         onClick={() => scroll(1)}
         className={overflow ? '' : 'invisible'}

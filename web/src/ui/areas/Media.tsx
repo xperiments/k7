@@ -17,13 +17,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   artistOf,
   byArtistThenAlbum,
+  byGenreThenAlbum,
+  genreOf,
   letterOf,
   useMediaIndex,
   type Album,
   type MediaIndexState,
 } from '../../media/albums';
 import { AlbumDetail } from '../album-detail';
-import { AlbumShelf, AlphabetIndex } from '../album-shelf';
+import { AlbumShelf, IndexRail } from '../album-shelf';
 import { Cover } from '../cover';
 import { DriveView } from '../drive';
 import { plural } from '../format';
@@ -266,23 +268,61 @@ export function MediaArea({ album, drive }: { album?: string; drive?: string } =
  * handed a tree without a card, a player or a store: the preview harness does exactly that,
  * and so would a test of the two views.
  */
+type Grouping = 'artist' | 'genre';
+
+/** The Carousel's order: by artist's initial (the default) or by the album's genre. */
+function orderAlbums(all: Album[], needle: string, grouping: Grouping): Album[] {
+  return all
+    .filter(
+      (entry) =>
+        !needle ||
+        entry.album.toLowerCase().includes(needle) ||
+        entry.artists.some((artist) => artist.toLowerCase().includes(needle)),
+    )
+    .sort(grouping === 'artist' ? byArtistThenAlbum : byGenreThenAlbum);
+}
+
 /** The view switch and the search, shared by the two views so they agree on the box. */
 function MediaHeader({
   readingDrive,
   query,
   onQuery,
   searchId,
+  grouping,
+  onGrouping,
 }: {
   readingDrive: boolean;
   query: string;
   onQuery: (value: string) => void;
   searchId: string;
+  grouping?: Grouping;
+  onGrouping?: (next: Grouping) => void;
 }) {
   const placeholder = readingDrive ? 'Search the drive' : 'Search albums';
   return (
     <header className="flex flex-wrap items-center justify-end gap-x-6 gap-y-3">
       <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
         <ViewSwitch view={readingDrive ? 'drive' : 'carousel'} />
+        {!readingDrive && grouping && onGrouping ? (
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant={grouping === 'artist' ? 'solid' : 'default'}
+              aria-pressed={grouping === 'artist'}
+              onClick={() => onGrouping('artist')}
+            >
+              A–Z
+            </Button>
+            <Button
+              size="sm"
+              variant={grouping === 'genre' ? 'solid' : 'default'}
+              aria-pressed={grouping === 'genre'}
+              onClick={() => onGrouping('genre')}
+            >
+              Genres
+            </Button>
+          </div>
+        ) : null}
         <div className="flex w-full flex-col gap-1 sm:w-64">
           <label htmlFor={searchId} className="sr-only">
             {placeholder}
@@ -322,21 +362,13 @@ export function MediaView({
     setQuery('');
   }, [drive]);
 
+  const [grouping, setGrouping] = useState<Grouping>('artist');
   const needle = query.trim().toLowerCase();
-  /* The Carousel walks artists, not album titles: the abecedary is the artists' initials,
-   * and a letter only leads somewhere if the rows are grouped by who made them. The title
-   * is the tie-break inside one name. */
+  /* The default order is the artist's initial; the genre order files an album under the
+   * most common genre of its rows. The title is the tie-break inside one group. */
   const albums = useMemo(
-    () =>
-      (state.index?.albums ?? [])
-        .filter(
-          (entry) =>
-            !needle ||
-            entry.album.toLowerCase().includes(needle) ||
-            entry.artists.some((artist) => artist.toLowerCase().includes(needle)),
-        )
-        .sort(byArtistThenAlbum),
-    [state.index, needle],
+    () => orderAlbums(state.index?.albums ?? [], needle, grouping),
+    [state.index, needle, grouping],
   );
 
   const [selected, setSelected] = useState(0);
@@ -361,10 +393,27 @@ export function MediaView({
 
   const active = albums.length > 0 ? albums[Math.min(selected, albums.length - 1)] : null;
 
-  /* A letter does not teleport the row: the selection walks every case to the artist's
-   * first album. The walk takes longer the further the letter is — one second for a step
-   * within a letter, three for a crossing of the alphabet — so the step is the duration
-   * divided by the cases. Any direct choice stops it. */
+  const keyOf = (entry: Album) =>
+    grouping === 'artist' ? letterOf(artistOf(entry)) : genreOf(entry);
+  const groups = useMemo(() => {
+    const out: { key: string; label: string; first: number; count: number }[] = [];
+    albums.forEach((entry, index) => {
+      const key = grouping === 'artist' ? letterOf(artistOf(entry)) : genreOf(entry);
+      const last = out[out.length - 1];
+      if (last && last.key === key) {
+        last.count += 1;
+        return;
+      }
+      out.push({ key, label: key, first: index, count: 1 });
+    });
+    return out;
+  }, [albums, grouping]);
+  const currentKey = active ? keyOf(active) : null;
+
+  /* A group does not teleport the row: the selection walks every case to the group's first
+   * album. The walk takes longer the further the group is — one second for a neighbour,
+   * three across the index — so the step is the duration divided by the cases. Any direct
+   * choice stops it. */
   const walk = useRef<number | null>(null);
   const stopWalk = () => {
     if (walk.current !== null) {
@@ -377,15 +426,18 @@ export function MediaView({
     stopWalk();
     setSelected(index);
   };
-  const jumpToLetter = (target: number) => {
+  const jumpToGroup = (target: number) => {
     stopWalk();
     let at = selected;
     if (at === target || albums.length === 0) return;
     const direction = target > at ? 1 : -1;
-    const from = letterOf(artistOf(albums[at])).charCodeAt(0);
-    const to = letterOf(artistOf(albums[target])).charCodeAt(0);
-    const letters = Math.min(26, Math.abs(to - from));
-    const duration = Math.min(3000, Math.max(1000, 1000 + (letters / 26) * 2000));
+    const currentGroup = groups.findIndex(
+      (group) => at >= group.first && at < group.first + group.count,
+    );
+    const targetGroup = groups.findIndex((group) => group.first === target);
+    const distance = Math.abs(targetGroup - currentGroup);
+    const span = Math.max(1, groups.length - 1);
+    const duration = Math.min(3000, Math.max(1000, 1000 + (distance / span) * 2000));
     const steps = Math.max(1, Math.abs(target - at));
     const step = Math.max(4, Math.round(duration / steps));
     walk.current = window.setInterval(() => {
@@ -403,6 +455,16 @@ export function MediaView({
     }, step);
   };
 
+  /* Switching the order keeps the turned album turned. */
+  const changeGrouping = (next: Grouping) => {
+    const name = active?.album;
+    setGrouping(next);
+    if (!name) return;
+    const ordered = orderAlbums(state.index?.albums ?? [], needle, next);
+    const at = ordered.findIndex((entry) => entry.album === name);
+    if (at >= 0) setSelected(at);
+  };
+
   if (readingDrive) {
     return (
       <div className="mx-auto flex w-full flex-col gap-4 px-4 py-6 sm:px-6">
@@ -416,7 +478,14 @@ export function MediaView({
   return (
     <div className="flex h-full min-h-0 gap-3 p-4 sm:gap-4 sm:p-6">
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <MediaHeader readingDrive={false} query={query} onQuery={setQuery} searchId={searchId} />
+        <MediaHeader
+          readingDrive={false}
+          query={query}
+          onQuery={setQuery}
+          searchId={searchId}
+          grouping={grouping}
+          onGrouping={changeGrouping}
+        />
         <ShelfView
           state={state}
           albums={albums}
@@ -427,11 +496,11 @@ export function MediaView({
           onClear={() => setQuery('')}
         />
       </div>
-      <AlphabetIndex
-        albums={albums}
-        selected={selected}
-        onSelect={selectNow}
-        onJump={jumpToLetter}
+      <IndexRail
+        groups={groups}
+        current={currentKey}
+        variant={grouping === 'artist' ? 'letter' : 'name'}
+        onJump={jumpToGroup}
       />
     </div>
   );
