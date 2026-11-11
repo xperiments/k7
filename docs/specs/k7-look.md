@@ -374,7 +374,8 @@ and the label stay neutral. The rail does not collapse: the shell is one frame a
 `K7Shell`. **[ADR]**
 
 - The frame is 1px neutral line, panel radius, 5px padding and 5px gutters; a 1px line divides
-  the rail from the stage, and the footer bar spans the frame below both.
+  the rail from the stage, the rail runs the frame's full height, and the footer bar is the
+  content's footer inside the stage column.
 - The logo is the accent wordmark on the page's dark ground — the inverse of the reference's filled
   tile, with no tile fill — and its wordmark is the only bold text in the system. It sits inside
   the rail's own header, which is the stage header's class
@@ -382,8 +383,8 @@ and the label stay neutral. The rail does not collapse: the shell is one frame a
   tile is `size-10` inside it.
 - Counts are accent numbers at the end of the row; each nav group's label is the uppercase word in
   the dim neutral followed by a 1px neutral rule to the rail's edge — no pill, no border.
-- The PlayerBar is the footer bar: a panel across the frame's bottom, its scrub solid to the
-  playhead and dim after.
+- The PlayerBar is the content's footer: a strip at the stage column's bottom, under a 1px top
+  rule, its scrub solid to the playhead and dim after.
 
 ### 5.2 The kit
 

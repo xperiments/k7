@@ -77,7 +77,7 @@ export function PlayerBar() {
     : 0;
 
   return (
-    <div className="flex shrink-0 flex-col rounded-panel border border-border bg-background">
+    <div className="flex shrink-0 flex-col border-t bg-background">
       <div className="flex h-14 items-center gap-3 px-3 sm:px-4">
         {cover || title !== 'Nothing playing' ? (
           /* The thing that is playing, as the thing it is: one cassette off the shelf,

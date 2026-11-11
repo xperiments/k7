@@ -389,10 +389,9 @@ export function Shell({ route, children }: { route: Route; children: React.React
             </header>
 
             <div className="min-h-0 flex-1 overflow-auto">{children}</div>
+            <PlayerBar />
           </main>
         </div>
-
-        <PlayerBar />
       </div>
     </SidebarProvider>
   );
