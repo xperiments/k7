@@ -664,6 +664,11 @@
           "at": "2026-11-11T04:37:59Z",
           "by": "dsh",
           "text": "Selected state corrected: the button fills accent and its icon and label are dark. A dark label cannot read on the transparent row, so the fill is what makes 'text black' possible."
+        },
+        {
+          "at": "2026-11-11T04:39:46Z",
+          "by": "dsh",
+          "text": "Active state settled: button border accent and no fill, dome filled accent, dome icon dark, label accent."
         }
       ]
     },
