@@ -246,9 +246,9 @@ function ShelfView({
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             <Button
               size="icon-sm"
-              variant="outline"
+              variant="ghost"
               aria-label="Close the tracks"
-              className="absolute top-2 left-2 z-10 bg-background"
+              className="absolute top-2 -left-8 z-10"
               onClick={() => setOpen(false)}
             >
               <PanelLeftOpen aria-hidden="true" />
