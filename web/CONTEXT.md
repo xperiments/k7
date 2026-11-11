@@ -51,7 +51,8 @@ _Avoid_: URL, link, path
 **Carousel**:
 Media's first view: the album shelf, the cases on their short ends with the selected one turned
 to face the reader. The name is the walk along the row; there is nothing that rotates, swipes or
-advances on a timer.
+advances on a timer. The selected album's tracks are a column the **Tracks** toggle opens; the
+shelf has the whole stage by default.
 _Avoid_: slider, gallery, carousel widget
 
 **Drive**:

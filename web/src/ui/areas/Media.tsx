@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Disc3, FolderOpen, LayoutGrid } from 'lucide-react';
+import { Disc3, FolderOpen, LayoutGrid, ListMusic } from 'lucide-react';
+import { cn } from 'cn';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -148,12 +149,15 @@ function ShelfView({
   album,
   query,
   onClear,
+  showTracks,
 }: {
   state: MediaIndexState;
   /** The album the route names, when the address came from a link to one. */
   album?: string;
   query: string;
   onClear: () => void;
+  /** The song column is opt-in: the carousel is the page until it is asked for. */
+  showTracks: boolean;
 }) {
   const [selected, setSelected] = useState(0);
   /* The route's album is applied once, when it arrives: a search that keeps it visible must
@@ -210,47 +214,63 @@ function ShelfView({
   const hasAlbums = (state.index?.albums.length ?? 0) > 0;
   const nothingMatches = state.index !== null && needle.length > 0 && albums.length === 0;
 
+  const shelfVisible = !state.loading && hasAlbums && !nothingMatches && active !== null;
+
+  /* With the tracks hidden, the shelf has the whole stage and floats in the middle of it;
+     with them shown, the pair is the old two-column grid and the tracks own the scroll. The
+     loading, empty and no-match states are the page's, not the song column's, so they show
+     whether or not the column is. */
+  const notice = state.loading ? (
+    <div className="flex justify-center py-6">
+      <Skeleton className="aspect-[16/25] w-40" />
+    </div>
+  ) : !hasAlbums ? (
+    <NoAlbums reachable={state.reachable} />
+  ) : nothingMatches ? (
+    <Empty className="border">
+      <EmptyHeader>
+        <EmptyTitle>Nothing matches “{query.trim()}”</EmptyTitle>
+        <EmptyDescription>Album names and artists are searched.</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button size="sm" variant="outline" onClick={onClear}>
+          Clear the search
+        </Button>
+      </EmptyContent>
+    </Empty>
+  ) : null;
+
   return (
-    /* Two columns from `lg`: the shelf on the left, the tracks on the right. The shelf
-       keeps its own height and never scrolls; the right column is the only scroll region
-       on the page, so the case stays in view while its tracks go past. Below `lg` the
-       shelf goes back on top and the tracks keep the remaining height. */
-    <div className="flex min-h-0 flex-1 flex-col gap-4 lg:grid lg:grid-cols-2 lg:gap-6">
-      {!state.loading && hasAlbums && !nothingMatches && active ? (
-        <aside className="min-h-0 lg:self-center">
+    <div
+      className={cn(
+        'flex min-h-0 flex-1 flex-col gap-4',
+        showTracks && shelfVisible && 'lg:grid lg:grid-cols-2 lg:gap-6',
+      )}
+    >
+      {shelfVisible ? (
+        <aside
+          className={cn(
+            'min-h-0',
+            showTracks ? 'lg:self-center' : 'flex flex-1 flex-col justify-center',
+          )}
+        >
           <AlbumShelf albums={albums} selected={selected} onSelect={setSelected} />
         </aside>
       ) : null}
 
-      {/* The column fills its half and the list floats in the middle of it. The margins —
-          not flex centring — are what places it, because auto margins collapse to nothing
-          when the content is taller than the column, where centring would clip the first
-          row. */}
-      <div ref={tracks} className="flex min-h-0 flex-1 flex-col overflow-auto">
-        <div className="m-auto flex w-full flex-col gap-4">
-          {state.loading ? (
-            <div className="flex justify-center py-6">
-              <Skeleton className="aspect-[16/25] w-40" />
+      {shelfVisible ? (
+        showTracks ? (
+          <div ref={tracks} className="flex min-h-0 flex-1 flex-col overflow-auto">
+            <div className="m-auto flex w-full flex-col gap-4">
+              <AlbumDetail album={active!} state={state} />
             </div>
-          ) : !hasAlbums ? (
-            <NoAlbums reachable={state.reachable} />
-          ) : nothingMatches ? (
-            <Empty className="border">
-              <EmptyHeader>
-                <EmptyTitle>Nothing matches “{query.trim()}”</EmptyTitle>
-                <EmptyDescription>Album names and artists are searched.</EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <Button size="sm" variant="outline" onClick={onClear}>
-                  Clear the search
-                </Button>
-              </EmptyContent>
-            </Empty>
-          ) : active ? (
-            <AlbumDetail album={active} state={state} />
-          ) : null}
+          </div>
+        ) : null
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+          <div className="m-auto flex w-full flex-col gap-4">{notice}</div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -276,6 +296,7 @@ export function MediaView({
 }) {
   const readingDrive = drive !== undefined;
   const [query, setQuery] = useState('');
+  const [showTracks, setShowTracks] = useState(false);
   const searchId = useId();
 
   /* A search is about what is on screen: another view, or another folder a link names,
@@ -304,6 +325,17 @@ export function MediaView({
             there is room for them, stacked under the title when there is not. */}
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
           <ViewSwitch view={readingDrive ? 'drive' : 'carousel'} />
+          {!readingDrive ? (
+            <Button
+              size="sm"
+              variant={showTracks ? 'solid' : 'default'}
+              aria-pressed={showTracks}
+              onClick={() => setShowTracks((shown) => !shown)}
+            >
+              <ListMusic aria-hidden="true" />
+              Tracks
+            </Button>
+          ) : null}
           <div className="flex w-full flex-col gap-1 sm:w-64">
             <label htmlFor={searchId} className="sr-only">
               {placeholder}
@@ -323,7 +355,13 @@ export function MediaView({
       {readingDrive ? (
         <DriveView state={state} path={drive} query={query} />
       ) : (
-        <ShelfView state={state} album={album} query={query} onClear={() => setQuery('')} />
+        <ShelfView
+          state={state}
+          album={album}
+          query={query}
+          onClear={() => setQuery('')}
+          showTracks={showTracks}
+        />
       )}
     </div>
   );
