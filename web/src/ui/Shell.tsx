@@ -332,7 +332,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
     <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden p-1">
       <div className="flex h-full w-full flex-col gap-1 rounded-panel">
         <div className="flex min-h-0 flex-1 gap-1">
-          <aside className="flex w-52 shrink-0 flex-col gap-3 border-r border-border p-2">
+          <aside className="flex w-52 shrink-0 flex-col gap-3 border-r border-border px-2 pb-2">
             <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
             <div className="min-h-0 flex-1 overflow-auto">
               <Nav groups={groups} route={route} />
