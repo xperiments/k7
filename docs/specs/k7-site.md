@@ -187,6 +187,11 @@ password twice (ADR 0076).
 **F12. No account, no upload, no analytics, no stored port.** The page writes the board and
 forgets it.
 
+**F13. The flash ends by resetting the board into the application, with an edge.** The write
+leaves the enable line released, and esptool-js's `after('hard_reset')` only releases it again —
+so the first browser flash left the board in the stub until the cable was pulled. The flasher
+asserts EN (RTS) for 150 ms and releases it, with IO0 high: the same edge the boot button makes.
+
 ---
 
 ## 4. The release
@@ -262,6 +267,7 @@ flashed from a browser, and the timings below are not yet measured.
 | T8 | The worker precaches `/app` and answers navigation there; a navigation to `/` goes to the network | web |
 | T9 | The device's 302 names `https://k7.xperiments.dev/app#/player` | host (`http_tests.sh`) |
 | T10 | The Site's flash section is absent-but-honest without `'serial' in navigator`, and the manual command carries the manifest's offsets | web |
+| T11 | The reset that ends a flash moves the enable line — `DTR false, RTS true`, a wait, `DTR false, RTS false` — instead of releasing a line that is already released | web |
 
 **Board-only, by hand**
 

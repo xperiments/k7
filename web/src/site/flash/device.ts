@@ -16,6 +16,7 @@ import {
 import { FlashError } from './errors';
 import { assertIdentity, type Identity } from './identity';
 import { FIRMWARE } from './manifest';
+import { resetIntoApp } from './reset';
 
 export interface FlashPart {
   data: Uint8Array;
@@ -122,10 +123,12 @@ export async function openSerialDevice(): Promise<FlashDevice> {
     },
 
     async close() {
+      /* An edge, not a level: the flash left RTS released, and esptool-js's own hard reset
+       * only releases it again (reset.ts). Without this the board stays in the stub. */
       try {
-        await loader.after('hard_reset');
+        await resetIntoApp(transport);
       } catch {
-        /* the board may already be running, or the cable went; the port is still closed */
+        /* the cable went, or the port refused; the disconnect below is still right */
       }
       await transport.disconnect().catch(() => undefined);
     },
