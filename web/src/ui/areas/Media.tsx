@@ -121,7 +121,7 @@ function ViewSwitch({
             size="sm"
             variant={grouping === 'artist' ? 'solid' : 'default'}
             aria-pressed={grouping === 'artist'}
-            className="h-6 px-2"
+            className="h-5 px-1.5"
             onClick={() => onGrouping('artist')}
           >
             A–Z
@@ -130,7 +130,7 @@ function ViewSwitch({
             size="sm"
             variant={grouping === 'genre' ? 'solid' : 'default'}
             aria-pressed={grouping === 'genre'}
-            className="h-6 px-2"
+            className="h-5 px-1.5"
             onClick={() => onGrouping('genre')}
           >
             Genre
