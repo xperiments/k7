@@ -115,7 +115,7 @@ export function VideoArea({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 bg-black">
+      <div className="relative min-h-0 flex-1 bg-background">
         {playing ? (
           <iframe
             src={embedUrl(id)}
@@ -134,8 +134,8 @@ export function VideoArea({ id }: { id: string }) {
             aria-label={`Play ${title}`}
           >
             <img src={poster} alt="" className="size-full object-contain" />
-            <span className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors group-hover:bg-black/10">
-              <span className="flex size-14 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm">
+            <span className="absolute inset-0 flex items-center justify-center bg-background/40 group-hover:bg-background/20">
+              <span className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <Play aria-hidden="true" className="size-6" />
               </span>
             </span>

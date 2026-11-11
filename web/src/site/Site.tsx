@@ -20,10 +20,10 @@ export function Site() {
         <header className="flex items-center justify-between gap-4">
           <a
             href="#top"
-            className="flex items-center gap-2 transition-colors hover:text-foreground"
+            aria-label="K7"
+            className="flex items-center gap-2 hover:text-foreground"
           >
-            <img src="/icons/k7logo.svg" alt="" className="size-7 object-contain" />
-            <span className="text-sm font-medium tracking-[0.18em]">K7</span>
+            <span aria-hidden="true" className="k7-logo size-7" />
           </a>
           <a
             href="/app"
@@ -44,7 +44,7 @@ export function Site() {
               station.
             </p>
             <div className="flex flex-wrap items-center gap-3">
-              <Button render={<a href="#flash" />}>Flash a board</Button>
+              <Button variant="solid" render={<a href="#flash" />}>Flash a board</Button>
               <Button variant="outline" render={<a href="#install" />}>
                 Install the app
               </Button>
@@ -53,7 +53,7 @@ export function Site() {
 
           {/* The hero's media slot. One file, one frame: the panel's own drawing today, a
             * photograph of the device tomorrow (k7-site.md S11). */}
-          <figure className="overflow-hidden rounded-xl border border-border">
+          <figure className="overflow-hidden rounded-panel border border-border">
             <img
               src="/site/panel.png"
               width={800}

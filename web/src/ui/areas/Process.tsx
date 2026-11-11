@@ -103,7 +103,7 @@ export function ProcessArea() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-0.5">
-          <h1 className="text-xl font-semibold tracking-tight">Process</h1>
+          <h1 className="text-xl font-light tracking-tight">Process</h1>
           <p className="max-w-prose text-sm text-muted-foreground">
             Tempo, key, mood and energy from MP3 &amp; FLAC, measured in this browser.
           </p>

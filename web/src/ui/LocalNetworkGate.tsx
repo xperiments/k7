@@ -81,11 +81,10 @@ export function LocalNetworkGate({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-dvh w-full items-center justify-center bg-background p-6 text-foreground">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <img
-            src="/icons/k7logo.svg"
-            alt="K7"
-            draggable={false}
-            className="mb-1 size-16 object-contain dark:invert"
+          <span
+            role="img"
+            aria-label="K7"
+            className="k7-logo mb-1 size-16 shrink-0"
           />
           <CardTitle className="text-xl">Local network access</CardTitle>
           <CardDescription>

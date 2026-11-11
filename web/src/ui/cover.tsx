@@ -46,7 +46,7 @@ export function Cover({
       <div
         aria-hidden="true"
         className={cn(
-          'flex aspect-square w-full items-center justify-center bg-muted text-2xl font-semibold text-muted-foreground',
+          'flex aspect-square w-full items-center justify-center bg-muted text-2xl font-light text-muted-foreground',
           className,
         )}
       >

@@ -74,7 +74,7 @@ export function Install() {
 
         {offer === 'install' ? (
           <>
-            <Button onClick={() => void promptInstallNow()}>
+            <Button variant="solid" onClick={() => void promptInstallNow()}>
               <MonitorDown aria-hidden="true" />
               Install K7
             </Button>

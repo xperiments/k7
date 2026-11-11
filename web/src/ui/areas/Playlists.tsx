@@ -257,7 +257,7 @@ export function PlaylistsArea() {
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <h1 className="text-xl font-semibold tracking-tight">Playlists</h1>
+          <h1 className="text-xl font-light tracking-tight">Playlists</h1>
         </div>
         <Button
           variant="outline"

@@ -77,7 +77,7 @@ const FAILURE: Record<FailureCause, { title: string; body: string }> = {
 
 function ManualPath() {
   return (
-    <details className="rounded-lg border border-border px-4 py-3">
+    <details className="rounded-panel border border-primary px-4 py-3">
       <summary className="cursor-pointer text-sm font-medium">Use another tool</summary>
       <p className="mt-3 text-xs text-muted-foreground">
         Download the three parts and write them with esptool. The offsets and the sizes are
@@ -183,7 +183,7 @@ export function Flash() {
                 written until you confirm.
               </li>
             </ul>
-            <Button onClick={prepare}>Connect a board</Button>
+            <Button variant="solid" onClick={prepare}>Connect a board</Button>
           </>
         ) : null}
 
@@ -229,7 +229,7 @@ export function Flash() {
               </>
             ) : (
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => flash(false)}>Flash K7 {state.version}</Button>
+                <Button variant="solid" onClick={() => flash(false)}>Flash K7 {state.version}</Button>
                 <Button variant="ghost" onClick={() => setErasePending(true)}>
                   Erase and install fresh…
                 </Button>

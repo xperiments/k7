@@ -299,7 +299,7 @@ export function MediaView({
       }
     >
       <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <h1 className="text-xl font-semibold tracking-tight">Media</h1>
+        <h1 className="text-xl font-light tracking-tight">Media</h1>
         {/* The view and the search are the header's two controls: beside each other when
             there is room for them, stacked under the title when there is not. */}
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">

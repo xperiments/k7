@@ -245,7 +245,7 @@ export function PlayerArea() {
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight break-words">{title}</h1>
+            <h1 className="text-2xl font-light tracking-tight break-words">{title}</h1>
             {subtitle ? (
               <p className="text-sm text-muted-foreground break-words">{subtitle}</p>
             ) : (

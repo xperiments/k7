@@ -161,8 +161,8 @@ function TreeItemLabel<T = any>({
     <span
       data-slot="tree-item-label"
       className={cn(
-        "in-focus-visible:ring-ring/50 bg-background hover:bg-accent in-data-[selected=true]:bg-accent in-data-[selected=true]:text-accent-foreground in-data-[drag-target=true]:bg-accent flex items-center gap-1 transition-colors not-in-data-[folder=true]:ps-7 in-focus-visible:ring-[3px] in-data-[search-match=true]:bg-blue-50! [&_svg]:pointer-events-none [&_svg]:shrink-0",
-        "rounded-md",
+        "in-focus-visible:ring-ring/50 bg-transparent hover:bg-primary/15 in-data-[selected=true]:bg-primary in-data-[selected=true]:text-primary-foreground in-data-[drag-target=true]:bg-primary/15 flex items-center gap-1 not-in-data-[folder=true]:ps-7 in-focus-visible:ring-2 in-data-[search-match=true]:bg-primary/15! [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:stroke-[1.25]",
+        "rounded-[4px]",
         "py-1.5",
         "px-2",
         "text-sm",
@@ -173,7 +173,7 @@ function TreeItemLabel<T = any>({
       {item.isFolder() &&
         (toggleIconType === "plus-minus" ? (
           item.isExpanded() ? (
-            <MinusIcon className="text-muted-foreground size-3.5" stroke="currentColor" strokeWidth="1" />
+            <MinusIcon className="text-muted-foreground size-3.5" stroke="currentColor" strokeWidth="1.25" />
           ) : (
             <PlusIcon className="text-muted-foreground size-3.5" stroke="currentColor" strokeWidth="1" />
           )

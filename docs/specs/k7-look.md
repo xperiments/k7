@@ -6,9 +6,11 @@ for what is current. The look is carried by the theme tokens and the installed p
 screen is not restyled one by one; and it is one look for both documents, because `/` and `/app`
 share one stylesheet and one set of primitives.
 
-**Status.** Specified. LK-02 to LK-07 move the App and the Site onto it; until they land, the
-stylesheet still carries a light palette and the shell still has a theme toggle. The calls this
-repository took against the guide that preceded this file are recorded in
+**Status.** The base is in (LK-02): the tokens, the dark-only documents and the installed
+primitives. LK-03 to LK-07 finish the shell, the screens, the Site and the verification; until
+they land, the screens keep their pre-K7 layouts and their state words are still backed by token
+names that resolve to the accent. The calls this repository took against the guide that preceded
+this file are recorded in
 [ADR 0080](../adr/0080-the-k7-look-is-the-products-one-skin.md) and marked **[ADR]** below.
 
 **Reference.** The ten scene drawings in [`docs/images/screens/`](../images/screens/), all of them
@@ -479,9 +481,12 @@ grep -rnE 'rounded-(lg|xl|2xl|3xl)|font-(semibold|bold)' web/src
 grep -rnE '<img|next/image|\.(png|jpg|jpeg|webp)' web/src
 ```
 
-**Allowed exceptions:** `shadow-none`, the coverflow's rules in `index.css` (its masks, its
-shading and its hues), `font-medium` on the micro-label chip, the focus ring offset in the
-button, the cover images and the Site's hero (`<img>` for content), and the theme file itself.
+**Allowed exceptions:** `shadow-none`; the coverflow's own rules in `index.css` and
+`album-shelf.tsx` (its masks, shading, hues and weights); `font-medium` on the micro-label chip;
+the focus ring offsets on the primitives; the content images — covers, video posters and the
+Site's hero — which are `<img>` on purpose; the `.jpeg(` call in `src/audio/covers.ts`, which the
+image grep reads as a file name; and `from-`/`to-`/`via-` inside prose and `auto-*`, which the
+decoration grep reads as utilities.
 
 ### 9.2 Visual checklist
 

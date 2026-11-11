@@ -215,7 +215,7 @@ export function AskArea() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-6">
       <header className="flex flex-col gap-0.5">
-        <h1 className="text-xl font-semibold tracking-tight">Ask</h1>
+        <h1 className="text-xl font-light tracking-tight">Ask</h1>
         <p className="text-sm text-muted-foreground">
           A sentence in, filters out. The model never sees your library, and nothing is added
           until you make it a playlist.

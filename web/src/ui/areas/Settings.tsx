@@ -392,7 +392,7 @@ export function SettingsArea() {
   return (
     <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
       <header className="flex flex-col gap-0.5">
-        <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
+        <h1 className="text-xl font-light tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
           What this browser remembers for itself. None of it is sent to the device.
         </p>

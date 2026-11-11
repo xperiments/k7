@@ -3,12 +3,10 @@ import {
   Disc3,
   ListMusic,
   MessageCircle,
-  Moon,
   Plug,
   RefreshCw,
   Settings as SettingsIcon,
   Sparkles,
-  Sun,
   Waves,
 } from 'lucide-react';
 import { cn } from 'cn';
@@ -54,7 +52,6 @@ import { InstallButton } from './InstallButton';
 import { useDrafts } from '../playlists/drafts';
 import { navigate, routeArea, routeHref, routePage, type Route } from './router';
 import { PlayerBar } from './PlayerBar';
-import { toggleTheme, useTheme } from './theme';
 
 /**
  * The shell: `c-sidebar-1`'s structure with this device's data in it.
@@ -211,7 +208,7 @@ function DeviceMenu({
             render={
               <SidebarMenuButton
                 size="lg"
-                className="h-auto aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-accent-foreground"
+                className="h-auto aria-expanded:bg-primary/15"
               />
             }
           >
@@ -226,7 +223,7 @@ function DeviceMenu({
               className="k7-sidebar-logo size-16 shrink-0 group-data-[collapsible=icon]:size-4!"
             />
             <span className="grid min-w-0 flex-1 text-left leading-tight">
-              <span className="truncate text-xs text-sidebar-foreground/70">{subtitle}</span>
+              <span className="truncate text-xs text-sidebar-foreground/85">{subtitle}</span>
             </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="start" className="w-64">
@@ -309,7 +306,6 @@ export function Shell({ route, children }: { route: Route; children: React.React
   const { status, reachable } = useDeviceStatus();
   const link = useDeviceLink();
   const drafts = useDrafts();
-  const theme = useTheme();
   const card = Boolean(status?.card);
   const tracks = status?.tracks ?? 0;
 
@@ -332,24 +328,6 @@ export function Shell({ route, children }: { route: Route; children: React.React
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
-            {/* The label is the action, not the state: the theme you are in is what the
-                whole page already says, and a button that reads "Dark theme" while dark
-                would be a switch that looks already thrown. */}
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                type="button"
-                onClick={toggleTheme}
-                aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-                tooltip={theme === 'dark' ? 'Light theme' : 'Dark theme'}
-              >
-                {theme === 'dark' ? (
-                  <Sun aria-hidden="true" />
-                ) : (
-                  <Moon aria-hidden="true" />
-                )}
-                <span>{theme === 'dark' ? 'Light theme' : 'Dark theme'}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton
                 render={<a href={routeHref({ name: 'settings' })} />}
@@ -404,7 +382,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
 export function NotFound({ path }: { path: string }) {
   return (
     <div className="flex flex-col gap-3 p-6">
-      <h1 className="text-xl font-semibold tracking-tight">No such place</h1>
+      <h1 className="text-xl font-light tracking-tight">No such place</h1>
       <p className="text-sm text-muted-foreground">
         <code className="bg-muted px-1 py-0.5 font-mono text-xs">#{path}</code> is not one of the
         front door's routes. Card, Playlists, Media and Player are.

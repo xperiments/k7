@@ -7,7 +7,7 @@
  * origin, because the player is a LAN appliance and a page whose type comes from someone
  * else's CDN is a page that renders differently when the house is offline.
  *
- * Variable weight 300..700, so the app's `font-medium`/`font-semibold` are real weights.
+ * Variable weight 300..700, so medium and semibold are real weights.
  * `OFL.txt` beside the files is the licence, and the service worker caches `/fonts/`
  * like the rest of the shell.
  */
@@ -33,7 +33,9 @@
 
 @theme inline {
     --font-heading: var(--font-sans);
-    --font-sans: 'Jura', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-sans: var(--k7-font);
+    --default-transition-duration: 100ms;
+    --default-transition-timing-function: linear;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -81,101 +83,84 @@
     --color-success-foreground: var(--success-foreground);
     --color-success: var(--success);
     --color-destructive-foreground: var(--destructive-foreground);
+    --color-k7-bg: var(--k7-bg);
+    --color-k7-accent: var(--k7-accent);
+    --color-k7-dim: var(--k7-accent-dim);
+    --color-k7-faint: var(--k7-accent-faint);
+    --color-k7-well: var(--k7-well);
+    --radius-panel: 0.4375rem;
+    /* The K7 look has no shadow: every built-in shadow utility resolves to none. */
+    --shadow-2xs: none;
+    --shadow-xs: none;
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+    --shadow-xl: none;
+    --shadow-2xl: none;
 }
 
 /*
- * The palette is the app's own: warm charcoal, an amber accent and a teal "measured"
- * colour, carried over from the hand-written stylesheet into semantic tokens so the
- * components keep their identity. Only the tokens change; no installed file is restyled.
+ * The K7 look (docs/specs/k7-look.md): one near-black page, one accent, outline for what is
+ * available and fill for what is current. The values are the firmware's own — COL_BLACK
+ * 0x111111 and COL_PRIMARY 0xF15A22 in components/app/screen_display/cassette_style.h — so
+ * the page and the panel are the same ink. The album shelf keeps its own colours below: it
+ * is the one preserved surface (K19).
  */
 :root {
-    --background: oklch(0.985 0.003 90);
-    --foreground: oklch(0.22 0.01 265);
-    --card: oklch(.5 0 0);
-    --card-foreground: oklch(0.22 0.01 265);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.22 0.01 265);
-    --primary: #F15A22;
-    --primary-foreground: oklch(0.99 0 0);
-    --secondary: oklch(0.96 0.004 90);
-    --secondary-foreground: oklch(0.22 0.01 265);
-    --muted: oklch(0.96 0.004 90);
-    --muted-foreground: oklch(0.5 0.01 265);
-    --accent: oklch(0.95 0.01 85);
-    --accent-foreground: oklch(0.22 0.01 265);
-    --destructive: oklch(0.55 0.19 27);
-    --destructive-foreground: oklch(0.45 0.16 27);
-    --border: oklch(0.91 0.005 265);
-    --input: oklch(0.91 0.005 265);
-    --ring: oklch(0.58 0.13 70);
-    --chart-1: oklch(0.58 0.13 70);
-    --chart-2: oklch(0.6 0.08 180);
-    --chart-3: oklch(0.55 0.1 240);
-    --chart-4: oklch(0.55 0.19 27);
-    --chart-5: oklch(0.5 0.01 265);
-    --radius: 0.625rem;
-    --sidebar:  oklch(0.22 0.01 265);
-    --sidebar-foreground: oklch(0.22 0.01 265);
-    --sidebar-primary: oklch(0.795 0.15 78);
-    --sidebar-primary-foreground: oklch(0.99 0 0);
-    --sidebar-accent: oklch(0.3 0.008 265);
-    --sidebar-accent-foreground: oklch(0.93 0.012 90);
-    --sidebar-border: oklch(0.91 0.005 265);
-    --sidebar-ring: oklch(0.58 0.13 70);
-    --success: oklch(0.6 0.08 180);
-    --success-foreground: oklch(0.45 0.07 180);
-    --info: oklch(0.58 0.1 240);
-    --info-foreground: oklch(0.45 0.09 240);
-    --warning: oklch(0.72 0.14 80);
-    --warning-foreground: oklch(0.5 0.11 75);
-    --invert: oklch(0.22 0.01 265);
-    --invert-foreground: oklch(0.98 0 0);
+    --k7-bg: #111111;
+    --k7-accent: #F15A22;
+    --k7-accent-dim: color-mix(in srgb, var(--k7-accent) 42%, transparent);
+    --k7-accent-faint: color-mix(in srgb, var(--k7-accent) 18%, transparent);
+    --k7-well: #2a0f05;
+    --k7-on-accent: var(--k7-bg);
+    --k7-font: 'Jura', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
-.dark {
-    /* The theme toggle sets this class; native scrollbars, pickers and form controls follow
-     * it, which is the half of the palette CSS cannot paint itself. */
+/* Dark is the only palette; both documents set class="dark" on <html>. */
+:root, .dark {
     color-scheme: dark;
-    --background: #222;
-    --foreground: oklch(0.93 0.012 90);
-    --card: oklch(0.215 0.005 265);
-    --card-foreground: oklch(0.93 0.012 90);
-    --popover: oklch(0.235 0.005 265);
-    --popover-foreground: oklch(0.93 0.012 90);
-    --primary: #F15A22;
-    --primary-foreground: oklch(0.22 0.03 70);
-    --secondary: oklch(0.275 0.006 265);
-    --secondary-foreground: oklch(0.93 0.012 90);
-    --muted: oklch(0.275 0.006 265);
-    --muted-foreground: oklch(0.7 0.01 85);
-    --accent: oklch(0.3 0.008 265);
-    --accent-foreground: oklch(0.93 0.012 90);
-    --destructive: oklch(0.68 0.145 30);
-    --destructive-foreground: oklch(0.86 0.06 35);
-    --border: oklch(0.315 0.006 265);
-    --input: oklch(0.35 0.006 265);
-    --ring: oklch(0.795 0.15 78);
-    --chart-1: oklch(0.795 0.15 78);
-    --chart-2: oklch(0.73 0.065 180);
-    --chart-3: oklch(0.72 0.07 235);
-    --chart-4: oklch(0.68 0.145 30);
-    --chart-5: oklch(0.7 0.01 85);
-    --sidebar: oklch(0.215 0.005 265);
-    --sidebar-foreground: oklch(0.93 0.012 90);
-    --sidebar-primary: oklch(0.795 0.15 78);
-    --sidebar-primary-foreground: oklch(0.22 0.03 70);
-    --sidebar-accent: oklch(0.3 0.008 265);
-    --sidebar-accent-foreground: oklch(0.93 0.012 90);
-    --sidebar-border: oklch(0.315 0.006 265);
-    --sidebar-ring: oklch(0.795 0.15 78);
-    --success: oklch(0.73 0.065 180);
-    --success-foreground: oklch(0.82 0.05 180);
-    --info: oklch(0.72 0.07 235);
-    --info-foreground: oklch(0.83 0.05 235);
-    --warning: oklch(0.8 0.135 80);
-    --warning-foreground: oklch(0.87 0.09 82);
-    --invert: oklch(0.93 0.012 90);
-    --invert-foreground: oklch(0.17 0.004 265);
+    --background: var(--k7-bg);
+    --foreground: var(--k7-accent);
+    --card: var(--k7-bg);
+    --card-foreground: var(--k7-accent);
+    --popover: var(--k7-bg);
+    --popover-foreground: var(--k7-accent);
+    --primary: var(--k7-accent);
+    --primary-foreground: var(--k7-on-accent);
+    --secondary: transparent;
+    --secondary-foreground: var(--k7-accent);
+    --muted: var(--k7-well);
+    --muted-foreground: color-mix(in srgb, var(--k7-accent) 85%, transparent);
+    --accent: var(--k7-accent);
+    --accent-foreground: var(--k7-on-accent);
+    --destructive: var(--k7-accent);
+    --destructive-foreground: var(--k7-on-accent);
+    --border: var(--k7-accent);
+    --input: var(--k7-accent);
+    --ring: var(--k7-accent);
+    --radius: 0.4375rem;
+    --chart-1: var(--k7-accent);
+    --chart-2: var(--k7-accent-dim);
+    --chart-3: var(--k7-accent-faint);
+    --chart-4: var(--k7-accent);
+    --chart-5: var(--k7-accent-dim);
+    --sidebar: var(--k7-bg);
+    --sidebar-foreground: var(--k7-accent);
+    --sidebar-primary: var(--k7-accent);
+    --sidebar-primary-foreground: var(--k7-on-accent);
+    --sidebar-accent: var(--k7-accent);
+    --sidebar-accent-foreground: var(--k7-on-accent);
+    --sidebar-border: var(--k7-accent);
+    --sidebar-ring: var(--k7-accent);
+    /* No second hue: the state names survive only while an installed file still reads one. */
+    --success: var(--k7-accent);
+    --success-foreground: var(--k7-accent);
+    --info: var(--k7-accent);
+    --info-foreground: var(--k7-accent);
+    --warning: var(--k7-accent);
+    --warning-foreground: var(--k7-accent);
+    --invert: var(--k7-accent);
+    --invert-foreground: var(--k7-bg);
 }
 
 @layer base {
@@ -191,38 +176,43 @@
      * the text, the padding and the components together. 130% of the browser's 16 px is
      * 20.8 px. */
     font-size: 130%;
-    color-scheme: light;
+    color-scheme: dark;
     }
 
-  /* Scrollbars, iOS-style: no channel, no buttons, and a thin rounded thumb that is not
-   * there until you point at the surface or tab into it — as close as CSS gets to iOS's
-   * "only while you are in it". The region still reserves its six pixels (`overflow:
-   * overlay` is gone), but the page is not crossed by a grey channel any more.
-   * `scrollbar-width`/`scrollbar-color` are the same two answers for Firefox. */
+  html, body {
+    background: var(--k7-bg);
+    color: var(--k7-accent);
+    font-weight: 300;
+    letter-spacing: 0.02em;
+    }
+
+  *, *::before, *::after {
+    border-color: var(--k7-accent);
+    }
+
+  ::selection {
+    background: var(--k7-accent);
+    color: var(--k7-bg);
+    }
+
+  /* The K7 scrollbar: a thin accent thumb on the background track, no channel and no
+   * buttons. `scrollbar-width`/`scrollbar-color` are the same two answers for Firefox. */
   * {
     scrollbar-width: thin;
-    scrollbar-color: transparent transparent;
-  }
-  *:hover,
-  *:focus-within {
-    scrollbar-color: color-mix(in oklch, var(--foreground) 30%, transparent) transparent;
-  }
+    scrollbar-color: var(--k7-accent-dim) transparent;
+    }
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
-  }
+    }
   ::-webkit-scrollbar-track,
   ::-webkit-scrollbar-corner {
     background: transparent;
-  }
+    }
   ::-webkit-scrollbar-thumb {
-    background: transparent;
+    background: var(--k7-accent-dim);
     border-radius: 999px;
-  }
-  *:hover::-webkit-scrollbar-thumb,
-  *:focus-within::-webkit-scrollbar-thumb {
-    background: color-mix(in oklch, var(--foreground) 26%, transparent);
-  }
+    }
 }
 
 /*
@@ -251,7 +241,7 @@
         --sidebar-accent-foreground: var(--sidebar-ink);
         --sidebar-ring: var(--sidebar-ink);
         border: 1px solid var(--sidebar-ink);
-        border-radius: var(--radius-xl);
+        border-radius: var(--radius-panel);
         color: var(--sidebar-ink);
     }
 
@@ -261,7 +251,8 @@
      * reserved by the element's size, exactly as the `<img class="size-16 object-contain">`
      * did before.
      */
-    .k7-sidebar-logo {
+    .k7-sidebar-logo,
+    .k7-logo {
         background-color: currentColor;
         -webkit-mask: url('/icons/k7logo.svg') center / contain no-repeat;
         mask: url('/icons/k7logo.svg') center / contain no-repeat;

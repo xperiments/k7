@@ -604,13 +604,25 @@
     {
       "id": "LK-02",
       "title": "The tokens, the stylesheet and the primitives are the K7 base",
-      "state": "todo",
+      "state": "review",
       "group": "LK",
       "deps": ["LK-01"],
       "yolo": true,
       "at": "2026-11-11T03:47:23Z",
       "by": "dsh",
-      "desc": "One stylesheet is shared by the Site and the App, so this is the base both wear: the K7 palette, the shadow kill, the 7px panel radius, pills, scrollbars, selection, focus, disabled; then the installed primitives in components/ui and components/reui (Button, Card, Input, Select, menu rows, Table, Tabs, Progress, Skeleton, Separator, Dialog/Sheet/Tooltip, Badge, Alert, Avatar) restyled onto outline/fill, one hue and a 1.25 icon stroke, with overlays retimed to linear 100ms or a cut. Done when every primitive renders in default, hover, focus, active and disabled on a K7 page, no raw colour lives outside the theme file, and the spec's greps pass outside its documented exceptions."
+      "desc": "One stylesheet is shared by the Site and the App, so this is the base both wear: the K7 palette, the shadow kill, the 7px panel radius, pills, scrollbars, selection, focus, disabled; then the installed primitives in components/ui and components/reui (Button, Card, Input, Select, menu rows, Table, Tabs, Progress, Skeleton, Separator, Dialog/Sheet/Tooltip, Badge, Alert, Avatar) restyled onto outline/fill, one hue and a 1.25 icon stroke, with overlays retimed to linear 100ms or a cut. Done when every primitive renders in default, hover, focus, active and disabled on a K7 page, no raw colour lives outside the theme file, and the spec's greps pass outside its documented exceptions.",
+      "notes": [
+        {
+          "at": "2026-11-11T03:54:01Z",
+          "by": "dsh",
+          "text": "Plan: replace the palettes with the K7 tokens in web/src/index.css, force dark in both documents, remove the theme module and its control, restyle the installed primitives and retime the overlays per the spec, then typecheck, test, build and run the spec's greps."
+        },
+        {
+          "at": "2026-11-11T04:00:22Z",
+          "by": "dsh",
+          "text": "The base is in: the App and the Site are K7 now.\n\n- Palette: #F15A22 on #111111, one hue; the light palette, the theme module and the footer toggle are gone, and both documents carry class=\"dark\".\n- Primitives: outlined pills (button, input, badge), transparent outlined panels (card, menus, sheet, alerts), rows that fill when current, 1.25 icons, no shadows, overlays cut or 100 ms linear, and a skeleton that no longer pulses.\n- Preserved as decided: the coverflow, the covers, the video posters and the Site's hero keep their colour. Two unused registry examples were deleted rather than left as a second palette.\n\nVerified: npm run typecheck, npm test (466), npm run build; the spec's five greps with the exceptions it names; screenshots of the Site (https://localhost:8000/) and the LNA gate (/app).\n\nWhat to check: the Site's filled action, the header mark and the Flash panel; the gate's card. Two things I could not click through headlessly: an open dropdown or sheet, and the disabled states. The App's shell sits behind the Local Network permission in headless Chrome, so its states are LK-03's review.\n\nNext: LK-03 and LK-06 are unblocked."
+        }
+      ]
     },
     {
       "id": "LK-03",

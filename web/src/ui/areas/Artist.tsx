@@ -46,7 +46,7 @@ export function ArtistArea({ artist }: { artist: string }) {
       </div>
 
       <header className="flex flex-col gap-0.5">
-        <h1 className="text-xl font-semibold tracking-tight">{artist}</h1>
+        <h1 className="text-xl font-light tracking-tight">{artist}</h1>
         <p className="text-sm text-muted-foreground">
           {known
             ? `${plural(albums.length, 'album')} · ${plural(tracks, 'track')}`
