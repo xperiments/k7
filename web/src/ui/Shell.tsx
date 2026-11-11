@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Disc3,
   ListMusic,
@@ -223,6 +223,18 @@ export function Shell({ route, children }: { route: Route; children: React.React
 
   const area = routeArea(route);
 
+  /* The rail is a drawer below 768px and the standing column above it. */
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window === 'undefined' ? false : window.matchMedia('(max-width: 767px)').matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const onChange = () => setIsMobile(media.matches);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   /* The rail's width is this browser's, like the old theme: remembered so a reload does not
    * throw the workspace back open. */
   const [collapsed, setCollapsed] = useState(() => {
@@ -247,49 +259,48 @@ export function Shell({ route, children }: { route: Route; children: React.React
     });
   };
 
+  const compact = collapsed && !mobileOpen;
+  const railExpanded = isMobile ? mobileOpen : !collapsed;
+  const railLabel = isMobile
+    ? mobileOpen
+      ? 'Hide the sidebar'
+      : 'Show the sidebar'
+    : collapsed
+      ? 'Expand the sidebar'
+      : 'Collapse the sidebar';
+  const toggleRailForViewport = () => {
+    if (isMobile) setMobileOpen((open) => !open);
+    else toggleRail();
+  };
+
   return (
     <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden p-1">
       <TooltipProvider delay={2000}>
-      <div className="flex h-full w-full flex-col gap-1 rounded-panel">
+      <div className="relative flex h-full w-full flex-col gap-1 rounded-panel">
+        {mobileOpen ? (
+          <button
+            type="button"
+            aria-label="Close the sidebar"
+            onClick={() => setMobileOpen(false)}
+            className="absolute inset-0 z-30 hidden bg-background/80 max-[767px]:block"
+          />
+        ) : null}
         <div className="flex min-h-0 flex-1 gap-1">
           <aside
             className={cn(
-              'flex shrink-0 flex-col border-r border-border',
-              collapsed ? 'w-16' : 'w-52',
+              'flex w-52 shrink-0 flex-col border-r border-border',
+              'max-[767px]:absolute max-[767px]:inset-y-0 max-[767px]:left-0 max-[767px]:z-40 max-[767px]:bg-background',
+              compact && 'min-[768px]:w-16',
+              mobileOpen ? '' : 'max-[767px]:hidden',
             )}
           >
-            <header
-              className={cn(
-                'flex h-12 shrink-0 items-center border-b px-2',
-                collapsed && 'justify-center',
-              )}
-            >
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      onClick={toggleRail}
-                      aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
-                      aria-expanded={!collapsed}
-                      className="grid size-10 shrink-0 place-items-center rounded-panel bg-transparent text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                    >
-                      <span aria-hidden="true" className="k7-sidebar-logo size-8" />
-                    </button>
-                  }
-                />
-                <TooltipContent side="right">
-                  {collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
-                </TooltipContent>
-              </Tooltip>
-            </header>
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-2">
             <div className="min-h-0 flex-1 overflow-auto">
-              <Nav groups={groups} route={route} collapsed={collapsed} />
+              <Nav groups={groups} route={route} collapsed={compact} />
             </div>
             <div className="flex flex-col gap-0 [&>*+*]:-mt-px">
-              <InstallButton compact={collapsed} />
-              <Tooltip disabled={!collapsed}>
+              <InstallButton compact={compact} />
+              <Tooltip disabled={!compact}>
                 <TooltipTrigger
                   render={
                     <a
@@ -297,7 +308,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
                       aria-current={route.name === 'settings' ? 'page' : undefined}
                       className={cn(
                         'flex h-12 w-full items-center gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                        collapsed && 'justify-center px-2',
+                        compact && 'justify-center px-2',
                       )}
                     >
                       <span
@@ -309,7 +320,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
                       >
                         <SettingsIcon aria-hidden="true" />
                       </span>
-                      <span className={cn(collapsed && 'sr-only')}>Settings</span>
+                      <span className={cn(compact && 'sr-only')}>Settings</span>
                     </a>
                   }
                 />
@@ -323,6 +334,22 @@ export function Shell({ route, children }: { route: Route; children: React.React
 
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      onClick={toggleRailForViewport}
+                      aria-label={railLabel}
+                      aria-expanded={railExpanded}
+                      className="grid size-9 shrink-0 place-items-center rounded-panel text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    >
+                      <span aria-hidden="true" className="k7-sidebar-logo size-7" />
+                    </button>
+                  }
+                />
+                <TooltipContent side="bottom">{railLabel}</TooltipContent>
+              </Tooltip>
               <Breadcrumb className="min-w-0">
                 <BreadcrumbList className="flex-nowrap">
                   {area ? (
