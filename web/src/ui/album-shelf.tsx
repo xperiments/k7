@@ -175,7 +175,9 @@ export function AlbumShelf({
           tabIndex={0}
           onDragStart={(event) => event.preventDefault()}
           onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture(event.pointerId);
+            /* No pointer capture: it would retarget the click to the shelf and the case
+             * would never open its tracks. The window's pointerup still ends a release
+             * that lands outside the shelf. */
             const root = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
             dragRem.current = root * fit;
             dragStart.current = event.clientX;
@@ -201,7 +203,6 @@ export function AlbumShelf({
           }}
           onPointerUp={(event) => endRef.current(event.clientX)}
           onPointerCancel={() => endRef.current(null)}
-          onLostPointerCapture={() => endRef.current(null)}
         >
           <div className="k7-shelf-row">
             {albums.map((album, index) => {

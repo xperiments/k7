@@ -56,7 +56,8 @@ beside it, walking the row with the arrows keeps them open, and a click outside 
 closes them. The left/right arrow keys walk the row from anywhere in the Media view — a text
 field keeps its own arrows — and the pointer drags the row through the cases, each crossed
 case turning the 3D with it; the release lands on the nearest case — the end is caught even when the pointer leaves
-the shelf or the window, so the row cannot be left in hand. A letter in the index walks every case of the row to that artist's first album rather than
+the shelf or the window, so the row cannot be left in hand. A press that never moved is still
+a click, and that click opens the case's tracks. A letter in the index walks every case of the row to that artist's first album rather than
 teleporting; the walk takes about a second within a letter and up to three across the
 alphabet. The index can instead file the shelf by **genre** — an album's most common genre
 tag — and then the rail's rows are the genre names. Choosing a genre narrows the shelf to
