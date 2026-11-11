@@ -309,7 +309,7 @@ export function AlphabetIndex({
      * letters that do not fit. */
     <nav
       aria-label="Artists by letter"
-      className="relative flex h-full w-8 shrink-0 flex-col"
+      className="flex h-full w-8 shrink-0 flex-col items-center gap-1"
     >
       <Button
         type="button"
@@ -318,13 +318,13 @@ export function AlphabetIndex({
         aria-label="Scroll the letters up"
         disabled={atTop}
         onClick={() => scroll(-1)}
-        className={`absolute top-0 left-0 z-10 ${overflow ? '' : 'invisible'}`}
+        className={overflow ? '' : 'invisible'}
       >
         <ChevronUp aria-hidden="true" />
       </Button>
       <div
         ref={list}
-        className="flex h-full flex-col items-center gap-1 overflow-y-auto"
+        className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {letters.map((letter) => {
           const active = letter === current;
@@ -377,7 +377,7 @@ export function AlphabetIndex({
         aria-label="Scroll the letters down"
         disabled={atEnd}
         onClick={() => scroll(1)}
-        className={`absolute bottom-0 left-0 z-10 ${overflow ? '' : 'invisible'}`}
+        className={overflow ? '' : 'invisible'}
       >
         <ChevronDown aria-hidden="true" />
       </Button>

@@ -368,11 +368,9 @@ export function MediaView({
     );
   }
 
-  /* The rail and the page are siblings, so the letters have the stage's height; the page's
-     header and the shelf own the rest. */
+  /* The rail is the stage's right edge, with the page's header and shelf to its left. */
   return (
     <div className="flex h-full min-h-0 gap-3 p-4 sm:gap-4 sm:p-6">
-      <AlphabetIndex albums={albums} selected={selected} onSelect={setSelected} />
       <div className="flex min-h-0 flex-1 flex-col gap-3">
         <MediaHeader readingDrive={false} query={query} onQuery={setQuery} searchId={searchId} />
         <ShelfView
@@ -385,6 +383,7 @@ export function MediaView({
           onClear={() => setQuery('')}
         />
       </div>
+      <AlphabetIndex albums={albums} selected={selected} onSelect={setSelected} />
     </div>
   );
 }
