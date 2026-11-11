@@ -77,7 +77,7 @@ export function AlbumShelf({
   if (!active) return null;
 
   return (
-    <section className="flex flex-col items-center gap-3" aria-label="Albums">
+    <section className="flex select-none flex-col items-center gap-3" aria-label="Albums">
       {/* The abecedary stands beside the stage and the height of it: the letters are the
           shelf's own index, not a control the page put down next to it. */}
       <div className="flex w-full min-w-0 items-stretch gap-2">
