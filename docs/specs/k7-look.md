@@ -320,7 +320,7 @@ if one is.
 | Separator | 1px `bg-foreground/20` |
 | Breadcrumb / Pagination | Neutral text, chevrons as line icons; the current page is the neutral ink. A filled pill only where it is a control |
 | Calendar | Day cells are circles. Selected is an accent filled circle, today is a neutral outlined circle, outside days at 42% |
-| Sidebar | The rail (§5.1): the logo tile in the accent, the rows and domes in the neutral, the current dome filled with the secondary, count chips in the accent |
+| Sidebar | The rail (§5.1): the logo tile in the accent, the rows and domes in the neutral, the current dome filled with the secondary, counts as accent numbers |
 | Navigation Menu | Pill triggers, panel content |
 | Scroll Area | Thin scrollbar, accent thumb |
 
@@ -377,8 +377,8 @@ and the label stay neutral. The rail does not collapse: the shell is one frame a
   the rail from the stage, and the footer bar spans the frame below both.
 - The logo tile is a solid accent square with `k7logo.svg` painted in the background colour — the
   reference's tile is filled, not outlined — and its wordmark is the only bold text in the system.
-- Counts are accent-outlined micro-label chips at the end of the row; each nav group's label is a
-  micro-label chip above its buttons.
+- Counts are accent numbers at the end of the row; each nav group's label is the uppercase word
+  followed by a 1px accent rule to the rail's edge — no pill, no border.
 - The PlayerBar is the footer bar: a panel across the frame's bottom, its scrub solid to the
   playhead and dim after.
 
