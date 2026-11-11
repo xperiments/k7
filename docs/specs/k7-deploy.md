@@ -165,7 +165,7 @@ Three jobs, all on a pull request:
 
 | Job | What it runs |
 |---|---|
-| `web` | `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, the artifact guard (D14), the firmware manifest guard (D15, k7-site.md R4), and a manifest shape check — `id`, `name`/`short_name`, `start_url: "/app"`, `scope: "/app"`, `display`, `theme_color`, and 192/512/512-maskable icons — so A9 cannot regress silently |
+| `web` | `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, the artifact guard (D14), the firmware manifest guard (D15, k7-site.md R4), the worker shell check (k7-site.md D3), and a manifest shape check — `id`, `name`/`short_name`, `start_url: "/app"`, `scope: "/app"`, `display`, `theme_color`, and 192/512/512-maskable icons — so A9 cannot regress silently |
 | `host` | `make -C host check` — the device's own fixtures, including the two Update-file names |
 | `e2e` | documented but commented until a Playwright dependency lands: one status round trip from the App's origin to `http://k7.local` with the `local-network` permission granted |
 

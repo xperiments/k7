@@ -16,7 +16,11 @@
  */
 const APP_VERSION = '__APP_VERSION__';
 
-const SHELL_CACHE = `k7-shell-${APP_VERSION}`;
+/* The cache is the App's shell *at its address*, not only the app's version: `/` used to be
+ * the shell, and an installed worker must not keep a cache filled for that address now that
+ * the App is `/app` (k7-site.md S5). A new shape drops the old cache on activate. */
+const SHELL_SHAPE = 'app-at-app';
+const SHELL_CACHE = `k7-shell-${APP_VERSION}-${SHELL_SHAPE}`;
 const SHELL_PREFIX = 'k7-shell-';
 
 function isShellAsset(pathname) {

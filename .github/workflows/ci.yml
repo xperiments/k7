@@ -1,6 +1,7 @@
 # CI for the App artifact and the device's own fixtures (k7-deploy.md §6).
 #
-#   web    the App: typecheck, unit tests, build, A9 manifest shape, D14 artifact guard
+#   web    the App: typecheck, unit tests, build, A9 manifest shape, S5 worker shell,
+#          D14 artifact guard
 #   host   the device's portable C, on the host build (host/Makefile `check`)
 #   e2e    documented but commented: it needs a Playwright dependency that does not exist yet
 #
@@ -44,6 +45,10 @@ jobs:
       # a manifest regression fails here instead of in a broken install on the real origin.
       - name: Manifest shape (A9)
         run: node scripts/check-manifest.mjs
+      # S5: the worker precaches the App at /app and never the Site at /, which must always
+      # come from the network because it names a firmware version.
+      - name: Worker shell (S5)
+        run: node scripts/check-shell.mjs
       # D14's second guard: no development origin and no pre-rename host anywhere in dist.
       - name: Artifact origins (D14)
         run: node scripts/check-artifact.mjs
