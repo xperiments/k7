@@ -88,7 +88,7 @@ export function Install() {
         {offer === 'open' ? (
           <>
             <p className="text-sm">K7 is installed on this computer.</p>
-            <Button render={<a href="/app" />}>Open K7</Button>
+            <Button variant="solid" render={<a href="/app" />}>Open K7</Button>
           </>
         ) : null}
 

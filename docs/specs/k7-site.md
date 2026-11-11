@@ -18,7 +18,7 @@ over a fake board and a fake origin — **not on hardware** — and **no board h
 from a browser**; SI-06 is the board and browser pass. The hero uses the panel's own render in
 its slot until a photograph of the device exists. The two ADRs are 0078 and 0079. The sizes in
 §3 are the released bytes; no timing in §6 is measured yet. S15 now names the K7 look
-([`k7-look.md`](./k7-look.md)), which LK-06 applies to the page.
+([`k7-look.md`](./k7-look.md)), applied by LK-06.
 
 **Vocabulary:** [`web/CONTEXT.md`](../../web/CONTEXT.md) — **Site**, **Flash**, **Install**. The
 App is [`k7-app.md`](./k7-app.md); the deployment is [`k7-deploy.md`](./k7-deploy.md); the

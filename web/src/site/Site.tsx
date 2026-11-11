@@ -35,7 +35,7 @@ export function Site() {
 
         <section id="top" className="grid items-center gap-10 md:grid-cols-[1.05fr_1fr]">
           <div className="grid gap-6">
-            <h1 className="text-balance text-4xl font-medium tracking-tight sm:text-5xl">
+            <h1 className="text-balance text-4xl font-light tracking-tight sm:text-5xl">
               Your music, on a cassette
             </h1>
             <p className="max-w-prose text-pretty text-base leading-relaxed text-muted-foreground">

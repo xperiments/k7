@@ -77,8 +77,8 @@ const FAILURE: Record<FailureCause, { title: string; body: string }> = {
 
 function ManualPath() {
   return (
-    <details className="rounded-panel border border-primary px-4 py-3">
-      <summary className="cursor-pointer text-sm font-medium">Use another tool</summary>
+    <details className="min-w-0 rounded-panel border border-primary px-4 py-3">
+      <summary className="cursor-pointer text-sm font-light">Use another tool</summary>
       <p className="mt-3 text-xs text-muted-foreground">
         Download the three parts and write them with esptool. The offsets and the sizes are
         the release’s own.
@@ -99,7 +99,7 @@ function ManualPath() {
           </li>
         ))}
       </ul>
-      <pre className="mt-3 overflow-x-auto rounded-md bg-muted p-3 text-xs">
+      <pre className="mt-3 w-full max-w-full overflow-x-auto rounded-panel bg-muted p-3 text-xs">
         <code>{manualCommand()}</code>
       </pre>
     </details>
@@ -219,7 +219,7 @@ export function Flash() {
                   </AlertDescription>
                 </Alert>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="destructive" onClick={() => flash(true)}>
+                  <Button variant="solid" onClick={() => flash(true)}>
                     Erase and flash
                   </Button>
                   <Button variant="ghost" onClick={() => setErasePending(false)}>
@@ -312,7 +312,7 @@ export function Flash() {
               <p className="text-xs text-muted-foreground">{state.message}</p>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={prepare}>
+              <Button variant="solid" onClick={prepare}>
                 <RefreshCw aria-hidden="true" /> Try again
               </Button>
               <Button variant="ghost" onClick={reset}>

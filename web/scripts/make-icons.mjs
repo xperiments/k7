@@ -11,11 +11,12 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, '..', 'public', 'icons');
 
-const BACKGROUND = [0x0e, 0x0f, 0x11];
-const BODY = [0x17, 0x18, 0x1b];
-const LINE = [0x2a, 0x2c, 0x31];
-const AMBER = [0xf0, 0xb4, 0x29];
-const DARK = [0x0e, 0x0f, 0x11];
+/* The K7 palette (docs/specs/k7-look.md): near-black, one accent, a well. */
+const BACKGROUND = [0x11, 0x11, 0x11];
+const BODY = [0x2a, 0x0f, 0x05];
+const LINE = [0xf1, 0x5a, 0x22];
+const AMBER = [0xf1, 0x5a, 0x22];
+const DARK = [0x11, 0x11, 0x11];
 
 function roundedRect(x, y, left, top, right, bottom, radius) {
   const cx = Math.max(left + radius, Math.min(x, right - radius));
