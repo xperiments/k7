@@ -23,7 +23,7 @@ export function InstallButton() {
   if (state === 'installable') {
     return (
       <Button
-        className="h-10 w-fit min-w-24 justify-start gap-2.5 rounded-[6px] border border-primary p-1 pr-3 font-light"
+        className="h-10 w-full justify-start gap-2.5 rounded-[6px] border border-primary p-1 pr-3 font-light"
         onClick={() => void promptInstallNow()}
       >
         <span

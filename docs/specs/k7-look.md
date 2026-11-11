@@ -352,7 +352,8 @@ small text in the same colour, not a badge.
 **K17. The shell is one frame: a rail of dome buttons, the stage, the footer bar.** The device
 menu is the filled logo tile at the top of the rail; the destinations and Settings are **dome
 buttons** — a plaque with a circular dome holding the icon at its left and the label beside it,
-6px corners and stacked flush with a shared 1px edge (the one shape exception to the pill rule);
+6px corners, full width of the rail and stacked flush with a shared 1px edge (the one shape
+exception to the pill rule);
 the install control is a dome button in the rail's footer. The current one fills and its dome
 inverts to the background with an accent icon. The rail does not collapse: the shell is one frame
 at every width. No `K7Shell`. **[ADR]**

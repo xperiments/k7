@@ -649,6 +649,11 @@
           "at": "2026-11-11T04:26:20Z",
           "by": "dsh",
           "text": "Revised on review: the dome stays circular; the plaque it sits in is 6px (not a pill), and the buttons sit flush with a shared 1px edge — sidebar and footer. The spec's K17 records the exception."
+        },
+        {
+          "at": "2026-11-11T04:32:25Z",
+          "by": "dsh",
+          "text": "The rail's buttons are 100% of the sidebar's width; they still touch, with the 6px corners and the dome intact."
         }
       ]
     },
