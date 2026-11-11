@@ -471,7 +471,7 @@
     }
 
     .k7-spine {
-        max-height: calc(var(--ch) - 1.4rem);
+        max-height: calc(var(--ch) - 2.4rem);
         overflow: clip;
         padding-block: 0.4rem;
         writing-mode: vertical-rl;
@@ -483,6 +483,7 @@
         text-transform: uppercase;
         white-space: nowrap;
         color: oklch(0.93 0.012 90);
+        text-overflow: ellipsis;
     }
 
     /* The group is the smaller half of the spine's read: group - album. */
