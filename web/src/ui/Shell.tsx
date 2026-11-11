@@ -103,7 +103,7 @@ function navGroups(drafts: number, tracks: number): NavGroup[] {
         },
         {
           href: routeHref({ name: 'ask' }),
-          label: 'Chat',
+          label: 'Ask',
           icon: <MessageCircle aria-hidden="true" />,
           names: ['ask'],
         },
@@ -399,11 +399,11 @@ export function NotFound({ path }: { path: string }) {
     <div className="flex flex-col gap-3 p-6">
       <h1 className="text-xl font-light tracking-tight">No such place</h1>
       <p className="text-sm text-muted-foreground">
-        <code className="bg-muted px-1 py-0.5 font-mono text-xs">#{path}</code> is not one of the
-        front door's routes. Card, Playlists, Media and Player are.
+        <code className="bg-muted px-1 py-0.5 font-mono text-xs">#{path}</code> is not a route in
+        this shell. Process, Playlists, Media, Ask and Settings are.
       </p>
       <div>
-        <Button size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
+        <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
           Go to Process
         </Button>
       </div>

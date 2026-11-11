@@ -151,8 +151,8 @@ export function DropZone({
     <Empty
       aria-busy={scanning}
       className={cn(
-        'border border-dashed py-8 transition-colors',
-        over && !inactive && 'border-primary bg-primary/5',
+        'border border-primary/60 py-8 transition-colors',
+        over && !inactive && 'border-primary bg-primary/15',
         inactive && 'opacity-60',
       )}
       onDragOver={(event) => {
@@ -188,7 +188,7 @@ export function DropZone({
         <EmptyContent>
           <div className="flex flex-wrap items-center justify-center gap-2">
             {pickable && (
-              <Button onClick={() => void chooseCard()} disabled={inactive}>
+              <Button variant="solid" onClick={() => void chooseCard()} disabled={inactive}>
                 Choose card
               </Button>
             )}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { ListMusic, Plus, Sparkles } from 'lucide-react';
+import { cn } from 'cn';
 
 import { Alert, AlertAction, AlertDescription } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
@@ -89,22 +90,43 @@ function DeviceRow({
   onWalk: (id: string) => void;
 }) {
   return (
-    <li className="flex flex-wrap items-center gap-2 border-b py-2.5 last:border-b-0">
+    <li
+      className={cn(
+        'flex flex-wrap items-center gap-2 border-b py-2.5 last:border-b-0',
+        chosen && 'border-primary bg-primary px-2.5 text-primary-foreground',
+      )}
+    >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium">{list.name}</span>
+          <span className="truncate text-sm font-light">{list.name}</span>
           {walking ? (
-            <Badge variant="success-light">Walking</Badge>
+            <Badge
+              variant="success-light"
+              className={cn(chosen && 'border-background bg-background text-primary')}
+            >
+              Walking
+            </Badge>
           ) : chosen ? (
-            <Badge variant="warning-light">Waiting for the card</Badge>
+            <Badge
+              variant="warning-light"
+              className={cn(chosen && 'border-background bg-background text-primary')}
+            >
+              Waiting for the card
+            </Badge>
           ) : null}
         </div>
-        <span className="text-xs text-muted-foreground tabular-nums">
+        <span
+          className={cn(
+            'text-xs tabular-nums',
+            chosen ? 'text-primary-foreground/80' : 'text-muted-foreground',
+          )}
+        >
           {plural(list.rows, 'track')} · made {created(list.created)}
         </span>
       </div>
       <Button
-        variant={chosen ? 'outline' : 'secondary'}
+        variant="outline"
+        className={cn(chosen && 'border-background text-primary-foreground hover:bg-background/10')}
         size="sm"
         disabled={walking || disabled}
         onClick={() => onWalk(list.id)}
@@ -123,7 +145,7 @@ function DraftRow({ draft }: { draft: Draft }) {
     <li className="flex flex-wrap items-center gap-2 border-b py-2.5 last:border-b-0">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium">{draft.name}</span>
+          <span className="truncate text-sm font-light">{draft.name}</span>
           <Badge variant="info-light">
             Not sent yet
           </Badge>
@@ -143,7 +165,7 @@ function DraftRow({ draft }: { draft: Draft }) {
         </Button>
         {confirming ? (
           <>
-            <Button variant="destructive" size="sm" onClick={() => deleteDraft(draft.id)}>
+            <Button variant="solid" size="sm" onClick={() => deleteDraft(draft.id)}>
               Delete draft
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
@@ -198,7 +220,7 @@ function NewPlaylist() {
           autoComplete="off"
         />
       </div>
-      <Button type="submit" size="sm" disabled={name.trim().length === 0}>
+      <Button type="submit" variant="solid" size="sm" disabled={name.trim().length === 0}>
         <Plus aria-hidden="true" />
         Create playlist
       </Button>
@@ -303,7 +325,7 @@ export function PlaylistsArea() {
                 {loadError}
               </p>
               <div>
-                <Button variant="outline" size="sm" onClick={() => void load()}>
+                <Button variant="solid" size="sm" onClick={() => void load()}>
                   Try again
                 </Button>
               </div>
@@ -340,7 +362,7 @@ export function PlaylistsArea() {
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
-                <Button size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
+                <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
                   Open Process
                 </Button>
               </EmptyContent>

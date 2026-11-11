@@ -198,7 +198,7 @@ function FailedRow({ item, onRetry }: { item: QueueItem; onRetry: () => void }) 
           {displayName(item.name)}
         </span>
         <Badge variant="destructive-light">Failed</Badge>
-        <Button variant="ghost" size="sm" onClick={onRetry}>
+        <Button variant="outline" size="sm" onClick={onRetry}>
           Retry
         </Button>
       </div>
@@ -225,7 +225,7 @@ export function QueueList() {
           }
         >
           <h2 className="flex items-baseline gap-1.5 border-b px-2.5 py-1.5 text-xs">
-            <span className="min-w-0 truncate font-medium text-foreground">{group.album}</span>
+            <span className="min-w-0 truncate font-light text-foreground">{group.album}</span>
             {group.artist !== null ? (
               <>
                 <span aria-hidden="true" className="shrink-0 text-muted-foreground/60">
@@ -238,7 +238,7 @@ export function QueueList() {
               {plural(group.items.length, 'track')}
             </span>
           </h2>
-          <ul className="flex flex-col divide-y divide-border">
+          <ul className="flex flex-col divide-y divide-primary/30">
             {group.items.map((item) => (
               <li key={item.id}>
                 {item.status === 'error' ? (

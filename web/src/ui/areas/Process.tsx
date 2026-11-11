@@ -183,6 +183,7 @@ export function ProcessArea() {
             )}
             {!running && queued > 0 ? (
               <Button
+                variant="solid"
                 size="sm"
                 onClick={resume}
                 title={`Measure the remaining ${plural(queued, 'track')}`}
@@ -258,7 +259,7 @@ export function ProcessArea() {
               >
                 <span className="text-xs text-muted-foreground">Clear the queue and cache?</span>
                 <Button
-                  variant="destructive"
+                  variant="solid"
                   size="sm"
                   onClick={() => {
                     setConfirmingClear(false);
@@ -288,7 +289,7 @@ export function ProcessArea() {
 
       <Card size="sm">
         <CardContent className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">Card</span>
+          <span className="font-light text-foreground">Card</span>
           <span className="tabular-nums">{cardLabel}</span>
           <span aria-hidden="true">·</span>
           <span>

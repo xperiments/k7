@@ -93,7 +93,7 @@ function ViewSwitch({ view }: { view: 'carousel' | 'drive' }) {
   return (
     <nav aria-label="Media view" className="flex items-center gap-1">
       <Button
-        variant={view === 'carousel' ? 'secondary' : 'ghost'}
+        variant={view === 'carousel' ? 'solid' : 'default'}
         size="sm"
         nativeButton={false}
         aria-current={view === 'carousel' ? 'page' : undefined}
@@ -103,7 +103,7 @@ function ViewSwitch({ view }: { view: 'carousel' | 'drive' }) {
         Carousel
       </Button>
       <Button
-        variant={view === 'drive' ? 'secondary' : 'ghost'}
+        variant={view === 'drive' ? 'solid' : 'default'}
         size="sm"
         nativeButton={false}
         aria-current={view === 'drive' ? 'page' : undefined}
@@ -131,7 +131,7 @@ function NoAlbums({ reachable }: { reachable: boolean }) {
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
+        <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
           Open Process
         </Button>
       </EmptyContent>

@@ -267,7 +267,7 @@ export function AskArea() {
                 autoComplete="off"
               />
             </div>
-            <Button type="submit" size="sm" disabled={!provider || asking || !sentence.trim()}>
+            <Button type="submit" variant="solid" size="sm" disabled={!provider || asking || !sentence.trim()}>
               {asking ? (
                 <Spinner aria-hidden="true" className="size-3.5" />
               ) : (
@@ -435,7 +435,7 @@ export function AskArea() {
                     key={mood}
                     type="button"
                     size="sm"
-                    variant={on ? 'secondary' : 'outline'}
+                    variant={on ? 'solid' : 'outline'}
                     aria-pressed={on}
                     onClick={() => toggleMood(mood)}
                   >
@@ -447,7 +447,7 @@ export function AskArea() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-            <Button size="sm" onClick={() => void run()} disabled={searching}>
+            <Button variant="solid" size="sm" onClick={() => void run()} disabled={searching}>
               {searching ? <Spinner aria-hidden="true" className="size-3.5" /> : null}
               Run search
             </Button>
@@ -508,7 +508,7 @@ export function AskArea() {
               </ul>
             )}
             <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-              <Button size="sm" onClick={create} disabled={search.tracks.length === 0}>
+              <Button variant="solid" size="sm" onClick={create} disabled={search.tracks.length === 0}>
                 Create playlist from these
               </Button>
               <span className="text-xs text-muted-foreground">
