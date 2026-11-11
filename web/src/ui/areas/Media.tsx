@@ -226,12 +226,12 @@ function ShelfView({
   return (
     <div
       className={cn(
-        'flex min-h-0 flex-1 flex-col gap-4',
+        'flex min-h-0 min-w-0 flex-1 flex-col gap-4',
         open && shelfVisible && 'lg:grid lg:grid-cols-2 lg:gap-6',
       )}
     >
       {shelfVisible ? (
-        <aside ref={shelf} className="flex min-h-0 flex-1 flex-col justify-center">
+        <aside ref={shelf} className="flex min-h-0 min-w-0 flex-1 flex-col justify-center">
           <AlbumShelf
             albums={albums}
             selected={selected}
@@ -243,7 +243,7 @@ function ShelfView({
 
       {shelfVisible ? (
         open ? (
-          <div className="relative flex min-h-0 flex-1 flex-col">
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             <Button
               size="icon-sm"
               variant="outline"
@@ -253,7 +253,7 @@ function ShelfView({
             >
               <ChevronLeft aria-hidden="true" />
             </Button>
-            <div ref={tracks} className="flex min-h-0 flex-1 flex-col overflow-auto">
+            <div ref={tracks} className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
               <div className="m-auto flex w-full flex-col gap-4">
                 <AlbumDetail album={active!} state={state} />
               </div>
@@ -261,7 +261,7 @@ function ShelfView({
           </div>
         ) : null
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
           <div className="m-auto flex w-full flex-col gap-4">{notice}</div>
         </div>
       )}
@@ -312,10 +312,10 @@ function MediaHeader({
   const placeholder = readingDrive ? 'Search the drive' : 'Search albums';
   return (
     <header className="flex flex-wrap items-center justify-end gap-x-6 gap-y-3">
-      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+      <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
         <ViewSwitch view={readingDrive ? 'drive' : 'carousel'} />
         {!readingDrive && grouping && onGrouping ? (
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <Button
               size="sm"
               variant={grouping === 'artist' ? 'solid' : 'default'}
@@ -334,7 +334,7 @@ function MediaHeader({
             </Button>
           </div>
         ) : null}
-        <div className="flex w-full flex-col gap-1 sm:w-64">
+        <div className="flex w-full min-w-0 flex-col gap-1 sm:w-64">
           <label htmlFor={searchId} className="sr-only">
             {placeholder}
           </label>
@@ -508,7 +508,7 @@ export function MediaView({
 
   if (readingDrive) {
     return (
-      <div className="mx-auto flex w-full flex-col gap-4 px-4 py-6 sm:px-6">
+      <div className="mx-auto flex w-full min-w-0 flex-col gap-4 px-4 py-6 sm:px-6">
         <MediaHeader readingDrive query={query} onQuery={setQuery} searchId={searchId} />
         <DriveView state={state} path={drive} query={query} />
       </div>
@@ -518,7 +518,7 @@ export function MediaView({
   /* The rail is the stage's right edge, with the page's header and shelf to its left. */
   return (
     <div className="flex h-full min-h-0 gap-3 p-4 sm:gap-4 sm:p-6">
-      <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
         <MediaHeader
           readingDrive={false}
           query={query}

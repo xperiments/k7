@@ -171,7 +171,7 @@ export function DriveView({
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       {notice ? (
         <div role="status" className="flex items-center gap-2 text-sm">
           <Badge variant={notice.kind === 'ok' ? 'success-light' : 'destructive-light'}>
