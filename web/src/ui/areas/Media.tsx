@@ -25,7 +25,7 @@ import {
   type MediaIndexState,
 } from '../../media/albums';
 import { AlbumDetail } from '../album-detail';
-import { AlbumShelf, IndexRail } from '../album-shelf';
+import { AlbumShelf, IndexRail, type IndexGroup } from '../album-shelf';
 import { Cover } from '../cover';
 import { DriveView } from '../drive';
 import { plural } from '../format';
@@ -363,13 +363,26 @@ export function MediaView({
   }, [drive]);
 
   const [grouping, setGrouping] = useState<Grouping>('artist');
+  const [genreFilter, setGenreFilter] = useState<string | null>(null);
   const needle = query.trim().toLowerCase();
   /* The default order is the artist's initial; the genre order files an album under the
    * most common genre of its rows. The title is the tie-break inside one group. */
-  const albums = useMemo(
-    () => orderAlbums(state.index?.albums ?? [], needle, grouping),
-    [state.index, needle, grouping],
+  const artistAlbums = useMemo(
+    () => orderAlbums(state.index?.albums ?? [], needle, 'artist'),
+    [state.index, needle],
   );
+  const genreAlbums = useMemo(
+    () => orderAlbums(state.index?.albums ?? [], needle, 'genre'),
+    [state.index, needle],
+  );
+  /* A chosen genre narrows the shelf to its albums; the rail keeps every genre so another
+   * one is one click away. */
+  const albums =
+    grouping === 'artist'
+      ? artistAlbums
+      : genreFilter
+        ? genreAlbums.filter((entry) => genreOf(entry) === genreFilter)
+        : genreAlbums;
 
   const [selected, setSelected] = useState(0);
   /* The route's album is applied once, when it arrives: a search that keeps it visible must
@@ -393,11 +406,10 @@ export function MediaView({
 
   const active = albums.length > 0 ? albums[Math.min(selected, albums.length - 1)] : null;
 
-  const keyOf = (entry: Album) =>
-    grouping === 'artist' ? letterOf(artistOf(entry)) : genreOf(entry);
   const groups = useMemo(() => {
+    const source = grouping === 'artist' ? artistAlbums : genreAlbums;
     const out: { key: string; label: string; first: number; count: number }[] = [];
-    albums.forEach((entry, index) => {
+    source.forEach((entry, index) => {
       const key = grouping === 'artist' ? letterOf(artistOf(entry)) : genreOf(entry);
       const last = out[out.length - 1];
       if (last && last.key === key) {
@@ -407,8 +419,13 @@ export function MediaView({
       out.push({ key, label: key, first: index, count: 1 });
     });
     return out;
-  }, [albums, grouping]);
-  const currentKey = active ? keyOf(active) : null;
+  }, [artistAlbums, genreAlbums, grouping]);
+  const currentKey =
+    grouping === 'artist'
+      ? active
+        ? letterOf(artistOf(active))
+        : null
+      : genreFilter ?? (active ? genreOf(active) : null);
 
   /* A group does not teleport the row: the selection walks every case to the group's first
    * album. The walk takes longer the further the group is — one second for a neighbour,
@@ -426,15 +443,27 @@ export function MediaView({
     stopWalk();
     setSelected(index);
   };
-  const jumpToGroup = (target: number) => {
+  const jumpToGroup = (group: IndexGroup) => {
     stopWalk();
+    if (grouping === 'genre') {
+      /* One genre at a time: a second click on the current one shows them all again. */
+      if (genreFilter === group.key) {
+        setGenreFilter(null);
+        setSelected(group.first);
+      } else {
+        setGenreFilter(group.key);
+        setSelected(0);
+      }
+      return;
+    }
+    const target = group.first;
     let at = selected;
     if (at === target || albums.length === 0) return;
     const direction = target > at ? 1 : -1;
     const currentGroup = groups.findIndex(
-      (group) => at >= group.first && at < group.first + group.count,
+      (item) => at >= item.first && at < item.first + item.count,
     );
-    const targetGroup = groups.findIndex((group) => group.first === target);
+    const targetGroup = groups.findIndex((item) => item.key === group.key);
     const distance = Math.abs(targetGroup - currentGroup);
     const span = Math.max(1, groups.length - 1);
     const duration = Math.min(3000, Math.max(1000, 1000 + (distance / span) * 2000));
@@ -459,6 +488,7 @@ export function MediaView({
   const changeGrouping = (next: Grouping) => {
     const name = active?.album;
     setGrouping(next);
+    if (next === 'genre') setGenreFilter(null);
     if (!name) return;
     const ordered = orderAlbums(state.index?.albums ?? [], needle, next);
     const at = ordered.findIndex((entry) => entry.album === name);

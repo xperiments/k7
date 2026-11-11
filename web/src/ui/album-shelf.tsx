@@ -251,7 +251,7 @@ export function IndexRail({
   groups: IndexGroup[];
   current: string | null;
   variant: 'letter' | 'name';
-  onJump: (first: number) => void;
+  onJump: (group: IndexGroup) => void;
 }) {
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const list = useRef<HTMLDivElement>(null);
@@ -284,7 +284,7 @@ export function IndexRail({
       ? current
       : groups[0].key;
 
-  const jump = (group: IndexGroup) => onJump(group.first);
+  const jump = (group: IndexGroup) => onJump(group);
   const step = (key: string, delta: number) => {
     const at = groups.findIndex((group) => group.key === key);
     const next = groups[Math.min(Math.max(0, at + delta), groups.length - 1)];
@@ -313,7 +313,7 @@ export function IndexRail({
       </Button>
       <div
         ref={list}
-        className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden w-28"
       >
         {groups.map((group) => {
           const active = group.key === current;

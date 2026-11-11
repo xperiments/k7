@@ -56,7 +56,8 @@ beside it, walking the row with the arrows keeps them open, and a click outside 
 closes them. A letter in the index walks every case of the row to that artist's first album rather than
 teleporting; the walk takes about a second within a letter and up to three across the
 alphabet. The index can instead file the shelf by **genre** — an album's most common genre
-tag — and then the rail's rows are the genre names.
+tag — and then the rail's rows are the genre names. Choosing a genre narrows the shelf to
+its albums; choosing it again shows them all, and the rail keeps every genre either way.
 _Avoid_: slider, gallery, carousel widget
 
 **Drive**:
