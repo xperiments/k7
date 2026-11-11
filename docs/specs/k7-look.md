@@ -353,17 +353,17 @@ small text in the same colour, not a badge.
 menu is the filled logo tile at the top of the rail; the destinations and Settings are **dome
 buttons** — a plaque with a circular dome holding the icon at its left and the label beside it,
 6px corners, full width of the rail and stacked flush with a shared 1px edge (the one shape
-exception to the pill rule);
-the install control is a dome button in the rail's footer. The current one fills and its dome
-inverts to the background with an accent icon. The rail does not collapse: the shell is one frame
-at every width. No `K7Shell`. **[ADR]**
+exception to the pill rule); the install control is a dome button in the rail's footer. In the
+default state the dome is outlined and transparent with an accent icon; the current one fills
+only its dome and turns the dome's icon dark, while the plaque, its border and the label do not
+change. The rail does not collapse: the shell is one frame at every width. No `K7Shell`. **[ADR]**
 
 - The frame is 1px accent, panel radius, 5px padding and 5px gutters; a 1px line divides the rail
   from the stage, and the footer bar spans the frame below both.
 - The logo tile is a solid accent square with `k7logo.svg` painted in the background colour — the
   reference's tile is filled, not outlined — and its wordmark is the only bold text in the system.
-- Counts are micro-label chips inside the pill; each nav group's label is a micro-label chip above
-  its buttons.
+- Counts are micro-label chips at the end of the row; each nav group's label is a micro-label chip
+  above its buttons.
 - The PlayerBar is the footer bar: a panel across the frame's bottom, its scrub solid to the
   playhead and dim after.
 

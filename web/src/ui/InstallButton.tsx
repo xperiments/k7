@@ -28,7 +28,7 @@ export function InstallButton() {
       >
         <span
           aria-hidden="true"
-          className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]"
+          className="grid size-8 shrink-0 place-items-center rounded-full border border-primary bg-transparent text-primary [&_svg]:size-4 [&_svg]:stroke-[1.25]"
         >
           <MonitorDown aria-hidden="true" />
         </span>

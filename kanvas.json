@@ -654,6 +654,11 @@
           "at": "2026-11-11T04:32:25Z",
           "by": "dsh",
           "text": "The rail's buttons are 100% of the sidebar's width; they still touch, with the 6px corners and the dome intact."
+        },
+        {
+          "at": "2026-11-11T04:35:42Z",
+          "by": "dsh",
+          "text": "The button states are now the requested pair: default has an outlined transparent dome and an accent label; selected fills only the dome and turns its icon dark, while the plaque, its border and the label stay put."
         }
       ]
     },
