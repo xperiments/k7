@@ -371,8 +371,8 @@ default state the button is outlined and transparent, with a neutral icon and la
 one fills only its dome with the secondary and turns its icon dark, while the button, its border
 and the label stay neutral. The rail rests collapsed to its icons: the logo is the toggle, the
 labels, the group rules and the counts go `sr-only`, the rail narrows to `w-16`, and the icons
-carry tooltips — the logo, every row, Install and Settings. Expanding it is the remembered
-choice; the first visit is collapsed. No `K7Shell`. **[ADR]**
+carry tooltips — the logo, every row, Install and Settings — after a two-second hover.
+Expanding it is the remembered choice; the first visit is collapsed. No `K7Shell`. **[ADR]**
 
 - The frame is 1px neutral line, panel radius, 5px padding and 5px gutters; a 1px line divides
   the rail from the stage, the rail runs the frame's full height, and the footer bar is the

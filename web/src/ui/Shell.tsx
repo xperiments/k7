@@ -249,7 +249,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
 
   return (
     <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden p-1">
-      <TooltipProvider>
+      <TooltipProvider delay={2000}>
       <div className="flex h-full w-full flex-col gap-1 rounded-panel">
         <div className="flex min-h-0 flex-1 gap-1">
           <aside
