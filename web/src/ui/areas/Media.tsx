@@ -117,11 +117,11 @@ function ViewSwitch({
       </Button>
       {grouping && onGrouping ? (
         <>
-          <span aria-hidden="true" className="mx-1 h-4 w-px bg-foreground/20" />
           <Button
             size="sm"
             variant={grouping === 'artist' ? 'solid' : 'default'}
             aria-pressed={grouping === 'artist'}
+            className="h-6 px-2"
             onClick={() => onGrouping('artist')}
           >
             A–Z
@@ -130,16 +130,17 @@ function ViewSwitch({
             size="sm"
             variant={grouping === 'genre' ? 'solid' : 'default'}
             aria-pressed={grouping === 'genre'}
+            className="h-6 px-2"
             onClick={() => onGrouping('genre')}
           >
-            Genres
+            Genre
           </Button>
         </>
       ) : null}
-      <span aria-hidden="true" className="mr-1 ml-3 h-4 w-px bg-foreground/20" />
       <Button
         variant={view === 'drive' ? 'solid' : 'default'}
         size="sm"
+        className="ml-2"
         nativeButton={false}
         aria-current={view === 'drive' ? 'page' : undefined}
         render={<a href={routeHref({ name: 'drive', path: '' })} />}
