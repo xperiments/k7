@@ -198,7 +198,7 @@ function DeviceMenu({
             type="button"
             aria-label="The player"
             title={subtitle}
-            className="grid size-10 shrink-0 place-items-center rounded-panel border border-primary bg-primary text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="grid size-10 shrink-0 place-items-center rounded-panel bg-transparent text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           />
         }
       >
@@ -333,7 +333,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
       <div className="flex h-full w-full flex-col gap-1 rounded-panel">
         <div className="flex min-h-0 flex-1 gap-1">
           <aside className="flex w-52 shrink-0 flex-col border-r border-border">
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+            <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2">
               <DeviceMenu link={link} card={card} tracks={tracks} reachable={reachable} />
             </header>
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-2">

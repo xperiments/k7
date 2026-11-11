@@ -375,9 +375,9 @@ and the label stay neutral. The rail does not collapse: the shell is one frame a
 
 - The frame is 1px neutral line, panel radius, 5px padding and 5px gutters; a 1px line divides
   the rail from the stage, and the footer bar spans the frame below both.
-- The logo tile is a solid accent square with `k7logo.svg` painted in the background colour — the
-  reference's tile is filled, not outlined — and its wordmark is the only bold text in the system.
-  It sits inside the rail's own header, which is the stage header's class
+- The logo is the accent wordmark on the page's dark ground — the inverse of the reference's filled
+  tile, with no tile fill — and its wordmark is the only bold text in the system. It sits inside
+  the rail's own header, which is the stage header's class
   (`flex h-12 shrink-0 items-center gap-2 border-b px-4`) so the two headers meet on one line; the
   tile is `size-10` inside it.
 - Counts are accent numbers at the end of the row; each nav group's label is the uppercase word in
