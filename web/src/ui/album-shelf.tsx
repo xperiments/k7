@@ -103,6 +103,37 @@ export function AlbumShelf({
     return Math.sign(r) * (1 + Math.round((Math.abs(r) - FIRST_STEP) / SPINE_STEP));
   };
 
+  /* The pointer may be released outside the shelf, outside the window, or not at all; one
+   * end path serves the shelf's pointerup, a window-level pointerup/cancel/blur and a lost
+   * capture, so a release can never leave the row in hand. */
+  const endRef = useRef<(clientX: number | null) => void>(() => {});
+  endRef.current = (clientX) => {
+    if (dragStart.current === null) return;
+    const from = dragStart.current;
+    dragStart.current = null;
+    if (clientX === null) return;
+    const target = Math.min(
+      Math.max(0, dragStartAt.current + stepsFor(clientX - from)),
+      Math.max(0, count - 1),
+    );
+    if (target !== dragTarget.current) {
+      dragTarget.current = target;
+      onSelect(target);
+    }
+  };
+  useEffect(() => {
+    const end = (event: PointerEvent) => endRef.current(event.clientX);
+    const cancel = () => endRef.current(null);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', cancel);
+    window.addEventListener('blur', cancel);
+    return () => {
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('blur', cancel);
+    };
+  }, []);
+
   const count = albums.length;
   const at = Math.min(selected, Math.max(0, count - 1));
   const active = albums[at];
@@ -154,6 +185,10 @@ export function AlbumShelf({
           }}
           onPointerMove={(event) => {
             if (dragStart.current === null) return;
+            if ((event.buttons & 1) === 0) {
+              endRef.current(event.clientX);
+              return;
+            }
             const dx = event.clientX - dragStart.current;
             if (Math.abs(dx) > 10) dragged.current = true;
             const target = Math.min(
@@ -164,22 +199,9 @@ export function AlbumShelf({
             dragTarget.current = target;
             onSelect(target);
           }}
-          onPointerUp={(event) => {
-            const from = dragStart.current;
-            dragStart.current = null;
-            if (from === null) return;
-            const target = Math.min(
-              Math.max(0, dragStartAt.current + stepsFor(event.clientX - from)),
-              Math.max(0, count - 1),
-            );
-            if (target !== dragTarget.current) {
-              dragTarget.current = target;
-              onSelect(target);
-            }
-          }}
-          onPointerCancel={() => {
-            dragStart.current = null;
-          }}
+          onPointerUp={(event) => endRef.current(event.clientX)}
+          onPointerCancel={() => endRef.current(null)}
+          onLostPointerCapture={() => endRef.current(null)}
         >
           <div className="k7-shelf-row">
             {albums.map((album, index) => {
