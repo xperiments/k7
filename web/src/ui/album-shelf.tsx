@@ -21,12 +21,6 @@ import { plural } from './format';
  * same shape at the app's 130% base size.
  */
 
-/** rem, and the same numbers as `--cw`, `--cd`, `--cg` in `index.css`. */
-const CASE_W = 13;
-const CASE_D = 2.6;
-const CASE_GAP = 0.65;
-/** Extra air on either side of the turned case, so it is plainly the one selected. */
-const SELECTED_GAP = 1.25;
 /** How far either side of the selection the row is built; the rest is off the shelf. */
 const WINDOW = 10;
 
@@ -38,13 +32,23 @@ function initialOf(album: Album): string {
   return (album.album.trim().slice(0, 1) || '?').toUpperCase();
 }
 
-/** Where a case at distance `d` from the selection sits, in rem. */
+/** Where a case at distance `d` from the selection sits. The terms are the stylesheet's
+ *  `--cw`, `--cd`, `--cg` and `--csg`, so the row scales with the case when the stage is
+ *  short. */
 function placeAt(distance: number): string {
   if (distance === 0) return 'translate3d(0, 0, 0)';
   const steps = Math.abs(distance) - 1;
-  const x = CASE_W / 2 + CASE_GAP + SELECTED_GAP + steps * (CASE_D + CASE_GAP) + CASE_D / 2;
-  const z = -Math.min(Math.abs(distance), 8) * 1.56;
-  return `translate3d(${(distance > 0 ? x : -x).toFixed(3)}rem, 0, ${z.toFixed(2)}rem)`;
+  const dir = distance > 0 ? 1 : -1;
+  const x = [
+    `var(--cw) * ${0.5 * dir}`,
+    `var(--cg) * ${dir}`,
+    `var(--csg) * ${dir}`,
+    `var(--cd) * ${dir * steps}`,
+    `var(--cg) * ${dir * steps}`,
+    `var(--cd) * ${0.5 * dir}`,
+  ].join(' + ');
+  const z = `var(--cw) * ${(-Math.min(Math.abs(distance), 8) * 0.12).toFixed(3)}`;
+  return `translate3d(calc(${x}), 0, calc(${z}))`;
 }
 
 export function AlbumShelf({

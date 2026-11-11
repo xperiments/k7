@@ -275,16 +275,19 @@
     }
 
     .k7-shelf {
-        --cw: 13rem;
+        /* The case is as wide as the stage's free height allows, so a short window shrinks
+           the shelf instead of pushing it under the header. 13rem is the full-size case. */
+        --cw: clamp(7rem, calc((100dvh - 17rem) * 16 / 25), 13rem);
         --ch: calc(var(--cw) * 25 / 16);
-        --cd: 2.6rem;
-        --cg: 0.65rem;
+        --cd: calc(var(--cw) * 0.2);
+        --cg: calc(var(--cw) * 0.05);
+        --csg: calc(var(--cw) * 0.096);
 
         position: relative;
         width: 100%;
         height: calc(var(--ch) + 0.5rem);
         overflow: clip;
-        perspective: 90rem;
+        perspective: calc(var(--cw) * 6.92);
         touch-action: pan-y;
         cursor: grab;
         /* The row does not end at the column's edge: it fades into the page there, so a
