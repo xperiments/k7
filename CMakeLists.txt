@@ -26,7 +26,13 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 idf_build_set_property(EXTRA_COMPONENT_EXCLUDE_DIRS
                        "${CMAKE_CURRENT_LIST_DIR}/components/portable;${CMAKE_CURRENT_LIST_DIR}/components/app")
 
-project(sd_stream_server)
+# The firmware's version is a file, not a CMake constant (ADR 0079): the release action, the
+# image's descriptor and the Site's manifest all read this one string, so a bump is one edit
+# and the panel's About row, `firmware.json` and the Site cannot disagree.
+file(READ "${CMAKE_CURRENT_LIST_DIR}/VERSION" K7_VERSION)
+string(STRIP "${K7_VERSION}" K7_VERSION)
+
+project(sd_stream_server VERSION ${K7_VERSION})
 
 # LVGL inherits the project's -Og, and the interface's rendering is the hot path on the
 # core it shares with the network stack: two rotating reel hubs with alpha, blended into
