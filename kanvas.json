@@ -382,7 +382,7 @@
     {
       "id": "SU-07",
       "title": "Prove the numbers, and the case it was built for",
-      "state": "review",
+      "state": "done",
       "group": "SU",
       "deps": ["SU-03", "SU-04", "SU-05", "SU-06"],
       "yolo": true,
@@ -409,6 +409,11 @@
           "at": "2026-11-10T22:55:43Z",
           "by": "dsh",
           "text": "**Board results, 2026-11-10 — seven of eight proven on the hardware. Two real bugs found by using it, both fixed and flashed.**\n\n| | |\n|---|---|\n| B1 the page from the hotspot | **proven** — /setup 200, the 2.4 GHz line, http://k7.local/setup resolved there by mDNS |\n| B2 a wrong password + the reason after a reload | **proven twice** — reason 15 against one network and 2 against another; both now mapped to the person's words, and last_attempt was there after reconnecting |\n| B3 a real join, the hotspot closing itself | **proven** — joined xperiments-2.4G, closed on its own, k7.local/api/status 200 from the LAN afterwards |\n| B4 the census | **proven** — 123183 B free at the hotspot's start, 43795 B free / 31744 B largest ten seconds later with the stream playing |\n| B5 eight minutes, hotspot up, client streaming | **proven for what it guards** — 0 rebases, 0 ms starved, 0 reboots; internal free never below 25355 B; encoder 64.0% of one core against 52.9% without the hotspot, so the setup network costs ~11 points and starves nothing |\n| B6 a reflash keeps the record | **proven** — idf.py flash again and it rejoined by itself: app: http://192.168.0.13/, no 'no network stored' |\n| B7 the stream over the hotspot | **proven** — 132-146 KB in four seconds with icy-name (the mountain case) |\n| B8 the panel's rows | **not proven** — t18_menu covers the model; how the five rows look and respond needs eyes at the glass |\n\n**Found by the board, not the host:** (1) a forgotten network was still being chased, and a station mid-connection refuses a scan — the next scan answered 503; fixed with app_board_wifi_forget() plus a scan that waits, retries once and always frees the driver's buffer. (2) The grace closed the hotspot just asked for: raising it on an already-connected device started the 60 s close at once, so it vanished while one was still choosing; a session opened on an associated device now never starts the grace, and t38_setup covers it.\n\n**Left running as the owner had it**: provisioned to xperiments-2.4G at 192.168.0.13, hotspot off, stream up. Harness: sh host/tests/board_setup.sh --home-pass. **Closing B8**: Menu - Settings - Wi-Fi, five rows — Setup STOP/START, Network xperiments-2.4G, Password in clear, Reset password RESET, Address an em dash while the hotspot is down. --- dsh"
+        },
+        {
+          "at": "2026-11-11T00:23:40Z",
+          "by": "dsh",
+          "text": "**Scope change, owner's call: the setup surface now exists only while the hotspot does (ADR 0077, commit d5b5e6f).**\n\n`GET /setup` and all seven `/api/setup*` routes answer only while a session is up; with no session they are 404 on every interface. Measured on the flashed board with the hotspot down: /setup 404, /api/setup 404, /api/setup/scan 404, while /api/status 200 and /stream 200. Host tier: H5 and H14 assert it.\n\n**Two consequences for this ticket's checks:** (1) `host/tests/board_setup.sh` can no longer raise the hotspot itself — it now says 'raise it from Menu - Settings - Wi-Fi - Setup, or use a device with no network'; B1/B2/B3/B7 need the hotspot up before the harness runs. (2) **B8 is now load-bearing rather than cosmetic**: on a healthy, provisioned device the panel's Setup row is the only way to get a hotspot back short of a power cycle. --- dsh"
         }
       ]
     }
