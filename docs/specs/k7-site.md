@@ -11,11 +11,12 @@ The origin does not move: `xperiments.dev` and its certificate are the ones alre
 the root ([ADR 0078](../adr/0078-the-site-owns-the-root-and-the-app-moves-to-app.md)) and how the
 firmware reaches a board ([ADR 0079](../adr/0079-the-firmware-is-flashed-in-parts-from-the-browser.md)).
 
-**Status:** designed and specified; **nothing is built.** The three parts exist in a local build
-(`bootloader.bin` 21,120 B, `partition-table.bin` 3,072 B, `sd_stream_server.bin` 2,072,992 B),
-but nothing publishes them, no page flashes them, and no board has been flashed from a browser.
-The two ADRs are 0078 and 0079. The numbers in §3 are the arithmetic of that one build, not a
-measurement of a release.
+**Status:** S1–S9, R1–R6 and D1–D4 are built; **K7 0.5.0 is released** (`web/firmware.json`
+and `web/public/firmware/0.5.0/`: `bootloader.bin` 21,120 B, `partition-table.bin` 3,072 B,
+`sd_stream_server.bin` 2,073,008 B). The Site's own page is still its first shape — the hero
+slot, the flash and the install are SI-03/SI-04 — and **no board has been flashed from a
+browser**. The two ADRs are 0078 and 0079. The sizes in §3 are the released bytes; no timing in
+§6 is measured yet.
 
 **Vocabulary:** [`web/CONTEXT.md`](../../web/CONTEXT.md) — **Site**, **Flash**, **Install**. The
 App is [`k7-app.md`](./k7-app.md); the deployment is [`k7-deploy.md`](./k7-deploy.md); the
@@ -139,9 +140,9 @@ a support burden in a dropdown.
 |---|---:|---:|
 | `bootloader.bin` | `0x0` | 21,120 B |
 | `partition-table.bin` | `0x8000` | 3,072 B |
-| `sd_stream_server.bin` | `0x10000` | 2,072,992 B |
+| `sd_stream_server.bin` | `0x10000` | 2,073,008 B |
 
-`nvs` sits at `0x9000` and `phy_init` at `0xF000`; the app ends at `0x20A1A0`, far below the
+`nvs` sits at `0x9000` and `phy_init` at `0xF000`; the app ends at `0x20A1B0`, far below the
 Snapshot at `0x410000`. A **merged** image written from `0x0` pads those gaps with `0xFF` and so
 erases the stored WiFi network — a factory reset disguised as an update. The Site therefore never
 serves or writes a merged image, and the download path (F10) is the same three parts with the

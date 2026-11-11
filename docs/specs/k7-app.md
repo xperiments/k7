@@ -16,8 +16,8 @@ The page the device used to serve is gone: **Front door**, **Launcher**, **Devic
 
 **Status:** M1–M3 are built and tested in this repository — the card's mark and the scoped
 stores, installability, and the one offline weights store with a gated prefetch. Not deployed
-and not flashed. The Site and the `/app` split are specified in
-[`k7-site.md`](./k7-site.md) and not built. M4 is partly built: the direct transport exists; the
+and not flashed. The `/app` split is built; the Site at `/` is its first shape
+([`k7-site.md`](./k7-site.md)). M4 is partly built: the direct transport exists; the
 Library's image source and the local Provider do not, so `#/media`, `#/playlists` and Ask still
 read the player only.
 

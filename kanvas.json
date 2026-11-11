@@ -424,7 +424,7 @@
     {
       "id": "SI-01",
       "title": "The origin serves two documents: the Site at / and the App at /app",
-      "state": "doing",
+      "state": "review",
       "group": "SI",
       "yolo": true,
       "at": "2026-11-11T01:38:45Z",
@@ -435,18 +435,35 @@
           "at": "2026-11-11T01:44:00Z",
           "by": "dsh",
           "text": "Plan: split the Vite build into index.html (Site) and app.html (App at /app); rewrite /app on Vercel and in dev; manifest start_url/scope /app; device 302 to /app#/player; gate links to the Site."
+        },
+        {
+          "at": "2026-11-11T01:52:51Z",
+          "by": "dsh",
+          "text": "The origin serves two documents: `/` is the Site (its first shape: the product's sentence and\nan \"Open K7\" link) and `/app` is the App. Vercel and the dev/preview servers rewrite `/app` to\n`app.html`; the manifest keeps `id: \"/\"` and starts at `/app` in `scope: \"/app\"`; the device's\n302 is `https://k7.xperiments.dev/app#/player`; the App's gate links to the Site's flash.\n\nVerified: `npm run typecheck`; `npm test` (438); `npm run build` emits both documents and\n`dist/shell.json` names `/app.html` only; `check-manifest` accepts `/app`; `vite preview`\nanswers `/` with the Site and `/app` with the App's document; `make -C host check` green,\nincluding the 302 in three fixtures.\n\nNot verified, and worth your check: an install from Chrome (A13) has not been re-signed in a\nbrowser. The worker change — it precaches `/app` and leaves `/` to the network — has no\nautomated test; SI-05 owns its check. The Site's page is a placeholder until SI-04."
         }
       ]
     },
     {
       "id": "SI-02",
       "title": "A firmware release is a version, a manifest and three committed parts",
-      "state": "todo",
+      "state": "review",
       "group": "SI",
       "yolo": true,
       "at": "2026-11-11T01:38:45Z",
       "by": "dsh",
-      "desc": "A release that can actually ship: `VERSION` in the image and the panel's About, `./tools/build.sh sunton release` writing `web/firmware.json` and the three parts under `web/public/firmware/<version>/`, and CI refusing a manifest that does not match the bytes.\n\nFinished when a clone with no ESP-IDF deploys a Site whose flasher works, and a dirty or untagged tree cannot release."
+      "desc": "A release that can actually ship: `VERSION` in the image and the panel's About, `./tools/build.sh sunton release` writing `web/firmware.json` and the three parts under `web/public/firmware/<version>/`, and CI refusing a manifest that does not match the bytes.\n\nFinished when a clone with no ESP-IDF deploys a Site whose flasher works, and a dirty or untagged tree cannot release.",
+      "notes": [
+        {
+          "at": "2026-11-11T01:52:46Z",
+          "by": "dsh",
+          "text": "Plan: VERSION read by CMake; a release action in tools/build.sh with dirty-tree and tag refusals; firmware.json and three parts under web/public/firmware/0.5.0/; a vitest guard over the manifest and bytes."
+        },
+        {
+          "at": "2026-11-11T01:52:51Z",
+          "by": "dsh",
+          "text": "K7 0.5.0 is released and committed: `web/firmware.json` names the version, the tag commit,\nthree parts at 0x0/0x8000/0x10000 with their sizes and sha256, and the parts themselves are\nunder `web/public/firmware/0.5.0/`. `VERSION` is read by CMake, so the image's descriptor, the\npanel's About and the Site's manifest carry the same number. A new guard test hashes the bytes\nagainst the manifest and fails on a missing part or a `VERSION` disagreement.\n\nVerified: the release refused the clean tree while untagged (\"tag v0.5.0 at HEAD first\"), then\npublished once `v0.5.0` pointed at HEAD; the image carries `0.5.0` and `/app#/player`;\n`npm run typecheck`; `npm test` (442).\n\nWorth your check: `git tag v0.5.0` is local and unpushed. The binaries are a child commit of\nthe tag (`dc2e99e` after `ea942df`), because a release is cut from a clean tree — the tagged\nsource commit has no binaries, and CI is green on both. No board has been flashed with 0.5.0,\nand the page that will flash it is SI-03."
+        }
+      ]
     },
     {
       "id": "SI-03",
