@@ -33,7 +33,15 @@ import {
   type CachedMedia,
 } from '../../storage/media';
 import { buildCoverArchive } from '../../storage/coverArchive';
-import { cardRefFor, currentCardScope, subscribeCardScope } from '../../card/session';
+import { composePath, copyIntoMusic, diffMusic, walkMusic, type ComposeDirectory, type ComposeResult, type WalkDirectory } from '../../card/compose';
+import {
+  cardRefFor,
+  currentCardScope,
+  setCardScope,
+  subscribeCardScope,
+  UNSCOPED,
+  useCardScope,
+} from '../../card/session';
 import { readCardFile as readFileFromCard, type CardRoot } from '../../card/read';
 import { isNotReadable, openReadable, withReadable } from '../../card/readable';
 import { writableCard, writeCardFile } from '../../card/write';
@@ -44,6 +52,7 @@ import {
   forgetCardHandle,
 } from '../../card/handles';
 import { loadSnapshot, saveSnapshot, type StoredSnapshot } from '../../storage/snapshots';
+import { getVirtualCard } from '../../storage/vcards';
 import { clearCache, getCached, putCached } from '../../storage/cache';
 import { requestPersistence } from '../../storage/persist';
 
@@ -52,6 +61,10 @@ let persistenceAsked = false;
 
 /** One pass per page load: the v2 rows' raw covers are moved to the shared AVIF store. */
 let coversMigrated = false;
+
+/** How often the reconciler re-walks the open card. The browser has no filesystem watcher,
+ * so a change made in Finder reaches the queue on the next poll rather than the next second. */
+const RECONCILE_MS = 5_000;
 function askPersistenceOnce(): void {
   if (persistenceAsked) return;
   persistenceAsked = true;
@@ -78,7 +91,7 @@ export interface Notice {
  * What the Card area measures and what it produces, in one place.
  *
  * This is the old PrepareView's state and actions, lifted out of the page and mounted
- * once at the app root. The reason is ADR 0052's: the Process area stays mounted while
+ * once at the app root. The reason is ADR 0052's: the Prepare area stays mounted while
  * another route is shown, so navigating away can never destroy a queue that is still
  * working. Keeping the state inside the area would have made that promise a coincidence
  * of `hidden` styling rather than a property of the app.
@@ -134,12 +147,23 @@ export interface AnalysisApi {
 
   addFound: (found: FoundFile[], skipped: number, readOnly?: boolean) => void;
   addCard: (found: FoundFile[], skipped: number, handle: SnapshotDirectory) => void;
+  /**
+   * True when the current card is a virtual card this session can compose into. A dropped
+   * folder of music is then copied into the card's `music/` rather than measured in place.
+   */
+  composing: boolean;
+  /** Copy dropped audio into the open virtual card's `music/`, measuring each as it lands. */
+  compose: (found: FoundFile[], skipped: number, into?: string) => Promise<void>;
   /** Walk the card this page holds open again; its files replace the queue. */
   rescanCard: () => Promise<void>;
   /** Open a different card; its files replace the queue and the Scope follows. */
   changeCard: () => Promise<void>;
   /** The card was opened read-write in this session, so it can be written back to. */
   hasCardHandle: boolean;
+  /** Forget the real SD picked this session — the eject control's act, never a virtual card. */
+  ejectRealCard: () => void;
+  /** Make the loaded real SD the current card again, without opening the picker. */
+  selectRealCard: () => void;
   /**
    * A card this browser can read: the one opened this visit, or the one it remembers opening
    * before. Rescan only needs read access, so it outlives the write grant.
@@ -205,9 +229,48 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   /* The same card's handle as this browser remembered it, when this visit has not opened one.
    * It is not a grant: reading needs the permission asked for again on the gesture. */
   const [storedHandle, setStoredHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  /* The scope the real SD was picked under, so a loaded card can be re-selected without
+   * opening the picker again. Null when no SD is loaded. */
+  const [realScope, setRealScope] = useState<string | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [weightError, setWeightError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+
+  /* The scope, as a React value: which card this session works on. The provider already
+   * re-reads the card's stores when it moves; this is the same signal for the compose and
+   * reconciler logic, which follow the card and must not answer for the previous one. */
+  const scope = useCardScope();
+  /* True when the current scope is a virtual card — a card this App created and can write
+   * audio into. A real SD with a mark shares the `mark:` prefix, so the vcards store is the
+   * one thing that tells the two apart. */
+  const [composing, setComposing] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const reference = cardRefFor(scope);
+    if (!reference.mark) {
+      setComposing(false);
+      return;
+    }
+    getVirtualCard(reference.mark)
+      .then((card) => {
+        if (!cancelled) setComposing(card !== undefined);
+      })
+      .catch(() => {
+        if (!cancelled) setComposing(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scope]);
+
+  /* The reconciler's memory. `composingFiles` names Snapshot paths a copy is still writing,
+   * so a poll never measures a half-written file; `lastWalk` is the previous walk the diff is
+   * taken against, and `baselined` keeps the first walk of a newly opened card from measuring
+   * everything it finds — a run is asked for, not assumed (rescan stays a gesture). */
+  const composingFiles = useRef(new Set<string>());
+  const lastWalk = useRef(new Map<string, { size: number; mtime: number }>());
+  const baselined = useRef(false);
+  const reconciling = useRef(false);
 
   /* The pool starts at boot. The setting is read once — auto (half the logical cores, capped
    * by memory) or a pinned count — the app starts that many workers, and keeps the ones that
@@ -283,6 +346,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       const stillCurrent = () => !cancelled && scope === currentCardScope();
       setLastSnapshot(null);
       setStoredHandle(null);
+      // A different card is a different run: its rows must not carry the previous card's
+      // tracks into the image. A pick's own `acceptIntake` replaces this straight after.
+      setItems([]);
       cardHandleFor(scope)
         .then((handle) => {
           if (stillCurrent()) setStoredHandle(handle);
@@ -636,14 +702,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * is recognised from the card's own record — and appending would double every row.
    */
   const acceptIntake = useCallback(
-    (found: FoundFile[], skipped: number, replace: boolean, readOnly = false) => {
+    (found: FoundFile[], _skipped: number, replace: boolean, _readOnly = false) => {
     const accepted: QueueItem[] = [];
-    const rejected: string[] = [];
 
     for (const { file, path } of found) {
       const format = trackFormat(file);
       if (!format) {
-        rejected.push(path);
         continue;
       }
       accepted.push({
@@ -673,21 +737,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const leftovers: string[] = [];
-    // Not "non-audio": WAV is audio the device plays, and this App never opens it. Said as
-    // what it is, because Media reports the same files apart rather than as unmeasured.
-    if (rejected.length > 0)
-      leftovers.push(`${plural(rejected.length, 'file')} this App cannot measure`);
-    if (skipped > 0) leftovers.push(`${plural(skipped, 'item')} unreadable`);
-
-    if (leftovers.length > 0 || readOnly) {
-      const parts = [
-        `${replace ? 'Read' : 'Added'} ${plural(accepted.length, 'track')}`,
-      ];
-      if (leftovers.length > 0) parts.push(leftovers.join(' · '));
-      if (readOnly) parts.push('a dropped folder is read-only · choose the card to write back');
-      setNotice({ kind: 'success', text: parts.join(' · ') });
-    }
   },
     [],
   );
@@ -697,6 +746,175 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       acceptIntake(found, skipped, false, readOnly),
     [acceptIntake],
   );
+
+  /**
+   * Compose: copy dropped audio into the open virtual card's `music/`, streaming each file
+   * and handing it to the queue the moment its copy closes — per-file, never a full-card scan
+   * first. A real SD never reaches this: its files stay "measure in place", and this method
+   * is only offered when `composing` is true.
+   *
+   * Only audio is copied; the dropped folder's structure below the dragged entry is kept. A
+   * file whose copy fails is said, not silently lost.
+   */
+  const compose = useCallback(
+    async (found: FoundFile[], skipped: number, into = '') => {
+      const reference = cardRefFor(currentCardScope());
+      if (!reference.mark) {
+        setNotice({ kind: 'error', text: 'Open a virtual card to compose music into it.' });
+        return;
+      }
+      let directory = storedHandle;
+      if (directory === null) directory = await cardHandleFor(currentCardScope());
+      if (directory === null) {
+        setNotice({
+          kind: 'error',
+          text: 'The virtual card’s folder is not reachable. Reconnect the working directory, then try again.',
+        });
+        return;
+      }
+
+      const audio = found.filter((entry) => trackFormat(entry.file) !== null);
+      const nonAudio = found.length - audio.length;
+      if (audio.length === 0) {
+        setNotice({
+          kind: 'error',
+          text:
+            found.length === 0
+              ? 'No MP3 or FLAC files found.'
+              : `No MP3 or FLAC files in ${plural(found.length, 'file')}.`,
+        });
+        return;
+      }
+
+      // Every path a copy is about to write is off-limits to the reconciler until it lands,
+      // so a poll cannot measure a half-written file while the copy is streaming.
+      const destinations = audio
+        .map((entry) => [into, composePath(entry.path)].filter(Boolean).join('/'))
+        .filter((path) => path !== '');
+      for (const path of destinations) composingFiles.current.add(path);
+
+      let result: ComposeResult;
+      try {
+        result = await copyIntoMusic(directory as unknown as ComposeDirectory, audio, (copied) => {
+          composingFiles.current.delete(copied.path);
+          // Record the copy's own size and mtime, so the next poll sees the file as known
+          // rather than "added" and nothing is measured twice.
+          lastWalk.current.set(copied.path, {
+            size: copied.file.size,
+            mtime: copied.file.lastModified,
+          });
+          addFound([{ file: copied.file, path: `music/${copied.path}` }], 0);
+        }, into);
+      } catch (error) {
+        setNotice({
+          kind: 'error',
+          text: `Could not copy into the virtual card: ${error instanceof Error ? error.message : String(error)}`,
+        });
+        return;
+      } finally {
+        for (const path of destinations) composingFiles.current.delete(path);
+      }
+
+      const leftovers: string[] = [];
+      if (nonAudio > 0) leftovers.push(`${plural(nonAudio, 'file')} not music`);
+      if (result.skipped > 0) leftovers.push(`${plural(result.skipped, 'file')} could not be copied`);
+      if (skipped > 0) leftovers.push(`${plural(skipped, 'item')} unreadable`);
+
+      if (result.copied === 0) {
+        setNotice({ kind: 'error', text: 'Nothing was copied into the virtual card.' });
+        return;
+      }
+      setNotice({
+        kind: 'success',
+        text:
+          `Copied ${plural(result.copied, 'track')} into the card` +
+          (leftovers.length > 0 ? ` · ${leftovers.join(' · ')}` : '') +
+          '.',
+      });
+    },
+    [storedHandle, addFound],
+  );
+
+  /**
+   * The reconciler: the browser has no filesystem watcher, so the open card is re-walked on a
+   * timer and diffed against the last walk. Files added or changed outside the App are
+   * measured; files removed are dropped from the queue; a copy still in progress is skipped.
+   *
+   * The first walk of a newly opened card records a baseline and measures nothing on its own —
+   * a run is a gesture, not something an open or a reload assumes, and the existing rescan
+   * button stays the way to ask for it.
+   */
+  useEffect(() => {
+    // The card being worked on, not whichever SD was last picked: a virtual card is walked
+    // through its own remembered handle while a real SD sits loaded but unselected.
+    const handle = composing ? storedHandle : (cardHandle ?? storedHandle);
+    if (handle === null) return;
+    const root = handle as unknown as WalkDirectory;
+
+    // A new (or re-asked) handle is a new baseline: the old card's walk must not diff against
+    // the new card's.
+    lastWalk.current = new Map();
+    baselined.current = false;
+
+    let cancelled = false;
+    const poll = async () => {
+      if (cancelled || reconciling.current) return;
+      reconciling.current = true;
+      try {
+        const current = (await walkMusic(root)).filter(
+          (entry) => !composingFiles.current.has(entry.path),
+        );
+        if (cancelled) return;
+
+        if (!baselined.current) {
+          baselined.current = true;
+          lastWalk.current = new Map(current.map((entry) => [entry.path, entry]));
+          return;
+        }
+
+        const diff = diffMusic(
+          [...lastWalk.current.entries()].map(([path, { size, mtime }]) => ({
+            path,
+            size,
+            mtime,
+          })),
+          current,
+        );
+
+        const gone = new Set<string>([
+          ...diff.removed.map((entry) => entry.path),
+          ...diff.changed.map((entry) => entry.path),
+        ]);
+        if (gone.size > 0) {
+          setItems((previous) =>
+            previous.filter((item) => {
+              const path = snapshotPath(item.path);
+              return path === null || !gone.has(path);
+            }),
+          );
+        }
+
+        for (const entry of [...diff.added, ...diff.changed]) {
+          const file = await readFileFromCard(handle as unknown as CardRoot, entry.path);
+          if (file === null || trackFormat(file) === null) continue;
+          acceptIntake([{ file, path: `music/${entry.path}` }], 0, false);
+        }
+
+        lastWalk.current = new Map(current.map((entry) => [entry.path, entry]));
+      } catch {
+        /* A walk that fails is not a reason to change the queue. */
+      } finally {
+        reconciling.current = false;
+      }
+    };
+
+    void poll();
+    const timer = window.setInterval(() => void poll(), RECONCILE_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [cardHandle, storedHandle, composing, acceptIntake]);
 
   /**
    * Read the card again: the same folder, walked now. It is the gesture for "I added tracks to
@@ -722,6 +940,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         return;
       }
       setCardHandle(storedHandle as unknown as SnapshotDirectory);
+      setRealScope(currentCardScope());
       handle = storedHandle as unknown as SnapshotDirectory;
     }
     if (handle === null) {
@@ -752,6 +971,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     switch (picked.kind) {
       case 'read':
         setCardHandle(picked.handle);
+        setRealScope(currentCardScope());
         acceptIntake(picked.files, picked.skipped, true);
         setNotice(null);
         return;
@@ -783,6 +1003,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const addCard = useCallback(
     (found: FoundFile[], skipped: number, handle: SnapshotDirectory) => {
       setCardHandle(handle);
+      setRealScope(currentCardScope());
       addFound(found, skipped);
       setNotice(null);
     },
@@ -918,18 +1139,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     return result;
   }, [items, manifest, setupError]);
 
-  const leftovers = (skipped: number) =>
-    skipped > 0 ? ` ${plural(skipped, 'analysed file')} outside music/ left out.` : '';
-
-  const listMessage = (count: number) => (count > 0 ? ` and ${plural(count, 'playlist')}` : '');
-
   const nonEmptyLists = () =>
     toSnapshotPlaylists().filter((list) => list.rows.length > 0).length;
 
-  /* What the card last took. The two signatures let an effect tell a new run or a changed
-   * list from the state it already wrote, so a settled queue does not rewrite the card on
-   * every render. */
-  const written = useRef({ run: '', lists: '' });
+  /* What the card last took. The signatures let an effect tell a new run, a changed list, or
+   * a virtual card's per-file rebuild from the state it already wrote, so nothing rewrites
+   * the card on every render. */
+  const written = useRef({ run: '', lists: '', virtual: '' });
   /* A write in flight, as a ref: `saving` drives the UI, but the effects below must not
    * re-run merely because a write finished — that would retry a failed one forever. */
   const writing = useRef(false);
@@ -958,8 +1174,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * cannot be raised (ADR 0010), and nothing else can write a card.
    */
   const writeToCard = useCallback(
-    async (mode: 'run' | 'lists'): Promise<boolean> => {
-      if (!cardHandle || writing.current) return false;
+    async (
+      directory: SnapshotDirectory,
+      mode: 'run' | 'lists',
+    ): Promise<boolean> => {
+      if (!directory || writing.current) return false;
       writing.current = true;
       setSaving(true);
       try {
@@ -979,7 +1198,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           skipped = built.skipped;
           lists = nonEmptyLists();
         }
-        await writeSnapshotToCard(cardHandle, bytes);
+        await writeSnapshotToCard(directory, bytes);
         const scope = currentCardScope();
 
         /* The card carries the browser's cover cache too, so a new browser (or this one after
@@ -999,7 +1218,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
                   return record ? [{ hash, ...record }] : [];
                 }),
               );
-              await writeSnapshotToCard(cardHandle, archive, 'k7.covers');
+              await writeSnapshotToCard(directory, archive, 'k7.covers');
             }
           } catch (error) {
             console.warn('the cover archive was not written to the card', error);
@@ -1017,14 +1236,15 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         await saveSnapshot(scope, stored);
         setLastSnapshot(stored);
         setWrittenAt(stored.at);
-        setNotice({
-          kind: 'success',
-          text:
-            (mode === 'lists'
-              ? `Wrote ${plural(lists, 'playlist')} to the card’s image.`
-              : `Wrote k7.db for ${plural(tracks, 'track')}${listMessage(lists)} to the card.` +
-                leftovers(skipped)) + ' Put the card back in the player.',
-        });
+        /* Writes are quiet: the tile already says what landed and when, so a toast after
+         * every run is noise. A list-only write still speaks, because it is a separate act
+         * with no visible result of its own. */
+        if (mode === 'lists') {
+          setNotice({
+            kind: 'success',
+            text: `Wrote ${plural(lists, 'playlist')} to the card’s image.`,
+          });
+        }
         return true;
       } catch (error) {
         setNotice({
@@ -1037,7 +1257,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         setSaving(false);
       }
     },
-    [buildImage, cardHandle, lastSnapshot],
+    [buildImage, lastSnapshot],
   );
 
 
@@ -1055,7 +1275,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     const signature = `${runRevision}:${total}:${done}`;
     if (signature === written.current.run) return;
     const timer = window.setTimeout(() => {
-      void writeToCard('run').then((ok) => {
+      void writeToCard(cardHandle, 'run').then((ok) => {
         if (!ok) return;
         written.current.run = signature;
         written.current.lists = listsSignature;
@@ -1071,18 +1291,38 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     if (!cardHandle || !lastSnapshot || written.current.run === '') return;
     if (listsSignature === written.current.lists) return;
     const timer = window.setTimeout(() => {
-      void writeToCard('lists').then((ok) => {
+      void writeToCard(cardHandle, 'lists').then((ok) => {
         if (ok) written.current.lists = listsSignature;
       });
     }, 800);
     return () => window.clearTimeout(timer);
   }, [cardHandle, lastSnapshot, listsSignature, writeToCard]);
 
+  /* A virtual card's k7.db stays current as files settle: after each measurement — and each
+   * playlist edit — the image is rebuilt from the measured set and rewritten to the card's
+   * own directory, debounced so a drop commits a few times rather than once per file. The
+   * real card's "write when the run ends" effect above is unchanged. */
+  useEffect(() => {
+    if (!composing || !manifest) return;
+    const directory = storedHandle;
+    if (directory === null) return;
+    if (done === 0 && listsSignature === '') return;
+    const signature = `${runRevision}:${done}:${total}:${listsSignature}`;
+    if (signature === written.current.virtual) return;
+    const timer = window.setTimeout(() => {
+      void writeToCard(directory as unknown as SnapshotDirectory, 'run').then((ok) => {
+        if (ok) written.current.virtual = signature;
+      });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [composing, manifest, storedHandle, runRevision, done, total, listsSignature, writeToCard]);
+
   /* A dropped card root is read-only, so a finished run has nowhere to go. Say it once,
-   * with the one act that fixes it, rather than leaving the user with a measured queue. */
+   * with the one act that fixes it, rather than leaving the user with a measured queue. A
+   * virtual card is writable and not a dropped folder, so it never gets this sentence. */
   const toldReadOnly = useRef('');
   useEffect(() => {
-    if (cardHandle || !settled) return;
+    if (cardHandle || composing || !settled) return;
     const signature = `${runRevision}:${total}`;
     if (toldReadOnly.current === signature) return;
     toldReadOnly.current = signature;
@@ -1093,7 +1333,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         'so the page can read it and not write it. Open it with “Choose card” once to write ' +
         'the image (nothing has to be measured again).',
     });
-  }, [cardHandle, settled, runRevision, total, done]);
+  }, [cardHandle, composing, settled, runRevision, total, done]);
 
   const cardLabel = (() => {
     const reference = cardRefFor(currentCardScope());
@@ -1143,6 +1383,23 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const pause = useCallback(() => setRunning(false), []);
   const resume = useCallback(() => setRunning(true), []);
 
+  /* The explicit way to unload the real SD: clear this session's read-write handle, and when
+   * the SD is the card being worked on, drop the scope too so the tile reads "choose or drop"
+   * rather than "loaded". A virtual card that is current is left alone. */
+  const ejectRealCard = useCallback(() => {
+    setCardHandle(null);
+    setRealScope(null);
+    if (!composing) {
+      setStoredHandle(null);
+      setCardScope(UNSCOPED);
+    }
+  }, [composing]);
+
+  /** Make the loaded real SD the card being worked on, without opening the picker again. */
+  const selectRealCard = useCallback(() => {
+    if (realScope !== null) setCardScope(realScope);
+  }, [realScope]);
+
   const value: AnalysisApi = {
     items,
     busy,
@@ -1168,9 +1425,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setConfirmingClear,
     addFound,
     addCard,
+    composing,
+    compose,
     rescanCard,
     changeCard,
     hasCardHandle: cardHandle !== null,
+    ejectRealCard,
+    selectRealCard,
     canRescan: cardHandle !== null || storedHandle !== null,
     retry,
     deepAnalyse,

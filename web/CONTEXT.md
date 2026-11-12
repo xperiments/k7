@@ -43,7 +43,7 @@ routes and nothing else; what it shows it reads from the player, from this brows
 _Avoid_: page, tab, section
 
 **Route**:
-A hash path in the address bar — `#/process`, `#/playlists/:id`, `#/media/album/:album` — naming an
+A hash path in the address bar — `#/prepare`, `#/playlists/:id`, `#/media/album/:album` — naming an
 area and, sometimes, one thing in it. The App serves one document and knows no path; a route
 exists only inside the App.
 _Avoid_: URL, link, path
@@ -101,8 +101,21 @@ _Avoid_: mode, offline mode, connectivity
 
 **Card**:
 A removable volume whose `music` directory is the player's Library, and which this browser can
-name for itself. A card out of the player is still the card.
+name for itself. A card out of the player is still the card. A **Virtual card** is a Card the
+App prepares in a **Working directory** before an SD is in the machine.
 _Avoid_: SD card (except for the object), volume, library, drive
+
+**Virtual card**:
+A **Card** the App creates under a granted **Working directory**: the same `music/` plus
+`k7.card`, `k7.db` and `k7.covers`, in a plain folder, with a chosen soft **capacity**. Its
+finish act is **Write to SD**.
+_Avoid_: image, container, virtual drive
+
+**Working directory**:
+The one read-write directory the user grants so the App can keep **Virtual cards** as folders
+under it. Its write grant does not survive a browser restart, so it is re-asked once per
+session.
+_Avoid_: workspace, root, base folder
 
 **Folder**:
 A directory the user drops or picks that is not a Card. Scanned recursively for Tracks, measured
@@ -138,7 +151,7 @@ _Avoid_: snapshot file, image file, config
 
 **Scan**:
 Reading a card that is in this computer: a picked directory walked for MP3 and FLAC, producing
-**Queue** entries. Never writes. It happens in **Process** — the drop zone is that area's intake,
+**Queue** entries. Never writes. It happens in **Prepare** — the drop zone is that area's intake,
 not a page of its own.
 _Avoid_: import, add files, load
 
@@ -147,10 +160,21 @@ The player rebuilding its **Library** from the card it holds, at `POST /api/resc
 act, on a different machine, than a **Scan**.
 _Avoid_: refresh, reload, reindex
 
-**Process**:
-The area that measures the **Queue** and builds the image carrying measurements and **Playlists**
-to the player.
-_Avoid_: analyse, run, batch
+**Prepare**:
+The area that prepares a **Card** — real or virtual. It composes a **Virtual card**'s music,
+measures the **Queue**, keeps a virtual card's `k7.db` current, and writes a virtual card onto
+an SD.
+_Avoid_: process, analyse, run, batch
+
+**Compose**:
+Copying dropped folders of music into a **Virtual card**'s `music/`, preserving the folder
+structure, and measuring each file as its copy lands.
+_Avoid_: import, ingest, add
+
+**Write to SD**:
+The finish act: copying a **Virtual card**'s contents into a picked SD's root — only the files
+that changed since the last write — then verifying and reporting **safe to eject**.
+_Avoid_: flash, burn, export
 
 **Last image**:
 The **Snapshot** this browser last wrote to a card, kept here so the next write costs no
@@ -274,7 +298,7 @@ An analysis reused because its content hash, analyzer version and model set all 
 _Avoid_: saved result
 
 **Worker pool**:
-The analysis threads **Process** runs, each with its own copy of the models. Its size is a
+The analysis threads **Prepare** runs, each with its own copy of the models. Its size is a
 **Setting**: auto by default — half the logical cores, capped by the memory the browser
 reports — or a pinned count. At boot the App starts that many workers and keeps the ones that
 answer a small probe.
@@ -294,8 +318,8 @@ whose path is no longer on the card is skipped, never silently dropped.
 _Avoid_: entry, item, slot
 
 **Draft**:
-A **Playlist** as this browser holds it, before it has been sent. It belongs to the user, not to a
-card.
+A **Playlist** as this browser holds it, authored against one card's Library. It belongs to the
+**Card** whose Tracks it names, not to the user.
 _Avoid_: unsaved, local copy, working set
 
 **Block**:

@@ -19,11 +19,16 @@ Update-file shim is in the firmware.
 ## 1. Card, and Folder
 
 **K1. A Card is a directory that contains `music/`.** `music/` is the Library the device owns
-and walks; it is the one structural fact that makes a directory a card.
+and walks; it is the one structural fact that makes a directory a card. A **virtual card** is
+a Card the App created under a granted **working directory**, before an SD is in the machine
+([ADR 0083](../adr/0083-a-virtual-card-is-a-staged-folder-under-a-working-directory.md)): the
+same `music/` plus `k7.card`, `k7.db` and `k7.covers`, in a plain folder.
 
 **K2. Anything else is a Folder.** A dropped album rip, a picked collection, a backup — all
 Folders. A Folder is measured exactly like a card, and it is **never marked**, because the App
-must not write files into directories that belong to the user's music collection.
+must not write files into directories that belong to the user's music collection. The one
+directory the App may write audio into is a virtual card's own `music/` — it owns that card,
+and composing it is the point of preparing it (ADR 0083).
 
 **K3. "Prepare as a Card" is an explicit act.** On a directory with no `music/`, the App offers
 to create `music/` and write the mark. That is the only way a Folder becomes a Card, and it
@@ -66,7 +71,7 @@ that shared its file would be flashed.
 **F3. JSON, small, versioned:**
 
 ```json
-{ "v": 1, "id": "f0b1c2d3-…", "created": "2026-11-03T01:20:00Z", "label": "kitchen card" }
+{ "v": 1, "id": "f0b1c2d3-…", "created": "2026-11-03T01:20:00Z", "label": "kitchen card", "capacity": 32000000000 }
 ```
 
 - `v` — the mark's own format, not the App's version.
@@ -76,9 +81,12 @@ that shared its file would be flashed.
   everywhere.
 - `created` — ISO 8601, UTC, informational.
 - `label` — optional, user-chosen, for the interface. Written by the App, never by the device.
+- `capacity` — optional, a virtual card's soft cap in whole bytes: a planning target the App
+  counts the card's music against, never an allocation. Absent on a physical card, whose
+  capacity the App does not know. Written by the App, never by the device.
 
 **F4. No secrets, no measurements, no paths.** The mark is not a cache and not a backup; it is
-a name and a label.
+a name, a label, and a virtual card's capacity.
 
 ---
 

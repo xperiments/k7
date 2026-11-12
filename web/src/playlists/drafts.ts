@@ -1,12 +1,20 @@
 import { useSyncExternalStore } from 'react';
-import { openDB, type IDBPDatabase } from 'idb';
+import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { playlistId, type SnapshotPlaylist } from '../domain/snapshot';
+import { currentCardScope, subscribeCardScope, UNSCOPED } from '../card/session';
 import { newId } from '../lib/id';
 
 /**
  * A Playlist before it has been sent: this browser's copy, which becomes the device's
  * copy only when an image carrying it is accepted (ADR 0051, and the front door spec's
  * Playlists area).
+ *
+ * A Playlist row is a path below a card's `music/`, so a Draft belongs to the CARD whose
+ * tracks it names, not to the user globally (ADR 0083). Drafts are keyed by the same
+ * **Scope** every card-level store uses (`card/session.ts`): `mark:<id>`,
+ * `fingerprint:<sha256>`, or `local` when no card is identified. The in-memory cache, and
+ * every reader and writer, operate on the CURRENT card's drafts; a pick that changes the
+ * card reloads them.
  *
  * A draft lives in IndexedDB beside the covers, because the page has nowhere else to put
  * one: the device holds what the last image said, and the card is not writable from the
@@ -50,18 +58,47 @@ export interface Draft {
   entries: DraftEntry[];
 }
 
-/** The row a draft saved before `entries` existed has: a list of paths and nothing else. */
-type StoredDraft = Omit<Draft, 'entries'> & { entries?: DraftEntry[] };
+/**
+ * The row a draft is stored as: the Draft plus the card scope it belongs to. The scope is a
+ * storage concern, so `normalise` drops it when the row is read back into memory.
+ */
+type StoredDraft = Omit<Draft, 'entries'> & { scope: string; entries?: DraftEntry[] };
+
+/** A draft as v1 stored it: a list of paths and nothing else, with no card scope. */
+type LegacyDraft = Omit<Draft, 'entries'> & { entries?: DraftEntry[] };
+
+interface DraftsDB extends DBSchema {
+  drafts: {
+    /** `[scope, id]`: two cards may each author a list with the same id. */
+    key: [string, string];
+    value: StoredDraft;
+    indexes: { scope: string };
+  };
+}
 
 const DB_NAME = 'k7-playlists';
 const STORE = 'drafts';
+const DB_VERSION = 2;
 
-let db: Promise<IDBPDatabase> | null = null;
+let db: Promise<IDBPDatabase<DraftsDB>> | null = null;
 
-function database(): Promise<IDBPDatabase> {
-  db ??= openDB(DB_NAME, 1, {
-    upgrade(upgradeDb) {
-      upgradeDb.createObjectStore(STORE, { keyPath: 'id' });
+function database(): Promise<IDBPDatabase<DraftsDB>> {
+  db ??= openDB<DraftsDB>(DB_NAME, DB_VERSION, {
+    upgrade: async (upgradeDb, oldVersion, _newVersion, transaction) => {
+      if (oldVersion < 2) {
+        // v1 held every draft as one global list, keyed by `id` and scoped to nothing. A
+        // draft is authored content, not a measurement, so it is kept rather than discarded
+        // the way a media row is: it had no card, and the honest home for "no card" is
+        // `local`.
+        let legacy: LegacyDraft[] = [];
+        if (upgradeDb.objectStoreNames.contains(STORE)) {
+          legacy = (await transaction.objectStore(STORE).getAll()) as LegacyDraft[];
+          upgradeDb.deleteObjectStore(STORE);
+        }
+        const store = upgradeDb.createObjectStore(STORE, { keyPath: ['scope', 'id'] });
+        store.createIndex('scope', 'scope');
+        for (const draft of legacy) await store.put({ ...draft, scope: UNSCOPED });
+      }
     },
   });
   return db;
@@ -75,6 +112,12 @@ function emit(): void {
   for (const listener of listeners) listener();
 }
 
+// The cache is the CURRENT card's drafts. When a pick changes the card, reload for the new
+// scope — the same read `App` makes at boot, and the only way `useDrafts` sees the new card.
+subscribeCardScope(() => {
+  void loadDrafts();
+});
+
 export function hexId(id: bigint | string): string {
   if (typeof id === 'bigint') return id.toString(16).padStart(16, '0');
   const cleaned = id.trim().toLowerCase().replace(/^0x/, '');
@@ -86,7 +129,7 @@ function freshId(name: string, createdAt: number): string {
   let candidate = createdAt;
   let id = hexId(playlistId(name, candidate));
   // The device refuses an image whose list ids collide, so an id is checked here
-  // rather than at send time.
+  // rather than at send time. `cache` is one card's drafts, which is also one image's.
   while (cache.some((draft) => draft.id === id)) {
     candidate += 1;
     id = hexId(playlistId(name, candidate));
@@ -114,16 +157,29 @@ function makeEntry(input: NewEntry): DraftEntry {
     : { id: newId(), kind: 'track', path: input.path };
 }
 
-/** Read an older draft back as track blocks, and trust `entries` when it is there. */
-function normalise(draft: StoredDraft): Draft {
-  if (Array.isArray(draft.entries) && draft.entries.length > 0) {
-    return { ...draft, entries: draft.entries, rows: rowsOf(draft.entries) };
+/** Read a stored row back as a Draft: track blocks when `entries` is absent, and the stored
+ * scope dropped, because a Draft in memory is the current card's and carries no scope. */
+function normalise(stored: StoredDraft): Draft {
+  if (Array.isArray(stored.entries) && stored.entries.length > 0) {
+    return {
+      id: stored.id,
+      name: stored.name,
+      createdAt: stored.createdAt,
+      entries: stored.entries,
+      rows: rowsOf(stored.entries),
+    };
   }
-  const entries = draft.rows.map(trackEntry);
-  return { ...draft, entries, rows: [...draft.rows] };
+  const entries = stored.rows.map(trackEntry);
+  return {
+    id: stored.id,
+    name: stored.name,
+    createdAt: stored.createdAt,
+    entries,
+    rows: [...stored.rows],
+  };
 }
 
-/** The drafts this browser holds, newest last. The order is the list's own. */
+/** The drafts the current card holds in this browser, newest last. The order is the list's own. */
 export function listDrafts(): Draft[] {
   return cache;
 }
@@ -141,25 +197,42 @@ export function draftsLoaded(): boolean {
   return loaded;
 }
 
-/** Read the store once, at boot. A store that cannot be read leaves no drafts, not an error. */
+/**
+ * Read the current card's drafts, at boot or whenever the scope changes. Safe to call again
+ * mid-flight: a read a later scope change has superseded is dropped rather than letting the
+ * previous card's rows land under the new one.
+ */
 export async function loadDrafts(): Promise<void> {
+  const wanted = currentCardScope();
+  cache = [];
+  loaded = false;
+  emit();
   try {
-    const rows = (await (await database()).getAll(STORE)) as StoredDraft[];
+    const rows = (await (await database()).getAllFromIndex(STORE, 'scope', wanted)) as StoredDraft[];
+    if (currentCardScope() !== wanted) return;
     cache = rows.map(normalise).sort((left, right) => left.createdAt - right.createdAt);
+    loaded = true;
   } catch {
+    if (currentCardScope() !== wanted) return;
     cache = [];
+    loaded = true;
   }
-  loaded = true;
   emit();
 }
 
-async function persist(draft: Draft | string): Promise<void> {
+async function persist(draft: StoredDraft): Promise<void> {
   try {
-    const handle = await database();
-    if (typeof draft === 'string') await handle.delete(STORE, draft);
-    else await handle.put(STORE, draft);
+    await (await database()).put(STORE, draft);
   } catch {
     /* The draft stays in memory; losing it on reload is the honest outcome of a full disk. */
+  }
+}
+
+async function remove(key: [string, string]): Promise<void> {
+  try {
+    await (await database()).delete(STORE, key);
+  } catch {
+    /* The draft is already gone from memory; the delete was best-effort. */
   }
 }
 
@@ -174,7 +247,7 @@ export function createDraft(name: string, rows: string[] = []): Draft {
     rows: rowsOf(entries),
   };
   cache = [...cache, draft];
-  void persist(draft);
+  void persist({ ...draft, scope: currentCardScope() });
   emit();
   return draft;
 }
@@ -193,7 +266,7 @@ export function updateDraft(
   const next = { ...cache[index], ...patch };
   if (patch.entries !== undefined) next.rows = rowsOf(patch.entries);
   cache = cache.map((draft, at) => (at === index ? next : draft));
-  void persist(next);
+  void persist({ ...next, scope: currentCardScope() });
   emit();
   return next;
 }
@@ -201,7 +274,7 @@ export function updateDraft(
 export function deleteDraft(id: string): void {
   const key = hexId(id);
   cache = cache.filter((draft) => draft.id !== key);
-  void persist(key);
+  void remove([currentCardScope(), key]);
   emit();
 }
 
@@ -257,7 +330,7 @@ export function clearDraft(id: string): Draft | null {
   return updateDraft(id, { entries: [] });
 }
 
-/** What the image builder takes: the drafts, in the shape `buildSnapshot` wants. */
+/** What the image builder takes: the current card's drafts, in the shape `buildSnapshot` wants. */
 export function toSnapshotPlaylists(): SnapshotPlaylist[] {
   return cache.map((draft) => ({
     id: draft.id,
@@ -272,7 +345,7 @@ export function previewId(name: string): string {
   return freshId(name, Math.floor(Date.now() / 1000));
 }
 
-/** The drafts, re-rendered on every change. */
+/** The current card's drafts, re-rendered on every change and every card change. */
 export function useDrafts(): Draft[] {
   return useSyncExternalStore(subscribeDrafts, listDrafts, listDrafts);
 }

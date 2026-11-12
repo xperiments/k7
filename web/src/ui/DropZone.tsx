@@ -12,12 +12,18 @@ import {
 } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
-import { scanDataTransfer, type FoundFile } from './files';
+import {
+  scanDataTransfer,
+  scanDirectoryHandle,
+  type CardDirectoryHandle,
+  type FoundFile,
+} from './files';
 import { cardPicker, type SnapshotDirectory } from './cardWriter';
 import { findCardMark, parseCardMark, fingerprintScope, scopeFor } from '../card/mark';
 import { cardShapeOf, cardShapeProblem } from '../card/shape';
 import { setCardScope } from '../card/session';
 import { fingerprintOf, readCardWithPicker } from './intake';
+import { useAnalysis } from './state/analysis';
 
 /** The two things a refusal can be: the folder is wrong, or the browser could not open it. */
 interface Problem {
@@ -40,6 +46,8 @@ interface DropZoneProps {
   onRescan?: () => void;
   /** A run is still writing into the card, so the rescan would race it. */
   rescanDisabled?: boolean;
+  /** The selected virtual card's name, so the intake says which card it adds to. */
+  cardName?: string;
 }
 
 /**
@@ -62,6 +70,7 @@ export function DropZone({
   onCard,
   onRescan,
   rescanDisabled = false,
+  cardName,
 }: DropZoneProps) {
   const [over, setOver] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -72,6 +81,9 @@ export function DropZone({
   const [note, setNote] = useState<string | null>(null);
   const inactive = disabled || scanning || picking;
   const pickable = cardPicker() !== undefined;
+  /* A virtual card is open: dropping a folder of music then composes it into the card's
+   * `music/`, instead of measuring it in place or refusing it as "not the card". */
+  const { composing, compose } = useAnalysis();
 
   const chooseCard = async () => {
     if (inactive) return;
@@ -110,13 +122,71 @@ export function DropZone({
     }
   };
 
+  /**
+   * Pick a folder of music and compose it into the open virtual card.
+   *
+   * The click path exists beside the drag: a person who does not know to drag needs one
+   * button that says what it does. The picker is read-only — the source folder is the user's
+   * music collection and is never written; the copy lands in the card's `music/`.
+   */
+  const chooseFolder = async () => {
+    if (inactive) return;
+    setError(null);
+    const picker = (
+      globalThis as {
+        showDirectoryPicker?: (options?: { mode?: string; id?: string }) => Promise<unknown>;
+      }
+    ).showDirectoryPicker;
+    if (typeof picker !== 'function') {
+      setError({
+        title: 'This browser cannot open a folder',
+        text: 'Drag a folder of music onto this area instead.',
+      });
+      return;
+    }
+    setScanning(true);
+    try {
+      const handle = await picker({ mode: 'read', id: 'k7-music' });
+      const result = await scanDirectoryHandle(handle as unknown as CardDirectoryHandle);
+      const shape = cardShapeOf(result.files.map((found) => found.path));
+      // The copy keeps the structure below the folder picked; a folder that already holds a
+      // `music/` directory would nest one inside the other, so it is refused rather than
+      // produced as `music/music/…`.
+      if (shape.kind !== 'no-music' && shape.kind !== 'music-dir') {
+        setError({
+          title: 'Pick a folder of music',
+          text: 'Choose an album or artist folder — not a folder that already contains a music folder.',
+        });
+        return;
+      }
+      await compose(result.files, result.skipped);
+    } catch (failure) {
+      if (!(failure instanceof DOMException && failure.name === 'AbortError')) {
+        setError({
+          title: 'Could not read the folder',
+          text: failure instanceof Error ? failure.message : String(failure),
+        });
+      }
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const drop = async (data: DataTransfer) => {
     if (inactive) return;
     setScanning(true);
     setError(null);
     try {
       const result = await scanDataTransfer(data);
-      const problem = cardShapeProblem(cardShapeOf(result.files.map((found) => found.path)));
+      const paths = result.files.map((found) => found.path);
+      const shape = cardShapeOf(paths);
+      // A virtual card is open: a dropped folder of music (or a card's `music/` itself) is
+      // the compose act — copy it into the card, per-file — not a "wrong folder" error.
+      if (composing && (shape.kind === 'no-music' || shape.kind === 'music-dir')) {
+        void compose(result.files, result.skipped);
+        return;
+      }
+      const problem = cardShapeProblem(shape);
       if (problem !== null) {
         setError({ title: 'That folder is not the card', text: problem });
         return;
@@ -124,7 +194,7 @@ export function DropZone({
       // The card's own mark is read when it has one: a dropped card is read-only, so the
       // mark cannot be written here, but the identity it already carries is what keeps the
       // covers and the last image attached to it (card-mark.md G2).
-      const markPath = findCardMark(result.files.map((found) => found.path));
+      const markPath = findCardMark(paths);
       const markFile = markPath === null ? undefined : result.files.find((found) => found.path === markPath);
       const mark = markFile === undefined ? null : parseCardMark(await markFile.file.text());
       const usable = typeof mark === 'object' && mark !== null ? mark : null;
@@ -171,28 +241,42 @@ export function DropZone({
           {scanning ? <Spinner aria-hidden="true" /> : <FolderOpenIcon aria-hidden="true" />}
         </EmptyMedia>
         <EmptyTitle>
-          {scanning ? 'Scanning…' : pickable ? 'Choose the SD card' : 'Drop a folder'}
+          {scanning
+            ? 'Scanning…'
+            : composing
+              ? `Add music to ${cardName ?? 'this card'}`
+              : pickable
+                ? 'Choose the SD card'
+                : 'Drop a folder'}
         </EmptyTitle>
         <EmptyDescription>
           {scanning
             ? 'Looking for MP3 and FLAC files'
             : disabled
               ? (disabledReason ?? 'The models are still loading.')
-              : pickable
-                ? 'it opens read-write, so the snapshot is written back to it'
-                : 'nothing leaves this machine'}
+              : composing
+                ? 'Copies MP3 and FLAC into the card’s music folder, measured as they land. Write it to an SD when it is ready.'
+                : pickable
+                  ? 'it opens read-write, so the snapshot is written back to it'
+                  : 'nothing leaves this machine'}
         </EmptyDescription>
       </EmptyHeader>
 
-      {!scanning && (pickable || onRescan) && (
+      {!scanning && (composing || pickable || onRescan) && (
         <EmptyContent>
           <div className="flex flex-wrap items-center justify-center gap-2">
-            {pickable && (
-              <Button variant="solid" onClick={() => void chooseCard()} disabled={inactive}>
-                Choose card
+            {composing ? (
+              <Button variant="solid" onClick={() => void chooseFolder()} disabled={inactive}>
+                Choose folder
               </Button>
+            ) : (
+              pickable && (
+                <Button variant="solid" onClick={() => void chooseCard()} disabled={inactive}>
+                  Choose card
+                </Button>
+              )
             )}
-            {onRescan && (
+            {!composing && onRescan && (
               <Button
                 variant="outline"
                 onClick={onRescan}
@@ -203,7 +287,9 @@ export function DropZone({
               </Button>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">or drop a folder — dropping is read-only</p>
+          <p className="text-xs text-muted-foreground">
+            {composing ? 'or drag a folder of music here' : 'or drop a folder — dropping is read-only'}
+          </p>
         </EmptyContent>
       )}
 

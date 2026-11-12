@@ -146,15 +146,15 @@ npx shadcn@latest add card button progress switch empty spinner   # shadcn/ui
 npx shadcn@latest add @reui/badge @reui/alert @reui/c-sidebar-1   # ReUI
 ```
 
-- **One shell, four areas** — Card (Process, Scan), Playlists (Manage, Ask), Media, Player —
+- **One shell, four areas** — Card (Prepare), Playlists (Manage, Ask), Media, Player —
   adapted from the `c-sidebar-1` example: its workspace switcher is the device, its count
   badges carry the track count and the draft count, and its account menu is gone (there are
   no accounts). Settings and the licence sit in the sidebar footer.
-- **Routes are hashes** (`#/process`, `#/playlists/:id`, `#/media/video/:id`) so the device
+- **Routes are hashes** (`#/prepare`, `#/playlists/:id`, `#/media/video/:id`) so the device
   still serves one page and answers 404 for everything it does not know. The card state
   chooses the first area once; `src/ui/router.ts` is the whole router and it has no
   dependency.
-- **Process stays mounted** while another route is shown, and that is what protects a running
+- **Prepare stays mounted** while another route is shown, and that is what protects a running
   queue: `App.tsx` hides it rather than unmounting it.
 - `src/index.css` is the only stylesheet: Tailwind, the theme tokens, the two `@font-face`
   rules for the self-hosted **Jura** (the face the device draws with), and nothing else. The

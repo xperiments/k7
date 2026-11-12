@@ -444,7 +444,7 @@ the module's top-left as its title, and the current thing filled.
 
 | Area | Pattern |
 | --- | --- |
-| Process | A column of outlined panels: the drop zone, the queue rows, the run controls. The queue's running state is a filled row and a filled action |
+| Prepare | A column of outlined panels: the drop zone, the virtual-card shelf, the queue rows, the run controls. The queue's running state is a filled row and a filled action |
 | Media | The coverflow exactly as it is (§5.3), with the album detail, artist and video routes as outlined panels around it |
 | Playlists | The list as rows; the editor as panels (search, blocks, actions); the current block is filled |
 | Ask | The prompt is a pill input; the intent is a panel of rows and controls; errors are K22 |

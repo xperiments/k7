@@ -1,7 +1,7 @@
 /**
  * Reading a card the user picks: the one way in, out of the component that draws it.
  *
- * Two places ask for a card — the drop zone in Process, and the "Change card" action in its
+ * Two places ask for a card — the drop zone in Prepare, and the "Change card" action in its
  * header — and both need the same four steps in the same order: pick read-write, walk the
  * files, refuse a choice that is not the card root, then identify the card so the scope exists
  * before the first cover is written. Keeping the order here is what makes "Change card" the

@@ -28,7 +28,7 @@ describe('embedded metadata', () => {
     expect(metadata.energy).toBe(0.8);
   });
 
-  it('reads the names and genre the Process row and the Snapshot show', async () => {
+  it('reads the names and genre the Prepare row and the Snapshot show', async () => {
     const bytes = new Uint8Array(await readFile(genreFixture));
     const file = new File([bytes], 'tagged-genre.mp3', { type: 'audio/mpeg' });
 

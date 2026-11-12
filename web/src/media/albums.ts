@@ -13,14 +13,14 @@
  *
  * 1. An album is the title its cache rows share. The artists on those rows are names it
  *    carries, not part of what makes it one album: a compilation is one shelf, not one per
- *    name -- the same rule Process groups its queue by. No cache row, no album, which is why
+ *    name -- the same rule Prepare groups its queue by. No cache row, no album, which is why
  *    the empty state says "measure the card once".
  * 2. Existence decides what counts. When the device listed *the whole* library, a cache row
  *    whose track is no longer on the card is left out: the album does not claim a file that
  *    is gone. When the listing was partial (it caps at 200 entries), the cache is shown
  *    whole, because absence from a partial listing means nothing.
  * 3. The tracks the device listed and this browser has no cache row for are **not
- *    measured** here. They are reported as such and link to Process, never guessed at.
+ *    measured** here. They are reported as such and link to Prepare, never guessed at.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -30,7 +30,6 @@ import { libraryStats, listLibrary, type LibraryListing } from '../device/mcp';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { listMedia, type CachedCover, type CachedMedia } from '../storage/media';
 import { presenceFromLibraryBlob } from '../device/libraryBlob';
-import { scopeFor } from '../card/mark';
 import { localRequest } from '../device/local';
 import { foldPath } from './paths';
 
@@ -341,15 +340,10 @@ export interface MediaIndexState {
  */
 export function useMediaIndex(): MediaIndexState {
   const { status, reachable } = useDeviceStatus();
-  /* When the player names its card, the Media area reads that card's own scope, not the
-   * last card this browser picked. The S3 can hold a different card, and the two must not
-   * borrow each other's names and covers; an unmarked card falls back to the pick, and an
-   * offline device to the scope the browser remembers. */
-  const pickedScope = useCardScope();
-  const scope =
-    reachable && status?.card && status.mark ? scopeFor({ id: status.mark }) : pickedScope;
+  /* The card being prepared — the picked scope — not the player's card. The S3 can hold a
+   * different card, and the two must not borrow each other's names and covers. */
+  const scope = useCardScope();
   const [cache, setCache] = useState<Map<string, CachedMedia> | null>(null);
-  const [presence, setPresence] = useState<Presence | null>(null);
   const [deviceImage, setDeviceImage] = useState<DeviceImage | null>(null);
 
   const tracks = status?.tracks ?? 0;
@@ -370,22 +364,6 @@ export function useMediaIndex(): MediaIndexState {
       cancelled = true;
     };
   }, [scope]);
-
-  useEffect(() => {
-    if (!hasDevice) {
-      setPresence(null);
-      return;
-    }
-    let cancelled = false;
-    void fetchPresence(tracks, generation).then((answer) => {
-      if (!cancelled) setPresence(answer);
-    }).catch(() => {
-      if (!cancelled) setPresence(null);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [hasDevice, tracks, generation]);
 
   /* Which image is answering. Its own poll: the library listing says what exists, this says
    * what the device knows about it, and the two changes are independent. */
@@ -417,8 +395,8 @@ export function useMediaIndex(): MediaIndexState {
   }, [hasDevice, generation]);
 
   const index = useMemo(
-    () => (cache ? buildMediaIndex(cache, presence) : null),
-    [cache, presence],
+    () => (cache ? buildMediaIndex(cache, null) : null),
+    [cache],
   );
 
   return {

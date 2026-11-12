@@ -3,13 +3,15 @@ import { DEVICE_NEEDS_PERMISSION } from '../config';
 import { restoreCardScope } from '../card/session';
 import { loadDrafts } from '../playlists/drafts';
 import { useDeviceStatus } from '../device/useDeviceStatus';
+import { countMedia } from '../storage/media';
+import { restoreCoversFromDevice } from './cardWriter';
 import { ArtistArea } from './areas/Artist';
 import { AskArea } from './areas/Ask';
 import { MediaArea } from './areas/Media';
 import { PlayerArea } from './areas/Player';
 import { PlaylistEditor } from './areas/PlaylistEditor';
 import { PlaylistsArea } from './areas/Playlists';
-import { ProcessArea } from './areas/Process';
+import { PrepareArea } from './areas/Prepare';
 import { SettingsArea } from './areas/Settings';
 import { VideoArea } from './areas/Video';
 import { navigate, useRoute } from './router';
@@ -47,13 +49,13 @@ export function App() {
  * The shell: four areas and the routes between them (ADR 0052).
  *
  * The Card state chooses the first area and nothing after that: with a card in the
- * player the page opens on Player, without one on Process. Every later change is the
- * user's -- what S3 protected is structural instead, because the Process area stays
+ * player the page opens on Player, without one on Prepare. Every later change is the
+ * user's -- what S3 protected is structural instead, because the Prepare area stays
  * mounted while another route is shown, so navigating never destroys a running Queue.
  */
 function AppContent() {
   const route = useRoute();
-  const { status } = useDeviceStatus();
+  const { status, reachable } = useDeviceStatus();
   const landed = useRef(false);
 
   useEffect(() => {
@@ -88,9 +90,28 @@ function AppContent() {
     // what is playing is in the bar, not on a page of its own.
     if (window.location.hash === '') {
       landed.current = true;
-      navigate(status.card ? '#/media' : '#/process', { replace: true });
+      navigate(status.card ? '#/media' : '#/prepare', { replace: true });
     }
   }, [status]);
+
+  /* A card in the player is the one way to get its preprocessed covers while it is not in
+   * the computer: when the device reports a card and this browser has no rows for it, pull
+   * the archive once. It runs in the background, so opening Media later already has them. */
+  const restoredCovers = useRef(new Set<string>());
+  useEffect(() => {
+    if (!reachable || !status?.card || !status.mark) return;
+    const scope = `mark:${status.mark}`;
+    if (restoredCovers.current.has(scope)) return;
+    restoredCovers.current.add(scope);
+    void (async () => {
+      try {
+        if ((await countMedia(scope)) > 0) return;
+        await restoreCoversFromDevice();
+      } catch {
+        /* A device that cannot stream its covers is not a reason to break the page. */
+      }
+    })();
+  }, [reachable, status]);
 
   return (
     <AnalysisProvider>
@@ -98,8 +119,8 @@ function AppContent() {
         <Shell route={route}>
           {/* Mounted always, hidden when it is not the route: a queue in flight outlives a
               visit to Media. */}
-          <div hidden={route.name !== 'process'} className="min-h-0">
-            <ProcessArea />
+          <div hidden={route.name !== 'prepare'} className="min-h-0">
+            <PrepareArea />
           </div>
 
           {route.name === 'playlists' && <PlaylistsArea />}

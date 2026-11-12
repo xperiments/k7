@@ -59,6 +59,20 @@ describe('parsing k7.card', () => {
     );
   });
 
+  it('reads the optional capacity, in bytes', () => {
+    expect(parseCardMark(JSON.stringify(mark({ capacity: 32_000_000_000 })))).toEqual(
+      mark({ capacity: 32_000_000_000 }),
+    );
+  });
+
+  it('ignores a capacity that is not a positive number', () => {
+    for (const capacity of ['32GB', 0, -4, 1.5, null, {}, []]) {
+      expect(parseCardMark(JSON.stringify({ ...mark(), capacity })), JSON.stringify(capacity)).toEqual(
+        mark(),
+      );
+    }
+  });
+
   it('ignores fields it does not know', () => {
     const text = JSON.stringify({ ...mark(), label: 'kitchen card', checksum: 'abc123' });
     expect(parseCardMark(text)).toEqual(mark({ label: 'kitchen card' }));
@@ -183,6 +197,15 @@ describe('serialising a mark', () => {
       v: 1,
     };
     expect(serialiseCardMark(reordered)).toBe(serialiseCardMark(mark({ label: 'kitchen card' })));
+  });
+
+  it('writes the capacity after the label', () => {
+    expect(serialiseCardMark(mark({ label: 'kitchen card', capacity: 32_000_000_000 }))).toBe(
+      `{"v":1,"id":"${ID}","created":"${CREATED}","label":"kitchen card","capacity":32000000000}`,
+    );
+    expect(serialiseCardMark(mark({ capacity: 32_000_000_000 }))).toBe(
+      `{"v":1,"id":"${ID}","created":"${CREATED}","capacity":32000000000}`,
+    );
   });
 
   it('round-trips through the parser', () => {

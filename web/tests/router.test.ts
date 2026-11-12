@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { parseRoute, routeHref, type Route } from '../src/ui/router';
 
 describe('the shell routes', () => {
-  it('a bare hash is Process: the shell has a landing, not a not-found', () => {
-    expect(parseRoute('')).toEqual({ name: 'process' });
-    expect(parseRoute('#/')).toEqual({ name: 'process' });
+  it('a bare hash is Prepare: the shell has a landing, not a not-found', () => {
+    expect(parseRoute('')).toEqual({ name: 'prepare' });
+    expect(parseRoute('#/')).toEqual({ name: 'prepare' });
   });
 
   it('reads every page the shell renders', () => {
-    expect(parseRoute('#/process')).toEqual({ name: 'process' });
-    // `#/scan` is gone: reading a card is what Process does, and its dock is the drop zone.
+    expect(parseRoute('#/prepare')).toEqual({ name: 'prepare' });
+    // `#/scan` is gone: reading a card is what Prepare does, and its dock is the drop zone.
     expect(parseRoute('#/scan')).toEqual({ name: 'not-found', path: '/scan' });
     expect(parseRoute('#/playlists')).toEqual({ name: 'playlists' });
     expect(parseRoute('#/playlists/ask')).toEqual({ name: 'ask' });
@@ -49,7 +49,7 @@ describe('the shell routes', () => {
 
   it('anything else is the shell own not-found, and says which path', () => {
     expect(parseRoute('#/nope')).toEqual({ name: 'not-found', path: '/nope' });
-    expect(parseRoute('#/process/extra')).toEqual({ name: 'not-found', path: '/process/extra' });
+    expect(parseRoute('#/prepare/extra')).toEqual({ name: 'not-found', path: '/prepare/extra' });
     expect(parseRoute('#/media/album/a/b')).toEqual({
       name: 'not-found',
       path: '/media/album/a/b',
@@ -58,7 +58,7 @@ describe('the shell routes', () => {
 
   it('routeHref is the inverse of parseRoute', () => {
     const routes: Route[] = [
-      { name: 'process' },
+      { name: 'prepare' },
       { name: 'playlists' },
       { name: 'ask' },
       { name: 'playlist', id: 'aaaa000000000001' },

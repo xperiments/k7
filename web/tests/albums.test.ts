@@ -16,7 +16,7 @@ import type { CachedMedia } from '../src/storage/media';
 
 /**
  * What makes two cache rows one album. The title alone does: a compilation names a different
- * artist on every track and is still one shelf, which is the rule Process already groups its
+ * artist on every track and is still one shelf, which is the rule Prepare already groups its
  * queue by. These tests read as that sentence.
  */
 

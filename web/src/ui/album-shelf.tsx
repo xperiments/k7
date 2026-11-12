@@ -32,6 +32,9 @@ import { plural } from './format';
 
 /** How far either side of the selection the row is built; the rest is off the shelf. */
 const WINDOW = 10;
+/** A case turns only after the pointer has rested on it this long: sweeping the row should
+ *  not make every case it passes stop and turn. */
+const HOVER_DELAY = 90;
 /** The same geometry as `--cw`, `--cd`, `--cg` and the selected gap in `index.css`, in rem:
  *  the selected case's neighbour, then each spine after it. */
 const FIRST_STEP = 9.7;
@@ -86,6 +89,8 @@ export function AlbumShelf({
    * not the case's own :hover: the case turns and rises while the pointer stays put, and a
    * hover that moved with the 3D box would keep dropping out from under the pointer. */
   const [hovered, setHovered] = useState<number | null>(null);
+  /* The pending hover: set on pointer-enter, fired after the dwell, dropped on leave. */
+  const hoverTimer = useRef<number | null>(null);
   useLayoutEffect(() => {
     const el = section.current;
     const parent = el?.parentElement;
@@ -295,11 +300,19 @@ export function AlbumShelf({
                   onPointerDown={distance === 0 ? beginDrag : undefined}
                   onPointerEnter={() => {
                     if (dragStart.current !== null) return;
-                    setHovered(index);
+                    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
+                    hoverTimer.current = window.setTimeout(() => {
+                      hoverTimer.current = null;
+                      setHovered(index);
+                    }, HOVER_DELAY);
                   }}
-                  onPointerLeave={() =>
-                    setHovered((current) => (current === index ? null : current))
-                  }
+                  onPointerLeave={() => {
+                    if (hoverTimer.current !== null) {
+                      window.clearTimeout(hoverTimer.current);
+                      hoverTimer.current = null;
+                    }
+                    setHovered((current) => (current === index ? null : current));
+                  }}
                   onClick={() => {
                     if (dragged.current) {
                       dragged.current = false;

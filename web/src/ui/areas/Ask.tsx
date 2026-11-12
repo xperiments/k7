@@ -512,7 +512,7 @@ export function AskArea() {
                 Create playlist from these
               </Button>
               <span className="text-xs text-muted-foreground">
-                Becomes a draft here; Process sends it to the player.
+                Becomes a draft here; Prepare sends it to the player.
               </span>
             </div>
           </CardContent>

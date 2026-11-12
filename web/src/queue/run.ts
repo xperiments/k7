@@ -149,7 +149,7 @@ export async function runItem(
     update(item.id, { status: 'decoding' });
 
     /* The file's own tags are read before the cache is consulted. They are not part of a
-     * stored analysis — the Process row shows the genre, and a cached Track would otherwise
+     * stored analysis — the Prepare row shows the genre, and a cached Track would otherwise
      * be the one row without it — and the Snapshot export reuses them instead of re-reading
      * the file. */
     const metadata = await deps.readTags(source);

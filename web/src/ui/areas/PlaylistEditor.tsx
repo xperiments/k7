@@ -193,8 +193,8 @@ function EditorMissing() {
           </EmptyMedia>
           <EmptyTitle>That playlist is not here</EmptyTitle>
           <EmptyDescription>
-            Drafts live in this browser. A link from another browser, or a list deleted since the
-            link was made, lands here.
+            A draft belongs to the card it was written for. A link from another card or browser, or
+            a list deleted since the link was made, lands here.
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
@@ -234,8 +234,8 @@ function NoSources({ reachable }: { reachable: boolean }) {
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
-          Open Process
+        <Button size="sm" onClick={() => navigate(routeHref({ name: 'prepare' }))}>
+          Open Prepare
         </Button>
       </EmptyContent>
     </Empty>
@@ -762,7 +762,7 @@ function Editor({ draft }: { draft: Draft }) {
 
             <p className="text-xs text-muted-foreground">
               Drag a row or a folder to move it; a folder moves as one block. Use the arrows
-              with a keyboard. This draft reaches the player when Process sends an image.
+              with a keyboard. This draft reaches the player when Prepare sends an image.
             </p>
           </div>
         </section>

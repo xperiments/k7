@@ -485,7 +485,7 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
       if (!played) {
         setNotice({
           kind: 'error',
-          text: 'This browser could not read that file from the card. Play again to allow access, or open the card in Process.',
+          text: 'This browser could not read that file from the card. Play again to allow access, or open the card in Prepare.',
         });
         return;
       }

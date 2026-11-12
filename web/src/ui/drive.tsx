@@ -88,8 +88,8 @@ function NoLibrary({ reachable }: { reachable: boolean }) {
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
-          Open Process
+        <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'prepare' }))}>
+          Open Prepare
         </Button>
       </EmptyContent>
     </Empty>
@@ -149,7 +149,7 @@ export function DriveView({
       if (!played) {
         setNotice({
           kind: 'error',
-          text: 'This browser could not read that file from the card. Play again to allow access, or open the card in Process.',
+          text: 'This browser could not read that file from the card. Play again to allow access, or open the card in Prepare.',
         });
         return;
       }

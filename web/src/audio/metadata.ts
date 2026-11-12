@@ -6,7 +6,7 @@ import { parseStoredAnalysis, type StoredAnalysis } from '../domain/storedAnalys
  * What a file says about itself, for display and search. Never measured, and never a reason
  * to fail a run: a Track with none is analysed like any other.
  *
- * The Process row shows the genre, and the Snapshot carries all four so the player's text
+ * The Prepare row shows the genre, and the Snapshot carries all four so the player's text
  * search has names to match (front door §4.1, `docs/specs/snapshot-format.md`).
  */
 export interface TrackTags {

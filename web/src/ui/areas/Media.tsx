@@ -40,7 +40,7 @@ import { navigate, routeHref } from '../router';
  * not a hidden mode: **Carousel** is the shelf an album's tracks hang under, and **Drive**
  * is the card's folders as a tree. Both are built from the cache in `media/albums.ts` and
  * `media/folders.ts`: names come from this browser, existence from the device, and the tracks
- * the device lists without a cache row are shown as **not measured** and sent to Process
+ * the device lists without a cache row are shown as **not measured** and sent to Prepare
  * rather than invented. That is why this area can be empty on a browser that never had the
  * card, and why it can still be useful with the device off.
  */
@@ -170,8 +170,8 @@ function NoAlbums({ reachable }: { reachable: boolean }) {
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
-          Open Process
+        <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'prepare' }))}>
+          Open Prepare
         </Button>
       </EmptyContent>
     </Empty>

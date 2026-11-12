@@ -30,6 +30,12 @@ export interface CardMark {
   created: string;
   /** Optional, user-chosen, for the interface. */
   label?: string;
+  /**
+   * A virtual card's soft capacity, in bytes. A planning cap, never an allocation: the App
+   * counts the card's music against it, and the browser's own storage is the hard ceiling.
+   * Absent on a physical card, whose capacity the App does not know or manage.
+   */
+  capacity?: number;
 }
 
 /**
@@ -160,6 +166,11 @@ export function parseCardMark(text: string): MarkState {
     const mark: CardMark = { v: MARK_VERSION, id, created };
     // A malformed label does not make the id unusable; it is dropped rather than trusted.
     if (typeof record.label === 'string') mark.label = record.label;
+    // A malformed capacity is dropped the same way: it is a hint, never identity. Bytes are
+    // whole numbers, so a fractional or non-integer capacity is not one we wrote.
+    if (typeof record.capacity === 'number' && Number.isInteger(record.capacity) && record.capacity > 0) {
+      mark.capacity = record.capacity;
+    }
     return mark;
   }
 
@@ -204,6 +215,7 @@ export function decideMark(state: MarkState, options: DecideOptions): MarkDecisi
 export function serialiseCardMark(mark: CardMark): string {
   const ordered: CardMark = { v: mark.v, id: mark.id, created: mark.created };
   if (mark.label !== undefined) ordered.label = mark.label;
+  if (mark.capacity !== undefined) ordered.capacity = mark.capacity;
   return JSON.stringify(ordered);
 }
 

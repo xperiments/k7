@@ -40,7 +40,7 @@ The Site is public in the same sense the App is public (L5 of the App spec): it 
 credential. It makes no device request at all — the player is reached over USB, not the network.
 
 **S2. `/app` is a rewrite, not a second origin.** Vercel rewrites `/app` to the App's document;
-the browser's address bar keeps `/app`, and the App's hash routes follow it — `/app#/process`,
+the browser's address bar keeps `/app`, and the App's hash routes follow it — `/app#/prepare`,
 `/app#/playlists/:id`, `/app#/media/album/:album`. A route that exists only inside the App still
 does (web/CONTEXT.md, **Route**); it now hangs off a path instead of the bare origin.
 

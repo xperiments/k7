@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
+  ArrowLeft,
   Disc3,
   ListMusic,
   MessageCircle,
+  Play,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { cn } from 'cn';
@@ -25,6 +27,8 @@ import { useDeviceStatus } from '../device/useDeviceStatus';
 import { InstallButton } from './InstallButton';
 import { useDrafts } from '../playlists/drafts';
 import { navigate, routeArea, routeHref, routePage, type Route } from './router';
+import { useSelectedVirtualCard } from './WriteToSd';
+import { useAnalysis } from './state/analysis';
 import { PlayerBar } from './PlayerBar';
 import {
   Tooltip,
@@ -61,21 +65,33 @@ interface NavGroup {
 function navGroups(drafts: number, tracks: number): NavGroup[] {
   return [
     {
-      id: 'card',
-      label: 'SD Card',
+      id: 'k7',
+      label: 'K7',
       items: [
         {
-          href: routeHref({ name: 'process' }),
-          label: 'Process',
-          icon: <ListMusic aria-hidden="true" />,
-          names: ['process'],
-          badge: tracks > 0 ? String(tracks) : undefined,
-        },
-                {
           href: routeHref({ name: 'media' }),
           label: 'Albums',
           icon: <Disc3 aria-hidden="true" />,
           names: ['media', 'album', 'artist', 'video', 'drive'],
+        },
+        {
+          href: routeHref({ name: 'player' }),
+          label: 'Player',
+          icon: <Play aria-hidden="true" />,
+          names: ['player'],
+        },
+      ],
+    },
+    {
+      id: 'card',
+      label: 'SD Card',
+      items: [
+        {
+          href: routeHref({ name: 'prepare' }),
+          label: 'Prepare',
+          icon: <ListMusic aria-hidden="true" />,
+          names: ['prepare'],
+          badge: tracks > 0 ? String(tracks) : undefined,
         },
       ],
     },
@@ -98,18 +114,6 @@ function navGroups(drafts: number, tracks: number): NavGroup[] {
         },
       ],
     },
-    // {
-    //   id: 'media',
-    //   label: 'Media',
-    //   items: [
-    //     {
-    //       href: routeHref({ name: 'media' }),
-    //       label: 'Albums',
-    //       icon: <Disc3 aria-hidden="true" />,
-    //       names: ['media', 'album', 'artist', 'video', 'drive'],
-    //     },
-    //   ],
-    // },
   ];
 }
 
@@ -142,13 +146,13 @@ function RailItem({
         isActive={active}
         tooltip={collapsed ? { children: label, hidden: false } : undefined}
         className={cn(
-          'h-12 w-full gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground hover:bg-foreground/10 active:bg-foreground/10 data-active:bg-transparent data-active:text-foreground',
+          'relative h-12 w-full gap-1.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground hover:bg-foreground/10 active:bg-foreground/10 data-active:z-[1] data-active:border-primary data-active:bg-transparent data-active:text-primary',
           collapsed && 'justify-center px-2',
         )}
       >
         <span
           aria-hidden="true"
-          className="grid size-8 shrink-0 place-items-center rounded-full border border-foreground/45 bg-transparent text-foreground group-data-[active]/menu-button:bg-secondary group-data-[active]/menu-button:text-secondary-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]"
+          className="grid size-8 shrink-0 place-items-center text-current [&_svg]:size-4 [&_svg]:stroke-[1.25]"
         >
           {icon}
         </span>
@@ -223,6 +227,13 @@ export function Shell({ route, children }: { route: Route; children: React.React
 
   const area = routeArea(route);
 
+  /* The Albums page belongs to a card, so its breadcrumb names the card it is browsing — the
+   * SD in the slot, or the virtual card being prepared — with a way back to Prepare. */
+  const { composing } = useAnalysis();
+  const virtualCard = useSelectedVirtualCard();
+  const mediaCard =
+    composing && virtualCard ? `Virtual SD ${virtualCard.label || virtualCard.folder}` : 'SD';
+
   /* The rail is a drawer below 768px and the standing column above it. */
   const [isMobile, setIsMobile] = useState(() =>
     typeof window === 'undefined' ? false : window.matchMedia('(max-width: 767px)').matches,
@@ -290,7 +301,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
           <aside
             className={cn(
               'flex shrink-0 flex-col border-r border-border',
-              compact ? 'w-16' : 'w-52',
+              compact ? 'w-16' : 'w-38',
               'max-[767px]:absolute max-[767px]:inset-y-0 max-[767px]:left-0 max-[767px]:z-40 max-[767px]:bg-background',
               mobileOpen ? '' : 'max-[767px]:hidden',
             )}
@@ -353,16 +364,14 @@ export function Shell({ route, children }: { route: Route; children: React.React
                       href={routeHref({ name: 'settings' })}
                       aria-current={route.name === 'settings' ? 'page' : undefined}
                       className={cn(
-                        'flex h-12 w-full items-center gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                        'relative flex h-12 w-full items-center gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                         compact && 'justify-center px-2',
+                        route.name === 'settings' && 'z-[1] border-primary text-primary',
                       )}
                     >
                       <span
                         aria-hidden="true"
-                        className={cn(
-                          'grid size-8 shrink-0 place-items-center rounded-full border border-foreground/45 bg-transparent text-foreground [&_svg]:size-4 [&_svg]:stroke-[1.25]',
-                          route.name === 'settings' && 'bg-secondary text-secondary-foreground',
-                        )}
+                        className="grid size-8 shrink-0 place-items-center text-current [&_svg]:size-4 [&_svg]:stroke-[1.25]"
                       >
                         <SettingsIcon aria-hidden="true" />
                       </span>
@@ -402,8 +411,25 @@ export function Shell({ route, children }: { route: Route; children: React.React
                 <BreadcrumbList className="flex-nowrap">
                   {area ? (
                     <>
+                      {area === 'K7' ? (
+                        <>
+                          <BreadcrumbItem>
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              aria-label="Back to Prepare"
+                              onClick={() => navigate(routeHref({ name: 'prepare' }))}
+                            >
+                              <ArrowLeft aria-hidden="true" />
+                            </Button>
+                          </BreadcrumbItem>
+                          <BreadcrumbSeparator />
+                        </>
+                      ) : null}
                       <BreadcrumbItem className="min-w-0">
-                        <span className="truncate text-sm text-muted-foreground">{area}</span>
+                        <span className="truncate text-sm text-muted-foreground">
+                          {area === 'K7' ? mediaCard : area}
+                        </span>
                       </BreadcrumbItem>
                       <BreadcrumbSeparator />
                     </>
@@ -421,7 +447,9 @@ export function Shell({ route, children }: { route: Route; children: React.React
             </header>
 
             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">{children}</div>
-            <PlayerBar />
+            {/* Prepare is the card-in-computer workbench: the player bar is about the card
+                in the player, and it would take room from the tree the user is working in. */}
+            {route.name === 'prepare' ? null : <PlayerBar />}
           </main>
         </div>
       </div>
@@ -437,11 +465,11 @@ export function NotFound({ path }: { path: string }) {
       <h1 className="text-xl font-light tracking-tight">No such place</h1>
       <p className="text-sm text-muted-foreground">
         <code className="bg-muted px-1 py-0.5 font-mono text-xs">#{path}</code> is not a route in
-        this shell. Process, Playlists, Media, Ask and Settings are.
+        this shell. Prepare, Playlists, Media, Ask and Settings are.
       </p>
       <div>
-        <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
-          Go to Process
+        <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'prepare' }))}>
+          Go to Prepare
         </Button>
       </div>
     </div>

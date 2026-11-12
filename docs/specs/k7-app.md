@@ -108,7 +108,7 @@ on the chip.
 
 | Feature | Needs |
 |---|---|
-| Scan a dropped folder, measure, build an Image, download it | File API |
+| Compose a virtual card (drop, measure, keep `k7.db` current), write it to an SD | secure context + directory handles |
 | Pick a card, write `k7.db`, write the card mark | secure context + directory handles |
 | Install, offline shell, weight prefetch | secure context + service worker |
 | Local Provider (WebLLM) | secure context + WebGPU + ~1 GB of patience |
@@ -194,13 +194,16 @@ Card, Folder, the mark, the fingerprint and the write policy are
 **C1. Pick → mark → scan → measure → build → deliver.** The writable pick creates or reads the
 mark before anything else, so the whole run has a scope. The scan walks `music/`, the run
 measures, the Image is built, and delivery is one of: write `k7.db` to the card, post it to the
-device (`snapshot`), or keep it as the Last image. The card write and the post are independent.
+device (`snapshot`), keep it as the Last image, or — for a virtual card — write the whole card
+onto an SD ([ADR 0083](../adr/0083-a-virtual-card-is-a-staged-folder-under-a-working-directory.md)).
+The card write and the post are independent.
 
 **C2. The Last image belongs to a card.** It records the scope it was built for. Changing the
 card in the computer does not silently retarget it.
 
-**C3. Drafts are the user's, not the card's.** They live in the drafts store and survive every
-card.
+**C3. A Playlist belongs to a card.** A Playlist row is a path below a card's `music/`, so a
+playlist lives on the card whose tracks it names; the Playlists area is entered within a card,
+and the Image carries that card's playlists ([ADR 0083](../adr/0083-a-virtual-card-is-a-staged-folder-under-a-working-directory.md)).
 
 ---
 

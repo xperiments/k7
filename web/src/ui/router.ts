@@ -11,7 +11,7 @@ import { useSyncExternalStore } from 'react';
  */
 
 export type Route =
-  | { name: 'process' }
+  | { name: 'prepare' }
   | { name: 'playlists' }
   | { name: 'playlist'; id: string }
   | { name: 'ask' }
@@ -36,11 +36,11 @@ function decode(segment: string): string {
 export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#/, '');
   const parts = path.split('/').filter((p) => p.length > 0);
-  if (parts.length === 0) return { name: 'process' };
+  if (parts.length === 0) return { name: 'prepare' };
 
   switch (parts[0]) {
-    case 'process':
-      return parts.length === 1 ? { name: 'process' } : { name: 'not-found', path };
+    case 'prepare':
+      return parts.length === 1 ? { name: 'prepare' } : { name: 'not-found', path };
     case 'player':
       return parts.length === 1 ? { name: 'player' } : { name: 'not-found', path };
     case 'settings':
@@ -70,9 +70,9 @@ export function parseRoute(hash: string): Route {
 }
 
 /** The area a route belongs to, or null for the shell's own pages (Settings). */
-export function routeArea(route: Route): 'Card' | 'Playlists' | 'Media' | 'Player' | null {
+export function routeArea(route: Route): 'Card' | 'Playlists' | 'K7' | 'Player' | null {
   switch (route.name) {
-    case 'process':
+    case 'prepare':
       return 'Card';
     case 'playlists':
     case 'playlist':
@@ -83,7 +83,7 @@ export function routeArea(route: Route): 'Card' | 'Playlists' | 'Media' | 'Playe
     case 'album':
     case 'artist':
     case 'video':
-      return 'Media';
+      return 'K7';
     case 'player':
       return 'Player';
     default:
@@ -94,8 +94,8 @@ export function routeArea(route: Route): 'Card' | 'Playlists' | 'Media' | 'Playe
 /** The page's name for the breadcrumb: the area says where, this says what. */
 export function routePage(route: Route): string {
   switch (route.name) {
-    case 'process':
-      return 'Process';
+    case 'prepare':
+      return 'Prepare';
     case 'playlists':
       return 'Playlists';
     case 'playlist':
@@ -150,7 +150,7 @@ export function routeHref(route: Route): string {
     case 'settings':
       return '#/settings';
     default:
-      return '#/process';
+      return '#/prepare';
   }
 }
 

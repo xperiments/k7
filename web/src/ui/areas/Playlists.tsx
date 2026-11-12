@@ -43,10 +43,11 @@ import { navigate, routeHref } from '../router';
  * Playlists, in two halves that must not be confused (front door §4.2).
  *
  * **On the device** is what the last accepted image said, and which list the broadcast is
- * walking: reading it is a GET, choosing one is the `select` command. **Drafts** are this
- * browser's copies; sending them rewrites the lists inside the last image and posts it, so
+ * walking: reading it is a GET, choosing one is the `select` command. **Drafts** are the
+ * current card's lists, held in this browser; sending them rewrites the lists inside the
+ * last image and posts it, so
  * a draft reaches the player only when
- * Process builds an image and posts it, which is what keeps ADR 0051's one-write rule true.
+ * Prepare builds an image and posts it, which is what keeps ADR 0051's one-write rule true.
  */
 
 function describeError(error: unknown): string {
@@ -59,7 +60,7 @@ function describeError(error: unknown): string {
       case 409:
         return 'That list has no track this library can find.';
       case 503:
-        return 'The player has no Snapshot yet — send one from Process.';
+        return 'The player has no Snapshot yet — send one from Prepare.';
       default:
         return error.message || `The player refused it (${error.status}).`;
     }
@@ -358,12 +359,12 @@ export function PlaylistsArea() {
                 </EmptyMedia>
                 <EmptyTitle>The player has no lists</EmptyTitle>
                 <EmptyDescription>
-                  A list reaches the player inside the image Process sends, not from this page.
+                  A list reaches the player inside the image Prepare sends, not from this page.
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
-                <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'process' }))}>
-                  Open Process
+                <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'prepare' }))}>
+                  Open Prepare
                 </Button>
               </EmptyContent>
             </Empty>

@@ -94,7 +94,7 @@ export async function startWorkerPool(
 
   const started = clients.length;
   /* A pool with no worker would leave the queue queued forever. Keep one so the first row
-   * reports the failure it hits, which is a sentence the Process page can show. */
+   * reports the failure it hits, which is a sentence the Prepare page can show. */
   if (clients.length === 0) clients.push(new AnalysisClient());
 
   return {

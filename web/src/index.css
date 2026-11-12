@@ -759,7 +759,7 @@
         }
         .k7-shelf[data-hover-side='right'] .k7-shelf-row {
             /* RIGHT of the active case */
-            transform: translateZ(-5rem) translateX(0rem) rotateY(-20deg);
+            transform: translateZ(-8rem) translateX(0rem) rotateY(-30deg);
         }
         .k7-shelf-item[data-hover='true']:not([data-active='true']) .k7-case {
             transform: translateZ(10rem) rotateY(90deg) scale(0.94);

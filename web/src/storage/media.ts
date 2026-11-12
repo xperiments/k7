@@ -228,6 +228,51 @@ export async function countMedia(scope: string): Promise<number> {
   return (await database()).countFromIndex('media', 'scope', scope);
 }
 
+/** Forget the rows at `paths` (exact), for files removed from the card. */
+export async function deleteMedia(scope: string, paths: readonly string[]): Promise<void> {
+  if (paths.length === 0) return;
+  const db = await database();
+  const tx = db.transaction('media', 'readwrite');
+  await Promise.all(paths.map((path) => tx.store.delete([scope, path])));
+  await tx.done;
+}
+
+/** Forget every row at or below `prefix`, for a folder removed from the card. */
+export async function deleteMediaBelow(scope: string, prefix: string): Promise<void> {
+  const db = await database();
+  const rows = await db.getAllFromIndex('media', 'scope', scope);
+  const doomed = rows.filter((row) => row.path === prefix || row.path.startsWith(`${prefix}/`));
+  if (doomed.length === 0) return;
+  const tx = db.transaction('media', 'readwrite');
+  await Promise.all(doomed.map((row) => tx.store.delete([scope, row.path])));
+  await tx.done;
+}
+
+/** Move one row's path, for a file renamed on the card. */
+export async function moveMedia(scope: string, from: string, to: string): Promise<void> {
+  const db = await database();
+  const row = await db.get('media', [scope, from]);
+  if (!row) return;
+  const tx = db.transaction('media', 'readwrite');
+  await tx.store.delete([scope, from]);
+  await tx.store.put({ ...row, path: to });
+  await tx.done;
+}
+
+/** Move every row at or below `from` to the same place under `to` (a folder moved). */
+export async function moveMediaBelow(scope: string, from: string, to: string): Promise<void> {
+  const db = await database();
+  const rows = await db.getAllFromIndex('media', 'scope', scope);
+  const moved = rows.filter((row) => row.path === from || row.path.startsWith(`${from}/`));
+  if (moved.length === 0) return;
+  const tx = db.transaction('media', 'readwrite');
+  for (const row of moved) {
+    await tx.store.delete([scope, row.path]);
+    await tx.store.put({ ...row, path: `${to}${row.path.slice(from.length)}` });
+  }
+  await tx.done;
+}
+
 /** Forget one card's media; every other card is untouched. Covers stay: they are shared. */
 export async function clearMedia(scope: string): Promise<void> {
   const db = await database();

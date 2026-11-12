@@ -1,71 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" viewBox="0 0 800 480" role="img" aria-labelledby="full-title full-desc">
-  <title id="full-title">xtape cassette screen - Bare, full size</title>
-  <desc id="full-desc">The cassette at its resting 800x480 pose, with a representative playing frame: its two frames, the tape packs with their rings, the two strands, rollers and bottom run, the two hubs and the VU meter in the right hub. This is the Bare Level at scale 256.</desc>
-  <!--
-    Vector of the current cassette screen, drawn on the 800x480 design grid.
-    Source: cassette_layout.c, cassette_tapes.c, cassette_meter.c,
-    cassette_buttons.c and cassette_style.c. Sample playing frame:
-    position 350/1000 -> pack fills 678/402,
-    pack diameters 308/260 px,
-    hub frames 5/13 of 36, VU L/R 0.22/0.15.
-    Pose: scale 256/256, offset (0, 0).
-  -->
-  <rect width="800" height="480" fill="#111111"/>
-  <g id="cassette-frames">
-    <rect x="16.5" y="16.5" width="767" height="359" rx="15.5" fill="#111111" stroke="#301206" stroke-width="1"/>
-    <rect x="122.5" y="122.5" width="555" height="167" rx="15.5" fill="#111111" stroke="#301206" stroke-width="1"/>
-  </g>
-  <g id="cassette-packs">
-    <g id="cassette-pack-0">
-      <circle cx="210" cy="206" r="154" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="210" cy="206" r="146" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="210" cy="206" r="138" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="210" cy="206" r="130" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="210" cy="206" r="122" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="210" cy="206" r="114" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="210" cy="206" r="106" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="210" cy="206" r="98" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="210" cy="206" r="90" fill="none" stroke="#C0481B" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="800" height="480" viewBox="0 0 800 480">
+  <title>cassette-800x480.svg</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <path d="M0 0 L800 0 L800 480 L0 480 Z" fill="#111111"/>
+    <g id="cassette-frames">
+      <path d="M32 16.5 L768 16.5 C776.56 16.5 783.5 23.44 783.5 32 L783.5 360 C783.5 368.56 776.56 375.5 768 375.5 L32 375.5 C23.44 375.5 16.5 368.56 16.5 360 L16.5 32 C16.5 23.44 23.44 16.5 32 16.5 Z" fill="#111111" stroke="#301206"/>
     </g>
-    <g id="cassette-pack-1">
-      <circle cx="594" cy="206" r="130" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="594" cy="206" r="122" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="594" cy="206" r="114" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="594" cy="206" r="106" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="594" cy="206" r="98" fill="none" stroke="#C0481B" stroke-width="1"/>
-      <circle cx="594" cy="206" r="90" fill="none" stroke="#C0481B" stroke-width="1"/>
+    <g id="cassette-packs">
+      <g id="cassette-pack-0">
+        <path d="M364 206 C364 291.052 295.052 360 210 360 C124.948 360 56 291.052 56 206 C56 120.948 124.948 52 210 52 C295.052 52 364 120.948 364 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M356 206 C356 286.634 290.634 352 210 352 C129.366 352 64 286.634 64 206 C64 125.366 129.366 60 210 60 C290.634 60 356 125.366 356 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M348 206 C348 282.215 286.215 344 210 344 C133.785 344 72 282.215 72 206 C72 129.785 133.785 68 210 68 C286.215 68 348 129.785 348 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M340 206 C340 277.797 281.797 336 210 336 C138.203 336 80 277.797 80 206 C80 134.203 138.203 76 210 76 C281.797 76 340 134.203 340 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M332 206 C332 273.379 277.379 328 210 328 C142.621 328 88 273.379 88 206 C88 138.621 142.621 84 210 84 C277.379 84 332 138.621 332 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M324 206 C324 268.96 272.96 320 210 320 C147.04 320 96 268.96 96 206 C96 143.04 147.04 92 210 92 C272.96 92 324 143.04 324 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M316 206 C316 264.542 268.542 312 210 312 C151.458 312 104 264.542 104 206 C104 147.458 151.458 100 210 100 C268.542 100 316 147.458 316 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M308 206 C308 260.124 264.124 304 210 304 C155.876 304 112 260.124 112 206 C112 151.876 155.876 108 210 108 C264.124 108 308 151.876 308 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M300 206 C300 255.706 259.706 296 210 296 C160.294 296 120 255.706 120 206 C120 156.294 160.294 116 210 116 C259.706 116 300 156.294 300 206 Z" fill="none" stroke="#c0481b"/>
+      </g>
+      <g id="cassette-pack-1">
+        <path d="M724 206 C724 277.797 665.797 336 594 336 C522.203 336 464 277.797 464 206 C464 134.203 522.203 76 594 76 C665.797 76 724 134.203 724 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M716 206 C716 273.379 661.379 328 594 328 C526.621 328 472 273.379 472 206 C472 138.621 526.621 84 594 84 C661.379 84 716 138.621 716 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M708 206 C708 268.96 656.96 320 594 320 C531.04 320 480 268.96 480 206 C480 143.04 531.04 92 594 92 C656.96 92 708 143.04 708 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M700 206 C700 264.542 652.542 312 594 312 C535.458 312 488 264.542 488 206 C488 147.458 535.458 100 594 100 C652.542 100 700 147.458 700 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M692 206 C692 260.124 648.124 304 594 304 C539.876 304 496 260.124 496 206 C496 151.876 539.876 108 594 108 C648.124 108 692 151.876 692 206 Z" fill="none" stroke="#c0481b"/>
+        <path d="M684 206 C684 255.706 643.706 296 594 296 C544.294 296 504 255.706 504 206 C504 156.294 544.294 116 594 116 C643.706 116 684 156.294 684 206 Z" fill="none" stroke="#c0481b"/>
+      </g>
     </g>
-  </g>
-  <g id="cassette-rollers">
-    <circle cx="39" cy="431" r="18.5" fill="none" stroke="#C0481B" stroke-width="1"/>
-    <circle cx="761" cy="431" r="18.5" fill="none" stroke="#C0481B" stroke-width="1"/>
-  </g>
-  <g id="cassette-run">
-    <line x1="39" y1="450" x2="761" y2="450" stroke="#C0481B" stroke-width="2" stroke-linecap="butt"/>
-  </g>
-  <g id="cassette-strands">
-    <polyline points="58,183 20,428 20,431 20,435 21,438 23,441 25,443 27,446 30,448 33,449 36,450 39,450" fill="none" stroke="#C0481B" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round"/>
-    <polyline points="721,176 779,427 780,430 780,433 779,437 778,440 776,443 774,445 771,447 768,449 764,450 761,450" fill="none" stroke="#C0481B" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round"/>
-  </g>
-  <g id="cassette-hubs">
-    <g id="cassette-hub-0">
-      <circle cx="210" cy="206" r="83" fill="#180903" stroke="#F15A22" stroke-width="2"/>
-      <line x1="252" y1="155" x2="256" y2="151" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
-      <line x1="168" y1="257" x2="164" y2="261" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
+    <g id="cassette-rollers">
+      <path d="M57.5 431 C57.5 441.217 49.217 449.5 39 449.5 C28.783 449.5 20.5 441.217 20.5 431 C20.5 420.783 28.783 412.5 39 412.5 C49.217 412.5 57.5 420.783 57.5 431 Z" fill="none" stroke="#c0481b"/>
+      <path d="M779.5 431 C779.5 441.217 771.217 449.5 761 449.5 C750.783 449.5 742.5 441.217 742.5 431 C742.5 420.783 750.783 412.5 761 412.5 C771.217 412.5 779.5 420.783 779.5 431 Z" fill="none" stroke="#c0481b"/>
     </g>
-    <g id="cassette-hub-1">
-      <circle cx="594" cy="206" r="83" fill="#180903" stroke="#F15A22" stroke-width="2"/>
-      <line x1="552" y1="155" x2="548" y2="151" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
-      <line x1="636" y1="257" x2="640" y2="261" stroke="#C0481B" stroke-width="4" stroke-linecap="round"/>
+    <g id="cassette-run">
+      <path d="M39 450 L761 450" fill="#000000" stroke="#c0481b" stroke-width="2"/>
     </g>
-  </g>
-  <g id="cassette-meter" transform="translate(546 158)">
-    <rect x="0" y="47" width="96" height="1" fill="#7F2C18"/>
-    <rect x="18" y="22" width="28" height="4" rx="2" fill="#F15A22"/>
-    <rect x="18" y="70" width="28" height="4" rx="2" fill="#F15A22"/>
-    <rect x="50" y="22" width="26" height="4" rx="2" fill="#F15A22"/>
-    <rect x="50" y="70" width="26" height="4" rx="2" fill="#F15A22"/>
-    <circle cx="48" cy="48" r="47" fill="none" stroke="#F15A22" stroke-width="2"/>
+    <g id="cassette-strands">
+      <path d="M58 183 L20 428 L20 431 L20 435 L21 438 L23 441 L25 443 L27 446 L30 448 L33 449 L36 450 L39 450" fill="none" stroke="#c0481b" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M721 176 L779 427 L780 430 L780 433 L779 437 L778 440 L776 443 L774 445 L771 447 L768 449 L764 450 L761 450" fill="none" stroke="#c0481b" stroke-width="2" stroke-linejoin="round"/>
+    </g>
+    <g id="cassette-hubs">
+      <g id="cassette-hub-0">
+        <path d="M293 206 C293 251.84 255.84 289 210 289 C164.16 289 127 251.84 127 206 C127 160.16 164.16 123 210 123 C255.84 123 293 160.16 293 206 Z" fill="#180903" stroke="#f15a22" stroke-width="2"/>
+        <path d="M252 155 L256 151" fill="#000000" stroke="#c0481b" stroke-width="4" stroke-linecap="round"/>
+        <path d="M168 257 L164 261" fill="#000000" stroke="#c0481b" stroke-width="4" stroke-linecap="round"/>
+      </g>
+      <g id="cassette-hub-1">
+        <path d="M677 206 C677 251.84 639.84 289 594 289 C548.16 289 511 251.84 511 206 C511 160.16 548.16 123 594 123 C639.84 123 677 160.16 677 206 Z" fill="#180903" stroke="#f15a22" stroke-width="2"/>
+        <path d="M552 155 L548 151" fill="#000000" stroke="#c0481b" stroke-width="4" stroke-linecap="round"/>
+        <path d="M636 257 L640 261" fill="#000000" stroke="#c0481b" stroke-width="4" stroke-linecap="round"/>
+      </g>
+    </g>
   </g>
 </svg>

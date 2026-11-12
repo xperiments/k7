@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import {
   FileMusic,
   Folder as FolderIcon,
@@ -10,12 +10,14 @@ import {
 import {
   expandAllFeature,
   hotkeysCoreFeature,
+  selectionFeature,
   syncDataLoaderFeature,
 } from '@headless-tree/core';
 import { useTree } from '@headless-tree/react';
 
 import { Tree, TreeItem, TreeItemLabel } from '@/components/reui/tree';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Empty,
   EmptyDescription,
@@ -140,8 +142,14 @@ function metaOf(track: FolderTrack): string {
   return tagged || track.name;
 }
 
+/** The two row controls a caller's own toolbar can drive. */
+export interface TreeControls {
+  expandAll: () => void;
+  collapseAll: () => void;
+}
+
 /** What pressing a file's row does. A source tree adds; the Drive plays or queues. */
-export type FileTreeAction = 'play' | 'queue' | 'add';
+export type FileTreeAction = 'play' | 'queue' | 'add' | 'none';
 
 export function FileTree({
   tree: root,
@@ -150,6 +158,15 @@ export function FileTree({
   action,
   onActivate,
   draggableSources = false,
+  onDropOnFolder,
+  onMove,
+  selectable = false,
+  onSelectionChange,
+  clearToken,
+  onRename,
+  renaming,
+  showControls = true,
+  controls,
 }: {
   tree: FolderNode;
   /** The header's search term: the whole drive is filtered, folders leading to a file kept. */
@@ -161,6 +178,30 @@ export function FileTree({
   onActivate: (track: FolderTrack, home: FolderNode) => void;
   /** A source tree's folders and files can be dragged into a playlist. */
   draggableSources?: boolean;
+  /** Every folder becomes a drop target: files dropped on it land in that folder. */
+  onDropOnFolder?: (folderPath: string, data: DataTransfer) => void;
+  /** Rows can be picked: click selects, cmd/ctrl toggles, shift extends. */
+  selectable?: boolean;
+  /** The selected paths below `music/`, whenever the selection changes. */
+  onSelectionChange?: (paths: string[]) => void;
+  /** Bump to clear the tree's own selection (a click-away or a finished operation). */
+  clearToken?: number;
+  /** Dragging rows onto a folder moves them there. */
+  onMove?: (paths: string[], toFolder: string) => void;
+  /** Double-clicking a row starts an inline rename. */
+  onRename?: (path: string) => void;
+  /** The row being renamed, and the input's state. */
+  renaming?: {
+    path: string;
+    value: string;
+    onValue: (value: string) => void;
+    onCommit: () => void;
+    onCancel: () => void;
+  };
+  /** Draw the header's expand/collapse buttons; a caller with its own bar says no. */
+  showControls?: boolean;
+  /** Filled with the tree's expand/collapse, for a caller's own bar. */
+  controls?: MutableRefObject<TreeControls | null>;
 }) {
   /* Searching prunes the tree instead of hiding rows: a visible folder never claims a file
      that is not under it, and a matching album can show its own files. */
@@ -198,7 +239,7 @@ export function FileTree({
     },
     isItemFolder: (item) => item.getItemData().kind === 'folder',
     onPrimaryAction: (item) => {
-      if (dragging.current) return;
+      if (action === 'none' || dragging.current) return;
       const entry = item.getItemData();
       if (entry.kind === 'track' && entry.track !== undefined && entry.home !== undefined) {
         onActivate(entry.track, entry.home);
@@ -208,8 +249,54 @@ export function FileTree({
       getItem: (itemId) => entries[itemId],
       getChildren: (itemId) => entries[itemId]?.children ?? [],
     },
-    features: [syncDataLoaderFeature, hotkeysCoreFeature, expandAllFeature],
+    features: [
+      syncDataLoaderFeature,
+      hotkeysCoreFeature,
+      expandAllFeature,
+      ...(selectable ? [selectionFeature] : []),
+    ],
   });
+
+  /* Report the selection so a caller can act on it. The manager's toolbar lives outside the
+   * tree: a row is too small to hold a menu, and the actions are not about one row. */
+  const selectedPaths = selectable
+    ? instance
+        .getSelectedItems()
+        .map((item) => {
+          const data = entries[item.getId()];
+          if (data === undefined) return '';
+          return data.kind === 'folder' ? data.folder?.path ?? '' : data.track?.path ?? '';
+        })
+        .filter((path) => path !== '')
+    : [];
+  const selectedKey = selectedPaths.join('\n');
+  useEffect(() => {
+    if (!selectable) return;
+    onSelectionChange?.(selectedKey === '' ? [] : selectedKey.split('\n'));
+    // `selectedKey` is the identity of the selection; the instances behind it are rebuilt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey, selectable]);
+
+  /* The caller can clear the selection without the tree knowing why (a click outside, or an
+   * operation that removed the rows). Bumping the token empties the feature's own state, so
+   * `data-selected` — and the accent ink that hangs off it — goes too. */
+  useEffect(() => {
+    if (clearToken === undefined) return;
+    instance.setSelectedItems([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearToken]);
+
+  /* Hand the expand/collapse pair to a caller that has its own toolbar. */
+  useEffect(() => {
+    if (controls === undefined) return;
+    controls.current = {
+      expandAll: () => void instance.expandAll(),
+      collapseAll: () => instance.collapseAll(),
+    };
+    return () => {
+      controls.current = null;
+    };
+  }, [instance, controls]);
 
   /* The data changes when the card or the drive does; the tree's structure cache has to be
      rebuilt before the new rows can be drawn. */
@@ -240,7 +327,13 @@ export function FileTree({
     .join(' · ');
 
   const verb =
-    action === 'add' ? 'Add to playlist' : action === 'queue' ? 'Queue on the player' : 'Play';
+    action === 'add'
+      ? 'Add to playlist'
+      : action === 'queue'
+        ? 'Queue on the player'
+        : action === 'play'
+          ? 'Play'
+          : '';
 
   return (
     <div className="flex flex-col gap-3">
@@ -249,14 +342,16 @@ export function FileTree({
           <span className="text-sm font-light">{data.name}</span>
           <span className="text-xs text-muted-foreground tabular-nums">{summary}</span>
         </div>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => void instance.expandAll()}>
-            Expand all
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => instance.collapseAll()}>
-            Collapse all
-          </Button>
-        </div>
+        {showControls ? (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={() => void instance.expandAll()}>
+              Expand all
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => instance.collapseAll()}>
+              Collapse all
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {/* One gradient paints the indent guides; each label masks it under its own row, so
@@ -267,9 +362,13 @@ export function FileTree({
         className="relative before:absolute before:inset-0 before:-ms-1 before:bg-[repeating-linear-gradient(to_right,transparent_0,transparent_calc(var(--tree-indent)-1px),var(--border)_calc(var(--tree-indent)-1px),var(--border)_calc(var(--tree-indent)))]"
       >
         {instance.getItems().map((item) => {
-          const entry = item.getItemData();
+          // The tree's own state can name an id the current data no longer has — a folder
+          // deleted or renamed since the last rebuild. Skip it rather than ask for its data.
+          const entry = entries[item.getId()];
+          if (entry === undefined) return null;
           const folder = entry.folder;
           const track = entry.track;
+          const entryPath = entry.kind === 'folder' ? folder?.path ?? '' : track?.path ?? '';
 
           return (
             <TreeItem
@@ -278,7 +377,9 @@ export function FileTree({
               item={item}
               title={
                 track !== undefined
-                  ? `${verb} — ${track.path}`
+                  ? verb === ''
+                    ? track.path
+                    : `${verb} — ${track.path}`
                   : action === 'add' && folder !== undefined
                     ? `Drag to add its files — ${folder.path}`
                     : folder?.path
@@ -286,28 +387,74 @@ export function FileTree({
               className={
                 draggableSources ? 'cursor-grab active:cursor-grabbing' : undefined
               }
-              draggable={draggableSources}
-              onDragStart={
-                draggableSources
-                  ? (event) => {
-                      dragging.current = true;
-                      if (track !== undefined) beginTrackDrag(event, track.path);
-                      else if (folder !== undefined) beginFolderDrag(event, folder.path);
-                    }
-                  : undefined
-              }
-              onDragEnd={
-                draggableSources
-                  ? () => {
-                      // Clear after the click that some browsers send on drop.
-                      window.setTimeout(() => {
-                        dragging.current = false;
-                      }, 0);
-                    }
-                  : undefined
-              }
+              onDoubleClick={onRename !== undefined ? () => onRename(entryPath) : undefined}
             >
-              <TreeItemLabel className="relative before:absolute before:inset-x-0 before:-inset-y-0.5 before:-z-10 before:bg-background">
+              {/* The drag lives on the label, not the row's button: a <span> is a reliable
+                  drag source in Chrome, and the label is the whole visible row anyway. */}
+              <TreeItemLabel
+                className="relative before:absolute before:inset-x-0 before:-inset-y-0.5 before:-z-10 before:bg-background in-data-[selected=true]:bg-transparent in-data-[selected=true]:text-primary"
+                draggable={draggableSources || onMove !== undefined}
+                onDragStart={
+                  onMove !== undefined
+                    ? (event) => {
+                        dragging.current = true;
+                        const paths = selectedPaths.includes(entryPath)
+                          ? selectedPaths
+                          : [entryPath];
+                        event.dataTransfer.setData('application/x-k7-paths', JSON.stringify(paths));
+                        event.dataTransfer.effectAllowed = 'move';
+                      }
+                    : draggableSources
+                      ? (event) => {
+                          dragging.current = true;
+                          if (track !== undefined) beginTrackDrag(event, track.path);
+                          else if (folder !== undefined) beginFolderDrag(event, folder.path);
+                        }
+                      : undefined
+                }
+                onDragEnd={
+                  draggableSources || onMove !== undefined
+                    ? () => {
+                        // Clear after the click that some browsers send on drop.
+                        window.setTimeout(() => {
+                          dragging.current = false;
+                        }, 0);
+                      }
+                    : undefined
+                }
+                onDragOver={
+                  (onDropOnFolder !== undefined || onMove !== undefined) && entry.kind === 'folder'
+                    ? (event) => {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = event.dataTransfer.types.includes(
+                          'application/x-k7-paths',
+                        )
+                          ? 'move'
+                          : 'copy';
+                      }
+                    : undefined
+                }
+                onDrop={
+                  (onDropOnFolder !== undefined || onMove !== undefined) && entry.kind === 'folder'
+                    ? (event) => {
+                        event.preventDefault();
+                        // The row's own folder wins over the tree's root drop target.
+                        event.stopPropagation();
+                        const raw = event.dataTransfer.getData('application/x-k7-paths');
+                        if (raw !== '' && onMove !== undefined) {
+                          // A row dragged from this tree moves; anything else is new music.
+                          try {
+                            onMove(JSON.parse(raw) as string[], entryPath);
+                          } catch {
+                            /* A malformed payload is treated as no move. */
+                          }
+                          return;
+                        }
+                        onDropOnFolder?.(entry.folder?.path ?? '', event.dataTransfer);
+                      }
+                    : undefined
+                }
+              >
                 <span className="flex min-w-0 flex-1 items-center gap-2">
                   {entry.kind === 'folder' ? (
                     item.isExpanded() ? (
@@ -319,7 +466,23 @@ export function FileTree({
                     <FileMusic aria-hidden="true" className="size-4 text-muted-foreground" />
                   )}
 
-                  <span className="truncate">{entry.name}</span>
+                  {renaming?.path === entryPath ? (
+                    <Input
+                      value={renaming.value}
+                      onChange={(event) => renaming.onValue(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') renaming.onCommit();
+                        if (event.key === 'Escape') renaming.onCancel();
+                      }}
+                      onBlur={() => renaming.onCommit()}
+                      onClick={(event) => event.stopPropagation()}
+                      onDoubleClick={(event) => event.stopPropagation()}
+                      className="h-7 w-48"
+                      autoFocus
+                    />
+                  ) : (
+                    <span className="truncate">{entry.name}</span>
+                  )}
 
                   {entry.kind === 'folder' ? (
                     <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
@@ -345,12 +508,12 @@ export function FileTree({
                           aria-hidden="true"
                           className="ml-auto size-3.5 shrink-0 text-muted-foreground"
                         />
-                      ) : (
+                      ) : action === 'play' ? (
                         <PlayIcon
                           aria-hidden="true"
                           className="ml-auto size-3.5 shrink-0 text-muted-foreground"
                         />
-                      )}
+                      ) : null}
                     </>
                   ) : null}
                 </span>
