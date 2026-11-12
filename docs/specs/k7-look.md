@@ -412,6 +412,21 @@ component.
 `cubic-bezier(0.22, 1, 0.36, 1)` turn. They are not re-drawn as line art, not monochromed, and
 not retimed. The stage around them is K7. **[ADR]**
 
+An album with no picture is still drawn: its face is one of the cassette case reference's five
+covers — a gradient with a ring, colour bands with a cream box, an off-white with a colour
+rule, a retro sunburst, a dark grid — seeded by its name, with its title, artist and cassette
+meta. The case, its `hueOf` colour, geometry, masks and timing are unchanged; the drawn face is
+cover art inside the preserved case, and its words hide when the face is too small to carry
+them. The same face fills the album card, the player bar's mini case and the Player's square.
+Every face of every case carries the sheen, so a spine has the same moulded gloss as a front.
+A case under the pointer comes towards the reader — a side case 10rem, the active front
+4rem — while the row steps back and turns towards the hovered side; the left and right turns
+are set separately in the stylesheet. The perspective stays at 90rem. The pointer is read
+from a flat hit layer at the cases' rest places, not from the moving case, so a turning case
+cannot pull the hover out from under itself. A carousel drag begins only on the central
+case, and the hover layer is off while the drag is in progress. The moves take the case's own
+600ms curve, and the shelf carries 1.5rem of extra height.
+
 ### 5.4 Content images
 
 **K20. An image that is content keeps its colour; an image that is chrome does not exist.** Album

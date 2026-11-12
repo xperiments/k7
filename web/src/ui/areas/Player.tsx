@@ -241,7 +241,12 @@ export function PlayerArea() {
       ) : (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
           <div className="w-56 shrink-0 sm:w-64">
-            <Cover cover={cached?.cover ?? null} initial={title} alt={`Cover of ${title}`} />
+            <Cover
+              cover={cached?.cover ?? null}
+              initial={title}
+              alt={`Cover of ${title}`}
+              art={{ title, artist, meta: album || undefined }}
+            />
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-2">

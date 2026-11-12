@@ -1,20 +1,24 @@
 import type { CSSProperties } from 'react';
 
 import type { CachedCover } from '../storage/media';
+import { AlbumArt, type AlbumArtData } from './album-art';
 import { useCoverUrl } from './cover';
 
 /**
- * A hue per name: the spine, the side and the no-cover face need *a* colour, and a hash of
- * the name is stable across visits, machines and the device's own table.
+ * The picture on a case's face: the art, or the album's drawn cover when it has no picture,
+ * or a tinted face with its initial where neither is available (the 30px player case). The
+ * moulding is drawn on top either way.
  */
-export function hueOf(text: string): number {
-  let hue = 0;
-  for (let at = 0; at < text.length; at += 1) hue = (hue * 31 + text.charCodeAt(at)) % 360;
-  return hue;
-}
-
-/** The picture on a case's face: the art, or a tinted face with its initial, and the moulding. */
-export function CassetteFront({ cover, initial }: { cover: CachedCover | null; initial: string }) {
+export function CassetteFront({
+  cover,
+  initial,
+  art,
+}: {
+  cover: CachedCover | null;
+  initial: string;
+  /** The drawn face for a coverless album; omitted by the tiny cases. */
+  art?: AlbumArtData;
+}) {
   const url = useCoverUrl(cover);
   return (
     <>
@@ -31,6 +35,8 @@ export function CassetteFront({ cover, initial }: { cover: CachedCover | null; i
             draggable={false}
           />
         </>
+      ) : art ? (
+        <AlbumArt {...art} />
       ) : (
         <span className="k7-cover-fallback" aria-hidden="true">
           {initial}
@@ -52,12 +58,15 @@ export function CassetteCase({
   cover,
   initial,
   hue,
+  art,
   className,
 }: {
   cover: CachedCover | null;
   initial: string;
   /** Degrees; the tint of the face when there is no picture. */
   hue?: number;
+  /** The drawn face for a coverless track; the mini hides its words. */
+  art?: AlbumArtData;
   className?: string;
 }) {
   return (
@@ -69,7 +78,7 @@ export function CassetteCase({
           style={hue === undefined ? undefined : ({ '--hue': `${hue}deg` } as CSSProperties)}
         >
           <span className="k7-face k7-front">
-            <CassetteFront cover={cover} initial={initial} />
+            <CassetteFront cover={cover} initial={initial} art={art} />
           </span>
         </div>
       </div>

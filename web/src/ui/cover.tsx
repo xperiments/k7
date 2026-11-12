@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { cn } from 'cn';
 import type { CachedCover } from '../storage/media';
+import { AlbumArt, type AlbumArtData } from './album-art';
 
 /**
  * The cover, as a blob URL made once per image and released when the element goes away.
@@ -32,12 +33,15 @@ export function Cover({
   initial,
   alt = '',
   className,
+  art,
 }: {
   cover: CachedCover | null;
-  /** What the placeholder tile shows when there is no picture. */
+  /** What the placeholder tile shows when there is no picture and no drawn face. */
   initial: string;
   alt?: string;
   className?: string;
+  /** The drawn face for a coverless album or track. */
+  art?: AlbumArtData;
 }) {
   const url = useCoverUrl(cover);
 
@@ -46,11 +50,11 @@ export function Cover({
       <div
         aria-hidden="true"
         className={cn(
-          'flex aspect-square w-full items-center justify-center bg-muted text-2xl font-light text-muted-foreground',
+          'k7-cover-tile flex aspect-square w-full items-center justify-center overflow-clip bg-muted text-2xl font-light text-muted-foreground',
           className,
         )}
       >
-        {(initial.trim().slice(0, 1) || '?').toUpperCase()}
+        {art ? <AlbumArt {...art} /> : (initial.trim().slice(0, 1) || '?').toUpperCase()}
       </div>
     );
   }

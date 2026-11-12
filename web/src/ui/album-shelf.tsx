@@ -1,9 +1,18 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { Album } from '../media/albums';
-import { CassetteFront, hueOf } from './cassette';
+import { hueOf } from './album-art';
+import { CassetteFront } from './cassette';
 import { plural } from './format';
 
 /**
@@ -73,6 +82,10 @@ export function AlbumShelf({
    * cases, letters, arrows and the name — is scaled down together so nothing is pushed
    * under the header or past the player. `zoom` (not transform) so the layout shrinks too. */
   const [fit, setFit] = useState(1);
+  /* Which case the pointer is on, read from the flat hit layer below. It is deliberately
+   * not the case's own :hover: the case turns and rises while the pointer stays put, and a
+   * hover that moved with the 3D box would keep dropping out from under the pointer. */
+  const [hovered, setHovered] = useState<number | null>(null);
   useLayoutEffect(() => {
     const el = section.current;
     const parent = el?.parentElement;
@@ -137,11 +150,29 @@ export function AlbumShelf({
   const count = albums.length;
   const at = Math.min(selected, Math.max(0, count - 1));
   const active = albums[at];
+  const hoverSide =
+    hovered === null ? undefined : hovered < at ? 'left' : hovered > at ? 'right' : 'active';
 
   const go = useCallback(
     (delta: number) => onSelect(Math.min(Math.max(0, at + delta), Math.max(0, count - 1))),
     [at, count, onSelect],
   );
+
+  /* A carousel drag begins only on the central case: the hit layer's active box is the only
+   * pointer target that calls this. The hover goes off for the duration, so the cases do not
+   * lift and turn under the hand that is moving the row. */
+  const beginDrag = (event: ReactPointerEvent) => {
+    if (event.button !== 0) return;
+    setHovered(null);
+    /* No pointer capture: it would retarget the click to the shelf and the case would never
+     * open its tracks. The window's pointerup still ends a release that lands outside. */
+    const root = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    dragRem.current = root * fit;
+    dragStart.current = event.clientX;
+    dragStartAt.current = at;
+    dragTarget.current = at;
+    dragged.current = false;
+  };
 
   /* The arrows walk the shelf from anywhere in the Media view, not only while it holds the
    * focus; a text field keeps its own arrows, and the pointer no longer drags the row. */
@@ -170,21 +201,11 @@ export function AlbumShelf({
       <div className="flex w-full min-w-0 items-stretch gap-2">
         <div
           className="k7-shelf min-w-0 flex-1"
+          data-hover-side={hoverSide}
           role="group"
           aria-roledescription="album shelf"
           tabIndex={0}
           onDragStart={(event) => event.preventDefault()}
-          onPointerDown={(event) => {
-            /* No pointer capture: it would retarget the click to the shelf and the case
-             * would never open its tracks. The window's pointerup still ends a release
-             * that lands outside the shelf. */
-            const root = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-            dragRem.current = root * fit;
-            dragStart.current = event.clientX;
-            dragStartAt.current = at;
-            dragTarget.current = at;
-            dragged.current = false;
-          }}
           onPointerMove={(event) => {
             if (dragStart.current === null) return;
             if ((event.buttons & 1) === 0) {
@@ -213,6 +234,8 @@ export function AlbumShelf({
                 <div
                   key={album.album}
                   className="k7-shelf-item"
+                  data-active={activeCase}
+                  data-hover={hovered === index}
                   style={{ transform: placeAt(distance) }}
                 >
                   <button
@@ -236,17 +259,56 @@ export function AlbumShelf({
                       <span className="k7-frame" aria-hidden="true" />
                       <span className="k7-sheen" aria-hidden="true" />
                     </span>
-                    <span className="k7-face k7-back" aria-hidden="true" />
-                    <span className="k7-face k7-side k7-right" aria-hidden="true" />
+                    <span className="k7-face k7-back" aria-hidden="true">
+                      <span className="k7-sheen" aria-hidden="true" />
+                    </span>
+                    <span className="k7-face k7-side k7-right" aria-hidden="true">
+                      <span className="k7-sheen" aria-hidden="true" />
+                    </span>
                     <span className="k7-face k7-side k7-left" aria-hidden="true">
                       <span className="k7-spine">
                         <span className="k7-spine-group">{byline(album)}</span> -{' '}
                         {album.album}
                       </span>
                       <span className="k7-frame" />
+                      <span className="k7-sheen" aria-hidden="true" />
                     </span>
                   </button>
                 </div>
+              );
+            })}
+          </div>
+
+          {/* The pointer's targets, at the cases' rest places and outside the row's hover
+              transform. The row and the cases animate above them; the pointer never has to
+              follow a moving 3D box. */}
+          <div className="k7-shelf-hits" aria-hidden="true">
+            {albums.map((album, index) => {
+              const distance = index - at;
+              if (Math.abs(distance) > WINDOW) return null;
+              return (
+                <span
+                  key={album.album}
+                  className="k7-shelf-hit"
+                  data-active={distance === 0}
+                  style={{ transform: placeAt(distance) }}
+                  onPointerDown={distance === 0 ? beginDrag : undefined}
+                  onPointerEnter={() => {
+                    if (dragStart.current !== null) return;
+                    setHovered(index);
+                  }}
+                  onPointerLeave={() =>
+                    setHovered((current) => (current === index ? null : current))
+                  }
+                  onClick={() => {
+                    if (dragged.current) {
+                      dragged.current = false;
+                      return;
+                    }
+                    onSelect(index);
+                    onOpen?.();
+                  }}
+                />
               );
             })}
           </div>
@@ -450,7 +512,13 @@ export function IndexRail({
   );
 }
 
-/** The album's face: its own art, or a tinted face with its initial. */
+/** The album's face: its own art, or the drawn cover it gets when it has no picture. */
 function CaseCover({ album }: { album: Album }) {
-  return <CassetteFront cover={album.cover} initial={initialOf(album)} />;
+  return (
+    <CassetteFront
+      cover={album.cover}
+      initial={initialOf(album)}
+      art={{ title: album.album, artist: byline(album) }}
+    />
+  );
 }

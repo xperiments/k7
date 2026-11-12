@@ -47,20 +47,23 @@ import { navigate, routeHref } from '../router';
 
 /** One album in a grid: the picture, its name, who made it, and how many tracks. */
 export function AlbumCard({ album }: { album: Album }) {
+  const artist =
+    album.artists.length === 1 ? album.artists[0] : plural(album.artists.length, 'artist');
   return (
     <Card size="sm">
       <a
         href={routeHref({ name: 'album', album: album.album })}
         className="flex flex-col gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
-        <Cover cover={album.cover} initial={album.album} className="aspect-[16/25]" />
+        <Cover
+          cover={album.cover}
+          initial={album.album}
+          art={{ title: album.album, artist }}
+          className="aspect-[16/25]"
+        />
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-sm font-medium">{album.album}</span>
-          <span className="truncate text-xs text-muted-foreground">
-            {album.artists.length === 1
-              ? album.artists[0]
-              : plural(album.artists.length, 'artist')}
-          </span>
+          <span className="truncate text-xs text-muted-foreground">{artist}</span>
           <span className="text-xs text-muted-foreground tabular-nums">
             {plural(album.tracks, 'track')}
           </span>
