@@ -11,6 +11,7 @@
  * Usage: icecast_host [--music-dir DIR] [--port N] [--out-hz N] [--bitrate N]
  *                     [--max-clients N] [--metaint N] [--lead-ms N] [--burst-ms N]
  *                     [--library-max-bytes N] [--library-max-tracks N] [--name NAME]
+ *                     [--app-origin-dev ORIGIN]
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,7 +39,8 @@ static void usage(const char *argv0)
            "  --burst-ms N      history sent on connect (default 500)\n"
            "  --library-max-bytes N   library arena+JSON budget (default 4 MiB)\n"
            "  --library-max-tracks N  library track cap (default 20000)\n"
-           "  --name NAME       station name (icy-name)\n",
+           "  --name NAME       station name (icy-name)\n"
+           "  --app-origin-dev ORIGIN  also trust this development App origin\n",
            argv0, MINI_ICECAST_MAX_CLIENTS);
 }
 
@@ -46,6 +48,7 @@ int main(int argc, char **argv)
 {
     const char *music_dir = "host/fixtures";
     const char *station = "ESP32 Radio (host)";
+    const char *app_origin_dev = NULL;
     uint16_t port = 18000;
     uint32_t out_hz = 44100, bitrate = 128, metaint = 16000, lead_ms = 1500, burst_ms = 500;
     uint32_t library_max_bytes = 0, library_max_tracks = 0;
@@ -68,6 +71,7 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--library-max-bytes") && v) { library_max_bytes = (uint32_t)atoi(v); i++; }
         else if (!strcmp(a, "--library-max-tracks") && v) { library_max_tracks = (uint32_t)atoi(v); i++; }
         else if (!strcmp(a, "--name") && v) { station = v; i++; }
+        else if (!strcmp(a, "--app-origin-dev") && v) { app_origin_dev = v; i++; }
         else {
             fprintf(stderr, "%s: unrecognised argument %s\n", argv[0], a);
             usage(argv[0]);
@@ -91,6 +95,7 @@ int main(int argc, char **argv)
         .library_max_bytes = library_max_bytes,
         .library_max_tracks = library_max_tracks,
         .server_name = "mini_icecast/host",
+        .app_origin_dev = app_origin_dev,
     };
     app_services_report_t report;
     esp_err_t err = app_services_start(&cfg, &report);

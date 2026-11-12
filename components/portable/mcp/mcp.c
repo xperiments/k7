@@ -39,6 +39,7 @@ static const char *SN_reason = "";
 static uint32_t L_scan_ms;
 static mcp_local_ip_fn L_local_ip;
 static const char *L_app_origin = ""; /* the deployed App's origin, or "" */
+static const char *L_dev_origin = ""; /* the development App's origin, or "" */
 static mcp_rescan_fn L_rescan;
 static uint16_t L_port = 8000;
 
@@ -917,10 +918,12 @@ static bool supported_version(const char *v)
 static bool origin_ok(const http_request_t *req)
 {
     if (!req->origin[0]) return true; /* native clients do not send Origin */
-    /* The deployed App is never same-origin with the device (it reaches k7.local through
-     * Local Network Access), and it is the page the endpoint exists for. Its origin is
-     * compiled in, so this is not "any origin": it is the one App. */
+    /* The App is never same-origin with the device (it reaches k7.local through Local
+     * Network Access), and it is the page the endpoint exists for. Its origin is compiled
+     * in, so this is not "any origin": it is the one App — or, in a development firmware,
+     * the two it serves (the deployed App and the dev server). */
     if (L_app_origin && *L_app_origin && strcasecmp(req->origin, L_app_origin) == 0) return true;
+    if (L_dev_origin && *L_dev_origin && strcasecmp(req->origin, L_dev_origin) == 0) return true;
     if (!req->host[0]) return false;
 
     const char *auth;
@@ -1190,6 +1193,7 @@ esp_err_t mcp_start(const mcp_cfg_t *cfg)
     L_scan_ms = cfg->scan_ms;
     L_local_ip = cfg->local_ip;
     L_app_origin = cfg->app_origin ? cfg->app_origin : "";
+    L_dev_origin = cfg->dev_origin ? cfg->dev_origin : "";
     L_rescan = cfg->rescan;
     L_port = cfg->port ? cfg->port : 8000;
     SN = cfg->snapshot;

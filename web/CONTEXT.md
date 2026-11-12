@@ -82,6 +82,8 @@ _Avoid_: mode, connection state, online
 **Local network**:
 The `local-network` permission a person grants this origin, which is what lets the App fetch
 `http://k7.local` from its HTTPS origin (LNA §2.5). Without it the App is gated: no area renders.
+A development build is served from the LAN, where the permission does not apply to a local→local
+request, so it mounts without it (ADR 0082).
 _Avoid_: LAN mode, device access
 
 **Capabilities**:

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { DEVICE_NEEDS_PERMISSION } from '../config';
 import { restoreCardScope } from '../card/session';
 import { loadDrafts } from '../playlists/drafts';
 import { useDeviceStatus } from '../device/useDeviceStatus';
@@ -24,12 +25,17 @@ import { prepareOffline } from './prefetchStore';
 /**
  * The App, behind the Local Network Access gate.
  *
- * Nothing here can work without the player, and the player is only reachable while Chrome's
- * `local-network` permission is granted, so the gate decides whether this tree mounts at
- * all. It sits above the providers on purpose: no analysis worker, no playback owner and no
- * poll starts before there is a player to point them at.
+ * Nothing here can work without the player, and from the shipping (public) origin the player
+ * is only reachable while Chrome's `local-network` permission is granted, so the gate decides
+ * whether this tree mounts at all. It sits above the providers on purpose: no analysis
+ * worker, no playback owner and no poll starts before there is a player to point them at.
+ *
+ * A development build is served from a LAN address, which the permission never gates, so it
+ * mounts the same tree without the gate (k7-app.md A3; ADR 0082). Both builds then reach the
+ * player the one way: `tryLocalConnect()` below.
  */
 export function App() {
+  if (!DEVICE_NEEDS_PERMISSION) return <AppContent />;
   return (
     <LocalNetworkGate>
       <AppContent />

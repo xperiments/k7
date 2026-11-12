@@ -6,7 +6,9 @@ page of either — it answers the API and the stream, plus `/setup` for
 a device that has no network yet, and the App reaches it directly over
 the local network once a person grants the `local-network` permission (ADR 0067). A development
 origin, `https://k7-dev.xperiments.dev:8000`, exists so connected mode can be tested against the
-same shape it ships in — real TLS, no warning, a genuine secure context.
+same shape it ships in — real TLS, no warning, a genuine secure context. It has one documented
+exception: the origin is on the LAN, so Chrome's `local-network` permission never gates it, and
+its build mounts without the gate (§4 D12; [ADR 0082](../adr/0082-the-development-origin-is-trusted-by-a-development-build.md)).
 
 **Status:** the config, the two checkers and the CI workflow exist; nothing has been deployed,
 no Vercel project points at it, and no certificate or DNS record has been created.
@@ -125,16 +127,26 @@ mkcert -cert-file web/.certs/k7-dev.pem -key-file web/.certs/k7-dev-key.pem \
   k7-dev.xperiments.dev 192.168.0.38 localhost 127.0.0.1
 ```
 
-`.certs/` is gitignored. The same pair serves `vite preview` and the App at the development
-origin.
+`.certs/` is gitignored. The same pair serves `npm run dev` and `vite preview` at the
+development origin.
 
 **D11. The port is part of the origin.** `https://k7-dev.xperiments.dev:8000` is the App's
 development origin, in full, including `:8000`. Serving the same certificate on another port
-makes another origin, with its own `local-network` grant to give.
+makes another origin — another CORS origin for the device, and another name in D12a.
 
-**D12. Serve the built App, not the dev server.** `vite preview --port 8000 --host` with
-`preview.https` set from `.certs/`, so the artifact being tested is the artifact being shipped's
-shape: worker, headers and all.
+**D12. Connected development is the development build, not the preview.** `npm run dev` on the
+development origin. Its build mounts without the `local-network` gate, because the origin is a
+LAN page and the permission does not gate local→local traffic (LNA §2.2; k7-app.md A3). `vite
+preview` serves the shipping artifact itself — worker, headers and the gate — and is for
+checking that shape, not for connected work: from the development origin it cannot answer the
+gate.
+
+**D12a. The development firmware trusts the development origin.** `./tools/build.sh dev build
+flash` compiles the panel variant with `CONFIG_K7_TRUST_DEV_ORIGIN=y`
+(`sdkconfig.defaults.dev`), so the device's CORS reply and its MCP guard accept both
+`https://k7.xperiments.dev` and `https://k7-dev.xperiments.dev:8000`, naming the request's own
+origin. The shipping `sunton` variant leaves the option off and carries one origin. Recorded in
+[ADR 0082](../adr/0082-the-development-origin-is-trusted-by-a-development-build.md).
 
 ---
 
@@ -149,8 +161,9 @@ packs no page of the Site or the App, `/` and `/bridge` answer 302 to the App at
 App at `/app` is the only UI a browser is sent to. The one page the firmware serves is `GET
 /setup` ([ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)).
 
-**D14. A shipping build refuses a development origin.** The deployed artifact fails the check if
-the development origin's string appears anywhere in `dist`.
+**D14. A shipping build refuses a development origin.** The deployed App artifact fails the check
+if the development origin's string appears anywhere in `dist`; the release firmware compiles
+without `CONFIG_K7_TRUST_DEV_ORIGIN` (D12a), so its binary carries no development origin either.
 
 **D15. A shipping build refuses a Flash it cannot serve.** The Site may name only a firmware
 version whose parts are present in `web/public/firmware/<version>/`, and every part's size and

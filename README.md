@@ -86,6 +86,12 @@ idf.py build
 idf.py -p /dev/tty.usbserial-XXXX flash monitor
 ```
 
+For developing against the App at `https://k7-dev.xperiments.dev:8000`, flash the development
+variant instead: `./tools/build.sh dev build flash`. It is the panel build plus
+`CONFIG_K7_TRUST_DEV_ORIGIN`, so the device's CORS reply and MCP guard also accept the
+development origin ([ADR 0082](./docs/adr/0082-the-development-origin-is-trusted-by-a-development-build.md)).
+A release is never cut from it.
+
 There is nothing to edit before the first build: **the network is chosen on the device, not compiled
 in** ([`docs/specs/wifi-provisioning.md`](./docs/specs/wifi-provisioning.md), [ADR 0076](./docs/adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)).
 

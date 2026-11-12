@@ -11,7 +11,7 @@
 #   make -C host            build the runnable server
 #   make -C host test       build and run the unit tests (no board, no network)
 #   make -C host integration run the HTTP acceptance tests against the server
-#   make -C host label      pack the real label designs, then open the sheet with the reader
+#   make -C host label      pack the labels, boot the builder, open the sheet with the reader
 #   make -C host check      all of the above
 #   make -C host tools      build the measurement/one-shot tools
 #   make -C host fixtures   (re)generate the fixture corpus with ffmpeg
@@ -383,6 +383,8 @@ integration: $(SERVER)
 	@$(PYTHON) $(HERE)/tests/snapshot_tests.py $(SERVER) $(HERE)/fixtures
 	@echo "--- the front door"
 	@$(PYTHON) $(HERE)/tests/front_door_tests.py $(SERVER) $(HERE)/fixtures
+	@echo "--- the App's origins and CORS"
+	@$(PYTHON) $(HERE)/tests/origin_tests.py $(SERVER) $(HERE)/fixtures
 	@echo "--- the setup page and its API"
 	@$(PYTHON) $(HERE)/tests/setup_tests.py $(SERVER) $(HERE)/fixtures
 	@echo "--- the snapshot upload"
@@ -396,10 +398,12 @@ layering:
 	@ROOT=$(ROOT) sh $(HERE)/tests/layering.sh
 
 # The label sheet, end to end: the packer's own test, its check that the LVGL canvas builder
-# repeats the sheet's faces and the Slot vocabulary, and the reader opening the sheet the
-# packer just wrote. That last one is the seam the other two cannot cross - t32 builds its own
-# bytes, and the page check reads source text - so before it, a change to the packer could
-# break the panel with every test still green.
+# repeats the sheet's faces and the Slot vocabulary, the builder booting in headless Chrome with
+# its stage and default slot values, and the reader opening the sheet the packer just wrote.
+# The reader is the seam the other two cannot cross - t32 builds its own bytes, and the page
+# check reads source text - so before it, a change to the packer could break the panel with
+# every test still green. The boot check is the same seam on the page's side: 905313d left a
+# const below its first reader, the page threw at load, and every C check stayed green.
 #
 # This is the one tier that runs the packer, which is why `make test` stays free of Python.
 LABEL_OUT    := $(BUILD)/label
@@ -429,6 +433,8 @@ label: $(BIN)/t33_label_sheet
 	@$(PYTHON) $(ROOT)/tools/label_pack.py --selftest
 	@$(PYTHON) $(ROOT)/tools/label_pack.py --check-vocabulary
 	@$(BIN)/t33_label_sheet $(LABEL_OUT)
+	@echo "--- the canvas builder boots"
+	@$(PYTHON) $(HERE)/tests/label_boot_tests.py "$(ROOT)/resources/LVGL canvas builder.html"
 
 check: test layering integration label
 

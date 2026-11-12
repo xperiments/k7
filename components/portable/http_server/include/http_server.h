@@ -104,10 +104,14 @@ typedef http_result_t (*http_route_fn)(int fd, const http_request_t *req, void *
 typedef struct {
     uint16_t    port;        /* default 8000; the device passes 80 */
     const char *server_name; /* "Server:" header value; default "sd-stream/1.0" */
-    /* The one origin allowed to read this device's JSON from a browser — the K7 App.
-     * Null serves no CORS headers. See the note in app_services.c about why this exists
-     * before the browser feature that needs it has shipped. */
+    /* The deployed App's origin: the one a shipping build names in its CORS reply.
+     * Null serves no CORS headers. See the note in app_services.c. */
     const char *cors_origin;
+    /* The development App's origin, or NULL. A development build sets it, and a reply
+     * then names the request's own origin when it is this one; the response carries
+     * `Vary: Origin` because the header now depends on the request. NULL (the shipping
+     * build) keeps the one origin, exactly as before. */
+    const char *cors_origin_dev;
     uint8_t     max_conns;   /* concurrent request tasks, 1..HTTP_MAX_CONNS, default 4 */
     /* Which listener this instance is. False (the default, and the host build)
      * means "answer every registered route": one listener, no filtering. The
@@ -155,6 +159,12 @@ esp_err_t http_server_register_route_method_ex_on(http_listener_t listener, cons
 /* Bind, listen and start accepting. Returns once this build's listener (or
  * listeners) are up. */
 esp_err_t http_server_start(const http_server_cfg_t *cfg);
+
+/* Record the Origin of the request the connection worker `worker` is serving on `fd`, so
+ * http_send_headers can answer with the request's own origin when the build trusts two.
+ * The loop calls it before a route and clears it (NULL) after; a response written outside
+ * a route keeps the deployed origin. Safe to call with an unset origin. */
+void http_server_request_origin(unsigned worker, int fd, const char *origin);
 
 /* ------------------------------------------------------------------ replies */
 

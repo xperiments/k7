@@ -272,7 +272,14 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    worker: { format: 'es' },
+    worker: {
+      format: 'es',
+      /* The worker bundle is a build of its own, and the analysis worker imports the tag
+       * writer: without this the worker's copy of TagLib's wrapper reaches dist unpatched,
+       * with a `Function(...)` the CSP refuses (check-artifact.mjs). The plugin is the
+       * same one the App's modules get, applied to the worker's modules too. */
+      plugins: () => [taglibWithoutDynamicCode()],
+    },
     test: {
       environment: 'node',
       include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],

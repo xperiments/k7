@@ -30,6 +30,13 @@ static struct {
     http_server_cfg_t cfg;
     http_route_t      routes[HTTP_MAX_ROUTES];
     int               nroutes;
+    /* The request each connection worker is serving, for the reply's CORS origin. A worker
+     * writes only its own row, and a reply reads the row whose fd matches, so two replies
+     * in flight cannot borrow each other's origin. */
+    struct {
+        int  fd;
+        char origin[128];
+    } request[HTTP_MAX_CONNS];
 } S;
 
 const char *http_reason_phrase(int status)
@@ -105,6 +112,37 @@ bool http_send_all(int fd, const void *data, size_t n)
     return true;
 }
 
+void http_server_request_origin(unsigned worker, int fd, const char *origin)
+{
+    if (worker >= HTTP_MAX_CONNS) return;
+
+    /* One fd has one row. A closed connection can hand its fd to another worker, and the
+     * stale row must not answer for the new request. */
+    for (unsigned i = 0; i < HTTP_MAX_CONNS; i++) {
+        if (S.request[i].fd == fd) {
+            S.request[i].fd = -1;
+            S.request[i].origin[0] = 0;
+        }
+    }
+    if (!origin || !*origin) return;
+
+    size_t n = strlen(origin);
+    if (n >= sizeof S.request[worker].origin) n = sizeof S.request[worker].origin - 1;
+    memcpy(S.request[worker].origin, origin, n);
+    S.request[worker].origin[n] = 0;
+    S.request[worker].fd = fd;
+}
+
+/* The origin of the request being served on `fd`, or NULL when this response is not a
+ * route's (a malformed request, a refused connection). */
+static const char *request_origin(int fd)
+{
+    for (unsigned i = 0; i < HTTP_MAX_CONNS; i++) {
+        if (S.request[i].fd == fd && S.request[i].origin[0]) return S.request[i].origin;
+    }
+    return NULL;
+}
+
 esp_err_t http_send_headers(int fd, int status, const char *content_type,
                             size_t body_len, const char *extra_headers)
 {
@@ -121,11 +159,18 @@ esp_err_t http_send_headers(int fd, int status, const char *content_type,
     if (reply.default_cache_control) hdr_add(&w, "Cache-Control: no-cache\r\n");
     hdr_add(&w, "Connection: close\r\n");
     if (reply.extra_headers) hdr_add(&w, "%s", reply.extra_headers);
-    /* One origin, one set of preflight answers: the App reads this device's JSON from a
-     * public HTTPS origin, and a browser only allows that with these headers. They cost
-     * nothing while no browser makes the request. */
-    if (S.cfg.cors_origin && *S.cfg.cors_origin) {
-        hdr_add(&w, "Access-Control-Allow-Origin: %s\r\n", S.cfg.cors_origin);
+    /* The App reads this device's JSON from another origin, and a browser only allows that
+     * with these headers. A development build trusts a second origin and answers with the
+     * request's own; `Vary: Origin` then keeps a cache from handing one App's reply to the
+     * other. A shipping build names one origin, as before, and does not vary. */
+    const char *cors = S.cfg.cors_origin;
+    bool two_origins = S.cfg.cors_origin && S.cfg.cors_origin_dev && *S.cfg.cors_origin_dev;
+    if (two_origins) {
+        const char *asked = request_origin(fd);
+        if (asked && strcasecmp(asked, S.cfg.cors_origin_dev) == 0) cors = S.cfg.cors_origin_dev;
+    }
+    if (cors && *cors) {
+        hdr_add(&w, "Access-Control-Allow-Origin: %s\r\n", cors);
         hdr_add(&w, "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n");
         /* `Mcp-Protocol-Version` is what an MCP client sends on every POST, and the browser
          * refuses the request at the preflight if it is not named here; the response carries
@@ -134,8 +179,7 @@ esp_err_t http_send_headers(int fd, int status, const char *content_type,
                 "Access-Control-Allow-Headers: Content-Type, Accept, Mcp-Protocol-Version\r\n");
         hdr_add(&w, "Access-Control-Expose-Headers: Mcp-Protocol-Version\r\n");
         hdr_add(&w, "Access-Control-Max-Age: 600\r\n");
-        /* No `Vary: Origin`: the origin is a constant, so the response does not vary by it,
-         * and a second Vary would sit beside the routes' own `Vary: Accept-Encoding`. */
+        if (two_origins) hdr_add(&w, "Vary: Origin\r\n");
     }
     hdr_add(&w, "\r\n");
     if (!w.ok) return ESP_ERR_INVALID_SIZE;
@@ -312,6 +356,7 @@ esp_err_t http_server_start(const http_server_cfg_t *cfg)
 {
     if (!cfg) return ESP_ERR_INVALID_ARG;
     S.cfg = *cfg;
+    for (unsigned i = 0; i < HTTP_MAX_CONNS; i++) S.request[i].fd = -1;
     if (!S.cfg.port) S.cfg.port = 8000;
     if (!S.cfg.server_name) S.cfg.server_name = "sd-stream/1.0";
     if (!S.cfg.max_conns) S.cfg.max_conns = 4;

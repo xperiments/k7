@@ -13,7 +13,7 @@
 
 import { useSyncExternalStore } from 'react';
 
-import { DEVICE_ORIGIN } from '../config';
+import { DEVICE_NEEDS_PERMISSION, DEVICE_ORIGIN } from '../config';
 import { createLocalDevice, type LocalDevice } from './local';
 import { requestLocalNetwork } from './localNetwork';
 import { DeviceError, NO_LINK, type Device, type Link } from './transport';
@@ -126,10 +126,11 @@ export async function tryLocalConnect(): Promise<boolean> {
  * device directly.
  *
  * There is no window to open and no second path: a refusal is thrown so the caller can put
- * the reason in front of the user.
+ * the reason in front of the user. A development build is served from a LAN address the
+ * permission never gates, so it skips the request and goes straight to the probe.
  */
 export async function connectToDevice(): Promise<void> {
-  if (!(await requestLocalNetwork())) {
+  if (DEVICE_NEEDS_PERMISSION && !(await requestLocalNetwork())) {
     throw new DeviceError(
       'Local network access was not granted. Allow it for this site in Chrome, then press Connect again.',
       'blocked',

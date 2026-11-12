@@ -42,6 +42,10 @@ typedef struct {
     uint32_t    library_max_bytes;  /* 0 = the library's default (4 MiB) */
     uint32_t    library_max_tracks; /* 0 = the library's default (20000) */
     const char *server_name;  /* HTTP Server: header; NULL = the server's default */
+    /* The development App's origin, or NULL. A development firmware build sets it and the
+     * device then accepts either this origin or the deployed one in its CORS reply and its
+     * MCP guard. NULL (the shipping build and the host) trusts the deployed origin alone. */
+    const char *app_origin_dev;
     /* The remembered Playlist selection (id, 0 for none). NULL means this build
      * remembers none: the choice then lives until reboot. Wired to NVS by the
      * appliance, left NULL by the host. */

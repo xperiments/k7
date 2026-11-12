@@ -9,6 +9,7 @@
 # Only sdkconfig.defaults* is tracked, so a fresh checkout reconfigures from it.
 #
 #   sunton           the panel board (the one that ships)
+#   dev              the panel board, also trusting the development App's origin
 #   backlight-test   the visual backlight test
 #   dump             the screen dump build
 #   capture          the screen capture build
@@ -30,7 +31,7 @@ usage() {
   cat >&2 <<'USAGE'
 usage: ./tools/build.sh <variant> [build|flash|monitor|reconfigure|fullclean|release ...]
 
-variants: sunton, backlight-test, dump, capture, verify, headless, default
+variants: sunton, dev, backlight-test, dump, capture, verify, headless, default
 env:      IDF_EXPORT (default ~/esp/esp-idf-6.1/export.sh), K7_PORT
 USAGE
   exit 2
@@ -50,6 +51,11 @@ case "$variant" in
     build_dir="build/sunton"
     sdkconfig="sdkconfig.sunton"
     defaults="sdkconfig.defaults;sdkconfig.defaults.sunton"
+    ;;
+  dev)
+    build_dir="build/dev"
+    sdkconfig="sdkconfig.dev"
+    defaults="sdkconfig.defaults;sdkconfig.defaults.sunton;sdkconfig.defaults.dev"
     ;;
   backlight-test)
     build_dir="build/backlight-test"

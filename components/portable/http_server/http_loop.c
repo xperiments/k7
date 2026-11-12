@@ -17,6 +17,7 @@
 #include "http_transport.h"
 
 #include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -180,10 +181,13 @@ static void set_socket_options(int fd)
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
 }
 
-/* Reads, parses and routes one request. Closes the fd unless a route took it. */
-static void serve_connection(int fd)
+/* Reads, parses and routes one request. Closes the fd unless a route took it.
+ * `worker` is this connection worker's slot in the server's request-origin table: the
+ * reply names the request's own origin from it when the build trusts two App origins. */
+static void serve_connection(int fd, unsigned worker)
 {
     set_socket_options(fd);
+    http_server_request_origin(worker, fd, NULL);
 
     char buf[HTTP_HEADER_MAX];
     size_t n = 0;
@@ -217,6 +221,10 @@ static void serve_connection(int fd)
         close(fd);
         return;
     }
+
+    /* The reply to anything this request provokes names this Origin when the firmware
+     * trusts the development App as well as the deployed one. */
+    http_server_request_origin(worker, fd, req.origin);
 
     http_route_find_t how;
     const http_route_t *r = http_find_route(L.cfg.filter_by_listener, L.cfg.listener,
@@ -282,7 +290,11 @@ static void serve_connection(int fd)
         req.body_len = req.content_length;
     }
 
-    if (r->fn(fd, &req, r->ctx) != HTTP_UPGRADED) close(fd);
+    http_result_t result = r->fn(fd, &req, r->ctx);
+    /* Before the close: a closed fd can be accepted again before this line runs, and the
+     * clear would then erase the next request's origin. */
+    http_server_request_origin(worker, fd, NULL);
+    if (result != HTTP_UPGRADED) close(fd);
     free(body);
 }
 
@@ -324,12 +336,12 @@ static BaseType_t create_task(TaskFunction_t fn, const char *name, uint32_t stac
 /* One worker per slot, alive for the life of the process. */
 static void conn_worker(void *arg)
 {
-    (void)arg;
+    unsigned worker = (unsigned)(uintptr_t)arg;
     for (;;) {
         if (xSemaphoreTake(L.jobs, portMAX_DELAY) != pdTRUE) continue;
         int fd = L.queue[L.q_head];
         L.q_head = (L.q_head + 1) % HTTP_MAX_CONNS;
-        serve_connection(fd);
+        serve_connection(fd, worker);
         /* How close this worker came to its stack limit, as a running minimum, so
          * the periodic telemetry reports the worst path taken. */
         uint32_t left = (uint32_t)uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t);
@@ -405,7 +417,8 @@ esp_err_t http_loop_start(const http_server_cfg_t *cfg)
      * before there is something to serve it. If the pool cannot be created, this
      * fails here, at startup, instead of dropping requests later. */
     for (unsigned i = 0; i < L.cfg.max_conns; i++) {
-        if (create_task(conn_worker, "http_conn", CONN_TASK_STACK, NULL, 5, 1) != pdPASS) {
+        void *worker = (void *)(uintptr_t)i;
+        if (create_task(conn_worker, "http_conn", CONN_TASK_STACK, worker, 5, 1) != pdPASS) {
             ESP_LOGE(TAG, "no memory for connection worker %u of %u", i + 1, (unsigned)L.cfg.max_conns);
             return ESP_ERR_NO_MEM;
         }

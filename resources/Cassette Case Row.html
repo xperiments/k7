@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Cassette Case Row</title>
+    <style>
+      :root {
+        --W: 230px;
+        --H: 361px;
+        --D: 45px;
+        --G: 12px;
+        --bg: #444444;
+        --fg: #ececf0;
+        --muted: #8b8e98;
+      }
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme="dark"]) {
+          --bg: #444444;
+          --fg: #ececf0;
+          --muted: #b0b3ba;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          14px/1.4 system-ui,
+          sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        overflow: hidden;
+      }
+
+      /* ---------- stage / row ---------- */
+      .stage {
+        position: relative;
+        width: min(100vw, 900px);
+        height: 440px;
+        perspective: 1200px;
+        touch-action: pan-y;
+        user-select: none;
+        cursor: grab;
+      }
+      #row {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        transform-style: preserve-3d;
+      }
+      .item {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 0;
+        height: 0;
+        transform-style: preserve-3d;
+      }
+      .ready .item {
+        transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
+      /* ---------- case (3D box) ---------- */
+      .case {
+        position: absolute;
+        left: calc(var(--W) / -2);
+        top: calc(var(--H) / -2);
+        width: var(--W);
+        height: var(--H);
+        transform-style: preserve-3d;
+        transform: rotateY(90deg); /* not selected: spine faces viewer */
+        transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+        cursor: pointer;
+      }
+      .case.active {
+        transform: rotateY(0deg);
+      } /* selected: front cover faces viewer */
+
+      .face {
+        position: absolute;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+      }
+      .front {
+        left: 0;
+        top: 0;
+        width: var(--W);
+        height: var(--H);
+        transform: translateZ(calc(var(--D) / 2));
+        border-radius: 4px;
+        overflow: hidden;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+      }
+      .back {
+        left: 0;
+        top: 0;
+        width: var(--W);
+        height: var(--H);
+        transform: rotateY(180deg) translateZ(calc(var(--D) / 2));
+        border-radius: 4px;
+        background: hsl(var(--hue) 20% 14%);
+      }
+      .side {
+        top: 0;
+        width: var(--D);
+        height: var(--H);
+        left: calc((var(--W) - var(--D)) / 2);
+      }
+      .right {
+        transform: rotateY(90deg) translateZ(calc(var(--W) / 2));
+        background: linear-gradient(
+          90deg,
+          hsl(var(--hue) 30% 18%),
+          hsl(var(--hue) 30% 30%),
+          hsl(var(--hue) 30% 18%)
+        );
+      }
+      .left {
+        transform: rotateY(-90deg) translateZ(calc(var(--W) / 2));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+      .spine-text {
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+        font:
+          700 13px/1 system-ui,
+          sans-serif;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        color: #f5efdf;
+      }
+
+      /* ---------- cover contents ---------- */
+      .cover {
+        position: absolute;
+        inset: 0;
+        padding: 22px;
+        display: flex;
+        flex-direction: column;
+        color: #fff;
+      }
+      .ring-art {
+        display: none;
+      }
+      .artist {
+        font:
+          600 11px/1 system-ui,
+          sans-serif;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        opacity: 0.9;
+      }
+      .title {
+        margin-top: auto;
+        font:
+          700 30px/1.05 Georgia,
+          serif;
+        text-wrap: balance;
+      }
+      .rule {
+        display: block;
+        height: 2px;
+        width: 56px;
+        background: #fff;
+        margin: 14px 0 10px;
+        opacity: 0.85;
+      }
+      .meta {
+        font:
+          600 11px/1.3 system-ui,
+          sans-serif;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        opacity: 0.8;
+      }
+
+      /* ---------- cover templates ---------- */
+      /* 1: classic gradient with ring motif */
+      .tpl-1 {
+        background: linear-gradient(
+          160deg,
+          hsl(var(--hue) 65% 58%),
+          hsl(var(--hue) 55% 30%)
+        );
+      }
+      .tpl-1 .ring-art {
+        position: absolute;
+        right: -50px;
+        top: 110px;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        display: block;
+        border: 2px solid rgba(255, 255, 255, 0.22);
+        box-shadow:
+          0 0 0 22px rgba(255, 255, 255, 0.05),
+          0 0 0 44px rgba(255, 255, 255, 0.04);
+      }
+      /* 2: colour bands with cream band and boxed title */
+      .tpl-2 {
+        background: linear-gradient(
+          180deg,
+          hsl(var(--hue) 70% 55%) 0 30%,
+          #f5efdf 30% 70%,
+          hsl(var(--hue) 60% 25%) 70% 100%
+        );
+      }
+      .tpl-2 .title {
+        align-self: flex-start;
+        color: #111;
+        background: #f5efdf;
+        padding: 4px 8px;
+        font:
+          800 28px/1.05 system-ui,
+          sans-serif;
+        text-transform: uppercase;
+      }
+      /* 3: minimal off-white with bold type and colour rule */
+      .tpl-3 {
+        background: #f4f1ea;
+      }
+      .tpl-3 .cover {
+        color: #111;
+      }
+      .tpl-3 .title {
+        font:
+          800 34px/1 system-ui,
+          sans-serif;
+        letter-spacing: -0.02em;
+        text-transform: uppercase;
+      }
+      .tpl-3 .rule {
+        width: 100%;
+        height: 8px;
+        background: hsl(var(--hue) 80% 50%);
+        margin: 14px 0 10px;
+        opacity: 1;
+      }
+      .tpl-3 .artist,
+      .tpl-3 .meta {
+        opacity: 0.7;
+      }
+      /* 4: retro sunburst with cream title */
+      .tpl-4 {
+        background: repeating-conic-gradient(
+          from 0deg at 50% 35%,
+          hsl(var(--hue) 70% 52%) 0 12deg,
+          hsl(var(--hue) 70% 40%) 12deg 24deg
+        );
+      }
+      .tpl-4 .title {
+        align-self: flex-start;
+        background: #f5efdf;
+        color: #222;
+        padding: 6px 10px;
+        border-radius: 10px;
+        font:
+          italic 700 30px/1.05 Georgia,
+          serif;
+      }
+      .tpl-4 .meta {
+        align-self: flex-start;
+        background: #222;
+        color: #f5efdf;
+        padding: 3px 6px;
+        border-radius: 3px;
+      }
+      /* 5: dark grid with bold sans title and accent bar */
+      .tpl-5 {
+        background-color: #151518;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+        background-size: 22px 22px;
+      }
+      .tpl-5 .title {
+        font:
+          800 34px/1 system-ui,
+          sans-serif;
+        text-transform: uppercase;
+        letter-spacing: -0.01em;
+      }
+      .tpl-5 .rule {
+        width: 100%;
+        height: 12px;
+        background: hsl(var(--hue) 90% 60%);
+        margin: 14px 0 10px;
+      }
+      .tpl-5 .artist {
+        color: hsl(var(--hue) 90% 72%);
+      }
+
+      /* ---------- spine styles ---------- */
+      /* a: solid tinted spine */
+      .spn-1 {
+        background: hsl(var(--hue) 40% 24%);
+      }
+      .spn-1 .spine-text {
+        color: #f5efdf;
+      }
+      /* b: spine with cream label patch */
+      .spn-2 {
+        background: hsl(var(--hue) 30% 16%);
+      }
+      .spn-2 .spine-text {
+        background: #f5efdf;
+        color: #222;
+        padding: 6px 3px;
+        border-radius: 2px;
+      }
+      /* c: diagonal stripes with black label */
+      .spn-3 {
+        background: repeating-linear-gradient(
+          45deg,
+          hsl(var(--hue) 60% 42%) 0 6px,
+          hsl(var(--hue) 60% 30%) 6px 12px
+        );
+      }
+      .spn-3 .spine-text {
+        background: #111;
+        color: #fff;
+        padding: 6px 3px;
+      }
+      /* d: near-black spine with coloured text */
+      .spn-4 {
+        background: #16161a;
+      }
+      .spn-4 .spine-text {
+        color: hsl(var(--hue) 85% 66%);
+      }
+
+      /* ---------- frame + sheen ---------- */
+      .frame {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        border: 6px solid #151518;
+        border-radius: 6px;
+        box-shadow:
+          inset 0 0 0 1px #c9ced4,
+          inset 0 0 0 2px rgba(255, 255, 255, 0.35),
+          0 0 0 1px #c9ced4;
+      }
+      .sheen {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(
+          115deg,
+          rgba(255, 255, 255, 0.28) 0%,
+          rgba(255, 255, 255, 0) 38%,
+          rgba(255, 255, 255, 0) 68%,
+          rgba(255, 255, 255, 0.14) 100%
+        );
+      }
+
+      /* ---------- controls ---------- */
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      button {
+        background: none;
+        border: 1px solid var(--muted);
+        color: var(--fg);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        font-size: 20px;
+        cursor: pointer;
+      }
+      #label {
+        min-width: 260px;
+        text-align: center;
+        font-weight: 600;
+      }
+      #label span {
+        display: block;
+        font-weight: 400;
+        color: var(--muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="stage" id="stage" aria-label="Cassette case row">
+      <div id="row"></div>
+    </main>
+
+    <div class="controls">
+      <button id="prev" aria-label="Previous case">&#8249;</button>
+      <div id="label"></div>
+      <button id="next" aria-label="Next case">&#8250;</button>
+    </div>
+
+    <script>
+      // tpl: cover template 1-5, spn: spine style 1-4
+      const CASES_BASE = [
+        {
+          title: "Night Drive",
+          artist: "Neon Harbor",
+          hue: 12,
+          tpl: 1,
+          spn: 1,
+        },
+        {
+          title: "Sunday Tapes",
+          artist: "Mara Vidal",
+          hue: 200,
+          tpl: 3,
+          spn: 2,
+        },
+        { title: "Lo-Fi Vol. 2", artist: "Various", hue: 280, tpl: 4, spn: 3 },
+        {
+          title: "Analog Dreams",
+          artist: "Ilse Korr",
+          hue: 150,
+          tpl: 2,
+          spn: 4,
+        },
+        { title: "Side Project", artist: "K. Ando", hue: 40, tpl: 5, spn: 1 },
+        { title: "Dub Plate 04", artist: "Sub Halo", hue: 330, tpl: 3, spn: 3 },
+        {
+          title: "Midnight FM",
+          artist: "Radio Varo",
+          hue: 210,
+          tpl: 4,
+          spn: 2,
+        },
+        { title: "Glass Coast", artist: "Ola Brenn", hue: 90, tpl: 1, spn: 4 },
+        { title: "Heat Wave", artist: "Tessa Lund", hue: 0, tpl: 2, spn: 2 },
+        {
+          title: "Quiet Engine",
+          artist: "Ruben Ito",
+          hue: 180,
+          tpl: 5,
+          spn: 3,
+        },
+      ];
+
+      // Keep in sync with the CSS variables above
+      const W = 230,
+        D = 45,
+        G = 12;
+      // Extra cases are generated so the row holds 50 in total
+      const CASES = [...CASES_BASE];
+      const TITLES = [
+        "Blue Hour",
+        "Tape Loop",
+        "Neon Rain",
+        "Static Sun",
+        "Afterglow",
+        "Velvet Road",
+        "Paper Moon",
+        "Low Tide",
+        "Glass Fields",
+        "Half Light",
+        "Orbit Club",
+        "Slow Motion",
+        "Cold Signal",
+        "Sugar Engine",
+        "Night Market",
+        "Dust Radio",
+        "Silver Lines",
+        "Open Window",
+        "Hi-Fi Ghost",
+        "Warm Static",
+      ];
+      const ARTISTS = [
+        "Kiyo Arai",
+        "Lena Moor",
+        "Dune Club",
+        "Pilar Sol",
+        "Tom Vance",
+        "Ines Rey",
+        "Hollow Pines",
+        "Marco Liu",
+        "Vesna K.",
+        "Eli Brandt",
+      ];
+      for (let i = CASES_BASE.length; i < 50; i++) {
+        CASES.push({
+          title: `${TITLES[i % TITLES.length]} ${String(i + 1).padStart(2, "0")}`,
+          artist: ARTISTS[i % ARTISTS.length],
+          hue: (i * 47) % 360,
+          tpl: (i % 5) + 1,
+          spn: (Math.floor(i / 5) % 4) + 1,
+        });
+      }
+      const N = CASES.length;
+
+      const stage = document.getElementById("stage");
+      const row = document.getElementById("row");
+      const label = document.getElementById("label");
+      const items = [];
+
+      let current = 0;
+      let startX = null;
+
+      // Build the row
+      CASES.forEach((c, i) => {
+        const item = document.createElement("div");
+        item.className = "item";
+        item.innerHTML = `
+    <div class="case" style="--hue:${c.hue}">
+      <div class="face front tpl-${c.tpl}">
+        <div class="cover">
+          <span class="ring-art"></span>
+          <span class="artist">${c.artist}</span>
+          <span class="title">${c.title}</span>
+          <span class="rule"></span>
+          <span class="meta">Side A &middot; Side B</span>
+        </div>
+        <span class="frame"></span>
+        <span class="sheen"></span>
+      </div>
+      <div class="face back"></div>
+      <div class="face side right"></div>
+      <div class="face side left spn-${c.spn}">
+        <span class="frame"></span>
+        <span class="spine-text">${c.title} &middot; ${c.artist}</span>
+      </div>
+    </div>`;
+        item.querySelector(".case").addEventListener("click", () => select(i));
+        row.appendChild(item);
+        items.push(item);
+      });
+
+      // Position every case relative to the current one: the selected case sits
+      // in the centre at full width, the others are lined up as spines either side.
+      function layout() {
+        CASES.forEach((c, i) => {
+          const d = i - current;
+          let x = 0;
+          if (d !== 0) {
+            const k = Math.abs(d) - 1;
+            const x0 = W / 2 + G + k * (D + G) + D / 2;
+            x = d > 0 ? x0 : -x0;
+          }
+          const z = -Math.min(Math.abs(d), 8) * 60;
+          items[i].style.transform = `translate3d(${x}px, 0, ${z}px)`;
+          items[i].style.display = Math.abs(d) > 10 ? "none" : "";
+          items[i].querySelector(".case").classList.toggle("active", d === 0);
+        });
+        const c = CASES[current];
+        label.innerHTML = `${c.title}<span>${c.artist}</span>`;
+      }
+
+      function select(i) {
+        current = ((i % N) + N) % N;
+        layout();
+      }
+
+      layout();
+      requestAnimationFrame(() => document.body.classList.add("ready"));
+
+      // Buttons
+      document
+        .getElementById("prev")
+        .addEventListener("click", () => select(current - 1));
+      document
+        .getElementById("next")
+        .addEventListener("click", () => select(current + 1));
+
+      // Keyboard
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight") select(current + 1);
+        if (e.key === "ArrowLeft") select(current - 1);
+      });
+
+      // Drag / swipe
+      stage.addEventListener("pointerdown", (e) => {
+        startX = e.clientX;
+      });
+      window.addEventListener("pointerup", (e) => {
+        if (startX === null) return;
+        const dx = e.clientX - startX;
+        startX = null;
+        if (Math.abs(dx) > 40) select(current + (dx < 0 ? 1 : -1));
+      });
+    </script>
+  </body>
+</html>

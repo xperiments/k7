@@ -748,7 +748,7 @@
     {
       "id": "LK-07",
       "title": "The K7 look is verified and reported",
-      "state": "review",
+      "state": "done",
       "group": "LK",
       "deps": ["LK-04", "LK-05", "LK-06"],
       "yolo": true,
@@ -776,8 +776,9 @@
     {
       "id": "LK-08",
       "title": "The look gets a primary and a secondary",
-      "state": "proposed",
+      "state": "done",
       "group": "LK",
+      "yolo": true,
       "at": "2026-11-11T15:36:57Z",
       "by": "dsh",
       "desc": "Orange stays the primary — the brand tile, chips, the active segments (Carousel/Drive, mood pills), the primary actions' border and text (not a fill), the scrollbar and the focus ring. A light neutral becomes the secondary — body text, control outlines, panel borders, muted text, and the active nav dome. The device's setup page at /setup carries the same palette by hand, and the Site's hero and install sections follow through the shared tokens. This supersedes ADR 0080's one-hue premise with ADR 0081.",
@@ -791,17 +792,145 @@
           "at": "2026-11-11T15:54:07Z",
           "by": "dsh",
           "text": "The accent buttons are outlines now, not fills."
+        },
+        {
+          "at": "2026-11-11T22:10:20Z",
+          "by": "dsh",
+          "text": "Checking the tree against the task: the palette split (52444f0), the setup page and the Site (b321b67), and the accent-outline change (0c379f7) are committed. Running check:look, typecheck, tests, build and the host checks before handing it to review."
+        },
+        {
+          "at": "2026-11-11T22:11:03Z",
+          "by": "dsh",
+          "text": "The look is now two tones, and the tree already carries it. Orange is the primary: the brand tile, chips, the current segment, a primary action's border and text, the scrollbar and the focus ring. A neutral ink is the secondary: text, control outlines, panel lines, muted text, and the rail's current dome. ADR 0081 supersedes ADR 0080's one-hue rule; k7-look.md K1/K7/K14/K17 and the token table carry the split. The device's /setup page carries the same tokens by hand in its inline CSS, and the Site's hero, flash and install sections follow through the shared tokens.\n\nVerified now: check:look 0 across (colour, palette, decoration, shape, image), typecheck, 466 tests, production build, and make -C host check (87 integration checks plus setup and label, 0 failures).\n\nWhat to check: the App's four areas and the Site on the new palette, then /setup on the board. Caveat: the setup page's palette has only been host-served — no board has been flashed with this build, so its panel rendering is not board-proven. The LK-07 report's one-hue numbers are superseded; its note says so."
         }
       ]
     },
     {
       "id": "LB-03",
       "title": "The label editor is proven to boot before it is used",
-      "state": "proposed",
+      "state": "done",
       "group": "LB",
+      "yolo": true,
       "at": "2026-11-11T20:18:31Z",
       "by": "agent",
-      "desc": "The canvas builder is one 4,400-line self-contained page with no test at all. 905313d left a const below the first call that reads it, so the page threw at load and painted nothing — no stage, no layers, no simulated slot values — and every host check stayed green. This proposes the missing seam: a headless-Chrome smoke check (the page is opened with a fresh profile, the stage must render and the default slot values must be on it) run by `make -C host label`, skipping loudly when no Chrome is installed. Done when the check fails on 905313d and passes on 365ed8f."
+      "desc": "The canvas builder is one 4,400-line self-contained page with no test at all. 905313d left a const below the first call that reads it, so the page threw at load and painted nothing — no stage, no layers, no simulated slot values — and every host check stayed green. This proposes the missing seam: a headless-Chrome smoke check (the page is opened with a fresh profile, the stage must render and the default slot values must be on it) run by `make -C host label`, skipping loudly when no Chrome is installed. Done when the check fails on 905313d and passes on 365ed8f.",
+      "notes": [
+        {
+          "at": "2026-11-11T22:11:08Z",
+          "by": "dsh",
+          "text": "Checked 2026-11-11T23:12Z: the headless-Chrome boot check is not in the tree. `make -C host label` still runs only the packer selftest, the vocabulary check and t33, and 365ed8f's browser verification was a throwaway harness. The page fix is in, but the task's done criterion (fail on 905313d, pass on 365ed8f) is not met. Chrome is installed at /Applications/Google Chrome.app, so the check can be built and run. LB-03 stays ready."
+        },
+        {
+          "at": "2026-11-11T22:27:34Z",
+          "by": "dsh",
+          "text": "Plan: add a headless-Chrome boot check for resources/LVGL canvas builder.html that opens the page in a fresh profile, requires the stage and the default slot values in the rendered DOM, and runs from make -C host label. Verify it fails on 905313d's page and passes on 365ed8f's."
+        },
+        {
+          "at": "2026-11-11T22:30:47Z",
+          "by": "dsh",
+          "text": "The canvas builder now has a boot check, and `make -C host label` runs it. The page is opened in headless Chrome with a fresh profile and the check requires what the boot paints: the tabs, the layer list, the stage's objects and the default slot values on the stage. A page that throws before the tail of its own script leaves all of them empty, which is exactly what 905313d did.\n\nVerified:\n- On 365ed8f's page and on HEAD it passes: stage 4 objects, 5 layers, 1 tab, with \"Neon Skyline\" and \"124\" on the stage.\n- On 905313d's page it fails with exit 1: 0 tabs, 0 layers, 0 objects, no values.\n- With no Chrome (`CHROME=/nonexistent/chrome`) it prints `SKIP label page: …` and exits 0, so a machine without a browser is not a failed host check.\n- `make -C host check` is green, including the new step (87 integration checks, the label sheet, t33 and the boot check).\n\nWhat changed: `host/tests/label_boot_tests.py` (new) and the `label` target in `host/Makefile`; the target's comment now names this seam beside the reader's. No board work and no spec change.\n\nTo check: run `make -C host label` on a machine with Chrome, or `python3 host/tests/label_boot_tests.py` to see the five assertions. CI without Chrome skips the step; the guard runs where a browser exists."
+        }
+      ]
+    },
+    {
+      "id": "SI-07",
+      "title": "The development origin reaches the player as a second trusted origin",
+      "state": "done",
+      "group": "SI",
+      "yolo": true,
+      "at": "2026-11-11T21:52:59Z",
+      "by": "dsh",
+      "desc": "Chosen: the player trusts `https://k7-dev.xperiments.dev:8000` as a second origin, but only in a development firmware build. The shipping firmware keeps its one origin.\n\nWhy it does not work today, both checked against the board at k7.local:\n\n- The player's CORS answer names only `https://k7.xperiments.dev`, so Chrome refuses to read the response from the dev origin.\n- The dev origin is itself a LAN address, so Chrome never asks for the `local-network` permission there. The App's permission gate cannot be answered on a LAN-served page.\n\nWhat changes:\n\n- A new `CONFIG_K7_TRUST_DEV_ORIGIN` (default off) adds the dev origin to the device's CORS reply and MCP origin guard. The device echoes the request's own `Origin` when it is one of the two it trusts. A shipping build still names one origin.\n- `tools/build.sh dev` builds the panel variant plus that option, so a board can be flashed for development without changing the shipping variant.\n- A development App build (`npm run dev`) does not put the App behind the permission gate, because a page served from the LAN is not a local network request (LNA §2.2). The shipping App keeps the gate.\n\nDone means:\n\n- `./tools/build.sh dev build flash` puts the development firmware on the board.\n- From https://k7-dev.xperiments.dev:8000/app, the chip says Connected · k7.local, the card, playlists and library load, and the stream plays.\n- `curl -H 'Origin: https://k7-dev.xperiments.dev:8000' http://k7.local/api/status` answers `Access-Control-Allow-Origin` with the dev origin, and `/mcp` accepts the same origin. A shipping-firmware build still answers only the production origin.\n- `make -C host check` and `npm run typecheck && npm test && npm run build` are green; the built App still names `k7.local` and the permission gate.\n- The deploy spec and ADR 0082 record the development-only trust and the App build that skips the gate.",
+      "notes": [
+        {
+          "at": "2026-11-11T22:11:27Z",
+          "by": "dsh",
+          "text": "Plan: (1) the device's CORS reply and MCP guard accept the dev origin when cfg->app_origin_dev is set, echoing the request's own Origin; (2) CONFIG_K7_TRUST_DEV_ORIGIN plus a tools/build.sh dev variant and host coverage; (3) the development App build skips the permission gate; (4) k7-deploy/k7-app amendments and ADR 0082; (5) host + web checks, flash the dev build and prove the dev origin end to end."
+        },
+        {
+          "at": "2026-11-11T22:25:31Z",
+          "by": "dsh",
+          "text": "Progress: the dev firmware is built and flashed (`./tools/build.sh dev build flash`). The board now answers `Access-Control-Allow-Origin: https://k7-dev.xperiments.dev:8000` with `Vary: Origin` for the dev origin, the deployed origin for the production App, and the deployed origin for an unknown origin; `/mcp` accepts the dev and deployed origins (200) and refuses an unknown one (403). The development App at https://k7-dev.xperiments.dev:8000/app mounts without the permission gate and shows the player's broadcast ('02 - Joaquin el Necio' / the player's broadcast) in a headless-Chrome screenshot. Host check green, including the new origin_tests.py; web typecheck, 468 tests and build green; the shipping artifact carries the gate, http://k7.local and no dev origin. One pre-existing failure noted: check-artifact.mjs flags a Function(...) in the bundled taglib wrapper (present before this task, unrelated)."
+        },
+        {
+          "at": "2026-11-11T22:26:40Z",
+          "by": "dsh",
+          "text": "Connected development at https://k7-dev.xperiments.dev:8000/app now works against the board, and the shipping App and firmware are unchanged.\n\nWhat changed:\n- The device accepts a second App origin in a development firmware: `CONFIG_K7_TRUST_DEV_ORIGIN` (off by default, on in `sdkconfig.defaults.dev`). With it, the CORS reply names the request's own origin when it is the deployed or the dev one, carries `Vary: Origin`, and the MCP origin guard accepts both. `./tools/build.sh dev build flash` builds and flashes it; the `sunton` release never turns the option on.\n- The development App (`npm run dev`) no longer mounts the `local-network` gate. The dev origin is a LAN address, and LNA only gates public→local requests, so Chrome never asks there; `DEVICE_NEEDS_PERMISSION` is derived from `import.meta.env.MODE`. The shipping build keeps the gate.\n- ADR 0082 records the decision; k7-app A3/L2/L4/X2, k7-deploy §4 (D10–D12a, D14), web/CONTEXT's Local network entry and the README follow.\n\nVerified:\n- Board (dev firmware flashed): `/api/status` with `Origin: https://k7-dev…:8000` answers `Access-Control-Allow-Origin: https://k7-dev…:8000` and `Vary: Origin`; the deployed origin answers with its own; an unknown origin still gets the deployed one. `/mcp` accepts dev and deployed (200) and refuses an unknown origin (403).\n- The App at the dev origin in headless Chrome mounts without the gate and shows the player's broadcast (\"02 - Joaquin el Necio\" / \"The player's broadcast\") in the playback bar. Screenshot: /tmp/k7-dev-origin.png.\n- Host: `make -C host check` green, including a new `host/tests/origin_tests.py` that starts a shipping and a development server and checks both origins, the preflight and MCP. Web: typecheck, 468 tests, build green. The shipping artifact carries the gate and `http://k7.local` and no dev origin; the shipping firmware binary contains no `k7-dev` string (the dev binary does).\n\nTo check: open https://k7-dev.xperiments.dev:8000/app in Chrome — the dev server is running on :8000 — and confirm the chip/player data. The board is now on the development firmware; reflash the `sunton` variant before using it as a release board.\n\nOne finding outside this task, proposed as APP-03: `node scripts/check-artifact.mjs dist` already fails on a second, unpatched copy of the taglib wrapper (`taglib-wrapper-CPMuyZsC.js`) with a `Function(...)` call. The chunk hash is the same before and after this change, so it is pre-existing. Also, this Mac's first `.local` lookup can take ~5 s, so the very first status attempt from a fresh page can be slow; the App's 4 s status timeout may make it show no player until the next attempt or Connect."
+        }
+      ]
+    },
+    {
+      "id": "APP-03",
+      "title": "The shipping artifact carries only the patched TagLib wrapper",
+      "state": "done",
+      "group": "APP",
+      "at": "2026-11-11T22:26:02Z",
+      "by": "dsh",
+      "desc": "`node scripts/check-artifact.mjs dist` fails on `dist/assets/taglib-wrapper-CPMuyZsC.js`: a second copy of `taglib-wasm`'s wrapper reaches the bundle with a `Function(d,l)` call intact. The `taglibWithoutDynamicCode` plugin patches the module the App imports (`taglib-wrapper-CsjMkaOc.js`, 27.26 kB), and the vendor has exactly the two `new Function` sites `patchTaglibGlue` handles, so something loads a smaller, unpatched copy (26.41 kB) past the plugin. Under the origin's CSP that call is refused if that path runs, which is what the guard exists to catch.\n\nDone when `check-artifact` is clean and TagLib still initializes and writes tags. Note: this predates SI-07 — the chunk hash is the same before and after that change — so it is a separate defect, not a regression. The place to start is whatever imports the 26.41 kB copy: a worker, a `?url` asset, or a second entry.",
+      "notes": [
+        {
+          "at": "2026-11-11T22:31:01Z",
+          "by": "dsh",
+          "text": "Plan: find why a second taglib-wrapper copy reaches dist unpatched (worker vs main, URL asset, or a plugin id mismatch), patch or dedupe it, then require check-artifact clean while TagLib still initializes and the glue tests stay green."
+        },
+        {
+          "at": "2026-11-11T22:32:50Z",
+          "by": "dsh",
+          "text": "`check-artifact` is clean again, and the cause was the worker build.\n\nThe analysis worker imports `writeTrackMetadata`, so it bundles TagLib too — but the worker build did not run the App's `taglibWithoutDynamicCode` plugin. Its copy of the wrapper was the 26.41 kB chunk (`taglib-wrapper-CPMuyZsC.js` in `dist`) with the `createJsInvoker` `Function(d,l)` call intact, while the App's own copy was patched. The guard was right: that path would hit the CSP when the worker wrote tags.\n\nFix: `vite.config.ts` now gives the worker build the same plugin (`worker.plugins: () => [taglibWithoutDynamicCode()]`). Both wrapper chunks in `dist` are patched now; the worker's hash changed, the App's did not.\n\nVerified: `npm run build`; `npm run typecheck`; 468 tests, including `tests/taglib-glue.test.ts`, which stages the patched glue with the real `taglib-web.wasm`, initializes TagLib under a `Function` that only counts, and writes and reads tags; `node scripts/check-artifact.mjs dist` prints \"ok — 82 text files … no dynamic code in the bundles\" and exits 0. The dev origin is still absent from `dist`.\n\nWhat changed: `web/vite.config.ts` (the worker plugin) and a sentence in `web/src/audio/taglib-glue.ts` saying the transform runs in both builds. No board work.\n\nTo check: `node scripts/check-artifact.mjs dist`, and `ls dist/assets/taglib-wrapper-*` — two chunks, both without the unpatched invoker."
+        }
+      ]
+    },
+    {
+      "id": "LK-09",
+      "title": "A coverless album wears one of the cassette case's drawn covers",
+      "state": "done",
+      "group": "LK",
+      "yolo": true,
+      "at": "2026-11-11T22:52:50Z",
+      "by": "dsh",
+      "desc": "Every coverless face gets a drawn cover, not just the albums' — that is the scope you picked.\n\n`resources/Cassette Case Row.html` draws five cover faces: gradient with a ring motif, colour bands with a cream boxed title, off-white with a bold colour rule, a retro sunburst with a cream title, and a dark grid with an accent bar.\n\nPlan:\n- Extract the five faces into the coverflow's own rules (`index.css`, which the look check owns) and a small `AlbumArt` component: title and artist, the reference's \"Side A · Side B\" meta, a hue from the name (the same `hueOf` the case uses) and a template seeded from name + artist, so one thing always gets the same cover.\n- Use it wherever a picture is missing: the shelf's front face, the album card's 16:25 tile, the player bar's 30px mini case, and the Player area's square track cover. The image covers are untouched.\n- The text is drawn on the large faces and hidden under a container query at the mini's size, where the template's colour and pattern are what can read; the square cover uses the same faces, with the type scaling from its width.\n- Keep the case as it is: the spine, the `hueOf` case colours, the 3D geometry, the masks and the 300ms turn do not change. The drawn face is cover art inside the preserved case.\n- One sentence in `docs/specs/k7-look.md` §5.3 (K19) records that a coverless face is drawn and the case itself is preserved.\n\nDone means:\n- Every coverless face — shelf case, album card, player bar mini, Player square — shows one of the five, stable for the same title/artist; across a library all five are reachable.\n- The text reads on the large faces, hides at the mini's width, and the title clamps while the artist/meta truncate.\n- The five designs match the reference in structure, colour and typography at the shelf's 13rem case, the card's width and the Player's square.\n- `npm run check:look`, `npm run typecheck`, `npm test`, `npm run build`, and a visual preview of the five faces against the reference.",
+      "notes": [
+        {
+          "at": "2026-11-11T23:01:14Z",
+          "by": "dsh",
+          "text": "Plan: extract the five cassette cover faces into an AlbumArt component and the coverflow's CSS; use it wherever a picture is missing (shelf, album card, player bar mini, Player square); hide the text at the mini size with a container query; add the §5.3 sentence; verify with check:look, typecheck, tests, build and a preview of the five faces."
+        },
+        {
+          "at": "2026-11-11T23:06:38Z",
+          "by": "dsh",
+          "text": "Every coverless face now wears one of the cassette case reference's five drawn covers.\n\nWhat changed:\n- `web/src/ui/album-art.tsx` (new): the five faces, the title/artist/`Side A · Side B` meta, a hue from the title (the same `hueOf` the case uses) and a template seeded from title + artist, so one album keeps one face across the shelf, its card and the player.\n- `web/src/index.css`: the art and its five templates — gradient with a ring, colour bands with a cream box, off-white with a colour rule, a retro sunburst, a dark grid — at the reference's palette and proportions, sized in `cqw` from the face's width. A container query hides the words under 6rem (the 30px player bar case), where the colour and pattern still read.\n- Used wherever a picture is missing: the shelf's front (`album-shelf.tsx`), the album card (`Media.tsx`), the player bar's mini case (`PlayerBar.tsx`) and the Player's square track cover (`Player.tsx`). Image covers are untouched; the initial remains only where there is no title.\n- The case is unchanged: spine, `hueOf` colours, 3D geometry, masks and the 300ms turn. `k7-look.md` §5.3/K19 gets the sentence recording the drawn face.\n- `web/tests/album-art.test.ts` (new): the seed is stable, all five faces are reachable and the artist is part of the seed.\n\nVerified: `npm run check:look` 0 across; `npm run typecheck`; 472 tests; `npm run build`; `node scripts/check-artifact.mjs dist` clean. Visual: the five faces at shelf/card/Player/mini sizes, and the dev App's player bar now draws its case face (`/tmp/k7-cover-faces.png`, `/tmp/k7-dev-mini.png`).\n\nTo check: a coverless album on the shelf and in its card should show one of the five; the mini case should show the colour/pattern with no words; the selected case should still turn and read its spine as before. The reference's spine styles are not applied — the case and spine stay the K7 ones."
+        },
+        {
+          "at": "2026-11-11T23:11:00Z",
+          "by": "dsh",
+          "text": "Review feedback from the conversation: a case under the pointer now comes 2rem towards the reader — translateZ on the case, on its own 300ms curve. Both the active front and the spines lift; the row and the stage stay put. The spec §5.3 records it. Verified with a CDP hover: :hover is true on the spine and the spine is visibly nearer in the hover screenshot (/tmp/k7-shelf-hover.png against /tmp/k7-shelf-baseline.png)."
+        },
+        {
+          "at": "2026-11-11T23:20:33Z",
+          "by": "dsh",
+          "text": "Review feedback: the side cases now come 8rem towards the reader on hover — the 2rem preview left them too far back. The active front keeps its 2rem lift so it does not outgrow the stage, and the shelf carries 1.5rem of extra height so the lifted side's frame stays inside it. Spec §5.3 records the amounts. CDP hover screenshots: /tmp/k7-shelf-side-8.png (side in front of the active) and /tmp/k7-shelf-active-2.png (active, not clipped)."
+        },
+        {
+          "at": "2026-11-11T23:27:17Z",
+          "by": "dsh",
+          "text": "Second pass: the side lift stays at your 10rem; the shelf's camera now steps back from 90rem to 110rem while a case is hovered, on the same 300ms curve. With the 1.5rem extra shelf height the lifted side's bounding box is 451.4px inside a 453.7px stage — no clip — and the active front keeps its 2rem. Spec §5.3 updated. Preview: /tmp/k7-shelf-side-10-cam.png."
+        },
+        {
+          "at": "2026-11-11T23:30:49Z",
+          "by": "dsh",
+          "text": "Corrected on your point: the camera back is in Z, not a wider lens. The perspective stays 90rem; while a case is hovered the row translates -2rem in Z. The 10rem side then ends exactly at the shelf edge (453.73px in a 453.69px stage, sub-pixel), no cut, and the active's 4rem gives back its old 2rem of screen lift after the same row step. Spec §5.3 says 'the camera moves back in Z, not a wider lens'. Preview: /tmp/k7-shelf-side-10-zb.png. (A -10rem row step cancels the side's 10rem and pulls the active 8rem back, so 2rem is the amount the 1.5rem shelf needs.)"
+        },
+        {
+          "at": "2026-11-11T23:40:13Z",
+          "by": "dsh",
+          "text": "Prepared the separate left/right row turns. LEFT is a case before the active item; RIGHT is one after it. LEFT keeps the current translateZ(-10rem) rotateY(-15deg); RIGHT is a copy marked 'tune me'. The selectors read the row order with .k7-shelf-item:hover ~ .k7-shelf-item[data-active='true'] (and the reverse); the shelf item now carries data-active, because nested :has() is invalid — that is why the first split did nothing. The active case's own hover leaves the row still and lifts 4rem. The spec numbers stay untouched until the right transform is final; build and check:look pass. Verified: left and right both turn the row, the active does not."
+        },
+        {
+          "at": "2026-11-11T23:57:05Z",
+          "by": "dsh",
+          "text": "Hover flicker fix: the case's lift/brightness now hang off the shelf item's :hover, not the moving case's, and each item carries a stationary ::before rest footprint (spine width for sides, case width for the active) as a second hover target. The union of that rest box and the lifted case keeps the hover while the 3D face turns/rises; a quick pass no longer drops it. The left/right row transforms and the side/active lifts you tuned are untouched. Verified with a CDP walk across the spine, its rest edge and off it: the item and case stay hovered through the move. Spec §5.3 amounts remain as you left them; build/check:look/artifact guard pass."
+        }
+      ]
     }
   ]
 }

@@ -30,6 +30,10 @@ typedef struct {
      * reach k7.local at all — so its requests never match the device's own Host and the
      * same-origin rule would refuse the App that exists to talk to this device. */
     const char *app_origin;
+    /* The development App's origin, or NULL. A development firmware build sets it and the
+     * guard accepts either origin; a shipping build leaves it NULL and accepts the
+     * deployed one alone. */
+    const char *dev_origin;
     mcp_rescan_fn rescan;     /* control builds only; may be NULL */
     uint16_t port;            /* the HTTP port; 0 means 8000 */
     /* The measurements this device holds, or NULL. `snapshot_state` explains a

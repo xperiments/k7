@@ -58,6 +58,10 @@ no such API, gets a wall with instructions, never a fallback. The wall also poin
 flash section for a person who has no player yet
 ([`k7-site.md`](./k7-site.md) S7).
 
+A development build is the one exception: it is served from the LAN, where the permission is
+not what gates a device request (LNA §2.2), so it mounts without the gate rather than waiting
+on an answer Chrome will never ask for. The shipping build always gates (ADR 0082).
+
 ---
 
 ## 2. Origins and trust
@@ -66,8 +70,10 @@ flash section for a person who has no player yet
 port, not another host. Reached at `http://192.168.0.13`, the App's gate says the device needs
 `k7.local`.
 
-**L2. The permission is per origin.** `https://k7.xperiments.dev` and the development origin are
-two grants; a preview deployment is a third and is never given one.
+**L2. The permission is per origin.** `https://k7.xperiments.dev` is the origin that holds the
+grant; a preview deployment is another origin and is never given one. The development origin is
+served from the LAN, where the permission does not apply: its build mounts without it (ADR
+0082).
 
 **L3. The device's name is `k7.local`.** The mDNS hostname is one string in
 [`appliance.c`](../../components/app/appliance/appliance.c). An unrenamed board serves nothing at
@@ -76,6 +82,8 @@ two grants; a preview deployment is a third and is never given one.
 **L4. A development origin is a build input, never a runtime fact.**
 `https://k7-dev.xperiments.dev:8000` — the port included, because an origin includes the port —
 is what a development build is served from; a shipping build refuses it (§9, [`k7-deploy.md`](./k7-deploy.md)).
+A development build also compiles the permission gate off, and a development firmware trusts
+that origin beside the deployed one (ADR 0082); neither is selected at runtime.
 
 **L5. The App is a public page.** Anyone may load it. That is safe because the App holds no
 credential and can reach nothing on its own: a device request needs the `local-network` grant,
@@ -266,7 +274,9 @@ The device's trust rules are in §2 (`k7-deploy.md` D3, D14). What the App adds:
 no component knows an origin.
 
 **X2.** The App fetches `http://k7.local` and nothing else. The `local-network` grant is the
-only thing that lets it, and the device's CORS headers are what make the answer readable.
+only thing that lets it, and the device's CORS headers are what make the answer readable. A
+development firmware also names the development origin in those headers; the deployed App
+never asks for it and never sees it (ADR 0082).
 
 **X3.** No `COOP: same-origin` on any App response. It would make the document cross-origin
 isolated and change what the CDN's weights may load — a separate decision (`k7-deploy.md` D7),

@@ -39,5 +39,12 @@ tls/*.csr
 # build and the screen use; the .psd stays on the machine that draws it.
 assets/labels/*.psd
 
+# The cassette-cover sources are the same 27 MB of binaries; the drawn covers are code now
+# (album-art.tsx), so the .psd stays on the machine that draws it too.
+resources/*.psd
+
+# The local agent's Kanvas skill is installed, not vendored (the project's is in .agents/).
+.claude/
+
 # The ReUI agent skill is installed by its own installer and updated there, not vendored.
 .agents/

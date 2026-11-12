@@ -2,7 +2,8 @@
  * TagLib's WebAssembly glue, made loadable under this App's Content Security Policy.
  *
  * This is a **build-time** transform, applied by `vite.config.ts` to
- * `taglib-wasm/dist/taglib-wrapper.js` before it is bundled. It has to be build-time: the
+ * `taglib-wasm/dist/taglib-wrapper.js` before it is bundled — in the App's build and in the
+ * analysis worker's, because the worker imports the tag writer. It has to be build-time: the
  * glue is imported as part of the shell, not fetched as a weight, so there is no text to
  * rewrite at run time the way `weights/essentia-glue.ts` does.
  *

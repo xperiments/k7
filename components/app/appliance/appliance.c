@@ -41,6 +41,16 @@
 #define STATION_NAME "ESP32 Radio"
 #define HTTP_PORT    80
 
+/* A development firmware accepts the App served from the dev origin as well as the
+ * deployed one: the CORS reply and the MCP guard then name whichever of the two made the
+ * request (app_services.c, http_server.c, mcp.c). A release leaves the option off and the
+ * binary carries the deployed origin alone. See docs/adr/0082. */
+#if CONFIG_K7_TRUST_DEV_ORIGIN
+#define DEV_APP_ORIGIN "https://k7-dev.xperiments.dev:8000"
+#else
+#define DEV_APP_ORIGIN NULL
+#endif
+
 /* A card that will not mount is the most likely fault this hardware has, so a
  * failed mount is not fatal: the device stays on the network and retries. */
 
@@ -210,6 +220,7 @@ void appliance_run(void)
          * connection worker as soon as it is registered. */
         .max_clients = 4,
         .max_conns = 4,
+        .app_origin_dev = DEV_APP_ORIGIN,
         .selection_load = selection_load,
         .selection_save = selection_save,
     };

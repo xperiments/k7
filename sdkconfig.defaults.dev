@@ -1,0 +1,5 @@
+# The development board accepts the App served at
+# https://k7-dev.xperiments.dev:8000 besides the deployed one, so connected mode can be
+# developed against the panel (tools/build.sh dev; docs/adr/0082). The sunton variant, which
+# ships, does not include this file and trusts the deployed origin alone.
+CONFIG_K7_TRUST_DEV_ORIGIN=y

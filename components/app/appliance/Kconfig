@@ -1,0 +1,16 @@
+menu "K7 appliance"
+
+config K7_TRUST_DEV_ORIGIN
+    bool "Trust the development App origin as well"
+    default n
+    help
+      A development firmware build accepts the App served at
+      https://k7-dev.xperiments.dev:8000 besides the deployed one at
+      https://k7.xperiments.dev: its CORS reply and its MCP origin guard
+      name whichever of the two made the request.
+
+      Turn this on only for a board you develop against. A release is built
+      from the sunton variant, which leaves it off, so a shipped binary
+      carries the deployed origin alone (docs/adr/0082).
+
+endmenu
