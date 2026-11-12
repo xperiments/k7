@@ -34,7 +34,10 @@ import { plural } from './format';
 const WINDOW = 10;
 /** A case turns only after the pointer has rested on it this long: sweeping the row should
  *  not make every case it passes stop and turn. */
-const HOVER_DELAY = 90;
+const HOVER_DELAY = 200;
+/** How long a turn is held after the pointer leaves, so crossing the gap between two cases
+ *  does not swing the shelf back to straight in between. */
+const HOVER_OUT_DELAY = 260;
 /** The same geometry as `--cw`, `--cd`, `--cg` and the selected gap in `index.css`, in rem:
  *  the selected case's neighbour, then each spine after it. */
 const FIRST_STEP = 9.7;
@@ -89,8 +92,17 @@ export function AlbumShelf({
    * not the case's own :hover: the case turns and rises while the pointer stays put, and a
    * hover that moved with the 3D box would keep dropping out from under the pointer. */
   const [hovered, setHovered] = useState<number | null>(null);
-  /* The pending hover: set on pointer-enter, fired after the dwell, dropped on leave. */
-  const hoverTimer = useRef<number | null>(null);
+  /* The pending turn and the pending release: a case is turned on dwell, and held across a
+   *  short leave so moving to its neighbour does not pass through "nothing hovered". */
+  const hoverIn = useRef<number | null>(null);
+  const hoverOut = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (hoverIn.current !== null) window.clearTimeout(hoverIn.current);
+      if (hoverOut.current !== null) window.clearTimeout(hoverOut.current);
+    },
+    [],
+  );
   useLayoutEffect(() => {
     const el = section.current;
     const parent = el?.parentElement;
@@ -300,18 +312,26 @@ export function AlbumShelf({
                   onPointerDown={distance === 0 ? beginDrag : undefined}
                   onPointerEnter={() => {
                     if (dragStart.current !== null) return;
-                    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
-                    hoverTimer.current = window.setTimeout(() => {
-                      hoverTimer.current = null;
+                    if (hoverIn.current !== null) window.clearTimeout(hoverIn.current);
+                    if (hoverOut.current !== null) {
+                      window.clearTimeout(hoverOut.current);
+                      hoverOut.current = null;
+                    }
+                    hoverIn.current = window.setTimeout(() => {
+                      hoverIn.current = null;
                       setHovered(index);
                     }, HOVER_DELAY);
                   }}
                   onPointerLeave={() => {
-                    if (hoverTimer.current !== null) {
-                      window.clearTimeout(hoverTimer.current);
-                      hoverTimer.current = null;
+                    if (hoverIn.current !== null) {
+                      window.clearTimeout(hoverIn.current);
+                      hoverIn.current = null;
                     }
-                    setHovered((current) => (current === index ? null : current));
+                    if (hoverOut.current !== null) window.clearTimeout(hoverOut.current);
+                    hoverOut.current = window.setTimeout(() => {
+                      hoverOut.current = null;
+                      setHovered((current) => (current === index ? null : current));
+                    }, HOVER_OUT_DELAY);
                   }}
                   onClick={() => {
                     if (dragged.current) {
