@@ -370,36 +370,14 @@
         transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
-    /* The pointer's targets sit in a flat layer at the cases' rest places, outside the
-       row's hover transform. The row and cases animate above them; the pointer never has
-       to follow a moving 3D box, so a hover cannot cancel itself mid-turn. */
-    .k7-shelf-hits {
-        position: absolute;
-        inset: 0;
-        transform-style: preserve-3d;
-        pointer-events: none;
-    }
-
-    .k7-shelf-hit {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: var(--cd);
-        height: var(--ch);
-        margin-left: calc(var(--cd) / -2);
-        margin-top: calc(var(--ch) / -2);
-        pointer-events: auto;
-    }
-
-    .k7-shelf-hit[data-active='true'] {
-        width: var(--cw);
-        margin-left: calc(var(--cw) / -2);
-        cursor: grab;
-    }
-
-    /* A drag begins only on the central case; the side spines are click targets. */
-    .k7-shelf-hit:not([data-active='true']) {
+    /* The case is the pointer's target now; a drag begins only on the central one, the
+       side spines are click targets. */
+    .k7-case {
         cursor: pointer;
+    }
+
+    .k7-case[data-active='true'] {
+        cursor: grab;
     }
 
     /* The case itself: a spine until it is selected, then a front cover. */
@@ -755,7 +733,7 @@
            from the flat hit layer (data-hover-side), never from the case's own :hover. */
         .k7-shelf[data-hover-side='left'] .k7-shelf-row {
             /* LEFT of the active case */
-            transform: translateX(0rem) translateZ(-1rem) rotateY(-25deg);
+            transform: translateX(0rem) translateZ(0rem) rotateY(-30deg);
         }
         .k7-shelf[data-hover-side='right'] .k7-shelf-row {
             /* RIGHT of the active case */

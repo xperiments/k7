@@ -254,6 +254,29 @@ export function AlbumShelf({
                   data-active={activeCase}
                   data-hover={hovered === index}
                   style={{ transform: placeAt(distance) }}
+                  onPointerEnter={() => {
+                    if (dragStart.current !== null) return;
+                    if (hoverIn.current !== null) window.clearTimeout(hoverIn.current);
+                    if (hoverOut.current !== null) {
+                      window.clearTimeout(hoverOut.current);
+                      hoverOut.current = null;
+                    }
+                    hoverIn.current = window.setTimeout(() => {
+                      hoverIn.current = null;
+                      setHovered(index);
+                    }, HOVER_DELAY);
+                  }}
+                  onPointerLeave={() => {
+                    if (hoverIn.current !== null) {
+                      window.clearTimeout(hoverIn.current);
+                      hoverIn.current = null;
+                    }
+                    if (hoverOut.current !== null) window.clearTimeout(hoverOut.current);
+                    hoverOut.current = window.setTimeout(() => {
+                      hoverOut.current = null;
+                      setHovered((current) => (current === index ? null : current));
+                    }, HOVER_OUT_DELAY);
+                  }}
                 >
                   <button
                     type="button"
@@ -262,6 +285,7 @@ export function AlbumShelf({
                     style={{ '--hue': `${hueOf(album.album)}deg` } as CSSProperties}
                     aria-label={`${album.album} — ${byline(album)}`}
                     aria-current={activeCase ? 'true' : undefined}
+                    onPointerDown={activeCase ? beginDrag : undefined}
                     onClick={() => {
                       if (dragged.current) {
                         dragged.current = false;
@@ -296,55 +320,6 @@ export function AlbumShelf({
             })}
           </div>
 
-          {/* The pointer's targets, at the cases' rest places and outside the row's hover
-              transform. The row and the cases animate above them; the pointer never has to
-              follow a moving 3D box. */}
-          <div className="k7-shelf-hits" aria-hidden="true">
-            {albums.map((album, index) => {
-              const distance = index - at;
-              if (Math.abs(distance) > WINDOW) return null;
-              return (
-                <span
-                  key={album.album}
-                  className="k7-shelf-hit"
-                  data-active={distance === 0}
-                  style={{ transform: placeAt(distance) }}
-                  onPointerDown={distance === 0 ? beginDrag : undefined}
-                  onPointerEnter={() => {
-                    if (dragStart.current !== null) return;
-                    if (hoverIn.current !== null) window.clearTimeout(hoverIn.current);
-                    if (hoverOut.current !== null) {
-                      window.clearTimeout(hoverOut.current);
-                      hoverOut.current = null;
-                    }
-                    hoverIn.current = window.setTimeout(() => {
-                      hoverIn.current = null;
-                      setHovered(index);
-                    }, HOVER_DELAY);
-                  }}
-                  onPointerLeave={() => {
-                    if (hoverIn.current !== null) {
-                      window.clearTimeout(hoverIn.current);
-                      hoverIn.current = null;
-                    }
-                    if (hoverOut.current !== null) window.clearTimeout(hoverOut.current);
-                    hoverOut.current = window.setTimeout(() => {
-                      hoverOut.current = null;
-                      setHovered((current) => (current === index ? null : current));
-                    }, HOVER_OUT_DELAY);
-                  }}
-                  onClick={() => {
-                    if (dragged.current) {
-                      dragged.current = false;
-                      return;
-                    }
-                    onSelect(index);
-                    onOpen?.();
-                  }}
-                />
-              );
-            })}
-          </div>
         </div>
       </div>
 
