@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   CheckIcon,
+  Cpu,
   EjectIcon,
   HardDriveIcon,
   PauseIcon,
@@ -17,7 +18,8 @@ import { cn } from '@/lib/utils';
 import { queryAccess } from '../card/handles';
 import { findCardMark, fingerprintScope, parseCardMark, scopeFor } from '../card/mark';
 import { cardShapeOf } from '../card/shape';
-import { UNSCOPED, setCardScope, useCardScope } from '../card/session';
+import { UNSCOPED, setCardScope, setDeviceView, useCardScope, useDeviceView } from '../card/session';
+import { useDeviceStatus } from '../device/useDeviceStatus';
 import {
   CARD_SIZES_GB,
   createVirtualCard,
@@ -28,13 +30,14 @@ import {
   sizeBytes,
 } from '../card/virtual';
 import { workingDirectory } from '../card/vdir';
-import { listVirtualCards, type VirtualCard } from '../storage/vcards';
+import type { VirtualCard } from '../storage/vcards';
 import { scanDataTransfer } from './files';
 import { fingerprintOf } from './intake';
 import { plural } from './format';
 import { navigate, routeHref } from './router';
 import { WriteToSd } from './WriteToSd';
 import { useAnalysis } from './state/analysis';
+import { forgetVirtualCard, rememberVirtualCard, useVirtualCards } from './state/cards';
 
 interface Note {
   error: boolean;
@@ -98,7 +101,8 @@ function PauseButton(props: { running: boolean; onPause: () => void; onResume: (
 }
 
 export function CardGrid() {
-  const [cards, setCards] = useState<VirtualCard[]>([]);
+  /* The bar above the shell reads the same list; both views stay in step through the store. */
+  const { cards } = useVirtualCards();
   const [dirReady, setDirReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<Note | null>(null);
@@ -112,6 +116,8 @@ export function CardGrid() {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
   const scope = useCardScope();
+  const { status: device } = useDeviceStatus();
+  const deviceView = useDeviceView();
   const {
     composing,
     changeCard,
@@ -149,7 +155,6 @@ export function CardGrid() {
   const finished = total > 0 && done === total && !inProgress;
 
   useEffect(() => {
-    void listVirtualCards().then(setCards);
     void (async () => {
       const dir = await workingDirectory();
       if (dir !== null) setDirReady(await queryAccess(dir, 'readwrite'));
@@ -188,7 +193,7 @@ export function CardGrid() {
       if (fail(dir) || dir.kind !== 'ready') return;
       setDirReady(true);
       const created = await createVirtualCard(dir.directory, label, sizeBytes(newGb));
-      setCards((current) => [...current, created.card]);
+      rememberVirtualCard(created.card);
       await openVirtualCard(created.card, created.directory);
       setCreating(false);
       setNewName('');
@@ -227,7 +232,7 @@ export function CardGrid() {
       const dir = await reconnectWorkingDirectory();
       if (fail(dir) || dir.kind !== 'ready') return;
       const next = await renameVirtualCard(dir.directory, card, label);
-      setCards((current) => current.map((each) => (each.id === next.id ? next : each)));
+      rememberVirtualCard(next);
       setEditing(null);
     } catch (error) {
       setNote({ error: true, text: error instanceof Error ? error.message : String(error) });
@@ -243,7 +248,7 @@ export function CardGrid() {
       const dir = await reconnectWorkingDirectory();
       if (fail(dir) || dir.kind !== 'ready') return;
       await deleteVirtualCard(dir.directory, card);
-      setCards((current) => current.filter((each) => each.id !== card.id));
+      forgetVirtualCard(card.id);
       setConfirmRemove(null);
     } catch (error) {
       setNote({ error: true, text: error instanceof Error ? error.message : String(error) });
@@ -276,17 +281,11 @@ export function CardGrid() {
     }
   };
 
-  const realSelected = !composing && scope !== UNSCOPED;
+  const realSelected = !composing && !deviceView && scope !== UNSCOPED;
   // The SD is "loaded" when it was picked this session, or when it is the card being worked
   // on (a dropped card is read-only but still the current card). Either way, eject must be
   // offered, because that is the only explicit way to put it down.
   const sdLoaded = hasCardHandle || realSelected;
-
-  /* Browse a card's albums: select it first, then the Albums page shows its shelf. */
-  const browse = async (card: VirtualCard) => {
-    await select(card);
-    navigate(routeHref({ name: 'media' }));
-  };
 
   const browseSd = () => {
     if (!sdLoaded) return;
@@ -343,6 +342,35 @@ export function CardGrid() {
       )}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {/* The card in the player: the ESP32-S3's own SD. The browser never has its
+            directory, so this tile only views it — its albums are the Albums page's. It
+            appears only while the device reports a card, and only a marked one can be named. */}
+        {device?.card === true && device.mark !== null ? (
+          <div
+            className={cn(tileClass(deviceView), 'cursor-pointer')}
+            onClick={() => setDeviceView(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setDeviceView(true);
+              }
+            }}
+            aria-label="Show the albums on the card in the player"
+          >
+            <div className="flex items-center gap-1">
+              <Cpu aria-hidden="true" />
+              <span className="min-w-0 flex-1 truncate text-sm">Device</span>
+              {deviceView ? <CheckIcon aria-hidden="true" className="size-4 shrink-0" /> : null}
+            </div>
+            <span className={cn('text-xs tabular-nums', deviceView ? '' : 'text-muted-foreground')}>
+              {deviceView ? 'card in the player · ' : ''}
+              {plural(device.tracks, 'track')}
+            </span>
+          </div>
+        ) : null}
+
         {/* The real SD slot. Drop a card folder on it or click to pick one read-write; the
             read-write pick is what lets Prepare write k7.db back. */}
         <div
@@ -440,7 +468,7 @@ export function CardGrid() {
         </div>
 
         {cards.map((card) => {
-          const selected = card.scope === scope;
+          const selected = !deviceView && card.scope === scope;
           const removing = confirmRemove === card.id;
           return (
             <div key={card.id} className="flex flex-col gap-1">
@@ -506,15 +534,6 @@ export function CardGrid() {
                   className="mt-1 flex flex-nowrap items-start gap-1"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <Button
-                    size="xs"
-                    variant="solid"
-                    className="whitespace-nowrap"
-                    onClick={() => void browse(card)}
-                    disabled={busy}
-                  >
-                    Browse albums
-                  </Button>
                   <WriteToSd card={card} />
                 </div>
               </div>

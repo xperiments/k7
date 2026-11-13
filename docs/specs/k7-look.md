@@ -380,6 +380,14 @@ stage, with a backdrop behind it and the mark at the drawer's top to close it. N
 - The frame is 1px neutral line, panel radius, 5px padding and 5px gutters; a 1px line divides
   the rail from the stage, the rail runs the frame's full height, and the footer bar is the
   content's footer inside the stage column.
+- The stage header's right is the **card switcher**, a secondary control rather than a third
+  action: the player's card and the SD are two ghost buttons, and the virtual cards are one
+  button or a **Virtual cards** menu. The current unit is the accent outline, the menu's trigger
+  names the current virtual card, and the header gains no strip. The Media header is only the
+  page's name: no card label and no back arrow. Below 768px the two unit buttons drop their
+  labels to their glyphs, the virtual control keeps the card's name, the other areas' breadcrumb
+  drops its area label and separator, and the header's gutter narrows so the page name and the
+  switcher both fit.
 - The logo is the accent wordmark on the page's dark ground — the inverse of the reference's filled
   tile, with no tile fill — and its wordmark is the only bold text in the system. It sits at the top of the rail above 768px — centred when the rail is collapsed — and at the
   top of the drawer below it; the stage header carries the mark only as the drawer's opener.

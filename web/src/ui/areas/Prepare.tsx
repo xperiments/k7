@@ -1,7 +1,7 @@
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Button } from '@/components/ui/button';
 import { WEIGHTS_MODE } from '../../weights/config';
-import { UNSCOPED, useCardScope } from '../../card/session';
+import { UNSCOPED, useCardScope, useDeviceView } from '../../card/session';
 import { CardTree } from '../CardTree';
 import { CardGrid } from '../CardGrid';
 import { useAnalysis } from '../state/analysis';
@@ -21,17 +21,18 @@ export function PrepareArea() {
   /* A card is open: the real slot or a virtual one. Its own `music/` tree replaces the
    * generic intake, because the directory to add to is now a fact, not a question. */
   const scope = useCardScope();
+  const deviceView = useDeviceView();
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6">
-      <header className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      {/* <header className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-0.5">
           <h1 className="text-xl font-light tracking-tight">Prepare</h1>
-          {/* <p className="max-w-prose text-sm text-muted-foreground">
+          <p className="max-w-prose text-sm text-muted-foreground">
             Tempo, key, mood and energy from MP3 &amp; FLAC, measured in this browser.
-          </p> */}
+          </p>
         </div>
-      </header>
+      </header> */}
 
       {setupError && (
         <Alert variant="destructive">
@@ -82,11 +83,11 @@ export function PrepareArea() {
 
       {/* The card shelf stays in view while the card's tree scrolls under it: which card is
           open is the context every action below depends on. */}
-      <div className="sticky top-0 z-20 -mx-4 shrink-0 border-b border-foreground/10 bg-background px-4 py-2 sm:-mx-6 sm:px-6">
+      <div className="sticky top-0 z-20 -mx-4 shrink-0 bg-background px-4 py-2 sm:-mx-6 sm:px-6">
         <CardGrid />
       </div>
 
-      {composing ? (
+      {composing && !deviceView ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <div className="min-h-0 flex-1">
             <CardTree />
@@ -94,9 +95,11 @@ export function PrepareArea() {
         </div>
       ) : (
         <p className="shrink-0 text-xs text-muted-foreground">
-          {scope !== UNSCOPED
-            ? 'The SD card in the player is written from a virtual card — pick one to compose.'
-            : 'Select a card above — the SD card or a virtual one — to prepare it.'}
+          {deviceView
+            ? 'The card in the player is a view of the device — its albums are on the Albums page.'
+            : scope !== UNSCOPED
+              ? 'The SD card in the player is written from a virtual card — pick one to compose.'
+              : 'Select a card above — the SD card or a virtual one — to prepare it.'}
         </p>
       )}
     </div>

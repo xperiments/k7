@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>STL to SVG views</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e9edf1;--panel:#f6f8fa;--ink:#15202b;--muted:#566677;--line:#c6d1da;--accent:#1456d6;--on-accent:#fff;--paper:#fbfcfd;--grid:rgba(20,86,214,.08);--paperink:#15202b;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1620;--panel:#142130;--ink:#e6edf3;--muted:#8da1b4;--line:#27394b;--accent:#6aa5ff;--on-accent:#06101c;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0d1620;--panel:#142130;--ink:#e6edf3;--muted:#8da1b4;--line:#27394b;--accent:#6aa5ff;--on-accent:#06101c;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 "Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif}
+.app{display:grid;grid-template-columns:292px minmax(0,1fr);gap:16px;padding:16px;max-width:1400px;margin:0 auto}
+@media(max-width:820px){.app{grid-template-columns:1fr}}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:18px;align-self:start}
+h1{font-size:18px;margin:0;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13px;margin:4px 0 0}
+h2{font-size:13px;font-weight:600;margin:0 0 8px;color:var(--muted)}
+button,select,input{font:inherit;color:inherit}
+.btn{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;cursor:pointer;text-align:center}
+.btn:hover{border-color:var(--accent)}
+.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.cross{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.cross .btn{padding:8px 2px;font-size:13px}
+.cross .btn[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600}
+.cross .sp{visibility:hidden}
+.iso{margin-top:6px;width:100%}
+.iso[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600}
+label.f{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+label.f span b{color:var(--ink);font-weight:600}
+select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 8px;width:100%}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink)}
+.stack{display:grid;gap:12px}
+main{min-width:0}
+.sheet{position:relative;height:clamp(340px,70vh,760px);background-color:var(--paper);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px;border:1px solid var(--line);border-radius:10px;overflow:hidden;color:var(--paperink)}
+.sheet.drag{outline:3px dashed var(--accent);outline-offset:-8px}
+#sheet-svg{position:absolute;inset:28px 28px 84px 28px}
+#sheet-svg svg{width:100%;height:100%;display:block}
+.empty{position:absolute;inset:0;display:grid;place-content:center;gap:12px;text-align:center;padding:24px}
+.empty p{margin:0;color:#4b5a69}
+.empty .row{justify-content:center}.empty .row>*{flex:0 0 auto}
+.tb{position:absolute;right:12px;bottom:12px;display:grid;grid-template-columns:auto auto;border:1.5px solid #15202b;background:var(--paper);font-size:12px;max-width:calc(100% - 24px)}
+.tb div{padding:4px 10px;border:.5px solid #15202b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb .k{color:#566677}
+.status{margin:10px 2px 0;color:var(--muted);font-size:13px;min-height:1.4em}
+.status.err{color:#c0392b}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <div>
+    <h1>STL to SVG views</h1>
+    <p class="sub">Load a model, pick a side, export a flat vector drawing.</p>
+  </div>
+  <div>
+    <h2>Model</h2>
+    <div class="row">
+      <button class="btn" id="open">Open STL</button>
+      <button class="btn" id="sample">Sample</button>
+    </div>
+    <input type="file" id="file" accept=".stl,model/stl,application/sla" class="hide">
+  </div>
+  <div>
+    <h2>View</h2>
+    <div class="cross" id="views">
+      <span class="sp"></span><button class="btn" data-v="top" aria-pressed="false">Top</button><span class="sp"></span><span class="sp"></span>
+      <button class="btn" data-v="left" aria-pressed="false">Left</button><button class="btn" data-v="front" aria-pressed="true">Front</button><button class="btn" data-v="right" aria-pressed="false">Right</button><button class="btn" data-v="back" aria-pressed="false">Back</button>
+      <span class="sp"></span><button class="btn" data-v="bottom" aria-pressed="false">Bottom</button><span class="sp"></span><span class="sp"></span>
+    </div>
+    <button class="btn iso" data-v="iso" aria-pressed="false">Isometric</button>
+  </div>
+  <div class="stack">
+    <h2 style="margin:0">Drawing</h2>
+    <label class="f">Style
+      <select id="style">
+        <option value="hidden" selected>Hidden line (white fill, black edges)</option>
+        <option value="shaded">Shaded</option>
+        <option value="edges">Edges only, see-through</option>
+      </select>
+    </label>
+    <label class="f"><span>Edge angle <b id="angv">30°</b></span><input type="range" id="ang" min="5" max="85" value="30"></label>
+    <label class="f"><span>Line weight <b id="lwv">0.4%</b></span><input type="range" id="lw" min="1" max="20" value="4"></label>
+    <label class="chk"><input type="checkbox" id="edges"> Edge lines on shaded</label>
+    <label class="chk"><input type="checkbox" id="yup"> Model is Y-up</label>
+    <label class="chk"><input type="checkbox" id="inv"> Faces look inside-out</label>
+  </div>
+  <div class="row">
+    <button class="btn primary" id="export" disabled>Export SVG</button>
+    <button class="btn" id="copy" disabled>Copy</button>
+  </div>
+</aside>
+<main>
+  <div class="sheet" id="sheet">
+    <div id="sheet-svg"></div>
+    <div class="empty" id="empty">
+      <p>Drop an STL file anywhere on this sheet, or</p>
+      <div class="row"><button class="btn primary" id="open2">Open STL</button><button class="btn" id="sample2">Try the sample</button></div>
+    </div>
+    <div class="tb hide" id="tb">
+      <div class="k">Part</div><div id="tpart"></div>
+      <div class="k">View</div><div id="tview"></div>
+      <div class="k">Size</div><div id="tsize"></div>
+    </div>
+  </div>
+  <p class="status" id="status">Nothing loaded yet. Binary and ASCII STL both work.</p>
+</main>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const nrm=a=>{const l=Math.hypot(...a);return a.map(x=>x/l)};
+const VIEWS={};
+for(const [k,[v,r]] of Object.entries({top:[[0,0,1],[1,0,0]],bottom:[[0,0,-1],[1,0,0]],front:[[0,-1,0],[1,0,0]],back:[[0,1,0],[-1,0,0]],left:[[-1,0,0],[0,-1,0]],right:[[1,0,0],[0,1,0]]}))VIEWS[k]={v,r,u:cross(v,r)};
+{const v=nrm([1,-1,1]),r=nrm(cross([0,0,1],v));VIEWS.iso={v,r,u:cross(v,r)};}
+const NAMES={top:'Top',bottom:'Bottom',front:'Front',back:'Back',left:'Left',right:'Right',iso:'Isometric'};
+const S={view:'front',raw:null,mesh:null,name:'',dl:undefined};
+const f3=n=>Math.round(n*1000)/1000;
+
+function parseSTL(buf){
+  if(buf.byteLength>=84){
+    const dv=new DataView(buf),n=dv.getUint32(80,true);
+    if(buf.byteLength===84+n*50){
+      const p=new Float32Array(n*9);let o=84;
+      for(let t=0;t<n;t++){o+=12;for(let i=0;i<9;i++){p[t*9+i]=dv.getFloat32(o,true);o+=4}o+=2}
+      return p;
+    }
+  }
+  const txt=new TextDecoder().decode(buf),nums=[],re=/vertex\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)/g;let m;
+  while((m=re.exec(txt)))nums.push(+m[1],+m[2],+m[3]);
+  if(!nums.length||nums.length%9)throw new Error('No triangles found. Is this an STL file?');
+  return Float32Array.from(nums);
+}
+
+function build(pos,yUp){
+  if(yUp)for(let i=0;i<pos.length;i+=3){const y=pos[i+1],z=pos[i+2];pos[i+1]=-z;pos[i+2]=y}
+  const T=pos.length/9;
+  let mn=[1e30,1e30,1e30],mx=[-1e30,-1e30,-1e30];
+  for(let i=0;i<pos.length;i++){const a=i%3;if(pos[i]<mn[a])mn[a]=pos[i];if(pos[i]>mx[a])mx[a]=pos[i]}
+  const q=1e4/Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2],1e-9);
+  const vm=new Map(),vx=[],vy=[],vz=[],idx=new Uint32Array(T*3);
+  for(let i=0;i<T*3;i++){
+    const x=pos[3*i],y=pos[3*i+1],z=pos[3*i+2],k=Math.round(x*q)+','+Math.round(y*q)+','+Math.round(z*q);
+    let id=vm.get(k);if(id===undefined){id=vx.length;vm.set(k,id);vx.push(x);vy.push(y);vz.push(z)}
+    idx[i]=id;
+  }
+  const NV=vx.length,nx=new Float64Array(T),ny=new Float64Array(T),nz=new Float64Array(T);
+  for(let t=0;t<T;t++){
+    const a=idx[3*t],b=idx[3*t+1],c=idx[3*t+2];
+    const ux=vx[b]-vx[a],uy=vy[b]-vy[a],uz=vz[b]-vz[a],wx=vx[c]-vx[a],wy=vy[c]-vy[a],wz=vz[c]-vz[a];
+    const cx=uy*wz-uz*wy,cy=uz*wx-ux*wz,cz=ux*wy-uy*wx,l=Math.hypot(cx,cy,cz);
+    if(l>1e-12){nx[t]=cx/l;ny[t]=cy/l;nz[t]=cz/l}
+  }
+  const em=new Map(),ea=[],eb=[],e0=[],e1=[];
+  for(let t=0;t<T;t++){
+    if(!nx[t]&&!ny[t]&&!nz[t])continue;
+    for(let k=0;k<3;k++){
+      const a=idx[3*t+k],b=idx[3*t+(k+1)%3];if(a===b)continue;
+      const lo=a<b?a:b,hi=a<b?b:a,key=lo*NV+hi,e=em.get(key);
+      if(e===undefined){em.set(key,ea.length);ea.push(lo);eb.push(hi);e0.push(t);e1.push(-1)}
+      else if(e1[e]<0)e1[e]=t;
+    }
+  }
+  return {T,NV,vx:Float64Array.from(vx),vy:Float64Array.from(vy),vz:Float64Array.from(vz),idx,nx,ny,nz,ea:Int32Array.from(ea),eb:Int32Array.from(eb),e0:Int32Array.from(e0),e1:Int32Array.from(e1)};
+}
+
+const SHADES=Array.from({length:33},(_,i)=>{const t=i/32,c=[[38,52,68],[222,231,238]];return '#'+c[0].map((d,j)=>Math.round(d+(c[1][j]-d)*t).toString(16).padStart(2,'0')).join('')});
+
+function render(m,view,o,forExport){
+  const {r,u,v}=VIEWS[view],{NV,T}=m,sg=o.inv?-1:1;
+  const sx=new Float64Array(NV),sy=new Float64Array(NV),sd=new Float64Array(NV);
+  let x0=1e30,x1=-1e30,y0=1e30,y1=-1e30;
+  for(let i=0;i<NV;i++){
+    const x=m.vx[i],y=m.vy[i],z=m.vz[i];
+    sx[i]=x*r[0]+y*r[1]+z*r[2];sy[i]=-(x*u[0]+y*u[1]+z*u[2]);sd[i]=x*v[0]+y*v[1]+z*v[2];
+    if(sx[i]<x0)x0=sx[i];if(sx[i]>x1)x1=sx[i];if(sy[i]<y0)y0=sy[i];if(sy[i]>y1)y1=sy[i];
+  }
+  const w=x1-x0,h=y1-y0,big=Math.max(w,h,1e-9),mg=big*.04,W=f3(w+2*mg),H=f3(h+2*mg),sw=f3(big*o.lw/100);
+  const front=new Uint8Array(T),list=[];
+  for(let t=0;t<T;t++)if((m.nx[t]*v[0]+m.ny[t]*v[1]+m.nz[t]*v[2])*sg>1e-9){front[t]=1;list.push(t)}
+  const dep=t=>sd[m.idx[3*t]]+sd[m.idx[3*t+1]]+sd[m.idx[3*t+2]];
+  const order=Int32Array.from(list).sort((a,b)=>dep(a)-dep(b)),pos=new Int32Array(T).fill(-1);
+  order.forEach((t,k)=>pos[t]=k);
+  const cosT=Math.cos(o.ang*Math.PI/180),wantEdges=o.style!=='shaded'||o.edges;
+  const head=new Int32Array(order.length).fill(-1),next=new Int32Array(m.ea.length).fill(-1),flat=[];
+  if(wantEdges)for(let e=0;e<m.ea.length;e++){
+    const a=m.e0[e],b=m.e1[e];let draw=b<0;
+    if(!draw){draw=(m.nx[a]*m.nx[b]+m.ny[a]*m.ny[b]+m.nz[a]*m.nz[b])<cosT||front[a]!==front[b]}
+    if(!draw)continue;
+    const own=Math.max(pos[a],b>=0?pos[b]:-1);if(own<0)continue;
+    next[e]=head[own];head[own]=e;flat.push(e);
+  }
+  const X=i=>f3(sx[i]-x0+mg),Y=i=>f3(sy[i]-y0+mg),seg=e=>`M${X(m.ea[e])} ${Y(m.ea[e])}L${X(m.eb[e])} ${Y(m.eb[e])}`;
+  const out=[`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"${forExport?` width="${W}mm" height="${H}mm"`:''}>`];
+  const lineG=`<g fill="none" stroke="#15202b" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">`;
+  if(o.style==='edges'){
+    out.push(lineG+`<path d="${flat.map(seg).join('')}"/></g>`);
+  }else{
+    const L=nrm([v[0]*.8+u[0]*.5-r[0]*.35,v[1]*.8+u[1]*.5-r[1]*.35,v[2]*.8+u[2]*.5-r[2]*.35]),seam=f3(sw*.5);
+    out.push(lineG);
+    for(let k=0;k<order.length;k++){
+      const t=order[k],a=m.idx[3*t],b=m.idx[3*t+1],c=m.idx[3*t+2],pts=`${X(a)},${Y(a)} ${X(b)},${Y(b)} ${X(c)},${Y(c)}`;
+      if(o.style==='hidden')out.push(`<polygon points="${pts}" fill="#fff" stroke="none"/>`);
+      else{const d=Math.max(0,(m.nx[t]*L[0]+m.ny[t]*L[1]+m.nz[t]*L[2])*sg),col=SHADES[Math.round((.3+.7*Math.min(1,d))*32)];
+        out.push(`<polygon points="${pts}" fill="${col}" stroke="${col}" stroke-width="${seam}"/>`)}
+      for(let e=head[k];e>=0;e=next[e])out.push(`<path d="${seg(e)}"/>`);
+    }
+    out.push('</g>');
+  }
+  out.push('</svg>');
+  return {svg:out.join(''),w,h,tris:order.length};
+}
+
+const opts=()=>({style:$('#style').value,ang:+$('#ang').value,lw:+$('#lw').value/10,edges:$('#edges').checked,inv:$('#inv').checked});
+let raf=0;const queue=()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(draw)};
+function say(t,err){const s=$('#status');s.textContent=t;s.classList.toggle('err',!!err)}
+function draw(){
+  if(!S.mesh)return;
+  const res=render(S.mesh,S.view,opts(),false);
+  $('#sheet-svg').innerHTML=res.svg;
+  $('#tpart').textContent=S.name;$('#tview').textContent=NAMES[S.view];
+  $('#tsize').textContent=`${res.w.toFixed(2)} × ${res.h.toFixed(2)} units`;
+  say(`${S.mesh.T.toLocaleString('en')} triangles in the model, ${res.tris.toLocaleString('en')} facing the ${NAMES[S.view].toLowerCase()} view. STL has no units, so the SVG treats one unit as 1 mm.`);
+}
+function load(pos,name){
+  S.raw=pos;S.name=name;
+  try{S.mesh=build(pos.slice(),$('#yup').checked)}catch(e){say('Could not build that mesh: '+e.message,true);return}
+  $('#empty').classList.add('hide');$('#tb').classList.remove('hide');
+  $('#export').disabled=!S.dl;$('#copy').disabled=false;draw();
+}
+async function loadFile(file){
+  try{load(parseSTL(await file.arrayBuffer()),file.name.replace(/\.stl$/i,''))}
+  catch(e){say(e.message||'Could not read that file.',true)}
+}
+function sampleTorus(){
+  const R=20,r=7,N=56,M=28,P=[],p=(i,j)=>{const u=i/N*2*Math.PI,v=j/M*2*Math.PI;return[(R+r*Math.cos(v))*Math.cos(u),(R+r*Math.cos(v))*Math.sin(u),r*Math.sin(v)]};
+  for(let i=0;i<N;i++)for(let j=0;j<M;j++){const a=p(i,j),b=p(i+1,j),c=p(i+1,j+1),d=p(i,j+1);P.push(...a,...b,...c,...a,...c,...d)}
+  load(Float32Array.from(P.flat()),'sample-torus');
+}
+const svgText=()=>'<?xml version="1.0" encoding="UTF-8"?>\n'+render(S.mesh,S.view,opts(),true).svg;
+async function doExport(){
+  if(!S.mesh||!S.dl)return;
+  try{await S.dl.save({filename:`${S.name||'model'}-${S.view}.svg`,data:svgText()});say('Saved the '+NAMES[S.view].toLowerCase()+' view as SVG.')}
+  catch(e){if(e&&e.code==='declined')return;say('Export failed: '+((e&&e.message)||'unknown error')+'. Try Copy and paste into a .svg file.',true)}
+}
+async function doCopy(){
+  if(!S.mesh)return;
+  try{await navigator.clipboard.writeText(svgText());say('SVG copied to the clipboard.')}
+  catch(e){say('The browser blocked clipboard access here.',true)}
+}
+
+$('#open').onclick=$('#open2').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{const f=e.target.files[0];if(f)loadFile(f);e.target.value=''};
+$('#sample').onclick=$('#sample2').onclick=sampleTorus;
+$('#views').onclick=e=>{const b=e.target.closest('[data-v]');if(b)setView(b.dataset.v)};
+document.querySelector('.iso').onclick=()=>setView('iso');
+function setView(v){S.view=v;document.querySelectorAll('[data-v]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v));queue()}
+$('#style').onchange=queue;$('#edges').onchange=queue;$('#inv').onchange=queue;
+$('#ang').oninput=e=>{$('#angv').textContent=e.target.value+'°';queue()};
+$('#lw').oninput=e=>{$('#lwv').textContent=(e.target.value/10)+'%';queue()};
+$('#yup').onchange=()=>{if(S.raw)load(S.raw,S.name)};
+$('#export').onclick=doExport;$('#copy').onclick=doCopy;
+const sheet=$('#sheet');
+['dragenter','dragover'].forEach(n=>window.addEventListener(n,e=>{e.preventDefault();sheet.classList.add('drag')}));
+['dragleave','drop'].forEach(n=>window.addEventListener(n,e=>{e.preventDefault();if(n==='drop'||!e.relatedTarget)sheet.classList.remove('drag')}));
+window.addEventListener('drop',e=>{const f=e.dataTransfer&&e.dataTransfer.files[0];if(f)loadFile(f)});
+(async()=>{try{S.dl=window.claude?await window.claude.use('downloads'):null}catch(e){S.dl=null}
+  if(S.mesh)$('#export').disabled=!S.dl;
+  if(!S.dl){$('#export').title='Saving files is not available in this view. Use Copy instead.'}})();
+</script>
+</body>
+</html>

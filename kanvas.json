@@ -1339,7 +1339,7 @@
     {
       "id": "APP-21",
       "title": "Ask over the selected card's image, not only the player",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-13T18:36:32Z",
       "by": "dsh",
@@ -1359,6 +1359,55 @@
           "at": "2026-11-13T18:45:08Z",
           "by": "dsh",
           "text": "Review correction, reported from Prepare: after switching the selected card from a virtual card to the Device SD, Ask still searched the virtual card.\n\nCause: the Device card tile is a view, not a scope. setDeviceView(true) leaves currentCardScope on the computer card, so chooseSource compared the player's mark with the virtual card's scope, missed, and fell back to the virtual card's image.\n\nFix:\n- chooseSource takes the device view: when the Device tile is selected, the player is the source if it reports a card, and none otherwise. A computer card pick resets the view (setCardScope), so the virtual card goes back to its image.\n- The player's profile is loaded from the player card's own scope (mark:<status.mark>), not the browser's, so the prompt describes the card the player holds; without that stored image it is static.\n- k7-app S2 and the README say the Device tile decides; a source test covers the view cases.\n\nVerified: 557 tests pass, the bundle builds, no typecheck error in a changed file."
+        }
+      ]
+    },
+    {
+      "id": "APP-22",
+      "title": "The current card is a switcher in the header, on every area",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-13T20:06:27Z",
+      "by": "dsh",
+      "desc": "Reported: which card the App is working on is only visible and changeable in the shelf at the top of Prepare. Media, Playlists and Ask follow the selected card but say nothing about which one it is, and changing it means going back to Prepare.\n\nDesign chosen: keep Prepare's shelf exactly as it is, and put the switcher in the stage header's right, so the shell gains no height. The player's card and the SD in this computer are two buttons; the virtual cards are one button when there is one and a Virtual cards menu when there are several. The current unit takes the accent outline, and the menu's trigger names the current virtual card, so the active unit is visible at every width. Choosing a unit switches the card in place, without navigating. A virtual card still asks for the working directory, and a refusal leaves the previous card selected and says so. With no card selected no unit is marked, and the breadcrumb says \"No card\" instead of naming an SD. Creating, renaming, removing, writing and ejecting stay on the shelf.\n\nFinished when: Device and SD card are two buttons, one virtual is one button and several are a Virtual cards menu; the current unit is clear by shape and to a screen reader at desktop and phone widths; choosing each unit switches the card and the areas that follow it; the working-directory refusal is visible; a reload keeps the remembered card; tests, typecheck and build pass; app spec C4 and the look spec say so.",
+      "notes": [
+        {
+          "at": "2026-11-13T20:24:12Z",
+          "by": "dsh",
+          "text": "Implemented in the working tree, on top of the existing APP-21 changes:\n\n- `web/src/ui/CardSwitcher.tsx` is in the stage header's right. Device and SD card are two buttons; one virtual card is one button; several are a \"Virtual cards\" menu. The active unit takes the accent outline, the menu trigger names the current virtual card, and the shell gains no height.\n- `web/src/ui/card-units.ts` is the pure selection rule, with `web/tests/card-units.test.ts` (9 cases).\n- `web/src/ui/state/cards.ts` is the shared virtual-card list, so the shelf and the switcher stay in step; `CardGrid` now uses it.\n- With no card selected, the breadcrumb says \"No card\" and no unit is marked.\n- The app spec (C4), the look spec and the web glossary are updated.\n- Phone widths: the two unit buttons drop to glyphs, the virtual control keeps the card name, and the header's gutter and gaps tighten so the page name still fits.\n\nVerified: 566 tests pass, the look checker passes, the Vite bundle builds, C1–C4 clean, and the header was checked at 1440 and 390 (closed, open, Device active, no card). Typecheck is clean in the changed files; the project check is still blocked by the pre-existing album-detail WIP (three unused symbols), which this change does not touch.\n\nNot committed yet. Approve this proposal and I'll move it to review."
+        },
+        {
+          "at": "2026-11-13T20:28:43Z",
+          "by": "dsh",
+          "text": "Plan: the switcher is already implemented in the working tree from the earlier pass. Verify it against the ticket — Device and SD as buttons, one virtual as a button, several as a Virtual cards menu, the active unit visible at 1440 and 390, the refusal path, the shared list with CardGrid, and the \"No card\" breadcrumb — then run tests, the look checker, the bundle build and the typecheck, and hand it to review with any known blocker called out."
+        },
+        {
+          "at": "2026-11-13T20:28:49Z",
+          "by": "dsh",
+          "text": "APP-22 is ready for review.\n\nWhat changed for you:\n- The stage header's right now names and switches the card: the player's card and the SD in this computer are two buttons; one virtual card is one button; several are a Virtual cards menu. The active unit takes the accent outline, and the menu's trigger names the current virtual card. No extra header strip.\n- With no card selected, no unit is marked and the breadcrumb says \"No card\" rather than \"SD\".\n- Prepare's shelf is untouched: creating, renaming, removing, writing and ejecting stay there. It and the header share one virtual-card list, so a create or rename shows up in both.\n- On a phone the Device and SD buttons reduce to their glyphs, the virtual control keeps the card name, and the header's gutter tightens so the page name still fits.\n\nWhat to check:\n- At desktop width: click Device, SD card, and a virtual card; the active mark follows, and the breadcrumb follows the card.\n- With one virtual card it is a button; add a second and the Virtual cards menu appears, listing only virtuals.\n- At phone width (390): the header still shows the page name and the active virtual card.\n- Refuse the working-directory prompt for a virtual card: the previous card stays selected and the refusal is visible.\n\nVerified: 566 tests pass, the look checker passes, the Vite bundle builds, C1–C4 are clean, and the header was checked at 1440 and 390 (closed, open, Device active, no card, refusal). Typecheck is clean in the changed files; the project-wide check is still blocked by the pre-existing album-detail WIP (three unused symbols), which this task does not touch.\n\nNot committed yet, as agreed while the other lanes are in the tree. The app spec C4, the look spec and the web glossary are updated."
+        }
+      ]
+    },
+    {
+      "id": "APP-23",
+      "title": "The Media header is only the page's name",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-13T20:31:47Z",
+      "by": "dsh",
+      "desc": "Reported after APP-22 was marked done: the Albums header still carried a back arrow and the card's name, though the card is now in the header's switcher. The Media header — Albums, an album, an artist, Drive, Video — is the page's name only; the rail is the way back. The card name and the back arrow are gone.\n\nThe change is already in the working tree: Shell's Media breadcrumb keeps only the page, and app spec C4 and the look bullet are updated. This card records the follow-up because APP-22 can no longer take a note.\n\nFinished when: no Media route shows a back arrow or a card label; the switcher still names the card; the header was checked at 1440 and 390; tests, the look checker and the bundle build pass.",
+      "notes": [
+        {
+          "at": "2026-11-13T20:46:09Z",
+          "by": "dsh",
+          "text": "Plan: the change is already in the working tree. Verify the Media breadcrumb is the page's name on every Media route at 1440 and 390, that the switcher still names the card, then run tests, the look checker and the bundle build and hand it to review."
+        },
+        {
+          "at": "2026-11-13T20:46:23Z",
+          "by": "dsh",
+          "text": "APP-23 is ready for review.\n\nWhat changed for you:\n- The Media header is the page's name only: Albums, an album, an artist, Drive or Video. The back arrow and the card's name are gone.\n- The header's right switcher remains the one place the card is named, and the rail is the way back to Prepare.\n- The app spec C4 and the look bullet now say the Media header carries no card label and no back arrow.\n\nWhat to check: open Albums, an album, an artist, Drive and Video; the header should read only that page's name at desktop and phone width, while the switcher still names the current card.\n\nVerified: 566 tests pass, the look checker passes, the bundle builds, and the header was checked at 1440 and 390. Typecheck is clean in the changed files; the project-wide check is still blocked by the pre-existing album-detail WIP (three unused symbols), which this change does not touch.\n\nStill uncommitted, as agreed while the other lanes are in the tree."
         }
       ]
     }

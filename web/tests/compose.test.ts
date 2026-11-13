@@ -115,7 +115,7 @@ describe('the destination path', () => {
 
   it('keeps a loose file’s name when it was dropped on its own', () => {
     expect(composePath('01.mp3')).toBe('01.mp3');
-    expect(composePath('Album/01.mp3')).toBe('01.mp3');
+    expect(composePath('Album/01.mp3')).toBe('Album/01.mp3');
   });
 });
 

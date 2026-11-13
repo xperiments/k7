@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  ArrowLeft,
   Disc3,
   ListMusic,
   MessageCircle,
+  MonitorX,
   Play,
   Settings as SettingsIcon,
 } from 'lucide-react';
@@ -24,11 +24,10 @@ import {
   SidebarProvider,
 } from '@/components/ui/sidebar';
 import { useDeviceStatus } from '../device/useDeviceStatus';
+import { CardSwitcher } from './CardSwitcher';
 import { InstallButton } from './InstallButton';
 import { useDrafts } from '../playlists/drafts';
 import { navigate, routeArea, routeHref, routePage, type Route } from './router';
-import { useSelectedVirtualCard } from './WriteToSd';
-import { useAnalysis } from './state/analysis';
 import { PlayerBar } from './PlayerBar';
 import {
   Tooltip,
@@ -62,36 +61,23 @@ interface NavGroup {
 }
 
 /** The four areas, and the routes that belong to each. */
-function navGroups(drafts: number, tracks: number): NavGroup[] {
+function navGroups(drafts: number): NavGroup[] {
   return [
     {
-      id: 'k7',
-      label: 'K7',
-      items: [
-        {
-          href: routeHref({ name: 'media' }),
-          label: 'Albums',
-          icon: <Disc3 aria-hidden="true" />,
-          names: ['media', 'album', 'artist', 'video', 'drive'],
-        },
-        {
-          href: routeHref({ name: 'player' }),
-          label: 'Player',
-          icon: <Play aria-hidden="true" />,
-          names: ['player'],
-        },
-      ],
-    },
-    {
       id: 'card',
-      label: 'SD Card',
+      label: 'Media',
       items: [
         {
           href: routeHref({ name: 'prepare' }),
           label: 'Prepare',
           icon: <ListMusic aria-hidden="true" />,
           names: ['prepare'],
-          badge: tracks > 0 ? String(tracks) : undefined,
+        },
+                {
+          href: routeHref({ name: 'media' }),
+          label: 'Browse',
+          icon: <Disc3 aria-hidden="true" />,
+          names: ['media', 'album', 'artist', 'video', 'drive'],
         },
       ],
     },
@@ -111,6 +97,18 @@ function navGroups(drafts: number, tracks: number): NavGroup[] {
           label: 'Ask',
           icon: <MessageCircle aria-hidden="true" />,
           names: ['ask'],
+        },
+      ],
+    },
+    {
+      id: 'k7',
+      label: 'Player',
+      items: [
+        {
+          href: routeHref({ name: 'player' }),
+          label: 'Player',
+          icon: <Play aria-hidden="true" />,
+          names: ['player'],
         },
       ],
     },
@@ -216,23 +214,15 @@ function Nav({
 }
 
 export function Shell({ route, children }: { route: Route; children: React.ReactNode }) {
-  const { status, reachable } = useDeviceStatus();
+  const { reachable } = useDeviceStatus();
   const drafts = useDrafts();
-  const tracks = status?.tracks ?? 0;
 
   /* There is no "Now playing" entry: the bar at the bottom of every area *is* the player, so
    * a page for it would be a second place to look at the same fact. `#/player` still renders
    * the device's facts for anyone who has the address. */
-  const groups = navGroups(drafts.length, tracks);
+  const groups = navGroups(drafts.length);
 
   const area = routeArea(route);
-
-  /* The Albums page belongs to a card, so its breadcrumb names the card it is browsing — the
-   * SD in the slot, or the virtual card being prepared — with a way back to Prepare. */
-  const { composing } = useAnalysis();
-  const virtualCard = useSelectedVirtualCard();
-  const mediaCard =
-    composing && virtualCard ? `Virtual SD ${virtualCard.label || virtualCard.folder}` : 'SD';
 
   /* The rail is a drawer below 768px and the standing column above it. */
   const [isMobile, setIsMobile] = useState(() =>
@@ -388,7 +378,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
           </aside>
 
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+            <header className="flex h-12 shrink-0 items-center gap-1 border-b px-4 max-[767px]:px-2 md:gap-2">
               {isMobile ? (
                 <Tooltip>
                   <TooltipTrigger
@@ -408,40 +398,32 @@ export function Shell({ route, children }: { route: Route; children: React.React
                 </Tooltip>
               ) : null}
               <Breadcrumb className="min-w-0">
-                <BreadcrumbList className="flex-nowrap">
-                  {area ? (
+                <BreadcrumbList className="min-w-0 flex-nowrap">
+                  {/* Media is the page's own name and nothing else: the card is the
+                      switcher's fact, and the rail is the way back. */}
+                  {area !== null && area !== 'K7' ? (
                     <>
-                      {area === 'K7' ? (
-                        <>
-                          <BreadcrumbItem>
-                            <Button
-                              size="icon-xs"
-                              variant="ghost"
-                              aria-label="Back to Prepare"
-                              onClick={() => navigate(routeHref({ name: 'prepare' }))}
-                            >
-                              <ArrowLeft aria-hidden="true" />
-                            </Button>
-                          </BreadcrumbItem>
-                          <BreadcrumbSeparator />
-                        </>
-                      ) : null}
-                      <BreadcrumbItem className="min-w-0">
-                        <span className="truncate text-sm text-muted-foreground">
-                          {area === 'K7' ? mediaCard : area}
-                        </span>
+                      <BreadcrumbItem className="min-w-0 max-[767px]:hidden">
+                        <span className="truncate text-sm text-muted-foreground">{area}</span>
                       </BreadcrumbItem>
-                      <BreadcrumbSeparator />
+                      <BreadcrumbSeparator className="max-[767px]:hidden" />
                     </>
                   ) : null}
-                  <BreadcrumbItem>
+                  <BreadcrumbItem className="min-w-0">
                     <BreadcrumbPage className="truncate">{routePage(route)}</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <CardSwitcher />
                 {!reachable ? (
-                  <span className="text-xs text-muted-foreground">device unreachable</span>
+                  <>
+                    <span className="hidden text-xs text-muted-foreground md:inline">
+                      device unreachable
+                    </span>
+                    <MonitorX aria-hidden="true" className="size-4 text-muted-foreground md:hidden" />
+                    <span className="sr-only md:hidden">device unreachable</span>
+                  </>
                 ) : null}
               </div>
             </header>

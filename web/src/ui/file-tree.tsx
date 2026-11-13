@@ -142,10 +142,12 @@ function metaOf(track: FolderTrack): string {
   return tagged || track.name;
 }
 
-/** The two row controls a caller's own toolbar can drive. */
+/** The row controls a caller's own toolbar can drive. */
 export interface TreeControls {
   expandAll: () => void;
   collapseAll: () => void;
+  selectAll: () => void;
+  deselectAll: () => void;
 }
 
 /** What pressing a file's row does. A source tree adds; the Drive plays or queues. */
@@ -292,11 +294,14 @@ export function FileTree({
     controls.current = {
       expandAll: () => void instance.expandAll(),
       collapseAll: () => instance.collapseAll(),
+      selectAll: () =>
+        instance.setSelectedItems(Object.keys(entries).filter((id) => id !== ROOT_ID)),
+      deselectAll: () => instance.setSelectedItems([]),
     };
     return () => {
       controls.current = null;
     };
-  }, [instance, controls]);
+  }, [instance, controls, entries]);
 
   /* The data changes when the card or the drive does; the tree's structure cache has to be
      rebuilt before the new rows can be drawn. */

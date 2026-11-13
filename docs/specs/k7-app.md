@@ -210,6 +210,18 @@ card in the computer does not silently retarget it.
 playlist lives on the card whose tracks it names; the Playlists area is entered within a card,
 and the Image carries that card's playlists ([ADR 0083](../adr/0083-a-virtual-card-is-a-staged-folder-under-a-working-directory.md)).
 
+**C4. The current card is named in the header, and the header switches it.** The stage header's
+right is the **card switcher**. The player's card — when it reports a marked one — and the SD in
+this computer are two buttons; the virtual cards are one button when there is one and a
+**Virtual cards** menu when there are several. The current unit takes the accent outline, and the
+menu's trigger names the current virtual card, so every area says which card it is working on
+without a visit to Prepare. Choosing a unit switches the card in place, without navigating; the
+areas that follow the selected card follow it. A refusal to reopen a virtual card's working
+directory leaves the previous card selected and says so. With nothing selected the switcher marks
+no unit. The Media header names only the page — Albums, an album, an artist, Drive, Video — because
+the switcher already names the card and the rail is the way back. The shelf in Prepare remains the
+place that creates, renames, removes, writes and ejects.
+
 ---
 
 ## 6. Offline

@@ -46,6 +46,8 @@ export function CardTree() {
   const [renaming, setRenaming] = useState<{ path: string; value: string } | null>(null);
   /* Bumped whenever the selection must be dropped in the tree too, not just here. */
   const [clearToken, setClearToken] = useState(0);
+  /* One button, toggling: what the next press will do is its label. */
+  const [allExpanded, setAllExpanded] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   /* The tree's own expand/collapse, driven from this bar. */
   const treeControls = useRef<TreeControls | null>(null);
@@ -132,7 +134,7 @@ export function CardTree() {
     setBusy(true);
     setError(null);
     try {
-      for (const path of selected) {
+      for (const path of topLevel(selected)) {
         await removeFromCard(card, path);
         await deleteMediaBelow(scope, path);
       }
@@ -177,7 +179,7 @@ export function CardTree() {
     setBusy(true);
     setError(null);
     try {
-      for (const path of paths) {
+      for (const path of topLevel(paths)) {
         // A folder cannot move into itself or below itself.
         if (path === '' || path === toFolder || toFolder.startsWith(`${path}/`)) continue;
         const next = await relocateInCard(card, path, toFolder);
@@ -196,6 +198,8 @@ export function CardTree() {
   if (tree === null) return <Skeleton className="h-40 w-full" />;
 
   const empty = tree.folders.length === 0 && tree.tracks.length === 0;
+  const total = countItems(tree);
+  const allSelected = total > 0 && selected.length >= total;
 
   return (
     <Card
@@ -243,11 +247,26 @@ export function CardTree() {
               <Trash2 aria-hidden="true" /> Delete
             </Button>
             <div className="ml-auto flex items-center gap-1">
-              <Button size="sm" variant="ghost" onClick={() => treeControls.current?.expandAll()}>
-                Expand all
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  if (allSelected) treeControls.current?.deselectAll();
+                  else treeControls.current?.selectAll();
+                }}
+              >
+                {allSelected ? 'Deselect all' : 'Select all'}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => treeControls.current?.collapseAll()}>
-                Collapse all
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  if (allExpanded) treeControls.current?.collapseAll();
+                  else treeControls.current?.expandAll();
+                  setAllExpanded((value) => !value);
+                }}
+              >
+                {allExpanded ? 'Collapse all' : 'Expand all'}
               </Button>
             </div>
           </div>
@@ -297,4 +316,28 @@ export function CardTree() {
       </div>
     </Card>
   );
+}
+
+/** Every selectable row: each folder and each file below the root. */
+function countItems(folder: Folder): number {
+  let count = folder.tracks.length;
+  for (const child of folder.folders) count += 1 + countItems(child);
+  return count;
+}
+
+/**
+ * Drop the paths a selected ancestor already covers. Deleting a folder removes its children
+ * on disk, so visiting a child afterwards asks for a file that is already gone; moving a
+ * folder takes them with it for the same reason.
+ */
+function topLevel(paths: readonly string[]): string[] {
+  const chosen = new Set(paths);
+  const parentOf = (path: string): string =>
+    path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+  return paths.filter((path) => {
+    for (let parent = parentOf(path); parent !== ''; parent = parentOf(parent)) {
+      if (chosen.has(parent)) return false;
+    }
+    return true;
+  });
 }

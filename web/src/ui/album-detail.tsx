@@ -21,9 +21,8 @@ import {
   UNKNOWN_ALBUM,
   UNKNOWN_ARTIST,
   type Album,
-  type MediaIndexState,
 } from '../media/albums';
-import { useCardScope } from '../card/session';
+import { useCardScope, useDeviceView } from '../card/session';
 import {
   imageRowKey,
   readImageMeasurements,
@@ -84,68 +83,6 @@ function albumQueryFor(album: Album): string | null {
 }
 
 type Notice = { kind: 'ok' | 'error'; text: string };
-
-/**
- * One track's measurements, and the difference between two silences the page used to blur:
- * `null` is the device not answering for the track at all (the request failed), while a
- * track document whose `analysis` is null is an answer -- this file exists and the image the
- * player is holding has no row for it. They mean different things and lead to different
- * acts, so they are not one word.
- */
-function TrackMeasurement({
-  track,
-  image,
-}: {
-  track: McpTrack | null | undefined;
-  /** The row this browser wrote for the card, used when the player cannot answer. */
-  image?: ImageMeasurement | null;
-}) {
-  if (track === undefined) {
-    return (
-      <span className="flex items-center gap-2">
-        <Skeleton className="h-4 w-12" />
-        <Skeleton className="h-4 w-8" />
-      </span>
-    );
-  }
-
-  /* The device first: with the card in it, its answer is what the player will play. */
-  if (track !== null && track.analysis !== null) {
-    return (
-      <span className="flex items-center gap-3 text-sm tabular-nums">
-        <span>{track.analysis.bpm === null ? '—' : `${track.analysis.bpm.toFixed(1)} BPM`}</span>
-        <span className="text-muted-foreground">{track.analysis.key ?? '—'}</span>
-      </span>
-    );
-  }
-
-  /* The card is in the computer, or its image has not been applied: the browser wrote the
-   * image, so it can read the row back rather than leaving the album unmeasured. */
-  if (image) {
-    return (
-      <span
-        className="flex items-center gap-3 text-sm tabular-nums"
-        title="From the image this browser wrote for the card; the player did not answer for it"
-      >
-        <span>{image.bpm === null ? '—' : `${image.bpm.toFixed(1)} BPM`}</span>
-        <span className="text-muted-foreground">{image.key ?? '—'}</span>
-      </span>
-    );
-  }
-
-  if (track === null) {
-    return (
-      <span className="text-xs text-muted-foreground" title="The device did not answer for this track">
-        no answer
-      </span>
-    );
-  }
-  return (
-    <span className="text-xs text-muted-foreground" title="The player's image has no row for this track">
-      not in the image
-    </span>
-  );
-}
 
 /**
  * An instance that has not answered in this long is treated as not answering: the album page
@@ -305,8 +242,6 @@ function LookupPanel({
 
 function TrackRow({
   row,
-  track,
-  image,
   showArtist,
   action,
   onPlay,
@@ -346,9 +281,9 @@ function TrackRow({
         {/* One width for the numbers, right-aligned: "128.0 BPM 8A" and "no answer" are not
             the same length, and the buttons after them must not move row to row — nor the
             room a song's name has to be truncated in. */}
-        <div className="flex w-24 shrink-0 items-center justify-end">
+        {/* <div className="flex w-24 shrink-0 items-center justify-end">
           <TrackMeasurement track={track} image={image} />
-        </div>
+        </div> */}
         <Button variant="outline" size="sm" onClick={onPlay}>
           {action === 'queue' ? (
             <ListPlus aria-hidden="true" />
@@ -389,10 +324,13 @@ function TrackRow({
   );
 }
 
-export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexState }) {
+export function AlbumDetail({ album }: { album: Album }) {
   const playback = usePlayback();
   const readCardFile = useCardReader();
   const scope = useCardScope();
+  /* The album's card is the device's only when the DEVICE tile is the one selected; every
+   * other card is in the computer, and its files play here instead of queueing there. */
+  const deviceCard = useDeviceView();
   const [imageRows, setImageRows] = useState<Map<string, ImageMeasurement> | null>(null);
   const [measurements, setMeasurements] = useState<Map<string, McpTrack | null> | null>(null);
   const [lookup, setLookup] = useState<{ query: string; title: string } | null>(null);
@@ -441,7 +379,7 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
     if (!album) return;
     // No card in the player, no library: asking for every row would be a dozen refusals for
     // an answer already known. The browser's own image answers instead.
-    if (!state.card) {
+    if (!deviceCard) {
       setMeasurements(new Map(album.rows.map((row) => [row.path, null] as const)));
       return;
     }
@@ -462,7 +400,7 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
     return () => {
       cancelled = true;
     };
-  }, [album, state.card]);
+  }, [album, deviceCard]);
 
   /* The row's numbers, as this browser wrote them, when the player cannot give them back. */
   const imageOf = (row: CachedMedia): ImageMeasurement | null =>
@@ -473,7 +411,7 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
    * album is handed to the bar, in its own order, and each track is read off the card as the
    * play reaches it: that is what makes the bar's next and previous mean something. */
   const play = async (row: CachedMedia) => {
-    if (!state.card) {
+    if (!deviceCard) {
       const tracks = (album?.rows ?? []).map((entry) => ({
         path: entry.path,
         title: titleOf(entry),
@@ -542,7 +480,7 @@ export function AlbumDetail({ album, state }: { album: Album; state: MediaIndexS
                     key={row.path}
                     row={row}
                     showArtist={album.artists.length > 1}
-                    action={state.card ? 'queue' : 'play'}
+                    action={deviceCard ? 'queue' : 'play'}
                     image={imageOf(row)}
                     track={measurements === null ? undefined : (measurements.get(row.path) ?? null)}
                     onPlay={() => void play(row)}

@@ -54,15 +54,17 @@ export interface ComposeDirectory {
 /**
  * The destination path below `music/` for one dropped file.
  *
- * A folder dropped onto a card contributes its *contents*: the folder's own name is the
- * container the user dragged, not part of the library, so it is dropped and everything below
- * it is kept — dragging `/Music/Artist/Album/` lands as `music/Artist/Album/…`. A loose file
- * dropped on its own has only its own name, which it keeps.
+ * A folder keeps its own name: dragging `A/` and `B/` lands as `music/A/…` and `music/B/…`,
+ * because the folders are the shape the user chose and two of them must not merge. The one
+ * exception is a dropped `music/` folder — the card's own root — whose name would nest a
+ * second `music/`; its contents are what was meant, so that segment is dropped.
  */
 export function composePath(path: string): string {
   const segments = path.split('/').filter((segment) => segment.length > 0);
-  if (segments.length <= 1) return path;
-  return segments.slice(1).join('/');
+  if (segments.length > 1 && segments[0].toLowerCase() === 'music') {
+    return segments.slice(1).join('/');
+  }
+  return segments.join('/');
 }
 
 /**

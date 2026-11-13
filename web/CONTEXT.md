@@ -150,6 +150,12 @@ because the pick cannot be repeated once the card is in the player
 ([ADR 0063](../docs/adr/0063-the-browser-remembers-the-card-it-last-worked-on.md)).
 _Avoid_: namespace, partition, key
 
+**Card switcher**:
+The header's right: the **Device card** and the SD in this computer as two buttons, and the
+**Virtual cards** as one button when there is one or a menu when there are several. It names the
+current **Card** and changes it; **Prepare**'s shelf is where a card is created and managed.
+_Avoid_: card bar, card picker, workspace switcher, tab bar
+
 **Update file**:
 The image at a Card's root that carries a **Snapshot** into the player. The App writes it, the
 player consumes it once and deletes it; nothing else writes a card's files.

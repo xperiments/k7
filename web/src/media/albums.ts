@@ -24,7 +24,8 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useCardScope } from '../card/session';
+import { useCardScope, useDeviceView } from '../card/session';
+import { scopeFor } from '../card/mark';
 import { measureableName } from '../domain/analysis';
 import { libraryStats, listLibrary, type LibraryListing } from '../device/mcp';
 import { useDeviceStatus } from '../device/useDeviceStatus';
@@ -340,9 +341,15 @@ export interface MediaIndexState {
  */
 export function useMediaIndex(): MediaIndexState {
   const { status, reachable } = useDeviceStatus();
-  /* The card being prepared — the picked scope — not the player's card. The S3 can hold a
-   * different card, and the two must not borrow each other's names and covers. */
-  const scope = useCardScope();
+  const picked = useCardScope();
+  const deviceView = useDeviceView();
+  /* The Albums page follows the selected card: the player's own card when its DEVICE tile is
+   * picked, otherwise the card this browser is preparing. Each has its own scope, so the two
+   * still never borrow each other's names and covers. */
+  const scope =
+    deviceView && status?.card === true && status.mark !== null
+      ? scopeFor({ id: status.mark })
+      : picked;
   const [cache, setCache] = useState<Map<string, CachedMedia> | null>(null);
   const [deviceImage, setDeviceImage] = useState<DeviceImage | null>(null);
 
