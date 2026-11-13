@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseRoute, routeHref, type Route } from '../src/ui/router';
+import { NAV_GROUPS, parseRoute, routeHref, routeTitle, type Route } from '../src/ui/router';
 
 describe('the shell routes', () => {
   it('a bare hash is Prepare: the shell has a landing, not a not-found', () => {
@@ -74,6 +74,75 @@ describe('the shell routes', () => {
     ];
     for (const route of routes) {
       expect(parseRoute(routeHref(route))).toEqual(route);
+    }
+  });
+});
+
+describe('the sidebar and the breadcrumb', () => {
+  it('takes the page from the sidebar item and the area from its group', () => {
+    expect(routeTitle(parseRoute('#/prepare'))).toEqual({
+      area: 'Media Sources',
+      page: 'Sources',
+    });
+    expect(routeTitle(parseRoute('#/playlists'))).toEqual({
+      area: 'Playlists',
+      page: 'Manage',
+    });
+    expect(routeTitle(parseRoute('#/playlists/ask'))).toEqual({
+      area: 'Playlists',
+      page: 'IA Agent',
+    });
+    expect(routeTitle(parseRoute('#/player'))).toEqual({
+      area: 'Player',
+      page: 'Now playing',
+    });
+  });
+
+  it('names the Media Sources pages under their area', () => {
+    expect(routeTitle(parseRoute('#/media'))).toEqual({
+      area: 'Media Sources',
+      page: 'Albums',
+    });
+    expect(routeTitle(parseRoute('#/media/album/AC%2FDC'))).toEqual({
+      area: 'Media Sources',
+      page: 'AC/DC',
+    });
+    expect(routeTitle(parseRoute('#/media/artist/Miles%20Davis'))).toEqual({
+      area: 'Media Sources',
+      page: 'Miles Davis',
+    });
+    expect(routeTitle(parseRoute('#/media/drive/Artist/Album'))).toEqual({
+      area: 'Media Sources',
+      page: 'Drive',
+    });
+    expect(routeTitle(parseRoute('#/media/video/dQw4w9WgXcQ'))).toEqual({
+      area: 'Media Sources',
+      page: 'Video',
+    });
+  });
+
+  it('keeps the sub-pages and the shell pages named', () => {
+    expect(routeTitle(parseRoute('#/playlists/aaaa000000000001'))).toEqual({
+      area: 'Playlists',
+      page: 'Editor',
+    });
+    expect(routeTitle(parseRoute('#/settings'))).toEqual({ area: null, page: 'Settings' });
+    expect(routeTitle(parseRoute('#/nope'))).toEqual({ area: null, page: 'Not found' });
+  });
+
+  it('every sidebar item opens its area and the right page', () => {
+    expect(NAV_GROUPS.map((group) => group.label)).toEqual([
+      'Media Sources',
+      'Playlists',
+      'Player',
+    ]);
+    for (const group of NAV_GROUPS) {
+      for (const item of group.items) {
+        const title = routeTitle(parseRoute(item.href));
+        // The Player's page says what it shows rather than repeating the item.
+        expect(title.area).toBe(group.label);
+        expect(title.page).toBe(item.names[0] === 'player' ? 'Now playing' : item.label);
+      }
     }
   });
 });

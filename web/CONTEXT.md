@@ -38,8 +38,11 @@ hash, cached in this browser.
 _Avoid_: models, assets, blobs
 
 **Area**:
-One of the App's destinations: **Card**, **Playlists**, **Media** and **Player**. An area owns
-routes and nothing else; what it shows it reads from the player, from this browser, or from both.
+One of the App's destinations: **Media Sources**, **Playlists** and **Player**. Media Sources
+holds the **Sources** and **Albums** pages, with the device's facts when the **Device card** is
+selected on Sources; Playlists holds **Manage**, the **Editor** and **IA Agent**; Player holds
+**Now playing**. An area owns routes and nothing else; what it shows it reads from the player,
+from this browser, or from both.
 _Avoid_: page, tab, section
 
 **Route**:
@@ -49,13 +52,13 @@ exists only inside the App.
 _Avoid_: URL, link, path
 
 **Carousel**:
-Media's first view: the album shelf, the cases on their short ends with the selected one turned
+The **Albums** page's first view: the album shelf, the cases on their short ends with the selected one turned
 to face the reader. The name is the walk along the row; there is nothing that rotates, swipes or
 advances on a timer. The shelf has the whole stage; clicking a case opens that album's tracks
 beside it — the shelf is centred under the header and grows to fill a tall stage while the rail's
 first letter or genre starts at the stage's top — walking the
 row with the arrows keeps them open, and a click outside, Escape or
-the floating button at the panel's top-left closes them. The left/right arrow keys walk the row from anywhere in the Media view — a text
+the floating button at the panel's top-left closes them. The left/right arrow keys walk the row from anywhere in the Albums view — a text
 field keeps its own arrows — and the pointer drags the row through the cases, each crossed
 case turning the 3D with it; the release lands on the nearest case — the end is caught even when the pointer leaves
 the shelf or the window, so the row cannot be left in hand. A press that never moved is still
@@ -67,7 +70,7 @@ its albums; choosing it again shows them all, and the rail keeps every genre eit
 _Avoid_: slider, gallery, carousel widget
 
 **Drive**:
-Media's second view: the card's folders as the tree their paths make, with the files the card
+The **Albums** page's second view: the card's folders as the tree their paths make, with the files the card
 holds under them. An album is a title its rows share; a folder is where the card put the files,
 and the two are not the same shape. `#/media/drive` is the card's `music` directory.
 _Avoid_: file browser, explorer, file tree
@@ -106,9 +109,10 @@ App prepares in a **Working directory** before an SD is in the machine.
 _Avoid_: SD card (except for the object), volume, library, drive
 
 **Device card**:
-The **Card** in the ESP32-S3. The browser never has its directory, so Prepare can only view
-it: selecting its tile points the **Albums** page at that card's scope. It appears only while
-the device reports a card, and only a marked one can be named.
+The **Card** in the ESP32-S3. The browser never has its directory, so the **Sources** page can
+only view it: selecting its tile or the switcher's Device button shows the device's facts there and
+points the **Albums** page at that card's scope. It appears only while the device reports a card,
+and only a marked one can be named.
 _Avoid_: remote card, player card, S3 card
 
 **Virtual card**:
@@ -153,7 +157,8 @@ _Avoid_: namespace, partition, key
 **Card switcher**:
 The header's right: the **Device card** and the SD in this computer as two buttons, and the
 **Virtual cards** as one button when there is one or a menu when there are several. It names the
-current **Card** and changes it; **Prepare**'s shelf is where a card is created and managed.
+current **Card** and changes it; the **Sources** page's shelf is where a card is created and
+managed.
 _Avoid_: card bar, card picker, workspace switcher, tab bar
 
 **Update file**:
@@ -163,7 +168,7 @@ _Avoid_: snapshot file, image file, config
 
 **Scan**:
 Reading a card that is in this computer: a picked directory walked for MP3 and FLAC, producing
-**Queue** entries. Never writes. It happens in **Prepare** — the drop zone is that area's intake,
+**Queue** entries. Never writes. It happens on the **Sources** page — the drop zone is that page's intake,
 not a page of its own.
 _Avoid_: import, add files, load
 
@@ -173,9 +178,9 @@ act, on a different machine, than a **Scan**.
 _Avoid_: refresh, reload, reindex
 
 **Prepare**:
-The area that prepares a **Card** — real or virtual. It composes a **Virtual card**'s music,
-measures the **Queue**, keeps a virtual card's `k7.db` current, and writes a virtual card onto
-an SD.
+The work that prepares a **Card** — real or virtual — on the **Sources** page. It composes a
+**Virtual card**'s music, measures the **Queue**, keeps a virtual card's `k7.db` current, and
+writes a virtual card onto an SD.
 _Avoid_: process, analyse, run, batch
 
 **Compose**:
@@ -357,9 +362,14 @@ _Avoid_: now playing, current song, track
 
 ### The assistant
 
+**IA Agent**:
+The Playlists page that holds **Ask**. The sidebar and the breadcrumb call the page IA Agent; the
+prompt box inside it is **Ask**.
+_Avoid_: Ask page, assistant page, AI Agent
+
 **Ask**:
-The prompt box in Playlists: the user's words, sent to the **Built-in model**, answered with an
-**Intent** and nothing else.
+The prompt box on the **IA Agent** page: the user's words, sent to the **Built-in model**, answered
+with an **Intent** and nothing else.
 _Avoid_: chat, assistant, generate
 
 **Intent**:

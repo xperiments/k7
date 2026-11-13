@@ -46,7 +46,8 @@ tile, the footer pill and the filled rows are what carry over.
   **secondary**), on a near-black page, plus alpha variants and one recessed well. The accent
   marks the brand, chips, the current button's border and text, and the scrollbar; the neutral
   carries text, control outlines, panel lines and the rail's current dome. No other colour
-  anywhere, including error, success and warning states. **[ADR 0081]**
+  anywhere, including error, success and warning states — except the device-unreachable badge
+  (K22, [ADR 0085](../adr/0085-the-device-warning-is-the-one-extra-hue.md)). **[ADR 0081]**
 - Dark theme only. Both documents carry `class="dark"` on `<html>`; there is no light palette and
   no theme control. **[ADR]**
 - No shadows, gradients, blur, glow, photos, rounded photo thumbnails or multi-colour charts, in
@@ -105,6 +106,7 @@ firmware value to borrow — they are the secondary the product was missing. **[
 | `--k7-accent-dim` | accent at 42% | Decorative ticks, empty meters (never text) |
 | `--k7-accent-faint` | accent at 18% | Tints |
 | `--k7-on-accent` | `#111111` | Text and icons on the accent |
+| `--k7-alert` | `#F2C94C` | The device-unreachable warning badge; the one hue outside the primary (K22, ADR 0085) |
 
 **K6. The geometry is rem, not px.** The guide's pixel values are measurements of a 16px-root
 document; this App sets `html { font-size: 130% }`, so the same rem value renders 30% larger and
@@ -296,7 +298,7 @@ if one is.
 | Component | K7 treatment |
 | --- | --- |
 | Button | Outlined pill in the neutral ink (`border-foreground/45 text-foreground`). `default` = outline. `solid` = accent outline, border and text (the primary action only; the name is historical). `ghost` = no border until hover, then a 1px neutral border. `destructive` = identical to default (no red). `link` = underline, neutral. Icon buttons are circles. The fill is reserved for chips, rows and the rail's dome |
-| Badge | Pill outline: the accent variant is the micro-label chip (accent border and text, uppercase, weight 500, `text-xs`); the quiet variants a neutral border and text. No fill |
+| Badge | Pill outline: the accent variant is the micro-label chip (accent border and text, uppercase, weight 500, `text-xs`); the quiet variants a neutral border and text. No fill. The `alert` variant is the one yellow, used only for the device-unreachable badge (K22, ADR 0085) |
 | Card | 1px neutral line (`border-border`), panel radius, transparent background, no shadow, `p-3`. Title weight 300 |
 | Input / Textarea / Select trigger | Transparent, 1px neutral outline (`border-foreground/40`), `rounded-full` (textarea: panel radius), text in the neutral ink, placeholder `text-foreground/50`, focus is a 2px accent ring |
 | Label / Form description | Neutral text; the description at the dim neutral (`text-muted-foreground`) |
@@ -383,11 +385,16 @@ stage, with a backdrop behind it and the mark at the drawer's top to close it. N
 - The stage header's right is the **card switcher**, a secondary control rather than a third
   action: the player's card and the SD are two ghost buttons, and the virtual cards are one
   button or a **Virtual cards** menu. The current unit is the accent outline, the menu's trigger
-  names the current virtual card, and the header gains no strip. The Media header is only the
-  page's name: no card label and no back arrow. Below 768px the two unit buttons drop their
-  labels to their glyphs, the virtual control keeps the card's name, the other areas' breadcrumb
-  drops its area label and separator, and the header's gutter narrows so the page name and the
-  switcher both fit.
+  names the current virtual card, and the header gains no strip. The Media Sources header names
+  the area and the view; the card label and the back arrow are gone. Below 768px the two unit
+  buttons drop their labels to their glyphs, the virtual control keeps the card's name, the other
+  areas' breadcrumb drops its area label and separator, and the header's gutter narrows so the
+  page name and the switcher both fit.
+- The area is the sidebar's group and the page is its item: **Media Sources > Sources**, **Media
+  Sources > Albums**, **Playlists > Manage**, **Playlists > IA Agent**. The album, artist, Drive
+  and Video pages are **Media Sources >** that page; the Player's page says what it shows
+  (**Player > Now playing**); Settings has no area. The header and the sidebar read one
+  `NAV_GROUPS` definition, so a renamed item cannot drift from its breadcrumb.
 - The logo is the accent wordmark on the page's dark ground — the inverse of the reference's filled
   tile, with no tile fill — and its wordmark is the only bold text in the system. It sits at the top of the rail above 768px — centred when the rail is collapsed — and at the
   top of the drawer below it; the stage header carries the mark only as the drawer's opener.
@@ -448,23 +455,27 @@ SVG in `currentColor`; there is no raster logo, icon or decorative photograph. *
 ## 6. The screens
 
 **K21. Every area is the shell plus modules.** One outline per module, one micro-label chip at
-the module's top-left as its title, and the current thing filled.
+the module's top-left as its title, and the current thing filled. The area is the sidebar's
+group; the page is its item.
 
-| Area | Pattern |
+| Page | Pattern |
 | --- | --- |
-| Prepare | A column of outlined panels: the drop zone, the virtual-card shelf, the queue rows, the run controls. The queue's running state is a filled row and a filled action |
-| Media | The coverflow exactly as it is (§5.3), with the album detail, artist and video routes as outlined panels around it |
-| Playlists | The list as rows; the editor as panels (search, blocks, actions); the current block is filled |
-| Ask | The prompt is a pill input; when the model is not ready its place is one sentence, with one solid button where the model can still be fetched (**Set up the assistant**), and the download's progress is a `Progress`; the intent is a panel of rows and controls; errors are K22 |
+| Sources | A column of outlined panels: the drop zone, the virtual-card shelf, the queue rows, the run controls. The Device card shows the device's facts — the card, the library, the Snapshot and Rescan — under the shelf. The queue's running state is a filled row and a filled action |
+| Albums | The coverflow exactly as it is (§5.3), with the album detail, artist and video routes as outlined panels around it |
+| Manage | The list as rows; the editor as panels (search, blocks, actions); the current block is filled |
+| IA Agent | The prompt is a pill input; when the model is not ready its place is one sentence, with one solid button where the model can still be fetched (**Set up the assistant**), and the download's progress is a `Progress`; the intent is a panel of rows and controls; errors are K22 |
 | Settings | A column of outlined panels, one per group. Labels left, controls right, pill inputs |
-| Player | The device's facts as modules; the primary action is one filled pill |
+| Now playing | The broadcast: what is on air, its cover and position, and what the device says when it cannot answer. The PlayerBar stays the control |
 | Site | See [`k7-site.md`](./k7-site.md): the hero, the flash section and the install section are modules, and the footer is the licence trail |
 
 **K22. States are shape and words, not hue.** Every data region has an empty state (with one
 action), a loading state (a `Skeleton` in the real layout) and an error state (a retry, plus a
 sentence naming the failure). An error or a warning is a filled bar or panel with a line icon and
-its word — "Unmarked card", "The model did not answer" — never a second colour. A destructive
-confirm is a panel whose action is the filled variant (the `AlertDialog` treatment, K14). **[ADR]**
+its word — "Unmarked card", "The model did not answer" — never a second colour. The one exception
+is the device-unreachable badge in the stage header: a yellow outline, a line alert icon and its
+word ([ADR 0085](../adr/0085-the-device-warning-is-the-one-extra-hue.md)), because the link state
+has to be seen before the card switcher; data errors stay neutral. A destructive confirm is a
+panel whose action is the filled variant (the `AlertDialog` treatment, K14). **[ADR]**
 
 ---
 

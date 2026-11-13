@@ -24,6 +24,20 @@ export type Route =
   | { name: 'settings' }
   | { name: 'not-found'; path: string };
 
+/** One sidebar item: the page's label, where it goes, and the routes it is the page of. */
+export interface NavItem {
+  label: string;
+  href: string;
+  names: Route['name'][];
+}
+
+/** One sidebar group: the area, and its pages. */
+export interface NavGroup {
+  id: string;
+  label: string;
+  items: NavItem[];
+}
+
 function decode(segment: string): string {
   try {
     return decodeURIComponent(segment);
@@ -69,59 +83,6 @@ export function parseRoute(hash: string): Route {
   }
 }
 
-/** The area a route belongs to, or null for the shell's own pages (Settings). */
-export function routeArea(route: Route): 'Card' | 'Playlists' | 'K7' | 'Player' | null {
-  switch (route.name) {
-    case 'prepare':
-      return 'Card';
-    case 'playlists':
-    case 'playlist':
-    case 'ask':
-      return 'Playlists';
-    case 'media':
-    case 'drive':
-    case 'album':
-    case 'artist':
-    case 'video':
-      return 'K7';
-    case 'player':
-      return 'Player';
-    default:
-      return null;
-  }
-}
-
-/** The page's name for the breadcrumb: the area says where, this says what. */
-export function routePage(route: Route): string {
-  switch (route.name) {
-    case 'prepare':
-      return 'Prepare';
-    case 'playlists':
-      return 'Playlists';
-    case 'playlist':
-      return 'Editor';
-    case 'ask':
-      return 'Ask';
-    case 'media':
-      return 'Albums';
-    case 'drive':
-      // The whole drive is the page; a path in the address only says which folder to open.
-      return 'Drive';
-    case 'album':
-      return route.album;
-    case 'artist':
-      return route.artist;
-    case 'video':
-      return 'Video';
-    case 'player':
-      return 'Now playing';
-    case 'settings':
-      return 'Settings';
-    default:
-      return 'Not found';
-  }
-}
-
 /** The hash a route is addressed by; the inverse of `parseRoute`. */
 export function routeHref(route: Route): string {
   switch (route.name) {
@@ -151,6 +112,84 @@ export function routeHref(route: Route): string {
       return '#/settings';
     default:
       return '#/prepare';
+  }
+}
+
+/**
+ * The sidebar and the breadcrumb, from one definition.
+ *
+ * The group label is the area; the item label is the page of a top-level route. The
+ * album/artist/Video/Drive pages and the playlist Editor keep their own names, and the
+ * Media Sources pages hide the area because the page already says which view it is.
+ */
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    id: 'sources',
+    label: 'Media Sources',
+    items: [
+      { label: 'Sources', href: routeHref({ name: 'prepare' }), names: ['prepare'] },
+      {
+        label: 'Albums',
+        href: routeHref({ name: 'media' }),
+        names: ['media', 'album', 'artist', 'video', 'drive'],
+      },
+    ],
+  },
+  {
+    id: 'playlists',
+    label: 'Playlists',
+    items: [
+      {
+        label: 'Manage',
+        href: routeHref({ name: 'playlists' }),
+        names: ['playlists', 'playlist'],
+      },
+      { label: 'IA Agent', href: routeHref({ name: 'ask' }), names: ['ask'] },
+    ],
+  },
+  {
+    id: 'player',
+    label: 'Player',
+    items: [{ label: 'Player', href: routeHref({ name: 'player' }), names: ['player'] }],
+  },
+];
+
+/** The area and page the header shows for a route. */
+export function routeTitle(route: Route): { area: string | null; page: string } {
+  if (route.name === 'settings') return { area: null, page: 'Settings' };
+  if (route.name === 'not-found') return { area: null, page: 'Not found' };
+
+  const group = NAV_GROUPS.find((each) =>
+    each.items.some((item) => item.names.includes(route.name)),
+  );
+  const item = group?.items.find((each) => each.names.includes(route.name));
+  if (group === undefined || item === undefined) return { area: null, page: 'Not found' };
+
+  return {
+    area: group.label,
+    page: subPage(route) ?? item.label,
+  };
+}
+
+/** A page whose route is below a destination and names itself. */
+function subPage(route: Route): string | null {
+  switch (route.name) {
+    case 'playlist':
+      return 'Editor';
+    case 'album':
+      return route.album;
+    case 'artist':
+      return route.artist;
+    case 'video':
+      return 'Video';
+    case 'drive':
+      // The whole drive is the page; a path in the address only says which folder to open.
+      return 'Drive';
+    case 'player':
+      // A destination whose page says what it shows; the item stays "Player".
+      return 'Now playing';
+    default:
+      return null;
   }
 }
 

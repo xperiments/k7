@@ -2,22 +2,18 @@ import { useEffect, useState } from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Skeleton } from '@/components/ui/skeleton';
-import { getDevice } from '../../device/device';
-import { libraryStats, statsCoverage, trackAt, type McpStats, type McpTrack } from '../../device/mcp';
-import type { DeviceStatus } from '../../device/status';
-import { DeviceError } from '../../device/transport';
-import { refreshDevice, useDeviceStatus } from '../../device/useDeviceStatus';
+import { trackAt, type McpTrack } from '../../device/mcp';
+import { useDeviceStatus } from '../../device/useDeviceStatus';
 import { currentCardScope } from '../../card/session';
 import { getMedia, type CachedMedia } from '../../storage/media';
-import { formatDuration, plural } from '../format';
+import { formatDuration } from '../format';
 import { Cover } from '../cover';
 
 /**
- * The Player: what the broadcast is carrying, and what the device says about itself.
+ * The Player: what the broadcast is carrying. The device's own facts — the card, the
+ * library and the Snapshot — live on Sources/Device.
  *
  * Read-only on purpose. A live stream cannot be paused for one listener, and the only
  * transport verb the page has is `POST /api/play {path}`, which the album rows offer; a
@@ -28,54 +24,12 @@ import { Cover } from '../cover';
  *   cover        the `k7-media` cache by the Snapshot path in `/api/status`
  *   name         `playing.title`, then the cache, then the device's row, then the file name
  *   artist/album the cache first, the device's row when the cache has no names
- *   order        `/api/status`'s `order` and `playlist`, when the firmware reports them
- *   coverage     `library_stats`, which is also the only place a Snapshot's age is known
  */
-
-/** The order the broadcast walks, as the device reports it; the page never assumes a list. */
-function orderLabel(status: DeviceStatus | null): string {
-  if (!status) return '—';
-  if (status.order === 'list' && status.playlist?.name.trim()) {
-    return `the playlist “${status.playlist.name.trim()}”`;
-  }
-  return 'the library';
-}
 
 /** A file name without its extension, for a track whose tags carried no title. */
 function fromPath(path: string): string {
   const name = path.split('/').pop() ?? path;
   return name.replace(/\.[^.]+$/, '');
-}
-
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="break-words text-sm">{children}</dd>
-    </div>
-  );
-}
-
-type Rescan =
-  | { state: 'idle' }
-  | { state: 'sending' }
-  | { state: 'accepted' }
-  | { state: 'busy'; text: string }
-  | { state: 'failed'; text: string };
-
-function snapshotState(state: string): string {
-  switch (state) {
-    case 'ok':
-      return 'valid';
-    case 'no_update':
-      return 'none flashed yet';
-    case 'no_partition':
-      return 'no snapshot partition in this build';
-    case 'invalid':
-      return 'refused (the image did not validate)';
-    default:
-      return state;
-  }
 }
 
 export function PlayerArea() {
@@ -85,8 +39,6 @@ export function PlayerArea() {
 
   const [cached, setCached] = useState<CachedMedia | null>(null);
   const [measured, setMeasured] = useState<McpTrack | null>(null);
-  const [stats, setStats] = useState<McpStats | null>(null);
-  const [statsFailed, setStatsFailed] = useState(false);
   // A failed poll is silent about whether the device is off or merely slow, so the page
   // waits before it says "not answering" rather than flashing it on every cold load.
   const [waited, setWaited] = useState(false);
@@ -125,27 +77,6 @@ export function PlayerArea() {
     };
   }, [path]);
 
-  // Coverage and the Snapshot's age: one call, and a failure is a dash rather than a page.
-  const hasStatus = status !== null;
-  const generation = status?.generation ?? 0;
-  useEffect(() => {
-    if (!hasStatus) return;
-    let cancelled = false;
-    setStatsFailed(false);
-    void libraryStats()
-      .then((answer) => {
-        if (!cancelled) setStats(answer);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setStats(null);
-        setStatsFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [hasStatus, generation]);
-
   const analysis = measured?.analysis ?? null;
   const title =
     playing?.title?.trim() ||
@@ -162,53 +93,6 @@ export function PlayerArea() {
   const elapsed = playing?.elapsed ?? 0;
   const duration = playing?.duration ?? 0;
   const percent = duration > 0 ? Math.min(100, Math.max(0, (elapsed / duration) * 100)) : 0;
-
-  const snapshot = stats?.snapshot ?? null;
-  const coverage = statsCoverage(stats);
-  const builtAt =
-    snapshot && typeof snapshot.generation === 'number' && snapshot.generation > 0
-      ? new Date(snapshot.generation * 1000).toLocaleString()
-      : null;
-  const libraryEmpty = Boolean(stats && !stats.available);
-
-  /* The Rescan: the device rebuilding its Library from the card it is holding. It is the one
-   * write this page can ask for, so it sits with the facts it changes rather than on a page
-   * of its own. */
-  const [rescan, setRescan] = useState<Rescan>({ state: 'idle' });
-  const rescanUnavailable = !reachable
-    ? 'the device is not answering'
-    : !status?.card
-      ? 'there is no card in the player'
-      : null;
-
-  const rescanLibrary = async () => {
-    setRescan({ state: 'sending' });
-    try {
-      const result = await getDevice().request('rescan');
-      setRescan(
-        result.ok
-          ? { state: 'accepted' }
-          : { state: 'failed', text: 'The player did not start the scan.' },
-      );
-    } catch (error) {
-      /* A refusal keeps the device's own sentence: "a scan is already running" is its
-       * fact, and 409 is how it says so (E1). */
-      if (error instanceof DeviceError && error.status === 409) {
-        setRescan({ state: 'busy', text: error.message });
-      } else if (error instanceof DeviceError && error.code === 'refused') {
-        setRescan({
-          state: 'failed',
-          text: error.message || `The player answered ${error.status}.`,
-        });
-      } else if (error instanceof DeviceError) {
-        setRescan({ state: 'failed', text: 'The player did not answer; is it on the same network?' });
-      } else {
-        setRescan({ state: 'failed', text: error instanceof Error ? error.message : String(error) });
-      }
-    } finally {
-      void refreshDevice();
-    }
-  };
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
@@ -294,81 +178,6 @@ export function PlayerArea() {
           </div>
         </div>
       )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>The device</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            What the firmware reports about the card, the library and the Snapshot it holds.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Fact label="Card">
-              {status ? (status.card ? 'in the player' : 'out of the player') : '—'}
-            </Fact>
-            <Fact label="Tracks">
-              {status ? (
-                <span className="tabular-nums">{plural(status.tracks, 'track')}</span>
-              ) : (
-                '—'
-              )}
-            </Fact>
-            <Fact label="Library generation">
-              {status ? <span className="tabular-nums">{status.generation}</span> : '—'}
-            </Fact>
-            <Fact label="Order">{orderLabel(status)}</Fact>
-            <Fact label="Snapshot">
-              {statsFailed ? (
-                '—'
-              ) : stats === null ? (
-                <Skeleton className="h-4 w-32" />
-              ) : libraryEmpty ? (
-                'the device has no library'
-              ) : !snapshot || snapshot.state !== 'ok' ? (
-                `no Snapshot (${snapshotState(snapshot?.state ?? 'unknown')})`
-              ) : coverage ? (
-                <span className="tabular-nums">
-                  {coverage.analysed} of {coverage.tracks} analysed ({coverage.percent}%)
-                </span>
-              ) : (
-                '—'
-              )}
-            </Fact>
-            <Fact label="Built">
-              {statsFailed ? (
-                '—'
-              ) : stats === null ? (
-                <Skeleton className="h-4 w-32" />
-              ) : (
-                builtAt ?? '—'
-              )}
-            </Fact>
-          </dl>
-
-          <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void rescanLibrary()}
-              disabled={rescanUnavailable !== null || rescan.state === 'sending'}
-            >
-              {rescan.state === 'sending' ? 'Asking…' : 'Rescan the card'}
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              {rescanUnavailable
-                ? `Unavailable: ${rescanUnavailable}.`
-                : rescan.state === 'accepted'
-                  ? 'Accepted — the library is rebuilding; the count follows on the next poll.'
-                  : rescan.state === 'busy'
-                    ? rescan.text
-                    : rescan.state === 'failed'
-                      ? rescan.text
-                      : 'Rebuilds the Library from the card in the player. Nothing is measured.'}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
 
       <p className="text-xs text-muted-foreground">
         The live stream is shared: every listener hears the same track at the same moment, and this

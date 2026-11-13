@@ -296,7 +296,7 @@ export function CardGrid() {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-light tracking-tight">Cards</h2>
+        <h2 className="text-sm font-light tracking-tight">Available Media Sources</h2>
         <div className="flex items-center gap-2">
           {!dirReady && (
             <Button size="xs" variant="outline" onClick={() => void connect()} disabled={busy}>

@@ -3,9 +3,9 @@ import {
   Disc3,
   ListMusic,
   MessageCircle,
-  MonitorX,
   Play,
   Settings as SettingsIcon,
+  TriangleAlert,
 } from 'lucide-react';
 import { cn } from 'cn';
 
@@ -16,6 +16,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
 import {
   SidebarMenu,
@@ -27,7 +28,14 @@ import { useDeviceStatus } from '../device/useDeviceStatus';
 import { CardSwitcher } from './CardSwitcher';
 import { InstallButton } from './InstallButton';
 import { useDrafts } from '../playlists/drafts';
-import { navigate, routeArea, routeHref, routePage, type Route } from './router';
+import {
+  NAV_GROUPS,
+  navigate,
+  routeHref,
+  routeTitle,
+  type NavItem,
+  type Route,
+} from './router';
 import { PlayerBar } from './PlayerBar';
 import {
   Tooltip,
@@ -40,79 +48,52 @@ import {
  * The shell: `c-sidebar-1`'s structure with this device's data in it.
  *
  * The template's three data blocks become: the device (where the workspace switcher
- * was), four nav groups with count badges, and a footer that links Settings and names
+ * was), the nav groups with count badges, and a footer that links Settings and names
  * the licence. Its "Projects" group and account menu are gone -- there are no projects
  * and no accounts, and inventing them to keep the shape would be a lie in the UI.
  */
 
-interface NavItem {
-  href: string;
-  label: string;
+interface RailNavItem extends NavItem {
   icon: React.ReactNode;
-  /** The routes this item is the current page of. */
-  names: Route['name'][];
   badge?: string;
 }
 
-interface NavGroup {
+interface RailNavGroup {
   id: string;
   label: string;
-  items: NavItem[];
+  items: RailNavItem[];
 }
 
-/** The four areas, and the routes that belong to each. */
-function navGroups(drafts: number): NavGroup[] {
-  return [
-    {
-      id: 'card',
-      label: 'Media',
-      items: [
-        {
-          href: routeHref({ name: 'prepare' }),
-          label: 'Prepare',
-          icon: <ListMusic aria-hidden="true" />,
-          names: ['prepare'],
-        },
-                {
-          href: routeHref({ name: 'media' }),
-          label: 'Browse',
-          icon: <Disc3 aria-hidden="true" />,
-          names: ['media', 'album', 'artist', 'video', 'drive'],
-        },
-      ],
-    },
-    {
-      id: 'playlists',
-      label: 'Playlists',
-      items: [
-        {
-          href: routeHref({ name: 'playlists' }),
-          label: 'Manage',
-          icon: <ListMusic aria-hidden="true" />,
-          names: ['playlists', 'playlist'],
-          badge: drafts > 0 ? String(drafts) : undefined,
-        },
-        {
-          href: routeHref({ name: 'ask' }),
-          label: 'Ask',
-          icon: <MessageCircle aria-hidden="true" />,
-          names: ['ask'],
-        },
-      ],
-    },
-    {
-      id: 'k7',
-      label: 'Player',
-      items: [
-        {
-          href: routeHref({ name: 'player' }),
-          label: 'Player',
-          icon: <Play aria-hidden="true" />,
-          names: ['player'],
-        },
-      ],
-    },
-  ];
+/** The glyph for one destination; the names and labels come from the router. */
+function iconFor(item: NavItem): React.ReactNode {
+  switch (item.names[0]) {
+    case 'prepare':
+      return <ListMusic aria-hidden="true" />;
+    case 'media':
+      return <Disc3 aria-hidden="true" />;
+    case 'playlists':
+      return <ListMusic aria-hidden="true" />;
+    case 'ask':
+      return <MessageCircle aria-hidden="true" />;
+    case 'player':
+      return <Play aria-hidden="true" />;
+    default:
+      return null;
+  }
+}
+
+/** The sidebar, with the draft count on Manage. */
+function railGroups(drafts: number): RailNavGroup[] {
+  return NAV_GROUPS.map((group) => ({
+    id: group.id,
+    label: group.label,
+    items: group.items.map((item) => ({
+      ...item,
+      icon: iconFor(item),
+      badge:
+        item.names.includes('playlists') && drafts > 0 ? String(drafts) : undefined,
+    })),
+  }));
 }
 
 /** The K7 control: a pill twice the dome's width, a circular dome with the icon, a label. */
@@ -175,7 +156,7 @@ function Nav({
   route,
   collapsed,
 }: {
-  groups: NavGroup[];
+  groups: RailNavGroup[];
   route: Route;
   collapsed: boolean;
 }) {
@@ -220,9 +201,8 @@ export function Shell({ route, children }: { route: Route; children: React.React
   /* There is no "Now playing" entry: the bar at the bottom of every area *is* the player, so
    * a page for it would be a second place to look at the same fact. `#/player` still renders
    * the device's facts for anyone who has the address. */
-  const groups = navGroups(drafts.length);
-
-  const area = routeArea(route);
+  const groups = railGroups(drafts.length);
+  const { area, page } = routeTitle(route);
 
   /* The rail is a drawer below 768px and the standing column above it. */
   const [isMobile, setIsMobile] = useState(() =>
@@ -399,9 +379,9 @@ export function Shell({ route, children }: { route: Route; children: React.React
               ) : null}
               <Breadcrumb className="min-w-0">
                 <BreadcrumbList className="min-w-0 flex-nowrap">
-                  {/* Media is the page's own name and nothing else: the card is the
-                      switcher's fact, and the rail is the way back. */}
-                  {area !== null && area !== 'K7' ? (
+                  {/* The Media Sources header names the area and the view; the card is
+                      the switcher's fact, and the rail is the way back. */}
+                  {area !== null ? (
                     <>
                       <BreadcrumbItem className="min-w-0 max-[767px]:hidden">
                         <span className="truncate text-sm text-muted-foreground">{area}</span>
@@ -410,20 +390,24 @@ export function Shell({ route, children }: { route: Route; children: React.React
                     </>
                   ) : null}
                   <BreadcrumbItem className="min-w-0">
-                    <BreadcrumbPage className="truncate">{routePage(route)}</BreadcrumbPage>
+                    <BreadcrumbPage className="truncate">{page}</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
               <div className="ml-auto flex shrink-0 items-center gap-2">
                 <CardSwitcher />
                 {!reachable ? (
-                  <>
-                    <span className="hidden text-xs text-muted-foreground md:inline">
-                      device unreachable
-                    </span>
-                    <MonitorX aria-hidden="true" className="size-4 text-muted-foreground md:hidden" />
-                    <span className="sr-only md:hidden">device unreachable</span>
-                  </>
+                  <Badge
+                    variant="alert"
+                    size="sm"
+                    role="status"
+                    aria-label="device unreachable"
+                    title="device unreachable"
+                    className="gap-1 px-0 md:px-2"
+                  >
+                    <TriangleAlert aria-hidden="true" />
+                    <span className="hidden md:inline">device unreachable</span>
+                  </Badge>
                 ) : null}
               </div>
             </header>
@@ -447,11 +431,11 @@ export function NotFound({ path }: { path: string }) {
       <h1 className="text-xl font-light tracking-tight">No such place</h1>
       <p className="text-sm text-muted-foreground">
         <code className="bg-muted px-1 py-0.5 font-mono text-xs">#{path}</code> is not a route in
-        this shell. Prepare, Playlists, Media, Ask and Settings are.
+        this shell. Sources, Playlists, Albums, IA Agent, Player and Settings are.
       </p>
       <div>
         <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'prepare' }))}>
-          Go to Prepare
+          Go to Sources
         </Button>
       </div>
     </div>

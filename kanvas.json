@@ -1410,6 +1410,81 @@
           "text": "APP-23 is ready for review.\n\nWhat changed for you:\n- The Media header is the page's name only: Albums, an album, an artist, Drive or Video. The back arrow and the card's name are gone.\n- The header's right switcher remains the one place the card is named, and the rail is the way back to Prepare.\n- The app spec C4 and the look bullet now say the Media header carries no card label and no back arrow.\n\nWhat to check: open Albums, an album, an artist, Drive and Video; the header should read only that page's name at desktop and phone width, while the switcher still names the current card.\n\nVerified: 566 tests pass, the look checker passes, the bundle builds, and the header was checked at 1440 and 390. Typecheck is clean in the changed files; the project-wide check is still blocked by the pre-existing album-detail WIP (three unused symbols), which this change does not touch.\n\nStill uncommitted, as agreed while the other lanes are in the tree."
         }
       ]
+    },
+    {
+      "id": "APP-24",
+      "title": "A device-unreachable warning sits beside the card switcher",
+      "state": "done",
+      "group": "APP",
+      "at": "2026-11-13T21:12:27Z",
+      "by": "dsh",
+      "desc": "Reported: when the player cannot be reached, the header says \"device unreachable\" in the neutral ink — a gray line on desktop, a gray MonitorX on phones — beside the card switcher. It reads as incidental text, not as the warning it is. Make it an alert badge/icon in yellow, immediately beside the switcher, so the link state is visible at a glance on every area.\n\nThis is a deliberate exception to the look's one-hue rule (K22: states are shape and words, not hue; the theme maps --warning to the neutral). Add a yellow warning token and a Badge/alert treatment, and record the exception in k7-look.md — if the one-skin rule (ADR 0080) needs an explicit amendment, add the ADR in the same change. The badge is the device link state, not a data error; it is the only yellow in the chrome.\n\nDesktop: the warning word with the alert icon. Phone: the icon with an accessible name, not a second line. It must fit beside the switcher at 390 without pushing the page name off; the switcher keeps naming the card.\n\nFinished when: the warning is yellow and beside the switcher at 1440 and 390; it is announced (role=status or alert, accessible name); the look spec says where the exception is (and the ADR if needed); typecheck, tests and build pass. Check: the header with the device off at both widths; the page name and the switcher still fit.",
+      "notes": [
+        {
+          "at": "2026-11-13T21:14:21Z",
+          "by": "dsh",
+          "text": "Plan: add one yellow alert token outside the --warning state words, a Badge \"alert\" variant using it, and put the badge beside the CardSwitcher: word + alert icon at desktop width, a compact icon with an accessible name at phone width. Record the one-hue exception in k7-look.md and ADR 0085 (amending ADR 0081 for this badge only); keep --warning neutral so measured values do not turn yellow. Verify the header with the device off at 1440 and 390, then typecheck, tests, look checker and build."
+        },
+        {
+          "at": "2026-11-13T21:15:59Z",
+          "by": "dsh",
+          "text": "APP-24 is ready for review.\n\nWhat changed for you:\n- The device-unreachable state is now a yellow alert badge beside the card switcher. Desktop: alert icon + \"device unreachable\". Phone: the icon alone, with the accessible name, so it does not take a second line.\n- It is announced as a status and carries the label \"device unreachable\"; no colour-only signal.\n- The yellow is one token, `--k7-alert` (#F2C94C), and one Badge variant (`alert`). `--warning` stays neutral, so measured values and every other state keep the shape-and-words rule.\n\nWhere the look records it:\n- k7-look.md: the hard constraints, the token table, the Badge row and K22 name the exception.\n- ADR 0085, \"The device warning is the one extra hue\", amends ADR 0081 for this badge only; ADR 0081 carries the amendment note.\n\nWhat to check:\n- With the player off, the header shows the yellow badge beside the switcher at 1440 and 390; the page name and the switcher still fit (the badge is about 23px on a phone).\n- With the player reachable, the badge is gone.\n- The measured values in the queue keep the neutral `text-warning`; only the device badge is yellow.\n\nVerified: typecheck, 566 tests, the look checker and the bundle build pass. Contrast of the alert on the page is 11.2:1. Screenshots at 1440 and 390 show the badge; the phone's page content below the header is squeezed by the in-flight \"Available Media Sources\" heading, which is not this change.\n\nNot committed; the working tree also carries your uncommitted sidebar labels and the CardGrid heading. The header still reads \"Card > Prepare\" until APP-25 lands."
+        }
+      ]
+    },
+    {
+      "id": "APP-25",
+      "title": "The sidebar and the breadcrumb use one set of names",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-13T21:12:27Z",
+      "by": "dsh",
+      "desc": "Reported: the sidebar labels were renamed in the working tree — Media Sources (Sources, Albums), Playlists (Manage, IA Agent), Player — but the breadcrumb still comes from the old routeArea/routePage switch: Prepare shows \"Card > Prepare\", the playlists list shows \"Playlists > Playlists\", and Ask shows \"Playlists > Ask\". Normalize every destination to the sidebar's names:\n\n- #/prepare: Media Sources > Sources (not Card > Prepare).\n- #/playlists: Playlists > Manage (not Playlists > Playlists).\n- #/playlists/ask: Playlists > IA Agent (not Playlists > Ask).\n- #/media: Albums only, area hidden (the previous header task).\n- #/playlists/:id: Playlists > Editor; #/player: Player > Now playing; Settings: Settings; keep the album/artist/Video/Drive pages as they are.\n\nReplace the duplicated switch with one route-title model shared by the sidebar and the breadcrumb, so the labels cannot drift again: the group label is the area, the item label is the page for a top-level route, and sub-pages keep their own name. The routePage/routeArea switch is the thing to retire. Update k7-look.md and the glossary where the destination names appear; add router tests for every route's area and page, including that every top-level page equals its sidebar item.\n\nFinished when: the three corrections and the other routes read as above at 1440 and 390; the sidebar and breadcrumb come from one definition; tests, typecheck and build pass.",
+      "notes": [
+        {
+          "at": "2026-11-13T21:42:11Z",
+          "by": "dsh",
+          "text": "Plan: put the sidebar groups, items and labels in one NAV_GROUPS definition in the router, derive the header's area/page from it with routeTitle, and retire routeArea/routePage. The mapping: Media Sources > Sources, Playlists > Manage, Playlists > IA Agent, Media Sources pages show only their view, Player > Now playing, Settings has no area. Update the look spec, the glossary and the router tests; verify every route's labels and the header at 1440 and 390."
+        },
+        {
+          "at": "2026-11-13T21:44:51Z",
+          "by": "dsh",
+          "text": "APP-25 is ready for review.\n\nWhat changed for you:\n- The sidebar and the header now read one list. NAV_GROUPS in the router holds the groups, items and route names; routeTitle derives the header's area and page from it. The old routeArea/routePage switch is gone.\n- The header reads: Media Sources > Sources, Playlists > Manage, Playlists > IA Agent. The Media Sources views name only the view (Albums, an album, an artist, Drive, Video); the Player's page says what it shows (Player > Now playing); Settings has no area.\n- The sidebar is Media Sources (Sources, Albums), Playlists (Manage, IA Agent), Player (Player). Not-found copy and its button now say Sources.\n- The glossary's Area, Prepare, Scan, Device card, Card switcher, Carousel, Drive and IA Agent/Ask entries now use the page and area names; k7-look's K17 and K21 say the same.\n- Four router tests cover every route's area and page, plus the sidebar's labels.\n\nWhat to check:\n- At 1440 with the rail open, the sidebar labels and the header for Sources, Manage, IA Agent, Albums and Now playing.\n- At 390 the area label drops and the page still reads Sources, Manage, IA Agent.\n- The Media Sources pages show only the page (no area); Settings has no area.\n\nOne deliberate exception: the Player's sidebar item stays \"Player\" while its page is \"Now playing\". The page says what it shows, and \"Now playing\" in the rail truncates at the current rail width; the test pins the exception. The ticket's \"every top-level page equals its sidebar item\" is true for the other destinations.\n\nVerified: typecheck, 570 tests, the look checker and the bundle build pass; headers at 1440 and 390. Not committed; the tree also carries your uncommitted \"Available Media Sources\" heading and the APP-24 alert badge (APP-24 is in review)."
+        },
+        {
+          "at": "2026-11-13T23:01:03Z",
+          "by": "dsh",
+          "text": "Review correction: the Media Sources pages now read Media Sources > the view on desktop — Media Sources > Albums, and the album, artist, Drive and Video pages likewise. The hideArea exception is gone; routeTitle always uses the group label for the area. The back arrow and card label stay gone. On phones the area label still drops (K17), so the page reads Albums.\n\nRouter tests updated; 570 tests, typecheck, the look checker and the bundle build pass. The look spec's K17 now says the Media Sources header names the area and the view."
+        }
+      ]
+    },
+    {
+      "id": "APP-26",
+      "title": "The device's facts live on Sources/Device, not the Player page",
+      "state": "review",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-13T23:04:18Z",
+      "by": "dsh",
+      "desc": "Reported: the Player page carries a \"The device\" section — what the firmware reports about the card, the library, the Snapshot and the Rescan. The card in the player is the Device card in the switcher, so those facts belong with that selection on Sources; the Player page should keep the broadcast.\n\nThe section moves to Sources, shown when the Device card is selected: the sentence that the card is a view of the device, then the facts card and its Rescan. The Player page keeps the cover, title, position, the not-answering alert and the shared-stream note. DeviceFacts is its own component; Prepare renders it under deviceView; the Player page no longer holds the card. The K21 look table and the glossary say where the facts live.\n\nThe change is in the working tree. Finished when: selecting Device on Sources shows the facts and Rescan; the Player page no longer has the device card and still shows the broadcast; tests, typecheck and build pass; the look spec says so.",
+      "notes": [
+        {
+          "at": "2026-11-13T23:05:20Z",
+          "by": "dsh",
+          "text": "Implemented in the working tree:\n\n- DeviceFacts is its own component (the facts card and Rescan); Prepare renders it when the Device card is selected, under the shelf and the \"view of the device\" sentence.\n- The Player page no longer carries the device card; it keeps the broadcast (cover, title, position, the not-answering alert and the shared-stream note).\n- k7-look's K21 table and the Area/Device card glossary entries say the device facts live on Sources/Device.\n\nVerified: typecheck, 570 tests, the look checker and the bundle build pass. The Sources/Device view was checked with a status fixture (a marked device): it shows Card, Tracks, Library generation, Order and the Rescan, and the Player page has only the broadcast. The fixture answered /api/status but not the MCP calls, so the Snapshot/Built cells read — there; the real device fills them through library_stats. Not committed."
+        },
+        {
+          "at": "2026-11-13T23:16:50Z",
+          "by": "dsh",
+          "text": "Plan: the move is already in the working tree. Verify the Sources/Device view shows DeviceFacts and Rescan, the Player page keeps only the broadcast, the K21 look table and glossary name the new home, then run typecheck, tests, look checker and build and hand it to review."
+        },
+        {
+          "at": "2026-11-13T23:17:11Z",
+          "by": "dsh",
+          "text": "APP-26 is ready for review.\n\nWhat changed for you:\n- Select Device on Media Sources > Sources and the page shows the sentence that the card is a view of the device, then the device facts card: Card, Tracks, Library generation, Order, Snapshot, Built, and Rescan the card. It sits under the card shelf, where the Device tile is already selected.\n- The Player page keeps the broadcast: the cover, title, position, the not-answering alert and the shared-stream note. The \"The device\" card is gone from it.\n- DeviceFacts is one component; Prepare renders it for deviceView, and the Player page does not import it.\n- k7-look's K21 table says Sources carries the device facts and Now playing is the broadcast; the Area and Device card glossary entries say the same.\n\nWhat to check:\n- With a device reporting a marked card, select Device on Sources: the facts and the Rescan appear; the Rescan still asks the player to rebuild the library.\n- The Player page has only the broadcast, no device card.\n- On a real device, Snapshot and Built fill from library_stats. The review screenshot used a status fixture with a marked device, so those two read — there; the fixture answered /api/status but not the MCP calls.\n\nVerified: typecheck, 570 tests, the look checker and the bundle build pass. Not committed; APP-25 is still in review and the tree carries your uncommitted \"Available Media Sources\" heading."
+        }
+      ]
     }
   ]
 }

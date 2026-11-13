@@ -4,6 +4,7 @@ import { WEIGHTS_MODE } from '../../weights/config';
 import { UNSCOPED, useCardScope, useDeviceView } from '../../card/session';
 import { CardTree } from '../CardTree';
 import { CardGrid } from '../CardGrid';
+import { DeviceFacts } from '../DeviceFacts';
 import { useAnalysis } from '../state/analysis';
 
 /**
@@ -87,7 +88,14 @@ export function PrepareArea() {
         <CardGrid />
       </div>
 
-      {composing && !deviceView ? (
+      {deviceView ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <p className="shrink-0 text-xs text-muted-foreground">
+            The card in the player is a view of the device — its albums are on the Albums page.
+          </p>
+          <DeviceFacts />
+        </div>
+      ) : composing ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <div className="min-h-0 flex-1">
             <CardTree />
@@ -95,11 +103,9 @@ export function PrepareArea() {
         </div>
       ) : (
         <p className="shrink-0 text-xs text-muted-foreground">
-          {deviceView
-            ? 'The card in the player is a view of the device — its albums are on the Albums page.'
-            : scope !== UNSCOPED
-              ? 'The SD card in the player is written from a virtual card — pick one to compose.'
-              : 'Select a card above — the SD card or a virtual one — to prepare it.'}
+          {scope !== UNSCOPED
+            ? 'The SD card in the player is written from a virtual card — pick one to compose.'
+            : 'Select a card above — the SD card or a virtual one — to prepare it.'}
         </p>
       )}
     </div>

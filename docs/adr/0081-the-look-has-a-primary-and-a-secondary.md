@@ -1,5 +1,8 @@
 # The look has a primary and a secondary, not one hue
 
+> **Amended in part by [ADR 0085](./0085-the-device-warning-is-the-one-extra-hue.md):** the
+> device-unreachable badge is the one warning hue; the primary and secondary rule still stands.
+
 [ADR 0080](./0080-the-k7-look-is-the-products-one-skin.md) made the look one hue: every text,
 outline and control was the accent, and hierarchy came from size and fill alone. On a real screen
 that left nothing quiet — a list of tracks, its labels and its numbers all competed with the
