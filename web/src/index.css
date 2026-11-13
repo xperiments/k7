@@ -357,6 +357,24 @@
         font-size: 1rem;
     }
 
+    /* One case at the shelf's own width: the Player page's cover. The face, frame and sheen
+       are the carousel's; only the width is declared here, and the height follows. */
+    .k7-case-shelf {
+        --cw: 13rem;
+        --ch: calc(var(--cw) * 25 / 16);
+        --cd: calc(var(--cw) * 0.2);
+        position: relative;
+        width: var(--cw);
+        height: var(--ch);
+        flex: none;
+    }
+
+    .k7-case-shelf .k7-case {
+        transform: rotateY(0deg);
+        transition: none;
+        cursor: default;
+    }
+
     .k7-shelf:focus-visible {
         outline: 2px solid var(--ring);
         outline-offset: 4px;

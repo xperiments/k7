@@ -8,8 +8,9 @@ import { trackAt, type McpTrack } from '../../device/mcp';
 import { useDeviceStatus } from '../../device/useDeviceStatus';
 import { currentCardScope } from '../../card/session';
 import { getMedia, type CachedMedia } from '../../storage/media';
+import { hueOf } from '../album-art';
+import { CassetteCase } from '../cassette';
 import { formatDuration } from '../format';
-import { Cover } from '../cover';
 
 /**
  * The Player: what the broadcast is carrying. The device's own facts — the library and the
@@ -124,14 +125,13 @@ export function PlayerArea() {
         </Card>
       ) : (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
-          <div className="w-56 shrink-0 sm:w-64">
-            <Cover
-              cover={cached?.cover ?? null}
-              initial={title}
-              alt={`Cover of ${title}`}
-              art={{ title, artist, meta: album || undefined }}
-            />
-          </div>
+          <CassetteCase
+            cover={cached?.cover ?? null}
+            initial={title}
+            hue={hueOf(title)}
+            art={{ title, artist, meta: album || undefined }}
+            size="shelf"
+          />
 
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <h1 className="text-2xl font-light tracking-tight break-words">{title}</h1>

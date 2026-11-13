@@ -50,9 +50,9 @@ export function CassetteFront({
 
 /**
  * One case, front to the reader: the shelf's case without the shelf. The player bar shows
- * what is playing as the object it is rather than as a thumbnail — a cassette with the cover
- * on its face — and the size is `.k7-mini`'s, because a case is a 3D box and its width is
- * what its height follows from.
+ * what is playing as the object it is rather than as a thumbnail; the Player page shows the
+ * same case at the shelf's own width. A case is a 3D box, so the width is the only number
+ * given and the height follows from it.
  */
 export function CassetteCase({
   cover,
@@ -60,17 +60,21 @@ export function CassetteCase({
   hue,
   art,
   className,
+  size = 'mini',
 }: {
   cover: CachedCover | null;
   initial: string;
   /** Degrees; the tint of the face when there is no picture. */
   hue?: number;
-  /** The drawn face for a coverless track; the mini hides its words. */
+  /** The drawn face for a coverless track; the mini hides its words, the shelf width shows them. */
   art?: AlbumArtData;
   className?: string;
+  /** `mini` is the player bar's 40px case; `shelf` is one at the carousel's width. */
+  size?: 'mini' | 'shelf';
 }) {
+  const base = size === 'shelf' ? 'k7-case-shelf' : 'k7-mini';
   return (
-    <div className={className ? `k7-mini ${className}` : 'k7-mini'} aria-hidden="true">
+    <div className={className ? `${base} ${className}` : base} aria-hidden="true">
       <div className="k7-shelf-item">
         <div
           className="k7-case"
