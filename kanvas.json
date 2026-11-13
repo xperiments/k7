@@ -1462,7 +1462,7 @@
     {
       "id": "APP-26",
       "title": "The device's facts live on Sources/Device, not the Player page",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "yolo": true,
       "at": "2026-11-13T23:04:18Z",
