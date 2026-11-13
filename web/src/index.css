@@ -277,6 +277,18 @@
         mask: url('/icons/k7logo.svg') center / contain no-repeat;
     }
 
+    /*
+     * The Device card's cassette is line art on a transparent ground, drawn in the file's
+     * own orange. Painting it as a mask puts it in the current ink instead, so it is the
+     * same one-stroke drawing as the rest of the chrome (k7-look §7, K25).
+     */
+    .k7-cassette {
+        aspect-ratio: 1064 / 660;
+        background-color: currentColor;
+        -webkit-mask: url('/assets/k7-cassette.svg') center / contain no-repeat;
+        mask: url('/assets/k7-cassette.svg') center / contain no-repeat;
+    }
+
     .k7-shelf {
         --cw: 13rem;
         --ch: calc(var(--cw) * 25 / 16);

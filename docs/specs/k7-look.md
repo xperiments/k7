@@ -460,7 +460,7 @@ group; the page is its item.
 
 | Page | Pattern |
 | --- | --- |
-| Sources | A column of outlined panels: the drop zone, the virtual-card shelf, the queue rows, the run controls. The Device card shows the device's facts — the card, the library, the Snapshot and Rescan — under the shelf. The queue's running state is a filled row and a filled action |
+| Sources | A column of outlined panels: the drop zone, the virtual-card shelf, the queue rows, the run controls. The Device card shows the device's facts — the library, the Snapshot and Rescan — under the shelf, beside the K7 cassette drawing. The queue's running state is a filled row and a filled action |
 | Albums | The coverflow exactly as it is (§5.3), with the album detail, artist and video routes as outlined panels around it |
 | Manage | The list as rows; the editor as panels (search, blocks, actions); the current block is filled |
 | IA Agent | The prompt is a pill input; when the model is not ready its place is one sentence, with one solid button where the model can still be fetched (**Set up the assistant**), and the download's progress is a `Progress`; the intent is a panel of rows and controls; errors are K22 |
@@ -492,8 +492,9 @@ unless a point is selected, grid at 42% with `1 4` dash, series separated by dim
 dashes rather than hue, and axes at `text-primary/90` and `text-xs`.
 
 **K25. Assets.** The logo and every glyph are SVG in `currentColor`, inlined where CSS variables
-must reach them (the sidebar logo uses a mask for that reason). Covers and the Site's hero are
-content (§5.4). No external font or CSS: Jura is self-hosted and preloaded.
+must reach them (the sidebar logo uses a mask for that reason). The Device card's cassette is the
+same line art, painted through a mask rather than in the orange it is drawn with. Covers and the
+Site's hero are content (§5.4). No external font or CSS: Jura is self-hosted and preloaded.
 
 ---
 

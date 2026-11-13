@@ -212,6 +212,9 @@ function shellOutputs(cdnWeights: boolean): Plugin {
           /* The brand mark sits in the sidebar on every page: offline it must be there on
            * the first paint, not after a fetch that fails. */
           '/icons/k7logo.svg',
+          /* The Device card's cassette, for the same reason: it is chrome, and it must not
+           * be the one blank thing on Sources offline. */
+          '/assets/k7-cassette.svg',
           '/weights.lock.json',
           ...emitted.filter((file) => file !== 'index.html').map((file) => `/${file}`),
         ]),

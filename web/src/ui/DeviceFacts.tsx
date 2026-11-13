@@ -5,28 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getDevice } from '../device/device';
 import { libraryStats, statsCoverage, type McpStats } from '../device/mcp';
-import type { DeviceStatus } from '../device/status';
 import { DeviceError } from '../device/transport';
 import { refreshDevice, useDeviceStatus } from '../device/useDeviceStatus';
 import { plural } from './format';
 
 /**
- * The device's own facts: the card it holds, the library it reports, the Snapshot it
- * carries, and the one write it accepts.
+ * The device's own facts: the library it reports, the Snapshot it carries, and the one
+ * write it accepts. The drawing beside them is the K7 cassette, painted in the ink.
  *
  * This is the block that used to close the Player page. It belongs with the Device card
  * selection on Sources: the facts are about the card in the player, and that is the card
  * the switcher names when this shows. The Player page keeps the broadcast.
  */
-
-/** The order the broadcast walks, as the device reports it; the block never assumes a list. */
-function orderLabel(status: DeviceStatus | null): string {
-  if (!status) return '—';
-  if (status.order === 'list' && status.playlist?.name.trim()) {
-    return `the playlist “${status.playlist.name.trim()}”`;
-  }
-  return 'the library';
-}
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -135,74 +125,70 @@ export function DeviceFacts() {
     <Card>
       <CardHeader>
         <CardTitle>The device</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          What the firmware reports about the card, the library and the Snapshot it holds.
-        </p>
       </CardHeader>
-      <CardContent>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Fact label="Card">
-            {status ? (status.card ? 'in the player' : 'out of the player') : '—'}
-          </Fact>
-          <Fact label="Tracks">
-            {status ? (
-              <span className="tabular-nums">{plural(status.tracks, 'track')}</span>
-            ) : (
-              '—'
-            )}
-          </Fact>
-          <Fact label="Library generation">
-            {status ? <span className="tabular-nums">{status.generation}</span> : '—'}
-          </Fact>
-          <Fact label="Order">{orderLabel(status)}</Fact>
-          <Fact label="Snapshot">
-            {statsFailed ? (
-              '—'
-            ) : stats === null ? (
-              <Skeleton className="h-4 w-32" />
-            ) : libraryEmpty ? (
-              'the device has no library'
-            ) : !snapshot || snapshot.state !== 'ok' ? (
-              `no Snapshot (${snapshotState(snapshot?.state ?? 'unknown')})`
-            ) : coverage ? (
-              <span className="tabular-nums">
-                {coverage.analysed} of {coverage.tracks} analysed ({coverage.percent}%)
-              </span>
-            ) : (
-              '—'
-            )}
-          </Fact>
-          <Fact label="Built">
-            {statsFailed ? (
-              '—'
-            ) : stats === null ? (
-              <Skeleton className="h-4 w-32" />
-            ) : (
-              builtAt ?? '—'
-            )}
-          </Fact>
-        </dl>
+      <CardContent className="flex flex-col gap-5 md:flex-row md:items-center md:gap-6">
+        <div
+          aria-hidden="true"
+          className="k7-cassette w-full max-w-72 shrink-0 self-center text-primary/70 md:w-64 lg:w-72"
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+            <Fact label="Tracks">
+              {status ? (
+                <span className="tabular-nums">{plural(status.tracks, 'track')}</span>
+              ) : (
+                '—'
+              )}
+            </Fact>
+            <Fact label="Snapshot">
+              {statsFailed ? (
+                '—'
+              ) : stats === null ? (
+                <Skeleton className="h-4 w-32" />
+              ) : libraryEmpty ? (
+                'the device has no library'
+              ) : !snapshot || snapshot.state !== 'ok' ? (
+                `no Snapshot (${snapshotState(snapshot?.state ?? 'unknown')})`
+              ) : coverage ? (
+                <span className="tabular-nums">
+                  {coverage.analysed} of {coverage.tracks} analysed ({coverage.percent}%)
+                </span>
+              ) : (
+                '—'
+              )}
+            </Fact>
+            <Fact label="Built">
+              {statsFailed ? (
+                '—'
+              ) : stats === null ? (
+                <Skeleton className="h-4 w-32" />
+              ) : (
+                builtAt ?? '—'
+              )}
+            </Fact>
+          </dl>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void rescanLibrary()}
-            disabled={rescanUnavailable !== null || rescan.state === 'sending'}
-          >
-            {rescan.state === 'sending' ? 'Asking…' : 'Rescan the card'}
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            {rescanUnavailable
-              ? `Unavailable: ${rescanUnavailable}.`
-              : rescan.state === 'accepted'
-                ? 'Accepted — the library is rebuilding; the count follows on the next poll.'
-                : rescan.state === 'busy'
-                  ? rescan.text
-                  : rescan.state === 'failed'
+          <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void rescanLibrary()}
+              disabled={rescanUnavailable !== null || rescan.state === 'sending'}
+            >
+              {rescan.state === 'sending' ? 'Asking…' : 'Rescan the card'}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {rescanUnavailable
+                ? `Unavailable: ${rescanUnavailable}.`
+                : rescan.state === 'accepted'
+                  ? 'Accepted — the library is rebuilding.'
+                  : rescan.state === 'busy'
                     ? rescan.text
-                    : 'Rebuilds the Library from the card in the player. Nothing is measured.'}
-          </span>
+                    : rescan.state === 'failed'
+                      ? rescan.text
+                      : 'Rebuilds the library from the card; nothing is measured.'}
+            </span>
+          </div>
         </div>
       </CardContent>
     </Card>

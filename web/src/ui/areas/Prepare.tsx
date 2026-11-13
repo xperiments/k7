@@ -91,7 +91,7 @@ export function PrepareArea() {
       {deviceView ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <p className="shrink-0 text-xs text-muted-foreground">
-            The card in the player is a view of the device — its albums are on the Albums page.
+            The device's card is view-only — its albums are on the Albums page.
           </p>
           <DeviceFacts />
         </div>

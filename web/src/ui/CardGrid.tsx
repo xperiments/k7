@@ -357,7 +357,7 @@ export function CardGrid() {
                 setDeviceView(true);
               }
             }}
-            aria-label="Show the albums on the card in the player"
+            aria-label="Show the device's card"
           >
             <div className="flex items-center gap-1">
               <Cpu aria-hidden="true" />
@@ -365,7 +365,6 @@ export function CardGrid() {
               {deviceView ? <CheckIcon aria-hidden="true" className="size-4 shrink-0" /> : null}
             </div>
             <span className={cn('text-xs tabular-nums', deviceView ? '' : 'text-muted-foreground')}>
-              {deviceView ? 'card in the player · ' : ''}
               {plural(device.tracks, 'track')}
             </span>
           </div>

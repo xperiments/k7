@@ -12,8 +12,8 @@ import { formatDuration } from '../format';
 import { Cover } from '../cover';
 
 /**
- * The Player: what the broadcast is carrying. The device's own facts — the card, the
- * library and the Snapshot — live on Sources/Device.
+ * The Player: what the broadcast is carrying. The device's own facts — the library and the
+ * Snapshot — live on Sources/Device.
  *
  * Read-only on purpose. A live stream cannot be paused for one listener, and the only
  * transport verb the page has is `POST /api/play {path}`, which the album rows offer; a
