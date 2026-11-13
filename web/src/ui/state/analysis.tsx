@@ -17,7 +17,7 @@ import { downloadTaggedCopy, METADATA_WRITE_VERSION, writeAnalysisTags, writeTra
 import { coverSource, type EmbeddablePicture } from '../../audio/covers';
 import { encodeCover } from '../../audio/avif';
 import type { Analysis, ModelManifest } from '../../domain/analysis';
-import { snapshotPath } from '../../domain/snapshot';
+import { snapshotPath, type LibraryProfile } from '../../domain/snapshot';
 import { newId } from '../../lib/id';
 import { runItem } from '../../queue/run';
 import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
@@ -1186,9 +1186,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         let tracks: number;
         let skipped = 0;
         let lists: number;
+        let generation: number | undefined;
+        let profile: LibraryProfile | undefined;
         if (mode === 'lists' && lastSnapshot) {
           bytes = patchListArea(lastSnapshot.bytes, toSnapshotPlaylists());
           tracks = lastSnapshot.tracks;
+          generation = lastSnapshot.generation;
+          profile = lastSnapshot.profile;
           lists = nonEmptyLists();
         } else {
           const built = await buildImage();
@@ -1196,6 +1200,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           bytes = built.bytes;
           tracks = built.tracks;
           skipped = built.skipped;
+          generation = built.generation;
+          profile = built.profile;
           lists = nonEmptyLists();
         }
         await writeSnapshotToCard(directory, bytes);
@@ -1231,6 +1237,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           bytes,
           tracks,
           skipped,
+          generation,
+          profile,
           at: new Date().toISOString(),
         };
         await saveSnapshot(scope, stored);

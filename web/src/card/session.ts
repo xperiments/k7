@@ -68,10 +68,36 @@ let scope = stored ?? UNSCOPED;
 const listeners = new Set<() => void>();
 
 export function setCardScope(next: string): void {
-  if (next === scope) return;
+  const changed = next !== scope || deviceView;
   scope = next;
+  // Picking a card in the computer leaves the player's card behind.
+  deviceView = false;
   writeStoredScope(next);
+  if (changed) {
+    for (const listener of listeners) listener();
+  }
+}
+
+/**
+ * The card in the player is a card the App can only *view*: the ESP32-S3 holds it, the
+ * browser never has its directory. Selecting it is therefore a view of the device, not a
+ * scope the stores are written under — the card's own scope names its rows, and this flag
+ * only says which card the Albums page should read.
+ */
+let deviceView = false;
+
+export function setDeviceView(next: boolean): void {
+  if (next === deviceView) return;
+  deviceView = next;
   for (const listener of listeners) listener();
+}
+
+export function currentDeviceView(): boolean {
+  return deviceView;
+}
+
+export function useDeviceView(): boolean {
+  return useSyncExternalStore(subscribeCardScope, currentDeviceView, currentDeviceView);
 }
 
 /**

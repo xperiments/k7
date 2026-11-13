@@ -33,8 +33,8 @@ it computes. Opened from its installed icon or by hand.
 _Avoid_: website, frontend, web app, launcher
 
 **Weights**:
-Everything the analysis and the Local Provider need that is too big to ship: the models and the
-runtimes. Verified by hash, cached in this browser.
+Everything the analysis needs that is too big to ship: the models and the runtimes. Verified by
+hash, cached in this browser.
 _Avoid_: models, assets, blobs
 
 **Area**:
@@ -87,9 +87,9 @@ request, so it mounts without it (ADR 0082).
 _Avoid_: LAN mode, device access
 
 **Capabilities**:
-What this browser and this origin can actually do — secure context, service worker, WebGPU,
-directory access, OPFS, local network. Observed at boot, shown in Settings, and what every feature
-is gated on.
+What this browser and this origin can actually do — secure context, service worker, directory
+access, OPFS, local network. Observed at boot, shown in Settings, and what every feature is gated
+on.
 _Avoid_: mode, support matrix, features
 
 **Network**:
@@ -104,6 +104,12 @@ A removable volume whose `music` directory is the player's Library, and which th
 name for itself. A card out of the player is still the card. A **Virtual card** is a Card the
 App prepares in a **Working directory** before an SD is in the machine.
 _Avoid_: SD card (except for the object), volume, library, drive
+
+**Device card**:
+The **Card** in the ESP32-S3. The browser never has its directory, so Prepare can only view
+it: selecting its tile points the **Albums** page at that card's scope. It appears only while
+the device reports a card, and only a marked one can be named.
+_Avoid_: remote card, player card, S3 card
 
 **Virtual card**:
 A **Card** the App creates under a granted **Working directory**: the same `music/` plus
@@ -346,7 +352,7 @@ _Avoid_: now playing, current song, track
 ### The assistant
 
 **Ask**:
-The prompt box in Playlists: the user's words, sent to the **Provider**, answered with an
+The prompt box in Playlists: the user's words, sent to the **Built-in model**, answered with an
 **Intent** and nothing else.
 _Avoid_: chat, assistant, generate
 
@@ -357,20 +363,14 @@ never results: a wrong filter is visible and correctable, a confident paragraph 
 does not exist is not (ADR 0050's rule, adopted in ADR 0053).
 _Avoid_: query, prompt, answer
 
-**Remote Provider**:
-The OpenAI-compatible endpoint — base URL, model and key — the **Intent** is asked of, held in this
-browser's settings and never sent to the player. No track is ever described to it.
-_Avoid_: API, backend, model, cloud
-
-**Local Provider**:
-A model running in this browser, with no key and no network: the same **Intent**, asked of a
-machine that cannot tell anyone. Needs WebGPU, so the **Device copy** can never have one.
-_Avoid_: local model, offline model, embedded AI
+**Built-in model**:
+The language model Chrome ships and runs on this machine, which turns an **Ask** into an
+**Intent** with no key and no request. It is not the **Model set**, which belongs to the analysis.
+_Avoid_: provider, remote provider, local provider, local model, LLM, AI, cloud
 
 **Settings**:
-What this browser remembers for itself: the **Provider**, the model, the Invidious
-**Instance**, the analysis worker count, and whether the rail is collapsed. Lost with site data, never written to the
-player.
+What this browser remembers for itself: the Invidious **Instance**, the analysis worker count, and
+whether the rail is collapsed. Lost with site data, never written to the player.
 _Avoid_: preferences, config, options
 
 ### The videos

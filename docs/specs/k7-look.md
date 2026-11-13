@@ -447,7 +447,7 @@ the module's top-left as its title, and the current thing filled.
 | Prepare | A column of outlined panels: the drop zone, the virtual-card shelf, the queue rows, the run controls. The queue's running state is a filled row and a filled action |
 | Media | The coverflow exactly as it is (§5.3), with the album detail, artist and video routes as outlined panels around it |
 | Playlists | The list as rows; the editor as panels (search, blocks, actions); the current block is filled |
-| Ask | The prompt is a pill input; the intent is a panel of rows and controls; errors are K22 |
+| Ask | The prompt is a pill input; when the model is not ready its place is one sentence, with one solid button where the model can still be fetched (**Set up the assistant**), and the download's progress is a `Progress`; the intent is a panel of rows and controls; errors are K22 |
 | Settings | A column of outlined panels, one per group. Labels left, controls right, pill inputs |
 | Player | The device's facts as modules; the primary action is one filled pill |
 | Site | See [`k7-site.md`](./k7-site.md): the hero, the flash section and the install section are modules, and the footer is the licence trail |
@@ -455,7 +455,7 @@ the module's top-left as its title, and the current thing filled.
 **K22. States are shape and words, not hue.** Every data region has an empty state (with one
 action), a loading state (a `Skeleton` in the real layout) and an error state (a retry, plus a
 sentence naming the failure). An error or a warning is a filled bar or panel with a line icon and
-its word — "Unmarked card", "The provider did not answer" — never a second colour. A destructive
+its word — "Unmarked card", "The model did not answer" — never a second colour. A destructive
 confirm is a panel whose action is the filled variant (the `AlertDialog` treatment, K14). **[ADR]**
 
 ---

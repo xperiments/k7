@@ -181,97 +181,78 @@ npx shadcn@latest add @reui/badge @reui/alert @reui/c-sidebar-1   # ReUI
   flash, not disk: a single `AlertDialog` is ~56 KiB of JavaScript, which is why the
   destructive confirm is asked in place. Weigh a new dependency as a budget decision.
 
-## The Provider, and why a local one needs a setting
+## The assistant
 
-Ask sends one sentence to an OpenAI-compatible endpoint and gets filters back; the endpoint, the
-model and the key are Settings, in this browser (ADR 0053). The page is served by the device at
-`http://xtape.local`, so a Provider on **this computer** — Ollama at
-`http://localhost:11434/v1` — is a different origin, and its server has to allow that origin or
-the browser throws the answer away before the page sees it. Settings' Test names that case
-instead of calling a working Provider unreachable (ADR 0056).
+Ask sends one sentence to Chrome's **built-in model** (Gemini Nano) and gets filters back. There
+is no key, no endpoint and no setting: the model runs on this machine, the sentence is not sent
+anywhere, and once the model is downloaded Ask works offline.
+[ADR 0084](../docs/adr/0084-the-assistant-is-the-browsers-built-in-model.md) records the move from the
+remote Provider.
 
-### Presets
+### What it needs
 
-The Provider card carries a **Start from** row that fills the base URL and the model. It fills
-nothing else: the key is always yours, and no endpoint or credential ships with the page.
+Chrome 148 or later on a computer — Windows 10 or 11, macOS 13+, Linux, or ChromeOS on a
+Chromebook Plus. Not Chrome for Android, iOS, or a ChromeOS device that is not a Plus. The machine
+needs at least 22 GB free on the volume that holds the Chrome profile, and either a graphics card
+with more than 4 GB of VRAM or 16 GB of RAM with four CPU cores. The first use downloads the
+model, a few gigabytes, on an unmetered connection; after that no network is used.
 
-| Preset | Base URL | Model |
-|---|---|---|
-| Ollama | `http://localhost:11434/v1` | whatever you have pulled — `ollama list` |
-| Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` (free tier) |
-| OpenRouter | `https://openrouter.ai/api/v1` | `google/gemma-4-26b-a4b-it:free` |
+Chrome keeps the model until free space falls below 10 GB, then removes it and downloads it again
+when there is room. Ask re-checks at each visit, so the state it shows is the state now.
 
-A preset is a head start, not a default: with none chosen the card is the three fields it always
-was. The free lists turn over, so if a preset's model has gone, ask the provider:
+Ask says which of these is missing, and the filter form below works without any of it.
 
-```sh
-# OpenRouter: ids ending in :free are the free variants (20 req/min, 50/day under 10 credits)
-curl -s https://openrouter.ai/api/v1/models | grep -o '"id":"[^"]*:free"'
+### The download
 
-# Gemini: what this key can see
-curl -s https://generativelanguage.googleapis.com/v1beta/openai/models \
-  -H "Authorization: Bearer $GEMINI_API_KEY"
-```
+The model is Chrome's, not the app's. Ask can start the download and show its progress; it cannot
+cancel or delete the model, and the model is not part of the app's 41 MB of weights.
+`chrome://on-device-internals` shows its size and state in Chrome, and removal is in Chrome's
+settings.
 
-For Ollama, allow the page, then restart the server so it reads the setting:
+The download needs a click, because Chrome requires user activation; that is what **Set up the
+assistant** is.
 
-```sh
-# The app (macOS): set it where its process inherits it, then quit and reopen Ollama.
-launchctl setenv OLLAMA_ORIGINS "http://xtape.local"
-# Undo with: launchctl unsetenv OLLAMA_ORIGINS
+### The languages
 
-# Or run the server by hand.
-OLLAMA_ORIGINS=http://xtape.local ollama serve
-```
+Chrome documents English, Japanese, Spanish, German and French for the model. The sentence can be
+in any of them; the Intent's values — mood names, sort names, keys — are the same in all.
 
-The origin is whatever the address bar says: `http://xtape.local` on a network that resolves the
-name, `http://192.168.1.69` on one that does not — set the one the page is opened at, and note
-that a port is part of it only if one is in the address bar. Ollama ignores the key, so any word
-in Settings' Key field will do.
+### What a filter sees
 
-A hosted Provider needs none of it, and calling one over HTTPS from this plain-HTTP origin is not
-mixed content — that rule runs the other way, a secure page refusing an insecure resource
-(ADR 0049). Checked against the same preflight with `Origin: http://xtape.local`:
-`api.openai.com` and Gemini's OpenAI-compatible endpoint echo the origin back, OpenRouter, Groq,
-Mistral and Together answer `*`, and all of them allow the `authorization` header. A Provider that
-refuses the preflight outright — Anthropic's own endpoint does — cannot be asked from a browser
-at all; it needs something in front of it that adds CORS, not a setting in this page.
+Every filter is `library_search`'s own argument, and each measurement it names is a field the
+Snapshot row carries. A range only sees tracks that were measured: a track with no row still
+matches a name search, and an unknown measurement never matches a range. BPM is the folded tempo,
+70–180, so a bound outside it cannot match; the Player reports coverage.
 
-### Gemini
+A filter the library has no values for — a genre nobody tagged, a key nobody measured — returns an
+empty result, not an error. The Intent shows it before the search runs.
 
-Google's OpenAI-compatible layer is the whole setup; there is nothing to allow on Google's side.
+### The library's own values
 
-| Settings field | Value |
-|---|---|
-| Base URL | `https://generativelanguage.googleapis.com/v1beta/openai` |
-| Model | `gemini-3.8-flash`, or `gemini-3.5-flash-lite` for cost |
-| Key | an [AI Studio](https://aistudio.google.com/apikey) key |
+Ask searches the player when the **Device card** tile is selected, or when the player holds the
+selected card; the card's **Last image** otherwise, so a virtual card is always the image. The
+results say which one answered.
 
-Ask's request is `POST <base>/chat/completions` with a system message and a one-line user
-message, so no `models/` prefix, no `?key=`, and no `/chat/completions` in the Base URL field —
-the page appends that itself. To confirm the key sees a model, ask Google rather than the page:
+When Ask has a library to describe, it tells the model that library's aggregates: its genres, its track count, and the range and quartiles of BPM, energy,
+danceability, valence and arousal. The model then cannot offer a genre the library does not have
+or a BPM range no track can fall in; the schema is closed to the same values, and the
+WORD→FILTER thresholds are the library's own quartiles.
 
-```sh
-curl -s https://generativelanguage.googleapis.com/v1beta/openai/models \
-  -H "Authorization: Bearer $GEMINI_API_KEY"
-```
+Genres are capped at the 40 most common; a library with more leaves its rarest out of the list
+and the enum. It is aggregates only — no track, artist, path or per-track measurement — and the
+model is the local one. When the player is running another image, or there is none, the static ranges apply.
 
-Two things about Gemini specifically: **the 2.5 models are deprecated** — `gemini-2.5-flash`
-starts routing to `gemini-3.5-flash-lite` on 1 December 2026 — and **Gemini 3 and later cannot
-switch reasoning off**, so the Test sends no `max_tokens` and waits twenty seconds: a tight output
-cap is spent on thinking before any answer is visible, which reads as "answered without a
-message". Ask is unaffected (it has no cap and a thirty-second timeout).
+### What the model is not
 
-To check the Ollama setting without the page:
-
-```sh
-curl -si -X OPTIONS http://localhost:11434/v1/chat/completions \
-  -H 'Origin: http://xtape.local' -H 'Access-Control-Request-Method: POST' | head -6
-```
-
-`Access-Control-Allow-Origin: http://xtape.local` means the page will be allowed;
-`403` with no such header means it will not, and that is the browser's error, not the
-Provider's.
+It writes filters, never results: it never sees a title, an artist, a path, a measurement or the
+library's size (ADR 0053, ADR 0084). It is a small model. On the twelve-sentence spike it got ten
+right and all twelve schema-valid; it turned "an hour" into 75 rows instead of 15 and lost the
+artist in "songs by Daft Punk", and it sometimes puts a category in `query` and adds ranges the
+sentence did not ask for. When the word is not a name the sentence used — a category, a purpose
+like "for a workout", or a lowercase word with no name before it — Ask asks once more with your
+sentence and drops it if it persists. A tightened prompt was measured on the same rubric and
+scored lower (eight of twelve), so the shipped prompt is the one above. The Intent is shown before
+anything runs, so a wrong filter is an edit rather than a wrong playlist.
 
 ## Accuracy caveats
 

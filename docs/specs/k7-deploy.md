@@ -78,12 +78,14 @@ wrong content type is a manifest Chrome does not read — and an app Chrome will
 **D5. `immutable` on `/assets/`** is safe because the filenames are content-hashed, and it is
 the same rule the device already applies in `cache_control_for`.
 
-**D6. The CSP is the App's only protection for the Provider key**, which lives in this origin's
-storage. Notes on the two entries that look odd and are not:
+**D6. The CSP is the defence against injected script.** The App holds no secret, so the policy is
+not a key's keeper; it is what stops script that got in from reaching further. Notes on the two
+entries that look odd and are not:
 - `script-src blob:` — Essentia, ORT and TagLib are fetched as text, verified by hash and
   imported from a blob URL; that is the integrity design, not a hole.
-- `connect-src https:` — the **Provider**'s base URL is configured by the user, so no list can
-  be enumerated ahead of time. A tighter list would break every self-hosted endpoint.
+- `connect-src https:` — the **Invidious Instance** is a setting and the weights come from a CDN,
+  so no list can be enumerated ahead of time. A tighter list would break every self-hosted
+  Instance.
 - `img-src https:` — for the same reason, from the other side: a Video's thumbnail comes from
   the **Invidious Instance** the user chose, which is a hostname no build can know. A picture
   is not code; the policy that matters is `script-src`, and it is unchanged.
@@ -194,7 +196,8 @@ the flash.
    `application/manifest+json` on the manifest.
 2. The Site offers the flash only in Chrome or Edge on a computer, and the install only where
    `local-network` can answer; Safari and Firefox get a sentence and the manual flash path.
-3. The App reports `isSecureContext: true`, a registered worker and `navigator.gpu`.
+3. The App reports `isSecureContext: true` and a registered worker, and Ask reports the built-in
+   model's state.
 4. It installs from either document: Chrome shows the omnibox install icon on the first visit
    after the engagement heuristic, the **Install K7** control does the same in one click, and the
    result opens at `/app` in its own window with no address bar. The 512 maskable icon is not

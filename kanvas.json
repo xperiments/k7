@@ -1072,7 +1072,7 @@
     {
       "id": "APP-10",
       "title": "Rename Process to Prepare and update the specs",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-07", "APP-08", "APP-09"],
       "at": "2026-11-12T01:10:27Z",
@@ -1088,6 +1088,277 @@
           "at": "2026-11-12T02:49:46Z",
           "by": "dsh",
           "text": "The area is Prepare now, everywhere it is live: the route is #/prepare, the component is PrepareArea (areas/Prepare.tsx), and every user-facing string and comment reads Prepare. The specs caught up with the built behaviour:\n\n- card-mark.md: virtual cards in K1, the write-policy exception in K2 (a virtual card's own music/ is the one directory the App writes audio into), and the mark's capacity field in F3.\n- k7-app.md: C1 delivery gains \"write it onto an SD\"; C3 becomes \"a Playlist belongs to a card\"; the capabilities table names composing a virtual card.\n- The glossary: Process becomes Prepare, and gains Virtual card, Working directory, Compose and Write to SD; Draft and Card are updated.\n- k7-look.md, k7-site.md and web/README.md renamed too.\n\nADR 0083 (landed with APP-04) records the decision and the rename.\n\nDeliberately left saying \"Process\": the historical ADRs (0052/0065/0078), the board's task history, the retired front-door.md page spec, and a generic DSP comment in tone_eq.h - historical records or a retired surface, not live copy. Say the word if you want the retired front-door.md swept too.\n\nVerified: typecheck clean, 517 tests pass, build and look check green."
+        }
+      ]
+    },
+    {
+      "id": "APP-11",
+      "title": "Measure Gemini Nano against the Intent before anything is replaced",
+      "state": "done",
+      "group": "APP",
+      "at": "2026-11-13T13:06:49Z",
+      "by": "dsh",
+      "desc": "Goal: a number, not an opinion, on whether Chrome's built-in model can turn a sentence into this app's Intent, before the remote provider is deleted.\n\nMeasure: 12 sentences, each with the Intent a person would expect written down first (the rubric), run through the exact system prompt in web/src/playlists/ask.ts plus a responseConstraint JSON schema, in a throwaway page under .scratch/. Per sentence: schema-valid, semantically right, and the filters produced. One sentence in Spanish, one in French.\n\nGo/no-go: at least 10 of 12 semantically right, all 12 schema-valid, Spanish passes. French is recorded, not gated. Below that the remote provider stays and the rest of this plan does not happen.\n\nFinished when: the rubric, the counts, the failure list and the go/no-go are in this task's notes.\n\nWhat you do: the page runs in your Chrome (148+ desktop, built-in model available; about 22 GB free disk). I build the page and the rubric; you open it and paste the output back.",
+      "notes": [
+        {
+          "at": "2026-11-13T13:08:42Z",
+          "by": "dsh",
+          "text": "Plan: a throwaway page under .scratch/nano-spike, generated from ask.ts's exact SYSTEM_PROMPT plus a JSON Schema for the Intent. 12 sentences with expected Intents; each run creates one session (system prompt), prompts with responseConstraint, and records schema validity, latency, the produced Intent, and a Right/Wrong mark the human sets. Served on localhost:8123; results copied as JSON."
+        },
+        {
+          "at": "2026-11-13T13:09:05Z",
+          "by": "dsh",
+          "text": "Rubric, written before the run. \"Right\" means the produced Intent carries the filters a person would have picked; a harmless extra filter is not a miss, a missing must-have is. You mark each row on the page; your mark is the measure.\n\n1. tracks between 85 and 95 BPM → {bpm_min: 85, bpm_max: 95}. Must: both bounds.\n2. fast aggressive techno → {genre: \"techno\", mood: [\"aggressive\"]}. Must: genre and mood; a BPM or energy floor is a bonus.\n3. happy party songs → {mood: [\"happy\", \"party\"]}. Must: both moods.\n4. sad and slow → {mood: [\"sad\"]}. Must: sad; slow may add bpm_max or energy_max.\n5. something in A minor → {key: [\"Am\"]}. Must: the key as written.\n6. Camelot 8A → {key: [\"8A\"]}. Must: 8A, not 8B and not a note name.\n7. about an hour of relaxed music → {mood: [\"relaxed\"], limit: 15}. Must: relaxed and a limit near 15 (the prompt's 15 tracks per hour); 12–18 is right.\n8. the 20 most danceable tracks → {sort: \"danceability\", limit: 20}. Must: both.\n9. songs by Daft Punk → {query: \"Daft Punk\"}. Must: a text query; \"Daft Punk\" must not become a genre.\n10. 10 songs for a workout → {limit: 10}. Must: limit 10; an energy floor is a bonus.\n11. (Spanish) música alegre para bailar → {mood: [\"happy\"]}. Must: happy; a danceability floor is a bonus. Gated.\n12. (French) de la musique calme pour lire → {mood: [\"relaxed\"]}. Must: relaxed; an energy cap is a bonus. Recorded, not gated.\n\nThe page records the raw answer for every row, so a miss can be read rather than guessed at."
+        },
+        {
+          "at": "2026-11-13T13:10:08Z",
+          "by": "dsh",
+          "text": "Question: Open http://localhost:8123/ in Chrome, press Run all 12, mark each row Right or Wrong, then Copy results and paste the JSON here. If it says the model is downloadable, press Download the model first (a few GB, 22 GB free disk)."
+        },
+        {
+          "at": "2026-11-13T13:18:18Z",
+          "by": "dsh",
+          "text": "Results. Chrome 157 on macOS, model available, full schema accepted (ranges, enums, additionalProperties), no fallback. 10/12 right, 12/12 schema-valid, Spanish right, French right. GO by the agreed bar.\n\nThe two misses:\n- #7 \"about an hour of relaxed music\" → limit 75, not ~15. The duration rule in the prompt did not hold.\n- #9 \"songs by Daft Punk\" → query \"songs\", genre \"electronic\"; the artist vanished.\n\nA pattern the count does not capture: the model uses `query` as a keyword bag, not a name finder — \"alegre\" (#11), \"calme\" (#12), \"workout\" (#10), \"songs\" (#9), \"happy party\" (#3). The artist case is the same defect. On mood asks it also over-fills: #2 and #11 fill ten keys, including valence, arousal, danceability, sort and limit 100 that the sentence did not ask for. #1, #5, #6 and #8 came back minimal, so it is sentence-dependent, not universal.\n\nLatency: first create 12.6 s (model load), creates after that ~0.4 s; answers 0.6–4.5 s; first total 13.8 s, later 1–4.9 s. The 30 s timeout is comfortable; the first ask needs its spinner.\n\nThe full schema worked: minimum/maximum, enum and additionalProperties were all accepted, so the Intent's ranges are enforceable by the constraint as well as by parseIntent's clamps.\n\nWhat it means: both misses are visible in the Intent and editable (ADR 0053), so they cost an edit rather than a wrong result. The query misuse is prompt-level and should be tightened in APP-13 (\"query is only a name the sentence mentions, never an adjective or a category\"); a re-run of this page against the shipped prompt is the evidence for the ADR's cost paragraph."
+        },
+        {
+          "at": "2026-11-13T13:18:21Z",
+          "by": "dsh",
+          "text": "GO at the bar: 10 of 12 right, 12 of 12 schema-valid, Spanish and French both produced the right mood. The built-in model is usable for Ask with no key and no network.\n\n- What to check: the two misses. \"about an hour\" became a limit of 75 instead of ~15, and \"songs by Daft Punk\" lost the artist and searched for \"songs\". Both show in the Intent and are editable.\n- The pattern: `query` is used as keywords (\"alegre\", \"calme\", \"workout\") and mood asks over-fill with energy and valence ranges. That is prompt work for APP-13; the bar is not moved.\n- The first ask took 12.6 s (model load), later answers 1–5 s. The full schema — ranges, enums, additionalProperties — was accepted, so the constraint enforces the Intent's ranges."
+        }
+      ]
+    },
+    {
+      "id": "APP-12",
+      "title": "Record the built-in model in ADR 0084, the spec and the look",
+      "state": "done",
+      "group": "APP",
+      "deps": ["APP-11"],
+      "at": "2026-11-13T13:06:49Z",
+      "by": "dsh",
+      "desc": "After the spike passes: record the decision and make the documents match the code that follows.\n\n- New ADR 0084, 'The assistant is the browser's built-in model': one provider; Ask owns the setup (absent / unavailable / downloadable / downloading / available); one session per ask; the Intent contract unchanged with a schema constraint. Supersedes 0053 (its shape rule adopted), 0056 (CORS failure naming), and retires 0061 (no weights to pin).\n- docs/specs/k7-app.md: section 7 rewritten; the two Ask rows in the capability table become one; A6 drops navigator.gpu; O7 leaves only the Invidious Instance; X4 — the App holds no secret; sections 9 and 10; section 1 'Owns ... WebGPU'; the status line and M4.\n- docs/specs/k7-look.md: the Ask row gains the setup state; K22's example sentence becomes 'The model did not answer'.\n- web/CONTEXT.md is already edited (Built-in model; the provider terms retired).\n\nFinished when: every cross-reference resolves and no spec describes the assistant with a Provider, a key, WebLLM or WebGPU.",
+      "notes": [
+        {
+          "at": "2026-11-13T13:21:29Z",
+          "by": "dsh",
+          "text": "Plan: ADR 0084 supersedes 0053/0056 and retires 0061; k7-app section 7 rewritten, with the capability table, A6, O7, X4, section 9, section 10, section 11, M1, M4 and the tests brought into line; k7-look's Ask row and K22 example; k7-deploy D6's key rationale. CONTEXT.md was edited during the grilling. APP-13 follows."
+        },
+        {
+          "at": "2026-11-13T13:22:07Z",
+          "by": "dsh",
+          "text": "The documents now say one thing: the assistant is Chrome's built-in model.\n\n- New ADR 0084, with 0053 and 0056 marked superseded and 0061 retired. It records the spike's number (10/12 right, 12/12 schema-valid) and its two misses rather than smoothing them over.\n- k7-app.md: section 7 rewritten as P1–P7; the capability table's two Ask rows become one; A6 drops navigator.gpu; O7 leaves only the Invidious Instance; X4 — the App holds no secret; section 9 loses the local-Provider chunk; section 10 gains the availability, latency and quality costs; section 11's WebLLM row is replaced by the unmeasured floor; M1, M4 and the tests are brought into line. WebGPU is gone from the App's needs.\n- k7-look.md: the Ask row names the setup state and the Progress; K22's example becomes \"The model did not answer\".\n- k7-deploy.md: D6 is no longer a key's keeper, and the first-run check no longer reads navigator.gpu.\n- CONTEXT.md: Built-in model; the provider terms retired; Weights, Settings and Capabilities narrowed.\n\nWhat to check: section 7's five states read as the Ask page should behave, and the ADR's cost paragraph matches the spike's notes.\n\nNot touched: front-door.md and bridge-protocol.md still mention a Provider, but their page and bridge halves are retired (ADR 0067) and they belong to the stream server's lane."
+        }
+      ]
+    },
+    {
+      "id": "APP-13",
+      "title": "Ask the built-in model, and delete the provider code, settings and card",
+      "state": "done",
+      "group": "APP",
+      "deps": ["APP-12"],
+      "yolo": true,
+      "at": "2026-11-13T13:06:49Z",
+      "by": "dsh",
+      "desc": "What changes for you: Settings loses the Provider card and the key; Ask keeps its pill and gains a one-time 'Set up the assistant' when Chrome's model is not downloaded; the assistant needs no key and no network.\n\n- New web/src/builtin-model.ts: the Prompt API edge, availability to state, the failure sentences; the pure parts tested.\n- ask.ts: requestIntent asks the built-in model with the system prompt and a responseConstraint schema; the validator and one repair stay.\n- One session per ask: create with the system prompt, prompt, destroy.\n- settings.ts: provider fields gone; k7.settings.v2; v1 removed on load.\n- Delete provider.ts, provider.test.ts, hasProvider, and the Provider card in Settings.\n- README: the built-in model's requirements, the download, removal in Chrome's settings, the languages.\n- Tests: the state mapping and a schema/parser agreement test; parseIntent unchanged. The model itself is not tested in CI, and the README says so.\n\nFinished when: cd web && npm run typecheck && npm test && npm run build passes, and Ask produces filters with no key and no network; with the model unavailable it says what is missing and the filter form still works.",
+      "notes": [
+        {
+          "at": "2026-11-13T13:22:14Z",
+          "by": "dsh",
+          "text": "Plan: builtin-model.ts (Prompt API edge, availability to state, failure sentences), ask.ts (schema and system prompt, requestIntent through the built-in model, one repair), settings.ts (provider fields gone, k7.settings.v2, v1 removed on load), Ask.tsx (five states, setup, progress), Settings.tsx (Provider card gone), delete provider.ts and provider.test.ts, README rewritten, tests for the state mapping and the schema/parser agreement."
+        },
+        {
+          "at": "2026-11-13T13:28:02Z",
+          "by": "dsh",
+          "text": "Ask now runs on Chrome's built-in model, and the Provider is gone: no key, no endpoint, no Settings card.\n\nWhat changed for you:\n- Settings has two cards, Analysis workers and Invidious instance. The Provider card, its presets, its Test and its key are deleted.\n- Ask's prompt is replaced by the model's state: a sentence while Chrome checks, \"Set up the assistant\" when the model can be fetched, a progress bar while it downloads, the sentence box once it is there. The Intent, the filter form and the search are unchanged.\n- Settings moved to k7.settings.v2 and removes the v1 blob on load, so the old Provider key is gone with it.\n- Ask works offline once the model is there. First ask after Chrome loads the model was 12.6 s on the spike's Mac; later answers 1–5 s.\n\nWhat to check in Chrome:\n- Ask with the model available: a sentence becomes filters.\n- Ask with the model downloadable: the button, then the progress bar, then the form.\n- Ask with the model unavailable: one sentence, and the filter form still runs.\n\nThe prompt is unchanged from the spike, so the measured 10/12 still describes what ships. The two misses and the over-fill show in the editable Intent; APP-14 is proposed to tighten the prompt and re-run, because changing it without a second run would leave ADR 0084 measuring a prompt that no longer ships.\n\nVerified: 523 vitest tests pass, 26 of them for the assistant (state mapping, schema/parser agreement, the repair flag); `npx vite build` bundles.\n\nNot green, and not this change:\n- `npm run typecheck` fails on web/src/ui/album-detail.tsx (three unused identifiers in another lane's uncommitted edit). No error is in a file this task touched.\n- `make -C host check` fails at `label page`: the headless Chrome GPU process crashes in this environment. Everything before it passed."
+        }
+      ]
+    },
+    {
+      "id": "APP-14",
+      "title": "Tighten the assistant's prompt and re-run the spike",
+      "state": "done",
+      "group": "APP",
+      "deps": ["APP-13"],
+      "at": "2026-11-13T13:28:02Z",
+      "by": "dsh",
+      "desc": "The spike measured 10 of 12 and named three prompt-level defects: \"about an hour\" became a limit of 75 instead of 15; \"songs by Daft Punk\" lost the artist and searched for \"songs\"; and the model uses query for adjectives and categories (\"alegre\", \"calme\", \"workout\") and over-fills mood asks with ranges nobody asked for.\n\nThe Intent is visible and editable, so each costs an edit rather than a wrong playlist. But a targeted prompt change should recover them.\n\nCandidate: query is only a name the person used (artist, album, title, genre), never a mood, an adjective or a category word; a duration is 15 tracks per hour; omit every key the sentence did not ask for.\n\nFinished when: the same 12-sentence rubric, run on the same page, has its new counts and failure list recorded; ADR 0084 and k7-app section 10 are updated if the number moves. The bar does not move.",
+      "notes": [
+        {
+          "at": "2026-11-13T13:49:33Z",
+          "by": "dsh",
+          "text": "Plan: tighten SYSTEM_PROMPT in ask.ts on the three findings (query is names only, not adjectives or categories; a duration is 15 tracks per hour; omit every key the sentence did not ask for). Rebuild .scratch/nano-spike from the changed prompt, re-run the same rubric and bar, record the new counts and failures, and update ADR 0084 and k7-app section 10 if the number moves."
+        },
+        {
+          "at": "2026-11-13T13:49:44Z",
+          "by": "dsh",
+          "text": "Question: Open http://localhost:8123/?v=2 in Chrome, press Run all 12, mark each row Right or Wrong, then Copy results and paste the JSON here. The model is already downloaded, so it should start in the form. This is the same rubric and the same bar."
+        },
+        {
+          "at": "2026-11-13T13:55:43Z",
+          "by": "dsh",
+          "text": "Run 2, tightened prompt, same 12-sentence rubric and same bar. Chrome 157, model available, full schema accepted, no fallback.\n\nMarks: 8 right, 4 wrong, 12/12 schema-valid. NO-GO (the bar is at least 10).\n\nRight: #1, #2, #3, #5, #6, #7, #11, #12.\nWrong: #4 (\"sad and slow\" — mood sad but \"slow\" unresolved, plus sort bpm and limit 30), #8 (\"the 20 most danceable tracks\" — query \"danceable tracks\" added), #9 (\"songs by Daft Punk\" — query fixed, but genre electronic plus ten invented ranges), #10 (\"10 songs for a workout\" — query \"songs\").\n\nThe two must-fixes did land: #7 returned limit 15 (was 75) and #9 returned \"Daft Punk\" (was \"songs\"). The query rule did not: \"techno\", \"party songs\", \"hour\", \"danceable tracks\", \"songs\", \"alegre\", \"calme\". The over-fill did not improve.\n\nDecision by the bar: revert the tightened prompt. The shipped prompt is the one that measured 10/12 in APP-11, and the remaining query and over-fill behaviour is accepted as the editable Intent's cost."
+        },
+        {
+          "at": "2026-11-13T13:56:10Z",
+          "by": "dsh",
+          "text": "NO-GO, and the bar held. The tightened prompt scored 8 of 12 on the same rubric and is reverted; `ask.ts` is back to the prompt that measured 10/12.\n\n- What changed for you: nothing in the app. The experiment is recorded here, and the shipped prompt is byte-for-byte the one APP-11 measured.\n- The two must-fixes did land: \"about an hour\" returned limit 15 (was 75), and \"songs by Daft Punk\" returned the artist (was \"songs\"). But #4, #8, #9 and #10 were judged wrong, and the invented `query` (\"hour\", \"songs\", \"danceable tracks\") and the over-fill got worse, not better.\n- ADR 0084, k7-app section 10 and the README now record that a tightened prompt was tried and rejected, so this is not re-argued from scratch.\n- What it means: the model's invented `query` and extra ranges are not fixed by prompt wording. The Intent's visibility and editability is the mitigation the design chose; anything better is a different mechanism, not another prompt.\n\nVerified: 26 assistant tests pass; no typecheck error in a file this change touches (the album-detail lane still blocks the project check); the prompt rebuilds to the same 28 lines and 1527 characters as APP-11's run."
+        }
+      ]
+    },
+    {
+      "id": "APP-15",
+      "title": "Make the Intent describe only what k7.db can serve",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-13T14:07:11Z",
+      "by": "dsh",
+      "desc": "The audit found no schema key without data: every one maps to a library_search argument and a Snapshot row, so nothing is removed. Three corrections make the Intent describe what can actually be served.\n\n1. BPM. k7.db stores folded tempo 70–180 only. The schema and the system prompt say 0–400, so a bound outside 70–180 can only return nothing. Change INTENT_SCHEMA's bpm_min/bpm_max to 70–180 and the prompt's BPM comments to match.\n2. String caps. parseIntent allows a 120-character genre, but the device refuses over 63 bytes and refuses the whole search. Cap query at 255 bytes and genre at 63 bytes in parseIntent, counting UTF-8 bytes rather than characters.\n3. Key. Leave the device's validator as the single source of truth. A bad key is a visible device sentence and the Intent is editable; mirroring the note-name grammar in JS would be a second source of truth.\n\nFinished when: the schema's BPM pair is 70–180 and the prompt says so; parseIntent's query and genre caps are byte-aware and tested; the schema/parser tests cover both; the README and the spec's filter note say a range only sees measured tracks.",
+      "notes": [
+        {
+          "at": "2026-11-13T14:15:41Z",
+          "by": "dsh",
+          "text": "Plan: INTENT_SCHEMA bpm_min/max 70-180 and the prompt's BPM comments; parseIntent clamps BPM to 70-180 and caps query at 255 bytes and genre at 63 bytes with a UTF-8-safe truncation; tests for the schema range and the byte caps; the README and k7-app's filter note say a range only sees measured tracks."
+        },
+        {
+          "at": "2026-11-13T14:16:59Z",
+          "by": "dsh",
+          "text": "The Intent now describes only what k7.db can serve.\n\n- BPM. INTENT_SCHEMA and the system prompt say 70–180, the folded tempo the Snapshot row stores, and parseIntent clamps to it. A bound outside that range used to be accepted and could only return nothing.\n- Strings. parseIntent caps query at 255 bytes and genre at 63, counting UTF-8 rather than characters and never cutting a code point. Before, a genre over 63 bytes made library_search refuse the whole search.\n- Tests. The clamp, the byte caps (including a multibyte string) and the schema's BPM range are covered; the suite is 524 tests and the bundle builds.\n- Documents. k7-app P2 says every key is library_search's own argument and P8 says a range only sees measured tracks; the README gains \"What a filter sees\" and names the Player's coverage.\n\nWhat to check:\n- An Intent for \"under 60 BPM\" now comes back as 70 and is visible in the form.\n- A long genre is cut to 63 bytes instead of making the device refuse the search.\n- A key the model invents still gets the device's own sentence, by design.\n\nLeft out, as discussed: the manual BPM fields in the Intent form still say 0–400, so a hand-typed bound outside 70–180 still returns nothing; say the word if that should be APP-16."
+        }
+      ]
+    },
+    {
+      "id": "APP-16",
+      "title": "Clamp the Intent form's manual BPM to 70-180",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-13T14:23:53Z",
+      "by": "dsh",
+      "desc": "APP-15 fixed the model's Intent, but the form's two BPM number fields still offer 0–400 and pass a hand-typed value straight to library_search. The device compares that value against folded tempo, so anything outside 70–180 can only return nothing — the same lie APP-15 removed from the schema, in a second place.\n\n- The BPM min and max fields in Ask's Intent form use 70 and 180.\n- The Run search path clamps any hand-typed tempo to 70–180 before it builds the search, and writes the clamped value back to the visible Intent, so the form and the search always agree.\n- The clamp lives in ask.ts beside the parser's range, with a test; the other fields are unchanged.\n\nFinished when: a typed 60 becomes 70 and a typed 200 becomes 180 before the search runs; the Intent shows the clamped value; the test covers it; no other field moves.",
+      "notes": [
+        {
+          "at": "2026-11-13T14:52:59Z",
+          "by": "dsh",
+          "text": "Plan: export BPM_RANGE and clampBpm from ask.ts (one source for the parser and the schema); the Intent form's two BPM fields use 70/180; Run search clamps a hand-typed tempo, writes it back to the visible Intent, and searches the clamped value; a test covers the clamp."
+        },
+        {
+          "at": "2026-11-13T14:53:36Z",
+          "by": "dsh",
+          "text": "The form's BPM now says what the library can answer.\n\n- Both BPM fields in the Intent form are 70–180.\n- Run search clamps a hand-typed tempo, writes the clamped value back to the visible Intent, and searches the clamped value — so the form and the query always agree. A typed 60 becomes 70, a typed 200 becomes 180, a typed 120 stays.\n- `BPM_RANGE` and `clampBpm` live in ask.ts beside the parser, and the schema, the parser and the form all use them: one source for the folded range. A test covers the clamp and the schema's pair.\n- No other field moved.\n\nWhat to check: type 60 into BPM min, press Run search; the field shows 70 and the search that runs is the 70 one. Type 120 and nothing changes.\n\nVerified: 525 tests pass, the bundle builds, no typecheck error in a file this touched (the album-detail lane still blocks the project check)."
+        }
+      ]
+    },
+    {
+      "id": "APP-17",
+      "title": "Drop a query that only restates a key",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-13T14:59:04Z",
+      "by": "dsh",
+      "desc": "Reported while testing: \"something in B minor\" came back as query \"B minor\" with key [\"Bm\"]. The key is right; the query is the same fact said again, and because filters are ANDed it can only narrow the search to nothing.\n\nA prompt rule cannot be trusted here — APP-14 measured that wording does not move this habit — so parseIntent should drop the duplicate deterministically.\n\n- Normalize the ways a key is written (\"B minor\", \"B min\", \"Bm\", \"B♭ minor\", \"B flat minor\", \"8A\") to one form.\n- If the query normalizes to one of the Intent's keys, drop the query; the key filter already says it.\n- A query with any extra words (\"B minor blues\") is not a key and stays.\n- The same comparison, exact, drops a query that only repeats the genre (\"techno\" beside genre \"techno\"); say if that should be included.\n\nFinished when: the reported answer parses to { key: [\"Bm\"] } with no query; \"B minor blues\" keeps its query; a test covers both.",
+      "notes": [
+        {
+          "at": "2026-11-13T15:02:21Z",
+          "by": "dsh",
+          "text": "Plan: a keyWords normalizer in ask.ts; after keys are parsed, drop the query when it normalizes to one of them; tests for the reported case, a flat key, 8A, and a query with extra words; k7-app P2 says the parser drops a restated key."
+        },
+        {
+          "at": "2026-11-13T15:02:45Z",
+          "by": "dsh",
+          "text": "The reported case is fixed in the parser, not the prompt.\n\n- \"something in B minor\" now parses to key [\"Bm\"] and no words to find. The key normalizer also catches \"B min\", \"B♭ minor\", \"B flat minor\" and \"8A\" beside their key.\n- A query with extra words stays: \"B minor blues\" is a title, not the key, and keeps its query. With no key at all, \"B minor\" stays a query.\n- k7-app P2 now says the parser drops a query that only restates a key.\n- The genre duplicate (\"techno\" beside genre \"techno\") is not included, as proposed; say if it should be.\n\nWhat to check: ask \"something in B minor\" — the Intent should show Keys Bm and an empty Words to find.\n\nVerified: 526 tests pass, the bundle builds, no typecheck error in a file this touched (the album-detail lane still blocks the project check)."
+        }
+      ]
+    },
+    {
+      "id": "APP-18",
+      "title": "Recover the name when the model puts a category in query",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-13T15:07:43Z",
+      "by": "dsh",
+      "desc": "Reported: \"songs by Daft Punk\" came back with words to find \"songs\". The artist is the one filter the sentence actually names, and \"songs\" is a category: as a text search it can only narrow the result to paths containing the word \"songs\".\n\nparseIntent cannot fix this — it sees the answer, not the sentence — but requestIntent has both. When a successful answer's query is a bare category word, put the sentence back to the model once with the specific failure: \"your query is a category, not a name; put the artist, album or title the sentence names in query, or leave it out\". Use the one repair attempt the contract already has. If the repaired query is still a bare category, drop it so the bare word never reaches the search; if that leaves no filter at all, say so.\n\n- Bare categories: songs, song, music, tracks, track, tunes, tune, something, anything, stuff. A query with extra words (\"party songs\") is left alone, as the earlier marks accepted it.\n- The predicate is pure and tested; the repair is a model call and stays out of CI, like the first ask.\n- k7-app P2 says the repair also covers a category query.\n\nFinished when: \"songs by Daft Punk\" yields query \"Daft Punk\" (or no query), never \"songs\"; the predicate's cases are tested.\n\nAlternative if you would rather not spend a second model call: a deterministic \"by X\" extraction in requestIntent, which is instant but only knows that phrasing.",
+      "notes": [
+        {
+          "at": "2026-11-13T17:49:21Z",
+          "by": "dsh",
+          "text": "Plan: a pure isCategoryQuery predicate (bare categories only) in ask.ts; requestIntent asks once more with the sentence when the query is a bare category, drops it if it persists, and says so if that leaves no filter; tests for the predicate; k7-app P2 and the README name the repair."
+        },
+        {
+          "at": "2026-11-13T17:49:58Z",
+          "by": "dsh",
+          "text": "The category query is now handled at the one place that has both the sentence and the answer.\n\n- When a successful Intent's query is a bare category — songs, music, tracks, tunes, something — requestIntent asks the model once more with the sentence and the specific failure. The second answer usually names the artist (\"Daft Punk\").\n- If it comes back a bare category again, the query is dropped so the word can never narrow the search; if that leaves no filter at all, the form says so.\n- \"party songs\" is not bare and is left alone, as the earlier marks accepted.\n- The predicate is pure and tested; the repair is a model call, like the first ask, and stays out of CI.\n- k7-app P2 and the README name the repair.\n\nWhat to check: \"songs by Daft Punk\" should show Words to find \"Daft Punk\" — or, if the model insists, an empty field, never \"songs\". It costs one extra ask (1–5 s) only for this kind of answer. Reload the dev app first.\n\nVerified: 527 tests pass, the bundle builds, no typecheck error in a file this touched (the album-detail lane still blocks the project check)."
+        }
+      ]
+    },
+    {
+      "id": "APP-19",
+      "title": "Ground query in the sentence, not in a word list",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-13T17:54:43Z",
+      "by": "dsh",
+      "desc": "Reported: \"10 songs for a workout\" put \"workout\" in words to find. Adding \"workout\" to APP-18's list would only move the problem to \"hour\", \"alegre\", \"calme\" or \"danceable tracks\" — the model uses query as a keyword bag.\n\nGround the query in the sentence instead of in a word list. requestIntent has both, so keep the model's query only when the sentence marks it as a name:\n\n- a name marker before it: by, from, called, named, titled, artist, band, album (skipping a/the/my and the like);\n- or a capitalized word when there is no marker at all.\n\nA purpose or context marker before it means it is not a name: for, to, during, while, with, without, at, in, on, about, like. So \"by Daft Punk\" keeps; \"for a workout\" goes; \"party songs\" and \"danceable tracks\" go; a bare category still goes (APP-18's predicate stays as the first check).\n\nWhat fails the check gets the one repair, with the sentence; if the repaired query still fails, it is dropped, and if that leaves nothing the form says so.\n\nThe cost, recorded: a lowercase name with no marker (\"blue monday\") is dropped unless the repair capitalises it. The Intent is editable, and the alternative — a growing word list — was tried and failed twice.\n\nFinished when: \"10 songs for a workout\" has no words to find and limit 10; \"songs by Daft Punk\" and \"by daft punk\" keep the name; the predicate's cases are tested.",
+      "notes": [
+        {
+          "at": "2026-11-13T18:20:44Z",
+          "by": "dsh",
+          "text": "Plan: an isNameQuery(sentence, query) predicate in ask.ts (bare category first; a name marker before the query wins, a context marker means no, otherwise capitalization decides); requestIntent repairs a query that fails it once, then drops it; tests for the marker cases; k7-app P2 and the README say not-a-name rather than category."
+        },
+        {
+          "at": "2026-11-13T18:21:37Z",
+          "by": "dsh",
+          "text": "The query is now grounded in the sentence, not in a word list.\n\n- isNameQuery asks whether the sentence marks the query as a name: a name marker before it (by, from, called, named, titled, artist, band, album) wins; a purpose or context marker (for, to, during, while, with, without, at, in, on, about, like) means no; with no marker, capitalization decides; a bare category is never a name.\n- requestIntent repairs a query that fails it once, with the sentence; if it still fails, the query is dropped, and if nothing remains the form says so.\n- \"songs by Daft Punk\" and \"by daft punk\" keep the name; \"10 songs for a workout\" loses workout; party songs, danceable tracks and the adjectives go too.\n- k7-app P2 and the README say not-a-name rather than category.\n\nWhat to check: \"10 songs for a workout\" should have no words to find and limit 10; \"songs by Daft Punk\" should keep the name. A lowercase name with no marker is the recorded cost: the repair gets one chance, otherwise it is dropped and the Intent is editable.\n\nVerified: 35 assistant tests pass, the suite is 530, the bundle builds, no typecheck error in a changed file (the album-detail lane still blocks the project check)."
+        }
+      ]
+    },
+    {
+      "id": "APP-20",
+      "title": "Describe the library's actual values to the model",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-13T18:21:23Z",
+      "by": "dsh",
+      "desc": "Asked for: the Ask prompt should be deterministic about the library's actual values — the genres that exist, the real BPM range (the tracks start at 85, not 70), and the same for energy, danceability, valence, arousal, keys, moods and track count — so the model cannot offer a genre no track has or a range that can only return nothing.\n\nSource (option A, recommended): the App's Last image already carries the rows. Build a LibraryProfile when the image is built — distinct genres (capped), track count, min/max and p25/p50/p75 for BPM, energy, danceability, valence and arousal, the Camelot keys and moods present — store it with the StoredSnapshot, and let Ask use it only when the device's library_stats reports the same Snapshot generation; otherwise fall back to today's static prompt and schema. A device library_summary tool (option B) is exact even without an image, but it is a firmware change; propose it as a follow-up if drift matters.\n\nChanges:\n- domain/snapshot.ts: buildProfile(tracks) from SnapshotTrack[] and its types.\n- storage/snapshots.ts: StoredSnapshot.profile and .generation.\n- analysis.tsx: build and save the profile with the image.\n- ask.ts: buildSystemPrompt(profile) and intentSchema(profile) — genre enum = the library's genres; BPM/energy/danceability/valence/arousal min/max = the library's; the WORD->FILTER thresholds from the quartiles (fast p75 BPM, slow p25, chill energy_max p25, workout energy_min p75, party danceability_min p75, sad valence_max p25, happy valence_min p75, aggressive arousal_min p75); the track count in the prompt; the few-shot examples' numbers derived from the profile; requestIntent(sentence, profile?).\n- Ask.tsx: load the current scope's profile, gate it on the device's Snapshot generation, pass it; static fallback when there is none.\n- Privacy: the model would now see aggregate library facts, never a track, artist, path or per-track measurement. This amends ADR 0053's \"the library is never described\"; record it (new ADR or a note in 0084) and update k7-app P2/P6 and the ask.ts comment.\n- Tests: profile from a fixture analysis set; prompt/schema builders; genre enum; quartile thresholds; the generation gate's pure part; fallback.\n\nFinished when: with a profile, the schema's genre enum is exactly the library's genres and its BPM range is the library's; the prompt's thresholds are its quartiles; Ask uses it only on a generation match; without a profile today's behavior is unchanged; tests pass.",
+      "notes": [
+        {
+          "at": "2026-11-13T18:23:10Z",
+          "by": "dsh",
+          "text": "Plan: build a LibraryProfile from the image's tracks (genres capped, track count, min/max and quartiles per axis, keys and moods present), store it with the StoredSnapshot, gate it on the device's Snapshot generation, and build the prompt, schema and examples from it; static fallback; record the aggregates-only privacy change; tests for the profile, builders and gate."
+        },
+        {
+          "at": "2026-11-13T18:27:50Z",
+          "by": "dsh",
+          "text": "The prompt now describes the library the player is actually running, so the model cannot offer a genre no track has or a BPM range no track can fall in.\n\nWhat changed for you:\n- When the player is running the image this browser built, Ask's prompt carries that library's genres, track count, the min/max and quartiles of BPM, energy, danceability, valence and arousal, and the keys and moods present.\n- The schema is closed to the same values: genre is an enum of the library's genres, each axis's bounds are the library's, the mood enum is the moods present.\n- The WORD->FILTER thresholds are the library's own quartiles (fast = p75 BPM, slow = p25, chill = p25 energy, workout = p75 energy, party = p75 danceability, sad = p25 valence, happy = p75 valence, aggressive = p75 arousal), and the few-shot examples use those numbers.\n- Without a profile — no image, another browser's image, or the player running a different one — the static prompt and ranges are unchanged.\n\nWhere it comes from: buildProfile(tracks) runs when the image is built; the profile and the image's generation are stored with the StoredSnapshot; Ask uses them only when library_stats reports the same Snapshot generation.\n\nPrivacy: aggregates only — genres, count, ranges, quartiles — never a track, artist, path or per-track measurement. ADR 0084's note records the amendment to ADR 0053; k7-app P2/P6 and the README say it.\n\nCaveats recorded:\n- Genres are capped at the 40 most common; a larger library leaves its rarest out of both the prompt and the enum.\n- Keys are listed in Camelot; the schema does not enum them, because the model may write a note name and the device accepts both.\n- The schema is the enforcement; parseIntent still clamps to the device's ranges, not the profile's, so a model that ignored the constraint would return nothing rather than be corrected.\n- The profile needs the player's stats; with no device it falls back to static, which is also what the search would need.\n\nVerified: 544 tests pass (profile, gate, prompt, schema, examples included), the bundle builds, no typecheck error in a changed file (the album-detail lane still blocks the project check)."
+        }
+      ]
+    },
+    {
+      "id": "APP-21",
+      "title": "Ask over the selected card's image, not only the player",
+      "state": "review",
+      "group": "APP",
+      "at": "2026-11-13T18:36:32Z",
+      "by": "dsh",
+      "desc": "Reported: a virtual card selected in Prepare (81 tracks) does not drive Ask. The virtual card's image is written under its scope and now stores a profile, but Ask's profile load gates it against library_stats.snapshot.generation — the player's Snapshot. A virtual card is not in the player, so the profile is refused; and Ask's search calls library_search on the player, so both the Intent's prompt and the results are the player's library, not the virtual card's k7.db.\n\nThis is the Library source gap the spec already defines (§4 S1–S5, M4), not a gate to loosen: using the virtual card's profile while searching the player would describe one library and search another.\n\nScope:\n- Implement the image LibrarySource over the selected card's stored k7.db: decode the rows, join to CachedMedia by snapshot path/fingerprint, and implement search (query, genre, bpm, key, mood, energy, danceability, valence, arousal, sort, offset, limit) with the same semantics as library_search, plus stats.\n- Source choice: the image when the selected card is a virtual card, or when the player is not running that image; the device when the link is present and its Snapshot is the selected card's image; neither → the existing empty state. The profile follows the source: the stored image profile for the image; the generation gate only for the device.\n- Ask's run uses the chosen source; the area says which source answered (S3); the profile is loaded with the same choice.\n- Tests: the image source over a fixture image (the format builder), the filter corpus (S4) shared with the device implementation, the source choice, the profile usage.\n\nFinished when: with the 81-track virtual card selected, Ask's prompt uses its profile and its search returns its tracks; with a real card the player runs, the device remains the source; without either, the current empty state; tests pass.\n\nInterim if wanted: Ask can say it is answering over the player's library (or refuse) until the image source exists, so it never silently answers over the wrong card.",
+      "notes": [
+        {
+          "at": "2026-11-13T18:39:06Z",
+          "by": "dsh",
+          "text": "Plan: read the stored k7.db rows into a pure image search (decode, join CachedMedia by snapshot fingerprint, implement the library_search filters/sort), a chooseSource rule (device only when the player reports this card; image for the selected card otherwise; none if neither), resolve the source for Ask's profile and search, show which source answered, and test the image filters, the key parser, the row decode and the source rule."
+        },
+        {
+          "at": "2026-11-13T18:41:35Z",
+          "by": "dsh",
+          "text": "Ask now answers over the selected card, not only the player. The 81-track virtual card is the case that exposed it.\n\nWhat changed for you:\n- Ask resolves the source: the player when it reports the selected card's mark; otherwise the card's Last image (a virtual card is always the image); otherwise a linked player is the only source; with neither, a sentence saying what is missing.\n- The image source reads the stored k7.db rows, joins them to the media index by the Snapshot path's fingerprint, and applies library_search's filters, key grammar, sort and paging. With your virtual card selected, Run search returns its 81 tracks.\n- The profile follows the source: the stored image profile, or — for an image written before profiles existed — one built from the rows. So the prompt and schema describe that card, not the player's.\n- The results say which source answered: \"The player · N tracks\" or \"Last image · 13 November · 81 tracks\" (S3).\n- k7-app's status and S2 now say the selected card decides, and the README says the player/Lost-image rule.\n\nWhat to check: select the 81-track virtual card, ask and run; the Intent should carry its genres/ranges and the results should say \"Last image · … · 81 tracks\". With a real card whose mark the player reports, it should say \"The player\".\n\nRecorded caveats:\n- The image source implements search only; S1's list/stats/track and Media/Playlists over the image are still unbuilt.\n- The S4 shared conformance corpus (one JSON run by both the JS and the C host tests) is not built; the JS tests pin the filters and the key parser against the C's semantics, and the C suite covers snapshot_matches, but they are not yet one fixture.\n- The path sort uses the media index's path order; the device's broadcast order can differ. Missing values sort as the C's do (title last, numeric first).\n- A track the image measured but the media store lost cannot be listed: the image stores no paths, so the join's other half is the browser's index.\n\nVerified: 556 tests pass (image row decode, filters/sort, key parser, profile from rows, source rule), the bundle builds, no typecheck error in a changed file (the album-detail lane still blocks the project check)."
+        },
+        {
+          "at": "2026-11-13T18:45:08Z",
+          "by": "dsh",
+          "text": "Review correction, reported from Prepare: after switching the selected card from a virtual card to the Device SD, Ask still searched the virtual card.\n\nCause: the Device card tile is a view, not a scope. setDeviceView(true) leaves currentCardScope on the computer card, so chooseSource compared the player's mark with the virtual card's scope, missed, and fell back to the virtual card's image.\n\nFix:\n- chooseSource takes the device view: when the Device tile is selected, the player is the source if it reports a card, and none otherwise. A computer card pick resets the view (setCardScope), so the virtual card goes back to its image.\n- The player's profile is loaded from the player card's own scope (mark:<status.mark>), not the browser's, so the prompt describes the card the player holds; without that stored image it is static.\n- k7-app S2 and the README say the Device tile decides; a source test covers the view cases.\n\nVerified: 557 tests pass, the bundle builds, no typecheck error in a changed file."
         }
       ]
     }

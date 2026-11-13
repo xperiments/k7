@@ -1,5 +1,7 @@
 import { openDB, type DBSchema } from 'idb';
 
+import type { LibraryProfile } from '../domain/snapshot';
+
 /**
  * The last Update file this page built, kept across reloads.
  *
@@ -37,6 +39,10 @@ export interface StoredSnapshot {
   tracks: number;
   /** Tracks outside `music/`, measured but not part of the card's Library. */
   skipped: number;
+  /** The image's generation, as its header carries it; the player reports the same. */
+  generation?: number;
+  /** The Library's aggregates, built with the image; absent in older records. */
+  profile?: LibraryProfile;
   /** When the image was built. */
   at: string;
   /** When the player last accepted it, if it has. */

@@ -102,6 +102,135 @@ export interface SnapshotInput {
   modelSet: bigint;
 }
 
+/** One measurement axis, as the library actually spreads: min, quartiles, max. */
+export interface AxisProfile {
+  min: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  max: number;
+}
+
+/**
+ * What one Library is like, in aggregate: the genres and keys it contains, how many Tracks,
+ * and the spread of the five measurements. It describes no track; it is what the Ask prompt
+ * may carry so the model cannot offer a genre the library does not have or a range no track
+ * can fall in.
+ */
+export interface LibraryProfile {
+  tracks: number;
+  genres: string[];
+  keys: string[];
+  moods: string[];
+  bpm: AxisProfile | null;
+  energy: AxisProfile | null;
+  danceability: AxisProfile | null;
+  valence: AxisProfile | null;
+  arousal: AxisProfile | null;
+}
+
+/** A long genre list costs context and teaches little; the rarest ones are dropped. */
+const PROFILE_GENRE_CAP = 40;
+
+const CAMELOT = /^(1[0-2]|[1-9])[AB]$/;
+
+/** The five mood heads; `danceable` is a property with its own field, not a mood. */
+const PROFILE_MOODS = ['happy', 'sad', 'aggressive', 'relaxed', 'party'] as const;
+
+function axisOf(values: readonly number[]): AxisProfile | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const at = (q: number) => sorted[Math.round(q * (sorted.length - 1))];
+  return { min: sorted[0], p25: at(0.25), p50: at(0.5), p75: at(0.75), max: sorted[sorted.length - 1] };
+}
+
+function camelotOrder(code: string): number {
+  const match = /^(\d{1,2})([AB])$/.exec(code);
+  return match ? Number(match[1]) + (match[2] === 'B' ? 12 : 0) : 99;
+}
+
+function genresOf(tracks: readonly SnapshotTrack[]): string[] {
+  const counts = new Map<string, { name: string; count: number }>();
+  for (const track of tracks) {
+    const name = track.genre.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const entry = counts.get(key);
+    if (entry) entry.count += 1;
+    else counts.set(key, { name, count: 1 });
+  }
+  return [...counts.values()]
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, PROFILE_GENRE_CAP)
+    .map((entry) => entry.name);
+}
+
+function keysOf(tracks: readonly SnapshotTrack[]): string[] {
+  const keys = new Set<string>();
+  for (const track of tracks) {
+    const code = track.analysis.key.camelot.trim().toUpperCase();
+    if (CAMELOT.test(code)) keys.add(code);
+  }
+  return [...keys].sort((a, b) => camelotOrder(a) - camelotOrder(b));
+}
+
+function moodsOf(tracks: readonly SnapshotTrack[]): string[] {
+  const present = new Set<string>();
+  for (const track of tracks) {
+    const tags = track.analysis.mood.tags;
+    if (!tags) continue;
+    for (const mood of PROFILE_MOODS) if (tags[mood] >= 0.5) present.add(mood);
+  }
+  return PROFILE_MOODS.filter((mood) => present.has(mood));
+}
+
+function valueOf(value: number | null, convert: (value: number) => number): number | null {
+  return value === null || !Number.isFinite(value) ? null : convert(value);
+}
+
+function axisValues(
+  tracks: readonly SnapshotTrack[],
+  value: (track: SnapshotTrack) => number | null,
+): number[] {
+  const out: number[] = [];
+  for (const track of tracks) {
+    const each = value(track);
+    if (each !== null) out.push(each);
+  }
+  return out;
+}
+
+/**
+ * The profile of a Library, from the rows the image carries. It is built once, with the image,
+ * and stored beside it; the values are the same encodings the rows use (folded BPM, integer
+ * percentages, the Snapshot's own mood threshold).
+ */
+export function buildProfile(tracks: readonly SnapshotTrack[]): LibraryProfile {
+  return {
+    tracks: tracks.length,
+    genres: genresOf(tracks),
+    keys: keysOf(tracks),
+    moods: moodsOf(tracks),
+    bpm: axisOf(
+      tracks
+        .map((track) => track.analysis.tempo.bpm)
+        .filter((bpm) => Number.isFinite(bpm) && bpm >= MIN_BPM && bpm <= MAX_BPM),
+    ),
+    energy: axisOf(
+      axisValues(tracks, (track) => valueOf(track.analysis.energy, energyPercent)),
+    ),
+    danceability: axisOf(
+      axisValues(tracks, (track) =>
+        track.analysis.mood.tags
+          ? valueOf(track.analysis.mood.tags.danceable, unitPercent)
+          : null,
+      ),
+    ),
+    valence: axisOf(axisValues(tracks, (track) => valueOf(track.analysis.mood.valence, unitPercent))),
+    arousal: axisOf(axisValues(tracks, (track) => valueOf(track.analysis.mood.arousal, unitPercent))),
+  };
+}
+
 /**
  * A **Playlist** to carry in the image (format §10, list record).
  *

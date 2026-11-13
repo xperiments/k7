@@ -1,9 +1,11 @@
 import { ANALYSIS_SCHEMA, type Analysis, type ModelManifest } from '../domain/analysis';
 import { ANALYZER_VERSION } from '../domain/version';
 import {
+  buildProfile,
   buildSnapshot,
   modelSetId,
   snapshotPath,
+  type LibraryProfile,
   type SnapshotPlaylist,
   type SnapshotTrack,
 } from '../domain/snapshot';
@@ -23,6 +25,10 @@ export interface SnapshotExport {
   tracks: number;
   /** Analysed Tracks outside a `music` directory, so not part of the card's Library. */
   skipped: number;
+  /** The generation the header carries, to match the player's Snapshot. */
+  generation: number;
+  /** The Library's aggregates, stored beside the image. */
+  profile: LibraryProfile;
 }
 
 /** The analyser's version as the format's number: major*10000 + minor*100 + patch. */
@@ -90,15 +96,22 @@ export async function buildSnapshotExport(
     });
   }
 
+  const generationSeconds = Math.floor(Date.now() / 1000);
   const bytes = buildSnapshot(
     {
       tracks,
-      generationSeconds: Math.floor(Date.now() / 1000),
+      generationSeconds,
       analyserVersion: versionNumber(ANALYZER_VERSION),
       appSchema: ANALYSIS_SCHEMA,
       modelSet: modelSetId(manifest.models),
     },
     lists,
   );
-  return { bytes, tracks: tracks.length, skipped };
+  return {
+    bytes,
+    tracks: tracks.length,
+    skipped,
+    generation: generationSeconds,
+    profile: buildProfile(tracks),
+  };
 }

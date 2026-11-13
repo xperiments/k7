@@ -1,5 +1,10 @@
 # A Provider's failure is named, and a local Provider has to allow this page
 
+> **Status: superseded by [ADR 0084](./0084-the-assistant-is-the-browsers-built-in-model.md)** —
+> with no remote Provider there is no CORS failure to name. The principle it settled, name the
+> failure rather than guess, is adopted there by the built-in model's sentences. The reasoning
+> below is kept as the record.
+
 ADR 0053 made the **Provider** a setting: an OpenAI-compatible endpoint, its model and its key,
 held in this browser. The page asking it is served by the device at `http://xtape.local`
 (ADR 0049), which is a plain-HTTP origin on the LAN. The first Provider tried against it was

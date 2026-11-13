@@ -18,9 +18,11 @@ The page the device used to serve is gone: **Front door**, **Launcher**, **Devic
 stores, installability, and the one offline weights store with a gated prefetch. Not deployed
 and not flashed. The `/app` split is built; the Site at `/` is its first shape
 ([`k7-site.md`](./k7-site.md)). M4 is partly built: the direct transport exists; the
-Library's image source and the local Provider do not, so `#/media`, `#/playlists` and Ask still
-read the player only. The K7 look is specified in [`k7-look.md`](./k7-look.md); LK-02 to LK-07
-apply it to the App.
+Library's image source answers Ask's search, but `#/media` and `#/playlists` still read the
+player only. Ask
+is answered by the built-in model
+([ADR 0084](../adr/0084-the-assistant-is-the-browsers-built-in-model.md)). The K7 look is
+specified in [`k7-look.md`](./k7-look.md); LK-02 to LK-07 apply it to the App.
 
 **Vocabulary:** [`web/CONTEXT.md`](../../web/CONTEXT.md). The device's own API is
 [`front-door.md`](./front-door.md) §2 — its routes and contracts still hold, the page it once
@@ -40,7 +42,7 @@ is [ADR 0057](../adr/0057-the-app-lives-at-a-public-origin.md); the direct trans
 | Served by | Vercel, with headers; the device serves no page of the App (`/setup` is the one
 page it serves, and only for provisioning) |
 | Secure context | yes |
-| Owns | library processing, card writes, the PWA, WebGPU, every view |
+| Owns | library processing, card writes, the PWA, every view |
 | Never | serves a Track, accepts a Track upload |
 
 **A1. One artifact.** `npm run build` produces the Site and the App from one build; there is no
@@ -99,8 +101,8 @@ Three observed facts. There is no mode enum, and no precedence table.
 
 **A5. `network`** — `online` or `offline`, from the browser's own event.
 
-**A6. `capabilities`** — `isSecureContext`, service worker, `navigator.gpu`, directory handles,
-OPFS, the `local-network` permission, all read at boot and shown in Settings.
+**A6. `capabilities`** — `isSecureContext`, service worker, directory handles, OPFS, the
+`local-network` permission, all read at boot and shown in Settings.
 
 **A7. One chip composes them** — "Connected · k7.local", "Connected · player unreachable",
 "No player — Connect", "Offline · cached". A feature is gated on the capability it needs, never
@@ -111,11 +113,10 @@ on the chip.
 | Compose a virtual card (drop, measure, keep `k7.db` current), write it to an SD | secure context + directory handles |
 | Pick a card, write `k7.db`, write the card mark | secure context + directory handles |
 | Install, offline shell, weight prefetch | secure context + service worker |
-| Local Provider (WebLLM) | secure context + WebGPU + ~1 GB of patience |
 | OPFS | secure context |
-| Media, Playlists, Ask over the Last image | nothing but the store |
+| Media and Playlists over the Last image | nothing but the store |
 | Device facts, playlists, send, play, stream | `link !== none` |
-| Ask over a remote Provider | `network === online` + Settings |
+| Ask | Chrome's built-in model, available (§7) |
 
 **A8. `window.isSecureContext` is a readout, not an assertion.** The App reads it and gates the
 features it forbids, instead of failing at the first call.
@@ -165,9 +166,13 @@ which it is talking to.
 `track(path)`. The **device** implementation is MCP over the bridge or direct; the **image**
 implementation is the Last image's rows joined to `k7-media` for titles, artists and covers.
 
-**S2. Local-first resolution.** `link` present → device, because it reflects the card as it is
-now. No link → image, if one exists for a scope. Neither → an empty state that says which is
-missing, never a spinner.
+**S2. The selected card decides.** The **Device card** tile is the player's card: when it is
+selected, the player is the source, because the player reflects the card as it is now. Otherwise
+the player is the source when it reports the selected card's mark (`status.mark` matches the
+scope). Otherwise the
+**Last image**, if one exists for the scope; otherwise a linked player is the only source there
+is; with neither, an empty state that says which is missing, never a spinner. A **Virtual card**
+is always the image: the player cannot hold it.
 
 **S3. The surface says which source it shows.** "The player · 4 120 tracks" and "Last image ·
 11 February · 4 118 tracks" are different facts and must not look alike.
@@ -233,39 +238,61 @@ the value is demonstrated; the quota and the cache's size are shown in Settings.
 **O6. Update detection is a banner, not a takeover**: "a new version is ready — reload", shown
 when a waiting worker exists.
 
-**O7. Offline cannot cover two features and says so:** a **Remote Provider**, and the Invidious
-**Instance**. Both are network features wearing a local app's clothes.
+**O7. Offline cannot cover one feature and says so:** the Invidious **Instance**, a network
+feature wearing a local app's clothes. Ask is offline once the built-in model is installed; the
+model's own download is its one network moment.
 
 ---
 
-## 7. The local Provider
+## 7. The assistant
 
-**P1. `Provider` is a union**: `{kind: 'remote', baseUrl, model, key}` or
-`{kind: 'local', model}`. Everything above it sees one thing: a sentence becomes filters.
+**P1. One provider: the built-in model.** Chrome's Gemini Nano, reached through the Prompt API.
+There is no endpoint, no key and no setting: a sentence becomes an **Intent** without a request.
+[ADR 0084](../adr/0084-the-assistant-is-the-browsers-built-in-model.md) records the move.
 
 **P2. The contract does not change.** The model produces an **Intent** and never results
-(ADR 0053); the same validator judges a local model's output, with one repair attempt and then
-an error.
+(ADR 0050, ADR 0053); `parseIntent` judges the answer: unknown keys are dropped, a query that only
+restates a key is dropped, and every number is clamped to the range the Snapshot stores. A
+malformed answer, and a query that is not a name the sentence used (a category, a purpose, or an
+unmarked lowercase word), each get one repair — the second is asked again with the sentence — and
+a word that is still not a name is dropped. Every key is
+`library_search`'s own argument, and each is the data the row has: BPM is the folded 70–180, and
+`query` and `genre` are cut to the device's byte ceilings (255 and 63), because a longer string
+would refuse the whole search. The shape is constrained by a JSON Schema passed as
+`responseConstraint` — the spike showed Chrome accepts ranges, enums and `additionalProperties`,
+measured on Chrome 157 — but the schema is a request and the validator is the judge. When this
+browser built the image the player is running (the same Snapshot generation), the prompt and
+schema carry that library's aggregates instead: the genres become a closed enum, each axis's
+bounds become the library's, and the WORD→FILTER thresholds its quartiles. Without a profile the
+static ranges apply. The profile is aggregates only — genres, count, ranges and quartiles — and
+no track, artist, path or per-track measurement is described either way.
 
-**P3. WebLLM, on WebGPU, gated.** Without `navigator.gpu` the local option is absent from
-Settings rather than present and broken.
+**P3. Ask owns the model's setup.** Five states: no Prompt API (not Chrome 148+ on desktop),
+`unavailable` (below the hardware floor, or built-in AI turned off in Chrome — the App cannot tell
+which), `downloadable`, `downloading`, `available`. Ask shows one sentence for the first two, a
+sentence and **Set up the assistant** for `downloadable`, progress for `downloading`, and the box
+for `available`. Nothing downloads on boot and nothing is prefetched; the filter form stands in
+every state.
 
-**P4. Two curated models, not a text field**: `Qwen2.5-1.5B-Instruct-q4f16_1` by default and
-`Qwen2.5-0.5B-Instruct-q4f16_1` for small machines. A free-text model id is a 404 generator.
+**P4. The App can offer the model and cannot remove it.** The download needs a user gesture — the
+setup's button is that gesture — and it is Chrome's component in Chrome's profile. The App can
+start it and watch it; removal is in Chrome's settings, and the setup says so.
 
-**P5. Downloaded only when chosen**, with progress, cancel and **Delete** — it is roughly 1 GB
-and it is never part of O3's prefetch.
+**P5. One session per Ask.** The session is created with the system prompt, prompts once and is
+destroyed. No context carries between asks, and no session is held while the person browses.
 
-**P6. Pinned, not hash-verified.** The model files come from an immutable Hugging Face commit
-recorded in a lock file; they are not hashed chunk by chunk like the 41 MB of ONNX weights.
-They are **data, not code**: a tampered model cannot execute, and the worst it does is produce
-a wrong filter that is shown and editable before anything is searched. The difference is
-recorded in [ADR 0061](../adr/0061-the-local-provider-is-pinned-not-verified.md) so the next
-person does not "fix" it into a minute of first-run hashing for no gain.
+**P6. Nothing leaves the machine.** The sentence, the Intent, the profile and the library stay
+where they are; the request is a local call, not a fetch. The profile is aggregate — genres,
+count, ranges and quartiles — never a track, artist, path or per-track measurement.
 
-**P7. Nothing leaves the tab.** With a local Provider, the Ask's sentence, the Intent and the
-library stay on the machine; that is the only configuration in which the App's privacy claim is
-unconditional.
+**P7. The model's language set is Chrome's.** English, Japanese, Spanish, German and French at the
+time of writing; `web/README.md` names the set. A misparse is visible in the Intent and editable,
+which is the rule (ADR 0053).
+
+**P8. A range sees only measured tracks.** Every measurement filter needs a Snapshot row, so a
+track with no row still matches a name search and an unknown value never matches a range. The
+result count is the player's; the Player reports coverage. A filter the library has no values for
+returns an empty result, not an error.
 
 ---
 
@@ -285,9 +312,9 @@ never asks for it and never sees it (ADR 0082).
 isolated and change what the CDN's weights may load — a separate decision (`k7-deploy.md` D7),
 not a hardening sweep. ORT stays single-threaded, and that is accepted.
 
-**X4.** The Provider's key is the only secret the App holds. It lives in this origin's storage,
-never crosses the bridge, and a CSP on the deployed App is what protects it from injected
-script.
+**X4.** The App holds no secret. Nothing in this origin's storage is a credential — the Invidious
+Instance, the worker count and the rail's state are not — and the built-in model needs none. The
+deployed App's CSP remains a hardening layer, not a secret's keeper.
 
 **X5.** The App is AGPL-3.0-only and ships its source offer at `SOURCE_URL`; a public origin
 makes that a deployment requirement, not a nicety.
@@ -301,7 +328,6 @@ makes that a deployment requirement, not a nicety.
 | Entries | `index.html` is the Site, `app.html` is the App; the manifest's `start_url` is `/app` within `scope: "/app"` |
 | Compression | plain; the host gzips |
 | Weights | fetched from jsDelivr at the pinned tag |
-| Local Provider | included, lazy chunk |
 
 **K1. There is no second packaging.** ADR 0067 removed the Shell: the build has one mode,
 `vite build`, and produces `dist`.
@@ -316,15 +342,22 @@ makes that a deployment requirement, not a nicety.
 
 ## 10. What this costs
 
-- **No cross-origin isolation.** No `SharedArrayBuffer`, so ORT is single-threaded. WebGPU is
-  unaffected, which is why the capability that motivated the move is not the one that pays.
+- **No cross-origin isolation.** No `SharedArrayBuffer`, so ORT is single-threaded.
 - **A public origin is a permanent dependency.** A fresh browser needs the internet once; after
   that the worker is the app.
-- **The fallback is thin.** No service worker, no picker, no WebGPU, and the App's code only
+- **The fallback is thin.** No service worker, no picker, and the App's code only
   because the device carries it. It is the App for a LAN with no internet, not the App for a new
   machine with no internet.
 - **The weights are still 41 MB from a public CDN.** No design decision here changes that; O4
   only decides who pays for it.
+- **The assistant is Chrome's, not the App's.** A machine below Chrome's floor has no Ask — the
+  filter form stands — and the App can offer the model but not remove it. The first ask was 12.6 s
+  on the spike's Mac; later answers were 1–5 s.
+- **Assistant quality is measured, not promised.** Ten of twelve sentences were semantically right
+  on the spike's rubric and all twelve were schema-valid; the duration rule and an artist name
+  missed, and the model over-fills mood asks and invents `query` words. A tightened prompt scored
+  8/12 and is not in the build. The Intent is visible and editable, which is the mitigation
+  (ADR 0053).
 
 ---
 
@@ -337,7 +370,7 @@ makes that a deployment requirement, not a nicety.
 | A page load's black frame with the Launcher | ADR 0055 measured 187 KB; the Launcher is 30× smaller |
 | Writing `k7.card` on a real FAT32 card through the picker | the writer is unbuilt |
 | Cold 41 MB prefetch over the LAN and over a WAN | the offline promise's first-run cost |
-| WebLLM's first load and its VRAM on the M2 | P4's choice is a claim until then |
+| The built-in model's first ask on a machine at Chrome's floor | the spike measured 12.6 s on one Mac; the floor is not measured |
 
 ---
 
@@ -352,7 +385,7 @@ bridge modes), the `/app` alias, the transport seam with `direct` and `bridge`, 
 round trip, the capability readout. The manifest and icons belong here rather than in M3
 because they are rename work touched regardless, and because a worker that installs is the same
 worker that serves offline. Acceptance: the App opens from the Launcher; both origins'
-allowlists hold; `window.isSecureContext` and `navigator.gpu` are shown; it installs from
+allowlists hold; `window.isSecureContext` is shown; it installs from
 Chrome's omnibox and from its own button and opens in its own window with the 512 maskable icon
 uncropped (A9–A13); the CI manifest check is green; the Playwright COOP test passes.
 
@@ -364,9 +397,10 @@ second card does not inherit the first's covers; a read-only card falls back to 
 collapse. Acceptance: a reload with the network off works; a model bump downloads one file
 rather than 41 MB; a waiting worker produces the banner and not a takeover.
 
-**M4 — connected, standalone, and the local Provider.** All fifteen operations, the Library's
-second source, the Device copy's gating, the local Provider. Acceptance: every area works with
-no device; with a device, send/play/stream work; a local model produces an Intent offline.
+**M4 — connected, standalone, and the assistant.** All fifteen operations, the Library's second
+source, the Device copy's gating, the built-in model. Acceptance: every area works with no device;
+with a device, send/play/stream work; the built-in model produces an Intent with no key and no
+network; with the model unavailable, Ask says what is missing and the filter form works.
 
 ---
 
@@ -374,7 +408,7 @@ no device; with a device, send/play/stream work; a local model produces an Inten
 
 - **vitest** — protocol state machines (§T1 of the bridge spec), the card mark's policy table,
   the fingerprint, the Image's `LibrarySource` over the conformance corpus, the Intent validator
-  against a local model's malformed output.
+  against malformed built-in model output (fixtures, not the model).
 - **Playwright** — two origins: handshake each way, one round trip, COOP/opener regression,
   disconnect and reconnect, offline reload, a blocked popup. Plus an installability assertion
   where the test browser fires `beforeinstallprompt` — desktop Chrome and Edge do, the headless

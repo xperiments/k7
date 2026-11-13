@@ -1,5 +1,9 @@
 # The local Provider is pinned, not verified
 
+> **Status: superseded by [ADR 0084](./0084-the-assistant-is-the-browsers-built-in-model.md)** —
+> the App no longer fetches a model for the assistant; the built-in model is Chrome's. The
+> asymmetry this ADR recorded has no object. The reasoning below is kept as the record.
+
 [ADR 0048](./0048-the-device-serves-the-analysis-app.md) settled that the weights are *verified,
 not just pinned*: a pinned URL is not integrity, so every JavaScript module and every ONNX file
 is checked against a manifest `sha256` before use, on every cold load. The rule was written for

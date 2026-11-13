@@ -1,5 +1,10 @@
 # The assistant writes filters, and runs on a remote provider
 
+> **Status: superseded by [ADR 0084](./0084-the-assistant-is-the-browsers-built-in-model.md)** —
+> the "provider is a setting" half is reversed; the shape rule this ADR settled, the model writes
+> filters and never results, is adopted there unchanged. The reasoning below is kept as the
+> record.
+
 ADR 0050 refused an in-browser assistant and wrote down why: a local model needs a secure origin,
 so it needs either a published Chrome extension or a name in public DNS — an install for every
 user or a certificate renewal for the owner — and neither was worth one unmeasured feature. It
