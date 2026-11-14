@@ -211,8 +211,9 @@ Every row's sentence is the note's; only predicates and a few expectations chang
   accepted from its automatic verdict; the record says `verdictSource: "accepted-auto"`, and that
   is bookkeeping, not an independent judgement. A `contractGap` or `profileGap` row carries no
   human verdict: no answer could satisfy it.
-- A **rubric bug** is a disagreement between a `verdictSource: "human"` verdict and the automatic
-  one. An `accepted-auto` row cannot produce one.
+- A **rubric bug** is a disagreement between a `verdictSource: "human"` verdict and a **stable**
+  row's automatic verdict. On an unstable row the human verdict is the tie-break, not a
+  disagreement; an `accepted-auto` row cannot produce one at all.
 
 The shipped arm also records **`normalized`** when the purpose normalizer changed the model's
 Intent. It is reported separately and on purpose: a normalized run explains part of a change in

@@ -589,9 +589,13 @@ export function Harness() {
                   const audit = auditFor(row.id);
                   const human = answers[0]?.verdictHuman ?? null;
                   const verdicts = answers.map((record) => record.scored?.verdict);
+                  /* A rubric bug is a human verdict against a *stable* automatic one. On an
+                   * unstable row the human verdict is the tie-break, not a disagreement. */
+                  const unanimous = verdicts.length >= 3 && new Set(verdicts).size === 1;
                   const disagrees =
-                    (human === 'right' && verdicts.includes('fail')) ||
-                    (human === 'wrong' && verdicts.includes('pass'));
+                    unanimous &&
+                    ((human === 'right' && verdicts[0] === 'fail') ||
+                      (human === 'wrong' && verdicts[0] === 'pass'));
                   return (
                     <Fragment key={row.id}>
                       <tr className="border-b border-border/60 align-top">
