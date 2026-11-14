@@ -646,7 +646,9 @@ describe('the repair flag', () => {
 });
 
 describe('the trace sink', () => {
-  beforeEach(() => model.askModel.mockReset());
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
 
   it('answers identically with and without a trace', async () => {
     model.askModel.mockResolvedValue('{"bpm_max":95}');
@@ -717,7 +719,9 @@ describe('the trace sink', () => {
 });
 
 describe('the purpose normalizer on the shipped path', () => {
-  beforeEach(() => model.askModel.mockReset());
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
 
   const overfill = JSON.stringify({
     bpm_min: 130,
@@ -770,7 +774,9 @@ describe('the purpose normalizer on the shipped path', () => {
 });
 
 describe('the like/similar fix on the shipped path', () => {
-  beforeEach(() => model.askModel.mockReset());
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
 
   it('keeps an artist query the repair used to drop, with one call', async () => {
     model.askModel.mockResolvedValue('{"query":"Radiohead"}');
@@ -784,7 +790,9 @@ describe('the like/similar fix on the shipped path', () => {
 });
 
 describe('key spellings on the shipped path', () => {
-  beforeEach(() => model.askModel.mockReset());
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
 
   it('rewrites a spelled key before returning the Intent', async () => {
     model.askModel.mockResolvedValue('{"key":["B flat major"]}');
@@ -799,5 +807,24 @@ describe('key spellings on the shipped path', () => {
   it('leaves a valid key alone', async () => {
     model.askModel.mockResolvedValue('{"key":["Am"]}');
     await expect(requestIntent('something in A minor')).resolves.toEqual({ key: ['Am'] });
+  });
+});
+
+describe('the App’s answer ceiling', () => {
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
+
+  it('returns the model-stopped failure when the signal aborts', async () => {
+    model.askModel.mockImplementation(({ signal }: { signal?: AbortSignal }) => {
+      if (signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
+      return new Promise((_, reject) => {
+        signal?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError')),
+        );
+      });
+    });
+    const result = await requestIntent('slow', null, undefined, AbortSignal.abort());
+    expect(result).toEqual({ error: 'The model did not answer.' });
   });
 });

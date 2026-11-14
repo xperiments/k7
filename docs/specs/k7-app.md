@@ -301,7 +301,8 @@ prose (ADR 0050's shape rule; [ADR 0086](../adr/0086-the-assistant-is-a-conversa
 answer names what was understood — "Found 10 tracks — techno, 124–132 BPM" — and **Filters** opens
 the exact `library_search` arguments, seeded with that Intent, for a misparse. The result is a
 preview of four tracks with **Show all N tracks**. There is no Intent panel and no separate
-**Run search**.
+**Run search**. A model call that has not answered within thirty seconds is abandoned: the answer
+is an error with the one retry, not a spinner that never ends.
 
 **P4. Ask owns the model's setup.** Five states: no Prompt API (not Chrome 148+ on desktop),
 `unavailable` (below the hardware floor, or built-in AI turned off in Chrome — the App cannot tell

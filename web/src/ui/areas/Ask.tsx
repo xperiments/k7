@@ -400,7 +400,14 @@ export function AskArea() {
         append(errorMessage('No library to search: connect the player or open a card first.', retry));
         return;
       }
-      const parsed = await requestIntent(text, source.profile);
+      /* ADR 0084's thirty-second ceiling: a prompt Chrome never settles is abandoned, not a
+       * spinner that never ends. The retry below is the one the area already offers. */
+      const parsed = await requestIntent(
+        text,
+        source.profile,
+        undefined,
+        AbortSignal.timeout(30_000),
+      );
       if ('error' in parsed) {
         append(errorMessage(parsed.error, retry));
         return;
