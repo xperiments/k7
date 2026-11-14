@@ -23,6 +23,7 @@
     "build:backlight-test": "./tools/build.sh backlight-test build",
     "flash:backlight-test": "./tools/build.sh backlight-test flash monitor",
     "monitor": "./tools/build.sh sunton monitor",
+    "release": "./tools/build.sh sunton release",
     "assets": "python3 tools/convert_cassette_assets.py",
     "screens": "python3 tools/capture_screens.py",
     "reconfigure": "./tools/build.sh default reconfigure"
