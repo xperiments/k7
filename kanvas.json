@@ -1632,7 +1632,7 @@
     {
       "id": "APP-27",
       "title": "Re-run the corpus with the prepared purpose prompt",
-      "state": "proposed",
+      "state": "todo",
       "group": "APP",
       "at": "2026-11-14T15:16:47Z",
       "by": "dsh",
@@ -1641,11 +1641,28 @@
     {
       "id": "APP-28",
       "title": "Normalize a spelled key before the search",
-      "state": "proposed",
+      "state": "review",
       "group": "APP",
       "at": "2026-11-14T15:16:47Z",
       "by": "dsh",
-      "desc": "Make an Intent like 'B flat major', 'Bflat' or 'E minor' the key the device can run ('Bb', 'Em') instead of an error.\n\nThe first run found rows 29, 30 and 32 failing on the spelling, not on the music: keyCode rejects the words and the reference search refuses the whole Intent.\n\nFinished means: a pure normalizer after parseIntent, shaped like isNameQuery and the purpose normalizer, that fires only when keyCode cannot parse a value, uses the sentence to settle major from minor ('F#' alone is not enough), and leaves the key alone when the sentence is ambiguous. Vitest in both directions and a line in k7-app section 7. Measured by re-scoring the 990 saved answers with the normalizer applied to the final Intent — no model run — so the effective change is visible before it ships.\n\nThis changes the Intent the App shows and runs. It is not a prompt change, but it is a product change, so it gets its own commit and spec line."
+      "desc": "Make an Intent like 'B flat major', 'Bflat' or 'E minor' the key the device can run ('Bb', 'Em') instead of an error.\n\nThe first run found rows 29, 30 and 32 failing on the spelling, not on the music: keyCode rejects the words and the reference search refuses the whole Intent.\n\nFinished means: a pure normalizer after parseIntent, shaped like isNameQuery and the purpose normalizer, that fires only when keyCode cannot parse a value, uses the sentence to settle major from minor ('F#' alone is not enough), and leaves the key alone when the sentence is ambiguous. Vitest in both directions and a line in k7-app section 7. Measured by re-scoring the 990 saved answers with the normalizer applied to the final Intent — no model run — so the effective change is visible before it ships.\n\nThis changes the Intent the App shows and runs. It is not a prompt change, but it is a product change, so it gets its own commit and spec line.",
+      "notes": [
+        {
+          "at": "2026-11-14T15:19:24Z",
+          "by": "dsh",
+          "text": "Plan: read keyCode's accepted forms, add a pure normalizeKeys after parseIntent (sentence settles a bare note's mode), wire it into requestIntent, test both directions, and re-score the 990 saved answers to measure it without a model run."
+        },
+        {
+          "at": "2026-11-14T15:21:46Z",
+          "by": "dsh",
+          "text": "Reading the saved answers: 29 and 30 are the key-spelling failures; 32 fails on a missing danceability, not a key. Re-scored with no model run: effective 31 to 33 (static), 25 to 27 (image), 34 to 35 (imageSearch). Row 30's third imageSearch rep is a wrong Camelot code, not a spelling, so that row stays unstable there."
+        },
+        {
+          "at": "2026-11-14T15:21:46Z",
+          "by": "dsh",
+          "text": "An Intent like \"B flat major\", \"Bflat\" or \"F♯m\" is now written the device's way — \"Bb\", \"F#m\" — before the search, instead of one unreadable key refusing the whole search.\n\n- Only the spelling is fixed: an explicit mode the model wrote wins, a bare note takes the mode the sentence states (\"F#\" in \"F# minor\"), a key that cannot be read is left as written, and two spellings of one key become one.\n- Measured on the 990 saved answers, no model run: effective 31 → 33 (static), 25 → 27 (image), 34 → 35 (imageSearch). The model's own verdict does not change; this is app-side.\n- Row 32 was not a key failure (it misses a danceability bound), and row 30's third imageSearch rep is a wrong Camelot code — still a miss.\n\nTo check: ask for \"B flat major\" and \"F# minor\"; Filters should show \"Bb\" and \"F#m\", and the search should run. The contract line is k7-app §7 P2.\n\nVerified: 731 tests, typecheck, and the re-score above."
+        }
+      ]
     }
   ]
 }
