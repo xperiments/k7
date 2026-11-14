@@ -113,16 +113,11 @@ genre it does not have (S2, 19, 20, 21, 45, N6), which is the six profile gaps; 
 two contract gaps. Effective (the Intent that ran, after repair/normalizer): 11, 31, 31, 25 and
 34 rows at 3/3.
 
-**The audit so far.** 60 rows human-marked, 50 accepted from stable automatic verdicts (only
-`systemOnly` has been accepted), 220 rows unmarked; 5 sampled rows marked. **No genuine rubric
-bug**: the five rows the page flagged (42, 44, 22, 30, 37) are all unstable rows where the human
-resolved the flake. The page required a *unanimous* automatic verdict before calling a human
-verdict a disagreement; that is now the rule.
-
 **Frozen 2026-11-14.** The audit is complete: **87 rows human-marked** (61 review + 26 sample),
 **221 stable rows accepted-auto**, and **22 gap rows** with no verdict (2 contract + 8 profile in
 each image arm). No stable human verdict disagrees with an automatic one, so **no rubric bug was
-found**. Raw blob: `.scratch/k7-ask-evals-2026-11-14T15-12-33-136Z.json` (rubric 2).
+found**. The blob was transient (`.scratch/` is not the record) and is no longer present; the table above
+is the record.
 
 **Machine.** Chrome 157 (157.0.0.0), macOS, 12 cores, 32 GB. `chrome://on-device-internals` in
 Chrome 157 shows *Device performance class: Very High* and model quality *Highest Quality*, with
@@ -131,15 +126,37 @@ version or size**, so the 2B/4B variant cannot be recorded. The export's `onDevi
 is empty; this paragraph is the record. Paste the string and re-export if a self-contained blob is
 wanted.
 
-**What remains:** nothing in this ticket. The prompt decision is separate (see *What this ticket
-does not decide*).
+### Prompt experiment (APP-27) — discarded 2026-11-14
 
-**Before the baseline is frozen**
+The prepared §5.1.3 change — one rule (“a purpose word sets the table’s filters and the count,
+never BPM, valence or danceability”) and one few-shot row (“10 songs for a workout”) — was run on
+`evals/prompt-run` against the same corpus. 990 runs, no invalid rows; raw blob:
+`.scratch/k7-ask-evals-2026-11-14T16-11-56-108Z.json`. System `2347e338`, examples 10
+(`5b1762a9`), profile prompt `f76c4f8b`. The page used a **15 s** answer timeout (Baseline 2 used
+90 s), and three rows were retried, so the setting is not identical.
 
-1. Paste the `chrome://on-device-internals` variant and mark the failing/unstable rows in the
-   page; re-export (no model calls are needed).
-2. Fix rubric v2: assert the expected genre and key values and that the expected moods are
-   present; record the profile's genres and moods and mark a row `unscored` where the profile's
-   enum excludes its expected genre; report the effective `final` verdict beside the model verdict.
-3. Re-score these 990 answers under v2 — static is exact, the image arms need the recorded
-   profile — and only then decide the prompt patch.
+| Combination | Baseline 2 | Prompt | Effective B2 | Effective prompt |
+|---|---:|---:|---:|---:|
+| `systemOnly` · static | 11 | 11 | 11 | 11 |
+| `systemExamples` · static | 31 | 31 | 31 | 31 |
+| `requestIntent` · static | 30 | **29** | 33 | **30** |
+| `requestIntent` · image | 24/58 | **21/58** | 27 | **22** |
+| `requestIntent` · imageSearch | 31/58 | **23/58** | 35 | **25** |
+
+The effective column is like-for-like: the key normalizer landed between the two runs, and
+re-scoring Baseline 2's saved answers with it gives 33/27/35, not the stored 31/25/34. The prompt
+arm is a larger effective regression than the stored baseline suggests; the model verdict
+comparison is unaffected.
+
+The twelve spike sentences: 2/6/6/6/9 baseline, **1/5/5/6/7** prompt. The one intended win is
+S10 “10 songs for a workout” in `imageSearch` (fail → pass); the other purpose and quality rows
+(S2, 21, 42, 43, N1, N6) did not improve, and the profile’s genre enum still makes six rows
+unjudgeable.
+
+**Decision: do not merge.** The shipped static arm regressed and the spike subset regressed in
+every arm, so the bar set for the experiment — no static regression and the purpose rows improve —
+is not met. The branch is left unmerged as the record; the prepared patch stays in this directory.
+One run per arm and the 15 s ceiling limit the claim: this is evidence against shipping the prompt
+as prepared, not proof that no prompt could help.
+
+**What remains:** nothing in this ticket.

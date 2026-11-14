@@ -1632,7 +1632,7 @@
     {
       "id": "APP-27",
       "title": "Re-run the corpus with the prepared purpose prompt",
-      "state": "doing",
+      "state": "review",
       "group": "APP",
       "at": "2026-11-14T15:16:47Z",
       "by": "dsh",
@@ -1642,6 +1642,21 @@
           "at": "2026-11-14T15:23:38Z",
           "by": "dsh",
           "text": "Plan: apply the prepared purpose rule and workout example on a run branch off current master, clear the saved baseline in the harness, run the five combinations three times (990 calls), export, and compare the model verdicts and the purpose rows against Baseline 2; merge only on a measured improvement."
+        },
+        {
+          "at": "2026-11-14T16:13:56Z",
+          "by": "dsh",
+          "text": "Run: 990, no invalid; 15 s timeout (3 rows retried); system 2347e338, examples 10 (5b1762a9), profile prompt f76c4f8b. Model verdicts 11/31/29/21/23 vs baseline 11/31/30/24/31; effective 11/31/30/22/25 vs 11/31/31/25/34; spike 2/6/6/6/9 -> 1/5/5/6/7. S10 imageSearch fail->pass; S2/21/42/43/N1/N6 did not improve. Not merged."
+        },
+        {
+          "at": "2026-11-14T16:13:57Z",
+          "by": "dsh",
+          "text": "The prepared prompt does not beat Baseline 2, so it is not merged.\n\n- Model verdicts: static 30 → 29; image 24 → 21 of 58; imageSearch 31 → 23 of 58. Effective: 30, 22, 25 against 31, 25, 34.\n- The twelve spike sentences: 2/6/6/6/9 → 1/5/5/6/7.\n- The one intended win: S10 \"10 songs for a workout\" in imageSearch, fail → pass. The other purpose rows (S2, 21, 42, 43, N1, N6) did not improve, and the profile genre gaps are unchanged.\n- Caveat: one run per arm, and the page used a 15 s answer timeout against the baseline's 90 s (three rows retried). This is evidence against the prompt as prepared, not against every prompt.\n\nThe branch `evals/prompt-run` is left unmerged as the record; the prepared patch stays in docs/design. The ticket records the numbers and the decision."
+        },
+        {
+          "at": "2026-11-14T16:14:10Z",
+          "by": "dsh",
+          "text": "Correction to the note above: both runs include the key normalizer now. Re-scored with it, Baseline 2's effective is 33/27/35, not 31/25/34, so the prompt's 30/22/25 is a larger effective regression. The model verdict comparison is unchanged and is what the decision rests on."
         }
       ]
     },
