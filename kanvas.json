@@ -1632,7 +1632,7 @@
     {
       "id": "APP-27",
       "title": "Re-run the corpus with the prepared purpose prompt",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-14T15:16:47Z",
       "by": "dsh",
@@ -1663,7 +1663,7 @@
     {
       "id": "APP-28",
       "title": "Normalize a spelled key before the search",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-14T15:16:47Z",
       "by": "dsh",
@@ -1685,6 +1685,24 @@
           "text": "An Intent like \"B flat major\", \"Bflat\" or \"F♯m\" is now written the device's way — \"Bb\", \"F#m\" — before the search, instead of one unreadable key refusing the whole search.\n\n- Only the spelling is fixed: an explicit mode the model wrote wins, a bare note takes the mode the sentence states (\"F#\" in \"F# minor\"), a key that cannot be read is left as written, and two spellings of one key become one.\n- Measured on the 990 saved answers, no model run: effective 31 → 33 (static), 25 → 27 (image), 34 → 35 (imageSearch). The model's own verdict does not change; this is app-side.\n- Row 32 was not a key failure (it misses a danceability bound), and row 30's third imageSearch rep is a wrong Camelot code — still a miss.\n\nTo check: ask for \"B flat major\" and \"F# minor\"; Filters should show \"Bb\" and \"F#m\", and the search should run. The contract line is k7-app §7 P2.\n\nVerified: 731 tests, typecheck, and the re-score above."
         }
       ]
+    },
+    {
+      "id": "APP-29",
+      "title": "Abandon an answer that takes longer than thirty seconds",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-14T16:17:46Z",
+      "by": "dsh",
+      "desc": "Make ADR 0084's thirty-second ceiling real in the App.\n\nThe ADR says the spinner and the thirty-second timeout cover the model's first slow answer, but the App has no timeout: requestIntent waits forever on a prompt Chrome never settles. The harness has hit exactly that, and now aborts and retries.\n\nFinished means: Ask passes AbortSignal.timeout(30_000) into the requestIntent signal parameter that already exists, the failure is the existing 'The model stopped before it answered' message with the one retry, and k7-app section 7 says so. A Vitest proves an aborted signal comes back as that failure.\n\nThis is production-facing and independent of model quality."
+    },
+    {
+      "id": "APP-30",
+      "title": "Measure a larger example set, without a prompt rule",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-14T16:17:46Z",
+      "by": "dsh",
+      "desc": "Test whether more few-shot turns help, with no rule and no other change.\n\nThe first baseline found the examples are the lever (11 to 31 rows), and the prepared rule plus one example lost. This experiment changes only the example set: the workout row, a stated numeric bound ('tracks under 100 BPM'), two keys ('8A or 9A') and a no-context refusal ('make it faster'). The system prompt stays byte-identical to Baseline 2.\n\nFinished means: a run branch, all five combinations three times (990 calls, about an hour) with the answer timeout back at the baseline's 90 s, and a comparison with Baseline 2 — model verdicts, the spike subset and the purpose rows. Merge only on a measured improvement; otherwise discard and record.\n\nOne variable, unlike the last prompt experiment: the system prompt hash must still be e5c9ccb4."
     }
   ]
 }
