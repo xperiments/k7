@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  albumIndexOfPath,
   artistOf,
   byArtistThenAlbum,
   byGenreThenAlbum,
@@ -24,6 +25,7 @@ import {
   type Album,
   type MediaIndexState,
 } from '../../media/albums';
+import { useDeviceStatus } from '../../device/useDeviceStatus';
 import { AlbumDetail } from '../album-detail';
 import { AlbumShelf, IndexRail, type IndexGroup } from '../album-shelf';
 import { Cover } from '../cover';
@@ -414,6 +416,26 @@ export function MediaView({
         : genreAlbums;
 
   const [selected, setSelected] = useState(0);
+
+  /* The Carousel opens on the album the broadcast is carrying when a reader arrives from
+   * another area; after that the selection is theirs. `armed` waits for the index and the
+   * status to answer, and is spent by the first sync attempt or by any choice below, so a
+   * late poll cannot yank the shelf out from under a reader. It is set again whenever the
+   * view leaves the Carousel, so the next visit starts on the player's album again. */
+  const { status } = useDeviceStatus();
+  const playingPath = status?.playing?.path?.trim() || null;
+  const armed = useRef(true);
+  useEffect(() => {
+    if (album !== undefined || drive !== undefined) {
+      armed.current = true;
+      return;
+    }
+    if (!armed.current || !state.playerScope || state.loading || status === null) return;
+    armed.current = false;
+    const at = albumIndexOfPath(albums, playingPath);
+    if (at >= 0) setSelected(at);
+  }, [album, drive, state.playerScope, state.loading, status, playingPath, albums]);
+
   /* The route's album is applied once, when it arrives: a search that keeps it visible must
    * not drag the selection back to it after the reader has moved on. */
   const applied = useRef<string | null>(null);
@@ -469,10 +491,12 @@ export function MediaView({
   };
   useEffect(() => stopWalk, []);
   const selectNow = (index: number) => {
+    armed.current = false;
     stopWalk();
     setSelected(index);
   };
   const jumpToGroup = (group: IndexGroup) => {
+    armed.current = false;
     stopWalk();
     if (grouping === 'genre') {
       /* One genre at a time: a second click on the current one shows them all again. */
@@ -515,6 +539,7 @@ export function MediaView({
 
   /* Switching the order keeps the turned album turned. */
   const changeGrouping = (next: Grouping) => {
+    armed.current = false;
     const name = active?.album;
     setGrouping(next);
     if (next === 'genre') setGenreFilter(null);

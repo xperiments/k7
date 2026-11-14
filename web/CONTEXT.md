@@ -67,6 +67,8 @@ teleporting; the walk takes about a second within a letter and up to three acros
 alphabet. The index can instead file the shelf by **genre** — an album's most common genre
 tag — and then the rail's rows are the genre names. Choosing a genre narrows the shelf to
 its albums; choosing it again shows them all, and the rail keeps every genre either way.
+Coming to it from another area turns the case of the album the player is carrying, when that
+album is in the shelf; a search, a letter or a click then chooses the case.
 _Avoid_: slider, gallery, carousel widget
 
 **Drive**:

@@ -329,6 +329,8 @@ export interface MediaIndexState {
   reachable: boolean;
   /** Whether a card is in the player. Without one its library is empty and nothing answers. */
   card: boolean;
+  /** True when the cache this shelf reads is the player's own card. */
+  playerScope: boolean;
   deviceTracks: number;
   /** The image the player answers from; null when it does not say or has none. */
   deviceImage: DeviceImage | null;
@@ -346,10 +348,9 @@ export function useMediaIndex(): MediaIndexState {
   /* The Albums page follows the selected card: the player's own card when its DEVICE tile is
    * picked, otherwise the card this browser is preparing. Each has its own scope, so the two
    * still never borrow each other's names and covers. */
-  const scope =
-    deviceView && status?.card === true && status.mark !== null
-      ? scopeFor({ id: status.mark })
-      : picked;
+  const deviceScope =
+    status?.card === true && status.mark !== null ? scopeFor({ id: status.mark }) : null;
+  const scope = deviceView && deviceScope !== null ? deviceScope : picked;
   const [cache, setCache] = useState<Map<string, CachedMedia> | null>(null);
   const [deviceImage, setDeviceImage] = useState<DeviceImage | null>(null);
 
@@ -411,6 +412,7 @@ export function useMediaIndex(): MediaIndexState {
     loading: cache === null,
     reachable,
     card: status?.card === true,
+    playerScope: deviceScope !== null && scope === deviceScope,
     deviceTracks: tracks,
     deviceImage,
   };
@@ -419,6 +421,22 @@ export function useMediaIndex(): MediaIndexState {
 /** One album, by the title its route carries. */
 export function findAlbum(index: MediaIndex | null, album: string): Album | null {
   return index?.albums.find((entry) => entry.album === album) ?? null;
+}
+
+/**
+ * Which album a playing track belongs to, by a cache row's path. The join is the path the
+ * Snapshot's `/api/status` reports and the row the browser cached for that card; a path the
+ * shelf has no row for is -1.
+ */
+export function albumIndexOfPath(
+  albums: Album[],
+  path: string | null | undefined,
+): number {
+  if (!path) return -1;
+  const needle = foldPath(path);
+  return albums.findIndex((entry) =>
+    entry.rows.some((row) => foldPath(row.path) === needle),
+  );
 }
 
 /** An artist's albums, in the index's order: every shelf their name is on, compilations included. */

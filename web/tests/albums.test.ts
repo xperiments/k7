@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import {
+  albumIndexOfPath,
   albumsOf,
   artistOf,
   buildMediaIndex,
@@ -94,6 +95,18 @@ describe('the album index', () => {
 
     expect(findAlbum(index, 'Ambient Works')?.tracks).toBe(1);
     expect(findAlbum(index, 'ambient works')).toBeNull();
+  });
+
+  it('turns the album a playing path belongs to', () => {
+    const index = indexOf([
+      row('Music/A/01.mp3', 'Aphex Twin', 'Ambient Works'),
+      row('Music/B/01.mp3', 'Brian Eno', 'Another Green World'),
+    ]);
+    const ambient = index.albums.findIndex((entry) => entry.album === 'Ambient Works');
+
+    expect(albumIndexOfPath(index.albums, 'music/a/01.mp3')).toBe(ambient);
+    expect(albumIndexOfPath(index.albums, 'music/missing.mp3')).toBe(-1);
+    expect(albumIndexOfPath(index.albums, null)).toBe(-1);
   });
 
   it('gives an artist every shelf their name is on, compilations included', () => {
