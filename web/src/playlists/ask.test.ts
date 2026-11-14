@@ -12,6 +12,7 @@ import {
   isNameQuery,
   MOOD_VALUES,
   parseIntent,
+  purposeFilters,
   relaxRanges,
   requestIntent,
   SORT_VALUES,
@@ -316,6 +317,52 @@ describe('relaxRanges', () => {
     ).toEqual({ query: 'rain', mood: ['relaxed'], limit: 20 });
     expect(relaxRanges({ energyMax: 40 })).toBeNull();
     expect(relaxRanges({ mood: ['relaxed'] })).toBeNull();
+  });
+
+  it('relaxes a range-heavy ask with the purpose pair, and leaves a hand-run Intent alone', () => {
+    const overfill = {
+      bpmMin: 130,
+      bpmMax: 160,
+      energyMin: 70,
+      energyMax: 90,
+      danceabilityMin: 70,
+      limit: 10,
+    };
+    expect(relaxRanges(overfill)).toBeNull();
+    expect(relaxRanges(overfill, {})).toEqual({ limit: 10 });
+    expect(relaxRanges(overfill, { purpose: { mood: ['relaxed'], energyMax: 40 } })).toEqual({
+      limit: 10,
+      energyMax: 40,
+    });
+    expect(relaxRanges({ bpmMin: 130, energyMin: 70 }, {})).toBeNull();
+    expect(relaxRanges({ mood: ['relaxed'], bpmMax: 95 }, { purpose: { energyMax: 40 } })).toEqual({
+      mood: ['relaxed'],
+    });
+  });
+});
+
+describe('purposeFilters', () => {
+  it('reads the table at the profile, in the five languages', () => {
+    expect(purposeFilters('10 songs for a workout', null)).toEqual({
+      energyMin: 70,
+      arousalMin: 60,
+    });
+    expect(purposeFilters('something for the gym', null)).toEqual({
+      energyMin: 70,
+      arousalMin: 60,
+    });
+    expect(purposeFilters('party playlist', null)).toEqual({
+      mood: ['party'],
+      danceabilityMin: 70,
+    });
+    expect(purposeFilters('de la musique calme pour lire', null)).toEqual({
+      mood: ['relaxed'],
+      energyMax: 40,
+    });
+    expect(purposeFilters('música triste', null)).toBeNull();
+    expect(purposeFilters('sad and slow', null)).toBeNull();
+    expect(purposeFilters('slow', null)).toBeNull();
+    expect(purposeFilters('workout', PROFILE)).toEqual({ energyMin: 74, arousalMin: 73 });
   });
 });
 

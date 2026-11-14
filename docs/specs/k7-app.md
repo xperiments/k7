@@ -270,7 +270,11 @@ There is no endpoint, no key and no setting: a sentence becomes an **Intent** wi
 restates a key is dropped, and every number is clamped to the range the Snapshot stores. A
 malformed answer, and a query that is not a name the sentence used (a category, a purpose, or an
 unmarked lowercase word), each get one repair — the second is asked again with the sentence — and
-a word that is still not a name is dropped. Every key is
+a word that is still not a name is dropped. When the exact search finds nothing, Ask retries once
+without the numeric ranges: with a mood left to search on, as before; and — only when the Intent
+carries three or more measurement ranges — with the pair the sentence's purpose word prescribes,
+or with every range dropped when the sentence names no purpose. A hand-run Intent keeps the mood
+rule only. Every key is
 `library_search`'s own argument, and each is the data the row has: BPM is the folded 70–180, a
 track's length is in seconds (the row keeps milliseconds), and `query` and `genre` are cut to the
 device's byte ceilings (255 and 63), because a longer string would refuse the whole search. A

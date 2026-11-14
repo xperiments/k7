@@ -20,7 +20,7 @@ import { McpError, type McpSearch, type SearchArgs } from '../../device/mcp';
 import { resolveSource, type LibrarySource } from '../../library/source';
 import { formatDuration } from '../format';
 import { newId } from '../../lib/id';
-import { requestIntent, relaxRanges } from '../../playlists/ask';
+import { purposeFilters, requestIntent, relaxRanges } from '../../playlists/ask';
 import {
   answerText,
   CARD_CHANGED,
@@ -63,12 +63,20 @@ function describeSearchError(error: unknown): string {
   return 'The library could not be read, so the search did not run.';
 }
 
-/** The exact search, then one relaxed retry when a mood is left to search on its own. */
-async function find(source: LibrarySource, intent: SearchArgs): Promise<Found> {
+/**
+ * The exact search, then one relaxed retry. An ask passes the sentence's purpose so a range-heavy
+ * over-fill can retry with the pair the table prescribes; a hand-run Intent passes nothing, so the
+ * filters a person set by hand are only relaxed when a mood is left to search on.
+ */
+async function find(
+  source: LibrarySource,
+  intent: SearchArgs,
+  options?: { purpose?: Partial<SearchArgs> | null },
+): Promise<Found> {
   const exact = await source.search(intent);
   if (exact.tracks.length > 0) return { intent, search: exact, relaxed: false };
 
-  const relaxed = relaxRanges(intent);
+  const relaxed = relaxRanges(intent, options);
   if (!relaxed) return { intent, search: exact, relaxed: false };
   const retry = await source.search(relaxed);
   if (retry.tracks.length === 0) return { intent, search: exact, relaxed: false };
@@ -398,7 +406,9 @@ export function AskArea() {
         return;
       }
       setPhase('searching');
-      const found = await find(source, parsed);
+      const found = await find(source, parsed, {
+        purpose: purposeFilters(text, source.profile),
+      });
       append(answerMessage(source, found, text));
     } catch (error) {
       append(errorMessage(describeSearchError(error), retry));
