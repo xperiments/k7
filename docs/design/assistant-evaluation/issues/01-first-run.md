@@ -1,6 +1,6 @@
 # 01 — the first Ask corpus run
 
-**Status:** ready.
+**Status:** in review — baseline 1 recorded; human marks and the model variant are still outstanding.
 **Blocked by:** none.
 **Spec:** [`../spec.md`](../spec.md). **How to run:** [`../run-guide.md`](../run-guide.md).
 
@@ -42,5 +42,62 @@ library profile and no repairs. The shipped input has never been measured.
 
 ## Comments
 
-Append the run here: date, machine, `chrome://on-device-internals` variant, per-arm pass counts,
-the unstable rows, and the link or path to the raw blob (`.scratch/`, never committed).
+### Baseline 1 — 2026-11-14
+
+**Run.** 990 runs: five combinations × 66 rows × 3, no invalid runs. Chrome 157 on macOS, 12
+cores, 32 GB. The `chrome://on-device-internals` variant was **not captured** (the field is empty
+in the export), so this is a number about this machine, not yet about Ask. Answer timeout 90 s.
+Static prompt `e5c9ccb4`, schema `7a8190e4`, 9 examples (`7a188889`). Profile prompt `63d14187`,
+schema `7c1b6578`, generation 1794654575, 1502 tracks. Raw blob:
+`.scratch/k7-ask-evals-2026-11-14T14-39-53-473Z.json` (not committed).
+
+| Combination | 3/3 pass | fail | unstable | unscored | run pass | recall | precision | repairs | normalized |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `systemOnly` · static | 12/64 | 43 | 8 | 1 | 23.7% | .34 | .33 | 0 | 0 |
+| `systemExamples` · static | 32/64 | 18 | 12 | 2 | 55.6% | .74 | .75 | 0 | 0 |
+| `requestIntent` · static | 31/64 | 20 | 10 | 3 | 56.6% | .76 | .76 | 9 | 30 |
+| `requestIntent` · image | 25/64 | 20 | 18 | 1 | 52.5% | .76 | .65 | 15 | 29 |
+| `requestIntent` · imageSearch | 33/64 | 20 | 11 | 0 | 60.1% | .78 | .68 | 18 | 29 |
+
+Two contract-gap rows per combination (S8, N4); only S8 passes, in `imageSearch`. Schema
+conformance 198/198 in every combination. Latency p50 1.3–1.7 s, p95 2.0–4.0 s, max 9.7 s.
+
+**The twelve spike sentences:** 2/12 `systemOnly`, 7/12 `systemExamples`, 7/12 static, 6/12
+image, 9/12 imageSearch. This does not reproduce 10/12 and cannot: the 10/12 measured a different
+prompt, schema and page (note §1.4).
+
+**What the run says**
+
+- **The few-shot turns are the lever.** 12 → 32 rows at 3/3 (+20); recall .34 → .74.
+- **The shipped static arm does not beat examples-alone** (31 vs 32; noise). The nine query
+  repairs and thirty normalized runs are real work, but the frozen verdict scores the model's
+  Intent, not the final one. Re-scored on `final`, the static arm is 32/64 — a derived report,
+  not a second baseline.
+- **The image arms are more variable, not obviously worse.** 18 unstable rows vs 10, run pass
+  52.5% vs 56.6%: the profile prompt costs 3/3 stability, not clear accuracy.
+- **`imageSearch` is the best run-level arm** (60.1%) and the only one where the `rows`
+  conditions are scored; 11 rows are still unstable.
+- **Flake is material**: 8–18 rows per arm never agree 3/3. That is the case for considering
+  `samplingMode` only after the rubric is settled.
+
+**What this baseline cannot support yet**
+
+- **No human verdicts.** `verdictHuman` is null everywhere, so the rubric-bug check is empty and
+  the rows the parser cannot judge are unmarked. The acceptance criteria above are not met.
+- **No model variant.** The machine is known; the model is not.
+- **Values are not asserted.** `required` checks that `genre`/`mood`/`key` are present, not that
+  they say the sentence's thing: row 19 passes with `genre: "Electronic"` as readily as with
+  `"techno"`. Six rows have an expected genre the profile's enum excludes (S2, 19, 20, 21, 45,
+  N6), and some pass on presence alone. This is a rubric defect the run found, not a model result.
+- **The effective shipped Intent is not the frozen verdict.** The query repair and the purpose
+  normalizer change `final`; the frozen rule scores `parseIntent(raw)`.
+
+**Before the baseline is frozen**
+
+1. Paste the `chrome://on-device-internals` variant and mark the failing/unstable rows in the
+   page; re-export (no model calls are needed).
+2. Fix rubric v2: assert the expected genre and key values and that the expected moods are
+   present; record the profile's genres and moods and mark a row `unscored` where the profile's
+   enum excludes its expected genre; report the effective `final` verdict beside the model verdict.
+3. Re-score these 990 answers under v2 — static is exact, the image arms need the recorded
+   profile — and only then decide the prompt patch.
