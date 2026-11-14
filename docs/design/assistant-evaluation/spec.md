@@ -278,8 +278,10 @@ before it is merged, not after.
   shape failures rather than assuming the subset.
 - Whether `availability()` behaves identically in a manually launched Chrome and an automated one;
   the harness runs in a manually launched one, which is the point.
-- The model variant. The run records what the human pastes from `chrome://on-device-internals`;
-  nothing here can read it.
+- The model variant. Chrome 157's `chrome://on-device-internals` shows the device performance
+  class (“Very High”) and a model-quality preset (“Highest Quality”), not a 2B/4B version or size.
+  The run records what the human pastes; the first baseline's blob has that field empty, so the
+  variant is recorded in the ticket prose instead.
 - **Chrome's missing-language warning.** `askModel` creates its session with `initialPrompts`
   only, so Chrome prints “No output language was specified” on every ask. The note's §6 says the
   app sets no `expectedInputs`, and the corpus therefore measures the model's multilingual

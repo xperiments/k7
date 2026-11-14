@@ -1,6 +1,6 @@
 # 01 — the first Ask corpus run
 
-**Status:** in review — baseline 1 recorded; human marks and the model variant are still outstanding.
+**Status:** done — baseline 2 frozen 2026-11-14.
 **Blocked by:** none.
 **Spec:** [`../spec.md`](../spec.md). **How to run:** [`../run-guide.md`](../run-guide.md).
 
@@ -119,12 +119,20 @@ bug**: the five rows the page flagged (42, 44, 22, 30, 37) are all unstable rows
 resolved the flake. The page required a *unanimous* automatic verdict before calling a human
 verdict a disagreement; that is now the rule.
 
-**What remains before Baseline 2 is frozen**
+**Frozen 2026-11-14.** The audit is complete: **87 rows human-marked** (61 review + 26 sample),
+**221 stable rows accepted-auto**, and **22 gap rows** with no verdict (2 contract + 8 profile in
+each image arm). No stable human verdict disagrees with an automatic one, so **no rubric bug was
+found**. Raw blob: `.scratch/k7-ask-evals-2026-11-14T15-12-33-136Z.json` (rubric 2).
 
-1. On each of the five tabs: **Accept stable**, then **Review only** and mark what it still lists
-   (the audit sample is most of it, ~27 rows). The page's counter should read 0.
-2. Paste the `chrome://on-device-internals` variant and export again.
-3. Then the baseline is the table above plus the audit record; nothing else changes it.
+**Machine.** Chrome 157 (157.0.0.0), macOS, 12 cores, 32 GB. `chrome://on-device-internals` in
+Chrome 157 shows *Device performance class: Very High* and model quality *Highest Quality*, with
+model directory `/tmp/model` and the tester's own Top K 1 / Temperature 0; it shows **no model
+version or size**, so the 2B/4B variant cannot be recorded. The export's `onDeviceInternals` field
+is empty; this paragraph is the record. Paste the string and re-export if a self-contained blob is
+wanted.
+
+**What remains:** nothing in this ticket. The prompt decision is separate (see *What this ticket
+does not decide*).
 
 **Before the baseline is frozen**
 
