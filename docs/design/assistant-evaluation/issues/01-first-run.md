@@ -159,4 +159,40 @@ is not met. The branch is left unmerged as the record; the prepared patch stays 
 One run per arm and the 15 s ceiling limit the claim: this is evidence against shipping the prompt
 as prepared, not proof that no prompt could help.
 
-**What remains:** nothing in this ticket.
+### Examples experiment (APP-30) — discarded 2026-11-14
+
+Four more few-shot rows and no system-prompt change (the prompt stayed `e5c9ccb4`; examples moved
+from 9/`7a188889` to 13/`889108e5`). 989 of 990 runs: `N6` in `imageSearch` has two reps instead
+of three, a `profileGap` row, so no verdict changes; answer timeout 90 s, no retries. Raw blob:
+`.scratch/k7-ask-evals-2026-11-14T17-44-27-370Z.json`.
+
+| Combination | Baseline 2 | Examples | Effective B2* | Effective examples |
+|---|---:|---:|---:|---:|
+| `systemOnly` · static | 11 | 11 | 11 | 11 |
+| `systemExamples` · static | 31 | 33 | 31 | 33 |
+| `requestIntent` · static | 30 | **32** | 33 | **35** |
+| `requestIntent` · image | 24/58 | **20/58** | 27 | **22** |
+| `requestIntent` · imageSearch | 31/58 | **21/58** | 35 | **23** |
+
+\* both runs include the key normalizer.
+
+The twelve spike sentences: **2/6/6/6/9 → 2/6/6/4/4**. The new examples did move the static and
+examples arms by +2, and N1 (“rápido para correr”) now passes statically — but the two profile
+arms fell by 4 and 10 rows, the image spike subset fell from 6 to 4 and 9 to 4, and S10 “10 songs
+for a workout” did **not** repeat the prompt run’s one win. The shipped App uses the profile when
+it can, so a static-only gain against a profile loss is not a merge.
+
+**Decision: do not merge.** The branch `evals/examples-run` stays as the record. The larger
+example set is not a clear win; if it is revisited, the static and profile example sets should be
+separated, because the profile arm is where it loses.
+
+### The first genuine rubric bug — row 38
+
+The audit marked **row 38, “music for sleeping”**, as **right** in `systemExamples` while all three
+automatic verdicts were `fail` for `missing: energyMax`. Every other flag was an unstable row
+where the human resolved the flake. This one is a stable disagreement, which the spec defines as a
+rubric bug: the row requires the table’s `energy_max` beside the mood, and the human accepted
+`{mood:["relaxed"]}` as the right answer. It is recorded here and **not** patched into the frozen
+rubric; relaxing the row is a rubric change that would need a re-score of the saved answers.
+
+**What remains:** nothing in this ticket. The rubric bug above is a decision for the human.

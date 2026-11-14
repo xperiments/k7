@@ -1710,7 +1710,7 @@
     {
       "id": "APP-30",
       "title": "Measure a larger example set, without a prompt rule",
-      "state": "doing",
+      "state": "review",
       "group": "APP",
       "at": "2026-11-14T16:17:46Z",
       "by": "dsh",
@@ -1720,6 +1720,16 @@
           "at": "2026-11-14T16:20:03Z",
           "by": "dsh",
           "text": "Plan: the branch evals/examples-run has four new examples and an unchanged system prompt (e5c9ccb4; examples 889108e5, 13). The human runs the five combinations with the answer timeout back at 90 s, clears the saved run, and exports; then the comparison."
+        },
+        {
+          "at": "2026-11-14T17:46:30Z",
+          "by": "dsh",
+          "text": "Run: 989/990 (N6 imageSearch has two reps; a profile-gap row, no verdict effect); 90 s timeout, no retries; system e5c9ccb4, examples 13/889108e5, profile examples 1fee0c0a. Model 11/33/32/20/21 vs baseline 11/31/30/24/31; effective 11/33/35/22/23 vs 11/31/33/27/35; spike 2/6/6/4/4 vs 2/6/6/6/9. N1 static passes; S10 does not repeat the prompt run's win. Not merged. Rubric bug found: row 38 human right vs three fail (missing energyMax)."
+        },
+        {
+          "at": "2026-11-14T17:46:30Z",
+          "by": "dsh",
+          "text": "The larger example set is not merged. It helps the no-profile arms and hurts the profile ones.\n\n- Static 30 → 32 model (33 → 35 effective) and examples 31 → 33 — a real +2.\n- But image 24 → 20 of 58 and imageSearch 31 → 21 of 58; effective 27 → 22 and 35 → 23.\n- The twelve spike sentences: 2/6/6/6/9 → 2/6/6/4/4.\n- N1 \"rápido para correr\" now passes statically; S10 \"10 songs for a workout\" did not repeat the prompt run's one win.\n- The shipped App uses the profile when it can, so a static-only gain against a profile loss is not a merge. The branch evals/examples-run stays as the record.\n\nThe run is 989 of 990: N6 in imageSearch has two reps, a profile-gap row, so no verdict changes.\n\nThe audit also found the first genuine rubric bug: row 38 \"music for sleeping\" was marked right while all three verdicts were fail for a missing energy_max. Recorded in the ticket, not patched into the frozen rubric."
         }
       ]
     }
