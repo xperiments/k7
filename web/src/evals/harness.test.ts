@@ -29,6 +29,7 @@ import {
   type RunRecord,
   type StoredRun,
 } from './harness';
+import { FIELD_NAMES } from './fields';
 import { scoreRow, type Verdict } from './score';
 
 /* The harness imports the image store and the media store for scopes 2 and 3. This test runs in
@@ -370,6 +371,7 @@ describe('exportPayload', () => {
     });
     expect(payload.matrix).toHaveLength(5);
     expect(payload.records).toHaveLength(1);
+    expect(payload.records[0].scored.fields).toHaveLength(FIELD_NAMES.length);
     expect(payload.machine.onDeviceInternals).toBe('variant');
     expect(payload.settings.timeoutSeconds).toBe(90);
   });

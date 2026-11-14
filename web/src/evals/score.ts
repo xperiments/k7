@@ -9,6 +9,10 @@
  *
  * Nothing here calls a model or the device: `scoreRow` is pure, and `use` comes in as the number
  * of tracks the reference search returned. That is what makes the rubric a CI-checkable diff.
+ *
+ * Beside the verdict, every run carries `fields`: one state per field, so a change that fixes the
+ * query and breaks BPM is visible. The breakdown never feeds the verdict; the frozen rubric is
+ * still the one that passes or fails a row.
  */
 
 import type { SearchArgs } from '../device/mcp';
@@ -20,6 +24,15 @@ import { intentSchema } from '../playlists/ask/prompt';
 import { purposeOf } from '../playlists/ask/purpose';
 
 import type { CorpusRow, FactKey, Must, NumericKey } from './corpus';
+import {
+  FIELD_NAMES,
+  FIELD_STATES,
+  matches,
+  scoreFields,
+  type FieldName,
+  type FieldScore,
+  type FieldTally,
+} from './fields';
 
 /* -------------------------------------------------------------------------- */
 /* Axes and filters                                                            */
@@ -208,32 +221,6 @@ function shapeOf(raw: string, profile: LibraryProfile | null): ShapeResult {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Values                                                                      */
-/* -------------------------------------------------------------------------- */
-
-/** One value, compared the way §4.3 says: keys by `keyCode`, strings case-folded, arrays as sets. */
-function matches(key: string, got: unknown, want: unknown): boolean {
-  if (Array.isArray(want)) {
-    if (!Array.isArray(got)) return false;
-    const values = got.filter((item): item is string => typeof item === 'string');
-    if (values.length !== got.length) return false;
-    const fold = (value: string) => (key === 'key' ? keyCode(value) : value.trim().toLowerCase());
-    const left = new Set(values.map(fold));
-    const right = new Set((want as unknown[]).map((item) => fold(String(item))));
-    if (left.size !== right.size) return false;
-    for (const value of right) {
-      if (!left.has(value)) return false;
-    }
-    return true;
-  }
-  if (typeof want === 'number') return typeof got === 'number' && got === want;
-  if (typeof want === 'string') {
-    return typeof got === 'string' && got.trim().toLowerCase() === want.trim().toLowerCase();
-  }
-  return false;
-}
-
-/* -------------------------------------------------------------------------- */
 /* One run                                                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -282,6 +269,8 @@ export interface ScoredRun {
   refusal: boolean;
   verdict: Verdict;
   axes: RowAxes;
+  /** Every field, judged beside the verdict; the verdict does not use it. */
+  fields: FieldScore[];
   reasons: string[];
   /**
    * The profile's closed enum cannot express the row's expected genre or mood, so no answer
@@ -499,6 +488,8 @@ export function scoreRow(
       ? [...parsedFilters].filter((filter) => allowed.has(filter)).length / parsedFilters.size
       : null;
 
+  const fields = scoreFields(expected, intent, must, allowed);
+
   return {
     rowId: row.id,
     set: row.set,
@@ -524,6 +515,7 @@ export function scoreRow(
       queryOk,
       usefulness,
     },
+    fields,
   };
 }
 
@@ -550,6 +542,8 @@ export interface Aggregate {
   repairs: Record<RepairKind, number>;
   normalizedRuns: number;
   refusals: { rows: number; passed: number };
+  /** Per-field counts across the runs: what the sentence-level verdict hides. */
+  fields: Record<FieldName, FieldTally>;
 }
 
 function mean(values: readonly number[]): number | null {
@@ -617,6 +611,16 @@ export function aggregate(runs: readonly ScoredRun[]): Aggregate {
     if (run.normalized) normalizedRuns += 1;
   }
 
+  const fields = Object.fromEntries(
+    FIELD_NAMES.map((field) => [
+      field,
+      Object.fromEntries(FIELD_STATES.map((state) => [state, 0])),
+    ]),
+  ) as Record<FieldName, FieldTally>;
+  for (const run of runs) {
+    for (const score of run.fields ?? []) fields[score.field][score.state] += 1;
+  }
+
   return {
     runs: runs.length,
     rows: byRow.size,
@@ -638,5 +642,6 @@ export function aggregate(runs: readonly ScoredRun[]): Aggregate {
     repairs,
     normalizedRuns,
     refusals: { rows: refusalRows, passed: refusalPassed },
+    fields,
   };
 }

@@ -11,6 +11,7 @@ import { parseIntent } from '../playlists/ask/parse';
 
 import { rowById } from './corpus';
 import { FIXTURES } from './fixtures';
+import { FIELD_NAMES, type FieldName } from './fields';
 import { aggregate, expectedFor, scoreRow, type RowContext, type ScoredRun } from './score';
 
 const LIBRARY: LibraryProfile = {
@@ -33,6 +34,12 @@ function scored(rowId: string, raw: string, context: RowContext = MATCHED): Scor
   const row = rowById(rowId);
   if (!row) throw new Error(`no corpus row ${rowId}`);
   return scoreRow(row, raw, parseIntent(raw), context);
+}
+
+function fieldOf(result: ScoredRun, field: FieldName) {
+  const found = result.fields.find((score) => score.field === field);
+  if (!found) throw new Error(`no field ${field}`);
+  return found;
 }
 
 describe('the fixtures', () => {
@@ -241,6 +248,89 @@ describe('usefulness', () => {
   });
 });
 
+describe('the field breakdown', () => {
+  it('reports every field in the reading order', () => {
+    const result = scored('18', '{"bpm_min":120,"bpm_max":140}');
+    expect(result.fields.map((score) => score.field)).toEqual([...FIELD_NAMES]);
+  });
+
+  it('puts a range difference on the field it changed', () => {
+    const exact = scored('18', '{"bpm_min":120,"bpm_max":140}');
+    const vague = scored('18', '{"bpm_min":100,"bpm_max":160}');
+    expect(fieldOf(exact, 'bpm')).toMatchObject({
+      state: 'exact',
+      expected: { min: 120, max: 140 },
+      got: { min: 120, max: 140 },
+    });
+    expect(fieldOf(vague, 'bpm').state).toBe('too-vague');
+    expect(fieldOf(exact, 'query').state).toBe('absent');
+    expect(fieldOf(vague, 'query').state).toBe('absent');
+  });
+
+  it('names a bound on the wrong side', () => {
+    const result = scored('15', '{"bpm_min":95}');
+    expect(fieldOf(result, 'bpm')).toMatchObject({
+      state: 'wrong-side',
+      expected: { max: 95 },
+      got: { min: 95 },
+    });
+  });
+
+  it('separates a narrowed pair from a partial one', () => {
+    const narrowed = scored('S1', '{"bpm_min":90,"bpm_max":95}');
+    const partial = scored('S1', '{"bpm_min":85}');
+    expect(fieldOf(narrowed, 'bpm').state).toBe('narrowed');
+    expect(fieldOf(partial, 'bpm')).toMatchObject({ state: 'partial', missing: ['bpmMax'] });
+  });
+
+  it('shows the fields a passing sentence-level verdict hides', () => {
+    const thin = scored('S10', '{"limit":10}');
+    expect(thin.verdict).toBe('pass');
+    expect(fieldOf(thin, 'limit')).toMatchObject({ state: 'exact', expected: 10, got: 10 });
+    expect(fieldOf(thin, 'energy')).toMatchObject({ state: 'missing', missing: ['energyMin'] });
+    expect(fieldOf(thin, 'arousal')).toMatchObject({ state: 'missing', missing: ['arousalMin'] });
+  });
+
+  it('marks an extra field, and says when the purpose table allows it', () => {
+    const extraSort = scored('S7', '{"mood":["relaxed"],"limit":15,"sort":"bpm"}');
+    expect(extraSort.verdict).toBe('pass');
+    expect(fieldOf(extraSort, 'sort')).toMatchObject({ state: 'extra', got: 'bpm' });
+
+    const allowedMood = scored(
+      'S11',
+      '{"mood":["happy","party"],"danceability_min":70}',
+    );
+    expect(allowedMood.verdict).toBe('pass');
+    expect(fieldOf(allowedMood, 'mood')).toMatchObject({
+      state: 'extra',
+      extra: ['party'],
+      allowed: true,
+    });
+  });
+
+  it('compares keys by the device code and moods by value', () => {
+    const key = scored('29', '{"key":["F#m","Am"]}');
+    expect(fieldOf(key, 'key')).toMatchObject({ state: 'extra', extra: ['Am'] });
+
+    const mood = scored('S3', '{"mood":["happy","party","relaxed"]}');
+    expect(mood.verdict).toBe('pass');
+    expect(fieldOf(mood, 'mood')).toMatchObject({
+      state: 'extra',
+      extra: ['relaxed'],
+      allowed: true,
+    });
+  });
+
+  it('reports absent fields for a refusal, and extra ones for an invented filter', () => {
+    const refused = scored('53', '{}');
+    expect(refused.fields.every((score) => score.state === 'absent')).toBe(true);
+
+    const invented = scored('53', '{"bpm_max":95}');
+    expect(invented.verdict).toBe('fail');
+    expect(fieldOf(invented, 'bpm')).toMatchObject({ state: 'extra', got: { max: 95 } });
+  });
+});
+
 describe('aggregate', () => {
   const pass = () => scored('S1', '{"bpm_min":85,"bpm_max":95}');
   const fail = () => scored('S1', '{"bpm_min":60,"bpm_max":120}');
@@ -275,6 +365,15 @@ describe('aggregate', () => {
       contractGaps: { rows: 1, passed: 1 },
       passRate: null,
     });
+  });
+
+  it('counts the field states across the runs', () => {
+    const good = scored('18', '{"bpm_min":120,"bpm_max":140}');
+    const bad = scored('18', '{"bpm_min":100,"bpm_max":160}');
+    const result = aggregate([good, good, bad]);
+    expect(result.fields.bpm.exact).toBe(2);
+    expect(result.fields.bpm['too-vague']).toBe(1);
+    expect(result.fields.query.absent).toBe(3);
   });
 
   it('reports refusals, repairs and normalization separately', () => {
