@@ -1595,7 +1595,7 @@
     {
       "id": "SN-05",
       "title": "The length is proven on the card and the board",
-      "state": "todo",
+      "state": "done",
       "group": "SN",
       "deps": ["SN-01", "SN-02", "SN-03", "SN-04"],
       "at": "2026-11-14T01:31:35Z",
@@ -1628,6 +1628,24 @@
           "text": "The first real re-export reached the board as format 4 but with every length zero: rows 1,502, coverage 1,259 of 1,495, and library_track returned duration_ms: null on measured rows (the playing track is one of the 236 unmeasured). Cause: the library's analyses are all tag-only (tagged bpm/key/mood/energy on every analysed row) and the content-keyed cache still holds analyses written before the tag path read a length, so the image was built from track.duration: 0. Fixed in the App: the image builder now reads the file's header for a length when the analysis has none (tested on a real FLAC), and the queue heals such a cached analysis once and stores it back, so later runs do not re-read. 609 web tests and the build pass. A second Prepare/re-export with the fixed App is needed; the device still holds the zero-length image until then."
         }
       ]
+    },
+    {
+      "id": "APP-27",
+      "title": "Re-run the corpus with the prepared purpose prompt",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-14T15:16:47Z",
+      "by": "dsh",
+      "desc": "Measure the one prepared prompt change against the frozen Baseline 2.\n\nThe change is the rule 'a purpose word sets the table's filters and the count, never BPM, valence or danceability' plus the '10 songs for a workout' example. It is already prepared on the branch evals/phase-4-prompt.\n\nFinished means: the change is applied to the current harness on a run branch, all five combinations are run three times (990 calls, about an hour), and the result is compared with Baseline 2 — shipped static 30/64 model, 31/64 effective; examples-alone 31/64. Merge only if the shipped static arm does not regress and the purpose rows improve; otherwise discard and record the numbers. The prepared branch's commit is labelled DO NOT MERGE, and the Baseline 2 export stays the comparison.\n\nWhy a run is worth it: the few-shot turns are the lever the first run found (11 to 31), and the over-fill and purpose rows still fail. The prompt has lost before (8/12), so the bar is a measured improvement, not a hope.\n\nRun this before the key normalizer, or the prompt result is confounded."
+    },
+    {
+      "id": "APP-28",
+      "title": "Normalize a spelled key before the search",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-14T15:16:47Z",
+      "by": "dsh",
+      "desc": "Make an Intent like 'B flat major', 'Bflat' or 'E minor' the key the device can run ('Bb', 'Em') instead of an error.\n\nThe first run found rows 29, 30 and 32 failing on the spelling, not on the music: keyCode rejects the words and the reference search refuses the whole Intent.\n\nFinished means: a pure normalizer after parseIntent, shaped like isNameQuery and the purpose normalizer, that fires only when keyCode cannot parse a value, uses the sentence to settle major from minor ('F#' alone is not enough), and leaves the key alone when the sentence is ambiguous. Vitest in both directions and a line in k7-app section 7. Measured by re-scoring the 990 saved answers with the normalizer applied to the final Intent — no model run — so the effective change is visible before it ships.\n\nThis changes the Intent the App shows and runs. It is not a prompt change, but it is a product change, so it gets its own commit and spec line."
     }
   ]
 }
