@@ -134,6 +134,28 @@ describe('shape and contract', () => {
   });
 });
 
+describe('a search the library refuses', () => {
+  const refused =
+    'key must be a list of Camelot codes or note names; mood a list of happy, sad, aggressive, relaxed, party';
+
+  it('fails the row and keeps the reason', () => {
+    const result = scored('19', '{"genre":"techno","key":["B flat"]}', {
+      matched: 5,
+      searchError: refused,
+    });
+    expect(result.verdict).toBe('fail');
+    expect(result.reasons).toContain(`search: ${refused}`);
+  });
+
+  it('passes the same row when the search ran', () => {
+    expect(scored('19', '{"genre":"techno"}').verdict).toBe('pass');
+  });
+
+  it('fails row 30 for a key the device cannot parse, even without a search error', () => {
+    expect(scored('30', '{"key":["B flat"]}').verdict).toBe('fail');
+  });
+});
+
 describe('precision', () => {
   it('counts a purpose word’s own filter as justified', () => {
     const result = scored('S3', '{"mood":["happy","party"],"danceability_min":70}');

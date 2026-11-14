@@ -196,6 +196,8 @@ export interface RunRecord extends RunBase {
   normalized: boolean;
   latencyMs: number;
   search?: { matched: number; tracks: number; truncated: boolean };
+  /** The reference search refused the Intent; it is scored as a failure, not a stopped run. */
+  searchError?: string;
   scored?: ScoredRun;
   verdictHuman: HumanVerdict | null;
   note: string;
@@ -366,13 +368,20 @@ export async function runOne(
   }
 
   let search: RunRecord['search'];
+  let searchError: string | undefined;
   if (combo.scope === 'imageSearch' && target.rows && target.media && !('error' in final)) {
-    const answered: McpSearch = searchImage(target.rows, target.media, final);
-    search = {
-      matched: answered.matched,
-      tracks: answered.tracks.length,
-      truncated: answered.truncated,
-    };
+    try {
+      const answered: McpSearch = searchImage(target.rows, target.media, final);
+      search = {
+        matched: answered.matched,
+        tracks: answered.tracks.length,
+        truncated: answered.truncated,
+      };
+    } catch (error) {
+      /* The image source validates a key the way the device does. An Intent it refuses is a
+       * failed row, not a lost model: record the reason and keep going. */
+      searchError = described(error);
+    }
   }
 
   const normalized =
@@ -385,6 +394,7 @@ export async function runOne(
     ...scoreRow(row, raw, parsed, {
       profile: target.profile,
       matched: search?.matched,
+      searchError,
     }),
     normalized,
   };
@@ -401,6 +411,7 @@ export async function runOne(
     normalized,
     latencyMs,
     search,
+    searchError,
     scored,
     verdictHuman: null,
     note: '',

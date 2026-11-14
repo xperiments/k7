@@ -250,6 +250,8 @@ export interface RowContext {
   /** Tracks the reference search returned, when the row asked for rows. */
   matched?: number;
   truncated?: boolean;
+  /** The reference search refused the Intent (an unparseable key, say): it cannot be run. */
+  searchError?: string;
 }
 
 export interface BoundProblem {
@@ -348,6 +350,8 @@ export function scoreRow(
   const expected = expectedFor(row, profile);
   const must: Must = row.must;
   const reasons: string[] = [];
+  /* An Intent the library refuses is not a runnable Intent, whatever its keys look like. */
+  if (context.searchError) reasons.push(`search: ${context.searchError}`);
 
   const shape = shapeOf(raw, profile);
   const parsedFilters = filtersOf(intent);

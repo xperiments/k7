@@ -575,6 +575,7 @@ export function Harness() {
                                   latencyMs: Math.round(record.latencyMs),
                                   availability: record.availability,
                                   search: record.search,
+                                  searchError: record.searchError,
                                   parsed: record.parsed,
                                   final: record.final,
                                   normalized: record.normalized,

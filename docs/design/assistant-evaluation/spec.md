@@ -192,6 +192,8 @@ Every row's sentence is the note's; only predicates and a few expectations chang
    missing is `partial`. Tolerance decides whether a narrowed or vague range also fails.
 7. **Usefulness** — the reference search with the Intent that ran (the parsed one, or its
    normalized form on the shipped arm) returns at least one track, where the row marks `rows`.
+   An Intent the reference search **refuses** — a key `keyCode` cannot parse, say — fails the
+   row: it is not runnable, and the reason is recorded rather than stopping the run.
 8. **Stability** — the row's three automatic verdicts are identical (below).
 
 ## 5. The pass rule
