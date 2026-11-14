@@ -269,3 +269,9 @@ before it is merged, not after.
   the harness runs in a manually launched one, which is the point.
 - The model variant. The run records what the human pastes from `chrome://on-device-internals`;
   nothing here can read it.
+- **Chrome's missing-language warning.** `askModel` creates its session with `initialPrompts`
+  only, so Chrome prints “No output language was specified” on every ask. The note's §6 says the
+  app sets no `expectedInputs`, and the corpus therefore measures the model's multilingual
+  behaviour rather than a configured language; the warning is advisory and does not stop a run.
+  Declaring `expectedInputs`/`expectedOutputs` changes the shipped request for every user, so it
+  is a separate change with its own commit and a re-baseline — not part of this rubric.

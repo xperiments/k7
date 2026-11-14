@@ -226,6 +226,50 @@ function described(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** The ADR's worst case is a 12.6 s first answer and 1–5 s after that; 45 s is a stall. */
+const ANSWER_TIMEOUT_MS = 45_000;
+
+/**
+ * A model call that never settles must not hold the run: the prompt API has no timeout of its
+ * own, so the harness gives up, records the row, and lets a resume ask again. The abandoned
+ * promise is ignored; the session it holds is destroyed when Chrome finally settles it.
+ */
+export function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`no answer after ${Math.round(ms / 1000)} s`)),
+      ms,
+    );
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
+ * Chrome can answer `unavailable` for a moment while it swaps a model component. Asking a
+ * sentence once and then declaring the model gone wastes a sitting, so the state is read up to
+ * three times before the run stops.
+ */
+async function availableNow(): Promise<AssistantState> {
+  let state: AssistantState = 'unavailable';
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    state = await withTimeout(assistantState(), 5_000).catch(
+      () => 'unavailable' as AssistantState,
+    );
+    if (state === 'available') return state;
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 700));
+  }
+  return state;
+}
+
 /** Run one sentence, once, and record everything §3.4 asks for. */
 export async function runOne(
   combo: Combo,
@@ -233,7 +277,7 @@ export async function runOne(
   row: CorpusRow,
   rep: 1 | 2 | 3,
 ): Promise<RunRecord> {
-  const availability = await assistantState().catch(() => 'unavailable' as AssistantState);
+  const availability = await availableNow();
   const system = buildSystemPrompt(target.profile);
   const schema = intentSchema(target.profile);
   /* The control arm with no examples sends none; the other two send intentExamples, which
@@ -276,9 +320,12 @@ export async function runOne(
 
   try {
     if (combo.arm === 'requestIntent') {
-      final = await requestIntent(row.sentence, target.profile, (attempt) => {
-        attempts.push({ ...attempt });
-      });
+      final = await withTimeout(
+        requestIntent(row.sentence, target.profile, (attempt) => {
+          attempts.push({ ...attempt });
+        }),
+        ANSWER_TIMEOUT_MS,
+      );
       raw = attempts.at(-1)?.answer ?? '';
       latencyMs = attempts.reduce((sum, attempt) => sum + attempt.ms, 0);
       parsed = parseIntent(raw);
@@ -293,7 +340,10 @@ export async function runOne(
       }
     } else {
       const started = performance.now();
-      raw = await askModel({ system, schema, sentence: row.sentence, examples });
+      raw = await withTimeout(
+        askModel({ system, schema, sentence: row.sentence, examples }),
+        ANSWER_TIMEOUT_MS,
+      );
       latencyMs = performance.now() - started;
       parsed = parseIntent(raw);
       final = parsed;

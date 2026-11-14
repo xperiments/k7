@@ -19,6 +19,7 @@ import {
   runKey,
   scoredRunsFor,
   upsertRecord,
+  withTimeout,
   type RunRecord,
   type StoredRun,
 } from './harness';
@@ -71,6 +72,16 @@ describe('digest', () => {
   it('is stable and notices a changed string', () => {
     expect(digest('abc')).toBe(digest('abc'));
     expect(digest('abc')).not.toBe(digest('abd'));
+  });
+});
+
+describe('withTimeout', () => {
+  it('gives up on an answer that never comes', async () => {
+    await expect(withTimeout(new Promise(() => {}), 20)).rejects.toThrow(/no answer after/);
+  });
+
+  it('passes an answer through', async () => {
+    await expect(withTimeout(Promise.resolve('ok'), 1_000)).resolves.toBe('ok');
   });
 });
 

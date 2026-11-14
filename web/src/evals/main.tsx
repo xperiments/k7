@@ -146,41 +146,58 @@ export function Harness() {
     stop.current = false;
     setError(null);
 
-    for (const combo of combos) {
-      if (stop.current) break;
-      let target;
-      try {
-        target = await loadTarget(combo.scope);
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : String(caught));
-        break;
-      }
-      /* Resume means resume: a repetition that already has a valid record is not asked again,
-       * and a re-run replaces its record instead of appending a second one. */
-      const finished = finishedReps(runRef.current.records, combo);
-      setRunning(comboKey(combo));
-      for (const row of CORPUS) {
+    try {
+      for (const combo of combos) {
         if (stop.current) break;
-        for (let rep = 1; rep <= REPETITIONS; rep += 1) {
+        let target;
+        try {
+          target = await loadTarget(combo.scope);
+        } catch (caught) {
+          setError(caught instanceof Error ? caught.message : String(caught));
+          break;
+        }
+        /* Resume means resume: a repetition that already has a valid record is not asked again,
+         * and a re-run replaces its record instead of appending a second one. */
+        const finished = finishedReps(runRef.current.records, combo);
+        setRunning(comboKey(combo));
+        for (const row of CORPUS) {
           if (stop.current) break;
-          if (finished.has(`${row.id}:${rep}`)) continue;
-          const record = await runOne(combo, target, row, rep as 1 | 2 | 3);
-          commit({
-            ...runRef.current,
-            records: upsertRecord(runRef.current.records, record),
-          });
-          setAvailability(record.availability);
-          if (record.invalid && record.availability !== 'available') {
-            setError(record.error ?? 'the model stopped answering');
-            stop.current = true;
+          for (let rep = 1; rep <= REPETITIONS; rep += 1) {
+            if (stop.current) break;
+            if (finished.has(`${row.id}:${rep}`)) continue;
+            let record: RunRecord;
+            try {
+              record = await runOne(combo, target, row, rep as 1 | 2 | 3);
+            } catch (caught) {
+              setError(
+                `Stopped at ${finishedReps(runRef.current.records, combo).size}/${TOTAL}: ` +
+                  `${caught instanceof Error ? caught.message : String(caught)}. Resume when it is back.`,
+              );
+              stop.current = true;
+              break;
+            }
+            commit({
+              ...runRef.current,
+              records: upsertRecord(runRef.current.records, record),
+            });
+            setAvailability(record.availability);
+            /* One unanswered row is not worth churning through the other 197: stop, keep the
+             * records, and let Resume pick up from the first missing repetition. */
+            if (record.invalid) {
+              setError(
+                `Stopped at ${finishedReps(runRef.current.records, combo).size}/${TOTAL}: ` +
+                  `${record.error ?? 'the model did not answer'}. Resume when it is back.`,
+              );
+              stop.current = true;
+            }
           }
         }
+        if (stop.current) break;
       }
-      if (stop.current) break;
+    } finally {
+      setRunning(null);
+      busy.current = false;
     }
-
-    setRunning(null);
-    busy.current = false;
   }
 
   const combo = MATRIX[tab];
