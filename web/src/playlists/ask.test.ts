@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BPM_RANGE,
   buildSystemPrompt,
@@ -13,10 +13,20 @@ import {
   MOOD_VALUES,
   parseIntent,
   relaxRanges,
+  requestIntent,
   SORT_VALUES,
+  type IntentTrace,
 } from './ask';
 import type { SearchArgs } from '../device/mcp';
 import type { LibraryProfile } from '../domain/snapshot';
+
+/* The model is Chrome's and this suite has none; the trace tests replace the one call it makes. */
+const model = vi.hoisted(() => ({ askModel: vi.fn() }));
+
+vi.mock('../builtin-model', () => ({
+  askModel: model.askModel,
+  assistantFailure: () => 'The model did not answer.',
+}));
 
 /**
  * The Intent is untrusted text from a model, so the tests are about the boundary: what
@@ -438,5 +448,68 @@ describe('the repair flag', () => {
 
     const empty = parseIntent('{}');
     expect('error' in empty && empty.retryable).toBeFalsy();
+  });
+});
+
+describe('the trace sink', () => {
+  beforeEach(() => model.askModel.mockReset());
+
+  it('answers identically with and without a trace', async () => {
+    model.askModel.mockResolvedValue('{"bpm_max":95}');
+    const plain = await requestIntent('slow');
+    model.askModel.mockResolvedValue('{"bpm_max":95}');
+    const traced = await requestIntent('slow', null, () => {});
+    expect(traced).toEqual(plain);
+    expect(traced).toEqual({ bpmMax: 95 });
+  });
+
+  it('reports one event per model call, and nothing when not passed', async () => {
+    model.askModel.mockResolvedValue('{"bpm_max":95}');
+    const seen: IntentTrace[] = [];
+    const result = await requestIntent('slow', null, (attempt) => seen.push(attempt));
+    expect(result).toEqual({ bpmMax: 95 });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ call: 1, reason: 'first', answer: '{"bpm_max":95}' });
+    expect(seen[0].ms).toBeGreaterThanOrEqual(0);
+    expect(model.askModel).toHaveBeenCalledTimes(1);
+
+    model.askModel.mockResolvedValue('{"bpm_max":95}');
+    await requestIntent('slow');
+    expect(model.askModel).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports the retry that follows an answer that is not an object', async () => {
+    model.askModel
+      .mockResolvedValueOnce('I cannot answer that')
+      .mockResolvedValueOnce('{"bpm_max":95}');
+    const seen: IntentTrace[] = [];
+    const result = await requestIntent('slow', null, (attempt) => seen.push(attempt));
+    expect(result).toEqual({ bpmMax: 95 });
+    expect(seen.map((attempt) => [attempt.call, attempt.reason])).toEqual([
+      [1, 'first'],
+      [2, 'notJson'],
+    ]);
+    expect(seen[1].answer).toBe('{"bpm_max":95}');
+  });
+
+  it('reports the retry that follows a query that is not a name', async () => {
+    model.askModel
+      .mockResolvedValueOnce('{"query":"songs"}')
+      .mockResolvedValueOnce('{"query":"Daft Punk"}');
+    const seen: IntentTrace[] = [];
+    const result = await requestIntent('songs by Daft Punk', null, (attempt) => seen.push(attempt));
+    expect(result).toEqual({ query: 'Daft Punk' });
+    expect(seen.map((attempt) => [attempt.call, attempt.reason])).toEqual([
+      [1, 'first'],
+      [2, 'queryNotName'],
+    ]);
+  });
+
+  it('does not call the model, or the sink, for an empty sentence', async () => {
+    const result = await requestIntent('   ', null, () => {
+      throw new Error('the sink must not fire without a model call');
+    });
+    expect(result).toEqual({ error: 'Say what you are looking for first.' });
+    expect(model.askModel).not.toHaveBeenCalled();
   });
 });

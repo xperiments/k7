@@ -16,7 +16,7 @@
 // Text files only: a dev origin inside a PNG or a .wasm is not a URL any browser follows.
 // Node 22, ESM, no dependencies. Exit 1 listing every offending file and line.
 import { closeSync, openSync, readFileSync, readSync, readdirSync } from 'node:fs';
-import { dirname, extname, join, relative, resolve } from 'node:path';
+import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -98,6 +98,21 @@ try {
   process.exit(1);
 }
 
+/* The evaluation harness is served by the dev server only. It lives outside Vite's build inputs,
+ * and this is the guard that keeps it outside: an `evals` path in dist is a page that ships. */
+const harness = files.filter((file) => relative(dist, file).split(sep).includes('evals'));
+if (harness.length > 0) {
+  for (const file of harness) {
+    console.error(`check-artifact: ${shown(file)} is the Ask evaluation harness, which is dev-only`);
+  }
+  console.error(
+    `check-artifact: ${harness.length} evaluation entr${harness.length === 1 ? 'y' : 'ies'} in ` +
+      `${label} — the harness is served by the dev server and must never be emitted ` +
+      '(docs/design/assistant-evaluation)',
+  );
+  process.exit(1);
+}
+
 let scanned = 0;
 const findings = [];
 
@@ -165,5 +180,5 @@ if (findings.length > 0) {
 
 console.log(
   `check-artifact: ok — ${scanned} text files in ${label}, no development origin, no ` +
-    'http://xtape.local and no dynamic code in the bundles',
+    'http://xtape.local, no dynamic code in the bundles and no evaluation harness',
 );

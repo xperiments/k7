@@ -817,6 +817,15 @@ export function intentSchema(profile: LibraryProfile | null = null) {
   return { ...INTENT_SCHEMA, properties };
 }
 
+/** One model call, as the evaluation harness sees it. Never passed by the App. */
+export interface IntentTrace {
+  call: 1 | 2;
+  /** `first` for the first ask, otherwise the repair that made a second one necessary. */
+  reason: 'first' | 'notJson' | 'queryNotName';
+  answer: string;
+  ms: number;
+}
+
 /**
  * Ask the built-in model for an Intent.
  *
@@ -825,10 +834,14 @@ export function intentSchema(profile: LibraryProfile | null = null) {
  * answer that was not a usable object — an empty Intent is the model's correct answer to a
  * sentence with no musical constraint, and asking twice would only repeat it — and one follows
  * a query that is not a name the sentence used, because the sentence says which name it meant.
+ *
+ * `trace` is the harness's sink and nothing in the App passes it: with it, each model call reports
+ * its answer and how long it took; without it, the function asks exactly what it asked before.
  */
 export async function requestIntent(
   sentence: string,
   profile: LibraryProfile | null = null,
+  trace?: (attempt: IntentTrace) => void,
 ): Promise<SearchArgs | IntentFailure> {
   const asked = sentence.trim();
   if (!asked) return failure('Say what you are looking for first.');
@@ -837,9 +850,21 @@ export async function requestIntent(
   const schema = intentSchema(profile);
   const examples = intentExamples(profile);
 
+  const ask = async (
+    call: 1 | 2,
+    reason: IntentTrace['reason'],
+    askedSentence: string,
+  ): Promise<string> => {
+    if (!trace) return askModel({ system, schema, sentence: askedSentence, examples });
+    const started = performance.now();
+    const response = await askModel({ system, schema, sentence: askedSentence, examples });
+    trace({ call, reason, answer: response, ms: performance.now() - started });
+    return response;
+  };
+
   let answer: string;
   try {
-    answer = await askModel({ system, schema, sentence: asked, examples });
+    answer = await ask(1, 'first', asked);
   } catch (error) {
     return failure(assistantFailure(error));
   }
@@ -849,24 +874,26 @@ export async function requestIntent(
   if (!('error' in intent)) {
     const query = intent.query;
     if (!query || isNameQuery(asked, query)) return intent;
-    return repairQuery(asked, answer, query, system, schema, examples);
+    return repairQuery(asked, answer, query, ask);
   }
 
   if (!intent.retryable) return intent;
 
   let repaired: string;
   try {
-    repaired = await askModel({
-      system,
-      schema,
-      sentence: `${asked}\n\nYour previous answer was: ${answer}\nIt failed because: ${intent.error}\nAnswer again with one JSON object and nothing else.`,
-      examples,
-    });
+    repaired = await ask(
+      2,
+      'notJson',
+      `${asked}\n\nYour previous answer was: ${answer}\nIt failed because: ${intent.error}\nAnswer again with one JSON object and nothing else.`,
+    );
   } catch (error) {
     return failure(assistantFailure(error));
   }
   return parseIntent(repaired);
 }
+
+/** The one call a repair makes, and the trace it reports. */
+type AskOnce = (call: 1 | 2, reason: IntentTrace['reason'], sentence: string) => Promise<string>;
 
 /**
  * The model sometimes answers a name with a word the sentence did not mark as one ("songs" for
@@ -878,18 +905,15 @@ async function repairQuery(
   asked: string,
   answer: string,
   query: string,
-  system: string,
-  schema: object,
-  examples: [string, string][],
+  ask: AskOnce,
 ): Promise<SearchArgs | IntentFailure> {
   let repaired: string;
   try {
-    repaired = await askModel({
-      system,
-      schema,
-      sentence: `${asked}\n\nYour previous answer was: ${answer}\nIts "query" is "${query}", which is not a name the sentence used. If the sentence names an artist, an album or a title, put that name in "query"; otherwise leave "query" out. Answer again with one JSON object.`,
-      examples,
-    });
+    repaired = await ask(
+      2,
+      'queryNotName',
+      `${asked}\n\nYour previous answer was: ${answer}\nIts "query" is "${query}", which is not a name the sentence used. If the sentence names an artist, an album or a title, put that name in "query"; otherwise leave "query" out. Answer again with one JSON object.`,
+    );
   } catch (error) {
     return failure(assistantFailure(error));
   }

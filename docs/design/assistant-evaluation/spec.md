@@ -219,7 +219,7 @@ be compared with the 10/12 frame, which was static:
 | `requestIntent` | `image` |
 | `requestIntent` | `imageSearch` |
 
-That is 60 rows × 3 runs × 5 combinations = **900 model calls**. The harness saves each finished
+That is 66 rows × 3 runs × 5 combinations = **990 model calls**. The harness saves each finished
 row, so a sitting can be resumed; the model can disappear mid-run (Chrome updates it by hot swap),
 and the run records the error, continues, and marks the affected rows invalid.
 

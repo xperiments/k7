@@ -48,7 +48,7 @@ The frozen matrix is five combinations, not the 3×3 cross product (spec §6):
 | `systemExamples` | the same plus `intentExamples(profile)` | static |
 | `requestIntent` | the shipped path, including both repairs | static, image, imageSearch |
 
-Each sentence runs **three times** per combination: 60 rows × 3 × 5 = 900 calls, roughly 25–80
+Each sentence runs **three times** per combination: 66 rows × 3 × 5 = 990 calls, roughly 25–80
 minutes on the ADR's 1–5 s per answer. The harness saves every finished row, so you can stop and
 resume; a run is only frozen when all five combinations have three runs per sentence.
 

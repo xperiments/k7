@@ -9,7 +9,7 @@
 
 import answers from './answers.json';
 
-export type FixtureOrigin = 'note-§5.1' | 'synthetic';
+export type FixtureOrigin = 'note-§5.1' | 'synthetic' | 'recorded';
 
 export interface Fixture {
   rowId: string;
