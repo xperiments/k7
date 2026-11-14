@@ -1,0 +1,32 @@
+diff --git a/web/src/playlists/ask.ts b/web/src/playlists/ask.ts
+index 18ae973..4de5358 100644
+--- a/web/src/playlists/ask.ts
++++ b/web/src/playlists/ask.ts
+@@ -810,6 +810,8 @@ export function buildSystemPrompt(profile: LibraryProfile | null): string {
+     `- Clamp tempos to ${f.bpm.min}..${f.bpm.max}; "very slow" is bpm_max ${f.bpm.slow}, not the floor.`,
+     '- Use mood for feelings and the numeric keys only for stated qualities. Do not add',
+     '  both for the same word unless the table below does.',
++    '- A purpose word sets the table\'s filters and the count; it never sets BPM, valence or',
++    '  danceability.',
+     '- A count of tracks is "limit". A listening session ("two hours of ...") is limit = 15',
+     '  per hour, max 100. A length of the tracks themselves ("under 3 minutes", "long mixes")',
+     '  is duration_max / duration_min, in seconds.',
+@@ -863,6 +865,7 @@ export const INTENT_EXAMPLES: [string, string][] = [
+   ['slowest tracks first', '{"sort":"bpm"}'],
+   ['tracks under three minutes', '{"duration_max":180}'],
+   ['long mixes', '{"duration_min":480}'],
++  ['10 songs for a workout', '{"limit":10,"energy_min":70,"arousal_min":60}'],
+   ['play something', '{}'],
+ ];
+ /**
+@@ -893,6 +896,10 @@ export function intentExamples(profile: LibraryProfile | null = null): [string,
+     ['slowest tracks first', '{"sort":"bpm"}'],
+     ['tracks under three minutes', JSON.stringify({ duration_max: f.duration.short })],
+     ['long mixes', JSON.stringify({ duration_min: f.duration.long })],
++    [
++      '10 songs for a workout',
++      JSON.stringify({ limit: 10, energy_min: f.energy.workout, arousal_min: f.arousal.workout }),
++    ],
+     ['play something', '{}'],
+   ];
+ }

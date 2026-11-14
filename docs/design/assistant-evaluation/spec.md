@@ -190,8 +190,8 @@ Every row's sentence is the note's; only predicates and a few expectations chang
 6. **Bounds** — per side: an **invented** bound beside a one-sided expectation fails; a range
    strictly inside the expected one is `narrowed`; strictly outside is `too-vague`; one side
    missing is `partial`. Tolerance decides whether a narrowed or vague range also fails.
-7. **Usefulness** — the reference search with the parsed Intent returns at least one track, where
-   the row marks `rows`.
+7. **Usefulness** — the reference search with the Intent that ran (the parsed one, or its
+   normalized form on the shipped arm) returns at least one track, where the row marks `rows`.
 8. **Stability** — the row's three automatic verdicts are identical (below).
 
 ## 5. The pass rule
@@ -254,6 +254,12 @@ questions and neither can be compared to the other.
   first run's flake rate justifies it, that is a separate ADR, not a harness setting.
 - No CI coverage of the model. CI runs the corpus, the scorer and the fixtures; the model is a
   manual, local, real-Chrome run.
+
+**Prepared, not applied.** [`prompt-change.patch`](./prompt-change.patch) is the §5.1.3 rule and
+few-shot row as a diff against the master it was prepared from; it applies cleanly today. The
+branch `evals/phase-4-prompt` carries the same change plus the examples-test entry, one commit
+labelled `DO NOT MERGE — only after a corpus re-run`. Neither is on master. The patch is measured
+before it is merged, not after.
 
 ## 8. Still unverified
 
