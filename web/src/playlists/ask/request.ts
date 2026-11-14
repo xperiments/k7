@@ -14,7 +14,7 @@ import { failure, type IntentFailure } from './contract';
 import { normalizeKeys } from './keys';
 import { isNameQuery, parseIntent } from './parse';
 import { buildSystemPrompt, intentExamples, intentSchema } from './prompt';
-import { normalizePurpose } from './purpose';
+import { normalizePurpose, purposeFilters } from './purpose';
 import { applySentenceFilters, sentenceFilters } from './sentence';
 
 /** One model call, as the evaluation harness sees it. Never passed by the App. */
@@ -84,7 +84,21 @@ export async function requestIntent(
       : normalizePurpose(
           asked,
           applySentenceFilters(normalizeKeys(asked, result), fromSentence),
+          profile,
         );
+
+  /* Finish a repaired answer, or fill an empty one for a purpose sentence: the prompt's row
+   * says what the word means, so a refusal here is an app-side miss, not a sentence with no
+   * ask. A sentence with no purpose still refuses. */
+  const recover = (result: SearchArgs | IntentFailure): SearchArgs | IntentFailure => {
+    if (!('error' in result)) return finish(result);
+    if (result.retryable) return result;
+    const table = purposeFilters(asked, profile);
+    if (!table || Object.keys(table).length === 0) return result;
+    const rescued: SearchArgs = { ...table };
+    if (fromSentence.limit !== undefined) rescued.limit = fromSentence.limit;
+    return finish(rescued);
+  };
 
   const intent = parseIntent(answer);
 
@@ -94,7 +108,7 @@ export async function requestIntent(
     return finish(await repairQuery(asked, answer, query, ask));
   }
 
-  if (!intent.retryable) return intent;
+  if (!intent.retryable) return recover(intent);
 
   let repaired: string;
   try {
@@ -106,7 +120,7 @@ export async function requestIntent(
   } catch (error) {
     return failure(assistantFailure(error));
   }
-  return finish(parseIntent(repaired));
+  return recover(parseIntent(repaired));
 }
 
 /** The one call a repair makes, and the trace it reports. */

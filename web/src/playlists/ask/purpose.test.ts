@@ -61,7 +61,7 @@ describe('normalizePurpose', () => {
       arousalMin: 60,
     });
     expect(normalizePurpose('party playlist', heavy)).toEqual({ danceabilityMin: 70 });
-    expect(normalizePurpose('music for sleeping', heavy)).toEqual({ energyMax: 90 });
+    expect(normalizePurpose('music for sleeping', heavy)).toEqual({ energyMax: 40 });
   });
 
   it('keeps an explicit tempo, in every language the corpus uses', () => {
@@ -122,9 +122,63 @@ describe('normalizePurpose', () => {
     expect(normalizePurpose('workout', heavy).sort).toBeUndefined();
   });
 
-  it('never turns an Intent that was all invention into an empty one', () => {
+  it('fills an Intent that was all invention with the table', () => {
     const invented: SearchArgs = { sort: 'bpm', bpmMax: 95 };
-    expect(normalizePurpose('workout', invented)).toEqual(invented);
+    expect(normalizePurpose('workout', invented)).toEqual({
+      energyMin: 70,
+      arousalMin: 60,
+    });
+  });
+
+  it('fills a limit-only answer and keeps the count', () => {
+    expect(normalizePurpose('10 songs for a workout', { limit: 10 })).toEqual({
+      limit: 10,
+      energyMin: 70,
+      arousalMin: 60,
+    });
+  });
+
+  it('fills an empty answer with the table', () => {
+    expect(normalizePurpose('party playlist', {})).toEqual({
+      mood: ['party'],
+      danceabilityMin: 70,
+    });
+  });
+
+  it('keeps a mood the model gave and adds the missing measurement', () => {
+    expect(normalizePurpose('música alegre para bailar', { mood: ['happy'] })).toEqual({
+      mood: ['happy'],
+      danceabilityMin: 70,
+    });
+  });
+
+  it('snaps a prescribed bound on an explicit axis, and keeps the other side', () => {
+    expect(
+      normalizePurpose('música alegre para bailar', {
+        mood: ['happy'],
+        valenceMin: 60,
+        valenceMax: 80,
+        danceabilityMin: 50,
+        danceabilityMax: 90,
+      }),
+    ).toEqual({
+      mood: ['happy'],
+      valenceMin: 60,
+      valenceMax: 80,
+      danceabilityMin: 70,
+      danceabilityMax: 90,
+    });
+  });
+
+  it('takes the table values from the profile, not the static facts', () => {
+    expect(
+      normalizePurpose('10 songs for a workout', { energyMin: 60, energyMax: 90 }, PROFILE),
+    ).toEqual({ energyMin: 74 });
+    expect(normalizePurpose('10 songs for a workout', { limit: 10 }, PROFILE)).toEqual({
+      limit: 10,
+      energyMin: 74,
+      arousalMin: 73,
+    });
   });
 
   it('leaves duration alone: it is the track’s length, not the purpose’s', () => {

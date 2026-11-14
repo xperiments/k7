@@ -128,6 +128,8 @@ describe('the purpose normalizer on the shipped path', () => {
       .mockResolvedValueOnce('{"query":"Daft Punk","bpm_min":130}');
     await expect(requestIntent('workout songs by Daft Punk')).resolves.toEqual({
       query: 'Daft Punk',
+      energyMin: 70,
+      arousalMin: 60,
     });
   });
 
@@ -243,5 +245,47 @@ describe('the sentence overrides the model', () => {
     const result = await requestIntent('add 5 songs to the playlist');
     expect('error' in result).toBe(true);
     if ('error' in result) expect(result.error).toMatch(/no filters/);
+  });
+});
+
+describe('the purpose table fills an empty answer', () => {
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
+
+  it('turns the empty answer for "10 songs for a workout" into the table plus the count', async () => {
+    model.askModel.mockResolvedValue('{}');
+    await expect(requestIntent('10 songs for a workout')).resolves.toEqual({
+      limit: 10,
+      energyMin: 70,
+      arousalMin: 60,
+    });
+  });
+
+  it('turns the empty answer for "party playlist" into the table', async () => {
+    model.askModel.mockResolvedValue('{}');
+    await expect(requestIntent('party playlist')).resolves.toEqual({
+      mood: ['party'],
+      danceabilityMin: 70,
+    });
+  });
+
+  it('still refuses when there is no purpose to fill', async () => {
+    model.askModel.mockResolvedValue('{}');
+    const result = await requestIntent('play something');
+    expect('error' in result).toBe(true);
+  });
+});
+
+describe('a repaired answer still goes through the table', () => {
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
+
+  it('normalizes the answer after the JSON repair, not before', async () => {
+    model.askModel
+      .mockResolvedValueOnce('I cannot answer that')
+      .mockResolvedValueOnce('{"energy_min":60,"energy_max":90}');
+    await expect(requestIntent('workout')).resolves.toEqual({ energyMin: 70 });
   });
 });

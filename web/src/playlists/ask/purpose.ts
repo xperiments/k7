@@ -3,7 +3,9 @@
  *
  * The first three rows are purposes: they prescribe filters and are the case that over-fills.
  * The rest are qualities, stated as prompt rows only. `normalizePurpose` drops what a purpose
- * sentence never asked for; it never adds a filter and changes no value.
+ * sentence never asked for, snaps a kept bound to the table when the model's is too loose, and
+ * fills the table's filters in when no measurement filter is left. The table's value is the
+ * App's, not the model's.
  */
 
 import type { SearchArgs } from '../../device/mcp';
@@ -194,27 +196,62 @@ function hasTempo(sentence: string): boolean {
   return hasAny(sentence, TEMPO_WORDS) || /\d\s*(?:bpm|tempo)\b/i.test(sentence);
 }
 
+const MEASUREMENT_KEYS = [
+  'bpmMin',
+  'bpmMax',
+  'durationMin',
+  'durationMax',
+  'energyMin',
+  'energyMax',
+  'danceabilityMin',
+  'danceabilityMax',
+  'valenceMin',
+  'valenceMax',
+  'arousalMin',
+  'arousalMax',
+] as const;
+
 /**
- * Drop the filters a purpose sentence never asked for.
+ * Make the WORD→FILTER table authoritative over a purpose sentence.
  *
- * The WORD→FILTER table says a purpose word sets *its* filters and the count, and nothing else.
- * So when the sentence names a purpose and a measurement axis is not explicit in the sentence,
- * that axis keeps only the side the purpose row prescribes: a workout keeps `energy_min` and
- * `arousal_min` and loses the invented maxima, a party keeps `danceability_min`, a sleep keeps
- * `energy_max`. An axis the row does not prescribe at all — BPM, valence and danceability for a
- * workout — goes. A sort nobody asked for goes too.
+ * The table says a purpose word sets *its* filters and the count, and nothing else. So when the
+ * sentence names a purpose and a measurement axis is not explicit in the sentence, that axis
+ * keeps only the side the purpose row prescribes: a workout keeps `energy_min` and `arousal_min`
+ * and loses the invented maxima, a party keeps `danceability_min`, a sleep keeps `energy_max`.
+ * An axis the row does not prescribe at all — BPM, valence and danceability for a workout — goes.
+ * A sort nobody asked for goes too.
  *
- * It never adds a filter and changes no value. If the only filters were inventions, the Intent is
- * left as the model gave it rather than turned into an empty one: the filters are visible and
- * correctable, and an empty Intent is an error.
+ * A bound the row prescribes is snapped to the table when the model's is too loose: a maximum
+ * above the table's, a minimum below it. An explicit axis keeps its other side, but its
+ * prescribed side is still the table's.
+ *
+ * When no measurement filter is left — an empty or a limit-only answer — the row's filters fill
+ * the Intent. A mood, a name or a genre the model did give is not overwritten, and the count
+ * stays. The values are the table's at this library's facts, not `factsOf(null)`: the prompt
+ * stated the same numbers, so the Intent runs what the sentence was promised.
  */
-export function normalizePurpose(sentence: string, intent: SearchArgs): SearchArgs {
+export function normalizePurpose(
+  sentence: string,
+  intent: SearchArgs,
+  profile: LibraryProfile | null = null,
+): SearchArgs {
   const rule = purposeOf(sentence);
   if (!rule) return intent;
 
-  const prescribed = rule.filters(factsOf(null));
+  const prescribed = rule.filters(factsOf(profile));
   const keeps = (key: keyof SearchArgs): boolean => prescribed[key] !== undefined;
   const out: SearchArgs = { ...intent };
+
+  /* Snap the prescribed side before anything is deleted: a max above the table's is too loose,
+   * a min below it is too loose. The other side is the delete pass's business. */
+  for (const key of Object.keys(prescribed) as (keyof SearchArgs)[]) {
+    const target = prescribed[key];
+    const current = out[key];
+    if (typeof target !== 'number' || typeof current !== 'number') continue;
+    if (key.endsWith('Max') ? current > target : current < target) {
+      (out as Record<string, unknown>)[key] = target;
+    }
+  }
 
   /* Every measurement axis the table can prescribe: keep only the side it names, unless the
    * sentence itself made the axis explicit. Duration is deliberately not here: a length is the
@@ -233,5 +270,15 @@ export function normalizePurpose(sentence: string, intent: SearchArgs): SearchAr
   }
 
   if (!hasAny(sentence, SORT_WORDS)) delete out.sort;
+
+  /* No measurement is left: an empty or limit-only answer. The row fills the Intent; a mood, a
+   * name or a genre the model did give stays, and so does the count. */
+  if (!MEASUREMENT_KEYS.some((key) => out[key] !== undefined)) {
+    for (const [key, value] of Object.entries(prescribed)) {
+      const field = key as keyof SearchArgs;
+      if (out[field] === undefined) (out as Record<string, unknown>)[field] = value;
+    }
+  }
+
   return Object.keys(out).length === 0 ? intent : out;
 }

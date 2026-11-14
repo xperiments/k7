@@ -278,6 +278,9 @@ length, track length, BPM, offset or key wins over the model's: a pure extractor
 field it finds replaces the model's field, while a field it does not find keeps the model's value.
 It runs only over a runnable Intent, so it never turns a refusal into a search, and it never writes
 a name, a mood or a genre ([ADR 0088](../adr/0088-the-sentence-wins-on-the-numbers-it-states.md)).
+A sentence that names a purpose keeps only the filters its WORD→FILTER row prescribes; a kept bound
+the table says is too loose is snapped to the table's value, and when no measurement filter is left
+the row's filters and the count fill the Intent. The table's value is the App's, not the model's.
 When the exact search finds nothing, Ask retries once
 without the numeric ranges: with a mood left to search on, as before; and — only when the Intent
 carries three or more measurement ranges — with the pair the sentence's purpose word prescribes,
