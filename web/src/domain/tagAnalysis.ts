@@ -53,7 +53,7 @@ export function tagAnalysis(track: TaggedTrack, metadata: TrackMetadata): Analys
   const energy = stored?.energy ?? metadata.energy ?? null;
   return {
     schema: ANALYSIS_SCHEMA,
-    track: { ...track, duration: 0 },
+    track: { ...track, duration: metadata.duration ?? 0 },
     tempo: {
       bpm,
       rawBpm: bpm,

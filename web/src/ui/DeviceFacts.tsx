@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { getDevice } from '../device/device';
 import { libraryStats, statsCoverage, type McpStats } from '../device/mcp';
 import { DeviceError } from '../device/transport';
@@ -30,7 +31,9 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 type Rescan =
   | { state: 'idle' }
   | { state: 'sending' }
-  | { state: 'accepted' }
+  /** Accepted by the player; `before` is the generation the scan will replace. */
+  | { state: 'accepted'; before: number }
+  | { state: 'done' }
   | { state: 'busy'; text: string }
   | { state: 'failed'; text: string };
 
@@ -92,13 +95,35 @@ export function DeviceFacts() {
       ? 'there is no card in the player'
       : null;
 
+  const scanning = status?.rescanning === true;
+
+  /* The player rebuilds in its own task. `status.rescanning` says it is running, and the
+   * generation changes when it publishes; polling a little faster than the status interval
+   * is what lets the card show the end of a scan instead of waiting five seconds for it. */
+  useEffect(() => {
+    if (rescan.state !== 'accepted') return;
+    if (status && status.generation !== rescan.before) {
+      setRescan({ state: 'done' });
+      return;
+    }
+    const poll = window.setInterval(() => void refreshDevice(), 800);
+    const giveUp = window.setTimeout(
+      () => setRescan({ state: 'failed', text: 'The player did not finish the scan.' }),
+      120_000,
+    );
+    return () => {
+      window.clearInterval(poll);
+      window.clearTimeout(giveUp);
+    };
+  }, [rescan, status, refreshDevice]);
+
   const rescanLibrary = async () => {
     setRescan({ state: 'sending' });
     try {
       const result = await getDevice().request('rescan');
       setRescan(
         result.ok
-          ? { state: 'accepted' }
+          ? { state: 'accepted', before: status?.generation ?? 0 }
           : { state: 'failed', text: 'The player did not start the scan.' },
       );
     } catch (error) {
@@ -173,21 +198,40 @@ export function DeviceFacts() {
               variant="outline"
               size="sm"
               onClick={() => void rescanLibrary()}
-              disabled={rescanUnavailable !== null || rescan.state === 'sending'}
+              disabled={
+                rescanUnavailable !== null ||
+                rescan.state === 'sending' ||
+                rescan.state === 'accepted' ||
+                scanning
+              }
             >
-              {rescan.state === 'sending' ? 'Asking…' : 'Rescan the card'}
+              {rescan.state === 'sending'
+                ? 'Asking…'
+                : rescan.state === 'accepted' || scanning
+                  ? 'Rescanning…'
+                  : 'Rescan the card'}
             </Button>
-            <span className="text-xs text-muted-foreground">
-              {rescanUnavailable
-                ? `Unavailable: ${rescanUnavailable}.`
-                : rescan.state === 'accepted'
-                  ? 'Accepted — the library is rebuilding.'
-                  : rescan.state === 'busy'
-                    ? rescan.text
-                    : rescan.state === 'failed'
+            {rescan.state === 'accepted' || scanning ? (
+              <span
+                role="status"
+                className="flex items-center gap-2 text-xs text-muted-foreground"
+              >
+                <Spinner aria-hidden="true" className="size-3" />
+                Rebuilding the library from the card; the player keeps playing.
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {rescanUnavailable
+                  ? `Unavailable: ${rescanUnavailable}.`
+                  : rescan.state === 'done'
+                    ? `Rescanned — ${status ? plural(status.tracks, 'track') : 'the library'}.`
+                    : rescan.state === 'busy'
                       ? rescan.text
-                      : 'Rebuilds the library from the card; nothing is measured.'}
-            </span>
+                      : rescan.state === 'failed'
+                        ? rescan.text
+                        : 'Rebuilds the library from the card; nothing is measured.'}
+              </span>
+            )}
           </div>
         </div>
       </CardContent>

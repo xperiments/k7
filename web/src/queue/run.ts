@@ -99,12 +99,29 @@ async function knownRow(item: QueueItem, deps: RunDeps): Promise<KnownRow | null
   if (hash === null) return null;
   const cached = await deps.getCached(cacheKey(hash, deps.modelSet)).catch(() => null);
   if (!cached) return null;
+  let analysis: Analysis = {
+    ...cached,
+    track: { ...cached.track, name: item.name, path: item.path, size: item.file.size, hash },
+  };
+  /* A cached analysis from before a row carried its length has `duration: 0` (the tag-only
+   * path used to write it), and the content-keyed cache would keep it forever. Read the
+   * file's header once and heal the cache, so every later run and image has the length
+   * without opening the file again. */
+  if (!(Number.isFinite(analysis.track.duration) && analysis.track.duration > 0)) {
+    try {
+      const metadata = await deps.readTags(item.file);
+      const seconds = metadata.duration;
+      if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0) {
+        analysis = { ...analysis, track: { ...analysis.track, duration: seconds } };
+        await deps.putCached(cacheKey(hash, deps.modelSet), analysis).catch(() => {});
+      }
+    } catch {
+      /* the row keeps no length; the image builder can still read one from the file */
+    }
+  }
   return {
-    analysis: {
-      ...cached,
-      track: { ...cached.track, name: item.name, path: item.path, size: item.file.size, hash },
-    },
-    // The row was never opened, so its tags come from the record, not from the file.
+    analysis,
+    // The row was never decoded, so its tags come from the record, not from the file.
     tags: tagsOf(media),
     media,
   };

@@ -3,7 +3,7 @@
 Shared by the tests that need an image rather than a reader: the format is a contract,
 and a test that invents its own bytes is testing itself.
 
-This is format version 3 only (docs/specs/snapshot-format.md): an 80-byte header, 32-byte
+This is format version 4 only (docs/specs/snapshot-format.md): an 80-byte header, 36-byte
 rows sorted by fingerprint, an interned string pool split at `row_pool_size`, then the
 list records and list rows.
 """
@@ -14,7 +14,7 @@ import zlib
 MAGIC = b"K7SNAP\0\0"
 
 HEADER_SIZE = 80
-ROW_SIZE = 32
+ROW_SIZE = 36
 LIST_SIZE = 32
 LIST_ROW_SIZE = 4
 UNKNOWN_PCT = 127
@@ -66,10 +66,10 @@ def _measurements(r):
 
 def build_image(rows, lists=(), generation=1767225600, analyser=300, schema=1,
                 model_set=0x1234):
-    """Build a version 3 image.
+    """Build a version 4 image.
 
-    rows: list of dicts with path, size, bpm_x10, key, energy, dance, valence,
-    arousal, mood, conf, src, title, artist, album, genre.
+    rows: list of dicts with path, size, duration_ms, bpm_x10, key, energy, dance,
+    valence, arousal, mood, conf, src, title, artist, album, genre.
     lists: list of dicts with id (int), name, created and rows (Library paths).
     Lists are sorted by id; list strings follow the row strings, each list's
     name and then its paths, in list order.
@@ -110,7 +110,7 @@ def build_image(rows, lists=(), generation=1767225600, analyser=300, schema=1,
 
     body = bytearray()
     for r, offsets in encoded:
-        body += struct.pack("<QI", fnv1a64(r["path"]), r["size"])
+        body += struct.pack("<QII", fnv1a64(r["path"]), r.get("duration_ms", 0), r["size"])
         for offset in offsets:
             body += _off3(offset)
         body += struct.pack("<Q", _measurements(r))
@@ -131,7 +131,7 @@ def build_image(rows, lists=(), generation=1767225600, analyser=300, schema=1,
     total = HEADER_SIZE + len(body)
     header = struct.pack(
         "<8sHHIIIQIIIIQQ",
-        MAGIC, 3, HEADER_SIZE, total, len(rows), ROW_SIZE, generation, len(pool),
+        MAGIC, 4, HEADER_SIZE, total, len(rows), ROW_SIZE, generation, len(pool),
         zlib.crc32(bytes(body)) & 0xFFFFFFFF, analyser, schema, model_set, 0,
     )
     header += struct.pack(

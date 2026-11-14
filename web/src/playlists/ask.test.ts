@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BPM_RANGE,
   buildSystemPrompt,
+  DURATION_RANGE,
   clampBpm,
   INTENT_EXAMPLES,
   INTENT_SCHEMA,
@@ -40,6 +41,8 @@ describe('parseIntent', () => {
           genre: 'ambient',
           bpm_min: 118,
           bpm_max: 124,
+          duration_min: 60,
+          duration_max: 300,
           energy_min: 40,
           energy_max: 70,
           danceability_min: 30,
@@ -62,6 +65,8 @@ describe('parseIntent', () => {
       genre: 'ambient',
       bpmMin: 118,
       bpmMax: 124,
+      durationMin: 60,
+      durationMax: 300,
       energyMin: 40,
       energyMax: 70,
       danceabilityMin: 30,
@@ -95,12 +100,23 @@ describe('parseIntent', () => {
     expect(args).toEqual({ bpmMin: 120 });
   });
 
+  it('reads a track length in seconds and drops a bound of zero', () => {
+    expect(argsOf(parseIntent('{"duration_max":180}'))).toEqual({ durationMax: 180 });
+    expect(argsOf(parseIntent('{"duration_min":60,"duration_max":0}'))).toEqual({
+      durationMin: 60,
+    });
+    expect(argsOf(parseIntent('{"duration_min":0,"mood":["happy"]}'))).toEqual({
+      mood: ['happy'],
+    });
+  });
+
   it('clamps every number to the range the library stores', () => {
     const args = argsOf(
       parseIntent(
         JSON.stringify({
           bpm_min: -10,
           bpm_max: 500,
+          duration_max: 900000,
           energy_min: -5,
           energy_max: 150,
           valence_max: 101,
@@ -113,6 +129,8 @@ describe('parseIntent', () => {
     /* Tempo is stored folded into 70-180, so anything outside it could never match. */
     expect(args.bpmMin).toBe(70);
     expect(args.bpmMax).toBe(180);
+    expect(args.durationMax).toBe(DURATION_RANGE.max);
+    expect(args.durationMin).toBeUndefined();
     expect(args.energyMin).toBe(0);
     expect(args.energyMax).toBe(100);
     expect(args.valenceMax).toBe(100);
@@ -220,6 +238,10 @@ describe('parseIntent', () => {
       arousalMin: 5,
       arousalMax: 95,
     });
+    expect(argsOf(parseIntent('{"duration_min":240,"duration_max":60}'))).toEqual({
+      durationMin: 60,
+      durationMax: 240,
+    });
   });
 });
 
@@ -252,6 +274,8 @@ describe('INTENT_EXAMPLES', () => {
       'something in B minor, danceable': { key: ['Bm'], danceabilityMin: 65 },
       'música tranquila para estudiar': { mood: ['relaxed'], energyMax: 40 },
       'slowest tracks first': { sort: 'bpm' },
+      'tracks under three minutes': { durationMax: 180 },
+      'long mixes': { durationMin: 480 },
       'play something': null,
     };
 
@@ -271,7 +295,14 @@ describe('INTENT_EXAMPLES', () => {
 describe('relaxRanges', () => {
   it('drops the numeric ranges only when a mood is left to search on', () => {
     expect(
-      relaxRanges({ query: 'rain', mood: ['relaxed'], bpmMax: 100, energyMax: 40, limit: 20 }),
+      relaxRanges({
+        query: 'rain',
+        mood: ['relaxed'],
+        bpmMax: 100,
+        energyMax: 40,
+        durationMax: 300,
+        limit: 20,
+      }),
     ).toEqual({ query: 'rain', mood: ['relaxed'], limit: 20 });
     expect(relaxRanges({ energyMax: 40 })).toBeNull();
     expect(relaxRanges({ mood: ['relaxed'] })).toBeNull();
@@ -283,6 +314,7 @@ const PROFILE: LibraryProfile = {
   genres: ['techno', 'ambient'],
   keys: ['8A', '9B'],
   moods: ['happy', 'relaxed'],
+  duration: { min: 45, p25: 180, p50: 300, p75: 420, max: 900 },
   bpm: { min: 85, p25: 98, p50: 120, p75: 131, max: 172 },
   energy: { min: 12, p25: 40, p50: 60, p75: 74, max: 98 },
   danceability: { min: 10, p25: 35, p50: 55, p75: 72, max: 95 },
@@ -294,6 +326,8 @@ describe('buildSystemPrompt', () => {
   it('uses the library the profile describes', () => {
     const prompt = buildSystemPrompt(PROFILE);
     expect(prompt).toContain('85..172');
+    expect(prompt).toContain('45..900 (seconds)');
+    expect(prompt).toContain('duration_max 180 / duration_min 420');
     expect(prompt).toContain('4120 tracks');
     expect(prompt).toContain('Genres present (most common first): techno, ambient');
     expect(prompt).toContain('energy_max 40');
@@ -305,6 +339,7 @@ describe('buildSystemPrompt', () => {
   it('is the static prompt without a profile', () => {
     const prompt = buildSystemPrompt(null);
     expect(prompt).toContain('70..180');
+    expect(prompt).toContain('0..86400 (seconds)');
     expect(prompt).not.toContain('THIS LIBRARY');
   });
 });
@@ -316,6 +351,8 @@ describe('intentSchema', () => {
     expect(properties.genre).toEqual({ type: 'string', enum: PROFILE.genres });
     expect(properties.bpm_min.minimum).toBe(85);
     expect(properties.bpm_max.maximum).toBe(172);
+    expect(properties.duration_min.minimum).toBe(45);
+    expect(properties.duration_max.maximum).toBe(900);
     expect(properties.energy_min.minimum).toBe(12);
     expect(properties.energy_max.maximum).toBe(98);
     expect(properties.valence_min.minimum).toBe(5);
@@ -343,6 +380,8 @@ describe('intentExamples', () => {
     expect(examples[1][0]).toBe('two hours of fast techno');
     expect(examples[1][1]).toContain('"bpm_min":131');
     expect(examples[3][1]).toContain('"danceability_min":72');
+    expect(examples[6][1]).toContain('"duration_max":180');
+    expect(examples[7][1]).toContain('"duration_min":420');
     for (const [, answer] of examples) {
       if (answer === '{}') continue;
       const parsed = parseIntent(answer);
@@ -385,6 +424,8 @@ describe('INTENT_SCHEMA', () => {
   it('states the ranges the parser clamps to', () => {
     expect(INTENT_SCHEMA.properties.bpm_min.minimum).toBe(BPM_RANGE.min);
     expect(INTENT_SCHEMA.properties.bpm_min.maximum).toBe(BPM_RANGE.max);
+    expect(INTENT_SCHEMA.properties.duration_min.minimum).toBe(DURATION_RANGE.min);
+    expect(INTENT_SCHEMA.properties.duration_max.maximum).toBe(DURATION_RANGE.max);
     expect(INTENT_SCHEMA.properties.limit.maximum).toBe(100);
     expect(INTENT_SCHEMA.properties.offset.maximum).toBe(199);
   });

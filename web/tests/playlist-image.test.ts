@@ -61,27 +61,27 @@ describe('giving an image new Playlists', () => {
     const original = buildSnapshot(input);
     const patched = patchListArea(original, [list]);
 
-    expect(original.length).toBe(80 + 32 + rowPool);
-    expect(patched.length).toBe(80 + 32 + rowPool + 11 + 19 + 32 + 4);
+    expect(original.length).toBe(80 + 36 + rowPool);
+    expect(patched.length).toBe(80 + 36 + rowPool + 11 + 19 + 32 + 4);
     expect(new TextDecoder().decode(patched.subarray(0, 8))).toBe('K7SNAP\0\0');
-    expect(u16(patched, 8)).toBe(3);
+    expect(u16(patched, 8)).toBe(4);
     expect(u16(patched, 10)).toBe(80);
     expect(u32(patched, 12)).toBe(patched.length);
     expect(u32(patched, 16)).toBe(1);
-    expect(u32(patched, 20)).toBe(32);
+    expect(u32(patched, 20)).toBe(36);
     expect(u32(patched, 32)).toBe(rowPool + 'Late night'.length + 1 + 'Alpha/One/one.flac'.length + 1);
     expect(u32(patched, 76)).toBe(rowPool);
 
     // The measurement area — the rows and the whole row pool — is byte-identical.
-    expect(Array.from(patched.subarray(80, 80 + 32 + rowPool))).toEqual(
-      Array.from(original.subarray(80, 80 + 32 + rowPool)),
+    expect(Array.from(patched.subarray(80, 80 + 36 + rowPool))).toEqual(
+      Array.from(original.subarray(80, 80 + 36 + rowPool)),
     );
-    expect(Array.from(patched.subarray(80, 112))).toEqual(Array.from(original.subarray(80, 112)));
+    expect(Array.from(patched.subarray(80, 116))).toEqual(Array.from(original.subarray(80, 116)));
 
     // The row's four offsets still resolve in the copied pool, including the shared album.
-    const poolStart = 80 + 32;
-    const titleOffset = patched[92] | (patched[93] << 8) | (patched[94] << 16);
-    const albumOffset = patched[98] | (patched[99] << 8) | (patched[100] << 16);
+    const poolStart = 80 + 36;
+    const titleOffset = patched[96] | (patched[97] << 8) | (patched[98] << 16);
+    const albumOffset = patched[102] | (patched[103] << 8) | (patched[104] << 16);
     expect(titleOffset).toBe(0);
     expect(albumOffset).toBe(0);
     expect(nul(patched, poolStart + titleOffset)).toBe('One');
@@ -114,23 +114,23 @@ describe('giving an image new Playlists', () => {
     ]);
     const third = patchListArea(second, []);
 
-    expect(u16(second, 8)).toBe(3);
+    expect(u16(second, 8)).toBe(4);
     // The row strings, then only the new list's name: the old list's strings are gone.
     expect(u32(second, 32)).toBe(rowPool + 'Short'.length + 1);
     expect(u32(second, 76)).toBe(rowPool);
 
-    // A patch back to no lists is still version 3, with an empty list area.
-    expect(u16(third, 8)).toBe(3);
+    // A patch back to no lists is still version 4, with an empty list area.
+    expect(u16(third, 8)).toBe(4);
     expect(u16(third, 10)).toBe(80);
     expect(u16(third, 64)).toBe(0);
     expect(u32(third, 72)).toBe(0);
     expect(u32(third, 76)).toBe(rowPool);
     expect(u32(third, 32)).toBe(rowPool);
-    expect(third.length).toBe(80 + 32 + rowPool);
+    expect(third.length).toBe(80 + 36 + rowPool);
     expect(Array.from(third)).toEqual(Array.from(original));
   });
 
-  it('refuses bytes that are not a version 3 image', () => {
+  it('refuses bytes that are not a version 4 image', () => {
     expect(() => patchListArea(new Uint8Array(4), [])).toThrow(ImageError);
 
     const notMagic = buildSnapshot(input);

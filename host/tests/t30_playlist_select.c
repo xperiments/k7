@@ -2,7 +2,7 @@
  * T30: playlist_select, host tier.
  *
  * The selection module is tested against a real Library built from a temporary tree and
- * a real version 3 Snapshot built byte by byte here, with the broadcast stubbed: this
+ * a real version 4 Snapshot built byte by byte here, with the broadcast stubbed: this
  * test is about resolution, refusal and remembering, not about audio. What the order
  * does once the broadcast has it is the integration suite's business (the hosting server
  * plus /api/playlists/select and the stream's own advance).
@@ -120,10 +120,10 @@ static void put64(uint8_t *p, size_t at, uint64_t v)
     for (int i = 0; i < 8; i++) p[at + i] = (uint8_t)(v >> (8 * i));
 }
 
-/* A version 3 image with no measurement rows and one list. There are no row
+/* A version 4 image with no measurement rows and one list. There are no row
  * strings, so `row_pool_size` is zero and the pool is the list's name followed by
  * each path (spec §2, §7). */
-static uint8_t *build_v3(size_t *out_n, const char *name, uint64_t id, const char *const *paths,
+static uint8_t *build_image(size_t *out_n, const char *name, uint64_t id, const char *const *paths,
                          uint32_t npaths)
 {
     size_t pool_n = strlen(name) + 1;
@@ -137,7 +137,7 @@ static uint8_t *build_v3(size_t *out_n, const char *name, uint64_t id, const cha
     put16(img, 10, 80);
     put32(img, 12, (uint32_t)total);
     put32(img, 16, 0);            /* no measurement rows */
-    put32(img, 20, 32);
+    put32(img, 20, SNAPSHOT_ROW_SIZE);
     put64(img, 24, 1767225600ull); /* generation */
     put32(img, 32, (uint32_t)pool_n);
     put32(img, 36, 0);            /* crc, patched below */
@@ -220,7 +220,7 @@ int main(void)
     const char *const SOME[] = {"A/one.mp3", "B/gone.mp3"};
     static const char *const NONE[] = {NULL};
     size_t n = 0;
-    uint8_t *img = build_v3(&n, "Late night", 0xAAAA000000000001ull, ALL, 3);
+    uint8_t *img = build_image(&n, "Late night", 0xAAAA000000000001ull, ALL, 3);
     snapshot_t *snap = NULL;
     CHECK_EQ(snapshot_open(img, n, &snap), SNAPSHOT_OK, "the image opens");
     CHECK_EQ(snapshot_lists(snap), 1, "one list");
@@ -270,7 +270,7 @@ int main(void)
 
     /* a row whose file is gone counts, and the rest still plays */
     size_t n2 = 0;
-    uint8_t *img2 = build_v3(&n2, "Half gone", 0xBBBB000000000002ull, SOME, 2);
+    uint8_t *img2 = build_image(&n2, "Half gone", 0xBBBB000000000002ull, SOME, 2);
     snapshot_t *snap2 = NULL;
     CHECK_EQ(snapshot_open(img2, n2, &snap2), SNAPSHOT_OK, "the second image opens");
     CHECK_EQ(playlist_select_set(snap2, lib, 0xBBBB000000000002ull), PLAYLIST_SELECT_OK,
@@ -280,7 +280,7 @@ int main(void)
 
     /* an empty list is refused, and nothing is walking */
     size_t n3 = 0;
-    uint8_t *img3 = build_v3(&n3, "Empty", 0xCCCC000000000003ull, NONE, 0);
+    uint8_t *img3 = build_image(&n3, "Empty", 0xCCCC000000000003ull, NONE, 0);
     snapshot_t *snap3 = NULL;
     CHECK_EQ(snapshot_open(img3, n3, &snap3), SNAPSHOT_OK, "the empty image opens");
     CHECK_EQ(playlist_select_set(snap3, lib, 0xCCCC000000000003ull), PLAYLIST_SELECT_EMPTY,

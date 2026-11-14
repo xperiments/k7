@@ -3,7 +3,7 @@
  * snapshot - the measured music a host produced for this Library.
  *
  * One immutable image, validated once and then read in place: an 80-byte header, one
- * 32-byte row per track sorted by fingerprint, one interned UTF-8 string pool, and the
+ * 36-byte row per track sorted by fingerprint, one interned UTF-8 string pool, and the
  * lists. The module never copies, caches or touches a filesystem -- it is handed a
  * pointer and a length. On the device the pointer is the PSRAM copy the appliance makes
  * at boot (ADR 0069); in the host tests it is a buffer.
@@ -21,12 +21,12 @@ extern "C" {
 #endif
 
 /* The header's first eight bytes: `K7SNAP`, NUL-padded to eight. This is the only magic
- * format version 3 has; there is no legacy name and no version branch (format spec §12). */
+ * format version 4 has; there is no legacy name and no version branch (format spec §12). */
 #define SNAPSHOT_MAGIC        "K7SNAP\0\0"
-/* Format version 3 is the only version this project reads or writes. */
-#define SNAPSHOT_VERSION      3u
+/* Format version 4 is the only version this project reads or writes. */
+#define SNAPSHOT_VERSION      4u
 #define SNAPSHOT_HEADER_SIZE  80u
-#define SNAPSHOT_ROW_SIZE     32u
+#define SNAPSHOT_ROW_SIZE     36u
 #define SNAPSHOT_LIST_SIZE    32u
 #define SNAPSHOT_LIST_ROW_SIZE 4u
 #define SNAPSHOT_MAX_LISTS    64u
@@ -60,9 +60,11 @@ typedef struct {
 } snapshot_list_t;
 
 /* One row, as read. `snapshot_find` fills it; percentages are exposed as 0xFF when
- * the image stores 127, and bpm_x10 is 0 (unknown) or 700..1800. */
+ * the image stores 127, bpm_x10 is 0 (unknown) or 700..1800, and duration_ms is 0
+ * when the track's length was never measured. */
 typedef struct {
     uint64_t fingerprint;
+    uint32_t duration_ms;
     uint32_t size;
     uint32_t title_offset;
     uint32_t artist_offset;
@@ -116,7 +118,7 @@ snapshot_result_t snapshot_open_why(const uint8_t *image, size_t size, snapshot_
                                     char *why, size_t why_size);
 void              snapshot_close(snapshot_t *s);
 
-/* 3; the image's own format version (the only one this reader accepts). */
+/* 4; the image's own format version (the only one this reader accepts). */
 uint16_t       snapshot_version(const snapshot_t *s);
 uint32_t       snapshot_rows(const snapshot_t *s);
 uint32_t       snapshot_generation(const snapshot_t *s);
@@ -200,14 +202,16 @@ typedef enum {
     SNAPSHOT_SORT_BPM,
     SNAPSHOT_SORT_ENERGY,
     SNAPSHOT_SORT_DANCEABILITY,
+    SNAPSHOT_SORT_DURATION,
 } snapshot_sort_t;
 
 /* Every filter is optional. Percentages use 0xFF for "unset" -- the same value the
  * image uses for "unknown", which is why a caller must start from
  * snapshot_filter_defaults() rather than zeroing the struct: 0 is a legal bound and
  * `energy_max: 0` has to mean "at most 0", not "no filter". A BPM bound is unset at
- * 0 (no track has 0 BPM) and a string filter at NULL. A set filter on a field the
- * track does not have excludes the track. */
+ * 0 (no track has 0 BPM), a duration bound at 0 ms (no track has 0 ms; it is the
+ * format's unknown), and a string filter at NULL. A set filter on a field the track
+ * does not have excludes the track. */
 typedef struct {
     const char *query;   /* case-insensitive substring of path, title, artist, album or genre */
     const char *genre;   /* case-insensitive substring of the genre string */
@@ -217,6 +221,8 @@ typedef struct {
     uint8_t     danceability_min, danceability_max;
     uint8_t     valence_min, valence_max;
     uint8_t     arousal_min, arousal_max;
+    uint32_t    duration_min_ms; /* 0 for no lower bound */
+    uint32_t    duration_max_ms; /* 0 for no upper bound */
     uint16_t    key_mask;  /* 1 << (camelot code - 1), 0 for no key filter */
     uint8_t     mood_mask; /* any listed bit matches, 0 for no mood filter */
     snapshot_sort_t sort;
@@ -235,8 +241,8 @@ int         snapshot_mood_from_name(const char *name);
  * `A major`). Returns 1..24, or 0 when the string is not a key this module knows. */
 uint8_t snapshot_key_parse(const char *text);
 
-/* Parse a sort name (`path`, `title`, `bpm`, `energy`, `danceability`). Returns false
- * for anything else, leaving `out` untouched. */
+/* Parse a sort name (`path`, `title`, `bpm`, `energy`, `danceability`, `duration`).
+ * Returns false for anything else, leaving `out` untouched. */
 bool snapshot_sort_parse(const char *name, snapshot_sort_t *out);
 
 /* Does this track match? `relpath` is the Library's relative path and `size` its file

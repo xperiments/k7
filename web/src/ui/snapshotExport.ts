@@ -59,7 +59,7 @@ export async function buildSnapshotExport(
   let skipped = 0;
 
   for (const item of items) {
-    const { analysis } = item;
+    let { analysis } = item;
     if (!analysis) continue;
     if (snapshotPath(analysis.track.path) === null) {
       skipped += 1;
@@ -73,16 +73,38 @@ export async function buildSnapshotExport(
     let artist = item.tags?.artist ?? '';
     let album = item.tags?.album ?? '';
     let genre = item.tags?.genre ?? '';
-    if (!item.tags) {
+
+    /* A length is the one row field an older cached analysis can lack: the tag-only path
+     * used to write `duration: 0`, and the cache is keyed by content, so re-measuring the
+     * card never replaces it. The image is the thing that has to carry the value, so a row
+     * without one reads it from the file here — the same header read that tags use, not a
+     * decode. A row that already has a length is never re-opened for it. */
+    let seconds = analysis.track.duration;
+    const needsDuration = !(Number.isFinite(seconds) && seconds > 0);
+    if (!item.tags || needsDuration) {
       try {
-        const { common } = await parseBlob(item.file, { duration: false, skipCovers: true });
-        title = common.title ?? '';
-        artist = common.artist ?? '';
-        album = common.album ?? '';
-        genre = common.genre?.[0] ?? '';
+        const parsed = await parseBlob(item.file, {
+          duration: needsDuration,
+          skipCovers: true,
+        });
+        if (!item.tags) {
+          const { common } = parsed;
+          title = common.title ?? '';
+          artist = common.artist ?? '';
+          album = common.album ?? '';
+          genre = common.genre?.[0] ?? '';
+        }
+        const read = parsed.format.duration;
+        if (needsDuration && typeof read === 'number' && Number.isFinite(read) && read > 0) {
+          seconds = read;
+        }
       } catch {
-        /* unreadable tags: the row keeps its measurements and empty strings */
+        /* unreadable tags or length: the row keeps its measurements and empty strings */
       }
+    }
+
+    if (seconds !== analysis.track.duration && Number.isFinite(seconds) && seconds > 0) {
+      analysis = { ...analysis, track: { ...analysis.track, duration: seconds } };
     }
 
     tracks.push({

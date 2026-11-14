@@ -102,14 +102,14 @@ def main():
     shutil.copy(os.path.join(FIXTURES, "tone-48000.wav"), wav)  # deliberately not in the image
 
     image = build_image([
-        dict(path="Alpha/One/tone.flac", size=os.path.getsize(flac), bpm_x10=1280, key=8,
-             energy=80, dance=60, valence=50, arousal=80, mood=HAPPY | PARTY, conf=70,
-             src=0x10, title="Alpha Tone", artist="The Alphas", album="One",
-             genre="electronic"),
-        dict(path="Beta/Two/tone.mp3", size=os.path.getsize(mp3), bpm_x10=1000, key=5,
-             energy=30, dance=UNKNOWN, valence=UNKNOWN, arousal=UNKNOWN, mood=RELAXED,
-             conf=UNKNOWN, src=0x03, title="Beta Tone", artist="The Betas", album="Two",
-             genre="jazz"),
+        dict(path="Alpha/One/tone.flac", size=os.path.getsize(flac), duration_ms=10500,
+             bpm_x10=1280, key=8, energy=80, dance=60, valence=50, arousal=80,
+             mood=HAPPY | PARTY, conf=70, src=0x10, title="Alpha Tone",
+             artist="The Alphas", album="One", genre="electronic"),
+        dict(path="Beta/Two/tone.mp3", size=os.path.getsize(mp3), duration_ms=0,
+             bpm_x10=1000, key=5, energy=30, dance=UNKNOWN, valence=UNKNOWN,
+             arousal=UNKNOWN, mood=RELAXED, conf=UNKNOWN, src=0x03,
+             title="Beta Tone", artist="The Betas", album="Two", genre="jazz"),
     ])
     image_path = os.path.join(tmp, "xtape.db")
     with open(image_path, "wb") as f:
@@ -138,6 +138,7 @@ def main():
         check("two analysed", stats["snapshot"]["coverage"]["analysed"], 2)
         check("coverage percent", stats["snapshot"]["coverage"]["percent"], 66)
         check("snapshot state", stats["snapshot"]["state"], "ok")
+        check("snapshot format", stats["snapshot"]["format_version"], 4)
         check("rows in the image", stats["snapshot"]["rows"], 2)
 
         # --- a BPM range
@@ -193,6 +194,25 @@ def main():
         # (covered by the host unit tests; here the device has one)
         found, err = call_tool(port, "library_search", {"genre": "electro"})
         check("genre substring", found["matched"], 1)
+
+        # --- a track's length: the flac is 10.5 s, the mp3's length was never written
+        found, err = call_tool(port, "library_search", {"duration_min": 10})
+        check("duration range is not an error", err, False)
+        check("duration range matched", found["matched"], 1)
+        check("the measured length", found["tracks"][0]["path"], "Alpha/One/tone.flac")
+        check("the length travels in the JSON", found["tracks"][0]["analysis"]["duration_ms"], 10500)
+
+        found, err = call_tool(port, "library_search", {"duration_max": 60, "query": "tone"})
+        check("an unknown length is not zero", found["matched"], 1)
+        check("and it is the flac", found["tracks"][0]["path"], "Alpha/One/tone.flac")
+
+        found, err = call_tool(port, "library_search", {"sort": "duration", "query": "tone"})
+        check("duration sort", [t["path"] for t in found["tracks"]],
+              ["Alpha/One/tone.flac", "Beta/Two/tone.mp3"])
+        check("the unknown is null", found["tracks"][1]["analysis"]["duration_ms"], None)
+
+        track, err = call_tool(port, "library_track", {"path": "Alpha/One/tone.flac"})
+        check("library_track carries the length", track["analysis"]["duration_ms"], 10500)
     finally:
         proc.terminate()
         try:

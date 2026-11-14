@@ -16,6 +16,7 @@ interface TrackOptions {
   danceable?: number;
   valence?: number;
   arousal?: number;
+  duration?: number;
   moods?: Partial<Record<Exclude<MoodTag, 'danceable'>, number>>;
 }
 
@@ -31,6 +32,7 @@ function track(options: TrackOptions): SnapshotTrack {
     danceable = 0.5,
     valence = 0.5,
     arousal = 0.5,
+    duration = 1,
     moods = {},
   } = options;
   const tags: Record<MoodTag, number> = {
@@ -44,7 +46,7 @@ function track(options: TrackOptions): SnapshotTrack {
   for (const [mood, value] of Object.entries(moods)) tags[mood as MoodTag] = value ?? 0;
   const analysis: Analysis = {
     schema: ANALYSIS_SCHEMA,
-    track: { name: path, path, size: 1, format: 'mp3', duration: 1, hash: 'h' },
+    track: { name: path, path, size: 1, format: 'mp3', duration, hash: 'h' },
     tempo: {
       bpm,
       rawBpm: bpm,
@@ -74,6 +76,7 @@ const TRACKS = [
     energy: 0.5,
     valence: 0.2,
     arousal: 0.5,
+    duration: 180,
     moods: { happy: 0.8 },
   }),
   track({
@@ -86,6 +89,7 @@ const TRACKS = [
     energy: 0.2,
     valence: 0.9,
     arousal: 0.2,
+    duration: 240,
     moods: { relaxed: 0.8 },
   }),
   track({
@@ -98,6 +102,7 @@ const TRACKS = [
     energy: 0.9,
     valence: 0.5,
     arousal: 0.9,
+    duration: 300,
     danceable: 0.9,
     moods: { party: 0.9 },
   }),
@@ -141,7 +146,7 @@ describe('readImageRows', () => {
     expect(monday?.fingerprint).toBe(fnv1a64(new TextEncoder().encode('a.mp3')));
   });
 
-  it('refuses bytes that are not a version 3 image', () => {
+  it('refuses bytes that are not a version 4 image', () => {
     expect(() => readImageRows(new Uint8Array(10))).toThrow(McpError);
   });
 });
@@ -165,6 +170,7 @@ describe('profileFromRows', () => {
     expect(profile.genres).toEqual(['Ambient', 'Techno']);
     expect(profile.bpm?.min).toBe(90);
     expect(profile.bpm?.max).toBe(140);
+    expect(profile.duration).toEqual({ min: 180, p25: 240, p50: 240, p75: 300, max: 300 });
     expect(profile.keys).toEqual(['8A', '9B']);
     expect(profile.moods).toEqual(['happy', 'relaxed', 'party']);
   });

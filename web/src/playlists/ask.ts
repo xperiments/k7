@@ -29,10 +29,13 @@ import type { AxisProfile, LibraryProfile } from '../domain/snapshot';
 export const MOOD_VALUES = ['happy', 'sad', 'aggressive', 'relaxed', 'party'] as const;
 
 /** `library_search`'s `sort`, exactly. */
-export const SORT_VALUES = ['path', 'title', 'bpm', 'energy', 'danceability'] as const;
+export const SORT_VALUES = ['path', 'title', 'bpm', 'energy', 'danceability', 'duration'] as const;
 
 /** The folded tempo range the Snapshot stores; a BPM bound outside it can never match. */
 export const BPM_RANGE = { min: 70, max: 180 } as const;
+
+/** A track's length is seconds in the Intent; a day is beyond any track a card can hold. */
+export const DURATION_RANGE = { min: 0, max: 86_400 } as const;
 
 /** A manual BPM bound, brought into the range the library can answer. */
 export function clampBpm(value: number): number {
@@ -302,6 +305,18 @@ export function parseIntent(answer: string): SearchArgs | IntentFailure {
   if (bpmMin !== undefined) out.bpmMin = bpmMin;
   if (bpmMax !== undefined) out.bpmMax = bpmMax;
 
+  // A track's length, in seconds. 0 is "no bound" to `library_search`, so a bound of 0 is
+  // dropped rather than ordered against the other one (and never shown as "length from 0:00").
+  let durationMin = numeric(raw.duration_min, DURATION_RANGE.min, DURATION_RANGE.max);
+  let durationMax = numeric(raw.duration_max, DURATION_RANGE.min, DURATION_RANGE.max);
+  if (durationMin === 0) durationMin = undefined;
+  if (durationMax === 0) durationMax = undefined;
+  if (durationMin !== undefined && durationMax !== undefined && durationMin > durationMax) {
+    [durationMin, durationMax] = [durationMax, durationMin];
+  }
+  if (durationMin) out.durationMin = durationMin;
+  if (durationMax) out.durationMax = durationMax;
+
   // The four regressions are percentages on the wire (0..100 integers).
   const [energyMin, energyMax] = orderedPair(raw.energy_min, raw.energy_max, 0, 100, true);
   if (energyMin !== undefined) out.energyMin = energyMin;
@@ -364,6 +379,8 @@ const NUMERIC_FILTERS = [
   'valenceMax',
   'arousalMin',
   'arousalMax',
+  'durationMin',
+  'durationMax',
 ] as const;
 
 /**
@@ -398,6 +415,7 @@ interface PromptFacts {
   danceability: { min: number; max: number; party: number };
   valence: { min: number; max: number; sad: number; happy: number };
   arousal: { min: number; max: number; workout: number; aggressive: number };
+  duration: { min: number; max: number; short: number; long: number };
 }
 
 const DEFAULT_FACTS: PromptFacts = {
@@ -410,6 +428,7 @@ const DEFAULT_FACTS: PromptFacts = {
   danceability: { min: 0, max: 100, party: 70 },
   valence: { min: 0, max: 100, sad: 40, happy: 60 },
   arousal: { min: 0, max: 100, workout: 60, aggressive: 65 },
+  duration: { min: DURATION_RANGE.min, max: DURATION_RANGE.max, short: 180, long: 480 },
 };
 
 function roundedAxis(axis: AxisProfile | null, fallback: { min: number; max: number }) {
@@ -424,6 +443,7 @@ function factsOf(profile: LibraryProfile | null): PromptFacts {
   const danceability = roundedAxis(profile.danceability, { min: 0, max: 100 });
   const valence = roundedAxis(profile.valence, { min: 0, max: 100 });
   const arousal = roundedAxis(profile.arousal, { min: 0, max: 100 });
+  const duration = roundedAxis(profile.duration, { min: 0, max: 86_400 });
   return {
     tracks: profile.tracks,
     genres: profile.genres.length > 0 ? profile.genres : null,
@@ -453,6 +473,11 @@ function factsOf(profile: LibraryProfile | null): PromptFacts {
       workout: profile.arousal ? Math.round(profile.arousal.p75) : 60,
       aggressive: profile.arousal ? Math.round(profile.arousal.p75) : 65,
     },
+    duration: {
+      ...duration,
+      short: profile.duration ? Math.round(profile.duration.p25) : 180,
+      long: profile.duration ? Math.round(profile.duration.p75) : 480,
+    },
   };
 }
 
@@ -479,9 +504,10 @@ export function buildSystemPrompt(profile: LibraryProfile | null): string {
     `  danceability_min/max       ${f.danceability.min}..${f.danceability.max}`,
     `  valence_min/max            ${f.valence.min}..${f.valence.max}`,
     `  arousal_min/max            ${f.arousal.min}..${f.arousal.max}`,
+    `  duration_min/max           ${f.duration.min}..${f.duration.max} (seconds)`,
     '  key      ["8A"] or ["Am"]. Never also put a key in "query".',
     `  mood     any of: ${f.moods ? f.moods.join(', ') : 'happy, sad, aggressive, relaxed, party'}`,
-    '  sort     one of: path, title, bpm, energy, danceability (ascending only)',
+    '  sort     one of: path, title, bpm, energy, danceability, duration (ascending only)',
     '  limit    1..100        offset    0..199',
     '',
     'RULES',
@@ -491,7 +517,9 @@ export function buildSystemPrompt(profile: LibraryProfile | null): string {
     `- Clamp tempos to ${f.bpm.min}..${f.bpm.max}; "very slow" is bpm_max ${f.bpm.slow}, not the floor.`,
     '- Use mood for feelings and the numeric keys only for stated qualities. Do not add',
     '  both for the same word unless the table below does.',
-    '- A count of tracks is "limit". A duration is limit = 15 per hour, max 100.',
+    '- A count of tracks is "limit". A listening session ("two hours of ...") is limit = 15',
+    '  per hour, max 100. A length of the tracks themselves ("under 3 minutes", "long mixes")',
+    '  is duration_max / duration_min, in seconds.',
     '- "next page" or "skip N" is offset. Otherwise omit offset.',
     '- "Similar to X", "like X" or anything you cannot filter: put the name X in "query"',
     '  if given, otherwise {}.',
@@ -506,6 +534,7 @@ export function buildSystemPrompt(profile: LibraryProfile | null): string {
     `  sad, melancholic           -> mood ["sad"], valence_max ${f.valence.sad}`,
     `  happy, upbeat, sunny       -> mood ["happy"], valence_min ${f.valence.happy}`,
     `  fast / slow                -> bpm_min ${f.bpm.fast} / bpm_max ${f.bpm.slow}`,
+    `  short / long               -> duration_max ${f.duration.short} / duration_min ${f.duration.long}`,
     `  aggressive, heavy          -> mood ["aggressive"], arousal_min ${f.arousal.aggressive}`,
   ];
   if (profile) {
@@ -539,6 +568,8 @@ export const INTENT_EXAMPLES: [string, string][] = [
   ['something in B minor, danceable', '{"key":["Bm"],"danceability_min":65}'],
   ['música tranquila para estudiar', '{"mood":["relaxed"],"energy_max":40}'],
   ['slowest tracks first', '{"sort":"bpm"}'],
+  ['tracks under three minutes', '{"duration_max":180}'],
+  ['long mixes', '{"duration_min":480}'],
   ['play something', '{}'],
 ];
 /**
@@ -567,6 +598,8 @@ export function intentExamples(profile: LibraryProfile | null = null): [string, 
       JSON.stringify({ mood: ['relaxed'], energy_max: f.energy.chill }),
     ],
     ['slowest tracks first', '{"sort":"bpm"}'],
+    ['tracks under three minutes', JSON.stringify({ duration_max: f.duration.short })],
+    ['long mixes', JSON.stringify({ duration_min: f.duration.long })],
     ['play something', '{}'],
   ];
 }
@@ -574,7 +607,7 @@ export function intentExamples(profile: LibraryProfile | null = null): [string, 
 
 /**
  * The Intent's shape, passed as `responseConstraint`. It states the same contract `parseIntent`
- * enforces: closed keys, the range the Snapshot stores, and the five moods and five sorts. The
+ * enforces: closed keys, the range the Snapshot stores, and the closed moods and sorts. The
  * schema is a request and the parser is the judge — a model that ignores a range is still
  * clamped — but with the constraint Chrome returns this shape, and the spike showed it accepts
  * ranges, enums and `additionalProperties` (ADR 0084).
@@ -594,6 +627,8 @@ export const INTENT_SCHEMA = {
     valence_max: { type: 'integer', minimum: 0, maximum: 100 },
     arousal_min: { type: 'integer', minimum: 0, maximum: 100 },
     arousal_max: { type: 'integer', minimum: 0, maximum: 100 },
+    duration_min: { type: 'number', minimum: DURATION_RANGE.min, maximum: DURATION_RANGE.max },
+    duration_max: { type: 'number', minimum: DURATION_RANGE.min, maximum: DURATION_RANGE.max },
     key: { type: 'array', items: { type: 'string' } },
     mood: { type: 'array', items: { type: 'string', enum: MOOD_VALUES } },
     sort: { type: 'string', enum: SORT_VALUES },
@@ -623,6 +658,7 @@ export function intentSchema(profile: LibraryProfile | null = null) {
     ['danceability_min', 'danceability_max', f.danceability],
     ['valence_min', 'valence_max', f.valence],
     ['arousal_min', 'arousal_max', f.arousal],
+    ['duration_min', 'duration_max', f.duration],
   ] as const;
   for (const [minKey, maxKey, axis] of axes) {
     properties[minKey] = {

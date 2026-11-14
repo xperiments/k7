@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { ModelManifest } from '../src/domain/analysis';
 import { modelSetId } from '../src/domain/snapshot';
@@ -33,6 +34,33 @@ describe('modelSetId', () => {
   });
 });
 
+describe('a length the cached analysis lacks', () => {
+  it('is read from the file at export, so an older cached row is not all-unknown', async () => {
+    const bytes = readFileSync(new URL('../../host/fixtures/tone-44100.flac', import.meta.url));
+    const file = new File([bytes], 'tone.flac', { type: 'audio/flac' });
+    const item: SnapshotItem = {
+      file,
+      analysis: {
+        ...sampleAnalysis,
+        track: {
+          ...sampleAnalysis.track,
+          name: 'tone.flac',
+          path: 'CARD/music/tone.flac',
+          size: file.size,
+          duration: 0,
+        },
+      },
+    };
+
+    const { bytes: image, tracks } = await buildSnapshotExport([item], manifest);
+    expect(tracks).toBe(1);
+    const view = new DataView(image.buffer, image.byteOffset, image.byteLength);
+    const length = view.getUint32(80 + 8, true);
+    expect(length).toBeGreaterThan(0);
+    expect(length).toBeLessThan(60 * 60 * 1000);
+  });
+});
+
 describe('building the snapshot for the player', () => {
   it('writes the tracks below a music directory and counts the rest', async () => {
     const { bytes, tracks, skipped } = await buildSnapshotExport(
@@ -46,11 +74,11 @@ describe('building the snapshot for the player', () => {
     /* The header, read here rather than through the module's own writer. */
     expect(new TextDecoder().decode(bytes.subarray(0, 8))).toBe('K7SNAP\0\0');
     const view = new DataView(bytes.buffer);
-    expect(view.getUint16(8, true)).toBe(3);
+    expect(view.getUint16(8, true)).toBe(4);
     expect(view.getUint16(10, true)).toBe(80);
     expect(view.getUint32(12, true)).toBe(bytes.length);
     expect(view.getUint32(16, true)).toBe(1);
-    expect(view.getUint32(20, true)).toBe(32);
+    expect(view.getUint32(20, true)).toBe(36);
     expect(view.getUint16(64, true)).toBe(0);
     expect(view.getUint16(66, true)).toBe(32);
     expect(view.getUint32(76, true)).toBe(view.getUint32(32, true));
@@ -67,8 +95,8 @@ describe('building the snapshot for the player', () => {
     );
     expect(tracks).toBe(0);
     expect(skipped).toBe(1);
-    expect(bytes.length).toBe(80); // a version 3 header and nothing else
-    expect(new DataView(bytes.buffer).getUint16(8, true)).toBe(3);
+    expect(bytes.length).toBe(80); // a version 4 header and nothing else
+    expect(new DataView(bytes.buffer).getUint16(8, true)).toBe(4);
     expect(new DataView(bytes.buffer).getUint16(10, true)).toBe(80);
     expect(new DataView(bytes.buffer).getUint16(64, true)).toBe(0); // list_count
   });

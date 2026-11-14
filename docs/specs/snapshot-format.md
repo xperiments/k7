@@ -17,13 +17,15 @@ Everything here is normative unless marked **[producer]** (a rule only the host 
   `0xFF`; the reader maps 127 to it).
 - BPM is BPM × 10, folded to `700..1800`, encoded as `bpm_x10 - 699` in `1..1101`; `0` means
   unknown.
+- A track's length is whole milliseconds in `0..4294967295`; `0` means unknown. The value is
+  the decoded duration rounded half away from zero, and is never interpreted as a file size.
 - Key is `0` unknown or `1..24`; mood bits and source flags are bit fields.
 - "Unknown" has exactly one representation per field. A field is never absent — a missing
   measurement is an unknown value, not a shorter record.
 - Offsets and lengths are unsigned and validated by the reader before use.
 
-**This is format version 3 only.** Versions 1 and 2, and the `XTAPESNP` magic that preceded the
-rename, are refused. A v3 reader accepts nothing else (ADR 0069); the producer writes nothing
+**This is format version 4 only.** Versions 1, 2 and 3, and the `XTAPESNP` magic that preceded
+the rename, are refused. A v4 reader accepts nothing else (ADR 0087); the producer writes nothing
 else.
 
 ## 2. Image layout
@@ -31,14 +33,14 @@ else.
 ```text
 +------------------------------------------------------------------+
 | header        80 B   magic, version, sizes, provenance, CRC      |
-| rows          row_count x 32 B, strictly ascending by fingerprint|
+| rows          row_count x 36 B, strictly ascending by fingerprint|
 | string pool   pool_size B, UTF-8, NUL-terminated, interned       |
 | lists         list_count x 32 B, strictly ascending by list id   |
 | list rows     list_rows x 4 B, tiled by the lists in list order  |
 +------------------------------------------------------------------+
 ```
 
-`total_size = 80 + row_count * 32 + pool_size + list_count * 32 + list_rows * 4`. That equality
+`total_size = 80 + row_count * 36 + pool_size + list_count * 32 + list_rows * 4`. That equality
 is checked, not assumed. There is no padding between sections and no second copy.
 
 The string pool has two regions:
@@ -60,11 +62,11 @@ The image is written at offset 0 of the `snapshot` partition. The file's length 
 | Offset | Size | Field | Value |
 |---:|---:|---|---|
 | 0 | 8 | `magic` | ASCII `K7SNAP`, NUL-padded to 8 bytes |
-| 8 | 2 | `format_version` | `3` |
+| 8 | 2 | `format_version` | `4` |
 | 10 | 2 | `header_size` | `80` |
 | 12 | 4 | `total_size` | image length in bytes, header included |
 | 16 | 4 | `row_count` | number of rows |
-| 20 | 4 | `row_size` | `32` |
+| 20 | 4 | `row_size` | `36` |
 | 24 | 8 | `generation` | Unix seconds (UTC) when the host built the image |
 | 32 | 4 | `pool_size` | length of the whole string pool in bytes |
 | 36 | 4 | `crc32` | CRC-32/IEEE of bytes `[80, total_size)` |
@@ -86,20 +88,22 @@ rows — and nothing in the header itself.
 used: FNV-1a 64 over the sorted, newline-joined descriptors (model name and content hash), no
 trailing newline.
 
-## 4. Row (32 bytes)
+## 4. Row (36 bytes)
 
 | Offset | Size | Field | Value |
 |---:|---:|---|---|
 | 0 | 8 | `fingerprint` | FNV-1a 64 of the relative path (§6) |
-| 8 | 4 | `size` | file size in bytes, as the filesystem reports it |
-| 12 | 3 | `title_offset` | offset into the pool of the title |
-| 15 | 3 | `artist_offset` | offset of the artist |
-| 18 | 3 | `album_offset` | offset of the album |
-| 21 | 3 | `genre_offset` | offset of the genre |
-| 24 | 8 | `measurements` | the packed word below |
+| 8 | 4 | `duration_ms` | the decoded length in whole milliseconds; `0` unknown |
+| 12 | 4 | `size` | file size in bytes, as the filesystem reports it |
+| 16 | 3 | `title_offset` | offset into the pool of the title |
+| 19 | 3 | `artist_offset` | offset of the artist |
+| 22 | 3 | `album_offset` | offset of the album |
+| 25 | 3 | `genre_offset` | offset of the genre |
+| 28 | 8 | `measurements` | the packed word below |
 
 All four offsets are relative to the start of the pool, and each points at one NUL-terminated
-string. Offsets are 24-bit, so the whole pool is at most 16 MiB.
+string. Offsets are 24-bit, so the whole pool is at most 16 MiB. `duration_ms` is informational:
+it is not part of the binding and never changes whether a row matches.
 
 `measurements` is one little-endian `uint64`, packed from the least significant bit:
 
@@ -243,17 +247,18 @@ the file's size or content.
 **[reader]** An image is usable only if all of these hold. Any failure means "no Snapshot".
 
 1. `total_size >= 80` and `total_size <= partition size`.
-2. `magic` is `K7SNAP`, `format_version == 3`, `header_size == 80`, `row_size == 32`.
+2. `magic` is `K7SNAP`, `format_version == 4`, `header_size == 80`, `row_size == 36`.
 3. Header reserved bytes (`56..63`, `70..71`) are zero.
 4. `row_pool_size <= pool_size`.
-5. `total_size == 80 + row_count*32 + pool_size + list_count*32 + list_rows*4`, with no
+5. `total_size == 80 + row_count*36 + pool_size + list_count*32 + list_rows*4`, with no
    32-bit overflow in any multiplication.
 6. `crc32` matches `[80, total_size)`.
 7. Rows are strictly ascending by `fingerprint`.
 8. Each of a row's four offsets is `< row_pool_size`, and its string terminates inside
    `[0, row_pool_size)`.
 9. `bpm_code <= 1101`; `key <= 24`; each percentage is `<= 100` or `== 127`; `mood_bits <= 0x1F`;
-   `source_flags <= 0x3F`; the measurement word's bits 62–63 are zero.
+   `source_flags <= 0x3F`; the measurement word's bits 62–63 are zero. `duration_ms` is any
+   `uint32`; `0` is the only unknown, and no range is refused.
 10. `list_count <= 64`, `list_rows <= 8192`, `list_size == 32`, `list_row_size == 4`; list ids
     strictly ascending; each list's name and paths terminate in
     `[row_pool_size, pool_size)`; the lists tile the list-row array exactly (the first starts at
@@ -269,20 +274,20 @@ rounded half away from zero. Two runs over an unchanged library produce byte-ide
 
 ## 11. Size
 
-Rows are fixed at 32 B; the pool is one copy of each distinct string.
+Rows are fixed at 36 B; the pool is one copy of each distinct string.
 
 | Tracks | Rows | Pool (est., interned) | Image |
 |---:|---:|---:|---:|
-| 1,000 | 32 KB | ~25 KB | ~57 KB |
-| 5,000 | 160 KB | ~100 KB | ~260 KB |
-| 20,000 | 640 KB | ~350 KB | ~1 MB |
+| 1,000 | 36 KB | ~25 KB | ~61 KB |
+| 5,000 | 180 KB | ~100 KB | ~280 KB |
+| 20,000 | 720 KB | ~350 KB | ~1.07 MB |
 
 The 5,000-track image fits the 2 MB partition with room for a second axis of growth; at 20,000
 the interned format still fits, which the run-level v2 pool did not.
 
 ## 12. Versioning
 
-`format_version = 3` is the only version this project reads or writes. There is no compatibility
-shim for v1 or v2 and no legacy magic; an unknown version is refused, and the device serves
-without analysis until a v3 image is applied. A Snapshot is cheap to regenerate, so there is no
+`format_version = 4` is the only version this project reads or writes. There is no compatibility
+shim for v1, v2 or v3 and no legacy magic; an unknown version is refused, and the device serves
+without analysis until a v4 image is applied. A Snapshot is cheap to regenerate, so there is no
 reason to guess at a half-understood image.

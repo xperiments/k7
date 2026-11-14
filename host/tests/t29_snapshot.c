@@ -17,7 +17,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "json.h"
 #include "snapshot.h"
+#include <math.h>
 
 /* ------------------------------------------------------------ independent bits */
 
@@ -110,15 +112,15 @@ static void patch64(uint8_t *p, size_t at, uint64_t v)
 static void patch_field(uint8_t *img, size_t row_at, int shift, int width, uint64_t v)
 {
     uint64_t mask = ((1ull << width) - 1ull) << shift;
-    uint64_t m = get64(img + row_at + 24);
-    patch64(img, row_at + 24, (m & ~mask) | ((v << shift) & mask));
+    uint64_t m = get64(img + row_at + 28);
+    patch64(img, row_at + 28, (m & ~mask) | ((v << shift) & mask));
 }
 
 static const char MAGIC[8] = {'K', '7', 'S', 'N', 'A', 'P', 0, 0};
 /* The wire values this test owns: the reader must not define the oracle. */
-#define IMG_VERSION 3u
+#define IMG_VERSION 4u
 #define IMG_HEADER_SIZE 80u
-#define IMG_ROW_SIZE 32u
+#define IMG_ROW_SIZE 36u
 #define IMG_LIST_SIZE 32u
 #define IMG_LIST_ROW_SIZE 4u
 #define IMG_MAX_LIST_ROWS 8192u
@@ -130,6 +132,7 @@ typedef struct {
     uint32_t title_off, artist_off, album_off, genre_off;
     uint16_t bpm_x10; /* 0 unknown, otherwise 700..1800 */
     uint8_t  key, energy, dance, valence, arousal, mood, conf, src; /* file values */
+    uint32_t duration_ms; /* 0 unknown; defaults to zero in an initializer that omits it */
 } row_t;
 
 static uint64_t pack_measurements(const row_t *r)
@@ -149,6 +152,7 @@ static uint64_t pack_measurements(const row_t *r)
 static void put_row(buf_t *b, const row_t *r)
 {
     put64(b, r->fp);
+    put32(b, r->duration_ms);
     put32(b, r->size);
     put24(b, r->title_off);
     put24(b, r->artist_off);
@@ -167,7 +171,7 @@ typedef struct {
     uint32_t        n;
 } list_t;
 
-/* A whole version 3 image: header, rows, pool, list records, list rows. The row
+/* A whole version 4 image: header, rows, pool, list records, list rows. The row
  * strings are the caller's pool (offsets are into it); the list strings follow them,
  * each list's name and then its paths, in list order. */
 static uint8_t *build_image_lists(size_t *out_n, const row_t *rows, size_t n,
@@ -287,10 +291,10 @@ static const uint32_t POOL_ROW1_AT = 58u; /* the first four strings together */
 static const row_t ROWS[] = {
     {0x1111111111111111ull, 1000, POOL0_TITLE, POOL0_ARTIST, POOL0_ALBUM, POOL0_GENRE,
      1245, 8, 78, 61, 40, 78, SNAPSHOT_MOOD_HAPPY | SNAPSHOT_MOOD_PARTY, 72,
-     SNAPSHOT_SRC_VA_PRESENT},
+     SNAPSHOT_SRC_VA_PRESENT, 342000u},
     {0x2222222222222222ull, 2000, POOL1_TITLE, POOL1_ARTIST, POOL1_ALBUM, POOL1_GENRE,
      920, 5, FILE_UNKNOWN_PCT, 40, FILE_UNKNOWN_PCT, 30, SNAPSHOT_MOOD_RELAXED,
-     FILE_UNKNOWN_PCT, SNAPSHOT_SRC_BPM_TAGGED | SNAPSHOT_SRC_KEY_TAGGED},
+     FILE_UNKNOWN_PCT, SNAPSHOT_SRC_BPM_TAGGED | SNAPSHOT_SRC_KEY_TAGGED, 0u},
 };
 
 /* --------------------------------------------------------------- fixtures */
@@ -321,9 +325,9 @@ static void test_lists(void)
     uint8_t *img = build_image_lists(&n, ROWS, 2, POOL, POOL_N, LISTS, 2);
 
     snapshot_t *s = open_ok(img, n);
-    CHECK(s != NULL, "a version 3 image with lists opens");
+    CHECK(s != NULL, "a version 4 image with lists opens");
     if (!s) return;
-    CHECK_EQ(snapshot_version(s), 3, "version 3");
+    CHECK_EQ(snapshot_version(s), 4, "version 4");
     CHECK_EQ(snapshot_lists(s), 2, "two lists");
     CHECK_EQ(snapshot_list_rows_total(s), 2, "two list rows");
     CHECK_EQ(snapshot_rows(s), 2, "rows are still readable");
@@ -459,14 +463,14 @@ static void test_row_offset_into_list_region(void)
     snapshot_t *s = NULL;
 
     memcpy(bad, img, n);
-    patch24(bad, IMG_HEADER_SIZE + 12, POOL_N); /* title -> first list name */
+    patch24(bad, IMG_HEADER_SIZE + 16, POOL_N); /* title -> first list name */
     fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID,
           "a row string offset in the list region is refused");
 
     /* the same offset one byte before the list region is fine */
     memcpy(bad, img, n);
-    patch24(bad, IMG_HEADER_SIZE + 12, POOL_N - 6u); /* inside "jazz" */
+    patch24(bad, IMG_HEADER_SIZE + 16, POOL_N - 6u); /* inside "jazz" */
     fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_OK, "a row string inside the row region opens");
     snapshot_close(s);
@@ -493,7 +497,7 @@ static void test_validation(void)
 
     snapshot_t *s = open_ok(img, n);
     CHECK(s != NULL, "two-row image opens");
-    CHECK_EQ(snapshot_version(s), 3, "version 3");
+    CHECK_EQ(snapshot_version(s), 4, "version 4");
     CHECK_EQ(snapshot_rows(s), 2, "rows");
     CHECK_EQ(snapshot_generation(s), 1767225600u, "generation");
     CHECK_EQ(snapshot_analyser(s), 300, "analyser");
@@ -508,11 +512,13 @@ static void test_validation(void)
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "bad magic refused");
     memcpy(bad, img, n);
 
-    /* version 2 and 1 are refused: there is no compatibility path. */
-    bad[8] = 2;
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a version 2 image refused");
+    /* versions 1, 2 and 3 are refused: there is no compatibility path. */
     bad[8] = 1;
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a version 1 image refused");
+    bad[8] = 2;
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a version 2 image refused");
+    bad[8] = 3;
+    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a version 3 image refused");
     memcpy(bad, img, n);
 
     /* header size */
@@ -572,7 +578,7 @@ static void test_validation(void)
 
     /* a string offset outside the row pool */
     memcpy(bad, img, n);
-    patch24(bad, IMG_HEADER_SIZE + 12, (uint32_t)POOL_N);
+    patch24(bad, IMG_HEADER_SIZE + 16, (uint32_t)POOL_N);
     fix_crc(bad, n);
     CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "string offset refused");
 
@@ -665,6 +671,7 @@ static void test_lookup(void)
 
     snapshot_row_t row;
     CHECK(snapshot_find(s, 0x1111111111111111ull, 1000, &row), "first row found");
+    CHECK_EQ(row.duration_ms, 342000u, "the track's length in milliseconds");
     CHECK_EQ(row.bpm_x10, 1245, "bpm");
     CHECK_EQ(row.key, 8, "key");
     CHECK_EQ(row.energy, 78, "energy");
@@ -673,6 +680,7 @@ static void test_lookup(void)
     CHECK(!snapshot_find(s, 0x3333333333333333ull, 1000, &row), "unknown fingerprint");
 
     CHECK(snapshot_find(s, 0x2222222222222222ull, 2000, &row), "second row found");
+    CHECK_EQ(row.duration_ms, 0u, "a length that was never reported is zero");
     CHECK_EQ(row.energy, SNAPSHOT_UNKNOWN_PCT, "the file's 127 is exposed as 0xFF");
     CHECK_EQ(row.confidence, SNAPSHOT_UNKNOWN_PCT, "confidence unknown");
     CHECK(strcmp(snapshot_row_string(s, &row, SNAPSHOT_STRING_TITLE), "So What") == 0,
@@ -714,19 +722,20 @@ static void test_shared_strings_predicates_and_bounds(void)
     };
     static const row_t SHARED_ROWS[] = {
         {0xAAAA000000000001ull, 100, SH_TITLE, SH_ARTIST, SH_ALBUM, SH_ROCK, 700, 24,
-         FILE_UNKNOWN_PCT, 0, 100, FILE_UNKNOWN_PCT, 0x1F, FILE_UNKNOWN_PCT, 0x3F},
+         FILE_UNKNOWN_PCT, 0, 100, FILE_UNKNOWN_PCT, 0x1F, FILE_UNKNOWN_PCT, 0x3F,
+         1u},
         {0xBBBB000000000002ull, 200, SH_TITLE, SH_ARTIST, SH_ALBUM, SH_JAZZ, 1800, 0,
-         0, 100, FILE_UNKNOWN_PCT, 0, 0x01, FILE_UNKNOWN_PCT, 0},
+         0, 100, FILE_UNKNOWN_PCT, 0, 0x01, FILE_UNKNOWN_PCT, 0, 4294967295u},
     };
     size_t n = 0;
     uint8_t *img = build_image(&n, SHARED_ROWS, 2, SHARED_POOL, sizeof SHARED_POOL - 1u);
 
     /* The builder wrote the file's own spelling of unknown, not the C marker. */
-    CHECK_EQ((int)((get64(img + IMG_HEADER_SIZE + 24) >> 16) & 0x7Fu), 127,
+    CHECK_EQ((int)((get64(img + IMG_HEADER_SIZE + 28) >> 16) & 0x7Fu), 127,
              "the file stores 127 for unknown");
     /* And both ends of the packed BPM range, as codes 1 and 1101. */
-    CHECK_EQ((int)(get64(img + IMG_HEADER_SIZE + 24) & 0x7FFu), 1, "bpm code 1");
-    CHECK_EQ((int)(get64(img + IMG_HEADER_SIZE + IMG_ROW_SIZE + 24) & 0x7FFu), 1101,
+    CHECK_EQ((int)(get64(img + IMG_HEADER_SIZE + 28) & 0x7FFu), 1, "bpm code 1");
+    CHECK_EQ((int)(get64(img + IMG_HEADER_SIZE + IMG_ROW_SIZE + 28) & 0x7FFu), 1101,
              "bpm code 1101");
 
     snapshot_t *s = open_ok(img, n);
@@ -736,6 +745,7 @@ static void test_shared_strings_predicates_and_bounds(void)
     }
     snapshot_row_t row;
     CHECK(snapshot_find(s, SHARED_ROWS[0].fp, 100, &row), "the 700 BPM row");
+    CHECK_EQ(row.duration_ms, 1u, "the shortest representable length");
     CHECK_EQ(row.bpm_x10, 700, "the bottom of the BPM range");
     CHECK_EQ(row.key, 24, "12B");
     CHECK_EQ(row.energy, SNAPSHOT_UNKNOWN_PCT, "unknown energy");
@@ -749,6 +759,7 @@ static void test_shared_strings_predicates_and_bounds(void)
           "the shared title");
 
     CHECK(snapshot_find(s, SHARED_ROWS[1].fp, 200, &row), "the 1800 BPM row");
+    CHECK_EQ(row.duration_ms, 4294967295u, "the field's whole 32-bit range");
     CHECK_EQ(row.bpm_x10, 1800, "the top of the BPM range");
     CHECK_EQ(row.key, 0, "unknown key");
     CHECK_EQ(row.energy, 0, "a measured zero is not unknown");
@@ -785,7 +796,9 @@ static void test_keys(void)
     CHECK(snapshot_sort_parse("bpm", &sort) && sort == SNAPSHOT_SORT_BPM, "sort bpm");
     CHECK(snapshot_sort_parse("path", &sort) && sort == SNAPSHOT_SORT_PATH, "sort path");
     CHECK(snapshot_sort_parse("title", &sort) && sort == SNAPSHOT_SORT_TITLE, "sort title");
-    CHECK(!snapshot_sort_parse("duration", &sort), "duration is not a sort");
+    CHECK(snapshot_sort_parse("duration", &sort) && sort == SNAPSHOT_SORT_DURATION,
+          "sort duration");
+    CHECK(!snapshot_sort_parse("length", &sort), "length is not a sort");
 }
 
 static void test_filters(void)
@@ -1103,6 +1116,296 @@ static int cmp_row_fp(const void *a, const void *b)
     return x->fp < y->fp ? -1 : x->fp > y->fp ? 1 : 0;
 }
 
+
+/* ------------------------------------------------------- conformance corpus */
+
+/* One JSON fixture, read by this test and by the web test: the S4 rule says the two
+ * implementations must agree on filter semantics, and this is the file that says what
+ * agreeing means. The tests may share the corpus; they do not share the implementation. */
+#ifndef SNAPSHOT_CONFORMANCE
+#define SNAPSHOT_CONFORMANCE "tests/snapshot-conformance.json"
+#endif
+
+typedef struct {
+    char  *p;
+    size_t n, cap;
+} pool_t;
+
+static void pool_reserve(pool_t *pool, size_t extra)
+{
+    if (pool->n + extra <= pool->cap) return;
+    size_t cap = pool->cap ? pool->cap * 2 : 128;
+    while (cap < pool->n + extra) cap *= 2;
+    char *q = realloc(pool->p, cap);
+    if (!q) abort();
+    pool->p = q;
+    pool->cap = cap;
+}
+
+/* The row strings are interned exactly as the format's §7 requires, so the fixture's
+ * repeated artist and album names are stored once and the offsets stay small. */
+static uint32_t pool_intern(pool_t *pool, const char *text)
+{
+    for (size_t at = 0; at < pool->n; at += strlen(pool->p + at) + 1)
+        if (strcmp(pool->p + at, text) == 0) return (uint32_t)at;
+    uint32_t offset = (uint32_t)pool->n;
+    size_t len = strlen(text);
+    pool_reserve(pool, len + 1);
+    memcpy(pool->p + pool->n, text, len + 1);
+    pool->n += len + 1;
+    return offset;
+}
+
+static char *read_text(const char *path, size_t *out_n)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return NULL; }
+    long n = ftell(f);
+    if (n < 0) { fclose(f); return NULL; }
+    rewind(f);
+    char *p = malloc((size_t)n + 1);
+    if (!p) { fclose(f); return NULL; }
+    size_t got = fread(p, 1, (size_t)n, f);
+    fclose(f);
+    p[got] = 0;
+    *out_n = got;
+    return p;
+}
+
+static bool tok_text(const char *body, const json_tok_t *t, int idx, char *out, size_t cap)
+{
+    if (idx < 0 || t[idx].type != JSON_TOK_STRING) return false;
+    return json_tok_unescape(body, &t[idx], out, cap);
+}
+
+static bool tok_number(const char *body, const json_tok_t *t, int idx, double *out)
+{
+    if (idx < 0 || t[idx].type != JSON_TOK_PRIMITIVE) return false;
+    size_t n = (size_t)(t[idx].end - t[idx].start);
+    char buf[40];
+    if (n == 0 || n >= sizeof buf) return false;
+    memcpy(buf, body + t[idx].start, n);
+    buf[n] = 0;
+    char *end = NULL;
+    double v = strtod(buf, &end);
+    if (!end || *end || !isfinite(v)) return false;
+    *out = v;
+    return true;
+}
+
+#define CONFORMANCE_ROWS 64
+
+static void test_conformance(void)
+{
+    size_t body_n = 0;
+    char *body = read_text(SNAPSHOT_CONFORMANCE, &body_n);
+    CHECK(body != NULL, "the conformance corpus is readable: %s", SNAPSHOT_CONFORMANCE);
+    if (!body) return;
+
+    static json_tok_t tok[4096];
+    int nt = 0;
+    CHECK(json_parse(body, tok, (int)(sizeof tok / sizeof tok[0]), &nt), "the corpus is JSON");
+    if (nt <= 0) { free(body); return; }
+
+    int tracks_arr = json_tok_member(body, tok, nt, 0, "tracks");
+    int cases_arr = json_tok_member(body, tok, nt, 0, "cases");
+    CHECK(tracks_arr >= 0 && tok[tracks_arr].type == JSON_TOK_ARRAY, "the corpus has tracks");
+    CHECK(cases_arr >= 0 && tok[cases_arr].type == JSON_TOK_ARRAY, "the corpus has cases");
+    if (tracks_arr < 0 || cases_arr < 0) { free(body); return; }
+
+    static row_t rows[CONFORMANCE_ROWS];
+    static char paths[CONFORMANCE_ROWS][256];
+    static char strings[CONFORMANCE_ROWS][4][128];
+    static uint32_t sizes[CONFORMANCE_ROWS];
+    memset(rows, 0, sizeof rows);
+
+    int nrows = 0;
+    for (int i = 0; i < CONFORMANCE_ROWS; i++) {
+        int obj = json_tok_array_item(tok, nt, tracks_arr, i);
+        if (obj < 0) break;
+        if (tok[obj].type != JSON_TOK_OBJECT) break;
+        row_t *r = &rows[i];
+        CHECK(tok_text(body, tok, json_tok_member(body, tok, nt, obj, "path"), paths[i],
+                       sizeof paths[i]),
+              "track %d has a path", i);
+        double v = 0;
+        CHECK(tok_number(body, tok, json_tok_member(body, tok, nt, obj, "size"), &v),
+              "track %d has a size", i);
+        sizes[i] = (uint32_t)v;
+        r->fp = snapshot_path_hash(paths[i]);
+        r->size = (uint32_t)v;
+        if (tok_number(body, tok, json_tok_member(body, tok, nt, obj, "duration_ms"), &v))
+            r->duration_ms = (uint32_t)v;
+        double bpm = 0;
+        if (tok_number(body, tok, json_tok_member(body, tok, nt, obj, "bpm"), &bpm) && bpm > 0)
+            r->bpm_x10 = (uint16_t)(bpm * 10.0 + 0.5);
+        char key[32] = {0};
+        tok_text(body, tok, json_tok_member(body, tok, nt, obj, "key"), key, sizeof key);
+        r->key = snapshot_key_parse(key);
+
+        static const char *const pct_keys[5] = {"energy", "danceability", "valence",
+                                                "arousal", "confidence"};
+        uint8_t *pct[5] = {&r->energy, &r->dance, &r->valence, &r->arousal, &r->conf};
+        for (int k = 0; k < 5; k++) {
+            *pct[k] = FILE_UNKNOWN_PCT;
+            double p = 0;
+            if (tok_number(body, tok, json_tok_member(body, tok, nt, obj, pct_keys[k]), &p))
+                *pct[k] = (uint8_t)p;
+        }
+        int moods = json_tok_member(body, tok, nt, obj, "mood");
+        if (moods >= 0 && tok[moods].type == JSON_TOK_ARRAY) {
+            for (int k = 0;; k++) {
+                int item = json_tok_array_item(tok, nt, moods, k);
+                if (item < 0) break;
+                char name[24] = {0};
+                if (!tok_text(body, tok, item, name, sizeof name)) continue;
+                int bit = snapshot_mood_from_name(name);
+                if (bit >= 0) r->mood |= (uint8_t)(1u << bit);
+            }
+        }
+        for (int k = 0; k < 4; k++) {
+            static const char *const name[4] = {"title", "artist", "album", "genre"};
+            tok_text(body, tok, json_tok_member(body, tok, nt, obj, name[k]),
+                     strings[i][k], sizeof strings[i][k]);
+        }
+        nrows++;
+    }
+    CHECK(nrows > 0, "the corpus has rows");
+
+    pool_t pool = {0};
+    for (int i = 0; i < nrows; i++) {
+        rows[i].title_off = pool_intern(&pool, strings[i][0]);
+        rows[i].artist_off = pool_intern(&pool, strings[i][1]);
+        rows[i].album_off = pool_intern(&pool, strings[i][2]);
+        rows[i].genre_off = pool_intern(&pool, strings[i][3]);
+    }
+
+    static row_t sorted[CONFORMANCE_ROWS];
+    memcpy(sorted, rows, sizeof(row_t) * (size_t)nrows);
+    qsort(sorted, (size_t)nrows, sizeof *sorted, cmp_row_fp);
+
+    size_t image_n = 0;
+    uint8_t *image = build_image(&image_n, sorted, (size_t)nrows, pool.p, pool.n);
+    snapshot_t *sn = open_ok(image, image_n);
+    CHECK(sn != NULL, "the corpus image opens");
+    if (!sn) { free(image); free(pool.p); free(body); return; }
+
+    int nc = 0;
+    for (int c = 0; c < 64; c++) {
+        int obj = json_tok_array_item(tok, nt, cases_arr, c);
+        if (obj < 0) break;
+        if (tok[obj].type != JSON_TOK_OBJECT) break;
+        nc++;
+        char name[80] = {0};
+        tok_text(body, tok, json_tok_member(body, tok, nt, obj, "name"), name, sizeof name);
+
+        snapshot_filter_t f;
+        snapshot_filter_defaults(&f);
+        int args = json_tok_member(body, tok, nt, obj, "args");
+        char query[256] = {0}, genre[64] = {0}, sort[16] = {0};
+        int offset = 0, limit = 50;
+        if (args >= 0) {
+            tok_text(body, tok, json_tok_member(body, tok, nt, args, "query"), query,
+                     sizeof query);
+            tok_text(body, tok, json_tok_member(body, tok, nt, args, "genre"), genre,
+                     sizeof genre);
+            tok_text(body, tok, json_tok_member(body, tok, nt, args, "sort"), sort,
+                     sizeof sort);
+            double v = 0;
+            if (tok_number(body, tok, json_tok_member(body, tok, nt, args, "offset"), &v))
+                offset = (int)v;
+            if (tok_number(body, tok, json_tok_member(body, tok, nt, args, "limit"), &v))
+                limit = (int)v;
+            if (tok_number(body, tok, json_tok_member(body, tok, nt, args, "duration_min"), &v))
+                f.duration_min_ms = v > 0 ? (uint32_t)(v * 1000.0 + 0.5) : 0;
+            if (tok_number(body, tok, json_tok_member(body, tok, nt, args, "duration_max"), &v))
+                f.duration_max_ms = v > 0 ? (uint32_t)(v * 1000.0 + 0.5) : 0;
+            if (tok_number(body, tok, json_tok_member(body, tok, nt, args, "bpm_min"), &v))
+                f.bpm_min_x10 = (uint16_t)(v * 10.0 + 0.5);
+            if (tok_number(body, tok, json_tok_member(body, tok, nt, args, "bpm_max"), &v))
+                f.bpm_max_x10 = (uint16_t)(v * 10.0 + 0.5);
+            static const char *const pct_args[8] = {
+                "energy_min", "energy_max", "danceability_min", "danceability_max",
+                "valence_min", "valence_max", "arousal_min", "arousal_max"};
+            uint8_t *pct[8] = {&f.energy_min, &f.energy_max, &f.danceability_min,
+                               &f.danceability_max, &f.valence_min, &f.valence_max,
+                               &f.arousal_min, &f.arousal_max};
+            for (int k = 0; k < 8; k++)
+                if (tok_number(body, tok, json_tok_member(body, tok, nt, args, pct_args[k]), &v))
+                    *pct[k] = (uint8_t)v;
+            int keys = json_tok_member(body, tok, nt, args, "key");
+            if (keys >= 0 && tok[keys].type == JSON_TOK_ARRAY) {
+                for (int k = 0;; k++) {
+                    int item = json_tok_array_item(tok, nt, keys, k);
+                    if (item < 0) break;
+                    char one[24] = {0};
+                    if (!tok_text(body, tok, item, one, sizeof one)) continue;
+                    uint8_t code = snapshot_key_parse(one);
+                    if (code) f.key_mask |= (uint16_t)(1u << (code - 1));
+                }
+            }
+            int moods = json_tok_member(body, tok, nt, args, "mood");
+            if (moods >= 0 && tok[moods].type == JSON_TOK_ARRAY) {
+                for (int k = 0;; k++) {
+                    int item = json_tok_array_item(tok, nt, moods, k);
+                    if (item < 0) break;
+                    char one[24] = {0};
+                    if (!tok_text(body, tok, item, one, sizeof one)) continue;
+                    int bit = snapshot_mood_from_name(one);
+                    if (bit >= 0) f.mood_mask |= (uint8_t)(1u << bit);
+                }
+            }
+            if (sort[0]) CHECK(snapshot_sort_parse(sort, &f.sort), "%s: sort %s", name, sort);
+            if (query[0]) f.query = query;
+            if (genre[0]) f.genre = genre;
+        }
+
+        snapshot_hits_t *hits = snapshot_hits_new((uint32_t)(offset + limit));
+        unsigned matched = 0;
+        for (int i = 0; i < nrows; i++) {
+            int64_t key = 0;
+            const char *str = NULL;
+            if (snapshot_matches(sn, &f, paths[i], sizes[i], &key, &str)) {
+                matched++;
+                snapshot_hits_add(hits, (uint32_t)i, key, str);
+            }
+        }
+
+        int expected = 0;
+        int expect_arr = json_tok_member(body, tok, nt, obj, "expect");
+        for (;;) {
+            int item = json_tok_array_item(tok, nt, expect_arr, expected);
+            if (item < 0) break;
+            expected++;
+        }
+        unsigned stored = snapshot_hits_count(hits);
+        unsigned page = stored > (unsigned)offset ? stored - (unsigned)offset : 0;
+        /* `expect` is the page the call answers with: offset and limit already applied. */
+        CHECK(page == (unsigned)expected, "%s: page has the expected length", name);
+        for (unsigned k = 0; k < page; k++) {
+            int item = json_tok_array_item(tok, nt, expect_arr, (int)k);
+            char want_path[256] = {0};
+            tok_text(body, tok, item, want_path, sizeof want_path);
+            uint32_t index = snapshot_hits_index(hits, k + (unsigned)offset);
+            CHECK(strcmp(paths[index], want_path) == 0, "%s: result %u", name, k);
+        }
+        int want_matched = expected;
+        double v = 0;
+        if (tok_number(body, tok, json_tok_member(body, tok, nt, obj, "matched"), &v))
+            want_matched = (int)v;
+        CHECK(matched == (unsigned)want_matched, "%s: matched count", name);
+        snapshot_hits_free(hits);
+    }
+    CHECK(nc > 0, "the corpus has cases");
+
+    snapshot_close(sn);
+    free(image);
+    free(pool.p);
+    free(body);
+}
+
+
 /* The stated target library: 5,000 rows, which is where the binary search and the
  * size arithmetic have to hold together. */
 static void test_many_rows(void)
@@ -1129,6 +1432,7 @@ static void test_many_rows(void)
         rows[i].arousal = (uint8_t)(i % 101);
         rows[i].mood = (uint8_t)(1u << (i % 5));
         rows[i].conf = 50;
+        rows[i].duration_ms = 60000u + (uint32_t)i;
     }
     qsort(rows, N, sizeof *rows, cmp_row_fp);
 
@@ -1143,7 +1447,7 @@ static void test_many_rows(void)
         for (int i = 0; i < N; i += 97) {
             snapshot_row_t row;
             if (snapshot_find(s, rows[i].fp, rows[i].size, &row) &&
-                row.bpm_x10 == rows[i].bpm_x10)
+                row.bpm_x10 == rows[i].bpm_x10 && row.duration_ms == rows[i].duration_ms)
                 found++;
         }
         CHECK_EQ(found, (N + 96) / 97, "every sampled row is found");
@@ -1169,6 +1473,7 @@ int main(void)
     test_lists();
     test_list_rejects();
     test_row_offset_into_list_region();
+    test_conformance();
     test_many_rows();
     TEST_END();
 }

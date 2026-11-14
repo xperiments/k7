@@ -332,7 +332,11 @@ $(BIN)/t27_timeline: $(OBJ)/timeline.o $(OBJ)/t27_timeline.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t29_snapshot: $(OBJ)/snapshot.o $(OBJ)/t29_snapshot.o
+# The one conformance corpus both implementations read. The C test needs the file's
+# absolute path because the test binary runs from anywhere.
+$(OBJ)/t29_snapshot.o: CFLAGS += -DSNAPSHOT_CONFORMANCE='"$(HERE)/tests/snapshot-conformance.json"'
+
+$(BIN)/t29_snapshot: $(OBJ)/snapshot.o $(OBJ)/json.o $(OBJ)/t29_snapshot.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

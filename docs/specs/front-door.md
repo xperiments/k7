@@ -29,7 +29,7 @@ vocabulary is [`web/CONTEXT.md`](../../web/CONTEXT.md); the device's is
 [`snapshot-format.md`](./snapshot-format.md).
 
 **Status:** built, flashed and running on the board over plain HTTP — the Shell (377 KiB packed),
-the four areas, the hash routes, `format_version 2` with the list area, `GET /api/playlists`,
+the four areas, the hash routes, the Snapshot's list area, `GET /api/playlists`,
 `GET /api/playlists/<id>`, `POST /api/playlists/select`, the selection remembered in NVS, and the
 broadcast walking a selected order. The page is served and its assets download from the device.
 What is not proven: a **selection restored across a reboot with a card mounted** (no card has been
@@ -122,7 +122,7 @@ separate, flash-sized decision — so what follows describes the device's behavi
 App's. `POST /api/snapshot` takes an `application/octet-stream` body — the `xtape.db` image —
 validates it in full before erasing anything, writes the snapshot partition, reads it back, and
 restarts in 1.5 s so the reply lands first. A refusal leaves the running snapshot untouched. The
-image may carry **Playlists** (`format_version 2`, §10 of the format); an accepted image replaces
+image may carry **Playlists** (`format_version 4`, §8 of the format); an accepted image replaces
 the previous lists entirely. The content type is also the CSRF guard: it is not CORS-safelisted,
 so another origin cannot send it without a preflight the device never answers.
 
@@ -145,7 +145,9 @@ is the honest reading of "play this now".
 **S1.** `GET /api/status` reports the **Card state**, the card's mark (`mark`: the `k7.card`
 id, or `null`), the Library's count and generation, what is Playing (`title`, `path`,
 `elapsed_ms`, `duration_ms`), and the order: `order` is `"tree"` or `"list"`, and `playlist` is
-`{"id","name"}` or `null`. It is `no-store` and answers only on its own path.
+`{"id","name"}` or `null`. `rescanning` is `true` while a Library rescan is running, so the
+App's Device card can say the card is being re-read and show the new generation when it
+publishes. It is `no-store` and answers only on its own path.
 
 **U4.** There is **no TLS**. No certificate is compiled in, no trust step exists, and a browser
 shows "Not secure" and no interstitial. The consequences are accepted, not hidden: no service
@@ -420,9 +422,9 @@ are the only source of names.
 | The firmware was built without a Shell | `/` answers `503` naming `/library`; every other route is unchanged |
 | An unregistered `/api/…` path | `404`, never the page |
 | A hash route the shell does not know | The shell's own not-found view, with the areas listed |
-| An upload that is not a snapshot, or is v1/v2-invalid | The reader's reason, `400`, partition untouched |
+| An upload that is not a snapshot, or is a version this reader refuses | The reader's reason, `400`, partition untouched |
 | An upload larger than the route allows | `413` before the body is read |
-| A v2 image on a firmware that knows only v1 | Refused as an unknown version; the running snapshot is untouched |
+| An image from an older format version | Refused as an unknown version; the running snapshot is untouched |
 | The device restarts after an upload | The reply is written first; the reader re-opens the new image at boot |
 | A selected Playlist disappears from a new image | Falls back to the tree's order, reported in status |
 | A Playlist row's file is gone or resized | Skipped at playback; shown as missing in the editor |
@@ -448,10 +450,10 @@ are the only source of names.
 | T6 | `/api/status` reports the card state within one poll of a removal and a reinsertion | board | **not proven** |
 | T7 | A cold cache loads the weights once; a warm cache starts with the network off | browser | **not proven** |
 | T8 | A tampered model is refused, by hash | host | **proven at the hash level** |
-| T9 | A v2 image with lists is accepted; one with a list row out of bounds, unsorted ids, a reserved byte or a bad CRC is refused | host | **proven** — `t29_snapshot` (v2 fixtures and every refusal) and `playlist_tests.py` |
+| T9 | A v4 image with lists is accepted; one with a list row out of bounds, unsorted ids, a reserved byte or a bad CRC is refused | host | **proven** — `t29_snapshot` (v4 fixtures and every refusal) and `playlist_tests.py` |
 | T10 | `select` applies the list, `404`s an unknown id, `409`s an empty one, and a pick outside the list drops it | host | **proven** — `playlist_tests.py` |
 | T10b | The choice is remembered across a reboot with a card mounted, and a stored id the new image lacks falls back | board | **not proven** — the board has had no card since the feature landed (the NVS write itself is proven: `select {"id":null}` answered 200 on the board, where the PSRAM-stack handler used to reset) |
-| T11 | A v1 image still applies on a v2 reader | host + board | **proven** — `playlist_tests.py` (v1, no lists) and the board served its previous v1 image after the v2 firmware was flashed |
+| T11 | A v1, v2 or v3 image is refused by a v4 reader; nothing applies across a version break | host | **proven** — `t29_snapshot` refuses all three |
 | T12 | Each hash route renders on a reload | browser | **proven** — headless Chrome loaded `#/process`, `#/playlists`, `#/media`, `#/player` and `#/settings` from the running board and each rendered its area (the shell, nav and page); `router.test.ts` covers the parse/format inverse |
 | T12b | Process keeps its Queue across a navigation | browser | **not proven** — needs a measuring queue, which needs a card |
 | T12c | A page load leaves the panel alone: no tearing while the shell is fetched, and no offset left behind | board | **not proven** — the image path is proven on the host (`t31_shell_image`, `front_door_tests.py`, and all 45 files of the real shell served byte-exactly), but the panel is the one thing only the board can answer (ADR 0055) |

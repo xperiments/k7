@@ -27,6 +27,11 @@ export interface DeviceStatus {
   tracks: number;
   generation: number;
   library: string;
+  /**
+   * True while the device is rebuilding its library from the card. Absent on firmware that
+   * predates the field, which is why the card falls back to watching the generation.
+   */
+  rescanning?: boolean;
   /** Which order the broadcast is walking: the library tree, or a Playlist. */
   order: 'tree' | 'list';
   /** The Playlist being walked, or null when the library's own order is playing. */
@@ -90,7 +95,7 @@ export function parseStatus(value: unknown): DeviceStatus | null {
   /* A firmware that predates the order fields reports neither; the library's order is
    * then the truthful reading, not an error. */
   const playlist = parsePlaylist(value.playlist);
-  return {
+  const status: DeviceStatus = {
     card: value.card,
     mark,
     tracks,
@@ -100,6 +105,8 @@ export function parseStatus(value: unknown): DeviceStatus | null {
     playlist,
     playing: parsePlaying(value.playing),
   };
+  if (typeof value.rescanning === 'boolean') status.rescanning = value.rescanning;
+  return status;
 }
 
 export function parseStatusText(text: string): DeviceStatus | null {

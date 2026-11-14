@@ -107,7 +107,13 @@ static void write_analysis(json_writer_t *w, const snapshot_t *sn, const snapsho
         json_puts(w, "null");
         return;
     }
-    json_puts(w, "{\"bpm\":");
+    json_puts(w, "{\"duration_ms\":");
+    if (row->duration_ms)
+        json_printf(w, "%u", (unsigned)row->duration_ms);
+    else
+        json_puts(w, "null");
+
+    json_puts(w, ",\"bpm\":");
     if (row->bpm_x10)
         json_printf(w, "%u.%u", (unsigned)(row->bpm_x10 / 10u), (unsigned)(row->bpm_x10 % 10u));
     else
@@ -464,6 +470,31 @@ static bool arg_bpm(const char *body, const json_tok_t *t, int nt, int args, con
     return true;
 }
 
+/* A track-length bound arrives in seconds -- the unit a sentence uses -- and is compared in
+ * milliseconds, the unit the row stores. 0 is "unset": no track is 0 ms long. */
+static bool arg_duration_ms(const char *body, const json_tok_t *t, int nt, int args,
+                            const char *key, uint32_t *out)
+{
+    int v = json_tok_member(body, t, nt, args, key);
+    if (v < 0) return true;
+    if (t[v].type != JSON_TOK_PRIMITIVE) return false;
+    size_t n = (size_t)(t[v].end - t[v].start);
+    char buf[32];
+    if (n == 0 || n >= sizeof buf) return false;
+    memcpy(buf, body + t[v].start, n);
+    buf[n] = 0;
+    char *endp = NULL;
+    double d = strtod(buf, &endp);
+    /* Rejects NaN and infinity too: both fail the range test. */
+    if (!endp || *endp || !(d >= 0 && d <= 4294967.0)) return false;
+    if (d == 0) return true;
+    double ms = d * 1000.0 + 0.5;
+    if (ms > 4294967295.0) return false;
+    *out = (uint32_t)ms;
+    if (*out == 0) *out = 1; /* a positive bound must not become "unset" */
+    return true;
+}
+
 /* A string array of keys, each Camelot or a note name. */
 static bool arg_keys(const char *body, const json_tok_t *t, int nt, int args, uint16_t *mask)
 {
@@ -551,6 +582,11 @@ static bool tool_library_search(json_writer_t *w, const library_t *lib, const ch
         json_puts(w, "bpm_min and bpm_max must be numbers");
         return false;
     }
+    if (!arg_duration_ms(body, t, nt, args, "duration_min", &f.duration_min_ms) ||
+        !arg_duration_ms(body, t, nt, args, "duration_max", &f.duration_max_ms)) {
+        json_puts(w, "duration_min and duration_max are seconds, 0 or more");
+        return false;
+    }
     if (!percent_filter(body, t, nt, args, "energy_min", "energy_max", &f.energy_min,
                         &f.energy_max) ||
         !percent_filter(body, t, nt, args, "danceability_min", "danceability_max",
@@ -573,13 +609,14 @@ static bool tool_library_search(json_writer_t *w, const library_t *lib, const ch
         return false;
     }
     if (sort[0] && !snapshot_sort_parse(sort, &f.sort)) {
-        json_puts(w, "sort must be path, title, bpm, energy or danceability");
+        json_puts(w, "sort must be path, title, bpm, energy, danceability or duration");
         return false;
     }
     if (query[0]) f.query = query;
     if (genre[0]) f.genre = genre;
 
     bool wants_analysis = f.bpm_min_x10 || f.bpm_max_x10 || f.key_mask || f.mood_mask ||
+                          f.duration_min_ms || f.duration_max_ms ||
                           f.energy_min != SNAPSHOT_UNKNOWN_PCT ||
                           f.energy_max != SNAPSHOT_UNKNOWN_PCT ||
                           f.danceability_min != SNAPSHOT_UNKNOWN_PCT ||
@@ -703,6 +740,8 @@ static const char TOOLS_READONLY[] =
     "\"query\":{\"type\":\"string\",\"description\":\"case-insensitive substring of the path, title, artist, album or genre\"},"
     "\"genre\":{\"type\":\"string\"},"
     "\"bpm_min\":{\"type\":\"number\"},\"bpm_max\":{\"type\":\"number\"},"
+    "\"duration_min\":{\"type\":\"number\",\"description\":\"seconds\"},"
+    "\"duration_max\":{\"type\":\"number\",\"description\":\"seconds\"},"
     "\"energy_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
     "\"energy_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
     "\"danceability_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
@@ -713,7 +752,7 @@ static const char TOOLS_READONLY[] =
     "\"arousal_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
     "\"key\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Camelot codes (8A) or note names (Am, A minor, F#m)\"},"
     "\"mood\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"happy\",\"sad\",\"aggressive\",\"relaxed\",\"party\"]}},"
-    "\"sort\":{\"type\":\"string\",\"enum\":[\"path\",\"title\",\"bpm\",\"energy\",\"danceability\"]},"
+    "\"sort\":{\"type\":\"string\",\"enum\":[\"path\",\"title\",\"bpm\",\"energy\",\"danceability\",\"duration\"]},"
     "\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":199},"
     "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100}}},"
     "\"annotations\":{\"readOnlyHint\":true}},"
@@ -745,6 +784,8 @@ static const char TOOLS_CONTROL[] =
     "\"query\":{\"type\":\"string\",\"description\":\"case-insensitive substring of the path, title, artist, album or genre\"},"
     "\"genre\":{\"type\":\"string\"},"
     "\"bpm_min\":{\"type\":\"number\"},\"bpm_max\":{\"type\":\"number\"},"
+    "\"duration_min\":{\"type\":\"number\",\"description\":\"seconds\"},"
+    "\"duration_max\":{\"type\":\"number\",\"description\":\"seconds\"},"
     "\"energy_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
     "\"energy_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
     "\"danceability_min\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
@@ -755,7 +796,7 @@ static const char TOOLS_CONTROL[] =
     "\"arousal_max\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
     "\"key\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Camelot codes (8A) or note names (Am, A minor, F#m)\"},"
     "\"mood\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"happy\",\"sad\",\"aggressive\",\"relaxed\",\"party\"]}},"
-    "\"sort\":{\"type\":\"string\",\"enum\":[\"path\",\"title\",\"bpm\",\"energy\",\"danceability\"]},"
+    "\"sort\":{\"type\":\"string\",\"enum\":[\"path\",\"title\",\"bpm\",\"energy\",\"danceability\",\"duration\"]},"
     "\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":199},"
     "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100}}},"
     "\"annotations\":{\"readOnlyHint\":true}},"

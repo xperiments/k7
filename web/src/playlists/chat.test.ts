@@ -44,6 +44,12 @@ describe('filterWords', () => {
     expect(filterWords({ energyMin: 70, energyMax: 100 })).toEqual(['energy 70–100']);
   });
 
+  it('says a track length as a clock, one-sided or two', () => {
+    expect(filterWords({ durationMax: 180 })).toEqual(['length up to 3:00']);
+    expect(filterWords({ durationMin: 60 })).toEqual(['length from 1:00']);
+    expect(filterWords({ durationMin: 60, durationMax: 240 })).toEqual(['length 1:00–4:00']);
+  });
+
   it('quotes a name and names the sort', () => {
     expect(filterWords({ query: 'Daft Punk', sort: 'bpm' })).toEqual([
       '“Daft Punk”',

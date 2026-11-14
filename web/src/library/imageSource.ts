@@ -20,13 +20,15 @@ import type { CachedMedia } from '../storage/media';
  */
 
 const HEADER_SIZE = 80;
-const ROW_SIZE = 32;
+const ROW_SIZE = 36;
 const MAGIC = 'K7SNAP\0\0';
 const UNKNOWN_PCT = 127;
 const DEFAULT_LIMIT = 50;
 
 export interface ImageRow {
   fingerprint: bigint;
+  /** The row's whole milliseconds; 0 when the track's length is unknown. */
+  durationMs: number;
   size: number;
   /** Folded BPM × 10; 0 unknown. */
   bpmX10: number;
@@ -45,13 +47,13 @@ export interface ImageRow {
   genre: string;
 }
 
-/** The rows of a version 3 image, or an `McpError` when the bytes are not one. */
+/** The rows of a version 4 image, or an `McpError` when the bytes are not one. */
 export function readImageRows(bytes: Uint8Array): ImageRow[] {
   if (bytes.length < HEADER_SIZE) throw new McpError('the image is shorter than its header');
   const magic = String.fromCharCode(...bytes.subarray(0, 8));
   if (magic !== MAGIC) throw new McpError('this is not a Snapshot');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (view.getUint16(8, true) !== 3) throw new McpError('this Snapshot is not format 3');
+  if (view.getUint16(8, true) !== 4) throw new McpError('this Snapshot is not format 4');
   const rowCount = view.getUint32(16, true);
   if (view.getUint16(20, true) !== ROW_SIZE) throw new McpError('unexpected row size');
   const poolSize = view.getUint32(32, true);
@@ -73,11 +75,12 @@ export function readImageRows(bytes: Uint8Array): ImageRow[] {
   const rows: ImageRow[] = [];
   for (let index = 0; index < rowCount; index += 1) {
     const at = HEADER_SIZE + index * ROW_SIZE;
-    const word = view.getBigUint64(at + 24, true);
+    const word = view.getBigUint64(at + 28, true);
     const bpmCode = bits(word, 0n, 0x7ffn);
     rows.push({
       fingerprint: view.getBigUint64(at, true),
-      size: view.getUint32(at + 8, true),
+      durationMs: view.getUint32(at + 8, true),
+      size: view.getUint32(at + 12, true),
       bpmX10: bpmCode === 0 ? 0 : bpmCode + 699,
       key: bits(word, 11n, 0x1fn),
       energy: bits(word, 16n, 0x7fn),
@@ -87,10 +90,10 @@ export function readImageRows(bytes: Uint8Array): ImageRow[] {
       confidence: bits(word, 44n, 0x7fn),
       moodBits: bits(word, 51n, 0x1fn),
       sourceFlags: bits(word, 56n, 0x3fn),
-      title: stringAt(offset3(at + 12)),
-      artist: stringAt(offset3(at + 15)),
-      album: stringAt(offset3(at + 18)),
-      genre: stringAt(offset3(at + 21)),
+      title: stringAt(offset3(at + 16)),
+      artist: stringAt(offset3(at + 19)),
+      album: stringAt(offset3(at + 22)),
+      genre: stringAt(offset3(at + 25)),
     });
   }
   return rows;
@@ -162,6 +165,7 @@ export function profileFromRows(rows: readonly ImageRow[]): LibraryProfile {
   const danceability: number[] = [];
   const valence: number[] = [];
   const arousal: number[] = [];
+  const duration: number[] = [];
 
   for (const row of rows) {
     const genre = row.genre.trim();
@@ -181,6 +185,7 @@ export function profileFromRows(rows: readonly ImageRow[]): LibraryProfile {
     if (row.danceability !== UNKNOWN_PCT) danceability.push(row.danceability);
     if (row.valence !== UNKNOWN_PCT) valence.push(row.valence);
     if (row.arousal !== UNKNOWN_PCT) arousal.push(row.arousal);
+    if (row.durationMs > 0) duration.push(row.durationMs / 1000);
   }
 
   return {
@@ -194,6 +199,7 @@ export function profileFromRows(rows: readonly ImageRow[]): LibraryProfile {
       return order(a) - order(b);
     }),
     moods: MOOD_NAMES.filter((mood) => moods.has(mood)),
+    duration: axisOf(duration),
     bpm: axisOf(bpm),
     energy: axisOf(energy),
     danceability: axisOf(danceability),
@@ -206,6 +212,7 @@ const TAGGED_NAMES = ['bpm', 'key', 'mood', 'energy'] as const;
 function analysisOf(row: ImageRow): McpAnalysis {
   const percent = (value: number) => (value === UNKNOWN_PCT ? null : value);
   return {
+    durationMs: row.durationMs || null,
     bpm: row.bpmX10 ? row.bpmX10 / 10 : null,
     key: camelotName(row.key),
     energy: percent(row.energy),
@@ -231,10 +238,17 @@ function titleOf(joined: Joined): string {
   return joined.row?.title ?? '';
 }
 
-function sortValue(joined: Joined, field: 'bpmX10' | 'energy' | 'danceability'): number {
-  if (!joined.row) return -1;
+/**
+ * The sort value, missing-last. The device sorts a track with no value after every track
+ * that has one (`INT64_MIN` in `cmp_hit`), and the image source has to do the same; -1
+ * would put it first and the two sources would disagree the moment a card has an
+ * unmeasured track.
+ */
+function sortValue(joined: Joined, field: 'bpmX10' | 'energy' | 'danceability' | 'durationMs'): number {
+  if (!joined.row) return Number.POSITIVE_INFINITY;
   const value = joined.row[field];
-  if (value === UNKNOWN_PCT) return -1;
+  if (field === 'bpmX10' ? value === 0 : value === UNKNOWN_PCT) return Number.POSITIVE_INFINITY;
+  if (field === 'durationMs' && value === 0) return Number.POSITIVE_INFINITY;
   return value;
 }
 
@@ -265,10 +279,14 @@ function compare(a: Joined, b: Joined, sort: SearchArgs['sort']): number {
     }
     case 'bpm':
     case 'energy':
-    case 'danceability': {
-      const field = sort === 'bpm' ? 'bpmX10' : sort;
-      const order = sortValue(a, field) - sortValue(b, field);
-      return order !== 0 ? order : a.media.path < b.media.path ? -1 : 1;
+    case 'danceability':
+    case 'duration': {
+      const field =
+        sort === 'bpm' ? 'bpmX10' : sort === 'duration' ? 'durationMs' : sort;
+      const at = sortValue(a, field);
+      const bt = sortValue(b, field);
+      if (at !== bt) return at < bt ? -1 : 1;
+      return a.media.path < b.media.path ? -1 : 1;
     }
     case 'path':
     default:
@@ -318,6 +336,8 @@ export function searchImage(
 
   const bpmMin = args.bpmMin !== undefined ? Math.round(args.bpmMin * 10) : 0;
   const bpmMax = args.bpmMax !== undefined ? Math.round(args.bpmMax * 10) : 0;
+  const durationMin = args.durationMin !== undefined ? Math.round(args.durationMin * 1000) : 0;
+  const durationMax = args.durationMax !== undefined ? Math.round(args.durationMax * 1000) : 0;
 
   const matched: Joined[] = [];
   const encoder = new TextEncoder();
@@ -333,6 +353,11 @@ export function searchImage(
     }
     if (genre) {
       if (!row || !row.genre.toLowerCase().includes(genre)) continue;
+    }
+    if (durationMin || durationMax) {
+      if (!row || row.durationMs === 0) continue;
+      if (durationMin && row.durationMs < durationMin) continue;
+      if (durationMax && row.durationMs > durationMax) continue;
     }
     if (bpmMin || bpmMax) {
       if (!row || row.bpmX10 === 0) continue;

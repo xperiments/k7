@@ -18,6 +18,7 @@ import {
 import { useCardScope, useDeviceView } from '../../card/session';
 import { McpError, type McpSearch, type SearchArgs } from '../../device/mcp';
 import { resolveSource, type LibrarySource } from '../../library/source';
+import { formatDuration } from '../format';
 import { newId } from '../../lib/id';
 import { requestIntent, relaxRanges } from '../../playlists/ask';
 import {
@@ -123,6 +124,9 @@ function TrackRows({ tracks }: { tracks: McpSearch['tracks'] }) {
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground tabular-nums">
+            {track.analysis?.durationMs ? (
+              <span>{formatDuration(track.analysis.durationMs / 1000)}</span>
+            ) : null}
             {track.analysis?.bpm != null ? (
               <span>{track.analysis.bpm.toFixed(1)} BPM</span>
             ) : null}

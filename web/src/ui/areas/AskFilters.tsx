@@ -147,6 +147,10 @@ export function AskFilters({
     const args: SearchArgs = { ...intent };
     if (args.bpmMin !== undefined) args.bpmMin = clampBpm(args.bpmMin);
     if (args.bpmMax !== undefined) args.bpmMax = clampBpm(args.bpmMax);
+    /* A negative length is not a bound the device accepts; a hand-typed "-5" means no
+     * lower bound, which is what 0 already means to `library_search`. */
+    if (args.durationMin !== undefined) args.durationMin = Math.max(0, args.durationMin);
+    if (args.durationMax !== undefined) args.durationMax = Math.max(0, args.durationMax);
     onRun(args);
   };
 
@@ -221,6 +225,20 @@ export function AskFilters({
               min={70}
               max={180}
               onChange={(value) => setField('bpmMax', value)}
+            />
+            <NumberField
+              label="Length min (s)"
+              value={intent.durationMin}
+              min={0}
+              max={86400}
+              onChange={(value) => setField('durationMin', value)}
+            />
+            <NumberField
+              label="Length max (s)"
+              value={intent.durationMax}
+              min={0}
+              max={86400}
+              onChange={(value) => setField('durationMax', value)}
             />
             <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor={keysField} className="text-xs text-muted-foreground">

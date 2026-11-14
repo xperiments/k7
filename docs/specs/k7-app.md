@@ -179,10 +179,11 @@ tracks · 3 460 analysed" and "Last image · 11 February · 4 118 tracks" are di
 must not look alike. A range only sees a track whose row carries the value (P9), so the player's
 label counts the analysed tracks.
 
-**S4. One conformance corpus, two implementations.** Filter semantics — BPM range, key, mood,
-energy, text, sort, offset, limit — are pinned as a JSON fixture of rows, queries and expected
-results, run by the App's vitest and by the device's host tests. Two implementations that agree
-by accident will disagree on purpose within a month.
+**S4. One conformance corpus, two implementations.** Filter semantics — BPM range, track
+length, key, mood, energy, text, sort, offset, limit — are pinned as one JSON fixture of rows,
+queries and expected results (`host/tests/snapshot-conformance.json`), read by the App's vitest
+and by the device's host tests. Two implementations that agree by accident will disagree on
+purpose within a month.
 
 **S5. Covers always come from the Last image's scope.** The device serves paths and
 measurements and never a picture; the media store is scoped by a card mark
@@ -270,14 +271,18 @@ restates a key is dropped, and every number is clamped to the range the Snapshot
 malformed answer, and a query that is not a name the sentence used (a category, a purpose, or an
 unmarked lowercase word), each get one repair — the second is asked again with the sentence — and
 a word that is still not a name is dropped. Every key is
-`library_search`'s own argument, and each is the data the row has: BPM is the folded 70–180, and
-`query` and `genre` are cut to the device's byte ceilings (255 and 63), because a longer string
-would refuse the whole search. The shape is constrained by a JSON Schema passed as
+`library_search`'s own argument, and each is the data the row has: BPM is the folded 70–180, a
+track's length is in seconds (the row keeps milliseconds), and `query` and `genre` are cut to the
+device's byte ceilings (255 and 63), because a longer string would refuse the whole search. A
+*track's* length is `duration_min`/`duration_max` in seconds; a *listening session's* length
+("two hours of…") is `limit`, at 15 tracks an hour. The two are never the same key. The shape is
+constrained by a JSON Schema passed as
 `responseConstraint` — the spike showed Chrome accepts ranges, enums and `additionalProperties`,
 measured on Chrome 157 — but the schema is a request and the validator is the judge. When this
 browser built the image the player is running (the same Snapshot generation), the prompt and
 schema carry that library's aggregates instead: the genres become a closed enum, each axis's
-bounds become the library's, and the WORD→FILTER thresholds its quartiles. Without a profile the
+bounds (track length among them) become the library's, and the WORD→FILTER thresholds its
+quartiles. Without a profile the
 static ranges apply. The profile is aggregates only — genres, count, ranges and quartiles — and
 no track, artist, path or per-track measurement is described either way.
 
@@ -314,8 +319,9 @@ count, ranges and quartiles — never a track, artist, path or per-track measure
 time of writing; `web/README.md` names the set. A misparse is visible in the answer's reading and
 fixable by asking again or opening **Filters**, which is the rule (ADR 0053, ADR 0086).
 
-**P9. A range sees only measured tracks.** Every measurement filter needs a Snapshot row, so a
-track with no row still matches a name search and an unknown value never matches a range. The
+**P9. A range sees only measured tracks.** Every measurement filter — BPM, a track's length,
+energy, danceability, valence, arousal — needs a Snapshot row, so a track with no row still
+matches a name search and an unknown value never matches a range. The
 result count is the player's; the Player reports coverage. A filter the library has no values for
 returns an empty result, not an error.
 

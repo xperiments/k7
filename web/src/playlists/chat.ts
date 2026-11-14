@@ -8,6 +8,7 @@
  *
  * These functions are pure so the copy is tested without React, a model or a device.
  */
+import { formatDuration } from '../ui/format';
 
 import type { McpSearch, SearchArgs } from '../device/mcp';
 
@@ -62,7 +63,18 @@ const SORT_LABEL: Record<NonNullable<SearchArgs['sort']>, string> = {
   bpm: 'BPM',
   energy: 'energy',
   danceability: 'danceability',
+  duration: 'length',
 };
+
+/** A length is seconds in the Intent and m:ss in the sentence. */
+function lengthPair(low: number | undefined, high: number | undefined): string | null {
+  if (low !== undefined && high !== undefined) {
+    return `length ${formatDuration(low)}–${formatDuration(high)}`;
+  }
+  if (low !== undefined) return `length from ${formatDuration(low)}`;
+  if (high !== undefined) return `length up to ${formatDuration(high)}`;
+  return null;
+}
 
 function pair(
   low: number | undefined,
@@ -88,6 +100,8 @@ export function filterWords(intent: SearchArgs): string[] {
 
   const bpm = pair(intent.bpmMin, intent.bpmMax, '');
   if (bpm) words.push(`${bpm.trim()} BPM`);
+  const length = lengthPair(intent.durationMin, intent.durationMax);
+  if (length) words.push(length);
   const energy = pair(intent.energyMin, intent.energyMax, 'energy');
   if (energy) words.push(energy);
   const danceability = pair(

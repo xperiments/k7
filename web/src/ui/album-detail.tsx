@@ -34,6 +34,7 @@ import { addRows, createDraft, useDrafts } from '../playlists/drafts';
 import { getSettings, subscribeSettings } from '../settings';
 import type { CachedMedia } from '../storage/media';
 import { formatDuration } from './format';
+import { trackLengthLabel } from './track-length';
 import { navigate, routeHref } from './router';
 import { rememberVideo } from './areas/Video';
 import { usePlayback } from './playback';
@@ -242,6 +243,8 @@ function LookupPanel({
 
 function TrackRow({
   row,
+  track,
+  image,
   showArtist,
   action,
   onPlay,
@@ -270,6 +273,7 @@ function TrackRow({
   const drafts = useDrafts();
   const title = titleOf(row);
   const label = showArtist ? `${row.artist} - ${title}` : title;
+  const length = trackLengthLabel(track, image);
 
   return (
     <li className="flex flex-col gap-2 border-b py-2 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
@@ -278,12 +282,12 @@ function TrackRow({
         {/* <span className="truncate text-xs text-muted-foreground">{row.path}</span> */}
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {/* One width for the numbers, right-aligned: "128.0 BPM 8A" and "no answer" are not
-            the same length, and the buttons after them must not move row to row — nor the
-            room a song's name has to be truncated in. */}
-        {/* <div className="flex w-24 shrink-0 items-center justify-end">
-          <TrackMeasurement track={track} image={image} />
-        </div> */}
+        {/* One width for the length, right-aligned, so the buttons after it do not move row
+            to row and the name keeps the room it has. An unmeasured track prints nothing:
+            an empty cell is not the same claim as "0:00". */}
+        <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+          {length ?? ''}
+        </span>
         <Button variant="outline" size="sm" onClick={onPlay}>
           {action === 'queue' ? (
             <ListPlus aria-hidden="true" />

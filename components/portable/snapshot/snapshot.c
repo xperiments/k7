@@ -31,7 +31,7 @@ static uint64_t rd64(const uint8_t *p)
     return v;
 }
 
-/* The one magic format version 3 has. The compare covers all eight bytes, never the C
+/* The one magic format version 4 has. The compare covers all eight bytes, never the C
  * string, so "K7SNAPxx" is not a Snapshot. */
 bool snapshot_magic_ok(const uint8_t *magic)
 {
@@ -131,7 +131,7 @@ static bool string_in(const uint8_t *pool, uint32_t lo, uint32_t hi, uint32_t of
  * terminates there. Two rows (or two fields) may share one offset. */
 static bool row_strings_ok(const uint8_t *row, const uint8_t *pool, uint32_t row_pool_size)
 {
-    const uint8_t *offs[4] = {row + 12, row + 15, row + 18, row + 21};
+    const uint8_t *offs[4] = {row + 16, row + 19, row + 22, row + 25};
     for (int i = 0; i < 4; i++)
         if (!string_in(pool, 0, row_pool_size, rd24(offs[i]))) return false;
     return true;
@@ -160,7 +160,7 @@ static bool list_ok(const uint8_t *l, const uint8_t *pool, uint32_t row_pool_siz
 
 static bool row_ok(const uint8_t *row, const uint8_t *pool, uint32_t row_pool_size)
 {
-    uint64_t m = rd64(row + 24);
+    uint64_t m = rd64(row + 28);
     uint32_t bpm_code = (uint32_t)(m & 0x7FFu);
     uint8_t  key = (uint8_t)((m >> 11) & 0x1Fu);
     uint8_t  energy = (uint8_t)((m >> 16) & 0x7Fu);
@@ -348,15 +348,16 @@ static const uint8_t *row_at(const snapshot_t *s, uint32_t i)
 
 static void row_read(const uint8_t *r, snapshot_row_t *out)
 {
-    uint64_t m = rd64(r + 24);
+    uint64_t m = rd64(r + 28);
     uint32_t bpm_code = (uint32_t)(m & 0x7FFu);
 
     out->fingerprint = rd64(r);
-    out->size = rd32(r + 8);
-    out->title_offset = rd24(r + 12);
-    out->artist_offset = rd24(r + 15);
-    out->album_offset = rd24(r + 18);
-    out->genre_offset = rd24(r + 21);
+    out->duration_ms = rd32(r + 8);
+    out->size = rd32(r + 12);
+    out->title_offset = rd24(r + 16);
+    out->artist_offset = rd24(r + 19);
+    out->album_offset = rd24(r + 22);
+    out->genre_offset = rd24(r + 25);
     out->bpm_x10 = bpm_code ? (uint16_t)(bpm_code + 699u) : 0;
     out->key = (uint8_t)((m >> 11) & 0x1Fu);
     out->energy = expose_pct((uint8_t)((m >> 16) & 0x7Fu));
@@ -385,7 +386,7 @@ bool snapshot_find(const snapshot_t *s, uint64_t fingerprint, uint32_t size,
     const uint8_t *r = row_at(s, lo);
     if (rd64(r) != fingerprint) return false;
     /* The size is part of the binding: same path, different file is not this row. */
-    if (rd32(r + 8) != size) return false;
+    if (rd32(r + 12) != size) return false;
     if (row) row_read(r, row);
     return true;
 }
@@ -570,6 +571,8 @@ bool snapshot_sort_parse(const char *name, snapshot_sort_t *out)
         *out = SNAPSHOT_SORT_ENERGY;
     } else if (strcmp(name, "danceability") == 0) {
         *out = SNAPSHOT_SORT_DANCEABILITY;
+    } else if (strcmp(name, "duration") == 0) {
+        *out = SNAPSHOT_SORT_DURATION;
     } else {
         return false;
     }
@@ -669,6 +672,13 @@ bool snapshot_matches(const snapshot_t *s, const snapshot_filter_t *f, const cha
         if (!r || !fold_contains(snapshot_row_string(s, r, SNAPSHOT_STRING_GENRE), f->genre))
             return false;
     }
+    if (f->duration_min_ms || f->duration_max_ms) {
+        /* 0 is the format's unknown, so a track whose length was never reported cannot
+         * fall in a length range. */
+        if (!r || r->duration_ms == 0) return false;
+        if (f->duration_min_ms && r->duration_ms < f->duration_min_ms) return false;
+        if (f->duration_max_ms && r->duration_ms > f->duration_max_ms) return false;
+    }
     struct {
         uint8_t min, max;
         uint8_t value;
@@ -712,6 +722,10 @@ bool snapshot_matches(const snapshot_t *s, const snapshot_filter_t *f, const cha
                                 ? (int64_t)r->danceability
                                 : INT64_MIN;
             break;
+        case SNAPSHOT_SORT_DURATION:
+            if (sort_key)
+                *sort_key = (r && r->duration_ms) ? (int64_t)r->duration_ms : INT64_MIN;
+            break;
         default:
             break;
         }
@@ -736,7 +750,7 @@ snapshot_result_t snapshot_apply(const snapshot_source_t *src, const snapshot_ta
     uint32_t size = src->size(src->ctx);
     if (size < SNAPSHOT_HEADER_SIZE) return fail(why, why_size, "the update file is too short");
 
-    /* Version 3 has one header size, so the whole header can always be read. */
+    /* The format has one header size, so the whole header can always be read. */
     uint8_t hdr[SNAPSHOT_HEADER_SIZE];
     uint32_t hdr_len = size < sizeof hdr ? size : (uint32_t)sizeof hdr;
     if (!src->read(src->ctx, 0, hdr, hdr_len))

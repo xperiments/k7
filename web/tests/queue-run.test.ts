@@ -153,6 +153,22 @@ describe('the run, from queued to settled', () => {
     expect(rec.calls).toContain('released');
   });
 
+  it('heals a cached row that predates the length field, once', async () => {
+    const rec = depsOf(
+      {
+        getCached: async () => analysisOf(HASH),
+        readTags: async () => ({ ...TAGS, duration: 240.5 }) as TrackMetadata,
+      },
+      mediaOf({ hash: HASH, written: METADATA_WRITE_VERSION }),
+    );
+    await runItem(itemOf(), client, rec.deps);
+
+    expect(rec.statuses()).toEqual(['done']);
+    expect(rec.patches[0]?.patch.analysis?.track.duration).toBe(240.5);
+    expect(rec.calls).toContain('putCached');
+    expect(rec.calls).not.toContain('read');
+  });
+
   it('finalizes a settled row whose file was never written by this build', async () => {
     const rec = depsOf({ getCached: async () => analysisOf(HASH) },
       mediaOf({ hash: HASH, written: undefined }));

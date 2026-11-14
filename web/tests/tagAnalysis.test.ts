@@ -14,6 +14,7 @@ const track = {
 const tagged = {
   bpm: 174,
   key: { tonic: 'A', mode: 'minor' as const, camelot: '8A' },
+  duration: 240.5,
 };
 
 describe('a track the tags already answer for', () => {
@@ -37,12 +38,13 @@ describe('a track the tags already answer for', () => {
       appSchema: 1,
       modelSet: 0x1234n,
     });
-    /* Format §4: the 80-byte header comes first, then 32-byte rows. A row's
-     * measurements are one little-endian uint64 at offset 24: bpm_code 0..10,
+    /* Format §4: the 80-byte header comes first, then 36-byte rows. A row's
+     * measurements are one little-endian uint64 at offset 28: bpm_code 0..10,
      * key 11..15, energy 16..22, danceability 23..29, valence 30..36,
      * arousal 37..43, confidence 44..50, mood_bits 51..55, source_flags 56..61. */
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const word = view.getBigUint64(80 + 24, true);
+    expect(view.getUint32(80 + 8, true)).toBe(240500); // the tagged length, in milliseconds
+    const word = view.getBigUint64(80 + 28, true);
     expect(Number(word & 0x7ffn) + 699).toBe(1740); // 174 BPM, tagged
     expect(Number((word >> 11n) & 0x1fn)).toBe(8); // 8A
     for (const shift of [16n, 23n, 30n, 37n, 44n]) {

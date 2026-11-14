@@ -26,6 +26,9 @@ typedef struct {
     /* The card's `k7.card` id, when it has one. Writes a NUL-terminated copy; false means
      * no mark. The callback owns the read: the status route must not touch the card. */
     bool (*card_mark)(char *out, size_t cap);
+    /* Whether a library rescan is running. The App's card shows its progress from this; the
+     * panel's Menu already says "Rescanning..." from the same function. */
+    bool (*rescan_running)(void);
 } front_door_cfg_t;
 
 /* Register `/api/status`. Call before http_server_start(). */

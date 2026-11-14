@@ -12,6 +12,7 @@ function track(
     danceable?: number;
     valence?: number | null;
     arousal?: number | null;
+    duration?: number;
     moods?: Partial<Record<Exclude<MoodTag, 'danceable'>, number>>;
   } = {},
 ): SnapshotTrack {
@@ -22,6 +23,7 @@ function track(
     danceable = 0.5,
     valence = 0.5,
     arousal = 0.5,
+    duration = 1,
     moods = {},
   } = overrides;
   const tags: Record<MoodTag, number> = {
@@ -35,7 +37,7 @@ function track(
   for (const [mood, value] of Object.entries(moods)) tags[mood as MoodTag] = value ?? 0;
   const analysis: Analysis = {
     schema: ANALYSIS_SCHEMA,
-    track: { name: 'a.mp3', path: 'music/a.mp3', size: 1, format: 'mp3', duration: 1, hash: 'h' },
+    track: { name: 'a.mp3', path: 'music/a.mp3', size: 1, format: 'mp3', duration, hash: 'h' },
     tempo: {
       bpm,
       rawBpm: bpm,
@@ -74,15 +76,16 @@ describe('buildProfile', () => {
 
   it('summarises each axis with its own range and quartiles', () => {
     const profile = buildProfile([
-      track('x', { bpm: 100, energy: 0.2, danceable: 0.3, valence: 0.2, arousal: 0.1 }),
-      track('x', { bpm: 120, energy: 0.5, danceable: 0.5, valence: 0.5, arousal: 0.5 }),
-      track('x', { bpm: 140, energy: 0.9, danceable: 0.8, valence: 0.9, arousal: 0.9 }),
+      track('x', { bpm: 100, energy: 0.2, danceable: 0.3, valence: 0.2, arousal: 0.1, duration: 180 }),
+      track('x', { bpm: 120, energy: 0.5, danceable: 0.5, valence: 0.5, arousal: 0.5, duration: 240 }),
+      track('x', { bpm: 140, energy: 0.9, danceable: 0.8, valence: 0.9, arousal: 0.9, duration: 300 }),
     ]);
     expect(profile.bpm).toEqual({ min: 100, p25: 120, p50: 120, p75: 140, max: 140 });
     expect(profile.energy).toEqual({ min: 20, p25: 50, p50: 50, p75: 90, max: 90 });
     expect(profile.danceability).toEqual({ min: 30, p25: 50, p50: 50, p75: 80, max: 80 });
     expect(profile.valence).toEqual({ min: 20, p25: 50, p50: 50, p75: 90, max: 90 });
     expect(profile.arousal).toEqual({ min: 10, p25: 50, p50: 50, p75: 90, max: 90 });
+    expect(profile.duration).toEqual({ min: 180, p25: 240, p50: 240, p75: 300, max: 300 });
   });
 
   it('lists the moods the rows carry at the Snapshot threshold', () => {

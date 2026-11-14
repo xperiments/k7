@@ -8,8 +8,8 @@ import type { Analysis, MoodTag } from './analysis';
 const MUSIC_DIRECTORY = 'music';
 
 const HEADER_SIZE = 80;
-const FORMAT_VERSION = 3;
-const ROW_SIZE = 32;
+const FORMAT_VERSION = 4;
+const ROW_SIZE = 36;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 /** The list record, list row, and the caps the format puts on them. */
@@ -113,7 +113,7 @@ export interface AxisProfile {
 
 /**
  * What one Library is like, in aggregate: the genres and keys it contains, how many Tracks,
- * and the spread of the five measurements. It describes no track; it is what the Ask prompt
+ * and the spread of the six measurements. It describes no track; it is what the Ask prompt
  * may carry so the model cannot offer a genre the library does not have or a range no track
  * can fall in.
  */
@@ -122,6 +122,8 @@ export interface LibraryProfile {
   genres: string[];
   keys: string[];
   moods: string[];
+  /** A track's length in seconds, like the analysis measured it. */
+  duration: AxisProfile | null;
   bpm: AxisProfile | null;
   energy: AxisProfile | null;
   danceability: AxisProfile | null;
@@ -211,6 +213,11 @@ export function buildProfile(tracks: readonly SnapshotTrack[]): LibraryProfile {
     genres: genresOf(tracks),
     keys: keysOf(tracks),
     moods: moodsOf(tracks),
+    duration: axisOf(
+      tracks
+        .map((track) => track.analysis.track.duration)
+        .filter((seconds) => Number.isFinite(seconds) && seconds > 0),
+    ),
     bpm: axisOf(
       tracks
         .map((track) => track.analysis.tempo.bpm)
@@ -264,6 +271,8 @@ interface PreparedList {
 
 interface SnapshotRow {
   fingerprint: bigint;
+  /** The track's length in whole milliseconds; 0 when it was never reported. */
+  durationMs: number;
   size: number;
   bpmX10: number;
   key: number;
@@ -391,6 +400,14 @@ function measurementWord(row: SnapshotRow): bigint {
   return word;
 }
 
+/** A track's length in whole milliseconds, or 0 when the decoder reported none. The
+ * decoded seconds are all it has; a 32-bit field holds every length a track can have,
+ * and an overflow is clamped rather than wrapping into a short song. */
+function durationField(seconds: number): number {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+  return Math.min(0xffffffff, Math.round(seconds * 1000));
+}
+
 function generationValue(seconds: number): bigint {
   return Number.isFinite(seconds) ? BigInt(Math.trunc(seconds)) & UINT64_MASK : 0n;
 }
@@ -424,6 +441,7 @@ function toRow(track: SnapshotTrack, encoder: TextEncoder): SnapshotRow {
 
   return {
     fingerprint: fnv1a64(encoder.encode(path)),
+    durationMs: durationField(track.analysis.track.duration),
     size: track.size,
     bpmX10: bpmField(track.analysis.tempo.bpm),
     key: keyField(track.analysis.key.camelot),
@@ -546,7 +564,7 @@ function prepareLists(
 }
 
 /**
- * Builds a version 3 image, with or without Playlists. Rows are sorted by fingerprint
+ * Builds a version 4 image, with or without Playlists. Rows are sorted by fingerprint
  * and their four strings are interned by exact bytes in first-use order; the list
  * area follows and is written even when there are no lists (`list_count` 0).
  */
@@ -579,7 +597,8 @@ export function buildSnapshot(
   rows.forEach((row, index) => {
     const at = index * ROW_SIZE;
     rowView.setBigUint64(at, row.fingerprint, true);
-    rowView.setUint32(at + 8, row.size, true);
+    rowView.setUint32(at + 8, row.durationMs, true);
+    rowView.setUint32(at + 12, row.size, true);
 
     row.strings.forEach((string, field) => {
       const key = byteKey(string);
@@ -595,11 +614,11 @@ export function buildSnapshot(
           );
         }
       }
-      // Row bytes 12, 15, 18 and 21: title, artist, album, genre.
-      writeUint24(rowBytes, at + 12 + field * 3, offset);
+      // Row bytes 16, 19, 22 and 25: title, artist, album, genre.
+      writeUint24(rowBytes, at + 16 + field * 3, offset);
     });
 
-    rowView.setBigUint64(at + 24, measurementWord(row), true);
+    rowView.setBigUint64(at + 28, measurementWord(row), true);
   });
 
   return assembleImage({
@@ -632,7 +651,7 @@ interface Assembly {
   appSchema: number;
   modelSet: bigint;
   rowCount: number;
-  /** `rowCount * 32` bytes, with the four 3-byte offsets already in place. */
+  /** `rowCount * 36` bytes, with the four 3-byte offsets already in place. */
   rowBytes: Uint8Array;
   /** `[0, row_pool_size)`: every row's interned strings, without list strings. */
   rowPool: Uint8Array;
@@ -640,7 +659,7 @@ interface Assembly {
 }
 
 /**
- * Write a version 3 image from parts that are already encoded. `buildSnapshot` uses
+ * Write a version 4 image from parts that are already encoded. `buildSnapshot` uses
  * it after measuring, and `patchListArea` uses it to give an existing image new
  * lists without disturbing its rows: the list area lives at the end, so everything
  * before it is written verbatim and only the sizes and the CRC change.
@@ -753,6 +772,8 @@ export function assembleImage(assembly: Assembly): Uint8Array<ArrayBuffer> {
 export interface ImageMeasurement {
   bpm: number | null;
   key: string | null;
+  /** The row's whole milliseconds; null when the track's length is unknown. */
+  durationMs: number | null;
 }
 
 /** The key an image row is found by: the path's fingerprint and the file's size. */
@@ -772,7 +793,7 @@ function camelotOf(key: number): string | null {
  * The album page asks the device for a track's numbers, and the device answers from the image
  * it last applied — so with the card in the computer there is no answer at all, even though
  * this browser wrote the image the card holds. The rows are on disk here, and this turns them
- * back into the same two numbers, keyed exactly as the device keys them: the path's
+ * back into the numbers the page can show, keyed exactly as the device keys them: the path's
  * fingerprint, the file's size, and nothing else.
  *
  * It refuses what the player refuses: a wrong magic, a version it does not know, a header of
@@ -804,13 +825,15 @@ export function readImageMeasurements(image: Uint8Array): Map<string, ImageMeasu
   for (let index = 0; index < rowCount; index += 1) {
     const at = headerSize + index * ROW_SIZE;
     const fingerprint = view.getBigUint64(at, true);
-    const size = view.getUint32(at + 8, true);
-    const word = view.getBigUint64(at + 24, true);
+    const durationMs = view.getUint32(at + 8, true);
+    const size = view.getUint32(at + 12, true);
+    const word = view.getBigUint64(at + 28, true);
     const bpmCode = Number(word & 0x7ffn);
     const key = Number((word >> 11n) & 0x1fn);
     out.set(`${fingerprint.toString(16)}:${size}`, {
       bpm: bpmCode === 0 ? null : (bpmCode + 699) / 10,
       key: camelotOf(key),
+      durationMs: durationMs === 0 ? null : durationMs,
     });
   }
   return out;

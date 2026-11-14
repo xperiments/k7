@@ -2,7 +2,7 @@
 """Playlists over HTTP: the image carries them, and the broadcast walks one.
 
 The lists live in the Snapshot (ADR 0051), so this starts a host server whose "partition"
-file already holds a version 3 image, then asks the routes the page uses. The walk itself
+file already holds a version 4 image, then asks the routes the page uses. The walk itself
 is the broadcast's business; what is proven here is that the choice is applied, that a
 pick outside the list ends it, and that every refusal is a refusal.
 

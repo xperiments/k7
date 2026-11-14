@@ -12,7 +12,7 @@ const deviceAnswer: McpStats = {
   generation: 1,
   snapshot: {
     state: 'ok',
-    format_version: 2,
+    format_version: 4,
     generation: 1767225600,
     rows: 4913,
     analyser: 300,

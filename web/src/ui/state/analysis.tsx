@@ -1255,9 +1255,18 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         }
         return true;
       } catch (error) {
+        /* A list-only write patches the image this browser last built for the card. An
+         * image from before the format moved cannot be patched, and pretending to rebuild
+         * it would write every row's length as unknown: the card has to be measured again. */
+        const staleImage =
+          mode === 'lists' &&
+          error instanceof Error &&
+          /unknown format version/.test(error.message);
         setNotice({
           kind: 'error',
-          text: `Could not write to the card: ${error instanceof Error ? error.message : String(error)}`,
+          text: staleImage
+            ? 'This card’s image is an older format. Measure the card again to re-export it, then save playlists.'
+            : `Could not write to the card: ${error instanceof Error ? error.message : String(error)}`,
         });
         return false;
       } finally {

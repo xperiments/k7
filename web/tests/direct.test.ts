@@ -153,6 +153,11 @@ describe('the requests this Device makes', () => {
     await expect(device.request('rescan')).resolves.toEqual({ ok: true });
     expect(net.calls[0]?.url).toBe('/api/rescan');
     expect(net.calls[0]?.init?.method).toBe('POST');
+    // The device's POST rules answer 415 without a JSON body and content type.
+    expect((net.calls[0]?.init?.headers as Record<string, string>)['content-type']).toBe(
+      'application/json',
+    );
+    expect(bodyOf(net.calls[0])).toEqual({});
 
     await expect(device.request('rescan')).rejects.toMatchObject({
       code: 'refused',
@@ -180,7 +185,15 @@ describe('the library over MCP', () => {
       mcpTool({
         query: 'aphex',
         matched: 1,
-        tracks: [{ name: 'a.mp3', path: 'Artist/a.mp3', size: 2, format: 'mp3', analysis: { bpm: 120, key: '8A' } }],
+        tracks: [
+          {
+            name: 'a.mp3',
+            path: 'Artist/a.mp3',
+            size: 2,
+            format: 'mp3',
+            analysis: { duration_ms: 10500, bpm: 120, key: '8A' },
+          },
+        ],
         truncated: false,
       }),
     );
@@ -205,9 +218,16 @@ describe('the library over MCP', () => {
     );
     const device = createDirectDevice({ fetch: net.fetch });
 
-    const search = await device.request('library.search', { query: 'aphex', bpmMin: 120, sort: 'bpm' });
+    const search = await device.request('library.search', {
+      query: 'aphex',
+      bpmMin: 120,
+      durationMin: 10,
+      durationMax: 360,
+      sort: 'bpm',
+    });
     expect(search.tracks).toHaveLength(1);
     expect(search.tracks[0]?.analysis?.bpm).toBe(120);
+    expect(search.tracks[0]?.analysis?.durationMs).toBe(10500);
     expect(net.calls[0]?.url).toBe('/mcp');
     expect(bodyOf(net.calls[0]).method).toBe('initialize');
 
@@ -215,7 +235,13 @@ describe('the library over MCP', () => {
     expect(call.method).toBe('tools/call');
     expect(call.params).toEqual({
       name: 'library_search',
-      arguments: { query: 'aphex', bpm_min: 120, sort: 'bpm' },
+      arguments: {
+        query: 'aphex',
+        bpm_min: 120,
+        duration_min: 10,
+        duration_max: 360,
+        sort: 'bpm',
+      },
     });
     expect((net.calls[1]?.init?.headers as Record<string, string>)['MCP-Protocol-Version']).toBe(
       '2025-11-25',

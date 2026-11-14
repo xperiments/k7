@@ -17,8 +17,8 @@ import type { SnapshotPlaylist } from '../domain/snapshot';
  * compared, never a trimmed string, so only a real Snapshot passes. */
 const MAGIC = 'K7SNAP\0\0';
 const HEADER_SIZE = 80;
-const FORMAT_VERSION = 3;
-const ROW_SIZE = 32;
+const FORMAT_VERSION = 4;
+const ROW_SIZE = 36;
 const LIST_SIZE = 32;
 const LIST_ROW_SIZE = 4;
 
@@ -39,7 +39,7 @@ function u64(view: DataView, at: number): bigint {
 
 /**
  * The image with these Playlists in it. Throws `ImageError` for bytes that are not a
- * version 3 Snapshot, and rebuilds only the list area: the rows, their strings and the
+ * version 4 Snapshot, and rebuilds only the list area: the rows, their strings and the
  * header's provenance are copied verbatim.
  */
 export function patchListArea(

@@ -27,6 +27,8 @@ export interface TrackMetadata {
   energy?: number;
   /** The lossless manifest written by this app, if present. */
   stored?: StoredAnalysis;
+  /** The file's own length in seconds, when the parser can establish it cheaply. */
+  duration?: number;
   /** The file's own names and genre; empty strings when a field is absent. */
   tags?: TrackTags;
 }
@@ -71,10 +73,18 @@ export async function readTrackMetadata(file: File): Promise<TrackMetadata> {
   try {
     const { parseBlob } = await import('music-metadata');
     const parsed = await parseBlob(file, {
-      duration: false,
+      // The duration is written into the Snapshot row, and for a tagged track that skips
+      // the decoder it is the only place the length can come from.
+      duration: true,
       skipCovers: true,
     });
     const { common } = parsed;
+    const duration =
+      typeof parsed.format.duration === 'number' &&
+      Number.isFinite(parsed.format.duration) &&
+      parsed.format.duration > 0
+        ? parsed.format.duration
+        : undefined;
 
     const native = parsed.native as Record<string, NativeTag[]>;
     const rawBpm = nativeValue(native, BPM_TAGS);
@@ -115,12 +125,13 @@ export async function readTrackMetadata(file: File): Promise<TrackMetadata> {
         key: stored.key,
         mood: stored.moodLabel ?? undefined,
         energy: stored.energy ?? undefined,
+        duration,
         stored,
         tags,
       };
     }
 
-    return { bpm, key: key ?? undefined, mood, energy, tags };
+    return { bpm, key: key ?? undefined, mood, energy, duration, tags };
   } catch {
     return {};
   }

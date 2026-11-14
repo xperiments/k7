@@ -28,11 +28,11 @@ is measured the text says so. §10 lists what the first board run has to measure
 | R1 | The device flashes `k7.db` from the card into a `snapshot` partition at boot, verifies it, deletes it, and copies the image into PSRAM before the panel's first clock |
 | R2 | The device never reboots because of a bad Update file, and writes nothing to the card except the Update file's delete and the Playlist selection record (§2 U7) |
 | R3 | The Snapshot is read from its PSRAM copy; no query reads the card or flash, and a normal boot reads the image from flash once, copies it and validates the copy |
-| R4 | `library_search` filters by BPM, key, energy, danceability, valence, arousal, mood, genre, name, and sorts and pages |
+| R4 | `library_search` filters by BPM, key, energy, danceability, valence, arousal, length, mood, genre and name, and sorts and pages |
 | R5 | `library_track` and `library_search` return the measurements beside the track, `null` where a track has none |
 | R6 | `library_stats` reports **Coverage** and the Snapshot's provenance |
 | R7 | A track with no row is unanalysed, not hidden: it plays, lists, and matches by name |
-| R8 | A version 3 image carries the host's **Playlists**, and the device can walk a selected one (ADR 0051; the selection is §2 U7) |
+| R8 | A version 4 image carries the host's **Playlists**, and the device can walk a selected one (ADR 0051; the selection is §2 U7) |
 
 ### Out of scope
 
@@ -120,9 +120,9 @@ snapshot, data, 0x40,    0x410000, 2M,
 - `0x410000` is the first offset after the 4 MB app partition, and it is 64 KB-aligned, which
   `esp_partition_mmap` requires. The image is mapped at offset 0 with `total_size` bytes, copied
   into PSRAM and unmapped; nothing reads it in place.
-- 2 MB is the ceiling for the file and for the image. At 5,000 tracks the image is about 260 KB
-  (format §11), and the 3,485-track card measured 177 KB in v3 (306 KB as v2), so the partition
-  is roughly eight times the 5,000-track target.
+- 2 MB is the ceiling for the file and for the image. At 5,000 tracks the image is about 280 KB
+  (format §11), and the 3,485-track card measured 177 KB in v3 (306 KB as v2) and about 191 KB
+  as v4, so the partition is roughly seven times the 5,000-track target.
 - `esp_partition_find_first(ESP_PARTITION_TYPE_DATA, 0x40, NULL)` is the only lookup. A build
   without the partition serves everything except the analysis, and says so.
 - The partition holds a Snapshot image and nothing else: no filesystem, no wear levelling, no
@@ -180,11 +180,11 @@ works on a pointer and a length.
 
 **S2. Validation happens once, at boot**, before the panel's first clock (so before MCP can
 serve). It is the format's §9 list, in order, with the first failure returned as the reason. The
-image is copied once into PSRAM (U9) — 177 KB on the 3,485-track card, ~260 KB at 5,000 — and the
+image is copied once into PSRAM (U9) — about 191 KB on the 3,485-track card, ~280 KB at 5,000 — and the
 CRC is computed over that copy; neither the image nor the CRC is read again.
 
 **S3. Nothing is read from flash.** Rows and strings are read from the PSRAM copy. A query that
-walks 5,000 rows touches 160 KB of PSRAM; the strings of a matched row are read to build the
+walks 5,000 rows touches 180 KB of PSRAM; the strings of a matched row are read to build the
 response and are never cached.
 
 **S4. Missing is a state, not a zero.** `snapshot_result_t` distinguishes: `NO_PARTITION`,
@@ -211,7 +211,8 @@ Nothing iterates the Snapshot.
 
 **Q2. A row describes a track only if the fingerprint matches *and* the size matches.** A size
 mismatch is an unanalysed track. This is how a replaced file stops wearing its predecessor's
-BPM.
+BPM. The row's `duration_ms` is carried on the row for the surfaces that read the library; it
+is not part of the binding and never changes whether a row matches.
 
 **Q3. Filters.** All optional; every one is an AND; a filter on a field a track does not have
 excludes that track.
@@ -220,6 +221,7 @@ excludes that track.
 |---|---|---|
 | `query` | string, 1..255 B | case-insensitive ASCII substring of the relative path **or** of title, artist, album or genre; a track with no row can only match by path |
 | `bpm_min`, `bpm_max` | number | `bpm_x10 / 10` within `[min, max]`, inclusive |
+| `duration_min`, `duration_max` | number (seconds) | `duration_ms / 1000` within `[min, max]`, inclusive; an unknown length is excluded |
 | `key` | array of strings | exact Camelot code (`8A`) or note name (`Am`, `A minor`, `F#m`), normalised to §5.2's code |
 | `energy_min`, `energy_max` | integer 0..100 | the percentage |
 | `danceability_min`, `danceability_max` | integer 0..100 | the percentage |
@@ -229,7 +231,7 @@ excludes that track.
 | `genre` | string | case-insensitive ASCII substring of the genre string |
 
 **Q4. Sorting and paging.** `sort` is one of `path` (default, broadcast order), `title`, `bpm`,
-`energy`, `danceability` — the Library keeps no duration, so there is nothing to sort by. Tracks with no value for the sort key sort last; ties
+`energy`, `danceability`, `duration`. Tracks with no value for the sort key sort last; ties
 break by track index, so the order is total and deterministic. `offset` is 0..199 and
 `limit` 1..100 (default 50), with `offset + limit <= 200`; the engine selects the top
 `offset + limit` with a bounded array (≤ 200 entries) and then skips `offset`. No full sort, no
@@ -241,13 +243,14 @@ candidate array proportional to the library.
 **Q6. The `analysis` object:**
 
 ```json
-{"bpm":124.5,"key":"8A","energy":78,"danceability":61,"valence":40,"arousal":78,
- "mood":["happy","party"],"title":"…","artist":"…","album":"…","genre":"…",
+{"duration_ms":342000,"bpm":124.5,"key":"8A","energy":78,"danceability":61,"valence":40,
+ "arousal":78,"mood":["happy","party"],"title":"…","artist":"…","album":"…","genre":"…",
  "tagged":["bpm","key"],"confidence":72}
 ```
 
-`energy`, `danceability`, `valence`, `arousal` and `confidence` are integers 0..100; `bpm` is
-the folded value to one decimal; `key` is the Camelot code; `mood` lists the set bits; `tagged`
+`duration_ms` is the track's length in whole milliseconds, or `null` when it was never
+measured; `energy`, `danceability`, `valence`, `arousal` and `confidence` are integers 0..100;
+`bpm` is the folded value to one decimal; `key` is the Camelot code; `mood` lists the set bits; `tagged`
 names the fields that came from tags (`bpm`, `key`, `mood`, `energy`). A field whose value is
 unknown is `null` rather than absent — "not measured" is an answer the model can act on, and a
 missing key cannot be told from a typo. `title`, `artist`, `album` and `genre` appear only when
@@ -277,7 +280,7 @@ by the id/generation pair `player_play` already accepts.
 **M3. `library_stats` gains:**
 
 ```json
-"snapshot":{"state":"ok","format_version":3,"generation":1767225600,"rows":4913,
+"snapshot":{"state":"ok","format_version":4,"generation":1767225600,"rows":4913,
             "coverage":{"tracks":5000,"analysed":4913,"percent":98},
             "analyser":300,"model_set":"12345678901234567890",
             "tagged":{"bpm":812,"key":40,"mood":90,"energy":15}}
@@ -305,7 +308,7 @@ of transient PSRAM under a query — a third of what the cover path leaves free
 |---|---|
 | No snapshot partition in the build | `library_stats` reports `no_partition`; search works on paths only |
 | Partition present, never flashed | `no_update`; the card is the only way to get one |
-| `k7.db` invalid, or a v1/v2/legacy image | Logged, left in place, boot continues; `invalid` with the reason; re-export the card as v3 |
+| `k7.db` invalid, or a v1/v2/v3/legacy image | Logged, left in place, boot continues; `invalid` with the reason; re-export the card as v4 |
 | The PSRAM copy cannot be allocated | No analysis; `invalid` with the byte count; the mapping is released and the screen is not blacked |
 | Power loss during erase/write | Partition fails the CRC; boot continues without analysis; the next boot with the card retries |
 | Power loss after the delete | Image valid; nothing to do |
@@ -326,12 +329,12 @@ of transient PSRAM under a query — a third of what the cover path leaves free
 
 | Resource | Cost |
 |---|---|
-| PSRAM at rest | the image: 177 KB on the 3,485-track card, ~260 KB at 5,000. The JSON view it replaces was 629,596 B / 615 KiB |
+| PSRAM at rest | the image: about 191 KB on the 3,485-track card, ~280 KB at 5,000. The JSON view it replaces was 629,596 B / 615 KiB |
 | PSRAM per query | result text (≤ ~40 KB at `limit` 100) + MCP's escaped copy (≤ ~80 KB) + top-K array (≤ 1.6 KB) |
 | Card, boot without an update | the update's mount and one `stat` of `/sdcard/k7.db`, the services' mount, and one read of `k7.select` (created as id 0 if absent) |
-| Card, boot with an update | the file read once (~0.18 s at 1 MB/s for 177 KB; ~0.26 s at 5,000 tracks) |
-| Flash, boot with an update | erase + write + read-back of the image (177–260 KB) — **to be measured**, target ≤ 3 s |
-| Flash, boot without an update | one header read and one copy of the image into PSRAM (177–260 KB) |
+| Card, boot with an update | the file read once (~0.19 s at 1 MB/s for 191 KB; ~0.28 s at 5,000 tracks) |
+| Flash, boot with an update | erase + write + read-back of the image (191–280 KB) — **to be measured**, target ≤ 3 s |
+| Flash, boot without an update | one header read and one copy of the image into PSRAM (191–280 KB) |
 | Card, any query | zero |
 | Flash, any query | zero |
 
@@ -346,11 +349,11 @@ running host server the questions the feature exists for:
 
 | # | Test |
 |---|---|
-| T1 | Images of 0, 2 and 5,000 rows open, and every sampled row is found by fingerprint and size — 5,000 is where the binary search and the size arithmetic have to hold |
-| T2 | Every validation rule in the format's §9 has a corruption case: bad magic, a v2 or legacy image, wrong version, size mismatch, bad CRC, non-ascending rows, offset past the pool, unterminated strings, out-of-range field, non-zero reserved, `row_pool_size` larger than the pool |
+| T1 | Images of 0, 2 and 5,000 rows open, and every sampled row is found by fingerprint and size, with its `duration_ms` intact — 5,000 is where the binary search and the size arithmetic have to hold |
+| T2 | Every validation rule in the format's §9 has a corruption case: bad magic, a v1, v2 or v3 image, wrong version, size mismatch, bad CRC, non-ascending rows, offset past the pool, unterminated strings, out-of-range field, non-zero reserved, `row_pool_size` larger than the pool |
 | T3 | A forged `row_count` near `UINT32_MAX` is refused without overflow |
-| T4 | Filter semantics: each filter alone, several together, unknown values excluded, `query` matching a title the path does not contain, genre as a substring |
-| T5 | Sort and page: ties, tracks with no sort value last, `offset + limit` bounds, `truncated` correct |
+| T4 | Filter semantics: each filter alone, several together, unknown values excluded, `query` matching a title the path does not contain, genre as a substring, a length range whose unknown is not zero |
+| T5 | Sort and page: ties, tracks with no sort value last (BPM and length), `offset + limit` bounds, `truncated` correct |
 | T6 | `analysis` is `null` for a track with no row, and `tagged` names exactly the tagged fields |
 | T7 | The MCP JSON shape for `library_search`, `library_track` and `library_stats` matches the documented examples |
 | T8 | Determinism: the generator run twice over the same input produces identical bytes |
@@ -376,7 +379,7 @@ id-0 record and a refusal for every damaged form.
 
 1. **The flash window's real duration** at 5,000 tracks — the only number that decides whether
    the boot update is acceptable or needs a progress indication.
-2. **The boot copy and the query cost from PSRAM** — the copy's duration at 177–260 KB, and a
+2. **The boot copy and the query cost from PSRAM** — the copy's duration at 191–280 KB, and a
    query measured cold and warm at a few milliseconds.
 3. **The response at `limit` 100** — the JSON size, the escaped copy, and whether the transient
    PSRAM is visible against the 504 KB the cover path leaves.

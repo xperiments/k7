@@ -9,6 +9,7 @@ const profile: LibraryProfile = {
   genres: [],
   keys: [],
   moods: [],
+  duration: null,
   bpm: null,
   energy: null,
   danceability: null,

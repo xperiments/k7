@@ -18,7 +18,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 const HEADER_SIZE = 80;
-const ROW_SIZE = 32;
+const ROW_SIZE = 36;
 const LIST_SIZE = 32;
 const LIST_ROW_SIZE = 4;
 
@@ -110,7 +110,7 @@ function readUint24(bytes: Uint8Array, at: number): number {
 
 /** The measurement word of one row, unpacked from bit 0 exactly as §4 lays it out. */
 function measurements(image: Uint8Array, index: number) {
-  const word = viewOf(image).getBigUint64(rowOffset(index) + 24, true);
+  const word = viewOf(image).getBigUint64(rowOffset(index) + 28, true);
   return {
     bpmCode: Number(word & 0x7ffn),
     key: Number((word >> 11n) & 0x1fn),
@@ -131,7 +131,7 @@ function rowStrings(image: Uint8Array, index: number, headerSize = HEADER_SIZE):
   const poolStart = headerSize + view.getUint32(16, true) * ROW_SIZE;
   const row = rowOffset(index, headerSize);
   return [0, 1, 2, 3].map((field) =>
-    readString(image, poolStart + readUint24(image, row + 12 + field * 3)).value,
+    readString(image, poolStart + readUint24(image, row + 16 + field * 3)).value,
   );
 }
 
@@ -142,6 +142,7 @@ describe('reading an image back', () => {
     expect(rows.get(imageRowKey('Artist/Album/01 - Track.mp3', 4_000_000))).toEqual({
       bpm: 124.5,
       key: '8A',
+      durationMs: 8000,
     });
   });
 
@@ -170,6 +171,7 @@ describe('reading an image back', () => {
     expect(readImageMeasurements(image).get(imageRowKey('A/b.mp3', 1))).toEqual({
       bpm: null,
       key: null,
+      durationMs: 8000,
     });
   });
 
@@ -232,17 +234,17 @@ describe('FNV-1a 64', () => {
 });
 
 describe('snapshot image', () => {
-  it('writes the version 3 header, one row, and an empty list area', () => {
+  it('writes the version 4 header, one row, and an empty list area', () => {
     const image = buildSnapshot(canonicalInput());
     const view = viewOf(image);
 
     expect(decoder.decode(image.subarray(0, 8))).toBe('K7SNAP\0\0');
-    expect(view.getUint16(8, true)).toBe(3);
+    expect(view.getUint16(8, true)).toBe(4);
     expect(view.getUint16(10, true)).toBe(80);
-    expect(image.byteLength).toBe(140);
+    expect(image.byteLength).toBe(144);
     expect(view.getUint32(12, true)).toBe(image.byteLength);
     expect(view.getUint32(16, true)).toBe(1);
-    expect(view.getUint32(20, true)).toBe(32);
+    expect(view.getUint32(20, true)).toBe(36);
     expect(view.getBigUint64(24, true)).toBe(1_700_000_000n);
     expect(view.getUint32(32, true)).toBe(28);
     expect(view.getUint32(40, true)).toBe(10_400);
@@ -263,11 +265,12 @@ describe('snapshot image', () => {
     expect(view.getBigUint64(row, true)).toBe(
       fnv1a64(encoder.encode('Artist/Album/01 - Track.mp3')),
     );
-    expect(view.getUint32(row + 8, true)).toBe(4_000_000);
-    expect(readUint24(image, row + 12)).toBe(0);
-    expect(readUint24(image, row + 15)).toBe(10);
-    expect(readUint24(image, row + 18)).toBe(17);
-    expect(readUint24(image, row + 21)).toBe(23);
+    expect(view.getUint32(row + 8, true)).toBe(8000);
+    expect(view.getUint32(row + 12, true)).toBe(4_000_000);
+    expect(readUint24(image, row + 16)).toBe(0);
+    expect(readUint24(image, row + 19)).toBe(10);
+    expect(readUint24(image, row + 22)).toBe(17);
+    expect(readUint24(image, row + 25)).toBe(23);
 
     expect(measurements(image, 0)).toEqual({
       bpmCode: 546, // 124.5 x 10 - 699
@@ -427,10 +430,10 @@ describe('snapshot image', () => {
 
     // 'One', 'Two', 'Shared Artist', 'Shared Album', 'House', each NUL-terminated.
     expect(view.getUint32(32, true)).toBe(4 + 4 + 14 + 13 + 6);
-    expect(image.byteLength).toBe(80 + 2 * 32 + 41);
+    expect(image.byteLength).toBe(80 + 2 * 36 + 41);
 
     const offsets = [0, 1].map((index) =>
-      [0, 1, 2, 3].map((field) => readUint24(image, rowOffset(index) + 12 + field * 3)),
+      [0, 1, 2, 3].map((field) => readUint24(image, rowOffset(index) + 16 + field * 3)),
     );
     const first = offsets[0];
     const second = offsets[1];
@@ -444,9 +447,9 @@ describe('snapshot image', () => {
   it('stamps the header with the CRC over the rows and the row pool', () => {
     const image = buildSnapshot(canonicalInput());
 
-    // Independently assembled from §3/§4: 32 row bytes + 28 pool bytes, CRC 0xd71cec22.
-    expect(crc32(image.subarray(HEADER_SIZE))).toBe(0xd71cec22);
-    expect(viewOf(image).getUint32(36, true)).toBe(0xd71cec22);
+    // Independently assembled from §3/§4: 36 row bytes + 28 pool bytes, CRC 0x666e87f1.
+    expect(crc32(image.subarray(HEADER_SIZE))).toBe(0x666e87f1);
+    expect(viewOf(image).getUint32(36, true)).toBe(0x666e87f1);
   });
 
   it('refuses two tracks with the same relative path', () => {
@@ -562,7 +565,7 @@ describe('snapshot images with Playlists', () => {
    * The fixture. Its numbers are worked out from the format rather than from the
    * writer: the canonical track's four interned strings are 28 bytes, the name is 12
    * with its NUL, the two paths are 28 and 29, so the pool is 97 and the image is
-   * 80 + 32 + 97 + 32 + 2*4 = 249.
+   * 80 + 36 + 97 + 32 + 2*4 = 253.
    */
   function listInput(): [SnapshotInput, SnapshotPlaylist[]] {
     return [
@@ -577,18 +580,18 @@ describe('snapshot images with Playlists', () => {
     ];
   }
 
-  it('writes the version 3 header and the list area at its offsets', () => {
+  it('writes the version 4 header and the list area at its offsets', () => {
     const [input, lists] = listInput();
     const image = buildSnapshot(input, lists);
     const view = viewOf(image);
 
     expect(decoder.decode(image.subarray(0, 8))).toBe('K7SNAP\0\0');
-    expect(view.getUint16(8, true)).toBe(3);
+    expect(view.getUint16(8, true)).toBe(4);
     expect(view.getUint16(10, true)).toBe(80);
-    expect(image.byteLength).toBe(249);
-    expect(view.getUint32(12, true)).toBe(249);
+    expect(image.byteLength).toBe(253);
+    expect(view.getUint32(12, true)).toBe(253);
     expect(view.getUint32(16, true)).toBe(1);
-    expect(view.getUint32(20, true)).toBe(32);
+    expect(view.getUint32(20, true)).toBe(36);
     expect(view.getUint32(32, true)).toBe(97);
     expect(view.getBigUint64(56, true)).toBe(0n);
 
@@ -614,7 +617,7 @@ describe('snapshot images with Playlists', () => {
     expect(Array.from(withLists.subarray(16, 32))).toEqual(Array.from(noLists.subarray(16, 32)));
     expect(Array.from(withLists.subarray(40, 64))).toEqual(Array.from(noLists.subarray(40, 64)));
     // The rows and the whole row pool are byte-identical, at the same offsets.
-    expect(Array.from(withLists.subarray(80, 140))).toEqual(Array.from(noLists.subarray(80, 140)));
+    expect(Array.from(withLists.subarray(80, 144))).toEqual(Array.from(noLists.subarray(80, 144)));
   });
 
   it('tiles the list records and rows in id order', () => {
@@ -732,22 +735,22 @@ describe('snapshot images with Playlists', () => {
     expect(Array.from(again)).toEqual(Array.from(forwards));
   });
 
-  it('still writes version 3, with list_count 0, when there are no Playlists', () => {
+  it('still writes version 4, with list_count 0, when there are no Playlists', () => {
     const implicit = buildSnapshot(canonicalInput());
     const explicit = buildSnapshot(canonicalInput(), []);
     const view = viewOf(implicit);
 
     expect(Array.from(explicit)).toEqual(Array.from(implicit));
-    expect(view.getUint16(8, true)).toBe(3);
+    expect(view.getUint16(8, true)).toBe(4);
     expect(view.getUint16(10, true)).toBe(80);
     expect(view.getUint16(64, true)).toBe(0);
     expect(view.getUint16(66, true)).toBe(32);
     expect(view.getUint16(68, true)).toBe(4);
     expect(view.getUint32(72, true)).toBe(0);
     expect(view.getUint32(76, true)).toBe(28);
-    expect(implicit.byteLength).toBe(140);
+    expect(implicit.byteLength).toBe(144);
     expect(view.getUint32(36, true)).toBe(crc32(implicit.subarray(HEADER_SIZE)));
-    expect(view.getUint32(36, true)).toBe(0xd71cec22);
+    expect(view.getUint32(36, true)).toBe(0x666e87f1);
   });
 
   it('refuses two lists with one id, and an id of zero', () => {

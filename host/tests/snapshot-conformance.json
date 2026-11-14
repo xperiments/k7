@@ -1,0 +1,167 @@
+{
+  "tracks": [
+    {
+      "path": "Alpha/One/one.mp3",
+      "size": 1000,
+      "duration_ms": 180000,
+      "bpm": 128.0,
+      "key": "8A",
+      "energy": 80,
+      "danceability": 60,
+      "valence": 50,
+      "arousal": 70,
+      "confidence": 90,
+      "mood": ["happy", "party"],
+      "genre": "techno",
+      "title": "One",
+      "artist": "Alpha",
+      "album": "One"
+    },
+    {
+      "path": "Alpha/One/two.mp3",
+      "size": 2000,
+      "duration_ms": 240000,
+      "bpm": 120.0,
+      "key": "5A",
+      "energy": 40,
+      "danceability": 30,
+      "valence": 20,
+      "arousal": 30,
+      "confidence": 80,
+      "mood": [],
+      "genre": "house",
+      "title": "Two",
+      "artist": "Alpha",
+      "album": "One"
+    },
+    {
+      "path": "Beta/Two/three.flac",
+      "size": 3000,
+      "duration_ms": 60000,
+      "bpm": 124.0,
+      "key": "9A",
+      "energy": 70,
+      "danceability": 50,
+      "valence": 60,
+      "arousal": 40,
+      "confidence": 70,
+      "mood": ["relaxed"],
+      "genre": "ambient",
+      "title": "Three",
+      "artist": "Beta",
+      "album": "Two"
+    },
+    {
+      "path": "Beta/Two/four.mp3",
+      "size": 4000,
+      "duration_ms": 0,
+      "bpm": 100.0,
+      "key": "1A",
+      "energy": 50,
+      "danceability": 40,
+      "valence": 30,
+      "arousal": 20,
+      "confidence": 60,
+      "mood": [],
+      "genre": "jazz",
+      "title": "Four",
+      "artist": "Beta",
+      "album": "Two"
+    },
+    {
+      "path": "Beta/Two/five.mp3",
+      "size": 5000,
+      "duration_ms": 200000,
+      "bpm": 132.0,
+      "key": "8A",
+      "energy": 80,
+      "danceability": 60,
+      "valence": 50,
+      "arousal": 70,
+      "confidence": 90,
+      "mood": ["happy"],
+      "genre": "techno",
+      "title": "Five",
+      "artist": "Beta",
+      "album": "Two"
+    },
+    {
+      "path": "Beta/Two/six.mp3",
+      "size": 6000,
+      "duration_ms": 150000,
+      "bpm": 0,
+      "key": "",
+      "genre": "spoken",
+      "title": "Six",
+      "artist": "Beta",
+      "album": "Two"
+    }
+  ],
+  "cases": [
+    {
+      "name": "both bounds, inclusive",
+      "args": { "duration_min": 120, "duration_max": 210 },
+      "expect": ["Alpha/One/one.mp3", "Beta/Two/five.mp3", "Beta/Two/six.mp3"]
+    },
+    {
+      "name": "a lower bound only",
+      "args": { "duration_min": 200 },
+      "expect": ["Alpha/One/two.mp3", "Beta/Two/five.mp3"]
+    },
+    {
+      "name": "an upper bound only, and an unknown length is not zero",
+      "args": { "duration_max": 120 },
+      "expect": ["Beta/Two/three.flac"]
+    },
+    {
+      "name": "an exact bound",
+      "args": { "duration_min": 60, "duration_max": 60 },
+      "expect": ["Beta/Two/three.flac"]
+    },
+    {
+      "name": "shortest first, an unknown length last",
+      "args": { "sort": "duration" },
+      "expect": [
+        "Beta/Two/three.flac",
+        "Beta/Two/six.mp3",
+        "Alpha/One/one.mp3",
+        "Beta/Two/five.mp3",
+        "Alpha/One/two.mp3",
+        "Beta/Two/four.mp3"
+      ]
+    },
+    {
+      "name": "the duration sort pages",
+      "args": { "sort": "duration", "offset": 1, "limit": 2 },
+      "matched": 6,
+      "expect": ["Beta/Two/six.mp3", "Alpha/One/one.mp3"]
+    },
+    {
+      "name": "a name still finds a track with no length",
+      "args": { "query": "four" },
+      "expect": ["Beta/Two/four.mp3"]
+    },
+    {
+      "name": "a length range and a BPM range together",
+      "args": { "bpm_min": 125, "duration_max": 210, "sort": "duration" },
+      "expect": ["Alpha/One/one.mp3", "Beta/Two/five.mp3"]
+    },
+    {
+      "name": "a length range excludes the unknown",
+      "args": { "duration_max": 0.5 },
+      "expect": []
+    },
+    {
+      "name": "BPM sort puts a missing measurement last",
+      "args": { "sort": "bpm" },
+      "expect": [
+        "Beta/Two/four.mp3",
+        "Alpha/One/two.mp3",
+        "Beta/Two/three.flac",
+        "Alpha/One/one.mp3",
+        "Beta/Two/five.mp3",
+        "Beta/Two/six.mp3"
+      ]
+    }
+  ]
+}

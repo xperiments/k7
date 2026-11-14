@@ -14,6 +14,8 @@ import { getDevice } from './device';
 import { DeviceError } from './transport';
 
 export interface McpAnalysis {
+  /** The track's length in whole milliseconds; null when it was never measured. */
+  durationMs: number | null;
   bpm: number | null;
   key: string | null;
   energy: number | null;
@@ -122,6 +124,7 @@ function number(value: unknown, fallback: number): number {
 function parseAnalysis(value: unknown): McpAnalysis | null {
   if (!isRecord(value)) return null;
   return {
+    durationMs: numberOrNull(value.duration_ms),
     bpm: numberOrNull(value.bpm),
     key: stringOrNull(value.key),
     energy: numberOrNull(value.energy),
@@ -276,6 +279,9 @@ export interface SearchArgs {
   genre?: string;
   bpmMin?: number;
   bpmMax?: number;
+  /** Track length bounds in seconds, as `library_search` takes them. */
+  durationMin?: number;
+  durationMax?: number;
   energyMin?: number;
   energyMax?: number;
   danceabilityMin?: number;
@@ -286,7 +292,7 @@ export interface SearchArgs {
   arousalMax?: number;
   key?: string[];
   mood?: string[];
-  sort?: 'path' | 'title' | 'bpm' | 'energy' | 'danceability';
+  sort?: 'path' | 'title' | 'bpm' | 'energy' | 'danceability' | 'duration';
   offset?: number;
   limit?: number;
 }

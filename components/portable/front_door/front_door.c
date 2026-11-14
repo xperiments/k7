@@ -85,8 +85,11 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
      * comes back with the card) while nothing is walking. */
     bool walking = playlist_select_walking();
     uint64_t playlist = walking ? playlist_select_current() : 0;
-    json_printf(&w, ",\"tracks\":%u,\"generation\":%u,\"library\":\"%s\",\"order\":\"%s\","
-                "\"playlist\":", tracks, generation, state, playlist ? "list" : "tree");
+    bool rescanning = F.rescan_running ? F.rescan_running() : false;
+    json_printf(&w, ",\"tracks\":%u,\"generation\":%u,\"library\":\"%s\",\"rescanning\":%s,"
+                "\"order\":\"%s\",\"playlist\":",
+                tracks, generation, state, rescanning ? "true" : "false",
+                playlist ? "list" : "tree");
     if (playlist) {
         char id[17] = {0};
         char raw[96];

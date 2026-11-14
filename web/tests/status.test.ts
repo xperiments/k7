@@ -36,6 +36,12 @@ const parsed = {
 };
 
 describe('the device status contract', () => {
+  it('reads a running rescan, and its absence as not running', () => {
+    expect(parseStatus({ ...valid, rescanning: true })?.rescanning).toBe(true);
+    expect(parseStatus({ ...valid, rescanning: false })?.rescanning).toBe(false);
+    expect(parseStatus(valid)?.rescanning).toBeUndefined();
+  });
+
   it('reads the card state, the library and what is playing', () => {
     expect(parseStatus(valid)).toEqual(parsed);
   });

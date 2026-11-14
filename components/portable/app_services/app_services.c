@@ -601,6 +601,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     front_door_cfg_t door = {
         .card_present = front_door_card_present,
         .card_mark = front_door_card_mark,
+        .rescan_running = app_services_rescan_running,
     };
     e = front_door_start(&door);
     if (e != ESP_OK) return fail(report, e, "front door");

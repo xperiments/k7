@@ -123,6 +123,8 @@ function searchArguments(args: SearchArgs): Record<string, unknown> {
   put('genre', args.genre);
   put('bpm_min', args.bpmMin);
   put('bpm_max', args.bpmMax);
+  put('duration_min', args.durationMin);
+  put('duration_max', args.durationMax);
   put('energy_min', args.energyMin);
   put('energy_max', args.energyMax);
   put('danceability_min', args.danceabilityMin);
@@ -399,7 +401,7 @@ export function createDirectDevice(options: DirectOptions = {}): DirectTransport
     },
 
     async rescan() {
-      const document = await read('rescan', '/api/rescan', { method: 'POST' });
+      const document = await read('rescan', '/api/rescan', jsonInit({}));
       if (isRecord(document) && document.ok === true) return { ok: true };
       return { ok: false };
     },

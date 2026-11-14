@@ -443,7 +443,7 @@ static void test_cut(void)
 /* ------------------------------------------------------------ values */
 
 #define IMG_HEADER 80u
-#define IMG_ROW 32u
+#define IMG_ROW 36u
 
 typedef struct {
     const char *title, *artist, *album, *genre;
@@ -465,7 +465,7 @@ static uint8_t *build_snapshot(size_t *n_out, const srow_t *r, uint32_t size,
 
     tbuf_t b = {0};
     put(&b, "K7SNAP\0\0", 8);
-    put16(&b, 3);                 /* format version */
+    put16(&b, 4);                 /* format version */
     put16(&b, IMG_HEADER);
     put32(&b, (uint32_t)(IMG_HEADER + IMG_ROW + pool.n));
     put32(&b, 1);                 /* rows */
@@ -485,6 +485,7 @@ static uint8_t *build_snapshot(size_t *n_out, const srow_t *r, uint32_t size,
     put32(&b, (uint32_t)pool.n);  /* row pool size */
 
     put64(&b, snapshot_path_hash(row_path));
+    put32(&b, 0);                 /* duration: unknown */
     put32(&b, size);
     put24(&b, off[0]);
     put24(&b, off[1]);

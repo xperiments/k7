@@ -247,7 +247,9 @@ in any of them; the Intent's values — mood names, sort names, keys — are the
 Every filter is `library_search`'s own argument, and each measurement it names is a field the
 Snapshot row carries. A range only sees tracks that were measured: a track with no row still
 matches a name search, and an unknown measurement never matches a range. BPM is the folded tempo,
-70–180, so a bound outside it cannot match; the Player reports coverage.
+70–180, so a bound outside it cannot match; a track's length is seconds, so "under three minutes"
+is a `duration_max` of 180. A length of the *tracks* is a filter; a length of the *listening
+session* ("two hours of…") is a row count, not a length bound. The Player reports coverage.
 
 A filter the library has no values for — a genre nobody tagged, a key nobody measured — returns an
 empty result, not an error. The answer's reading names the filters that ran, and **Filters** opens
@@ -260,9 +262,9 @@ selected card; the card's **Last image** otherwise, so a virtual card is always 
 results say which one answered, and for the player, how many of its tracks are analysed.
 
 When Ask has a library to describe, it tells the model that library's aggregates: its genres, its track count, and the range and quartiles of BPM, energy,
-danceability, valence and arousal. The model then cannot offer a genre the library does not have
-or a BPM range no track can fall in; the schema is closed to the same values, and the
-WORD→FILTER thresholds are the library's own quartiles.
+danceability, valence, arousal and track length. The model then cannot offer a genre the library
+does not have or a BPM or length range no track can fall in; the schema is closed to the same
+values, and the WORD→FILTER thresholds are the library's own quartiles.
 
 Genres are capped at the 40 most common; a library with more leaves its rarest out of the list
 and the enum. It is aggregates only — no track, artist, path or per-track measurement — and the

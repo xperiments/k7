@@ -12,7 +12,7 @@ import { fetchStatus } from '../device/useDeviceStatus';
 import { profileFor } from '../playlists/profile';
 import { listMedia } from '../storage/media';
 import { loadSnapshot, type StoredSnapshot } from '../storage/snapshots';
-import { profileFromRows, readImageRows, searchImage } from './imageSource';
+import { profileFromRows, readImageRows, searchImage, type ImageRow } from './imageSource';
 
 /**
  * Which source answers for the selected card. The player only when it is holding *this*
@@ -120,8 +120,16 @@ export async function resolveSource(
   }
 
   if (!stored) return null;
+  /* A stored image this build cannot read - one this browser wrote before the format moved -
+   * is no image, not an exception: the selected card simply has no source until it is
+   * re-exported. */
+  let rows: ImageRow[];
+  try {
+    rows = readImageRows(stored.bytes);
+  } catch {
+    return null;
+  }
   const media = await listMedia(scope);
-  const rows = readImageRows(stored.bytes);
   return {
     kind,
     profile: stored.profile ?? profileFromRows(rows),

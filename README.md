@@ -293,7 +293,7 @@ effect with the mode bar's `led` button to see it.
 | `GET /api/playlists` | The Playlists the Snapshot holds — `{id, name, created, rows}` — and `selected`, the list the broadcast is walking (or `null` for the Library's own order), plus `missing`, the rows the Library could not resolve. |
 | `GET /api/playlists/<id>` | One list's rows, as the Library's own paths. A hex id; anything else is a `404`. |
 | `POST /api/playlists/select` | `{"id":"<hex16>"}` tells the broadcast to walk that Playlist, `{"id":null}` returns it to the Library's order. Written to `k7.select` at the card root; a `404` for an unknown id, a `409` for a list with no Track the Library can find. A `POST /api/play` for a Track outside the selected list drops the selection. |
-| `GET /api/status` | The Card state, the Library's count and generation, the order (`tree` or `list`, with the Playlist's `{id, name}`), and what the broadcast is playing: `title`, `path`, `elapsed_ms`, `duration_ms`. |
+| `GET /api/status` | The Card state, the Library's count and generation, `rescanning` while the card is being re-read, the order (`tree` or `list`, with the Playlist's `{id, name}`), and what the broadcast is playing: `title`, `path`, `elapsed_ms`, `duration_ms`. |
 | `POST /mcp` | MCP (2025-11-25): `initialize`, `ping`, `tools/list`, `tools/call` for `library_stats`, `library_list`, `library_search`, `library_track` and `player_status`. Read-only by default; a build with `XTAPE_MCP_CONTROL=1` adds `player_play`, `player_skip`, `player_prev` and `library_rescan`. |
 | anything else | `404`, or `405` for a known path with the wrong method. |
 
@@ -1172,26 +1172,29 @@ reads that copy:
 
 ```jsonc
 // tools/call library_search
-{"bpm_min": 120, "bpm_max": 130, "key": ["8A", "9A"], "energy_min": 70, "sort": "danceability"}
+{"bpm_min": 120, "bpm_max": 130, "key": ["8A", "9A"], "energy_min": 70, "duration_max": 360,
+ "sort": "danceability"}
 ```
 
 Each result carries its measurements beside the track, `null` where nothing was measured:
 
 ```jsonc
-{"path": "Alpha/One/tone.flac", "analysis": {"bpm": 128.0, "key": "8A", "energy": 80,
- "danceability": 60, "valence": 50, "arousal": 80, "mood": ["happy", "party"],
+{"path": "Alpha/One/tone.flac", "analysis": {"duration_ms": 10500, "bpm": 128.0, "key": "8A",
+ "energy": 80, "danceability": 60, "valence": 50, "arousal": 80, "mood": ["happy", "party"],
  "title": "Alpha Tone", "artist": "The Alphas", "album": "One", "genre": "electronic",
  "tagged": ["bpm", "key"], "confidence": 70}}
 ```
 
+`duration_min`/`duration_max` are in seconds, and `duration` is a sort like the others.
 `library_stats` reports the **Coverage**: how many tracks the Snapshot describes, out of how
 many the card holds. A track with no row is unanalysed, never hidden — it still lists, plays and
-matches a name search, and it never matches a range. Nothing about the Snapshot touches flash
-once boot is done: queries read the PSRAM copy, the partition is unmapped, and there is no
-black-frame guard because there is no flash read to hide. The image is format v3 — interned
-strings, 32-byte rows: **177 KB on the 3,485-track card**, down from 306 KB as v2, and ~260 KB at
-5,000 tracks. Removing the Library JSON view (only `/api/library.bin` remains) freed 629,596 B
-for that card's Library, 615 KiB at 5,000.
+matches a name search, and it never matches a range, a length included. Nothing about the
+Snapshot touches flash once boot is done: queries read the PSRAM copy, the partition is
+unmapped, and there is no black-frame guard because there is no flash read to hide. The image
+is format v4 — interned strings, 36-byte rows carrying each track's length in milliseconds:
+**about 191 KB on the 3,485-track card** (177 KB as v3, 306 KB as v2), and ~280 KB at 5,000
+tracks. Removing the Library JSON view (only `/api/library.bin` remains) freed 629,596 B for
+that card's Library, 615 KiB at 5,000.
 
 The selected Playlist is remembered in `k7.select` at the card root, a 32-byte CRC'd record
 written by its own task below the decoder; NVS no longer holds it. That is the card's second kind
@@ -1201,13 +1204,14 @@ The byte format is [`docs/specs/snapshot-format.md`](docs/specs/snapshot-format.
 subsystem and its failure modes are [`docs/specs/snapshot.md`](docs/specs/snapshot.md), and the
 decision behind both is [ADR 0047](docs/adr/0047-the-snapshot-lives-in-flash-and-is-never-resident.md),
 amended by [ADR 0051](docs/adr/0051-a-playlist-lives-in-the-snapshot.md) and superseded in part
-by [ADR 0069](docs/adr/0069-the-snapshot-is-resident-and-the-card-carries-the-selection.md).
+by [ADR 0069](docs/adr/0069-the-snapshot-is-resident-and-the-card-carries-the-selection.md) and
+[ADR 0087](docs/adr/0087-the-row-carries-the-track-length.md).
 The host tier is tested end to end (`make -C host check` runs a real server against a generated
 image); the flash window, the PSRAM copy and the update path are **board-tier pending** — no
 board has run them yet.
 
-**Upgrading a v2 card:** flash the firmware first, then the App, then re-export the card. A v2
-image is refused, and the device serves without analysis until a v3 image is applied.
+**Upgrading a card:** flash the firmware first, then the App, then re-export the card. A v1, v2
+or v3 image is refused, and the device serves without analysis until a v4 image is applied.
 
 ## The internal-RAM picture
 
