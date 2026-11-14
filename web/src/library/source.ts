@@ -21,6 +21,8 @@ export interface LibrarySource {
   profile: LibraryProfile | null;
   /** What the surface says it is showing (S3). */
   label: string;
+  /** Where a playlist built from this answer belongs, or null when it cannot be authored. */
+  draftScope: string | null;
   search(args: SearchArgs): Promise<McpSearch>;
 }
 
@@ -41,6 +43,24 @@ export function chooseSource(
   return 'none';
 }
 
+/**
+ * The card scope a playlist from this source may be stored under. An image is this browser's
+ * card: its scope is the answer's. The player is the same card only when its mark is the
+ * scope the browser already holds — otherwise the card is not a directory here, and a draft
+ * under another scope would name rows that card does not have.
+ */
+export function draftScopeFor(
+  kind: 'device' | 'image' | 'none',
+  scope: string,
+  status: DeviceStatus | null,
+): string | null {
+  if (kind === 'image') return scope;
+  if (kind === 'device' && status?.mark != null) {
+    return scope === `mark:${status.mark}` ? scope : null;
+  }
+  return null;
+}
+
 function imageLabel(stored: StoredSnapshot): string {
   const at = Date.parse(stored.at);
   const day = Number.isFinite(at)
@@ -50,8 +70,9 @@ function imageLabel(stored: StoredSnapshot): string {
 }
 
 /**
- * Resolve the selected card's source, its profile, and the call that searches it. The image
- * is read once per resolution: `k7.db` is small and the join needs the media index anyway.
+ * Resolve the selected card's source, its profile, the call that searches it and the scope a
+ * playlist it finds belongs to. The image is read once per resolution: `k7.db` is small and the
+ * join needs the media index anyway.
  */
 export async function resolveSource(
   scope: string,
@@ -75,6 +96,7 @@ export async function resolveSource(
       kind,
       profile: profileFor(stored, stats),
       label: `The player · ${status?.tracks ?? 0} tracks`,
+      draftScope: draftScopeFor(kind, scope, status),
       search: (args) => searchTracks(args),
     };
   }
@@ -86,6 +108,7 @@ export async function resolveSource(
     kind,
     profile: stored.profile ?? profileFromRows(rows),
     label: imageLabel(stored),
+    draftScope: draftScopeFor(kind, scope, status),
     search: (args) => Promise.resolve(searchImage(rows, media, args)),
   };
 }

@@ -279,32 +279,50 @@ bounds become the library's, and the WORD→FILTER thresholds its quartiles. Wit
 static ranges apply. The profile is aggregates only — genres, count, ranges and quartiles — and
 no track, artist, path or per-track measurement is described either way.
 
-**P3. Ask owns the model's setup.** Five states: no Prompt API (not Chrome 148+ on desktop),
+**P3. Ask is a conversation.** The composer is at the foot of the page; a sentence becomes a
+message from the person, and the answer is a message from Ask with the tracks it found. The answer
+is the App's words, computed from the Intent that ran and the search that answered: the count, the
+reading of the filters, the source, the save question and the confirmation. The model writes no
+prose (ADR 0050's shape rule; [ADR 0086](../adr/0086-the-assistant-is-a-conversation.md)). The
+answer names what was understood — "Found 10 tracks — techno, 124–132 BPM" — and **Filters** opens
+the exact `library_search` arguments, seeded with that Intent, for a misparse. The result is a
+preview of four tracks with **Show all N tracks**. There is no Intent panel and no separate
+**Run search**.
+
+**P4. Ask owns the model's setup.** Five states: no Prompt API (not Chrome 148+ on desktop),
 `unavailable` (below the hardware floor, or built-in AI turned off in Chrome — the App cannot tell
 which), `downloadable`, `downloading`, `available`. Ask shows one sentence for the first two, a
-sentence and **Set up the assistant** for `downloadable`, progress for `downloading`, and the box
-for `available`. Nothing downloads on boot and nothing is prefetched; the filter form stands in
-every state.
+sentence and **Set up the assistant** for `downloadable`, progress for `downloading`, and the
+composer for `available`. Nothing downloads on boot and nothing is prefetched; the **Filters**
+sheet stands in every state.
 
-**P4. The App can offer the model and cannot remove it.** The download needs a user gesture — the
+**P5. The App can offer the model and cannot remove it.** The download needs a user gesture — the
 setup's button is that gesture — and it is Chrome's component in Chrome's profile. The App can
 start it and watch it; removal is in Chrome's settings, and the setup says so.
 
-**P5. One session per Ask.** The session is created with the system prompt, prompts once and is
-destroyed. No context carries between asks, and no session is held while the person browses.
+**P6. One session per Ask.** The session is created with the system prompt, prompts once and is
+destroyed. No context carries between asks, and no session is held while the person browses. The
+transcript is this tab's and is not sent back: each ask stands alone, and it is not stored.
 
-**P6. Nothing leaves the machine.** The sentence, the Intent, the profile and the library stay
+**P7. Nothing leaves the machine.** The sentence, the Intent, the profile and the library stay
 where they are; the request is a local call, not a fetch. The profile is aggregate — genres,
 count, ranges and quartiles — never a track, artist, path or per-track measurement.
 
-**P7. The model's language set is Chrome's.** English, Japanese, Spanish, German and French at the
-time of writing; `web/README.md` names the set. A misparse is visible in the Intent and editable,
-which is the rule (ADR 0053).
+**P8. The model's language set is Chrome's.** English, Japanese, Spanish, German and French at the
+time of writing; `web/README.md` names the set. A misparse is visible in the answer's reading and
+fixable by asking again or opening **Filters**, which is the rule (ADR 0053, ADR 0086).
 
-**P8. A range sees only measured tracks.** Every measurement filter needs a Snapshot row, so a
+**P9. A range sees only measured tracks.** Every measurement filter needs a Snapshot row, so a
 track with no row still matches a name search and an unknown value never matches a range. The
 result count is the player's; the Player reports coverage. A filter the library has no values for
 returns an empty result, not an error.
+
+**P10. Saving is a draft on the card.** When the answer's source is a card this browser can author
+for — its Last image, or the player's card whose mark is this browser's scope — Ask asks **Save
+these N tracks as a playlist on this card?** Saving creates a draft in the store the editor uses
+(ADR 0051, ADR 0083); it writes no card and no player, and Prepare is still the only way to send
+it. A source the browser cannot author for — another card in the player, or a scope that changed
+under an old answer — gets the reason and no button. Nothing is saved without the person's click.
 
 ---
 
@@ -363,13 +381,17 @@ makes that a deployment requirement, not a nicety.
 - **The weights are still 41 MB from a public CDN.** No design decision here changes that; O4
   only decides who pays for it.
 - **The assistant is Chrome's, not the App's.** A machine below Chrome's floor has no Ask — the
-  filter form stands — and the App can offer the model but not remove it. The first ask was 12.6 s
-  on the spike's Mac; later answers were 1–5 s.
+  **Filters** sheet stands — and the App can offer the model but not remove it. The first ask was
+  12.6 s on the spike's Mac; later answers were 1–5 s.
 - **Assistant quality is measured, not promised.** Ten of twelve sentences were semantically right
   on the spike's rubric and all twelve were schema-valid; the duration rule and an artist name
   missed, and the model over-fills mood asks and invents `query` words. A tightened prompt scored
-  8/12 and is not in the build. The Intent is visible and editable, which is the mitigation
-  (ADR 0053).
+  8/12 and is not in the build. The answer says what it understood and **Filters** opens the exact
+  arguments, so a miss is visible and fixable (ADR 0053, ADR 0086).
+- **The conversation has no memory.** The transcript is a record, not context: "make it faster"
+  after a set is a new ask. Carrying the previous Intent would change the one-shot prompt the
+  10/12 describes, so it needs its own measurement before it ships. A reload clears the transcript;
+  drafts survive.
 
 ---
 
@@ -412,7 +434,7 @@ rather than 41 MB; a waiting worker produces the banner and not a takeover.
 **M4 — connected, standalone, and the assistant.** All fifteen operations, the Library's second
 source, the Device copy's gating, the built-in model. Acceptance: every area works with no device;
 with a device, send/play/stream work; the built-in model produces an Intent with no key and no
-network; with the model unavailable, Ask says what is missing and the filter form works.
+network; with the model unavailable, Ask says what is missing and the **Filters** sheet works.
 
 ---
 

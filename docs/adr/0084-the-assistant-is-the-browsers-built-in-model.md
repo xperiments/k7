@@ -1,5 +1,9 @@
 # The assistant is the browser's built-in model
 
+> **Note:** the provider, setup and one-session decisions below stand. The page's UI — the
+> Intent panel, the separate Run and the results card — is amended by
+> [ADR 0086](./0086-the-assistant-is-a-conversation.md).
+
 ADR 0053 made the **Provider** a setting: an OpenAI-compatible endpoint, a model name and a key,
 all in this browser. That answered the constraints of its time — a plain-HTTP origin that could
 not run a model, and an assistant that had to be remote to exist at all. It bought a key in

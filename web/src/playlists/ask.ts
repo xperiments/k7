@@ -15,6 +15,10 @@
  * `requestIntent` is the only function that asks the model, and it is not tested: the
  * built-in model is Chrome's and CI has none. The schema it passes and the parser it trusts
  * are both tested (ADR 0084).
+ *
+ * What Ask says back is not this module's: the count, the reading, the source and the save
+ * question are computed in `chat.ts` from the Intent and the search, so the model never writes a
+ * sentence about a track (ADR 0086).
  */
 
 import { askModel, assistantFailure } from '../builtin-model';

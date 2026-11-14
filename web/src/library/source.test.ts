@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import type { DeviceStatus } from '../device/status';
 import type { StoredSnapshot } from '../storage/snapshots';
-import { chooseSource } from './source';
+import { chooseSource, draftScopeFor } from './source';
 
 const stored: StoredSnapshot = {
   scope: 'mark:vcard',
@@ -46,5 +46,22 @@ describe('chooseSource', () => {
     expect(chooseSource('mark:other', undefined, status('player'))).toBe('device');
     expect(chooseSource('mark:other', undefined, status(null, false))).toBe('none');
     expect(chooseSource('mark:other', undefined, null)).toBe('none');
+  });
+});
+
+describe('draftScopeFor', () => {
+  it('authors for the card in the computer', () => {
+    expect(draftScopeFor('image', 'mark:vcard', status('player'))).toBe('mark:vcard');
+  });
+
+  it('authors for the player only when its card is the scope the browser holds', () => {
+    expect(draftScopeFor('device', 'mark:player', status('player'))).toBe('mark:player');
+    expect(draftScopeFor('device', 'mark:vcard', status('player'))).toBeNull();
+    expect(draftScopeFor('device', 'mark:vcard', status(null))).toBeNull();
+    expect(draftScopeFor('device', 'mark:vcard', null)).toBeNull();
+  });
+
+  it('has nowhere to author when no source answered', () => {
+    expect(draftScopeFor('none', 'mark:vcard', status('vcard'))).toBeNull();
   });
 });

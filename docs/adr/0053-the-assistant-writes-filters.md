@@ -2,8 +2,10 @@
 
 > **Status: superseded by [ADR 0084](./0084-the-assistant-is-the-browsers-built-in-model.md)** —
 > the "provider is a setting" half is reversed; the shape rule this ADR settled, the model writes
-> filters and never results, is adopted there unchanged. The reasoning below is kept as the
-> record.
+> filters and never results, is adopted there unchanged. **Further amended by
+> [ADR 0086](./0086-the-assistant-is-a-conversation.md):** the Intent is no longer a standing
+> panel; the answer says what it understood and **Filters** opens the exact arguments. The shape
+> rule and the degrade to the form stand. The reasoning below is kept as the record.
 
 ADR 0050 refused an in-browser assistant and wrote down why: a local model needs a secure origin,
 so it needs either a published Chrome extension or a name in public DNS — an install for every

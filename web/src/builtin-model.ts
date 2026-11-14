@@ -65,7 +65,7 @@ export function assistantFailure(error: unknown): string {
   if (/download|network|fetch/i.test(message)) {
     return 'Chrome could not finish downloading the model. Check the connection and try again.';
   }
-  return 'The model did not answer. The filters below still work on their own.';
+  return 'The model did not answer. The Filters sheet still works on its own.';
 }
 
 function requireModel(): LanguageModelStatic {

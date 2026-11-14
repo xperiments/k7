@@ -183,11 +183,16 @@ npx shadcn@latest add @reui/badge @reui/alert @reui/c-sidebar-1   # ReUI
 
 ## The assistant
 
-Ask sends one sentence to Chrome's **built-in model** (Gemini Nano) and gets filters back. There
-is no key, no endpoint and no setting: the model runs on this machine, the sentence is not sent
-anywhere, and once the model is downloaded Ask works offline.
+Ask is a conversation. One sentence goes to Chrome's **built-in model** (Gemini Nano), which
+returns filters; the App runs them and answers with the tracks it found. There is no key, no
+endpoint and no setting: the model runs on this machine, the sentence is not sent anywhere, and
+once the model is downloaded Ask works offline.
 [ADR 0084](../docs/adr/0084-the-assistant-is-the-browsers-built-in-model.md) records the move from the
-remote Provider.
+remote Provider, and [ADR 0086](../docs/adr/0086-the-assistant-is-a-conversation.md) the conversation.
+
+The model writes filters, never results. Every word in Ask's answer — the count, what it
+understood, the library it came from, the offer to save — is computed by the App from the filters
+that ran and the search that answered.
 
 ### What it needs
 
@@ -200,7 +205,8 @@ model, a few gigabytes, on an unmetered connection; after that no network is use
 Chrome keeps the model until free space falls below 10 GB, then removes it and downloads it again
 when there is room. Ask re-checks at each visit, so the state it shows is the state now.
 
-Ask says which of these is missing, and the filter form below works without any of it.
+Ask says which of these is missing, and the **Filters** sheet below still searches without any
+of it.
 
 ### The download
 
@@ -211,6 +217,25 @@ settings.
 
 The download needs a click, because Chrome requires user activation; that is what **Set up the
 assistant** is.
+
+### The answer
+
+The composer is at the foot of the page. Say what you want and press Enter: your sentence becomes a
+message, and the answer names what was understood ("Found 10 tracks — techno, 124–132 BPM"), the
+library it came from, and the tracks. Four are shown; **Show all N tracks** expands the list.
+
+**Filters** opens the exact `library_search` arguments, already filled from your sentence. Change
+one and **Run search** without asking the model again. The same sheet is the search for a machine
+without the built-in model.
+
+When the answer comes from a card this browser holds, Ask asks whether to save the tracks as a
+playlist **on this card**. Saving makes a draft in Playlists; it does not write the card or the
+player, and **Prepare** is where a draft is sent. The player's card is read-only from here, so its
+answer says a playlist needs the card in the computer.
+
+Each ask stands alone: the previous sentence and its filters are not sent back to the model, so
+"make it faster" is a new ask rather than a change to the last set. The conversation is not
+stored; a reload clears it. Drafts survive.
 
 ### The languages
 
@@ -225,7 +250,8 @@ matches a name search, and an unknown measurement never matches a range. BPM is 
 70–180, so a bound outside it cannot match; the Player reports coverage.
 
 A filter the library has no values for — a genre nobody tagged, a key nobody measured — returns an
-empty result, not an error. The Intent shows it before the search runs.
+empty result, not an error. The answer's reading names the filters that ran, and **Filters** opens
+the same arguments.
 
 ### The library's own values
 
@@ -251,8 +277,10 @@ artist in "songs by Daft Punk", and it sometimes puts a category in `query` and 
 sentence did not ask for. When the word is not a name the sentence used — a category, a purpose
 like "for a workout", or a lowercase word with no name before it — Ask asks once more with your
 sentence and drops it if it persists. A tightened prompt was measured on the same rubric and
-scored lower (eight of twelve), so the shipped prompt is the one above. The Intent is shown before
-anything runs, so a wrong filter is an edit rather than a wrong playlist.
+scored lower (eight of twelve), so the shipped prompt is the one above. The answer says what it
+understood and **Filters** opens the exact filters, so a wrong one is an edit rather than a wrong
+playlist — seen after the first result, not before it. The answer's words are the App's for the
+same reason: the model never sees a track, so it cannot describe one.
 
 ## Accuracy caveats
 

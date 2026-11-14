@@ -367,19 +367,21 @@ _Avoid_: now playing, current song, track
 
 **IA Agent**:
 The Playlists page that holds **Ask**. The sidebar and the breadcrumb call the page IA Agent; the
-prompt box inside it is **Ask**.
+conversation on it is **Ask**.
 _Avoid_: Ask page, assistant page, AI Agent
 
 **Ask**:
-The prompt box on the **IA Agent** page: the user's words, sent to the **Built-in model**, answered
-with an **Intent** and nothing else.
-_Avoid_: chat, assistant, generate
+The conversation on the **IA Agent** page: the composer at its foot, what the person said, and the
+App's answer — the reading, the tracks it found and the offer to save them. The model writes the
+**Intent**; the App writes what Ask says.
+_Avoid_: chatbot, AI assistant, generate
 
 **Intent**:
 The `library_search` filters a sentence was parsed into — BPM range, key, mood, energy, text, sort
-and a count — shown on screen and editable before anything is searched. The model writes filters,
-never results: a wrong filter is visible and correctable, a confident paragraph about music that
-does not exist is not (ADR 0050's rule, adopted in ADR 0053).
+and a count. It is not a panel on the page: the answer says what it understood, and **Filters**
+opens the exact arguments. The model writes filters, never results: a wrong filter is visible and
+correctable, a confident paragraph about music that does not exist is not (ADR 0050's rule,
+adopted in ADR 0053; the conversation is ADR 0086).
 _Avoid_: query, prompt, answer
 
 **Built-in model**:
