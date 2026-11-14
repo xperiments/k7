@@ -1689,7 +1689,7 @@
     {
       "id": "APP-29",
       "title": "Abandon an answer that takes longer than thirty seconds",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-14T16:17:46Z",
       "by": "dsh",
@@ -1710,7 +1710,7 @@
     {
       "id": "APP-30",
       "title": "Measure a larger example set, without a prompt rule",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-14T16:17:46Z",
       "by": "dsh",
@@ -1730,6 +1730,28 @@
           "at": "2026-11-14T17:46:30Z",
           "by": "dsh",
           "text": "The larger example set is not merged. It helps the no-profile arms and hurts the profile ones.\n\n- Static 30 → 32 model (33 → 35 effective) and examples 31 → 33 — a real +2.\n- But image 24 → 20 of 58 and imageSearch 31 → 21 of 58; effective 27 → 22 and 35 → 23.\n- The twelve spike sentences: 2/6/6/6/9 → 2/6/6/4/4.\n- N1 \"rápido para correr\" now passes statically; S10 \"10 songs for a workout\" did not repeat the prompt run's one win.\n- The shipped App uses the profile when it can, so a static-only gain against a profile loss is not a merge. The branch evals/examples-run stays as the record.\n\nThe run is 989 of 990: N6 in imageSearch has two reps, a profile-gap row, so no verdict changes.\n\nThe audit also found the first genuine rubric bug: row 38 \"music for sleeping\" was marked right while all three verdicts were fail for a missing energy_max. Recorded in the ticket, not patched into the frozen rubric."
+        }
+      ]
+    },
+    {
+      "id": "APP-31",
+      "title": "Split the assistant module into its seams, and give the key grammar its own module",
+      "state": "review",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-14T23:14:51Z",
+      "by": "dsh",
+      "desc": "`web/src/playlists/ask.ts` is 1,210 lines with five responsibilities and 26 exports. This splits it into concern-shaped modules behind `./ask`, and moves the device's key grammar out of the Last image's search module. No behaviour changes: the same prompt bytes, schema, examples, Intent, failures and exported names.\n\nFinished when:\n- `web/src/playlists/ask/` holds `contract`, `parse`, `facts`, `purpose`, `keys`, `prompt` and `request` behind an `index.ts` that still answers `./ask`; the App's imports are unchanged.\n- `relaxRanges` lives in `playlists/relax.ts` as search policy, re-exported by the index.\n- `keyCode` and `camelotName` live in `domain/key.ts`; `parseKeyTag` and `camelot.ts` are untouched.\n- The 65 tests still pass, split with their modules; one new test checks the device's key code against the Camelot wheel for all 24 keys.\n- `docs/research/assistant-evaluation.md` cites the new modules instead of the old line numbers.\n\nCheck: `cd web && npm run typecheck && npm test && npm run build`, and the built prompt is byte-identical. No ADR, spec or CONTEXT change. Four commits: the move, the split, the key grammar, the note refresh.",
+      "notes": [
+        {
+          "at": "2026-11-14T23:16:04Z",
+          "by": "dsh",
+          "text": "Plan: four commits, each green. (1) Move ask.ts to ask/index.ts with no content change. (2) Extract contract, parse, facts, purpose, keys, prompt, request behind the index; move relaxRanges to playlists/relax.ts; split the tests with their modules. (3) Move keyCode/camelotName to domain/key.ts, leaving parseKeyTag and camelot.ts alone. (4) Refresh docs/research/assistant-evaluation.md to module + function citations.\n\nGuardrail: no prompt, schema, example, Intent or failure text changes; the App's imports and the exported names stay. Verify typecheck, test and build after each code commit."
+        },
+        {
+          "at": "2026-11-14T23:21:27Z",
+          "by": "dsh",
+          "text": "The assistant is now one module per question, and the key grammar has its own home. `ask.ts` (1,210 lines, 26 exports) is `ask/index.ts` plus `contract`, `parse`, `facts`, `purpose`, `keys`, `prompt` and `request`; `relaxRanges` lives in `playlists/relax.ts`; `keyCode`/`camelotName` live in `domain/key.ts`. The App's imports and every exported name are unchanged.\n\nNo behaviour change: the moved bodies were diffed byte-identical against the previous file, so the prompt, schema, examples, clamping and failure sentences are the same. The 65 assistant tests split with their modules (parse 23, prompt 10, purpose 9, keys 6, request 15, relax 2), plus one new test that walks the device's key code and the Camelot wheel through all 24 keys.\n\nTo check: `git log --oneline -4` (move, split, key grammar, note), then `cd web && npm run typecheck && npm test && npm run build`. The numbers: 737 tests, typecheck and build all green.\n\nFour commits. No ADR, spec or CONTEXT change; `docs/research/assistant-evaluation.md` now cites modules and functions instead of line numbers."
         }
       ]
     }
