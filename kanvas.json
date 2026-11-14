@@ -1689,20 +1689,39 @@
     {
       "id": "APP-29",
       "title": "Abandon an answer that takes longer than thirty seconds",
-      "state": "proposed",
+      "state": "review",
       "group": "APP",
       "at": "2026-11-14T16:17:46Z",
       "by": "dsh",
-      "desc": "Make ADR 0084's thirty-second ceiling real in the App.\n\nThe ADR says the spinner and the thirty-second timeout cover the model's first slow answer, but the App has no timeout: requestIntent waits forever on a prompt Chrome never settles. The harness has hit exactly that, and now aborts and retries.\n\nFinished means: Ask passes AbortSignal.timeout(30_000) into the requestIntent signal parameter that already exists, the failure is the existing 'The model stopped before it answered' message with the one retry, and k7-app section 7 says so. A Vitest proves an aborted signal comes back as that failure.\n\nThis is production-facing and independent of model quality."
+      "desc": "Make ADR 0084's thirty-second ceiling real in the App.\n\nThe ADR says the spinner and the thirty-second timeout cover the model's first slow answer, but the App has no timeout: requestIntent waits forever on a prompt Chrome never settles. The harness has hit exactly that, and now aborts and retries.\n\nFinished means: Ask passes AbortSignal.timeout(30_000) into the requestIntent signal parameter that already exists, the failure is the existing 'The model stopped before it answered' message with the one retry, and k7-app section 7 says so. A Vitest proves an aborted signal comes back as that failure.\n\nThis is production-facing and independent of model quality.",
+      "notes": [
+        {
+          "at": "2026-11-14T16:20:03Z",
+          "by": "dsh",
+          "text": "Plan: pass AbortSignal.timeout(30_000) into requestIntent, keep the existing failure and retry, add the spec line and a test."
+        },
+        {
+          "at": "2026-11-14T16:20:03Z",
+          "by": "dsh",
+          "text": "Ask now abandons a model call that has not answered in thirty seconds, which is the ceiling ADR 0084 already claimed.\n\n- The spinner ends with the existing \"The model stopped before it answered\" failure and its one retry, instead of waiting forever on a prompt Chrome never settles.\n- It uses the signal parameter `requestIntent` already takes for the harness; nothing else in the Ask path changed.\n- k7-app §7 P3 says so; a Vitest proves an aborted signal comes back as that failure.\n\nTo check: ask something, then let the model sit (or abort it) for thirty seconds — the error with retry appears, and the composer is usable again.\n\nVerified: 736 tests, typecheck."
+        }
+      ]
     },
     {
       "id": "APP-30",
       "title": "Measure a larger example set, without a prompt rule",
-      "state": "proposed",
+      "state": "doing",
       "group": "APP",
       "at": "2026-11-14T16:17:46Z",
       "by": "dsh",
-      "desc": "Test whether more few-shot turns help, with no rule and no other change.\n\nThe first baseline found the examples are the lever (11 to 31 rows), and the prepared rule plus one example lost. This experiment changes only the example set: the workout row, a stated numeric bound ('tracks under 100 BPM'), two keys ('8A or 9A') and a no-context refusal ('make it faster'). The system prompt stays byte-identical to Baseline 2.\n\nFinished means: a run branch, all five combinations three times (990 calls, about an hour) with the answer timeout back at the baseline's 90 s, and a comparison with Baseline 2 — model verdicts, the spike subset and the purpose rows. Merge only on a measured improvement; otherwise discard and record.\n\nOne variable, unlike the last prompt experiment: the system prompt hash must still be e5c9ccb4."
+      "desc": "Test whether more few-shot turns help, with no rule and no other change.\n\nThe first baseline found the examples are the lever (11 to 31 rows), and the prepared rule plus one example lost. This experiment changes only the example set: the workout row, a stated numeric bound ('tracks under 100 BPM'), two keys ('8A or 9A') and a no-context refusal ('make it faster'). The system prompt stays byte-identical to Baseline 2.\n\nFinished means: a run branch, all five combinations three times (990 calls, about an hour) with the answer timeout back at the baseline's 90 s, and a comparison with Baseline 2 — model verdicts, the spike subset and the purpose rows. Merge only on a measured improvement; otherwise discard and record.\n\nOne variable, unlike the last prompt experiment: the system prompt hash must still be e5c9ccb4.",
+      "notes": [
+        {
+          "at": "2026-11-14T16:20:03Z",
+          "by": "dsh",
+          "text": "Plan: the branch evals/examples-run has four new examples and an unchanged system prompt (e5c9ccb4; examples 889108e5, 13). The human runs the five combinations with the answer timeout back at 90 s, clears the saved run, and exports; then the comparison."
+        }
+      ]
     }
   ]
 }
