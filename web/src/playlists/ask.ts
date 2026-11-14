@@ -666,7 +666,105 @@ export function purposeOf(sentence: string): PurposeRule | null {
   return null;
 }
 
+/* -------------------------------------------------------------------------- */
+/* The purpose normalizer                                                      */
+/* -------------------------------------------------------------------------- */
 
+/**
+ * The words that make an axis *explicit*. A sentence that says "fast" has asked for a tempo, so a
+ * BPM bound is not an invention; the same for a valence and a danceability word. Each list is per
+ * language on purpose: the corpus is multilingual, and gating on English alone would strip a bound
+ * the Spanish or Japanese sentence had justified.
+ */
+const TEMPO_WORDS = [
+  'fast', 'faster', 'fastest', 'slow', 'slower', 'slowest', 'bpm', 'tempo', 'uptempo',
+  'rápido', 'rápida', 'rápidos', 'rápidas', 'lento', 'lenta', 'lentos', 'lentas',
+  'rapide', 'rapides', 'lent', 'lente', 'lentes',
+  'schnell', 'schnelle', 'schneller', 'langsam', 'langsame', 'langsamer',
+  '速い', '遅い', 'テンポ', 'アップテンポ',
+] as const;
+
+const VALENCE_WORDS = [
+  'happy', 'sad', 'upbeat', 'sunny', 'melancholic', 'cheerful', 'joyful', 'gloomy',
+  'alegre', 'alegres', 'triste', 'tristes', 'feliz', 'felices', 'contento', 'contenta',
+  'heureux', 'heureuse', 'joyeux', 'joyeuse', 'gai', 'gaie',
+  'fröhlich', 'fröhliche', 'traurig', 'traurige', 'glücklich', 'glückliche',
+  '明るい', '暗い', '悲しい', '楽しい', '陽気',
+] as const;
+
+const DANCEABILITY_WORDS = [
+  'danceable', 'dance', 'dancing',
+  'bailable', 'bailar', 'baila', 'bailando',
+  'dansant', 'dansante', 'danser',
+  'tanzbar', 'tanzen',
+  '踊れる', 'ダンス', '踊り',
+] as const;
+
+const SORT_WORDS = [
+  'sort', 'sorted', 'sorting', 'order', 'ordered', 'alphabetical', 'alphabetically',
+  'first', 'last', 'slowest', 'fastest',
+  'by bpm', 'by title', 'by energy', 'by danceability', 'by duration', 'by length',
+  'ordenar', 'ordenado', 'alfabético', 'alfabética', 'primero', 'último', 'última',
+  'trier', 'trié', 'alphabétique', 'premier', 'première', 'dernier', 'dernière',
+  'sortieren', 'sortiert', 'alphabetisch', 'erste', 'erster', 'letzte', 'letzter',
+  '順', '並び', '並べ', '順番',
+] as const;
+
+function hasAny(sentence: string, words: readonly string[]): boolean {
+  return words.some((word) => containsWord(sentence.toLowerCase(), word));
+}
+
+/** A stated tempo: a word, or a number written against `bpm`/`tempo`. */
+function hasTempo(sentence: string): boolean {
+  return hasAny(sentence, TEMPO_WORDS) || /\d\s*(?:bpm|tempo)\b/i.test(sentence);
+}
+
+/**
+ * Drop the filters a purpose sentence never asked for.
+ *
+ * The WORD→FILTER table says a purpose word sets *its* filters and the count, and nothing else.
+ * So when the sentence names a purpose and a measurement axis is not explicit in the sentence,
+ * that axis keeps only the side the purpose row prescribes: a workout keeps `energy_min` and
+ * `arousal_min` and loses the invented maxima, a party keeps `danceability_min`, a sleep keeps
+ * `energy_max`. An axis the row does not prescribe at all — BPM, valence and danceability for a
+ * workout — goes. A sort nobody asked for goes too.
+ *
+ * It never adds a filter and changes no value. If the only filters were inventions, the Intent is
+ * left as the model gave it rather than turned into an empty one: the filters are visible and
+ * correctable, and an empty Intent is an error.
+ */
+export function normalizePurpose(sentence: string, intent: SearchArgs): SearchArgs {
+  const rule = purposeOf(sentence);
+  if (!rule) return intent;
+
+  const prescribed = rule.filters(factsOf(null));
+  const keeps = (key: keyof SearchArgs): boolean => prescribed[key] !== undefined;
+  const out: SearchArgs = { ...intent };
+
+  /* Every measurement axis the table can prescribe: keep only the side it names, unless the
+   * sentence itself made the axis explicit. Duration is deliberately not here: a length is the
+   * track's, not the purpose's, and "under three minutes for a workout" asked for it. */
+  const axes: readonly (readonly [readonly [keyof SearchArgs, keyof SearchArgs], boolean])[] = [
+    [['bpmMin', 'bpmMax'], hasTempo(sentence)],
+    [['valenceMin', 'valenceMax'], hasAny(sentence, VALENCE_WORDS)],
+    [['danceabilityMin', 'danceabilityMax'], hasAny(sentence, DANCEABILITY_WORDS)],
+    [['energyMin', 'energyMax'], false],
+    [['arousalMin', 'arousalMax'], false],
+  ];
+  for (const [[minKey, maxKey], explicit] of axes) {
+    if (explicit) continue;
+    if (!keeps(minKey)) delete out[minKey];
+    if (!keeps(maxKey)) delete out[maxKey];
+  }
+
+  if (!hasAny(sentence, SORT_WORDS)) delete out.sort;
+  return Object.keys(out).length === 0 ? intent : out;
+}
+
+/**
+ * The instruction, with the library's real ranges when a profile is available. Without one it
+ * is the static prompt: the device's ranges and no claim about a library.
+ */
 export function buildSystemPrompt(profile: LibraryProfile | null): string {
   const f = factsOf(profile);
   const lines = [
