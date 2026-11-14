@@ -29,6 +29,10 @@
     {
       "id": "LK",
       "name": "Look"
+    },
+    {
+      "id": "SN",
+      "name": "Snapshot"
     }
   ],
   "tasks": [
@@ -1488,6 +1492,140 @@
           "at": "2026-11-13T23:48:27Z",
           "by": "dsh",
           "text": "Review feedback applied:\n- The device card is now the cassette drawing plus three facts — Tracks, Snapshot coverage and Built. Card, Library generation and Order are gone, and so is the description under the title.\n- The Device tile no longer says \"card in the player\"; the sentence above the card reads \"The device's card is view-only — its albums are on the Albums page.\"\n- The drawing is /assets/k7-cassette.svg, painted through a mask in the primary ink (K25) and added to the worker's shell so it is there offline. K21 and K25 say where it sits.\n\nVerified: typecheck, 570 tests, build, manifest/shell/artifact checks and the look checker. Looked at 1440 and 390 with a stubbed status and library_stats; the dev origin cannot reach the player from this browser."
+        }
+      ]
+    },
+    {
+      "id": "LB-04",
+      "title": "Retire the one-page canvas builder now that the editor lives in tools/LabelEditor",
+      "state": "proposed",
+      "group": "LB",
+      "yolo": true,
+      "at": "2026-11-14T00:29:04Z",
+      "by": "dsh",
+      "desc": "The label editor is now a React app at `tools/LabelEditor` (ReUI, one Editor store, the same template engine, a real LVGL preview). Its exports were compared byte for byte with the one-page builder: the default design, a documented design with an aperture/rotation/static text, and a `label-template v1` round trip. They match.\n\nBut the repository still treats `resources/LVGL canvas builder.html` as the editor: `tools/label_pack.py --check-vocabulary` reads its generated VOCAB block and hashes the fonts embedded in it, and `make -C host label` boots that page in headless Chrome. So there are two copies of the editor and two vocabularies, and the day one changes the other is stale with nothing to catch it.\n\nThis retires the page and points the checks at the app: `label_pack.py`'s EDITOR and generated block move to `src/engine/vocab.generated.ts` (same markers, `export const VOCAB`), the font-hash check is replaced by the vocabulary's own face list (the fonts are files in `public/fonts/` now, not base64), the boot check opens the editor's built page and asserts the same things (stage, layer list, default slot values), and `make -C host label` builds `tools/LabelEditor` first. The paths named in `docs/specs/label-templates.md` follow.\n\nFinished when: `resources/LVGL canvas builder.html` is deleted, `make -C host check` is green with the editor's boot check, and removing a Slot from `assets/labels/vocabulary.json` makes the editor's copy fail the check."
+    },
+    {
+      "id": "SN-01",
+      "title": "The card's image carries each track's length, as format v4",
+      "state": "done",
+      "group": "SN",
+      "at": "2026-11-14T01:31:35Z",
+      "by": "dsh",
+      "desc": "`k7.db` cannot say how long a track is, so nothing can show its length or filter by it before it plays. This puts the length on every measured row.\n\nIt cannot be a v3 edit: v3 is the current format and its 32-byte row is full, every bit spoken for. So this is **format v4** — rows of 36 bytes with a 4-byte length in milliseconds (0 = unknown) beside the file size, `format_version 4`, and v3 refused with no compatibility shim, the way ADR 0069 refused v2. Upgrade order: firmware, then App, then the card re-exported. A v3 image is refused and left in place; the device serves without analysis until it is applied.\n\nThe App already has the length — it decodes every track to measure it — so nothing is measured twice. Both ends change together: the image builder in the browser, the reader in the device, and the App's own reader of the images it has stored (an old v3 image must read as \"no image\", not as an exception).\n\nFinished when: an image the App builds is read by the C reader and returns the same length for every measured track; a v3 image is refused with the spec's reason; the host tests pin the byte offsets, a 0/unknown length and byte-for-byte determinism; ADR 0087 and both snapshot specs state every byte and the re-export the change forces. The image grows 4 bytes a track: about 191 KB on the 3,485-track card (177 KB today), about 280 KB at 5,000.",
+      "notes": [
+        {
+          "at": "2026-11-14T01:33:52Z",
+          "by": "dsh",
+          "text": "Plan: write ADR 0087 and move the format to v4 (36-byte row, duration_ms at 8..11, size at 12..15, offsets after, format_version 4); producer in web/src/domain/snapshot.ts + snapshotExport.ts; reader in components/portable/snapshot; the App's stored-image reader and every v3/32 assumption; tests on both sides; both snapshot specs and the README's format paragraph. No search or UI in this task."
+        },
+        {
+          "at": "2026-11-14T01:42:53Z",
+          "by": "dsh",
+          "text": "The card's image now carries each track's length, as format v4.\n\nWhat changed for you:\n- `k7.db` rows are 36 bytes and hold `duration_ms` beside the file size. The App writes the length it already measured (or reads it from tags on the tag-only path, so a Mixed-In-Key library is not all-unknown), and the device reads it into the row.\n- The format is v4 only: a v1, v2 or v3 image is refused with the spec's reason and left in place; the device serves without analysis until the card is re-exported. The upgrade order is firmware, then App, then card.\n- An image this browser stored before the change reads as \"no image\" rather than as an error, and a playlist edit on such a card says to measure it again, instead of writing a half-empty image.\n- ADR 0087, `snapshot-format.md`, `snapshot.md`, the front-door spec and the README state the new bytes and the re-export. The image grows 4 bytes a track: about 191 KB on the 3,485-track card (from 177 KB), about 280 KB at 5,000 (from ~260 KB).\n\nVerified:\n- `make -C host test layering integration`: green, including 226 checks in `t29_snapshot` (the 36-byte offsets, 0 unknown, a 1 ms length, 4,294,967,295 ms, 5,000 rows, v1/v2/v3 refused, apply round trip).\n- A web-built image was opened by the C reader and returned `version=4, duration_ms=8000` for its 8-second track — the two implementations agree on the bytes.\n- `npm run typecheck` clean; `npm test` 588 passed (snapshot, export, playlist patch, image source, tag rows).\n- The `label` tier of `make -C host check` fails here because headless Chrome's GPU process cannot start in this sandbox; the label tests themselves pass (`t33`, vocabulary, selftest). It is unrelated to the Snapshot, and the label resources are being edited by another session in this tree.\n\nWhat to check:\n- Re-export a card after the firmware and App are updated: before that the card is refused and the player has no analysis. The 191/280 KB figures are arithmetic, not a measurement — SN-05 proves them on the board.\n- The working tree also has changes from another writer (`web/src/ui/areas/Player.tsx`, `web/app.html`, root `package.json`, a canvas-builder copy under `resources/`); none of them are in this task's diff."
+        }
+      ]
+    },
+    {
+      "id": "SN-02",
+      "title": "Length is a search filter and a sort, on both library sources",
+      "state": "done",
+      "group": "SN",
+      "deps": ["SN-01"],
+      "at": "2026-11-14T01:31:35Z",
+      "by": "dsh",
+      "desc": "With the length on the row, the library can answer by it: `library_search` gains `duration_min`/`duration_max` in seconds and `sort: \"duration\"`, and `library_track` reports the length (`null` when the track has no row). The Last-image source implements the same rules, and the S4 conformance corpus is built now — one JSON fixture of rows, queries and expected results run by vitest and by the C host tests — so the two implementations cannot drift on this new axis. It also retires the shared-corpus gap APP-21 left.\n\nA length range sees only tracks with a row, as P9 already says for every measurement: a track with no row is excluded from the range and still found by name.\n\nFinished when: the same corpus passes on both sides, covering a one-sided bound, both bounds, an unknown length and the sort; the tool schema and the README's example name the new arguments; the bridge passes them through unchanged.",
+      "notes": [
+        {
+          "at": "2026-11-14T01:47:10Z",
+          "by": "dsh",
+          "text": "Plan: duration_min/duration_max in seconds (0 unset) and sort=duration on the device, the bridge types and the image source; duration_ms in the analysis JSON; the S4 JSON conformance corpus shared by vitest and the C host tests; then snapshot.md, k7-app P2/P9/S4 and the README."
+        },
+        {
+          "at": "2026-11-14T01:53:32Z",
+          "by": "dsh",
+          "text": "A track's length is now a search argument and a sort on both library sources, and the two implementations are pinned by one shared corpus.\n\nWhat changed for you:\n- `library_search` takes `duration_min`/`duration_max` in seconds (the row keeps milliseconds) and `sort: \"duration\"`. `library_track` and every search result carry `duration_ms` inside `analysis`: the whole number, or `null` when the card never measured that track.\n- A length range behaves like the other measurement ranges: inclusive, and a track with no row is excluded — it is still found by name.\n- The Last-image source applies the same rules, and the bridge maps the two arguments to the device's own names.\n- The S4 conformance corpus now exists: `host/tests/snapshot-conformance.json`, ten cases over six tracks, read by the App's vitest and by `host/tests/t29_snapshot.c`. It covers one-sided and both bounds, an exact bound, an unknown length that is not zero, paging after the sort, a name search on an unmeasured track, a combined BPM/length range, and the sort with an unknown last.\n\nOne divergence found and fixed: the image source sorted a track with no BPM (or no length) *first*, while the device sorts it last. The corpus's BPM-sort case now catches that, and the image source matches the device.\n\nVerified:\n- Host unit tests green; `t29_snapshot` 295 checks (the corpus included), `snapshot_tests.py` green end to end (a 10.5 s length in the JSON, `null` for the track with no length, the duration sort and range over MCP).\n- `make -C host test integration` green, the control build compiles, `npm run typecheck` clean and 601 web tests pass.\n- The `label` tier still fails here because headless Chrome's GPU process cannot start in this sandbox; it is unrelated and that area is being edited by another session.\n\nWhat to check:\n- Filter by length in Ask's Filters sheet once SN-03 adds the fields; today the arguments work over MCP and the image source, but no Ask control produces them yet (SN-04).\n- The corpus is the contract for both sides: a change to either engine that moves a result fails one of the two suites."
+        }
+      ]
+    },
+    {
+      "id": "SN-03",
+      "title": "The App shows a track's length, and filters by it",
+      "state": "done",
+      "group": "SN",
+      "deps": ["SN-02"],
+      "at": "2026-11-14T01:31:35Z",
+      "by": "dsh",
+      "desc": "The App shows the length where it lists tracks, and lets a person search by it: Media's album rows show `3:45`, the Filters sheet gains a shortest/longest pair and a `duration` sort, and a track the card has not measured shows no length rather than `0:00`. A virtual card shows lengths before it ever reaches the player, because the browser measured them.\n\nFinished when: the same album shows lengths from a device card and from a virtual card; a Filters run with a length range returns the matching tracks and the sheet keeps its bounds when reopened; an old v3 image shows no lengths until the card is re-exported.",
+      "notes": [
+        {
+          "at": "2026-11-14T01:57:07Z",
+          "by": "dsh",
+          "text": "Plan: Media album rows show m:ss from the device's analysis.duration_ms or the image row; AskFilters gains a length pair (seconds, shown as m:ss) and a duration sort; absent length prints nothing, never 0:00; tests for both sources and the v3 image case."
+        },
+        {
+          "at": "2026-11-14T01:58:58Z",
+          "by": "dsh",
+          "text": "Media now shows each track's length, and the Filters sheet can search by it.\n\nWhat changed for you:\n- Every track row in an album shows its length (`3:45`) beside the Play/Queue button, right-aligned in a fixed column so the buttons do not move row to row. It comes from the player's answer when the card is in the player, and from the browser's own image when it is not — so a virtual card shows lengths before it ever reaches the player.\n- A track neither source measured prints nothing. It does not print `0:00`, which would be a claim; and an old v3 image simply has no lengths until the card is re-exported.\n- The Filters sheet has a **Length min (s)** / **Length max (s)** pair and a `duration` sort. The bounds are seconds, the unit `library_search` takes, and they survive reopening from an answer's Intent. A hand-typed negative is treated as no bound.\n\nVerified:\n- `npm run typecheck` clean; `npm test` 605 passed (new `track-length` tests cover the device answer, the image fallback, the preference order and the unknown); `npm run build` and `npm run check:look` green (colour, palette, decoration, shape, image).\n- The UI is not visually verified in a browser here — the page needs a card and a running device; the length logic itself is unit-tested.\n\nWhat to check:\n- Open an album with a real card in the player, then the same album as a virtual card: both rows should carry lengths.\n- Open Filters, set 60 and 240, run, then reopen Filters from the answer: the bounds should still be there.\n- With a v3 card, the rows should show no length at all until it is re-exported."
+        }
+      ]
+    },
+    {
+      "id": "SN-04",
+      "title": "Ask understands a track's length, not just a session's",
+      "state": "done",
+      "group": "SN",
+      "deps": ["SN-02", "SN-03"],
+      "at": "2026-11-14T01:31:35Z",
+      "by": "dsh",
+      "desc": "Ask can take a track's length from a sentence — \"tracks under three minutes\", \"long mixes\" — and carry it in the Intent. The schema, the prompt and `parseIntent` gain the pair, clamped to the lengths the card actually holds; the profile adds the library's length bounds and quartiles like the other axes; the model still sees no track, only the aggregates.\n\nThe existing rule stays: a *session* length — \"two hours of fast techno\" — is `limit`, not a track filter. The examples and tests pin both readings, so the model cannot turn a listening session into a length bound.\n\nFinished when: \"tracks under 3 minutes\" runs the length range and the result shows the lengths; \"an hour of techno\" still returns about 15 tracks; a card's profile bounds come from its own rows; tests cover the clamp, both readings and the profile.",
+      "notes": [
+        {
+          "at": "2026-11-14T02:06:37Z",
+          "by": "dsh",
+          "text": "Plan: add duration to the profile (seconds), the Intent schema, parseIntent's clamp and repair, the prompt's session-vs-track rule, the answer's reading, and the tests: an hour still means about 15 tracks, under 3 minutes means a length bound."
+        },
+        {
+          "at": "2026-11-14T02:10:01Z",
+          "by": "dsh",
+          "text": "Ask now understands a track's length, and keeps it apart from the length of a listening session.\n\nWhat changed for you:\n- \"tracks under three minutes\" becomes `duration_max: 180`; \"long mixes\" becomes `duration_min: 480`. The Intent schema, the prompt and `parseIntent` carry the pair in seconds, clamped to 0..86400, with an inverted pair ordered and a bound of 0 dropped rather than read as \"0:00\".\n- The listening-session rule stays: \"two hours of fast techno\" is still `limit` (15 tracks an hour, max 100), not a length bound. The prompt says both rules in one place, and the few-shot examples show one of each, so the model is not left to guess which \"long\" means.\n- The library profile gained a length axis (seconds) from both builders — the App's own analyses and a stored image's rows. When Ask has a profile, the schema's length bounds and the \"short\"/\"long\" thresholds are that library's own (quartiles), like BPM and the rest.\n- The answer reads a length back as a clock: \"length up to 3:00\", \"length from 1:00\", \"length 1:00–4:00\".\n- Ask's own result rows now show each track's length beside its BPM and key, so a length-filtered answer shows what it found.\n\nVerified:\n- `npm run typecheck` clean; `npm test` 607 passed (the new cases cover the clamp, the zero bound, the inverted pair, the session-vs-track examples, the schema ranges, the profile axis from both builders, and the clock reading); `npm run build` and `npm run check:look` green.\n- What is not testable here is the model's own behaviour: it needs Chrome's built-in model. The contract around it — prompt, schema, examples, clamp and profile — is what is pinned.\n\nWhat to check:\n- With the built-in model, ask \"tracks under three minutes\": the answer should say \"length up to 3:00\" and the rows should be short. Then ask \"an hour of techno\": it should still come back as about 15 tracks, with no length bound.\n- Open Filters from either answer: the Length fields should be filled from the Intent."
+        }
+      ]
+    },
+    {
+      "id": "SN-05",
+      "title": "The length is proven on the card and the board",
+      "state": "todo",
+      "group": "SN",
+      "deps": ["SN-01", "SN-02", "SN-03", "SN-04"],
+      "at": "2026-11-14T01:31:35Z",
+      "by": "dsh",
+      "desc": "The tier the host cannot prove. Re-export the real card as v4, flash the firmware first and deploy the App second, then insert the card. Confirm a v3 image is refused cleanly — logged, boot continues, no analysis — and a v4 image is accepted. Then check the numbers: the image's size on the 3,485-track card, `library_stats` coverage, `library_track`'s length against the file's own duration, one length-filtered search, one ask, and a file replaced at the same path reading as unanalysed.\n\nFinished when: the board has run all of it, with the measured image size and the search's and the ask's answers beside the result, and a v3 card's refusal is a log line rather than a boot problem.",
+      "notes": [
+        {
+          "at": "2026-11-14T02:14:58Z",
+          "by": "dsh",
+          "text": "Plan: build the sunton firmware from this tree, prepare the v4 card and the board checklist, record what the host has already proven, and leave the flash/card/panel evidence to the board step (serial shared)."
+        },
+        {
+          "at": "2026-11-14T02:15:43Z",
+          "by": "dsh",
+          "text": "Stopped at the board gate: everything that can be done without the panel and a card is done; the acceptance evidence is board-tier.\n\nBuilt: `./tools/build.sh sunton build` completes from this tree. `sd_stream_server.bin` is 0x1fa700 bytes (2,076,416 B), 51% of the app partition free. The v4 reader, the new MCP arguments and both tool schemas compile for the device.\n\nAlready proven on the host (not board evidence):\n- A v3 image is refused with `state: invalid`, reason `unknown format version`; the server stays up and answers — the same validation the update path runs before it erases a partition.\n- A v4 image is accepted; `library_track` returns `duration_ms` (10 500 for the 10.5 s fixture), a length range excludes the unmeasured track, and `sort: \"duration\"` puts the unknown last (`snapshot_tests.py`, `t29_snapshot` 295 checks, the shared corpus).\n- The App's own image builder and the C reader agree on the bytes (a web-built v4 image opened by the C reader: version 4, duration 8000 ms).\n\nRemaining, in this order (the ADR's upgrade order):\n1. Flash the firmware: `./tools/build.sh sunton flash` (the port is free and no monitor is attached; not run here). The v3 card still in the device should be refused at boot — look for the log line and `library_stats` reporting invalid; the player serves without analysis.\n2. Deploy the App (the build in `web/dist` is current).\n3. Re-export the card from Prepare. Record `k7.db`'s size: the row area grows 4 B a track, so 3,485 tracks is +13,940 B over the 177 KB v3 image; the real figure is the card's own.\n4. Check: coverage in `library_stats`; `library_track` against the file's own duration (`ffprobe`); a `duration_max: 180` search; one ask (\"tracks under three minutes\"), whose rows should show lengths; and a file replaced at the same path reading as unanalysed.\n\nThe pause is the card: none is mounted here and the re-export is the App's browser flow. Resume when the board and a v4 card are in hand."
+        },
+        {
+          "at": "2026-11-14T02:31:33Z",
+          "by": "dsh",
+          "text": "Flashed and proven on the board as far as a card/browser step can be done here; the real card still needs its App re-export.\n\nFlash: `./tools/build.sh sunton flash` wrote 2,074,368 bytes and verified the hash; the board reset and booted the new firmware.\n\nBoard evidence taken from the panel and over MCP:\n- The v3 card is refused cleanly, as a log line, not a boot problem: `E (1974) app: snapshot: unknown format version; queries answer without measurements`. The panel started, the card's 1,495 tracks list and play, and `library_stats` reported `state: invalid`, reason `unknown format version`, coverage 0.\n- A v4 image uploaded through the device's own `/api/snapshot` was accepted: `state: ok`, `format_version: 4`, 1 row.\n- The row's length is the file's own: `library_track` returned `duration_ms: 77640` while `/api/status` reported `duration_ms: 77640` for the same playing file.\n- The length is searchable on the board: `duration_max: 90` matched it; `duration_max: 60` matched nothing.\n- The sort puts the unknown last: `sort: \"duration\"` returned the measured track first, then the 1,494 rows with no measurements.\n- The size binding still holds in v4: an image with the same path and a size one byte off gave coverage 0 and `analysis: null`; restoring the right size gave coverage 1 and `duration_ms: 77640`.\n\nWhat is left, and needs the card and the browser:\n1. Take the card out, open the App, and re-export it from Prepare. Record `k7.db`'s size before/after (the row area grows 4 B a track; 1,495 tracks is ~5.8 KiB).\n2. Reinsert the card; `library_stats` should move from 1 analysed to the card's real coverage, and the whole library's rows should carry lengths.\n3. In the browser, ask \"tracks under three minutes\" and check the answer's reading and the lengths on its rows.\n4. Optionally replace one file at the same path and confirm it reads as unanalysed.\n\nNote: the board now holds the 1-row synthetic image in its snapshot partition; the card's v3 `k7.db` is still on the card, untouched. The next valid card export replaces the synthetic image."
+        },
+        {
+          "at": "2026-11-14T02:42:13Z",
+          "by": "dsh",
+          "text": "The sunton flash was replaced by the dev variant: the App was being opened at https://k7-dev.xperiments.dev:8000, and the shipping build answers CORS with the production origin only, so the browser blocked every request and the App said 'device unreachable' while the device was up. The dev build trusts that origin (verified: Access-Control-Allow-Origin echoes https://k7-dev.xperiments.dev:8000; the production origin is still accepted). Same firmware code, so the evidence above still holds; only the origin allowlist differs."
+        },
+        {
+          "at": "2026-11-14T03:07:56Z",
+          "by": "dsh",
+          "text": "The first real re-export reached the board as format 4 but with every length zero: rows 1,502, coverage 1,259 of 1,495, and library_track returned duration_ms: null on measured rows (the playing track is one of the 236 unmeasured). Cause: the library's analyses are all tag-only (tagged bpm/key/mood/energy on every analysed row) and the content-keyed cache still holds analyses written before the tag path read a length, so the image was built from track.duration: 0. Fixed in the App: the image builder now reads the file's header for a length when the analysis has none (tested on a real FLAC), and the queue heals such a cached analysis once and stores it back, so later runs do not re-read. 609 web tests and the build pass. A second Prepare/re-export with the fixed App is needed; the device still holds the zero-length image until then."
         }
       ]
     }
