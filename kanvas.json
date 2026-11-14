@@ -1632,11 +1632,18 @@
     {
       "id": "APP-27",
       "title": "Re-run the corpus with the prepared purpose prompt",
-      "state": "todo",
+      "state": "doing",
       "group": "APP",
       "at": "2026-11-14T15:16:47Z",
       "by": "dsh",
-      "desc": "Measure the one prepared prompt change against the frozen Baseline 2.\n\nThe change is the rule 'a purpose word sets the table's filters and the count, never BPM, valence or danceability' plus the '10 songs for a workout' example. It is already prepared on the branch evals/phase-4-prompt.\n\nFinished means: the change is applied to the current harness on a run branch, all five combinations are run three times (990 calls, about an hour), and the result is compared with Baseline 2 — shipped static 30/64 model, 31/64 effective; examples-alone 31/64. Merge only if the shipped static arm does not regress and the purpose rows improve; otherwise discard and record the numbers. The prepared branch's commit is labelled DO NOT MERGE, and the Baseline 2 export stays the comparison.\n\nWhy a run is worth it: the few-shot turns are the lever the first run found (11 to 31), and the over-fill and purpose rows still fail. The prompt has lost before (8/12), so the bar is a measured improvement, not a hope.\n\nRun this before the key normalizer, or the prompt result is confounded."
+      "desc": "Measure the one prepared prompt change against the frozen Baseline 2.\n\nThe change is the rule 'a purpose word sets the table's filters and the count, never BPM, valence or danceability' plus the '10 songs for a workout' example. It is already prepared on the branch evals/phase-4-prompt.\n\nFinished means: the change is applied to the current harness on a run branch, all five combinations are run three times (990 calls, about an hour), and the result is compared with Baseline 2 — shipped static 30/64 model, 31/64 effective; examples-alone 31/64. Merge only if the shipped static arm does not regress and the purpose rows improve; otherwise discard and record the numbers. The prepared branch's commit is labelled DO NOT MERGE, and the Baseline 2 export stays the comparison.\n\nWhy a run is worth it: the few-shot turns are the lever the first run found (11 to 31), and the over-fill and purpose rows still fail. The prompt has lost before (8/12), so the bar is a measured improvement, not a hope.\n\nRun this before the key normalizer, or the prompt result is confounded.",
+      "notes": [
+        {
+          "at": "2026-11-14T15:23:38Z",
+          "by": "dsh",
+          "text": "Plan: apply the prepared purpose rule and workout example on a run branch off current master, clear the saved baseline in the harness, run the five combinations three times (990 calls), export, and compare the model verdicts and the purpose rows against Baseline 2; merge only on a measured improvement."
+        }
+      ]
     },
     {
       "id": "APP-28",
