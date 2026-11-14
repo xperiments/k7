@@ -32,6 +32,12 @@ idf_build_set_property(EXTRA_COMPONENT_EXCLUDE_DIRS
 file(READ "${CMAKE_CURRENT_LIST_DIR}/VERSION" K7_VERSION)
 string(STRIP "${K7_VERSION}" K7_VERSION)
 
+# A configure reads VERSION once. Without this dependency, a bump that changes no other CMake
+# input leaves the app descriptor on the old number while the manifest already says the new
+# one - the panel's About row and the Site disagree about the same binary.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+             "${CMAKE_CURRENT_LIST_DIR}/VERSION")
+
 project(sd_stream_server VERSION ${K7_VERSION})
 
 # LVGL inherits the project's -Og, and the interface's rendering is the hot path on the
