@@ -659,3 +659,56 @@ describe('the trace sink', () => {
     expect(model.askModel).not.toHaveBeenCalled();
   });
 });
+
+describe('the purpose normalizer on the shipped path', () => {
+  beforeEach(() => model.askModel.mockReset());
+
+  const overfill = JSON.stringify({
+    bpm_min: 130,
+    bpm_max: 160,
+    energy_min: 70,
+    energy_max: 90,
+    danceability_min: 70,
+    danceability_max: 90,
+    valence_min: 60,
+    valence_max: 80,
+    arousal_min: 60,
+    arousal_max: 80,
+    sort: 'bpm',
+    limit: 10,
+  });
+
+  it('returns the table answer for the over-fill', async () => {
+    model.askModel.mockResolvedValue(overfill);
+    await expect(requestIntent('10 songs for a workout')).resolves.toEqual({
+      limit: 10,
+      energyMin: 70,
+      arousalMin: 60,
+    });
+  });
+
+  it('leaves a sentence with no purpose word alone', async () => {
+    model.askModel.mockResolvedValue('{"bpm_max":95}');
+    await expect(requestIntent('slow')).resolves.toEqual({ bpmMax: 95 });
+  });
+
+  it('normalizes a repaired answer, after the repair', async () => {
+    model.askModel
+      .mockResolvedValueOnce('{"query":"songs","bpm_min":130}')
+      .mockResolvedValueOnce('{"query":"Daft Punk","bpm_min":130}');
+    await expect(requestIntent('workout songs by Daft Punk')).resolves.toEqual({
+      query: 'Daft Punk',
+    });
+  });
+
+  it('still traces the raw answer, before normalizing', async () => {
+    model.askModel.mockResolvedValue(overfill);
+    const seen: IntentTrace[] = [];
+    await expect(requestIntent('10 songs for a workout', null, (a) => seen.push(a))).resolves.toEqual({
+      limit: 10,
+      energyMin: 70,
+      arousalMin: 60,
+    });
+    expect(seen[0].answer).toBe(overfill);
+  });
+});

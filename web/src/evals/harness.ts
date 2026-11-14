@@ -168,6 +168,8 @@ export interface RunRecord extends RunBase {
   final: SearchArgs | IntentFailure | null;
   /** The harness's own check of `raw` against the same `intentSchema` the model was sent. */
   schemaOk: boolean;
+  /** The purpose normalizer changed the Intent the model returned. Never model quality. */
+  normalized: boolean;
   latencyMs: number;
   search?: { matched: number; tracks: number; truncated: boolean };
   scored?: ScoredRun;
@@ -187,6 +189,7 @@ function failureRecord(base: RunBase, message: string): RunRecord {
     parsed: null,
     final: null,
     schemaOk: false,
+    normalized: false,
     latencyMs: 0,
     verdictHuman: null,
     note: '',
@@ -286,10 +289,19 @@ export async function runOne(
     };
   }
 
-  const scored = scoreRow(row, raw, parsed, {
-    profile: target.profile,
-    matched: search?.matched,
-  });
+  const normalized =
+    combo.arm === 'requestIntent' &&
+    !('error' in parsed) &&
+    !('error' in final) &&
+    intentChanged(final, parsed);
+
+  const scored = {
+    ...scoreRow(row, raw, parsed, {
+      profile: target.profile,
+      matched: search?.matched,
+    }),
+    normalized,
+  };
 
   return {
     ...base,
@@ -300,6 +312,7 @@ export async function runOne(
     parsed,
     final,
     schemaOk: scored.axes.shape,
+    normalized,
     latencyMs,
     search,
     scored,
@@ -307,6 +320,21 @@ export async function runOne(
     note: '',
     invalid: false,
   };
+}
+
+/**
+ * Whether the Intent that ran differs from the one `parseIntent` produced. This is how the
+ * harness reports the purpose normalizer separately from model quality: the model's answer is
+ * `parsed`, the search ran `final`, and a difference here is app-side.
+ */
+export function intentChanged(a: SearchArgs, b: SearchArgs): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    const left = (a as Record<string, unknown>)[key];
+    const right = (b as Record<string, unknown>)[key];
+    if (JSON.stringify(left) !== JSON.stringify(right)) return true;
+  }
+  return false;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -366,7 +394,11 @@ export function scoredRunsFor(records: readonly RunRecord[], combo: Combo): Scor
         record.scope === combo.scope &&
         record.scored !== undefined,
     )
-    .map((record) => ({ ...record.scored!, repair: record.repair }));
+    .map((record) => ({
+      ...record.scored!,
+      repair: record.repair,
+      normalized: record.normalized,
+    }));
 }
 
 export function exportPayload(run: StoredRun): string {

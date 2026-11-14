@@ -206,6 +206,11 @@ Every row's sentence is the note's; only predicates and a few expectations chang
 - The human verdict is per row. Where it disagrees with the row's automatic verdict, the harness
   flags a **rubric bug**: the disagreement is a defect in this document, not in the model.
 
+The shipped arm also records **`normalized`** when the purpose normalizer changed the model's
+Intent. It is reported separately and on purpose: a normalized run explains part of a change in
+the shipped number, and it is not evidence that the model improved. The row's verdict is still the
+model's Intent scored against this rubric.
+
 ## 6. The first run
 
 The matrix is five combinations, not the 3×3 cross product, because the two control arms exist to

@@ -505,6 +505,7 @@ export function Harness() {
                                   search: record.search,
                                   parsed: record.parsed,
                                   final: record.final,
+                                  normalized: record.normalized,
                                   reasons: record.scored?.reasons,
                                   axes: record.scored?.axes,
                                   attempts: record.attempts,

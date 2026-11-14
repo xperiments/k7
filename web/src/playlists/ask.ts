@@ -1007,12 +1007,17 @@ export async function requestIntent(
     return failure(assistantFailure(error));
   }
 
+  /* The purpose normalizer is the last filter step: it runs on whatever the model finally said,
+   * including a repaired answer, so the Intent the App shows is the one the search will run. */
+  const finish = (result: SearchArgs | IntentFailure): SearchArgs | IntentFailure =>
+    'error' in result ? result : normalizePurpose(asked, result);
+
   const intent = parseIntent(answer);
 
   if (!('error' in intent)) {
     const query = intent.query;
-    if (!query || isNameQuery(asked, query)) return intent;
-    return repairQuery(asked, answer, query, ask);
+    if (!query || isNameQuery(asked, query)) return finish(intent);
+    return finish(await repairQuery(asked, answer, query, ask));
   }
 
   if (!intent.retryable) return intent;
@@ -1027,7 +1032,7 @@ export async function requestIntent(
   } catch (error) {
     return failure(assistantFailure(error));
   }
-  return parseIntent(repaired);
+  return finish(parseIntent(repaired));
 }
 
 /** The one call a repair makes, and the trace it reports. */

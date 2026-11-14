@@ -12,6 +12,7 @@ import {
   digest,
   exportPayload,
   fixturesFrom,
+  intentChanged,
   loadTarget,
   scoredRunsFor,
   type RunRecord,
@@ -52,6 +53,7 @@ function record(overrides: Partial<RunRecord> = {}): RunRecord {
     parsed,
     final: parsed,
     schemaOk: true,
+    normalized: false,
     latencyMs: 1,
     scored: scoreRow(row, RAW, parsed, { matched: 5 }),
     verdictHuman: null,
@@ -65,6 +67,15 @@ describe('digest', () => {
   it('is stable and notices a changed string', () => {
     expect(digest('abc')).toBe(digest('abc'));
     expect(digest('abc')).not.toBe(digest('abd'));
+  });
+});
+
+describe('intentChanged', () => {
+  it('notices a filter the normalizer removed, and nothing else', () => {
+    expect(intentChanged({ bpmMax: 95 }, { bpmMax: 95 })).toBe(false);
+    expect(intentChanged({ bpmMax: 95 }, {})).toBe(true);
+    expect(intentChanged({ mood: ['happy'] }, { mood: ['happy'] })).toBe(false);
+    expect(intentChanged({ mood: ['happy'] }, { mood: ['party'] })).toBe(true);
   });
 });
 

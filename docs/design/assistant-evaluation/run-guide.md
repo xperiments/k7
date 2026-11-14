@@ -81,9 +81,10 @@ the reason in the note. One human verdict per row:
 **Export run** downloads one JSON blob: `{at, machine, matrix, records}`, where each record carries
 the sentence, arm, scope, profile, example count and hash, `systemSha`, `schemaSha`, the
 availability before the run, the raw answer(s), the repair kind, the parsed Intent, the schema
-check, latency, the search result, both verdicts, the note and the machine. Nothing is uploaded
-and nothing is committed: `.scratch/` is the place for a raw blob, and the aggregate goes into
-the run ticket's **Comments**.
+check, latency, the search result, both verdicts, the note and the machine. `normalized` marks a shipped-arm run
+whose Intent the purpose normalizer changed; read it beside the model's own verdict, never instead
+of it. Nothing is uploaded and nothing is committed: `.scratch/` is the place for a raw blob, and
+the aggregate goes into the run ticket's **Comments**.
 
 The export is also what makes the rubric reusable: **Export fixtures** writes an `answers.json`
 shaped like `src/evals/fixtures/answers.json`, so a real run can replace the reconstructed
