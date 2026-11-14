@@ -9,8 +9,8 @@ in the repository yet**; the first run produces the baseline, and it is yours to
 - Desktop Chrome 148 or later, with built-in AI on, on a machine that meets Chrome's floor.
   `chrome://on-device-internals` is the only place the model's version and size are visible.
 - **Free disk and a quiet Chrome.** The component updater hot-swaps the model; a prompt running
-  during a swap can fail. The harness records such a failure and marks the affected rows invalid
-  rather than stopping the run.
+  during a swap can fail. The harness records the failure, stops at that row with the count and
+  the reason, and leaves the rest to Resume.
 - The repository's dev certificate (the one `k7-deploy.md` §4 sets up with mkcert). Without it the
   dev server is plain HTTP, the page still works, but the origin differs from the App's.
 - A **Last image** in this browser if you want scopes 2 and 3. Scope 1 needs no library at all;
@@ -35,8 +35,11 @@ The page shows Chrome's availability first:
 - `downloading` — the page waits; do not start a run.
 - `unavailable` / `absent` — the machine cannot run the model; the harness says which.
   There is nothing to measure here.
-- the model disappears mid-run — the run records the error, continues to the next sentence, and
-  marks that row invalid. Re-run the invalid rows when it is back.
+- the model disappears mid-run, or one call never answers — the run stops at that row, says
+  `Stopped at N/198: <reason>`, and keeps every finished run. Press **Resume** when it is back;
+  it starts at the first missing repetition. **Answer timeout** (in the Machine card, 90 s by
+  default) is the ceiling for one answer: raise it if this machine answers slowly, lower it if
+  you would rather see a stall sooner.
 
 ## What to run
 

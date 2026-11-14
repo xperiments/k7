@@ -110,6 +110,8 @@ export interface AskModelOptions {
    * by example instead of describing it in the system message.
    */
   readonly examples?: readonly (readonly [string, string])[];
+  /** Abort the prompt (a harness ceiling); the App passes none. */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -121,6 +123,7 @@ export async function askModel({
   schema,
   sentence,
   examples,
+  signal,
 }: AskModelOptions): Promise<string> {
   const model = requireModel();
   const initialPrompts: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
@@ -134,7 +137,10 @@ export async function askModel({
   }
   const session = await model.create({ initialPrompts });
   try {
-    return await session.prompt(sentence, { responseConstraint: schema });
+    return await session.prompt(sentence, {
+      responseConstraint: schema,
+      ...(signal ? { signal } : {}),
+    });
   } finally {
     session.destroy();
   }

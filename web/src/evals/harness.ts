@@ -226,20 +226,20 @@ function described(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** The ADR's worst case is a 12.6 s first answer and 1–5 s after that; 45 s is a stall. */
-const ANSWER_TIMEOUT_MS = 45_000;
+/** The page's default ceiling; the ADR's worst warm case is a few seconds per answer. */
+export const DEFAULT_TIMEOUT_MS = 90_000;
 
 /**
  * A model call that never settles must not hold the run: the prompt API has no timeout of its
  * own, so the harness gives up, records the row, and lets a resume ask again. The abandoned
  * promise is ignored; the session it holds is destroyed when Chrome finally settles it.
  */
-export function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+export function withTimeout<T>(work: Promise<T>, ms: number, onTimeout?: () => void): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`no answer after ${Math.round(ms / 1000)} s`)),
-      ms,
-    );
+    const timer = setTimeout(() => {
+      onTimeout?.();
+      reject(new Error(`no answer after ${Math.round(ms / 1000)} s`));
+    }, ms);
     work.then(
       (value) => {
         clearTimeout(timer);
@@ -276,6 +276,7 @@ export async function runOne(
   target: Target,
   row: CorpusRow,
   rep: 1 | 2 | 3,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<RunRecord> {
   const availability = await availableNow();
   const system = buildSystemPrompt(target.profile);
@@ -311,6 +312,10 @@ export async function runOne(
     return failureRecord(base, `the model is ${availability}; this row was not asked`);
   }
 
+  /* A hung prompt must be cancelled, not merely ignored: the session is destroyed in the
+   * askModel finally only when its own promise settles, and an abandoned one can wedge the next
+   * call. The timeout aborts it. */
+  const controller = new AbortController();
   let attempts: Attempt[] = [];
   let raw = '';
   let parsed: SearchArgs | IntentFailure;
@@ -321,10 +326,16 @@ export async function runOne(
   try {
     if (combo.arm === 'requestIntent') {
       final = await withTimeout(
-        requestIntent(row.sentence, target.profile, (attempt) => {
-          attempts.push({ ...attempt });
-        }),
-        ANSWER_TIMEOUT_MS,
+        requestIntent(
+          row.sentence,
+          target.profile,
+          (attempt) => {
+            attempts.push({ ...attempt });
+          },
+          controller.signal,
+        ),
+        timeoutMs,
+        () => controller.abort(),
       );
       raw = attempts.at(-1)?.answer ?? '';
       latencyMs = attempts.reduce((sum, attempt) => sum + attempt.ms, 0);
@@ -341,8 +352,9 @@ export async function runOne(
     } else {
       const started = performance.now();
       raw = await withTimeout(
-        askModel({ system, schema, sentence: row.sentence, examples }),
-        ANSWER_TIMEOUT_MS,
+        askModel({ system, schema, sentence: row.sentence, examples, signal: controller.signal }),
+        timeoutMs,
+        () => controller.abort(),
       );
       latencyMs = performance.now() - started;
       parsed = parseIntent(raw);
@@ -436,11 +448,19 @@ export function dedupeRecords(records: readonly RunRecord[]): RunRecord[] {
   return [...byId.values()];
 }
 
+export interface RunSettings {
+  /** The page's ceiling for one model answer, in seconds. */
+  timeoutSeconds: number;
+}
+
 export interface StoredRun {
   startedAt: string;
   machine: MachineInfo;
+  settings: RunSettings;
   records: RunRecord[];
 }
+
+export const DEFAULT_SETTINGS: RunSettings = { timeoutSeconds: 90 };
 
 export function savedRun(): StoredRun | null {
   if (typeof localStorage === 'undefined') return null;
@@ -449,7 +469,11 @@ export function savedRun(): StoredRun | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredRun;
     if (!Array.isArray(parsed.records) || typeof parsed.startedAt !== 'string') return null;
-    return { ...parsed, records: dedupeRecords(parsed.records) };
+    return {
+      ...parsed,
+      settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
+      records: dedupeRecords(parsed.records),
+    };
   } catch {
     return null;
   }
@@ -502,6 +526,7 @@ export function exportPayload(run: StoredRun): string {
       at: new Date().toISOString(),
       startedAt: run.startedAt,
       machine: run.machine,
+      settings: run.settings,
       matrix: MATRIX,
       repetitions: REPETITIONS,
       rows: CORPUS.length,

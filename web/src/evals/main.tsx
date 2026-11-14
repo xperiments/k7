@@ -32,6 +32,7 @@ import {
   comboKey,
   comboLabel,
   clearRun,
+  DEFAULT_SETTINGS,
   exportPayload,
   finishedReps,
   fixturesFrom,
@@ -56,7 +57,17 @@ import '../index.css';
 const TOTAL = CORPUS.length * REPETITIONS;
 
 function freshRun(): StoredRun {
-  return { startedAt: new Date().toISOString(), machine: machineInfo(), records: [] };
+  return {
+    startedAt: new Date().toISOString(),
+    machine: machineInfo(),
+    settings: { ...DEFAULT_SETTINGS },
+    records: [],
+  };
+}
+
+/** The page keeps a typed value while it is being edited; this is the value a run uses. */
+function boundedTimeout(value: number): number {
+  return Number.isFinite(value) && value >= 15 ? Math.min(600, value) : DEFAULT_SETTINGS.timeoutSeconds;
 }
 
 function stamp(): string {
@@ -167,7 +178,13 @@ export function Harness() {
             if (finished.has(`${row.id}:${rep}`)) continue;
             let record: RunRecord;
             try {
-              record = await runOne(combo, target, row, rep as 1 | 2 | 3);
+              record = await runOne(
+                combo,
+                target,
+                row,
+                rep as 1 | 2 | 3,
+                boundedTimeout(runRef.current.settings.timeoutSeconds) * 1000,
+              );
             } catch (caught) {
               setError(
                 `Stopped at ${finishedReps(runRef.current.records, combo).size}/${TOTAL}: ` +
@@ -180,6 +197,8 @@ export function Harness() {
               ...runRef.current,
               records: upsertRecord(runRef.current.records, record),
             });
+            /* Give Chrome's model process a moment between sessions; it is a lot of sessions. */
+            await new Promise((resolve) => setTimeout(resolve, 250));
             setAvailability(record.availability);
             /* One unanswered row is not worth churning through the other 197: stop, keep the
              * records, and let Resume pick up from the first missing repetition. */
@@ -371,6 +390,33 @@ export function Harness() {
             {run.machine.userAgent} · {run.machine.hardwareConcurrency ?? '?'} cores ·{' '}
             {run.machine.deviceMemory ?? '?'} GB
           </p>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <label htmlFor="answer-timeout">Answer timeout</label>
+            <Input
+              id="answer-timeout"
+              type="number"
+              min={15}
+              max={600}
+              step={15}
+              className="w-24"
+              value={run.settings.timeoutSeconds}
+              onChange={(event) =>
+                commit({
+                  ...runRef.current,
+                  settings: { timeoutSeconds: Number(event.target.value) },
+                })
+              }
+              onBlur={() =>
+                commit({
+                  ...runRef.current,
+                  settings: {
+                    timeoutSeconds: boundedTimeout(runRef.current.settings.timeoutSeconds),
+                  },
+                })
+              }
+            />
+            <span>seconds, then the row is abandoned and can be resumed</span>
+          </div>
         </CardContent>
       </Card>
 

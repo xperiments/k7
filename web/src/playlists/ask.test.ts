@@ -659,6 +659,14 @@ describe('the trace sink', () => {
     ]);
   });
 
+  it('passes the abort signal to every model call it makes', async () => {
+    model.askModel.mockResolvedValue('{"bpm_max":95}');
+    const controller = new AbortController();
+    await requestIntent('slow', null, undefined, controller.signal);
+    const [options] = model.askModel.mock.calls[0] as [{ signal?: AbortSignal }];
+    expect(options.signal).toBe(controller.signal);
+  });
+
   it('does not call the model, or the sink, for an empty sentence', async () => {
     const result = await requestIntent('   ', null, () => {
       throw new Error('the sink must not fire without a model call');

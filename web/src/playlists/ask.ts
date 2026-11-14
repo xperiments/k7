@@ -993,6 +993,7 @@ export async function requestIntent(
   sentence: string,
   profile: LibraryProfile | null = null,
   trace?: (attempt: IntentTrace) => void,
+  signal?: AbortSignal,
 ): Promise<SearchArgs | IntentFailure> {
   const asked = sentence.trim();
   if (!asked) return failure('Say what you are looking for first.');
@@ -1006,9 +1007,11 @@ export async function requestIntent(
     reason: IntentTrace['reason'],
     askedSentence: string,
   ): Promise<string> => {
-    if (!trace) return askModel({ system, schema, sentence: askedSentence, examples });
+    if (!trace) {
+      return askModel({ system, schema, sentence: askedSentence, examples, signal });
+    }
     const started = performance.now();
-    const response = await askModel({ system, schema, sentence: askedSentence, examples });
+    const response = await askModel({ system, schema, sentence: askedSentence, examples, signal });
     trace({ call, reason, answer: response, ms: performance.now() - started });
     return response;
   };

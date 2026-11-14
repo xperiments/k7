@@ -83,6 +83,20 @@ describe('withTimeout', () => {
   it('passes an answer through', async () => {
     await expect(withTimeout(Promise.resolve('ok'), 1_000)).resolves.toBe('ok');
   });
+
+  it('aborts the work it gives up on', async () => {
+    let aborted = false;
+    await expect(
+      withTimeout(
+        new Promise(() => {}),
+        20,
+        () => {
+          aborted = true;
+        },
+      ),
+    ).rejects.toThrow(/no answer after/);
+    expect(aborted).toBe(true);
+  });
 });
 
 describe('run identity', () => {
@@ -170,6 +184,7 @@ describe('exportPayload', () => {
         deviceMemory: 16,
         onDeviceInternals: 'variant',
       },
+      settings: { timeoutSeconds: 90 },
       records: [record()],
     };
     const payload = JSON.parse(exportPayload(run));
@@ -182,5 +197,6 @@ describe('exportPayload', () => {
     expect(payload.matrix).toHaveLength(5);
     expect(payload.records).toHaveLength(1);
     expect(payload.machine.onDeviceInternals).toBe('variant');
+    expect(payload.settings.timeoutSeconds).toBe(90);
   });
 });
