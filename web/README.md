@@ -257,7 +257,7 @@ the same arguments.
 
 Ask searches the player when the **Device card** tile is selected, or when the player holds the
 selected card; the card's **Last image** otherwise, so a virtual card is always the image. The
-results say which one answered.
+results say which one answered, and for the player, how many of its tracks are analysed.
 
 When Ask has a library to describe, it tells the model that library's aggregates: its genres, its track count, and the range and quartiles of BPM, energy,
 danceability, valence and arousal. The model then cannot offer a genre the library does not have

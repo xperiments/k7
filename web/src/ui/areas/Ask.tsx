@@ -177,6 +177,11 @@ function AnswerBlock({
           Filters
         </Button>
       </div>
+      {tracks.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Every filter has to match at once, and a range only sees analysed tracks.
+        </p>
+      ) : null}
 
       {tracks.length > 0 ? (
         <Card size="sm">

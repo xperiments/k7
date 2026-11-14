@@ -1,5 +1,12 @@
 import type { LibraryProfile } from '../domain/snapshot';
-import { libraryStats, searchTracks, type McpSearch, type SearchArgs } from '../device/mcp';
+import {
+  libraryStats,
+  searchTracks,
+  statsCoverage,
+  type McpCoverage,
+  type McpSearch,
+  type SearchArgs,
+} from '../device/mcp';
 import type { DeviceStatus } from '../device/status';
 import { fetchStatus } from '../device/useDeviceStatus';
 import { profileFor } from '../playlists/profile';
@@ -61,6 +68,17 @@ export function draftScopeFor(
   return null;
 }
 
+/**
+ * The player's label, with the part a range actually sees: a measurement filter only reads a
+ * track whose row carries the value, so the library's total is not the searchable total.
+ */
+export function playerLabel(status: DeviceStatus | null, coverage: McpCoverage | null): string {
+  const tracks = status?.tracks ?? 0;
+  const base = `The player · ${tracks} tracks`;
+  if (!coverage || coverage.analysed >= tracks) return base;
+  return `${base} · ${coverage.analysed} analysed`;
+}
+
 function imageLabel(stored: StoredSnapshot): string {
   const at = Date.parse(stored.at);
   const day = Number.isFinite(at)
@@ -95,7 +113,7 @@ export async function resolveSource(
     return {
       kind,
       profile: profileFor(stored, stats),
-      label: `The player · ${status?.tracks ?? 0} tracks`,
+      label: playerLabel(status, statsCoverage(stats)),
       draftScope: draftScopeFor(kind, scope, status),
       search: (args) => searchTracks(args),
     };

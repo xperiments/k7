@@ -174,8 +174,10 @@ scope). Otherwise the
 is; with neither, an empty state that says which is missing, never a spinner. A **Virtual card**
 is always the image: the player cannot hold it.
 
-**S3. The surface says which source it shows.** "The player · 4 120 tracks" and "Last image ·
-11 February · 4 118 tracks" are different facts and must not look alike.
+**S3. The surface says which source it shows, and how much it measures.** "The player · 4 120
+tracks · 3 460 analysed" and "Last image · 11 February · 4 118 tracks" are different facts and
+must not look alike. A range only sees a track whose row carries the value (P9), so the player's
+label counts the analysed tracks.
 
 **S4. One conformance corpus, two implementations.** Filter semantics — BPM range, key, mood,
 energy, text, sort, offset, limit — are pinned as a JSON fixture of rows, queries and expected

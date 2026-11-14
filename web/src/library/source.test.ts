@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import type { DeviceStatus } from '../device/status';
 import type { StoredSnapshot } from '../storage/snapshots';
-import { chooseSource, draftScopeFor } from './source';
+import { chooseSource, draftScopeFor, playerLabel } from './source';
 
 const stored: StoredSnapshot = {
   scope: 'mark:vcard',
@@ -46,6 +46,23 @@ describe('chooseSource', () => {
     expect(chooseSource('mark:other', undefined, status('player'))).toBe('device');
     expect(chooseSource('mark:other', undefined, status(null, false))).toBe('none');
     expect(chooseSource('mark:other', undefined, null)).toBe('none');
+  });
+});
+
+describe('playerLabel', () => {
+  const player = { ...status('player'), tracks: 1495 };
+
+  it('says how many tracks a player range can actually see', () => {
+    expect(playerLabel(player, { tracks: 1495, analysed: 1259, percent: 84 })).toBe(
+      'The player · 1495 tracks · 1259 analysed',
+    );
+  });
+
+  it('leaves the label alone when every track is analysed, or there is no coverage', () => {
+    expect(playerLabel(player, { tracks: 1495, analysed: 1495, percent: 100 })).toBe(
+      'The player · 1495 tracks',
+    );
+    expect(playerLabel(player, null)).toBe('The player · 1495 tracks');
   });
 });
 
