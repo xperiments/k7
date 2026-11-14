@@ -178,11 +178,6 @@ export function PlayerArea() {
           </div>
         </div>
       )}
-
-      <p className="text-xs text-muted-foreground">
-        The live stream is shared: every listener hears the same track at the same moment, and this
-        page cannot pause it.
-      </p>
     </div>
   );
 }
