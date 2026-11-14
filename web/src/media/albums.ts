@@ -329,8 +329,6 @@ export interface MediaIndexState {
   reachable: boolean;
   /** Whether a card is in the player. Without one its library is empty and nothing answers. */
   card: boolean;
-  /** True when the cache this shelf reads is the player's own card. */
-  playerScope: boolean;
   deviceTracks: number;
   /** The image the player answers from; null when it does not say or has none. */
   deviceImage: DeviceImage | null;
@@ -412,7 +410,6 @@ export function useMediaIndex(): MediaIndexState {
     loading: cache === null,
     reachable,
     card: status?.card === true,
-    playerScope: deviceScope !== null && scope === deviceScope,
     deviceTracks: tracks,
     deviceImage,
   };

@@ -418,10 +418,12 @@ export function MediaView({
   const [selected, setSelected] = useState(0);
 
   /* The Carousel opens on the album the broadcast is carrying when a reader arrives from
-   * another area; after that the selection is theirs. `armed` waits for the index and the
-   * status to answer, and is spent by the first sync attempt or by any choice below, so a
-   * late poll cannot yank the shelf out from under a reader. It is set again whenever the
-   * view leaves the Carousel, so the next visit starts on the player's album again. */
+   * another area; after that the selection is theirs. The join is the playing path and the
+   * cache row's path, not the card's scope: the same card can be remembered under a mark,
+   * a fingerprint or the unscoped name, and the shelf it fills is still the one on air.
+   * `armed` waits for the index and the status to answer, and is spent by the first sync
+   * attempt or by any choice below, so a late poll cannot yank the shelf out from under a
+   * reader. It is set again whenever the view leaves the Carousel. */
   const { status } = useDeviceStatus();
   const playingPath = status?.playing?.path?.trim() || null;
   const armed = useRef(true);
@@ -430,11 +432,11 @@ export function MediaView({
       armed.current = true;
       return;
     }
-    if (!armed.current || !state.playerScope || state.loading || status === null) return;
+    if (!armed.current || state.loading || status === null) return;
     armed.current = false;
     const at = albumIndexOfPath(albums, playingPath);
     if (at >= 0) setSelected(at);
-  }, [album, drive, state.playerScope, state.loading, status, playingPath, albums]);
+  }, [album, drive, state.loading, status, playingPath, albums]);
 
   /* The route's album is applied once, when it arrives: a search that keeps it visible must
    * not drag the selection back to it after the reader has moved on. */
