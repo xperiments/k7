@@ -1758,19 +1758,32 @@
     {
       "id": "APP-32",
       "title": "Score each Intent field, not only the sentence",
-      "state": "proposed",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-31"],
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
-      "desc": "`scoreRow` gives one pass/fail per sentence, so a change that fixes the query and breaks BPM reads as a wash. Add a per-field breakdown beside the row verdict: query, genre, mood, key, bpm, energy, danceability, valence, arousal, duration, limit, offset, sort. The frozen rubric's verdict stays exactly as it is; this is an extra analysis of the same Intent, and the saved answers can be re-scored without a model run.\n\nFinished when:\n- every row reports, per field, missing / extra / wrong-side / too-vague / exact, and the harness records it;\n- a known-good and a known-bad answer for the same sentence differ on the field the change targets;\n- the frozen row verdicts and the 61 score tests are unchanged.\n\nThe rubric is frozen (`docs/design/assistant-evaluation/spec.md`): do not quietly make the field score part of pass/fail. If the team wants that, it is a new spec version."
+      "desc": "`scoreRow` gives one pass/fail per sentence, so a change that fixes the query and breaks BPM reads as a wash. Add a per-field breakdown beside the row verdict: query, genre, mood, key, bpm, energy, danceability, valence, arousal, duration, limit, offset, sort. The frozen rubric's verdict stays exactly as it is; this is an extra analysis of the same Intent, and the saved answers can be re-scored without a model run.\n\nFinished when:\n- every row reports, per field, missing / extra / wrong-side / too-vague / exact, and the harness records it;\n- a known-good and a known-bad answer for the same sentence differ on the field the change targets;\n- the frozen row verdicts and the 61 score tests are unchanged.\n\nThe rubric is frozen (`docs/design/assistant-evaluation/spec.md`): do not quietly make the field score part of pass/fail. If the team wants that, it is a new spec version.",
+      "notes": [
+        {
+          "at": "2026-11-14T23:32:39Z",
+          "by": "dsh",
+          "text": "Plan: add a per-field breakdown beside the frozen row verdict. Read the current `findings` and `filterOf`, give every verdict field (query, genre, mood, key, bpm, energy, danceability, valence, arousal, duration, limit, offset, sort) one of missing / extra / wrong-side / too-vague / exact / absent, carry it on `ScoredRun`, record it in the harness export, and test a known-good vs known-bad answer. The row verdict stays byte-identical; no product change."
+        },
+        {
+          "at": "2026-11-14T23:38:22Z",
+          "by": "dsh",
+          "text": "Every run now reports all 13 fields beside the frozen row verdict: query, genre, mood, key, bpm, energy, danceability, valence, arousal, duration, limit, offset and sort. Each is exact, missing, extra, wrong, wrong-side, narrowed, too-vague, partial or absent, with the expected and got values (and the values missing or beyond a list). The verdict itself is untouched; the breakdown never feeds it.\n\nThe case this was for: `{\"limit\":10}` for \"10 songs for a workout\" still passes the row, and now reads `limit exact, energy missing, arousal missing`. A sort the sentence never asked for passes too, and reads `sort extra`. An extra field the purpose table prescribes carries `allowed: true`, so it is not confused with an invention.\n\nTo check:\n- `web/src/evals/fields.ts` is the breakdown; `score.ts` stayed at 650 lines and only carries the result.\n- `score.test.ts` has 70 tests: the original 61 untouched, plus 9 for the field view, including the thin workout and the extra sort.\n- `harness.test.ts` asserts the exported record carries all 13 fields.\n- `cd web && npm run typecheck && npm test && npm run build`: 746 tests, all green.\n\n`aggregate()` also counts each field's states, so a saved run can be compared field by field without a model. The harness UI does not render a per-field table yet; the JSON record is the source."
+        }
+      ]
     },
     {
       "id": "APP-33",
       "title": "Let the sentence override the model on counts, lengths, BPM and keys",
-      "state": "proposed",
+      "state": "todo",
       "group": "APP",
       "deps": ["APP-32"],
+      "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
       "desc": "The sentence is the best source for a count, a length, a tempo and a key. Run pure extractors on it and let a fired extractor win over the model's value; the model keeps mood, genre, name and vague words like \"fast\". Extract:\n- counts: \"10 songs\", \"twenty tracks\", \"two hours\" → 15 per hour, cap 100;\n- durations: \"under 3 minutes\", \"over 8 min\" → seconds;\n- BPM: \"120 bpm\", \"around 140\";\n- keys: \"in A minor\", \"8A\", through `domain/key.ts` (only a key the grammar reads).\n\nFinished when:\n- the extractors live in a pure module beside `parse.ts` and are tested without a model;\n- the corpus rows that state a number or key (S7, S10, 13–18, 29–32, 44–47, N2) improve or hold on the per-field score, and no row that only implies a number regresses;\n- a key the grammar cannot read never replaces a valid one;\n- k7-app §7 P2 says the sentence's explicit number or key wins, and an ADR is filed if that changes the \"the model writes the Intent\" contract."
@@ -1778,9 +1791,10 @@
     {
       "id": "APP-34",
       "title": "Make the purpose table authoritative for the bounds it keeps",
-      "state": "proposed",
+      "state": "todo",
       "group": "APP",
       "deps": ["APP-32"],
+      "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
       "desc": "`normalizePurpose` only deletes, so \"music for sleeping\" keeps the model's invented energyMax 90 instead of the table's 40, and an empty or limit-only answer for \"10 songs for a workout\" either fails or returns everything. Make the table authoritative:\n- when a purpose is detected, snap a kept bound on the wrong side of the table value to the table (the profile's value, not `factsOf(null)`);\n- when the Intent has no measurement filter at all, start from `purposeFilters(...)` plus the count, instead of failing.\n\nThis changes the module's \"never adds, never changes a value\" contract: update its doc and k7-app §7 P2, and say why the value is the table's rather than the model's.\n\nFinished when: the over-fill and the empty answer both produce the table's filters; a hand-run Intent is untouched; the five languages hold; the per-field score shows the purpose rows up without S2/S11/S12 regressing. The count for the empty case comes from the model's limit or, once APP-33 lands, the sentence."
@@ -1788,9 +1802,10 @@
     {
       "id": "APP-35",
       "title": "Do not prescribe a mood the library does not have",
-      "state": "proposed",
+      "state": "todo",
       "group": "APP",
       "deps": ["APP-32"],
+      "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
       "desc": "The table prescribes mood `[\"relaxed\"]` or `[\"party\"]` without looking at the library. If the profile has no such tag, the filter can only empty the search. When a profile is available, keep a prescribed mood only if `profile.moods` contains it; otherwise keep the numeric side and drop the mood (or drop the rule if it has none). Without a profile, leave the table alone. Share the decision between `normalizePurpose` and `purposeFilters` so the retry and the shown Intent agree.\n\nFinished when: a profile with no `party` on \"party playlist\" returns the numeric filter or the count, not an empty mood; a profile with the mood is unchanged; S11 and the party rows hold on the per-field score."
@@ -1798,7 +1813,7 @@
     {
       "id": "APP-36",
       "title": "Read a name in the five languages",
-      "state": "proposed",
+      "state": "todo",
       "group": "APP",
       "deps": ["APP-32"],
       "at": "2026-11-14T23:29:31Z",
@@ -1808,9 +1823,10 @@
     {
       "id": "APP-37",
       "title": "Try the sentence before asking the model again about a query",
-      "state": "proposed",
+      "state": "todo",
       "group": "APP",
       "deps": ["APP-32", "APP-36"],
+      "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
       "desc": "`repairQuery` spends a second Nano call to fix a query the sentence can usually answer. Replace the repair with:\n1. a name after a marker (\"by X\", \"like X\", \"called X\") wins;\n2. no name but other filters → drop the query;\n3. the query was the only filter → one model call, as today.\n\nThis removes the common-path latency and the \"repair drops the name\" bug. It changes the contract's repair rule; update k7-app §7 P2 and ADR 0084's consequence.\n\nFinished when: \"songs by Daft Punk\", \"music like Radiohead\" and \"canciones de bonobo\" resolve with one model call; \"10 songs for a workout\" drops the query and keeps the count; a name-only sentence still gets the model repair; the per-field score holds; the harness records the new repair kind (or none)."
@@ -1818,9 +1834,10 @@
     {
       "id": "APP-38",
       "title": "Measure general grounding before shipping it",
-      "state": "proposed",
+      "state": "todo",
       "group": "APP",
       "deps": ["APP-32"],
+      "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
       "desc": "The purpose normalizer drops unjustified axes only when a purpose word is present. Try the same grounding on every sentence: drop a sort with no sort word, a limit with no number or duration, a BPM bound with no tempo word or number. It can strip legitimate filters (\"chill\" implying a tempo), so it is an experiment, not a ship: put it behind a dev flag or a second normalizer, run the corpus per-field, and keep only the rules that hold. Coordinate with APP-33 so a number the sentence stated is not mistaken for an invention.\n\nFinished when: a run compares grounded vs ungrounded per field; the report names the rows that gained and lost; a decision (ship none/some/all) is on the ticket; nothing ships without the measurement."
@@ -1828,7 +1845,7 @@
     {
       "id": "APP-39",
       "title": "Give the prompt the examples it is missing",
-      "state": "proposed",
+      "state": "todo",
       "group": "APP",
       "deps": ["APP-32"],
       "at": "2026-11-14T23:29:31Z",
@@ -1838,9 +1855,10 @@
     {
       "id": "APP-40",
       "title": "Try teaching the prompt by examples instead of rules",
-      "state": "proposed",
+      "state": "todo",
       "group": "APP",
       "deps": ["APP-32", "APP-39"],
+      "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
       "desc": "The system prompt is long for Nano, and its RULES and WORD→FILTER rows may be read less reliably than the few-shot turns. Convert one block at a time (a WORD→FILTER row, then a RULE) into a turn, re-run the corpus after each, and keep only the changes that hold. This is a prompt experiment, not a rewrite: the current prompt is the baseline.\n\nFinished when: each conversion is a separate measured run; the per-field score names the gain and loss; the final prompt is the one with the best field profile, not the shortest; the prompt sha and the run record are on the ticket."
@@ -1848,7 +1866,7 @@
     {
       "id": "APP-41",
       "title": "Loosen the schema where the profile narrows too far",
-      "state": "proposed",
+      "state": "todo",
       "group": "APP",
       "deps": ["APP-32"],
       "at": "2026-11-14T23:29:31Z",
@@ -1858,8 +1876,9 @@
     {
       "id": "APP-42",
       "title": "Measure session reuse and the sampling options",
-      "state": "proposed",
+      "state": "todo",
       "group": "APP",
+      "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
       "desc": "Each ask creates a session with the system prompt and examples, then destroys it. Chrome's IDL has `session.clone` and `omitResponseConstraintInput`; the web ignores `temperature` and `topK` (extensions only), and `samplingMode` is behind the AIPromptAPIParams origin trial — so do not propose a lower temperature, it is a no-op. Measure instead: create vs clone per ask, `omitResponseConstraintInput` on/off, and `samplingMode` only if the origin trial is available. Record latency per ask and the corpus's 3/3 stability, and check that a clone sees the same system prompt and examples.\n\nFinished when: the API facts are verified for the shipping Chrome; a dev harness measures create vs clone and the two options on the same corpus; the report gives latency and variance; a recommendation is on the ticket. If the API does not support it, the ticket says so and no code lands. No product change until the numbers and an ADR for ADR 0084's one-session decision."
