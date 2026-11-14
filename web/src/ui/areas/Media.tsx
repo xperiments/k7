@@ -421,9 +421,11 @@ export function MediaView({
    * another area; after that the selection is theirs. The join is the playing path and the
    * cache row's path, not the card's scope: the same card can be remembered under a mark,
    * a fingerprint or the unscoped name, and the shelf it fills is still the one on air.
-   * `armed` waits for the index and the status to answer, and is spent by the first sync
-   * attempt or by any choice below, so a late poll cannot yank the shelf out from under a
-   * reader. It is set again whenever the view leaves the Carousel. */
+   * `armed` waits for the index and the status to answer, and is spent by a successful
+   * match or by any choice below, so a late poll cannot yank the shelf out from under a
+   * reader. A shelf that is still settling, or a broadcast that has not reported its track
+   * yet, is retried rather than spent. It is set again whenever the view leaves the
+   * Carousel. */
   const { status } = useDeviceStatus();
   const playingPath = status?.playing?.path?.trim() || null;
   const armed = useRef(true);
@@ -433,9 +435,11 @@ export function MediaView({
       return;
     }
     if (!armed.current || state.loading || status === null) return;
-    armed.current = false;
     const at = albumIndexOfPath(albums, playingPath);
-    if (at >= 0) setSelected(at);
+    if (at >= 0) {
+      armed.current = false;
+      setSelected(at);
+    }
   }, [album, drive, state.loading, status, playingPath, albums]);
 
   /* The route's album is applied once, when it arrives: a search that keeps it visible must
@@ -496,6 +500,12 @@ export function MediaView({
     armed.current = false;
     stopWalk();
     setSelected(index);
+  };
+  /* A search on the Carousel is a choice too: the shelf must not jump to the player's album
+   * after the reader has narrowed it. The Drive's search is not this shelf's. */
+  const chooseQuery = (next: string) => {
+    armed.current = false;
+    setQuery(next);
   };
   const jumpToGroup = (group: IndexGroup) => {
     armed.current = false;
@@ -568,7 +578,7 @@ export function MediaView({
       <MediaHeader
         readingDrive={false}
         query={query}
-        onQuery={setQuery}
+        onQuery={chooseQuery}
         searchId={searchId}
         grouping={grouping}
         onGrouping={changeGrouping}
@@ -581,7 +591,7 @@ export function MediaView({
           onSelect={selectNow}
           active={active}
           query={query}
-          onClear={() => setQuery('')}
+          onClear={() => chooseQuery('')}
         />
         <IndexRail
           groups={groups}

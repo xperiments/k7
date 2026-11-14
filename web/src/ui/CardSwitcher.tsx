@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ChevronDownIcon,
   Cpu,
@@ -57,6 +57,16 @@ export function CardSwitcher() {
     deviceView,
     hasCardHandle,
   });
+
+  /* The Device view is remembered across reloads. If the first answer says the player has
+   * no card it can name, fall back to the card this browser last worked on instead of
+   * leaving the header with no current unit. A view chosen after that is the reader's. */
+  const reconciled = useRef(false);
+  useEffect(() => {
+    if (reconciled.current || status === null) return;
+    reconciled.current = true;
+    if (deviceView && (!status.card || status.mark === null)) setDeviceView(false);
+  }, [deviceView, status]);
   const device = units.find((unit) => unit.kind === 'device') ?? null;
   const sd = units.find((unit) => unit.kind === 'sd') ?? null;
   const virtuals = units.filter(

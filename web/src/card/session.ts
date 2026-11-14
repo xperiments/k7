@@ -62,16 +62,47 @@ function writeStoredScope(next: string): void {
   }
 }
 
+/** The Device view is a preference, remembered across reloads beside the scope. */
+const DEVICE_VIEW_KEY = 'k7.device-view.v1';
+
+function readStoredDeviceView(): boolean {
+  try {
+    return localStorage.getItem(DEVICE_VIEW_KEY) === '1';
+  } catch {
+    // A browser that refuses storage still has the view for this page's life.
+    return false;
+  }
+}
+
+function writeStoredDeviceView(next: boolean): void {
+  try {
+    localStorage.setItem(DEVICE_VIEW_KEY, next ? '1' : '0');
+  } catch {
+    /* The view still holds for this page's life. */
+  }
+}
+
 /** What the browser had stored at load, `null` when it had nothing usable. */
 const stored = readStoredScope();
 let scope = stored ?? UNSCOPED;
 const listeners = new Set<() => void>();
 
-export function setCardScope(next: string): void {
-  const changed = next !== scope || deviceView;
+/**
+ * Select a card in the computer. Picking one leaves the player's card behind, so the Device
+ * view is cleared and remembered as off; `preserveDeviceView` is for the boot recovery,
+ * which adopts a scope without claiming a local card was picked.
+ */
+export function setCardScope(
+  next: string,
+  options: { preserveDeviceView?: boolean } = {},
+): void {
+  const keepDevice = options.preserveDeviceView === true;
+  const changed = next !== scope || (!keepDevice && deviceView);
   scope = next;
-  // Picking a card in the computer leaves the player's card behind.
-  deviceView = false;
+  if (!keepDevice && deviceView) {
+    deviceView = false;
+    writeStoredDeviceView(false);
+  }
   writeStoredScope(next);
   if (changed) {
     for (const listener of listeners) listener();
@@ -84,11 +115,12 @@ export function setCardScope(next: string): void {
  * scope the stores are written under — the card's own scope names its rows, and this flag
  * only says which card the Albums page should read.
  */
-let deviceView = false;
+let deviceView = readStoredDeviceView();
 
 export function setDeviceView(next: boolean): void {
   if (next === deviceView) return;
   deviceView = next;
+  writeStoredDeviceView(next);
   for (const listener of listeners) listener();
 }
 
@@ -121,7 +153,9 @@ export async function restoreCardScope(): Promise<string> {
     /* A store that cannot be read leaves the scope as it was. */
   }
   // The read is asynchronous: a pick may have arrived while it was in flight.
-  if (newest !== undefined && stored === null && scope === UNSCOPED) setCardScope(newest.scope);
+  if (newest !== undefined && stored === null && scope === UNSCOPED) {
+    setCardScope(newest.scope, { preserveDeviceView: true });
+  }
   return scope;
 }
 

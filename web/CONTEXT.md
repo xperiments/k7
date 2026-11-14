@@ -160,7 +160,8 @@ _Avoid_: namespace, partition, key
 The header's right: the **Device card** and the SD in this computer as two buttons, and the
 **Virtual cards** as one button when there is one or a menu when there are several. It names the
 current **Card** and changes it; the **Sources** page's shelf is where a card is created and
-managed.
+managed. The card last chosen is remembered across reloads; if the player no longer holds a
+card it can name, the app falls back to the card this browser last worked on.
 _Avoid_: card bar, card picker, workspace switcher, tab bar
 
 **Update file**:
