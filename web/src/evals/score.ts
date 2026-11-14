@@ -14,13 +14,10 @@
 import type { SearchArgs } from '../device/mcp';
 import type { LibraryProfile } from '../domain/snapshot';
 import { keyCode } from '../library/imageSource';
-import {
-  factsOf,
-  intentSchema,
-  purposeOf,
-  type IntentFailure,
-  type PromptFacts,
-} from '../playlists/ask';
+import type { IntentFailure } from '../playlists/ask/contract';
+import { factsOf, type PromptFacts } from '../playlists/ask/facts';
+import { intentSchema } from '../playlists/ask/prompt';
+import { purposeOf } from '../playlists/ask/purpose';
 
 import type { CorpusRow, FactKey, Must, NumericKey } from './corpus';
 

@@ -6,7 +6,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { parseIntent } from '../playlists/ask';
+import { parseIntent } from '../playlists/ask/parse';
 import { CORPUS, rowById } from './corpus';
 import {
   acceptStableVerdicts,

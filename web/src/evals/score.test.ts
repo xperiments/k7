@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { LibraryProfile } from '../domain/snapshot';
-import { parseIntent } from '../playlists/ask';
+import { parseIntent } from '../playlists/ask/parse';
 
 import { rowById } from './corpus';
 import { FIXTURES } from './fixtures';

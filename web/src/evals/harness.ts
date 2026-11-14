@@ -21,15 +21,11 @@ import {
   searchImage,
   type ImageRow,
 } from '../library/imageSource';
-import {
-  buildSystemPrompt,
-  intentExamples,
-  intentSchema,
-  parseIntent,
-  requestIntent,
-  type IntentFailure,
-  type IntentTrace,
-} from '../playlists/ask';
+import { requestIntent } from '../playlists/ask';
+import type { IntentFailure } from '../playlists/ask/contract';
+import { parseIntent } from '../playlists/ask/parse';
+import { buildSystemPrompt, intentExamples, intentSchema } from '../playlists/ask/prompt';
+import type { IntentTrace } from '../playlists/ask/request';
 import { listMedia, type CachedMedia } from '../storage/media';
 import { newestSnapshot, type StoredSnapshot } from '../storage/snapshots';
 

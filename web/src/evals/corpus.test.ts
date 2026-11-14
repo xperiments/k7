@@ -10,7 +10,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { SearchArgs } from '../device/mcp';
-import { buildSystemPrompt, factsOf, PURPOSE_RULES } from '../playlists/ask';
+import { factsOf } from '../playlists/ask/facts';
+import { buildSystemPrompt } from '../playlists/ask/prompt';
+import { PURPOSE_RULES } from '../playlists/ask/purpose';
 
 import { CORPUS, type CorpusRow } from './corpus';
 
