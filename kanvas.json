@@ -1780,13 +1780,20 @@
     {
       "id": "APP-33",
       "title": "Let the sentence override the model on counts, lengths, BPM and keys",
-      "state": "todo",
+      "state": "doing",
       "group": "APP",
       "deps": ["APP-32"],
       "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
-      "desc": "The sentence is the best source for a count, a length, a tempo and a key. Run pure extractors on it and let a fired extractor win over the model's value; the model keeps mood, genre, name and vague words like \"fast\". Extract:\n- counts: \"10 songs\", \"twenty tracks\", \"two hours\" → 15 per hour, cap 100;\n- durations: \"under 3 minutes\", \"over 8 min\" → seconds;\n- BPM: \"120 bpm\", \"around 140\";\n- keys: \"in A minor\", \"8A\", through `domain/key.ts` (only a key the grammar reads).\n\nFinished when:\n- the extractors live in a pure module beside `parse.ts` and are tested without a model;\n- the corpus rows that state a number or key (S7, S10, 13–18, 29–32, 44–47, N2) improve or hold on the per-field score, and no row that only implies a number regresses;\n- a key the grammar cannot read never replaces a valid one;\n- k7-app §7 P2 says the sentence's explicit number or key wins, and an ADR is filed if that changes the \"the model writes the Intent\" contract."
+      "desc": "The sentence is the best source for a count, a length, a tempo and a key. Run pure extractors on it and let a fired extractor win over the model's value; the model keeps mood, genre, name and vague words like \"fast\". Extract:\n- counts: \"10 songs\", \"twenty tracks\", \"two hours\" → 15 per hour, cap 100;\n- durations: \"under 3 minutes\", \"over 8 min\" → seconds;\n- BPM: \"120 bpm\", \"around 140\";\n- keys: \"in A minor\", \"8A\", through `domain/key.ts` (only a key the grammar reads).\n\nFinished when:\n- the extractors live in a pure module beside `parse.ts` and are tested without a model;\n- the corpus rows that state a number or key (S7, S10, 13–18, 29–32, 44–47, N2) improve or hold on the per-field score, and no row that only implies a number regresses;\n- a key the grammar cannot read never replaces a valid one;\n- k7-app §7 P2 says the sentence's explicit number or key wins, and an ADR is filed if that changes the \"the model writes the Intent\" contract.",
+      "notes": [
+        {
+          "at": "2026-11-14T23:42:50Z",
+          "by": "dsh",
+          "text": "Plan: a pure `ask/sentence.ts` extractor that runs on the sentence before the normalizers, and only over a runnable `parseIntent`.\n- counts: digits and number words; \"10 songs\", \"the 20 most danceable tracks\", \"about an hour\" / \"two hours\" / \"three hours\" at 15 per hour, cap 100; \"skip N\" → offset.\n- durations: seconds and minutes with under / over / at least; hours are a session count, not a track length.\n- BPM: between / from A and B, A to B, under / over / at least A, and a bare \"A bpm\"; clamp to 70–180; a one-sided sentence owns the field and clears the model's other side.\n- keys: Camelot codes anywhere; a note + mode only at the start or after in / key / camelot, through `normalizeKeys`; \"a minor\" mid-sentence is not a key.\n- Applied in `requestIntent`'s `finish`, before `normalizeKeys` / `normalizePurpose`; never turn a refusal into a search, so \"add 5 songs to the playlist\" stays a refusal.\n- `sentenceFilters` exported for APP-34's fallback.\n- Tests: the extractors alone, the shipped-path overrides, a corpus guard for the rows that state a number or key, and row 59.\n- Spec k7-app §7 P2 and ADR 0088 (the sentence wins on the numbers it states), because this changes the \"the model writes the Intent\" contract; the model's scored Intent stays, and the extractor is reported through `effective`.\nOpen: a bare \"around 140\" without bpm / tempo is left to the model; the unit is required so a count is never stolen."
+        }
+      ]
     },
     {
       "id": "APP-34",
