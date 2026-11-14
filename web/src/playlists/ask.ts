@@ -70,7 +70,19 @@ export function isCategoryQuery(query: string | undefined): boolean {
   return CATEGORY_QUERIES.has(normalized);
 }
 
-const NAME_MARKERS = new Set(['by', 'from', 'called', 'named', 'titled', 'artist', 'band', 'album']);
+const NAME_MARKERS = new Set([
+  'by',
+  'from',
+  'called',
+  'named',
+  'titled',
+  'artist',
+  'band',
+  'album',
+  /* "like X" and "similar to X" name a thing to sound like: the prompt says to put X in
+   * "query", so the repair has to agree. */
+  'like',
+]);
 const CONTEXT_MARKERS = new Set([
   'for',
   'to',
@@ -82,7 +94,6 @@ const CONTEXT_MARKERS = new Set([
   'in',
   'on',
   'about',
-  'like',
 ]);
 const DETERMINERS = new Set([
   'a',
@@ -123,6 +134,8 @@ export function isNameQuery(sentence: string, query: string): boolean {
   const marker = index >= 0 ? plainWord(before[index]) : '';
 
   if (NAME_MARKERS.has(marker)) return true;
+  /* "similar to" is two words; the marker is "to", and the word before it is the signal. */
+  if (marker === 'to' && index > 0 && plainWord(before[index - 1]) === 'similar') return true;
   if (CONTEXT_MARKERS.has(marker)) return false;
   return capital;
 }

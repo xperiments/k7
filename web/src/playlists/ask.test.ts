@@ -562,6 +562,14 @@ describe('isNameQuery', () => {
     expect(isNameQuery('music for reading', 'reading')).toBe(false);
     expect(isNameQuery('a late night', 'late night')).toBe(false);
   });
+
+  it('treats like X and similar to X as the name the prompt says they are', () => {
+    expect(isNameQuery('music like Radiohead', 'Radiohead')).toBe(true);
+    expect(isNameQuery('sounds like Bonobo', 'bonobo')).toBe(true);
+    expect(isNameQuery('something like Bonobo but faster', 'Bonobo')).toBe(true);
+    expect(isNameQuery('music similar to Bonobo', 'Bonobo')).toBe(true);
+    expect(isNameQuery('similar to the Beatles', 'the Beatles')).toBe(true);
+  });
 });
 
 describe('INTENT_SCHEMA', () => {
@@ -710,5 +718,19 @@ describe('the purpose normalizer on the shipped path', () => {
       arousalMin: 60,
     });
     expect(seen[0].answer).toBe(overfill);
+  });
+});
+
+describe('the like/similar fix on the shipped path', () => {
+  beforeEach(() => model.askModel.mockReset());
+
+  it('keeps an artist query the repair used to drop, with one call', async () => {
+    model.askModel.mockResolvedValue('{"query":"Radiohead"}');
+    await expect(requestIntent('music like Radiohead')).resolves.toEqual({ query: 'Radiohead' });
+    expect(model.askModel).toHaveBeenCalledTimes(1);
+
+    model.askModel.mockResolvedValue('{"query":"Bonobo"}');
+    await expect(requestIntent('similar to Bonobo')).resolves.toEqual({ query: 'Bonobo' });
+    expect(model.askModel).toHaveBeenCalledTimes(2);
   });
 });
