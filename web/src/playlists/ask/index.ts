@@ -21,10 +21,10 @@
  * sentence about a track (ADR 0086).
  */
 
-import { askModel, assistantFailure } from '../builtin-model';
-import { keyCode } from '../library/imageSource';
-import type { SearchArgs } from '../device/mcp';
-import type { AxisProfile, LibraryProfile } from '../domain/snapshot';
+import { askModel, assistantFailure } from '../../builtin-model';
+import { keyCode } from '../../library/imageSource';
+import type { SearchArgs } from '../../device/mcp';
+import type { AxisProfile, LibraryProfile } from '../../domain/snapshot';
 
 /** The five mood heads the device knows. Danceability is a property, not a mood. */
 export const MOOD_VALUES = ['happy', 'sad', 'aggressive', 'relaxed', 'party'] as const;
