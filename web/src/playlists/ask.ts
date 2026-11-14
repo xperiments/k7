@@ -405,7 +405,7 @@ export function relaxRanges(intent: SearchArgs): SearchArgs | null {
  * ranges and their closed sets, and nothing else: there is no track in it, and there is no
  * room in it for one.
  */
-interface PromptFacts {
+export interface PromptFacts {
   tracks: number | null;
   genres: readonly string[] | null;
   keys: readonly string[] | null;
@@ -435,8 +435,14 @@ function roundedAxis(axis: AxisProfile | null, fallback: { min: number; max: num
   return axis ? { min: Math.floor(axis.min), max: Math.ceil(axis.max) } : fallback;
 }
 
-/** The prompt's numbers: the library's own when there is a profile, the device's otherwise. */
-function factsOf(profile: LibraryProfile | null): PromptFacts {
+/**
+ * The prompt's numbers: the library's own when there is a profile, the device's otherwise.
+ *
+ * Exported for the evaluation harness: the corpus's expected numbers are the same quantities the
+ * prompt states (`bpm.slow`, `energy.workout`, …), so the scorer has to read them from here rather
+ * than hard-code a second copy that could drift from the prompt.
+ */
+export function factsOf(profile: LibraryProfile | null): PromptFacts {
   if (!profile) return DEFAULT_FACTS;
   const bpm = roundedAxis(profile.bpm, { min: 70, max: 180 });
   const energy = roundedAxis(profile.energy, { min: 0, max: 100 });
@@ -481,10 +487,146 @@ function factsOf(profile: LibraryProfile | null): PromptFacts {
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Purpose words                                                               */
+/* -------------------------------------------------------------------------- */
+
+/** The three purposes the WORD→FILTER table names: they prescribe filters, not a mood word. */
+export type PurposeId = 'relax' | 'energise' | 'dance';
+
+export interface PurposeRule {
+  id: PurposeId;
+  /** The words that mark this purpose, in the five languages Chrome's model covers. */
+  words: readonly string[];
+  /** The filters the WORD→FILTER table prescribes for the purpose, at this library's numbers. */
+  filters(facts: PromptFacts): Partial<SearchArgs>;
+}
+
 /**
- * The instruction, with the library's real ranges when a profile is available. Without one it
- * is the static prompt: the device's ranges and no claim about a library.
+ * The table's first three rows. They are *purposes*, not qualities: "sad" and "happy" prescribe a
+ * valence bound but they are properties of a track, so a sentence may combine them with a tempo
+ * ("sad and slow") without the purpose rule dropping that tempo. Only these three rows say what
+ * the music is *for*, which is the case that over-fills.
  */
+const RELAX_WORDS = [
+  'chill',
+  'calm',
+  'calma',
+  'calme',
+  'sleep',
+  'sleeping',
+  'study',
+  'studying',
+  'relax',
+  'relaxing',
+  'reading',
+  'focus',
+  'estudiar',
+  'dormir',
+  'relajarse',
+  'leer',
+  'descansar',
+  'étudier',
+  'lire',
+  'relaxer',
+  'détendre',
+  'lernen',
+  'schlafen',
+  'lesen',
+  'entspannen',
+  '勉強',
+  '睡眠',
+  '寝る',
+  '読書',
+  '集中',
+  'リラックス',
+] as const;
+
+const ENERGISING_WORDS = [
+  'workout',
+  'gym',
+  'exercise',
+  'run',
+  'running',
+  'jog',
+  'jogging',
+  'training',
+  'sport',
+  'sports',
+  'fitness',
+  'energetic',
+  'intense',
+  'cardio',
+  'entrenar',
+  'correr',
+  'gimnasio',
+  'ejercicio',
+  'courir',
+  'entraînement',
+  'laufen',
+  'ワークアウト',
+  '運動',
+  'ジョギング',
+  '走る',
+  '筋トレ',
+  'トレーニング',
+  'エクササイズ',
+] as const;
+
+const DANCE_WORDS = [
+  'party',
+  'dance',
+  'dancing',
+  'bailar',
+  'fiesta',
+  'discoteca',
+  'danser',
+  'fête',
+  'tanzen',
+  'feier',
+  'パーティー',
+  '踊る',
+  'ダンス',
+] as const;
+
+export const PURPOSE_RULES: readonly PurposeRule[] = [
+  {
+    id: 'relax',
+    words: RELAX_WORDS,
+    filters: (facts) => ({ mood: ['relaxed'], energyMax: facts.energy.chill }),
+  },
+  {
+    id: 'energise',
+    words: ENERGISING_WORDS,
+    filters: (facts) => ({ energyMin: facts.energy.workout, arousalMin: facts.arousal.workout }),
+  },
+  {
+    id: 'dance',
+    words: DANCE_WORDS,
+    filters: (facts) => ({ mood: ['party'], danceabilityMin: facts.danceability.party }),
+  },
+];
+
+/** Japanese has no spaces, so its words match inside a run of characters; Latin words need edges. */
+function containsWord(text: string, word: string): boolean {
+  if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(word)) return text.includes(word);
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'u').test(text);
+}
+
+/**
+ * The purpose a sentence states, if any. The first matching row wins: a sentence naming two
+ * purposes ("a workout party") is ambiguous, and guessing a union is how an Intent over-fills.
+ */
+export function purposeOf(sentence: string): PurposeRule | null {
+  const text = sentence.toLowerCase();
+  for (const rule of PURPOSE_RULES) {
+    if (rule.words.some((word) => containsWord(text, word))) return rule;
+  }
+  return null;
+}
+
+
 export function buildSystemPrompt(profile: LibraryProfile | null): string {
   const f = factsOf(profile);
   const lines = [

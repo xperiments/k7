@@ -1,0 +1,201 @@
+[
+  {
+    "rowId": "S10",
+    "raw": "{\"bpm_min\":130,\"bpm_max\":160,\"energy_min\":70,\"energy_max\":90,\"danceability_min\":70,\"danceability_max\":90,\"valence_min\":60,\"valence_max\":80,\"arousal_min\":60,\"arousal_max\":80,\"sort\":\"bpm\"}",
+    "origin": "note-§5.1",
+    "verdict": "fail",
+    "note": "the five-pair over-fill the note records: BPM, danceability and valence are inventions"
+  },
+  {
+    "rowId": "S9",
+    "raw": "{\"query\":\"songs\"}",
+    "origin": "note-§5.1",
+    "verdict": "fail",
+    "note": "ADR 0084's artist miss: a query of \"songs\" is a category, not the name the sentence used"
+  },
+  {
+    "rowId": "53",
+    "raw": "{}",
+    "origin": "synthetic",
+    "verdict": "pass",
+    "note": "{} is the designed answer and a refusal is correct"
+  },
+  {
+    "rowId": "54",
+    "raw": "{}",
+    "origin": "synthetic",
+    "verdict": "pass"
+  },
+  {
+    "rowId": "55",
+    "raw": "{}",
+    "origin": "synthetic",
+    "verdict": "pass"
+  },
+  {
+    "rowId": "56",
+    "raw": "{}",
+    "origin": "synthetic",
+    "verdict": "pass"
+  },
+  {
+    "rowId": "59",
+    "raw": "{}",
+    "origin": "synthetic",
+    "verdict": "pass"
+  },
+  {
+    "rowId": "60",
+    "raw": "{}",
+    "origin": "synthetic",
+    "verdict": "pass"
+  },
+  {
+    "rowId": "54",
+    "raw": "{\"limit\":10}",
+    "origin": "synthetic",
+    "verdict": "pass",
+    "note": "the note tolerates a bare limit where it expected an empty Intent"
+  },
+  {
+    "rowId": "S1",
+    "raw": "{\"bpm_min\":85,\"bpm_max\":95}",
+    "origin": "synthetic",
+    "verdict": "pass"
+  },
+  {
+    "rowId": "S1",
+    "raw": "{\"bpm_min\":88,\"bpm_max\":92}",
+    "origin": "synthetic",
+    "verdict": "pass",
+    "note": "inside the expected range and within the ±3 tolerance: a finding, not a failure"
+  },
+  {
+    "rowId": "S1",
+    "raw": "{\"bpm_min\":60,\"bpm_max\":120}",
+    "origin": "synthetic",
+    "verdict": "fail",
+    "note": "the too-vague signature"
+  },
+  {
+    "rowId": "S1",
+    "raw": "```json\n{\"bpm_min\":85,\"bpm_max\":95}\n```",
+    "origin": "synthetic",
+    "verdict": "pass",
+    "note": "the contract tolerates a fence; shape is reported false because Chrome should not have"
+  },
+  {
+    "rowId": "S1",
+    "raw": "I cannot answer that.",
+    "origin": "synthetic",
+    "verdict": "fail"
+  },
+  {
+    "rowId": "13",
+    "raw": "{\"bpm_max\":100,\"bpm_min\":90}",
+    "origin": "synthetic",
+    "verdict": "fail",
+    "note": "an invented lower bound beside a one-sided expectation"
+  },
+  {
+    "rowId": "13",
+    "raw": "{\"bpm_max\":50}",
+    "origin": "synthetic",
+    "verdict": "fail",
+    "note": "below the schema's minimum: shape false, and the clamp is not what the sentence said"
+  },
+  {
+    "rowId": "S8",
+    "raw": "{\"sort\":\"danceability\",\"limit\":20}",
+    "origin": "synthetic",
+    "verdict": "pass",
+    "note": "the Intent is right; the ascending-only sort is a contract gap, not a model failure"
+  },
+  {
+    "rowId": "58",
+    "raw": "{\"bpm_min\":300,\"bpm_max\":400}",
+    "origin": "synthetic",
+    "verdict": "pass"
+  },
+  {
+    "rowId": "18",
+    "raw": "{\"bpm_min\":140,\"bpm_max\":120}",
+    "origin": "synthetic",
+    "verdict": "pass",
+    "note": "the parser swaps the pair, and the assertion is on the parsed result"
+  },
+  {
+    "rowId": "26",
+    "raw": "{\"query\":\"Radiohead\"}",
+    "origin": "synthetic",
+    "verdict": "pass",
+    "note": "\"like X\" is a name marker, so the shipped repair must keep this query"
+  },
+  {
+    "rowId": "29",
+    "raw": "{\"key\":[\"F#m\"]}",
+    "origin": "synthetic",
+    "verdict": "pass",
+    "note": "keyCode is the device's parser: F#m and Fmin are the same key, F♯m is not"
+  },
+  {
+    "rowId": "31",
+    "raw": "{\"key\":[\"8A\",\"9A\"]}",
+    "origin": "synthetic",
+    "verdict": "pass"
+  },
+  {
+    "rowId": "31",
+    "raw": "{\"key\":[\"9A\",\"8A\"]}",
+    "origin": "synthetic",
+    "verdict": "pass",
+    "note": "a set, not a sequence"
+  },
+  {
+    "rowId": "31",
+    "raw": "{\"key\":[\"8A\"]}",
+    "origin": "synthetic",
+    "verdict": "fail",
+    "note": "only one of the two keys the sentence named"
+  },
+  {
+    "rowId": "57",
+    "raw": "{\"mood\":[\"happy\"]}",
+    "origin": "synthetic",
+    "verdict": "pass"
+  },
+  {
+    "rowId": "57",
+    "raw": "{\"valence_max\":40}",
+    "origin": "synthetic",
+    "verdict": "fail",
+    "note": "the exact wrong reading of \"isn't sad\""
+  },
+  {
+    "rowId": "22",
+    "raw": "{\"mood\":[\"relaxed\"],\"energy_max\":40,\"query\":\"lo-fi\"}",
+    "origin": "synthetic",
+    "verdict": "fail"
+  },
+  {
+    "rowId": "N4",
+    "raw": "{\"query\":\"Justice\"}",
+    "origin": "synthetic",
+    "verdict": "pass",
+    "note": "either name is the best the contract can express"
+  },
+  {
+    "rowId": "N4",
+    "raw": "{\"query\":\"Daft Punk and Justice\"}",
+    "origin": "synthetic",
+    "verdict": "fail",
+    "note": "the conjunction matches nothing and is not a name either artist has"
+  },
+  {
+    "rowId": "S10",
+    "raw": "{\"limit\":10,\"energy_min\":70,\"arousal_min\":60}",
+    "origin": "synthetic",
+    "verdict": "pass",
+    "note": "the answer the normalizer is meant to produce"
+  }
+]
