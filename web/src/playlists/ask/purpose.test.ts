@@ -186,3 +186,66 @@ describe('normalizePurpose', () => {
     expect(out.durationMax).toBe(180);
   });
 });
+
+describe("the library's moods", () => {
+  const PARTY = { ...PROFILE, moods: ['happy', 'party', 'relaxed'] };
+
+  it('leaves out a prescribed mood the profile does not have', () => {
+    expect(purposeFilters('party playlist', PROFILE)).toEqual({ danceabilityMin: 72 });
+    expect(purposeFilters('party playlist', PARTY)).toEqual({
+      mood: ['party'],
+      danceabilityMin: 72,
+    });
+    expect(purposeFilters('de la musique calme pour lire', PROFILE)).toEqual({
+      mood: ['relaxed'],
+      energyMax: 40,
+    });
+    expect(
+      purposeFilters('de la musique calme pour lire', { ...PROFILE, moods: ['happy', 'party'] }),
+    ).toEqual({ energyMax: 40 });
+    expect(purposeFilters('party playlist', { ...PROFILE, moods: [] })).toEqual({
+      danceabilityMin: 72,
+    });
+  });
+
+  it('keeps the table without a profile', () => {
+    expect(purposeFilters('party playlist', null)).toEqual({
+      mood: ['party'],
+      danceabilityMin: 70,
+    });
+  });
+
+  it('drops the model’s mood when the library does not have it', () => {
+    const intent: SearchArgs = { mood: ['party'], danceabilityMin: 70, danceabilityMax: 90 };
+    expect(normalizePurpose('party playlist', intent, PROFILE)).toEqual({
+      danceabilityMin: 72,
+    });
+    expect(normalizePurpose('party playlist', intent, PARTY)).toEqual({
+      mood: ['party'],
+      danceabilityMin: 72,
+    });
+  });
+
+  it('fills the numeric side when the model only gives the unavailable mood', () => {
+    expect(normalizePurpose('party playlist', { mood: ['party'] }, PROFILE)).toEqual({
+      danceabilityMin: 72,
+    });
+  });
+
+  it('keeps S11’s happy mood when the library has it', () => {
+    const intent: SearchArgs = {
+      mood: ['happy'],
+      valenceMin: 60,
+      valenceMax: 80,
+      danceabilityMin: 70,
+      danceabilityMax: 90,
+    };
+    expect(normalizePurpose('música alegre para bailar', intent, PROFILE)).toEqual({
+      mood: ['happy'],
+      valenceMin: 60,
+      valenceMax: 80,
+      danceabilityMin: 72,
+      danceabilityMax: 90,
+    });
+  });
+});

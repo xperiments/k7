@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { requestIntent, type IntentTrace } from './request';
+import { TEST_PROFILE as PROFILE } from './test-support';
 
 const model = vi.hoisted(() => ({ askModel: vi.fn() }));
 
@@ -287,5 +288,35 @@ describe('a repaired answer still goes through the table', () => {
       .mockResolvedValueOnce('I cannot answer that')
       .mockResolvedValueOnce('{"energy_min":60,"energy_max":90}');
     await expect(requestIntent('workout')).resolves.toEqual({ energyMin: 70 });
+  });
+});
+
+describe("the purpose table's moods", () => {
+  const PARTY = { ...PROFILE, moods: ['happy', 'party', 'relaxed'] };
+
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
+
+  it('drops a mood the library does not have, keeping the numeric side', async () => {
+    model.askModel.mockResolvedValue('{"mood":["party"],"danceability_min":70}');
+    await expect(requestIntent('party playlist', PROFILE)).resolves.toEqual({
+      danceabilityMin: 72,
+    });
+  });
+
+  it('keeps the mood when the library has it', async () => {
+    model.askModel.mockResolvedValue('{"mood":["party"],"danceability_min":70}');
+    await expect(requestIntent('party playlist', PARTY)).resolves.toEqual({
+      mood: ['party'],
+      danceabilityMin: 72,
+    });
+  });
+
+  it('fills the numeric side from an empty answer when the library has no party', async () => {
+    model.askModel.mockResolvedValue('{}');
+    await expect(requestIntent('party playlist', PROFILE)).resolves.toEqual({
+      danceabilityMin: 72,
+    });
   });
 });

@@ -3,9 +3,9 @@
  *
  * The first three rows are purposes: they prescribe filters and are the case that over-fills.
  * The rest are qualities, stated as prompt rows only. `normalizePurpose` drops what a purpose
- * sentence never asked for, snaps a kept bound to the table when the model's is too loose, and
- * fills the table's filters in when no measurement filter is left. The table's value is the
- * App's, not the model's.
+ * sentence never asked for, snaps a kept bound to the table when the model's is too loose, fills
+ * the table's filters in when no measurement filter is left, and leaves out a mood the library
+ * does not have. The table's value is the App's, not the model's.
  */
 
 import type { SearchArgs } from '../../device/mcp';
@@ -142,13 +142,39 @@ export function purposeOf(sentence: string): PurposeRule | null {
   return null;
 }
 
+const foldMood = (value: string): string => value.trim().toLowerCase();
+
+/**
+ * The rule's filters at this profile, with a mood the library does not have left out.
+ *
+ * Without a profile the table is the table. With one, a prescribed mood is kept only if the
+ * profile has it; when it does not, the row's numeric side stands, and a rule with nothing left
+ * is dropped. `purposeFilters` and `normalizePurpose` both come through here, so the retry and
+ * the shown Intent agree.
+ */
+function prescribe(
+  rule: PurposeRule,
+  facts: PromptFacts,
+  profile: LibraryProfile | null,
+): Partial<SearchArgs> | null {
+  const filters = rule.filters(facts);
+  if (!profile || !filters.mood) return filters;
+  const moods = new Set(profile.moods.map(foldMood));
+  const kept = filters.mood.filter((mood) => moods.has(foldMood(mood)));
+  if (kept.length === filters.mood.length) return filters;
+  const rest: Partial<SearchArgs> = { ...filters };
+  delete rest.mood;
+  if (kept.length > 0) return { ...rest, mood: kept };
+  return Object.keys(rest).length > 0 ? rest : null;
+}
+
 /** The filters the sentence's purpose word prescribes at this profile, if it names one. */
 export function purposeFilters(
   sentence: string,
   profile: LibraryProfile | null,
 ): Partial<SearchArgs> | null {
   const rule = purposeOf(sentence);
-  return rule ? rule.filters(factsOf(profile)) : null;
+  return rule ? prescribe(rule, factsOf(profile), profile) : null;
 }
 
 /**
@@ -229,6 +255,9 @@ const MEASUREMENT_KEYS = [
  * the Intent. A mood, a name or a genre the model did give is not overwritten, and the count
  * stays. The values are the table's at this library's facts, not `factsOf(null)`: the prompt
  * stated the same numbers, so the Intent runs what the sentence was promised.
+ *
+ * A mood the library does not have is left out: the row's prescribed mood is filtered by
+ * `prescribe`, and a mood the model gave that the library lacks is dropped here.
  */
 export function normalizePurpose(
   sentence: string,
@@ -238,7 +267,7 @@ export function normalizePurpose(
   const rule = purposeOf(sentence);
   if (!rule) return intent;
 
-  const prescribed = rule.filters(factsOf(profile));
+  const prescribed = prescribe(rule, factsOf(profile), profile) ?? {};
   const keeps = (key: keyof SearchArgs): boolean => prescribed[key] !== undefined;
   const out: SearchArgs = { ...intent };
 
@@ -270,6 +299,15 @@ export function normalizePurpose(
   }
 
   if (!hasAny(sentence, SORT_WORDS)) delete out.sort;
+
+  /* A mood the model gave that this library does not have can only empty the search. The row's
+   * prescribed mood has already been filtered by `prescribe`; this is the model's own. */
+  if (profile && out.mood) {
+    const allowed = new Set(profile.moods.map(foldMood));
+    const kept = out.mood.filter((mood) => allowed.has(foldMood(mood)));
+    if (kept.length === 0) delete out.mood;
+    else if (kept.length !== out.mood.length) out.mood = kept;
+  }
 
   /* No measurement is left: an empty or limit-only answer. The row fills the Intent; a mood, a
    * name or a genre the model did give stays, and so does the count. */

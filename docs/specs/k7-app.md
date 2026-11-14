@@ -281,6 +281,9 @@ a name, a mood or a genre ([ADR 0088](../adr/0088-the-sentence-wins-on-the-numbe
 A sentence that names a purpose keeps only the filters its WORD→FILTER row prescribes; a kept bound
 the table says is too loose is snapped to the table's value, and when no measurement filter is left
 the row's filters and the count fill the Intent. The table's value is the App's, not the model's.
+A mood the library does not have is left out: a prescribed mood is kept only when the profile has
+it, keeping the row's numeric side, and a mood the model gave that the library lacks is dropped.
+Without a profile the table stands.
 When the exact search finds nothing, Ask retries once
 without the numeric ranges: with a mood left to search on, as before; and — only when the Intent
 carries three or more measurement ranges — with the pair the sentence's purpose word prescribes,
