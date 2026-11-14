@@ -1803,13 +1803,25 @@
     {
       "id": "APP-34",
       "title": "Make the purpose table authoritative for the bounds it keeps",
-      "state": "todo",
+      "state": "review",
       "group": "APP",
       "deps": ["APP-32"],
       "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
-      "desc": "`normalizePurpose` only deletes, so \"music for sleeping\" keeps the model's invented energyMax 90 instead of the table's 40, and an empty or limit-only answer for \"10 songs for a workout\" either fails or returns everything. Make the table authoritative:\n- when a purpose is detected, snap a kept bound on the wrong side of the table value to the table (the profile's value, not `factsOf(null)`);\n- when the Intent has no measurement filter at all, start from `purposeFilters(...)` plus the count, instead of failing.\n\nThis changes the module's \"never adds, never changes a value\" contract: update its doc and k7-app §7 P2, and say why the value is the table's rather than the model's.\n\nFinished when: the over-fill and the empty answer both produce the table's filters; a hand-run Intent is untouched; the five languages hold; the per-field score shows the purpose rows up without S2/S11/S12 regressing. The count for the empty case comes from the model's limit or, once APP-33 lands, the sentence."
+      "desc": "`normalizePurpose` only deletes, so \"music for sleeping\" keeps the model's invented energyMax 90 instead of the table's 40, and an empty or limit-only answer for \"10 songs for a workout\" either fails or returns everything. Make the table authoritative:\n- when a purpose is detected, snap a kept bound on the wrong side of the table value to the table (the profile's value, not `factsOf(null)`);\n- when the Intent has no measurement filter at all, start from `purposeFilters(...)` plus the count, instead of failing.\n\nThis changes the module's \"never adds, never changes a value\" contract: update its doc and k7-app §7 P2, and say why the value is the table's rather than the model's.\n\nFinished when: the over-fill and the empty answer both produce the table's filters; a hand-run Intent is untouched; the five languages hold; the per-field score shows the purpose rows up without S2/S11/S12 regressing. The count for the empty case comes from the model's limit or, once APP-33 lands, the sentence.",
+      "notes": [
+        {
+          "at": "2026-11-14T23:50:59Z",
+          "by": "dsh",
+          "text": "Plan: make the purpose table authoritative in three steps.\n- `normalizePurpose` takes the profile and the table's values at that profile; a kept prescribed bound that is too loose snaps to the table (a max above, a min below); an explicit axis keeps its other side but still snaps the prescribed side.\n- When no measurement filter is left, fill in the table's filters without overwriting the model's mood/query/genre, and keep the count.\n- The empty `{}` failure is rescued in `requestIntent` with `purposeFilters(asked, profile)` plus the sentence's count (APP-33); a sentence with no purpose still refuses.\n- Update the module doc and k7-app §7 P2; tests for the profile's value, the snap, the limit-only and empty answers, the five languages, and a non-purpose refusal."
+        },
+        {
+          "at": "2026-11-14T23:54:18Z",
+          "by": "dsh",
+          "text": "The purpose table is now authoritative. `normalizePurpose` takes the profile, snaps a kept bound the table says is too loose to the table's value (a maximum above, a minimum below; an explicit axis keeps its other side but its prescribed side is still the table's), and when no measurement filter is left fills the row's filters in, keeping a mood, a name, a genre or a count the model did give.\n\nThe empty `{}` answer is rescued in `requestIntent` with `purposeFilters(asked, profile)` plus the sentence's count; a sentence with no purpose still refuses. A JSON-repaired answer now goes through the normalizers too, which the first cut of the rescue skipped.\n\nWhat to check:\n- `purpose.test.ts` (14): \"music for sleeping\" snaps 90 to 40; a limit-only \"10 songs for a workout\" fills energyMin/arousalMin and keeps the limit; an empty \"party playlist\" fills mood/danceability; the profile's 74/73 is used, not the static 70/60; an explicit danceability snaps 50 to 70 and keeps its 90 max.\n- `request.test.ts` (25): the empty answer, the non-purpose refusal, and the repaired answer.\n- k7-app §7 P2 and the module doc; no ADR. A hand-run Intent never reaches the normalizer.\n- `cd web && npm run typecheck && npm test && npm run build`: 784 tests, all green.\n\nThe model's scored Intent is unchanged; the table is reported through `effective`. No model was run, so the per-field score on the next run is what to watch. The S2/S11/S12 paths are covered by the five-language and explicit-axis tests."
+        }
+      ]
     },
     {
       "id": "APP-35",
