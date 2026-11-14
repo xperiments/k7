@@ -205,8 +205,14 @@ Every row's sentence is the note's; only predicates and a few expectations chang
   denominator.
 - A row that asks for `rows` at a scope without a search is `unscored`; it is not a failure, and it
   is not a pass.
-- The human verdict is per row. Where it disagrees with the row's automatic verdict, the harness
-  flags a **rubric bug**: the disagreement is a defect in this document, not in the model.
+- **The human column is an audit, not a second judge.** Every `unstable` row and every `unscored`
+  row must be marked by a person. A deterministic 10% sample of stable rows
+  (`parseInt(hash(combo + row), 16) % 10 === 0`) is marked too. Every other stable row may be
+  accepted from its automatic verdict; the record says `verdictSource: "accepted-auto"`, and that
+  is bookkeeping, not an independent judgement. A `contractGap` or `profileGap` row carries no
+  human verdict: no answer could satisfy it.
+- A **rubric bug** is a disagreement between a `verdictSource: "human"` verdict and the automatic
+  one. An `accepted-auto` row cannot produce one.
 
 The shipped arm also records **`normalized`** when the purpose normalizer changed the model's
 Intent. It is reported separately and on purpose: a normalized run explains part of a change in

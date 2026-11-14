@@ -158,6 +158,9 @@ export function digest(value: string): string {
 
 export type HumanVerdict = 'right' | 'wrong' | 'unsure';
 
+/** Where a human column came from: a person, or a stable automatic verdict they accepted. */
+export type VerdictSource = 'human' | 'accepted-auto';
+
 export interface Attempt {
   call: 1 | 2;
   reason: IntentTrace['reason'];
@@ -208,6 +211,10 @@ export interface RunRecord extends RunBase {
   /** The same rubric on the Intent that actually ran (after a repair or the normalizer). */
   effective?: ScoredRun;
   verdictHuman: HumanVerdict | null;
+  /** `human` is an independent judgement; `accepted-auto` is bookkeeping, not an audit. */
+  verdictSource?: VerdictSource;
+  /** This row is in the deterministic audit sample. */
+  sample?: true;
   note: string;
   error?: string;
   invalid: boolean;
@@ -450,6 +457,89 @@ export function intentChanged(a: SearchArgs, b: SearchArgs): boolean {
     if (JSON.stringify(left) !== JSON.stringify(right)) return true;
   }
   return false;
+}
+
+/**
+ * The 10% audit sample: a deterministic hash of the combination and the row, so the same rows
+ * are sampled every time and a re-export can be compared with the last one.
+ */
+export function isSampled(rowId: string, combo: Combo): boolean {
+  return parseInt(digest(`${comboKey(combo)}:${rowId}`), 16) % 10 === 0;
+}
+
+export type ReviewKind = 'stable' | 'sample' | 'unstable' | 'unscored' | 'gap';
+
+/**
+ * What the human column should do with one row.
+ *
+ * `stable` — all three verdicts agree; the automatic verdict is the answer, and it may be
+ * accepted in bulk (recorded as `accepted-auto`, never as a human judgement).
+ * `sample` — stable, and this row is in the audit sample: a person must mark it.
+ * `unstable` — the three runs disagree, or the row has not run three times.
+ * `unscored` — the reference search could not decide it.
+ * `gap` — a contract or profile gap; no answer could satisfy it, so no verdict is expected.
+ */
+export function reviewKind(
+  rowId: string,
+  group: readonly RunRecord[],
+  combo: Combo,
+): ReviewKind {
+  if (
+    group.some(
+      (record) => record.scored?.contractGap === true || record.scored?.profileGap !== undefined,
+    )
+  ) {
+    return 'gap';
+  }
+  const verdicts = group.map((record) => record.scored?.verdict);
+  if (verdicts.length < REPETITIONS || new Set(verdicts).size !== 1) return 'unstable';
+  if (verdicts[0] === 'unscored' || verdicts[0] === undefined) return 'unscored';
+  if (isSampled(rowId, combo)) return 'sample';
+  return 'stable';
+}
+
+/**
+ * Fill the human column for every stable row from its automatic verdict. Sampled rows,
+ * unstable/unscored rows, gaps and anything a person already marked are left alone.
+ */
+export function acceptStableVerdicts(
+  records: readonly RunRecord[],
+  combo: Combo,
+): { records: RunRecord[]; accepted: number } {
+  const byRow = new Map<string, RunRecord[]>();
+  for (const record of records) {
+    if (record.arm !== combo.arm || record.scope !== combo.scope) continue;
+    const group = byRow.get(record.rowId) ?? [];
+    group.push(record);
+    byRow.set(record.rowId, group);
+  }
+
+  const accepted = new Map<string, HumanVerdict>();
+  for (const [rowId, group] of byRow) {
+    const marked = group.some(
+      (record) =>
+        record.verdictSource === 'human' ||
+        (record.verdictSource === undefined && record.verdictHuman),
+    );
+    if (marked) continue;
+    if (reviewKind(rowId, group, combo) !== 'stable') continue;
+    const verdict = group[0].scored?.verdict;
+    if (verdict !== 'pass' && verdict !== 'fail') continue;
+    accepted.set(rowId, verdict === 'pass' ? 'right' : 'wrong');
+  }
+
+  const next = records.map((record) => {
+    if (record.arm !== combo.arm || record.scope !== combo.scope) return record;
+    const verdict = accepted.get(record.rowId);
+    if (!verdict) return record;
+    return {
+      ...record,
+      verdictHuman: verdict,
+      verdictSource: 'accepted-auto' as const,
+      sample: undefined,
+    };
+  });
+  return { records: next, accepted: accepted.size };
 }
 
 /**

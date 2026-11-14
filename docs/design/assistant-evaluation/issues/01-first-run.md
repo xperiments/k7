@@ -25,13 +25,14 @@ library profile and no repairs. The shipped input has never been measured.
 
 - All five combinations present, three runs per sentence per combination, on one Chrome and one
   recorded model variant.
-- Every row has an automatic verdict; every `unstable` row and every row the parser cannot judge
-  has a human verdict.
+- Every row has an automatic verdict; every `unstable`/`unscored` row and the deterministic 10%
+  audit sample has a human verdict; every other stable row is either human-marked or accepted from
+  the automatic verdict and recorded as `accepted-auto`.
 - The exported JSON exists, and its aggregate is appended under **Comments** below.
 - No `contractGap` row has been counted as a model failure; no `unscored` row has been counted as
   a pass.
-- Any human/automatic disagreement is filed as a rubric bug against `../spec.md`, not worked around
-  in the harness.
+- Any human/automatic disagreement (`verdictSource: "human"`) is filed as a rubric bug against
+  `../spec.md`, not worked around in the harness.
 
 ## What this ticket does not decide
 

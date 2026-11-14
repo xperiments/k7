@@ -7,16 +7,19 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { parseIntent } from '../playlists/ask';
-import { rowById } from './corpus';
+import { CORPUS, rowById } from './corpus';
 import {
+  acceptStableVerdicts,
   dedupeRecords,
   digest,
   exportPayload,
   finishedReps,
   fixturesFrom,
   intentChanged,
+  isSampled,
   loadTarget,
   rescoreRun,
+  reviewKind,
   runKey,
   scoredRunsFor,
   upsertRecord,
@@ -24,7 +27,7 @@ import {
   type RunRecord,
   type StoredRun,
 } from './harness';
-import { scoreRow } from './score';
+import { scoreRow, type Verdict } from './score';
 
 /* The harness imports the image store and the media store for scopes 2 and 3. This test runs in
  * node with no IndexedDB, and scope `static` never reads either, so they are stubbed out. */
@@ -130,6 +133,61 @@ describe('run identity', () => {
     const otherArm = record({ rep: 3, arm: 'systemOnly' });
     const finished = finishedReps([done, invalid, otherArm], combo);
     expect([...finished]).toEqual(['S1:1']);
+  });
+});
+
+describe('the audit rule', () => {
+  const combo = { arm: 'requestIntent', scope: 'static' } as const;
+  const run = (rowId: string, rep: 1 | 2 | 3, verdict: Verdict) =>
+    record({
+      id: `requestIntent@static:${rowId}:${rep}`,
+      rowId,
+      rep,
+      scored: { ...record().scored!, verdict },
+    });
+
+  it('samples deterministically, and not every row', () => {
+    const sampled = CORPUS.find((row) => isSampled(row.id, combo));
+    expect(sampled).toBeDefined();
+    expect(isSampled(sampled!.id, combo)).toBe(true);
+    expect(isSampled('S1', combo)).toBe(false);
+  });
+
+  it('separates stable, unstable, sampled and gap rows', () => {
+    expect(reviewKind('S1', [run('S1', 1, 'pass'), run('S1', 2, 'pass'), run('S1', 3, 'pass')], combo)).toBe('stable');
+    expect(reviewKind('S1', [run('S1', 1, 'pass'), run('S1', 2, 'fail'), run('S1', 3, 'pass')], combo)).toBe('unstable');
+    expect(reviewKind('S1', [run('S1', 1, 'unscored'), run('S1', 2, 'unscored'), run('S1', 3, 'unscored')], combo)).toBe('unscored');
+    const sampled = CORPUS.find((row) => isSampled(row.id, combo))!;
+    expect(reviewKind(sampled.id, [run(sampled.id, 1, 'pass'), run(sampled.id, 2, 'pass'), run(sampled.id, 3, 'pass')], combo)).toBe('sample');
+    const gap = [run('S1', 1, 'pass'), run('S1', 2, 'pass'), run('S1', 3, 'pass')].map((r) => ({
+      ...r,
+      scored: { ...r.scored!, contractGap: true },
+    }));
+    expect(reviewKind('S1', gap, combo)).toBe('gap');
+  });
+
+  it('accepts stable rows, leaves mixed rows, samples and human marks alone', () => {
+    const stable = [run('S1', 1, 'pass'), run('S1', 2, 'pass'), run('S1', 3, 'pass')];
+    const mixed = [run('S2', 1, 'pass'), run('S2', 2, 'fail'), run('S2', 3, 'pass')];
+    const result = acceptStableVerdicts([...stable, ...mixed], combo);
+    expect(result.accepted).toBe(1);
+    expect(
+      result.records
+        .filter((record) => record.rowId === 'S1')
+        .every((record) => record.verdictHuman === 'right' && record.verdictSource === 'accepted-auto'),
+    ).toBe(true);
+    expect(result.records.filter((record) => record.rowId === 'S2').every((record) => record.verdictHuman === null)).toBe(true);
+
+    const marked = stable.map((record) => ({
+      ...record,
+      verdictHuman: 'wrong' as const,
+      verdictSource: 'human' as const,
+    }));
+    expect(acceptStableVerdicts(marked, combo).accepted).toBe(0);
+
+    const sampled = CORPUS.find((row) => isSampled(row.id, combo))!;
+    const sampleRuns = [run(sampled.id, 1, 'pass'), run(sampled.id, 2, 'pass'), run(sampled.id, 3, 'pass')];
+    expect(acceptStableVerdicts(sampleRuns, combo).accepted).toBe(0);
   });
 });
 

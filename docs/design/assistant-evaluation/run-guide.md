@@ -70,14 +70,20 @@ and `deviceMemory`.
 
 ## Mark the rows
 
-The table shows each row's three automatic verdicts and its three answers. For rows the parser
-cannot judge — does "relaxed" *mean* relaxed? — mark **Right**, **Wrong** or **Unsure**, and put
-the reason in the note. One human verdict per row:
+The table shows each row's three automatic verdicts, an **audit** badge and its answers.
 
-- an automatic verdict is the default; only mark where you disagree or the parser cannot decide;
-- if the human verdict disagrees with the row's automatic verdict, the page flags a **rubric
-  bug** — the disagreement is a defect in `spec.md`, not in the model. Write it down; do not
-  silently side with either.
+1. Press **Accept stable**. Every row whose three verdicts agree is filled from the automatic
+   verdict and recorded as `accepted-auto` — bookkeeping, not a human judgement.
+2. Press **Review only**. What is left is the work: every **review** row (the three runs disagree,
+   or the search could not decide) and the **sample** rows (a deterministic 10% of stable rows, so
+   a rubric bug on a stable row can still be caught). Mark those **Right**, **Wrong** or
+   **Unsure**, and put the reason in the note.
+3. A **gap** row needs no mark: the contract or the library's enum cannot express the sentence, so
+   no answer could satisfy it.
+
+If a human verdict disagrees with the row's automatic verdict, the page flags a **rubric bug** —
+the disagreement is a defect in `spec.md`, not in the model. Only `verdictSource: "human"` can
+produce one; an accepted-auto row is not an audit.
 
 ## Export
 

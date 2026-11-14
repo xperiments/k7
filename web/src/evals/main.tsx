@@ -29,6 +29,7 @@ import {
 } from '../builtin-model';
 import { CORPUS } from './corpus';
 import {
+  acceptStableVerdicts,
   comboKey,
   comboLabel,
   clearRun,
@@ -36,11 +37,13 @@ import {
   exportPayload,
   finishedReps,
   fixturesFrom,
+  isSampled,
   loadTarget,
   machineInfo,
   MATRIX,
   REPETITIONS,
   rescoreRun,
+  reviewKind,
   runOne,
   savedRun,
   saveRun,
@@ -48,6 +51,7 @@ import {
   upsertRecord,
   type Combo,
   type HumanVerdict,
+  type ReviewKind,
   type RunRecord,
   type StoredRun,
   type Target,
@@ -57,6 +61,14 @@ import { aggregate, type ScoredRun, type Verdict } from './score';
 import '../index.css';
 
 const TOTAL = CORPUS.length * REPETITIONS;
+
+const AUDIT_LABEL: Record<ReviewKind, string> = {
+  stable: 'auto',
+  sample: 'sample',
+  unstable: 'review',
+  unscored: 'review',
+  gap: 'gap',
+};
 
 function freshRun(): StoredRun {
   return {
@@ -112,6 +124,7 @@ export function Harness() {
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [reviewOnly, setReviewOnly] = useState(false);
   const [tab, setTab] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -242,14 +255,42 @@ export function Harness() {
   );
   const hasEffective = records.some((record) => record.effective);
   const first = records[0];
+  const auditFor = (rowId: string): ReviewKind | null => {
+    const group = byRow.get(rowId) ?? [];
+    return group.length > 0 ? reviewKind(rowId, group, combo) : null;
+  };
+  const auditRows = CORPUS.filter((row) => auditFor(row.id) !== null);
+  const reviewRows = auditRows.filter((row) => auditFor(row.id) !== 'stable');
+  const toReview = reviewRows.filter((row) => auditFor(row.id) !== 'gap').length;
+  const humanRows = auditRows.filter((row) =>
+    (byRow.get(row.id) ?? []).some((record) => record.verdictSource === 'human'),
+  ).length;
+  const acceptedRows = auditRows.filter((row) =>
+    (byRow.get(row.id) ?? []).some((record) => record.verdictSource === 'accepted-auto'),
+  ).length;
+  const visibleRows = reviewOnly ? reviewRows : CORPUS;
 
   function mark(rowId: string, verdict: HumanVerdict | null): void {
     const updated = runRef.current.records.map((record) =>
       record.arm === combo.arm && record.scope === combo.scope && record.rowId === rowId
-        ? { ...record, verdictHuman: verdict }
+        ? {
+            ...record,
+            verdictHuman: verdict,
+            verdictSource: verdict ? ('human' as const) : undefined,
+            sample: verdict && isSampled(rowId, combo) ? (true as const) : undefined,
+          }
         : record,
     );
     commit({ ...runRef.current, records: updated });
+  }
+
+  function accept(): void {
+    const result = acceptStableVerdicts(runRef.current.records, combo);
+    commit({ ...runRef.current, records: result.records });
+    setStatus(
+      `Accepted ${result.accepted} stable rows from the automatic verdict — recorded as ` +
+        'accepted-auto, not as a human judgement.',
+    );
   }
 
   function note(rowId: string, value: string): void {
@@ -498,12 +539,18 @@ export function Harness() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => download(`k7-ask-evals-${stamp()}.json`, exportPayload(runRef.current))} disabled={run.records.length === 0}>
               Export run
             </Button>
             <Button size="sm" variant="outline" onClick={() => void rescore()} disabled={running !== null || run.records.length === 0}>
               Re-score with rubric 2
+            </Button>
+            <Button size="sm" variant="outline" onClick={accept} disabled={running !== null || records.length === 0}>
+              Accept stable
+            </Button>
+            <Button size="sm" variant="ghost" aria-pressed={reviewOnly} onClick={() => setReviewOnly(!reviewOnly)}>
+              Review only
             </Button>
             <Button
               size="sm"
@@ -515,6 +562,9 @@ export function Harness() {
             >
               Export fixtures
             </Button>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {toReview} to review · {humanRows} human · {acceptedRows} accepted
+            </span>
           </div>
           <Separator />
           <div className="overflow-x-auto">
@@ -527,14 +577,16 @@ export function Harness() {
                   <th className="py-2 pr-2 text-left font-medium">#</th>
                   <th className="py-2 pr-2 text-left font-medium">Sentence</th>
                   <th className="py-2 pr-2 text-left font-medium">Auto (1 · 2 · 3)</th>
+                  <th className="py-2 pr-2 text-left font-medium">Audit</th>
                   <th className="py-2 pr-2 text-left font-medium">Human</th>
                   <th className="py-2 pr-2 text-left font-medium">Note</th>
                   <th className="py-2 text-left font-medium">·</th>
                 </tr>
               </thead>
               <tbody>
-                {CORPUS.map((row) => {
+                {visibleRows.map((row) => {
                   const answers = byRow.get(row.id) ?? [];
+                  const audit = auditFor(row.id);
                   const human = answers[0]?.verdictHuman ?? null;
                   const verdicts = answers.map((record) => record.scored?.verdict);
                   const disagrees =
@@ -573,6 +625,31 @@ export function Harness() {
                           </div>
                         </td>
                         <td className="py-2 pr-2">
+                          {audit ? (
+                            <Badge
+                              variant={
+                                audit === 'unstable' || audit === 'unscored'
+                                  ? 'alert'
+                                  : audit === 'sample'
+                                    ? 'default'
+                                    : 'outline'
+                              }
+                              size="sm"
+                              title={
+                                audit === 'gap'
+                                  ? 'no answer could satisfy this row'
+                                  : audit === 'stable'
+                                    ? 'acccepted from the automatic verdict'
+                                    : 'a person must mark this row'
+                              }
+                            >
+                              {AUDIT_LABEL[audit]}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="py-2 pr-2">
                           <div className="flex flex-wrap gap-1">
                             {(['right', 'wrong', 'unsure'] as const).map((value) => (
                               <Button
@@ -580,7 +657,7 @@ export function Harness() {
                                 size="xs"
                                 variant="outline"
                                 aria-pressed={human === value}
-                                disabled={answers.length === 0}
+                                disabled={answers.length === 0 || audit === 'gap'}
                                 onClick={() => mark(row.id, human === value ? null : value)}
                               >
                                 {value === 'right' ? 'Right' : value === 'wrong' ? 'Wrong' : 'Unsure'}
@@ -611,7 +688,7 @@ export function Harness() {
                       </tr>
                       {open === row.id ? (
                         <tr className="border-b border-border/60">
-                          <td colSpan={6} className="py-2">
+                          <td colSpan={7} className="py-2">
                             <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all text-xs">
                               {JSON.stringify(
                                 answers.map((record) => ({
@@ -629,6 +706,9 @@ export function Harness() {
                                   profileGap: record.scored?.profileGap,
                                   axes: record.scored?.axes,
                                   effective: record.effective,
+                                  verdictHuman: record.verdictHuman,
+                                  verdictSource: record.verdictSource,
+                                  sample: record.sample,
                                   attempts: record.attempts,
                                   error: record.error,
                                 })),
