@@ -13,7 +13,7 @@
 
 import type { SearchArgs } from '../device/mcp';
 import type { LibraryProfile } from '../domain/snapshot';
-import { keyCode } from '../library/imageSource';
+import { keyCode } from '../domain/key';
 import type { IntentFailure } from '../playlists/ask/contract';
 import { factsOf, type PromptFacts } from '../playlists/ask/facts';
 import { intentSchema } from '../playlists/ask/prompt';

@@ -3,7 +3,7 @@ import { ANALYSIS_SCHEMA, type Analysis, type MoodTag } from '../domain/analysis
 import { buildSnapshot, fnv1a64, snapshotPath, type SnapshotTrack } from '../domain/snapshot';
 import { McpError } from '../device/mcp';
 import type { CachedMedia } from '../storage/media';
-import { keyCode, profileFromRows, readImageRows, searchImage } from './imageSource';
+import { profileFromRows, readImageRows, searchImage } from './imageSource';
 
 interface TrackOptions {
   path: string;
@@ -151,17 +151,6 @@ describe('readImageRows', () => {
   });
 });
 
-describe('keyCode', () => {
-  it('reads Camelot and note names the way the device does', () => {
-    expect(keyCode('8A')).toBe(8);
-    expect(keyCode('8B')).toBe(20);
-    expect(keyCode('Am')).toBe(8);
-    expect(keyCode('A minor')).toBe(8);
-    expect(keyCode('C')).toBe(20);
-    expect(keyCode('C#m')).toBe(12);
-    expect(keyCode('bogus')).toBe(0);
-  });
-});
 
 describe('profileFromRows', () => {
   it('builds the library profile from an image that predates one', () => {

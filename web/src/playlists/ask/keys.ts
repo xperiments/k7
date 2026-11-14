@@ -4,7 +4,7 @@
  */
 
 import type { SearchArgs } from '../../device/mcp';
-import { keyCode } from '../../library/imageSource';
+import { keyCode } from '../../domain/key';
 
 import { hasAny } from './words';
 
