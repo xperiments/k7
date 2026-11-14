@@ -10,11 +10,14 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { SearchArgs } from '../device/mcp';
+import { keyCode } from '../domain/key';
 import { factsOf } from '../playlists/ask/facts';
 import { buildSystemPrompt } from '../playlists/ask/prompt';
 import { PURPOSE_RULES } from '../playlists/ask/purpose';
+import { sentenceFilters } from '../playlists/ask/sentence';
 
 import { CORPUS, type CorpusRow } from './corpus';
+import { expectedFor } from './score';
 
 const SEARCH_KEYS = new Set<keyof SearchArgs>([
   'query',
@@ -108,6 +111,25 @@ describe('the corpus', () => {
     expect(refusals.sort()).toEqual(['53', '54', '55', '56', '57', '59', '60', 'N3']);
     for (const id of refusals) {
       expect(['fail', 'either']).toContain(row(id).must.outcome);
+    }
+  });
+
+
+  it('reads only the numbers and keys the corpus states', () => {
+    for (const item of CORPUS) {
+      const expected = expectedFor(item, null);
+      /* A refusal has no filter to extract; the request path never applies the extractor to one. */
+      if (!expected) continue;
+      const found = sentenceFilters(item.sentence);
+      for (const [key, value] of Object.entries(found)) {
+        if (key === 'key') {
+          const want = new Set((expected.key ?? []).map(keyCode));
+          const got = new Set((value as string[]).map(keyCode));
+          expect([...got].sort(), `${item.id}: key`).toEqual([...want].sort());
+        } else {
+          expect(expected[key as keyof SearchArgs], `${item.id}: ${key}`).toEqual(value);
+        }
+      }
     }
   });
 

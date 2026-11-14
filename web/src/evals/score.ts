@@ -279,7 +279,7 @@ export interface ScoredRun {
   profileGap?: string;
   /** Which repair the shipped path needed, when the harness knows. */
   repair?: RepairKind;
-  /** The purpose normalizer changed the Intent the model produced. */
+  /** The app's own steps (keys, purpose, sentence numbers) changed the model's Intent. */
   normalized?: boolean;
 }
 

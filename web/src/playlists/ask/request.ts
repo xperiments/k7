@@ -15,6 +15,7 @@ import { normalizeKeys } from './keys';
 import { isNameQuery, parseIntent } from './parse';
 import { buildSystemPrompt, intentExamples, intentSchema } from './prompt';
 import { normalizePurpose } from './purpose';
+import { applySentenceFilters, sentenceFilters } from './sentence';
 
 /** One model call, as the evaluation harness sees it. Never passed by the App. */
 export interface IntentTrace {
@@ -36,6 +37,9 @@ export interface IntentTrace {
  *
  * `trace` is the harness's sink and nothing in the App passes it: with it, each model call reports
  * its answer and how long it took; without it, the function asks exactly what it asked before.
+ *
+ * The sentence's own numbers and key are applied before the normalizers, so a stated count, a
+ * length, a tempo or a key does not depend on the model (ADR 0088).
  */
 export async function requestIntent(
   sentence: string,
@@ -45,6 +49,7 @@ export async function requestIntent(
 ): Promise<SearchArgs | IntentFailure> {
   const asked = sentence.trim();
   if (!asked) return failure('Say what you are looking for first.');
+  const fromSentence = sentenceFilters(asked);
 
   const system = buildSystemPrompt(profile);
   const schema = intentSchema(profile);
@@ -74,7 +79,12 @@ export async function requestIntent(
   /* The purpose normalizer is the last filter step: it runs on whatever the model finally said,
    * including a repaired answer, so the Intent the App shows is the one the search will run. */
   const finish = (result: SearchArgs | IntentFailure): SearchArgs | IntentFailure =>
-    'error' in result ? result : normalizePurpose(asked, normalizeKeys(asked, result));
+    'error' in result
+      ? result
+      : normalizePurpose(
+          asked,
+          applySentenceFilters(normalizeKeys(asked, result), fromSentence),
+        );
 
   const intent = parseIntent(answer);
 

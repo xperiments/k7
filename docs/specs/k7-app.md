@@ -273,7 +273,12 @@ unmarked lowercase word), each get one repair — the second is asked again with
 a word that is still not a name is dropped. A key the model spells in words or symbols is written
 the device's way before the search — "B flat major" and "B♭" become "Bb", "F sharp minor" and
 "F♯m" become "F#m" — and a bare note takes its mode from the sentence when the sentence states
-one; a key that cannot be read is left as written. When the exact search finds nothing, Ask retries once
+one; a key that cannot be read is left as written. The sentence's own count, listening-session
+length, track length, BPM, offset or key wins over the model's: a pure extractor reads it, and a
+field it finds replaces the model's field, while a field it does not find keeps the model's value.
+It runs only over a runnable Intent, so it never turns a refusal into a search, and it never writes
+a name, a mood or a genre ([ADR 0088](../adr/0088-the-sentence-wins-on-the-numbers-it-states.md)).
+When the exact search finds nothing, Ask retries once
 without the numeric ranges: with a mood left to search on, as before; and — only when the Intent
 carries three or more measurement ranges — with the pair the sentence's purpose word prescribes,
 or with every range dropped when the sentence names no purpose. A hand-run Intent keeps the mood

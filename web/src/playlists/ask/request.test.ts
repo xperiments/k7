@@ -198,3 +198,50 @@ describe('the App’s answer ceiling', () => {
     expect(result).toEqual({ error: 'The model did not answer.' });
   });
 });
+
+describe('the sentence overrides the model', () => {
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
+
+  it('gives "10 songs for a workout" the count the sentence states', async () => {
+    model.askModel.mockResolvedValue('{"limit":50,"energy_min":70,"arousal_min":60}');
+    await expect(requestIntent('10 songs for a workout')).resolves.toEqual({
+      limit: 10,
+      energyMin: 70,
+      arousalMin: 60,
+    });
+  });
+
+  it('clears the invented side of a stated maximum', async () => {
+    model.askModel.mockResolvedValue('{"bpm_min":60,"bpm_max":140}');
+    await expect(requestIntent('tracks under 100 BPM')).resolves.toEqual({ bpmMax: 100 });
+  });
+
+  it('takes the key from the sentence', async () => {
+    model.askModel.mockResolvedValue('{"key":["Am"]}');
+    await expect(requestIntent('tracks in 8A or 9A')).resolves.toEqual({ key: ['8A', '9A'] });
+  });
+
+  it('reads a listening session as a count', async () => {
+    model.askModel.mockResolvedValue('{"genre":"ambient","limit":10}');
+    await expect(requestIntent('three hours of ambient')).resolves.toEqual({
+      genre: 'ambient',
+      limit: 45,
+    });
+  });
+
+  it('clears both sides of a stated track length', async () => {
+    model.askModel.mockResolvedValue('{"duration_min":60,"duration_max":600}');
+    await expect(requestIntent('tracks under three minutes')).resolves.toEqual({
+      durationMax: 180,
+    });
+  });
+
+  it('does not turn "add 5 songs to the playlist" into a search', async () => {
+    model.askModel.mockResolvedValue('{}');
+    const result = await requestIntent('add 5 songs to the playlist');
+    expect('error' in result).toBe(true);
+    if ('error' in result) expect(result.error).toMatch(/no filters/);
+  });
+});
