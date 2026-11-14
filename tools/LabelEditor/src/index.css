@@ -1,0 +1,246 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * The editor wears the product's one skin (docs/specs/k7-look.md): a near-black page, one
+ * orange accent, a neutral ink, outline for what is available and fill for what is current.
+ * The artwork on the canvas keeps its own colours — that is content, like the coverflow.
+ * ADR 0080 records the skin; the values are the firmware's own.
+ */
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--k7-font);
+  --default-transition-duration: 100ms;
+  --default-transition-timing-function: linear;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-invert: var(--invert);
+  --color-invert-foreground: var(--invert-foreground);
+  --color-k7-bg: var(--k7-bg);
+  --color-k7-accent: var(--k7-accent);
+  --color-k7-well: var(--k7-well);
+  --color-k7-surface: var(--k7-surface);
+  --color-k7-line: var(--k7-line);
+  --color-k7-dim: var(--k7-dim);
+  --color-k7-faint: var(--k7-faint);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-panel: var(--radius);
+
+  /* The K7 look has no shadow: every built-in shadow utility resolves to none. */
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-2xl: none;
+}
+
+:root {
+  --k7-bg: #17181a;
+  --k7-accent: #f15a22;
+  --k7-ink: #a6a8a8;
+  --k7-ink-dim: #858787;
+  --k7-line: #2e3030;
+  --k7-surface: #222425;
+  --k7-well: #121314;
+  --k7-on-accent: #111111;
+  --k7-alert: #f2c94c;
+  --k7-dim: color-mix(in srgb, var(--k7-accent) 42%, transparent);
+  --k7-faint: color-mix(in srgb, var(--k7-accent) 18%, transparent);
+  --k7-font:
+    "Jura", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --destructive-foreground: var(--color-red-800);
+  --success: var(--color-emerald-500);
+  --success-foreground: var(--color-emerald-900);
+  --info: var(--color-violet-500);
+  --info-foreground: var(--color-violet-900);
+  --warning: var(--color-yellow-500);
+  --warning-foreground: var(--color-yellow-900);
+  --invert: var(--color-zinc-900);
+  --invert-foreground: var(--color-zinc-50);
+}
+
+/* Dark is the only palette: the tool is a desk lamp in a dark room. */
+:root,
+.dark {
+  color-scheme: dark;
+  --radius: 0.4375rem;
+  --background: var(--k7-bg);
+  --foreground: var(--k7-ink);
+  --card: var(--k7-bg);
+  --card-foreground: var(--k7-ink);
+  --popover: var(--k7-bg);
+  --popover-foreground: var(--k7-ink);
+  --primary: var(--k7-accent);
+  --primary-foreground: var(--k7-on-accent);
+  --secondary: var(--k7-ink-dim);
+  --secondary-foreground: var(--k7-on-accent);
+  --muted: var(--k7-well);
+  --muted-foreground: var(--k7-ink-dim);
+  --accent: var(--k7-surface);
+  --accent-foreground: var(--k7-ink);
+  --destructive: var(--k7-accent);
+  --destructive-foreground: var(--k7-on-accent);
+  --border: var(--k7-line);
+  --input: var(--k7-line);
+  --ring: var(--k7-accent);
+  --success: var(--k7-ink-dim);
+  --success-foreground: var(--k7-ink);
+  --info: var(--k7-ink-dim);
+  --info-foreground: var(--k7-ink);
+  --warning: var(--k7-ink-dim);
+  --warning-foreground: var(--k7-ink);
+  --invert: var(--k7-ink);
+  --invert-foreground: var(--k7-bg);
+  --sidebar: var(--k7-bg);
+  --sidebar-foreground: var(--k7-ink);
+  --sidebar-primary: var(--k7-accent);
+  --sidebar-primary-foreground: var(--k7-on-accent);
+  --sidebar-accent: var(--k7-surface);
+  --sidebar-accent-foreground: var(--k7-ink);
+  --sidebar-border: var(--k7-line);
+  --sidebar-ring: var(--k7-accent);
+}
+
+/*
+ * Jura, the same face the device draws with: the editor's chrome and the label's own fonts
+ * are downloaded from this origin, never a CDN — the tool must work on the bench offline.
+ */
+@font-face {
+  font-family: "Jura";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/Jura-VariableFont_wght.ttf") format("truetype");
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  html {
+    @apply font-sans;
+    /* One knob for the editor's size: Tailwind's type, spacing, controls and panel widths
+     * are rem, so this scales the chrome together. The label's own type is design pixels
+     * (inline px on the stage) and never scales with it. */
+    font-size: 125%;
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    font-weight: 300;
+    letter-spacing: 0.02em;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--k7-accent);
+    color: var(--k7-bg);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--k7-accent) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--k7-accent);
+    border-radius: 999px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* The label's own type: the three faces the sheet compiles, previewed at their real size. */
+  .font-label {
+    font-kerning: none;
+  }
+  .tabnum {
+    font-variant-numeric: tabular-nums;
+  }
+  /* The canvas is a working surface, not a page: it owns its pointer, so no text cursor. */
+  .canvas-surface {
+    touch-action: none;
+    user-select: none;
+  }
+  .canvas-surface.is-preview {
+    cursor: default;
+  }
+}
+/*
+ ---break---
+ */
+.dark {
+  --destructive-foreground: var(--color-red-600);
+  --success: var(--color-emerald-500);
+  --success-foreground: var(--color-emerald-600);
+  --info: var(--color-violet-500);
+  --info-foreground: var(--color-violet-600);
+  --warning: var(--color-yellow-500);
+  --warning-foreground: var(--color-yellow-600);
+  --invert: var(--color-zinc-700);
+  --invert-foreground: var(--color-zinc-50);
+}
