@@ -33,6 +33,7 @@ import {
   comboLabel,
   clearRun,
   exportPayload,
+  finishedReps,
   fixturesFrom,
   loadTarget,
   machineInfo,
@@ -42,6 +43,7 @@ import {
   savedRun,
   saveRun,
   scoredRunsFor,
+  upsertRecord,
   type Combo,
   type HumanVerdict,
   type RunRecord,
@@ -153,13 +155,20 @@ export function Harness() {
         setError(caught instanceof Error ? caught.message : String(caught));
         break;
       }
+      /* Resume means resume: a repetition that already has a valid record is not asked again,
+       * and a re-run replaces its record instead of appending a second one. */
+      const finished = finishedReps(runRef.current.records, combo);
       setRunning(comboKey(combo));
       for (const row of CORPUS) {
         if (stop.current) break;
         for (let rep = 1; rep <= REPETITIONS; rep += 1) {
           if (stop.current) break;
+          if (finished.has(`${row.id}:${rep}`)) continue;
           const record = await runOne(combo, target, row, rep as 1 | 2 | 3);
-          commit({ ...runRef.current, records: [...runRef.current.records, record] });
+          commit({
+            ...runRef.current,
+            records: upsertRecord(runRef.current.records, record),
+          });
           setAvailability(record.availability);
           if (record.invalid && record.availability !== 'available') {
             setError(record.error ?? 'the model stopped answering');
@@ -292,24 +301,24 @@ export function Harness() {
           </div>
           <Separator />
           {MATRIX.map((item, index) => {
-            const count = run.records.filter(
-              (record) => record.arm === item.arm && record.scope === item.scope,
-            ).length;
+            const finished = finishedReps(run.records, item).size;
             const active = running === comboKey(item);
             return (
               <div key={comboKey(item)} className="flex flex-wrap items-center gap-3">
                 <span className="w-72 text-sm">{comboLabel(item)}</span>
-                <Progress value={percent(count, TOTAL)} className="max-w-48" />
+                <Progress value={percent(finished, TOTAL)} className="max-w-48" />
                 <span className="w-20 text-xs text-muted-foreground tabular-nums">
-                  {count}/{TOTAL}
+                  {finished}/{TOTAL}
                 </span>
                 <Button
                   size="xs"
                   variant="outline"
                   onClick={() => void runMany([item])}
-                  disabled={running !== null || availability !== 'available'}
+                  disabled={
+                    running !== null || availability !== 'available' || finished === TOTAL
+                  }
                 >
-                  {active ? 'Running…' : count > 0 ? 'Resume' : 'Run'}
+                  {active ? 'Running…' : finished === TOTAL ? 'Done' : finished > 0 ? 'Resume' : 'Run'}
                 </Button>
                 <Button
                   size="xs"
@@ -433,7 +442,7 @@ export function Harness() {
                               <span className="text-xs text-muted-foreground">—</span>
                             ) : (
                               answers.map((record) => (
-                                <span key={record.rep} title={record.scored?.reasons.join('; ')}>
+                                <span key={record.id} title={record.scored?.reasons.join('; ')}>
                                   <Badge
                                     variant={
                                       record.invalid

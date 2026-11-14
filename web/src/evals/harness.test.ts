@@ -9,12 +9,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseIntent } from '../playlists/ask';
 import { rowById } from './corpus';
 import {
+  dedupeRecords,
   digest,
   exportPayload,
+  finishedReps,
   fixturesFrom,
   intentChanged,
   loadTarget,
+  runKey,
   scoredRunsFor,
+  upsertRecord,
   type RunRecord,
   type StoredRun,
 } from './harness';
@@ -67,6 +71,39 @@ describe('digest', () => {
   it('is stable and notices a changed string', () => {
     expect(digest('abc')).toBe(digest('abc'));
     expect(digest('abc')).not.toBe(digest('abd'));
+  });
+});
+
+describe('run identity', () => {
+  it('is the combination, the sentence and the repetition', () => {
+    expect(runKey({ arm: 'requestIntent', scope: 'static' }, 'S1', 3)).toBe(
+      'requestIntent@static:S1:3',
+    );
+  });
+
+  it('replaces a re-run instead of appending a second copy of the same rep', () => {
+    const first = record();
+    const second = record({ note: 're-run' });
+    const next = upsertRecord([first], second);
+    expect(next).toHaveLength(1);
+    expect(next[0].note).toBe('re-run');
+  });
+
+  it('repairs a saved run that already holds duplicates, keeping the last', () => {
+    const first = record({ note: 'first' });
+    const last = record({ note: 'last' });
+    const repaired = dedupeRecords([first, first, last]);
+    expect(repaired).toHaveLength(1);
+    expect(repaired[0].note).toBe('last');
+  });
+
+  it('skips a finished rep, re-runs an invalid one and ignores another combination', () => {
+    const combo = { arm: 'requestIntent', scope: 'static' } as const;
+    const done = record();
+    const invalid = record({ rep: 2, invalid: true });
+    const otherArm = record({ rep: 3, arm: 'systemOnly' });
+    const finished = finishedReps([done, invalid, otherArm], combo);
+    expect([...finished]).toEqual(['S1:1']);
   });
 });
 

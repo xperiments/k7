@@ -67,6 +67,30 @@ export function comboLabel(combo: Combo): string {
   return `${combo.arm} · ${combo.scope}`;
 }
 
+/** One run's identity: a combination, a sentence and a repetition. */
+export function runKey(combo: Combo, rowId: string, rep: number): string {
+  return `${comboKey(combo)}:${rowId}:${rep}`;
+}
+
+/**
+ * The repetitions of one combination that already have a valid record. A resume skips these and
+ * re-runs everything else, including a row the model failed to answer: a second `Run` must not
+ * append a second copy of a repetition it already has.
+ */
+export function finishedReps(records: readonly RunRecord[], combo: Combo): Set<string> {
+  return new Set(
+    records
+      .filter(
+        (record) =>
+          record.arm === combo.arm &&
+          record.scope === combo.scope &&
+          !record.invalid &&
+          record.scored !== undefined,
+      )
+      .map((record) => `${record.rowId}:${record.rep}`),
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* What a scope reads                                                          */
 /* -------------------------------------------------------------------------- */
@@ -216,7 +240,7 @@ export async function runOne(
    * requestIntent builds for itself. The record has to describe what the arm actually sent. */
   const examples = combo.arm === 'systemOnly' ? [] : intentExamples(target.profile);
   const base: RunBase = {
-    id: `${comboKey(combo)}:${row.id}:${rep}`,
+    id: runKey(combo, row.id, rep),
     rowId: row.id,
     set: row.set,
     sentence: row.sentence,
@@ -343,6 +367,25 @@ export function intentChanged(a: SearchArgs, b: SearchArgs): boolean {
 
 const KEY = 'k7-ask-evals-v1';
 
+/**
+ * One record per run identity. A resume replaces a run instead of appending a second copy of the
+ * same repetition, which is what a naive append does; the last answer wins.
+ */
+export function upsertRecord(records: readonly RunRecord[], record: RunRecord): RunRecord[] {
+  const index = records.findIndex((item) => item.id === record.id);
+  if (index < 0) return [...records, record];
+  const next = [...records];
+  next[index] = record;
+  return next;
+}
+
+/** A saved run from before the upsert could hold duplicates; keep the last copy of each run. */
+export function dedupeRecords(records: readonly RunRecord[]): RunRecord[] {
+  const byId = new Map<string, RunRecord>();
+  for (const record of records) byId.set(record.id, record);
+  return [...byId.values()];
+}
+
 export interface StoredRun {
   startedAt: string;
   machine: MachineInfo;
@@ -356,7 +399,7 @@ export function savedRun(): StoredRun | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredRun;
     if (!Array.isArray(parsed.records) || typeof parsed.startedAt !== 'string') return null;
-    return parsed;
+    return { ...parsed, records: dedupeRecords(parsed.records) };
   } catch {
     return null;
   }
