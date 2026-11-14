@@ -11,6 +11,7 @@ import {
   isCategoryQuery,
   isNameQuery,
   MOOD_VALUES,
+  normalizeKeys,
   normalizePurpose,
   parseIntent,
   purposeFilters,
@@ -364,6 +365,45 @@ describe('purposeFilters', () => {
     expect(purposeFilters('sad and slow', null)).toBeNull();
     expect(purposeFilters('slow', null)).toBeNull();
     expect(purposeFilters('workout', PROFILE)).toEqual({ energyMin: 74, arousalMin: 73 });
+  });
+});
+
+describe('normalizeKeys', () => {
+  it('writes a spelled note the device’s way', () => {
+    expect(normalizeKeys('B flat major', { key: ['B flat major'] })).toEqual({ key: ['Bb'] });
+    expect(normalizeKeys('B flat minor', { key: ['B flat minor'] })).toEqual({ key: ['Bbm'] });
+    expect(normalizeKeys('B flat major', { key: ['Bflat'] })).toEqual({ key: ['Bb'] });
+    expect(normalizeKeys('B flat major', { key: ['B♭'] })).toEqual({ key: ['Bb'] });
+    expect(normalizeKeys('B flat minor', { key: ['B♭m'] })).toEqual({ key: ['Bbm'] });
+    expect(normalizeKeys('F sharp minor', { key: ['F sharp minor'] })).toEqual({ key: ['F#m'] });
+    expect(normalizeKeys('F sharp minor', { key: ['F♯m'] })).toEqual({ key: ['F#m'] });
+    expect(normalizeKeys('B flat major', { key: ['B-flat'] })).toEqual({ key: ['Bb'] });
+  });
+
+  it('lets the sentence settle a bare note', () => {
+    expect(normalizeKeys('something in F# minor', { key: ['F#'] })).toEqual({ key: ['F#m'] });
+    expect(normalizeKeys('something in F# major', { key: ['F#'] })).toEqual({ key: ['F#'] });
+    expect(normalizeKeys('something in F#', { key: ['F#'] })).toEqual({ key: ['F#'] });
+  });
+
+  it('leaves a key it cannot read, or one the device already reads', () => {
+    expect(normalizeKeys('anything', { key: ['8A'] })).toEqual({ key: ['8A'] });
+    expect(normalizeKeys('anything', { key: ['E minor'] })).toEqual({ key: ['E minor'] });
+    expect(normalizeKeys('H minor', { key: ['H minor'] })).toEqual({ key: ['H minor'] });
+    expect(normalizeKeys('B flat major', { key: ['Bb major'] })).toEqual({ key: ['Bb major'] });
+  });
+
+  it('keeps an explicit mode over the sentence’s', () => {
+    expect(normalizeKeys('B flat minor', { key: ['B flat major'] })).toEqual({ key: ['Bb'] });
+  });
+
+  it('dedupes two spellings of one key', () => {
+    expect(normalizeKeys('F# minor', { key: ['F#m', 'F♯m'] })).toEqual({ key: ['F#m'] });
+  });
+
+  it('returns the same Intent when there is no key', () => {
+    const intent: SearchArgs = { bpmMax: 95 };
+    expect(normalizeKeys('slow', intent)).toBe(intent);
   });
 });
 
@@ -740,5 +780,24 @@ describe('the like/similar fix on the shipped path', () => {
     model.askModel.mockResolvedValue('{"query":"Bonobo"}');
     await expect(requestIntent('similar to Bonobo')).resolves.toEqual({ query: 'Bonobo' });
     expect(model.askModel).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('key spellings on the shipped path', () => {
+  beforeEach(() => model.askModel.mockReset());
+
+  it('rewrites a spelled key before returning the Intent', async () => {
+    model.askModel.mockResolvedValue('{"key":["B flat major"]}');
+    await expect(requestIntent('B flat major')).resolves.toEqual({ key: ['Bb'] });
+  });
+
+  it('lets the sentence settle a bare note', async () => {
+    model.askModel.mockResolvedValue('{"key":["F#"]}');
+    await expect(requestIntent('something in F# minor')).resolves.toEqual({ key: ['F#m'] });
+  });
+
+  it('leaves a valid key alone', async () => {
+    model.askModel.mockResolvedValue('{"key":["Am"]}');
+    await expect(requestIntent('something in A minor')).resolves.toEqual({ key: ['Am'] });
   });
 });

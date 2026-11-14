@@ -270,7 +270,10 @@ There is no endpoint, no key and no setting: a sentence becomes an **Intent** wi
 restates a key is dropped, and every number is clamped to the range the Snapshot stores. A
 malformed answer, and a query that is not a name the sentence used (a category, a purpose, or an
 unmarked lowercase word), each get one repair — the second is asked again with the sentence — and
-a word that is still not a name is dropped. When the exact search finds nothing, Ask retries once
+a word that is still not a name is dropped. A key the model spells in words or symbols is written
+the device's way before the search — "B flat major" and "B♭" become "Bb", "F sharp minor" and
+"F♯m" become "F#m" — and a bare note takes its mode from the sentence when the sentence states
+one; a key that cannot be read is left as written. When the exact search finds nothing, Ask retries once
 without the numeric ranges: with a mood left to search on, as before; and — only when the Intent
 carries three or more measurement ranges — with the pair the sentence's purpose word prescribes,
 or with every range dropped when the sentence names no purpose. A hand-run Intent keeps the mood
