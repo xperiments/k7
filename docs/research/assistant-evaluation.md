@@ -35,7 +35,7 @@ which sentences should the corpus be?
    component updater. The repo's "not tested in CI" is correct. (§2)
 6. **The harness should be a dev-only page on the app's own origin** (`web/evals/`), importing
    `requestIntent`/`parseIntent`/`buildSystemPrompt`/`intentSchema`/`intentExamples` from
-   `web/src/playlists/ask.ts`. Vite's build has an explicit `input` of `site` + `app`, so a page
+   `web/src/playlists/ask/`. Vite's build has an explicit `input` of `site` + `app`, so a page
    outside it is not shipped. Add one trace sink so repairs are visible; do not copy the path. (§3)
 7. **Score the Intent, not the string.** `parseIntent` is already the judge; score its output on
    recall, precision, forbidden keys, bound direction, and whether the result is non-empty. (§4)
@@ -104,8 +104,8 @@ temperature" would be measuring nothing while looking like it did.
   explainer).
 - The docs' examples use only `type`, `properties`, `required`, `additionalProperties`, `items`,
   `pattern`, `maxItems`, `minimum`, `maximum` (**VERIFIED**, [structured output](https://developer.chrome.com/docs/ai/structured-output-for-prompt-api)).
-  `enum` is **not** in any Chrome example; `web/src/playlists/ask.ts` relies on it, and the spike
-  reports it worked (repository evidence, not a Chrome statement).
+  `enum` is **not** in any Chrome example; `web/src/playlists/ask/prompt.ts` relies on it, and the
+  spike reports it worked (repository evidence, not a Chrome statement).
 - **The supported subset is UNVERIFIED.** Chrome publishes no keyword list. I checked: the Prompt
   API page, the structured-output page, the explainer's "Structured output" section, the IDL, the
   `on_device_model` mojom (which carries the schema as an opaque `string json_schema`), and
@@ -117,8 +117,8 @@ temperature" would be measuring nothing while looking like it did.
   `pattern` to the Intent schema, run it there.
 - The schema is also *shown to the model* by default, i.e. it is prompt text as well as a
   constraint, and it costs context (**VERIFIED**, docs: "Your implementation can include a JSON
-  Schema … This uses some of the context window"). `ask.ts`'s comment that the schema "is a request
-  and the parser is the judge" is the right reading.
+  Schema … This uses some of the context window"). `ask/prompt.ts`'s comment that the schema "is a
+  request and the parser is the judge" is the right reading.
 
 ### 1.4 The 10/12 measured a different input than what ships
 
@@ -128,15 +128,16 @@ This is the single most important correction in this note.
   `initialPrompts: [{role:'system', content: SYSTEM_PROMPT}]` and prompts with a **hand-copied**
   `SCHEMA`. It has no `examples`, no library profile, no repair retry (**VERIFIED**, reading both
   files).
-- Its build script lifts `const SYSTEM_PROMPT = [` — a literal array that `ask.ts` no longer
-  contains; the prompt is now assembled by `buildSystemPrompt(profile)`. The page therefore cannot
-  be rebuilt, and whatever it ran is an older prompt (**VERIFIED**, `build.mjs` lines 16–40 vs
-  `ask.ts` 463–528).
+- Its build script lifts `const SYSTEM_PROMPT = [` — a literal array the assistant no longer
+  contains; the prompt is now assembled by `buildSystemPrompt(profile)` in `ask/prompt.ts`. The
+  page therefore cannot be rebuilt, and whatever it ran is an older prompt (**VERIFIED**,
+  `build.mjs` lines 16–40 vs `ask/prompt.ts`, `buildSystemPrompt`).
 - ADR 0084's note of 2026-11-13 says the prompt "now carries a word-to-filter table and few-shot
   turns passed as `initialPrompts`". That is a *later* change than the 10/12 run described in the
   ADR's Decision section. The 8/12 tightened prompt was measured on the same older frame.
 - `requestIntent` today also repairs: once for an answer that is not a usable object, and once for
-  a `query` that is not a name the sentence used (`ask.ts` 651–730). Neither existed in the spike.
+  a `query` that is not a name the sentence used (`ask/request.ts`, `requestIntent` and
+  `repairQuery`). Neither existed in the spike.
 
 So: **10/12 is the number for a static prompt with no examples, no profile, no repairs.** The
 shipped input has never been measured, and the number may be better or worse. A new measurement is
@@ -167,9 +168,9 @@ settles which description is right.
 
 ## 2. CI and headless
 
-**The repo's statement stands, with a sharper reason.** `web/src/playlists/ask.ts` says the ask "is
-not tested: the built-in model is Chrome's and CI has none", and `.github/workflows/ci.yml` runs
-only Node on `ubuntu-latest` (plus the host build) — no browser at all, and the Playwright job is
+**The repo's statement stands, with a sharper reason.** `web/src/playlists/ask/request.ts` says the
+ask "is not tested: the built-in model is Chrome's and CI has none", and `.github/workflows/ci.yml`
+runs only Node on `ubuntu-latest` (plus the host build) — no browser at all, and the Playwright job is
 commented out (**VERIFIED**, repository).
 
 What is documented, and what is not:
@@ -203,7 +204,7 @@ What is documented, and what is not:
 **Verdict.** The corpus is a **manual, local, real-Chrome** measurement, run by a person on a
 machine that already has the model. CI keeps testing what it can: `parseIntent`, `isNameQuery`,
 `buildSystemPrompt`, `intentSchema`, `intentExamples` — already covered in
-`web/src/playlists/ask.test.ts`. The harness's own scoring code should also be unit-tested in
+`web/src/playlists/ask/*.test.ts`. The harness's own scoring code should also be unit-tested in
 Vitest against recorded model answers, so a rubric change is a CI-checkable diff even though the
 model is not.
 
@@ -227,7 +228,7 @@ not a route in the shipped App.
   that `dist` has no `evals` entry, if that comfort is wanted.
 - Put the corpus, the scoring and the page under `web/src/evals/` so `tsconfig.json`'s
   `include: ["src", …]` typechecks them, and the page under `web/evals/` so Vite serves it at a
-  clean path. The import from `../playlists/ask` is then the real module, not a copy.
+  clean path. The imports from `../playlists/ask` are then the real modules, not a copy.
 - A route in the App (`#/evals`) is the wrong shape: the App mounts the device gate, the analysis
   worker and the poll (`src/ui/App.tsx`), none of which the harness needs, and a shipped route is a
   shipped route.
@@ -235,7 +236,9 @@ not a route in the shipped App.
 ### 3.2 What it imports
 
 ```ts
-import { buildSystemPrompt, intentExamples, intentSchema, parseIntent, requestIntent } from '../playlists/ask';
+import { requestIntent } from '../playlists/ask';
+import { parseIntent } from '../playlists/ask/parse';
+import { buildSystemPrompt, intentExamples, intentSchema } from '../playlists/ask/prompt';
 import { searchImage } from '../library/imageSource';
 import { loadSnapshot } from '../storage/snapshots';
 import { listMedia } from '../storage/media';
@@ -368,11 +371,11 @@ Then two outcome checks:
 
 ### 4.4 The empty Intent is a refusal, not an answer
 
-`parseIntent` fails on an object with no filters, and `ask.test.ts` says so out loud: "`{}` is the
-designed no-filter answer, and `parseIntent` refuses it by design" (**VERIFIED**,
-`web/src/playlists/ask.test.ts` 246–268). `Ask.tsx` turns that into an error message with a retry
-(**VERIFIED**, `Ask.tsx` 391–393). So "play something", "surprise me" and "hello" are rows where the
-*correct* outcome is an error, and the row must be scored for **not inventing** a filter. Any
+`parseIntent` fails on an object with no filters, and `prompt.test.ts` says so out loud: "`{}` is
+the designed no-filter answer, and `parseIntent` refuses it by design" (**VERIFIED**,
+`web/src/playlists/ask/prompt.test.ts`, the `INTENT_EXAMPLES` case). `Ask.tsx` turns that into an
+error message with a retry (**VERIFIED**, `Ask.tsx` 391–393). So "play something", "surprise me"
+and "hello" are rows where the *correct* outcome is an error, and the row must be scored for **not inventing** a filter. Any
 harness that expects `{}` to parse will report a false failure on the model's best answer. If the
 product wants a real no-filter answer, that is a spec change (an empty `SearchArgs` that the search
 accepts), not a prompt change.
@@ -419,7 +422,8 @@ prompt's WORD→FILTER table says a purpose word maps to **two** filters (`energ
 and the sentence's count maps to `limit`; the other three pairs and the sort are inventions. The
 five-filter intersection is empty on a 1,495-track library with 1,259 analysed rows, so the user sees
 "Nothing matched" — and `relaxRanges` cannot save it, because it returns `null` without a mood
-(`ask.ts` 374–380, `ask.test.ts` "drops the numeric ranges only when a mood is left to search on").
+(`playlists/relax.ts`, `relaxRanges`; `relax.test.ts` "drops the numeric ranges only when a mood is
+left to search on").
 
 What would fix it, in increasing cost:
 
@@ -445,11 +449,11 @@ What would fix it, in increasing cost:
 
 ### 5.2 Two repo facts that make the few-shot option concrete
 
-- `INTENT_EXAMPLES` (`ask.ts` 535–543) has **no workout row** and **no purpose row except sleep**.
+- `INTENT_EXAMPLES` (`ask/prompt.ts`) has **no workout row** and **no purpose row except sleep**.
   The two known misses — the artist and the purpose — are therefore the two things the examples do
   not teach. `Ask.tsx` even offers "10 songs for a workout" as one of three `OPENERS`
   (`chat.ts` 158–162): the app suggests the sentence the model is weakest at.
-- The examples are already asserted to parse (`ask.test.ts` 246), so adding one is a one-line test
+- The examples are already asserted to parse (`prompt.test.ts`), so adding one is a one-line test
   change plus a re-measure.
 
 ---
@@ -462,7 +466,7 @@ What would fix it, in increasing cost:
   (`profile: null`), in the App's camelCase, with the prompt's own thresholds (fast 125, slow 95,
   chill 40, workout 70, dance 70, sad 40, happy 60, arousal 60/65). With a profile the same row's
   numbers become that library's quartiles — the harness reads `profile.*.p75`/`p25`, the same
-  quantities `factsOf` uses (`ask.ts` 420–457) — so only the *shape* of the expectation is fixed.
+  quantities `factsOf` uses (`ask/facts.ts`) — so only the *shape* of the expectation is fixed.
 - **Must** is the row's pass condition, in the codes of §4.1: `parse` (a runnable Intent),
   `fail` (a refusal is the correct outcome), `{a,b}` required keys, `!{a,b}` forbidden keys,
   `≤n` at most n numeric pairs, `~v` within tolerance, `rows` non-empty result on the reference
@@ -553,10 +557,10 @@ rows and their `must` codes, and the rule that a row passes only on 3/3 identica
 now what "better" means: the shipped baseline is **unknown**, so the first run defines it.
 
 **Stage 1 — the harness, measuring only.** Build `web/evals/` + `web/src/evals/`, importing the real
-`ask.ts`. Add the optional `trace` parameter to `requestIntent` (behaviour unchanged). Run three
-arms on one machine: `systemOnly` (the 10/12 control), `systemExamples`, and `requestIntent` with
-the static profile; then `requestIntent` with the Last image's stored profile, plus the search in
-scope 3. Record `chrome://on-device-internals`. Ship no product change. Success: a JSON export and a
+assistant modules. Add the optional `trace` parameter to `requestIntent` (behaviour unchanged).
+Run three arms on one machine: `systemOnly` (the 10/12 control), `systemExamples`, and
+`requestIntent` with the static profile; then `requestIntent` with the Last image's stored profile,
+plus the search in scope 3. Record `chrome://on-device-internals`. Ship no product change. Success: a JSON export and a
 first honest number for the shipped input, with per-row verdicts and repairs counted.
 
 **Stage 2 — the cheap fixes, one at a time, each re-measured.** In this order:
@@ -638,15 +642,17 @@ Third party (REPORTED, not relied on for any API fact):
 
 This repository:
 
-- `web/src/playlists/ask.ts` — `buildSystemPrompt`, `INTENT_EXAMPLES`/`intentExamples`,
-  `INTENT_SCHEMA`/`intentSchema`, `parseIntent`, `relaxRanges`, `isNameQuery`, `requestIntent`,
-  `repairQuery`.
+- `web/src/playlists/ask/` — `request` (`requestIntent`, `repairQuery`), `parse` (`parseIntent`,
+  `isNameQuery`), `prompt` (`buildSystemPrompt`, `INTENT_EXAMPLES`/`intentExamples`,
+  `INTENT_SCHEMA`/`intentSchema`), and the `purpose`, `facts`, `keys` and `contract` modules behind
+  them.
+- `web/src/playlists/relax.ts` — `relaxRanges`.
 - `web/src/builtin-model.ts` — `askModel`: one session per ask, `initialPrompts`, one
   `session.prompt(sentence, {responseConstraint})`, no sampling option.
 - `web/src/playlists/chat.ts`, `web/src/ui/areas/Ask.tsx` — the deterministic answer, the error path,
   the `OPENERS`.
-- `web/src/library/source.ts`, `web/src/library/imageSource.ts` — the Last image search and
-  `keyCode`.
+- `web/src/library/source.ts`, `web/src/library/imageSource.ts` — the Last image search.
+- `web/src/domain/key.ts` — `keyCode`, `camelotName`: the device's key grammar.
 - `docs/adr/0084-…`, `docs/adr/0086-…`, `docs/specs/k7-app.md` §7 — the contract, the measured
   number, the conversation.
 - `.scratch/nano-spike/build.mjs`, `page.html` — the APP-11 harness, and why its 10/12 is not the
