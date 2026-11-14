@@ -1826,13 +1826,25 @@
     {
       "id": "APP-35",
       "title": "Do not prescribe a mood the library does not have",
-      "state": "todo",
+      "state": "review",
       "group": "APP",
       "deps": ["APP-32"],
       "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
-      "desc": "The table prescribes mood `[\"relaxed\"]` or `[\"party\"]` without looking at the library. If the profile has no such tag, the filter can only empty the search. When a profile is available, keep a prescribed mood only if `profile.moods` contains it; otherwise keep the numeric side and drop the mood (or drop the rule if it has none). Without a profile, leave the table alone. Share the decision between `normalizePurpose` and `purposeFilters` so the retry and the shown Intent agree.\n\nFinished when: a profile with no `party` on \"party playlist\" returns the numeric filter or the count, not an empty mood; a profile with the mood is unchanged; S11 and the party rows hold on the per-field score."
+      "desc": "The table prescribes mood `[\"relaxed\"]` or `[\"party\"]` without looking at the library. If the profile has no such tag, the filter can only empty the search. When a profile is available, keep a prescribed mood only if `profile.moods` contains it; otherwise keep the numeric side and drop the mood (or drop the rule if it has none). Without a profile, leave the table alone. Share the decision between `normalizePurpose` and `purposeFilters` so the retry and the shown Intent agree.\n\nFinished when: a profile with no `party` on \"party playlist\" returns the numeric filter or the count, not an empty mood; a profile with the mood is unchanged; S11 and the party rows hold on the per-field score.",
+      "notes": [
+        {
+          "at": "2026-11-14T23:58:21Z",
+          "by": "dsh",
+          "text": "Plan: one shared decision for both call sites.\n- A private `prescribe(rule, facts, profile)` filters the rule's prescribed mood against `profile.moods`: an available mood stays, an absent one is dropped and the numeric side remains (the rule is dropped only if nothing is left). No profile keeps the table as it is.\n- `purposeFilters` and `normalizePurpose` both use it, so the shown Intent and the relaxed retry agree.\n- `normalizePurpose` also drops a mood the model gave that the profile does not have; a profile that has the mood is unchanged.\n- Tests: party/relax with and without the mood, the profile with no moods at all, the empty answer, S11, and the retry's purpose pair; k7-app §7 P2."
+        },
+        {
+          "at": "2026-11-14T23:59:47Z",
+          "by": "dsh",
+          "text": "The table no longer prescribes a mood the library does not have. A shared `prescribe()` filters the rule's mood against `profile.moods`: an available mood stays, an absent one is dropped and the row's numeric side stands, and a rule with nothing left is dropped. Without a profile the table is untouched.\n\n`purposeFilters` and `normalizePurpose` both come through it, so the relaxed retry and the shown Intent agree. `normalizePurpose` also drops a mood the model gave that the library lacks; a profile with the mood is unchanged.\n\nWhat to check:\n- Profile with happy/relaxed, no party: \"party playlist\" with the model's mood party returns `{danceabilityMin: 72}`, and the empty answer returns the same numeric table.\n- Profile with party: `{mood: ['party'], danceabilityMin: 72}`.\n- Profile with no moods at all: the numeric side; no profile: the table (mood plus danceability 70).\n- S11 keeps its happy mood and snaps its danceability to the profile's 72.\n\n`purpose.test.ts` has 19 tests and `request.test.ts` 28; 792 web tests, typecheck and build green. k7-app §7 P2 gains the rule; no ADR. The model's scored Intent is unchanged, and the table is reported through `effective`. No model was run, so the next per-field score is the measurement to watch; the party rows are `unscored` in a profile without the mood, by the scorer's existing profile gap."
+        }
+      ]
     },
     {
       "id": "APP-36",
