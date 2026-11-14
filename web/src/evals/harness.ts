@@ -217,6 +217,8 @@ export interface RunRecord extends RunBase {
   sample?: true;
   note: string;
   error?: string;
+  /** Fresh attempts that followed a timeout; 0 or absent when the first answer came. */
+  timeoutRetries?: number;
   invalid: boolean;
 }
 
@@ -268,6 +270,49 @@ export function withTimeout<T>(work: Promise<T>, ms: number, onTimeout?: () => v
       },
     );
   });
+}
+
+/** A hung prompt gets two fresh attempts before the run stops for a human: ~4.5 minutes. */
+export const TIMEOUT_RETRIES = 2;
+export const TIMEOUT_RETRY_DELAY_MS = 3_000;
+
+/** The error `withTimeout` raises, as opposed to a refusal or an unavailable model. */
+export function isTimeoutError(error: string | undefined): boolean {
+  return /^no answer after \d+ s$/.test(error ?? '');
+}
+
+export interface TimeoutRetryOptions {
+  retries?: number;
+  delayMs?: number;
+  onRetry?: (retry: number) => void;
+  /** The Stop button and the run loop share this; a cancelled run does not retry. */
+  canRetry?: () => boolean;
+}
+
+/**
+ * Retry a row the model never answered, automatically, before the run stops.
+ *
+ * Only a timeout is retried: a refusal is a result, and an unavailable model is not fixed by
+ * asking again. Each retry is a fresh session with a fresh timeout, so a hung prompt that the
+ * abort freed can be asked again without a human pressing Resume.
+ */
+export async function retryTimeout<T extends { invalid: boolean; error?: string }>(
+  attempt: () => Promise<T>,
+  options: TimeoutRetryOptions = {},
+): Promise<{ result: T; retries: number }> {
+  const limit = options.retries ?? TIMEOUT_RETRIES;
+  const delayMs = options.delayMs ?? TIMEOUT_RETRY_DELAY_MS;
+  let result = await attempt();
+  let used = 0;
+  while (result.invalid && isTimeoutError(result.error) && used < limit) {
+    if (options.canRetry && !options.canRetry()) break;
+    used += 1;
+    options.onRetry?.(used);
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    if (options.canRetry && !options.canRetry()) break;
+    result = await attempt();
+  }
+  return { result, retries: used };
 }
 
 /**

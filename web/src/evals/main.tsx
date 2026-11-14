@@ -43,12 +43,15 @@ import {
   MATRIX,
   REPETITIONS,
   rescoreRun,
+  retryTimeout,
   reviewKind,
   runOne,
   savedRun,
   saveRun,
   scoredRunsFor,
   upsertRecord,
+  TIMEOUT_RETRIES,
+  TIMEOUT_RETRY_DELAY_MS,
   type Combo,
   type HumanVerdict,
   type ReviewKind,
@@ -193,15 +196,32 @@ export function Harness() {
             if (stop.current) break;
             if (finished.has(`${row.id}:${rep}`)) continue;
             let record: RunRecord;
+            let retries = 0;
             try {
-              record = await runOne(
-                combo,
-                target,
-                row,
-                rep as 1 | 2 | 3,
-                boundedTimeout(runRef.current.settings.timeoutSeconds) * 1000,
+              const attempted = await retryTimeout(
+                () =>
+                  runOne(
+                    combo,
+                    target,
+                    row,
+                    rep as 1 | 2 | 3,
+                    boundedTimeout(runRef.current.settings.timeoutSeconds) * 1000,
+                  ),
+                {
+                  delayMs: TIMEOUT_RETRY_DELAY_MS,
+                  onRetry: (retry) =>
+                    setStatus(
+                      `Timed out at ${finishedReps(runRef.current.records, combo).size}/${TOTAL} ` +
+                        `on ${row.id}; retrying in ${Math.round(TIMEOUT_RETRY_DELAY_MS / 1000)} s ` +
+                        `(${retry}/${TIMEOUT_RETRIES})…`,
+                    ),
+                  canRetry: () => !stop.current,
+                },
               );
+              record = { ...attempted.result, timeoutRetries: attempted.retries };
+              retries = attempted.retries;
             } catch (caught) {
+              setStatus(null);
               setError(
                 `Stopped at ${finishedReps(runRef.current.records, combo).size}/${TOTAL}: ` +
                   `${caught instanceof Error ? caught.message : String(caught)}. Resume when it is back.`,
@@ -209,6 +229,7 @@ export function Harness() {
               stop.current = true;
               break;
             }
+            setStatus(null);
             commit({
               ...runRef.current,
               records: upsertRecord(runRef.current.records, record),
@@ -221,7 +242,8 @@ export function Harness() {
             if (record.invalid) {
               setError(
                 `Stopped at ${finishedReps(runRef.current.records, combo).size}/${TOTAL}: ` +
-                  `${record.error ?? 'the model did not answer'}. Resume when it is back.`,
+                  `${record.error ?? 'the model did not answer'}` +
+                  `${retries > 0 ? ` after ${retries + 1} attempts` : ''}. Resume when it is back.`,
               );
               stop.current = true;
             }
@@ -713,6 +735,7 @@ export function Harness() {
                                   verdictHuman: record.verdictHuman,
                                   verdictSource: record.verdictSource,
                                   sample: record.sample,
+                                  timeoutRetries: record.timeoutRetries,
                                   attempts: record.attempts,
                                   error: record.error,
                                 })),

@@ -17,8 +17,10 @@ import {
   fixturesFrom,
   intentChanged,
   isSampled,
+  isTimeoutError,
   loadTarget,
   rescoreRun,
+  retryTimeout,
   reviewKind,
   runKey,
   scoredRunsFor,
@@ -100,6 +102,71 @@ describe('withTimeout', () => {
       ),
     ).rejects.toThrow(/no answer after/);
     expect(aborted).toBe(true);
+  });
+});
+
+describe('retryTimeout', () => {
+  const timeout = { invalid: true, error: 'no answer after 90 s' };
+  const answer = { invalid: false, error: undefined };
+
+  it('recognises only the timeout error', () => {
+    expect(isTimeoutError('no answer after 90 s')).toBe(true);
+    expect(isTimeoutError('the model is unavailable')).toBe(false);
+    expect(isTimeoutError(undefined)).toBe(false);
+  });
+
+  it('retries a timeout and keeps the answer that finally comes', async () => {
+    let calls = 0;
+    const retried: number[] = [];
+    const { result, retries } = await retryTimeout(
+      async () => {
+        calls += 1;
+        return calls < 3 ? timeout : answer;
+      },
+      { delayMs: 0, onRetry: (retry) => retried.push(retry) },
+    );
+    expect(result.invalid).toBe(false);
+    expect(retries).toBe(2);
+    expect(calls).toBe(3);
+    expect(retried).toEqual([1, 2]);
+  });
+
+  it('does not retry a refusal or an unavailable model', async () => {
+    let calls = 0;
+    const { result, retries } = await retryTimeout(
+      async () => {
+        calls += 1;
+        return { invalid: true, error: 'the model is unavailable' };
+      },
+      { delayMs: 0 },
+    );
+    expect(result.invalid).toBe(true);
+    expect(retries).toBe(0);
+    expect(calls).toBe(1);
+  });
+
+  it('stops at the limit and honours a cancel', async () => {
+    let calls = 0;
+    const limited = await retryTimeout(
+      async () => {
+        calls += 1;
+        return timeout;
+      },
+      { retries: 1, delayMs: 0 },
+    );
+    expect(limited.retries).toBe(1);
+    expect(calls).toBe(2);
+
+    calls = 0;
+    const cancelled = await retryTimeout(
+      async () => {
+        calls += 1;
+        return timeout;
+      },
+      { delayMs: 0, canRetry: () => false },
+    );
+    expect(cancelled.retries).toBe(0);
+    expect(calls).toBe(1);
   });
 });
 

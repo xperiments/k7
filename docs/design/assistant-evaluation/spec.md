@@ -235,9 +235,11 @@ be compared with the 10/12 frame, which was static:
 
 That is 66 rows × 3 runs × 5 combinations = **990 model calls**. The harness saves each finished
 row, so a sitting can be resumed; the model can disappear mid-run (Chrome updates it by hot swap),
-and the run stops at the first unanswered row with the count and the reason, marks that row
-invalid, and lets Resume pick up at the first missing repetition. One answer is abandoned after
-the page's ceiling (90 s by default, adjustable in the page) and the hung session is aborted.
+and a row that never answers is retried twice automatically — 3 s apart, a fresh session each
+time — before the run stops at it with the count and the reason, marks it invalid, and lets Resume
+pick up at the first missing repetition. One answer is abandoned after the page's ceiling (90 s by
+default, adjustable in the page), the hung session is aborted, and only a timeout is retried: a
+refusal is a result and an unavailable model is not fixed by asking again.
 
 **What the first run defines as the baseline.** The per-arm, per-row automatic verdicts and the
 human verdicts from one machine, one Chrome, one model variant. From then on:
