@@ -1,6 +1,6 @@
 {
-  "version": "0.5.0",
-  "commit": "ea942df77aef77cf92b10fc6ebb0d99ac57858b4",
+  "version": "0.6.0",
+  "commit": "781e8456f4e41e3232a02c2e38486dd21931830f",
   "idf": "ESP-IDF v6.1",
   "chip": "esp32s3",
   "flash": {
@@ -8,7 +8,7 @@
     "size": "16MB",
     "freq": "80m"
   },
-  "built_at": "2026-11-11T01:51:57Z",
+  "built_at": "2026-11-14T11:19:06Z",
   "parts": [
     {
       "file": "bootloader.bin",
@@ -25,8 +25,8 @@
     {
       "file": "sd_stream_server.bin",
       "offset": 65536,
-      "size": 2073008,
-      "sha256": "6056683f856f003eff4e24ce39d24560146ae4fa2d592970a616cbcae9c78f14"
+      "size": 2074544,
+      "sha256": "42f49d425e173ea6a5218104513e46413ee716318b44b2b36ddcac662182d16d"
     }
   ]
 }
