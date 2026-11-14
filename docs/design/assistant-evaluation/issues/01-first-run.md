@@ -93,6 +93,39 @@ prompt, schema and page (note §1.4).
 - **The effective shipped Intent is not the frozen verdict.** The query repair and the purpose
   normalizer change `final`; the frozen rule scores `parseIntent(raw)`.
 
+### Baseline 2 — rubric v2
+
+Re-scored from the same 990 answers, no model calls. v2 asserts the expected genre word, every
+expected key by `keyCode` and that every expected mood is present; a profile row whose expected
+genre its enum cannot express is `unscored` (`profileGap`), not a failure.
+
+| Combination | 3/3 pass | fail | unstable | unscored | gaps | of non-gap |
+|---|---:|---:|---:|---:|---:|---:|
+| `systemOnly` · static | 11 | 44 | 8 | 1 | 2 | 11/64 |
+| `systemExamples` · static | 31 | 20 | 12 | 1 | 2 | 31/64 |
+| `requestIntent` · static | 30 | 21 | 11 | 2 | 2 | 30/64 |
+| `requestIntent` · image | 24 | 18 | 15 | 1 | 8 | 24/58 |
+| `requestIntent` · imageSearch | 31 | 17 | 10 | 0 | 8 (1 pass) | 31/58 |
+
+The library is 1502 tracks with genres `Pop`, `Hard Rock`, `Rock`, `Alternative Rock`,
+`Synth-Pop`, `Electronic`, `Trance`, `Jazz, Pop, Rock`, … and all five moods. Six rows expect a
+genre it does not have (S2, 19, 20, 21, 45, N6), which is the six profile gaps; S8 and N4 are the
+two contract gaps. Effective (the Intent that ran, after repair/normalizer): 11, 31, 31, 25 and
+34 rows at 3/3.
+
+**The audit so far.** 60 rows human-marked, 50 accepted from stable automatic verdicts (only
+`systemOnly` has been accepted), 220 rows unmarked; 5 sampled rows marked. **No genuine rubric
+bug**: the five rows the page flagged (42, 44, 22, 30, 37) are all unstable rows where the human
+resolved the flake. The page required a *unanimous* automatic verdict before calling a human
+verdict a disagreement; that is now the rule.
+
+**What remains before Baseline 2 is frozen**
+
+1. On each of the five tabs: **Accept stable**, then **Review only** and mark what it still lists
+   (the audit sample is most of it, ~27 rows). The page's counter should read 0.
+2. Paste the `chrome://on-device-internals` variant and export again.
+3. Then the baseline is the table above plus the audit record; nothing else changes it.
+
 **Before the baseline is frozen**
 
 1. Paste the `chrome://on-device-internals` variant and mark the failing/unstable rows in the
