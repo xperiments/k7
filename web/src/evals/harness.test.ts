@@ -16,6 +16,7 @@ import {
   fixturesFrom,
   intentChanged,
   loadTarget,
+  rescoreRun,
   runKey,
   scoredRunsFor,
   upsertRecord,
@@ -129,6 +130,54 @@ describe('run identity', () => {
     const otherArm = record({ rep: 3, arm: 'systemOnly' });
     const finished = finishedReps([done, invalid, otherArm], combo);
     expect([...finished]).toEqual(['S1:1']);
+  });
+});
+
+describe('rescoreRun', () => {
+  it('replaces a stored verdict with the current rules, without a model', () => {
+    const row = rowById('19');
+    if (!row) throw new Error('no row 19');
+    const raw = '{"genre":"electronic"}';
+    const parsed = parseIntent(raw);
+    const stale = { ...scoreRow(row, raw, parsed, { matched: 5 }), verdict: 'pass' as const };
+    const stored = record({
+      id: 'requestIntent@static:19:1',
+      rowId: '19',
+      sentence: row.sentence,
+      raw,
+      parsed,
+      final: parsed,
+      scored: stale,
+      search: { matched: 5, tracks: 5, truncated: false },
+    });
+    const result = rescoreRun([stored], null);
+    expect(result.rescored).toBe(1);
+    expect(result.records[0].scored?.verdict).toBe('fail');
+  });
+
+  it('re-scores the Intent that ran beside the model Intent', () => {
+    const row = rowById('S1');
+    if (!row) throw new Error('no S1');
+    const raw = '{"bpm_min":85,"bpm_max":95}';
+    const parsed = { bpmMin: 85, bpmMax: 95 };
+    const final = { bpmMin: 85 };
+    const stored = record({
+      raw,
+      parsed,
+      final,
+      scored: scoreRow(row, raw, parsed, { matched: 5 }),
+      search: { matched: 5, tracks: 5, truncated: false },
+    });
+    const result = rescoreRun([stored], null);
+    expect(result.records[0].scored?.verdict).toBe('pass');
+    expect(result.records[0].effective?.verdict).toBe('fail');
+  });
+
+  it('skips an image run whose profile is gone', () => {
+    const image = record({ scope: 'image', profile: { kind: 'image', generation: 1 } });
+    const result = rescoreRun([image], null);
+    expect(result.skipped).toBe(1);
+    expect(result.records[0].scored?.verdict).toBe(image.scored?.verdict);
   });
 });
 

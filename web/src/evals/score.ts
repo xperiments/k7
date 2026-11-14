@@ -286,6 +286,11 @@ export interface ScoredRun {
   verdict: Verdict;
   axes: RowAxes;
   reasons: string[];
+  /**
+   * The profile's closed enum cannot express the row's expected genre or mood, so no answer
+   * could satisfy it. The row is `unscored` in that scope, not a failure.
+   */
+  profileGap?: string;
   /** Which repair the shipped path needed, when the harness knows. */
   repair?: RepairKind;
   /** The purpose normalizer changed the Intent the model produced. */
@@ -352,6 +357,53 @@ export function scoreRow(
   const reasons: string[] = [];
   /* An Intent the library refuses is not a runnable Intent, whatever its keys look like. */
   if (context.searchError) reasons.push(`search: ${context.searchError}`);
+
+  const fold = (value: string): string => value.trim().toLowerCase();
+  if (contract && expected) {
+    /* v2: the key being present is not the value being right. The expected genre must be the
+     * exact word (case-folded), every expected key must parse to the same `keyCode`, and every
+     * expected mood must be present. An extra mood is the precision axis's business. */
+    if (expected.genre !== undefined) {
+      const got = intent.genre;
+      if (got === undefined || fold(got) !== fold(expected.genre)) {
+        reasons.push(`genre: ${JSON.stringify(got)} is not ${JSON.stringify(expected.genre)}`);
+      }
+    }
+    if (expected.key && expected.key.length > 0) {
+      const got = (intent.key ?? []).map(keyCode);
+      for (const want of expected.key) {
+        if (!got.includes(keyCode(want))) {
+          reasons.push(`key: ${JSON.stringify(intent.key)} is missing ${JSON.stringify(want)}`);
+        }
+      }
+    }
+    if (expected.mood && expected.mood.length > 0) {
+      const got = (intent.mood ?? []).map(fold);
+      for (const want of expected.mood) {
+        if (!got.includes(fold(want))) {
+          reasons.push(`mood: ${JSON.stringify(intent.mood)} is missing ${JSON.stringify(want)}`);
+        }
+      }
+    }
+  }
+
+  /* A profile closes the genre and mood sets. If the row's expected value is not in them, the
+   * model could not have said it; the row is unjudgeable here, not wrong. */
+  let profileGap: string | undefined;
+  if (expected) {
+    const genres = context.profile?.genres ?? [];
+    const moods = context.profile?.moods ?? [];
+    if (expected.genre && genres.length > 0 && !genres.some((genre) => fold(genre) === fold(expected.genre!))) {
+      profileGap = `genre ${JSON.stringify(expected.genre)} is not in this library`;
+    }
+    if (!profileGap && expected.mood && moods.length > 0) {
+      const missing = expected.mood.filter((mood) => !moods.some((item) => fold(item) === fold(mood)));
+      if (missing.length > 0) {
+        profileGap = `mood ${missing.map((mood) => JSON.stringify(mood)).join(', ')} is not in this library`;
+      }
+    }
+  }
+  if (profileGap) reasons.unshift(`profile: ${profileGap}`);
 
   const shape = shapeOf(raw, profile);
   const parsedFilters = filtersOf(intent);
@@ -426,7 +478,8 @@ export function scoreRow(
   const usefulness = wantsRows ? (context.matched === undefined ? null : context.matched > 0) : null;
   if (usefulness === false) reasons.push('rows: nothing matched');
   let verdict: Verdict;
-  if (failed) verdict = 'fail';
+  if (profileGap) verdict = 'unscored';
+  else if (failed) verdict = 'fail';
   else if (usefulness === false) verdict = 'fail';
   else if (usefulness === null && wantsRows) verdict = 'unscored';
   else verdict = 'pass';
@@ -456,6 +509,7 @@ export function scoreRow(
     refusal: row.expected === null,
     verdict,
     reasons,
+    ...(profileGap ? { profileGap } : {}),
     axes: {
       shape: shape.ok,
       shapeErrors: shape.errors,

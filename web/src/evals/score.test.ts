@@ -134,6 +134,40 @@ describe('shape and contract', () => {
   });
 });
 
+describe('the expected values, not just the keys', () => {
+  it('asserts the genre word', () => {
+    expect(scored('19', '{"genre":"Techno"}').verdict).toBe('pass');
+    expect(scored('19', '{"genre":"electronic"}').verdict).toBe('fail');
+  });
+
+  it('asserts every expected mood and lets an extra be precision', () => {
+    expect(scored('S3', '{"mood":["happy","party"]}').verdict).toBe('pass');
+    expect(scored('S3', '{"mood":["party"]}').verdict).toBe('fail');
+    /* Precision is filter-level: an extra mood head is one filter, so it is the human
+     * column's business, not the automatic verdict's. */
+    expect(scored('S3', '{"mood":["happy","party","relaxed"]}').verdict).toBe('pass');
+  });
+
+  it('asserts every expected key by keyCode', () => {
+    expect(scored('31', '{"key":["8A","9A"]}').verdict).toBe('pass');
+    expect(scored('31', '{"key":["8A"]}').verdict).toBe('fail');
+  });
+});
+
+describe('a profile that cannot express the row', () => {
+  it('is unscored, not a model failure', () => {
+    const profile = { ...LIBRARY, genres: ['Electronic', 'Pop'] };
+    const result = scored('19', '{"genre":"Techno"}', { profile, matched: 5 });
+    expect(result.verdict).toBe('unscored');
+    expect(result.profileGap).toMatch(/techno/);
+  });
+
+  it('scores normally when the profile has the genre', () => {
+    const profile = { ...LIBRARY, genres: ['techno', 'ambient'] };
+    expect(scored('19', '{"genre":"Techno"}', { profile, matched: 5 }).verdict).toBe('pass');
+  });
+});
+
 describe('a search the library refuses', () => {
   const refused =
     'key must be a list of Camelot codes or note names; mood a list of happy, sad, aggressive, relaxed, party';

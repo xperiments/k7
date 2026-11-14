@@ -33,7 +33,7 @@ import {
 import { listMedia, type CachedMedia } from '../storage/media';
 import { newestSnapshot, type StoredSnapshot } from '../storage/snapshots';
 
-import { CORPUS, type CorpusRow } from './corpus';
+import { CORPUS, rowById, type CorpusRow } from './corpus';
 import { scoreRow, type RepairKind, type ScoredRun } from './score';
 
 /* -------------------------------------------------------------------------- */
@@ -173,7 +173,13 @@ export interface RunBase {
   arm: Arm;
   scope: Scope;
   rep: 1 | 2 | 3;
-  profile: { kind: 'none' | 'image'; generation?: number; tracks?: number };
+  profile: {
+    kind: 'none' | 'image';
+    generation?: number;
+    tracks?: number;
+    /** The aggregates the prompt and the scorer read, so a saved run can be re-scored. */
+    library?: LibraryProfile;
+  };
   examples: { count: number; sha: string };
   systemSha: string;
   schemaSha: string;
@@ -199,6 +205,8 @@ export interface RunRecord extends RunBase {
   /** The reference search refused the Intent; it is scored as a failure, not a stopped run. */
   searchError?: string;
   scored?: ScoredRun;
+  /** The same rubric on the Intent that actually ran (after a repair or the normalizer). */
+  effective?: ScoredRun;
   verdictHuman: HumanVerdict | null;
   note: string;
   error?: string;
@@ -298,6 +306,7 @@ export async function runOne(
       kind: target.profile ? 'image' : 'none',
       generation: target.snapshot?.generation,
       tracks: target.profile?.tracks,
+      ...(target.profile ? { library: target.profile } : {}),
     },
     examples: {
       count: examples.length,
@@ -390,14 +399,22 @@ export async function runOne(
     !('error' in final) &&
     intentChanged(final, parsed);
 
+  const context = {
+    profile: target.profile,
+    matched: search?.matched,
+    searchError,
+  };
   const scored = {
-    ...scoreRow(row, raw, parsed, {
-      profile: target.profile,
-      matched: search?.matched,
-      searchError,
-    }),
+    ...scoreRow(row, raw, parsed, context),
     normalized,
   };
+  /* The Intent that ran is not always the one the model parsed: a repair drops a bad query and
+   * the normalizer drops invented filters. Score that one too, but only as a report — the
+   * frozen verdict above stays the model's Intent. */
+  const effective =
+    !('error' in parsed) && !('error' in final) && intentChanged(final, parsed)
+      ? scoreRow(row, raw, final, context)
+      : undefined;
 
   return {
     ...base,
@@ -413,6 +430,7 @@ export async function runOne(
     search,
     searchError,
     scored,
+    effective,
     verdictHuman: null,
     note: '',
     invalid: false,
@@ -432,6 +450,66 @@ export function intentChanged(a: SearchArgs, b: SearchArgs): boolean {
     if (JSON.stringify(left) !== JSON.stringify(right)) return true;
   }
   return false;
+}
+
+/**
+ * Re-score every stored answer under the current rubric, without a model. A run saved before a
+ * rubric change can be brought forward: the raw answers and Intents are the evidence, and the
+ * profile is either on the record or the Last image's aggregates.
+ */
+export interface RescoreResult {
+  records: RunRecord[];
+  rescored: number;
+  /** Image runs that cannot be re-scored because their profile is gone or a different one. */
+  skipped: number;
+}
+
+export function rescoreRun(
+  records: readonly RunRecord[],
+  profile: LibraryProfile | null,
+  generation?: number,
+): RescoreResult {
+  let rescored = 0;
+  let skipped = 0;
+  const next = records.map((record) => {
+    if (record.invalid || !record.parsed) return record;
+    const row = rowById(record.rowId);
+    if (!row) return record;
+
+    const image = record.scope !== 'static';
+    const library = image ? (profile ?? record.profile.library ?? null) : null;
+    if (image && !library) {
+      skipped += 1;
+      return record;
+    }
+    if (
+      image &&
+      generation !== undefined &&
+      record.profile.generation !== undefined &&
+      generation !== record.profile.generation
+    ) {
+      skipped += 1;
+      return record;
+    }
+
+    const context = {
+      profile: library,
+      matched: record.search?.matched,
+      searchError: record.searchError,
+    };
+    const scored = scoreRow(row, record.raw, record.parsed, context);
+    const final = record.final;
+    const effective =
+      final &&
+      !('error' in final) &&
+      !('error' in record.parsed) &&
+      intentChanged(final, record.parsed)
+        ? scoreRow(row, record.raw, final, context)
+        : record.effective;
+    rescored += 1;
+    return { ...record, scored, effective };
+  });
+  return { records: next, rescored, skipped };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -468,6 +546,8 @@ export interface StoredRun {
   startedAt: string;
   machine: MachineInfo;
   settings: RunSettings;
+  /** The profile the Last image's scopes ran against, once a re-score has attached it. */
+  library?: LibraryProfile;
   records: RunRecord[];
 }
 
@@ -534,10 +614,12 @@ export function exportPayload(run: StoredRun): string {
     {
       kind: 'k7-ask-evals',
       version: 1,
+      rubric: 2,
       at: new Date().toISOString(),
       startedAt: run.startedAt,
       machine: run.machine,
       settings: run.settings,
+      library: run.library ?? null,
       matrix: MATRIX,
       repetitions: REPETITIONS,
       rows: CORPUS.length,

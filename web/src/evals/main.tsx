@@ -40,6 +40,7 @@ import {
   machineInfo,
   MATRIX,
   REPETITIONS,
+  rescoreRun,
   runOne,
   savedRun,
   saveRun,
@@ -49,8 +50,9 @@ import {
   type HumanVerdict,
   type RunRecord,
   type StoredRun,
+  type Target,
 } from './harness';
-import { aggregate, type Verdict } from './score';
+import { aggregate, type ScoredRun, type Verdict } from './score';
 
 import '../index.css';
 
@@ -109,6 +111,7 @@ export function Harness() {
   const [downloadPercent, setDownloadPercent] = useState<number | null>(null);
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [tab, setTab] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -232,6 +235,12 @@ export function Harness() {
   for (const group of byRow.values()) group.sort((a, b) => a.rep - b.rep);
 
   const summary = aggregate(scoredRunsFor(run.records, combo));
+  const effectiveSummary = aggregate(
+    records
+      .map((record) => record.effective ?? record.scored)
+      .filter((scored): scored is ScoredRun => scored !== undefined),
+  );
+  const hasEffective = records.some((record) => record.effective);
   const first = records[0];
 
   function mark(rowId: string, verdict: HumanVerdict | null): void {
@@ -254,6 +263,34 @@ export function Harness() {
 
   function machineNote(value: string): void {
     commit({ ...runRef.current, machine: { ...runRef.current.machine, onDeviceInternals: value } });
+  }
+
+  async function rescore(): Promise<void> {
+    setStatus(null);
+    setError(null);
+    let target: Target | null = null;
+    try {
+      target = await loadTarget('image');
+    } catch {
+      target = null;
+    }
+    const result = rescoreRun(
+      runRef.current.records,
+      target?.profile ?? null,
+      target?.snapshot?.generation,
+    );
+    commit({
+      ...runRef.current,
+      ...(target?.profile ? { library: target.profile } : {}),
+      records: result.records,
+    });
+    setStatus(
+      `Re-scored ${result.rescored} runs with rubric 2` +
+        (result.skipped > 0
+          ? `; ${result.skipped} image runs skipped because the Last image is gone or a different generation`
+          : '') +
+        '. Export to keep it.',
+    );
   }
 
   function reset(): void {
@@ -425,6 +462,7 @@ export function Harness() {
           {error}
         </p>
       ) : null}
+      {status ? <p className="text-xs text-muted-foreground">{status}</p> : null}
 
       <Card size="sm">
         <CardHeader>
@@ -446,6 +484,11 @@ export function Harness() {
               repairs {summary.repairs.notJson + summary.repairs.queryNotName} · normalized{' '}
               {summary.normalizedRuns}
             </span>
+            {hasEffective ? (
+              <span>
+                effective {effectiveSummary.passed}/{effectiveSummary.modelRows} pass 3/3
+              </span>
+            ) : null}
             {first ? (
               <span>
                 system {first.systemSha} · schema {first.schemaSha} · examples {first.examples.count}{' '}
@@ -458,6 +501,9 @@ export function Harness() {
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={() => download(`k7-ask-evals-${stamp()}.json`, exportPayload(runRef.current))} disabled={run.records.length === 0}>
               Export run
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => void rescore()} disabled={running !== null || run.records.length === 0}>
+              Re-score with rubric 2
             </Button>
             <Button
               size="sm"
@@ -580,7 +626,9 @@ export function Harness() {
                                   final: record.final,
                                   normalized: record.normalized,
                                   reasons: record.scored?.reasons,
+                                  profileGap: record.scored?.profileGap,
                                   axes: record.scored?.axes,
+                                  effective: record.effective,
                                   attempts: record.attempts,
                                   error: record.error,
                                 })),
