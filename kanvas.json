@@ -1871,13 +1871,25 @@
     {
       "id": "APP-37",
       "title": "Try the sentence before asking the model again about a query",
-      "state": "todo",
+      "state": "review",
       "group": "APP",
       "deps": ["APP-32", "APP-36"],
       "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
-      "desc": "`repairQuery` spends a second Nano call to fix a query the sentence can usually answer. Replace the repair with:\n1. a name after a marker (\"by X\", \"like X\", \"called X\") wins;\n2. no name but other filters → drop the query;\n3. the query was the only filter → one model call, as today.\n\nThis removes the common-path latency and the \"repair drops the name\" bug. It changes the contract's repair rule; update k7-app §7 P2 and ADR 0084's consequence.\n\nFinished when: \"songs by Daft Punk\", \"music like Radiohead\" and \"canciones de bonobo\" resolve with one model call; \"10 songs for a workout\" drops the query and keeps the count; a name-only sentence still gets the model repair; the per-field score holds; the harness records the new repair kind (or none)."
+      "desc": "`repairQuery` spends a second Nano call to fix a query the sentence can usually answer. Replace the repair with:\n1. a name after a marker (\"by X\", \"like X\", \"called X\") wins;\n2. no name but other filters → drop the query;\n3. the query was the only filter → one model call, as today.\n\nThis removes the common-path latency and the \"repair drops the name\" bug. It changes the contract's repair rule; update k7-app §7 P2 and ADR 0084's consequence.\n\nFinished when: \"songs by Daft Punk\", \"music like Radiohead\" and \"canciones de bonobo\" resolve with one model call; \"10 songs for a workout\" drops the query and keeps the count; a name-only sentence still gets the model repair; the per-field score holds; the harness records the new repair kind (or none).",
+      "notes": [
+        {
+          "at": "2026-11-15T00:31:33Z",
+          "by": "dsh",
+          "text": "Plan: try the sentence before a second model call.\n- A pure `nameFrom(sentence)` extracts the name after the last valid marker (by / like / called / de / similar to / parecido a …), cuts at a context or conjunction, and validates with `isNameQuery`; the partitive candidates fail and are skipped.\n- In `requestIntent`: a marked name replaces the bad query; with no name, if the Intent or the sentence has another filter, drop the query; only a query-only Intent gets the existing repair call.\n- Tests: the three named examples with one call, \"10 songs for a workout\" drops the query and keeps the count, a name-only sentence still repairs, and the trace's queryNotName uses a sentence with no extractable name.\n- Update k7-app §7 P2 and ADR 0084's consequence; the harness records no repair for the deterministic paths."
+        },
+        {
+          "at": "2026-11-15T00:33:40Z",
+          "by": "dsh",
+          "text": "The sentence is tried before a second model call. A pure `nameFrom()` reads the name after the last valid marker (by, like, called, de, similar to, parecido a…), stops at a context or a conjunction, and accepts it only when `isNameQuery` says it is a name; a partitive candidate is skipped. In `requestIntent` a marked name replaces the bad query; with no name, any other filter drops the query; only a query-only Intent gets the repair call.\n\nWhat to check:\n- \"songs by Daft Punk\", \"music like Radiohead\" and \"canciones de bonobo\" resolve with one model call.\n- \"10 songs for a workout\" drops the workout query and keeps the count; the purpose table then fills energy/arousal.\n- \"Daft Punk\" alone still repairs with a second call.\n- The trace's queryNotName test now uses \"a late night\", and the purpose-repair test uses \"workout\", so both still exercise a real repair.\n\nk7-app §7 P2 and ADR 0084's consequence record the order. The harness records no repair for the deterministic paths; the effective report shows the changed query.\n\nTested: 30 parse tests, 33 request tests, 804 web tests, typecheck and build. APP-36 (the five-language names) is done in the same chain."
+        }
+      ]
     },
     {
       "id": "APP-38",
