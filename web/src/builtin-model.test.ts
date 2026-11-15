@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { askModel, assistantFailure, assistantSentence, assistantState, stateFrom } from './builtin-model';
+import { askModel, assistantFailure, assistantSentence, assistantState, destroyBases, stateFrom } from './builtin-model';
 
 /**
  * The built-in model's state is Chrome's answer, not this page's; what is testable here is the
@@ -53,10 +53,12 @@ describe('assistantFailure', () => {
 });
 
 describe('askModel', () => {
-  it('leaves the schema out of the input but still constrains the answer', async () => {
+  it('keeps one base session, clones it per ask, and does not echo the schema', async () => {
     const prompt = vi.fn().mockResolvedValue('{"limit":10}');
-    const destroy = vi.fn();
-    const create = vi.fn().mockResolvedValue({ prompt, destroy });
+    const cloneDestroy = vi.fn();
+    const clone = vi.fn().mockResolvedValue({ prompt, destroy: cloneDestroy });
+    const baseDestroy = vi.fn();
+    const create = vi.fn().mockResolvedValue({ clone, prompt: vi.fn(), destroy: baseDestroy });
     vi.stubGlobal('LanguageModel', { availability: vi.fn(), create });
     try {
       const answer = await askModel({
@@ -65,7 +67,15 @@ describe('askModel', () => {
         sentence: 'ten songs',
         examples: [['play', '{}']],
       });
+      const again = await askModel({
+        system: 'system',
+        schema: { type: 'object' },
+        sentence: 'twenty songs',
+        examples: [['play', '{}']],
+      });
       expect(answer).toBe('{"limit":10}');
+      expect(again).toBe('{"limit":10}');
+      expect(create).toHaveBeenCalledTimes(1);
       expect(create).toHaveBeenCalledWith({
         initialPrompts: [
           { role: 'system', content: 'system' },
@@ -73,15 +83,22 @@ describe('askModel', () => {
           { role: 'assistant', content: '{}' },
         ],
       });
-      expect(prompt).toHaveBeenCalledWith(
+      expect(clone).toHaveBeenCalledTimes(2);
+      expect(prompt).toHaveBeenCalledTimes(2);
+      expect(prompt).toHaveBeenNthCalledWith(
+        1,
         'ten songs',
         expect.objectContaining({
           responseConstraint: { type: 'object' },
           omitResponseConstraintInput: true,
         }),
       );
-      expect(destroy).toHaveBeenCalledOnce();
+      expect(cloneDestroy).toHaveBeenCalledTimes(2);
+      expect(baseDestroy).not.toHaveBeenCalled();
+      await destroyBases();
+      expect(baseDestroy).toHaveBeenCalledOnce();
     } finally {
+      await destroyBases();
       vi.unstubAllGlobals();
     }
   });

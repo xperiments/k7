@@ -331,7 +331,10 @@ is an error with the one retry, not a spinner that never ends.
 which), `downloadable`, `downloading`, `available`. Ask shows one sentence for the first two, a
 sentence and **Set up the assistant** for `downloadable`, progress for `downloading`, and the
 composer for `available`. Nothing downloads on boot and nothing is prefetched; the **Filters**
-sheet stands in every state.
+sheet stands in every state. After the first ask the page holds one base session for the current
+prompt and clones it for each question; the base is never prompted, and it is destroyed when the
+prompt changes or the Ask area closes
+([ADR 0089](../adr/0089-the-assistant-keeps-one-base-session-and-clones-it.md)).
 
 **P5. The App can offer the model and cannot remove it.** The download needs a user gesture — the
 setup's button is that gesture — and it is Chrome's component in Chrome's profile. The App can

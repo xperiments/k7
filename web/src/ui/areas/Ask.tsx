@@ -12,6 +12,7 @@ import {
   assistantFailure,
   assistantSentence,
   assistantState,
+  destroyBases,
   downloadModel,
   type AssistantState,
 } from '../../builtin-model';
@@ -335,6 +336,7 @@ export function AskArea() {
   /* Two guards on one ask: React's state is a render behind, and a bounce on Enter must not
    * spend a second model call. The ref is the lock; `phase` is what the page shows. */
   const busy = useRef(false);
+  const lastProfile = useRef<string | null>(null);
 
   const pending = phase !== null;
 
@@ -350,6 +352,13 @@ export function AskArea() {
       setDownloadError(assistantFailure(error));
     }
   };
+
+  useEffect(
+    () => () => {
+      void destroyBases();
+    },
+    [],
+  );
 
   useEffect(() => {
     void refresh();
@@ -400,6 +409,13 @@ export function AskArea() {
         append(errorMessage('No library to search: connect the player or open a card first.', retry));
         return;
       }
+      /* The base session belongs to the prompt, which belongs to the source profile. A new
+       * source closes the old base; the next requestIntent creates the new one. */
+      const profileKey = JSON.stringify(source.profile);
+      if (lastProfile.current !== null && lastProfile.current !== profileKey) {
+        await destroyBases();
+      }
+      lastProfile.current = profileKey;
       /* ADR 0084's thirty-second ceiling: a prompt Chrome never settles is abandoned, not a
        * spinner that never ends. The retry below is the one the area already offers. */
       const parsed = await requestIntent(

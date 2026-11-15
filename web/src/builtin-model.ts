@@ -114,9 +114,46 @@ export interface AskModelOptions {
   readonly signal?: AbortSignal;
 }
 
+type InitialPrompts = { role: 'system' | 'user' | 'assistant'; content: string }[];
+
 /**
- * Ask the built-in model once. One session per ask: the system prompt and the examples go in,
- * one answer comes out, and the session is destroyed so no context carries to the next sentence.
+ * The base sessions, one per system prompt and example set. A base is created once, never
+ * prompted, and cloned per ask; the clone carries the initial prompt and is destroyed after its
+ * one answer, so no ask's context reaches another. The App closes them when the profile changes
+ * or the Ask area closes; the evaluation harness closes them after a run.
+ */
+const bases = new Map<string, Promise<LanguageModelSession>>();
+
+function baseFor(initialPrompts: InitialPrompts): Promise<LanguageModelSession> {
+  const key = JSON.stringify(initialPrompts);
+  const cached = bases.get(key);
+  if (cached) return cached;
+  const base = requireModel().create({ initialPrompts });
+  bases.set(key, base);
+  base.catch(() => bases.delete(key));
+  return base;
+}
+
+/** Close every base session; call this when the prompt changes or the area holding it closes. */
+export async function destroyBases(): Promise<void> {
+  const held = [...bases.values()];
+  bases.clear();
+  await Promise.all(
+    held.map(async (base) => {
+      try {
+        (await base).destroy();
+      } catch {
+        /* the model is gone; there is nothing left to close */
+      }
+    }),
+  );
+}
+
+/**
+ * Ask the built-in model once. The base session holds the system prompt and the examples; each
+ * ask clones it, prompts the clone once and destroys the clone. The base is never prompted, so
+ * no answer's context carries to the next sentence.
+ *
  * The schema is passed as the constraint but not echoed into the input: the prompt's rules and
  * turns teach the shape, and echoing it made the model over-fill (APP-42's session screen).
  */
@@ -127,17 +164,15 @@ export async function askModel({
   examples,
   signal,
 }: AskModelOptions): Promise<string> {
-  const model = requireModel();
-  const initialPrompts: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-    { role: 'system', content: system },
-  ];
+  const initialPrompts: InitialPrompts = [{ role: 'system', content: system }];
   for (const [asked, answered] of examples ?? []) {
     initialPrompts.push(
       { role: 'user', content: asked },
       { role: 'assistant', content: answered },
     );
   }
-  const session = await model.create({ initialPrompts });
+  const base = await baseFor(initialPrompts);
+  const session = await base.clone();
   try {
     return await session.prompt(sentence, {
       responseConstraint: schema,

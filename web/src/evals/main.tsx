@@ -24,6 +24,7 @@ import { Separator } from '@/components/ui/separator';
 import {
   assistantSentence,
   assistantState,
+  destroyBases,
   downloadModel,
   type AssistantState,
 } from '../builtin-model';
@@ -254,6 +255,7 @@ export function Harness() {
     } finally {
       setRunning(null);
       busy.current = false;
+      await destroyBases();
     }
   }
 
