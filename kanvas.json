@@ -2136,7 +2136,7 @@
     {
       "id": "FW-04",
       "title": "Start every boot shuffled",
-      "state": "review",
+      "state": "done",
       "group": "FW",
       "yolo": true,
       "at": "2026-11-15T18:50:47Z",
@@ -2176,6 +2176,216 @@
           "text": "\"10 rock tracks\" no longer answers with ten tracks from one album. An ask that names no group or artist is now drawn from across the matched window, one track per artist, in library order.\n\nMeasured on the card: the 200-row rock window answers ten different artists, Annie Lennox to Van Halen (before: ten tracks from Annie Lennox's Diva, all from the first folder the search met). A sentence that names an artist keeps its page — \"10 rock tracks of Nirvana\" still answers Nirvana — and a stated offset or sort is untouched.\n\n**To check in the browser:** ask \"10 rock tracks\" and scan the artists in the answer; then ask with an artist named (\"10 rock tracks of Nirvana\") and confirm it still narrows. The Last image follows the same rule from its own rows.\n\n**Known limit:** the player answers at most 200 rows for one search, so a library with more than 200 matches is spread over its first 200, not the whole set. If that turns out to bite, the follow-up is a sampling request in the player's search; the task recorded that trade-off when it was proposed.\n\nTested: 841 web tests (12 new for the spread), typecheck and build. k7-app §7 P3 records the rule."
         }
       ]
+    },
+    {
+      "id": "APP-50",
+      "title": "Read a card's lists from the card that carries them",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-15T21:01:37Z",
+      "by": "deepseek",
+      "desc": "A card's lists become readable without the player: from the k7.db the card carries while it is open, from this browser's copy of the image it last wrote there when it is not, and from the player for the Device card. With that, the Playlists page can say per list how far it got — only here, on this card, on the player — and whether the copy there is current, or that a removal is waiting for the card.\n\nFinished when the resolution and the state join are one tested module with no browser: a card prepared on another computer shows its lists, a card this browser has never read says so, a card's list with no draft here is adopted with its id, name, date and rows, and a deletion leaves a pending removal that the write clears. The specs are already written (ADR 0092, front-door §4.2); the app spec's status line that says #/playlists still reads the player only is updated here.\n\nTo check: npm test, with the four cases above named in the test titles.",
+      "notes": [
+        {
+          "at": "2026-11-15T21:08:30Z",
+          "by": "deepseek",
+          "text": "Plan: add readListArea beside patchListArea; one pure playlists/lists module with chooseListSource + joinLists + adoption and removals in drafts.ts; tests for the four cases; wire the write to clear removals."
+        },
+        {
+          "at": "2026-11-15T21:12:12Z",
+          "by": "deepseek",
+          "text": "Cards can now answer for their lists without the player. A card's `k7.db` is read back into lists — the read side of the write the App already does — and when the card is closed its lists come from this browser's copy of the image it wrote there, dated. The three answers (the player, the card, the copy) are one small module: the rule that picks between them, and a join that turns them into one row per list saying how far it got — only here, on this card, on the player — and whether the card's copy is current. Deleting a list now leaves a pending removal that the card's write clears, and opening a list a card carries but this browser has never seen adopts it with its own id, name, date and rows.\n\nNothing in the UI calls any of it yet, by design: APP-51 puts the page on top, and APP-52/53 the editor.\n\n- To see it: `cd web && npx vitest run tests/list-area.test.ts tests/drafts-lists.test.ts src/playlists/lists.test.ts` — 29 tests, the four cases in this ticket among their titles.\n- Verified: `npm run typecheck`, `npm test` (870 passing, 100 files), `npm run build`.\n- Check: a card prepared on another computer shows its lists; a card this browser has never read says so instead of showing nothing; an adopted list keeps its id; a deleted list stays a pending removal across a reload.\n\nTwo things to know, both left for the next tickets:\n- The app spec's status line still says `#/playlists` reads the player only, and it does until APP-51 wires the page — I would rather leave it true than update it early.\n- The write that clears a removal is wired in the analysis provider (after the image lands) but not unit-tested; it needs a card and a run. APP-51's page is where you will see the marker go."
+        }
+      ]
+    },
+    {
+      "id": "APP-51",
+      "title": "One Playlists page, badged by how far each list got",
+      "state": "done",
+      "group": "APP",
+      "deps": ["APP-50"],
+      "at": "2026-11-15T21:01:37Z",
+      "by": "deepseek",
+      "desc": "The page is about the card the header says. One list of lists, each row badged by how far it got — only here, on this card, on the player — and marked when the card has an older copy or a removal is waiting. Open and Delete for what this browser holds, Walk this for the player's lists, Read the card when the card has not been read. A card's list this browser has never seen opens by being adopted. New playlist is one dialog, the empty state's one action is the same button, and the rail's Playlists group is one item.\n\nFinished when the page is right for the Device card, an SD, a virtual card, and for a card this browser cannot read, each with its empty, loading and error state; and the old Ask page and its rail item are gone, with #/playlists/ask redirecting.\n\nTo check: switch cards in the header and watch the page follow; delete a list with the card out of the computer and see the row say the card still has it.",
+      "notes": [
+        {
+          "at": "2026-11-15T21:13:04Z",
+          "by": "deepseek",
+          "text": "Plan: rewrite the Playlists page as one list of lists for the selected card, on top of playlists/lists + cardLists; dialog for New playlist; one rail item; #/playlists/ask redirects."
+        },
+        {
+          "at": "2026-11-15T21:19:58Z",
+          "by": "deepseek",
+          "text": "The Playlists page is now about the card the header names. With the Device card selected it shows the player's lists and which one is walking; with an SD or virtual card selected it shows that card's own lists, or this browser's copy of the image it last wrote there when the card is not open, with the date it was written. Each list appears once, badged by how far it got — only here, on this card, on the player — and marked when the card has an older copy or a deletion is waiting for it. Open and Delete for what this browser holds, Walk this for the player's lists, Read the card when the card has not been read and you want its current bytes. Opening a list the card carries but this browser has never seen adopts it with its own id, name, date and rows.\n\nThe rail's Playlists group is one item now, there is no Ask page, and #/playlists/ask lands on the page. A new list is one dialog; the page names where its lists came from in one line above them.\n\n- To see it: reload, then switch cards in the header — the page follows, and its line says which answer it is showing.\n- Verified: typecheck, 870 tests, build, and the look checks (the one remaining hit is the pre-existing font-semibold in the eval harness, untouched).\n- Check: with a card out of the computer, delete a list the card carries — the row should stay and say the card still has it, and Undo should bring it back. Then put the card in, open it, and watch the marker go.\n\nTwo deliberate small things: a pending removal whose list no source carries any more is dropped quietly, and the Device card's lists stay read-only — Walk this is its one command, as the spec says."
+        }
+      ]
+    },
+    {
+      "id": "APP-52",
+      "title": "Put the files and the AI Agent in the editor's left column",
+      "state": "done",
+      "group": "APP",
+      "deps": ["APP-50"],
+      "at": "2026-11-15T21:01:37Z",
+      "by": "deepseek",
+      "desc": "The editor keeps its two columns, and the left one switches between the card's files and the AI Agent. A row's title, BPM, key and energy come from the selected card instead of always from the player, so the editor stops calling a card's own tracks 'not on the card' when the player holds something else.\n\nFinished when an SD or virtual card edits with the player off or holding another card, the row count and the missing count read against that card, and the player's own card still answers from the player.\n\nTo check: open a list for a virtual card with the player off, switch to Files and drag a folder in; every row should know what it is.",
+      "notes": [
+        {
+          "at": "2026-11-15T21:13:04Z",
+          "by": "deepseek",
+          "text": "Plan: segmented Files/Ask tabs in the editor's left column (ReUI c-tabs-9), Ask extracted into a panel, row facts resolved from the selected card instead of the player."
+        },
+        {
+          "at": "2026-11-15T21:20:02Z",
+          "by": "deepseek",
+          "text": "The editor's left column now switches between the card's files and the AI Agent, behind a Files / Ask pill switch that lives in the address: #/playlists/<id> shows the files, #/playlists/<id>/ask shows the conversation, and a reload lands on the one you left. The conversation is kept while you flip back to the files, so it is not lost by looking at the tree.\n\nA row's facts now come from the card you are editing. With the Device card selected they come from the player as before; with an SD or virtual card selected they come from this browser's own rows for that card joined to the image it wrote there, so the editor works with the player off or holding a different card — and a row the card does not have reads \"Not in this card's library\" instead of \"Not on the card\".\n\n- To see it: open a list for a virtual card with the player switched off; every row should know its BPM and key, and dragging from Files into the list should still land exactly where you drop it.\n- Verified: typecheck, 870 tests, build, look checks (the one remaining hit is the pre-existing eval-harness line).\n- Check: switch to Ask, ask something, switch to Files and back — the conversation should still be there.\n\nTwo things you should know:\n- The answer still offers \"Save playlist\", which leaves the editor for a new list; APP-53 is what turns it into \"Add to this list\". That is the split we agreed, not an oversight.\n- The switch needed the K7 treatment on two installed components, so tabs.tsx and dialog.tsx were edited in place (accent-outline pills, a cut overlay, a panel with no shadow) rather than restyled from outside them.\n\nNot visually verified: there is no browser in this session, so the layout and the switch's focus order are worth one look before you accept it."
+        }
+      ]
+    },
+    {
+      "id": "APP-53",
+      "title": "Let Ask add its tracks to the list beside it",
+      "state": "done",
+      "group": "APP",
+      "deps": ["APP-52"],
+      "at": "2026-11-15T21:01:37Z",
+      "by": "deepseek",
+      "desc": "An answer inside the editor adds the tracks it found to the list beside it — at the end, in the order the answer shows them, repeats allowed — with Save as a new list as the other choice. A sentence that says 'add five tracks to this playlist' is honoured instead of refused; the model still writes only filters and never sees the list.\n\nFinished when a set asked for in the editor lands in the open list in order, the tab is in the address at #/playlists/:id/ask, and a selection with nothing to search says so rather than offering rows it does not have.\n\nTo check: with a list open, ask for a late-night 8A set; the rows should arrive in the order the answer showed them.",
+      "notes": [
+        {
+          "at": "2026-11-15T21:23:58Z",
+          "by": "deepseek",
+          "text": "Plan: add-to-open-list as the answer's primary action (App applies the Intent to the draft beside it), Save as a new list secondary, and stop refusing an instruction to change the list."
+        },
+        {
+          "at": "2026-11-15T21:26:34Z",
+          "by": "deepseek",
+          "text": "An answer now adds to the list beside it. Ask's primary action in the editor is \"Add N tracks\": the rows the search found are appended to the open list, in the order the answer shows them, repeats allowed — so the list on the right is the answer's, and the panel does not need copying by hand. \"Save as a new list\" stays as the other choice, and creates that list with the sentence as its name (it offers to open it rather than throwing you out of the editor). Once added, the answer says how many it put where, and the offer is gone.\n\nA sentence that asks for the change is now read like any other: \"add 5 songs to the playlist\" is the count it states, so it searches for five tracks and adds them. What still refuses is an instruction that states nothing to search (\"add songs to the playlist\").\n\n- To see it: open a list, switch to Ask, ask for a late-night 8A set, press Add. The rows should arrive at the end of the list in the order the answer showed them, and the draft should be written to the card as before.\n- Verified: typecheck, 871 tests, build. The refusal tests and the eval corpus now pin the new rule: row 59 went from a refusal to a parsed count, and its recorded answer fixture changed with it.\n- Check: ask \"add 5 songs to the playlist\" with a list open — five tracks should be added; then ask \"add songs to the playlist\" and it should still say there is nothing to search on.\n\nOne correction I made to the documents while building: the spec and ADR 0093 said \"Save as a new list\" opens the new list; the code has always offered to open it instead of navigating. The documents now say \"offers to open it\", which is what the answer does and what keeps the conversation.\n\nNot visually verified: the footer's three buttons at a narrow column width are worth a look before you accept it."
+        }
+      ]
+    },
+    {
+      "id": "FW-05",
+      "title": "Keep the card's playlists on the player",
+      "state": "done",
+      "group": "FW",
+      "at": "2026-11-15T21:54:57Z",
+      "by": "deepseek",
+      "desc": "The player holds the card's playlists itself: it reads `k7.playlists/` when a card mounts, reports each list with a fingerprint, and takes `PUT /api/playlists/<id>` and `DELETE /api/playlists/<id>` — one file per request, written to a temporary name and renamed onto the final one, answered only when the bytes are on the card. Deleting the selected list clears `k7.select` and the broadcast returns to the library's order. It refuses a bad body, a full card and a card with more than 64 lists, and it no longer reads a list area out of the image (format v5).\n\nFinished when the endpoints answer as `docs/specs/front-door.md` §2 says on the board, a list written while the card is in the player survives a power cycle, and a mounted card's lists are read with no image involved. The format is `docs/specs/playlist-format.md` and the permission is ADR 0094.\n\nTo check: write a list, pull the power, boot; `/api/playlists` still has it. Then fill a card and see the write refused rather than half-written.",
+      "notes": [
+        {
+          "at": "2026-11-15T22:02:15Z",
+          "by": "deepseek",
+          "text": "Plan: a portable playlist_store over mini_files (read the directory at mount, write temp+rename, delete), playlist_http gains PUT/DELETE and the fingerprint, the snapshot reader drops the list area (v5), playlist_select clears a deleted selection, host tests for the format and the store."
+        },
+        {
+          "at": "2026-11-15T22:15:05Z",
+          "by": "deepseek",
+          "text": "The player now owns the card's playlists. It reads `k7.playlists/` when a card mounts, reports each list with a name, creation time, row count and a fingerprint, and answers the two reads from those files. It takes `PUT /api/playlists/<id>` — the body is the list's file, which the device writes to a temporary name, validates by reading it back, and renames onto the final one, answering only when the bytes are on the card — and `DELETE /api/playlists/<id>`, which also ends the walk when the list being walked is the one removed. The image reader is format v5: measurements only, no list area, and older images are refused. The selection resolves from the file now, so a card that is out keeps the choice and simply stops walking.\n\nTwo things the work forced, both in the spec now: a PUT's body is the playlist file itself rather than a JSON document, so the device stores exactly what it validated; and the HTTP server had to learn to read PUT bodies and to name PUT and DELETE in its CORS preflight, without which the app's browser would refuse the write before it was sent.\n\n- Verified on the host tier: `make -C host test` (all unit tests, including the new `t40_playlist_file` with 128 checks on the format and the directory), `make -C host integration` (seven suites, including a rewritten playlist suite that drives PUT, DELETE, the fingerprints and every refusal), and `make -C host layering`.\n- Not proven, and it cannot be here: the firmware build (no ESP-IDF on this machine) and the board. Pulling the power after a write and booting is the check this change exists to pass, and it needs the board.\n- The `label` step of `make -C host check` cannot run in this sandbox: headless Chrome's GPU process exits. Everything before it passes.\n\nTo check on the board: PUT a list, pull the power, boot, and `GET /api/playlists` should still have it; fill a card and see the write refused rather than half-written; delete the list that is walking and watch the broadcast fall back to the library's order.\n\nOne thing for whoever commits: `tools/LabelEditor/` has uncommitted changes from another lane in this tree. Mine are the components, host tests and docs; commit them by explicit path."
+        }
+      ]
+    },
+    {
+      "id": "APP-54",
+      "title": "Every list becomes a file the app writes",
+      "state": "done",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-15T21:54:57Z",
+      "by": "deepseek",
+      "desc": "A module reads and writes `k7.playlists/<id>.k7list` — the text format in `docs/specs/playlist-format.md` — and the editor writes it through the card's handle when the card is in the computer, with the list filed under the card it belongs to rather than the card this browser last worked on. The browser keeps a pending edit only until its card takes it, and the list's currency is the fingerprint comparison.\n\nFinished when a list saved on a virtual card sits in `k7.playlists/` as a readable file, a card's files are read back as its lists, a row the card does not have is reported as missing, and a failed write leaves the edit pending with the reason. Tests pin the format's refusals and the rule that the id inside the file agrees with its name.\n\nTo check: write a list, open the file in a text editor, change a row, and see the page say the card has an older copy.",
+      "notes": [
+        {
+          "at": "2026-11-15T22:18:07Z",
+          "by": "deepseek",
+          "text": "Plan: a pure playlists/file.ts (encode/read/fingerprint) beside the list source, card-list read/write through the card's handle, drafts keyed by the list's own card, and the join's currency from fingerprints."
+        },
+        {
+          "at": "2026-11-15T22:21:41Z",
+          "by": "deepseek",
+          "text": "A list is a file the app writes. The editor debounces each change into `k7.playlists/<id>.k7list` through the card's own directory, and the page reads a card's files back as its lists, each with the fingerprint the device will report. The format is one module (`playlists/file.ts`) that both encodes and validates: a list with an id that disagrees with its file name, a name over 63 bytes, a row that is absolute or climbs out of `music/`, or a count that does not match the rows is refused before anything touches the card. The draft store now files pending edits under the list's own card — the Device card's mark or the card in the computer — rather than the card this browser last worked on, and a list's currency is a fingerprint comparison when both sides carry one.\n\nVerified: typecheck, 898 tests (a new format suite pins every refusal and the id-in-the-file rule, and pins the fingerprint against the value the device's own C code computes; a new directory suite drives write, read, remove and the skip of a damaged file), build, and the look checks — the one remaining hit is the pre-existing one in the eval harness.\n\nNot verified, and it needs a browser: the write through a real card and the read back. The device's side of the same format is FW-05, which is in review.\n\nTwo things APP-55 and APP-56 finish:\n- For now the old image path is still live: a draft change also patches the image in Prepare (the analysis provider), so a list is briefly written twice. APP-55 removes that and the image's list area together.\n- The page's buttons and badges for the new states — \"waiting for the card\", the device write, and the editor's own refusal text — are APP-56's; the editor today says \"Waiting for the card\" or \"On the card\" and keeps the pending edit either way."
+        }
+      ]
+    },
+    {
+      "id": "APP-55",
+      "title": "The image carries measurements only",
+      "state": "review",
+      "group": "APP",
+      "deps": ["APP-54"],
+      "at": "2026-11-15T21:54:57Z",
+      "by": "deepseek",
+      "desc": "Format v5 writes the rows and nothing else. `readListArea`, `patchListArea`, `toSnapshotPlaylists` and Prepare's lists-only write are deleted, the app reads no list out of any image, and a v4 image is refused like every older version.\n\nFinished when a run writes a v5 image, editing a list does not write the image at all, and Prepare says the image carries measurements only. The format is `docs/specs/snapshot-format.md`.\n\nTo check: run a card, then edit a list — the image on the card should keep its timestamp. Then read the image back with the layout in the format doc.",
+      "notes": [
+        {
+          "at": "2026-11-15T22:26:25Z",
+          "by": "deepseek",
+          "text": "Plan: v5 in domain/snapshot (no list area), delete playlists/image.ts and its tests, drop toSnapshotPlaylists and the lists write mode from Prepare, and fix the copy that says lists travel in the image."
+        },
+        {
+          "at": "2026-11-15T22:29:29Z",
+          "by": "deepseek",
+          "text": "The image carries measurements only now. Format 5 writes the header, the rows and the pool, and bytes 64..80 are reserved; the list area is gone from the builder and from every reader in the app. `readListArea`, `patchListArea` and the whole `playlists/image.ts` module are deleted, `toSnapshotPlaylists` is gone with them, and Prepare no longer has a lists-only write: a list edit writes its own small file and touches nothing else, so the image on the card keeps its timestamp. A v4 image is refused like every older format — the album page falls back to the device as it already did when an image could not be read.\n\nVerified: typecheck, 876 tests, build, and the look checks (the one remaining hit is the pre-existing one in the eval harness). The two list-in-image suites are deleted with the code they tested, and the image suite now pins the v5 header with its reserved bytes.\n\nTo check: run a card, note the image's timestamp, then edit a list in the editor — the timestamp should not move, and the list should appear under `k7.playlists/` instead. Read the image back with the layout in the format doc: a header and the rows, and nothing after the pool.\n\nOne consequence worth knowing: an image this browser wrote before this change is now unreadable to its own readers, which is the \"nothing carried\" decision from the grilling. A card with one is re-measured, and the next run writes a v5 image."
+        }
+      ]
+    },
+    {
+      "id": "APP-56",
+      "title": "The page and the editor stand on the files",
+      "state": "review",
+      "group": "APP",
+      "deps": ["APP-54", "FW-05"],
+      "at": "2026-11-15T21:54:57Z",
+      "by": "deepseek",
+      "desc": "The Playlists page and the editor use the card's files and the player's index. A list the player holds opens, edits and writes back through the player — this browser no longer needs to have opened the card. A card in the computer shows its files. A card in neither place shows only the pending edits and says it is not open. The row's write state is visible — writing, written, refused — and 'edited, the player has the older copy' is a comparison with the player's fingerprint rather than a memory.\n\nFinished when a list edited with the card in the player is walking without a reboot, the Device card's lists are editable, and a refused write is a sentence with a retry rather than a spinner that ends in silence.\n\nTo check: with the card in the player, add a track to a list and hear it walking; then take the card out and see the row say the card is not open.",
+      "notes": [
+        {
+          "at": "2026-11-15T22:31:39Z",
+          "by": "deepseek",
+          "text": "Plan: a device put/delete for playlists, the page opening a player's list by fetching its rows, the editor writing through the player when the card is there, and the write state visible on both."
+        },
+        {
+          "at": "2026-11-15T22:34:05Z",
+          "by": "deepseek",
+          "text": "The Playlists page and the editor stand on the card's files and the player's index. A list the player holds opens by fetching its rows, edits, and writes back through the player — `PUT /api/playlists/<id>` with the file as the body — so this browser no longer needs to have opened that card to author for it. A card in the computer answers from its own directory; a card in neither place shows only the pending edits and says it is not open, with one action to open it. Deleting goes to whichever side carries the list, and the removal marker clears when that side takes it.\n\nThe editor's header now says where the edit has got to — writing, on the card, on the player, waiting for the card, or not written with the player's own sentence — and the row's \"edited, the player has the older copy\" is a comparison with the fingerprint the player reports, not this browser's memory.\n\nVerified: typecheck, 878 tests, build, look checks (the one remaining hit is the pre-existing eval-harness line). The new requests are pinned on the wire: a PUT carries the list's file with `text/plain`, and a DELETE is a DELETE; the join has a test for a player list whose fingerprint differs from the draft's.\n\nNot verified, and it needs a browser and a board: editing with the card in the player and hearing it walk. The player's half is FW-05, which is done and host-tested; the two together are the check that matters.\n\nTo check: with the card in the player, open one of its lists from the page, add a track, watch the header say \"On the player\", and hear it walking without a reboot. Then take the card out and see the row say the card is not open."
+        }
+      ]
+    },
+    {
+      "id": "APP-57",
+      "title": "The list's name is edited in the stage header",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-15T23:19:27Z",
+      "by": "deepseek",
+      "desc": "The editor's name field leaves the page and becomes the stage header's page crumb, so the list is named where it is shown. Pressing the title opens a pill input; Enter or leaving it commits, Escape abandons, and an empty name is refused by returning the one the list has. A rename is an edit like any other: it changes the fingerprint, so it schedules the write that carries the list to its card.\n\nThe edit's own state — writing, on the card, on the player, waiting, or the refusal's sentence — moves from the page's top row to the list's heading, over the count and the rows the library is missing. The page's words go: clearing the list is a trash icon whose press opens the filled confirm, and the back row is gone, leaving the area crumb as the way back (the rail below 768px). The list takes the left column, with the card's files and the IA Agent in the right one.\n\n  Finished when the page carries no name field, no back row and no written-out control, a rename made in the header writes the card's file with the new name, and the state of that write reads on the heading line above the blocks.\n\n  To check: open a list, rename it in the header, and see 'On the player' (or 'On the card') beside the Playlist heading, the blocks on the left, the files and Ask on the right, and the new name on the list of lists.",
+      "notes": [
+        {
+          "at": "2026-11-15T23:20:06Z",
+          "by": "deepseek",
+          "text": "Built and waiting for approval: the title is now the stage header's page crumb (a new `ui/PlaylistTitle` — press it to open a pill input, Enter or leaving commits, Escape abandons, an empty name is refused), the editor's Name field is gone and its row carries only the write state and All playlists, the area crumb on this route is a link back to the list of lists, and `findDraft` moved into `playlists/drafts.ts` so the header and the page resolve a link to the same list. k7-look.md K17 and K21 carry the rule. Verified: typecheck, 880 tests (two new for findDraft), build, look checks — the one shape hit is the pre-existing evals/sessions-main.tsx line. Not verified: the header in a browser at 390px and 1280px, which needs a card."
+        },
+        {
+          "at": "2026-11-15T23:29:59Z",
+          "by": "deepseek",
+          "text": "Description now matches what was built: the state moved to the Playlist heading and the controls became icons."
+        },
+        {
+          "at": "2026-11-15T23:31:41Z",
+          "by": "deepseek",
+          "text": "The back row is removed and the columns swap: list left, sources (files and Ask) right."
+        }
+      ]
+    },
+    {
+      "id": "LB-05",
+      "title": "The editor's actions are agent tools",
+      "state": "proposed",
+      "group": "LB",
+      "at": "2026-11-15T23:30:13Z",
+      "by": "dsh",
+      "desc": "A browser agent can read and edit the open design: 14 tools registered on load with WebMCP, and the same calls on `window.__labelEditorMcp` when the browser has no such API, so a page script or Playwright reaches them too. The status bar's WebMCP button opens *Agent tools*, which shows what registered and lists the tools, so the person at the screen can see what is exposed.\n\nThere is deliberately no external MCP server — the tools live in the page that owns the design, and a stdio or HTTP proxy would need a page of its own, which would put the design in two places.\n\nFinished means the tools, the dialog and their tests are on master (they are: `7b1ba13`, after `a2384df`), and a label built through the bridge packs with `tools/label_pack.py` — this one is `HOLA`, 183 B. To check it yourself: `npm run dev`, then the status bar's WebMCP button in a Chrome started with `--enable-features=WebMCP` should say 14 tools registered."
     }
   ]
 }
