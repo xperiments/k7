@@ -2026,10 +2026,9 @@
     {
       "id": "APP-43",
       "title": "Leave the schema out of the model's input",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-42"],
-      "yolo": true,
       "at": "2026-11-15T15:24:23Z",
       "by": "dsh",
       "desc": "The APP-42 session screen: `omitResponseConstraintInput` took the create arm from 19 to 37 rows passing (1850 → 1130 ms mean, std 761 → 105) and clone+omit to 41 pass, 2 unstable, 316 ms. The schema still constrains the output; it is just not echoed into the model's input, so the prompt's rules and turns carry the shape.\n\nDone in the same change: `askModel` passes the option on every prompt (repairs included), the stub test proves it, and k7-app §7 P2 records it. Remaining for the record: the next full eval run on the shipped path (`requestIntent`) to capture the per-field score; the clone + base session remains the ADR-gated change.",
@@ -2049,12 +2048,25 @@
     {
       "id": "APP-44",
       "title": "Keep one base session and clone it per ask",
-      "state": "proposed",
+      "state": "review",
       "group": "APP",
       "deps": ["APP-42", "APP-43"],
+      "yolo": true,
       "at": "2026-11-15T15:28:26Z",
       "by": "dsh",
-      "desc": "The APP-42 screen: create 19 pass at 1850 ms, create+omit 37 at 1130 ms, clone+omit 41 at 316 ms (2 unstable rows against 15). The clone is the speed; the omit is the quality. ADR 0089 supersedes ADR 0084's one-session bullet: one base session per prompt, a clone per ask, the base never prompted, destroyed on the profile change or the Ask area close.\n\nDone in the same change: `askModel` creates/holds/clones the base; the App's profile and unmount cleanup; the eval's after-run cleanup; the stub test; k7-app §7 P4; ADR 0089. Remaining for the record: the next full eval run on the shipped `requestIntent` path to capture the per-field score with the base and the omit together."
+      "desc": "The APP-42 screen: create 19 pass at 1850 ms, create+omit 37 at 1130 ms, clone+omit 41 at 316 ms (2 unstable rows against 15). The clone is the speed; the omit is the quality. ADR 0089 supersedes ADR 0084's one-session bullet: one base session per prompt, a clone per ask, the base never prompted, destroyed on the profile change or the Ask area close.\n\nDone in the same change: `askModel` creates/holds/clones the base; the App's profile and unmount cleanup; the eval's after-run cleanup; the stub test; k7-app §7 P4; ADR 0089. Remaining for the record: the next full eval run on the shipped `requestIntent` path to capture the per-field score with the base and the omit together.",
+      "notes": [
+        {
+          "at": "2026-11-15T15:37:53Z",
+          "by": "dsh",
+          "text": "The implementation is already in commit d0f8639; the task is to verify it end to end and hand it over.\n- `askModel` holds one base per system prompt + examples, clones per ask, never prompts the base.\n- The App closes the bases on the source-profile change and on the Ask area unmount; the evaluation harness after a run.\n- The stub test, k7-app §7 P4 and ADR 0089; the full suite and build.\n- The remaining measurement is the shipped `requestIntent@static` screen (198 calls), then the full five."
+        },
+        {
+          "at": "2026-11-15T15:37:53Z",
+          "by": "dsh",
+          "text": "The base-session change is in commit d0f8639 and verified: 818 web tests, typecheck and build.\n\n- `askModel` creates one base session per system prompt and example set on the first ask, holds it, never prompts it, and clones it for every ask; the clone is prompted once and destroyed. The repair calls clone too.\n- The clone keeps `omitResponseConstraintInput`, so the output is still constrained without the schema in the input. The first ask pays the base's 867 ms (create paid 1850 ms); the later asks are 316 ms instead of 1850.\n- The isolation survives: the base is never prompted, so no ask's context reaches another. ADR 0089 supersedes ADR 0084's \"One session per Ask\" bullet; the rest of 0084 stands.\n- The App closes the bases when the source profile changes and when the Ask area closes ([Ask.tsx]); the evaluation harness closes them after a run.\n- The test stubs Chrome and proves the base is created once, cloned twice, not destroyed by an ask, and closed by `destroyBases`. k7-app §7 P4 records the lifecycle.\n\nRemaining for the record: the shipped `requestIntent@static` screen (198 calls) on Chrome, then the full five, to capture the per-field with the base and the omit together. The genre drop is the next app-side lever."
+        }
+      ]
     }
   ]
 }
