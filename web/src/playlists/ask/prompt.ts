@@ -100,6 +100,11 @@ export const INTENT_EXAMPLES: [string, string][] = [
   ['tracks under three minutes', '{"duration_max":180}'],
   ['long mixes', '{"duration_min":480}'],
   ['play something', '{}'],
+  ['music like Bonobo', '{"query":"Bonobo"}'],
+  ['happy techno', '{"genre":"techno","mood":["happy"]}'],
+  ['next page', '{"limit":20,"offset":20}'],
+  ['canciones de bonobo', '{"query":"bonobo"}'],
+  ['a workout party', '{"energy_min":70,"arousal_min":60}'],
 ];
 /**
  * The few-shot turns for one library: the same lessons with the profile's own numbers, so an
@@ -108,7 +113,10 @@ export const INTENT_EXAMPLES: [string, string][] = [
 export function intentExamples(profile: LibraryProfile | null = null): [string, string][] {
   if (!profile) return INTENT_EXAMPLES;
   const f = factsOf(profile);
-  const genre = profile.genres[0];
+  /* Use the second genre when there is one, so the most common genre is not the only one the
+   * turns teach. The choice is deterministic for a library, so the measured prompt is stable. */
+  const genre = profile.genres.length > 1 ? profile.genres[1] : profile.genres[0];
+  const mood = profile.moods[0] ?? 'happy';
   return [
     [
       'twenty relaxed tracks for sleeping',
@@ -130,6 +138,19 @@ export function intentExamples(profile: LibraryProfile | null = null): [string, 
     ['tracks under three minutes', JSON.stringify({ duration_max: f.duration.short })],
     ['long mixes', JSON.stringify({ duration_min: f.duration.long })],
     ['play something', '{}'],
+    ['music like Bonobo', '{"query":"Bonobo"}'],
+    genre
+      ? [
+          `${mood} ${genre}`,
+          JSON.stringify({ genre, mood: [mood] }),
+        ]
+      : [`${mood} music`, JSON.stringify({ mood: [mood] })],
+    ['next page', '{"limit":20,"offset":20}'],
+    ['canciones de bonobo', '{"query":"bonobo"}'],
+    [
+      'a workout party',
+      JSON.stringify({ energy_min: f.energy.workout, arousal_min: f.arousal.workout }),
+    ],
   ];
 }
 

@@ -24,6 +24,11 @@ describe('INTENT_EXAMPLES', () => {
       'tracks under three minutes': { durationMax: 180 },
       'long mixes': { durationMin: 480 },
       'play something': null,
+      'music like Bonobo': { query: 'Bonobo' },
+      'happy techno': { genre: 'techno', mood: ['happy'] },
+      'next page': { limit: 20, offset: 20 },
+      'canciones de bonobo': { query: 'bonobo' },
+      'a workout party': { energyMin: 70, arousalMin: 60 },
     };
 
     for (const [sentence, answer] of INTENT_EXAMPLES) {
@@ -94,11 +99,17 @@ describe('intentExamples', () => {
   it('uses the library’s own numbers and a genre it has', () => {
     const examples = intentExamples(PROFILE);
     expect(examples[0][1]).toContain('"energy_max":40');
-    expect(examples[1][0]).toBe('two hours of fast techno');
+    expect(examples[1][0]).toBe('two hours of fast ambient');
     expect(examples[1][1]).toContain('"bpm_min":131');
     expect(examples[3][1]).toContain('"danceability_min":72');
     expect(examples[6][1]).toContain('"duration_max":180');
     expect(examples[7][1]).toContain('"duration_min":420');
+    expect(examples[9][1]).toContain('"query":"Bonobo"');
+    expect(examples[10][1]).toContain('"mood":["happy"]');
+    expect(examples[10][1]).toContain('"genre":"ambient"');
+    expect(examples[11][1]).toContain('"offset":20');
+    expect(examples[12][1]).toContain('"query":"bonobo"');
+    expect(examples[13][1]).toContain('"energy_min":74');
     for (const [, answer] of examples) {
       if (answer === '{}') continue;
       const parsed = parseIntent(answer);

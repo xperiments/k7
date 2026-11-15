@@ -80,6 +80,8 @@ export function factsOf(profile: LibraryProfile | null): PromptFacts {
     arousal: {
       ...arousal,
       workout: profile.arousal ? Math.round(profile.arousal.p75) : 60,
+      /* Aggressive and workout share the library's top arousal quartile; the mood aggressive is
+       * what tells them apart. The static prompt keeps the 65/60 offset. */
       aggressive: profile.arousal ? Math.round(profile.arousal.p75) : 65,
     },
     duration: {
