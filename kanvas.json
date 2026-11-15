@@ -2094,7 +2094,7 @@
     {
       "id": "APP-46",
       "title": "Read the genre the sentence names",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-45"],
       "at": "2026-11-15T16:58:48Z",
@@ -2116,7 +2116,7 @@
     {
       "id": "APP-47",
       "title": "Drop a genre the sentence never named",
-      "state": "todo",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-45", "APP-46"],
       "at": "2026-11-15T17:07:49Z",
@@ -2126,7 +2126,7 @@
     {
       "id": "APP-48",
       "title": "Let the static genre words apply with a profile too",
-      "state": "todo",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-46", "APP-47"],
       "at": "2026-11-15T18:16:56Z",
