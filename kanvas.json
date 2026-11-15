@@ -2071,7 +2071,7 @@
     {
       "id": "APP-45",
       "title": "Rebuild an empty answer from the sentence's own filters",
-      "state": "doing",
+      "state": "review",
       "group": "APP",
       "deps": ["APP-44"],
       "yolo": true,
@@ -2083,6 +2083,11 @@
           "at": "2026-11-15T16:07:07Z",
           "by": "dsh",
           "text": "The recovery is committed (20c6714) and the static screen is in: 45 improved fail → unstable, 50/44/47 pass, 13/43/S10 are still unscored because their rows conditions need a search. The next measurement is the full five: the imageSearch combination is what scores 13/43/S10, the 45 and the 50 with a search, and the image combination fills the profile scope; the systemOnly/systemExamples arms are the control.\n- Run all five on the eval page; the static 198 records are already done, so it resumes the four missing combinations (792 calls).\n- The image scopes need a Last image in this Chrome; check it, and paste the model variant before the run.\n- Export the full 990-record JSON for the per-field and the imageSearch rows."
+        },
+        {
+          "at": "2026-11-15T16:46:54Z",
+          "by": "dsh",
+          "text": "The full five is in: 990 records, five arms, no errors, no repairs, 214 app-side normalizations. The model-variant box was blank again.\n\n| arm | 3/3 pass | fail | unstable | unscored | mean |\n|---|---:|---:|---:|---:|---:|\n| systemOnly · static | 20 | 32 | 13 | 1 | 499 ms |\n| systemExamples · static | 38 | 18 | 7 | 3 | 309 ms |\n| requestIntent · static | 41 | 19 | 3 | 3 | 305 ms |\n| requestIntent · image | 35 | 17 | 4 | 10 | 315 ms |\n| **requestIntent · imageSearch** | **48** | 11 | **1** | 6 | 381 ms |\n\nThe imageSearch arm is the best measured combination. The rows-condition rows now score: **13, 43, S10, 50, 44 and 47 all pass**, and the spike is 8/12 pass (S7 and S8 fail, S3 fail, S2 unscored). The static arm's rows-condition rows stay unscored, as expected.\n\n**45 is still unscored on every scope** — the limit recovers on the static screen (the 16:03 export had it fail → unstable), but the genre \"ambient\" is not in the sentence path, and the imageSearch's search does not rescue it. That is the remaining app-side hole.\n\nThe full's static 41/46 is the pre-recovery record (the 15:44 run); the 16:03 recovery screen was a separate export at 38/45. The recovery's own static re-run is the next check for the 45 limit; the 13/43/S10 rows already pass on the imageSearch.\n\nTested: 824 web tests, typecheck and build. The next work is 45's genre (the sentence → genre path), then the 15 genre extras."
         }
       ]
     }
