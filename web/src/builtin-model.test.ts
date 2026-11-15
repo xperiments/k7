@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { assistantFailure, assistantSentence, assistantState, stateFrom } from './builtin-model';
+import { describe, expect, it, vi } from 'vitest';
+import { askModel, assistantFailure, assistantSentence, assistantState, stateFrom } from './builtin-model';
 
 /**
  * The built-in model's state is Chrome's answer, not this page's; what is testable here is the
@@ -49,5 +49,40 @@ describe('assistantFailure', () => {
 
   it('falls back to the model not answering', () => {
     expect(assistantFailure(new Error('boom'))).toMatch(/did not answer/);
+  });
+});
+
+describe('askModel', () => {
+  it('leaves the schema out of the input but still constrains the answer', async () => {
+    const prompt = vi.fn().mockResolvedValue('{"limit":10}');
+    const destroy = vi.fn();
+    const create = vi.fn().mockResolvedValue({ prompt, destroy });
+    vi.stubGlobal('LanguageModel', { availability: vi.fn(), create });
+    try {
+      const answer = await askModel({
+        system: 'system',
+        schema: { type: 'object' },
+        sentence: 'ten songs',
+        examples: [['play', '{}']],
+      });
+      expect(answer).toBe('{"limit":10}');
+      expect(create).toHaveBeenCalledWith({
+        initialPrompts: [
+          { role: 'system', content: 'system' },
+          { role: 'user', content: 'play' },
+          { role: 'assistant', content: '{}' },
+        ],
+      });
+      expect(prompt).toHaveBeenCalledWith(
+        'ten songs',
+        expect.objectContaining({
+          responseConstraint: { type: 'object' },
+          omitResponseConstraintInput: true,
+        }),
+      );
+      expect(destroy).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

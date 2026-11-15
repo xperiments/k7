@@ -117,6 +117,8 @@ export interface AskModelOptions {
 /**
  * Ask the built-in model once. One session per ask: the system prompt and the examples go in,
  * one answer comes out, and the session is destroyed so no context carries to the next sentence.
+ * The schema is passed as the constraint but not echoed into the input: the prompt's rules and
+ * turns teach the shape, and echoing it made the model over-fill (APP-42's session screen).
  */
 export async function askModel({
   system,
@@ -139,6 +141,10 @@ export async function askModel({
   try {
     return await session.prompt(sentence, {
       responseConstraint: schema,
+      /* The output is still constrained; the schema is just not echoed into the model's input.
+       * The prompt's rules and turns carry the shape. The APP-42 screen measured 19 → 37 rows
+       * passing and 1850 → 1130 ms without the echo. */
+      omitResponseConstraintInput: true,
       ...(signal ? { signal } : {}),
     });
   } finally {

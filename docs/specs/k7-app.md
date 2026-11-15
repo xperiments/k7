@@ -298,7 +298,10 @@ device's byte ceilings (255 and 63), because a longer string would refuse the wh
 ("two hours of…") is `limit`, at 15 tracks an hour. The two are never the same key. The shape is
 constrained by a JSON Schema passed as
 `responseConstraint` — the spike showed Chrome accepts ranges, enums and `additionalProperties`,
-measured on Chrome 157 — but the schema is a request and the validator is the judge. When this
+measured on Chrome 157 — but the schema is a request and the validator is the judge. The schema is
+not echoed into the model's input (`omitResponseConstraintInput`): the prompt's rules and turns
+teach the shape, and echoing it made the model over-fill — the session screen measured 19 → 37
+rows passing and 1850 → 1130 ms without the echo. When this
 browser built the image the player is running (the same Snapshot generation), the prompt and
 schema carry that library's aggregates instead: the genres become a closed enum, each axis's
 ceiling becomes the library's, and each axis's floor is the library's too — except a track's
