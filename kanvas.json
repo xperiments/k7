@@ -1780,7 +1780,7 @@
     {
       "id": "APP-33",
       "title": "Let the sentence override the model on counts, lengths, BPM and keys",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-32"],
       "yolo": true,
@@ -1803,7 +1803,7 @@
     {
       "id": "APP-34",
       "title": "Make the purpose table authoritative for the bounds it keeps",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-32"],
       "yolo": true,
@@ -1826,7 +1826,7 @@
     {
       "id": "APP-35",
       "title": "Do not prescribe a mood the library does not have",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-32"],
       "yolo": true,
@@ -1871,7 +1871,7 @@
     {
       "id": "APP-37",
       "title": "Try the sentence before asking the model again about a query",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-32", "APP-36"],
       "yolo": true,
@@ -1894,7 +1894,7 @@
     {
       "id": "APP-38",
       "title": "Measure general grounding before shipping it",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-32"],
       "yolo": true,
@@ -1939,7 +1939,7 @@
     {
       "id": "APP-40",
       "title": "Try teaching the prompt by examples instead of rules",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-32", "APP-39"],
       "yolo": true,
@@ -1982,7 +1982,7 @@
     {
       "id": "APP-41",
       "title": "Loosen the schema where the profile narrows too far",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-32"],
       "yolo": true,
@@ -2048,7 +2048,7 @@
     {
       "id": "APP-44",
       "title": "Keep one base session and clone it per ask",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-42", "APP-43"],
       "yolo": true,
@@ -2065,6 +2065,24 @@
           "at": "2026-11-15T15:37:53Z",
           "by": "dsh",
           "text": "The base-session change is in commit d0f8639 and verified: 818 web tests, typecheck and build.\n\n- `askModel` creates one base session per system prompt and example set on the first ask, holds it, never prompts it, and clones it for every ask; the clone is prompted once and destroyed. The repair calls clone too.\n- The clone keeps `omitResponseConstraintInput`, so the output is still constrained without the schema in the input. The first ask pays the base's 867 ms (create paid 1850 ms); the later asks are 316 ms instead of 1850.\n- The isolation survives: the base is never prompted, so no ask's context reaches another. ADR 0089 supersedes ADR 0084's \"One session per Ask\" bullet; the rest of 0084 stands.\n- The App closes the bases when the source profile changes and when the Ask area closes ([Ask.tsx]); the evaluation harness closes them after a run.\n- The test stubs Chrome and proves the base is created once, cloned twice, not destroyed by an ask, and closed by `destroyBases`. k7-app §7 P4 records the lifecycle.\n\nRemaining for the record: the shipped `requestIntent@static` screen (198 calls) on Chrome, then the full five, to capture the per-field with the base and the omit together. The genre drop is the next app-side lever."
+        }
+      ]
+    },
+    {
+      "id": "APP-45",
+      "title": "Rebuild an empty answer from the sentence's own filters",
+      "state": "doing",
+      "group": "APP",
+      "deps": ["APP-44"],
+      "yolo": true,
+      "at": "2026-11-15T15:52:56Z",
+      "by": "dsh",
+      "desc": "The shipped eval's gap: with the omit, the model returns `{}` where it used to over-fill, and `recover` only filled a purpose table. Lost: 45 \"three hours of ambient\" (the sentence's limit), 13 \"under 100 BPM\" (the BPM), 43 and S10 (the track length and a purpose). The recover now rebuilds from the sentence's own count, session, BPM, track length, offset or key, plus the purpose table; the sentence extractor also reads \"long mixes\"/\"short tracks\" (the profile's long/short or the static 480/180).\n\nDone in the same change: request.ts's recover and the action guard (\"add 5 songs to the playlist\" stays a refusal), sentence.ts's profile-aware long/short, the six recovery tests, k7-app §7 P2; 824 tests, typecheck, build. Remaining for the record: the next shipped eval run to score 45/13/43/S10; 45's genre is still missing from the sentence path.",
+      "notes": [
+        {
+          "at": "2026-11-15T16:07:07Z",
+          "by": "dsh",
+          "text": "The recovery is committed (20c6714) and the static screen is in: 45 improved fail → unstable, 50/44/47 pass, 13/43/S10 are still unscored because their rows conditions need a search. The next measurement is the full five: the imageSearch combination is what scores 13/43/S10, the 45 and the 50 with a search, and the image combination fills the profile scope; the systemOnly/systemExamples arms are the control.\n- Run all five on the eval page; the static 198 records are already done, so it resumes the four missing combinations (792 calls).\n- The image scopes need a Last image in this Chrome; check it, and paste the model variant before the run.\n- Export the full 990-record JSON for the per-field and the imageSearch rows."
         }
       ]
     }
