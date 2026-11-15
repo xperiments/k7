@@ -2145,11 +2145,24 @@
     {
       "id": "APP-49",
       "title": "Spread a genre answer across the library",
-      "state": "proposed",
+      "state": "review",
       "group": "APP",
+      "yolo": true,
       "at": "2026-11-15T19:01:01Z",
       "by": "dsh",
-      "desc": "\"10 rock tracks\" answers with the first ten matches in path order. On this card that is ten tracks from Annie Lennox's Diva, because 250 tracks match rock and the search walks the library A-Z and stops at the first page. An ask that names no group or artist should draw from the whole library instead: the requested count spread across the matched tracks A-Z, one track per artist while there are artists left. A sentence that names one (\"10 rock tracks of Metallica\") keeps today's answer — that artist's matching tracks, in order.\n\nFinished means:\n\n- A sentence with no name in it (a genre, a mood, a BPM range, a measurement) is answered with a spread of the matched tracks in library order, one per artist while artists remain, then repeats only if it must.\n- A sentence that names a group or artist answers exactly as it does today.\n- A stated offset or sort keeps its linear page; the spread is for an unpaged ask.\n- The answer still reports the true matched count, and saving the answer saves the spread, in the order shown.\n- The player's search answers at most 200 rows, so the App reads that window and spreads within it; the Last image is spread the same way from its own rows. A library with more matches than the window is the known limit, and a player-side sample is the follow-up if it bites.\n- Host tests pin the spread and that it applies only when no name is named; k7-app §7 records the rule.\n\nTo check on the card: \"10 rock tracks\" should list about ten different artists from across the library, not ten tracks from one album. \"10 rock tracks of Nirvana\" (this card has no Metallica) should still list Nirvana."
+      "desc": "\"10 rock tracks\" answers with the first ten matches in path order. On this card that is ten tracks from Annie Lennox's Diva, because 250 tracks match rock and the search walks the library A-Z and stops at the first page. An ask that names no group or artist should draw from the whole library instead: the requested count spread across the matched tracks A-Z, one track per artist while there are artists left. A sentence that names one (\"10 rock tracks of Metallica\") keeps today's answer — that artist's matching tracks, in order.\n\nFinished means:\n\n- A sentence with no name in it (a genre, a mood, a BPM range, a measurement) is answered with a spread of the matched tracks in library order, one per artist while artists remain, then repeats only if it must.\n- A sentence that names a group or artist answers exactly as it does today.\n- A stated offset or sort keeps its linear page; the spread is for an unpaged ask.\n- The answer still reports the true matched count, and saving the answer saves the spread, in the order shown.\n- The player's search answers at most 200 rows, so the App reads that window and spreads within it; the Last image is spread the same way from its own rows. A library with more matches than the window is the known limit, and a player-side sample is the follow-up if it bites.\n- Host tests pin the spread and that it applies only when no name is named; k7-app §7 records the rule.\n\nTo check on the card: \"10 rock tracks\" should list about ten different artists from across the library, not ten tracks from one album. \"10 rock tracks of Nirvana\" (this card has no Metallica) should still list Nirvana.",
+      "notes": [
+        {
+          "at": "2026-11-15T19:02:12Z",
+          "by": "dsh",
+          "text": "Plan: read the spread rule into the app, then build the selection."
+        },
+        {
+          "at": "2026-11-15T19:05:01Z",
+          "by": "dsh",
+          "text": "\"10 rock tracks\" no longer answers with ten tracks from one album. An ask that names no group or artist is now drawn from across the matched window, one track per artist, in library order.\n\nMeasured on the card: the 200-row rock window answers ten different artists, Annie Lennox to Van Halen (before: ten tracks from Annie Lennox's Diva, all from the first folder the search met). A sentence that names an artist keeps its page — \"10 rock tracks of Nirvana\" still answers Nirvana — and a stated offset or sort is untouched.\n\n**To check in the browser:** ask \"10 rock tracks\" and scan the artists in the answer; then ask with an artist named (\"10 rock tracks of Nirvana\") and confirm it still narrows. The Last image follows the same rule from its own rows.\n\n**Known limit:** the player answers at most 200 rows for one search, so a library with more than 200 matches is spread over its first 200, not the whole set. If that turns out to bite, the follow-up is a sampling request in the player's search; the task recorded that trade-off when it was proposed.\n\nTested: 841 web tests (12 new for the spread), typecheck and build. k7-app §7 P3 records the rule."
+        }
+      ]
     }
   ]
 }
