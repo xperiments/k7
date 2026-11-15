@@ -67,13 +67,14 @@ describe('buildSystemPrompt', () => {
 });
 
 describe('intentSchema', () => {
-  it('closes the genres, moods and ranges to the library', () => {
+  it('closes the genres and moods, and the ceilings, to the library', () => {
     const schema = intentSchema(PROFILE);
     const properties = schema.properties as Record<string, Record<string, unknown>>;
     expect(properties.genre).toEqual({ type: 'string', enum: PROFILE.genres });
     expect(properties.bpm_min.minimum).toBe(85);
     expect(properties.bpm_max.maximum).toBe(172);
-    expect(properties.duration_min.minimum).toBe(45);
+    expect(properties.duration_min.minimum).toBe(DURATION_RANGE.min);
+    expect(properties.duration_max.minimum).toBe(DURATION_RANGE.min);
     expect(properties.duration_max.maximum).toBe(900);
     expect(properties.energy_min.minimum).toBe(12);
     expect(properties.energy_max.maximum).toBe(98);
@@ -84,6 +85,20 @@ describe('intentSchema', () => {
       items: { type: 'string', enum: PROFILE.moods },
     });
     expect(Object.keys(schema.properties).at(-1)).toBe('query');
+  });
+
+  it('loosens the duration floor to the device range', () => {
+    const properties = intentSchema(PROFILE).properties as Record<string, Record<string, unknown>>;
+    expect(properties.duration_min.minimum).toBe(DURATION_RANGE.min);
+    expect(properties.duration_max.minimum).toBe(DURATION_RANGE.min);
+    expect(properties.duration_max.maximum).toBe(900);
+    expect(argsOf(parseIntent('{"duration_max":30}'))).toEqual({ durationMax: 30 });
+  });
+
+  it('leaves the key unconstrained', () => {
+    const properties = intentSchema(PROFILE).properties as Record<string, Record<string, unknown>>;
+    expect(properties.key).toEqual({ type: 'array', items: { type: 'string' } });
+    expect(argsOf(parseIntent('{"key":["1A"]}'))).toEqual({ key: ['1A'] });
   });
 
   it('is the default schema without a profile', () => {

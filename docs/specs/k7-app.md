@@ -301,8 +301,14 @@ constrained by a JSON Schema passed as
 measured on Chrome 157 — but the schema is a request and the validator is the judge. When this
 browser built the image the player is running (the same Snapshot generation), the prompt and
 schema carry that library's aggregates instead: the genres become a closed enum, each axis's
-bounds (track length among them) become the library's, and the WORD→FILTER thresholds its
-quartiles. Without a profile the
+ceiling becomes the library's, and each axis's floor is the library's too — except a track's
+length, whose floor is the device's 0, not the library's shortest, so "under 30 seconds" is
+still representable. The schema's floor for a track's length is therefore the device's, not the
+library's. The other floors (BPM, energy, danceability, valence, arousal) and every ceiling stay
+the library's; a sentence below one is refused by the schema — a known narrowness, reported
+rather than widened silently. The schema leaves `key` unconstrained — the grammar is the judge —
+so a key the library lacks is still sent and the search answers empty. The WORD→FILTER thresholds
+its quartiles. Without a profile the
 static ranges apply. The profile is aggregates only — genres, count, ranges and quartiles — and
 no track, artist, path or per-track measurement is described either way.
 

@@ -190,8 +190,10 @@ export const INTENT_SCHEMA = {
 
 /**
  * The schema, narrowed to the library's actual values when there is a profile: the genres and
- * moods it has, and each axis's own min/max. The default is the device's range; the narrowed
- * one is still a request, and `parseIntent` remains the judge.
+ * moods it has, each axis's ceiling, and each axis's floor except a track's length, whose floor
+ * stays the device's 0 so a sentence below the library's shortest track is still representable.
+ * The key stays unconstrained: the grammar is the judge. The default is the device's range; the
+ * narrowed one is still a request, and `parseIntent` remains the judge.
  */
 export function intentSchema(profile: LibraryProfile | null = null) {
   if (!profile) return INTENT_SCHEMA;
@@ -210,14 +212,18 @@ export function intentSchema(profile: LibraryProfile | null = null) {
     ['duration_min', 'duration_max', f.duration],
   ] as const;
   for (const [minKey, maxKey, axis] of axes) {
+    /* A library can have no track under 45 s; the sentence can still ask for one, and the search
+     * answers empty rather than the schema refusing the request. The other floors keep the
+     * library's value — a known narrowness, reported rather than silently changed. */
+    const minimum = minKey === 'duration_min' ? DURATION_RANGE.min : axis.min;
     properties[minKey] = {
       ...(INTENT_SCHEMA.properties[minKey] as object),
-      minimum: axis.min,
+      minimum,
       maximum: axis.max,
     };
     properties[maxKey] = {
       ...(INTENT_SCHEMA.properties[maxKey] as object),
-      minimum: axis.min,
+      minimum,
       maximum: axis.max,
     };
   }
