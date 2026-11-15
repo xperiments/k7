@@ -2005,12 +2005,19 @@
     {
       "id": "APP-42",
       "title": "Measure session reuse and the sampling options",
-      "state": "todo",
+      "state": "doing",
       "group": "APP",
       "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
-      "desc": "Each ask creates a session with the system prompt and examples, then destroys it. Chrome's IDL has `session.clone` and `omitResponseConstraintInput`; the web ignores `temperature` and `topK` (extensions only), and `samplingMode` is behind the AIPromptAPIParams origin trial — so do not propose a lower temperature, it is a no-op. Measure instead: create vs clone per ask, `omitResponseConstraintInput` on/off, and `samplingMode` only if the origin trial is available. Record latency per ask and the corpus's 3/3 stability, and check that a clone sees the same system prompt and examples.\n\nFinished when: the API facts are verified for the shipping Chrome; a dev harness measures create vs clone and the two options on the same corpus; the report gives latency and variance; a recommendation is on the ticket. If the API does not support it, the ticket says so and no code lands. No product change until the numbers and an ADR for ADR 0084's one-session decision."
+      "desc": "Each ask creates a session with the system prompt and examples, then destroys it. Chrome's IDL has `session.clone` and `omitResponseConstraintInput`; the web ignores `temperature` and `topK` (extensions only), and `samplingMode` is behind the AIPromptAPIParams origin trial — so do not propose a lower temperature, it is a no-op. Measure instead: create vs clone per ask, `omitResponseConstraintInput` on/off, and `samplingMode` only if the origin trial is available. Record latency per ask and the corpus's 3/3 stability, and check that a clone sees the same system prompt and examples.\n\nFinished when: the API facts are verified for the shipping Chrome; a dev harness measures create vs clone and the two options on the same corpus; the report gives latency and variance; a recommendation is on the ticket. If the API does not support it, the ticket says so and no code lands. No product change until the numbers and an ADR for ADR 0084's one-session decision.",
+      "notes": [
+        {
+          "at": "2026-11-15T14:44:07Z",
+          "by": "dsh",
+          "text": "Plan: measure, do not ship. The product stays on ADR 0084's one session per ask.\n- API facts for Chrome 157: `session.clone()` and `omitResponseConstraintInput` are stable; `samplingMode` is the Sampling Parameters origin trial; a web page's `temperature`/`topK` are ignored (Chromium's legacy extension-only params). Sources: the Prompt API, Session management and Structured output docs, and Chromium's decoupling commit.\n- Dev harness at `https://k7-dev.xperiments.dev:8000/evals/sessions.html`: create, clone, create+omit, clone+omit, and create+sampling ('creative') only when a session reports a mode. It runs the frozen 66-row corpus × 3, records per-ask latency, the 3/3 verdicts and the per-field states, probes that a clone sees the same initial prompt, and exports the raw records with the machine and prompt shas.\n- Product unchanged: `askModel`, `requestIntent` and the App are not touched. The `.d.ts` only types the API facts the harness uses.\n- The run is 792 calls for the four base strategies, 990 with sampling. Then the report (latency/variance, clone vs create) and a recommendation; an ADR only if the numbers overturn ADR 0084's one-session decision."
+        }
+      ]
     }
   ]
 }
