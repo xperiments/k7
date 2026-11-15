@@ -438,3 +438,24 @@ describe('the sentence before the repair', () => {
     expect(model.askModel).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('the model’s genre', () => {
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
+
+  it('is dropped when the sentence never names one', async () => {
+    model.askModel.mockResolvedValue('{"genre":"party","bpm_min":120}');
+    await expect(requestIntent('tracks for the whole library')).resolves.toEqual({ bpmMin: 120 });
+  });
+
+  it('is kept when the sentence names it', async () => {
+    model.askModel.mockResolvedValue('{"genre":"techno"}');
+    await expect(requestIntent('fast techno')).resolves.toEqual({ genre: 'techno' });
+  });
+
+  it('is replaced by the genre the sentence names', async () => {
+    model.askModel.mockResolvedValue('{"genre":"techno","bpm_min":120}');
+    await expect(requestIntent('ambient')).resolves.toEqual({ genre: 'ambient', bpmMin: 120 });
+  });
+});

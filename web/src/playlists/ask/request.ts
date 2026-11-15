@@ -91,7 +91,10 @@ export async function requestIntent(
       ? result
       : normalizePurpose(
           asked,
-          applySentenceFilters(normalizeKeys(asked, result), fromSentence),
+          normalizeGenre(
+            applySentenceFilters(normalizeKeys(asked, result), fromSentence),
+            fromSentence,
+          ),
           profile,
         );
 
@@ -146,6 +149,18 @@ export async function requestIntent(
     return failure(assistantFailure(error));
   }
   return recover(parseIntent(repaired));
+}
+
+/**
+ * The model's genre is kept only when the sentence names a genre. A genre the sentence never
+ * stated over-fills the search: a party mood does not mean the party genre, and a name is not a
+ * genre. The sentence's own genre already won in `applySentenceFilters`; this drops the rest.
+ */
+function normalizeGenre(intent: SearchArgs, stated: Partial<SearchArgs>): SearchArgs {
+  if (intent.genre === undefined || stated.genre !== undefined) return intent;
+  const out: SearchArgs = { ...intent };
+  delete out.genre;
+  return out;
 }
 
 /** The one call a repair makes, and the trace it reports. */
