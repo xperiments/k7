@@ -66,6 +66,10 @@ uses `query` for adjectives as well as names.
 
 ## Consequences
 
+- **A repair is the narrow case, not the first answer.** A query that is not a name is read from
+  the sentence's own marker ("by X", "like X", "called X") or dropped when another filter remains;
+  only a query that was the only filter is asked again. The one-session decision stands; the second
+  session is now the exception it was meant to be.
 - **A machine below Chrome's floor loses Ask.** It keeps the filter form — ADR 0053's degrade to
   the form — and Ask says which floor it needs instead of offering a key. Mobile is not a
   regression: the App is already walled there on the `local-network` permission (A3).

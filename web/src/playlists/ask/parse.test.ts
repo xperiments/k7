@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { BPM_RANGE, clampBpm, DURATION_RANGE } from './contract';
-import { isCategoryQuery, isNameQuery, parseIntent } from './parse';
+import { isCategoryQuery, isNameQuery, nameFrom, parseIntent } from './parse';
 import { argsOf, errorOf } from './test-support';
 
 describe('parseIntent', () => {
@@ -291,6 +291,43 @@ describe('isNameQuery', () => {
     expect(isNameQuery('musique pour bonobo', 'bonobo')).toBe(false);
     expect(isNameQuery('Musik für bonobo', 'bonobo')).toBe(false);
     expect(isNameQuery('ボノボのために', 'ボノボ')).toBe(false);
+  });
+});
+
+describe('nameFrom', () => {
+  it('reads the name after a marker', () => {
+    expect(nameFrom('songs by Daft Punk')).toBe('Daft Punk');
+    expect(nameFrom('music like Radiohead')).toBe('Radiohead');
+    expect(nameFrom('a song called Nightcall')).toBe('Nightcall');
+    expect(nameFrom('tracks from the album Discovery')).toBe('Discovery');
+    expect(nameFrom('the album Discovery')).toBe('Discovery');
+    expect(nameFrom('songs by the Beatles')).toBe('the Beatles');
+  });
+
+  it('stops at a conjunction, a context or punctuation', () => {
+    expect(nameFrom('something like Bonobo but faster')).toBe('Bonobo');
+    expect(nameFrom('tracks by Daft Punk and Justice')).toBe('Daft Punk');
+    expect(nameFrom('songs by Daft Punk for a workout')).toBe('Daft Punk');
+    expect(nameFrom('music by Daft Punk, Justice')).toBe('Daft Punk');
+  });
+
+  it('reads the five languages', () => {
+    expect(nameFrom('canciones de bonobo')).toBe('bonobo');
+    expect(nameFrom('chansons de bonobo')).toBe('bonobo');
+    expect(nameFrom('Lieder von bonobo')).toBe('bonobo');
+    expect(nameFrom('canciones como bonobo')).toBe('bonobo');
+    expect(nameFrom('chansons comme bonobo')).toBe('bonobo');
+    expect(nameFrom('Lieder wie bonobo')).toBe('bonobo');
+    expect(nameFrom('canciones parecido a bonobo')).toBe('bonobo');
+    expect(nameFrom('music similar to Bonobo')).toBe('Bonobo');
+  });
+
+  it('leaves the partitive and the context without a name', () => {
+    expect(nameFrom('de la musique')).toBeNull();
+    expect(nameFrom('von der Musik')).toBeNull();
+    expect(nameFrom('música para bonobo')).toBeNull();
+    expect(nameFrom('play Blue Monday')).toBeNull();
+    expect(nameFrom('the key is A minor')).toBeNull();
   });
 });
 

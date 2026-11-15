@@ -61,11 +61,11 @@ describe('the trace sink', () => {
 
   it('reports the retry that follows a query that is not a name', async () => {
     model.askModel
-      .mockResolvedValueOnce('{"query":"songs"}')
-      .mockResolvedValueOnce('{"query":"Daft Punk"}');
+      .mockResolvedValueOnce('{"query":"late night"}')
+      .mockResolvedValueOnce('{"query":"Late Night"}');
     const seen: IntentTrace[] = [];
-    const result = await requestIntent('songs by Daft Punk', null, (attempt) => seen.push(attempt));
-    expect(result).toEqual({ query: 'Daft Punk' });
+    const result = await requestIntent('a late night', null, (attempt) => seen.push(attempt));
+    expect(result).toEqual({ query: 'Late Night' });
     expect(seen.map((attempt) => [attempt.call, attempt.reason])).toEqual([
       [1, 'first'],
       [2, 'queryNotName'],
@@ -125,13 +125,9 @@ describe('the purpose normalizer on the shipped path', () => {
 
   it('normalizes a repaired answer, after the repair', async () => {
     model.askModel
-      .mockResolvedValueOnce('{"query":"songs","bpm_min":130}')
-      .mockResolvedValueOnce('{"query":"Daft Punk","bpm_min":130}');
-    await expect(requestIntent('workout songs by Daft Punk')).resolves.toEqual({
-      query: 'Daft Punk',
-      energyMin: 70,
-      arousalMin: 60,
-    });
+      .mockResolvedValueOnce('{"query":"workout"}')
+      .mockResolvedValueOnce('{"energy_min":60,"energy_max":90}');
+    await expect(requestIntent('workout')).resolves.toEqual({ energyMin: 70 });
   });
 
   it('still traces the raw answer, before normalizing', async () => {
@@ -360,5 +356,43 @@ describe('names in the five languages', () => {
       await expect(requestIntent(sentence), sentence).resolves.toEqual({ mood: ['relaxed'] });
       expect(model.askModel, sentence).toHaveBeenCalledTimes(2);
     }
+  });
+});
+
+describe('the sentence before the repair', () => {
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
+
+  it('takes the name the sentence marks, with one call', async () => {
+    const cases: [string, string, string][] = [
+      ['songs by Daft Punk', 'songs', 'Daft Punk'],
+      ['music like Radiohead', 'music', 'Radiohead'],
+      ['canciones de bonobo', 'canciones', 'bonobo'],
+    ];
+    for (const [sentence, bad, name] of cases) {
+      model.askModel.mockReset();
+      model.askModel.mockResolvedValue(JSON.stringify({ query: bad }));
+      await expect(requestIntent(sentence), sentence).resolves.toEqual({ query: name });
+      expect(model.askModel, sentence).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('drops a bad query when the sentence keeps the count', async () => {
+    model.askModel.mockResolvedValue('{"query":"workout"}');
+    await expect(requestIntent('10 songs for a workout')).resolves.toEqual({
+      limit: 10,
+      energyMin: 70,
+      arousalMin: 60,
+    });
+    expect(model.askModel).toHaveBeenCalledTimes(1);
+  });
+
+  it('still asks again when the query is the only filter', async () => {
+    model.askModel
+      .mockResolvedValueOnce('{"query":"songs"}')
+      .mockResolvedValueOnce('{"query":"Daft Punk"}');
+    await expect(requestIntent('Daft Punk')).resolves.toEqual({ query: 'Daft Punk' });
+    expect(model.askModel).toHaveBeenCalledTimes(2);
   });
 });

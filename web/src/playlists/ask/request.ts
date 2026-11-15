@@ -12,7 +12,7 @@ import type { LibraryProfile } from '../../domain/snapshot';
 
 import { failure, type IntentFailure } from './contract';
 import { normalizeKeys } from './keys';
-import { isNameQuery, parseIntent } from './parse';
+import { isNameQuery, nameFrom, parseIntent } from './parse';
 import { buildSystemPrompt, intentExamples, intentSchema } from './prompt';
 import { normalizePurpose, purposeFilters } from './purpose';
 import { applySentenceFilters, sentenceFilters } from './sentence';
@@ -105,6 +105,21 @@ export async function requestIntent(
   if (!('error' in intent)) {
     const query = intent.query;
     if (!query || isNameQuery(asked, query)) return finish(intent);
+
+    /* The sentence usually names the thing: take that name, or drop the bad query when another
+     * filter remains, before spending a second model call. */
+    const name = nameFrom(asked);
+    if (name) return finish({ ...intent, query: name });
+
+    const otherFilter =
+      Object.keys(intent).some((key) => key !== 'query') ||
+      Object.keys(fromSentence).length > 0;
+    if (otherFilter) {
+      const withoutQuery: SearchArgs = { ...intent };
+      delete withoutQuery.query;
+      return finish(withoutQuery);
+    }
+
     return finish(await repairQuery(asked, answer, query, ask));
   }
 

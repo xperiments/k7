@@ -258,6 +258,62 @@ export function isNameQuery(sentence: string, query: string): boolean {
   return capital;
 }
 
+/* A name after a marker ends at a context or a conjunction: "songs by Daft Punk and Justice" is
+ * Daft Punk, "something like Bonobo but faster" is Bonobo. */
+const NAME_STOP = new Set([...CONTEXT_MARKERS, 'and', 'or', 'but', 'with', 'without', 'plus']);
+
+/** The words after `start`, up to a stop word, a conjunction or punctuation. */
+function candidateAfter(sentence: string, start: number): string | null {
+  const words = sentence.slice(start).trim().split(/\s+/).filter(Boolean);
+  const kept: string[] = [];
+  for (const word of words) {
+    if (NAME_STOP.has(plainWord(word))) break;
+    const clean = word.replace(/[,;.!?]+$/, '');
+    if (clean) kept.push(clean);
+    if (/[,;.!?]$/.test(word)) break;
+  }
+  const candidate = kept.join(' ').trim();
+  return candidate || null;
+}
+
+/**
+ * The name the sentence names after a marker, if there is one. The last valid marker wins, so
+ * "tracks from the album Discovery" gives Discovery, not "the album Discovery". A candidate is
+ * a name only when `isNameQuery` says so: "de la musique" is a partitive and yields nothing.
+ */
+export function nameFrom(sentence: string): string | null {
+  const found: { at: number; name: string }[] = [];
+  const add = (at: number, name: string | null): void => {
+    if (!name || !isNameQuery(sentence, name)) return;
+    found.push({ at, name: truncateBytes(name, QUERY_BYTES) });
+  };
+
+  for (const marker of NAME_MARKERS) {
+    const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`\\b${escaped}\\b`, 'gi');
+    for (const match of sentence.matchAll(pattern)) {
+      const at = (match.index ?? 0) + match[0].length;
+      add(at, candidateAfter(sentence, at));
+    }
+  }
+  /* "similar to X" and "parecido a X": the preposition is the marker, the word before it is the
+   * signal, and the candidate starts after the pair. */
+  for (const [first, second] of [
+    ['similar', 'to'],
+    ['parecido', 'a'],
+  ] as const) {
+    const pattern = new RegExp(`\\b${first}\\s+${second}\\b`, 'gi');
+    for (const match of sentence.matchAll(pattern)) {
+      const at = (match.index ?? 0) + match[0].length;
+      add(at, candidateAfter(sentence, at));
+    }
+  }
+
+  if (found.length === 0) return null;
+  found.sort((left, right) => right.at - left.at);
+  return found[0].name;
+}
+
 /**
  * A key said two ways: "B minor", "B min" and "Bm" are one; "B flat minor" and "B♭ minor" are
  * "Bbm"; "8A" is its own. Used only to notice a query that restates a key, so the mapping is

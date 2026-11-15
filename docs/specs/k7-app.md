@@ -268,9 +268,11 @@ There is no endpoint, no key and no setting: a sentence becomes an **Intent** wi
 **P2. The contract does not change.** The model produces an **Intent** and never results
 (ADR 0050, ADR 0053); `parseIntent` judges the answer: unknown keys are dropped, a query that only
 restates a key is dropped, and every number is clamped to the range the Snapshot stores. A
-malformed answer, and a query that is not a name the sentence used (a category, a purpose, or an
-unmarked lowercase word), each get one repair — the second is asked again with the sentence — and
-a word that is still not a name is dropped. A key the model spells in words or symbols is written
+malformed answer gets one repair. A query that is not a name the sentence used is first read
+from the sentence when a marker names one ("by X", "like X", "called X", "de X"); if no name is
+there and another filter remains, the query is dropped; only when the query was the only filter is
+the model asked once more with the sentence, and a word that is still not a name is dropped. A key
+the model spells in words or symbols is written
 the device's way before the search — "B flat major" and "B♭" become "Bb", "F sharp minor" and
 "F♯m" become "F#m" — and a bare note takes its mode from the sentence when the sentence states
 one; a key that cannot be read is left as written. The sentence's own count, listening-session
