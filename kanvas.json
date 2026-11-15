@@ -2005,7 +2005,7 @@
     {
       "id": "APP-42",
       "title": "Measure session reuse and the sampling options",
-      "state": "doing",
+      "state": "review",
       "group": "APP",
       "yolo": true,
       "at": "2026-11-14T23:29:31Z",
@@ -2016,6 +2016,11 @@
           "at": "2026-11-15T14:44:07Z",
           "by": "dsh",
           "text": "Plan: measure, do not ship. The product stays on ADR 0084's one session per ask.\n- API facts for Chrome 157: `session.clone()` and `omitResponseConstraintInput` are stable; `samplingMode` is the Sampling Parameters origin trial; a web page's `temperature`/`topK` are ignored (Chromium's legacy extension-only params). Sources: the Prompt API, Session management and Structured output docs, and Chromium's decoupling commit.\n- Dev harness at `https://k7-dev.xperiments.dev:8000/evals/sessions.html`: create, clone, create+omit, clone+omit, and create+sampling ('creative') only when a session reports a mode. It runs the frozen 66-row corpus × 3, records per-ask latency, the 3/3 verdicts and the per-field states, probes that a clone sees the same initial prompt, and exports the raw records with the machine and prompt shas.\n- Product unchanged: `askModel`, `requestIntent` and the App are not touched. The `.d.ts` only types the API facts the harness uses.\n- The run is 792 calls for the four base strategies, 990 with sampling. Then the report (latency/variance, clone vs create) and a recommendation; an ADR only if the numbers overturn ADR 0084's one-session decision."
+        },
+        {
+          "at": "2026-11-15T15:19:20Z",
+          "by": "dsh",
+          "text": "The session screen is in: 792 records, 4 strategies × 66 rows × 3, no errors, on Chrome 157 / 12 cores / 32 GB. The model-variant field was left blank; the APP-40 baseline on the same machine/UA recorded `nano_v3_gpu_high_tier_model`. Prompt `e5c9ccb4` / examples `f9b49d39`; static schema `7a8190e4`.\n\n| strategy | 3/3 pass | fail | unstable | unscored | mean | median | p95 | std |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|\n| create | 19 | 31 | 15 | 1 | 1850 ms | 1575 | 3995 | 761 |\n| clone | 17 | 34 | 14 | 1 | 1028 | 783 | 3224 | 737 |\n| create + omit | 37 | 18 | 8 | 3 | 1130 | 1121 | 1338 | 105 |\n| clone + omit | **41** | 20 | **2** | 3 | **316** | 320 | 501 | **100** |\n\nThe omit is the result. Leaving the schema out of the model's input (`omitResponseConstraintInput: true`, the output still constrained) cut the invented extras: genre 58→18/19, query 58→14/9, mood extra 35→1/4, valence 22→0, danceability 38→3/4, arousal 12→0, limit 30→13, sort 38→20/24; mood exact rose 36→51/50. The pass went 19→37 (create+omit) and 19→41 (clone+omit); variance collapsed (std 761→105/100). The clone adds speed and stability: the base session costs 867 ms once, the per-ask clone+omit is 316 ms vs create 1850 ms.\n\nCaveats:\n- The clone probe did not match: the base answered `{\"mood\":[\"relaxed\"],\"genre\":\"\",\"query\":\"\"}`, the clone `{\"mood\":[\"relaxed\"],\"sort\":\"bpm\",\"limit\":20}`. The docs say a clone preserves the initial prompt and context; the clone's run fields match or beat the create, and the clone's answer followed the example's `limit:20`, so I read the probe as sampling variance, not a lost prompt. It is not a clean equality check.\n- `samplingMode` was not available in this Chrome (`available: false`); the sampling strategy was not run.\n- The model variant was not recorded in this export; the APP-40 baseline's variant on the same machine is the record.\n\nRecommendation: adopt the **omit** first — it is the biggest quality, latency and stability gain and does not touch ADR 0084's one-session decision. Then decide **clone + omit**: it is the best measured profile (41 pass, 2 unstable, 316 ms) but it holds one base session, so it needs the ADR that supersedes the one-session bullet. No product change was made here; `askModel` and `requestIntent` are untouched."
         }
       ]
     }
