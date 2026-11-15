@@ -2005,9 +2005,8 @@
     {
       "id": "APP-42",
       "title": "Measure session reuse and the sampling options",
-      "state": "review",
+      "state": "done",
       "group": "APP",
-      "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
       "desc": "Each ask creates a session with the system prompt and examples, then destroys it. Chrome's IDL has `session.clone` and `omitResponseConstraintInput`; the web ignores `temperature` and `topK` (extensions only), and `samplingMode` is behind the AIPromptAPIParams origin trial — so do not propose a lower temperature, it is a no-op. Measure instead: create vs clone per ask, `omitResponseConstraintInput` on/off, and `samplingMode` only if the origin trial is available. Record latency per ask and the corpus's 3/3 stability, and check that a clone sees the same system prompt and examples.\n\nFinished when: the API facts are verified for the shipping Chrome; a dev harness measures create vs clone and the two options on the same corpus; the report gives latency and variance; a recommendation is on the ticket. If the API does not support it, the ticket says so and no code lands. No product change until the numbers and an ADR for ADR 0084's one-session decision.",
@@ -2023,6 +2022,39 @@
           "text": "The session screen is in: 792 records, 4 strategies × 66 rows × 3, no errors, on Chrome 157 / 12 cores / 32 GB. The model-variant field was left blank; the APP-40 baseline on the same machine/UA recorded `nano_v3_gpu_high_tier_model`. Prompt `e5c9ccb4` / examples `f9b49d39`; static schema `7a8190e4`.\n\n| strategy | 3/3 pass | fail | unstable | unscored | mean | median | p95 | std |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|\n| create | 19 | 31 | 15 | 1 | 1850 ms | 1575 | 3995 | 761 |\n| clone | 17 | 34 | 14 | 1 | 1028 | 783 | 3224 | 737 |\n| create + omit | 37 | 18 | 8 | 3 | 1130 | 1121 | 1338 | 105 |\n| clone + omit | **41** | 20 | **2** | 3 | **316** | 320 | 501 | **100** |\n\nThe omit is the result. Leaving the schema out of the model's input (`omitResponseConstraintInput: true`, the output still constrained) cut the invented extras: genre 58→18/19, query 58→14/9, mood extra 35→1/4, valence 22→0, danceability 38→3/4, arousal 12→0, limit 30→13, sort 38→20/24; mood exact rose 36→51/50. The pass went 19→37 (create+omit) and 19→41 (clone+omit); variance collapsed (std 761→105/100). The clone adds speed and stability: the base session costs 867 ms once, the per-ask clone+omit is 316 ms vs create 1850 ms.\n\nCaveats:\n- The clone probe did not match: the base answered `{\"mood\":[\"relaxed\"],\"genre\":\"\",\"query\":\"\"}`, the clone `{\"mood\":[\"relaxed\"],\"sort\":\"bpm\",\"limit\":20}`. The docs say a clone preserves the initial prompt and context; the clone's run fields match or beat the create, and the clone's answer followed the example's `limit:20`, so I read the probe as sampling variance, not a lost prompt. It is not a clean equality check.\n- `samplingMode` was not available in this Chrome (`available: false`); the sampling strategy was not run.\n- The model variant was not recorded in this export; the APP-40 baseline's variant on the same machine is the record.\n\nRecommendation: adopt the **omit** first — it is the biggest quality, latency and stability gain and does not touch ADR 0084's one-session decision. Then decide **clone + omit**: it is the best measured profile (41 pass, 2 unstable, 316 ms) but it holds one base session, so it needs the ADR that supersedes the one-session bullet. No product change was made here; `askModel` and `requestIntent` are untouched."
         }
       ]
+    },
+    {
+      "id": "APP-43",
+      "title": "Leave the schema out of the model's input",
+      "state": "review",
+      "group": "APP",
+      "deps": ["APP-42"],
+      "yolo": true,
+      "at": "2026-11-15T15:24:23Z",
+      "by": "dsh",
+      "desc": "The APP-42 session screen: `omitResponseConstraintInput` took the create arm from 19 to 37 rows passing (1850 → 1130 ms mean, std 761 → 105) and clone+omit to 41 pass, 2 unstable, 316 ms. The schema still constrains the output; it is just not echoed into the model's input, so the prompt's rules and turns carry the shape.\n\nDone in the same change: `askModel` passes the option on every prompt (repairs included), the stub test proves it, and k7-app §7 P2 records it. Remaining for the record: the next full eval run on the shipped path (`requestIntent`) to capture the per-field score; the clone + base session remains the ADR-gated change.",
+      "notes": [
+        {
+          "at": "2026-11-15T15:28:39Z",
+          "by": "dsh",
+          "text": "The APP-42 session screen measured the omit: create 19 → 37 rows passing, 1850 → 1130 ms, std 761 → 105; clone+omit 41 pass, 2 unstable, 316 ms. Add the option to askModel without changing the one-session decision; record it in §7 P2; prove it with a stub of Chrome's LanguageModel."
+        },
+        {
+          "at": "2026-11-15T15:28:39Z",
+          "by": "dsh",
+          "text": "The omit is in `askModel`: every prompt passes `omitResponseConstraintInput: true`, including the repair calls. The JSON Schema is still the `responseConstraint`, so the output is still constrained; it is just no longer echoed into the model's input. The prompt's rules and turns carry the shape. The APP-42 screen measured 19 → 37 rows passing, 1850 → 1130 ms mean, std 761 → 105 (clone+omit 41 pass, 2 unstable, 316 ms).\n\nThe stub test in `builtin-model.test.ts` proves the create still gets the system prompt and examples, the prompt gets the `responseConstraint` with the omit flag, and the session is destroyed. k7-app §7 P2 records the rule and the numbers. Tested: 818 web tests, typecheck and build. The next full eval run on the shipped `requestIntent` path records the per-field score; the clone/base change is ADR 0089."
+        }
+      ]
+    },
+    {
+      "id": "APP-44",
+      "title": "Keep one base session and clone it per ask",
+      "state": "proposed",
+      "group": "APP",
+      "deps": ["APP-42", "APP-43"],
+      "at": "2026-11-15T15:28:26Z",
+      "by": "dsh",
+      "desc": "The APP-42 screen: create 19 pass at 1850 ms, create+omit 37 at 1130 ms, clone+omit 41 at 316 ms (2 unstable rows against 15). The clone is the speed; the omit is the quality. ADR 0089 supersedes ADR 0084's one-session bullet: one base session per prompt, a clone per ask, the base never prompted, destroyed on the profile change or the Ask area close.\n\nDone in the same change: `askModel` creates/holds/clones the base; the App's profile and unmount cleanup; the eval's after-run cleanup; the stub test; k7-app §7 P4; ADR 0089. Remaining for the record: the next full eval run on the shipped `requestIntent` path to capture the per-field score with the base and the omit together."
     }
   ]
 }
