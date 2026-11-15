@@ -294,9 +294,12 @@ describe('the sentence fills an empty answer', () => {
     await expect(requestIntent('50 tracks')).resolves.toEqual({ limit: 50 });
   });
 
-  it('recovers a stated listening session', async () => {
+  it('recovers a stated listening session and genre', async () => {
     model.askModel.mockResolvedValue('{}');
-    await expect(requestIntent('three hours of ambient')).resolves.toEqual({ limit: 45 });
+    await expect(requestIntent('three hours of ambient')).resolves.toEqual({
+      genre: 'ambient',
+      limit: 45,
+    });
   });
 
   it('recovers a stated offset and key', async () => {

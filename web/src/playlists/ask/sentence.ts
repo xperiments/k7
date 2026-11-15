@@ -134,6 +134,34 @@ function skipOf(sentence: string): number | undefined {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Genres                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The genre words a sentence can name without a profile. A profile's own genres win; this list is
+ * deliberately conservative where a word is commonly something else ("house" in "house party",
+ * "lo-fi" in a textual style, "dance" as a mood), so the sentence does not invent a genre.
+ */
+const DEFAULT_GENRES = [
+  'ambient', 'techno', 'reggaeton', 'jazz', 'classical', 'hip-hop', 'drum and bass', 'trance',
+  'funk', 'soul', 'disco', 'rock', 'pop', 'metal', 'blues', 'country', 'folk', 'reggae',
+  'synthwave', 'electro', 'punk', 'indie', 'grunge', 'salsa', 'cumbia', 'bachata', 'afrobeat',
+  'amapiano', 'drill', 'trap', 'dubstep', 'edm', 'r&b', 'k-pop', 'j-pop',
+] as const;
+
+function genreOf(sentence: string, profile: LibraryProfile | null): string | undefined {
+  const genres = profile?.genres?.length ? profile.genres : DEFAULT_GENRES;
+  for (const genre of genres) {
+    /* A whole word, in the sentence's own case: "the album Discovery" is not disco, and the
+     * artist "Daft Punk" is not the punk genre. A sentence that says "techno" or "ambient" is. */
+    const escaped = genre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}(?:$|[^\\p{L}\\p{N}])`, 'u');
+    if (pattern.test(sentence)) return genre;
+  }
+  return undefined;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Durations                                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -310,6 +338,8 @@ export function sentenceFilters(
   const offset = skipOf(text);
   if (offset !== undefined) out.offset = offset;
 
+  const genre = genreOf(sentence, profile);
+  if (genre) out.genre = genre;
   const duration = durationOf(text, facts);
   if (duration) Object.assign(out, duration);
   const bpm = bpmOf(text);
@@ -350,6 +380,7 @@ export function applySentenceFilters(
     if (filters.bpmMax !== undefined) out.bpmMax = filters.bpmMax;
   }
 
+  if (filters.genre !== undefined) out.genre = filters.genre;
   if (filters.durationMin !== undefined || filters.durationMax !== undefined) {
     delete out.durationMin;
     delete out.durationMax;

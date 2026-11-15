@@ -46,8 +46,8 @@ export interface IntentTrace {
  * `trace` is the harness's sink and nothing in the App passes it: with it, each model call reports
  * its answer and how long it took; without it, the function asks exactly what it asked before.
  *
- * The sentence's own numbers and key are applied before the normalizers, so a stated count, a
- * length, a tempo or a key does not depend on the model (ADR 0088).
+ * The sentence's own numbers, key and named genre are applied before the normalizers, so a
+ * stated count, a length, a tempo, a key or a genre does not depend on the model (ADR 0088).
  */
 export async function requestIntent(
   sentence: string,

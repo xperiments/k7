@@ -22,8 +22,8 @@ describe('counts', () => {
 
   it('reads a listening session at fifteen tracks an hour', () => {
     expect(sentenceFilters('about an hour of relaxed music')).toEqual({ limit: 15 });
-    expect(sentenceFilters('two hours of fast techno')).toEqual({ limit: 30 });
-    expect(sentenceFilters('three hours of ambient')).toEqual({ limit: 45 });
+    expect(sentenceFilters('two hours of fast techno')).toEqual({ limit: 30, genre: 'techno' });
+    expect(sentenceFilters('three hours of ambient')).toEqual({ limit: 45, genre: 'ambient' });
   });
 
   it('reads a skip as an offset, and keeps a count beside it', () => {
@@ -51,6 +51,13 @@ describe('durations', () => {
     expect(sentenceFilters('long mixes')).toEqual({ durationMin: 480 });
     expect(sentenceFilters('long mixes', TEST_PROFILE)).toEqual({ durationMin: 420 });
     expect(sentenceFilters('short tracks')).toEqual({ durationMax: 180 });
+    expect(sentenceFilters('three hours of ambient')).toEqual({ genre: 'ambient', limit: 45 });
+    expect(sentenceFilters('techno', TEST_PROFILE)).toEqual({ genre: 'techno' });
+    expect(sentenceFilters('a house party')).toEqual({});
+    expect(sentenceFilters('lo-fi beats')).toEqual({});
+    expect(applySentenceFilters({ genre: 'techno' }, { genre: 'ambient' })).toEqual({
+      genre: 'ambient',
+    });
   });
 
   it('does not mistake a listening session for a track length', () => {
@@ -86,7 +93,7 @@ describe('BPM', () => {
   });
 
   it('leaves a word or a unitless number to the model', () => {
-    expect(sentenceFilters('fast aggressive techno')).toEqual({});
+    expect(sentenceFilters('fast aggressive techno')).toEqual({ genre: 'techno' });
     expect(sentenceFilters('around 140')).toEqual({});
   });
 });
