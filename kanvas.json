@@ -1945,7 +1945,19 @@
       "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
-      "desc": "The system prompt is long for Nano, and its RULES and WORD→FILTER rows may be read less reliably than the few-shot turns. Convert one block at a time (a WORD→FILTER row, then a RULE) into a turn, re-run the corpus after each, and keep only the changes that hold. This is a prompt experiment, not a rewrite: the current prompt is the baseline.\n\nFinished when: each conversion is a separate measured run; the per-field score names the gain and loss; the final prompt is the one with the best field profile, not the shortest; the prompt sha and the run record are on the ticket."
+      "desc": "The system prompt is long for Nano, and its RULES and WORD→FILTER rows may be read less reliably than the few-shot turns. Convert one block at a time (a WORD→FILTER row, then a RULE) into a turn, re-run the corpus after each, and keep only the changes that hold. This is a prompt experiment, not a rewrite: the current prompt is the baseline.\n\nFinished when: each conversion is a separate measured run; the per-field score names the gain and loss; the final prompt is the one with the best field profile, not the shortest; the prompt sha and the run record are on the ticket.",
+      "notes": [
+        {
+          "at": "2026-11-15T01:04:48Z",
+          "by": "dsh",
+          "text": "APP-40 is a measurement, not a code change: its whole finished-when is a model run, and this environment has no Chrome built-in model. I am recording the two conversions against the APP-39 baseline and pausing before a blind prompt edit.\n- Baseline shas: system static e5c9ccb4, system profile 4d84353e, examples static f9b49d39, examples profile f7962ab0.\n- Conversion 1, a WORD→FILTER row: remove \"sad, melancholic -> mood [\\\"sad\\\"], valence_max <profile p25>\" and add the turn \"sad songs\" -> {\"mood\":[\"sad\"],\"valence_max\":<profile p25>}. Measure rows 34, 50, 57 and the spike rows.\n- Conversion 2, a RULE block: remove the three-line \"A count of tracks is limit...\" rule and add the turn \"50 tracks\" -> {\"limit\":50}. Measure 44–46, S7, S10, 47 and the duration rows N2/7/8.\nKeep a conversion only when the per-field profile improves and no spike row regresses; the final prompt is the best profile, not the shortest. Each run records its own prompt sha and per-field delta."
+        },
+        {
+          "at": "2026-11-15T01:04:48Z",
+          "by": "dsh",
+          "text": "Paused: APP-40 needs a real Chrome with the built-in model; none is available in this environment, and a prompt edit without its run is exactly what the task forbids. The baseline shas and the two one-at-a-time conversions are in the plan note. The remaining step is the harness run in Chrome: convert the sad row, run the full corpus, record the per-field delta and the new sha; then the count rule, run again; keep only the conversions that hold. The board is ready to resume when the model is."
+        }
+      ]
     },
     {
       "id": "APP-41",
