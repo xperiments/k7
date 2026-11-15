@@ -2136,16 +2136,29 @@
     {
       "id": "FW-04",
       "title": "Start every boot shuffled",
-      "state": "proposed",
+      "state": "review",
       "group": "FW",
+      "yolo": true,
       "at": "2026-11-15T18:50:47Z",
       "by": "dsh",
-      "desc": "The player starts shuffled. After a boot the first pass walks a random order of the Playlist and the Menu's Shuffle row reads On, so shuffle no longer has to be turned on by hand every time the board restarts.\n\nFinished means:\n\n- Every boot begins with the mode on and the first pass shuffled; a pick moves the cursor and a rescan keeps the mode on, as they do now.\n- Turning it off in the Menu lasts until the next boot: the mode is still not remembered (no NVS), so a reboot is shuffled again.\n- If the order cannot be allocated the mode still falls back to Off and the row reads Off.\n- The Menu spec and ADR 0023 record the new default, and the first pass on a fresh broadcast is pinned by a host test.\n\nTo check on the board: reboot and watch the first track, and the Shuffle row in the Menu."
+      "desc": "The player starts shuffled. After a boot the first pass walks a random order of the Playlist and the Menu's Shuffle row reads On, so shuffle no longer has to be turned on by hand every time the board restarts.\n\nFinished means:\n\n- Every boot begins with the mode on and the first pass shuffled; a pick moves the cursor and a rescan keeps the mode on, as they do now.\n- Turning it off in the Menu lasts until the next boot: the mode is still not remembered (no NVS), so a reboot is shuffled again.\n- If the order cannot be allocated the mode still falls back to Off and the row reads Off.\n- The Menu spec and ADR 0023 record the new default, and the first pass on a fresh broadcast is pinned by a host test.\n\nTo check on the board: reboot and watch the first track, and the Shuffle row in the Menu.",
+      "notes": [
+        {
+          "at": "2026-11-15T19:18:30Z",
+          "by": "dsh",
+          "text": "Plan: put the boot default where boot policy lives, keep the host tests' linear default unless they opt in, record the rule in menu.md and ADR 0023, then flash and reboot to prove it on the board."
+        },
+        {
+          "at": "2026-11-15T19:25:35Z",
+          "by": "dsh",
+          "text": "The player boots shuffled: the first pass after a boot walks a random order and the Menu's Shuffle row reads On without a toggle. The first track is random too — the order used to put its cursor on Track 0, so a shuffled boot would still have opened on the same row every time.\n\n**On the board, two resets:** the library's first row is Albert Plá's \"01 - El Sol De Verano\"; the two boots opened on the Beach Boys' \"07 - Sloop John B\" and Radio Futura's \"09 - Un vaso de agua\". The row reads On because the menu's facts read the mode's flag, which the boot default now sets.\n\n**To check:** reboot, open the Menu and look at Shuffle (On), then toggle it Off and confirm the pass goes back to the library order. Off lasts until the next boot — nothing is stored, so a reboot is shuffled again. If the order can't be allocated the row still reads Off.\n\nTested: host test, layering and integration pass, including a new t39 that pins the default and the first two Tracks with a fixed seed; the transport test asks for the library order before start; dev and sunton firmware both build. ADR 0091 records the decision and amends ADR 0023; the Menu spec and the component header carry the default."
+        }
+      ]
     },
     {
       "id": "APP-49",
       "title": "Spread a genre answer across the library",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "yolo": true,
       "at": "2026-11-15T19:01:01Z",
