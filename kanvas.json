@@ -1982,12 +1982,25 @@
     {
       "id": "APP-41",
       "title": "Loosen the schema where the profile narrows too far",
-      "state": "todo",
+      "state": "review",
       "group": "APP",
       "deps": ["APP-32"],
+      "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
-      "desc": "With a profile, `duration_min` has `minimum: 45`, so \"tracks under 30 seconds\" cannot be represented. The schema is a request and `parseIntent` is the judge: loosen the duration floor to the device's 0. Leave the key unconstrained: the grammar is the judge, and an extractor may name a key the library lacks (the search returns empty, not refused). If another axis has the same problem (a sentence below the library's min), report it rather than changing it silently.\n\nFinished when: a 30-second duration survives `intentSchema(profile)` and `parseIntent` clamps only to the device range; a key outside `profile.keys` is still sent; the schema tests and the per-field score hold; k7-app §7 P2 says the schema's floors are the device's, not the library's."
+      "desc": "With a profile, `duration_min` has `minimum: 45`, so \"tracks under 30 seconds\" cannot be represented. The schema is a request and `parseIntent` is the judge: loosen the duration floor to the device's 0. Leave the key unconstrained: the grammar is the judge, and an extractor may name a key the library lacks (the search returns empty, not refused). If another axis has the same problem (a sentence below the library's min), report it rather than changing it silently.\n\nFinished when: a 30-second duration survives `intentSchema(profile)` and `parseIntent` clamps only to the device range; a key outside `profile.keys` is still sent; the schema tests and the per-field score hold; k7-app §7 P2 says the schema's floors are the device's, not the library's.",
+      "notes": [
+        {
+          "at": "2026-11-15T14:18:11Z",
+          "by": "dsh",
+          "text": "Plan: the schema is a request, `parseIntent` is the judge.\n- Loosen the duration pair's floor in `intentSchema(profile)` to `DURATION_RANGE.min` (0), so a 30-second sentence is representable; keep the library's ceiling.\n- Leave `key` unconstrained; test that a key outside `profile.keys` still parses and is sent.\n- Report, not change, the other axes whose floors are the library's (BPM 85, energy 12, danceability/valence/arousal mins, and the ceilings); the task asks for a report rather than a silent widening.\n- Spec k7-app §7 P2: the track-length floor is the device's, the key is unconstrained, the other floors stay the library's as a known narrowness.\n- Tests: a 30-second duration survives the schema and the parse; the key test; the schema tests and the per-field scores hold."
+        },
+        {
+          "at": "2026-11-15T14:19:16Z",
+          "by": "dsh",
+          "text": "The duration floor is the device's 0 now. `intentSchema(profile)` keeps the library's ceiling but no longer its floor for a track's length, so \"tracks under 30 seconds\" is representable; `parseIntent` clamps only to the device range and the test sends `{\"duration_max\":30}` through both. The 1A key proves the schema is unconstrained and the parse keeps a key outside `PROFILE.keys`, so the search gets it and answers empty.\n\nThe other axes are reported, not changed. On the test profile the schema still has BPM 85..172, energy 12..98, danceability 10..95, valence 5..99, arousal 8..97 and a 900 s duration ceiling: a sentence below a floor or above a ceiling is refused by the schema, while `parseIntent` would accept the device range. A follow-up can widen those separately.\n\nk7-app §7 P2 now states the track-length exception, the unconstrained key, and the known narrowness. Tested: 12 prompt tests, 812 web tests (the score/field tests included), typecheck and build. No ADR: the spec settles it."
+        }
+      ]
     },
     {
       "id": "APP-42",
