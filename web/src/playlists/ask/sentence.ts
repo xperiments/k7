@@ -13,9 +13,11 @@
  */
 
 import type { SearchArgs } from '../../device/mcp';
+import type { LibraryProfile } from '../../domain/snapshot';
 import { keyCode } from '../../domain/key';
 
 import { clampBpm, DURATION_RANGE } from './contract';
+import { factsOf, type PromptFacts } from './facts';
 import { normalizeKeys } from './keys';
 
 const LIMIT_PER_HOUR = 15;
@@ -142,7 +144,16 @@ const DURATION = new RegExp(
 
 const DURATION_MAX = /^(?:under|below|less than|up to|at most|max)/;
 
-function durationOf(sentence: string): Pick<SearchArgs, 'durationMin' | 'durationMax'> | undefined {
+/** A long or a short track, rather than a listening session: the prompt's "long mixes". */
+const LONG_TRACK = /^(?:long|longer|extended)\b/;
+const SHORT_TRACK = /^(?:short|shorter|brief)\b/;
+
+function durationOf(
+  sentence: string,
+  facts: PromptFacts,
+): Pick<SearchArgs, 'durationMin' | 'durationMax'> | undefined {
+  if (LONG_TRACK.test(sentence)) return { durationMin: facts.duration.long };
+  if (SHORT_TRACK.test(sentence)) return { durationMax: facts.duration.short };
   const match = DURATION.exec(sentence);
   if (!match) return undefined;
   const value = parseNumber(match[2]);
@@ -286,8 +297,12 @@ function keysOf(sentence: string): string[] {
 /* -------------------------------------------------------------------------- */
 
 /** The fields the sentence states. A field absent here keeps the model's value. */
-export function sentenceFilters(sentence: string): Partial<SearchArgs> {
+export function sentenceFilters(
+  sentence: string,
+  profile: LibraryProfile | null = null,
+): Partial<SearchArgs> {
   const text = sentence.toLowerCase().replace(/[–—]/g, '-');
+  const facts = factsOf(profile);
   const out: Partial<SearchArgs> = {};
 
   const limit = countOf(text) ?? sessionOf(text);
@@ -295,7 +310,7 @@ export function sentenceFilters(sentence: string): Partial<SearchArgs> {
   const offset = skipOf(text);
   if (offset !== undefined) out.offset = offset;
 
-  const duration = durationOf(text);
+  const duration = durationOf(text, facts);
   if (duration) Object.assign(out, duration);
   const bpm = bpmOf(text);
   if (bpm) Object.assign(out, bpm);

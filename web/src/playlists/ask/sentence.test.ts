@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import type { SearchArgs } from '../../device/mcp';
 
 import { applySentenceFilters, sentenceFilters } from './sentence';
+import { TEST_PROFILE } from './test-support';
 
 describe('counts', () => {
   it('reads a stated number of tracks', () => {
@@ -47,6 +48,9 @@ describe('durations', () => {
     expect(sentenceFilters('over 8 min')).toEqual({ durationMin: 480 });
     expect(sentenceFilters('at least 30 seconds')).toEqual({ durationMin: 30 });
     expect(sentenceFilters('under 30 seconds')).toEqual({ durationMax: 30 });
+    expect(sentenceFilters('long mixes')).toEqual({ durationMin: 480 });
+    expect(sentenceFilters('long mixes', TEST_PROFILE)).toEqual({ durationMin: 420 });
+    expect(sentenceFilters('short tracks')).toEqual({ durationMax: 180 });
   });
 
   it('does not mistake a listening session for a track length', () => {

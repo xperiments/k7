@@ -16,6 +16,14 @@ import { isNameQuery, nameFrom, parseIntent } from './parse';
 import { buildSystemPrompt, intentExamples, intentSchema } from './prompt';
 import { normalizePurpose, purposeFilters } from './purpose';
 import { applySentenceFilters, sentenceFilters } from './sentence';
+import { hasAny } from './words';
+
+/** The imperative verbs that ask the App to change the library, not to search it. */
+const ACTION_WORDS = ['add', 'save', 'put', 'remove', 'delete', 'rename', 'create'] as const;
+
+function isAction(sentence: string): boolean {
+  return hasAny(sentence, ACTION_WORDS);
+}
 
 /** One model call, as the evaluation harness sees it. Never passed by the App. */
 export interface IntentTrace {
@@ -49,7 +57,7 @@ export async function requestIntent(
 ): Promise<SearchArgs | IntentFailure> {
   const asked = sentence.trim();
   if (!asked) return failure('Say what you are looking for first.');
-  const fromSentence = sentenceFilters(asked);
+  const fromSentence = sentenceFilters(asked, profile);
 
   const system = buildSystemPrompt(profile);
   const schema = intentSchema(profile);
@@ -87,17 +95,19 @@ export async function requestIntent(
           profile,
         );
 
-  /* Finish a repaired answer, or fill an empty one for a purpose sentence: the prompt's row
-   * says what the word means, so a refusal here is an app-side miss, not a sentence with no
-   * ask. A sentence with no purpose still refuses. */
+  /* Finish a repaired answer, or rebuild an empty one from what the sentence itself stated: the
+   * purpose table when it names one, and the sentence's own count, session, length, BPM, offset
+   * or key. The model's `{}` is its no-filter answer, not a refusal, so the app applies the
+   * sentence's filters; an instruction to change the library ("add 5 songs to the playlist") and
+   * a sentence with neither a purpose nor a stated filter still refuse. */
   const recover = (result: SearchArgs | IntentFailure): SearchArgs | IntentFailure => {
     if (!('error' in result)) return finish(result);
     if (result.retryable) return result;
+    if (isAction(asked)) return result;
     const table = purposeFilters(asked, profile);
-    if (!table || Object.keys(table).length === 0) return result;
-    const rescued: SearchArgs = { ...table };
-    if (fromSentence.limit !== undefined) rescued.limit = fromSentence.limit;
-    return finish(rescued);
+    const stated = Object.keys(fromSentence).length > 0;
+    if ((!table || Object.keys(table).length === 0) && !stated) return result;
+    return finish({ ...(table ?? {}) });
   };
 
   const intent = parseIntent(answer);

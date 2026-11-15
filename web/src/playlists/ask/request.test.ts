@@ -267,9 +267,48 @@ describe('the purpose table fills an empty answer', () => {
     });
   });
 
-  it('still refuses when there is no purpose to fill', async () => {
+  it('still refuses when there is no purpose and no stated filter', async () => {
     model.askModel.mockResolvedValue('{}');
     const result = await requestIntent('play something');
+    expect('error' in result).toBe(true);
+  });
+});
+
+describe('the sentence fills an empty answer', () => {
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
+
+  it('recovers a stated BPM', async () => {
+    model.askModel.mockResolvedValue('{}');
+    await expect(requestIntent('tracks under 100 BPM')).resolves.toEqual({ bpmMax: 100 });
+  });
+
+  it('recovers a stated track length', async () => {
+    model.askModel.mockResolvedValue('{}');
+    await expect(requestIntent('long mixes')).resolves.toEqual({ durationMin: 480 });
+  });
+
+  it('recovers a stated count', async () => {
+    model.askModel.mockResolvedValue('{}');
+    await expect(requestIntent('50 tracks')).resolves.toEqual({ limit: 50 });
+  });
+
+  it('recovers a stated listening session', async () => {
+    model.askModel.mockResolvedValue('{}');
+    await expect(requestIntent('three hours of ambient')).resolves.toEqual({ limit: 45 });
+  });
+
+  it('recovers a stated offset and key', async () => {
+    model.askModel.mockResolvedValue('{}');
+    await expect(requestIntent('skip 40')).resolves.toEqual({ offset: 40 });
+    model.askModel.mockResolvedValue('{}');
+    await expect(requestIntent('tracks in 8A')).resolves.toEqual({ key: ['8A'] });
+  });
+
+  it('does not rebuild an instruction to change the library', async () => {
+    model.askModel.mockResolvedValue('{}');
+    const result = await requestIntent('add 5 songs to the playlist');
     expect('error' in result).toBe(true);
   });
 });
