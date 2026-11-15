@@ -9,6 +9,7 @@ import { AppBar } from "@/components/app-bar";
 import { CanvasStage } from "@/components/canvas-stage";
 import { DocTabs } from "@/components/doc-tabs";
 import { ExportDialog, ProblemsDialog, ShortcutsDialog } from "@/components/dialogs";
+import { AgentToolsDialog } from "@/components/agent-tools-dialog";
 import { Inspector, InspectorRail } from "@/components/inspector";
 import { LayersPanel } from "@/components/layers-panel";
 import { StatusBar } from "@/components/status-bar";
@@ -21,6 +22,7 @@ export function App() {
   const ed = useEditor();
   const [exportOpen, setExportOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [agentToolsOpen, setAgentToolsOpen] = useState(false);
   const [problems, setProblems] = useState<{ title: string; errors: string[] } | null>(null);
   const [dragDepth, setDragDepth] = useState(0);
   const [inspectorOpen, setInspectorOpen] = useState(() => {
@@ -210,7 +212,7 @@ export function App() {
             <InspectorRail onExpand={() => setInspectorOpen(true)} />
           )}
         </div>
-        <StatusBar />
+        <StatusBar onAgentTools={() => setAgentToolsOpen(true)} />
         {dragDepth > 0 ? (
           <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/80">
             <div className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-primary bg-background px-8 py-6 text-center">
@@ -238,6 +240,7 @@ export function App() {
         }}
       />
 
+      <AgentToolsDialog open={agentToolsOpen} onOpenChange={setAgentToolsOpen} />
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} onProblems={onProblems} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       {problems ? (

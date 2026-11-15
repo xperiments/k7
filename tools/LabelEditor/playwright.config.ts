@@ -23,4 +23,20 @@ export default defineConfig({
     reuseExistingServer: true,
     timeout: 60_000,
   },
+  projects: [
+    {
+      name: "chrome",
+      testIgnore: /webmcp-native\.spec\.ts/,
+      use: { channel: "chrome" },
+    },
+    {
+      // Chrome's own WebMCP behind the feature flag; the spec skips when the API is absent.
+      name: "webmcp-native",
+      testMatch: /webmcp-native\.spec\.ts/,
+      use: {
+        channel: "chrome",
+        launchOptions: { args: ["--enable-features=WebMCP"] },
+      },
+    },
+  ],
 });

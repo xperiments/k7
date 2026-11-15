@@ -17,6 +17,8 @@ npm install
 npm run dev        # http://localhost:5178
 npm test           # the template and zip engines
 npm run e2e        # Playwright, in the installed Chrome
+npm run e2e:webmcp # only the native WebMCP test (skips if Chrome has no API)
+npm run test-label  # build a test label (HOLA) through the tool surface
 npm run typecheck
 npm run build      # dist/
 ```
@@ -105,6 +107,129 @@ npm run connect     # in another terminal: prints the state, writes docs/connect
 its stored flag), the open documents, the zoom, and each inspector section's open state, then
 takes a screenshot. `window.__editor` is exposed in development, so the same script can read
 any editor state you want to add.
+
+## WebMCP: the editor's actions as agent tools
+
+On load the editor offers its actions to the browser as WebMCP tools:
+`document.modelContext.registerTool(tool, { signal })`, with `navigator.modelContext`
+as the fallback older builds use. WebMCP is a Chrome 146+ preview behind
+`#enable-webmcp-testing`; without it nothing is registered and the app is unchanged.
+
+There is deliberately **no external MCP server** — nothing on stdio, nothing on HTTP. The
+tools live in the page that owns the design, so an MCP client reaches them through a
+browser: native WebMCP, the bridge below, or Playwright (`scripts/test-label.mjs`). A server
+would have to own a page to be useful, and then two places would hold the same design.
+
+| Tool | What it does |
+|---|---|
+| `label-editor-read` | The coordinate space, fields, roles, type faces, open documents, layers, mask, groups, selection and export errors. |
+| `label-editor-add-layer` | Add a rect, square, circle or text at a design-pixel position; a text is static unless it names a field. |
+| `label-editor-update-layer` | Change one layer's position, size, rotation, text or field, role, font role, alignment, name, test value or lock. |
+| `label-editor-delete-layer` | Delete a layer. |
+| `label-editor-select-layer` | Select layers, so the person at the screen sees what the agent is working on. |
+| `label-editor-move-layer` | Raise, lower, or send a layer to the top or bottom of the stack. |
+| `label-editor-group-layers` | Group the selection, or ungroup it. |
+| `label-editor-set-design` | Template id and name, background, ink, rule, the eight bands, paper and its radius, a type role's face and size. |
+| `label-editor-set-field-value` | Set what a field previews (its simulated value). |
+| `label-editor-import-template` | Open a `label-template v1` object (or JSON text) in a new document, with the packer's refusals. |
+| `label-editor-export-template` | Return the active or a named design as `label-template v1` plus the errors that would stop an export. |
+| `label-editor-validate` | Check every open design and return the reasons any would not export. |
+| `label-editor-document` | New, switch, rename or close a document. |
+| `label-editor-history` | Undo or redo. |
+
+The same tools are always on the page, with or without the browser API:
+
+```js
+const design = await window.__labelEditorMcp.call("label-editor-read");
+await window.__labelEditorMcp.call("label-editor-add-layer", {
+  type: "text",
+  text: "Side A",
+  x: 40,
+  y: 300,
+  role: "band.6",
+});
+const tools = window.__labelEditorMcp.tools();   // name, description, inputSchema
+const status = window.__labelEditorMcp.status(); // { available, via, registered, tools }
+```
+
+The status bar's **WebMCP** button opens *Agent tools*: the registration state, every
+tool with its description, and a copy of the list as JSON.
+
+![The Agent tools dialog, with all 14 tools registered](docs/agent-tools.png) Each call is an ordinary edit
+of the open design — it updates the UI and is undoable. No tool downloads a file or calls
+the network; import takes a template object and export returns one.
+
+`e2e/webmcp.spec.ts` stubs `document.modelContext`, asserts all 14 tools register, runs
+add/update/read/export through them, and checks that a refused call changes nothing. A
+second test removes the API and asserts the bridge still works.
+
+`e2e/webmcp-native.spec.ts` uses Chrome's own WebMCP instead: the `webmcp-native` project
+launches Chrome with `--enable-features=WebMCP` (the feature behind the
+`#enable-webmcp-testing` flag), waits for the 14 tools, and adds a text through
+`document.modelContext.executeTool`. It skips on a Chrome that does not expose the API, so
+`npm run e2e` stays green everywhere.
+
+Three ways to try it by hand:
+
+1. **No flag, the bridge.** `npm run dev`, then in the console:
+   ```js
+   await window.__labelEditorMcp.call("label-editor-read");
+   await window.__labelEditorMcp.call("label-editor-add-layer", {
+     type: "text", text: "Side A", x: 40, y: 300,
+   });
+   ```
+   The canvas and inspector update; `label-editor-history` undoes it.
+2. **The real API in this Chrome.**
+   ```bash
+   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+     --enable-features=WebMCP \
+     http://localhost:5178
+   ```
+   Open the status bar's **WebMCP** button: it should say *14 tools registered* through
+   `document.modelContext`. In the console:
+   ```js
+   const tools = await document.modelContext.getTools();
+   const tool = tools.find((t) => t.name === "label-editor-read");
+   JSON.parse(await document.modelContext.executeTool(tool, {}));
+   ```
+   Chrome's testing API returns a tool's result as JSON text, which is why the result is
+   parsed here.
+3. **Automated, watching.** `npm run e2e:ui` opens the interactive runner; tick
+   `webmcp.spec.ts` (the stub) or run `npm run e2e:webmcp` for the native path.
+
+## A test label, in one command
+
+`npm run test-label` builds a label through the page's own tool surface — the same calls an
+agent makes — validates it, and writes `label-template v1`:
+
+- `.scratch/label.test-hola.json` — the design
+- `.scratch/test-hola.png` — the print, at the current zoom
+
+It needs the editor open (`npm run dev`) and takes `--text`, `--id`, `--name`, `--out`,
+`--url`, `--head` (watch it run) and `--no-shot`. `--out -` prints the template to stdout;
+point `--out` at `assets/labels/templates/label.test-hola.json` to add the design to the
+sheet `make -C host label` packs. The JSON this produced packs with the real packer:
+`label_pack: 1 designs, 3 prims, 0 slots, 183 B`.
+
+The sequence, if you would rather run it from the console:
+
+```js
+await __labelEditorMcp.call("label-editor-document", { action: "new", name: "HOLA Test" });
+await __labelEditorMcp.call("label-editor-set-design", {
+  templateId: "label.test-hola",
+  name: "HOLA Test",
+  paper: "#c7a867",
+  paperRadius: 12,
+});
+await __labelEditorMcp.call("label-editor-add-layer", {
+  type: "rect", x: 0, y: 0, width: 748, height: 359, role: "band.7",
+});
+await __labelEditorMcp.call("label-editor-add-layer", {
+  type: "text", text: "HOLA", x: 274, y: 140, width: 200,
+  role: "band.6", fontRole: "numeral", align: "center",
+});
+await __labelEditorMcp.call("label-editor-export-template", {});
+```
 
 ## Keyboard
 

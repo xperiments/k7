@@ -1,11 +1,16 @@
-import { CheckCircle2, CircleDot, RotateCw, TriangleAlert } from "lucide-react";
+import { Bot, CheckCircle2, CircleDot, RotateCw, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useEditor } from "@/hooks/use-editor";
 import { PRINT_H, PRINT_W, SCREEN_H, SCREEN_W } from "@/engine/vocab";
 
-export function StatusBar() {
+export function StatusBar({ onAgentTools }: { onAgentTools: () => void }) {
   const ed = useEditor();
   const sel = ed.sel;
   const fields = ed.objs.filter((o) => o.type === "text" && !o.static).length;
@@ -43,6 +48,24 @@ export function StatusBar() {
       ) : null}
 
       <span className="ml-auto flex items-center gap-3">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="xs"
+                className="gap-1 text-muted-foreground"
+                aria-label="Agent tools (WebMCP)"
+                onClick={onAgentTools}
+              >
+                <Bot className="size-3" />
+                <span className="hidden xl:inline">WebMCP</span>
+              </Button>
+            }
+          />
+          <TooltipContent>Agent tools (WebMCP)</TooltipContent>
+        </Tooltip>
+        <Separator orientation="vertical" className="h-3" />
         <span className="hidden items-center gap-1 xl:flex">
           <CheckCircle2 className="size-3 text-primary" />
           autosaved here

@@ -1061,6 +1061,16 @@ export class Editor {
     this.selGroup = null;
     this.emit();
   }
+  /** Select one or more layers by id, as a Cmd-click selection would. */
+  selectLayers(ids: number[]) {
+    const mem = this.objs.filter((o) => ids.includes(o.id));
+    if (!mem.length) return;
+    this.selSet = new Set(mem.map((o) => o.id));
+    this.sel = mem[mem.length - 1];
+    this.selGroup = null;
+    this.selMask = false;
+    this.emit();
+  }
   toggleMaskCollapsed() {
     if (!this.mask) return;
     this.mask.collapsed = !this.mask.collapsed;
