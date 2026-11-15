@@ -218,8 +218,13 @@ const SORT_WORDS = [
 ] as const;
 
 /** A stated tempo: a word, or a number written against `bpm`/`tempo`. */
-function hasTempo(sentence: string): boolean {
+export function hasTempo(sentence: string): boolean {
   return hasAny(sentence, TEMPO_WORDS) || /\d\s*(?:bpm|tempo)\b/i.test(sentence);
+}
+
+/** Whether the sentence asks for an order: "sort by BPM", "alphabetical", "slowest first". */
+export function statesSort(sentence: string): boolean {
+  return hasAny(sentence, SORT_WORDS);
 }
 
 const MEASUREMENT_KEYS = [
@@ -298,7 +303,7 @@ export function normalizePurpose(
     if (!keeps(maxKey)) delete out[maxKey];
   }
 
-  if (!hasAny(sentence, SORT_WORDS)) delete out.sort;
+  if (!statesSort(sentence)) delete out.sort;
 
   /* A mood the model gave that this library does not have can only empty the search. The row's
    * prescribed mood has already been filtered by `prescribe`; this is the model's own. */
