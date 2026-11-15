@@ -197,6 +197,25 @@ Three ways to try it by hand:
 3. **Automated, watching.** `npm run e2e:ui` opens the interactive runner; tick
    `webmcp.spec.ts` (the stub) or run `npm run e2e:webmcp` for the native path.
 
+## Designing a label with an agent
+
+The editor ships a skill for agents:
+[`skills/k7-labels/SKILL.md`](skills/k7-labels/SKILL.md). It is the guide
+to the K7's label — the print's box, the Card's window, the fields, the three type pairs — plus
+a tool reference generated from the page's own registry. The dev server serves it at
+`http://localhost:5178/skill.md`, and a build emits it as `dist/skill.md`, so an agent that can
+read the page can read what its tools are for.
+
+Give it to an agent that can drive WebMCP — ChatGPT desktop with the page open, or Chrome with
+`--enable-features=WebMCP` — and describe the label you want. The agent reads the design, lays
+out paper, bands and type, binds the fields, validates, and hands back the exported JSON.
+
+`npm run skill` regenerates the skill's tool reference from `src/webmcp/tools.ts`;
+`npm run skill:check` (and `src/webmcp/skill.test.ts`) refuse a stale one, so adding a tool
+means running `npm run skill`. [docs/labels-for-the-k7.md](docs/labels-for-the-k7.md) is the
+same ground for a person: what the label is for, the zones that read, and how a design reaches
+the player.
+
 ## A test label, in one command
 
 `npm run test-label` builds a label through the page's own tool surface — the same calls an
