@@ -1939,7 +1939,7 @@
     {
       "id": "APP-40",
       "title": "Try teaching the prompt by examples instead of rules",
-      "state": "todo",
+      "state": "review",
       "group": "APP",
       "deps": ["APP-32", "APP-39"],
       "yolo": true,
@@ -1956,6 +1956,26 @@
           "at": "2026-11-15T01:04:48Z",
           "by": "dsh",
           "text": "Paused: APP-40 needs a real Chrome with the built-in model; none is available in this environment, and a prompt edit without its run is exactly what the task forbids. The baseline shas and the two one-at-a-time conversions are in the plan note. The remaining step is the harness run in Chrome: convert the sad row, run the full corpus, record the per-field delta and the new sha; then the count rule, run again; keep only the conversions that hold. The board is ready to resume when the model is."
+        },
+        {
+          "at": "2026-11-15T13:43:01Z",
+          "by": "dsh",
+          "text": "Baseline is in: `.scratch/k7-ask-evals-2026-11-15T13-39-31-859Z.json`, 990/990 records (66 × 3 × 5), Chrome 157, `nano_v3_gpu_high_tier_model`, M2 Max 32 GB. Static shas `e5c9ccb4` / `f9b49d39` (the APP-39 prompt); image `63d14187` / `b3a72204`; systemOnly examples 0.\n\nAutomatic 3/3: systemOnly 11/64 pass, systemExamples 17/64, requestIntent@static 14/64, image 7/64, imageSearch 7/64; 17–19 unstable. The app-side effective on the shipped static is 27 pass / 19 fail / 17 unstable / 3 unscored. The run is not adjudicated: `verdictHuman` is null and no row has a note; the human review/sample marking is still needed for a frozen record, but the per-field comparison is usable.\n\nConversion 1 targets: row 34 \"sad songs\" is a stable fail with `valenceMax` missing in all three runs; rows 50 and 57 already pass. Conversion 2 targets: 44, 45 and 47 already pass effective; 46 is a stable fail; S10 is a stable fail because the model's invented duration makes three pairs; N2 is unstable on an extra limit; S7's failure is mood, not count.\n\nNext: conversion 1, the sad row to a turn."
+        },
+        {
+          "at": "2026-11-15T13:43:33Z",
+          "by": "dsh",
+          "text": "Conversion 1 is applied in the working tree (uncommitted): the `sad, melancholic` WORD→FILTER row is removed and `sad songs` joins both example sets (15). New shas: static system `31424caa`, examples `458514b5`; test profile `7cd535b7` / `a560ac59`. Prompt tests, 810 web tests, typecheck and build green.\n\nThe baseline is exported; the page's saved run is still the baseline, so **Clear** after exporting and run conversion 1. The first screen is `requestIntent@static` (198 calls); the full five is the record. Export as `.scratch/ask-evals/conv1.json`, then the delta. Target: row 34's `valenceMax`; rows 50 and 57 must not regress; S1–S12 no down. The change is kept only if the run holds."
+        },
+        {
+          "at": "2026-11-15T14:03:48Z",
+          "by": "dsh",
+          "text": "Conversion 1 measured (screen, 198 `requestIntent@static`; system `31424caa`, examples `458514b5`) and **rejected**:\n- Row 34 \"sad songs\" is unchanged: stable fail, `valenceMax` missing in all three runs. The turn did not fix the row it was for.\n- S12 goes from stable pass to unstable — a spike row down.\n- Mood gets worse: `exact` 34→33, `extra` +5, `missing` +2; `valence` `missing` +2.\n- Effective row 45 goes pass → unstable; the unscored count 3 → 4.\n- The overall scored pass does rise 14→18 (effective 27→30), but it is not on the target and comes with the S12 regression and the mood/valence damage. The keep rule says no; reverted to the APP-39 baseline.\n\nConversion 2 is applied (uncommitted, from the reverted baseline): the three-line count/duration rule is removed and `50 tracks` is the 15th turn. Shas: static system `db56b93d`, examples `39057fa2`; test profile `59b5fedd` / `ca4544fd`. Prompt tests, 810 web tests, typecheck and build green.\n\nScreen `requestIntent@static` (198): target 44/45/46/47/S7/S10/N2; no spike row down. If it holds, the full five for the record; if not, revert and the baseline is the final prompt."
+        },
+        {
+          "at": "2026-11-15T14:16:07Z",
+          "by": "dsh",
+          "text": "Both conversions were measured on the shipped static screen (198 each) against the full APP-39 baseline (990 records; static system `e5c9ccb4`, examples `f9b49d39`). Both fail the keep rule, so the final prompt is the **baseline**, unchanged.\n\nConversion 1 (sad WORD→FILTER row → turn; `31424caa` / `458514b5`): target row 34 is unchanged — stable fail, `valenceMax` missing in all three; S12 goes stable pass → unstable; mood `exact` 34→33, `extra` +5, `missing` +2; effective row 45 goes pass → unstable. The overall scored pass rises 14→18, but not on the target. Rejected.\n\nConversion 2 (count/duration rule → `50 tracks`; `db56b93d` / `39057fa2`): scored 14→19, effective 27→29, but rows 44, 46, 47, S10 and N2 are unchanged; effective 45 goes pass → unstable; S6 goes unstable → fail; the limit and duration extras rise 13 each, offset +7, valence missing +3, while mood exact +11, query extra −25 and genre −17. The target did not improve and a spike row went down. Rejected.\n\nFinal prompt: the APP-39 baseline, 14 examples, shas `e5c9ccb4` / `f9b49d39`; both working-tree conversions are reverted. The full five was not run for either candidate because each fails the keep rule on the static; the baseline's 990-record run is the record. The two conversion exports are in `.scratch/`.\n\nThe experiment's answer: on this model, neither block moved the rows it targeted, and both cost a spike row. The baseline is the best field profile; no prompt change ships."
         }
       ]
     },
