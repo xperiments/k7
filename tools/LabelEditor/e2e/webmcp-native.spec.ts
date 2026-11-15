@@ -29,7 +29,7 @@ test("registers with Chrome's WebMCP and runs a tool", async ({ page }) => {
         }),
       { timeout: 10_000 },
     )
-    .toBe(14);
+    .toBe(15);
 
   // Chrome's testing API serialises a tool's return value to JSON text.
   const added = await page.evaluate(async () => {

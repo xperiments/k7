@@ -12,8 +12,9 @@ every Track in the library, so a label is a layout plus references to the player
 
 You design it in the **Label Editor**, a page that offers its actions to you as tools. This
 file is the working guide; `tools/LabelEditor/README.md` and the repository's
-`docs/specs/label-templates.md` are the deeper reference, and the editor serves this file at
-`/skill.md`.
+`docs/specs/label-templates.md` are the deeper reference. The editor serves this file at
+`/skill.md`, and `label-editor-guide` returns it as a tool result for a session where that
+route is blocked.
 
 ## What you are designing
 
@@ -41,6 +42,10 @@ the one to call first. If you cannot see them, the editor page is not open, or t
 no WebMCP — ask the human to open http://localhost:5178 in a browser that has the API. The
 same calls also live on `window.__labelEditorMcp` for a page script, which is how the repo's
 own `scripts/test-label.mjs` drives them.
+
+If the page's routes are blocked, call `label-editor-guide` instead of reading `/skill.md`.
+If the tools themselves cannot be reached, every action still has a visible control — see
+*Driving the visible controls*, below — so a label is still finishable in this session.
 
 - **Read first, every time.** `label-editor-read` returns the board, the fields, the colour
   roles, the type roles, the open documents, and the active design's layers and export errors.
@@ -116,6 +121,10 @@ cut at 96 characters. A design with no layer at all is refused.
 
 ## The tools
 
+The complete reference — every tool, its sentence and its arguments — is written below from
+the page's own registry. When you read this through `label-editor-guide` that block is left
+out, because your tool list already carries the same schemas.
+
 <!-- generated: tools:start -->
 ### `label-editor-read`
 
@@ -124,6 +133,12 @@ Read the label editor: the print's coordinate space, the fields, roles and type 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
 | `includeTemplate` | `boolean` |  | Also return the active design as a label-template v1 object. |
+
+### `label-editor-guide`
+
+Read this once before designing: what a K7 label is for, how the print and the Card's window shape a layout, the fields and the three type roles, the workflow, what gets refused, and how to do all of it from the visible controls when the tools cannot be reached. The same guide is served at /skill.md.
+
+Takes no arguments.
 
 ### `label-editor-add-layer`
 
@@ -372,6 +387,34 @@ A refusal is a sentence naming the design and the layer, so read it rather than 
 The last gate is the packer, which the human runs: it refuses the same facts, and a file in
 `assets/labels/templates/` that is not a design fails the firmware build by name. So check the
 JSON you hand over: `v`, `id`, `space`, `prims` at least, and `errors: []` from the export.
+
+## Driving the visible controls
+
+If you cannot reach the tools — a browser agent that only clicks, or a session whose network
+blocks the page's routes — every action above has a control. The page is the editor: a rail on
+the left, the Layers panel and the print in the middle, the Inspector on the right, and the
+documents' tabs across the top.
+
+1. **Start clean.** The **+** at the end of the tab strip opens a new design. Every design
+   autosaves in this browser, so the canvas may open on one from last time: start a new one
+   rather than editing earlier work.
+2. **Set the design.** With nothing selected the Inspector shows it: **Template** (Id, Name),
+   **Colourway** (ink, rule, the eight bands), **Paper** (colour and radius — it is the
+   LayerMask, and without it there is no background), **Type roles** (the three pairs), and
+   **Test values** (what the fields preview).
+3. **Add layers.** The rail: **Rectangle (R)**, **Square (S)**, **Circle (O)**, **Text (T)** —
+   pick one, then click the print where it goes; **Select (V)** to stop adding. Fine-tune in
+   **Layout**: X, Y, Width (a text's *wrap width*), Height, Radius, Rotation °.
+4. **Give a text its job.** **Content** → **Kind**: *Dynamic text (from a field)*, then
+   **Field**; or *Static text*, then **Text**. **Test value** changes only the preview.
+5. **Give it its look.** **Typography** → **Font role** (title, numeral, caption) and
+   **Align**; **Appearance** → **Colour role** (ink or a band).
+6. **Order the layers.** The Layers panel lists the front layer first: drag a row, or use
+   **Raise** and **Lower** in its header, to put a band behind the type.
+7. **Check and export.** **Preview** (the Design/Preview switch in the app bar) draws it with
+   the LVGL build the panel runs; **Export** writes the JSON, or says what stops it.
+
+That is the same design the tools build, one click at a time.
 
 ## When you are done
 

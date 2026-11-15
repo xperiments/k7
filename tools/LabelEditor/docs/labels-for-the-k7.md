@@ -80,11 +80,12 @@ texts, the Inspector sets the colourway and the type roles, Layers keeps the ord
 
 **With an agent.** The editor offers its actions as WebMCP tools, and ships a skill that says
 how to use them: [`skills/k7-labels/SKILL.md`](../skills/k7-labels/SKILL.md).
-The dev server serves the same file at `http://localhost:5178/skill.md`, so an agent that can
-read the page can read its instructions too. An agent that can drive WebMCP — ChatGPT desktop
-with the page open, Chrome with `--enable-features=WebMCP`, or any browser agent — can then
-read the design, lay out paper, bands and type, bind the fields, validate, and export. What to
-ask for is a brief, not a tool call:
+The dev server serves the same file at `http://localhost:5178/skill.md`, and the page also
+answers it as a tool — `label-editor-guide` — which is the road for a session that will not
+fetch a route. An agent that can drive WebMCP — ChatGPT desktop with the page open, Chrome with
+`--enable-features=WebMCP`, or any browser agent — can then read the design, lay out paper,
+bands and type, bind the fields, validate, and export. What to ask for is a brief, not a tool
+call:
 
 > Open http://localhost:5178, read /skill.md, and make a label for a synthwave track: deep
 > navy paper, a blue band across the top with the title, artist and BPM, and the album, mood
@@ -92,6 +93,12 @@ ask for is a brief, not a tool call:
 
 The human's receipt is the status bar's **WebMCP** button (Agent tools), which lists every
 tool the page registered while the agent was working.
+
+If the agent has no tools at all — a browser session that only clicks, or one that blocks the
+page's routes — the label is still finishable: the skill carries a *Driving the visible
+controls* walkthrough that maps every tool to the panel it lives in (rail, Inspector sections,
+Layers, Export), and the canvas may open on an earlier autosaved design, so the first step is
+the tab strip's **+**.
 
 ## How a design reaches the player
 

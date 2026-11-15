@@ -1,6 +1,7 @@
 import type { Editor } from "@/engine/editor";
 import { labelEditorTools } from "./tools";
 import type { LabelTool, ModelContextLike } from "./types";
+import { SKILL_TEXT } from "./skill-text";
 
 export interface WebMcpStatus {
   available: boolean;
@@ -45,7 +46,7 @@ export function modelContext(): ModelContextLike | null {
 
 /** Install `window.__labelEditorMcp` so a page script or extension can call the tools. */
 export function installBridge(ed: Editor): LabelEditorBridge {
-  const tools = labelEditorTools(ed);
+  const tools = labelEditorTools(ed, { guide: SKILL_TEXT });
   const byName = new Map(tools.map((t) => [t.name, t]));
   const bridge: LabelEditorBridge = {
     tools: () =>
@@ -74,7 +75,7 @@ export function installBridge(ed: Editor): LabelEditorBridge {
  * rather than leaving an agent with half a surface.
  */
 export async function registerLabelEditorTools(ed: Editor): Promise<WebMcpStatus> {
-  const tools = labelEditorTools(ed);
+  const tools = labelEditorTools(ed, { guide: SKILL_TEXT });
   installBridge(ed);
   webmcpStatus.tools = tools.length;
   if (registering) return webmcpStatus;

@@ -1,6 +1,7 @@
 import type { Editor } from "@/engine/editor";
 import type { Obj, Tool } from "@/engine/types";
 import type { LabelTool } from "@/webmcp/types";
+import { skillProse } from "./skill";
 import {
   FROLES,
   PRINT_H,
@@ -158,7 +159,10 @@ function docsSummary(ed: Editor) {
   }));
 }
 
-export function labelEditorTools(ed: Editor): LabelTool[] {
+export function labelEditorTools(
+  ed: Editor,
+  opts: { guide: string },
+): LabelTool[] {
   return [
     {
       name: "label-editor-read",
@@ -207,6 +211,18 @@ export function labelEditorTools(ed: Editor): LabelTool[] {
           ...(args.includeTemplate === true ? { template: tpl.doc } : {}),
         };
       },
+    },
+
+    {
+      name: "label-editor-guide",
+      description:
+        "Read this once before designing: what a K7 label is for, how the print and the Card's window shape a layout, the fields and the three type roles, the workflow, what gets refused, and how to do all of it from the visible controls when the tools cannot be reached. The same guide is served at /skill.md.",
+      inputSchema: schema({}),
+      execute: () => ({
+        ok: true,
+        guide: skillProse(opts.guide),
+        url: "/skill.md",
+      }),
     },
 
     {

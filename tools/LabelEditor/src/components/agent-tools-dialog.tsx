@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useEditor } from "@/hooks/use-editor";
+import { SKILL_TEXT } from "@/webmcp/skill-text";
 import { labelEditorTools } from "@/webmcp/tools";
 import { webmcpStatus } from "@/webmcp/register";
 
@@ -30,7 +31,7 @@ export function AgentToolsDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const ed = useEditor();
-  const tools = useMemo(() => labelEditorTools(ed), [ed]);
+  const tools = useMemo(() => labelEditorTools(ed, { guide: SKILL_TEXT }), [ed]);
   const status = webmcpStatus;
   const bridge =
     typeof window !== "undefined" ? window.__labelEditorMcp : undefined;

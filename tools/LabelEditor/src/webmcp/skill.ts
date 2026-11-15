@@ -105,6 +105,22 @@ export function renderSkillSection(tools: LabelTool[]): string {
   ].join("\n");
 }
 
+/**
+ * The hand-written guide, with the generated tool list taken out. This is what the page hands
+ * an agent through `label-editor-guide`, whose own tool list already carries the schemas.
+ */
+export function skillProse(skill: string): string {
+  const start = skill.indexOf(SKILL_TOOLS_START);
+  const end = skill.indexOf(SKILL_TOOLS_END);
+  const withoutTools =
+    start < 0 || end < 0 || end < start
+      ? skill
+      : skill.slice(0, start) + skill.slice(end + SKILL_TOOLS_END.length);
+  // The YAML frontmatter is the skill loader's; a tool result needs the guide itself.
+  const withoutFrontmatter = withoutTools.replace(/^---\n[\s\S]*?\n---\n/, "");
+  return withoutFrontmatter.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 /** Read a skill file and return the generated body, or null when the markers are missing. */
 export function readSkillSection(skill: string): string | null {
   const start = skill.indexOf(SKILL_TOOLS_START);

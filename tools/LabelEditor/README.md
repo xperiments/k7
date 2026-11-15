@@ -120,9 +120,14 @@ tools live in the page that owns the design, so an MCP client reaches them throu
 browser: native WebMCP, the bridge below, or Playwright (`scripts/test-label.mjs`). A server
 would have to own a page to be useful, and then two places would hold the same design.
 
+A session that will not fetch a route still gets the guide: `label-editor-guide` returns it as
+a tool result. A session that cannot call the tools at all can still make the label — the same
+guide says which visible controls do what.
+
 | Tool | What it does |
 |---|---|
 | `label-editor-read` | The coordinate space, fields, roles, type faces, open documents, layers, mask, groups, selection and export errors. |
+| `label-editor-guide` | The guide to designing a K7 label in one result — the print and the Card's window, the fields, the workflow, the refusals, and the visible-controls path. The same file is served at `/skill.md`; this is for a session that blocks routes. |
 | `label-editor-add-layer` | Add a rect, square, circle or text at a design-pixel position; a text is static unless it names a field. |
 | `label-editor-update-layer` | Change one layer's position, size, rotation, text or field, role, font role, alignment, name, test value or lock. |
 | `label-editor-delete-layer` | Delete a layer. |
@@ -155,17 +160,17 @@ const status = window.__labelEditorMcp.status(); // { available, via, registered
 The status bar's **WebMCP** button opens *Agent tools*: the registration state, every
 tool with its description, and a copy of the list as JSON.
 
-![The Agent tools dialog, with all 14 tools registered](docs/agent-tools.png) Each call is an ordinary edit
+![The Agent tools dialog, with all 15 tools registered](docs/agent-tools.png) Each call is an ordinary edit
 of the open design — it updates the UI and is undoable. No tool downloads a file or calls
 the network; import takes a template object and export returns one.
 
-`e2e/webmcp.spec.ts` stubs `document.modelContext`, asserts all 14 tools register, runs
+`e2e/webmcp.spec.ts` stubs `document.modelContext`, asserts all 15 tools register, runs
 add/update/read/export through them, and checks that a refused call changes nothing. A
 second test removes the API and asserts the bridge still works.
 
 `e2e/webmcp-native.spec.ts` uses Chrome's own WebMCP instead: the `webmcp-native` project
 launches Chrome with `--enable-features=WebMCP` (the feature behind the
-`#enable-webmcp-testing` flag), waits for the 14 tools, and adds a text through
+`#enable-webmcp-testing` flag), waits for the 15 tools, and adds a text through
 `document.modelContext.executeTool`. It skips on a Chrome that does not expose the API, so
 `npm run e2e` stays green everywhere.
 
@@ -185,7 +190,7 @@ Three ways to try it by hand:
      --enable-features=WebMCP \
      http://localhost:5178
    ```
-   Open the status bar's **WebMCP** button: it should say *14 tools registered* through
+   Open the status bar's **WebMCP** button: it should say *15 tools registered* through
    `document.modelContext`. In the console:
    ```js
    const tools = await document.modelContext.getTools();

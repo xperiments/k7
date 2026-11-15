@@ -4,7 +4,7 @@ import type { Editor } from "@/engine/editor";
 import { labelEditorTools } from "./tools";
 
 // The rules are pure metadata; execute is exercised in the browser tests.
-const tools = labelEditorTools({} as Editor);
+const tools = labelEditorTools({} as Editor, { guide: "" });
 
 describe("the WebMCP tool surface", () => {
   it("has unique, kebab-case names", () => {

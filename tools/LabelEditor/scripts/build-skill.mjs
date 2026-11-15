@@ -28,7 +28,7 @@ const { renderSkillSection, readSkillSection } = await jiti.import(
 );
 const { labelEditorTools } = await jiti.import(resolve(root, "src/webmcp/tools.ts"));
 
-const tools = labelEditorTools({});
+const tools = labelEditorTools({}, { guide: "" });
 const skill = readFileSync(skillPath, "utf8");
 const expected = readSkillSection(renderSkillSection(tools));
 
