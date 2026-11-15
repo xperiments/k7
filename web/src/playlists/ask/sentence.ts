@@ -8,8 +8,9 @@
  * pair is one field, so a stated maximum clears an invented minimum. A field it does not find
  * keeps the model's value.
  *
- * It never writes a name, a mood or a genre: those are the fuzzy semantics the model is for.
- * A bare "around 140" is left to the model; without "bpm" or "tempo" it can be a count.
+ * It never writes a name or a mood: those are the fuzzy semantics the model is for. A genre it
+ * writes only when the sentence names one as a whole word, and not as part of a name. A bare
+ * "around 140" is left to the model; without "bpm" or "tempo" it can be a count.
  */
 
 import type { SearchArgs } from '../../device/mcp';
@@ -154,13 +155,31 @@ function genreOf(sentence: string, profile: LibraryProfile | null): string | und
    * still answers a sentence that names reggaeton. */
   const genres = [...new Set([...(profile?.genres ?? []), ...DEFAULT_GENRES])];
   for (const genre of genres) {
-    /* A whole word, in the sentence's own case: "the album Discovery" is not disco, and the
-     * artist "Daft Punk" is not the punk genre. A sentence that says "techno" or "ambient" is. */
-    const escaped = genre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}(?:$|[^\\p{L}\\p{N}])`, 'u');
-    if (pattern.test(sentence)) return genre;
+    if (namesGenre(sentence, genre)) return genre;
   }
   return undefined;
+}
+
+/**
+ * Whether the sentence names this genre, as a whole word and as a genre rather than a name. The
+ * word's own casing is the only signal a sentence gives: a capitalised genre counts at the start
+ * of the sentence ("Ambient for focus") or after a lowercase word ("three hours of Ambient"), and
+ * a capitalised genre after a capitalised word is read as the rest of a name, so the artist
+ * "Daft Punk" is not the punk genre while "the album Discovery" is not disco.
+ */
+function namesGenre(sentence: string, genre: string): boolean {
+  const escaped = genre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`(?:^|[^\\p{L}\\p{N}])(${escaped})(?=$|[^\\p{L}\\p{N}])`, 'giu');
+  for (const match of sentence.matchAll(pattern)) {
+    const word = match[1];
+    if (word[0] !== word[0].toUpperCase()) return true;
+
+    const before = sentence.slice(0, match.index ?? 0).trim();
+    if (before === '') return true;
+    const previous = before.match(/(\p{L}[\p{L}\p{N}]*)[^\p{L}\p{N}]*$/u)?.[1] ?? '';
+    if (!previous || previous[0] !== previous[0].toUpperCase()) return true;
+  }
+  return false;
 }
 
 /* -------------------------------------------------------------------------- */

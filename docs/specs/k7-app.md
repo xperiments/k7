@@ -278,12 +278,16 @@ the device's way before the search — "B flat major" and "B♭" become "Bb", "F
 one; a key that cannot be read is left as written. The sentence's own count, listening-session
 length, track length, BPM, offset, key or a genre it names wins over the model's: a pure extractor
 reads it, and a field it finds replaces the model's field, while a field it does not find keeps the
-model's value. A genre is matched as a whole word in the sentence's own case, so the artist "Daft
-Punk" is not the punk genre and "the album Discovery" is not disco; without a profile the static
-genre words apply, and with one the profile's genres and the static words apply together. A genre the sentence never names is dropped:
+model's value. A genre is matched as a whole word and read for its casing: a lowercase genre
+always counts, a capitalised one counts at the start of the sentence or after a lowercase word
+("Ambient music", "three hours of Ambient"), and a capitalised genre after a capitalised word is
+read as the rest of a name, so the artist "Daft Punk" is not the punk genre and "the album
+Discovery" is not disco; without a profile the static genre words apply, and with one the profile's
+genres and the static words apply together. A genre the sentence never names is dropped:
 a party mood is not the party genre, and a name is not a genre.
 It runs only over a runnable Intent, so it never turns a refusal into a search, and it never writes
-a name, a mood or a genre ([ADR 0088](../adr/0088-the-sentence-wins-on-the-numbers-it-states.md)).
+a name or a mood ([ADR 0088](../adr/0088-the-sentence-wins-on-the-numbers-it-states.md),
+[ADR 0090](../adr/0090-a-genre-the-sentence-names-wins-like-its-numbers.md)).
 A model answer with no filters is rebuilt from the sentence's own filters — a stated BPM, track
 length, key, offset, count or listening session — and the purpose table when it names one; an
 instruction to change the library ("add 5 songs to the playlist") stays a refusal, as does a

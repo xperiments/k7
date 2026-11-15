@@ -51,6 +51,15 @@ describe('durations', () => {
     expect(sentenceFilters('long mixes')).toEqual({ durationMin: 480 });
     expect(sentenceFilters('long mixes', TEST_PROFILE)).toEqual({ durationMin: 420 });
     expect(sentenceFilters('short tracks')).toEqual({ durationMax: 180 });
+  });
+
+  it('does not mistake a listening session for a track length', () => {
+    expect(sentenceFilters('about an hour')).toEqual({ limit: 15 });
+  });
+});
+
+describe('genres', () => {
+  it('reads a genre the sentence names, from the profile or the static list', () => {
     expect(sentenceFilters('three hours of ambient')).toEqual({ genre: 'ambient', limit: 45 });
     expect(sentenceFilters('techno', TEST_PROFILE)).toEqual({ genre: 'techno' });
     expect(sentenceFilters('reggaeton', TEST_PROFILE)).toEqual({ genre: 'reggaeton' });
@@ -61,8 +70,14 @@ describe('durations', () => {
     });
   });
 
-  it('does not mistake a listening session for a track length', () => {
-    expect(sentenceFilters('about an hour')).toEqual({ limit: 15 });
+  it('reads a capitalised genre, and still knows a name when it sees one', () => {
+    expect(sentenceFilters('Ambient music for a rainy day')).toEqual({ genre: 'ambient' });
+    expect(sentenceFilters('three hours of Ambient')).toEqual({ genre: 'ambient', limit: 45 });
+    expect(sentenceFilters('Track 1: Ambient')).toEqual({ genre: 'ambient' });
+    expect(sentenceFilters('Play some Techno')).toEqual({ genre: 'techno' });
+    expect(sentenceFilters('songs by Daft Punk')).toEqual({});
+    expect(sentenceFilters('Listen to Daft Punk')).toEqual({});
+    expect(sentenceFilters('the album Discovery')).toEqual({});
   });
 });
 
