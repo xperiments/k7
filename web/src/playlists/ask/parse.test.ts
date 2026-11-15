@@ -266,6 +266,32 @@ describe('isNameQuery', () => {
     expect(isNameQuery('music similar to Bonobo', 'Bonobo')).toBe(true);
     expect(isNameQuery('similar to the Beatles', 'the Beatles')).toBe(true);
   });
+
+  it('reads a name in the five languages', () => {
+    expect(isNameQuery('canciones de bonobo', 'bonobo')).toBe(true);
+    expect(isNameQuery('chansons de bonobo', 'bonobo')).toBe(true);
+    expect(isNameQuery('Lieder von bonobo', 'bonobo')).toBe(true);
+    expect(isNameQuery('canciones como bonobo', 'bonobo')).toBe(true);
+    expect(isNameQuery('chansons comme bonobo', 'bonobo')).toBe(true);
+    expect(isNameQuery('Lieder wie bonobo', 'bonobo')).toBe(true);
+    expect(isNameQuery('canciones parecido a bonobo', 'bonobo')).toBe(true);
+    expect(isNameQuery('ボノボの曲', 'ボノボ')).toBe(true);
+    expect(isNameQuery('ボノボによる曲', 'ボノボ')).toBe(true);
+  });
+
+  it('does not mistake a partitive for a name', () => {
+    expect(isNameQuery('de la musique', 'musique')).toBe(false);
+    expect(isNameQuery('de la musique', 'la musique')).toBe(false);
+    expect(isNameQuery('von der Musik', 'Musik')).toBe(false);
+    expect(isNameQuery('chansons de la banda', 'banda')).toBe(false);
+  });
+
+  it('refuses a name after a context marker in the five languages', () => {
+    expect(isNameQuery('música para bonobo', 'bonobo')).toBe(false);
+    expect(isNameQuery('musique pour bonobo', 'bonobo')).toBe(false);
+    expect(isNameQuery('Musik für bonobo', 'bonobo')).toBe(false);
+    expect(isNameQuery('ボノボのために', 'ボノボ')).toBe(false);
+  });
 });
 
 describe('the repair flag', () => {

@@ -320,3 +320,45 @@ describe("the purpose table's moods", () => {
     });
   });
 });
+
+describe('names in the five languages', () => {
+  beforeEach(() => {
+    model.askModel.mockReset();
+  });
+
+  it('keeps a marked name with one model call', async () => {
+    const cases: [string, string][] = [
+      ['canciones de bonobo', 'bonobo'],
+      ['chansons de bonobo', 'bonobo'],
+      ['Lieder von bonobo', 'bonobo'],
+      ['canciones como bonobo', 'bonobo'],
+      ['chansons comme bonobo', 'bonobo'],
+      ['Lieder wie bonobo', 'bonobo'],
+      ['canciones parecido a bonobo', 'bonobo'],
+      ['ボノボの曲', 'ボノボ'],
+    ];
+    for (const [sentence, query] of cases) {
+      model.askModel.mockReset();
+      model.askModel.mockResolvedValue(JSON.stringify({ query }));
+      await expect(requestIntent(sentence), sentence).resolves.toEqual({ query });
+      expect(model.askModel, sentence).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('still repairs a partitive or a name after a context marker', async () => {
+    const cases: [string, string][] = [
+      ['de la musique', 'musique'],
+      ['música para bonobo', 'bonobo'],
+      ['Musik für bonobo', 'bonobo'],
+      ['ボノボのために', 'ボノボ'],
+    ];
+    for (const [sentence, query] of cases) {
+      model.askModel.mockReset();
+      model.askModel
+        .mockResolvedValueOnce(JSON.stringify({ query }))
+        .mockResolvedValueOnce('{"mood":["relaxed"]}');
+      await expect(requestIntent(sentence), sentence).resolves.toEqual({ mood: ['relaxed'] });
+      expect(model.askModel, sentence).toHaveBeenCalledTimes(2);
+    }
+  });
+});

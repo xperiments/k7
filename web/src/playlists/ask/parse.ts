@@ -48,6 +48,7 @@ export function isCategoryQuery(query: string | undefined): boolean {
 }
 
 const NAME_MARKERS = new Set([
+  /* English */
   'by',
   'from',
   'called',
@@ -59,8 +60,20 @@ const NAME_MARKERS = new Set([
   /* "like X" and "similar to X" name a thing to sound like: the prompt says to put X in
    * "query", so the repair has to agree. */
   'like',
+  /* Spanish, French, German */
+  'de',
+  'como',
+  'comme',
+  'von',
+  'wie',
 ]);
+
+/* A partitive marker names a thing only when it is not followed by a determiner: "canciones de
+ * bonobo" is a name, "de la musique" is not. */
+const PARTITIVES = new Set(['de', 'von']);
+
 const CONTEXT_MARKERS = new Set([
+  /* English */
   'for',
   'to',
   'during',
@@ -71,8 +84,37 @@ const CONTEXT_MARKERS = new Set([
   'in',
   'on',
   'about',
+  /* Spanish */
+  'para',
+  'durante',
+  'mientras',
+  'con',
+  'sin',
+  'en',
+  'sobre',
+  /* French */
+  'pour',
+  'pendant',
+  'avec',
+  'sans',
+  'dans',
+  'sur',
+  /* German */
+  'für',
+  'während',
+  'mit',
+  'ohne',
+  'auf',
+  'über',
+  /* Japanese; the postposition is read after the query */
+  'ための',
+  'ために',
+  'について',
+  'ながら',
 ]);
+
 const DETERMINERS = new Set([
+  /* English */
   'a',
   'an',
   'the',
@@ -84,6 +126,75 @@ const DETERMINERS = new Set([
   'that',
   'these',
   'those',
+  /* Spanish */
+  'el',
+  'la',
+  'los',
+  'las',
+  'un',
+  'una',
+  'unos',
+  'unas',
+  'mi',
+  'tu',
+  'su',
+  'nuestro',
+  'nuestra',
+  'este',
+  'esta',
+  'estos',
+  'estas',
+  'ese',
+  'esa',
+  'esos',
+  'esas',
+  /* French */
+  'le',
+  'les',
+  'l',
+  'une',
+  'des',
+  'mon',
+  'ma',
+  'mes',
+  'ton',
+  'ta',
+  'tes',
+  'son',
+  'sa',
+  'ses',
+  'notre',
+  'votre',
+  'leur',
+  'ce',
+  'cette',
+  'ces',
+  /* German */
+  'der',
+  'die',
+  'das',
+  'den',
+  'dem',
+  'ein',
+  'eine',
+  'einen',
+  'einem',
+  'einer',
+  'mein',
+  'meine',
+  'dein',
+  'deine',
+  'sein',
+  'seine',
+  'ihr',
+  'ihre',
+  'unser',
+  'unsere',
+  'euer',
+  'eure',
+  'dieser',
+  'diese',
+  'dieses',
 ]);
 
 /** A word without its punctuation, lowercased: "Songs," -> "songs". */
@@ -93,8 +204,10 @@ function plainWord(value: string): string {
 
 /**
  * Whether the sentence marks the query as a name. A name marker before it wins ("by Daft
- * Punk"); a purpose or context marker means it is not a name ("for a workout"); with no marker
- * at all, capitalization decides. A bare category is never a name.
+ * Punk", "de Bonobo", "von Bonobo"); a purpose or context marker means it is not a name
+ * ("for a workout", "para bailar", "de la musique"); with no marker at all, capitalization
+ * decides. A bare category is never a name. Japanese is postpositional: a の after the query
+ * names its owner, while のために is a purpose.
  */
 export function isNameQuery(sentence: string, query: string): boolean {
   if (isCategoryQuery(query)) return false;
@@ -105,14 +218,42 @@ export function isNameQuery(sentence: string, query: string): boolean {
   const capital = /\p{Lu}/u.test(needle);
   if (at < 0) return capital;
 
-  const before = sentence.slice(0, at).trim().split(/\s+/).filter(Boolean);
-  let index = before.length - 1;
-  while (index >= 0 && DETERMINERS.has(plainWord(before[index]))) index -= 1;
-  const marker = index >= 0 ? plainWord(before[index]) : '';
+  /* Japanese is postpositional: the marker follows the name. "ボノボの曲" names Bonobo;
+   * "ボノボのために" is a purpose. The context phrase is checked first because it starts with の. */
+  const after = sentence.slice(at + needle.length);
+  if (/^\s*(のために|のための|のため|について|ながら)/u.test(after)) return false;
+  if (/^\s*(の|による|が歌う|を歌う)/u.test(after)) return true;
 
-  if (NAME_MARKERS.has(marker)) return true;
-  /* "similar to" is two words; the marker is "to", and the word before it is the signal. */
+  const before = sentence.slice(0, at).trim().split(/\s+/).filter(Boolean);
+  /* "similar to" and "parecido a" are two words, and the second can be a determiner. Check the
+   * pair before the determiner skip, or "parecido a" loses its "a". */
+  const last = before.length - 1;
+  if (last > 0 && plainWord(before[last]) === 'to' && plainWord(before[last - 1]) === 'similar') {
+    return true;
+  }
+  if (last > 0 && plainWord(before[last]) === 'a' && plainWord(before[last - 1]) === 'parecido') {
+    return true;
+  }
+
+  let index = before.length - 1;
+  let skipped = 0;
+  while (index >= 0 && DETERMINERS.has(plainWord(before[index]))) {
+    index -= 1;
+    skipped += 1;
+  }
+  const marker = index >= 0 ? plainWord(before[index]) : '';
+  const queryWords = needle.split(/\s+/).map(plainWord).filter(Boolean);
+  const queryHasDeterminer = queryWords.length > 1 && DETERMINERS.has(queryWords[0]);
+
+  if (NAME_MARKERS.has(marker)) {
+    /* "de la musique" and "von der Musik" are partitives, not names; "canciones de bonobo"
+     * and "Lieder von Bonobo" are names. */
+    if (PARTITIVES.has(marker) && (skipped > 0 || queryHasDeterminer)) return false;
+    return true;
+  }
+  /* "similar to" and "parecido a" are two words; the marker is the second. */
   if (marker === 'to' && index > 0 && plainWord(before[index - 1]) === 'similar') return true;
+  if (marker === 'a' && index > 0 && plainWord(before[index - 1]) === 'parecido') return true;
   if (CONTEXT_MARKERS.has(marker)) return false;
   return capital;
 }
