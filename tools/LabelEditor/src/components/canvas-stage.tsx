@@ -179,6 +179,9 @@ export function CanvasStage() {
                 fontFamily: `"${ed.ffOf(o)}", sans-serif`,
                 textAlign: alignOf(o),
                 lineHeight: 1.2,
+                // The chrome's tracking is not the print's: the sheet draws the face's own
+                // spacing, and the fit below measures without letter-spacing.
+                letterSpacing: "normal",
                 whiteSpace: "pre-wrap",
                 textShadow: "none",
               }

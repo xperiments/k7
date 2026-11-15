@@ -35,7 +35,10 @@ npm run build      # dist/
   and their test values; groups and the LayerMask, which clips to a rounded print.
 - **An inspector that gives the open section the whole column.** Sections open one at a time
   (click the open header to close it), so no section is half-hidden behind a scrollbar; the
-  inspector itself collapses to a rail and remembers that across reloads.
+  inspector itself collapses to a rail and remembers that across reloads. An empty static
+  text says so — a placeholder and a line under the field, and an `empty` badge in Layers.
+
+  ![An empty static text: the field says what it prints, and a line says why nothing does](docs/empty-text.png)
 - **Real preview.** LVGL 9.6 compiled to WebAssembly (`public/lvgl.js`), the same build the
   panel runs, rendering the design and the aperture.
 - **Export.** One `label-template v1` file, or every open design as a zip with a PNG preview

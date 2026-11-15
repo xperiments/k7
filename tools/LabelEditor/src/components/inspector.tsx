@@ -92,7 +92,14 @@ export function Inspector({ onCollapse }: { onCollapse: () => void }) {
     body = <MultiPanel key={[...ids].sort().join(",")} />;
   } else if (sel) {
     title = sel.type === "text" ? "Text" : sel.type === "circle" ? "Circle" : "Rectangle";
-    subtitle = sel.name ? `field · ${sel.name}` : sel.label || `layer ${sel.id}`;
+    subtitle = sel.name
+      ? `field · ${sel.name}`
+      : sel.label ||
+        (sel.type === "text" && sel.static
+          ? sel.text?.trim()
+            ? sel.text.trim().slice(0, 32)
+            : "empty text"
+          : `layer ${sel.id}`);
     body = <LayerPanel key={sel.id} o={sel} />;
   } else {
     body = <DesignPanel />;
@@ -422,6 +429,11 @@ function LayerPanel({ o }: { o: Obj }) {
                       ))}
                     </SelectContent>
                   </Select>
+                  {!o.name ? (
+                    <p className="text-xs text-muted-foreground">
+                      Choose a field: a dynamic text with none prints nothing.
+                    </p>
+                  ) : null}
                 </Field>
                 <Field className="gap-1.5">
                   <FieldLabel className="text-xs text-muted-foreground">
@@ -447,6 +459,7 @@ function LayerPanel({ o }: { o: Obj }) {
                 <FieldLabel className="text-xs text-muted-foreground">Text</FieldLabel>
                 <Input
                   value={o.text ?? ""}
+                  placeholder="What this text prints"
                   onChange={(e) => {
                     o.text = e.target.value;
                     ed.commit(false);
@@ -456,6 +469,12 @@ function LayerPanel({ o }: { o: Obj }) {
                   className="h-8"
                   aria-label="Text"
                 />
+                {!(o.text ?? "").trim() ? (
+                  <p className="text-xs text-muted-foreground">
+                    Empty prints nothing. Type the string here, or set Kind to a dynamic text
+                    and choose a field.
+                  </p>
+                ) : null}
               </Field>
             )}
           </>

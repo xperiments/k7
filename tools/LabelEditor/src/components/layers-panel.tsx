@@ -376,12 +376,17 @@ export function LayersPanel() {
                     />
                   ) : (
                     <span className="truncate text-xs">
-                      {o.label || o.name || `${o.type} ${o.id}`}
+                      {layerNameOf(o)}
                     </span>
                   )}
                   {o.name ? (
                     <Badge variant="outline" className="shrink-0">
                       input
+                    </Badge>
+                  ) : null}
+                  {o.type === "text" && o.static && !(o.text ?? "").trim() ? (
+                    <Badge variant="outline" className="shrink-0" title="Prints nothing">
+                      empty
                     </Badge>
                   ) : null}
                   {ed.outOfSpace(o) ? (
@@ -408,6 +413,14 @@ export function LayersPanel() {
       </div>
     </aside>
   );
+}
+
+/** A layer's row label: its name, its field, or (for a static text) what it prints. */
+function layerNameOf(o: Obj): string {
+  if (o.label) return o.label;
+  if (o.name) return o.name;
+  if (o.type === "text" && o.static && o.text?.trim()) return o.text.trim();
+  return `${o.type} ${o.id}`;
 }
 
 function buildRows(ed: ReturnType<typeof useEditor>): Row[] {

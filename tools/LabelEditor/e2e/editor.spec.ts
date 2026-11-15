@@ -34,6 +34,26 @@ test("collapses the inspector to a rail and remembers it", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Collapse the inspector" })).toBeVisible();
 });
 
+test("an empty static text says what it is", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Text \(T\)/ }).click();
+  const box = await page.locator(".canvas-surface").boundingBox();
+  await page.mouse.click(box!.x + 200, box!.y + 200);
+
+  const field = page.locator('aside[aria-label="Inspector"] input[aria-label="Text"]');
+  await expect(field).toHaveValue("Text");
+  await field.fill("");
+
+  await expect(field).toHaveAttribute("placeholder", "What this text prints");
+  await expect(page.getByText(/Empty prints nothing/)).toBeVisible();
+  await expect(page.locator('aside[aria-label="Layers"]')).toContainText("empty");
+  await expect(page.getByText("empty text")).toBeVisible();
+
+  await field.fill("Hello");
+  await expect(page.locator(".canvas-surface")).toContainText("Hello");
+  await expect(field).toHaveValue("Hello");
+});
+
 test("imports a preexisting label template", async ({ page }) => {
   await page.goto("/");
   const template = fileURLToPath(

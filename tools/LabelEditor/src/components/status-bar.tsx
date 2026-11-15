@@ -36,7 +36,7 @@ export function StatusBar() {
           <Separator orientation="vertical" className="hidden h-3 xl:block" />
           <span className="hidden truncate tabnum xl:inline">
             {sel.type} · {Math.round(sel.x)}, {Math.round(sel.y)} · {Math.round(sel.w)}×
-            {Math.round(sel.h ?? ed.pxOf(sel) * 1.2)}
+            {Math.round(sel.type === "text" ? ed.pxOf(sel) * 1.2 : (sel.h ?? 0))}
             {sel.rot ? ` · ${Math.round(sel.rot)}°` : ""}
           </span>
         </>
