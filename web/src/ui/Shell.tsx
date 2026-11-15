@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   Disc3,
   ListMusic,
-  MessageCircle,
   Play,
   Settings as SettingsIcon,
   TriangleAlert,
@@ -12,6 +11,7 @@ import { cn } from 'cn';
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
@@ -27,7 +27,7 @@ import {
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { CardSwitcher } from './CardSwitcher';
 import { InstallButton } from './InstallButton';
-import { useDrafts } from '../playlists/drafts';
+import { useDrafts, findDraft } from '../playlists/drafts';
 import {
   NAV_GROUPS,
   navigate,
@@ -37,6 +37,7 @@ import {
   type Route,
 } from './router';
 import { PlayerBar } from './PlayerBar';
+import { PlaylistTitle } from './PlaylistTitle';
 import {
   Tooltip,
   TooltipContent,
@@ -73,8 +74,6 @@ function iconFor(item: NavItem): React.ReactNode {
       return <Disc3 aria-hidden="true" />;
     case 'playlists':
       return <ListMusic aria-hidden="true" />;
-    case 'ask':
-      return <MessageCircle aria-hidden="true" />;
     case 'player':
       return <Play aria-hidden="true" />;
     default:
@@ -203,6 +202,9 @@ export function Shell({ route, children }: { route: Route; children: React.React
    * the device's facts for anyone who has the address. */
   const groups = railGroups(drafts.length);
   const { area, page } = routeTitle(route);
+  /* The editor's page is the list itself: the header names it and is where it is renamed, so a
+   * list is named once and the page starts with its two columns (k7-look.md K17). */
+  const list = route.name === 'playlist' ? findDraft(drafts, route.id) : undefined;
 
   /* The rail is a drawer below 768px and the standing column above it. */
   const [isMobile, setIsMobile] = useState(() =>
@@ -256,7 +258,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
   };
 
   return (
-    <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden p-1">
+    <SidebarProvider className="h-dvh min-h-0 w-full overflow-hidden">
       <TooltipProvider delay={2000}>
       <div className="relative flex h-full w-full flex-col gap-1 rounded-panel">
         {mobileOpen ? (
@@ -384,13 +386,28 @@ export function Shell({ route, children }: { route: Route; children: React.React
                   {area !== null ? (
                     <>
                       <BreadcrumbItem className="min-w-0 max-[767px]:hidden">
-                        <span className="truncate text-sm text-muted-foreground">{area}</span>
+                        {/* On the editor the area is the way back to the list of lists: the
+                            list's own name is the page there, and it is a control. */}
+                        {route.name === 'playlist' ? (
+                          <BreadcrumbLink
+                            href={routeHref({ name: 'playlists' })}
+                            className="truncate text-sm text-muted-foreground"
+                          >
+                            {area}
+                          </BreadcrumbLink>
+                        ) : (
+                          <span className="truncate text-sm text-muted-foreground">{area}</span>
+                        )}
                       </BreadcrumbItem>
                       <BreadcrumbSeparator className="max-[767px]:hidden" />
                     </>
                   ) : null}
                   <BreadcrumbItem className="min-w-0">
-                    <BreadcrumbPage className="truncate">{page}</BreadcrumbPage>
+                    {list !== undefined ? (
+                      <PlaylistTitle key={list.id} draft={list} />
+                    ) : (
+                      <BreadcrumbPage className="truncate">{page}</BreadcrumbPage>
+                    )}
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>

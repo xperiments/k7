@@ -108,7 +108,8 @@ describe('the corpus', () => {
 
   it('expects a refusal exactly where the sentence has no runnable filter', () => {
     const refusals = CORPUS.filter((item) => item.must.outcome !== 'parse').map((item) => item.id);
-    expect(refusals.sort()).toEqual(['53', '54', '55', '56', '57', '59', '60', 'N3']);
+    // 59 is not a refusal any more: it states a count, and the App adds what it finds (ADR 0093).
+    expect(refusals.sort()).toEqual(['53', '54', '55', '56', '57', '60', 'N3']);
     for (const id of refusals) {
       expect(['fail', 'either']).toContain(row(id).must.outcome);
     }

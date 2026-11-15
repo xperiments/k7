@@ -1,5 +1,10 @@
 # The assistant is a conversation, and the App says what it found
 
+> **Amended by [ADR 0093](./0093-ask-edits-the-list-it-is-beside.md).** Ask is still a
+> conversation and the App still writes every sentence of it; it now stands in the Playlist
+> editor's left column instead of a page of its own, and an answer adds its tracks to the list
+> beside it. The IA Agent page and its rail item are gone.
+
 Ask was built as a pipeline made visible: a prompt card, an **Intent** panel of rows and controls,
 a **Run search** button, then a **Results** card. That shape came from the rule
 [ADR 0050](./0050-the-assistant-waits-for-a-secure-origin.md) settled and

@@ -118,12 +118,9 @@ static void patch_field(uint8_t *img, size_t row_at, int shift, int width, uint6
 
 static const char MAGIC[8] = {'K', '7', 'S', 'N', 'A', 'P', 0, 0};
 /* The wire values this test owns: the reader must not define the oracle. */
-#define IMG_VERSION 4u
+#define IMG_VERSION 5u
 #define IMG_HEADER_SIZE 80u
 #define IMG_ROW_SIZE 36u
-#define IMG_LIST_SIZE 32u
-#define IMG_LIST_ROW_SIZE 4u
-#define IMG_MAX_LIST_ROWS 8192u
 #define FILE_UNKNOWN_PCT 127u
 
 typedef struct {
@@ -161,59 +158,12 @@ static void put_row(buf_t *b, const row_t *r)
     put64(b, pack_measurements(r));
 }
 
-/* One list, as the test builds it. The row tiling is computed by the builder, not
- * given, so a test that wants a broken tiling patches the bytes afterwards. */
-typedef struct {
-    uint64_t        id;
-    const char     *name;
-    uint64_t        created;
-    const char *const *paths;
-    uint32_t        n;
-} list_t;
-
-/* A whole version 4 image: header, rows, pool, list records, list rows. The row
- * strings are the caller's pool (offsets are into it); the list strings follow them,
- * each list's name and then its paths, in list order. */
-static uint8_t *build_image_lists(size_t *out_n, const row_t *rows, size_t n,
-                                  const char *row_pool, size_t row_pool_n,
-                                  const list_t *lists, uint32_t nlists)
+/* A whole version 5 image: header, rows and the pool. A Playlist is a file on the card,
+ * not a row here (ADR 0095), so there is no list area to build. */
+static uint8_t *build_image(size_t *out_n, const row_t *rows, size_t n, const char *pool,
+                            size_t pool_n)
 {
-    uint32_t list_rows = 0;
-    for (uint32_t i = 0; i < nlists; i++) list_rows += lists[i].n;
-
-    size_t list_pool_n = 0;
-    for (uint32_t i = 0; i < nlists; i++) {
-        list_pool_n += strlen(lists[i].name) + 1;
-        for (uint32_t j = 0; j < lists[i].n; j++)
-            list_pool_n += strlen(lists[i].paths[j]) + 1;
-    }
-    size_t pool_n = row_pool_n + list_pool_n;
-
-    uint8_t *pool = malloc(pool_n ? pool_n : 1);
-    uint32_t *name_off = malloc(sizeof(uint32_t) * (nlists ? nlists : 1));
-    uint32_t *path_off = malloc(sizeof(uint32_t) * (list_rows ? list_rows : 1));
-    if (!pool || !name_off || !path_off) abort();
-
-    memcpy(pool, row_pool, row_pool_n);
-    size_t pn = row_pool_n;
-    uint32_t at = 0;
-    for (uint32_t i = 0; i < nlists; i++) {
-        name_off[i] = (uint32_t)pn;
-        size_t ln = strlen(lists[i].name) + 1;
-        memcpy(pool + pn, lists[i].name, ln);
-        pn += ln;
-        for (uint32_t j = 0; j < lists[i].n; j++) {
-            path_off[at] = (uint32_t)pn;
-            size_t pl = strlen(lists[i].paths[j]) + 1;
-            memcpy(pool + pn, lists[i].paths[j], pl);
-            pn += pl;
-            at++;
-        }
-    }
-
-    size_t total = IMG_HEADER_SIZE + n * IMG_ROW_SIZE + pool_n +
-                   (size_t)nlists * IMG_LIST_SIZE +
-                   (size_t)list_rows * IMG_LIST_ROW_SIZE;
+    size_t total = IMG_HEADER_SIZE + n * IMG_ROW_SIZE + pool_n;
 
     buf_t b = {0};
     put(&b, MAGIC, 8);
@@ -229,40 +179,15 @@ static uint8_t *build_image_lists(size_t *out_n, const row_t *rows, size_t n,
     put32(&b, 1);
     put64(&b, 0x0123456789ABCDEFull);
     put64(&b, 0); /* reserved 56..63 */
-    put16(&b, (uint16_t)nlists);
-    put16(&b, IMG_LIST_SIZE);
-    put16(&b, IMG_LIST_ROW_SIZE);
-    put16(&b, 0); /* reserved 70..71 */
-    put32(&b, list_rows);
-    put32(&b, (uint32_t)row_pool_n);
+    put64(&b, 0); /* reserved 64..71 */
+    put64(&b, 0); /* reserved 72..79 */
 
     for (size_t i = 0; i < n; i++) put_row(&b, &rows[i]);
     put(&b, pool, pool_n);
 
-    at = 0;
-    for (uint32_t i = 0; i < nlists; i++) {
-        put64(&b, lists[i].id);
-        put32(&b, name_off[i]);
-        put32(&b, at);
-        put32(&b, lists[i].n);
-        put64(&b, lists[i].created);
-        put32(&b, 0);
-        at += lists[i].n;
-    }
-    for (uint32_t i = 0; i < list_rows; i++) put32(&b, path_off[i]);
-
     patch32(b.p, 36, crc32_ref(b.p + IMG_HEADER_SIZE, b.n - IMG_HEADER_SIZE));
     *out_n = b.n;
-    free(pool);
-    free(name_off);
-    free(path_off);
     return b.p;
-}
-
-static uint8_t *build_image(size_t *out_n, const row_t *rows, size_t n, const char *pool,
-                            size_t pool_n)
-{
-    return build_image_lists(out_n, rows, n, pool, pool_n, NULL, 0);
 }
 
 static void fix_crc(uint8_t *image, size_t n)
@@ -308,177 +233,6 @@ static snapshot_t *open_ok(const uint8_t *image, size_t n)
     return s;
 }
 
-/* ------------------------------------------------------------- lists */
-
-/* Two lists over the two-row fixture: ids ascending, one row each. */
-static const char *const LIST1_PATHS[] = {"New Order/Power/x.mp3"};
-static const char *const LIST2_PATHS[] = {"Miles/Blue/y.flac"};
-
-static const list_t LISTS[] = {
-    {0xAAAA000000000001ull, "Late night", 1767225600ull, LIST1_PATHS, 1},
-    {0xBBBB000000000002ull, "Morning", 1767225600ull, LIST2_PATHS, 1},
-};
-
-static void test_lists(void)
-{
-    size_t n = 0;
-    uint8_t *img = build_image_lists(&n, ROWS, 2, POOL, POOL_N, LISTS, 2);
-
-    snapshot_t *s = open_ok(img, n);
-    CHECK(s != NULL, "a version 4 image with lists opens");
-    if (!s) return;
-    CHECK_EQ(snapshot_version(s), 4, "version 4");
-    CHECK_EQ(snapshot_lists(s), 2, "two lists");
-    CHECK_EQ(snapshot_list_rows_total(s), 2, "two list rows");
-    CHECK_EQ(snapshot_rows(s), 2, "rows are still readable");
-
-    snapshot_list_t l;
-    CHECK(snapshot_list_find(s, LISTS[0].id, &l), "find the first list by id");
-    CHECK(strcmp(snapshot_list_name(s, &l), "Late night") == 0, "its name");
-    CHECK_EQ(l.row_count, 1, "one row");
-    CHECK(l.created == LISTS[0].created, "created");
-    /* Both list strings live after the row strings. */
-    CHECK(l.name_offset >= POOL_N, "a list name is in the list region");
-
-    const char *path = NULL;
-    CHECK(snapshot_list_row(s, &l, 0, &path), "read its row");
-    CHECK(strcmp(path, LIST1_PATHS[0]) == 0, "the path is the row's");
-
-    CHECK(snapshot_list_at(s, 1, &l), "the second list by index");
-    CHECK(strcmp(snapshot_list_name(s, &l), "Morning") == 0, "its name");
-    CHECK(!snapshot_list_find(s, 0, &l), "id zero is never a list");
-    CHECK(!snapshot_list_find(s, 0xCCCC000000000003ull, &l), "an unknown id is not a list");
-    CHECK(!snapshot_list_row(s, &l, 7, &path), "a row past the list is refused");
-
-    /* The header records where the row strings end; the list strings follow it. */
-    CHECK_EQ(img[76] | (img[77] << 8), (int)POOL_N, "row_pool_size in the header");
-    snapshot_close(s);
-    free(img);
-}
-
-static void test_list_rejects(void)
-{
-    size_t n = 0;
-    uint8_t *img = build_image_lists(&n, ROWS, 2, POOL, POOL_N, LISTS, 2);
-    uint8_t *bad = malloc(n);
-    snapshot_t *s = NULL;
-
-    /* The list area is the tail of the image: two records, then two rows. */
-    uint32_t lrows = (uint32_t)n - 2 * IMG_LIST_ROW_SIZE;
-    uint32_t list1 = lrows - IMG_LIST_SIZE;
-    uint32_t list0 = list1 - IMG_LIST_SIZE;
-
-    /* ids descending */
-    memcpy(bad, img, n);
-    patch64(bad, list0, 0xFFFF000000000000ull);
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "descending list ids refused");
-
-    /* a second list that does not start where the first ended */
-    memcpy(bad, img, n);
-    patch32(bad, list1 + 12, 2);
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a tiling gap is refused");
-
-    /* a list record whose reserved bytes are not zero */
-    memcpy(bad, img, n);
-    bad[list0 + 28] = 1;
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a list record's reserved byte is refused");
-
-    /* the wrong list size */
-    memcpy(bad, img, n);
-    bad[66] = 31;
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a bad list size is refused");
-
-    /* the wrong list row size */
-    memcpy(bad, img, n);
-    bad[68] = 3;
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a bad list row size is refused");
-
-    /* a reserved byte in the second half of the header */
-    memcpy(bad, img, n);
-    bad[70] = 1;
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "reserved header bytes 70..71 refused");
-
-    /* a name offset past the pool */
-    memcpy(bad, img, n);
-    patch32(bad, list0 + 8, (uint32_t)POOL_N + 40u + 0x1000u);
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a name outside the pool is refused");
-
-    /* a name offset that points into the row-string region */
-    memcpy(bad, img, n);
-    patch32(bad, list0 + 8, 0);
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID,
-          "a list name in the row region is refused");
-
-    /* a path offset that points into the row-string region */
-    memcpy(bad, img, n);
-    patch32(bad, lrows, 0);
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID,
-          "a list path in the row region is refused");
-
-    /* a path offset past the pool */
-    memcpy(bad, img, n);
-    patch32(bad, lrows, (uint32_t)n);
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "a path outside the pool is refused");
-
-    /* a list name that does not terminate inside the list region */
-    memcpy(bad, img, n);
-    bad[n - 1] = 'x';
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID,
-          "an unterminated list string is refused");
-
-    /* a list count over the cap */
-    memcpy(bad, img, n);
-    bad[64] = 65;
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "more than 64 lists is refused");
-
-    /* more list rows than the image may hold */
-    memcpy(bad, img, n);
-    patch32(bad, 72, IMG_MAX_LIST_ROWS + 1u);
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID, "more than 8192 list rows is refused");
-
-    free(bad);
-    free(img);
-}
-
-/* A row offset that names a string in the list region is invalid even when that
- * string terminates there. */
-static void test_row_offset_into_list_region(void)
-{
-    size_t n = 0;
-    uint8_t *img = build_image_lists(&n, ROWS, 2, POOL, POOL_N, LISTS, 2);
-    uint8_t *bad = malloc(n);
-    snapshot_t *s = NULL;
-
-    memcpy(bad, img, n);
-    patch24(bad, IMG_HEADER_SIZE + 16, POOL_N); /* title -> first list name */
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_INVALID,
-          "a row string offset in the list region is refused");
-
-    /* the same offset one byte before the list region is fine */
-    memcpy(bad, img, n);
-    patch24(bad, IMG_HEADER_SIZE + 16, POOL_N - 6u); /* inside "jazz" */
-    fix_crc(bad, n);
-    CHECK(snapshot_open(bad, n, &s) == SNAPSHOT_OK, "a row string inside the row region opens");
-    snapshot_close(s);
-
-    free(bad);
-    free(img);
-}
-
 static void test_vectors(void)
 {
     /* Published FNV-1a 64 vectors, and the CRC-32 check value. */
@@ -497,7 +251,7 @@ static void test_validation(void)
 
     snapshot_t *s = open_ok(img, n);
     CHECK(s != NULL, "two-row image opens");
-    CHECK_EQ(snapshot_version(s), 4, "version 4");
+    CHECK_EQ(snapshot_version(s), 5, "version 5");
     CHECK_EQ(snapshot_rows(s), 2, "rows");
     CHECK_EQ(snapshot_generation(s), 1767225600u, "generation");
     CHECK_EQ(snapshot_analyser(s), 300, "analyser");
@@ -631,7 +385,6 @@ static void test_validation(void)
     snapshot_t *e = NULL;
     CHECK(snapshot_open(empty, empty_n, &e) == SNAPSHOT_OK, "empty image opens");
     CHECK(e && snapshot_rows(e) == 0, "no rows");
-    CHECK(e && snapshot_lists(e) == 0, "no lists");
     snapshot_row_t none;
     CHECK(e && !snapshot_find(e, 1, 1, &none), "an empty image finds nothing");
     snapshot_close(e);
@@ -1470,9 +1223,6 @@ int main(void)
     test_filters();
     test_hits();
     test_apply();
-    test_lists();
-    test_list_rejects();
-    test_row_offset_into_list_region();
     test_conformance();
     test_many_rows();
     TEST_END();

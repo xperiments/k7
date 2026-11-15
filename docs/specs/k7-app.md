@@ -18,8 +18,9 @@ The page the device used to serve is gone: **Front door**, **Launcher**, **Devic
 stores, installability, and the one offline weights store with a gated prefetch. Not deployed
 and not flashed. The `/app` split is built; the Site at `/` is its first shape
 ([`k7-site.md`](./k7-site.md)). M4 is partly built: the direct transport exists; the
-Library's image source answers Ask's search, but `#/media` and `#/playlists` still read the
-player only. Ask
+Library's image source answers Ask's search, the Playlists area reads and writes the selected
+card's own list files, and the image is format 5 with no list area
+([ADR 0095](../adr/0095-a-playlist-is-a-file-on-its-card.md)). Ask
 is answered by the built-in model
 ([ADR 0084](../adr/0084-the-assistant-is-the-browsers-built-in-model.md)). The K7 look is
 specified in [`k7-look.md`](./k7-look.md); LK-02 to LK-07 apply it to the App.
@@ -192,6 +193,17 @@ also the scope covers are looked up in. A *different* card in the player can the
 the last image's covers until the device reports its own mark in `status`
 ([`card-mark.md`](./card-mark.md) §6) — a known gap with a specified end, not a hidden one.
 
+**S6. The selected card answers for its Playlists too.** A Playlist row is a path below one card's
+`music/`, so the same selection that picks a library source picks the lists: the **Device card**'s
+come from the player (`GET /api/playlists`, `/api/playlists/<id>`); an SD or virtual card's come
+from its own `k7.playlists/`; and a card that is in neither place has no readable lists, so the
+Playlists page shows only this browser's **Drafts** and says the card is not open. The page shows
+each list once, joined by its id, with how far it has **reached** — only here, on this card, on the
+player — and whether that copy is current, which the player answers with a fingerprint
+([ADR 0092](../adr/0092-a-playlist-belongs-to-its-card.md)). Editing a list writes it: the file
+when the card is in the computer, a request to the player when it is in the player
+([ADR 0094](../adr/0094-the-device-writes-the-lists-it-is-given.md)).
+
 ---
 
 ## 5. The card
@@ -209,9 +221,15 @@ The card write and the post are independent.
 **C2. The Last image belongs to a card.** It records the scope it was built for. Changing the
 card in the computer does not silently retarget it.
 
-**C3. A Playlist belongs to a card.** A Playlist row is a path below a card's `music/`, so a
-playlist lives on the card whose tracks it names; the Playlists area is entered within a card,
-and the Image carries that card's playlists ([ADR 0083](../adr/0083-a-virtual-card-is-a-staged-folder-under-a-working-directory.md)).
+**C3. A Playlist belongs to a card, and the card is its store.** A Playlist row is a path below a
+card's `music/`, and the list itself is one file at `k7.playlists/<id>.k7list`
+([`playlist-format.md`](./playlist-format.md)), written by the App when the card is in the computer
+and by the player when it is in the player
+([ADR 0095](../adr/0095-a-playlist-is-a-file-on-its-card.md),
+[ADR 0094](../adr/0094-the-device-writes-the-lists-it-is-given.md)). The Image carries
+measurements only. The browser's copy — the **Draft** — is the edit that has not reached the card
+yet, not a home, and it is filed under the list's own card; a deletion is a **pending removal**
+until the card takes it ([ADR 0092](../adr/0092-a-playlist-belongs-to-its-card.md)).
 
 **C4. The current card is named in the header, and the header switches it.** The stage header's
 right is the **card switcher**. The player's card — when it reports a marked one — and the SD in
@@ -290,8 +308,11 @@ a name or a mood ([ADR 0088](../adr/0088-the-sentence-wins-on-the-numbers-it-sta
 [ADR 0090](../adr/0090-a-genre-the-sentence-names-wins-like-its-numbers.md)).
 A model answer with no filters is rebuilt from the sentence's own filters — a stated BPM, track
 length, key, offset, count or listening session — and the purpose table when it names one; an
-instruction to change the library ("add 5 songs to the playlist") stays a refusal, as does a
-sentence with neither a purpose nor a stated filter.
+instruction to change the library ("add 5 songs to the playlist") is read like any other sentence,
+and the rows it finds are added to the list the editor has open, because the App applies the Intent
+and the model still writes no result
+([ADR 0093](../adr/0093-ask-edits-the-list-it-is-beside.md)); a sentence with neither a purpose nor
+a stated filter stays a refusal.
 A sentence that names a purpose keeps only the filters its WORD→FILTER row prescribes; a kept bound
 the table says is too loose is snapped to the table's value, and when no measurement filter is left
 the row's filters and the count fill the Intent. The table's value is the App's, not the model's.
@@ -327,10 +348,12 @@ its quartiles. Without a profile the
 static ranges apply. The profile is aggregates only — genres, count, ranges and quartiles — and
 no track, artist, path or per-track measurement is described either way.
 
-**P3. Ask is a conversation.** The composer is at the foot of the page; a sentence becomes a
-message from the person, and the answer is a message from Ask with the tracks it found. The answer
+**P3. Ask is a conversation, and it stands in the editor's sources column.** The composer is at
+the foot of that column, behind the **Files / Ask** switch, beside the list it edits; a sentence
+becomes a message from the person, and the answer is a message from Ask with the tracks it found. The answer
 is the App's words, computed from the Intent that ran and the search that answered: the count, the
-reading of the filters, the source, the save question and the confirmation. The model writes no
+reading of the filters, the source, the offer to add its rows to the open list and the
+confirmation. The model writes no
 prose (ADR 0050's shape rule; [ADR 0086](../adr/0086-the-assistant-is-a-conversation.md)). The
 answer names what was understood — "Found 10 tracks — techno, 124–132 BPM" — and **Filters** opens
 the exact `library_search` arguments, seeded with that Intent, for a misparse. The result is a
@@ -351,7 +374,7 @@ sentence and **Set up the assistant** for `downloadable`, progress for `download
 composer for `available`. Nothing downloads on boot and nothing is prefetched; the **Filters**
 sheet stands in every state. After the first ask the page holds one base session for the current
 prompt and clones it for each question; the base is never prompted, and it is destroyed when the
-prompt changes or the Ask area closes
+prompt changes or the editor closes
 ([ADR 0089](../adr/0089-the-assistant-keeps-one-base-session-and-clones-it.md)).
 
 **P5. The App can offer the model and cannot remove it.** The download needs a user gesture — the
@@ -360,7 +383,8 @@ start it and watch it; removal is in Chrome's settings, and the setup says so.
 
 **P6. One session per Ask.** The session is created with the system prompt, prompts once and is
 destroyed. No context carries between asks, and no session is held while the person browses. The
-transcript is this tab's and is not sent back: each ask stands alone, and it is not stored.
+transcript is this tab's and is not sent back: each ask stands alone, it is not stored, and it dies
+with the editor rather than with a page.
 
 **P7. Nothing leaves the machine.** The sentence, the Intent, the profile and the library stay
 where they are; the request is a local call, not a fetch. The profile is aggregate — genres,
@@ -376,12 +400,16 @@ matches a name search and an unknown value never matches a range. The
 result count is the player's; the Player reports coverage. A filter the library has no values for
 returns an empty result, not an error.
 
-**P10. Saving is a draft on the card.** When the answer's source is a card this browser can author
-for — its Last image, or the player's card whose mark is this browser's scope — Ask asks **Save
-these N tracks as a playlist on this card?** Saving creates a draft in the store the editor uses
-(ADR 0051, ADR 0083); it writes no card and no player, and Prepare is still the only way to send
-it. A source the browser cannot author for — another card in the player, or a scope that changed
-under an old answer — gets the reason and no button. Nothing is saved without the person's click.
+**P10. An answer adds to the list it is beside, and a set can still become its own list.** The
+answer's one primary action appends the tracks it found to the draft the editor has open — at the
+end, in the answer's order, repeats allowed, as the editor already allows them.
+**Save as a new list** is the secondary: it creates a draft named from the sentence, and the
+answer then offers to open it.
+Neither is a separate act afterwards: the edit reaches the open list's card the moment it settles —
+the file when the card is in the computer, a write through the player when it is in the player
+([ADR 0095](../adr/0095-a-playlist-is-a-file-on-its-card.md)). A selected source with nothing to search — no card in the player and no image for
+this scope — gets the reason and no rows. Nothing is added and nothing is saved without the
+person's click.
 
 ---
 

@@ -17,11 +17,9 @@ import { downloadTaggedCopy, METADATA_WRITE_VERSION, writeAnalysisTags, writeTra
 import { coverSource, type EmbeddablePicture } from '../../audio/covers';
 import { encodeCover } from '../../audio/avif';
 import type { Analysis, ModelManifest } from '../../domain/analysis';
-import { snapshotPath, type LibraryProfile } from '../../domain/snapshot';
+import { snapshotPath } from '../../domain/snapshot';
 import { newId } from '../../lib/id';
 import { runItem } from '../../queue/run';
-import { toSnapshotPlaylists, useDrafts } from '../../playlists/drafts';
-import { patchListArea } from '../../playlists/image';
 import {
   countMedia,
   ensureCover,
@@ -329,10 +327,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    * page has saved the bytes. Only then does the scheduler give it another row. */
   const busyClients = useRef(new Set<AnalysisClient>());
   const [laneTick, setLaneTick] = useState(0);
-
-  /* Drafts are read reactively so a Playlist added while the page is open makes "Send to
-   * player" available without a reload: a list is part of what an image is. */
-  const drafts = useDrafts();
 
   /* The last image survives a reload, which is what makes the player's restart cheap: the
    * page can lose its origin for a second and still have the run to send again. */
@@ -1094,10 +1088,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   );
 
   /**
-   * The snapshot is the only thing this page produces that the player consumes: one file,
-   * at the card's root, that the device flashes and deletes. It carries the measurements
-   * *and* this browser's drafts (ADR 0051); with no Playlist the output is byte-identical
-   * version 1, so an image with nothing to say about lists stays the smaller, older format.
+   * The snapshot is the only thing this page produces that the player consumes: one file, at
+   * the card's root, that the device flashes and deletes. It carries measurements only — a
+   * Playlist is a file on the card, written by the editor and the device between them
+   * (ADR 0095).
    *
    * A Track outside a `music` directory is measured and shown but has no place in it, so
    * the count is reported rather than silently dropped.
@@ -1117,7 +1111,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     const media = new Map(
       (await listMedia(currentCardScope())).map((row) => [row.path, row] as const),
     );
-    const lists = toSnapshotPlaylists();
     const result = await buildSnapshotExport(
       items.map((item) => ({
         file: item.file,
@@ -1125,27 +1118,21 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         tags: media.get(snapshotPath(item.path) ?? ''),
       })),
       manifest,
-      lists,
     );
-    if (result.tracks === 0 && lists.every((list) => list.rows.length === 0)) {
+    if (result.tracks === 0) {
       setNotice({
         kind: 'error',
-        text:
-          'Nothing to write yet: no Track below music/ has been measured, and there is no ' +
-          'Playlist to carry. Measure the card, or add a Playlist.',
+        text: 'Nothing to write yet: no Track below music/ has been measured. Measure the card.',
       });
       return null;
     }
     return result;
   }, [items, manifest, setupError]);
 
-  const nonEmptyLists = () =>
-    toSnapshotPlaylists().filter((list) => list.rows.length > 0).length;
-
-  /* What the card last took. The signatures let an effect tell a new run, a changed list, or
-   * a virtual card's per-file rebuild from the state it already wrote, so nothing rewrites
-   * the card on every render. */
-  const written = useRef({ run: '', lists: '', virtual: '' });
+  /* What the card last took. The signatures let an effect tell a new run, or a virtual card's
+   * per-file rebuild, from the state it already wrote, so nothing rewrites the card on every
+   * render. */
+  const written = useRef({ run: '', virtual: '' });
   /* A write in flight, as a ref: `saving` drives the UI, but the effects below must not
    * re-run merely because a write finished — that would retry a failed one forever. */
   const writing = useRef(false);
@@ -1168,67 +1155,43 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   /**
    * The card is the App's only output, so the write happens by itself.
    *
-   * `run` builds the image from the queue; `lists` patches this browser's lists into the
-   * image already on the card, which is one 2 MB rewrite instead of a re-measurement. Both
-   * need the card to have been opened read-write at intake: a dropped folder's permission
-   * cannot be raised (ADR 0010), and nothing else can write a card.
+   * The image is built from what the queue measured; the card has to have been opened
+   * read-write at intake, because a dropped folder's permission cannot be raised (ADR 0010)
+   * and nothing else can write a card.
    */
   const writeToCard = useCallback(
-    async (
-      directory: SnapshotDirectory,
-      mode: 'run' | 'lists',
-    ): Promise<boolean> => {
+    async (directory: SnapshotDirectory): Promise<boolean> => {
       if (!directory || writing.current) return false;
       writing.current = true;
       setSaving(true);
       try {
-        let bytes: Uint8Array<ArrayBuffer>;
-        let tracks: number;
-        let skipped = 0;
-        let lists: number;
-        let generation: number | undefined;
-        let profile: LibraryProfile | undefined;
-        if (mode === 'lists' && lastSnapshot) {
-          bytes = patchListArea(lastSnapshot.bytes, toSnapshotPlaylists());
-          tracks = lastSnapshot.tracks;
-          generation = lastSnapshot.generation;
-          profile = lastSnapshot.profile;
-          lists = nonEmptyLists();
-        } else {
-          const built = await buildImage();
-          if (!built) return false;
-          bytes = built.bytes;
-          tracks = built.tracks;
-          skipped = built.skipped;
-          generation = built.generation;
-          profile = built.profile;
-          lists = nonEmptyLists();
-        }
+        const built = await buildImage();
+        if (!built) return false;
+        const bytes = built.bytes;
+        const { tracks, skipped, generation, profile } = built;
         await writeSnapshotToCard(directory, bytes);
         const scope = currentCardScope();
 
         /* The card carries the browser's cover cache too, so a new browser (or this one after
          * its storage is cleared) can take the preprocessed art from the card instead of
-         * reading it out of every audio file again. The list-only write changes no covers. */
-        if (mode === 'run') {
-          try {
-            const rows = await listMedia(scope);
-            const hashes = [
-              ...new Set(rows.map((row) => row.coverHash).filter((hash): hash is string => !!hash)),
-            ];
-            if (hashes.length > 0) {
-              const records = await getCoverRecords(hashes);
-              const archive = buildCoverArchive(
-                hashes.flatMap((hash) => {
-                  const record = records.get(hash);
-                  return record ? [{ hash, ...record }] : [];
-                }),
-              );
-              await writeSnapshotToCard(directory, archive, 'k7.covers');
-            }
-          } catch (error) {
-            console.warn('the cover archive was not written to the card', error);
+         * reading it out of every audio file again. */
+        try {
+          const rows = await listMedia(scope);
+          const hashes = [
+            ...new Set(rows.map((row) => row.coverHash).filter((hash): hash is string => !!hash)),
+          ];
+          if (hashes.length > 0) {
+            const records = await getCoverRecords(hashes);
+            const archive = buildCoverArchive(
+              hashes.flatMap((hash) => {
+                const record = records.get(hash);
+                return record ? [{ hash, ...record }] : [];
+              }),
+            );
+            await writeSnapshotToCard(directory, archive, 'k7.covers');
           }
+        } catch (error) {
+          console.warn('the cover archive was not written to the card', error);
         }
 
         const stored: StoredSnapshot = {
@@ -1244,29 +1207,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         await saveSnapshot(scope, stored);
         setLastSnapshot(stored);
         setWrittenAt(stored.at);
-        /* Writes are quiet: the tile already says what landed and when, so a toast after
-         * every run is noise. A list-only write still speaks, because it is a separate act
-         * with no visible result of its own. */
-        if (mode === 'lists') {
-          setNotice({
-            kind: 'success',
-            text: `Wrote ${plural(lists, 'playlist')} to the card’s image.`,
-          });
-        }
+        /* Writes are quiet: the tile already says what landed and when. */
         return true;
       } catch (error) {
-        /* A list-only write patches the image this browser last built for the card. An
-         * image from before the format moved cannot be patched, and pretending to rebuild
-         * it would write every row's length as unknown: the card has to be measured again. */
-        const staleImage =
-          mode === 'lists' &&
-          error instanceof Error &&
-          /unknown format version/.test(error.message);
         setNotice({
           kind: 'error',
-          text: staleImage
-            ? 'This card’s image is an older format. Measure the card again to re-export it, then save playlists.'
-            : `Could not write to the card: ${error instanceof Error ? error.message : String(error)}`,
+          text: `Could not write to the card: ${error instanceof Error ? error.message : String(error)}`,
         });
         return false;
       } finally {
@@ -1278,10 +1224,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   );
 
 
-  const listsSignature = drafts
-    .map((draft) => `${draft.id}:${draft.name}:${draft.rows.join('|')}`)
-    .join(';');
-
   /* A card is only written once nothing is still moving on it. The queue settling is not
    * the end of a run any more: the label pass keeps rewriting files after the last measure,
    * and each of those writes moves a size the Snapshot reports. Waiting for both is what
@@ -1292,47 +1234,32 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     const signature = `${runRevision}:${total}:${done}`;
     if (signature === written.current.run) return;
     const timer = window.setTimeout(() => {
-      void writeToCard(cardHandle, 'run').then((ok) => {
-        if (!ok) return;
-        written.current.run = signature;
-        written.current.lists = listsSignature;
+      void writeToCard(cardHandle).then((ok) => {
+        if (ok) written.current.run = signature;
       });
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [cardHandle, manifest, finished, runRevision, total, done, listsSignature, writeToCard]);
+  }, [cardHandle, manifest, finished, runRevision, total, done, writeToCard]);
 
-  /* Playlists ride the image, so editing one after a run has to reach the card too — but
-   * only once this session has written an image: a card that has not been measured here is
-   * not overwritten with a stored one. */
-  useEffect(() => {
-    if (!cardHandle || !lastSnapshot || written.current.run === '') return;
-    if (listsSignature === written.current.lists) return;
-    const timer = window.setTimeout(() => {
-      void writeToCard(cardHandle, 'lists').then((ok) => {
-        if (ok) written.current.lists = listsSignature;
-      });
-    }, 800);
-    return () => window.clearTimeout(timer);
-  }, [cardHandle, lastSnapshot, listsSignature, writeToCard]);
-
-  /* A virtual card's k7.db stays current as files settle: after each measurement — and each
-   * playlist edit — the image is rebuilt from the measured set and rewritten to the card's
-   * own directory, debounced so a drop commits a few times rather than once per file. The
-   * real card's "write when the run ends" effect above is unchanged. */
+  /* A virtual card's k7.db stays current as files settle: after each measurement the image is
+   * rebuilt from the measured set and rewritten to the card's own directory, debounced so a
+   * drop commits a few times rather than once per file. A list is a file of its own and never
+   * triggers an image write (ADR 0095). The real card's "write when the run ends" effect above
+   * is unchanged. */
   useEffect(() => {
     if (!composing || !manifest) return;
     const directory = storedHandle;
     if (directory === null) return;
-    if (done === 0 && listsSignature === '') return;
-    const signature = `${runRevision}:${done}:${total}:${listsSignature}`;
+    if (done === 0) return;
+    const signature = `${runRevision}:${done}:${total}`;
     if (signature === written.current.virtual) return;
     const timer = window.setTimeout(() => {
-      void writeToCard(directory as unknown as SnapshotDirectory, 'run').then((ok) => {
+      void writeToCard(directory as unknown as SnapshotDirectory).then((ok) => {
         if (ok) written.current.virtual = signature;
       });
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [composing, manifest, storedHandle, runRevision, done, total, listsSignature, writeToCard]);
+  }, [composing, manifest, storedHandle, runRevision, done, total, writeToCard]);
 
   /* A dropped card root is read-only, so a finished run has nowhere to go. Say it once,
    * with the one act that fixes it, rather than leaving the user with a measured queue. A

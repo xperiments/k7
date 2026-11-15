@@ -13,6 +13,8 @@ const OPS: readonly OpName[] = [
   'status',
   'playlists',
   'playlist',
+  'playlist.put',
+  'playlist.delete',
   'select',
   'rescan',
   'play',

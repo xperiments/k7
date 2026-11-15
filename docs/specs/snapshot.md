@@ -26,13 +26,13 @@ is measured the text says so. §10 lists what the first board run has to measure
 | # | Requirement |
 |---|---|
 | R1 | The device flashes `k7.db` from the card into a `snapshot` partition at boot, verifies it, deletes it, and copies the image into PSRAM before the panel's first clock |
-| R2 | The device never reboots because of a bad Update file, and writes nothing to the card except the Update file's delete and the Playlist selection record (§2 U7) |
+| R2 | The device never reboots because of a bad Update file, and writes nothing to the card except the Update file's delete, the Playlist selection record (front-door §2 U3) and the playlists the app sends it (front-door §2 U2a, [ADR 0094](../adr/0094-the-device-writes-the-lists-it-is-given.md)) |
 | R3 | The Snapshot is read from its PSRAM copy; no query reads the card or flash, and a normal boot reads the image from flash once, copies it and validates the copy |
 | R4 | `library_search` filters by BPM, key, energy, danceability, valence, arousal, length, mood, genre and name, and sorts and pages |
 | R5 | `library_track` and `library_search` return the measurements beside the track, `null` where a track has none |
 | R6 | `library_stats` reports **Coverage** and the Snapshot's provenance |
 | R7 | A track with no row is unanalysed, not hidden: it plays, lists, and matches by name |
-| R8 | A version 4 image carries the host's **Playlists**, and the device can walk a selected one (ADR 0051; the selection is §2 U7) |
+| R8 | A version 5 image carries measurements only; the **Playlists** are files on the card and the device can walk a selected one ([ADR 0095](../adr/0095-a-playlist-is-a-file-on-its-card.md)) |
 
 ### Out of scope
 
@@ -319,9 +319,9 @@ of transient PSRAM under a query — a third of what the cover path leaves free
 | The card changes without a new Update file | The old Snapshot stays; `coverage` drops as tracks stop matching |
 | A list row's path is not in the Library | Skipped at playback, reported as missing; never deleted |
 | A list row's path is re-encoded or replaced | Still resolves: a list row binds the path, not the file's size (format §8) |
-| A selected list, then an image without it | Falls back to the broadcast order; `k7.select` is rewritten to id 0 |
+| A selected list, then a card without its file | Falls back to the broadcast order; `k7.select` is rewritten to id 0 |
 | `k7.select` cannot be written (card out or read-only) | The choice lasts the session; one warning, not one per attempt |
-| An image with a list area that fails the format's §9 rule 10 | The whole image is refused, as with any other invalid byte |
+| A playlist file that fails its format | That list is refused and not shown; the rest of the card is untouched |
 
 ---
 

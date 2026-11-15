@@ -6,7 +6,6 @@ import { useDeviceStatus } from '../device/useDeviceStatus';
 import { countMedia } from '../storage/media';
 import { restoreCoversFromDevice } from './cardWriter';
 import { ArtistArea } from './areas/Artist';
-import { AskArea } from './areas/Ask';
 import { MediaArea } from './areas/Media';
 import { PlayerArea } from './areas/Player';
 import { PlaylistEditor } from './areas/PlaylistEditor';
@@ -14,7 +13,7 @@ import { PlaylistsArea } from './areas/Playlists';
 import { PrepareArea } from './areas/Prepare';
 import { SettingsArea } from './areas/Settings';
 import { VideoArea } from './areas/Video';
-import { navigate, useRoute } from './router';
+import { navigate, routeHref, useRoute } from './router';
 import { NotFound, Shell } from './Shell';
 import { PlaybackProvider } from './playback';
 import { tryLocalConnect } from '../device/device';
@@ -76,6 +75,14 @@ function AppContent() {
     void tryLocalConnect();
   }, []);
 
+  /* The IA Agent's old address has no page any more; land on the list of lists and rewrite
+   * the address, so a reload does not keep asking for a place that is gone (ADR 0093). */
+  useEffect(() => {
+    if (window.location.hash === '#/playlists/ask') {
+      navigate(routeHref({ name: 'playlists' }), { replace: true });
+    }
+  }, [route]);
+
   /* O4: the 41 MB is downloaded for people who installed the app, and for nobody else. */
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
@@ -124,8 +131,7 @@ function AppContent() {
           </div>
 
           {route.name === 'playlists' && <PlaylistsArea />}
-          {route.name === 'playlist' && <PlaylistEditor id={route.id} />}
-          {route.name === 'ask' && <AskArea />}
+          {route.name === 'playlist' && <PlaylistEditor id={route.id} ask={route.ask === true} />}
           {/* Media is one area with two views: the route chooses which from the same slot, so
               the cache is read once while a reader walks between the shelf and the folders.
               An album route turns the case on the shelf; a drive route opens its folder. */}

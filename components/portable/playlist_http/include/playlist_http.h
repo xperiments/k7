@@ -1,26 +1,31 @@
 #pragma once
 /*
- * playlist_http - the Playlists the Snapshot holds, as the App reads them.
+ * playlist_http - the Playlists on the card, as the App reads and writes them.
  *
- * Three routes: the list of lists, one list's rows, and the one command that selects one.
- * None of them writes flash: a new list arrives as a new image and a choice is a command
- * (ADR 0051).
+ * Five routes: the index with each list's fingerprint, one list's rows, a PUT that stores one
+ * file, a DELETE that removes one, and the command that selects one. The first four read and
+ * write `k7.playlists/` at the card root -- the only directory the device may create and the
+ * only content it writes besides the selection record (ADR 0094). Nothing here touches flash:
+ * a Playlist is a file now, and an image carries measurements (ADR 0095).
  *
  * They lived in `app_services`, which is the composition - the thing that decides the order
  * the device boots in - so a change to how a Playlist is answered edited the same file as the
  * boot sequence. They are beside the module that owns the selection now.
  */
+#include <stddef.h>
+
 #include "esp_err.h"
-#include "snapshot.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Register the three routes. `snapshot` is asked per request: an update replaces the image,
- * so a route must never hold the one that was current when it was registered. It may return
- * NULL, and the answer is then "no lists", which is true. */
-esp_err_t playlist_http_start(const snapshot_t *(*snapshot)(void));
+/* Body limit of a PUT: the format's own size for a list, with room for the header. */
+#define PLAYLIST_HTTP_BODY_MAX (64u * 1024u)
+
+/* Register the routes. `card_root` is asked per request -- a card is inserted and removed
+ * while the device runs -- and fills in the card's root, or "" when there is none. */
+esp_err_t playlist_http_start(void (*card_root)(char *out, size_t cap));
 
 #ifdef __cplusplus
 }

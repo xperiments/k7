@@ -1,5 +1,10 @@
 # The card is the only way to the player
 
+> **Amended by [ADR 0095](./0095-a-playlist-is-a-file-on-its-card.md).** The card is still the only
+> way to the player for measurements, which is what the image carries. A Playlist is no longer one
+> of them: it is a file under `k7.playlists/`, and it reaches the player over HTTP as well as on
+> the card ([ADR 0094](./0094-the-device-writes-the-lists-it-is-given.md)).
+
 Four buttons stood at the top of Process — **Send to player**, **Save to card**, **Download
 .db**, **Download JSON** — and they were four answers to one question ("where does the image
 go?") asked at the wrong moment. The answer is the card. It is already in the reader, the

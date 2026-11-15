@@ -54,7 +54,7 @@ describe('the fixtures', () => {
 
 describe('a refusal', () => {
   it('scores the empty Intent as correct for every refusal row', () => {
-    for (const id of ['53', '54', '55', '56', '59', '60']) {
+    for (const id of ['53', '54', '55', '56', '60']) {
       const result = scored(id, '{}');
       expect(result.axes.contract, id).toBe(false);
       expect(result.verdict, `${id}: ${result.reasons.join('; ')}`).toBe('pass');
@@ -64,8 +64,14 @@ describe('a refusal', () => {
   it('still fails a refusal row that answered with a filter', () => {
     expect(scored('56', '{"genre":"country"}').verdict).toBe('fail');
     expect(scored('55', '{"bpm_min":130}').verdict).toBe('fail');
-    expect(scored('59', '{"limit":5}').verdict).toBe('fail');
     expect(scored('60', '{"query":"car video"}').verdict).toBe('fail');
+  });
+
+  it('reads an instruction to change the list as the count it states', () => {
+    // 59 stopped being a refusal in ADR 0093: the App applies the Intent to the list it is
+    // beside, so the count it states is the answer, and an empty Intent is now the failure.
+    expect(scored('59', '{"limit":5}').verdict).toBe('pass');
+    expect(scored('59', '{}').verdict).toBe('fail');
   });
 });
 

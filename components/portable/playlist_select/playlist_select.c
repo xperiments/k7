@@ -1,11 +1,11 @@
 /*
- * playlist_select - see include/playlist_select.h and ADR 0051.
+ * playlist_select - see include/playlist_select.h and ADR 0095.
  *
  * The order is handed to the broadcast as Library track indices, because that is what
  * the Library's lookup answers. Resolution happens here, on demand, against the
  * generation that is published now: a row names a path, and the path is looked up the
  * same way /api/play does it. A path that is gone is counted, not removed -- the list
- * on the device is exactly what the last image said.
+ * on the device is exactly what the card's file says.
  */
 #include "playlist_select.h"
 
@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "mini_icecast.h"
+#include "playlist_file.h"
 
 static pthread_mutex_t s_lock = PTHREAD_MUTEX_INITIALIZER;
 static playlist_select_store_t s_store;
@@ -35,38 +36,35 @@ static void store_save(uint64_t id)
     if (s_store.save) s_store.save(s_store.ctx, id);
 }
 
-/* Resolve a list's rows into `out`. Returns how many rows the Library could resolve;
- * `missing` counts the rest. */
-static uint32_t resolve(const snapshot_t *snap, const library_t *lib, const snapshot_list_t *list,
-                        uint32_t *out, uint32_t *missing)
+/* One list's rows, resolved against the Library as they are read. */
+typedef struct {
+    const library_t *lib;
+    uint32_t        *indices;
+    uint32_t         n;
+    uint32_t         missing;
+} resolve_t;
+
+static bool resolve_row(void *ctx, const char *path)
 {
-    uint32_t n = 0, gone = 0;
-    for (uint32_t i = 0; i < list->row_count; i++) {
-        const char *path = NULL;
-        if (!snapshot_list_row(snap, list, i, &path) || !path || !path[0]) {
-            gone++;
-            continue;
-        }
-        lib_node_t node = library_find(lib, path);
-        if (node == LIB_NODE_NONE || library_kind(lib, node) != LIB_TRACK) {
-            gone++;
-            continue;
-        }
-        uint32_t index = library_track_index(lib, node);
-        if (index == (uint32_t)LIB_NODE_NONE) { /* not a track */
-            gone++;
-            continue;
-        }
-        out[n++] = index;
+    resolve_t *r = ctx;
+    lib_node_t node = library_find(r->lib, path);
+    if (node == LIB_NODE_NONE || library_kind(r->lib, node) != LIB_TRACK) {
+        r->missing++;
+        return true;
     }
-    *missing = gone;
-    return n;
+    uint32_t index = library_track_index(r->lib, node);
+    if (index == (uint32_t)LIB_NODE_NONE) {
+        r->missing++;
+        return true;
+    }
+    r->indices[r->n++] = index;
+    return true;
 }
 
 /* Resolve and apply, or refuse without touching what is walking. The order is
  * published to the broadcast only once the list has resolved, so a refusal cannot
  * silence a list that was working. Called with the lock held. */
-static playlist_select_result_t apply(const snapshot_t *snap, const library_t *lib,
+static playlist_select_result_t apply(const char *card_root, const library_t *lib,
                                       uint64_t id, bool persist)
 {
     if (!id) {
@@ -75,25 +73,29 @@ static playlist_select_result_t apply(const snapshot_t *snap, const library_t *l
         if (persist) store_save(0);
         return PLAYLIST_SELECT_OK;
     }
-    if (!snap || !lib) return PLAYLIST_SELECT_NO_SNAPSHOT;
+    if (!card_root || !card_root[0] || !lib) return PLAYLIST_SELECT_NO_CARD;
 
-    snapshot_list_t list;
-    if (!snapshot_list_find(snap, id, &list)) return PLAYLIST_SELECT_NOT_FOUND;
-    if (list.row_count == 0) return PLAYLIST_SELECT_EMPTY;
+    playlist_file_t list;
+    playlist_file_result_t read = playlist_read_meta(card_root, id, &list);
+    if (read == PLAYLIST_FILE_NOT_FOUND) return PLAYLIST_SELECT_NOT_FOUND;
+    if (read == PLAYLIST_FILE_NO_CARD) return PLAYLIST_SELECT_NO_CARD;
+    if (read != PLAYLIST_FILE_OK) return PLAYLIST_SELECT_NO_CARD;
+    if (list.rows == 0) return PLAYLIST_SELECT_EMPTY;
 
-    uint32_t *indices = malloc((size_t)list.row_count * sizeof *indices);
+    uint32_t *indices = malloc((size_t)list.rows * sizeof *indices);
     if (!indices) return PLAYLIST_SELECT_NO_MEM;
 
-    uint32_t missing = 0;
-    uint32_t generation = library_generation(lib);
-    uint32_t n = resolve(snap, lib, &list, indices, &missing);
-    if (n == 0) {
+    resolve_t r = {lib, indices, 0, 0};
+    if (playlist_read(card_root, id, NULL, resolve_row, &r) != PLAYLIST_FILE_OK || r.n == 0) {
+        /* The file went away or changed shape between the two reads, or nothing in it is on
+         * the card. A list that resolved to nothing is EMPTY, not a broken selection. */
         free(indices);
         return PLAYLIST_SELECT_EMPTY;
     }
-    mini_icecast_set_order(indices, n, generation);
+
+    mini_icecast_set_order(indices, r.n, library_generation(lib));
     free(indices);
-    remember(id, snapshot_list_name(snap, &list), missing);
+    remember(id, list.name, r.missing);
     if (persist) store_save(id);
     return PLAYLIST_SELECT_OK;
 }
@@ -126,7 +128,7 @@ void playlist_select_init(const playlist_select_store_t *store)
     mini_icecast_set_order_dropped_cb(on_order_dropped, NULL);
 }
 
-void playlist_select_sync(const snapshot_t *snap, const library_t *lib)
+void playlist_select_sync(const char *card_root, const library_t *lib)
 {
     pthread_mutex_lock(&s_lock);
     if (!s_init) {
@@ -139,31 +141,35 @@ void playlist_select_sync(const snapshot_t *snap, const library_t *lib)
         uint64_t stored = 0;
         if (s_store.load(s_store.ctx, &stored) && stored) id = stored;
     }
-    playlist_select_result_t r = apply(snap, lib, id, false);
-    if (id && (r == PLAYLIST_SELECT_NOT_FOUND || r == PLAYLIST_SELECT_NO_SNAPSHOT)) {
-        /* The image no longer holds the list: back to the Library's order and forget the
-         * choice rather than retry it every boot. An EMPTY resolution is not this case --
-         * it means the card is out, so the choice stands and the walk resumes when the
-         * Library can resolve it again (U3: a refusal leaves the selection alone). */
+    playlist_select_result_t r = apply(card_root, lib, id, false);
+    if (id && r == PLAYLIST_SELECT_NOT_FOUND) {
+        /* The card's file is gone: back to the Library's order and forget the choice rather
+         * than retry it every boot. NO_CARD is not this case -- with the card out the choice
+         * stands, and the walk resumes when the card is back (U3: a refusal leaves the
+         * selection alone). */
         mini_icecast_set_order(NULL, 0, 0);
         remember(0, "", 0);
         store_save(0);
+    } else if (id && r == PLAYLIST_SELECT_NO_CARD) {
+        /* The card is out: nothing can walk, and the choice stays on it to come back with
+         * it. The broadcast is handed no order until then. */
+        mini_icecast_set_order(NULL, 0, 0);
     } else if (id && r == PLAYLIST_SELECT_EMPTY) {
         /* Keep the id and its name; remember how many rows are waiting for the card. */
-        snapshot_list_t list;
-        if (snap && snapshot_list_find(snap, id, &list)) {
+        playlist_file_t list;
+        if (playlist_read_meta(card_root, id, &list) == PLAYLIST_FILE_OK) {
             /* Nothing resolved, so every row is waiting for the card. */
-            remember(id, snapshot_list_name(snap, &list), list.row_count);
+            remember(id, list.name, list.rows);
         }
     }
     pthread_mutex_unlock(&s_lock);
 }
 
-playlist_select_result_t playlist_select_set(const snapshot_t *snap, const library_t *lib,
+playlist_select_result_t playlist_select_set(const char *card_root, const library_t *lib,
                                              uint64_t id)
 {
     pthread_mutex_lock(&s_lock);
-    playlist_select_result_t r = apply(snap, lib, id, true);
+    playlist_select_result_t r = apply(card_root, lib, id, true);
     pthread_mutex_unlock(&s_lock);
     return r;
 }

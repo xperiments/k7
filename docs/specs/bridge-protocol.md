@@ -117,8 +117,10 @@ wire.
 | Op | The Launcher's request | `args` | `data` | Timeout |
 |---|---|---|---:|---:|
 | `status` | `GET /api/status` | — | the status document | 4 s |
-| `playlists` | `GET /api/playlists` | — | `{selected, walking, missing, lists}` | 6 s |
+| `playlists` | `GET /api/playlists` | — | `{selected, walking, missing, lists}` — each list with a `fingerprint` | 6 s |
 | `playlist` | `GET /api/playlists/<id>` | `{id: hex16}` | `{id, name, rows: string[]}` | 6 s |
+| `playlist.put` | `PUT /api/playlists/<id>` | `{id: hex16}`; the body is the list's file (`text/plain`, up to 64 KB) | `{id, rows, fingerprint}` | 10 s |
+| `playlist.delete` | `DELETE /api/playlists/<id>` | `{id: hex16}` | `{id, removed: true}` | 10 s |
 | `select` | `POST /api/playlists/select` | `{id: hex16 \| null}` | `{order, selected}` | 10 s |
 | `rescan` | `POST /api/rescan` | — | `{ok}` or a `refused` with status 409 | 10 s |
 | `play` | `POST /api/play` | `{path: string}` | `{}` | 10 s |

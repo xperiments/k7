@@ -6,7 +6,7 @@
  * player through it alone.
  *
  * Everything here is one `fetch` against a path — no proxy, no CORS, no key — and the
- * fourteen operations of `protocol.ts` are exactly the requests this file makes. The
+ * operations of `protocol.ts` are exactly the requests this file makes. The
  * parsing lives in `status.ts`, `playlists.ts`, `mcp.ts` and `upload.ts`, so a document
  * this module cannot read never reaches a view (O5).
  *
@@ -29,9 +29,11 @@ import {
 import {
   parsePlaylistRows,
   parsePlaylists,
+  parsePlaylistWrite,
   parseSelectResult,
   type DevicePlaylistRows,
   type DevicePlaylists,
+  type PlaylistWrite,
   type SelectResult,
 } from './playlists';
 import { parseStatus, type DeviceStatus } from './status';
@@ -354,7 +356,7 @@ export function createDirectDevice(options: DirectOptions = {}): DirectTransport
     return stream;
   }
 
-  /* ------------------------------------------------------------ the fifteen ---- */
+  /* ------------------------------------------------------------ the operations ---- */
 
   const handlers: {
     [K in OpName]: (args: OpArgs[K]) => Promise<OpData[K]>;
@@ -389,6 +391,28 @@ export function createDirectDevice(options: DirectOptions = {}): DirectTransport
         }),
         parsePlaylistRows,
         'playlist',
+      );
+    },
+
+    async 'playlist.put'(args: { id: string; body: string }) {
+      return parsed<PlaylistWrite>(
+        await read('playlist.put', `/api/playlists/${encodeURIComponent(args.id)}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'text/plain; charset=utf-8' },
+          body: args.body,
+        }),
+        parsePlaylistWrite,
+        'playlist write',
+      );
+    },
+
+    async 'playlist.delete'(args: { id: string }) {
+      return parsed<PlaylistWrite>(
+        await read('playlist.delete', `/api/playlists/${encodeURIComponent(args.id)}`, {
+          method: 'DELETE',
+        }),
+        parsePlaylistWrite,
+        'playlist removal',
       );
     },
 

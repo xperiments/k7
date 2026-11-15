@@ -138,7 +138,7 @@ def main():
         check("two analysed", stats["snapshot"]["coverage"]["analysed"], 2)
         check("coverage percent", stats["snapshot"]["coverage"]["percent"], 66)
         check("snapshot state", stats["snapshot"]["state"], "ok")
-        check("snapshot format", stats["snapshot"]["format_version"], 4)
+        check("snapshot format", stats["snapshot"]["format_version"], 5)
         check("rows in the image", stats["snapshot"]["rows"], 2)
 
         # --- a BPM range

@@ -99,9 +99,9 @@ works.
 | Route | Area | What it shows |
 |---|---|---|
 | `#/process` | Card | intake (drop or pick a card), the Queue, the run's progress |
-| `#/playlists` | Playlists | the device's Playlists and this browser's Drafts |
-| `#/playlists/:id` | Playlists | one Playlist's rows, order and actions |
-| `#/playlists/ask` | Playlists | the prompt, the Intent, and the search that becomes a Draft |
+| `#/playlists` | Playlists | the selected card's Playlists and this browser's Drafts, one row per list |
+| `#/playlists/:id` | Playlists | one Playlist's rows, order and actions, with the card's files beside them |
+| `#/playlists/:id/ask` | Playlists | the same list, with the AI Agent's conversation in its left column |
 | `#/media` | Media | albums, from the device's Snapshot rows |
 | `#/media/album/:album` | Media | one album's tracks |
 | `#/media/artist/:artist` | Media | one artist's albums |
@@ -122,20 +122,34 @@ separate, flash-sized decision — so what follows describes the device's behavi
 App's. `POST /api/snapshot` takes an `application/octet-stream` body — the `xtape.db` image —
 validates it in full before erasing anything, writes the snapshot partition, reads it back, and
 restarts in 1.5 s so the reply lands first. A refusal leaves the running snapshot untouched. The
-image may carry **Playlists** (`format_version 4`, §8 of the format); an accepted image replaces
-the previous lists entirely. The content type is also the CSRF guard: it is not CORS-safelisted,
-so another origin cannot send it without a preflight the device never answers.
+image carries measurements and nothing else (`format_version 5`; a **Playlist** is a file on the
+card, [`playlist-format.md`](./playlist-format.md)). The content type is also the CSRF guard: it
+is not CORS-safelisted, so another origin cannot send it without a preflight the device never
+answers.
 
-**U2.** `GET /api/playlists` reports the lists the Snapshot holds — id, name, created, row count —
-and which one is selected. `GET /api/playlists/<id>` reports one list's rows as paths. Both are
-`no-cache`, like the rest of `/api/*` but `/api/status`.
+**U2.** `GET /api/playlists` reports the lists the card holds — id, name, created, row count and a
+fingerprint of the file — and which one is selected. `GET /api/playlists/<id>` reports one list's
+name and rows as paths. Both are `no-cache`, like the rest of `/api/*` but `/api/status`; both
+read `k7.playlists/` and nothing else, and neither reads the card on a request: the device builds
+its index when a card mounts and updates it on its own writes ([ADR 0094](../adr/0094-the-device-writes-the-lists-it-is-given.md)).
+
+**U2a.** `PUT /api/playlists/<id>` takes the list's **file** as its body — the text of
+[`playlist-format.md`](./playlist-format.md), `text/plain; charset=utf-8` — and creates or
+replaces that file; `DELETE /api/playlists/<id>` removes it. The PUT writes the body to a
+temporary file, validates it there with the reader the card is read by (the id inside must equal
+the id in the path), and renames it onto the final name on the same volume; it answers
+`{"ok":true,"id","rows","fingerprint"}` only once the file is on the card. `400` for a body that
+is not a list or an id that disagrees, `503` when there is no card, `507` when the card is full,
+`413` for a body over 64 KB. The body is the file rather than a JSON document so the device
+stores exactly what it validated, with no second encoding between them. Deleting the selected list
+clears the selection and the broadcast returns to the tree's order.
 
 **U3.** `POST /api/playlists/select` takes `{"id": "<hex16>"}` or `{"id": null}` and tells the
-broadcast which Playlist to walk. `404` for an id the Snapshot does not hold, `409` for a list
-with no rows — or whose rows the Library cannot resolve at all — `503` when there is no Snapshot,
-`400` for a body that is not that object. The choice is remembered in NVS and survives a restart;
-on boot a stored id the current image no longer holds falls back to the tree's order and the
-stored id is cleared. A refusal leaves the working selection alone.
+broadcast which Playlist to walk. `404` for an id the card does not hold, `409` for a list
+with no rows — or whose rows the Library cannot resolve at all — `503` when there is no card,
+`400` for a body that is not that object. The choice is remembered in `k7.select` and survives a
+restart; on boot a stored id the card no longer holds falls back to the tree's order and the
+record is cleared. A refusal leaves the working selection alone.
 
 **U4.** `POST /api/play` keeps its meaning: the broadcast moves to that Track. If a Playlist is
 selected and the Track is not in it, the selection is **dropped** — the walk is over — and the
@@ -264,31 +278,61 @@ The Queue, measured, written to the card by the run itself.
   when this browser remembers one, **Rescan card**), loading (rows appear as they are found;
   `Skeleton` only for the manifest), error (models missing or a weight refused, inline, with what
   to do).
-- **Device work:** the run builds `k7.db` — rows from the Queue, lists from the Playlists
-  Drafts — keeps it as the **last image**, and writes it to the card (ADR 0065).
+- **Device work:** the run builds `k7.db` — the rows from the Queue, and no lists, which are files
+  on the card — keeps it as the **last image**, and writes it to the card (ADR 0065,
+  [ADR 0095](../adr/0095-a-playlist-is-a-file-on-its-card.md)).
 
 ### 4.2 Playlists
 
-- `#/playlists` lists what the device holds (from `GET /api/playlists`, with the selected one
-  marked) and this browser's Drafts. Creating one is a name; the lists reach the card with the
-  next run's image, and an edit made while the card is still open rewrites it (ADR 0065).
-- `#/playlists/:id` is the editor, in two columns: the card's folders as a **source tree** on
-  the left, the draft's blocks on the right. A file adds one row; a folder adds one block that
-  carries every file under it and moves as a unit. A drag from the tree lands exactly where it
-  is dropped, a block reorders by drag (with arrow-key alternatives), and a folder block opens
-  to show its rows. The order is the author's: nothing re-sorts it. **Clear** empties the list
-  behind an inline confirmation, and removing a block is a block action; nothing here is
-  destructive enough to need a dialog.
-- `#/playlists/ask` is **Ask**: a sentence, an **Intent** (the `library_search` filters the model
-  produced), shown and editable, and then a search — run against the device's own MCP endpoint —
-  whose rows become a new Draft. With no Provider configured, the filter fields stand alone. The
-  model never sees a track (ADR 0053).
-- Rows come from the device: a Draft's rows are paths and Track fingerprints, resolved against
-  the Library for names and measurements, against this browser's cache for covers. A row the
-  Library no longer has is shown as missing and skipped by the broadcast, not deleted here.
-- **The card is the only delivery.** A list reaches the player inside the next run's image; an
-  edit made while the card is still open rewrites that image on the card, and there is nothing
-  to send (ADR 0065).
+- **The area follows the card switcher.** With the **Device card** selected the player answers for
+  its lists — `GET /api/playlists`, and `/api/playlists/<id>` for one list's rows; with an SD or
+  virtual card selected, the `k7.playlists/` directory that card carries does. A card that is open
+  in this session is read directly, and **Read the card** asks for the grant when someone wants its
+  current bytes; a card that is open in neither place shows only this browser's pending edits, and
+  says the card is not open — there is no mirror of a card's lists
+  ([ADR 0095](../adr/0095-a-playlist-is-a-file-on-its-card.md)).
+- `#/playlists` is **one list of lists**. Rows are joined by the list's id, so a list appears once;
+  each row says how far it has **reached** — only here, on this card, on the player — and whether
+  that copy is **current** (*edited — the card has the older copy*), or that a **pending removal**
+  is waiting for the card. The actions follow the state: **Open** and **Delete** for what this
+  browser holds, **Walk this** for the Device card's lists, and **Read the card** when the card has
+  not been read. A card's list this browser has no draft for opens by being adopted: a draft with
+  the same id, name, creation time and rows.
+- **New playlist** is one action — a name in a dialog, then the editor. The empty state's one action
+  is the same, and there is no second way to start a list.
+- **Any card the player holds is editable.** A list there is opened from the player's rows, edited,
+  and written back through the device; this browser does not need to have opened the card. The
+  Device card's lists are no longer read-only, and *Walk this* is one action among them
+  ([ADR 0094](../adr/0094-the-device-writes-the-lists-it-is-given.md)).
+- **A list is the card's, and either side may write it.** With the card in the computer the editor
+  writes the file through the card's handle; with the card in the player it sends the same list to
+  the device, which writes it and answers once it is on the card
+  ([ADR 0095](../adr/0095-a-playlist-is-a-file-on-its-card.md),
+  [ADR 0094](../adr/0094-the-device-writes-the-lists-it-is-given.md)). The write is debounced after
+  an edit, a refusal is shown and retried, and the page says where each list has got to. The image
+  carries measurements still, and Prepare is its only door
+  ([ADR 0065](../adr/0065-the-card-is-the-only-way-to-the-player.md)).
+- `#/playlists/:id` is the editor, in two columns: the left carries the card's folders as a
+  **source tree** and the **IA Agent**, behind one **Files / Ask** switch; the draft's blocks are on
+  the right. A file adds one row; a folder adds one block that carries every file under it and
+  moves as a unit. A drag from the tree lands exactly where it is dropped, a block reorders by drag
+  (with arrow-key alternatives), and a folder block opens to show its rows. The order is the
+  author's: nothing re-sorts it. **Clear** empties the list behind an inline confirmation, and
+  removing a block is a block action; nothing here is destructive enough to need a dialog.
+- **A row's facts come from the selected source**, not from the player: an SD or virtual card's
+  rows are read from this browser's rows for that card and from the card's own image, so a row the
+  card does not have reads *not in this card's library*. The Device card's rows come from the
+  player (`library_track`), which is what the editor used for every card before this. A row the
+  source no longer has is shown as missing and skipped by the broadcast, never deleted here.
+- `#/playlists/:id/ask` is the same editor with **Ask** showing, and it is where the assistant
+  lives: a sentence, an **Intent** the App computed, a search, and an answer whose one action adds
+  its tracks to the open list — appended at the end, in the answer's order — with **Save as a new
+  list** as the secondary, which creates a list of its own and offers to open it. The model writes filters and never results, and never sees the list
+  ([ADR 0050](../adr/0050-the-assistant-waits-for-a-secure-origin.md),
+  [ADR 0053](../adr/0053-the-assistant-writes-filters.md),
+  [ADR 0093](../adr/0093-ask-edits-the-list-it-is-beside.md)). The five states of the built-in
+  model, the **Filters** sheet and the one-retry error live in the column, and `#/playlists/ask`
+  redirects here from the retired page.
 
 ### 4.3 Media
 
@@ -394,7 +438,7 @@ that adds it, and never calls a running Provider unreachable (ADR 0056). The rec
 | The Library's tree | `library_list` over `/mcp` | no device: Media says so |
 | Titles, artists, albums | this browser's `xtape-media` cache | "not measured", with Process |
 | One track's measurements | `library_track` over `/mcp` | a dash, not an error |
-| Playlists, the selection | `GET /api/playlists` | no Snapshot: none, and a Draft is still authorable |
+| Playlists, the selection | the selected card: the player's `GET /api/playlists` for the Device card, the card's own `k7.playlists/` otherwise | this browser's pending edits, and the page says the card is not open |
 | Covers | this browser's `xtape-media` store | placeholder tile, never an error |
 | Videos | the Invidious **Instance** | a note and the setting |
 | A sentence's filters | the **Provider** | the filter form alone |

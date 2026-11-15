@@ -391,10 +391,17 @@ stage, with a backdrop behind it and the mark at the drawer's top to close it. N
   areas' breadcrumb drops its area label and separator, and the header's gutter narrows so the
   page name and the switcher both fit.
 - The area is the sidebar's group and the page is its item: **Media Sources > Sources**, **Media
-  Sources > Albums**, **Playlists > Manage**, **Playlists > IA Agent**. The album, artist, Drive
+  Sources > Albums**, **Playlists**. The album, artist, Drive
   and Video pages are **Media Sources >** that page; the Player's page says what it shows
   (**Player > Now playing**); Settings has no area. The header and the sidebar read one
   `NAV_GROUPS` definition, so a renamed item cannot drift from its breadcrumb.
+- The editor's page is the list's own name rather than a word for the screen, and that crumb is
+  the field that renames the list: pressing the name opens a pill input of the same metrics,
+  Enter or leaving it commits, Escape abandons it, and an empty name is refused by returning the
+  one the list has. The name is typed where it is shown, so the editor's body starts with its two
+  columns and carries no second title. The area beside it is the link back to the list of lists;
+  the editor adds no back control of its own, so below 768px — where the area label is dropped —
+  the way back is the rail.
 - The logo is the accent wordmark on the page's dark ground — the inverse of the reference's filled
   tile, with no tile fill — and its wordmark is the only bold text in the system. It sits at the top of the rail above 768px — centred when the rail is collapsed — and at the
   top of the drawer below it; the stage header carries the mark only as the drawer's opener.
@@ -465,8 +472,8 @@ group; the page is its item.
 | --- | --- |
 | Sources | A column of outlined panels: the drop zone, the virtual-card shelf, the queue rows, the run controls. The Device card shows the device's facts — the library, the Snapshot and Rescan — under the shelf, beside the K7 cassette drawing. The queue's running state is a filled row and a filled action |
 | Albums | The coverflow exactly as it is (§5.3), with the album detail, artist and video routes as outlined panels around it |
-| Manage | The list as rows; the editor as panels (search, blocks, actions); the current block is filled |
-| IA Agent | A conversation. The composer is a pill input at the foot; the person's sentence is a filled message on the right; Ask's answer is a plain message with a result panel that carries the tracks and the save question. When the model is not ready the composer's place is one sentence, with one solid button where the model can still be fetched (**Set up the assistant**), and the download's progress is a `Progress`. The Intent is behind **Filters**, a sheet of rows and controls. Errors sit in the thread and are K22 |
+| Playlists | The selected card's lists as rows, each row filled by how far its list has reached; New playlist is one dialog. The list's name is the stage header's page and is renamed there. The editor's body is two columns: the blocks, with the current block filled, on the left, and the card's files with the IA Agent behind one segmented Files / Ask switch on the right. The blocks' heading carries the edit's own state — writing, on the card, on the player, waiting, or the refusal's sentence — over the count and the rows the library is missing, and clearing the list is a trash icon whose press opens the filled confirm |
+| IA Agent | A conversation, in the editor's sources column (the right-hand one) when the switch says Ask. The composer is a pill input at the foot; the person's sentence is a filled message on the right; Ask's answer is a plain message with a result panel that carries the tracks and the offer to add them to the list beside it. When the model is not ready the composer's place is one sentence, with one solid button where the model can still be fetched (**Set up the assistant**), and the download's progress is a `Progress`. The Intent is behind **Filters**, a sheet of rows and controls. Errors sit in the thread and are K22 |
 | Settings | A column of outlined panels, one per group. Labels left, controls right, pill inputs |
 | Now playing | The broadcast: what is on air, its cassette (one case at the shelf's width) and position, and what the device says when it cannot answer. The PlayerBar stays the control |
 | Site | See [`k7-site.md`](./k7-site.md): the hero, the flash section and the install section are modules, and the footer is the licence trail |

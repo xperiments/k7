@@ -61,6 +61,12 @@ static struct {
     SemaphoreHandle_t free_slots; /* workers not currently serving */
 } L;
 
+/* The methods whose body this server reads. */
+static bool body_method(const char *m)
+{
+    return strcasecmp(m, "POST") == 0 || strcasecmp(m, "PUT") == 0;
+}
+
 /* Discard a rejected POST body that is already on the socket. Closing with
  * unread bytes sends RST and can destroy the error response, so the cap branch
  * reads what the client sent before closing. The cap keeps a hostile declared
@@ -230,10 +236,10 @@ static void serve_connection(int fd, unsigned worker)
     const http_route_t *r = http_find_route(L.cfg.filter_by_listener, L.cfg.listener,
                                             req.path, req.method, &how);
     if (!r) {
-        /* Nothing this listener serves. Read off a POST body before answering, so
+        /* Nothing this listener serves. Read off a POST or PUT body before answering, so
          * closing does not send RST over an unread body and destroy the answer -
          * whichever answer it is. */
-        if (strcasecmp(req.method, "POST") == 0 && req.has_content_length) {
+        if (body_method(req.method) && req.has_content_length) {
             discard_body(fd, req.content_length > body_in_buf ? req.content_length - body_in_buf : 0);
         }
         if (L.cfg.redirect_to_tls) {
@@ -256,14 +262,15 @@ static void serve_connection(int fd, unsigned worker)
     const char *detail = NULL;
     int bad = http_post_rules(&req, r->method, &detail);
     if (bad) {
-        ESP_LOGI(TAG, "POST %s -> %d (%u bytes)", req.path, bad, (unsigned)req.content_length);
+        ESP_LOGI(TAG, "%s %s -> %d (%u bytes)", req.method, req.path, bad,
+                 (unsigned)req.content_length);
         http_route_error(fd, r, bad, detail);
         if (bad == 413 || bad == 415)
             discard_body(fd, req.content_length > body_in_buf ? req.content_length - body_in_buf : 0);
         close(fd);
         return;
     }
-    if (strcasecmp(r->method && r->method[0] ? r->method : "GET", "POST") == 0) {
+    if (body_method(r->method && r->method[0] ? r->method : "GET")) {
         body = http_body_alloc(req.content_length);
         if (!body) {
             http_route_error(fd, r, 500, "no memory for the request body");
@@ -276,8 +283,8 @@ static void serve_connection(int fd, unsigned worker)
         while (got < req.content_length) {
             int r2 = recv(fd, body + got, req.content_length - got, 0);
             if (r2 <= 0) {
-                ESP_LOGW(TAG, "POST %s -> 400 (short body %u/%u)", req.path, (unsigned)got,
-                         (unsigned)req.content_length);
+                ESP_LOGW(TAG, "%s %s -> 400 (short body %u/%u)", req.method, req.path,
+                         (unsigned)got, (unsigned)req.content_length);
                 http_route_error(fd, r, 400, "the request body is incomplete");
                 free(body);
                 close(fd);

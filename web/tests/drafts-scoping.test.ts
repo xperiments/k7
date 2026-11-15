@@ -78,6 +78,6 @@ describe('card-scoped drafts', () => {
 
     session.setCardScope(cardA);
     await drafts.loadDrafts();
-    expect(drafts.toSnapshotPlaylists().map((list) => list.name)).toEqual(['A mix']);
+    expect(drafts.listDrafts().map((list) => list.name)).toEqual(['A mix']);
   });
 });

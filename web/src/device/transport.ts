@@ -1,7 +1,7 @@
 /**
  * The seam between the App and a device.
  *
- * Every view asks the same fourteen questions, and there is one way to answer them: over the
+ * Every view asks the same sixteen questions, and there is one way to answer them: over the
  * local network when Chrome's Local Network Access permission allows it (see `local.ts`). A
  * window with no player answers `none` and rejects every request. The seam exists so a view
  * never knows which, and so the link and the views cannot drift in what they accept or
@@ -13,7 +13,12 @@
 
 import type { OpName } from './protocol';
 import type { McpSearch, McpStats, McpTrack, LibraryListing, SearchArgs } from './mcp';
-import type { DevicePlaylists, DevicePlaylistRows, SelectResult } from './playlists';
+import type {
+  DevicePlaylists,
+  DevicePlaylistRows,
+  PlaylistWrite,
+  SelectResult,
+} from './playlists';
 import type { DeviceStatus } from './status';
 
 /**
@@ -39,6 +44,9 @@ export interface OpArgs {
   status: undefined;
   playlists: undefined;
   playlist: { id: string };
+  /** The list's file text, exactly as it will be stored on the card. */
+  'playlist.put': { id: string; body: string };
+  'playlist.delete': { id: string };
   select: { id: string | null };
   rescan: undefined;
   play: { path: string };
@@ -57,6 +65,8 @@ export interface OpData {
   status: DeviceStatus;
   playlists: DevicePlaylists;
   playlist: DevicePlaylistRows;
+  'playlist.put': PlaylistWrite;
+  'playlist.delete': PlaylistWrite;
   select: SelectResult;
   rescan: { ok: boolean };
   play: Record<string, never>;

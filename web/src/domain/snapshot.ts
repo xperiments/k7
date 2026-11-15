@@ -8,17 +8,10 @@ import type { Analysis, MoodTag } from './analysis';
 const MUSIC_DIRECTORY = 'music';
 
 const HEADER_SIZE = 80;
-const FORMAT_VERSION = 4;
+/** The image carries measurements only: a Playlist is a file on the card (ADR 0095). */
+const FORMAT_VERSION = 5;
 const ROW_SIZE = 36;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
-
-/** The list record, list row, and the caps the format puts on them. */
-const LIST_SIZE = 32;
-const LIST_ROW_SIZE = 4;
-const MAX_LISTS = 64;
-const MAX_LIST_ROWS = 8192;
-/** A name is written NUL-terminated, so its UTF-8 bytes must stay under 64. */
-const MAX_LIST_NAME_BYTES = 63;
 
 /** Percentages are seven bits: `0..100`, with 127 as the one "unknown". */
 const UNKNOWN_PERCENT = 127;
@@ -238,37 +231,6 @@ export function buildProfile(tracks: readonly SnapshotTrack[]): LibraryProfile {
   };
 }
 
-/**
- * A **Playlist** to carry in the image (format §10, list record).
- *
- * `id` is opaque, 64-bit and non-zero; it is what `select` and the device's NVS
- * key carry, so renaming a list must not change it. `createdAt` is Unix seconds
- * and is informational.
- *
- * `rows` are **Snapshot paths**, in the order the list plays them: each is a
- * Track's location below the card's `music` directory (`Artist/Album/track.mp3`),
- * never the browser path it was found at. A row names a Track by that path alone —
- * there is no fingerprint and no size — so the file the Library holds at that path
- * is what plays, and a path the Library no longer has is skipped.
- */
-export interface SnapshotPlaylist {
-  id: bigint | string;
-  /** NUL-terminated in the pool, so its UTF-8 encoding must be under 64 bytes. */
-  name: string;
-  createdAt: number;
-  rows: readonly string[];
-}
-
-/** A list after validation and sorting: what the writer interns and emits. */
-interface PreparedList {
-  id: bigint;
-  createdAt: bigint;
-  /** The name, UTF-8, without its NUL terminator. */
-  name: Uint8Array;
-  /** Each row's path, UTF-8 and NUL-free, in the list's own order. */
-  paths: Uint8Array[];
-}
-
 interface SnapshotRow {
   fingerprint: bigint;
   /** The track's length in whole milliseconds; 0 when it was never reported. */
@@ -467,111 +429,10 @@ function compareUint64(left: bigint, right: bigint): number {
 }
 
 /**
- * A 64-bit unsigned value, from a `bigint` or from the textual forms a caller may
- * hold it in: `0x`-prefixed hex, decimal, or up to sixteen hex digits that contain
- * a letter (so a bare string of digits is always decimal).
+ * Builds a version 5 image: the rows and the string pool, and nothing else. Rows are sorted by
+ * fingerprint and their four strings are interned by exact bytes in first-use order.
  */
-function parseUint64(value: bigint | string, field: string): bigint {
-  let parsed: bigint;
-  if (typeof value === 'bigint') {
-    parsed = value;
-  } else {
-    const text = value.trim();
-    if (/^0[xX][0-9a-fA-F]{1,16}$/.test(text)) parsed = BigInt(text);
-    else if (/^[0-9]{1,20}$/.test(text)) parsed = BigInt(text);
-    else if (/^[0-9a-fA-F]{1,16}$/.test(text)) parsed = BigInt(`0x${text}`);
-    else throw new Error(`${field} "${value}" is not a 64-bit unsigned integer`);
-  }
-  if (parsed < 0n || parsed > UINT64_MASK) {
-    throw new Error(`${field} ${parsed} is outside the 64-bit unsigned range`);
-  }
-  return parsed;
-}
-
-/**
- * A Playlist row names a Track the Library has, so its path must be one the device
- * can look up: relative to the Music directory, `/`-separated, no empty, `.` or
- * `..` segment, and no backslash (which `library_find` refuses).
- */
-function assertListPath(path: string, where: string): void {
-  if (path.length === 0) throw new Error(`${where}: the path is empty`);
-  if (path.includes('\0')) throw new Error(`${where}: the path contains a NUL byte`);
-  if (path.startsWith('/')) {
-    throw new Error(`${where}: "${path}" is absolute; a Playlist row is a path below music/`);
-  }
-  if (path.includes('\\')) {
-    throw new Error(`${where}: "${path}" contains a backslash, which the Library refuses`);
-  }
-  for (const segment of path.split('/')) {
-    if (segment === '' || segment === '.' || segment === '..') {
-      throw new Error(`${where}: "${path}" has an empty, "." or ".." segment`);
-    }
-  }
-}
-
-/**
- * Validate and order the lists. Refusing here rather than writing a truncated or
- * out-of-order image is the format's rule (§8, §9, §10): the device checks these
- * invariants and would reject the whole image anyway.
- */
-function prepareLists(
-  lists: readonly SnapshotPlaylist[],
-  encoder: TextEncoder,
-): PreparedList[] {
-  if (lists.length > MAX_LISTS) {
-    throw new Error(`snapshot has ${lists.length} Playlists; the format allows ${MAX_LISTS}`);
-  }
-
-  const prepared = lists.map((list, listIndex): PreparedList => {
-    const where = `Playlist ${listIndex}${list.name ? ` ("${list.name}")` : ''}`;
-    const id = parseUint64(list.id, `${where}: id`);
-    if (id === 0n) throw new Error(`${where}: an id of zero is not a Playlist`);
-
-    if (list.name.includes('\0')) {
-      throw new Error(`${where}: the name contains a NUL byte`);
-    }
-    const name = encoder.encode(list.name);
-    if (name.length > MAX_LIST_NAME_BYTES) {
-      throw new Error(
-        `${where}: the name is ${name.length} bytes; the format allows ${MAX_LIST_NAME_BYTES}`,
-      );
-    }
-
-    const paths = list.rows.map((path, rowIndex) => {
-      assertListPath(path, `${where}, row ${rowIndex}`);
-      return encoder.encode(path);
-    });
-
-    return { id, createdAt: generationValue(list.createdAt), name, paths };
-  });
-
-  prepared.sort((left, right) => compareUint64(left.id, right.id));
-
-  for (let index = 1; index < prepared.length; index += 1) {
-    if (prepared[index].id === prepared[index - 1].id) {
-      throw new Error(
-        `duplicate Playlist id ${prepared[index].id.toString(16)}: two lists share one id`,
-      );
-    }
-  }
-
-  const listRows = prepared.reduce((count, list) => count + list.paths.length, 0);
-  if (listRows > MAX_LIST_ROWS) {
-    throw new Error(`snapshot has ${listRows} Playlist rows; the format allows ${MAX_LIST_ROWS}`);
-  }
-
-  return prepared;
-}
-
-/**
- * Builds a version 4 image, with or without Playlists. Rows are sorted by fingerprint
- * and their four strings are interned by exact bytes in first-use order; the list
- * area follows and is written even when there are no lists (`list_count` 0).
- */
-export function buildSnapshot(
-  input: SnapshotInput,
-  lists: readonly SnapshotPlaylist[] = [],
-): Uint8Array<ArrayBuffer> {
+export function buildSnapshot(input: SnapshotInput): Uint8Array<ArrayBuffer> {
   const encoder = new TextEncoder();
   const rows = input.tracks.map((track) => toRow(track, encoder));
 
@@ -629,7 +490,6 @@ export function buildSnapshot(
     rowCount: rows.length,
     rowBytes,
     rowPool: concatNulTerminated(poolParts),
-    lists,
   });
 }
 
@@ -653,55 +513,24 @@ interface Assembly {
   rowCount: number;
   /** `rowCount * 36` bytes, with the four 3-byte offsets already in place. */
   rowBytes: Uint8Array;
-  /** `[0, row_pool_size)`: every row's interned strings, without list strings. */
+  /** The rows' interned strings. */
   rowPool: Uint8Array;
-  lists: readonly SnapshotPlaylist[];
 }
 
 /**
- * Write a version 4 image from parts that are already encoded. `buildSnapshot` uses
- * it after measuring, and `patchListArea` uses it to give an existing image new
- * lists without disturbing its rows: the list area lives at the end, so everything
- * before it is written verbatim and only the sizes and the CRC change.
+ * Write a version 5 image from parts that are already encoded. `buildSnapshot` is the only
+ * caller: there is no list area to patch any more, because a Playlist is a file on the card
+ * (ADR 0095).
  */
 export function assembleImage(assembly: Assembly): Uint8Array<ArrayBuffer> {
-  const encoder = new TextEncoder();
-  const prepared = prepareLists(assembly.lists, encoder);
-
   if (assembly.rowBytes.length !== assembly.rowCount * ROW_SIZE) {
     throw new Error(
       `the rows are ${assembly.rowBytes.length} bytes; ${assembly.rowCount} rows are ${assembly.rowCount * ROW_SIZE}`,
     );
   }
 
-  /* §7: the list strings follow the row pool and are interned among themselves —
-   * never against a row string, which occupies the region before them. */
-  const rowPoolSize = assembly.rowPool.length;
-  const listPoolOffsets = new Map<string, number>();
-  const listPoolParts: Uint8Array[] = [];
-  let listPoolSize = 0;
-  const listRecords = prepared.map((list) => {
-    const intern = (bytes: Uint8Array): number => {
-      const key = byteKey(bytes);
-      const existing = listPoolOffsets.get(key);
-      if (existing !== undefined) return existing;
-      const offset = rowPoolSize + listPoolSize;
-      listPoolOffsets.set(key, offset);
-      listPoolParts.push(bytes);
-      listPoolSize += bytes.length + 1;
-      return offset;
-    };
-    return { nameOffset: intern(list.name), pathOffsets: list.paths.map(intern) };
-  });
-
-  const poolSize = rowPoolSize + listPoolSize;
-  const listRowCount = prepared.reduce((count, list) => count + list.paths.length, 0);
-  const totalSize =
-    HEADER_SIZE +
-    assembly.rowCount * ROW_SIZE +
-    poolSize +
-    prepared.length * LIST_SIZE +
-    listRowCount * LIST_ROW_SIZE;
+  const poolSize = assembly.rowPool.length;
+  const totalSize = HEADER_SIZE + assembly.rowCount * ROW_SIZE + poolSize;
   if (totalSize > MAX_IMAGE_BYTES) {
     throw new Error(`snapshot is ${totalSize} bytes, larger than ${MAX_IMAGE_BYTES}`);
   }
@@ -709,8 +538,6 @@ export function assembleImage(assembly: Assembly): Uint8Array<ArrayBuffer> {
   const image = new Uint8Array(totalSize);
   const view = new DataView(image.buffer);
   const poolStart = HEADER_SIZE + assembly.rowCount * ROW_SIZE;
-  const listsStart = poolStart + poolSize;
-  const listRowsStart = listsStart + prepared.length * LIST_SIZE;
 
   /* The magic field is eight bytes (format spec §3): the six-letter name and two NULs.
    * Written out in full so the device's eight-byte compare sees exactly one value. */
@@ -728,40 +555,10 @@ export function assembleImage(assembly: Assembly): Uint8Array<ArrayBuffer> {
   view.setUint32(40, assembly.analyserVersion, true);
   view.setUint32(44, assembly.appSchema, true);
   view.setBigUint64(48, assembly.modelSet & UINT64_MASK, true);
-  // `reserved` at 56..64 stays zero; the buffer starts zeroed and is never
-  // written there.
-
-  // §3, bytes 64..80: the list counts and `row_pool_size`.
-  view.setUint16(64, prepared.length, true);
-  view.setUint16(66, LIST_SIZE, true);
-  view.setUint16(68, LIST_ROW_SIZE, true);
-  // `reserved` at 70..72 stays zero.
-  view.setUint32(72, listRowCount, true);
-  view.setUint32(76, rowPoolSize, true);
+  // `reserved` at 56..80 stays zero: 64..80 held the v4 list area's counts.
 
   image.set(assembly.rowBytes, HEADER_SIZE);
   image.set(assembly.rowPool, poolStart);
-  image.set(concatNulTerminated(listPoolParts), poolStart + rowPoolSize);
-
-  let listRowStart = 0;
-  for (let index = 0; index < prepared.length; index += 1) {
-    const list = prepared[index];
-    const record = listsStart + index * LIST_SIZE;
-
-    view.setBigUint64(record, list.id, true);
-    view.setUint32(record + 8, listRecords[index].nameOffset, true);
-    view.setUint32(record + 12, listRowStart, true);
-    view.setUint32(record + 16, list.paths.length, true);
-    view.setBigUint64(record + 20, list.createdAt, true);
-    // `reserved` at 28..32 stays zero.
-
-    for (let rowIndex = 0; rowIndex < list.paths.length; rowIndex += 1) {
-      const at = listRowsStart + (listRowStart + rowIndex) * LIST_ROW_SIZE;
-      view.setUint32(at, listRecords[index].pathOffsets[rowIndex], true);
-    }
-
-    listRowStart += list.paths.length;
-  }
 
   // The CRC covers everything after the header, never the header that carries it.
   view.setUint32(36, crc32(image.subarray(HEADER_SIZE, totalSize)), true);

@@ -237,11 +237,11 @@ describe('the sentence overrides the model', () => {
     });
   });
 
-  it('does not turn "add 5 songs to the playlist" into a search', async () => {
+  it('reads "add 5 songs to the playlist" as the count it states', async () => {
     model.askModel.mockResolvedValue('{}');
-    const result = await requestIntent('add 5 songs to the playlist');
-    expect('error' in result).toBe(true);
-    if ('error' in result) expect(result.error).toMatch(/no filters/);
+    // The App applies the Intent to the list beside the panel, so an instruction to change
+    // the list is a search like any other (ADR 0093).
+    await expect(requestIntent('add 5 songs to the playlist')).resolves.toEqual({ limit: 5 });
   });
 });
 
@@ -309,9 +309,9 @@ describe('the sentence fills an empty answer', () => {
     await expect(requestIntent('tracks in 8A')).resolves.toEqual({ key: ['8A'] });
   });
 
-  it('does not rebuild an instruction to change the library', async () => {
+  it('still refuses an instruction to change the list that states nothing to search', async () => {
     model.askModel.mockResolvedValue('{}');
-    const result = await requestIntent('add 5 songs to the playlist');
+    const result = await requestIntent('add songs to the playlist');
     expect('error' in result).toBe(true);
   });
 });

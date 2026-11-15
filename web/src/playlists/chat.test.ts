@@ -5,7 +5,8 @@ import {
   filterWords,
   nameFor,
   READ_ONLY_SOURCE,
-  saveQuestion,
+  addQuestion,
+  addedNote,
   SAVED_NOTE,
 } from './chat';
 
@@ -113,13 +114,17 @@ describe('answerText', () => {
 
 describe('the save question', () => {
   it('asks about tracks, or about one', () => {
-    expect(saveQuestion(18)).toBe('Save these 18 tracks as a playlist on this card?');
-    expect(saveQuestion(1)).toBe('Save this track as a playlist on this card?');
+    expect(addQuestion(18, 'Late night 8A')).toBe(
+      'Add these 18 tracks to “Late night 8A”?',
+    );
+    expect(addQuestion(1, 'Late night 8A')).toBe('Add this track to “Late night 8A”?');
+    expect(addedNote(18, 'Late night 8A')).toBe('Added 18 tracks to “Late night 8A”.');
+    expect(addedNote(1, 'Late night 8A')).toBe('Added 1 track to “Late night 8A”.');
   });
 
-  it('names the limit of a read-only source, and the confirmation', () => {
-    expect(READ_ONLY_SOURCE).toContain('read-only');
-    expect(SAVED_NOTE).toContain('draft');
+  it('names the limit of a read-only source, and the other choice', () => {
+    expect(READ_ONLY_SOURCE).toContain('another card');
+    expect(SAVED_NOTE).toContain('new list');
   });
 });
 

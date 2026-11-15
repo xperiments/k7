@@ -54,7 +54,7 @@ export function readImageRows(bytes: Uint8Array): ImageRow[] {
   const magic = String.fromCharCode(...bytes.subarray(0, 8));
   if (magic !== MAGIC) throw new McpError('this is not a Snapshot');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (view.getUint16(8, true) !== 4) throw new McpError('this Snapshot is not format 4');
+  if (view.getUint16(8, true) !== 5) throw new McpError('this Snapshot is not format 5');
   const rowCount = view.getUint32(16, true);
   if (view.getUint16(20, true) !== ROW_SIZE) throw new McpError('unexpected row size');
   const poolSize = view.getUint32(32, true);

@@ -6,7 +6,7 @@ import { OP_SPECS } from '../src/device/protocol';
 import { DeviceError } from '../src/device/transport';
 
 /**
- * The direct transport: the request implementation `local.ts` wraps. Each of the fourteen
+ * The direct transport: the request implementation `local.ts` wraps. Each of the
  * operations is one `fetch` against a path, and the answer is parsed by the parsers the
  * local transport exposes. The fakes record the request rather than answering it
  * meaningfully, because the question here is what went on the wire and what came back
@@ -128,6 +128,35 @@ describe('the requests this Device makes', () => {
       rows: ['a.mp3'],
     });
     expect(net.calls[1]?.url).toBe('/api/playlists/aaaa000000000001');
+  });
+
+  it('writes one list with PUT, and removes one with DELETE', async () => {
+    const net = recorder();
+    net.replies.push(() => json({ ok: true, id: 'aaaa000000000001', rows: 2, fingerprint: '00000000000000aa' }));
+    net.replies.push(() => json({ ok: true, id: 'aaaa000000000001', removed: true }));
+    const device = createDirectDevice({ fetch: net.fetch });
+
+    const file = 'K7LIST 1\nid aaaa000000000001\nname Late night\ncreated 5\nrows 2\na.mp3\nb.mp3\n';
+    await expect(device.request('playlist.put', { id: 'aaaa000000000001', body: file })).resolves.toEqual({
+      ok: true,
+      id: 'aaaa000000000001',
+      rows: 2,
+      fingerprint: '00000000000000aa',
+      removed: false,
+    });
+    expect(net.calls[0]?.url).toBe('/api/playlists/aaaa000000000001');
+    expect(net.calls[0]?.init?.method).toBe('PUT');
+    /* The body is the list's file, not a JSON document: the device stores what it validated. */
+    expect(net.calls[0]?.init?.body).toBe(file);
+    expect((net.calls[0]?.init?.headers as Record<string, string>)['content-type']).toBe(
+      'text/plain; charset=utf-8',
+    );
+
+    await expect(device.request('playlist.delete', { id: 'aaaa000000000001' })).resolves.toMatchObject({
+      ok: true,
+      removed: true,
+    });
+    expect(net.calls[1]?.init?.method).toBe('DELETE');
   });
 
   it('selects a list with POST /api/playlists/select', async () => {

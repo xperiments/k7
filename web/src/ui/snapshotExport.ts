@@ -6,7 +6,6 @@ import {
   modelSetId,
   snapshotPath,
   type LibraryProfile,
-  type SnapshotPlaylist,
   type SnapshotTrack,
 } from '../domain/snapshot';
 import type { TrackTags } from '../audio/metadata';
@@ -46,13 +45,13 @@ function versionNumber(version: string): number {
  * is measured and shown, and simply not part of the card's Library. Titles come from the
  * files' own tags, because the player's text search is only as good as the names it has.
  *
- * `lists` are this browser's Playlists (ADR 0051). With none, the image is still a version
- * 3 image with `list_count = 0`; the format has no version that omits the list area.
+ * The image carries measurements only: a Playlist is a file on the card (ADR 0095), so nothing
+ * about a list is written here.
  */
 export async function buildSnapshotExport(
   items: readonly SnapshotItem[],
   manifest: ModelManifest,
-  lists: readonly SnapshotPlaylist[] = [],
+
 ): Promise<SnapshotExport> {
   const { parseBlob } = await import('music-metadata');
   const tracks: SnapshotTrack[] = [];
@@ -119,16 +118,13 @@ export async function buildSnapshotExport(
   }
 
   const generationSeconds = Math.floor(Date.now() / 1000);
-  const bytes = buildSnapshot(
-    {
-      tracks,
-      generationSeconds,
-      analyserVersion: versionNumber(ANALYZER_VERSION),
-      appSchema: ANALYSIS_SCHEMA,
-      modelSet: modelSetId(manifest.models),
-    },
-    lists,
-  );
+  const bytes = buildSnapshot({
+    tracks,
+    generationSeconds,
+    analyserVersion: versionNumber(ANALYZER_VERSION),
+    appSchema: ANALYSIS_SCHEMA,
+    modelSet: modelSetId(manifest.models),
+  });
   return {
     bytes,
     tracks: tracks.length,

@@ -27,13 +27,16 @@ refused at review, not queued behind other work.
   operation — the card in a reader, or a host tool. The device's only SD access is the
   read-only access the broadcast and the Library need: mount the card, scan it to build the
   Library, read a Track to encode it, read artwork for the display, read the **Update file**.
-  That is all of it but for the two writes below.
-- **The two writes.** The device deletes the **Update file** it consumed once the **Snapshot**
-  has been flashed and verified; and it writes `k7.select`, the 32-byte record of the selected
+  That is all of it but for the three writes below.
+- **The three writes.** The device deletes the **Update file** it consumed once the **Snapshot**
+  has been flashed and verified; it writes `k7.select`, the 32-byte record of the selected
   **Playlist**, creating it at boot as id 0 when it is absent and rewriting it whenever that
-  choice changes, on its own task below the decoder. It writes nothing else to the card: never a
-  Track, never a directory, never a repair. These are the smallest writes that let the card say
-  what to do next without the device keeping that state; ADR 0047 is amended by ADR 0069.
+  choice changes, on its own task below the decoder; and it writes the **Playlists** the app sends
+  to it, one file per list under `k7.playlists/` at the card root, creating that one directory if
+  it is absent. It writes nothing else to the card: never a Track, never a library directory,
+  never a repair. These are the smallest writes that let the card say what to do next without the
+  device keeping that state; ADR 0047 is amended by ADR 0069, and the playlist write by
+  [ADR 0094](../adr/0094-the-device-writes-the-lists-it-is-given.md).
 
 **What the premise does not forbid**, because the distinction is the point:
 
@@ -51,8 +54,8 @@ Read literally, "all SD processing outside" would forbid the broadcast itself. I
 mean that. **SD processing** in the premise means operating on the card's content on someone
 else's behalf: adding, removing, renaming, rewriting, or shipping a Track out. Reading a Track
 to put it on air is the appliance's own job, and it is what the Library scan and the decoder
-do. Nothing else may read the card, and nothing may write it except the **Update file**'s delete
-and the `k7.select` record.
+do. Nothing else may read the card, and nothing may write it except the **Update file**'s delete,
+the `k7.select` record and the playlist files under `k7.playlists/`.
 
 ## Language
 
@@ -61,7 +64,8 @@ and the `k7.select` record.
 **Music directory**:
 The root directory on the mounted card. Its contents, recursively, define the library; the
 directory is not itself the library. The library is discovered, never stored: a **Snapshot**
-annotates its tracks and may carry **Playlists**, but it never lists the library.
+annotates its tracks, but it never lists the library and carries no **Playlists** — those are
+files on the card.
 _Avoid_: library root, media path
 
 **Library tree**:
@@ -79,9 +83,9 @@ The order the broadcast walks Tracks in: the library tree's depth-first, name-so
 _Avoid_: playlist (that is the authored one), queue, rotation
 
 **Playlist**:
-An ordered selection of the Library's Tracks, authored outside the device, stored in a
-**Snapshot**, and walked by the broadcast while selected. It is not a view of the library tree,
-and not a Track's place in it.
+An ordered selection of the Library's Tracks, authored outside the device, stored as one file on
+the card — `k7.playlists/<id>.k7list` — and walked by the broadcast while selected. It is not a
+view of the library tree, and not a Track's place in it.
 _Avoid_: broadcast order, setlist, crate, rotation
 
 **Source format**:
@@ -99,9 +103,9 @@ _Avoid_: raw file, raw audio
 **Snapshot**:
 What a host measured for a Library, delivered as one file, flashed into a partition and copied
 into PSRAM at boot, where queries read it. It annotates tracks that the Library already knows and
-may carry the host's **Playlists**; it never defines what the Library contains, and its absence
-changes nothing about what plays. The format and its reasoning are ADR 0047, amended by ADR 0051
-and 0069.
+carries measurements and nothing else — the **Playlists** are files on the card, not rows in it;
+it never defines what the Library contains, and its absence changes nothing about what plays. The
+format and its reasoning are ADR 0047, amended by ADR 0069 and ADR 0095.
 _Avoid_: database, cache, index, library
 
 **Update file**:
@@ -130,7 +134,8 @@ _Avoid_: detected (ambiguous between the two), corrected
 
 **Selected Playlist**:
 The one **Playlist** the broadcast is walking, or none. It is a choice, not a copy: the lists
-live in the Snapshot, and the selection is remembered in the card's `k7.select` across a restart.
+live in `k7.playlists/` on the card, and the selection is remembered in the card's `k7.select`
+across a restart.
 _Avoid_: active playlist, current list, mode
 
 **Station format**:
@@ -616,15 +621,21 @@ _Avoid_: card flag, insertion status
 computer. The App stopped using it when the card replaced the network as the only way in
 ([ADR 0065](../adr/0065-the-card-is-the-only-way-to-the-player.md)); the route is still there.
 The image is validated before anything is erased and the device restarts afterwards. It is the
-one write the device accepts over HTTP, and it carries measurements and **Playlists**, never a
-**Track**.
+one image the device accepts over HTTP, and it carries measurements, never a **Track** and never a
+**Playlist**.
 _Avoid_: file upload, flash endpoint
 
 **Playlist selection**:
 `POST /api/playlists/select`: the command that tells the broadcast which **Playlist** to walk,
 or `none`. Written to `k7.select` at the card root and read back at boot; a selection naming a
-list the Snapshot no longer holds falls back to the library tree's order and clears the record.
+list the card no longer holds falls back to the library tree's order and clears the record.
 _Avoid_: switch, activate, load
+
+**Playlist file**:
+`k7.playlists/<id>.k7list` on the card: the format in
+[`playlist-format.md`](./playlist-format.md). Written by the app when the card is in a computer and
+by the device when it is in the player, never by anything else.
+_Avoid_: sidecar, m3u
 
 ### Build and licensing
 

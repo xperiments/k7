@@ -12,7 +12,9 @@ describe('the shell routes', () => {
     // `#/scan` is gone: reading a card is what Prepare does, and its dock is the drop zone.
     expect(parseRoute('#/scan')).toEqual({ name: 'not-found', path: '/scan' });
     expect(parseRoute('#/playlists')).toEqual({ name: 'playlists' });
-    expect(parseRoute('#/playlists/ask')).toEqual({ name: 'ask' });
+    /* The IA Agent has no page any more: its old address lands on the list of lists, and the
+     * conversation is a tab of one editor (ADR 0093). */
+    expect(parseRoute('#/playlists/ask')).toEqual({ name: 'playlists' });
     expect(parseRoute('#/media')).toEqual({ name: 'media' });
     expect(parseRoute('#/media/drive')).toEqual({ name: 'drive', path: '' });
     expect(parseRoute('#/player')).toEqual({ name: 'player' });
@@ -23,6 +25,11 @@ describe('the shell routes', () => {
     expect(parseRoute('#/playlists/aaaa000000000001')).toEqual({
       name: 'playlist',
       id: 'aaaa000000000001',
+    });
+    expect(parseRoute('#/playlists/aaaa000000000001/ask')).toEqual({
+      name: 'playlist',
+      id: 'aaaa000000000001',
+      ask: true,
     });
     expect(parseRoute('#/media/album/AC%2FDC%20-%20Back%20In%20Black')).toEqual({
       name: 'album',
@@ -60,8 +67,8 @@ describe('the shell routes', () => {
     const routes: Route[] = [
       { name: 'prepare' },
       { name: 'playlists' },
-      { name: 'ask' },
       { name: 'playlist', id: 'aaaa000000000001' },
+      { name: 'playlist', id: 'aaaa000000000001', ask: true },
       { name: 'media' },
       { name: 'drive', path: '' },
       { name: 'drive', path: 'Artist/Album' },
@@ -86,11 +93,7 @@ describe('the sidebar and the breadcrumb', () => {
     });
     expect(routeTitle(parseRoute('#/playlists'))).toEqual({
       area: 'Playlists',
-      page: 'Manage',
-    });
-    expect(routeTitle(parseRoute('#/playlists/ask'))).toEqual({
-      area: 'Playlists',
-      page: 'IA Agent',
+      page: 'Playlists',
     });
     expect(routeTitle(parseRoute('#/player'))).toEqual({
       area: 'Player',

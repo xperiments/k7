@@ -3,8 +3,9 @@
  *
  * The conversation is the App's, not the model's: the model still produces an **Intent** and
  * nothing else (ADR 0050, ADR 0084). Everything a person reads here — the count, what was
- * understood, the source, the question about saving — is computed from the Intent that ran and
- * the search that answered, so no sentence can describe a track that does not exist.
+ * understood, the source, the offer to add the rows to the list beside the panel — is computed
+ * from the Intent that ran and the search that answered, so no sentence can describe a track
+ * that does not exist (ADR 0093).
  *
  * These functions are pure so the copy is tested without React, a model or a device.
  */
@@ -36,8 +37,10 @@ export interface Answer {
   manual?: boolean;
   /** The playlist's name if it is saved: the sentence, shortened. */
   name: string;
-  /** Set once the person saves it; the draft's id. */
+  /** Set once the person saves it as a list of its own; the draft's id. */
   draftId?: string;
+  /** Set once the person adds its rows to the list the panel stands beside. */
+  added?: boolean;
   /** The person said not now; the save question goes away. */
   dismissed?: boolean;
 }
@@ -147,20 +150,27 @@ export function sourceText(source: AnswerSource): string {
 }
 
 /** The assistant's question, or the reason it cannot ask one. */
-export function saveQuestion(count: number): string {
+export function addQuestion(count: number, list: string): string {
   const what = count === 1 ? 'this track' : `these ${count} tracks`;
-  return `Save ${what} as a playlist on this card?`;
+  return `Add ${what} to “${list}”?`;
 }
 
-/** Why there is no question for a source this browser cannot author for. */
+/** What the answer says once its rows are in the list it was asked beside. */
+export function addedNote(count: number, list: string): string {
+  const what = count === 1 ? '1 track' : `${count} tracks`;
+  return `Added ${what} to “${list}”.`;
+}
+
+/** Why there is nothing to add: the answer came from a card this list does not belong to. */
 export const READ_ONLY_SOURCE =
-  'The player’s card is read-only here — a playlist needs the card in the computer.';
+  'This answer came from another card, so its tracks cannot go into this list.';
 
-/** Why an answer can no longer be saved: the selected card changed under it. */
-export const CARD_CHANGED = 'The selected card changed since this answer — ask again to save it.';
+/** Why an answer can no longer be added: the selected card changed under it. */
+export const CARD_CHANGED = 'The selected card changed since this answer — ask again to add it.';
 
-/** A saved answer's confirmation. */
-export const SAVED_NOTE = 'Saved as a draft on this card. Open it in Playlists, or send it from Prepare.';
+/** A saved answer's confirmation: the other choice, a list of its own. */
+export const SAVED_NOTE =
+  'Saved as a new list on this card. Open it in Playlists, or send it from Prepare.';
 
 /** A playlist name from the sentence: one line, at most 60 characters. */
 export function nameFor(sentence: string, fallback = 'Asked set'): string {

@@ -6,10 +6,13 @@ Premises that outrank every requirement in every context below. Work that violat
 refused, not scheduled.
 
 - **The ESP32-S3 never serves a Track and never accepts a Track upload; all SD content
-  processing happens outside the device.** The one card write is the delete of an **Update
-  file** it has already flashed and verified. A **Card mark** is written by the K7 app, not by
-  the device, and the device that reads one reads it read-only. Stated in full, with what it
-  does and does not forbid, in [the stream server's premise](./docs/specs/CONTEXT.md#the-global-premise).
+  processing happens outside the device.** The card writes are the delete of an **Update file**
+  it has already flashed and verified, the **Playlist selection** record, and the **Playlists**
+  the app sends it, one file per list under `k7.playlists/`
+  ([ADR 0094](./docs/adr/0094-the-device-writes-the-lists-it-is-given.md)). A **Card mark** is
+  written by the K7 app, not by the device, and the device that reads one reads it read-only.
+  Stated in full, with what it does and does not forbid, in
+  [the stream server's premise](./docs/specs/CONTEXT.md#the-global-premise).
 
 ## Contexts
 
@@ -29,8 +32,8 @@ refused, not scheduled.
   [`docs/specs/snapshot-format.md`](./docs/specs/snapshot-format.md).
 - [K7 app](./web/CONTEXT.md) — the Site at `https://k7.xperiments.dev/` and the application at
   `/app` on it. The **App** measures Tracks, authors Playlists, browses the library from either
-  the device or its own **Last image**, and writes the card's **Update file** and its **Card
-  mark**. It reaches the device directly over Local Network Access, gated on the
+  the device or its own **Last image**, and writes the card's **Update file**, its **Card mark**
+  and its **Playlists** — one file per list, either directly or through the player. It reaches the device directly over Local Network Access, gated on the
   `local-network` permission, and only in Chrome
   ([ADR 0067](./docs/adr/0067-chrome-only-direct-to-the-device.md)). The App is the producer of
   the **Snapshot** the stream server answers its queries from. The **Site** is public: it offers
@@ -65,15 +68,16 @@ refused, not scheduled.
   words with different scope, so each is defined in both glossaries:
   - **Track** — there, a file in the card's music directory, owned by the device; here, a file
     the user submits for measurement.
-  - **Playlist** — there, an ordered selection stored in the Snapshot and walked by the
-    broadcast; here, the same thing while it is being authored, named and reordered.
+  - **Playlist** — there, an ordered selection on the card, one file per list, walked by the
+    broadcast; here, the same list while it is being authored, named and reordered.
   - **Snapshot** — there, an immutable image in a flash partition; here, an image this browser
     builds, keeps as its **Last image**, and sends.
 
-- **K7 app → Stream server**: the app can never change what plays by editing a Playlist. A
-  Playlist reaches the device only inside a Snapshot (an image, a restart), and a chosen
-  Playlist is a command afterwards (ADR 0051). This is why the app's editor is a draft and
-  sending is an act.
+- **K7 app → Stream server**: a Playlist is the card's, and either side may write it — the app
+  when the card is in a computer, the device when the card is in the player
+  ([ADR 0095](./docs/adr/0095-a-playlist-is-a-file-on-its-card.md)). A measurement only ever
+  arrives by flashing an image on the card, and flashes a restart; a list arrives as a file and
+  does not.
 
 ## Note on the research tree
 

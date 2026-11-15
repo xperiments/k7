@@ -93,6 +93,11 @@ export async function loadSnapshot(scope: string): Promise<StoredSnapshot | unde
   return (await dbPromise).get('snapshots', scope);
 }
 
+/** Whether this browser keeps an image for a card, without reading its bytes. */
+export async function hasSnapshot(scope: string): Promise<boolean> {
+  return (await (await dbPromise).getKey('snapshots', scope)) !== undefined;
+}
+
 /**
  * The image this browser built or sent most recently, whichever card it belongs to.
  *

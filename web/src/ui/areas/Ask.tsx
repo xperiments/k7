@@ -23,6 +23,8 @@ import { formatDuration } from '../format';
 import { newId } from '../../lib/id';
 import { purposeFilters, requestIntent, relaxRanges, spreadAnswer } from '../../playlists/ask';
 import {
+  addedNote,
+  addQuestion,
   answerText,
   CARD_CHANGED,
   filterWords,
@@ -30,7 +32,6 @@ import {
   OPENERS,
   READ_ONLY_SOURCE,
   SAVED_NOTE,
-  saveQuestion,
   sourceText,
   type ChatMessage,
   type Retry,
@@ -151,14 +152,19 @@ function TrackRows({ tracks }: { tracks: McpSearch['tracks'] }) {
 function AnswerBlock({
   message,
   scope,
+  listName,
   onFilters,
+  onAdd,
   onSave,
   onDismiss,
   onOpenDraft,
 }: {
   message: ChatMessage;
   scope: string;
+  /** The list the editor has open beside the panel. */
+  listName: string;
   onFilters: (intent: SearchArgs) => void;
+  onAdd: (message: ChatMessage) => void;
   onSave: (message: ChatMessage) => void;
   onDismiss: (message: ChatMessage) => void;
   onOpenDraft: (id: string) => void;
@@ -227,6 +233,12 @@ function AnswerBlock({
                 Open playlist
               </Button>
             </CardFooter>
+          ) : answer.added ? (
+            <CardFooter>
+              <p className="text-xs text-muted-foreground">
+                {addedNote(tracks.length, listName)}
+              </p>
+            </CardFooter>
           ) : answer.dismissed ? null : !saveable ? (
             <CardFooter>
               <p className="text-xs text-muted-foreground">{READ_ONLY_SOURCE}</p>
@@ -238,16 +250,24 @@ function AnswerBlock({
           ) : (
             <CardFooter className="flex flex-col items-stretch gap-2">
               <p className="text-xs text-muted-foreground">
-                {saveQuestion(tracks.length)}
+                {addQuestion(tracks.length, listName)}
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="solid"
                   size="sm"
+                  onClick={() => onAdd(message)}
+                >
+                  Add {tracks.length === 1 ? '1 track' : `${tracks.length} tracks`}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => onSave(message)}
                 >
-                  Save playlist
+                  Save as a new list
                 </Button>
                 <Button
                   type="button"
@@ -274,21 +294,21 @@ function Empty({
   onAsk: (sentence: string) => void;
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 text-center">
+    <div className="flex flex-col items-center gap-2 text-center">
       <span
-        className="grid size-10 place-items-center rounded-full border border-foreground/30 text-primary"
+        className="grid size-8 place-items-center rounded-full border border-foreground/30 text-primary"
         aria-hidden="true"
       >
-        <Sparkles className="size-5 stroke-[1.25]" />
+        <Sparkles className="size-4 stroke-[1.25]" />
       </span>
-      <h2 className="text-xl font-light tracking-tight">What should we listen to?</h2>
-      <p className="max-w-md text-sm text-muted-foreground">
+      <h2 className="text-sm font-light tracking-tight">What should we listen to?</h2>
+      <p className="text-xs text-muted-foreground">
         {canAsk
           ? 'A mood, a tempo, a name or a key — in your own words. The model runs on this machine and never sees a track.'
           : 'The assistant is not ready on this machine. The Filters sheet still searches the library.'}
       </p>
       {canAsk ? (
-        <div className="flex flex-wrap justify-center gap-2">
+        <div className="flex flex-wrap justify-center gap-1.5">
           {OPENERS.map((opener) => (
             <Button
               key={opener}
@@ -319,7 +339,14 @@ function Pending({ phase }: { phase: 'reading' | 'searching' }) {
   );
 }
 
-export function AskArea() {
+export function AskPanel({
+  listName,
+  onAdd,
+}: {
+  /** The list the editor has open: where an answer's rows go. */
+  listName: string;
+  onAdd: (rows: readonly string[]) => void;
+}) {
   const scope = useCardScope();
   const deviceView = useDeviceView();
   const [assistant, setAssistant] = useState<AssistantState | null>(null);
@@ -470,6 +497,21 @@ export function AskArea() {
     else void runFilters(message.retry.intent);
   }
 
+  /** The primary action: the App applies the Intent to the list beside the panel (ADR 0093). */
+  function add(message: ChatMessage) {
+    const answer = message.answer;
+    if (!answer || answer.added || answer.draftId) return;
+    if (answer.source.draftScope === null || answer.source.draftScope !== scope) return;
+    onAdd(answer.search.tracks.map((track) => track.path));
+    setMessages((current) =>
+      current.map((each) =>
+        each.id === message.id && each.answer
+          ? { ...each, answer: { ...each.answer, added: true } }
+          : each,
+      ),
+    );
+  }
+
   function save(message: ChatMessage) {
     const answer = message.answer;
     if (!answer || answer.draftId || answer.source.draftScope === null) return;
@@ -516,22 +558,7 @@ export function AskArea() {
         : '';
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5 sm:px-6">
-        <h1 className="min-w-0 flex-1 text-lg font-light tracking-tight">Ask</h1>
-        {messages.length > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={clear}
-            disabled={pending}
-          >
-            New ask
-          </Button>
-        ) : null}
-      </header>
-
+    <div className="flex min-h-0 flex-1 flex-col">
       <div
         role="log"
         aria-live="polite"
@@ -540,7 +567,7 @@ export function AskArea() {
       >
         <div
           className={cn(
-            'mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 sm:px-6',
+            'flex w-full flex-col gap-4 py-3',
             messages.length === 0 && 'min-h-full justify-center',
           )}
         >
@@ -568,7 +595,9 @@ export function AskArea() {
                 <AnswerBlock
                   message={message}
                   scope={scope}
+                  listName={listName}
                   onFilters={openFilters}
+                  onAdd={add}
                   onSave={save}
                   onDismiss={dismiss}
                   onOpenDraft={(id) => navigate(routeHref({ name: 'playlist', id }))}
@@ -616,8 +645,8 @@ export function AskArea() {
         </div>
       </div>
 
-      <div className="shrink-0 border-t">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 px-4 py-3 sm:px-6">
+      <div className="shrink-0 border-t pt-3">
+        <div className="flex w-full flex-col gap-2">
           {assistant === null ? (
             <p
               role="status"
@@ -655,15 +684,28 @@ export function AskArea() {
                   )}
                 </Button>
               </form>
-              <div className="flex items-center justify-between gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => openFilters(seed)}
-                >
-                  Filters
-                </Button>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => openFilters(seed)}
+                  >
+                    Filters
+                  </Button>
+                  {messages.length > 0 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={clear}
+                      disabled={pending}
+                    >
+                      New ask
+                    </Button>
+                  ) : null}
+                </div>
                 <span className="text-xs text-muted-foreground">
                   The model never sees a track.
                 </span>

@@ -171,7 +171,7 @@ esp_err_t http_send_headers(int fd, int status, const char *content_type,
     }
     if (cors && *cors) {
         hdr_add(&w, "Access-Control-Allow-Origin: %s\r\n", cors);
-        hdr_add(&w, "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n");
+        hdr_add(&w, "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n");
         /* `Mcp-Protocol-Version` is what an MCP client sends on every POST, and the browser
          * refuses the request at the preflight if it is not named here; the response carries
          * the same header back, which `Expose-Headers` is what lets a page read. */
@@ -298,7 +298,8 @@ const http_route_t *http_find_route(bool filter_by_listener, http_listener_t lis
 int http_post_rules(const http_request_t *req, const char *route_method, const char **detail)
 {
     const char *m = route_method && route_method[0] ? route_method : "GET";
-    if (strcasecmp(m, "POST") != 0) return 0;
+    /* POST and PUT are the two methods that carry a body this server reads. */
+    if (strcasecmp(m, "POST") != 0 && strcasecmp(m, "PUT") != 0) return 0;
 
     /* A route that named a limit is speaking bytes, not JSON: it checks its own type. */
     http_route_find_t how;

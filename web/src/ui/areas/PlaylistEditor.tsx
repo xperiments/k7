@@ -5,9 +5,11 @@ import {
   ChevronDown,
   ChevronRight,
   Folder,
+  FolderTree,
   GripVertical,
   ListMusic,
   Plus,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { cn } from 'cn';
@@ -15,6 +17,7 @@ import { cn } from 'cn';
 import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Empty,
   EmptyContent,
@@ -25,28 +28,39 @@ import {
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useCardScope, useDeviceView } from '../../card/session';
 import { McpError, trackAt, type McpTrack } from '../../device/mcp';
+import { useDeviceStatus } from '../../device/useDeviceStatus';
+import { imageRowKey } from '../../domain/snapshot';
 import { useMediaIndex } from '../../media/albums';
 import { buildFolderTree, folderTrackPaths, locateFolder } from '../../media/folders';
+import { readImageRows, type ImageRow } from '../../library/imageSource';
 import { fileName } from '../../media/paths';
 import {
   clearDraft,
   draftsLoaded,
+  findDraft,
   insertEntries,
   moveEntry,
   removeEntry,
-  updateDraft,
   useDrafts,
   type Draft,
   type NewEntry,
 } from '../../playlists/drafts';
+import { encodeList, listFingerprint } from '../../playlists/file';
+import { writeListFile } from '../../playlists/cardLists';
+import { putPlaylist } from '../../device/playlists';
+import { loadSnapshot } from '../../storage/snapshots';
+import { useListScope } from '../lists-scope';
+import type { CachedMedia } from '../../storage/media';
+import { AskPanel } from './Ask';
 import { FileTree } from '../file-tree';
 import { plural } from '../format';
 import { navigate, routeHref } from '../router';
 import { draggedFolder, draggedTrack, isLibraryDrag } from '../track-drag';
 
 /**
- * One draft as a workspace: the card's folders on the left, the list on the right.
+ * One draft as a workspace: the list on the left, the card's folders beside it.
  *
  * A source row can be **pressed** to add a track at the end, or **dragged** into the list to
  * place it exactly. A folder is a block of its own — dropping it adds one row that carries
@@ -97,17 +111,42 @@ interface FactsState {
 }
 
 /**
- * Resolve every distinct row the draft holds. The effect re-runs when the *set* of paths
- * changes (a reorder does not), and a path is asked for once:
- * `settled` keeps the answers and `inFlight` keeps two overlapping runs from duplicating.
+ * Where a row's facts are answered from: the player for the **Device card**, this browser's own
+ * rows for a card in the computer. A card's rows are the media cache joined to the image this
+ * browser wrote for it, keyed exactly as the player keys them — the path's fingerprint and the
+ * file's size — so the editor works with the player off, or holding a different card (ADR 0092).
  */
-function useRowFacts(paths: readonly string[]): FactsState {
+interface FactsSource {
+  /** The player holds the selected card, so it answers for the rows. */
+  device: boolean;
+  /** The card being edited. */
+  scope: string;
+  /** This browser's rows for that card, by path; null while they are still being read. */
+  rows: Map<string, CachedMedia> | null;
+}
+
+/**
+ * Resolve every distinct row the draft holds. The effect re-runs when the *set* of paths
+ * changes (a reorder does not), and a path is asked for once: `settled` keeps the answers and
+ * `inFlight` keeps two overlapping runs from duplicating. A change of source starts over,
+ * because a fact about the player's card says nothing about this one.
+ */
+function useRowFacts(paths: readonly string[], source: FactsSource): FactsState {
   const key = useMemo(() => Array.from(new Set(paths)).sort().join('\n'), [paths]);
   const [state, setState] = useState<FactsState>({ map: new Map(), loading: false, error: null });
   const settled = useRef(new Set<string>());
   const inFlight = useRef(new Set<string>());
+  const kind = source.device ? 'device' : 'card';
 
   useEffect(() => {
+    settled.current = new Set();
+    inFlight.current = new Set();
+    setState({ map: new Map(), loading: false, error: null });
+  }, [kind, source.scope]);
+
+  /* The Device card: one `library_track` per row, eight at a time. */
+  useEffect(() => {
+    if (!source.device) return;
     let cancelled = false;
     const targets = (key ? key.split('\n') : []).filter(
       (path) => path && !settled.current.has(path) && !inFlight.current.has(path),
@@ -168,19 +207,81 @@ function useRowFacts(paths: readonly string[]): FactsState {
     return () => {
       cancelled = true;
     };
-  }, [key]);
+  }, [key, source.device]);
+
+  /* A card in the computer: this browser's rows, joined to the image it wrote for the card. A
+   * path with no cached row is not in this card's library, and says so instead of asking the
+   * player about a card it is not holding. */
+  useEffect(() => {
+    if (source.device || source.rows === null) return;
+    const rows = source.rows;
+    const targets = (key ? key.split('\n') : []).filter(
+      (path) => path && !settled.current.has(path) && !inFlight.current.has(path),
+    );
+    if (targets.length === 0) return;
+    let cancelled = false;
+    for (const path of targets) inFlight.current.add(path);
+
+    const run = async () => {
+      setState((current) => ({ ...current, loading: true, error: null }));
+      let image: Map<string, ImageRow> | null = null;
+      try {
+        const stored = await loadSnapshot(source.scope);
+        image = stored
+          ? new Map(
+              readImageRows(stored.bytes).map(
+                (row) => [`${row.fingerprint.toString(16)}:${row.size}`, row] as const,
+              ),
+            )
+          : null;
+      } catch {
+        /* An image this build cannot read is no answer: the cache still names the row. */
+        image = null;
+      }
+      if (cancelled) return;
+
+      const answers: [string, RowFacts | null][] = targets.map((path) => {
+        const cached = rows.get(path);
+        if (cached === undefined) return [path, null];
+        const row = image?.get(imageRowKey(cached.path, cached.size ?? -1)) ?? null;
+        return [
+          path,
+          {
+            bpm: row !== null && row.bpmX10 > 0 ? row.bpmX10 / 10 : null,
+            key: row !== null ? camelotOf(row.key) : null,
+            /* The format stores a percentage, with 127 for "not measured". */
+            energy: row !== null && row.energy !== 127 ? row.energy : null,
+            artist: cached.artist || row?.artist || null,
+            album: cached.album || row?.album || null,
+            title: cached.title || row?.title || null,
+          },
+        ];
+      });
+
+      for (const path of targets) {
+        settled.current.add(path);
+        inFlight.current.delete(path);
+      }
+      setState((current) => {
+        const map = new Map(current.map);
+        for (const [path, facts] of answers) map.set(path, facts);
+        return { ...current, map, loading: false };
+      });
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [key, source.device, source.scope, source.rows]);
 
   return state;
 }
 
-function normaliseId(id: string): string {
-  return id.trim().toLowerCase().replace(/^0x/, '');
-}
-
-function findDraft(drafts: readonly Draft[], id: string): Draft | undefined {
-  const wanted = normaliseId(id);
-  if (!wanted) return undefined;
-  return drafts.find((draft) => draft.id === wanted || draft.id === wanted.padStart(16, '0'));
+/** The key's Camelot code, written the way the player writes it: `8A`, `12B`. */
+function camelotOf(key: number): string | null {
+  if (key < 1 || key > 24) return null;
+  return `${((key - 1) % 12) + 1}${key > 12 ? 'B' : 'A'}`;
 }
 
 function EditorMissing() {
@@ -256,9 +357,12 @@ function SourceLoading() {
 function TrackInfo({
   path,
   facts,
+  missingLabel,
 }: {
   path: string;
   facts: RowFacts | null | undefined;
+  /** What "no facts" means for this source: the player's card, or a card in the computer. */
+  missingLabel: string;
 }) {
   const missing = facts === null;
   return (
@@ -267,7 +371,7 @@ function TrackInfo({
         <span className="truncate text-sm" title={path}>
           {facts?.title || fileName(path)}
         </span>
-        {missing ? <Badge variant="destructive-light">Not on the card</Badge> : null}
+        {missing ? <Badge variant="destructive-light">{missingLabel}</Badge> : null}
       </div>
       <span className="truncate text-xs text-muted-foreground">{path}</span>
     </div>
@@ -333,10 +437,12 @@ function BlockActions({
   );
 }
 
-function Editor({ draft }: { draft: Draft }) {
-  const facts = useRowFacts(draft.rows);
+function Editor({ draft, ask }: { draft: Draft; ask: boolean }) {
+  const scope = useCardScope();
+  const deviceView = useDeviceView();
+  const { status } = useDeviceStatus();
   const media = useMediaIndex();
-  const [name, setName] = useState(draft.name);
+  const [tab, setTab] = useState<'files' | 'ask'>(ask ? 'ask' : 'files');
   const [entryFrom, setEntryFrom] = useState<number | null>(null);
   const [entryDropAt, setEntryDropAt] = useState<number | null>(null);
   const [overEmpty, setOverEmpty] = useState(false);
@@ -344,8 +450,41 @@ function Editor({ draft }: { draft: Draft }) {
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [sourceQuery, setSourceQuery] = useState('');
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const nameField = useId();
+  const listScope = useListScope();
+  /* Where the edit has got to: the card's file here, the player's file there, or still only
+   * in this browser. A refusal keeps its sentence. */
+  const [written, setWritten] = useState<
+    | { kind: 'writing' }
+    | { kind: 'card' }
+    | { kind: 'player' }
+    | { kind: 'waiting' }
+    | { kind: 'refused'; reason: string }
+  >({ kind: 'writing' });
+  /* The list's content: a rename, a reorder or an added row is a different fingerprint, and
+   * that is what a write is debounced on. */
+  const fingerprint = listFingerprint(draft);
   const sourceSearch = useId();
+
+  /* A row's facts come from the selected source: the player when it holds this card, this
+   * browser's own rows for the card when it does not (ADR 0092). */
+  const deviceSource = deviceView && status?.card === true;
+  const mediaRows = useMemo(
+    () =>
+      media.index
+        ? new Map(
+            media.index.albums
+              .flatMap((album) => album.rows)
+              .map((row) => [row.path, row] as const),
+          )
+        : null,
+    [media.index],
+  );
+  const facts = useRowFacts(draft.rows, {
+    device: deviceSource,
+    scope,
+    rows: mediaRows,
+  });
+  const missingLabel = deviceSource ? 'Not on the card' : 'Not in this card’s library';
 
   /* The same tree Media's Drive shows, read from the same cache and listing. The editor
    * starts it at the root: the point here is to pick a file, not to walk a history. */
@@ -367,13 +506,68 @@ function Editor({ draft }: { draft: Draft }) {
   const checked = draft.rows.every((path) => facts.map.has(path));
   const missing = checked ? draft.rows.filter((path) => facts.map.get(path) === null).length : null;
 
-  const commitName = () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setName(draft.name);
-      return;
-    }
-    if (trimmed !== draft.name) updateDraft(draft.id, { name: trimmed });
+  /* An edit is a write to the list's card, debounced: one small file. With the card in this
+   * computer it goes through the card's own directory; with the card in the player it goes to
+   * the player, which writes it (ADR 0094). Until it lands the draft is the pending edit, and
+   * the header says so rather than pretending the card has it (ADR 0095). */
+  const viaPlayer = deviceSource;
+  useEffect(() => {
+    let cancelled = false;
+    setWritten({ kind: 'writing' });
+    const timer = setTimeout(() => {
+      const list = {
+        id: draft.id,
+        name: draft.name,
+        createdAt: draft.createdAt,
+        rows: draft.rows,
+      };
+      let text: string;
+      try {
+        text = encodeList(list);
+      } catch (failure) {
+        if (!cancelled) {
+          setWritten({
+            kind: 'refused',
+            reason: failure instanceof Error ? failure.message : String(failure),
+          });
+        }
+        return;
+      }
+      const write = viaPlayer
+        ? putPlaylist(list.id, text).then(() => ({ kind: 'player' as const }))
+        : writeListFile(listScope, list).then((ok) =>
+            ok ? ({ kind: 'card' as const }) : ({ kind: 'waiting' as const }),
+          );
+      void write
+        .then((state) => {
+          if (!cancelled) setWritten(state);
+        })
+        .catch((failure: unknown) => {
+          if (!cancelled) {
+            setWritten({
+              kind: 'refused',
+              reason: failure instanceof Error ? failure.message : String(failure),
+            });
+          }
+        });
+    }, 1200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [listScope, viaPlayer, draft.id, fingerprint]);
+
+  /* The tab is a place: the address carries it, so a reload lands where the person was. */
+  useEffect(() => {
+    setTab(ask ? 'ask' : 'files');
+  }, [ask]);
+
+  const chooseTab = (next: string) => {
+    const wanted = next === 'ask' ? 'ask' : 'files';
+    setTab(wanted);
+    navigate(routeHref({ name: 'playlist', id: draft.id, ask: wanted === 'ask' }), {
+      replace: true,
+    });
   };
 
   const toggleExpanded = (id: string) => {
@@ -465,108 +659,51 @@ function Editor({ draft }: { draft: Draft }) {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4 sm:p-6 lg:h-full lg:min-h-0">
-      <h1 className="sr-only">Edit playlist</h1>
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex w-full max-w-xl flex-col gap-1">
-          <label htmlFor={nameField} className="text-xs text-muted-foreground">
-            Name
-          </label>
-          <Input
-            id={nameField}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onBlur={commitName}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                event.currentTarget.blur();
-              }
-              if (event.key === 'Escape') {
-                // Reverting must not blur: onBlur reads the name from this render, and
-                // that is still the text being abandoned.
-                setName(draft.name);
-              }
-            }}
-            maxLength={60}
-            autoComplete="off"
-          />
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(routeHref({ name: 'playlists' }))}
-        >
-          All playlists
-        </Button>
-      </header>
+      <h1 className="sr-only">Edit {draft.name}</h1>
 
-      <div className="grid min-w-0 gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        {/* Sources: the card, as a tree, with every file and folder a drag or a press away. */}
-        <section aria-labelledby="sources-heading" className="flex min-w-0 flex-col gap-3 lg:min-h-0">
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-0.5">
-              <h2 id="sources-heading" className="text-sm font-light">
-                Sources
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                The card&apos;s folders. Drag a file or folder into the list, or press a file to
-                add it at the end.
-              </p>
-            </div>
-            {!media.loading && hasSources ? (
-              <div className="flex flex-col gap-1">
-                <label htmlFor={sourceSearch} className="sr-only">
-                  Search sources
-                </label>
-                <Input
-                  id={sourceSearch}
-                  type="search"
-                  value={sourceQuery}
-                  onChange={(event) => setSourceQuery(event.target.value)}
-                  placeholder="Search sources"
-                  autoComplete="off"
-                />
-              </div>
-            ) : null}
-          </div>
-
-          <div className="min-h-0 lg:flex-1 lg:overflow-auto">
-            {media.loading ? (
-              <SourceLoading />
-            ) : !hasSources ? (
-              <NoSources reachable={media.reachable} />
-            ) : (
-              <FileTree
-                key={`sources\u0000${sourceQuery}`}
-                tree={sourceTree}
-                query={sourceQuery}
-                path=""
-                action="add"
-                draggableSources
-                onActivate={(track) => addToEnd([{ kind: 'track', path: track.path }])}
-              />
-            )}
-          </div>
-        </section>
-
-        {/* The draft: blocks in order, each one a drop target and a drag handle. */}
+      <div className="grid min-w-0 gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        {/* The list: blocks in order, each one a drop target and a drag handle. */}
         <section
           aria-labelledby="playlist-heading"
           className="flex min-w-0 flex-col gap-3 lg:min-h-0"
         >
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div className="flex flex-col gap-0.5">
-              <h2 id="playlist-heading" className="text-sm font-light">
-                Playlist
-              </h2>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                <h2 id="playlist-heading" className="text-sm font-light">
+                  Playlist
+                </h2>
+                <span aria-hidden="true" className="text-xs text-muted-foreground">
+                  ·
+                </span>
+                {/* Where the edit has got to: the card's file, the player's, or still here. */}
+                <span
+                  role="status"
+                  className={cn(
+                    'min-w-0 text-xs',
+                    written.kind === 'refused' ? 'text-destructive' : 'text-muted-foreground',
+                  )}
+                >
+                  {written.kind === 'writing'
+                    ? 'Writing…'
+                    : written.kind === 'card'
+                      ? 'On the card'
+                      : written.kind === 'player'
+                        ? 'On the player'
+                        : written.kind === 'waiting'
+                          ? 'Waiting for the card'
+                          : `Not written: ${written.reason}`}
+                </span>
+              </div>
               <p className="text-xs text-muted-foreground tabular-nums" role="status">
                 {plural(draft.rows.length, 'track')}
-                {folderCount > 0 ? ` · ${plural(folderCount, 'folder')}` : ''} · not on the card:{' '}
+                {folderCount > 0 ? ` · ${plural(folderCount, 'folder')}` : ''} ·{' '}
+                {deviceSource ? 'not on the card' : 'not in this card’s library'}:{' '}
                 {facts.error ? facts.error : missing === null ? 'checking…' : missing}
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1">
+            <div className="flex shrink-0 flex-wrap items-center gap-1">
               {confirmingClear ? (
                 <>
                   <Button variant="solid" size="sm" onClick={clearAll}>
@@ -579,12 +716,13 @@ function Editor({ draft }: { draft: Draft }) {
               ) : (
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon-sm"
+                  aria-label="Clear the playlist"
+                  title="Clear the playlist"
                   disabled={draft.entries.length === 0}
                   onClick={() => setConfirmingClear(true)}
                 >
                   <Trash2 aria-hidden="true" />
-                  Clear
                 </Button>
               )}
             </div>
@@ -618,7 +756,7 @@ function Editor({ draft }: { draft: Draft }) {
                         </EmptyMedia>
                         <EmptyTitle>No rows yet</EmptyTitle>
                         <EmptyDescription>
-                          Drag a file or folder from Sources into this card, or press a file to
+                          Drag a file or folder from Sources into this list, or press a file to
                           add it at the end.
                         </EmptyDescription>
                       </EmptyHeader>
@@ -650,7 +788,11 @@ function Editor({ draft }: { draft: Draft }) {
                                 <span className="w-6 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
                                   {index + 1}
                                 </span>
-                                <TrackInfo path={entry.path} facts={facts.map.get(entry.path)} />
+                                <TrackInfo
+                                  path={entry.path}
+                                  facts={facts.map.get(entry.path)}
+                                  missingLabel={missingLabel}
+                                />
                                 <FactsLine facts={facts.map.get(entry.path)} />
                                 <BlockActions
                                   index={index}
@@ -717,7 +859,11 @@ function Editor({ draft }: { draft: Draft }) {
                                         key={`${entry.id}:${path}`}
                                         className="flex items-center gap-2 border-b px-3 py-1.5 ps-14 last:border-b-0"
                                       >
-                                        <TrackInfo path={path} facts={facts.map.get(path)} />
+                                        <TrackInfo
+                                          path={path}
+                                          facts={facts.map.get(path)}
+                                          missingLabel={missingLabel}
+                                        />
                                         <FactsLine facts={facts.map.get(path)} />
                                       </li>
                                     ))}
@@ -759,25 +905,92 @@ function Editor({ draft }: { draft: Draft }) {
                 )}
               </CardContent>
             </Card>
-
-            <p className="text-xs text-muted-foreground">
-              Drag a row or a folder to move it; a folder moves as one block. Use the arrows
-              with a keyboard. This draft reaches the player when Prepare sends an image.
-            </p>
           </div>
+        </section>
+
+        {/* The sources: the card's files and the AI Agent, one at a time behind a switch. */}
+        <section
+          aria-labelledby="sources-heading"
+          className="flex min-w-0 flex-col gap-3 lg:min-h-0"
+        >
+          <h2 id="sources-heading" className="sr-only">
+            Files and the AI Agent
+          </h2>
+          <Tabs value={tab} onValueChange={chooseTab} className="min-h-0 flex-1">
+            <TabsList className="w-full">
+              <TabsTrigger value="files">
+                <FolderTree aria-hidden="true" />
+                Files
+              </TabsTrigger>
+              <TabsTrigger value="ask">
+                <Sparkles aria-hidden="true" />
+                Ask
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="files" className="flex min-h-0 flex-col gap-3">
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-sm font-light">Files</p>
+                </div>
+                {!media.loading && hasSources ? (
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor={sourceSearch} className="sr-only">
+                      Search sources
+                    </label>
+                    <Input
+                      id={sourceSearch}
+                      type="search"
+                      value={sourceQuery}
+                      onChange={(event) => setSourceQuery(event.target.value)}
+                      placeholder="Search sources"
+                      autoComplete="off"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="min-h-0 flex-1 lg:overflow-auto">
+                {media.loading ? (
+                  <SourceLoading />
+                ) : !hasSources ? (
+                  <NoSources reachable={media.reachable} />
+                ) : (
+                  <FileTree
+                    key={`sources\u0000${sourceQuery}`}
+                    tree={sourceTree}
+                    query={sourceQuery}
+                    path=""
+                    action="add"
+                    draggableSources
+                    onActivate={(track) => addToEnd([{ kind: 'track', path: track.path }])}
+                  />
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Kept mounted while the other tab shows: the conversation is this visit's, and a
+                switch back to the files must not throw it away. */}
+            <TabsContent value="ask" keepMounted className="flex min-h-0 flex-col">
+              <AskPanel
+                listName={draft.name}
+                onAdd={(rows) => addToEnd(rows.map((path) => ({ kind: 'track', path })))}
+              />
+            </TabsContent>
+          </Tabs>
         </section>
       </div>
     </div>
   );
 }
 
-export function PlaylistEditor({ id }: { id: string }) {
+export function PlaylistEditor({ id, ask }: { id: string; ask: boolean }) {
   const drafts = useDrafts();
   const draft = findDraft(drafts, id);
 
   // The drafts are read once at boot; until then an unknown id is "loading", not "missing".
   if (!draft && !draftsLoaded()) return <EditorLoading />;
   if (!draft) return <EditorMissing />;
-  // Keyed by id: opening another list resets the name field and the drag state.
-  return <Editor key={draft.id} draft={draft} />;
+  // Keyed by id: opening another list resets the tab, the drag state and the source search.
+  return <Editor key={draft.id} draft={draft} ask={ask} />;
 }

@@ -3,9 +3,9 @@
  * snapshot - the measured music a host produced for this Library.
  *
  * One immutable image, validated once and then read in place: an 80-byte header, one
- * 36-byte row per track sorted by fingerprint, one interned UTF-8 string pool, and the
- * lists. The module never copies, caches or touches a filesystem -- it is handed a
- * pointer and a length. On the device the pointer is the PSRAM copy the appliance makes
+ * 36-byte row per track sorted by fingerprint, and one interned UTF-8 string pool. A
+ * Playlist is a file on the card, not a row here (ADR 0095). The module never copies,
+ * caches or touches a filesystem -- it is handed a pointer and a length. On the device the pointer is the PSRAM copy the appliance makes
  * at boot (ADR 0069); in the host tests it is a buffer.
  *
  * The byte layout is docs/specs/snapshot-format.md. This header is the only interface
@@ -21,16 +21,12 @@ extern "C" {
 #endif
 
 /* The header's first eight bytes: `K7SNAP`, NUL-padded to eight. This is the only magic
- * format version 4 has; there is no legacy name and no version branch (format spec §12). */
+ * format version 5 has; there is no legacy name and no version branch (format spec §12). */
 #define SNAPSHOT_MAGIC        "K7SNAP\0\0"
-/* Format version 4 is the only version this project reads or writes. */
-#define SNAPSHOT_VERSION      4u
+/* Format version 5 is the only version this project reads or writes. */
+#define SNAPSHOT_VERSION      5u
 #define SNAPSHOT_HEADER_SIZE  80u
 #define SNAPSHOT_ROW_SIZE     36u
-#define SNAPSHOT_LIST_SIZE    32u
-#define SNAPSHOT_LIST_ROW_SIZE 4u
-#define SNAPSHOT_MAX_LISTS    64u
-#define SNAPSHOT_MAX_LIST_ROWS 8192u
 #define SNAPSHOT_MAX_BYTES    (2u * 1024u * 1024u)
 
 /* Unknown percentages are exposed as 0xFF; the image stores 127 and the reader maps
@@ -48,16 +44,6 @@ typedef enum {
 
 /* A validated image. Opaque: the fields are read through the accessors below. */
 typedef struct snapshot snapshot_t;
-
-/* One Playlist, as read: its opaque id, where its name is in the pool, and its slice
- * of the list-row array. `snapshot_list_row` reads one row of that slice. */
-typedef struct {
-    uint64_t id;
-    uint32_t name_offset;
-    uint32_t row_start;
-    uint32_t row_count;
-    uint64_t created;
-} snapshot_list_t;
 
 /* One row, as read. `snapshot_find` fills it; percentages are exposed as 0xFF when
  * the image stores 127, bpm_x10 is 0 (unknown) or 700..1800, and duration_ms is 0
@@ -135,23 +121,6 @@ bool snapshot_find(const snapshot_t *s, uint64_t fingerprint, uint32_t size,
 /* A row's string, NUL-terminated inside the image; "" when absent. */
 const char *snapshot_row_string(const snapshot_t *s, const snapshot_row_t *row,
                                 snapshot_string_t which);
-
-/* ---------------------------------------------------------------- the lists */
-
-/* Playlists live in the same image. Lists are stored in ascending id order, so `find`
- * is a binary search. None of this resolves a row to a track -- that needs the Library,
- * which this module never touches. */
-uint32_t snapshot_lists(const snapshot_t *s);
-bool     snapshot_list_at(const snapshot_t *s, uint32_t index, snapshot_list_t *out);
-bool     snapshot_list_find(const snapshot_t *s, uint64_t id, snapshot_list_t *out);
-const char *snapshot_list_name(const snapshot_t *s, const snapshot_list_t *list);
-uint32_t snapshot_list_rows_total(const snapshot_t *s);
-
-/* One row of a list: the relative path it names, NUL-terminated inside the image. The
- * path is the whole binding -- a list row has no measurement to protect, and the
- * Library is what resolves it. */
-bool snapshot_list_row(const snapshot_t *s, const snapshot_list_t *list, uint32_t index,
-                       const char **path);
 
 /* FNV-1a 64 of a relative path's bytes -- the hash half of a Track fingerprint. The
  * other half is the file's size, which the lookup takes separately because a renamed

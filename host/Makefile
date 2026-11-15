@@ -55,6 +55,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/groups/include \
        -I$(ROOT)/components/portable/rgb/include \
        -I$(ROOT)/components/portable/snapshot/include \
+       -I$(ROOT)/components/portable/playlist_file/include \
        -I$(ROOT)/components/portable/playlist_select/include \
        -I$(ROOT)/components/portable/card_select/include \
        -I$(ROOT)/components/portable/flash_job/include \
@@ -117,6 +118,7 @@ PROD_SRC := \
   $(ROOT)/components/portable/rgb/rgb.c \
   $(ROOT)/components/portable/mini_icecast/mi_shuffle.c \
   $(ROOT)/components/portable/snapshot/snapshot.c \
+  $(ROOT)/components/portable/playlist_file/playlist_file.c \
   $(ROOT)/components/portable/playlist_select/playlist_select.c \
   $(ROOT)/components/portable/card_select/card_select.c \
   $(ROOT)/components/portable/flash_job/flash_job.c \
@@ -159,6 +161,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/groups \
           $(ROOT)/components/portable/rgb \
           $(ROOT)/components/portable/snapshot \
+          $(ROOT)/components/portable/playlist_file \
           $(ROOT)/components/portable/playlist_select \
           $(ROOT)/components/portable/card_select \
           $(ROOT)/components/portable/wifi_record \
@@ -175,7 +178,7 @@ BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
-SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/card_path.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/snapshot_http.o $(OBJ)/covers_http.o $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o $(OBJ)/setup.o $(OBJ)/setup_http.o $(OBJ)/wifi_record.o
+SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/card_path.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/snapshot_http.o $(OBJ)/covers_http.o $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_file.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o $(OBJ)/setup.o $(OBJ)/setup_http.o $(OBJ)/wifi_record.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/http_loop.o $(OBJ)/http_backend_single.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/board_host.o $(OBJ)/icecast_host.o
@@ -196,7 +199,8 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline $(BIN)/t28_entrance \
          $(BIN)/t29_snapshot $(BIN)/t30_playlist_select $(BIN)/t31_card_select \
          $(BIN)/t32_label $(BIN)/t34_json $(BIN)/t35_card_use \
-         $(BIN)/t36_wifi_record $(BIN)/t38_setup $(BIN)/t39_shuffle_default
+         $(BIN)/t36_wifi_record $(BIN)/t38_setup $(BIN)/t39_shuffle_default \
+         $(BIN)/t40_playlist_file
 
 .PHONY: all test integration layering label check tools fixtures bench control control-check clean help
 
@@ -356,11 +360,15 @@ $(BIN)/t32_label: $(OBJ)/label.o $(OBJ)/label_values.o $(OBJ)/snapshot.o $(OBJ)/
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t30_playlist_select: $(OBJ)/playlist_select.o $(OBJ)/snapshot.o $(OBJ)/library.o $(OBJ)/audio_format.o $(OBJ)/shim.o $(OBJ)/t30_playlist_select.o
+$(BIN)/t30_playlist_select: $(OBJ)/playlist_select.o $(OBJ)/playlist_file.o $(OBJ)/library.o $(OBJ)/audio_format.o $(OBJ)/shim.o $(OBJ)/t30_playlist_select.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t31_card_select: $(OBJ)/card_select.o $(OBJ)/t31_card_select.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t40_playlist_file: $(OBJ)/playlist_file.o $(OBJ)/shim.o $(OBJ)/t40_playlist_file.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

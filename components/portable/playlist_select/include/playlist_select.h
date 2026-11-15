@@ -2,10 +2,10 @@
 /*
  * playlist_select - which Playlist the broadcast walks, and the order that means.
  *
- * A Playlist is stored in the Snapshot (ADR 0051); the broadcast knows nothing about
- * playlists, only about an order of Library track indices. This module is the seam:
- * it resolves a list's rows to those indices, hands the array to the broadcast, keeps
- * the choice, and lets the page clear it.
+ * A Playlist is a file on the card (ADR 0095, docs/specs/playlist-format.md); the
+ * broadcast knows nothing about playlists, only about an order of Library track indices.
+ * This module is the seam: it resolves a list's rows to those indices, hands the array to
+ * the broadcast, keeps the choice, and lets the page clear it.
  *
  * The choice is remembered through an injected store, because NVS is the device's and
  * this module compiles on the host too: the appliance wires NVS, the host tests wire
@@ -16,7 +16,6 @@
 #include <stdint.h>
 
 #include "library.h"
-#include "snapshot.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,8 +23,8 @@ extern "C" {
 
 typedef enum {
     PLAYLIST_SELECT_OK = 0,
-    PLAYLIST_SELECT_NO_SNAPSHOT, /* this device has no usable Snapshot */
-    PLAYLIST_SELECT_NOT_FOUND,   /* no such list id in the image */
+    PLAYLIST_SELECT_NO_CARD,     /* no card mounted, so no list to resolve */
+    PLAYLIST_SELECT_NOT_FOUND,   /* no such list on the card */
     PLAYLIST_SELECT_EMPTY,       /* the list has no row the Library can resolve */
     PLAYLIST_SELECT_NO_MEM,      /* the order could not be built */
 } playlist_select_result_t;
@@ -45,14 +44,15 @@ typedef struct {
  * not playing. Call once, before the first sync. */
 void playlist_select_init(const playlist_select_store_t *store);
 
-/* Re-read the remembered selection against this Snapshot and Library and re-apply it.
+/* Re-read the remembered selection against this card and Library and re-apply it.
  * Call after the Library is published and after a rescan publishes a new generation;
- * a generation change invalidates the indices the broadcast was given. */
-void playlist_select_sync(const snapshot_t *snap, const library_t *lib);
+ * a generation change invalidates the indices the broadcast was given. `card_root` is the
+ * card's root directory ("" / NULL when there is no card). */
+void playlist_select_sync(const char *card_root, const library_t *lib);
 
-/* Choose a list, or 0 for none. Resolves it, hands the broadcast the order, and stores
- * the choice. */
-playlist_select_result_t playlist_select_set(const snapshot_t *snap, const library_t *lib,
+/* Choose a list, or 0 for none. Resolves it from the card's file, hands the broadcast the
+ * order, and stores the choice. */
+playlist_select_result_t playlist_select_set(const char *card_root, const library_t *lib,
                                              uint64_t id);
 
 /* The chosen list, 0 for none. */

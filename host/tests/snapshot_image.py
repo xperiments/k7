@@ -3,9 +3,9 @@
 Shared by the tests that need an image rather than a reader: the format is a contract,
 and a test that invents its own bytes is testing itself.
 
-This is format version 4 only (docs/specs/snapshot-format.md): an 80-byte header, 36-byte
-rows sorted by fingerprint, an interned string pool split at `row_pool_size`, then the
-list records and list rows.
+This is format version 5 only (docs/specs/snapshot-format.md): an 80-byte header, 36-byte
+rows sorted by fingerprint, and one interned string pool. A Playlist is a file on the card,
+not a row in the image (ADR 0095), so there is no list area to build.
 """
 import struct
 import zlib
@@ -15,8 +15,6 @@ MAGIC = b"K7SNAP\0\0"
 
 HEADER_SIZE = 80
 ROW_SIZE = 36
-LIST_SIZE = 32
-LIST_ROW_SIZE = 4
 UNKNOWN_PCT = 127
 
 
@@ -64,18 +62,13 @@ def _measurements(r):
     return word
 
 
-def build_image(rows, lists=(), generation=1767225600, analyser=300, schema=1,
-                model_set=0x1234):
-    """Build a version 4 image.
+def build_image(rows, generation=1767225600, analyser=300, schema=1, model_set=0x1234):
+    """Build a version 5 image.
 
     rows: list of dicts with path, size, duration_ms, bpm_x10, key, energy, dance,
     valence, arousal, mood, conf, src, title, artist, album, genre.
-    lists: list of dicts with id (int), name, created and rows (Library paths).
-    Lists are sorted by id; list strings follow the row strings, each list's
-    name and then its paths, in list order.
     """
     rows = sorted(rows, key=lambda r: fnv1a64(r["path"]))
-    ordered_lists = sorted(lists, key=lambda l: l["id"])
 
     # The rows' strings, interned in first-use order over the sorted rows. The same
     # bytes are stored once, so the same offset may be named by several fields/rows.
@@ -93,20 +86,6 @@ def build_image(rows, lists=(), generation=1767225600, analyser=300, schema=1,
     for r in rows:
         offsets = [intern(r.get(field, "")) for field in ("title", "artist", "album", "genre")]
         encoded.append((r, offsets))
-    row_pool_size = len(pool)
-
-    name_offsets = []
-    path_offsets = []
-    list_rows = 0
-    for playlist in ordered_lists:
-        name_offsets.append(len(pool))
-        pool.extend(playlist["name"].encode("utf-8") + b"\0")
-        offsets = []
-        for path in playlist["rows"]:
-            offsets.append(len(pool))
-            pool.extend(path.encode("utf-8") + b"\0")
-        path_offsets.append(offsets)
-        list_rows += len(playlist["rows"])
 
     body = bytearray()
     for r, offsets in encoded:
@@ -116,27 +95,12 @@ def build_image(rows, lists=(), generation=1767225600, analyser=300, schema=1,
         body += struct.pack("<Q", _measurements(r))
     body += pool
 
-    row_at = 0
-    for index, playlist in enumerate(ordered_lists):
-        body += struct.pack(
-            "<QIIIQ4s",
-            playlist["id"], name_offsets[index], row_at, len(playlist["rows"]),
-            playlist.get("created", 0), b"\0" * 4,
-        )
-        row_at += len(playlist["rows"])
-    for offsets in path_offsets:
-        for offset in offsets:
-            body += struct.pack("<I", offset)
-
     total = HEADER_SIZE + len(body)
     header = struct.pack(
         "<8sHHIIIQIIIIQQ",
-        MAGIC, 4, HEADER_SIZE, total, len(rows), ROW_SIZE, generation, len(pool),
+        MAGIC, 5, HEADER_SIZE, total, len(rows), ROW_SIZE, generation, len(pool),
         zlib.crc32(bytes(body)) & 0xFFFFFFFF, analyser, schema, model_set, 0,
     )
-    header += struct.pack(
-        "<HHHHII", len(ordered_lists), LIST_SIZE, LIST_ROW_SIZE, 0, list_rows,
-        row_pool_size,
-    )
+    header += b"\0" * 16  # reserved 64..80: the v4 list area's counts
     assert len(header) == HEADER_SIZE, len(header)
     return header + bytes(body)

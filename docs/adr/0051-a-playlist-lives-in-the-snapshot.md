@@ -1,10 +1,21 @@
 # A Playlist lives in the Snapshot, and the broadcast can walk one
 
+> **Superseded by [ADR 0095](./0095-a-playlist-is-a-file-on-its-card.md).** A Playlist is a file
+> on its card now, under `k7.playlists/`, and the image carries measurements only. What survives
+> from this decision is listed in the superseding ADR: a list is a selection rather than a model of
+> the library, the device walks one at a time, a lost selection falls back to the library's order,
+> and a row names a path.
+>
 > **Amended by [ADR 0069](./0069-the-snapshot-is-resident-and-the-card-carries-the-selection.md).**
 > The selected Playlist is no longer remembered in NVS. The device writes it to `k7.select` at
 > the card root, a 32-byte CRC'd record, asynchronously on a task below the decoder. The format
 > is v3 only, so the v1/v2 compatibility rules below no longer apply; the lists still live in
 > the Snapshot, and the selection is still a choice, not a copy.
+>
+> **Amended by [ADR 0092](./0092-a-playlist-belongs-to-its-card.md).** Still true: the lists live
+> in the Snapshot, and an accepted image is the whole truth for the device. What changed is the
+> reading side — a card's lists are read from the card that carries them, or from this browser's
+> copy of the image it wrote there, instead of only from a browser store.
 
 The front door grew a Playlists area, and a list had nowhere to live. The card is host-written
 by policy, the page the device serves cannot write it at all (plain HTTP, no directory picker —

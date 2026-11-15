@@ -50,6 +50,21 @@ static app_services_cfg_t s_cfg;
 static atomic_bool s_rescan_running;
 static pthread_mutex_t s_card_lock = PTHREAD_MUTEX_INITIALIZER;
 static volatile bool s_card_present;
+
+/* The card's root, for the modules that read and write the playlists beside its music
+ * directory. "" when no card is mounted: a list is the card's, and there is nothing to
+ * read or write without one (ADR 0094). */
+static void current_card_root(char *out, size_t cap);
+
+static void current_card_root(char *out, size_t cap)
+{
+    if (!out || !cap) return;
+    if (!s_card_present) {
+        out[0] = 0;
+        return;
+    }
+    card_path_root(out, cap);
+}
 /* The card's file lifetime. The gate is a mutex + a binary "idle" semaphore rather than a
  * pthread condition: the decoder and the artwork loader call it from FreeRTOS tasks, and
  * the watcher waits here while the card is being pulled. */
@@ -121,8 +136,11 @@ static void rescan_task(void *arg)
         (void)library_blob(next, &arena_len);
         int64_t scan_ms = (esp_timer_get_time() - t0) / 1000;
         if (library_publish(next)) {
-            /* The indices the walk was given describe the old generation; re-resolve. */
-            playlist_select_sync(s_snapshot, next);
+            /* The indices the walk was given describe the old generation; re-resolve
+             * against the card's files. */
+            char root[160];
+            current_card_root(root, sizeof root);
+            playlist_select_sync(root, next);
             /* The coverage follows the published generation, so it is re-walked once here on a
              * card change - never per `library_stats` request. This runs on core 0 with the panel
              * scanning, so a rescan still slips the picture for its flash reads; that is a card
@@ -629,9 +647,13 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     if (e != ESP_OK) return fail(report, e, "broadcast");
     if (report) report->broadcast_up = true;
 
-    /* Which Playlist the broadcast walks, now that both the image and the Library
-     * exist: the remembered choice is resolved and handed over, or the Library plays. */
-    playlist_select_sync(s_snapshot, s_library);
+    /* Which Playlist the broadcast walks, now that the card and the Library exist: the
+     * remembered choice is resolved from its file and handed over, or the Library plays. */
+    {
+        char root[160];
+        current_card_root(root, sizeof root);
+        playlist_select_sync(root, s_library);
+    }
 
     /* The MCP endpoint is registered before the listener, after the broadcast
      * exists because player_status reads its snapshot. */
@@ -661,7 +683,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     e = covers_http_start();
     if (e != ESP_OK) return fail(report, e, "covers endpoint");
 
-    e = playlist_http_start(app_services_snapshot);
+    e = playlist_http_start(current_card_root);
     if (e != ESP_OK) return fail(report, e, "playlist endpoints");
 
     e = snapshot_http_start();

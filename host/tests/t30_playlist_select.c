@@ -1,11 +1,11 @@
 /*
  * T30: playlist_select, host tier.
  *
- * The selection module is tested against a real Library built from a temporary tree and
- * a real version 4 Snapshot built byte by byte here, with the broadcast stubbed: this
- * test is about resolution, refusal and remembering, not about audio. What the order
- * does once the broadcast has it is the integration suite's business (the hosting server
- * plus /api/playlists/select and the stream's own advance).
+ * The selection module is tested against a real Library built from a temporary tree and real
+ * playlist files on a temporary card, with the broadcast stubbed: this test is about
+ * resolution, refusal and remembering, not about audio. What the order does once the
+ * broadcast has it is the integration suite's business (the hosting server plus
+ * /api/playlists/select and the stream's own advance).
  *
  * The stub is the seam, not a fork: playlist_select only ever calls set_order and the
  * dropped callback, so the two functions here are the whole contract it uses.
@@ -21,8 +21,8 @@
 #include <fcntl.h>
 
 #include "library.h"
+#include "playlist_file.h"
 #include "playlist_select.h"
-#include "snapshot.h"
 
 /* ------------------------------------------------------------- the broadcast stub */
 
@@ -94,87 +94,27 @@ static void file_at(const char *root, const char *rel, size_t size)
     close(f);
 }
 
-/* ------------------------------------------------------------- the image */
-
-static uint32_t crc32_ref(const uint8_t *p, size_t n)
+/** One list on the card, written the way the app writes it. */
+static void write_list(const char *card_root, uint64_t id, const char *name,
+                       const char *const *paths, uint32_t npaths)
 {
-    uint32_t crc = 0xFFFFFFFFu;
-    for (size_t i = 0; i < n; i++) {
-        crc ^= p[i];
-        for (int k = 0; k < 8; k++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+    char dir[LIB_PATH_MAX];
+    snprintf(dir, sizeof dir, "%s/%s", card_root, PLAYLIST_DIR_NAME);
+    mkdir(dir, 0755);
+    char path[LIB_PATH_MAX + 40];
+    snprintf(path, sizeof path, "%s/%016llx%s", dir, (unsigned long long)id, PLAYLIST_EXT);
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        printf("FATAL: cannot write %s\n", path);
+        exit(1);
     }
-    return ~crc;
-}
-
-static void put16(uint8_t *p, size_t at, uint16_t v)
-{
-    p[at] = (uint8_t)v;
-    p[at + 1] = (uint8_t)(v >> 8);
-}
-static void put32(uint8_t *p, size_t at, uint32_t v)
-{
-    for (int i = 0; i < 4; i++) p[at + i] = (uint8_t)(v >> (8 * i));
-}
-static void put64(uint8_t *p, size_t at, uint64_t v)
-{
-    for (int i = 0; i < 8; i++) p[at + i] = (uint8_t)(v >> (8 * i));
-}
-
-/* A version 4 image with no measurement rows and one list. There are no row
- * strings, so `row_pool_size` is zero and the pool is the list's name followed by
- * each path (spec §2, §7). */
-static uint8_t *build_image(size_t *out_n, const char *name, uint64_t id, const char *const *paths,
-                         uint32_t npaths)
-{
-    size_t pool_n = strlen(name) + 1;
-    for (uint32_t i = 0; i < npaths; i++) pool_n += strlen(paths[i]) + 1;
-    size_t total = 80 + pool_n + 32 + (size_t)npaths * 4;
-    uint8_t *img = calloc(1, total);
-    if (!img) abort();
-
-    memcpy(img, SNAPSHOT_MAGIC, 8);
-    put16(img, 8, SNAPSHOT_VERSION);
-    put16(img, 10, 80);
-    put32(img, 12, (uint32_t)total);
-    put32(img, 16, 0);            /* no measurement rows */
-    put32(img, 20, SNAPSHOT_ROW_SIZE);
-    put64(img, 24, 1767225600ull); /* generation */
-    put32(img, 32, (uint32_t)pool_n);
-    put32(img, 36, 0);            /* crc, patched below */
-    put32(img, 40, 300);
-    put32(img, 44, 2);
-    put64(img, 48, 0x0123456789ABCDEFull);
-    put16(img, 64, 1);            /* list_count */
-    put16(img, 66, 32);
-    put16(img, 68, 4);
-    put16(img, 70, 0);            /* reserved */
-    put32(img, 72, npaths);
-    put32(img, 76, 0);            /* row_pool_size: no row strings */
-
-    size_t at = 80;
-    memcpy(img + at, name, strlen(name) + 1);
-    at += strlen(name) + 1;
-    size_t name_off = 0; /* offsets are into the pool, not into the image */
-    uint32_t *path_off = malloc(sizeof(uint32_t) * (npaths ? npaths : 1));
-    for (uint32_t i = 0; i < npaths; i++) {
-        path_off[i] = (uint32_t)(at - 80);
-        memcpy(img + at, paths[i], strlen(paths[i]) + 1);
-        at += strlen(paths[i]) + 1;
+    fprintf(f, "K7LIST 1\nid %016llx\nname %s\ncreated 1767225600\nrows %u\n",
+            (unsigned long long)id, name, (unsigned)npaths);
+    for (uint32_t i = 0; i < npaths; i++) fprintf(f, "%s\n", paths[i]);
+    if (fclose(f) != 0) {
+        printf("FATAL: cannot close %s\n", path);
+        exit(1);
     }
-
-    /* the one list record */
-    put64(img, at, id);
-    put32(img, at + 8, (uint32_t)name_off);
-    put32(img, at + 12, 0);
-    put32(img, at + 16, npaths);
-    put64(img, at + 20, 1767225600ull);
-    at += 32;
-    for (uint32_t i = 0; i < npaths; i++, at += 4) put32(img, at, path_off[i]);
-
-    put32(img, 36, crc32_ref(img + 80, total - 80));
-    free(path_off);
-    *out_n = total;
-    return img;
 }
 
 /* ------------------------------------------------------------- store */
@@ -204,26 +144,24 @@ static bool store_save(void *ctx, uint64_t id)
 
 int main(void)
 {
-    char *root = temp_root();
-    mkdir_at(root, "A");
-    mkdir_at(root, "B");
-    file_at(root, "A/one.mp3", 10);
-    file_at(root, "B/two.mp3", 20);
-    file_at(root, "B/three.mp3", 30);
+    char *card = temp_root();
+    char music[LIB_PATH_MAX];
+    snprintf(music, sizeof music, "%s/music", card);
+    mkdir_at(card, "music");
+    mkdir_at(music, "A");
+    mkdir_at(music, "B");
+    file_at(music, "A/one.mp3", 10);
+    file_at(music, "B/two.mp3", 20);
+    file_at(music, "B/three.mp3", 30);
 
-    library_cfg_t cfg = {.music_dir = root};
+    library_cfg_t cfg = {.music_dir = music};
     library_t *lib = NULL;
     CHECK_EQ(library_open(&cfg, &lib), LIB_OK, "the fixture tree opens");
     CHECK_EQ(library_track_count(lib), 3, "three tracks");
 
     const char *const ALL[] = {"A/one.mp3", "B/two.mp3", "B/three.mp3"};
     const char *const SOME[] = {"A/one.mp3", "B/gone.mp3"};
-    static const char *const NONE[] = {NULL};
-    size_t n = 0;
-    uint8_t *img = build_image(&n, "Late night", 0xAAAA000000000001ull, ALL, 3);
-    snapshot_t *snap = NULL;
-    CHECK_EQ(snapshot_open(img, n, &snap), SNAPSHOT_OK, "the image opens");
-    CHECK_EQ(snapshot_lists(snap), 1, "one list");
+    write_list(card, 0xAAAA000000000001ull, "Late night", ALL, 3);
 
     g_store_has = false;
     g_saves = 0;
@@ -232,7 +170,7 @@ int main(void)
 
     /* nothing chosen: the Library plays, and no order is sent */
     g_order_calls = 0;
-    playlist_select_sync(snap, lib);
+    playlist_select_sync(card, lib);
     CHECK_EQ(playlist_select_current(), 0, "no selection");
     CHECK_EQ(g_order_n, 0, "no order");
     char name[64] = {0};
@@ -240,7 +178,7 @@ int main(void)
     CHECK(strcmp(name, "") == 0, "no name");
 
     /* choose it: the whole list, in order */
-    CHECK_EQ(playlist_select_set(snap, lib, 0xAAAA000000000001ull), PLAYLIST_SELECT_OK,
+    CHECK_EQ(playlist_select_set(card, lib, 0xAAAA000000000001ull), PLAYLIST_SELECT_OK,
              "selecting the list");
     CHECK_EQ(playlist_select_current(), 0xAAAA000000000001ull, "the id is remembered");
     playlist_select_name(name, sizeof name);
@@ -251,84 +189,72 @@ int main(void)
     CHECK_EQ(g_saves, 1, "the choice is persisted once");
     CHECK(g_stored == 0xAAAA000000000001ull, "the stored id");
     /* the order is Library track indices, in list order */
-    uint32_t expect = 0;
     for (uint32_t i = 0; i < 3; i++) {
-        const char *p = ALL[i];
-        lib_node_t node = library_find(lib, p);
-        uint32_t got = g_order[i];
-        uint32_t want = library_track_index(lib, node);
-        CHECK_EQ(got, want, "row resolves in order");
-        expect++;
+        lib_node_t node = library_find(lib, ALL[i]);
+        CHECK_EQ(g_order[i], library_track_index(lib, node), "row resolves in order");
     }
-    CHECK_EQ(expect, 3, "three rows checked");
 
     /* an unknown id is a refusal, and the old order stays */
-    CHECK_EQ(playlist_select_set(snap, lib, 0xAAAA0000000000FFull), PLAYLIST_SELECT_NOT_FOUND,
+    CHECK_EQ(playlist_select_set(card, lib, 0xAAAA0000000000FFull), PLAYLIST_SELECT_NOT_FOUND,
              "an unknown id is refused");
     CHECK_EQ(playlist_select_current(), 0xAAAA000000000001ull, "the refusal changed nothing");
     CHECK_EQ(g_order_n, 3, "the order is still the selected one");
 
     /* a row whose file is gone counts, and the rest still plays */
-    size_t n2 = 0;
-    uint8_t *img2 = build_image(&n2, "Half gone", 0xBBBB000000000002ull, SOME, 2);
-    snapshot_t *snap2 = NULL;
-    CHECK_EQ(snapshot_open(img2, n2, &snap2), SNAPSHOT_OK, "the second image opens");
-    CHECK_EQ(playlist_select_set(snap2, lib, 0xBBBB000000000002ull), PLAYLIST_SELECT_OK,
+    write_list(card, 0xBBBB000000000002ull, "Half gone", SOME, 2);
+    CHECK_EQ(playlist_select_set(card, lib, 0xBBBB000000000002ull), PLAYLIST_SELECT_OK,
              "a list with a missing row still selects");
     CHECK_EQ(g_order_n, 1, "one resolved row");
     CHECK_EQ(playlist_select_missing(), 1, "one missing row is counted");
 
     /* an empty list is refused, and nothing is walking */
-    size_t n3 = 0;
-    uint8_t *img3 = build_image(&n3, "Empty", 0xCCCC000000000003ull, NONE, 0);
-    snapshot_t *snap3 = NULL;
-    CHECK_EQ(snapshot_open(img3, n3, &snap3), SNAPSHOT_OK, "the empty image opens");
-    CHECK_EQ(playlist_select_set(snap3, lib, 0xCCCC000000000003ull), PLAYLIST_SELECT_EMPTY,
+    write_list(card, 0xCCCC000000000003ull, "Empty", NULL, 0);
+    CHECK_EQ(playlist_select_set(card, lib, 0xCCCC000000000003ull), PLAYLIST_SELECT_EMPTY,
              "an empty list is refused");
     CHECK_EQ(playlist_select_current(), 0xBBBB000000000002ull,
              "a refused selection leaves the working one alone");
     CHECK_EQ(g_order_n, 1, "and its order is untouched");
 
     /* none: back to the Library */
-    CHECK_EQ(playlist_select_set(snap, lib, 0), PLAYLIST_SELECT_OK, "clearing");
+    CHECK_EQ(playlist_select_set(card, lib, 0), PLAYLIST_SELECT_OK, "clearing");
     CHECK_EQ(playlist_select_current(), 0, "cleared");
     CHECK_EQ(g_order_n, 0, "no order after clearing");
     CHECK(!g_store_has, "and the stored id is gone");
 
     /* remembered across a reboot: a fresh init reads the stored id and re-applies it */
     g_saves = 0;
-    CHECK_EQ(playlist_select_set(snap, lib, 0xAAAA000000000001ull), PLAYLIST_SELECT_OK,
+    CHECK_EQ(playlist_select_set(card, lib, 0xAAAA000000000001ull), PLAYLIST_SELECT_OK,
              "select again");
     CHECK(g_store_has, "stored");
     playlist_select_init(&store); /* the reboot */
     CHECK_EQ(playlist_select_current(), 0, "a fresh module has no state");
     g_order_n = 0;
-    playlist_select_sync(snap, lib); /* the boot sync */
+    playlist_select_sync(card, lib); /* the boot sync */
     CHECK_EQ(playlist_select_current(), 0xAAAA000000000001ull, "the stored choice came back");
     CHECK_EQ(g_order_n, 3, "and so did its order");
 
-    /* a boot sync against no Snapshot clears rather than guessing */
+    /* a boot sync with no card keeps the choice and stops the walk: the card carries it, so
+     * it comes back with the card (spec U3: a refusal leaves the selection alone) */
     playlist_select_sync(NULL, lib);
-    CHECK_EQ(playlist_select_current(), 0, "no Snapshot clears the choice");
-    CHECK_EQ(g_order_n, 0, "and the order");
-    CHECK(!g_store_has, "and the stored id");
+    CHECK_EQ(playlist_select_current(), 0xAAAA000000000001ull, "no card keeps the choice");
+    CHECK_EQ(g_order_n, 0, "and stops the walk");
+    CHECK(g_store_has, "the choice is still stored");
 
-    /* a card that is out keeps the choice: the same image, a Library that cannot resolve a
-     * row (an empty root) -- the walk stops, the selection does not (spec U3) */
+    /* a Library that cannot resolve a row is EMPTY, not a refusal: the walk stops and the
+     * choice stands, so it resumes when the card is back */
     char *empty_root = temp_root();
     library_cfg_t empty_cfg = {.music_dir = empty_root};
     library_t *empty_lib = NULL;
     CHECK_EQ(library_open(&empty_cfg, &empty_lib), LIB_OK, "the empty root opens");
-    CHECK_EQ(playlist_select_set(snap, lib, 0xAAAA000000000001ull), PLAYLIST_SELECT_OK,
-             "select before the card leaves");
+    playlist_select_sync(card, lib);
     CHECK_EQ(g_order_n, 3, "walking");
     g_order_n = 0;
-    playlist_select_sync(snap, empty_lib);
+    playlist_select_sync(card, empty_lib);
     CHECK_EQ(g_order_n, 0, "with no resolvable row the walk stops");
     CHECK_EQ(playlist_select_current(), 0xAAAA000000000001ull,
              "but the choice stands, so it comes back with the card");
     CHECK(g_store_has, "and it is still stored");
-    playlist_select_sync(snap, lib);
+    playlist_select_sync(card, lib);
     CHECK_EQ(g_order_n, 3, "the card comes back and so does the walk");
     CHECK_EQ(playlist_select_current(), 0xAAAA000000000001ull, "same choice");
     library_close(empty_lib);
@@ -337,26 +263,32 @@ int main(void)
     if (system(rm) != 0) { /* the test's own /tmp tree */ }
     free(empty_root);
 
+    /* a list whose file went away is forgotten rather than retried every boot */
+    CHECK_EQ(playlist_select_set(card, lib, 0xBBBB000000000002ull), PLAYLIST_SELECT_OK,
+             "walk the half-gone list");
+    char gone_path[LIB_PATH_MAX + 40];
+    snprintf(gone_path, sizeof gone_path, "%s/%s/%016llx%s", card, PLAYLIST_DIR_NAME,
+             0xBBBB000000000002ull, PLAYLIST_EXT);
+    unlink(gone_path);
+    playlist_select_sync(card, lib);
+    CHECK_EQ(playlist_select_current(), 0, "a list that is gone clears the choice");
+    CHECK_EQ(g_order_n, 0, "and the order");
+    CHECK(!g_store_has, "and the stored id");
+
     /* the broadcast dropped the order for a Track outside it: the choice is cleared */
-    CHECK_EQ(playlist_select_set(snap, lib, 0xAAAA000000000001ull), PLAYLIST_SELECT_OK,
+    CHECK_EQ(playlist_select_set(card, lib, 0xAAAA000000000001ull), PLAYLIST_SELECT_OK,
              "select again for the drop");
     CHECK(g_dropped != NULL, "the dropped callback is registered");
     if (g_dropped) g_dropped(g_dropped_ctx);
     CHECK_EQ(playlist_select_current(), 0, "the drop cleared the selection");
     CHECK(!g_store_has, "and the stored id");
 
-    playlist_select_set(snap, lib, 0);
-    snapshot_close(snap);
-    snapshot_close(snap2);
-    snapshot_close(snap3);
-    free(img);
-    free(img2);
-    free(img3);
+    playlist_select_set(card, lib, 0);
     library_close(lib);
 
     char cmd[LIB_PATH_MAX + 16];
-    snprintf(cmd, sizeof cmd, "rm -rf '%s'", root);
+    snprintf(cmd, sizeof cmd, "rm -rf '%s'", card);
     if (system(cmd) != 0) { /* the test's own /tmp tree */ }
-    free(root);
+    free(card);
     TEST_END();
 }

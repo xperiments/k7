@@ -94,11 +94,6 @@ struct snapshot {
     uint32_t       row_count;
     const uint8_t *pool;
     uint32_t       pool_size;
-    uint32_t       row_pool_size;
-    const uint8_t *lists;
-    uint32_t       list_count;
-    const uint8_t *list_rows;
-    uint32_t       list_rows_total;
     uint32_t       generation;
     uint32_t       analyser;
     uint32_t       app_schema;
@@ -129,11 +124,11 @@ static bool string_in(const uint8_t *pool, uint32_t lo, uint32_t hi, uint32_t of
 
 /* A row's four offsets are independent: each points into the row-string region and
  * terminates there. Two rows (or two fields) may share one offset. */
-static bool row_strings_ok(const uint8_t *row, const uint8_t *pool, uint32_t row_pool_size)
+static bool row_strings_ok(const uint8_t *row, const uint8_t *pool, uint32_t pool_size)
 {
     const uint8_t *offs[4] = {row + 16, row + 19, row + 22, row + 25};
     for (int i = 0; i < 4; i++)
-        if (!string_in(pool, 0, row_pool_size, rd24(offs[i]))) return false;
+        if (!string_in(pool, 0, pool_size, rd24(offs[i]))) return false;
     return true;
 }
 
@@ -144,21 +139,7 @@ static uint8_t expose_pct(uint8_t v) { return v == 127u ? SNAPSHOT_UNKNOWN_PCT :
 
 /* One list record: a name in the list-string region, and a slice of the list-row array
  * that starts exactly where the previous list ended and stays inside it. */
-static bool list_ok(const uint8_t *l, const uint8_t *pool, uint32_t row_pool_size,
-                    uint32_t pool_size, uint32_t row_start_expected, uint32_t list_rows_total,
-                    uint32_t *next_row_start)
-{
-    if (rd32(l + 28) != 0) return false;             /* reserved */
-    uint32_t row_start = rd32(l + 12);
-    uint32_t row_count = rd32(l + 16);
-    if (row_start != row_start_expected) return false;
-    if ((uint64_t)row_start + row_count > list_rows_total) return false;
-    if (!string_in(pool, row_pool_size, pool_size, rd32(l + 8))) return false;
-    *next_row_start = row_start + row_count;
-    return true;
-}
-
-static bool row_ok(const uint8_t *row, const uint8_t *pool, uint32_t row_pool_size)
+static bool row_ok(const uint8_t *row, const uint8_t *pool, uint32_t pool_size)
 {
     uint64_t m = rd64(row + 28);
     uint32_t bpm_code = (uint32_t)(m & 0x7FFu);
@@ -179,7 +160,7 @@ static bool row_ok(const uint8_t *row, const uint8_t *pool, uint32_t row_pool_si
     if (mood > 0x1Fu) return false;
     if (flags > 0x3Fu) return false;
     if ((m >> 62) != 0) return false; /* the word's reserved top two bits */
-    return row_strings_ok(row, pool, row_pool_size);
+    return row_strings_ok(row, pool, pool_size);
 }
 
 static bool bad(char *why, size_t why_size, const char *reason)
@@ -194,10 +175,7 @@ typedef struct {
     uint32_t header_size;
     uint32_t rows;
     uint32_t pool;
-    uint32_t row_pool;
     uint32_t total;
-    uint32_t lists;
-    uint32_t list_rows;
 } header_t;
 
 /* Every structural rule that can be decided from the header alone. Both the reader
@@ -213,27 +191,16 @@ static bool header_check(const uint8_t *hdr, uint32_t hdr_len, uint32_t size,
     if (rd16(hdr + 8) != SNAPSHOT_VERSION) return bad(why, why_size, "unknown format version");
     if (rd16(hdr + 10) != SNAPSHOT_HEADER_SIZE) return bad(why, why_size, "bad header size");
     if (rd32(hdr + 20) != SNAPSHOT_ROW_SIZE) return bad(why, why_size, "bad row size");
-    for (int i = 56; i < 64; i++)
+    /* Bytes 56..79 are reserved and zero: 64..80 held the list area's counts up to version
+     * 4, and the image carries no lists now (ADR 0095). */
+    for (int i = 56; i < 80; i++)
         if (hdr[i]) return bad(why, why_size, "reserved header bytes are not zero");
-    if (hdr[70] || hdr[71]) return bad(why, why_size, "reserved header bytes are not zero");
-
-    uint32_t lists = rd16(hdr + 64);
-    uint32_t list_rows = rd32(hdr + 72);
-    uint32_t row_pool = rd32(hdr + 76);
-    if (rd16(hdr + 66) != SNAPSHOT_LIST_SIZE) return bad(why, why_size, "bad list size");
-    if (rd16(hdr + 68) != SNAPSHOT_LIST_ROW_SIZE)
-        return bad(why, why_size, "bad list row size");
-    if (lists > SNAPSHOT_MAX_LISTS) return bad(why, why_size, "too many lists");
-    if (list_rows > SNAPSHOT_MAX_LIST_ROWS) return bad(why, why_size, "too many list rows");
 
     uint32_t total = rd32(hdr + 12);
     uint32_t rows = rd32(hdr + 16);
     uint32_t pool = rd32(hdr + 32);
-    if (row_pool > pool) return bad(why, why_size, "the row pool is larger than the pool");
     /* Widen before multiplying: a 32-bit row count must never wrap the size equation. */
-    uint64_t want = (uint64_t)SNAPSHOT_HEADER_SIZE + (uint64_t)rows * SNAPSHOT_ROW_SIZE + pool +
-                    (uint64_t)lists * SNAPSHOT_LIST_SIZE +
-                    (uint64_t)list_rows * SNAPSHOT_LIST_ROW_SIZE;
+    uint64_t want = (uint64_t)SNAPSHOT_HEADER_SIZE + (uint64_t)rows * SNAPSHOT_ROW_SIZE + pool;
     if (want != total) return bad(why, why_size, "sizes disagree");
     if (total != size) return bad(why, why_size, "image is not its stated length");
     if (total > SNAPSHOT_MAX_BYTES) return bad(why, why_size, "image is larger than any partition");
@@ -243,10 +210,7 @@ static bool header_check(const uint8_t *hdr, uint32_t hdr_len, uint32_t size,
         out->header_size = SNAPSHOT_HEADER_SIZE;
         out->rows = rows;
         out->pool = pool;
-        out->row_pool = row_pool;
         out->total = total;
-        out->lists = lists;
-        out->list_rows = list_rows;
     }
     return true;
 }
@@ -283,26 +247,7 @@ snapshot_result_t snapshot_open_why(const uint8_t *image, size_t size, snapshot_
         uint64_t fp = rd64(r);
         if (i && fp <= prev) return fail(why, why_size, "rows are not sorted by fingerprint");
         prev = fp;
-        if (!row_ok(r, pool, h.row_pool)) return fail(why, why_size, "a row is out of range");
-    }
-
-    const uint8_t *lists = pool + h.pool;
-    const uint8_t *list_rows = lists + (size_t)h.lists * SNAPSHOT_LIST_SIZE;
-    uint64_t prev_id = 0;
-    uint32_t next_row = 0;
-    for (uint32_t i = 0; i < h.lists; i++) {
-        const uint8_t *l = lists + (size_t)i * SNAPSHOT_LIST_SIZE;
-        uint64_t id = rd64(l);
-        if (i && id <= prev_id) return fail(why, why_size, "lists are not sorted by id");
-        prev_id = id;
-        if (!list_ok(l, pool, h.row_pool, h.pool, next_row, h.list_rows, &next_row))
-            return fail(why, why_size, "a list is out of range");
-    }
-    if (next_row != h.list_rows) return fail(why, why_size, "lists do not tile their rows");
-    for (uint32_t i = 0; i < h.list_rows; i++) {
-        const uint8_t *r = list_rows + (size_t)i * SNAPSHOT_LIST_ROW_SIZE;
-        if (!string_in(pool, h.row_pool, h.pool, rd32(r)))
-            return fail(why, why_size, "a list row is out of range");
+        if (!row_ok(r, pool, h.pool)) return fail(why, why_size, "a row is out of range");
     }
 
     snapshot_t *s = (snapshot_t *)calloc(1, sizeof *s);
@@ -315,11 +260,6 @@ snapshot_result_t snapshot_open_why(const uint8_t *image, size_t size, snapshot_
     s->row_count = h.rows;
     s->pool = pool;
     s->pool_size = h.pool;
-    s->row_pool_size = h.row_pool;
-    s->lists = lists;
-    s->list_count = h.lists;
-    s->list_rows = list_rows;
-    s->list_rows_total = h.list_rows;
     s->generation = (uint32_t)rd64(image + 24);
     s->analyser = rd32(image + 40);
     s->app_schema = rd32(image + 44);
@@ -403,80 +343,11 @@ const char *snapshot_row_string(const snapshot_t *s, const snapshot_row_t *row,
     case SNAPSHOT_STRING_GENRE: off = row->genre_offset; break;
     default: return "";
     }
-    if (off >= s->row_pool_size) return "";
+    if (off >= s->pool_size) return "";
     return (const char *)(s->pool + off);
 }
 
-/* ------------------------------------------------------------------ lists */
-
 uint16_t snapshot_version(const snapshot_t *s) { return s ? s->version : 0; }
-
-uint32_t snapshot_lists(const snapshot_t *s) { return s ? s->list_count : 0; }
-
-uint32_t snapshot_list_rows_total(const snapshot_t *s) { return s ? s->list_rows_total : 0; }
-
-static const uint8_t *list_at(const snapshot_t *s, uint32_t i)
-{
-    return s->lists + (size_t)i * SNAPSHOT_LIST_SIZE;
-}
-
-static void list_read(const uint8_t *l, snapshot_list_t *out)
-{
-    out->id = rd64(l);
-    out->name_offset = rd32(l + 8);
-    out->row_start = rd32(l + 12);
-    out->row_count = rd32(l + 16);
-    out->created = rd64(l + 20);
-}
-
-bool snapshot_list_at(const snapshot_t *s, uint32_t index, snapshot_list_t *out)
-{
-    if (!s || index >= s->list_count) return false;
-    if (out) list_read(list_at(s, index), out);
-    return true;
-}
-
-bool snapshot_list_find(const snapshot_t *s, uint64_t id, snapshot_list_t *out)
-{
-    if (!s || !s->list_count || id == 0) return false;
-    uint32_t lo = 0, hi = s->list_count;
-    while (lo < hi) {
-        uint32_t mid = lo + (hi - lo) / 2;
-        uint64_t v = rd64(list_at(s, mid));
-        if (v < id)
-            lo = mid + 1;
-        else
-            hi = mid;
-    }
-    if (lo >= s->list_count) return false;
-    const uint8_t *l = list_at(s, lo);
-    if (rd64(l) != id) return false;
-    if (out) list_read(l, out);
-    return true;
-}
-
-const char *snapshot_list_name(const snapshot_t *s, const snapshot_list_t *list)
-{
-    if (!s || !list || list->name_offset < s->row_pool_size ||
-        list->name_offset >= s->pool_size)
-        return "";
-    return (const char *)(s->pool + list->name_offset);
-}
-
-bool snapshot_list_row(const snapshot_t *s, const snapshot_list_t *list, uint32_t index,
-                       const char **path)
-{
-    if (!s || !list || index >= list->row_count) return false;
-    uint32_t at = list->row_start + index;
-    if (at >= s->list_rows_total) return false;
-    const uint8_t *r = s->list_rows + (size_t)at * SNAPSHOT_LIST_ROW_SIZE;
-    if (path) {
-        uint32_t off = rd32(r);
-        *path = off >= s->row_pool_size && off < s->pool_size ? (const char *)(s->pool + off)
-                                                              : "";
-    }
-    return true;
-}
 
 /* ------------------------------------------------------------------ keys */
 

@@ -465,7 +465,7 @@ static uint8_t *build_snapshot(size_t *n_out, const srow_t *r, uint32_t size,
 
     tbuf_t b = {0};
     put(&b, "K7SNAP\0\0", 8);
-    put16(&b, 4);                 /* format version */
+    put16(&b, 5);                 /* format version */
     put16(&b, IMG_HEADER);
     put32(&b, (uint32_t)(IMG_HEADER + IMG_ROW + pool.n));
     put32(&b, 1);                 /* rows */
@@ -476,13 +476,9 @@ static uint8_t *build_snapshot(size_t *n_out, const srow_t *r, uint32_t size,
     put32(&b, 1);                 /* analyser */
     put32(&b, 1);                 /* app schema */
     put64(&b, 0);                 /* model set */
-    put64(&b, 0);                 /* reserved */
-    put16(&b, 0);                 /* list count */
-    put16(&b, 32);                /* list size */
-    put16(&b, 4);                 /* list row size */
-    put16(&b, 0);                 /* reserved */
-    put32(&b, 0);                 /* list rows */
-    put32(&b, (uint32_t)pool.n);  /* row pool size */
+    put64(&b, 0);                 /* reserved 56..63 */
+    put64(&b, 0);                 /* reserved 64..71 */
+    put64(&b, 0);                 /* reserved 72..79 */
 
     put64(&b, snapshot_path_hash(row_path));
     put32(&b, 0);                 /* duration: unknown */

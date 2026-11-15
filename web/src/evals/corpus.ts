@@ -804,11 +804,13 @@ export const CORPUS: readonly CorpusRow[] = [
     id: '59',
     set: 'corpus',
     sentence: 'add 5 songs to the playlist',
-    expected: null,
+    expected: { limit: 5 },
     must: {
-      outcome: 'fail',
-      forbidden: ['limit', 'query'],
-      note: 'not a search: the sentence asks the App to change a playlist',
+      outcome: 'parse',
+      required: ['limit'],
+      maxPairs: 0,
+      exact: { limit: 5 },
+      note: 'an instruction to change the list is the count it states; the App adds the rows it finds (ADR 0093)',
     },
   },
   {

@@ -16,14 +16,6 @@ import { isNameQuery, nameFrom, parseIntent } from './parse';
 import { buildSystemPrompt, intentExamples, intentSchema } from './prompt';
 import { normalizePurpose, purposeFilters } from './purpose';
 import { applySentenceFilters, sentenceFilters } from './sentence';
-import { hasAny } from './words';
-
-/** The imperative verbs that ask the App to change the library, not to search it. */
-const ACTION_WORDS = ['add', 'save', 'put', 'remove', 'delete', 'rename', 'create'] as const;
-
-function isAction(sentence: string): boolean {
-  return hasAny(sentence, ACTION_WORDS);
-}
 
 /** One model call, as the evaluation harness sees it. Never passed by the App. */
 export interface IntentTrace {
@@ -101,12 +93,13 @@ export async function requestIntent(
   /* Finish a repaired answer, or rebuild an empty one from what the sentence itself stated: the
    * purpose table when it names one, and the sentence's own count, session, length, BPM, offset
    * or key. The model's `{}` is its no-filter answer, not a refusal, so the app applies the
-   * sentence's filters; an instruction to change the library ("add 5 songs to the playlist") and
-   * a sentence with neither a purpose nor a stated filter still refuse. */
+   * sentence's filters. An instruction to change the list is one of these sentences now: "add 5
+   * songs to the playlist" states a count, so it is read and the rows it finds are added to the
+   * list the editor has open — the App applies the Intent, and the model still writes no result
+   * (ADR 0093). A sentence with neither a purpose nor a stated filter still refuses. */
   const recover = (result: SearchArgs | IntentFailure): SearchArgs | IntentFailure => {
     if (!('error' in result)) return finish(result);
     if (result.retryable) return result;
-    if (isAction(asked)) return result;
     const table = purposeFilters(asked, profile);
     const stated = Object.keys(fromSentence).length > 0;
     if ((!table || Object.keys(table).length === 0) && !stated) return result;

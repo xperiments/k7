@@ -40,9 +40,10 @@
   },
   {
     "rowId": "59",
-    "raw": "{}",
+    "raw": "{\"limit\":5}",
     "origin": "synthetic",
-    "verdict": "pass"
+    "verdict": "pass",
+    "note": "the sentence states a count, and the App adds the rows it finds (ADR 0093)"
   },
   {
     "rowId": "60",

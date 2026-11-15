@@ -40,9 +40,9 @@ _Avoid_: models, assets, blobs
 **Area**:
 One of the App's destinations: **Media Sources**, **Playlists** and **Player**. Media Sources
 holds the **Sources** and **Albums** pages, with the device's facts when the **Device card** is
-selected on Sources; Playlists holds **Manage**, the **Editor** and **IA Agent**; Player holds
-**Now playing**. An area owns routes and nothing else; what it shows it reads from the player,
-from this browser, or from both.
+selected on Sources; Playlists holds the list of lists and the **Editor**, whose sources column
+holds the **IA Agent**; Player holds **Now playing**. An area owns routes and nothing else; what
+it shows it reads from the player, from this browser, or from both.
 _Avoid_: page, tab, section
 
 **Route**:
@@ -328,8 +328,10 @@ _Avoid_: thread pool, concurrency, parallelism
 
 **Playlist**:
 An ordered selection of the Library's Tracks that a person authored and named, reorderable here
-and sent to the player inside a **Snapshot**. The player owns its storage and its playback; the
-App owns its authoring.
+and stored as one file on the card it belongs to, at `k7.playlists/<id>.k7list`. It belongs to the
+card whose Tracks it names, and that card is where it lives: the App reads it from the card when
+the card is in the computer, from the player when it is in the player, and says how far it has got.
+The player owns its playback; the App owns its authoring.
 _Avoid_: setlist, crate, mixtape, queue (that one is the analyser's)
 
 **Playlist row**:
@@ -338,9 +340,17 @@ whose path is no longer on the card is skipped, never silently dropped.
 _Avoid_: entry, item, slot
 
 **Draft**:
-A **Playlist** as this browser holds it, authored against one card's Library. It belongs to the
-**Card** whose Tracks it names, not to the user.
+A **Playlist** whose last edit has not reached its own card yet — because the card is out, the
+player is not answering, or the write was refused. It is this browser's pending edit, filed under
+the **Card** whose Tracks it names, and it stops being a draft the moment the card takes it. A
+list on a card or on the player is read into one while it is being edited, keeping its id, name,
+creation time and rows.
 _Avoid_: unsaved, local copy, working set
+
+**Reach**:
+How far a **Playlist** has got: only here, on its card, on the player. Where it is and whether the
+copy there is current are separate facts — a list can be on the player and edited here since.
+_Avoid_: state, status, sync state
 
 **Block**:
 One row of the Playlist editor's list: a Track, or a Folder carrying the Tracks it was added
@@ -358,6 +368,18 @@ Which of the two answers a library question — search, list, stats, one Track: 
 reflects the card in it now, or the **Last image**, which reflects the last run this browser made.
 _Avoid_: backend, data source, database
 
+**List source**:
+Which answer carries a card's **Playlists**: the player for the **Device card**, the card's own
+`k7.playlists/` while it is in the computer, and nothing else — a card that is in neither place
+shows only this browser's **Drafts**, because there is no copy of its lists here. The selected card
+decides, as it does for a **Library source**.
+_Avoid_: backend, data source, database
+
+**Pending removal**:
+A **Playlist** deleted here that its card still carries. The row says so until the card is
+written, and the write ends it.
+_Avoid_: queued delete, tombstone, soft delete
+
 **Playing**:
 The Track the live stream is carrying at this moment, as the player reports it. A fact about the
 broadcast, not a control.
@@ -366,14 +388,14 @@ _Avoid_: now playing, current song, track
 ### The assistant
 
 **IA Agent**:
-The Playlists page that holds **Ask**. The sidebar and the breadcrumb call the page IA Agent; the
-conversation on it is **Ask**.
+The assistant's panel in the **Editor**'s sources column, behind the **Files / Ask** switch. It is
+not a page and has no item of its own in the rail; the conversation on it is **Ask**.
 _Avoid_: Ask page, assistant page, AI Agent
 
 **Ask**:
-The conversation on the **IA Agent** page: the composer at its foot, what the person said, and the
-App's answer — the reading, the tracks it found and the offer to save them. The model writes the
-**Intent**; the App writes what Ask says.
+The conversation on the **IA Agent** panel: the composer at its foot, what the person said, and the
+App's answer — the reading, the tracks it found and the offer to add them to the list beside it.
+The model writes the **Intent**; the App writes what Ask says.
 _Avoid_: chatbot, AI assistant, generate
 
 **Intent**:

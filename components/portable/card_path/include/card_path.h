@@ -3,7 +3,9 @@
  * card_path - where a card's own files are.
  *
  * The device is started with the Music directory (`/sdcard/music`); the card root is its
- * parent, and the files the App writes - `k7.db`, `k7.card`, `k7.covers` - sit there. The
+ * parent, and the files the App writes - `k7.db`, `k7.card`, `k7.covers`, and the
+ * `k7.playlists/` directory - sit there. The device writes only the selection record and,
+ * when the app asks it to, one playlist file at a time. The
  * derivation was written twice, once for the covers archive and once for the card mark.
  */
 #include <stddef.h>

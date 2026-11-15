@@ -20,6 +20,8 @@ export interface DevicePlaylist {
   /** Unix seconds. */
   created: number;
   rows: number;
+  /** The file's content fingerprint, which the card's copy is compared by (spec §7). */
+  fingerprint?: string;
 }
 
 export interface DevicePlaylists {
@@ -38,6 +40,15 @@ export interface DevicePlaylistRows {
   name: string;
   /** Snapshot paths, in play order. */
   rows: string[];
+}
+
+/** What a write answers: the list's id and, for a PUT, what the card now says it holds. */
+export interface PlaylistWrite {
+  ok: boolean;
+  id: string;
+  rows?: number;
+  fingerprint?: string;
+  removed?: boolean;
 }
 
 export class PlaylistsError extends Error {
@@ -67,6 +78,20 @@ export function parsePlaylist(value: unknown): DevicePlaylist | null {
     name: value.name,
     created: finite(value.created, 0),
     rows: finite(value.rows, 0),
+    fingerprint: typeof value.fingerprint === 'string' ? value.fingerprint : undefined,
+  };
+}
+
+/** The answer of a PUT or a DELETE: an id, and what the card now holds. */
+export function parsePlaylistWrite(value: unknown): PlaylistWrite | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== 'string') return null;
+  return {
+    ok: value.ok === true,
+    id: value.id,
+    rows: typeof value.rows === 'number' ? value.rows : undefined,
+    fingerprint: typeof value.fingerprint === 'string' ? value.fingerprint : undefined,
+    removed: value.removed === true,
   };
 }
 
@@ -135,6 +160,24 @@ export async function fetchPlaylists(): Promise<DevicePlaylists> {
 export async function fetchPlaylistRows(id: string): Promise<DevicePlaylistRows> {
   try {
     return await getDevice().request('playlist', { id });
+  } catch (error) {
+    throw playlistsError(error);
+  }
+}
+
+/** `PUT /api/playlists/<id>`: one list's file, and the answer after it is on the card. */
+export async function putPlaylist(id: string, body: string): Promise<PlaylistWrite> {
+  try {
+    return await getDevice().request('playlist.put', { id, body });
+  } catch (error) {
+    throw playlistsError(error);
+  }
+}
+
+/** `DELETE /api/playlists/<id>`: remove one file. The walk ends if it was the one walking. */
+export async function deletePlaylist(id: string): Promise<PlaylistWrite> {
+  try {
+    return await getDevice().request('playlist.delete', { id });
   } catch (error) {
     throw playlistsError(error);
   }

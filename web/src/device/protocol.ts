@@ -9,11 +9,13 @@
  * operation is called and how long the caller waits.
  */
 
-/** The fourteen operations. */
+/** The sixteen operations. */
 export type OpName =
   | 'status'
   | 'playlists'
   | 'playlist'
+  | 'playlist.put'
+  | 'playlist.delete'
   | 'select'
   | 'rescan'
   | 'play'
@@ -36,6 +38,8 @@ export const OP_SPECS: Readonly<Record<OpName, OpSpec>> = {
   status: { timeout: 4_000 },
   playlists: { timeout: 6_000 },
   playlist: { timeout: 6_000 },
+  'playlist.put': { timeout: 10_000 },
+  'playlist.delete': { timeout: 10_000 },
   select: { timeout: 10_000 },
   rescan: { timeout: 10_000 },
   play: { timeout: 10_000 },

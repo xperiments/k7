@@ -64,3 +64,24 @@ describe('a draft made of blocks', () => {
     expect(cleared?.rows).toEqual([]);
   });
 });
+
+describe('the list an address names', () => {
+  it('finds a draft by its id, with or without the leading zeros and the 0x', async () => {
+    const drafts = await load();
+    const draft = drafts.createDraft('Late night', ['a.mp3']);
+
+    expect(drafts.findDraft(drafts.listDrafts(), draft.id)?.name).toBe('Late night');
+    expect(drafts.findDraft(drafts.listDrafts(), draft.id.replace(/^0+/, ''))?.id).toBe(draft.id);
+    expect(drafts.findDraft(drafts.listDrafts(), `0x${draft.id}`)?.id).toBe(draft.id);
+    expect(drafts.findDraft(drafts.listDrafts(), draft.id.toUpperCase())?.id).toBe(draft.id);
+  });
+
+  it('names nothing for a word that is not an id', async () => {
+    const drafts = await load();
+    drafts.createDraft('Late night', ['a.mp3']);
+
+    expect(drafts.findDraft(drafts.listDrafts(), 'late-night')).toBeUndefined();
+    expect(drafts.findDraft(drafts.listDrafts(), '')).toBeUndefined();
+    expect(drafts.findDraft(drafts.listDrafts(), '1'.repeat(17))).toBeUndefined();
+  });
+});

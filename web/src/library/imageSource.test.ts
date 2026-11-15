@@ -117,7 +117,6 @@ function image(): Uint8Array<ArrayBuffer> {
       appSchema: ANALYSIS_SCHEMA,
       modelSet: 1n,
     },
-    [],
   );
 }
 
