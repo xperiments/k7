@@ -2141,6 +2141,15 @@
       "at": "2026-11-15T18:50:47Z",
       "by": "dsh",
       "desc": "The player starts shuffled. After a boot the first pass walks a random order of the Playlist and the Menu's Shuffle row reads On, so shuffle no longer has to be turned on by hand every time the board restarts.\n\nFinished means:\n\n- Every boot begins with the mode on and the first pass shuffled; a pick moves the cursor and a rescan keeps the mode on, as they do now.\n- Turning it off in the Menu lasts until the next boot: the mode is still not remembered (no NVS), so a reboot is shuffled again.\n- If the order cannot be allocated the mode still falls back to Off and the row reads Off.\n- The Menu spec and ADR 0023 record the new default, and the first pass on a fresh broadcast is pinned by a host test.\n\nTo check on the board: reboot and watch the first track, and the Shuffle row in the Menu."
+    },
+    {
+      "id": "APP-49",
+      "title": "Spread a genre answer across the library",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-15T19:01:01Z",
+      "by": "dsh",
+      "desc": "\"10 rock tracks\" answers with the first ten matches in path order. On this card that is ten tracks from Annie Lennox's Diva, because 250 tracks match rock and the search walks the library A-Z and stops at the first page. An ask that names no group or artist should draw from the whole library instead: the requested count spread across the matched tracks A-Z, one track per artist while there are artists left. A sentence that names one (\"10 rock tracks of Metallica\") keeps today's answer — that artist's matching tracks, in order.\n\nFinished means:\n\n- A sentence with no name in it (a genre, a mood, a BPM range, a measurement) is answered with a spread of the matched tracks in library order, one per artist while artists remain, then repeats only if it must.\n- A sentence that names a group or artist answers exactly as it does today.\n- A stated offset or sort keeps its linear page; the spread is for an unpaged ask.\n- The answer still reports the true matched count, and saving the answer saves the spread, in the order shown.\n- The player's search answers at most 200 rows, so the App reads that window and spreads within it; the Last image is spread the same way from its own rows. A library with more matches than the window is the known limit, and a player-side sample is the follow-up if it bites.\n- Host tests pin the spread and that it applies only when no name is named; k7-app §7 records the rule.\n\nTo check on the card: \"10 rock tracks\" should list about ten different artists from across the library, not ten tracks from one album. \"10 rock tracks of Nirvana\" (this card has no Metallica) should still list Nirvana."
     }
   ]
 }
