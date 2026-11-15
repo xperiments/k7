@@ -2355,7 +2355,7 @@
     {
       "id": "APP-57",
       "title": "The list's name is edited in the stage header",
-      "state": "proposed",
+      "state": "review",
       "group": "APP",
       "at": "2026-11-15T23:19:27Z",
       "by": "deepseek",
@@ -2381,11 +2381,66 @@
     {
       "id": "LB-05",
       "title": "The editor's actions are agent tools",
-      "state": "proposed",
+      "state": "review",
       "group": "LB",
       "at": "2026-11-15T23:30:13Z",
       "by": "dsh",
-      "desc": "A browser agent can read and edit the open design: 14 tools registered on load with WebMCP, and the same calls on `window.__labelEditorMcp` when the browser has no such API, so a page script or Playwright reaches them too. The status bar's WebMCP button opens *Agent tools*, which shows what registered and lists the tools, so the person at the screen can see what is exposed.\n\nThere is deliberately no external MCP server — the tools live in the page that owns the design, and a stdio or HTTP proxy would need a page of its own, which would put the design in two places.\n\nFinished means the tools, the dialog and their tests are on master (they are: `7b1ba13`, after `a2384df`), and a label built through the bridge packs with `tools/label_pack.py` — this one is `HOLA`, 183 B. To check it yourself: `npm run dev`, then the status bar's WebMCP button in a Chrome started with `--enable-features=WebMCP` should say 14 tools registered."
+      "desc": "A browser agent can read and edit the open design: 14 tools registered on load with WebMCP, and the same calls on `window.__labelEditorMcp` when the browser has no such API, so a page script or Playwright reaches them too. The status bar's WebMCP button opens *Agent tools*, which shows what registered and lists the tools, so the person at the screen can see what is exposed.\n\nThere is deliberately no external MCP server — the tools live in the page that owns the design, and a stdio or HTTP proxy would need a page of its own, which would put the design in two places.\n\nFinished means the tools, the dialog and their tests are on master (they are: `7b1ba13`, after `a2384df`), and a label built through the bridge packs with `tools/label_pack.py` — this one is `HOLA`, 183 B. To check it yourself: `npm run dev`, then the status bar's WebMCP button in a Chrome started with `--enable-features=WebMCP` should say 14 tools registered.",
+      "notes": [
+        {
+          "at": "2026-11-15T23:47:12Z",
+          "by": "dsh",
+          "text": "Plan: the surface is on master (7b1ba13); verify it on this tree, then record it for review."
+        },
+        {
+          "at": "2026-11-15T23:47:12Z",
+          "by": "dsh",
+          "text": "The editor now offers its 14 actions to a browser agent. Open it in a Chrome started with `--enable-features=WebMCP` and the status bar's **WebMCP** button says 14 tools registered, lists them, and copies the list; an agent can read the design, add, change, move or delete layers, set the colourway, import and export `label-template v1`, validate, switch documents and undo. Without the browser API the same calls stay on `window.__labelEditorMcp`, so a page script or Playwright reaches them too. There is deliberately no external MCP server: a proxy would have to own a page, and then two places would hold the design.\n\nWhat to check yourself:\n- `npm run dev`, then the WebMCP button in a Chrome with `--enable-features=WebMCP`: 14 tools registered.\n- `npm run test-label`: it builds HOLA through the bridge; `tools/label_pack.py` packs it (1 designs, 3 prims, 0 slots, 183 B).\n- `npm run e2e`: 9 passed, including Chrome's own WebMCP and the no-API fallback; a refused call changes nothing.\n\nOn master as `7b1ba13` (with the empty-text and letter-spacing fixes in `a2384df` before it)."
+        }
+      ]
+    },
+    {
+      "id": "LB-06",
+      "title": "An agent can design a K7 label from a brief",
+      "state": "review",
+      "group": "LB",
+      "at": "2026-11-15T23:41:26Z",
+      "by": "dsh",
+      "desc": "A person can hand an agent a brief — \"a synthwave label: navy paper, a blue band with the title, artist and BPM, the small print below the window\" — and get back a valid `label-template v1` for the K7, designed through the editor's WebMCP tools. Today the tools are documented as a list; nothing says what a label is, where the Card's window cuts it, which fields the player fills, or what the type pairs are.\n\nThe agent's guide is `tools/LabelEditor/skills/k7-labels/SKILL.md`, served by the editor at `/skill.md` and emitted into `dist/skill.md`, so an agent that reaches the page reads it there. Its tool reference is generated from the tools themselves (`npm run skill`, guarded by `npm run skill:check` and a unit test), and the same test keeps the field table and the type pairs honest.\n\nThe human's guide is `tools/LabelEditor/docs/labels-for-the-k7.md`: what the label is for, the zones that read, the eleven fields, both roads to a design, and how one reaches the player.\n\nFinished means a person can paste the brief, point the agent at `http://localhost:5178/skill.md`, and land a label they would print — and a stale skill fails the app's tests rather than drifting. It is on master now (`d64e2df`); approve this to record it, and tell me which brief to try it with.",
+      "notes": [
+        {
+          "at": "2026-11-15T23:47:16Z",
+          "by": "dsh",
+          "text": "Plan: the skill, its generator and the guide are on master (d64e2df); record them for review."
+        },
+        {
+          "at": "2026-11-15T23:47:16Z",
+          "by": "dsh",
+          "text": "The editor now ships the instructions an agent needs to design a K7 label with it. Point an agent at `http://localhost:5178/skill.md` — the editor serves it, and the build writes it into `dist/` — and it can read what a label is (the 748x359 print, the Card's window as a hole, the strips left for type), the eleven fields the player fills, the three face-and-size pairs, the workflow, two worked designs and the refusals it will meet. Then it designs through the same 14 tools.\n\nFor you, `tools/LabelEditor/docs/labels-for-the-k7.md` is the same ground in fewer words: what a label is for, which zones read, both roads to a design (by hand, or from a brief given to an agent), and how one reaches the player.\n\nWhat to check yourself:\n- Open `http://localhost:5178/skill.md` — it is the skill, and the status bar's WebMCP button is the receipt of what the agent can see.\n- `npm run skill:check` refuses a stale tool reference; a unit test also refuses it, and the same test fails if a field or a type pair stops being documented. Add a tool, run `npm run skill`, and the guide follows.\n- Give ChatGPT desktop the brief from the guide: read `/skill.md`, then make the label. Both worked designs were run through the bridge and exported with no errors (3 and 10 prims).\n\nOn master as `d64e2df`."
+        }
+      ]
+    },
+    {
+      "id": "APP-58",
+      "title": "Ask is the composer under the tree, and its answer is the tree",
+      "state": "review",
+      "group": "APP",
+      "yolo": true,
+      "at": "2026-11-15T23:46:39Z",
+      "by": "deepseek",
+      "desc": "The editor's sources column loses its Files / Ask switch. The card's tree is the column, and Ask is the composer at its foot: one sentence, one send. An answer is drawn in the tree — the card's own folders, pruned to the rows the search answered, opened so they read at once — with the answer's words, Filters and the offer to add or save in a panel above it, and Files in the column's header to give the whole card back. A failure stands in the answer's place and leaves the tree whole; the address no longer carries a tab, so #/playlists/:id/ask is the editor.\n\n  Finished when the editor has one surface with no switch, an answer's rows are the tree and can still be dragged as a folder, Files returns the whole card, and the last answer is announced to a screen reader.\n\n  To check: open a list, type '10 rock tracks' under the tree, and see the tree narrow to those rows with the answer above it; press Files and see the card again; drag a folder out of the answer into the list.\n\n  This replaces the switch APP-52 put in, and the tab's address that APP-52 and APP-53 carried.",
+      "notes": [
+        {
+          "at": "2026-11-15T23:53:05Z",
+          "by": "deepseek",
+          "text": "Plan: the sources column owns the tree, the search, the answer and the composer; an answer prunes the card's tree with keepFolderTree; Files gives the card back; the Files / Ask switch and the ask flag on the route go."
+        },
+        {
+          "at": "2026-11-15T23:53:16Z",
+          "by": "deepseek",
+          "text": "The editor's sources column is one surface. The card's tree is the column and Ask is the composer at its foot (one sentence, one send); an answer is drawn in that tree — the card's own folders pruned to the rows the search answered with keepFolderTree, opened so they read at once — with the answer's words, Filters and the add/save offer in an outlined panel above it. Files in the column's header gives the whole card back and the answer's offer stays usable without it. A failure stands in the answer's place and leaves the tree whole, and the last answer carries role=status because the thread that used to announce it is gone.\n\nThe Files / Ask switch is retired, and so is the ask flag on the route: #/playlists/:id/ask is the editor. The tab state, the thread, the second list of rows and Show all are gone with it (Ask.tsx deleted, Sources.tsx is the column).\n\nTwo deliberate shapes: the pruned tree keeps the card's order, not the answer's — the answer's order is what Add appends, and the tree is the card's shape; and the folder of an answer drags as one block, which is the thing a second list could not do.\n\nVerified: typecheck, 884 tests (4 new for keepFolderTree, 1 router case updated for the retired tab), build, and the look checks with only the eval harness's pre-existing heading. Not verified: the browser checks in this ticket — asking, reading the answer in the tree, Files, and dragging a folder out of it — which need a card and the board.\n\nDocs: k7-app P3 rewritten, k7-look K21 (Playlists and IA Agent), front-door §4.2 and the route table, web/CONTEXT's IA Agent and Ask, ADR 0093's note now records that the switch is retired."
+        }
+      ]
     }
   ]
 }
