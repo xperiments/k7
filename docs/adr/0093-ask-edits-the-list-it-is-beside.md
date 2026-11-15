@@ -1,8 +1,12 @@
 # Ask edits the list it is beside
 
-> **Moved, not reversed ([k7-look.md](../specs/k7-look.md) K21).** The list now takes the editor's
-> left column and the panel with the files takes the right. The decision below — Ask is a panel
-> beside the list, with no page and no rail item — stands; only the side it stands on changed.
+> **Moved, and the switch retired ([k7-look.md](../specs/k7-look.md) K21).** The list now takes the
+> editor's left column and the panel with the files takes the right. The **Files / Ask** switch is
+> gone as well: the card's tree is the column, and Ask is the composer at its foot, with the last
+> answer drawn over the tree itself — the card's folders pruned to its rows — and **Files** in the
+> column's header to give the card back. The decision below — Ask is a panel beside the list, with
+> no page and no rail item — stands; what changed is its shape inside the column, and that
+> `#/playlists/:id/ask` no longer names a tab.
 
 [ADR 0086](./0086-the-assistant-is-a-conversation.md) made Ask a conversation on its own page,
 the **IA Agent** page at `#/playlists/ask`, with the composer at its foot and one action at the end

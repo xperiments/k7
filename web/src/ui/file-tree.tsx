@@ -168,6 +168,7 @@ export function FileTree({
   onRename,
   renaming,
   showControls = true,
+  expandAll = false,
   controls,
 }: {
   tree: FolderNode;
@@ -202,6 +203,8 @@ export function FileTree({
   };
   /** Draw the header's expand/collapse buttons; a caller with its own bar says no. */
   showControls?: boolean;
+  /** Open every folder on the first render: a short tree is read at once, not walked. */
+  expandAll?: boolean;
   /** Filled with the tree's expand/collapse, for a caller's own bar. */
   controls?: MutableRefObject<TreeControls | null>;
 }) {
@@ -223,8 +226,9 @@ export function FileTree({
      remounts us when either changes (the `key` in `DriveView`), which is what makes this
      initial state the current one rather than only the first. */
   const initialExpanded = useMemo(
-    () => (query.trim().length > 0 ? allFolderIds(data) : expandedForPath(root, path)),
-    [data, root, path, query],
+    () =>
+      expandAll || query.trim().length > 0 ? allFolderIds(data) : expandedForPath(root, path),
+    [data, root, path, query, expandAll],
   );
 
   const instance = useTree<TreeEntry>({

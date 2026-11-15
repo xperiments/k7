@@ -1,15 +1,13 @@
-import { useEffect, useId, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
   ChevronRight,
   Folder,
-  FolderTree,
   GripVertical,
   ListMusic,
   Plus,
-  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { cn } from 'cn';
@@ -17,7 +15,6 @@ import { cn } from 'cn';
 import { Badge } from '@/components/reui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Empty,
   EmptyContent,
@@ -26,7 +23,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCardScope, useDeviceView } from '../../card/session';
 import { McpError, trackAt, type McpTrack } from '../../device/mcp';
@@ -53,8 +49,7 @@ import { putPlaylist } from '../../device/playlists';
 import { loadSnapshot } from '../../storage/snapshots';
 import { useListScope } from '../lists-scope';
 import type { CachedMedia } from '../../storage/media';
-import { AskPanel } from './Ask';
-import { FileTree } from '../file-tree';
+import { SourcesColumn } from './Sources';
 import { plural } from '../format';
 import { navigate, routeHref } from '../router';
 import { draggedFolder, draggedTrack, isLibraryDrag } from '../track-drag';
@@ -320,38 +315,6 @@ function EditorLoading() {
   );
 }
 
-function NoSources({ reachable }: { reachable: boolean }) {
-  return (
-    <Empty className="border">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <ListMusic aria-hidden="true" />
-        </EmptyMedia>
-        <EmptyTitle>No card to browse</EmptyTitle>
-        <EmptyDescription>
-          {reachable
-            ? 'Measure a card in this browser and its folders appear here, ready to drag into the list.'
-            : 'The device is not answering, and this browser has not measured a card. Put the card in the computer and measure it once.'}
-        </EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent>
-        <Button size="sm" onClick={() => navigate(routeHref({ name: 'prepare' }))}>
-          Open Prepare
-        </Button>
-      </EmptyContent>
-    </Empty>
-  );
-}
-
-function SourceLoading() {
-  return (
-    <div className="flex flex-col gap-2">
-      {Array.from({ length: 6 }, (_, index) => (
-        <Skeleton key={index} className="h-7 w-full" />
-      ))}
-    </div>
-  );
-}
 
 /** One file's name, path and state, without any of the buttons around it. */
 function TrackInfo({
@@ -437,18 +400,16 @@ function BlockActions({
   );
 }
 
-function Editor({ draft, ask }: { draft: Draft; ask: boolean }) {
+function Editor({ draft }: { draft: Draft }) {
   const scope = useCardScope();
   const deviceView = useDeviceView();
   const { status } = useDeviceStatus();
   const media = useMediaIndex();
-  const [tab, setTab] = useState<'files' | 'ask'>(ask ? 'ask' : 'files');
   const [entryFrom, setEntryFrom] = useState<number | null>(null);
   const [entryDropAt, setEntryDropAt] = useState<number | null>(null);
   const [overEmpty, setOverEmpty] = useState(false);
   const [overEnd, setOverEnd] = useState(false);
   const [confirmingClear, setConfirmingClear] = useState(false);
-  const [sourceQuery, setSourceQuery] = useState('');
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const listScope = useListScope();
   /* Where the edit has got to: the card's file here, the player's file there, or still only
@@ -463,7 +424,6 @@ function Editor({ draft, ask }: { draft: Draft; ask: boolean }) {
   /* The list's content: a rename, a reorder or an added row is a different fingerprint, and
    * that is what a write is debounced on. */
   const fingerprint = listFingerprint(draft);
-  const sourceSearch = useId();
 
   /* A row's facts come from the selected source: the player when it holds this card, this
    * browser's own rows for the card when it does not (ADR 0092). */
@@ -499,8 +459,6 @@ function Editor({ draft, ask }: { draft: Draft; ask: boolean }) {
         : null,
     [media.index],
   );
-  const hasSources =
-    sourceTree !== null && (sourceTree.folders.length > 0 || sourceTree.tracks.length > 0);
   const folderCount = draft.entries.filter((entry) => entry.kind === 'folder').length;
 
   const checked = draft.rows.every((path) => facts.map.has(path));
@@ -556,19 +514,6 @@ function Editor({ draft, ask }: { draft: Draft; ask: boolean }) {
       clearTimeout(timer);
     };
   }, [listScope, viaPlayer, draft.id, fingerprint]);
-
-  /* The tab is a place: the address carries it, so a reload lands where the person was. */
-  useEffect(() => {
-    setTab(ask ? 'ask' : 'files');
-  }, [ask]);
-
-  const chooseTab = (next: string) => {
-    const wanted = next === 'ask' ? 'ask' : 'files';
-    setTab(wanted);
-    navigate(routeHref({ name: 'playlist', id: draft.id, ask: wanted === 'ask' }), {
-      replace: true,
-    });
-  };
 
   const toggleExpanded = (id: string) => {
     setExpanded((current) => {
@@ -908,89 +853,34 @@ function Editor({ draft, ask }: { draft: Draft; ask: boolean }) {
           </div>
         </section>
 
-        {/* The sources: the card's files and the AI Agent, one at a time behind a switch. */}
+        {/* The sources: the card's tree is the column, and Ask is the composer at its foot. */}
         <section
           aria-labelledby="sources-heading"
           className="flex min-w-0 flex-col gap-3 lg:min-h-0"
         >
           <h2 id="sources-heading" className="sr-only">
-            Files and the AI Agent
+            The card's files and the AI Agent
           </h2>
-          <Tabs value={tab} onValueChange={chooseTab} className="min-h-0 flex-1">
-            <TabsList className="w-full">
-              <TabsTrigger value="files">
-                <FolderTree aria-hidden="true" />
-                Files
-              </TabsTrigger>
-              <TabsTrigger value="ask">
-                <Sparkles aria-hidden="true" />
-                Ask
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="files" className="flex min-h-0 flex-col gap-3">
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-col gap-0.5">
-                  <p className="text-sm font-light">Files</p>
-                </div>
-                {!media.loading && hasSources ? (
-                  <div className="flex flex-col gap-1">
-                    <label htmlFor={sourceSearch} className="sr-only">
-                      Search sources
-                    </label>
-                    <Input
-                      id={sourceSearch}
-                      type="search"
-                      value={sourceQuery}
-                      onChange={(event) => setSourceQuery(event.target.value)}
-                      placeholder="Search sources"
-                      autoComplete="off"
-                    />
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="min-h-0 flex-1 lg:overflow-auto">
-                {media.loading ? (
-                  <SourceLoading />
-                ) : !hasSources ? (
-                  <NoSources reachable={media.reachable} />
-                ) : (
-                  <FileTree
-                    key={`sources\u0000${sourceQuery}`}
-                    tree={sourceTree}
-                    query={sourceQuery}
-                    path=""
-                    action="add"
-                    draggableSources
-                    onActivate={(track) => addToEnd([{ kind: 'track', path: track.path }])}
-                  />
-                )}
-              </div>
-            </TabsContent>
-
-            {/* Kept mounted while the other tab shows: the conversation is this visit's, and a
-                switch back to the files must not throw it away. */}
-            <TabsContent value="ask" keepMounted className="flex min-h-0 flex-col">
-              <AskPanel
-                listName={draft.name}
-                onAdd={(rows) => addToEnd(rows.map((path) => ({ kind: 'track', path })))}
-              />
-            </TabsContent>
-          </Tabs>
+          <SourcesColumn
+            tree={sourceTree}
+            loading={media.loading}
+            reachable={media.reachable}
+            listName={draft.name}
+            onAdd={(rows) => addToEnd(rows.map((path) => ({ kind: 'track', path })))}
+          />
         </section>
       </div>
     </div>
   );
 }
 
-export function PlaylistEditor({ id, ask }: { id: string; ask: boolean }) {
+export function PlaylistEditor({ id }: { id: string }) {
   const drafts = useDrafts();
   const draft = findDraft(drafts, id);
 
   // The drafts are read once at boot; until then an unknown id is "loading", not "missing".
   if (!draft && !draftsLoaded()) return <EditorLoading />;
   if (!draft) return <EditorMissing />;
-  // Keyed by id: opening another list resets the tab, the drag state and the source search.
-  return <Editor key={draft.id} draft={draft} ask={ask} />;
+  // Keyed by id: opening another list resets the drag state and the source column's visit.
+  return <Editor key={draft.id} draft={draft} />;
 }

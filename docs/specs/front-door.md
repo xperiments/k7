@@ -101,7 +101,7 @@ works.
 | `#/process` | Card | intake (drop or pick a card), the Queue, the run's progress |
 | `#/playlists` | Playlists | the selected card's Playlists and this browser's Drafts, one row per list |
 | `#/playlists/:id` | Playlists | one Playlist's rows, order and actions, with the card's files beside them |
-| `#/playlists/:id/ask` | Playlists | the same list, with the AI Agent's conversation in its left column |
+| `#/playlists/:id/ask` | Playlists | the same editor: the address of the retired Ask tab, which no longer names a tab |
 | `#/media` | Media | albums, from the device's Snapshot rows |
 | `#/media/album/:album` | Media | one album's tracks |
 | `#/media/artist/:artist` | Media | one artist's albums |
@@ -312,9 +312,9 @@ The Queue, measured, written to the card by the run itself.
   an edit, a refusal is shown and retried, and the page says where each list has got to. The image
   carries measurements still, and Prepare is its only door
   ([ADR 0065](../adr/0065-the-card-is-the-only-way-to-the-player.md)).
-- `#/playlists/:id` is the editor, in two columns: the left carries the card's folders as a
-  **source tree** and the **IA Agent**, behind one **Files / Ask** switch; the draft's blocks are on
-  the right. A file adds one row; a folder adds one block that carries every file under it and
+- `#/playlists/:id` is the editor, in two columns: the draft's blocks are on the left, and the
+  card's folders as a **source tree** on the right, with the **IA Agent**'s composer at the tree's
+  foot — one surface, no switch. A file adds one row; a folder adds one block that carries every file under it and
   moves as a unit. A drag from the tree lands exactly where it is dropped, a block reorders by drag
   (with arrow-key alternatives), and a folder block opens to show its rows. The order is the
   author's: nothing re-sorts it. **Clear** empties the list behind an inline confirmation, and
@@ -324,15 +324,18 @@ The Queue, measured, written to the card by the run itself.
   card does not have reads *not in this card's library*. The Device card's rows come from the
   player (`library_track`), which is what the editor used for every card before this. A row the
   source no longer has is shown as missing and skipped by the broadcast, never deleted here.
-- `#/playlists/:id/ask` is the same editor with **Ask** showing, and it is where the assistant
-  lives: a sentence, an **Intent** the App computed, a search, and an answer whose one action adds
-  its tracks to the open list — appended at the end, in the answer's order — with **Save as a new
-  list** as the secondary, which creates a list of its own and offers to open it. The model writes filters and never results, and never sees the list
+- The assistant is that composer, and an answer is drawn **in the tree**: the card's own folders
+  pruned to the rows the search answered, with the answer's words and its offer in a panel above
+  them and **Files** in the column's header to give the whole card back. Nothing on the card
+  changes until the person acts: one action adds the answer's rows to the open list — appended at
+  the end, in the answer's order — with **Save as a new list** as the secondary, which creates a
+  list of its own and offers to open it. The model writes filters and never results, and never sees the list
   ([ADR 0050](../adr/0050-the-assistant-waits-for-a-secure-origin.md),
   [ADR 0053](../adr/0053-the-assistant-writes-filters.md),
   [ADR 0093](../adr/0093-ask-edits-the-list-it-is-beside.md)). The five states of the built-in
-  model, the **Filters** sheet and the one-retry error live in the column, and `#/playlists/ask`
-  redirects here from the retired page.
+  model, the **Filters** sheet and the one-retry error live in the column, `#/playlists/:id/ask`
+  lands on the editor because there is no tab to name any more, and `#/playlists/ask` redirects to
+  the list of lists from the retired page.
 
 ### 4.3 Media
 

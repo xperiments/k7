@@ -131,7 +131,7 @@ function AppContent() {
           </div>
 
           {route.name === 'playlists' && <PlaylistsArea />}
-          {route.name === 'playlist' && <PlaylistEditor id={route.id} ask={route.ask === true} />}
+          {route.name === 'playlist' && <PlaylistEditor id={route.id} />}
           {/* Media is one area with two views: the route chooses which from the same slot, so
               the cache is read once while a reader walks between the shelf and the folders.
               An album route turns the case on the shelf; a drive route opens its folder. */}

@@ -348,22 +348,27 @@ its quartiles. Without a profile the
 static ranges apply. The profile is aggregates only — genres, count, ranges and quartiles — and
 no track, artist, path or per-track measurement is described either way.
 
-**P3. Ask is a conversation, and it stands in the editor's sources column.** The composer is at
-the foot of that column, behind the **Files / Ask** switch, beside the list it edits; a sentence
-becomes a message from the person, and the answer is a message from Ask with the tracks it found. The answer
-is the App's words, computed from the Intent that ran and the search that answered: the count, the
-reading of the filters, the source, the offer to add its rows to the open list and the
-confirmation. The model writes no
-prose (ADR 0050's shape rule; [ADR 0086](../adr/0086-the-assistant-is-a-conversation.md)). The
-answer names what was understood — "Found 10 tracks — techno, 124–132 BPM" — and **Filters** opens
-the exact `library_search` arguments, seeded with that Intent, for a misparse. The result is a
-preview of four tracks with **Show all N tracks**. There is no Intent panel and no separate
-**Run search**. An answer that names no group or artist is drawn from across the matched window,
-not from the search's first page: Ask reads up to the player's 200-row window and keeps one track
-per artist, spread across the window in library order, until the count is met, then fills any
-remainder at even steps through the tracks left. A sentence that names a group or artist, and a
-stated offset or sort, keep their page. The selection is the App's, computed from the search; the
-model still writes no result, and the Last image is drawn the same way from its own rows.
+**P3. Ask is the composer under the editor's tree, and its answer is drawn in that tree.** The
+sources column is the card's folders, always: there is no Files / Ask switch and no second surface
+to learn. The composer sits at the tree's foot — one sentence, one send — and the last answer is what the column
+shows above the tree. An answer's rows are not a second
+list beside the tree, they are the tree: the card's own folders, pruned to the rows the search
+answered, kept in their folders so a folder can still be dragged as one block, with **Files** in
+the column's header giving the whole card back. The tree's shape is the card's, not the answer's
+order — that order is what **Add** appends, and it is never re-sorted. A sentence becomes a message
+from the person, and the answer is a message from Ask carrying the reading, the source and the
+offer to add its rows; a failure replaces the answer and leaves the tree alone, because there is
+nothing to prune it to. The model writes no prose (ADR 0050's shape rule; ADR 0086), and
+[ADR 0093](../adr/0093-ask-edits-the-list-it-is-beside.md) still holds: Ask is beside the list it
+edits, with no page and no rail item. The answer names what was understood — "Found 10 tracks —
+techno, 124–132 BPM" — and **Filters** opens the exact `library_search` arguments, seeded with that
+Intent, for a misparse. There is no Intent panel and no separate **Run search**. An answer that
+names no group or artist is drawn from across the matched window, not from the search's first page:
+Ask reads up to the player's 200-row window and keeps one track per artist, spread across the
+window in library order, until the count is met, then fills any remainder at even steps through
+the tracks left. A sentence that names a group or artist, and a stated offset or sort, keep their
+page. The selection is the App's, computed from the search; the model still writes no result, and
+the Last image is drawn the same way from its own rows.
 A model call that has not answered within thirty seconds is abandoned: the answer is an error
 with the one retry, not a spinner that never ends.
 

@@ -13,7 +13,7 @@ import { useSyncExternalStore } from 'react';
 export type Route =
   | { name: 'prepare' }
   | { name: 'playlists' }
-  | { name: 'playlist'; id: string; ask?: boolean }
+  | { name: 'playlist'; id: string }
   | { name: 'media' }
   | { name: 'drive'; path: string }
   | { name: 'album'; album: string }
@@ -64,8 +64,10 @@ export function parseRoute(hash: string): Route {
        * lists, and the conversation lives in an editor's column beside the files (ADR 0093). */
       if (parts.length === 2 && parts[1] === 'ask') return { name: 'playlists' };
       if (parts.length === 2) return { name: 'playlist', id: decode(parts[1]) };
+      /* The editor had a tab and its address carried it; the column is one surface now, so the
+       * old address is the editor. */
       if (parts.length === 3 && parts[2] === 'ask') {
-        return { name: 'playlist', id: decode(parts[1]), ask: true };
+        return { name: 'playlist', id: decode(parts[1]) };
       }
       return { name: 'not-found', path };
     case 'media':
@@ -93,9 +95,7 @@ export function routeHref(route: Route): string {
     case 'playlists':
       return '#/playlists';
     case 'playlist':
-      return route.ask
-        ? `#/playlists/${encodeURIComponent(route.id)}/ask`
-        : `#/playlists/${encodeURIComponent(route.id)}`;
+      return `#/playlists/${encodeURIComponent(route.id)}`;
     case 'media':
       return '#/media';
     case 'drive':

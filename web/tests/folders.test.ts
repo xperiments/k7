@@ -5,6 +5,7 @@ import {
   filterFolderTree,
   folderCounts,
   folderTrackPaths,
+  keepFolderTree,
   locateFolder,
   MUSIC_ROOT,
 } from '../src/media/folders';
@@ -241,5 +242,43 @@ describe('dragging a folder', () => {
     const empty = { ...tree.folders[0], folders: [], tracks: [], tracksBelow: 0 };
 
     expect(folderTrackPaths(empty)).toEqual([]);
+  });
+});
+
+describe('the tree pruned to an answer', () => {
+  it('keeps the files an answer names and the folders that lead to them', () => {
+    const tree = buildFolderTree([
+      row('A/Album/01.mp3'),
+      row('A/Album/02.mp3'),
+      row('B/Other/03.mp3'),
+    ]);
+
+    const kept = keepFolderTree(tree, ['A/Album/02.mp3', 'B/Other/03.mp3']);
+
+    expect(folderTrackPaths(kept!)).toEqual(['A/Album/02.mp3', 'B/Other/03.mp3']);
+    expect(kept!.folders.map((folder) => folder.name)).toEqual(['A', 'B']);
+    expect(kept!.tracksBelow).toBe(2);
+    expect(kept!.folders[0].tracksBelow).toBe(1);
+  });
+
+  it('drops a folder with no kept file below it', () => {
+    const tree = buildFolderTree([row('A/Album/01.mp3'), row('B/Other/03.mp3')]);
+
+    const kept = keepFolderTree(tree, ['A/Album/01.mp3']);
+
+    expect(kept!.folders.map((folder) => folder.path)).toEqual(['A']);
+  });
+
+  it('compares a path folded, as the card spells it', () => {
+    const tree = buildFolderTree([row('A/Album/01.mp3')]);
+
+    expect(keepFolderTree(tree, ['a/album/01.MP3'])).not.toBeNull();
+  });
+
+  it('has no answer when the tree holds none of the paths', () => {
+    const tree = buildFolderTree([row('A/Album/01.mp3')]);
+
+    expect(keepFolderTree(tree, ['Somewhere/else.mp3'])).toBeNull();
+    expect(keepFolderTree(tree, [])).toBeNull();
   });
 });

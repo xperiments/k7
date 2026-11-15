@@ -26,10 +26,10 @@ describe('the shell routes', () => {
       name: 'playlist',
       id: 'aaaa000000000001',
     });
+    // The Ask tab is gone; its old address is the editor, not a 404.
     expect(parseRoute('#/playlists/aaaa000000000001/ask')).toEqual({
       name: 'playlist',
       id: 'aaaa000000000001',
-      ask: true,
     });
     expect(parseRoute('#/media/album/AC%2FDC%20-%20Back%20In%20Black')).toEqual({
       name: 'album',
@@ -68,7 +68,6 @@ describe('the shell routes', () => {
       { name: 'prepare' },
       { name: 'playlists' },
       { name: 'playlist', id: 'aaaa000000000001' },
-      { name: 'playlist', id: 'aaaa000000000001', ask: true },
       { name: 'media' },
       { name: 'drive', path: '' },
       { name: 'drive', path: 'Artist/Album' },
