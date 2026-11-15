@@ -1894,13 +1894,25 @@
     {
       "id": "APP-38",
       "title": "Measure general grounding before shipping it",
-      "state": "todo",
+      "state": "review",
       "group": "APP",
       "deps": ["APP-32"],
       "yolo": true,
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
-      "desc": "The purpose normalizer drops unjustified axes only when a purpose word is present. Try the same grounding on every sentence: drop a sort with no sort word, a limit with no number or duration, a BPM bound with no tempo word or number. It can strip legitimate filters (\"chill\" implying a tempo), so it is an experiment, not a ship: put it behind a dev flag or a second normalizer, run the corpus per-field, and keep only the rules that hold. Coordinate with APP-33 so a number the sentence stated is not mistaken for an invention.\n\nFinished when: a run compares grounded vs ungrounded per field; the report names the rows that gained and lost; a decision (ship none/some/all) is on the ticket; nothing ships without the measurement."
+      "desc": "The purpose normalizer drops unjustified axes only when a purpose word is present. Try the same grounding on every sentence: drop a sort with no sort word, a limit with no number or duration, a BPM bound with no tempo word or number. It can strip legitimate filters (\"chill\" implying a tempo), so it is an experiment, not a ship: put it behind a dev flag or a second normalizer, run the corpus per-field, and keep only the rules that hold. Coordinate with APP-33 so a number the sentence stated is not mistaken for an invention.\n\nFinished when: a run compares grounded vs ungrounded per field; the report names the rows that gained and lost; a decision (ship none/some/all) is on the ticket; nothing ships without the measurement.",
+      "notes": [
+        {
+          "at": "2026-11-15T00:38:02Z",
+          "by": "dsh",
+          "text": "Plan: an eval-only experiment, not a ship.\n- `ground(sentence, intent, rules)` with three independent rules: sort with no sort word, limit with no count/session, BPM with no tempo word/number; the purpose normalizer shares `statesSort`/`hasTempo`.\n- `auditExpected` runs each rule over the corpus's expected Intents to find the legitimate filters it would strip; `compareGrounding` runs each rule over the recorded answers and reports the field states and the rows that gained/lost.\n- The decision is on the ticket; nothing is wired into `requestIntent`."
+        },
+        {
+          "at": "2026-11-15T00:38:02Z",
+          "by": "dsh",
+          "text": "The general-grounding experiment is in `evals/grounding.ts`, never on the shipped path. Three rules are measured apart: drop a sort with no sort word, a limit with no count or session, a BPM with no tempo word or number. The purpose normalizer now shares `statesSort` and `hasTempo`, so the rules use the table's vocabulary; its behaviour is unchanged.\n\nThe report:\n- Full corpus, expected Intents: the sort rule strips S8's legitimate \"danceability\" sort; the limit rule strips row 46's \"the whole library\" limit 100; the BPM rule strips nothing.\n- The 30 recorded answers: the sort rule loses S8 and turns its pass into a fail; the limit rule gains the 54 \"hello\" limit, but the corpus loss stands; the BPM rule changes no field.\n\nDecision for APP-38: **ship none**. The sort and limit rules are rejected on the legitimate-filter audit. The BPM rule is the only one with no corpus loss, but the recorded sample shows no gain, so it waits for a full model run; the experiment stays in `evals/`.\n\nTested: 6 grounding tests, 810 web tests, typecheck and build. No spec or ADR: no product change. The remaining ready YOLO tasks are APP-39 and APP-42; APP-41 is ready without YOLO; APP-40 waits on APP-39."
+        }
+      ]
     },
     {
       "id": "APP-39",
