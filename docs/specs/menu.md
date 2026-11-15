@@ -122,7 +122,9 @@ MENU
   idle dim and the screen-off step are skipped until Auto is chosen again, which is the cost of
   a brightness the user chose.
 - **Shuffle**: the Row reads `mini_icecast_shuffle_enabled()` and toggles it; the order itself is
-  the broadcast's (ADR 0023).
+  the broadcast's (ADR 0023). The mode starts **On** at boot, so the first pass is shuffled
+  without a Menu trip, and a toggle lasts until the next boot — the mode is not stored
+  ([ADR 0091](../adr/0091-the-player-boots-shuffled.md)).
 
 ## The Pad
 
@@ -291,4 +293,6 @@ footer is Jura 28 and the header Jura 36.
   "1.70 MB of 4 MB".
 - The acceleration thresholds, the hysteresis and the touch's drag limit: constants, tuned with a
   finger on the board.
-- NVS for the backlight hold and the shuffle mode: deferred; both live until reboot.
+- NVS for the backlight hold and the shuffle mode: deferred; both live until reboot. The
+  shuffle mode's boot default is On (ADR 0091), so a reboot is shuffled again rather than
+  remembering the last choice.

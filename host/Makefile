@@ -196,7 +196,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t25_rgb $(BIN)/t26_groups $(BIN)/t27_timeline $(BIN)/t28_entrance \
          $(BIN)/t29_snapshot $(BIN)/t30_playlist_select $(BIN)/t31_card_select \
          $(BIN)/t32_label $(BIN)/t34_json $(BIN)/t35_card_use \
-         $(BIN)/t36_wifi_record $(BIN)/t38_setup
+         $(BIN)/t36_wifi_record $(BIN)/t38_setup $(BIN)/t39_shuffle_default
 
 .PHONY: all test integration layering label check tools fixtures bench control control-check clean help
 
@@ -277,6 +277,10 @@ $(BIN)/t11_ring: $(CORE_OBJ) $(OBJ)/t11_ring.o
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t12_transport: $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/t12_transport.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t39_shuffle_default: $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/t39_shuffle_default.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

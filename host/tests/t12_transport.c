@@ -122,6 +122,9 @@ int main(void)
         .bitrate = KBPS,
         .max_clients = 1,
     };
+    /* The player boots shuffled (docs/adr/0091); this test pins the library's own
+     * order, so it asks for it before the first pass exists. */
+    mini_icecast_shuffle_set(false);
     CHECK(mini_icecast_start(&cfg) == ESP_OK, "the broadcast starts");
 
     char last[MINI_ICECAST_STATUS_FILE_MAX] = {0};

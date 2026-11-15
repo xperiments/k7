@@ -158,12 +158,16 @@ static struct {
      * broadcast builds the order at the top of its next pass, while it holds the
      * Library lease, and owns it for the pass. `shuffle.order` is one count*4 B
      * allocation (80,000 B at 20,000 Tracks), PSRAM first; shuffle_generation is
-     * the generation the order was built from, so a rescan rebuilds it. */
+     * the generation the order was built from, so a rescan rebuilds it.
+     *
+     * A fresh broadcast starts with the mode **on** (docs/adr/0091): the player boots
+     * shuffled, and a caller that needs the library's own order - the transport test -
+     * turns it off before start(). */
     bool               shuffle_on;
     mi_shuffle_t       shuffle;
     uint32_t           shuffle_generation;
     uint32_t           shuffle_seed; /* published by mini_icecast_shuffle_seed() */
-} S;
+} S = {.shuffle_on = true}; /* the boot default, and only that: see docs/adr/0091 */
 
 /* ------------------------------------------------------------- clients */
 
@@ -1007,7 +1011,10 @@ static bool shuffle_pass_begin(uint32_t count, uint32_t generation, bool have_cu
     mi_shuffle_t built = {0};
     built.rng = rng;
     if (!built.rng) mi_shuffle_seed(&built, seed);
-    (void)mi_shuffle_build(&built, order, count, have_current ? current : 0);
+    /* A fresh pass has no Track playing: `count` is outside the order, so the build puts
+     * the cursor on the order's first element and a shuffled boot opens on a random
+     * Track, not on the first row every time (docs/adr/0091). */
+    (void)mi_shuffle_build(&built, order, count, have_current ? current : count);
 
     uint32_t *old = NULL;
     xSemaphoreTake(S.lock, portMAX_DELAY);
@@ -1588,6 +1595,13 @@ void mini_icecast_shuffle_seed(uint32_t seed)
 
 void mini_icecast_shuffle_set(bool on)
 {
+    /* Before start() there is no lock and no order to free: keep the choice for the
+     * first pass, which is how the transport test asks for the library order
+     * (docs/adr/0091). */
+    if (!S.lock) {
+        S.shuffle_on = on;
+        return;
+    }
     /* Only the flag is flipped here: the order is built (or freed) by the broadcast
      * task at the next Track boundary, under its Library lease (ADR 0023). */
     xSemaphoreTake(S.lock, portMAX_DELAY);

@@ -263,6 +263,12 @@ void appliance_run(void)
         ESP_LOGE(TAG, "the screen did not come up: %s; the device still serves",
                  esp_err_to_name(boot_err));
 
+    /* The shuffle mode starts On, so the station's first pass builds an order and the
+     * seed has to be in place before app_services_start() creates the broadcast task.
+     * The seed is the app's to give: mini_icecast never calls esp_random() itself, so
+     * the host shim needs no such symbol (docs/adr/0023, docs/adr/0091). */
+    mini_icecast_shuffle_seed((uint32_t)esp_random());
+
     /* The services resolve the station first (arithmetic only), then bring up the
      * network before the broadcast takes its internal RAM, then the file surface,
      * the broadcast and the listener. The order and its reasons are in
@@ -281,12 +287,6 @@ void appliance_run(void)
         }
         for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
     }
-
-    /* The shuffle mode's order draws from the hardware RNG, and the seed is the app's
-     * to give: mini_icecast never calls esp_random() itself, so the host shim needs no
-     * such symbol (ADR 0023). The mode itself starts Off; this only arms the order the
-     * Menu's row toggles. */
-    mini_icecast_shuffle_seed((uint32_t)esp_random());
 
     /* The boot's flash work is behind us, so the panel's first clock can start now. The mark
      * is painted on a quiet bus, the backlight is lit over it, and it is held for its dwell

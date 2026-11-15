@@ -195,13 +195,14 @@ void      mini_icecast_prev(void);                              /* jump to the p
  * and the next command and back by the previous one; the end of a lap clears the
  * history, as the linear broadcast order's lap does. A pick (mini_icecast_play) moves the
  * order's cursor, so the next advance continues from it without rebuilding. A new
- * Library generation builds a new order with the mode still on. The mode lives until
- * reboot; there is no NVS entry.
+ * Library generation builds a new order with the mode still on. A fresh broadcast starts
+ * with the mode On, so the first pass is shuffled and a shuffled boot opens on a random
+ * Track (docs/adr/0091); a mode turned off lives until reboot, and there is no NVS entry.
  *
  * Seed it once at boot from the hardware RNG: the broadcast never calls esp_random()
  * itself, so the app gives the randomness and the host tests can pin the sequence.
- * Call the seed setter after mini_icecast_start() (or before it: the seed is kept for
- * the first order). */
+ * Seed before mini_icecast_start(): the first pass already builds an order, and a seed
+ * that arrives later would only reach the next one. */
 void      mini_icecast_shuffle_seed(uint32_t seed);
 
 /* Turn the mode on or off. `set(true)` only publishes the request - the broadcast
@@ -210,8 +211,10 @@ void      mini_icecast_shuffle_seed(uint32_t seed);
  * and the order catches up at the next Track boundary. `set(false)` frees the order
  * and returns to broadcast order at the same boundary. If the order cannot be
  * allocated the mode stays Off, the failure is logged, and playback continues in
- * broadcast order: the row cannot claim a mode that is not running. Safe from any
- * task; mini_icecast_shuffle_enabled() is what the Menu's row reads. */
+ * broadcast order: the row cannot claim a mode that is not running. Called before
+ * mini_icecast_start(), set(false) gives the first pass the library's own order, which
+ * is how the transport test keeps its page. Safe from any task after start;
+ * mini_icecast_shuffle_enabled() is what the Menu's row reads. */
 void      mini_icecast_shuffle_set(bool on);
 bool      mini_icecast_shuffle_enabled(void);
 
