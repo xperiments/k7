@@ -2071,7 +2071,7 @@
     {
       "id": "APP-45",
       "title": "Rebuild an empty answer from the sentence's own filters",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-44"],
       "yolo": true,
@@ -2090,6 +2090,48 @@
           "text": "The full five is in: 990 records, five arms, no errors, no repairs, 214 app-side normalizations. The model-variant box was blank again.\n\n| arm | 3/3 pass | fail | unstable | unscored | mean |\n|---|---:|---:|---:|---:|---:|\n| systemOnly · static | 20 | 32 | 13 | 1 | 499 ms |\n| systemExamples · static | 38 | 18 | 7 | 3 | 309 ms |\n| requestIntent · static | 41 | 19 | 3 | 3 | 305 ms |\n| requestIntent · image | 35 | 17 | 4 | 10 | 315 ms |\n| **requestIntent · imageSearch** | **48** | 11 | **1** | 6 | 381 ms |\n\nThe imageSearch arm is the best measured combination. The rows-condition rows now score: **13, 43, S10, 50, 44 and 47 all pass**, and the spike is 8/12 pass (S7 and S8 fail, S3 fail, S2 unscored). The static arm's rows-condition rows stay unscored, as expected.\n\n**45 is still unscored on every scope** — the limit recovers on the static screen (the 16:03 export had it fail → unstable), but the genre \"ambient\" is not in the sentence path, and the imageSearch's search does not rescue it. That is the remaining app-side hole.\n\nThe full's static 41/46 is the pre-recovery record (the 15:44 run); the 16:03 recovery screen was a separate export at 38/45. The recovery's own static re-run is the next check for the 45 limit; the 13/43/S10 rows already pass on the imageSearch.\n\nTested: 824 web tests, typecheck and build. The next work is 45's genre (the sentence → genre path), then the 15 genre extras."
         }
       ]
+    },
+    {
+      "id": "APP-46",
+      "title": "Read the genre the sentence names",
+      "state": "review",
+      "group": "APP",
+      "deps": ["APP-45"],
+      "at": "2026-11-15T16:58:48Z",
+      "by": "dsh",
+      "desc": "45 \"three hours of ambient\" recovered its limit but not its genre. `sentenceFilters` now reads a genre the sentence names — the profile's genres, or a conservative static list where \"house\", \"lo-fi\" and \"dance\" are deliberately absent — as a whole word in the sentence's case; `applySentenceFilters` lets the sentence's genre override the model's.\n\nDone in the same change: the static list, the whole-word/case guard (\"Daft Punk\" is not punk, \"the album Discovery\" is not disco), the 45 test, the genre-override test, k7-app §7 P2; 824 tests, typecheck, build. Remaining for the record: the next shipped run (the 45's genre), then the genre drop of the 15 model extras.",
+      "notes": [
+        {
+          "at": "2026-11-15T18:22:35Z",
+          "by": "dsh",
+          "text": "Plan: the genre path from APP-45 landed with a case hole — a capitalised genre (\"Ambient music\", \"three hours of Ambient\") is not read, while \"Daft Punk\" must stay a name. Re-read the sentence case-aware, keep the whole-word guard, test both sides, and fix the file's stale header that still says the extractor never writes a genre."
+        },
+        {
+          "at": "2026-11-15T18:29:03Z",
+          "by": "dsh",
+          "text": "The genre is read the way a person writes the sentence. \"Ambient music for a rainy day\", \"three hours of Ambient\" and \"Play some Techno\" now carry the genre the sentence names; \"Daft Punk\" and \"the album Discovery\" still do not. Before this, only an all-lowercase genre counted, so a sentence starting with a capital — the usual way people type — lost its genre.\n\n**To check:** type a capitalised genre into Ask and confirm the Intent shows it, and that \"songs by Daft Punk\" stays a query with no punk genre. The shipped Chrome run is still the real test of the 45 case.\n\nThe file header and k7-app §7 P2 said the extractor never writes a genre, which had stopped being true when the genre reader landed; both now say a name or a mood. The genre needed a decision on the record, so ADR 0090 supersedes ADR 0088's genre exclusion — names and moods stay the model's, because they have no list to check a word against.\n\nTested: 829 web tests, typecheck and build; host test, layering and integration (723 checks). `make -C host check`'s label target fails in this environment because Chrome's GPU process dies, which this change does not reach.\n\nBoard: APP-47 and APP-48 are blocked on this task, but their changes are already in master (\"Drop a genre the sentence never named\", \"Let the static genre words apply with a profile too\"). They need your decision on the board."
+        }
+      ]
+    },
+    {
+      "id": "APP-47",
+      "title": "Drop a genre the sentence never named",
+      "state": "todo",
+      "group": "APP",
+      "deps": ["APP-45", "APP-46"],
+      "at": "2026-11-15T17:07:49Z",
+      "by": "dsh",
+      "desc": "The full five still left 15 genre extras on the static arm: the model gave a genre to sentences that only implied a mood or named an artist. `normalizeGenre` keeps the model's genre only when the sentence names one; the sentence's own genre already wins in `applySentenceFilters`.\n\nDone in the same change: the drop, the three tests (\"tracks for the whole library\" loses party, \"fast techno\" keeps it, \"ambient\" replaces techno), k7-app §7 P2; 827 tests, typecheck, build. Remaining for the record: the next shipped run to count the 15 extras turning absent and check the synonym risk (\"dnb\" for drum and bass)."
+    },
+    {
+      "id": "APP-48",
+      "title": "Let the static genre words apply with a profile too",
+      "state": "todo",
+      "group": "APP",
+      "deps": ["APP-46", "APP-47"],
+      "at": "2026-11-15T18:16:56Z",
+      "by": "dsh",
+      "desc": "The full run left 18 missing genres on the image arms: the sentence genre path used only the profile's genres, so a sentence naming a genre the image library lacks lost it, and the model's genre was then dropped as unstated. The path now uses the profile's genres and the static words together.\n\nDone in the same change: the union, the reggaeton-with-a-profile test, k7-app §7 P2; 827 tests, typecheck, build. Remaining for the record: the next full run should turn the 18 missing into exact/absent; the 45's rows condition is the remaining unscored row."
     }
   ]
 }
