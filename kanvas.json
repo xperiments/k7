@@ -1849,12 +1849,24 @@
     {
       "id": "APP-36",
       "title": "Read a name in the five languages",
-      "state": "todo",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-32"],
       "at": "2026-11-14T23:29:31Z",
       "by": "dsh",
-      "desc": "`isNameQuery` reads English markers only, so a lowercase Spanish name (\"canciones de bonobo\") fails, goes through the repair, and is dropped. Add the name markers (es: de, como, parecido a; fr: de, comme; de: von, wie; ja: の and the like) and the context markers (para, pour, für, 〜のための). The rule stays positional: a name marker before the query wins, a context marker refuses, capitalization decides when neither. The partitive is the trap: \"de la musique\" must stay a context, not become a name; add a row for it.\n\nFinished when: each language's name keeps its query on the shipped path with no second model call; the context markers still refuse; the per-field score shows the name rows up and no other row down."
+      "desc": "`isNameQuery` reads English markers only, so a lowercase Spanish name (\"canciones de bonobo\") fails, goes through the repair, and is dropped. Add the name markers (es: de, como, parecido a; fr: de, comme; de: von, wie; ja: の and the like) and the context markers (para, pour, für, 〜のための). The rule stays positional: a name marker before the query wins, a context marker refuses, capitalization decides when neither. The partitive is the trap: \"de la musique\" must stay a context, not become a name; add a row for it.\n\nFinished when: each language's name keeps its query on the shipped path with no second model call; the context markers still refuse; the per-field score shows the name rows up and no other row down.",
+      "notes": [
+        {
+          "at": "2026-11-15T00:30:06Z",
+          "by": "dsh",
+          "text": "Plan: extend the positional rule, not the contract.\n- Name markers: Spanish de/como, French de/comme, German von/wie, and the \"parecido a\" pair; context markers para, pour, für and the Japanese postpositions.\n- Japanese is postpositional: の/による/が歌う after the query names it; のために/のため/について/ながら refuses.\n- Partitive guard: a de/von followed by a determiner, or a query that starts with one, is a context — \"de la musique\", \"von der Musik\"; \"canciones de bonobo\" stays a name.\n- Tests: the five languages on the shipped path with one model call, the partitive and context still repairing, and the Japanese after-marker."
+        },
+        {
+          "at": "2026-11-15T00:30:17Z",
+          "by": "dsh",
+          "text": "The name rule reads the sentence's own markers in five languages, so a lowercase marked name no longer goes through the repair and gets dropped.\n\n- Spanish, French and German: de / como / comme / von / wie, and the \"parecido a\" pair, keep the query with one model call.\n- Japanese is postpositional: の / による / が歌う after the query name it; のために / のため / について / ながら refuse.\n- The partitive guard keeps \"de la musique\" and \"von der Musik\" contexts, so the repair still fires there; \"canciones de bonobo\" stays a name. \"parecido a\" is checked before the determiner skip because its \"a\" is also an English determiner.\n\nTested: 26 parse tests, 30 request tests, 797 web tests, typecheck and build. No spec change: k7-app §7 P2 already says a name the sentence used. The model's scored Intent is unchanged; the repair count for marked names should drop, and the next per-field score shows the name rows.\n\nAPP-37 is now ready: the deterministic query repair."
+        }
+      ]
     },
     {
       "id": "APP-37",
