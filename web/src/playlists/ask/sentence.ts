@@ -150,7 +150,9 @@ const DEFAULT_GENRES = [
 ] as const;
 
 function genreOf(sentence: string, profile: LibraryProfile | null): string | undefined {
-  const genres = profile?.genres?.length ? profile.genres : DEFAULT_GENRES;
+  /* A profile's genres and the static words apply together: a library that has no reggaeton
+   * still answers a sentence that names reggaeton. */
+  const genres = [...new Set([...(profile?.genres ?? []), ...DEFAULT_GENRES])];
   for (const genre of genres) {
     /* A whole word, in the sentence's own case: "the album Discovery" is not disco, and the
      * artist "Daft Punk" is not the punk genre. A sentence that says "techno" or "ambient" is. */

@@ -53,6 +53,7 @@ describe('durations', () => {
     expect(sentenceFilters('short tracks')).toEqual({ durationMax: 180 });
     expect(sentenceFilters('three hours of ambient')).toEqual({ genre: 'ambient', limit: 45 });
     expect(sentenceFilters('techno', TEST_PROFILE)).toEqual({ genre: 'techno' });
+    expect(sentenceFilters('reggaeton', TEST_PROFILE)).toEqual({ genre: 'reggaeton' });
     expect(sentenceFilters('a house party')).toEqual({});
     expect(sentenceFilters('lo-fi beats')).toEqual({});
     expect(applySentenceFilters({ genre: 'techno' }, { genre: 'ambient' })).toEqual({
