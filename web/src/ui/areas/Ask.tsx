@@ -21,7 +21,7 @@ import { McpError, type McpSearch, type SearchArgs } from '../../device/mcp';
 import { resolveSource, type LibrarySource } from '../../library/source';
 import { formatDuration } from '../format';
 import { newId } from '../../lib/id';
-import { purposeFilters, requestIntent, relaxRanges } from '../../playlists/ask';
+import { purposeFilters, requestIntent, relaxRanges, spreadAnswer } from '../../playlists/ask';
 import {
   answerText,
   CARD_CHANGED,
@@ -74,12 +74,13 @@ async function find(
   intent: SearchArgs,
   options?: { purpose?: Partial<SearchArgs> | null },
 ): Promise<Found> {
-  const exact = await source.search(intent);
+  const search = (args: SearchArgs) => source.search(args);
+  const exact = await spreadAnswer(search, intent);
   if (exact.tracks.length > 0) return { intent, search: exact, relaxed: false };
 
   const relaxed = relaxRanges(intent, options);
   if (!relaxed) return { intent, search: exact, relaxed: false };
-  const retry = await source.search(relaxed);
+  const retry = await spreadAnswer(search, relaxed);
   if (retry.tracks.length === 0) return { intent, search: exact, relaxed: false };
   return { intent: relaxed, search: retry, relaxed: true };
 }

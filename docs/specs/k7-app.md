@@ -335,8 +335,14 @@ prose (ADR 0050's shape rule; [ADR 0086](../adr/0086-the-assistant-is-a-conversa
 answer names what was understood — "Found 10 tracks — techno, 124–132 BPM" — and **Filters** opens
 the exact `library_search` arguments, seeded with that Intent, for a misparse. The result is a
 preview of four tracks with **Show all N tracks**. There is no Intent panel and no separate
-**Run search**. A model call that has not answered within thirty seconds is abandoned: the answer
-is an error with the one retry, not a spinner that never ends.
+**Run search**. An answer that names no group or artist is drawn from across the matched window,
+not from the search's first page: Ask reads up to the player's 200-row window and keeps one track
+per artist, spread across the window in library order, until the count is met, then fills any
+remainder at even steps through the tracks left. A sentence that names a group or artist, and a
+stated offset or sort, keep their page. The selection is the App's, computed from the search; the
+model still writes no result, and the Last image is drawn the same way from its own rows.
+A model call that has not answered within thirty seconds is abandoned: the answer is an error
+with the one retry, not a spinner that never ends.
 
 **P4. Ask owns the model's setup.** Five states: no Prompt API (not Chrome 148+ on desktop),
 `unavailable` (below the hardware floor, or built-in AI turned off in Chrome — the App cannot tell

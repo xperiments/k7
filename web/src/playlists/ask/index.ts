@@ -23,6 +23,7 @@
 
 export { requestIntent } from './request';
 export { purposeFilters } from './purpose';
+export { spreadAnswer, spreadApplies, spreadTracks } from './spread';
 export { relaxRanges } from '../relax';
 export { clampBpm, MOOD_VALUES, SORT_VALUES } from './contract';
 export type { IntentFailure } from './contract';
