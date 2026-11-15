@@ -2132,6 +2132,15 @@
       "at": "2026-11-15T18:16:56Z",
       "by": "dsh",
       "desc": "The full run left 18 missing genres on the image arms: the sentence genre path used only the profile's genres, so a sentence naming a genre the image library lacks lost it, and the model's genre was then dropped as unstated. The path now uses the profile's genres and the static words together.\n\nDone in the same change: the union, the reggaeton-with-a-profile test, k7-app §7 P2; 827 tests, typecheck, build. Remaining for the record: the next full run should turn the 18 missing into exact/absent; the 45's rows condition is the remaining unscored row."
+    },
+    {
+      "id": "FW-04",
+      "title": "Start every boot shuffled",
+      "state": "proposed",
+      "group": "FW",
+      "at": "2026-11-15T18:50:47Z",
+      "by": "dsh",
+      "desc": "The player starts shuffled. After a boot the first pass walks a random order of the Playlist and the Menu's Shuffle row reads On, so shuffle no longer has to be turned on by hand every time the board restarts.\n\nFinished means:\n\n- Every boot begins with the mode on and the first pass shuffled; a pick moves the cursor and a rescan keeps the mode on, as they do now.\n- Turning it off in the Menu lasts until the next boot: the mode is still not remembered (no NVS), so a reboot is shuffled again.\n- If the order cannot be allocated the mode still falls back to Off and the row reads Off.\n- The Menu spec and ADR 0023 record the new default, and the first pass on a fresh broadcast is pinned by a host test.\n\nTo check on the board: reboot and watch the first track, and the Shuffle row in the Menu."
     }
   ]
 }
