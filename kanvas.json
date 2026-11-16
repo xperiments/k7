@@ -2518,6 +2518,11 @@
           "at": "2026-11-16T01:01:52Z",
           "by": "deepseek",
           "text": "Asked again, and final: the bar carries nothing under the field. 'The model never sees a track' is gone for good — it came back once when I restored that row, and the row is that phrase's only home. The available state now renders nothing below the field except the openers while there are no messages."
+        },
+        {
+          "at": "2026-11-16T01:07:38Z",
+          "by": "deepseek",
+          "text": "Changed by request: an answer's results are the list's own rows, a size smaller — number, title, path, BPM and key, a plus — in the answer's order, rather than the card's tree pruned to them. A search's results stay the card's tree filtered by its words. keepFolderTree and its four cases went with the pruned view."
         }
       ]
     },
