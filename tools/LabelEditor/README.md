@@ -211,6 +211,9 @@ a tool reference generated from the page's own registry. The dev server serves i
 `http://localhost:5178/skill.md`, and a build emits it as `dist/skill.md`, so an agent that can
 read the page can read what its tools are for.
 
+[`docs/label-prompts.md`](docs/label-prompts.md) is the taste half: the devices a sleeve uses,
+and seven prompts to paste (three of them built and pictured).
+
 Give it to an agent that can drive WebMCP — ChatGPT desktop with the page open, or Chrome with
 `--enable-features=WebMCP` — and describe the label you want. The agent reads the design, lays
 out paper, bands and type, binds the fields, validates, and hands back the exported JSON.

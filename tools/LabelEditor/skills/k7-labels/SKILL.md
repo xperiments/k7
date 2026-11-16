@@ -292,6 +292,10 @@ Undo or redo the last edit of the active design.
 
 ## Two worked designs
 
+For more looks to aim at — the sleeve devices, and seven pasteable prompts, three of them
+built — see `tools/LabelEditor/docs/label-prompts.md`.
+
+
 The first is the smallest label that reads: a top strip of one band, and a numeral above the
 window. The colour is set in `set-design` so the cream ink reads on the green band.
 

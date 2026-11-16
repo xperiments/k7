@@ -78,6 +78,11 @@ holds up to 48 layers and 16 fields; the sheet holds up to 32 designs.
 texts, the Inspector sets the colourway and the type roles, Layers keeps the order. The
 **Preview** pane draws it with the real LVGL build. **Export** writes the JSON.
 
+**From a brief.** [`label-prompts.md`](label-prompts.md) distils the look of a real cassette
+collection — a saturated field, a hero number, a side badge, small mono print — into a prompt
+shape and four pasteable prompts. Two of them are built: mustard-and-ink *HiFi 1969*, and the
+navy-magenta *808 Stripes*.
+
 **With an agent.** The editor offers its actions as WebMCP tools, and ships a skill that says
 how to use them: [`skills/k7-labels/SKILL.md`](../skills/k7-labels/SKILL.md).
 The dev server serves the same file at `http://localhost:5178/skill.md`, and the page also
