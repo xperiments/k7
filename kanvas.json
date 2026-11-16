@@ -2478,6 +2478,15 @@
       "at": "2026-11-16T00:22:15Z",
       "by": "deepseek",
       "desc": "Reported: after a normal load the header can say 'device unreachable' while the player is on, and it stays that way until a reload. Cause: the page tries the local path once at load; if that first probe loses the cold k7.local lookup, nothing tries it again, so the status poll asks a none device every five seconds. Fix: the status poll retries the local path while the link is none, and concurrent attempts share one probe. Finished when a load whose first probe fails shows the device on the next poll without a reload; a regression test covers the two-poll case; typecheck, tests, build and host check pass."
+    },
+    {
+      "id": "APP-60",
+      "title": "The answer is its rows, not a sentence about them",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-16T00:38:46Z",
+      "by": "deepseek",
+      "desc": "The panel above the tree opened with the App's reading of the sentence — 'Found 50 of 137 tracks — key 8A, sorted by BPM' — while the count was already the column's heading, the filters were behind Filters and the rows were the tree. The sentence and answerText go; the panel keeps where the rows came from, Filters, the add/save offer, and the one note the rows cannot carry — that the exact search found nothing and the retry dropped the ranges. The count keeps role=status in the heading and an empty answer says 'Nothing matched' there, so an ask still speaks.\n\n  Finished when a panel above the tree names its source and its offer and says nothing else, and a screen reader still hears how many rows arrived.\n\n  To check: ask for something, and see the tree narrow with no sentence above it; ask for something impossible and see 'Nothing matched' in the heading.\n\n  The code is already in the tree (c4016ed) because the work was asked for directly; approving this records it."
     }
   ]
 }
