@@ -11,7 +11,7 @@
 #   make -C host            build the runnable server
 #   make -C host test       build and run the unit tests (no board, no network)
 #   make -C host integration run the HTTP acceptance tests against the server
-#   make -C host label      pack the labels, boot the builder, open the sheet with the reader
+#   make -C host label      pack the labels, boot the editor, open the sheet with the reader
 #   make -C host check      all of the above
 #   make -C host tools      build the measurement/one-shot tools
 #   make -C host fixtures   (re)generate the fixture corpus with ffmpeg
@@ -413,20 +413,31 @@ integration: $(SERVER)
 layering:
 	@ROOT=$(ROOT) sh $(HERE)/tests/layering.sh
 
-# The label sheet, end to end: the packer's own test, its check that the LVGL canvas builder
-# repeats the sheet's faces and the Slot vocabulary, the builder booting in headless Chrome with
-# its stage and default slot values, and the reader opening the sheet the packer just wrote.
-# The reader is the seam the other two cannot cross - t32 builds its own bytes, and the page
-# check reads source text - so before it, a change to the packer could break the panel with
-# every test still green. The boot check is the same seam on the page's side: 905313d left a
-# const below its first reader, the page threw at load, and every C check stayed green.
+# The label sheet, end to end: the packer's own test, its check that the label editor repeats
+# the sheet's faces and the Slot vocabulary, the editor built and booting in headless Chrome
+# with its stage and default slot values, and the reader opening the sheet the packer just
+# wrote. The reader is the seam the other two cannot cross - t32 builds its own bytes, and
+# the vocabulary check reads generated text - so before it, a change to the packer could
+# break the panel with every test still green. The boot check is the same seam on the
+# editor's side: 905313d left a const below its first reader, the page threw at load, and
+# every C check stayed green.
 #
-# This is the one tier that runs the packer, which is why `make test` stays free of Python.
+# This is the one tier that runs the packer and builds the editor, which is why `make test`
+# stays free of Python and Node.
 LABEL_OUT    := $(BUILD)/label
 LABEL_SHEET  := $(LABEL_OUT)/label_sheet.bin
 LABEL_HEADER := $(LABEL_OUT)/label_fonts.h
 LABEL_INPUTS := $(ROOT)/assets/labels/vocabulary.json $(ROOT)/tools/label_pack.py \
                 $(wildcard $(ROOT)/assets/labels/templates/*.json)
+
+EDITOR      := $(ROOT)/tools/LabelEditor
+EDITOR_DIST := $(EDITOR)/dist/index.html
+NPM         ?= npm
+# Every source the editor's build reads, so a change rebuilds it. dist/ is ignored by git:
+# the build is made here, never committed.
+EDITOR_SRC  := $(EDITOR)/index.html $(EDITOR)/package.json $(EDITOR)/tsconfig.json \
+               $(EDITOR)/vite.config.ts \
+               $(shell find $(EDITOR)/src $(EDITOR)/public $(EDITOR)/skills -type f 2>/dev/null)
 
 # One recipe writes all three files - the sheet, the font header and the manifest - and make
 # 3.81 has no grouped targets, so naming both outputs here can run it twice. It is idempotent
@@ -445,12 +456,17 @@ $(BIN)/t33_label_sheet: $(OBJ)/label.o $(OBJ)/t33_label_sheet.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-label: $(BIN)/t33_label_sheet
+$(EDITOR_DIST): $(EDITOR_SRC)
+	@test -d $(EDITOR)/node_modules || { \
+	  echo "$(EDITOR)/node_modules is missing; run 'npm ci' in $(EDITOR) first." >&2; exit 1; }
+	@cd $(EDITOR) && $(NPM) run build
+
+label: $(BIN)/t33_label_sheet $(EDITOR_DIST)
 	@$(PYTHON) $(ROOT)/tools/label_pack.py --selftest
 	@$(PYTHON) $(ROOT)/tools/label_pack.py --check-vocabulary
 	@$(BIN)/t33_label_sheet $(LABEL_OUT)
-	@echo "--- the canvas builder boots"
-	@$(PYTHON) $(HERE)/tests/label_boot_tests.py "$(ROOT)/resources/LVGL canvas builder.html"
+	@echo "--- the label editor boots"
+	@$(PYTHON) $(HERE)/tests/label_boot_tests.py
 
 check: test layering integration label
 

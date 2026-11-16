@@ -1,4 +1,4 @@
-import { VOCAB } from "./types";
+import { VOCAB } from "./vocab.generated";
 
 /**
  * The default palette: a 70s Pantone set. New layers cycle through it, and the

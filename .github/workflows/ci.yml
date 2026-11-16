@@ -2,7 +2,8 @@
 #
 #   web    the App: typecheck, unit tests, build, A9 manifest shape, S5 worker shell,
 #          D14 artifact guard
-#   host   the device's portable C, on the host build (host/Makefile `check`)
+#   host   the device's portable C and the Label Editor, on the host build
+#          (host/Makefile `check`)
 #   e2e    documented but commented: it needs a Playwright dependency that does not exist yet
 #
 # The firmware build is deliberately not here: it needs ESP-IDF, and CI proves the artifact,
@@ -58,6 +59,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # `host check` builds tools/LabelEditor and boots its built page, so the editor's
+      # dependencies are part of this job. Chrome is not installed on the runner, so the
+      # boot check skips loudly there; the build itself (tsc + vite) still runs and fails
+      # the job on a type or bundle error.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/LabelEditor/package-lock.json
+      - name: Install the Label Editor's dependencies
+        working-directory: tools/LabelEditor
+        run: npm ci
       # The target the repo already has: unit tests, the layering check (H3), and the HTTP
       # acceptance tests, including /app mapping and both Snapshot magics. The k7.db →
       # xtape.db fallback lives in board_esp32.c, which needs a card and a board: it is

@@ -1,7 +1,7 @@
 # Label templates
 
 The cassette's **Label template** is the design the two-finger screen prints on the Card's
-print. It is authored in the LVGL canvas builder (`resources/LVGL canvas builder.html`), stored
+print. It is authored in the Label Editor (`tools/LabelEditor/`), stored
 as `label-template v1` JSON in `assets/labels/templates/`, packed at build into one **Label
 sheet**, and read in place by `components/portable/label/`. [ADR 0071](../adr/0071-the-two-finger-screen-prints-a-packed-label-sheet.md)
 records why the device does not parse the JSON; this document is the contract the editor, the
@@ -227,8 +227,8 @@ file. The editor and the firmware do not each keep a copy of it:
   with, which is what the device would print for that Slot.
 - **`fonts`** is the sheet's font table. The first three rows are what the screen already
   compiles; the last three are the editor's own faces. `"editor": true` marks the faces the
-  canvas builder offers — the ones it embeds and can draw. A face it cannot draw is a face it
-  cannot show, so a role picker never offers one.
+  editor offers — the ones it serves and can draw. A face it cannot draw is a face it cannot
+  show, so a role picker never offers one.
 - **`space`, `aperture`, `bands`, `value`, `limits` and `coords`** are the numbers the packer
   used to hold alone. `coords` is what a prim's record can say — `x` and `y` int16, `w` and `h`
   uint16 — which is a refusal, not a clamp (ADR 0072).
@@ -239,14 +239,16 @@ Two copies are generated from it, and both are committed:
 - **`components/portable/label/include/label_vocab.h`** carries the space, the limits and the
   Slot list. The list is one macro, expanded twice: the enum the resolver indexes and the names
   the sheet carries cannot disagree, because they are the same list.
-- **The `VOCAB` block in `resources/LVGL canvas builder.html`**, between its generated markers.
-  The page is one self-contained file — it is opened from disk and sometimes published — so the
-  table is inlined rather than fetched from a sibling.
+- **`tools/LabelEditor/src/engine/vocab.generated.ts`**, the editor's module, between the same
+  generated markers. The editor imports it; there is no second copy of the table in its source.
 
 `tools/label_pack.py --generate-vocabulary` writes both; `--check-vocabulary` refuses them when
-they are stale, and `make -C host label` runs it. The check also compares the bytes of the faces
-the page embeds with `assets/fonts/`: a page that draws a face the build cannot compile would
-show the designer glyphs the panel does not have.
+they are stale, and `make -C host label` runs it. The check also compares each face the editor
+offers — the `fonts` rows with `"editor": true` — with its file in
+`tools/LabelEditor/public/fonts/` and with `assets/fonts/`: an editor that draws a face the
+build cannot compile would show the designer glyphs the panel does not have. `make -C host
+label` also builds the editor and boots the built page in headless Chrome, so one that throws
+at load is a host failure.
 
 - **The packer's font index is the table's index**, and it also writes `label_fonts.h` with
   `#define LABEL_FONT_<SLUG> <index>` and `LABEL_FONT_COUNT`, so the app's

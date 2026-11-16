@@ -13,7 +13,7 @@ import {
   onSheet,
   slotOf,
 } from "./vocab";
-import { VOCAB } from "./types";
+import { VOCAB } from "./vocab.generated";
 import type { FontRole, Group, Mask, Obj, Tpl } from "./types";
 
 /** The design a document starts from: its id, name, inks, font roles, slots and sims. */

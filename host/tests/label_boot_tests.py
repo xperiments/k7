@@ -1,33 +1,37 @@
 #!/usr/bin/env python3
-"""Open the label canvas builder in headless Chrome and prove it booted.
+"""Open the built label editor in headless Chrome and prove it booted.
 
-The page is one self-contained HTML file with no module boundary and no test. On
-905313d a `const` sat below the first `defaultTpl()` call that reads it, so the
-page threw a TDZ ReferenceError while loading and painted nothing: the tabs were
-empty, the layer list was empty and the stage had no objects. Every host check
-stayed green because none of them opened the page.
+The editor is the React app in `tools/LabelEditor`: `make -C host label` builds it into
+`dist/`, and this opens that build, not its source. On 905313d its predecessor put a
+`const` below the first `defaultTpl()` call that read it, so the page threw a TDZ
+ReferenceError while loading and painted nothing: the tabs were empty, the layer list was
+empty and the stage had no objects. Every host check stayed green because none of them
+opened the editor.
 
-This is that missing seam. It opens the page with a fresh Chrome profile, reads
-the rendered DOM, and requires what the boot paints: the tabs, the layer list,
-and the stage with its default slot values. A page that throws before the tail
-of its own script leaves all three empty, so the check fails for the right
-reason. When Chrome is not installed it skips loudly and succeeds, so a machine
-without a browser is not a failed host check.
+This is that missing seam. It serves the build over HTTP (the app's modules and its faces
+will not load from `file://`), opens it with a fresh Chrome profile, reads the rendered DOM,
+and requires what the boot paints: the design's tab, the layer list, and the stage with its
+default slot values. A page that throws before the tail of its own script leaves all three
+empty, so the check fails for the right reason. When Chrome is not installed it skips loudly
+and succeeds, so a machine without a browser is not a failed host check.
 
-Usage: label_boot_tests.py [PAGE] [--timeout SECONDS]
+Usage: label_boot_tests.py [DIST] [--timeout SECONDS]
 """
 import argparse
+import functools
+import http.server
 import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 FAIL = 0
 
-DEFAULT_PAGE = Path(__file__).resolve().parents[2] / "resources" / "LVGL canvas builder.html"
+DEFAULT_DIST = Path(__file__).resolve().parents[2] / "tools" / "LabelEditor" / "dist"
 
 
 def check(label, ok, detail=""):
@@ -60,6 +64,21 @@ def find_chrome():
     return None
 
 
+class QuietHandler(http.server.SimpleHTTPRequestHandler):
+    """A static server for the build that does not narrate every module and face."""
+
+    def log_message(self, *args):
+        pass
+
+
+def serve(directory):
+    """Serve the build on a free loopback port; the app cannot boot from file://."""
+    handler = functools.partial(QuietHandler, directory=str(directory))
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd, f"http://127.0.0.1:{httpd.server_address[1]}/"
+
+
 def strip_tags(html):
     """The text a human sees in a block, with tags and entities roughly removed."""
     text = re.sub(r"<script\b.*?</script>", " ", html, flags=re.S | re.I)
@@ -76,27 +95,26 @@ def block(html, opening, closing):
     return match.group(1) if match else ""
 
 
-def count_class(html, name):
-    return len(re.findall(r'class="[^"]*\b' + re.escape(name) + r'\b[^"]*"', html))
-
-
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("page", nargs="?", default=str(DEFAULT_PAGE))
+    parser.add_argument("dist", nargs="?", default=str(DEFAULT_DIST))
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args()
 
-    page = Path(args.page).resolve()
+    dist = Path(args.dist).resolve()
+    page = dist / "index.html"
     if not page.is_file():
-        print(f"FAIL label page: {page} does not exist")
+        print(f"FAIL label page: {page} does not exist — run `npm run build` in "
+              f"tools/LabelEditor (`make -C host label` does it).")
         return 1
 
     chrome = find_chrome()
     if chrome is None:
         print("SKIP label page: no Chrome found (set CHROME to a browser binary).", file=sys.stderr)
-        print("SKIP label page: the canvas builder boot check did not run.")
+        print("SKIP label page: the label editor boot check did not run.")
         return 0
 
+    httpd, url = serve(dist)
     profile = tempfile.mkdtemp(prefix="k7-label-boot-")
     try:
         command = [
@@ -105,11 +123,10 @@ def main():
             "--disable-gpu",
             "--no-first-run",
             "--no-default-browser-check",
-            "--allow-file-access-from-files",
             f"--user-data-dir={profile}",
-            "--virtual-time-budget=8000",
+            "--virtual-time-budget=15000",
             "--dump-dom",
-            page.as_uri(),
+            url,
         ]
         try:
             run = subprocess.run(command, capture_output=True, text=True, timeout=args.timeout)
@@ -128,37 +145,41 @@ def main():
                 print(f"  {line}")
             return 1
 
-        tabs = block(dom, r'<nav[^>]*\bid="tabs"[^>]*>', r"</nav>")
-        stage = block(dom, r'<div[^>]*\bid="stage"[^>]*>', r"<canvas")
-        layers = block(dom, r'<ul[^>]*\bid="list"[^>]*>', r"</ul>")
+        tabs = block(dom, r'<div[^>]*role="tablist"[^>]*>', r"</div>")
+        stage = block(dom, r'<section[^>]*\baria-label="Canvas"[^>]*>', r"</section>")
+        layers = block(dom, r'<aside[^>]*\baria-label="Layers"[^>]*>', r"</aside>")
 
         tabs_text = strip_tags(tabs)
         stage_text = strip_tags(stage)
         layers_text = strip_tags(layers)
-        objects = count_class(stage, "o")
-        rows = len(re.findall(r"<li\b", layers, re.I))
-        tabs_count = count_class(tabs, "tab")
+        objects = len(re.findall(r'data-obj-id="', stage))
+        rows = len(re.findall(r'role="treeitem"', layers, re.I))
+        tabs_count = len(re.findall(r'role="tab"', dom, re.I))
+        surface = re.search(r'<div[^>]*class="[^"]*\bcanvas-surface\b[^"]*"[^>]*>', stage)
 
-        check("the tabs are painted", tabs_count >= 1, f"{tabs_count} tab(s): {tabs_text[:60]!r}")
-        check("the layer list is painted", rows >= 3, f"{rows} row(s): {layers_text[:90]!r}")
+        check("the design's tab is painted", tabs_count >= 1 and "Untitled 1" in tabs_text,
+              f"{tabs_count} tab(s): {tabs_text[:60]!r}")
+        check("the layer list is painted", rows >= 4, f"{rows} row(s): {layers_text[:90]!r}")
         check("the stage has its objects", objects >= 3, f"{objects} object(s)")
         check(
             "the default slot values are on the stage",
-            bool(re.search(r"[0-9A-Za-z]", stage_text)),
+            "Neon Skyline" in stage_text and "124" in stage_text,
             repr(stage_text[:100]),
         )
         check(
             "the stage is the print, not an empty box",
-            "width:" in stage and "height:" in stage,
+            bool(surface) and "width:" in surface.group(0) and "height:" in surface.group(0),
             "the stage has its print geometry",
         )
 
         if FAIL:
-            print("\nthe canvas builder did not boot; the stage/list/tabs are above.")
+            print("\nthe label editor did not boot; the stage/list/tabs are above.")
             return 1
         print(f"label page: ok (stage {objects} objects, {rows} layers, {tabs_count} tab(s))")
         return 0
     finally:
+        httpd.shutdown()
+        httpd.server_close()
         shutil.rmtree(profile, ignore_errors=True)
 
 

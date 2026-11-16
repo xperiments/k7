@@ -4,8 +4,8 @@ The cassette label's design tool: draw the print at its one real size (748 × 35
 the panel's 800 × 480 screen), preview it with the real LVGL build, and export
 `label-template v1` — the file `assets/labels/templates/` takes.
 
-It is the professional rebuild of the one-page `resources/LVGL canvas builder.html`: same
-document model, same template JSON, same exports, on React and the ReUI design system.
+It replaces the one-page HTML builder it grew out of: same document model, same template
+JSON, same exports, on React and the ReUI design system.
 
 ![The editor in Design: layers, the print on the panel, and the inspector](docs/design.png)
 
@@ -70,15 +70,12 @@ design coordinates inside a stage scaled by the zoom, which is also why the poin
 
 ## Coupling to the repository
 
-- **The vocabulary.** `src/engine/vocab.generated.ts` is a copy of `assets/labels/vocabulary.json`
-  inside the generated markers. The one-page builder's copy is still the one
-  `python3 tools/label_pack.py --check-vocabulary` reads, and `make -C host label` still boots
-  `resources/LVGL canvas builder.html`. **Retiring that page means:** repointing `EDITOR` in
-  `tools/label_pack.py` (the block markers and the block's `const VOCAB` shape), repointing the
-  boot check in `host/Makefile` and `host/tests/label_boot_tests.py`, and updating the paths
-  named in `docs/specs/label-templates.md`. The fonts are no longer embedded as base64 in the
-  page — they are files in `public/fonts/` — so the packer's font-hash check needs that change
-  too. None of it is done here on purpose: it edits another lane's files.
+- **The vocabulary.** `src/engine/vocab.generated.ts` is a generated copy of
+  `assets/labels/vocabulary.json`, inside the markers `tools/label_pack.py` writes between.
+  `python3 tools/label_pack.py --check-vocabulary` refuses it when it is stale, and
+  `make -C host label` runs that check, builds this app and boots the built page in headless
+  Chrome. The faces it offers are files in `public/fonts/`, checked byte for byte against the
+  ones `assets/fonts/` compiles. There is no second copy of the editor to drift from.
 - **The file format is unchanged.** `tplBuild`/`tplImport` are a faithful port; exports were
   compared byte for byte against the one-page builder for a default design and for a complex
   design with an aperture, a rotated rect, a static text and two slots.

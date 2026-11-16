@@ -11,8 +11,8 @@ something else.
     python3 tools/label_pack.py assets/labels build/ --check   # validate, write, then re-read
     python3 tools/label_pack.py --selftest
     python3 tools/label_pack.py --generate-vocabulary   # write label_vocab.h and the editor's block
-    python3 tools/label_pack.py --check-vocabulary      # both current, and the faces the page
-                                                        # embeds are the files the build compiles
+    python3 tools/label_pack.py --check-vocabulary      # both current, and the faces the editor
+                                                        # serves are the files the build compiles
 
 Standard library only: the firmware build runs this, and the build has no network.
 """
@@ -40,7 +40,10 @@ SLOT_SIZE = 8
 TEMPLATES = "templates"
 
 ROOT = Path(__file__).resolve().parent.parent
-EDITOR = ROOT / "resources" / "LVGL canvas builder.html"
+EDITOR = ROOT / "tools" / "LabelEditor" / "src" / "engine" / "vocab.generated.ts"
+# The editor serves a face as a file, one per face at every size the sheet carries. Its
+# name is the face's: "Archivo Narrow 600" is `archivo-narrow-600.ttf`.
+EDITOR_FONTS = ROOT / "tools" / "LabelEditor" / "public" / "fonts"
 VOCABULARY = "vocabulary.json"
 VOCAB_HEADER = ROOT / "components" / "portable" / "label" / "include" / "label_vocab.h"
 BLOCK_OPEN = "// <generated:label-vocabulary>"
@@ -465,7 +468,7 @@ def load_fonts(src):
 
     The table lives in the same vocabulary file as the Slots and the limits, because a face
     that the editor offers and the build cannot compile is exactly the drift it exists to
-    stop. `editor: true` marks the faces the canvas builder offers and can draw.
+    stop. `editor: true` marks the faces the editor offers and can draw.
     """
     path = Path(src) / VOCABULARY
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -544,7 +547,7 @@ def main(argv):
             print(f"label_pack: {line}", file=sys.stderr)
         if errors:
             return 1
-        print("label_pack: the vocabulary, its generated copies and the page's faces agree")
+        print("label_pack: the vocabulary, its generated copies and the editor's faces agree")
         return 0
 
     if len(args) != 2:
@@ -705,11 +708,11 @@ def vocab_header(v):
 
 
 def vocab_block(v):
-    """The vocabulary as the canvas builder reads it, markers included.
+    """The vocabulary as the editor imports it, markers included.
 
-    The page is one self-contained file - it is opened from disk and sometimes published - so
-    the table is inlined rather than fetched from a sibling. Written as a hand-shaped literal
-    rather than dumped JSON, because this block is committed and read in review.
+    The editor is a module graph, not a page opened from disk, so the table is a module of
+    its own that `engine/types.ts` and `engine/vocab.ts` import. Written as a hand-shaped
+    literal rather than dumped JSON, because this block is committed and read in review.
     """
     def js(value):
         return json.dumps(value, ensure_ascii=False)
@@ -717,79 +720,81 @@ def vocab_block(v):
     sp, ap, lm = v["space"], v["aperture"], v["limits"]
     cd, df = v["coords"], v["defaults"]["fonts"]
     rows = [
-        "      " + BLOCK_OPEN,
-        "      // tools/label_pack.py writes this from assets/labels/vocabulary.json, and",
-        "      // `make -C host label` refuses it when it is stale. Do not edit: the vocabulary",
-        "      // is the source, and this is the page's copy of it.",
-        "      const VOCAB = {",
-        f"        space: {{ w: {sp['w']}, h: {sp['h']} }},",
-        f"        aperture: {{ x: {ap['x']}, y: {ap['y']}, w: {ap['w']}, h: {ap['h']}, "
+        BLOCK_OPEN,
+        "// assets/labels/vocabulary.json is the source. tools/label_pack.py writes this",
+        "// block, and `make -C host label` refuses it when it is stale. Do not edit: the",
+        "// vocabulary is the source, and this is the editor's copy of it.",
+        "export const VOCAB = {",
+        f"  space: {{ w: {sp['w']}, h: {sp['h']} }},",
+        f"  aperture: {{ x: {ap['x']}, y: {ap['y']}, w: {ap['w']}, h: {ap['h']}, "
         f"r: {ap['r']} }},",
-        f"        bands: {v['bands']},",
-        f"        value: {v['value']},",
-        f"        limits: {{ prims: {lm['prims']}, slots: {lm['slots']}, "
+        f"  bands: {v['bands']},",
+        f"  value: {v['value']},",
+        f"  limits: {{ prims: {lm['prims']}, slots: {lm['slots']}, "
         f"templates: {lm['templates']} }},",
-        "        coords: {",
+        "  coords: {",
     ]
     for axis in ("x", "y", "w", "h"):
         lo, hi = cd[axis]
-        rows.append(f"          {axis}: [{lo}, {hi}],")
-    rows += ["        },", "        slots: ["]
+        rows.append(f"    {axis}: [{lo}, {hi}],")
+    rows += ["  },", "  slots: ["]
     for slot in v["slots"]:
-        rows.append(f"          {{ id: {js(slot['id'])}, label: {js(slot['label'])}, "
+        rows.append(f"    {{ id: {js(slot['id'])}, label: {js(slot['label'])}, "
                     f"sim: {js(slot['sim'])} }},")
-    rows += ["        ],", "        fonts: ["]
+    rows += ["  ],", "  fonts: ["]
     for font in v["fonts"]:
         extra = ', editor: true' if font.get("editor") else ""
-        rows.append(f"          {{ name: {js(font['name'])}, px: {font['px']}, "
+        rows.append(f"    {{ name: {js(font['name'])}, px: {font['px']}, "
                     f"symbol: {js(font['symbol'])}{extra} }},")
-    rows += ["        ],", "        defaults: { fonts: {"]
+    rows += ["  ],", "  defaults: { fonts: {"]
     for role, face in df.items():
-        rows.append(f"          {role}: {{ ff: {js(face['ff'])}, px: {face['px']} }},")
-    rows += ["        } },", "      };", "      " + BLOCK_CLOSE]
+        rows.append(f"    {role}: {{ ff: {js(face['ff'])}, px: {face['px']} }},")
+    rows += ["  } },", "} as const;", BLOCK_CLOSE]
     return "\n".join(rows) + "\n"
 
 
-def block_span(html):
+def block_span(text):
     """The character span of the generated block, markers included."""
-    i, j = html.find(BLOCK_OPEN), html.find(BLOCK_CLOSE)
+    i, j = text.find(BLOCK_OPEN), text.find(BLOCK_CLOSE)
     if i < 0 or j < 0 or j < i:
         raise PackError([f"{EDITOR}: no {BLOCK_OPEN} ... {BLOCK_CLOSE} block to write"])
-    start = html.rfind("\n", 0, i) + 1
-    end = html.find("\n", j)
-    return start, (len(html) if end < 0 else end + 1)
+    start = text.rfind("\n", 0, i) + 1
+    end = text.find("\n", j)
+    return start, (len(text) if end < 0 else end + 1)
 
 
-def _faces(html):
-    """The faces the page embeds, as (name, sha256 of the bytes, the font file it is).
+def _face_file(name):
+    """The file the editor serves a face from: its name, lowercased and hyphenated."""
+    return EDITOR_FONTS / (re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") + ".ttf")
 
-    The page is how a design is judged, so a face it draws that the build does not compile
-    would show the designer glyphs the panel cannot print - which is what ticket 05 set out
-    to stop. The bytes are compared, not the name.
+
+def _editor_faces(v):
+    """The faces the editor offers, as files the build compiles.
+
+    The editor draws a face from `public/fonts/`, so a face it offers that is missing there
+    cannot be drawn, and one whose bytes differ from `assets/fonts/` is a face the panel
+    will not print - the designer would see glyphs the sheet does not carry. The bytes are
+    compared, not just the name.
     """
-    import base64
-    import hashlib
-
-    m = re.search(r"const BUILTIN_FONTS\s*=\s*\[(.*?)\];", html, re.S)
-    if not m:
-        return [], ["the page has no BUILTIN_FONTS table"]
-    by_hash = {}
-    for path in sorted((ROOT / "assets" / "fonts").glob("*.ttf")):
-        by_hash[hashlib.sha256(path.read_bytes()).hexdigest()] = path.name
-    out = []
-    for entry in re.finditer(r"\{([^{}]*?)\}", m.group(1), re.S):
-        body = entry.group(1)
-        name = re.search(r'name:\s*"([^"]+)"', body)
-        b64 = re.search(r'b64:\s*"([^"]+)"', body)
-        if not name or not b64:
-            continue
-        digest = hashlib.sha256(base64.b64decode(b64.group(1))).hexdigest()
-        out.append((name.group(1), digest, by_hash.get(digest)))
-    return out, []
+    errors = []
+    names = sorted({f["name"] for f in v["fonts"] if f.get("editor")})
+    for name in names:
+        served = _face_file(name)
+        compiled = ROOT / "assets" / "fonts" / served.name
+        shown = served.relative_to(ROOT)
+        if not compiled.exists():
+            errors.append(f"{VOCABULARY}: {name!r} is offered to the editor, and "
+                          f"assets/fonts/{served.name} is not a file the build compiles")
+        elif not served.exists():
+            errors.append(f"{shown}: missing; the editor offers {name!r} and cannot draw it")
+        elif served.read_bytes() != compiled.read_bytes():
+            errors.append(f"{shown}: not the bytes of assets/fonts/{served.name}, so the "
+                          f"editor draws a face the build does not compile")
+    return errors
 
 
 def generate_vocabulary():
-    """Write label_vocab.h and the page's block. Returns the two paths written."""
+    """Write label_vocab.h and the editor's block. Returns the two paths written."""
     v = VOCAB
     errors = vocabulary_errors(v)
     if errors:
@@ -797,14 +802,20 @@ def generate_vocabulary():
     header = vocab_header(v)
     VOCAB_HEADER.parent.mkdir(parents=True, exist_ok=True)
     VOCAB_HEADER.write_text(header, encoding="utf-8")
-    html = EDITOR.read_text(encoding="utf-8")
-    start, end = block_span(html)
-    EDITOR.write_text(html[:start] + vocab_block(v) + html[end:], encoding="utf-8")
+    if EDITOR.exists():
+        text = EDITOR.read_text(encoding="utf-8")
+        start, end = block_span(text)
+        EDITOR.write_text(text[:start] + vocab_block(v) + text[end:], encoding="utf-8")
+    else:
+        # The block is the whole file: it is generated, and nothing outside the markers
+        # belongs in it.
+        EDITOR.parent.mkdir(parents=True, exist_ok=True)
+        EDITOR.write_text(vocab_block(v), encoding="utf-8")
     return [VOCAB_HEADER, EDITOR]
 
 
 def check_vocabulary():
-    """Everything the vocabulary generates is current, and the page draws only compiled faces."""
+    """Everything the vocabulary generates is current, and the editor draws compiled faces."""
     v = VOCAB
     errors = vocabulary_errors(v)
     header = vocab_header(v)
@@ -813,29 +824,18 @@ def check_vocabulary():
     elif VOCAB_HEADER.read_text(encoding="utf-8") != header:
         errors.append(f"{VOCAB_HEADER}: stale; run --generate-vocabulary")
 
-    html = EDITOR.read_text(encoding="utf-8")
-    try:
-        start, end = block_span(html)
-    except PackError as exc:
-        return errors + exc.errors
-    if html[start:end] != vocab_block(v):
-        errors.append(f"{EDITOR}: the generated block is stale; run --generate-vocabulary")
+    if not EDITOR.exists():
+        errors.append(f"{EDITOR}: missing; run --generate-vocabulary")
+    else:
+        text = EDITOR.read_text(encoding="utf-8")
+        try:
+            start, end = block_span(text)
+        except PackError as exc:
+            return errors + exc.errors
+        if text[start:end] != vocab_block(v):
+            errors.append(f"{EDITOR}: the generated block is stale; run --generate-vocabulary")
 
-    faces, face_errors = _faces(html)
-    errors += face_errors
-    offered = {(f["name"], f["px"]) for f in v["fonts"] if f.get("editor")}
-    for name, digest, path in faces:
-        if path is None:
-            errors.append(f'{EDITOR}: embeds {name!r}, whose bytes match no file in '
-                          f'assets/fonts/ - a face the build cannot compile')
-        shown = [(n, px) for n, px in offered if n == name]
-        if not shown:
-            errors.append(f'{EDITOR}: embeds {name!r}, which no font in {VOCABULARY} offers '
-                          f'with "editor": true')
-    embedded = {name for name, _, _ in faces}
-    for name, _px in sorted(offered - {o for o in offered if o[0] in embedded}):
-        errors.append(f'{EDITOR}: offers {name!r} but does not embed it, so it cannot draw it')
-    return errors
+    return errors + _editor_faces(v)
 
 
 def selftest():
