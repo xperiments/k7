@@ -743,7 +743,6 @@ export function SourcesColumn({
                 </Button>
               ) : null}
             </div>
-            <span>The model never sees a track.</span>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
