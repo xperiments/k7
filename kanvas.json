@@ -2579,6 +2579,15 @@
       "at": "2026-11-16T01:20:21Z",
       "by": "deepseek",
       "desc": "An ask that names no artist keeps one track per artist while artists remain, then filled the rest at even steps through everything left: with two artists in the window that is three of one and seven of the other, left in library order, so the seven played as a run. The count is divided between the artists now as evenly as it divides — five and five, or two, one, one with the odd row on a spread artist — each share taken from across its own tracks, and the answer is ordered artist by artist in turn, so no two neighbours share an artist while another has rows left.\n\n  Finished when an ask for ten tracks from a window of two artists answers five and five, alternating, and a window of one artist still spreads across that artist's albums.\n\n  To check: ask for 10 rock tracks on a card whose rock is two artists, and count the rows and their neighbours.\n\n  The code is in the tree already; approving records it."
+    },
+    {
+      "id": "LK-10",
+      "title": "The shelf drags from any case, and the wheel walks it",
+      "state": "proposed",
+      "group": "LK",
+      "at": "2026-11-16T03:29:52Z",
+      "by": "deepseek",
+      "desc": "The album carousel let a drag begin only on the turned case, so grabbing the row by a spine did nothing, and the wheel scrolled the page past the shelf. A drag begins on any case now — a press that never moves is still a click on that case — and the wheel steps one case per notch or per a trackpad's travel adding up to one, with a short rest after each step so a fling does not run the row to its end. The listener is native and not passive, because React's onWheel is passive at the root and preventDefault there does nothing.\n\n  Finished when a drag can start on any case and the wheel walks the row without scrolling the page under it.\n\n  To check: grab the row by a side case and flick it; then turn the wheel over the shelf and watch one case step per notch. The code is in the tree already; approving records it."
     }
   ]
 }
