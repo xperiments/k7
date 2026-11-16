@@ -129,11 +129,6 @@ export function filterWords(intent: SearchArgs): string[] {
  */
 export const RELAXED_NOTE = 'Those ranges found nothing, so I dropped them.';
 
-/** The one line under an answer: which library it came from. */
-export function sourceText(source: AnswerSource): string {
-  return source.label;
-}
-
 /** The assistant's question, or the reason it cannot ask one. */
 export function addQuestion(count: number, list: string): string {
   const what = count === 1 ? 'this track' : `these ${count} tracks`;

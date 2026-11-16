@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ListMusic, Search, SlidersHorizontal, Sparkles, TriangleAlert } from 'lucide-react';
+import {
+  FolderTree,
+  ListMusic,
+  Rows3,
+  Search,
+  SlidersHorizontal,
+  Sparkles,
+  TriangleAlert,
+} from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/reui/alert';
 import { Button } from '@/components/ui/button';
@@ -40,7 +48,6 @@ import {
   READ_ONLY_SOURCE,
   RELAXED_NOTE,
   SAVED_NOTE,
-  sourceText,
   type ChatMessage,
   type Retry,
 } from '../../playlists/chat';
@@ -73,6 +80,9 @@ interface Found {
   search: McpSearch;
   relaxed: boolean;
 }
+
+/** What the results tab is showing: a direct search, or the rows an answer found. */
+type Results = { kind: 'search'; query: string } | { kind: 'answer'; id: string };
 
 function describeSearchError(error: unknown): string {
   if (error instanceof McpError) return error.message;
@@ -173,7 +183,6 @@ function AnswerBlock({
   message,
   scope,
   listName,
-  onFilters,
   onAdd,
   onSave,
   onDismiss,
@@ -183,7 +192,6 @@ function AnswerBlock({
   scope: string;
   /** The list the editor has open beside the column. */
   listName: string;
-  onFilters: (intent: SearchArgs) => void;
   onAdd: (message: ChatMessage) => void;
   onSave: (message: ChatMessage) => void;
   onDismiss: (message: ChatMessage) => void;
@@ -191,6 +199,9 @@ function AnswerBlock({
 }) {
   const answer = message.answer;
   if (!answer) return null;
+  /* A dismissed answer with nothing to explain is not a panel: the rows are still in the view,
+   * and an empty outline over them would only ask for a decision that was already made. */
+  if (answer.dismissed && !answer.relaxed) return null;
 
   const count = answer.search.tracks.length;
   const saveable = answer.source.draftScope !== null;
@@ -199,35 +210,16 @@ function AnswerBlock({
   return (
     <Card size="sm">
       <CardContent className="flex flex-col gap-2">
-        {/* The rows and the count are the answer; the panel says where they came from, how to
-            read the sentence again (Filters), and the one thing the rows cannot: that the
-            ranges asked for found nothing and the retry dropped them. */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-          <span>{sourceText(answer.source)}</span>
-          <span aria-hidden="true">·</span>
-          <Button
-            type="button"
-            variant="link"
-            size="xs"
-            className="h-auto px-0 text-xs"
-            onClick={() => onFilters(answer.intent)}
-          >
-            Filters
-          </Button>
-          {answer.relaxed ? (
-            <>
-              <span aria-hidden="true">·</span>
-              <span role="status">{RELAXED_NOTE}</span>
-            </>
-          ) : null}
-        </div>
-
-        {count === 0 ? (
+        {/* The rows and their tree are the answer; the panel says what to do with them, and the
+            one thing the rows cannot: that the ranges asked for found nothing and the retry
+            dropped them. */}
+        {answer.relaxed ? (
           <p role="status" className="text-xs text-muted-foreground">
-            Nothing matched: every filter has to match at once, and a range only sees analysed
-            tracks.
+            {RELAXED_NOTE}
           </p>
-        ) : answer.draftId ? (
+        ) : null}
+
+        {answer.draftId ? (
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs text-muted-foreground">{SAVED_NOTE}</p>
             <Button
@@ -241,7 +233,7 @@ function AnswerBlock({
           </div>
         ) : answer.added ? (
           <p className="text-xs text-muted-foreground">{addedNote(count, listName)}</p>
-        ) : answer.dismissed ? null : !saveable ? (
+        ) : !saveable ? (
           <p className="text-xs text-muted-foreground">{READ_ONLY_SOURCE}</p>
         ) : !sameCard ? (
           <p className="text-xs text-muted-foreground">{CARD_CHANGED}</p>
@@ -307,10 +299,10 @@ export function SourcesColumn({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sentence, setSentence] = useState('');
   const [phase, setPhase] = useState<'reading' | 'searching' | null>(null);
-  const [query, setQuery] = useState('');
-  /* What the tree is showing: the whole card, or the answer's rows in it. An ask switches to
-   * its own answer; **Files** gives the card back and keeps the answer's offer below. */
-  const [showingAnswer, setShowingAnswer] = useState(false);
+  /* The two views of the column: the card's folders, and what the last search or ask found.
+   * Results is dead until one of them has happened — there is nothing to show otherwise. */
+  const [results, setResults] = useState<Results | null>(null);
+  const [view, setView] = useState<'files' | 'results'>('files');
   const [filters, setFilters] = useState<{ open: boolean; initial: SearchArgs }>({
     open: false,
     initial: {},
@@ -354,14 +346,15 @@ export function SourcesColumn({
   );
   const answer = reply?.answer ?? null;
 
-  /* An answer is what the tree shows, the moment it lands. A failure leaves the card's files
-   * where they are: there is nothing to prune them to. The id is the whole dependency: adding,
-   * saving or dismissing rewords the same answer, and must not pull the tree back to it after
-   * the person pressed Files. */
+  /* An answer is what the results view holds, the moment it lands. A failure leaves the view
+   * where it is: there is nothing to put there. The id is the whole dependency: adding, saving
+   * or dismissing rewords the same answer, and must not pull the person back to a view they
+   * left. */
   const answeredId = reply?.answer ? reply.id : null;
-  const replyId = reply?.id;
   useEffect(() => {
-    if (answeredId) setShowingAnswer(true);
+    if (!answeredId) return;
+    setResults({ kind: 'answer', id: answeredId });
+    setView('results');
   }, [answeredId]);
 
   /* The card's own folders, pruned to the answer's rows. It keeps the tree's order and its
@@ -377,13 +370,21 @@ export function SourcesColumn({
         : null,
     [answer, tree],
   );
-  const showing = showingAnswer && answerTree !== null;
+  /* The results view is the answer's rows when there are any, and the card's tree filtered by
+   * the search's words otherwise. */
+  const showingResults = view === 'results' && results !== null;
+  const showingAnswer =
+    showingResults && results !== null && results.kind === 'answer' && answerTree !== null;
+  const searchQuery =
+    showingResults && results !== null && results.kind === 'search' ? results.query : '';
   const hasSources = tree !== null && (tree.folders.length > 0 || tree.tracks.length > 0);
-
-  const showFiles = () => {
-    setShowingAnswer(false);
-    setQuery('');
-  };
+  /* What a screen reader hears when an answer lands: the sentence the panel no longer says. */
+  const announcing = showingResults && results !== null && results.kind === 'answer';
+  const announcement = announcing
+    ? answer && answer.search.tracks.length > 0
+      ? `${plural(answer.search.tracks.length, 'track')} found`
+      : 'Nothing matched'
+    : '';
 
   const setup = async () => {
     setDownloadError(null);
@@ -522,20 +523,22 @@ export function SourcesColumn({
   function clear() {
     if (busy.current) return;
     setMessages([]);
-    setQuery('');
-    setShowingAnswer(false);
+    setResults(null);
+    setView('files');
     setFilters({ open: false, initial: {} });
   }
 
-  /** The magnifier: the same words, filtering the card's tree instead of asking the model. */
+  /** The magnifier: the same words, read as a search of the card rather than as an ask. An
+   * empty field is the way back — there are no results to show. */
   function searchFiles(text: string) {
-    setQuery(text.trim());
-    setShowingAnswer(false);
-  }
-
-  function clearSearch() {
-    setQuery('');
-    setSentence('');
+    const wanted = text.trim();
+    if (!wanted) {
+      setResults(null);
+      setView('files');
+      return;
+    }
+    setResults({ kind: 'search', query: wanted });
+    setView('results');
   }
 
   /* Enter does what the browser can do: Ask where there is a model, and the direct search
@@ -555,52 +558,46 @@ export function SourcesColumn({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      {/* What the tree is: the card's folders, or the answer's rows inside them. */}
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <p className="text-sm font-light">{showing ? 'Ask found' : 'Files'}</p>
-          {showing && answer ? (
-            <p role="status" className="text-xs text-muted-foreground tabular-nums">
-              {plural(answer.search.tracks.length, 'track')} · the card’s folders, pruned to
-              them
-            </p>
-          ) : query ? (
-            <p className="text-xs text-muted-foreground">
-              Searching the card for “{query}”
-            </p>
-          ) : null}
-        </div>
-        {showing ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Show the card's files"
-            onClick={showFiles}
-          >
-            Files
-          </Button>
-        ) : query ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Clear the search"
-            onClick={clearSearch}
-          >
-            Clear
-          </Button>
-        ) : null}
+      {/* Two round buttons in place of a bar: the card's folders, and what the last search or
+          ask found. Results is dead until there is something in it — a search that ran, or an
+          answer that came back. */}
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-pressed={view === 'files'}
+          aria-label="Files"
+          title="The card's files"
+          onClick={() => setView('files')}
+        >
+          <FolderTree aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-pressed={view === 'results'}
+          aria-label="Results"
+          title="What the last search or ask found"
+          onClick={() => setView('results')}
+          disabled={results === null}
+        >
+          <Rows3 aria-hidden="true" />
+        </Button>
       </div>
 
+      {/* The sentence the panel no longer says, kept for a screen reader only. */}
+      <p className="sr-only" role="status">
+        {announcement}
+      </p>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 lg:overflow-auto">
-        {reply?.answer ? (
+        {showingAnswer && reply ? (
           <AnswerBlock
             message={reply}
             scope={scope}
             listName={listName}
-            onFilters={openFilters}
             onAdd={add}
             onSave={save}
             onDismiss={dismiss}
@@ -612,16 +609,30 @@ export function SourcesColumn({
           <SourceLoading />
         ) : !hasSources ? (
           <NoSources reachable={reachable} />
+        ) : showingResults && results !== null && results.kind === 'answer' && answerTree === null ? (
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyTitle>Nothing matched</EmptyTitle>
+              <EmptyDescription>
+                Every filter has to match at once, and a range only sees analysed tracks.
+                The Filters button shows the arguments that ran.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
           <FileTree
-            key={`${showing ? `answer\u0000${replyId ?? ''}` : `sources\u0000${query}`}`}
-            tree={showing ? answerTree! : tree!}
-            query={showing ? '' : query}
+            key={
+              showingResults
+                ? `results\u0000${results !== null && results.kind === 'answer' ? results.id : searchQuery}`
+                : 'files'
+            }
+            tree={showingAnswer ? answerTree! : tree!}
+            query={searchQuery}
             path=""
             action="add"
             draggableSources
-            expandAll={showing}
-            showControls={!showing}
+            expandAll={showingAnswer}
+            showControls={!showingAnswer}
             onActivate={(track) => onAdd([track.path])}
           />
         )}

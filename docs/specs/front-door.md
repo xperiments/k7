@@ -313,10 +313,11 @@ The Queue, measured, written to the card by the run itself.
   carries measurements still, and Prepare is its only door
   ([ADR 0065](../adr/0065-the-card-is-the-only-way-to-the-player.md)).
 - `#/playlists/:id` is the editor, in two columns: the draft's blocks are on the left, and the
-  card's folders as a **source tree** on the right, with the **IA Agent**'s bar at the tree's foot —
-  one surface, no switch. The bar is one field and three icons: **Filters** for the exact
-  arguments, the magnifier for the tree filtered by the field's words, and **Ask** for the same
-  words sent to the model — one field either way. A file adds
+  card's folders as a **source tree** on the right, with two round icon views at that column's top
+  — **Files** and **Results**, the second dead until a search or an answer has filled it — and the
+  **IA Agent**'s bar at the tree's foot. The bar is one field and three icons: **Filters** for the
+  exact arguments, the magnifier for the card's tree searched by the field's words, and **Ask** for
+  the same words sent to the model — one field either way. A file adds
   one row; a folder adds one block that carries every file under it and
   moves as a unit. A drag from the tree lands exactly where it is dropped, a block reorders by drag
   (with arrow-key alternatives), and a folder block opens to show its rows. The order is the
@@ -327,9 +328,9 @@ The Queue, measured, written to the card by the run itself.
   card does not have reads *not in this card's library*. The Device card's rows come from the
   player (`library_track`), which is what the editor used for every card before this. A row the
   source no longer has is shown as missing and skipped by the broadcast, never deleted here.
-- The assistant is that bar, and an answer is drawn **in the tree**: the card's own folders
-  pruned to the rows the search answered, with the answer's words and its offer in a panel above
-  them and **Files** in the column's header to give the whole card back. Nothing on the card
+- The assistant is that bar, and an answer fills the **Results** view: the card's own folders
+  pruned to the rows the search answered, with nothing above them but the offer to add them.
+  Nothing on the card
   changes until the person acts: one action adds the answer's rows to the open list — appended at
   the end, in the answer's order — with **Save as a new list** as the secondary, which creates a
   list of its own and offers to open it. The model writes filters and never results, and never sees the list

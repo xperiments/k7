@@ -305,7 +305,7 @@ function EditorMissing() {
 
 function EditorLoading() {
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4 sm:p-6">
+    <div className="mx-auto flex w-full flex-col gap-4 p-4 sm:p-6">
       <Skeleton className="h-8 w-64" />
       <div className="grid gap-6 lg:grid-cols-2">
         <Skeleton className="h-64 w-full" />
@@ -603,7 +603,7 @@ function Editor({ draft }: { draft: Draft }) {
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4 sm:p-6 lg:h-full lg:min-h-0">
+    <div className="mx-auto flex w-full flex-col gap-4 p-4 sm:p-6 lg:h-full lg:min-h-0">
       <h1 className="sr-only">Edit {draft.name}</h1>
 
       <div className="grid min-w-0 gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">

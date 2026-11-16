@@ -390,15 +390,15 @@ _Avoid_: now playing, current song, track
 ### The assistant
 
 **IA Agent**:
-The assistant in the **Editor**'s sources column: the composer at the foot of the card's tree, and
-the last answer drawn over that tree. It is not a page, has no item of its own in the rail, and is
-no longer a tab — the tree stays where it is. The conversation on it is **Ask**.
+The assistant in the **Editor**'s sources column: the bar at the foot of the card's tree, whose
+answer fills the column's **Results** view beside **Files**. It is not a page, has no item of its
+own in the rail, and is no longer a tab of its own. The conversation on it is **Ask**.
 _Avoid_: Ask page, assistant page, AI Agent, Ask tab
 
 **Ask**:
-The conversation on the **IA Agent**: the composer at the foot of the tree, what the person said,
-and the App's answer — the rows it found, drawn in the tree, and the offer to add them to the list
-beside it. The model writes the **Intent**; the App writes what Ask says.
+The conversation on the **IA Agent**: the bar at the foot of the tree, what the person said, and the
+App's answer — the rows it found, filling the **Results** view, and the offer to add them to the
+list beside it. The model writes the **Intent**; the App writes what Ask says.
 _Avoid_: chatbot, AI assistant, generate
 
 **Intent**:

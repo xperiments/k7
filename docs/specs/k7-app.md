@@ -350,31 +350,31 @@ its quartiles. Without a profile the
 static ranges apply. The profile is aggregates only — genres, count, ranges and quartiles — and
 no track, artist, path or per-track measurement is described either way.
 
-**P3. One bar under the editor's tree searches the card and asks the model, and an answer is drawn in that tree.** The
-sources column is the card's folders, always: there is no Files / Ask switch and no second surface
-to learn, and one bar at the tree's foot serves both jobs. The bar is one field and three icon
-buttons: **Filters** opens the sheet of exact arguments, the **magnifier** filters the tree by the
-field's words — a plain search is local and instant — and **Ask** sends the same words to the model
-and is drawn only when this browser has it. The sheet is in the bar in every model state, which is
-why the setup's separate search control is gone. Enter does what the
-browser can do — Ask where there is a model, the direct search where there is not — and the field
-holds the filter while the tree is filtered, so **Clear** in the column's header is the way out of
-it. The last answer is what the column
-shows above the tree. An answer's rows are not a second
-list beside the tree, they are the tree: the card's own folders, pruned to the rows the search
-answered, kept in their folders so a folder can still be dragged as one block, with **Files** in
-the column's header giving the whole card back. The tree's shape is the card's, not the answer's
-order — that order is what **Add** appends, and it is never re-sorted. A sentence becomes a message
-from the person, and the answer is the rows themselves with a panel that names the source and the
-offer to add them; a failure replaces the answer and leaves the tree alone, because there is
-nothing to prune it to. The model writes no prose (ADR 0050's shape rule; ADR 0086), and
-[ADR 0093](../adr/0093-ask-edits-the-list-it-is-beside.md) still holds: Ask is beside the list it
-edits, with no page and no rail item. The answer does not narrate itself: its count is the column's
-heading, its rows are the tree, and the panel says where they came from and offers to add them.
-The one thing the rows cannot say is that the ranges asked for found nothing and the retry dropped
-them, so the panel says that when it happens. **Filters** opens the exact `library_search`
-arguments, seeded with that Intent, for a misparse. There is no Intent panel and no separate
-**Run search**. An answer that
+**P3. The editor's sources column is two views — the card's folders, and the results — over one
+bar that searches the card and asks the model.** The views are two round icon buttons at the
+column's top: **Files** is the card's own tree, **Results** is what the last search or the last
+answer found, and Results is dead until there is something in it — a direct search that ran, or an
+answer that came back. An editor opens on Files; a new ask or a new search moves to Results and
+stays there until the person moves away. One bar at the tree's foot serves both jobs: one field and
+three icon buttons — **Filters** for the sheet of exact arguments, the **magnifier** for a search of
+the card, which is local and instant, and **Ask** for the same words sent to the model, drawn only
+where this browser has it. Enter does what the browser can do: Ask where there is a model, the
+search where there is not. An empty field pressed with the magnifier is the way back to the whole
+card.
+
+A search's results are the card's tree filtered by the field's words; an answer's results are the
+same tree pruned to the rows the answer found, kept in their folders so a folder in an answer still
+drags into the list as one block. Nothing narrates either view: the tree's own header counts what
+it holds — folders and tracks — and no heading, count line or source line repeats it. Over an
+answer's tree sits only the offer to add its rows to the list beside, or what happened instead, and
+the one thing the rows cannot say: that the ranges asked for found nothing and the retry dropped
+them. The tree's shape is the card's, not the answer's order — that order is what **Add** appends,
+and it is never re-sorted. A failure leaves the views where they are, with the sentence in place of
+an answer, because there is nothing to show in Results. The model writes no prose (ADR 0050's shape
+rule; ADR 0086), and [ADR 0093](../adr/0093-ask-edits-the-list-it-is-beside.md) still holds: Ask is
+beside the list it edits, with no page and no rail item. **Filters** opens the exact
+`library_search` arguments, seeded with the Intent that ran, for a misparse. There is no Intent
+panel and no separate **Run search**. An answer that
 names no group or artist is drawn from across the matched window, not from the search's first page:
 Ask reads up to the player's 200-row window and keeps one track per artist, spread across the
 window in library order, until the count is met, then fills any remainder at even steps through
