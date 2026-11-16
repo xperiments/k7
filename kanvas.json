@@ -2508,6 +2508,11 @@
           "at": "2026-11-16T00:55:05Z",
           "by": "deepseek",
           "text": "The answer's offer left the scroll area: it is a bar of its own under the tree and over the field. Inside the scrolling column it was a flex child of a min-h-0 box, and the Card — which is overflow-hidden — was being squeezed to a sliver, so its buttons were cut in half and the tree header sat on top of them. shrink-0 outside the scroll region, and a long tree can no longer scroll the offer away either."
+        },
+        {
+          "at": "2026-11-16T01:01:19Z",
+          "by": "deepseek",
+          "text": "The bar's clear is in the field: an × inside the pill, shown with the first character, which forgets the words and leaves the results alone. The New ask button under the field is gone with clear() — the offer's Not now and the Files view do the rest. While in that row: 'The model never sees a track.' had been lost in an earlier pass over it, and it is back, alone now."
         }
       ]
     },
