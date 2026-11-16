@@ -70,14 +70,36 @@ describe('spreadTracks', () => {
     ]);
   });
 
-  it('fills with repeats only when the artists run out', () => {
+  it("spreads one artist's own tracks when it is the only one", () => {
     const tracks = shelf(['Annie Lennox'], 10);
     const picked = spreadTracks(tracks, 3);
     expect(picked.map((one) => one.path)).toEqual([
       'Annie Lennox/Album/1.mp3',
-      'Annie Lennox/Album/2.mp3',
+      'Annie Lennox/Album/6.mp3',
       'Annie Lennox/Album/10.mp3',
     ]);
+  });
+
+  it('divides the count evenly between the artists there are, and alternates them', () => {
+    const tracks = shelf(['Iron Maiden', 'Metallica'], 20);
+    const picked = spreadTracks(tracks, 10);
+    const artists = picked.map((one) => one.analysis?.artist);
+
+    expect(artists.filter((one) => one === 'Iron Maiden')).toHaveLength(5);
+    expect(artists.filter((one) => one === 'Metallica')).toHaveLength(5);
+    /* Five in a row of one artist is what the division is for: neighbours alternate. */
+    artists.slice(1).forEach((one, index) => expect(one).not.toBe(artists[index]));
+  });
+
+  it('leaves an odd row for the first artist when the count does not divide', () => {
+    const tracks = shelf(['A', 'B', 'C'], 10);
+    const picked = spreadTracks(tracks, 4);
+    const artists = picked.map((one) => one.analysis?.artist);
+
+    expect(artists.filter((one) => one === 'A')).toHaveLength(2);
+    expect(artists.filter((one) => one === 'B')).toHaveLength(1);
+    expect(artists.filter((one) => one === 'C')).toHaveLength(1);
+    artists.slice(1).forEach((one, index) => expect(one).not.toBe(artists[index]));
   });
 
   it('keeps the first and the last artist when it spreads', () => {

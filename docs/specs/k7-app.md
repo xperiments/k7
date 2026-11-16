@@ -379,10 +379,13 @@ beside the list it edits, with no page and no rail item. **Filters** opens the e
 `library_search` arguments, seeded with the Intent that ran, for a misparse. There is no Intent
 panel and no separate **Run search**. An answer that
 names no group or artist is drawn from across the matched window, not from the search's first page:
-Ask reads up to the player's 200-row window and keeps one track per artist, spread across the
-window in library order, until the count is met, then fills any remainder at even steps through
-the tracks left. A sentence that names a group or artist, and a stated offset or sort, keep their
-page. The selection is the App's, computed from the search; the model still writes no result, and
+Ask reads up to the player's 200-row window and keeps one track per artist while artists remain,
+and when the window has fewer artists than the count it divides the rows between them as evenly as
+the count divides — ten tracks from two artists are five and five, never three and seven — taking
+each artist's share from across its own tracks rather than its first album. The answer is ordered
+artist by artist in turn, so two rows side by side do not share an artist while another artist has
+rows left; a run of one artist happens only when every other artist has run out. A sentence that
+names a group or artist, and a stated offset or sort, keep their page. The selection is the App's, computed from the search; the model still writes no result, and
 the Last image is drawn the same way from its own rows.
 A model call that has not answered within thirty seconds is abandoned: the answer is an error
 with the one retry, not a spinner that never ends.

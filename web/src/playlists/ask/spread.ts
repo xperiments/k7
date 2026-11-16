@@ -8,11 +8,14 @@
  * showed it.
  *
  * So an unpaged ask that names nothing is drawn from the matched window instead: the App reads
- * up to two pages (the player answers at most 200 rows for one search), and keeps one track per
- * artist, spread across the window in library order, until the count is met; if the window has
- * fewer artists than that, the rest is filled at even steps through the tracks left. A sentence
- * that names a group or artist, and a stated offset or sort, keep their page: a name is a
- * request for that name, and a page is a page.
+ * up to two pages (the player answers at most 200 rows for one search) and keeps one track per
+ * artist, spread across the window in library order, until the count is met. When the window has
+ * fewer artists than the count, the rows are divided between those artists as evenly as the count
+ * allows — a hundred tracks from two artists is fifty and fifty, never three and seven — and each
+ * artist's share is taken from across its own tracks, not from its first album. The answer is
+ * then ordered artist by artist in turn, so two rows side by side do not share an artist while
+ * another artist still has rows to give. A sentence that names a group or artist, and a stated
+ * offset or sort, keep their page: a name is a request for that name, and a page is a page.
  *
  * The window is the player's page ceiling, not the App's choice: a library with more matches
  * than 200 is spread over its first 200, and a player-side sample is the follow-up if that
@@ -55,9 +58,11 @@ function spreadIndices(total: number, count: number): number[] {
 }
 
 /**
- * `count` tracks out of `tracks`, one per artist while artists remain and spread across them
- * in library order; then the rest at even steps through the tracks left. The result is in
- * `tracks`' own order, so an answer is still A–Z.
+ * `count` tracks out of `tracks`, one per artist while artists remain and spread across them in
+ * library order. Fewer artists than that, and the count is divided between them as evenly as it
+ * divides — five and five, not three and seven — each artist's share taken from across its own
+ * tracks. The result is artist by artist in turn, so two rows side by side do not share an artist
+ * while another artist still has rows to give.
  */
 export function spreadTracks(tracks: readonly McpTrack[], count: number): McpTrack[] {
   if (count <= 0) return [];
@@ -72,20 +77,32 @@ export function spreadTracks(tracks: readonly McpTrack[], count: number): McpTra
   }
 
   const artists = [...groups.values()];
-  const picked: McpTrack[] = [];
+  /* Each artist's own picks, in the artist's order: one each while artists remain, or a share
+   * of the count when there are fewer artists than rows. */
+  const picks: McpTrack[][] = [];
   if (artists.length >= count) {
-    for (const index of spreadIndices(artists.length, count)) picked.push(artists[index][0]);
+    for (const index of spreadIndices(artists.length, count)) picks.push([artists[index][0]]);
   } else {
-    for (const group of artists) picked.push(group[0]);
-    const chosen = new Set(picked);
-    const rest = tracks.filter((track) => !chosen.has(track));
-    for (const index of spreadIndices(rest.length, count - picked.length)) {
-      picked.push(rest[index]);
-    }
+    const share = Math.floor(count / artists.length);
+    const extra = count % artists.length;
+    const generous = new Set(spreadIndices(artists.length, extra));
+    artists.forEach((group, index) => {
+      const want = share + (generous.has(index) ? 1 : 0);
+      picks.push(spreadIndices(group.length, want).map((at) => group[at]));
+    });
   }
 
-  const place = new Map(tracks.map((track, index) => [track, index]));
-  return picked.sort((a, b) => (place.get(a) ?? 0) - (place.get(b) ?? 0));
+  /* Artist by artist in turn: the first pick of every artist, then the second of every artist
+   * that has one, and so on. A run of one artist can only happen when no other has rows left. */
+  const deepest = Math.max(...picks.map((list) => list.length));
+  const picked: McpTrack[] = [];
+  for (let depth = 0; depth < deepest; depth += 1) {
+    for (const list of picks) {
+      const track = list[depth];
+      if (track !== undefined) picked.push(track);
+    }
+  }
+  return picked;
 }
 
 /**
