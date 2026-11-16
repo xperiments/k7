@@ -42,6 +42,11 @@ const HOVER_OUT_DELAY = 260;
  *  the selected case's neighbour, then each spine after it. */
 const FIRST_STEP = 9.7;
 const SPINE_STEP = 3.25;
+/** Wheel travel that walks the shelf one case: a mouse notch is about a hundred, and a
+ *  trackpad's small deltas add up to it. */
+const WHEEL_STEP = 50;
+/** After a step the wheel rests this long, so a fling does not run the shelf to its end. */
+const WHEEL_COOLDOWN = 180;
 
 function byline(album: Album): string {
   return album.artists.length === 1 ? album.artists[0] : plural(album.artists.length, 'artist');
@@ -175,8 +180,8 @@ export function AlbumShelf({
     [at, count, onSelect],
   );
 
-  /* A carousel drag begins only on the central case: the hit layer's active box is the only
-   * pointer target that calls this. The hover goes off for the duration, so the cases do not
+  /* A carousel drag can begin on any case, not only the turned one: the row moves under the
+   * hand from wherever it was taken. The hover goes off for the duration, so the cases do not
    * lift and turn under the hand that is moving the row. */
   const beginDrag = (event: ReactPointerEvent) => {
     if (event.button !== 0) return;
@@ -190,6 +195,36 @@ export function AlbumShelf({
     dragTarget.current = at;
     dragged.current = false;
   };
+
+  /* The wheel is the other way along the row: a notch, or a trackpad's travel adding up to
+   * one, turns one case. It is native and not passive — React's `onWheel` is registered as a
+   * passive listener at the root, where `preventDefault` does nothing, and the page would
+   * scroll under the shelf as it stepped. */
+  useEffect(() => {
+    const el = section.current;
+    if (!el) return;
+    let travel = 0;
+    let struck = 0;
+    const onWheel = (event: WheelEvent) => {
+      /* A trackpad reports the same gesture on both axes; the larger is the one meant. */
+      const delta =
+        Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+      if (delta === 0) return;
+      event.preventDefault();
+      const now = performance.now();
+      if (now - struck < WHEEL_COOLDOWN) {
+        travel = 0;
+        return;
+      }
+      travel += delta;
+      if (Math.abs(travel) < WHEEL_STEP) return;
+      struck = now;
+      go(Math.sign(travel));
+      travel = 0;
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [go]);
 
   /* The arrows walk the shelf from anywhere in the Media view, not only while it holds the
    * focus; a text field keeps its own arrows, and the pointer no longer drags the row. */
@@ -285,7 +320,7 @@ export function AlbumShelf({
                     style={{ '--hue': `${hueOf(album.album)}deg` } as CSSProperties}
                     aria-label={`${album.album} — ${byline(album)}`}
                     aria-current={activeCase ? 'true' : undefined}
-                    onPointerDown={activeCase ? beginDrag : undefined}
+                    onPointerDown={beginDrag}
                     onClick={() => {
                       if (dragged.current) {
                         dragged.current = false;

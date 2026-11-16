@@ -449,9 +449,11 @@ A case under the pointer comes towards the reader — a side case 10rem, the act
 4rem — while the row steps back and turns towards the hovered side; the left and right turns
 are set separately in the stylesheet. The perspective stays at 90rem. The pointer is read
 from a flat hit layer at the cases' rest places, not from the moving case, so a turning case
-cannot pull the hover out from under itself. A carousel drag begins only on the central
-case, and the hover layer is off while the drag is in progress. The moves take the case's own
-600ms curve, and the shelf carries 1.5rem of extra height.
+cannot pull the hover out from under itself. A carousel drag can begin on any case, not only the
+turned one, and the hover layer is off while the drag is in progress. The wheel is the other way
+along the row — a notch, or a trackpad's travel adding up to one, turns one case — and it is
+taken from the page rather than left to scroll it. The moves take the case's own 600ms curve, and
+the shelf carries 1.5rem of extra height.
 
 ### 5.4 Content images
 
