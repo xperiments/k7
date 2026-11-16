@@ -756,9 +756,7 @@ export function SourcesColumn({
             <Spinner aria-hidden="true" className="size-3.5" />
             Checking Chrome’s built-in model…
           </p>
-        ) : assistant === 'available' ? (
-          <p className="text-xs text-muted-foreground">The model never sees a track.</p>
-        ) : (
+        ) : assistant === 'available' ? null : (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-muted-foreground">{setupNote}</p>
             {downloadPercent !== null ? (
