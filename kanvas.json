@@ -2486,7 +2486,14 @@
       "group": "APP",
       "at": "2026-11-16T00:38:46Z",
       "by": "deepseek",
-      "desc": "The panel above the tree opened with the App's reading of the sentence — 'Found 50 of 137 tracks — key 8A, sorted by BPM' — while the count was already the column's heading, the filters were behind Filters and the rows were the tree. The sentence and answerText go; the panel keeps where the rows came from, Filters, the add/save offer, and the one note the rows cannot carry — that the exact search found nothing and the retry dropped the ranges. The count keeps role=status in the heading and an empty answer says 'Nothing matched' there, so an ask still speaks.\n\n  Finished when a panel above the tree names its source and its offer and says nothing else, and a screen reader still hears how many rows arrived.\n\n  To check: ask for something, and see the tree narrow with no sentence above it; ask for something impossible and see 'Nothing matched' in the heading.\n\n  The code is already in the tree (c4016ed) because the work was asked for directly; approving this records it."
+      "desc": "The panel above the tree opened with the App's reading of the sentence — 'Found 50 of 137 tracks — key 8A, sorted by BPM' — while the count was already the column's heading, the filters were behind Filters and the rows were the tree. The sentence and answerText go; the panel keeps where the rows came from, Filters, the add/save offer, and the one note the rows cannot carry — that the exact search found nothing and the retry dropped the ranges. The count keeps role=status in the heading and an empty answer says 'Nothing matched' there, so an ask still speaks.\n\n  Finished when a panel above the tree names its source and its offer and says nothing else, and a screen reader still hears how many rows arrived.\n\n  To check: ask for something, and see the tree narrow with no sentence above it; ask for something impossible and see 'Nothing matched' in the heading.\n\n  The code is already in the tree (c4016ed) because the work was asked for directly; approving this records it.",
+      "notes": [
+        {
+          "at": "2026-11-16T00:50:53Z",
+          "by": "deepseek",
+          "text": "Also gone, asked for after the sentence: the panel's question — 'Add these 50 tracks to “Test”?' — and addQuestion with it. The buttons already say 'Add 50 tracks', 'Save as a new list' and 'Not now'; naming the action twice over the same three buttons was the same repetition as the reading. The panel now opens on the buttons, and on nothing at all when the answer was dismissed."
+        }
+      ]
     },
     {
       "id": "APP-61",
