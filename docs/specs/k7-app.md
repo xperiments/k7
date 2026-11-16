@@ -98,7 +98,9 @@ and the device's own CORS and routes decide what a granted origin may ask.
 
 Three observed facts. There is no mode enum, and no precedence table.
 
-**A4. `link`** — `local` (the device answered over the local network) or `none`.
+**A4. `link`** — `local` (the device answered over the local network) or `none`. It is
+observed, not chosen: while it is `none` the status poll tries the local path again, so a
+player that was slow or off when the page loaded is picked up without a reload.
 
 **A5. `network`** — `online` or `offline`, from the browser's own event.
 

@@ -91,6 +91,9 @@ export function useDeviceLink(): Link {
 
 /** True while a probe is in flight, so the UI can say "looking" instead of "no player". */
 let probing = false;
+
+/** The probe callers in this document share, so one link costs one request. */
+let connecting: Promise<boolean> | null = null;
 export function isProbing(): boolean {
   return probing;
 }
@@ -98,13 +101,24 @@ export function isProbing(): boolean {
 /**
  * Try the local path and nothing else: no window, no opener, no fallback.
  *
- * This is what runs on load, after the gate holds the permission. It reaches the device when
- * the browser's Local Network Access permission has been granted and returns `false`
- * quietly otherwise, which the gate has already ruled out but a revoked permission can
- * still produce.
+ * This runs on load, after the gate holds the permission, and again from the status poll
+ * while there is no link: a probe that lost a cold `k7.local` lookup must not leave the page
+ * asking a `none` device until someone reloads it. Calls made while a probe is in flight
+ * share it, so a poll and the load-time attempt do not race two requests for one link.
+ *
+ * It reaches the device when the browser's Local Network Access permission has been granted
+ * and returns `false` quietly otherwise, which the gate has already ruled out but a revoked
+ * permission can still produce.
  */
-export async function tryLocalConnect(): Promise<boolean> {
-  if (ensure().link() !== 'none') return true;
+export function tryLocalConnect(): Promise<boolean> {
+  if (ensure().link() !== 'none') return Promise.resolve(true);
+  connecting ??= probeLocal().finally(() => {
+    connecting = null;
+  });
+  return connecting;
+}
+
+async function probeLocal(): Promise<boolean> {
   probing = true;
   notify();
   try {

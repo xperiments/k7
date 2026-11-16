@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { getDevice, subscribeDeviceLink } from './device';
+import { getDevice, subscribeDeviceLink, tryLocalConnect } from './device';
 import type { DeviceStatus } from './status';
 
 export interface DeviceSnapshot {
@@ -15,11 +15,14 @@ const INITIAL: DeviceSnapshot = { status: null, reachable: false };
  * One poll, tolerant of every failure an absent device can produce.
  *
  * The request goes through the `Device` seam: local, the answer arrives from the device
- * over the network; direct, from the device's own API; with no link at all it rejects at
- * once and the absence is `null`, which every view already has copy for.
+ * over the network; with no link at all it asks for one first. The link is an observed fact,
+ * so a probe that failed early — the first load's `k7.local` lookup is the cold one — is
+ * tried again on the next beat instead of leaving the page with a `none` device until a
+ * reload. A probe and the status request are two round trips only in the beat that links.
  */
 export async function fetchStatus(): Promise<DeviceStatus | null> {
   try {
+    if (!(await tryLocalConnect())) return null;
     return await getDevice().request('status');
   } catch {
     return null;

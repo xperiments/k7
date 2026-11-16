@@ -81,7 +81,9 @@ _Avoid_: file browser, explorer, file tree
 
 **Link**:
 Whether the App can command a player right now: **local** when the device answers over the local
-network, or **none**. An observed fact, never a mode the user selects.
+network, or **none**. An observed fact, never a mode the user selects: while it is **none**, the
+status poll tries the local path again, so a player that was slow or off at load is picked up
+without a reload.
 _Avoid_: mode, connection state, online
 
 **Local network**:
