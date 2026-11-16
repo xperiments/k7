@@ -2558,6 +2558,11 @@
           "at": "2026-11-16T01:32:52Z",
           "by": "dsh",
           "text": "Restored the shelf's CassetteCase beside the screen after the review: the Player is now case | screen, with the track info under the screen. Desktop is a 13rem case on the left and an 872px screen with the title, badges and progress under it; a phone centres the case, then the screen, then the track, with no horizontal scroll. Committed as f528b88; the spec's K19/K21/K29 say both views."
+        },
+        {
+          "at": "2026-11-16T01:39:43Z",
+          "by": "dsh",
+          "text": "Adjusted after review: the case and the screen share one height where they stand side by side. The pair is a grid whose columns carry the screen's 5:3 and the case's 16:25, and the case reads its column's width through a container, so both end together at every side-by-side width. At 1440 the case is 335x524 and the screen 873x525; at 390 they stack, the case keeps its shelf width, and there is no horizontal scroll. Committed as a858187."
         }
       ]
     },
