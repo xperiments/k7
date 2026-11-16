@@ -2439,8 +2439,40 @@
           "at": "2026-11-15T23:53:16Z",
           "by": "deepseek",
           "text": "The editor's sources column is one surface. The card's tree is the column and Ask is the composer at its foot (one sentence, one send); an answer is drawn in that tree — the card's own folders pruned to the rows the search answered with keepFolderTree, opened so they read at once — with the answer's words, Filters and the add/save offer in an outlined panel above it. Files in the column's header gives the whole card back and the answer's offer stays usable without it. A failure stands in the answer's place and leaves the tree whole, and the last answer carries role=status because the thread that used to announce it is gone.\n\nThe Files / Ask switch is retired, and so is the ask flag on the route: #/playlists/:id/ask is the editor. The tab state, the thread, the second list of rows and Show all are gone with it (Ask.tsx deleted, Sources.tsx is the column).\n\nTwo deliberate shapes: the pruned tree keeps the card's order, not the answer's — the answer's order is what Add appends, and the tree is the card's shape; and the folder of an answer drags as one block, which is the thing a second list could not do.\n\nVerified: typecheck, 884 tests (4 new for keepFolderTree, 1 router case updated for the retired tab), build, and the look checks with only the eval harness's pre-existing heading. Not verified: the browser checks in this ticket — asking, reading the answer in the tree, Files, and dragging a folder out of it — which need a card and the board.\n\nDocs: k7-app P3 rewritten, k7-look K21 (Playlists and IA Agent), front-door §4.2 and the route table, web/CONTEXT's IA Agent and Ask, ADR 0093's note now records that the switch is retired."
+        },
+        {
+          "at": "2026-11-16T00:22:40Z",
+          "by": "deepseek",
+          "text": "Follow-up after the hand-over, asked for directly: the sources' own search field is gone and its job moved into the bar. One field at the tree's foot and two buttons — the magnifier filters the card's tree with the same words, Ask sends them to the model and is drawn only when this browser has it. Enter keeps Ask where there is a model and does the direct search where there is not. The field holds the filter while the tree is filtered, the column's header says what it is filtering by, and Clear there is the way out. k7-app P3, k7-look K21 and front-door §4.2 say so; typecheck, 885 tests, the build and the look checks are green."
         }
       ]
+    },
+    {
+      "id": "LB-07",
+      "title": "An agent reads the guide in the page when a session blocks its routes",
+      "state": "proposed",
+      "group": "LB",
+      "at": "2026-11-15T23:54:25Z",
+      "by": "dsh",
+      "desc": "A browser session reported that the editor's `/skill.md` route was blocked and its shell could not reach the page, so the guide we had just written was unreachable in the middle of making a label — the work carried on by eyeballing the canvas.\n\nThe page now answers the guide as a tool. `label-editor-guide` returns the skill's prose (without the generated tool block, which the caller's tool list already carries), so a session that will not fetch a route still gets the geometry, the fields and the workflow. The skill also gained *Driving the visible controls*: a walkthrough that maps every tool to the panel it lives in, for a session that can only click, and the first step says the canvas may open on an earlier autosaved design.\n\nFinished means both roads work from inside the page: a WebMCP agent calls `label-editor-guide` and then designs; an agent with no tools follows the visible controls and exports. The tool surface is 15 now, and the native spec, README and the Agent tools screenshot say so.\n\nIt is on master as `f608da1`; approve this to record it."
+    },
+    {
+      "id": "LB-08",
+      "title": "A K7 label can be asked for by taste, not only built by hand",
+      "state": "proposed",
+      "group": "LB",
+      "at": "2026-11-16T00:14:46Z",
+      "by": "dsh",
+      "desc": "The prompts an agent needs to design a *good* K7 label, not just a valid one: the moves that make a label read as a cassette label (a saturated field, a hero number, a side badge, small mono print), the six sleeve devices a 70s/80s collection uses (overlapping discs, dot grid, concentric rings, barcode, rule stack, bled numeral) with the editor's move for each, and seven prompts to paste, plus what not to ask for.\n\nThree of the seven were built through the bridge and exported with no errors, and their prints are committed beside the prompts: HiFi 1969 (mustard and ink), 808 Stripes (navy and magenta pinstripes), Discs C-60 (three overlapping discs). Each picture is the print at 748 x 359, the size the panel draws.\n\nFinished means a person can point an agent at the guide, paste one of the prompts, and get a label they would print — or use the prompts as a shape for their own brief. The skill and README point at the page.\n\nIt is on master as `0851c94`; approve this to record it."
+    },
+    {
+      "id": "APP-59",
+      "title": "The player link recovers without a reload",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-16T00:22:15Z",
+      "by": "deepseek",
+      "desc": "Reported: after a normal load the header can say 'device unreachable' while the player is on, and it stays that way until a reload. Cause: the page tries the local path once at load; if that first probe loses the cold k7.local lookup, nothing tries it again, so the status poll asks a none device every five seconds. Fix: the status poll retries the local path while the link is none, and concurrent attempts share one probe. Finished when a load whose first probe fails shows the device on the next poll without a reload; a regression test covers the two-poll case; typecheck, tests, build and host check pass."
     }
   ]
 }
