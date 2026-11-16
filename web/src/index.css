@@ -120,6 +120,13 @@
     --k7-alert: #F2C94C;
     --k7-accent-dim: color-mix(in srgb, var(--k7-accent) 42%, transparent);
     --k7-accent-faint: color-mix(in srgb, var(--k7-accent) 18%, transparent);
+    /* The device's cassette screen (K29): the panel's own inks, from cassette_style.c.
+       The page and the panel are the same black and the same primary. */
+    --k7-device-bg: #111111;       /* COL_BLACK */
+    --k7-device-frame: #60240D;    /* COL_DARKEN_HEX(COL_PRIMARY, 40) */
+    --k7-device-tape: var(--k7-accent); /* COL_PRIMARY */
+    --k7-device-hub: #301206;      /* COL_DARKEN_HEX(COL_PRIMARY, 20) */
+    --k7-device-hub-ink: #C0481B;  /* COL_DARKEN_HEX(COL_PRIMARY, 80) */
     --k7-font: 'Jura', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 

@@ -434,15 +434,14 @@ their drawing, their `hueOf` case colours, their 3D geometry, their masks and th
 `cubic-bezier(0.22, 1, 0.36, 1)` turn. They are not re-drawn as line art, not monochromed, and
 not retimed. The stage around them is K7. **[ADR]**
 
-One case also faces the reader on the Player page, at the shelf's width: it is the same
-face, frame and sheen, not a second drawing.
+The Player page does not face a case: it shows the device's own cassette screen (K29).
 
 An album with no picture is still drawn: its face is one of the cassette case reference's five
 covers — a gradient with a ring, colour bands with a cream box, an off-white with a colour
 rule, a retro sunburst, a dark grid — seeded by its name, with its title, artist and cassette
 meta. The case, its `hueOf` colour, geometry, masks and timing are unchanged; the drawn face is
 cover art inside the preserved case, and its words hide when the face is too small to carry
-them. The same face fills the album card, the player bar's mini case and the Player's square.
+them. The same face fills the album card and the player bar's mini case.
 Every face of every case carries the sheen, so a spine has the same moulded gloss as a front.
 A case under the pointer comes towards the reader — a side case 10rem, the active front
 4rem — while the row steps back and turns towards the hovered side; the left and right turns
@@ -475,7 +474,7 @@ group; the page is its item.
 | Playlists | The selected card's lists as rows, each row filled by how far its list has reached; New playlist is one dialog. The list's name is the stage header's page and is renamed there. The editor's body is two columns: the blocks, with the current block filled, on the left, and the card's tree with one search-or-ask bar at its foot on the right. The blocks' heading carries the edit's own state — writing, on the card, on the player, waiting, or the refusal's sentence — over the count and the rows the library is missing, and clearing the list is a trash icon whose press opens the filled confirm |
 | IA Agent | Two views at the top of the editor's sources column, as round outlined icons — the card's folders and the results — the current one taking the accent, and the results dead until there is something in them. One bar at the tree's foot: a pill field, then Filters, the magnifier and Ask as icons, the primary filled. An answer's rows are the results view, drawn as the list's own rows a size smaller (a number, the file, its BPM and key, a plus) in the answer's order, with only the offer to add them below the tree, and the note that says dropped ranges are why when they were. A failure stands where the answer would and leaves the view where it is. When the model is not ready the bar is there for the search, with one sentence, and one solid button where the model can still be fetched (**Set up the assistant**), and the download's progress is a `Progress`. The Intent is behind **Filters**, a sheet of rows and controls. Errors are K22 |
 | Settings | A column of outlined panels, one per group. Labels left, controls right, pill inputs |
-| Now playing | The broadcast: what is on air, its cassette (one case at the shelf's width) and position, and what the device says when it cannot answer. The PlayerBar stays the control |
+| Now playing | The broadcast: what is on air, the device's own cassette screen (K29) and position, and what the device says when it cannot answer. The PlayerBar stays the control |
 | Site | See [`k7-site.md`](./k7-site.md): the hero, the flash section and the install section are modules, and the footer is the licence trail |
 
 **K22. States are shape and words, not hue.** Every data region has an empty state (with one
@@ -518,10 +517,19 @@ spinner stays: it is feedback, not decoration. The one exception is the coverflo
 (K19). **[ADR]**
 
 **K27. Reduced motion means none.** Under `prefers-reduced-motion: reduce`, no transition and no
-rotation; not a calmer fade.
+rotation; not a calmer fade. The Player's cassette screen draws one held frame (K29): the packs
+show how much tape is on each side, and the hubs sit still.
 
 **K28. Scene changes are cuts.** Changing route swaps the stage and keeps the shell; there is no
 page transition and no entrance animation.
+
+**K29. The Player shows the device's screen.** The Player's visual is the panel's own entry view,
+drawn as an SVG at its 800x480 grid in the panel's inks: the two frames and the three chips, the
+two packs of concentric rings, the two hubs with their turning dividers, the guides, the strands
+and the bottom run. It is not the shelf's case. The reels follow the broadcast: each turns at the
+tape speed at its own pack radius, counter-clockwise, in the device's 36 frames; the packs fill
+from elapsed/duration with the device's 80/1000 floor and square-root law; a track change plays
+the device's 8 s rewind. The page's title, badges and progress stay outside the screen.
 
 ---
 

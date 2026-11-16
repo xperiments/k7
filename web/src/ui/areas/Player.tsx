@@ -8,8 +8,7 @@ import { trackAt, type McpTrack } from '../../device/mcp';
 import { useDeviceStatus } from '../../device/useDeviceStatus';
 import { currentCardScope } from '../../card/session';
 import { getMedia, type CachedMedia } from '../../storage/media';
-import { hueOf } from '../album-art';
-import { CassetteCase } from '../cassette';
+import { CassetteScreen } from '../cassette-screen';
 import { formatDuration } from '../format';
 
 /**
@@ -22,7 +21,8 @@ import { formatDuration } from '../format';
  *
  * The joins are the interesting part, and each one degrades to a dash rather than an error:
  *
- *   cover        the `k7-media` cache by the Snapshot path in `/api/status`
+ *   cache        the `k7-media` row by the Snapshot path in `/api/status`, for the names; the
+ *                page no longer prints its cover
  *   name         `playing.title`, then the cache, then the device's row, then the file name
  *   artist/album the cache first, the device's row when the cache has no names
  */
@@ -113,25 +113,31 @@ export function PlayerArea() {
       ) : null}
 
       {!path ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Nothing is playing</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {status
-                ? 'The broadcast has no track on air — the library may be empty, or the card may have just left.'
-                : 'The broadcast’s state is only known once the device answers.'}
-            </p>
-          </CardHeader>
-        </Card>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
+          <figure className="m-0 w-full min-w-0 max-w-full shrink-0 overflow-hidden rounded-panel border border-border lg:w-[min(58%,42rem)]">
+            <CassetteScreen playing={false} elapsedMs={0} durationMs={0} trackKey="" />
+          </figure>
+          <Card className="min-w-0 lg:flex-1">
+            <CardHeader>
+              <CardTitle>Nothing is playing</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {status
+                  ? 'The broadcast has no track on air — the library may be empty, or the card may have just left.'
+                  : 'The broadcast’s state is only known once the device answers.'}
+              </p>
+            </CardHeader>
+          </Card>
+        </div>
       ) : (
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
-          <CassetteCase
-            cover={cached?.cover ?? null}
-            initial={title}
-            hue={hueOf(title)}
-            art={{ title, artist, meta: album || undefined }}
-            size="shelf"
-          />
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
+          <figure className="m-0 w-full min-w-0 max-w-full shrink-0 overflow-hidden rounded-panel border border-border lg:w-[min(58%,42rem)]">
+            <CassetteScreen
+              playing
+              elapsedMs={elapsed}
+              durationMs={duration}
+              trackKey={path}
+            />
+          </figure>
 
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <h1 className="text-2xl font-light tracking-tight break-words">{title}</h1>
@@ -167,8 +173,8 @@ export function PlayerArea() {
             <div className="flex flex-col gap-1 pt-2">
               <Progress value={percent} aria-label="Playback position" />
               <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
-                <span>{formatDuration(elapsed)}</span>
-                <span>{duration > 0 ? formatDuration(duration) : '—'}</span>
+                <span>{formatDuration(elapsed / 1000)}</span>
+                <span>{duration > 0 ? formatDuration(duration / 1000) : '—'}</span>
               </div>
             </div>
 
