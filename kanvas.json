@@ -2487,6 +2487,15 @@
       "at": "2026-11-16T00:38:46Z",
       "by": "deepseek",
       "desc": "The panel above the tree opened with the App's reading of the sentence — 'Found 50 of 137 tracks — key 8A, sorted by BPM' — while the count was already the column's heading, the filters were behind Filters and the rows were the tree. The sentence and answerText go; the panel keeps where the rows came from, Filters, the add/save offer, and the one note the rows cannot carry — that the exact search found nothing and the retry dropped the ranges. The count keeps role=status in the heading and an empty answer says 'Nothing matched' there, so an ask still speaks.\n\n  Finished when a panel above the tree names its source and its offer and says nothing else, and a screen reader still hears how many rows arrived.\n\n  To check: ask for something, and see the tree narrow with no sentence above it; ask for something impossible and see 'Nothing matched' in the heading.\n\n  The code is already in the tree (c4016ed) because the work was asked for directly; approving this records it."
+    },
+    {
+      "id": "APP-61",
+      "title": "The sources column is two views, and nothing repeats the tree's counts",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-16T00:46:13Z",
+      "by": "deepseek",
+      "desc": "The column's heading, its count line and the answer panel's source line were the tree's own header said again. Two round icon buttons at the column's top replace them: Files, the card's folders, and Results, what the last search or answer found — dead until there is something in it. The answer's panel keeps only the offer, what happened after it, and the dropped-ranges note; sourceText goes. A hidden live region keeps an ask audible: how many rows arrived, or that nothing matched.\n\n  Finished when the column is two icon views, Results is dead until a search or an answer fills it, the answer's panel carries no statistics, and a screen reader still hears the count.\n\n  To check: open a list and see two round icons and the tree's own counts; search, and see Results light up; switch back to Files and find the whole card there.\n\n  The code is already in the tree; approving records it."
     }
   ]
 }
