@@ -2496,6 +2496,15 @@
       "at": "2026-11-16T00:46:13Z",
       "by": "deepseek",
       "desc": "The column's heading, its count line and the answer panel's source line were the tree's own header said again. Two round icon buttons at the column's top replace them: Files, the card's folders, and Results, what the last search or answer found — dead until there is something in it. The answer's panel keeps only the offer, what happened after it, and the dropped-ranges note; sourceText goes. A hidden live region keeps an ask audible: how many rows arrived, or that nothing matched.\n\n  Finished when the column is two icon views, Results is dead until a search or an answer fills it, the answer's panel carries no statistics, and a screen reader still hears the count.\n\n  To check: open a list and see two round icons and the tree's own counts; search, and see Results light up; switch back to Files and find the whole card there.\n\n  The code is already in the tree; approving records it."
+    },
+    {
+      "id": "APP-62",
+      "title": "An answer from the player's card can go into its list",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-16T00:49:08Z",
+      "by": "deepseek",
+      "desc": "With the Device card selected, Ask answered from the player and the panel said the rows came from another card and could not be added, because the column compared the answer's scope with the browser's card while the list's edits are filed under the player's mark. Add and save were refused silently for the same reason. The column reads the list's scope now; a real card switch still says the selected card changed.\n\n  Finished when an answer from the player can be added to a list edited on the Device card, and a switch of cards still refuses the old answer with its own sentence.\n\n  To check: select the Device card, ask for tracks, press Add, and see them in the list; then switch to a virtual card and see the old answer say the card changed.\n\n  The code is in the tree already; approving records it."
     }
   ]
 }
