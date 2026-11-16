@@ -499,6 +499,12 @@ panel whose action is the filled variant (the `AlertDialog` treatment, K14). **[
 coloured or emoji icon. The rail glyphs of the device are not this App's icons; the sidebar's
 icons are the ones the areas already use.
 
+One icon is drawn in this repository instead: the rail's **Albums** glyph, a frame over three
+thumbnails ([`gallery-glyph.tsx`](../../web/src/ui/gallery-glyph.tsx)), because the glyph the owner
+chose has no Lucide twin. It keeps the rest of the rule — `currentColor`, line art, the 24-unit
+grid — but draws its 1-unit walls by fill, because a 1.25 stroke at the rail's 16px closes the
+three thumbnails into one bar. It is the only such glyph.
+
 **K24. No charts, and the rule if one arrives.** The App has no charting dependency. A chart
 added later follows the guide: `var(--chart-1)` strokes at 1px, no fills, no gradients, no dots
 unless a point is selected, grid at 42% with `1 4` dash, series separated by dim vs solid or

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  Disc3,
   ListMusic,
   Play,
   Settings as SettingsIcon,
@@ -26,6 +25,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { CardSwitcher } from './CardSwitcher';
+import { GalleryGlyph } from './gallery-glyph';
 import { InstallButton } from './InstallButton';
 import { useDrafts, findDraft } from '../playlists/drafts';
 import {
@@ -71,7 +71,7 @@ function iconFor(item: NavItem): React.ReactNode {
     case 'prepare':
       return <ListMusic aria-hidden="true" />;
     case 'media':
-      return <Disc3 aria-hidden="true" />;
+      return <GalleryGlyph />;
     case 'playlists':
       return <ListMusic aria-hidden="true" />;
     case 'player':
