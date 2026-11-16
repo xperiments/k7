@@ -4,7 +4,6 @@ import {
   filterWords,
   nameFor,
   READ_ONLY_SOURCE,
-  addQuestion,
   addedNote,
   SAVED_NOTE,
 } from './chat';
@@ -54,12 +53,8 @@ describe('filterWords', () => {
 });
 
 
-describe('the save question', () => {
-  it('asks about tracks, or about one', () => {
-    expect(addQuestion(18, 'Late night 8A')).toBe(
-      'Add these 18 tracks to “Late night 8A”?',
-    );
-    expect(addQuestion(1, 'Late night 8A')).toBe('Add this track to “Late night 8A”?');
+describe('the added note', () => {
+  it('says what arrived, and how much of it', () => {
     expect(addedNote(18, 'Late night 8A')).toBe('Added 18 tracks to “Late night 8A”.');
     expect(addedNote(1, 'Late night 8A')).toBe('Added 1 track to “Late night 8A”.');
   });

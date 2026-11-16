@@ -130,11 +130,6 @@ export function filterWords(intent: SearchArgs): string[] {
 export const RELAXED_NOTE = 'Those ranges found nothing, so I dropped them.';
 
 /** The assistant's question, or the reason it cannot ask one. */
-export function addQuestion(count: number, list: string): string {
-  const what = count === 1 ? 'this track' : `these ${count} tracks`;
-  return `Add ${what} to “${list}”?`;
-}
-
 /** What the answer says once its rows are in the list it was asked beside. */
 export function addedNote(count: number, list: string): string {
   const what = count === 1 ? '1 track' : `${count} tracks`;

@@ -40,7 +40,6 @@ import { newId } from '../../lib/id';
 import { purposeFilters, requestIntent, relaxRanges, spreadAnswer } from '../../playlists/ask';
 import {
   addedNote,
-  addQuestion,
   CARD_CHANGED,
   filterWords,
   nameFor,
@@ -239,37 +238,27 @@ function AnswerBlock({
         ) : !sameCard ? (
           <p className="text-xs text-muted-foreground">{CARD_CHANGED}</p>
         ) : (
-          <>
-            <p className="text-xs text-muted-foreground">
-              {addQuestion(count, listName)}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="solid"
-                size="sm"
-                onClick={() => onAdd(message)}
-              >
-                Add {plural(count, 'track')}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onSave(message)}
-              >
-                Save as a new list
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => onDismiss(message)}
-              >
-                Not now
-              </Button>
-            </div>
-          </>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="solid" size="sm" onClick={() => onAdd(message)}>
+              Add {plural(count, 'track')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onSave(message)}
+            >
+              Save as a new list
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onDismiss(message)}
+            >
+              Not now
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>
