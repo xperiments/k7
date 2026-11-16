@@ -8,6 +8,8 @@ import { trackAt, type McpTrack } from '../../device/mcp';
 import { useDeviceStatus } from '../../device/useDeviceStatus';
 import { currentCardScope } from '../../card/session';
 import { getMedia, type CachedMedia } from '../../storage/media';
+import { hueOf } from '../album-art';
+import { CassetteCase } from '../cassette';
 import { CassetteScreen } from '../cassette-screen';
 import { formatDuration } from '../format';
 
@@ -21,8 +23,8 @@ import { formatDuration } from '../format';
  *
  * The joins are the interesting part, and each one degrades to a dash rather than an error:
  *
- *   cache        the `k7-media` row by the Snapshot path in `/api/status`, for the names; the
- *                page no longer prints its cover
+ *   cover        the `k7-media` cache by the Snapshot path in `/api/status`, printed on the case
+ *   case         the same CassetteCase the shelf draws, at the shelf's width, beside the screen
  *   name         `playing.title`, then the cache, then the device's row, then the file name
  *   artist/album the cache first, the device's row when the cache has no names
  */
@@ -130,57 +132,68 @@ export function PlayerArea() {
         </div>
       ) : (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
-          <figure className="m-0 w-full min-w-0 max-w-full shrink-0 overflow-hidden rounded-panel border border-border lg:w-[min(58%,42rem)]">
-            <CassetteScreen
-              playing
-              elapsedMs={elapsed}
-              durationMs={duration}
-              trackKey={path}
-            />
-          </figure>
+          <CassetteCase
+            cover={cached?.cover ?? null}
+            initial={title}
+            hue={hueOf(title)}
+            art={{ title, artist, meta: album || undefined }}
+            size="shelf"
+            className="self-center lg:self-start"
+          />
 
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <h1 className="text-2xl font-light tracking-tight break-words">{title}</h1>
-            {subtitle ? (
-              <p className="text-sm text-muted-foreground break-words">{subtitle}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                The tags carried no artist or album, and the Snapshot has no row for this track.
+          <div className="flex min-w-0 flex-1 flex-col gap-4 sm:gap-6 lg:max-w-[42rem]">
+            <figure className="m-0 w-full overflow-hidden rounded-panel border border-border">
+              <CassetteScreen
+                playing
+                elapsedMs={elapsed}
+                durationMs={duration}
+                trackKey={path}
+              />
+            </figure>
+
+            <div className="flex min-w-0 flex-col gap-2">
+              <h1 className="text-2xl font-light tracking-tight break-words">{title}</h1>
+              {subtitle ? (
+                <p className="text-sm text-muted-foreground break-words">{subtitle}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  The tags carried no artist or album, and the Snapshot has no row for this track.
+                </p>
+              )}
+
+              {analysis ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Badge variant="secondary">
+                    {analysis.bpm === null ? 'no BPM' : `${analysis.bpm.toFixed(1)} BPM`}
+                  </Badge>
+                  <Badge variant="secondary">
+                    {analysis.key ?? 'no key'}
+                  </Badge>
+                  {analysis.energy === null ? null : (
+                    <Badge variant="secondary">
+                      {analysis.energy}% energy
+                    </Badge>
+                  )}
+                  {analysis.mood.length > 0 ? (
+                    <Badge variant="secondary">
+                      {analysis.mood.join(', ')}
+                    </Badge>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="flex flex-col gap-1 pt-2">
+                <Progress value={percent} aria-label="Playback position" />
+                <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
+                  <span>{formatDuration(elapsed / 1000)}</span>
+                  <span>{duration > 0 ? formatDuration(duration / 1000) : '—'}</span>
+                </div>
+              </div>
+
+              <p className="truncate text-xs text-muted-foreground" title={path}>
+                {path}
               </p>
-            )}
-
-            {analysis ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Badge variant="secondary">
-                  {analysis.bpm === null ? 'no BPM' : `${analysis.bpm.toFixed(1)} BPM`}
-                </Badge>
-                <Badge variant="secondary">
-                  {analysis.key ?? 'no key'}
-                </Badge>
-                {analysis.energy === null ? null : (
-                  <Badge variant="secondary">
-                    {analysis.energy}% energy
-                  </Badge>
-                )}
-                {analysis.mood.length > 0 ? (
-                  <Badge variant="secondary">
-                    {analysis.mood.join(', ')}
-                  </Badge>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="flex flex-col gap-1 pt-2">
-              <Progress value={percent} aria-label="Playback position" />
-              <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
-                <span>{formatDuration(elapsed / 1000)}</span>
-                <span>{duration > 0 ? formatDuration(duration / 1000) : '—'}</span>
-              </div>
             </div>
-
-            <p className="truncate text-xs text-muted-foreground" title={path}>
-              {path}
-            </p>
           </div>
         </div>
       )}
