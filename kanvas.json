@@ -2513,6 +2513,11 @@
           "at": "2026-11-16T01:01:19Z",
           "by": "deepseek",
           "text": "The bar's clear is in the field: an × inside the pill, shown with the first character, which forgets the words and leaves the results alone. The New ask button under the field is gone with clear() — the offer's Not now and the Files view do the rest. While in that row: 'The model never sees a track.' had been lost in an earlier pass over it, and it is back, alone now."
+        },
+        {
+          "at": "2026-11-16T01:01:52Z",
+          "by": "deepseek",
+          "text": "Asked again, and final: the bar carries nothing under the field. 'The model never sees a track' is gone for good — it came back once when I restored that row, and the row is that phrase's only home. The available state now renders nothing below the field except the openers while there are no messages."
         }
       ]
     },
