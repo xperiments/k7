@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   FolderTree,
   ListMusic,
+  Plus,
   Rows3,
   Search,
   SlidersHorizontal,
@@ -35,7 +36,8 @@ import {
 } from '../../builtin-model';
 import { useDeviceView } from '../../card/session';
 import { McpError, type McpSearch, type SearchArgs } from '../../device/mcp';
-import { keepFolderTree, type Folder } from '../../media/folders';
+import type { Folder } from '../../media/folders';
+import { fileName } from '../../media/paths';
 import { resolveSource, type LibrarySource } from '../../library/source';
 import { newId } from '../../lib/id';
 import { purposeFilters, requestIntent, relaxRanges, spreadAnswer } from '../../playlists/ask';
@@ -56,6 +58,7 @@ import { plural } from '../format';
 import { FileTree } from '../file-tree';
 import { useListScope } from '../lists-scope';
 import { navigate, routeHref } from '../router';
+import { beginTrackDrag } from '../track-drag';
 import { AskFilters } from './AskFilters';
 
 /**
@@ -179,7 +182,68 @@ function Pending({ phase }: { phase: 'reading' | 'searching' }) {
   );
 }
 
-/** The answer's own words and its offer, over the rows it put in the tree. */
+/** One answer's rows: the list's own rows, smaller — a number, what the file is, its numbers, and
+ * a plus that is the same act as pressing the row. Pressing adds the track at the end; dragging
+ * carries it to a place in the list like any other row. */
+function AnswerRows({
+  tracks,
+  onAdd,
+}: {
+  tracks: McpSearch['tracks'];
+  onAdd: (path: string) => void;
+}) {
+  return (
+    <Card size="sm" className="shrink-0">
+      <CardContent className="p-0">
+        <ol aria-label="What Ask found" className="flex flex-col">
+          {tracks.map((track, index) => {
+            const title = track.analysis?.title || fileName(track.path);
+            const line = track.analysis?.artist
+              ? `${track.analysis.artist} · ${track.path}`
+              : track.path;
+            return (
+              <li
+                key={`${index}\u0000${track.path}`}
+                className="border-b last:border-b-0"
+              >
+                <button
+                  type="button"
+                  draggable
+                  onDragStart={(event) => beginTrackDrag(event, track.path)}
+                  onClick={() => onAdd(track.path)}
+                  aria-label={`Add ${title}`}
+                  className="flex w-full items-center gap-2 px-2 py-1.5 text-left outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  <span className="w-6 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+                    {index + 1}
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate text-sm" title={track.path}>
+                      {title}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">{line}</span>
+                  </span>
+                  <span className="hidden shrink-0 items-center gap-2 text-xs text-muted-foreground tabular-nums xl:flex">
+                    {track.analysis?.bpm != null ? (
+                      <span>{track.analysis.bpm.toFixed(1)} BPM</span>
+                    ) : null}
+                    {track.analysis?.key ? <span>{track.analysis.key}</span> : null}
+                  </span>
+                  <Plus
+                    aria-hidden="true"
+                    className="size-4 shrink-0 text-muted-foreground"
+                  />
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** The answer's own words and its offer, over the rows it found. */
 function AnswerBlock({
   message,
   scope,
@@ -353,32 +417,19 @@ export function SourcesColumn({
     setView('results');
   }, [answeredId]);
 
-  /* The card's own folders, pruned to the answer's rows. It keeps the tree's order and its
-   * folder rows, so dragging a folder out of an answer is the same act as dragging one out of
-   * the card (k7-look.md K21). */
-  const answerTree = useMemo(
-    () =>
-      answer && tree
-        ? keepFolderTree(
-            tree,
-            answer.search.tracks.map((track) => track.path),
-          )
-        : null,
-    [answer, tree],
-  );
-  /* The results view is the answer's rows when there are any, and the card's tree filtered by
-   * the search's words otherwise. */
+  /* The results view holds two things: an answer's rows in the answer's own order, and the
+   * card's tree filtered by a search's words. An answer is a list to choose from, so it is drawn
+   * as the list's own rows rather than as the card's folders (k7-look.md K21). */
   const showingResults = view === 'results' && results !== null;
-  const showingAnswer =
-    showingResults && results !== null && results.kind === 'answer' && answerTree !== null;
+  const showingAnswer = showingResults && results !== null && results.kind === 'answer';
+  const answerCount = answer?.search.tracks.length ?? 0;
   const searchQuery =
     showingResults && results !== null && results.kind === 'search' ? results.query : '';
   const hasSources = tree !== null && (tree.folders.length > 0 || tree.tracks.length > 0);
   /* What a screen reader hears when an answer lands: the sentence the panel no longer says. */
-  const announcing = showingResults && results !== null && results.kind === 'answer';
-  const announcement = announcing
-    ? answer && answer.search.tracks.length > 0
-      ? `${plural(answer.search.tracks.length, 'track')} found`
+  const announcement = showingAnswer
+    ? answerCount > 0
+      ? `${plural(answerCount, 'track')} found`
       : 'Nothing matched'
     : '';
 
@@ -585,30 +636,31 @@ export function SourcesColumn({
           <SourceLoading />
         ) : !hasSources ? (
           <NoSources reachable={reachable} />
-        ) : showingResults && results !== null && results.kind === 'answer' && answerTree === null ? (
-          <Empty className="border">
-            <EmptyHeader>
-              <EmptyTitle>Nothing matched</EmptyTitle>
-              <EmptyDescription>
-                Every filter has to match at once, and a range only sees analysed tracks.
-                The Filters button shows the arguments that ran.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+        ) : showingAnswer ? (
+          answerCount > 0 ? (
+            <AnswerRows
+              tracks={answer!.search.tracks}
+              onAdd={(path) => onAdd([path])}
+            />
+          ) : (
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyTitle>Nothing matched</EmptyTitle>
+                <EmptyDescription>
+                  Every filter has to match at once, and a range only sees analysed tracks.
+                  The Filters button shows the arguments that ran.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )
         ) : (
           <FileTree
-            key={
-              showingResults
-                ? `results\u0000${results !== null && results.kind === 'answer' ? results.id : searchQuery}`
-                : 'files'
-            }
-            tree={showingAnswer ? answerTree! : tree!}
+            key={showingResults ? `results\u0000${searchQuery}` : 'files'}
+            tree={tree!}
             query={searchQuery}
             path=""
             action="add"
             draggableSources
-            expandAll={showingAnswer}
-            showControls={!showingAnswer}
             onActivate={(track) => onAdd([track.path])}
           />
         )}

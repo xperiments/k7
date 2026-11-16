@@ -328,8 +328,9 @@ The Queue, measured, written to the card by the run itself.
   card does not have reads *not in this card's library*. The Device card's rows come from the
   player (`library_track`), which is what the editor used for every card before this. A row the
   source no longer has is shown as missing and skipped by the broadcast, never deleted here.
-- The assistant is that bar, and an answer fills the **Results** view: the card's own folders
-  pruned to the rows the search answered, with nothing above them but the offer to add them.
+- The assistant is that bar, and an answer fills the **Results** view: the rows it found, drawn as
+  the list's own rows a size smaller and in the answer's order, with only the offer to add them
+  under them. A search's results are the card's tree filtered by the field's words instead.
   Nothing on the card
   changes until the person acts: one action adds the answer's rows to the open list — appended at
   the end, in the answer's order — with **Save as a new list** as the secondary, which creates a

@@ -362,9 +362,12 @@ where this browser has it. Enter does what the browser can do: Ask where there i
 search where there is not. An empty field pressed with the magnifier is the way back to the whole
 card.
 
-A search's results are the card's tree filtered by the field's words; an answer's results are the
-same tree pruned to the rows the answer found, kept in their folders so a folder in an answer still
-drags into the list as one block. Nothing narrates either view: the tree's own header counts what
+The results view is not one shape for both. A search's results are the card's tree filtered by the
+field's words, because a search is a way through the card. An answer's results are the rows
+themselves, drawn as the list's own rows a size smaller — a number, the file, its BPM and key, a
+plus — in the answer's order, because an answer is a set to choose from: pressing a row adds that
+track at the end, and dragging one carries it to a place in the list the way any row does. Nothing
+narrates either view: the tree's own header counts what
 it holds — folders and tracks — and no heading, count line or source line repeats it. Over an
 answer's tree sits only the offer to add its rows to the list beside, or what happened instead, and
 the one thing the rows cannot say: that the ranges asked for found nothing and the retry dropped

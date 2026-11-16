@@ -61,32 +61,6 @@ export interface Folder {
   cover: CachedCover | null;
 }
 
-/**
- * The same tree pruned to the files in `keep`: what Ask answered, drawn in the card's own
- * folders rather than as a flat list (k7-look.md K21). Only the folders that lead to a kept
- * file survive, and each one keeps its own count, so a folder row in an answer still says how
- * many tracks below it the answer holds. `null` when nothing in the tree is kept.
- *
- * The order is the tree's, not the answer's: the answer's order is what the add appends, and
- * the picture is the card's shape.
- */
-export function keepFolderTree(root: Folder, keep: Iterable<string>): Folder | null {
-  const wanted = new Set<string>();
-  for (const path of keep) wanted.add(foldPath(path));
-
-  const prune = (folder: Folder): Folder | null => {
-    const folders = folder.folders
-      .map(prune)
-      .filter((child): child is Folder => child !== null);
-    const tracks = folder.tracks.filter((track) => wanted.has(foldPath(track.path)));
-    const tracksBelow = tracks.length + folders.reduce((sum, child) => sum + child.tracksBelow, 0);
-    if (tracksBelow === 0) return null;
-    return { ...folder, folders, tracks, tracksBelow };
-  };
-
-  return prune(root);
-}
-
 /** A folder and how the route reached it, for a breadcrumb that can link each level. */
 export interface FolderLocation {
   folder: Folder;
