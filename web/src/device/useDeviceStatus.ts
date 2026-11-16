@@ -15,14 +15,12 @@ const INITIAL: DeviceSnapshot = { status: null, reachable: false };
  * One poll, tolerant of every failure an absent device can produce.
  *
  * The request goes through the `Device` seam: local, the answer arrives from the device
- * over the network; with no link at all it asks for one first. The link is an observed fact,
- * so a probe that failed early — the first load's `k7.local` lookup is the cold one — is
- * tried again on the next beat instead of leaving the page with a `none` device until a
- * reload. A probe and the status request are two round trips only in the beat that links.
+ * over the network; with no link at all it rejects at once and the absence is `null`, which
+ * every view already has copy for. Retrying the link belongs to the poll below, not to this
+ * read: a caller resolving a library source must not wait on a probe.
  */
 export async function fetchStatus(): Promise<DeviceStatus | null> {
   try {
-    if (!(await tryLocalConnect())) return null;
     return await getDevice().request('status');
   } catch {
     return null;
@@ -49,6 +47,10 @@ async function pollOnce(): Promise<void> {
   if (inFlight) return;
   inFlight = true;
   try {
+    /* The link is an observed fact, so a probe that lost the first load's cold `k7.local`
+     * lookup is tried again here. Asking the status poll to recover is what keeps the page
+     * from waiting on a `none` device until someone reloads it. */
+    if (getDevice().link() === 'none') await tryLocalConnect();
     const status = await fetchStatus();
     publish(status ? { status, reachable: true } : { status: snapshot.status, reachable: false });
   } finally {
