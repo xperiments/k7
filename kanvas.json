@@ -2502,7 +2502,14 @@
       "group": "APP",
       "at": "2026-11-16T00:46:13Z",
       "by": "deepseek",
-      "desc": "The column's heading, its count line and the answer panel's source line were the tree's own header said again. Two round icon buttons at the column's top replace them: Files, the card's folders, and Results, what the last search or answer found — dead until there is something in it. The answer's panel keeps only the offer, what happened after it, and the dropped-ranges note; sourceText goes. A hidden live region keeps an ask audible: how many rows arrived, or that nothing matched.\n\n  Finished when the column is two icon views, Results is dead until a search or an answer fills it, the answer's panel carries no statistics, and a screen reader still hears the count.\n\n  To check: open a list and see two round icons and the tree's own counts; search, and see Results light up; switch back to Files and find the whole card there.\n\n  The code is already in the tree; approving records it."
+      "desc": "The column's heading, its count line and the answer panel's source line were the tree's own header said again. Two round icon buttons at the column's top replace them: Files, the card's folders, and Results, what the last search or answer found — dead until there is something in it. The answer's panel keeps only the offer, what happened after it, and the dropped-ranges note; sourceText goes. A hidden live region keeps an ask audible: how many rows arrived, or that nothing matched.\n\n  Finished when the column is two icon views, Results is dead until a search or an answer fills it, the answer's panel carries no statistics, and a screen reader still hears the count.\n\n  To check: open a list and see two round icons and the tree's own counts; search, and see Results light up; switch back to Files and find the whole card there.\n\n  The code is already in the tree; approving records it.",
+      "notes": [
+        {
+          "at": "2026-11-16T00:55:05Z",
+          "by": "deepseek",
+          "text": "The answer's offer left the scroll area: it is a bar of its own under the tree and over the field. Inside the scrolling column it was a flex child of a min-h-0 box, and the Card — which is overflow-hidden — was being squeezed to a sliver, so its buttons were cut in half and the tree header sat on top of them. shrink-0 outside the scroll region, and a long tree can no longer scroll the offer away either."
+        }
+      ]
     },
     {
       "id": "APP-62",
