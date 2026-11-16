@@ -2534,6 +2534,31 @@
       "at": "2026-11-16T00:49:08Z",
       "by": "deepseek",
       "desc": "With the Device card selected, Ask answered from the player and the panel said the rows came from another card and could not be added, because the column compared the answer's scope with the browser's card while the list's edits are filed under the player's mark. Add and save were refused silently for the same reason. The column reads the list's scope now; a real card switch still says the selected card changed.\n\n  Finished when an answer from the player can be added to a list edited on the Device card, and a switch of cards still refuses the old answer with its own sentence.\n\n  To check: select the Device card, ask for tracks, press Add, and see them in the list; then switch to a virtual card and see the old answer say the card changed.\n\n  The code is in the tree already; approving records it."
+    },
+    {
+      "id": "APP-63",
+      "title": "Show the device's cassette screen on the Player",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-16T01:17:29Z",
+      "by": "dsh",
+      "desc": "The Player page should show the panel's own cassette screen, not the shelf's case: an 800x480 SVG of the entry view with the two packs of concentric tape rings, the two hubs and their turning dividers, the strands to the rollers, the bottom run, the frames and the chips. The reels turn at the tape speed (v/r, counter-clockwise, 36 frames a revolution), the packs fill from the broadcast's elapsed/duration, a pause holds them, and a track change plays the device's 8s rewind. The page's title, badges and progress stay.\n\nFinished when: it is checked at desktop and phone widths; reduced motion draws one resting frame; the model's laws (fill split, square-root pack, phase, rewind) are covered by tests; typecheck, tests, build and check:look pass.",
+      "notes": [
+        {
+          "at": "2026-11-16T01:18:39Z",
+          "by": "dsh",
+          "text": "The human asked for this directly in the conversation; implementing it now while the proposal waits for approval. Plan: port the reel model from components/portable/cassette/cassette.c, draw the entry-view cassette from cassette_tapes.c/cassette_layout.h as SVG, drive it from the Player's status, and keep the page's title, badges and progress."
+        }
+      ]
+    },
+    {
+      "id": "APP-64",
+      "title": "An answer divides its count between the artists and alternates them",
+      "state": "proposed",
+      "group": "APP",
+      "at": "2026-11-16T01:20:21Z",
+      "by": "deepseek",
+      "desc": "An ask that names no artist keeps one track per artist while artists remain, then filled the rest at even steps through everything left: with two artists in the window that is three of one and seven of the other, left in library order, so the seven played as a run. The count is divided between the artists now as evenly as it divides — five and five, or two, one, one with the odd row on a spread artist — each share taken from across its own tracks, and the answer is ordered artist by artist in turn, so no two neighbours share an artist while another has rows left.\n\n  Finished when an ask for ten tracks from a window of two artists answers five and five, alternating, and a window of one artist still spreads across that artist's albums.\n\n  To check: ask for 10 rock tracks on a card whose rock is two artists, and count the rows and their neighbours.\n\n  The code is in the tree already; approving records it."
     }
   ]
 }
