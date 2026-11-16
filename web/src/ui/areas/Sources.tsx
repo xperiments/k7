@@ -7,6 +7,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   TriangleAlert,
+  X,
 } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/reui/alert';
@@ -515,14 +516,6 @@ export function SourcesColumn({
     );
   }
 
-  function clear() {
-    if (busy.current) return;
-    setMessages([]);
-    setResults(null);
-    setView('files');
-    setFilters({ open: false, initial: {} });
-  }
-
   /** The magnifier: the same words, read as a search of the card rather than as an ask. An
    * empty field is the way back — there are no results to show. */
   function searchFiles(text: string) {
@@ -678,15 +671,34 @@ export function SourcesColumn({
           <label htmlFor="source-bar" className="sr-only">
             Search the sources, or ask
           </label>
-          <Input
-            id="source-bar"
-            value={sentence}
-            onChange={(event) => setSentence(event.target.value)}
-            placeholder="Search or ask — a mood, a tempo, a name…"
-            maxLength={280}
-            autoComplete="off"
-            disabled={pending}
-          />
+          <div className="relative flex min-w-0 flex-1 items-center">
+            <Input
+              id="source-bar"
+              value={sentence}
+              onChange={(event) => setSentence(event.target.value)}
+              placeholder="Search or ask — a mood, a tempo, a name…"
+              maxLength={280}
+              autoComplete="off"
+              disabled={pending}
+              className="pr-9"
+            />
+            {/* Clear the words, in the field they are in. It is not a new ask: the results stay
+                until the next search or ask replaces them. */}
+            {sentence.length > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Clear the field"
+                title="Clear"
+                className="absolute right-1"
+                disabled={pending}
+                onClick={() => setSentence('')}
+              >
+                <X aria-hidden="true" />
+              </Button>
+            ) : null}
+          </div>
           <Button
             type="button"
             variant="outline"
@@ -745,21 +757,7 @@ export function SourcesColumn({
             Checking Chrome’s built-in model…
           </p>
         ) : assistant === 'available' ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-            {reply ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={clear}
-                disabled={pending}
-              >
-                New ask
-              </Button>
-            ) : (
-              <span />
-            )}
-          </div>
+          <p className="text-xs text-muted-foreground">The model never sees a track.</p>
         ) : (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-muted-foreground">{setupNote}</p>
