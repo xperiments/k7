@@ -370,7 +370,8 @@ the top of the rail toggles it above 768px; below 768px the rail is a drawer, op
 logo in the stage header and closed by the logo at its top; the destinations and Settings are **dome buttons** — a plaque with a circular dome holding the icon at its left and the label beside it,
 6px corners, full width of the rail and stacked flush with a shared 1px edge (the one shape
 exception to the pill rule); the install control is a dome button in the rail's footer. In the
-default state the button is outlined and transparent, with a neutral icon and label; the current
+default state the button is outlined in `border-foreground/25` — a step lighter than a `Button`'s
+`/45`, so the column reads as one plaque — with a neutral icon and label; the current
 one fills only its dome with the secondary and turns its icon dark, while the button, its border
 and the label stay neutral. Above 768px the rail rests collapsed to its icons: the top logo
 is the toggle, the labels and the counts go `sr-only`, the rail narrows to

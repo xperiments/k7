@@ -124,7 +124,7 @@ function RailItem({
         isActive={active}
         tooltip={collapsed ? { children: label, hidden: false } : undefined}
         className={cn(
-          'relative h-12 w-full gap-1.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground hover:bg-foreground/10 active:bg-foreground/10 data-active:z-[1] data-active:border-primary data-active:bg-transparent data-active:text-primary',
+          'relative h-12 w-full gap-1.5 rounded-[6px] border border-foreground/25 bg-transparent p-2 text-sm text-foreground hover:bg-foreground/10 active:bg-foreground/10 data-active:z-[1] data-active:border-primary data-active:bg-transparent data-active:text-primary',
           collapsed && 'justify-center px-2',
         )}
       >
@@ -330,7 +330,7 @@ export function Shell({ route, children }: { route: Route; children: React.React
                       href={routeHref({ name: 'settings' })}
                       aria-current={route.name === 'settings' ? 'page' : undefined}
                       className={cn(
-                        'relative flex h-12 w-full items-center gap-2.5 rounded-[6px] border border-foreground/45 bg-transparent p-2 text-sm text-foreground outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                        'relative flex h-12 w-full items-center gap-2.5 rounded-[6px] border border-foreground/25 bg-transparent p-2 text-sm text-foreground outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                         compact && 'justify-center px-2',
                         route.name === 'settings' && 'z-[1] border-primary text-primary',
                       )}

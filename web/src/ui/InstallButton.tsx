@@ -29,7 +29,7 @@ export function InstallButton({ compact = false }: { compact?: boolean }) {
           render={
             <Button
               className={cn(
-                'h-12 w-full justify-start gap-2.5 rounded-[6px] border border-foreground/45 p-2 font-light',
+                'h-12 w-full justify-start gap-2.5 rounded-[6px] border border-foreground/25 p-2 font-light',
                 compact && 'justify-center px-2',
               )}
               onClick={() => void promptInstallNow()}
