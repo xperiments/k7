@@ -240,6 +240,42 @@ static mini_icecast_status_t status_playing(const char *path, mi_fmt_t fmt, uint
     return s;
 }
 
+static playlist_file_t list_make(uint64_t id, const char *name, uint32_t rows)
+{
+    playlist_file_t p;
+    memset(&p, 0, sizeof p);
+    p.id = id;
+    snprintf(p.name, sizeof p.name, "%s", name);
+    p.rows = rows;
+    return p;
+}
+
+static menu_facts_t facts_with_playlists(const playlist_file_t *lists, int count,
+                                         uint64_t selected)
+{
+    menu_facts_t f = facts_plain();
+    f.playlists = lists;
+    f.playlist_count = count;
+    f.playlist_selected = selected;
+    return f;
+}
+
+/* The long Playlists fixture: 32 lists, so a window shift and a ratchet have room. The
+ * names are already in order; the model's own sort is exercised by test_playlists_rows. */
+#define LONG_LISTS 32
+static playlist_file_t g_long_lists[LONG_LISTS];
+static menu_facts_t g_long_facts;
+
+static void long_lists_setup(void)
+{
+    for (int i = 0; i < LONG_LISTS; i++) {
+        char name[32];
+        snprintf(name, sizeof name, "List %02d", i);
+        g_long_lists[i] = list_make((uint64_t)i + 1, name, 10);
+    }
+    g_long_facts = facts_with_playlists(g_long_lists, LONG_LISTS, 0);
+}
+
 static menu_t *menu_open_with(const library_t *lib, const menu_facts_t *facts)
 {
     menu_t *m = menu_new();
@@ -338,45 +374,46 @@ static void test_root_rows(void)
     menu_row_t r[MENU_ROWS];
     read_rows(m, r);
 
-    want_label(&r[0], "Tracks", "root row 0 label");
-    want_icon(&r[0], MENU_ICON_TRACKS, "root row 0 icon");
+    want_label(&r[0], "Browse", "root row 0 label");
+    want_icon(&r[0], MENU_ICON_BROWSE, "root row 0 icon");
     want_kind(&r[0], MENU_ROW_SUBMENU, "root row 0 kind");
-    CHECK(r[0].chevron, "Tracks wears a chevron");
-    CHECK(r[0].enabled, "Tracks is live with an ok library");
+    CHECK(r[0].chevron, "Browse wears a chevron");
+    CHECK(r[0].enabled, "Browse is live with an ok library");
     CHECK(r[0].value[0] == 0, "a submenu row has no value");
 
-    want_label(&r[1], "Browse", "root row 1 label");
-    want_icon(&r[1], MENU_ICON_BROWSE, "root row 1 icon");
+    want_label(&r[1], "Playlists", "root row 1 label");
+    want_icon(&r[1], MENU_ICON_PLAYLIST, "root row 1 icon");
     want_kind(&r[1], MENU_ROW_SUBMENU, "root row 1 kind");
-    CHECK(r[1].chevron, "Browse wears a chevron");
-    CHECK(r[1].enabled, "Browse is live with an ok library");
+    CHECK(r[1].chevron, "Playlists wears a chevron");
+    CHECK(r[1].enabled, "Playlists is live with an ok library");
+    CHECK(r[1].value[0] == 0, "a submenu row has no value");
 
-    want_label(&r[2], "Shuffle", "root row 2 label");
-    want_icon(&r[2], MENU_ICON_SHUFFLE, "root row 2 icon");
-    want_kind(&r[2], MENU_ROW_ACTION, "root row 2 kind");
-    CHECK(!r[2].chevron, "Shuffle has no chevron");
-    CHECK(r[2].enabled, "Shuffle is always live");
-    want_value(&r[2], "Off", "Shuffle reads the mode");
+    want_label(&r[2], "Settings", "root row 2 label");
+    want_icon(&r[2], MENU_ICON_SETTINGS, "root row 2 icon");
+    want_kind(&r[2], MENU_ROW_SUBMENU, "root row 2 kind");
+    CHECK(r[2].chevron, "Settings wears a chevron");
+    CHECK(r[2].enabled, "Settings is always live");
 
-    want_label(&r[3], "Settings", "root row 3 label");
-    want_icon(&r[3], MENU_ICON_SETTINGS, "root row 3 icon");
-    want_kind(&r[3], MENU_ROW_SUBMENU, "root row 3 kind");
-    CHECK(r[3].chevron, "Settings wears a chevron");
-    CHECK(r[3].enabled, "Settings is always live");
+    want_label(&r[3], "Shuffle", "root row 3 label");
+    want_icon(&r[3], MENU_ICON_SHUFFLE, "root row 3 icon");
+    want_kind(&r[3], MENU_ROW_ACTION, "root row 3 kind");
+    CHECK(!r[3].chevron, "Shuffle has no chevron");
+    CHECK(r[3].enabled, "Shuffle is always live");
+    want_value(&r[3], "Off", "Shuffle reads the mode");
 
     CHECK(r[4].label[0] == 0, "the root's fifth slot is blank");
     CHECK(!r[4].enabled, "a blank row is not enabled");
     CHECK(!r[4].chevron, "a blank row has no chevron");
 
-    menu_step(m, 2);
-    CHECK_EQ(menu_band(m), 2, "the band is on Shuffle");
+    menu_step(m, 3);
+    CHECK_EQ(menu_band(m), 3, "the band is on Shuffle");
     CHECK_EQ(menu_activate(m), MENU_ACTION_SHUFFLE, "Shuffle returns its toggle action");
-    CHECK_EQ(menu_band(m), 2, "toggling shuffle does not move the band");
+    CHECK_EQ(menu_band(m), 3, "toggling shuffle does not move the band");
 
     facts.shuffle_on = true;
     menu_update(m, lib, &facts, NULL);
     read_rows(m, r);
-    want_value(&r[2], "On", "the shuffle value follows the facts");
+    want_value(&r[3], "On", "the shuffle value follows the facts");
 
     menu_close(m);
     CHECK(!menu_is_open(m), "menu_close closes the menu");
@@ -397,9 +434,9 @@ static void test_wifi_list(void)
     facts.hotspot_address = "192.168.4.1";
     menu_t *m = menu_open_with(lib, &facts);
 
-    menu_step(m, 3);                  /* Settings */
+    menu_step(m, 2);                  /* Settings */
     menu_activate(m);                 /* push Settings */
-    menu_step(m, 4);                  /* the Wi-Fi row */
+    menu_step(m, 2);                  /* the Wi-Fi row */
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Wi-Fi is not an action");
     want_str(menu_title(m), "Wi-Fi", "Wi-Fi title");
     CHECK_EQ(menu_count(m), 5, "the Wi-Fi list has five rows");
@@ -448,7 +485,7 @@ static void test_wifi_list(void)
     /* menu_back() answers only "did this close the Menu"; going up a level is false. */
     menu_back(m);
     want_str(menu_title(m), "Settings", "and lands in Settings");
-    CHECK_EQ(menu_band(m), 4, "on the Wi-Fi row");
+    CHECK_EQ(menu_band(m), 2, "on the Wi-Fi row");
 
     menu_free(m);
 }
@@ -460,11 +497,11 @@ static void test_settings_rows(void)
     menu_facts_t facts = facts_plain();
     menu_t *m = menu_open_with(lib, &facts);
 
-    menu_step(m, 3);
-    CHECK_EQ(menu_band(m), 3, "the band is on Settings");
+    menu_step(m, 2);
+    CHECK_EQ(menu_band(m), 2, "the band is on Settings");
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
     want_str(menu_title(m), "Settings", "Settings title");
-    CHECK_EQ(menu_count(m), 6, "Settings has six rows");
+    CHECK_EQ(menu_count(m), 4, "Settings has four rows");
     CHECK_EQ(menu_band(m), 0, "a pushed list starts at its first row");
     CHECK_EQ(menu_position(m), 1, "Settings position 1");
 
@@ -477,26 +514,23 @@ static void test_settings_rows(void)
     CHECK(!r[0].chevron, "Backlight has no chevron");
     want_value(&r[0], "Auto", "the default backlight is Auto");
 
-    want_label(&r[1], "Station", "Settings row 1 label");
-    want_icon(&r[1], MENU_ICON_STATION, "Settings row 1 icon");
-    want_kind(&r[1], MENU_ROW_SUBMENU, "Settings row 1 kind");
-    CHECK(r[1].chevron, "Station wears a chevron");
+    want_label(&r[1], "Rescan", "Settings row 1 label");
+    want_icon(&r[1], MENU_ICON_RESCAN, "Settings row 1 icon");
+    want_kind(&r[1], MENU_ROW_ACTION, "Settings row 1 kind");
+    CHECK(!r[1].chevron, "Rescan has no chevron");
+    CHECK(r[1].enabled, "Rescan is live when it is not running");
 
-    want_label(&r[2], "Library", "Settings row 2 label");
-    want_icon(&r[2], MENU_ICON_LIBRARY, "Settings row 2 icon");
+    want_label(&r[2], "Wi-Fi", "Settings row 2 label");
+    want_icon(&r[2], MENU_ICON_WIFI, "Settings row 2 icon");
     want_kind(&r[2], MENU_ROW_SUBMENU, "Settings row 2 kind");
-    CHECK(r[2].chevron, "Library wears a chevron");
+    CHECK(r[2].chevron, "Wi-Fi wears a chevron");
 
-    want_label(&r[3], "Rescan", "Settings row 3 label");
-    want_icon(&r[3], MENU_ICON_RESCAN, "Settings row 3 icon");
-    want_kind(&r[3], MENU_ROW_ACTION, "Settings row 3 kind");
-    CHECK(!r[3].chevron, "Rescan has no chevron");
-    CHECK(r[3].enabled, "Rescan is live when it is not running");
+    want_label(&r[3], "About", "Settings row 3 label");
+    want_icon(&r[3], MENU_ICON_ABOUT, "Settings row 3 icon");
+    want_kind(&r[3], MENU_ROW_SUBMENU, "Settings row 3 kind");
+    CHECK(r[3].chevron, "About wears a chevron");
 
-    want_label(&r[4], "Wi-Fi", "Settings row 4 label");
-    want_icon(&r[4], MENU_ICON_WIFI, "Settings row 4 icon");
-    want_kind(&r[4], MENU_ROW_SUBMENU, "Settings row 4 kind");
-    CHECK(r[4].chevron, "Wi-Fi wears a chevron");
+    CHECK(r[4].label[0] == 0, "the Settings list leaves its fifth slot blank");
 
     /* Backlight cycles Auto -> 100 -> 60 -> 30 -> Auto, in place. */
     CHECK_EQ(menu_activate(m), MENU_ACTION_BACKLIGHT, "Backlight returns its action");
@@ -526,120 +560,22 @@ static void test_settings_rows(void)
     menu_update(m, lib, &facts, NULL);
 
     /* Rescan: inert and relabelled while it runs. */
-    menu_step(m, 3);
-    CHECK_EQ(menu_band(m), 3, "the band is on Rescan");
+    menu_step(m, 1);
+    CHECK_EQ(menu_band(m), 1, "the band is on Rescan");
     CHECK_EQ(menu_activate(m), MENU_ACTION_RESCAN, "Rescan is returned when idle");
 
     facts.rescanning = true;
     menu_update(m, lib, &facts, NULL);
     read_rows(m, r);
-    CHECK(!r[3].enabled, "Rescan is inert while running");
-    want_label(&r[3], "Rescanning...", "Rescan's label while running");
+    CHECK(!r[1].enabled, "Rescan is inert while running");
+    want_label(&r[1], "Rescanning...", "Rescan's label while running");
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "a running rescan return no action");
 
     facts.rescanning = false;
     menu_update(m, lib, &facts, NULL);
     read_rows(m, r);
-    CHECK(r[3].enabled, "Rescan is live again");
-    want_label(&r[3], "Rescan", "Rescan's label when idle");
-
-    menu_free(m);
-    library_close(lib);
-    remove_tree(root);
-    free(root);
-}
-
-static void test_station_rows(void)
-{
-    char *root = make_tree();
-    library_t *lib = lib_from(root);
-    menu_facts_t facts = facts_plain();
-    menu_t *m = menu_open_with(lib, &facts);
-
-    menu_step(m, 3);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
-    menu_step(m, 1);
-    CHECK_EQ(menu_band(m), 1, "the band is on Station");
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Station is not an action");
-    want_str(menu_title(m), "Station", "Station title");
-    CHECK_EQ(menu_count(m), 3, "Station has three rows");
-
-    mini_icecast_status_t st = status_playing("", MI_FMT_MP3, 44100, 192);
-    menu_update(m, lib, &facts, &st);
-
-    menu_row_t r[MENU_ROWS];
-    read_rows(m, r);
-    want_label(&r[0], "Format", "Station row 0 label");
-    want_value(&r[0], "MP3", "Station format MP3");
-    want_kind(&r[0], MENU_ROW_VALUE, "Station rows are read-only values");
-    CHECK(!r[0].chevron, "a value row has no chevron");
-    CHECK(r[0].enabled, "a value row is live");
-    want_icon(&r[0], MENU_ICON_NONE, "a value row has no icon");
-
-    want_label(&r[1], "Rate", "Station row 1 label");
-    want_value(&r[1], "44.1 kHz", "Station rate 44.1 kHz");
-    want_label(&r[2], "Bitrate", "Station row 2 label");
-    want_value(&r[2], "192 kbps", "Station bitrate 192 kbps");
-
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "activating Format does nothing");
-    menu_step(m, 2);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "activating Bitrate does nothing");
-
-    st = status_playing("", MI_FMT_FLAC, 48000, 320);
-    menu_update(m, lib, &facts, &st);
-    read_rows(m, r);
-    want_value(&r[0], "FLAC", "Station format FLAC");
-    want_value(&r[1], "48 kHz", "Station rate 48 kHz");
-    want_value(&r[2], "320 kbps", "Station bitrate 320 kbps");
-
-    /* Idle: the status carries no format, rate or bit rate, so each reads as an
-     * em dash, the model's "nothing" glyph. */
-    st = status_idle();
-    menu_update(m, lib, &facts, &st);
-    read_rows(m, r);
-    want_value(&r[0], EM_DASH, "an idle format is an em dash");
-    want_value(&r[1], EM_DASH, "an idle rate is an em dash");
-    want_value(&r[2], EM_DASH, "an idle bitrate is an em dash");
-
-    menu_free(m);
-    library_close(lib);
-    remove_tree(root);
-    free(root);
-}
-
-static void test_library_rows(void)
-{
-    char *root = make_tree();
-    library_t *lib = lib_from(root);
-    menu_facts_t facts = facts_plain();
-    menu_t *m = menu_open_with(lib, &facts);
-
-    menu_step(m, 3);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
-    menu_step(m, 2);
-    CHECK_EQ(menu_band(m), 2, "the band is on Library");
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Library is not an action");
-    want_str(menu_title(m), "Library", "Library title");
-    CHECK_EQ(menu_count(m), 5, "Library has five rows");
-
-    menu_row_t r[MENU_ROWS];
-    read_rows(m, r);
-    want_label(&r[0], "State", "Library row 0 label");
-    want_value(&r[0], "ok", "Library state is the library's name");
-    want_label(&r[1], "Tracks", "Library row 1 label");
-    want_value(&r[1], "6 tracks", "Library track count");
-    want_label(&r[2], "Directories", "Library row 2 label");
-    want_value(&r[2], "4 dirs", "Library directory count");
-    want_label(&r[3], "Size", "Library row 3 label");
-    want_value(&r[3], "210 B", "Library size");
-    want_label(&r[4], "Truncated", "Library row 4 label");
-    want_value(&r[4], "No", "Library truncation flag");
-    for (int i = 0; i < MENU_ROWS; i++) {
-        want_kind(&r[i], MENU_ROW_VALUE, "Library rows are read-only values");
-        CHECK(!r[i].chevron, "a Library row has no chevron");
-        CHECK(r[i].enabled, "a Library row is live");
-    }
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "activating Truncated does nothing");
+    CHECK(r[1].enabled, "Rescan is live again");
+    want_label(&r[1], "Rescan", "Rescan's label when idle");
 
     menu_free(m);
     library_close(lib);
@@ -647,25 +583,25 @@ static void test_library_rows(void)
     /* A truncated generation says so. */
     library_t *cut = lib_from_capped(root, 2);
     m = menu_open_with(cut, &facts);
-    menu_step(m, 3);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
     menu_step(m, 2);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Library is not an action");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
+    menu_step(m, 3);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening About is not an action");
+    menu_step(m, 10);
     read_rows(m, r);
     want_value(&r[1], "2 tracks", "a capped library reports two tracks");
     want_value(&r[4], "Yes", "a capped library reports truncation");
     menu_free(m);
     library_close(cut);
-    remove_tree(root);
-    free(root);
 
-    /* A no-card generation still has a Library list, with zeroes. */
+    /* A no-card generation still has the library facts, with zeroes. */
     library_t *nc = lib_no_card("/tmp/xtape-no-card");
     m = menu_open_with(nc, &facts);
-    menu_step(m, 3);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
     menu_step(m, 2);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Library is not an action");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
+    menu_step(m, 3);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening About is not an action");
+    menu_step(m, 10);
     read_rows(m, r);
     want_value(&r[0], "no_card", "a no-card library's state name");
     want_value(&r[1], "0 tracks", "a no-card library has no tracks");
@@ -674,6 +610,121 @@ static void test_library_rows(void)
     want_value(&r[4], "No", "a no-card library is not truncated");
     menu_free(m);
     library_close(nc);
+
+    remove_tree(root);
+    free(root);
+}
+
+static void test_playlists_rows(void)
+{
+    char *root = make_tree();
+    library_t *lib = lib_from(root);
+
+    /* The index arrives in id order; the model draws it in name order. */
+    playlist_file_t lists[4] = {
+        list_make(0x10, "Zed", 12),
+        list_make(0x20, "alpha", 1),
+        list_make(0x30, "Beta", 0),
+        list_make(0x40, "late night 8A", 3),
+    };
+    menu_facts_t facts = facts_with_playlists(lists, 4, 0x10);
+    menu_t *m = menu_open_with(lib, &facts);
+
+    menu_step(m, 1);
+    CHECK_EQ(menu_band(m), 1, "the band is on Playlists");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Playlists is not an action");
+    want_str(menu_title(m), "Playlists", "Playlists title");
+    CHECK_EQ(menu_count(m), 5, "Library order plus four lists");
+    CHECK_EQ(menu_band(m), 0, "the Playlists list starts at Library order");
+    CHECK_EQ(menu_position(m), 1, "Playlists position 1");
+
+    menu_row_t r[MENU_ROWS];
+    read_rows(m, r);
+
+    want_label(&r[0], "Library order", "row 0 is the library's own order");
+    want_icon(&r[0], MENU_ICON_LIBRARY, "Library order wears books");
+    want_kind(&r[0], MENU_ROW_PLAYLIST, "Library order chooses a walk");
+    CHECK(!r[0].chevron, "Library order has no chevron");
+    CHECK(r[0].enabled, "Library order is live");
+    CHECK(!r[0].playing, "the selected list is not the library's order");
+
+    want_label(&r[1], "Beta", "the lists are in name order");
+    want_value(&r[1], "0 tracks", "a zero-row list states its count");
+    CHECK(!r[1].enabled, "a zero-row list is dimmed");
+    want_label(&r[2], "Zed", "byte order puts the capitals first");
+    want_value(&r[2], "12 tracks", "the declared count is the right column");
+    CHECK(r[2].playing, "the walking list carries the dot");
+    CHECK(r[2].enabled, "a list with rows is live");
+    want_icon(&r[2], MENU_ICON_PLAYLIST, "a list wears radio-waves");
+    want_label(&r[3], "alpha", "lowercase names follow the capitals");
+    want_value(&r[3], "1 track", "one row is singular");
+    want_label(&r[4], "late night 8A", "the name is shown verbatim");
+
+    /* Library order walks the tree order; a list walks its id. */
+    CHECK_EQ(menu_band(m), 0, "the band is on Library order");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_WALK, "Library order returns WALK");
+    CHECK_EQ(menu_action_playlist(m), 0, "Library order is id 0");
+
+    menu_step(m, 2);
+    CHECK_EQ(menu_band(m), 2, "the band is on Zed");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_WALK, "a list returns WALK");
+    CHECK_EQ(menu_action_playlist(m), 0x10, "the walk names the list's id");
+
+    /* A zero-row list is inert. */
+    menu_step(m, -1);
+    CHECK_EQ(menu_band(m), 1, "the band is on Beta");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "a zero-row list does nothing");
+
+    /* The dot moves with the selection, without the index changing. */
+    facts.playlist_selected = 0;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    CHECK(r[0].playing, "Library order carries the dot when no list walks");
+    CHECK(!r[2].playing, "the old list loses it");
+    menu_step(m, 1);
+    facts.playlist_selected = 0x40;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    CHECK(r[4].playing, "the newly selected list carries the dot");
+
+    menu_free(m);
+
+    /* No lists, too many lists, and a card pulled while the list is open. */
+    menu_facts_t empty = facts_with_playlists(NULL, 0, 0);
+    m = menu_open_with(lib, &empty);
+    menu_step(m, 1);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Playlists is not an action");
+    CHECK_EQ(menu_count(m), 2, "Library order and the no-lists note");
+    read_rows(m, r);
+    want_label(&r[0], "Library order", "Library order is still there");
+    want_label(&r[1], "No playlists", "the empty note");
+    want_kind(&r[1], MENU_ROW_NOTE, "the empty note is a note");
+    CHECK(!r[1].enabled, "the empty note is inert");
+    menu_free(m);
+
+    menu_facts_t over = facts_with_playlists(lists, -1, 0);
+    m = menu_open_with(lib, &over);
+    menu_step(m, 1);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Playlists is not an action");
+    CHECK_EQ(menu_count(m), 2, "Library order and the over-cap note");
+    read_rows(m, r);
+    want_label(&r[0], "Library order", "Library order is still there");
+    want_label(&r[1], "Too many lists", "the over-cap note");
+    menu_free(m);
+
+    menu_facts_t good = facts_with_playlists(lists, 4, 0);
+    m = menu_open_with(lib, &good);
+    menu_step(m, 1);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Playlists is not an action");
+    menu_update(m, NULL, &good, NULL);
+    CHECK_EQ(menu_count(m), 1, "a pulled card leaves one note");
+    read_rows(m, r);
+    want_label(&r[0], "No card", "the card-pulled note");
+    menu_free(m);
+
+    library_close(lib);
+    remove_tree(root);
+    free(root);
 }
 
 static void test_about_rows(void)
@@ -683,31 +734,75 @@ static void test_about_rows(void)
     menu_facts_t facts = facts_plain();
     menu_t *m = menu_open_with(lib, &facts);
 
-    menu_step(m, 3);
+    menu_step(m, 2);
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
-    menu_step(m, 5);
-    CHECK_EQ(menu_band(m), 4, "the band is on About (screen row 4 of 5, list row 5 of 6)");
+    menu_step(m, 3);
+    CHECK_EQ(menu_band(m), 3, "the band is on About");
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening About is not an action");
     want_str(menu_title(m), "About", "About title");
-    CHECK_EQ(menu_count(m), 3, "About has three rows");
+    CHECK_EQ(menu_count(m), 11, "About has eleven rows");
+
+    mini_icecast_status_t st = status_playing("", MI_FMT_MP3, 44100, 192);
+    menu_update(m, lib, &facts, &st);
 
     menu_row_t r[MENU_ROWS];
     read_rows(m, r);
     want_label(&r[0], "Firmware", "About row 0 label");
     want_value(&r[0], "1.2.3", "About firmware is the app's version");
+    want_icon(&r[0], MENU_ICON_FIRMWARE, "About firmware wears the chip");
     want_label(&r[1], "Board", "About row 1 label");
     want_value(&r[1], "xtape-esp32s3", "About board is the board's name");
+    want_icon(&r[1], MENU_ICON_BOARD, "About board wears the tablet");
     want_label(&r[2], "Partition", "About row 2 label");
     want_value(&r[2], "1.68 MB of 4 MB", "About partition figures");
-    want_icon(&r[0], MENU_ICON_FIRMWARE, "About firmware wears the chip");
-    want_icon(&r[1], MENU_ICON_BOARD, "About board wears the tablet");
     want_icon(&r[2], MENU_ICON_PARTITION, "About partition wears the disc");
-    for (int i = 0; i < 3; i++) {
+    want_label(&r[3], "Format", "About row 3 label");
+    want_value(&r[3], "MP3", "the broadcast's format");
+    want_icon(&r[3], MENU_ICON_STATION, "the broadcast's rows wear radio-waves");
+    want_label(&r[4], "Rate", "About row 4 label");
+    want_value(&r[4], "44.1 kHz", "the broadcast's rate");
+    for (int i = 0; i < MENU_ROWS; i++) {
         want_kind(&r[i], MENU_ROW_VALUE, "About rows are read-only values");
         CHECK(!r[i].chevron, "an About row has no chevron");
+        CHECK(r[i].enabled, "an About row is live");
     }
-    CHECK(r[3].label[0] == 0, "the About list leaves row 3 blank");
-    CHECK(r[4].label[0] == 0, "the About list leaves row 4 blank");
+
+    /* The bitrate and then the library block are below the fold. */
+    menu_step(m, 5);
+    read_rows(m, r);
+    want_label(&r[4], "Bitrate", "About row 5 label");
+    want_value(&r[4], "192 kbps", "the broadcast's bitrate");
+
+    menu_step(m, 5);
+    CHECK_EQ(menu_position(m), 11, "the band is on the last row");
+    CHECK_EQ(menu_band(m), 4, "the window scrolled, not the band past the page");
+    read_rows(m, r);
+    want_label(&r[0], "State", "the library block starts at State");
+    want_value(&r[0], "ok", "the library's state");
+    want_label(&r[1], "Tracks", "About row 7 label");
+    want_value(&r[1], "6 tracks", "the library's track count");
+    want_label(&r[2], "Directories", "About row 8 label");
+    want_value(&r[2], "4 dirs", "the library's directory count");
+    want_label(&r[3], "Size", "About row 9 label");
+    want_value(&r[3], "210 B", "the library's size");
+    want_label(&r[4], "Truncated", "About row 10 label");
+    want_value(&r[4], "No", "the library is not truncated");
+    for (int i = 0; i < MENU_ROWS; i++) {
+        want_icon(&r[i], MENU_ICON_LIBRARY, "the library's rows wear books");
+    }
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "activating a value row does nothing");
+
+    /* Idle: the status carries no format, rate or bit rate. */
+    st = status_idle();
+    menu_update(m, lib, &facts, &st);
+    menu_step(m, -10);
+    read_rows(m, r);
+    want_value(&r[3], EM_DASH, "an idle format is an em dash");
+    want_value(&r[4], EM_DASH, "an idle rate is an em dash");
+    menu_step(m, 5);
+    read_rows(m, r);
+    want_value(&r[4], EM_DASH, "an idle bitrate is an em dash");
+    menu_step(m, -5);
 
     /* NULL facts read as an em dash. */
     facts.version = NULL;
@@ -738,69 +833,6 @@ static void test_about_rows(void)
     free(root);
 }
 
-static void test_tracks_rows(void)
-{
-    char *root = make_tree();
-    library_t *lib = lib_from(root);
-    menu_facts_t facts = facts_plain();
-    menu_t *m = menu_open_with(lib, &facts);
-
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Tracks row pushes the broadcast order");
-    want_str(menu_title(m), "Tracks", "Tracks title");
-    CHECK_EQ(menu_count(m), 6, "the broadcast order has six rows");
-    CHECK_EQ(menu_band(m), 0, "the broadcast order starts at its first Track");
-    CHECK_EQ(menu_position(m), 1, "Tracks position 1");
-
-    menu_row_t r[MENU_ROWS];
-    read_rows(m, r);
-    want_label(&r[0], "Caf\xc3\xa9", "Track row 0 is the cleaned name");
-    want_label(&r[1], "01 - Blue Train", "Track row 1 label");
-    want_label(&r[2], "02 - Moment s Notice", "Track row 2 drops the apostrophe");
-    want_label(&r[3], "So What", "Track row 3 label");
-    want_label(&r[4], "loose song", "Track row 4 label");
-    for (int i = 0; i < MENU_ROWS; i++) {
-        want_kind(&r[i], MENU_ROW_TRACK, "a broadcast-order row is a Track row");
-        want_icon(&r[i], MENU_ICON_TRACK, "a Track row wears radio-waves");
-        CHECK(!r[i].chevron, "a Track row has no chevron");
-        CHECK(r[i].enabled, "a Track row is live");
-        CHECK(!r[i].playing, "nothing is playing yet");
-    }
-
-    /* The window scrolls: row 5 is the last Track. */
-    menu_step(m, 5);
-    read_rows(m, r);
-    want_label(&r[0], "01 - Blue Train", "the window has shifted by one");
-    want_label(&r[4], "Don t Stop", "the last Track is Don't Stop (Live)");
-
-    /* The playing marker follows the broadcast's path, not the visible slot. */
-    mini_icecast_status_t st =
-        status_playing("Jazz/Blue Train/02 - Moment's Notice.flac", MI_FMT_FLAC, 44100, 192);
-    menu_update(m, lib, &facts, &st);
-    menu_step(m, -5); /* back to the first screen */
-    read_rows(m, r);
-    CHECK(r[2].playing, "the playing Track's row carries the marker");
-    CHECK(!r[1].playing, "the Track before it does not");
-    CHECK(!r[3].playing, "the Track after it does not");
-
-    /* Activating a Track plays it by relative path. */
-    menu_step(m, 2);
-    CHECK_EQ(menu_band(m), 2, "the band is on the playing Track");
-    CHECK_EQ(menu_activate(m), MENU_ACTION_PLAY, "a Track returns PLAY");
-    want_str(menu_action_path(m), "Jazz/Blue Train/02 - Moment's Notice.flac",
-             "the action path is the Track's relative path");
-    CHECK_EQ(menu_activate(m), MENU_ACTION_PLAY, "activating the playing Track restarts it");
-
-    menu_step(m, -1);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_PLAY, "another Track returns PLAY");
-    want_str(menu_action_path(m), "Jazz/Blue Train/01 - Blue Train.mp3",
-             "the action path follows the band");
-
-    menu_free(m);
-    library_close(lib);
-    remove_tree(root);
-    free(root);
-}
-
 static void test_browse_rows(void)
 {
     char *root = make_tree();
@@ -808,8 +840,7 @@ static void test_browse_rows(void)
     menu_facts_t facts = facts_plain();
     menu_t *m = menu_open_with(lib, &facts);
 
-    menu_step(m, 1);
-    CHECK_EQ(menu_band(m), 1, "the band is on Browse");
+    CHECK_EQ(menu_band(m), 0, "the band is on Browse");
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Browse row pushes the directory");
     want_str(menu_title(m), "Browse", "Browse's root title");
     CHECK_EQ(menu_count(m), 4, "the root directory has four children");
@@ -878,7 +909,6 @@ static void test_back_paths(void)
 
     /* Down the Browse tree, then back out one list at a time. */
     menu_t *m = menu_open_with(lib, &facts);
-    menu_step(m, 1);
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Browse root");
     menu_step(m, 1);
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Jazz");
@@ -897,47 +927,45 @@ static void test_back_paths(void)
 
     CHECK(!menu_back(m), "Back from Browse's root stays in the Menu");
     want_str(menu_title(m), "Menu", "Back from Browse lands on the root list");
-    CHECK_EQ(menu_band(m), 1, "the band is on the Browse row");
-    CHECK_EQ(menu_position(m), 2, "Browse is the root's second row");
+    CHECK_EQ(menu_band(m), 0, "the band is on the Browse row");
+    CHECK_EQ(menu_position(m), 1, "Browse is the root's first row");
 
     CHECK(menu_back(m), "Back from the root closes the Menu");
     CHECK(!menu_is_open(m), "the Menu is closed");
     CHECK(!menu_back(m), "Back while closed does nothing");
     menu_free(m);
 
-    /* Settings and its read-only lists. */
+    /* Settings and its lists. */
     m = menu_open_with(lib, &facts);
-    menu_step(m, 3);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Settings");
-    menu_step(m, 1);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Station");
-    CHECK(!menu_back(m), "Back from Station stays in the Menu");
-    want_str(menu_title(m), "Settings", "Back returns to Settings");
-    CHECK_EQ(menu_band(m), 1, "the band is on the Station row");
-
-    menu_step(m, 1);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Library");
-    CHECK(!menu_back(m), "Back from Library stays in the Menu");
-    CHECK_EQ(menu_band(m), 2, "the band is on the Library row");
-
     menu_step(m, 2);
-    CHECK_EQ(menu_band(m), 4, "the band is on About");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Settings");
+    menu_step(m, 2);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Wi-Fi");
+    CHECK(!menu_back(m), "Back from Wi-Fi stays in the Menu");
+    want_str(menu_title(m), "Settings", "Back returns to Settings");
+    CHECK_EQ(menu_band(m), 2, "the band is on the Wi-Fi row");
+
+    menu_step(m, 1);
+    CHECK_EQ(menu_band(m), 3, "the band is on About");
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "About");
     CHECK(!menu_back(m), "Back from About stays in the Menu");
-    CHECK_EQ(menu_band(m), 4, "the band is on the About row");
+    CHECK_EQ(menu_band(m), 3, "the band is on the About row");
 
     CHECK(!menu_back(m), "Back from Settings stays in the Menu");
     want_str(menu_title(m), "Menu", "Back returns to the root");
-    CHECK_EQ(menu_band(m), 3, "the band is on the Settings row");
+    CHECK_EQ(menu_band(m), 2, "the band is on the Settings row");
     CHECK(menu_back(m), "Back from the root closes the Menu");
     menu_free(m);
 
-    /* Tracks returns to its root row. */
-    m = menu_open_with(lib, &facts);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Tracks");
-    CHECK(!menu_back(m), "Back from Tracks stays in the Menu");
+    /* Playlists returns to its root row. */
+    menu_facts_t with_lists = facts_with_playlists(g_long_lists, 4, 0);
+    m = menu_open_with(lib, &with_lists);
+    menu_step(m, 1);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Playlists");
+    CHECK_EQ(menu_count(m), 5, "Library order plus four lists");
+    CHECK(!menu_back(m), "Back from Playlists stays in the Menu");
     want_str(menu_title(m), "Menu", "Back returns to the root");
-    CHECK_EQ(menu_band(m), 0, "the band is on the Tracks row");
+    CHECK_EQ(menu_band(m), 1, "the band is on the Playlists row");
     menu_free(m);
 
     library_close(lib);
@@ -949,38 +977,40 @@ static void test_remembered_state(void)
 {
     char *root = make_tree();
     library_t *lib = lib_from(root);
-    menu_facts_t facts = facts_plain();
+    menu_facts_t facts = g_long_facts;
 
     menu_t *m = menu_open_with(lib, &facts);
     want_str(menu_title(m), "Menu", "the root on the first open");
     CHECK_EQ(menu_band(m), 0, "the root's band starts at 0 on the first open");
 
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Tracks");
+    menu_step(m, 1);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Playlists");
     menu_step(m, 5);
     CHECK_EQ(menu_band(m), 4, "the band is on the last visible slot");
-    CHECK_EQ(menu_position(m), 6, "the position is the sixth Track");
+    CHECK_EQ(menu_position(m), 6, "the position is the sixth row");
     menu_close(m);
     CHECK(!menu_is_open(m), "close keeps the model");
     menu_open(m, lib, &facts);
-    want_str(menu_title(m), "Tracks", "the list is remembered");
-    CHECK_EQ(menu_count(m), 6, "the list is rebuilt");
+    want_str(menu_title(m), "Playlists", "the list is remembered");
+    CHECK_EQ(menu_count(m), LONG_LISTS + 1, "the list is rebuilt");
     CHECK_EQ(menu_band(m), 4, "the screen row is remembered");
     CHECK_EQ(menu_position(m), 6, "the band is remembered");
     menu_row_t r[MENU_ROWS];
     read_rows(m, r);
-    want_label(&r[0], "01 - Blue Train", "the window is remembered too");
+    want_label(&r[0], "List 00", "the window is remembered too");
 
     /* The Settings band survives a close as well. */
     CHECK(!menu_back(m), "back to the root");
-    menu_step(m, 3);
+    menu_step(m, 1);
+    CHECK_EQ(menu_band(m), 2, "the band is on Settings");
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Settings");
-    menu_step(m, 2);
-    CHECK_EQ(menu_band(m), 2, "the band is on Library");
+    menu_step(m, 3);
+    CHECK_EQ(menu_band(m), 3, "the band is on About");
     menu_close(m);
     menu_open(m, lib, &facts);
     want_str(menu_title(m), "Settings", "the Settings list is remembered");
-    CHECK_EQ(menu_band(m), 2, "the Settings band is remembered");
-    CHECK_EQ(menu_position(m), 3, "the Settings position is remembered");
+    CHECK_EQ(menu_band(m), 3, "the Settings band is remembered");
+    CHECK_EQ(menu_position(m), 4, "the Settings position is remembered");
     menu_free(m);
 
     library_close(lib);
@@ -988,22 +1018,21 @@ static void test_remembered_state(void)
     free(root);
 }
 
-/* Open a good library, descend into Tracks or Browse, close, and reopen on a
- * library that cannot be read: the remembered list holds one inert note. */
-static void note_case(const library_t *bad, int root_row, const char *want)
+/* Open a good library, descend into Browse, close, and reopen on a library that
+ * cannot be read: the remembered list holds one inert note. */
+static void note_case(const library_t *bad, const char *want)
 {
     char *root = make_tree();
     library_t *good = lib_from(root);
     menu_facts_t facts = facts_plain();
     menu_t *m = menu_open_with(good, &facts);
 
-    menu_step(m, root_row);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the good library opens the list");
-    CHECK_EQ(menu_count(m), root_row == 0 ? 6 : 4, "the good list has rows");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the good library opens Browse");
+    CHECK_EQ(menu_count(m), 4, "the good Browse list has rows");
     menu_close(m);
 
     menu_open(m, bad, &facts);
-    want_str(menu_title(m), root_row == 0 ? "Tracks" : "Browse", "the list is remembered");
+    want_str(menu_title(m), "Browse", "the list is remembered");
     CHECK_EQ(menu_count(m), 1, "an unreadable list holds one note");
     CHECK_EQ(menu_position(m), 1, "the note's position is 1");
 
@@ -1026,16 +1055,13 @@ static void note_case(const library_t *bad, int root_row, const char *want)
 static void test_no_library(void)
 {
     library_t *nc = lib_no_card("/tmp/xtape-no-card");
-    note_case(nc, 0, "No card");
-    note_case(nc, 1, "No card");
-    note_case(NULL, 0, "No card");
-    note_case(NULL, 1, "No card");
+    note_case(nc, "No card");
+    note_case(NULL, "No card");
 
     char *empty_root = temp_root();
     library_t *empty = lib_from(empty_root);
     CHECK_EQ(library_state(empty), LIB_STATE_EMPTY, "the empty fixture is empty");
-    note_case(empty, 0, "Library empty");
-    note_case(empty, 1, "Library empty");
+    note_case(empty, "Library empty");
     library_close(empty);
     remove_tree(empty_root);
     free(empty_root);
@@ -1046,9 +1072,9 @@ static void test_no_library(void)
     menu_t *me = menu_open_with(empty2, &empty_facts);
     menu_row_t er[MENU_ROWS];
     read_rows(me, er);
-    CHECK(!er[0].enabled, "Tracks is dimmed for an empty library");
-    CHECK(!er[1].enabled, "Browse is dimmed for an empty library");
-    CHECK_EQ(menu_activate(me), MENU_ACTION_NONE, "Tracks is inert for an empty library");
+    CHECK(!er[0].enabled, "Browse is dimmed for an empty library");
+    CHECK(!er[1].enabled, "Playlists is dimmed for an empty library");
+    CHECK_EQ(menu_activate(me), MENU_ACTION_NONE, "Browse is inert for an empty library");
     want_str(menu_title(me), "Menu", "the model stays on the root");
     menu_free(me);
     library_close(empty2);
@@ -1059,48 +1085,50 @@ static void test_no_library(void)
                              .generation = library_next_generation()};
     library_t *nodir = lib_from_cfg(&bad_cfg);
     CHECK_EQ(library_state(nodir), LIB_STATE_NO_DIR, "the bad fixture has no directory");
-    note_case(nodir, 0, "Library error");
+    note_case(nodir, "Library error");
     library_close(nodir);
 
-    /* No card: the root still opens, Tracks and Browse are dimmed and inert, and
+    /* No card: the root still opens; Browse and Playlists are dimmed and inert, and
      * the lists that explain and fix it stay reachable. */
     menu_facts_t facts = facts_plain();
     menu_t *m = menu_open_with(nc, &facts);
     menu_row_t r[MENU_ROWS];
     read_rows(m, r);
-    CHECK(!r[0].enabled, "Tracks is dimmed with no card");
-    CHECK(!r[1].enabled, "Browse is dimmed with no card");
-    CHECK(r[2].enabled, "Shuffle still works with no card");
-    CHECK(r[3].enabled, "Settings still works with no card");
+    CHECK(!r[0].enabled, "Browse is dimmed with no card");
+    CHECK(!r[1].enabled, "Playlists is dimmed with no card");
+    CHECK(r[2].enabled, "Settings still works with no card");
+    CHECK(r[3].enabled, "Shuffle still works with no card");
 
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "a dimmed Tracks row is inert");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "a dimmed Browse row is inert");
     want_str(menu_title(m), "Menu", "the model stays on the root");
     CHECK_EQ(menu_band(m), 0, "the band does not move");
     menu_step(m, 1);
-    CHECK_EQ(menu_band(m), 1, "the band is on Browse");
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "a dimmed Browse row is inert");
-    CHECK_EQ(menu_band(m), 1, "the band does not move from Browse");
+    CHECK_EQ(menu_band(m), 1, "the band is on Playlists");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "a dimmed Playlists row is inert");
+    CHECK_EQ(menu_band(m), 1, "the band does not move from Playlists");
 
-    menu_step(m, 2);
+    menu_step(m, 1);
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Settings opens with no card");
-    menu_step(m, 2);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Library opens with no card");
+    menu_step(m, 3);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "About opens with no card");
+    menu_step(m, 10);
     read_rows(m, r);
-    want_value(&r[0], "no_card", "Library explains the missing card");
+    want_value(&r[0], "no_card", "About explains the missing card");
     menu_free(m);
 
     library_close(nc);
 }
 
-static void test_library_big_values(void)
+static void test_about_big_values(void)
 {
     menu_facts_t facts = facts_plain();
     menu_t *m = menu_open_with(g_many_lib, &facts);
 
-    menu_step(m, 3);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
     menu_step(m, 2);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Library is not an action");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
+    menu_step(m, 3);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening About is not an action");
+    menu_step(m, 10);
 
     menu_row_t r[MENU_ROWS];
     read_rows(m, r);
@@ -1115,18 +1143,20 @@ static void test_library_big_values(void)
 
 static void test_band_window(void)
 {
-    menu_facts_t facts = facts_plain();
+    menu_facts_t facts = g_long_facts;
     menu_t *m = menu_open_with(g_many_lib, &facts);
 
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Tracks row pushes the broadcast order");
-    CHECK_EQ(menu_count(m), (int)MANY_TRACKS, "the broadcast order is the whole library");
+    menu_step(m, 1);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Playlists row pushes the lists");
+    CHECK_EQ(menu_count(m), LONG_LISTS + 1, "Library order plus the fixture's lists");
     CHECK_EQ(menu_band(m), 0, "the band starts on the first visible row");
     CHECK_EQ(menu_position(m), 1, "the position is 1");
 
     menu_row_t r[MENU_ROWS];
     read_rows(m, r);
-    want_label(&r[0], "big", "the first Track is the 12.4 GiB file");
-    want_label(&r[4], "t0003", "the fifth visible Track");
+    want_label(&r[0], "Library order", "the first row is Library order");
+    want_label(&r[1], "List 00", "the first list");
+    want_label(&r[4], "List 03", "the fifth visible row");
 
     menu_step(m, 4);
     CHECK_EQ(menu_band(m), 4, "the band moves inside the page");
@@ -1136,29 +1166,29 @@ static void test_band_window(void)
     CHECK_EQ(menu_band(m), 4, "at the edge the band stays on the edge row");
     CHECK_EQ(menu_position(m), 6, "the window shifted instead");
     read_rows(m, r);
-    want_label(&r[0], "t0000", "the window starts one row later");
+    want_label(&r[0], "List 00", "the window starts one row later");
 
     menu_step(m, -1);
     CHECK_EQ(menu_band(m), 3, "up inside the page moves the band");
     CHECK_EQ(menu_position(m), 5, "the position follows the band");
     read_rows(m, r);
-    want_label(&r[0], "t0000", "the window does not shift until the top edge");
+    want_label(&r[0], "List 00", "the window does not shift until the top edge");
 
     menu_step(m, -4);
     CHECK_EQ(menu_band(m), 0, "the top edge is the first row");
     CHECK_EQ(menu_position(m), 1, "the first position");
     read_rows(m, r);
-    want_label(&r[0], "big", "the window is back at the top");
+    want_label(&r[0], "Library order", "the window is back at the top");
 
     menu_step(m, 5000);
     CHECK_EQ(menu_band(m), 4, "a long step lands on the page's last slot");
-    CHECK_EQ(menu_position(m), (int)MANY_TRACKS, "a long step lands on the last row");
+    CHECK_EQ(menu_position(m), LONG_LISTS + 1, "a long step lands on the last row");
     read_rows(m, r);
-    want_label(&r[0], "t1198", "the last window starts at the count minus five");
-    want_label(&r[4], "t1202", "the last visible Track");
+    want_label(&r[0], "List 27", "the last window starts six rows from the end");
+    want_label(&r[4], "List 31", "the last visible list");
 
     menu_step(m, 1);
-    CHECK_EQ(menu_position(m), (int)MANY_TRACKS, "a step past the end does nothing");
+    CHECK_EQ(menu_position(m), LONG_LISTS + 1, "a step past the end does nothing");
     CHECK_EQ(menu_band(m), 4, "the band stays on the last visible row");
 
     menu_step(m, -5000);
@@ -1172,7 +1202,7 @@ static void test_band_window(void)
     CHECK_EQ(menu_band(m), 3, "the band clamps at the root's last row");
     CHECK_EQ(menu_position(m), 4, "the root's last position");
     read_rows(m, r);
-    want_label(&r[3], "Settings", "the last root row is Settings");
+    want_label(&r[3], "Shuffle", "the last root row is Shuffle");
     CHECK(r[4].label[0] == 0, "a short list leaves its fifth slot blank");
     menu_step(m, 1);
     CHECK_EQ(menu_band(m), 3, "the short list's band cannot leave the list");
@@ -1184,9 +1214,10 @@ static void test_band_window(void)
  * 2400 px/s, and a 150 ms hold before the stage drops back. */
 static void test_ratchet(void)
 {
-    menu_facts_t facts = facts_plain();
+    menu_facts_t facts = g_long_facts;
     menu_t *m = menu_open_with(g_many_lib, &facts);
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Tracks row pushes the broadcast order");
+    menu_step(m, 1);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "the Playlists row pushes the lists");
 
     /* One row per 54 px at rest, and only whole rows. menu_position() is the
      * absolute 1-based row, so it is what a ratchet assertion wants. */
@@ -1237,7 +1268,6 @@ static void test_empty_browse(void)
     menu_facts_t facts = facts_plain();
     menu_t *m = menu_open_with(lib, &facts);
 
-    menu_step(m, 1);
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Browse root");
     CHECK_EQ(menu_count(m), 2, "the root has a Track and an empty directory");
 
@@ -1272,7 +1302,6 @@ static void test_update_generation(void)
     menu_t *m = menu_open_with(lib1, &facts);
 
     /* Deep in Browse. */
-    menu_step(m, 1);
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Browse root");
     menu_step(m, 1);
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Jazz");
@@ -1302,35 +1331,26 @@ static void test_update_generation(void)
     read_rows(m, r);
     want_label(&r[0], "a", "the rows come from the new generation");
 
-    /* The broadcast order rebuilds and its band clamps. */
+    /* The Playlists list is rebuilt from the facts and its band clamps. */
+    menu_update(m, lib3, &g_long_facts, NULL);
     CHECK(!menu_back(m), "Back to the root");
-    menu_step(m, -1);
-    CHECK_EQ(menu_band(m), 0, "the band is on Tracks");
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Tracks opens on the new tree");
-    CHECK_EQ(menu_count(m), 1, "the new tree has one Track");
-    menu_update(m, lib1, &facts, NULL);
-    CHECK_EQ(menu_count(m), 6, "the old tree's six Tracks come back");
-    menu_step(m, 5);
-    CHECK_EQ(menu_position(m), 6, "the band is on the last Track");
-    menu_update(m, lib3, &facts, NULL);
-    CHECK_EQ(menu_count(m), 1, "back to one Track");
-    CHECK_EQ(menu_band(m), 0, "the band clamps to the new count");
-    CHECK_EQ(menu_position(m), 1, "the position clamps");
-
-    /* The window is clamped on a big-to-small change too. */
-    menu_update(m, g_many_lib, &facts, NULL);
-    CHECK_EQ(menu_count(m), (int)MANY_TRACKS, "the many fixture's rows");
-    menu_step(m, 500);
-    CHECK_EQ(menu_position(m), 501, "deep in the many fixture");
-    menu_update(m, lib1, &facts, NULL);
-    CHECK_EQ(menu_count(m), 6, "the small tree again");
-    CHECK_EQ(menu_band(m), 4, "the band clamps to the last visible slot");
-    CHECK_EQ(menu_position(m), 6, "the position clamps to six");
+    menu_step(m, 1);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Playlists opens on the long index");
+    CHECK_EQ(menu_count(m), LONG_LISTS + 1, "Library order plus the fixture's lists");
+    menu_step(m, 20);
+    CHECK_EQ(menu_position(m), 21, "deep in the lists");
+    menu_facts_t small = facts_with_playlists(NULL, 0, 0);
+    menu_update(m, lib3, &small, NULL);
+    CHECK_EQ(menu_count(m), 2, "Library order and the no-lists note");
+    CHECK_EQ(menu_band(m), 1, "the band clamps to the last row");
+    CHECK_EQ(menu_position(m), 2, "the position clamps");
+    menu_row_t p[MENU_ROWS];
+    read_rows(m, p);
+    want_label(&p[1], "No playlists", "the new index's note");
 
     /* A remembered Browse path is re-resolved by string when the Menu reopens. */
     menu_free(m);
     m = menu_open_with(lib1, &facts);
-    menu_step(m, 1);
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Browse root");
     menu_step(m, 1);
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Jazz");
@@ -1353,7 +1373,7 @@ static void test_version(void)
 {
     char *root = make_tree();
     library_t *lib = lib_from(root);
-    menu_facts_t facts = facts_plain();
+    menu_facts_t facts = g_long_facts;
     menu_t *m = menu_open_with(lib, &facts);
 
     uint32_t v0 = menu_version(m);
@@ -1364,7 +1384,8 @@ static void test_version(void)
     menu_update(m, lib, &facts, &st);
     CHECK_EQ(menu_version(m), v0, "the root does not draw the broadcast's status");
 
-    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Tracks opens");
+    menu_step(m, 1);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Playlists opens");
     uint32_t v1 = menu_version(m);
     CHECK(v1 != v0, "pushing a list bumps the version");
 
@@ -1379,12 +1400,13 @@ static void test_version(void)
     uint32_t v2 = menu_version(m);
     CHECK(v2 != v1, "a band move bumps the version");
 
-    /* The playing marker is part of the rows. */
-    menu_update(m, lib, &facts, NULL);
-    CHECK(menu_version(m) != v2, "losing the playing marker bumps the version");
+    /* The dot is part of the rows. */
+    facts.playlist_selected = 1;
+    menu_update(m, lib, &facts, &st);
+    CHECK(menu_version(m) != v2, "the walking dot moving bumps the version");
     uint32_t v3 = menu_version(m);
 
-    menu_step(m, 10);
+    menu_step(m, 100);
     uint32_t v4 = menu_version(m);
     CHECK(v4 != v3, "a window shift bumps the version");
     menu_step(m, 1);
@@ -1404,21 +1426,21 @@ static void test_version(void)
 
 int main(void)
 {
+    long_lists_setup();
+
     test_clean_name();
     test_root_rows();
     test_settings_rows();
     test_wifi_list();
-    test_station_rows();
-    test_library_rows();
     test_about_rows();
-    test_tracks_rows();
+    test_playlists_rows();
     test_browse_rows();
     test_back_paths();
     test_remembered_state();
     test_no_library();
 
     many_setup();
-    test_library_big_values();
+    test_about_big_values();
     test_band_window();
     test_ratchet();
     test_empty_browse();

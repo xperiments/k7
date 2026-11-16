@@ -92,6 +92,11 @@ void app_services_card_state(bool present, const char *mount_error);
  * rescan reads it, so one flag answers "is there a library" for both. */
 bool app_services_card_present(void);
 
+/* The mounted card's root, or "" when there is none. The Menu's view reads
+ * `k7.playlists/` and walks a list through the portable modules, which take a root; only
+ * this component knows how the card is mounted (ADR 0096). */
+void app_services_card_root(char *out, size_t cap);
+
 /* The opened Snapshot, or NULL when this device has none (no partition, no image, or an
  * image that did not validate). Borrowed, not owned: an update replaces the image, so a
  * caller copies what it needs within the step that asked. The screen asks once per Track

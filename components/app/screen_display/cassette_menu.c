@@ -22,6 +22,7 @@
 #include "cassette_menu.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "esp_app_desc.h"
@@ -49,6 +50,8 @@
 #include "menu.h"
 #include "cassette_pad.h"
 #include "mini_icecast.h"
+#include "playlist_file.h"
+#include "playlist_select.h"
 
 LV_FONT_DECLARE(jura_20);
 LV_FONT_DECLARE(jura_28);
@@ -86,6 +89,12 @@ static uint32_t s_drawn;             /* the model version on screen */
 static mini_icecast_status_t s_status;
 static menu_row_t s_rows[MENU_ROWS];
 static menu_facts_t s_facts;
+
+/* The card's Playlist index while the Menu is open. The model reads it from the facts
+ * and never touches the card; this array belongs to the view and outlives the open Menu.
+ * `s_playlist_count` is -1 when the card holds more lists than the format allows. */
+static playlist_file_t *s_playlists;
+static int s_playlist_count;
 
 static char s_version[32];
 static char s_board[40];
@@ -126,7 +135,7 @@ typedef struct {
 static icon_glyph_t icon_of(menu_icon_t icon, bool shuffle_on)
 {
     switch (icon) {
-        case MENU_ICON_TRACKS:
+        case MENU_ICON_PLAYLIST:
         case MENU_ICON_STATION:
             return (icon_glyph_t){ CASSETTE_ICON_RADIO, CASSETTE_ICON_RADIO_CP };
         case MENU_ICON_TRACK:
@@ -177,6 +186,42 @@ static uint32_t now_ms(void)
     return (uint32_t)(esp_timer_get_time() / 1000);
 }
 
+/* Read the card's index for the model. Called when the Menu opens and when a new library
+ * generation lands, not on every 25 Hz poll: a list is the card's, and the read is a
+ * directory plus one header per file. A card past the format's cap is -1, which the model
+ * draws as "Too many lists". */
+static void read_playlists(void)
+{
+    if (s_playlists) {
+        free(s_playlists);
+        s_playlists = NULL;
+    }
+    s_playlist_count = 0;
+
+    char root[128];
+    app_services_card_root(root, sizeof root);
+    if (!root[0]) return;
+
+    playlist_file_t *lists = malloc(sizeof *lists * PLAYLIST_MAX_LISTS);
+    if (!lists) {
+        ESP_LOGW(TAG, "no memory for the Playlist index");
+        return;
+    }
+    int n = playlist_list(root, lists, (int)PLAYLIST_MAX_LISTS);
+    if (n < 0) {
+        free(lists);
+        return;
+    }
+    if (n > (int)PLAYLIST_MAX_LISTS) {
+        /* The directory is refused as a whole; the note says so. */
+        free(lists);
+        s_playlist_count = -1;
+        return;
+    }
+    s_playlists = lists;
+    s_playlist_count = n;
+}
+
 static menu_facts_t build_facts(void)
 {
     menu_facts_t f;
@@ -196,6 +241,9 @@ static menu_facts_t build_facts(void)
     f.network = setup.provisioned ? setup.network : NULL;
     f.setup_password = setup.password;
     f.hotspot_address = setup.session ? SETUP_NETWORK_IP : NULL;
+    f.playlists = s_playlists;
+    f.playlist_count = s_playlist_count;
+    f.playlist_selected = playlist_select_current();
     return f;
 }
 
@@ -227,8 +275,8 @@ static void draw_rows(void)
             lv_obj_set_hidden(s_icon[i], true);
         }
 
-        lv_obj_set_width(s_label[i], s_rows[i].kind == MENU_ROW_VALUE ? MENU_ROW_LABEL_W_VALUE
-                                                                     : MENU_ROW_LABEL_W);
+        lv_obj_set_width(s_label[i], s_rows[i].value[0] ? MENU_ROW_LABEL_W_VALUE
+                                                       : MENU_ROW_LABEL_W);
         /* LONG_DOT writes its dots into the label's own copy, so the model's buffer is
          * copied rather than handed to LVGL as static text (LVGL 9 does not allow the
          * dot mode on static text). Five small copies per redraw, not per frame. */
@@ -262,19 +310,23 @@ static void draw_rows(void)
 
 /* Re-read the facts, hand them and the status to the model, and redraw what changed. A
  * rescan may have published a new generation: take the new lease first, then drop the old
- * one, so the model's re-resolve walks the new tree. */
+ * one, so the model's re-resolve walks the new tree; the Playlist index is read again
+ * because a new card is a new set of lists. */
 static void refresh(void)
 {
     if (!s_open || !s_model) return;
 
     uint32_t current = library_current_generation();
+    bool new_lease = false;
     if (current != 0 && (!s_lib || library_generation(s_lib) != current)) {
         const library_t *fresh = library_acquire();
         if (fresh) {
             if (s_lib) library_release(s_lib);
             s_lib = fresh;
+            new_lease = true;
         }
     }
+    if (new_lease) read_playlists();
 
     s_facts = build_facts();
     menu_update(s_model, s_lib, &s_facts, &s_status);
@@ -304,6 +356,16 @@ static void activate(void)
             const char *path = menu_action_path(s_model);
             if (path && path[0] && !mini_icecast_play(path)) {
                 ESP_LOGW(TAG, "the broadcast refused %s", path);
+            }
+            break;
+        }
+        case MENU_ACTION_WALK: {
+            char root[128];
+            app_services_card_root(root, sizeof root);
+            playlist_select_result_t r =
+                playlist_select_set(root, s_lib, menu_action_playlist(s_model));
+            if (r != PLAYLIST_SELECT_OK) {
+                ESP_LOGW(TAG, "the card refused the walk (%d)", (int)r);
             }
             break;
         }
@@ -472,6 +534,7 @@ void cassette_menu_open(bool white)
     s_drawn = 0;
     mini_icecast_status(&s_status);
     s_lib = library_acquire();
+    read_playlists();
 
     s_facts = build_facts();
     menu_open(s_model, s_lib, &s_facts);
@@ -507,6 +570,11 @@ void cassette_menu_close(void)
         library_release(s_lib);
         s_lib = NULL;
     }
+    if (s_playlists) {
+        free(s_playlists);
+        s_playlists = NULL;
+    }
+    s_playlist_count = 0;
     cassette_pad_set_target(NULL);
     s_drawn = 0;
 }

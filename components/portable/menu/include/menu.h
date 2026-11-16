@@ -4,15 +4,15 @@
  * pad's ratchet. No LVGL, no card, no board: the view hands it a Library lease and the
  * broadcast's status and draws what it says.
  *
- * The Menu is a mode of the Controls (docs/specs/menu.md, ADR 0022). Its model owns:
- *   - which Menu list is on top: the root, Settings, Tracks, a Browse directory, or one of
- *     the read-only lists (Station, Library, About);
+ * The Menu is a mode of the Controls (docs/specs/menu.md, ADR 0022, ADR 0096). Its model owns:
+ *   - which Menu list is on top: the root, Browse, the card's Playlists, Settings, Wi-Fi or
+ *     About;
  *   - the band: the row a tap on the pad activates, absolute in the list;
  *   - the window: the five rows the page shows, derived from the band;
  *   - the pad's ratchet: one row per 54 px of travel, in 1x/2x/4x stages;
  *   - the row models: label, icon, value and state for the five visible rows;
- *   - the actions the view has to execute: play a Track, rescan, next backlight, toggle
- *     the shuffle mode, close.
+ *   - the actions the view has to execute: play a Track, walk a Playlist, rescan, next
+ *     backlight, toggle the shuffle mode, close.
  *
  * The view must hold a Library lease for as long as the Menu is open; the pointers the
  * model hands back (labels, the play path) are copied into the model's own buffers and do
@@ -27,6 +27,7 @@
 
 #include "library.h"
 #include "mini_icecast.h"
+#include "playlist_file.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,33 +37,35 @@ extern "C" {
 #define MENU_ROWS 5
 #define MENU_LABEL_MAX 96
 #define MENU_VALUE_MAX 32
+#define MENU_PLAYLISTS_MAX PLAYLIST_MAX_LISTS
 
 typedef enum {
     MENU_ICON_NONE = 0,
-    MENU_ICON_TRACKS,    /* the broadcast order destination */
     MENU_ICON_BROWSE,    /* the Library-tree destination */
+    MENU_ICON_PLAYLIST,  /* the Playlists destination and each of its Rows */
     MENU_ICON_DIRECTORY, /* a directory row inside Browse */
     MENU_ICON_TRACK,     /* a Track row */
     MENU_ICON_SHUFFLE,
     MENU_ICON_SETTINGS,
     MENU_ICON_BACKLIGHT,
-    MENU_ICON_STATION,
-    MENU_ICON_LIBRARY,
+    MENU_ICON_STATION,   /* About's broadcast facts */
+    MENU_ICON_LIBRARY,   /* Library order and About's library facts */
     MENU_ICON_RESCAN,
     MENU_ICON_ABOUT,
-    MENU_ICON_FIRMWARE,  /* About's three value rows */
+    MENU_ICON_FIRMWARE,  /* About's three player Rows */
     MENU_ICON_BOARD,
     MENU_ICON_PARTITION,
     MENU_ICON_WIFI,      /* Settings' Wi-Fi row and the setup network's own list */
 } menu_icon_t;
 
 typedef enum {
-    MENU_ROW_ACTION = 0, /* acts in place: Shuffle, Rescan, Backlight */
-    MENU_ROW_SUBMENU,    /* opens another Menu list */
-    MENU_ROW_TRACK,      /* plays; the path is the action's */
-    MENU_ROW_DIR,        /* opens Browse on that directory */
-    MENU_ROW_VALUE,      /* a read-only label/value row: activating does nothing */
-    MENU_ROW_NOTE,       /* the empty-state line: activating does nothing */
+    MENU_ROW_ACTION = 0,   /* acts in place: Shuffle, Rescan, Backlight */
+    MENU_ROW_SUBMENU,      /* opens another Menu list */
+    MENU_ROW_PLAYLIST,     /* chooses a Playlist; the id is the action's */
+    MENU_ROW_TRACK,        /* plays; the path is the action's */
+    MENU_ROW_DIR,          /* opens Browse on that directory */
+    MENU_ROW_VALUE,        /* a read-only label/value row: activating does nothing */
+    MENU_ROW_NOTE,         /* the empty-state line: activating does nothing */
 } menu_row_kind_t;
 
 /* One visible row. The label and value are the model's copies; the view may keep the
@@ -71,7 +74,7 @@ typedef struct {
     menu_row_kind_t kind;
     menu_icon_t     icon;
     bool            enabled;  /* false: dimmed and inert (no library, rescan running) */
-    bool            playing;  /* the Track the broadcast is on */
+    bool            playing;  /* the Track or the Playlist the broadcast is on */
     bool            chevron;  /* opens another list; the value is then empty */
     char            label[MENU_LABEL_MAX];
     char            value[MENU_VALUE_MAX];
@@ -80,6 +83,7 @@ typedef struct {
 typedef enum {
     MENU_ACTION_NONE = 0,
     MENU_ACTION_PLAY,      /* menu_action_path() is the Track's relative path */
+    MENU_ACTION_WALK,      /* menu_action_playlist() is the id, 0 for library order */
     MENU_ACTION_RESCAN,
     MENU_ACTION_BACKLIGHT, /* menu_action_backlight() is the new percent (0 = Auto) */
     MENU_ACTION_SHUFFLE,   /* toggle the mode (ADR 0023) */
@@ -106,6 +110,14 @@ typedef struct {
     const char *network;
     const char *setup_password;
     const char *hotspot_address;
+    /* The card's Playlists, read by the view (ADR 0096); the model sorts them by name and
+     * never touches the card. `playlist_count` is the number of entries, 0 for none, or -1
+     * when the card holds more than MENU_PLAYLISTS_MAX of them; `playlist_selected` is the id
+     * the broadcast walks, 0 for the library's own order. The array must outlive the open
+     * Menu. */
+    const playlist_file_t *playlists;
+    int                    playlist_count;
+    uint64_t               playlist_selected;
 } menu_facts_t;
 
 typedef struct menu menu_t;
@@ -134,8 +146,8 @@ uint32_t menu_version(const menu_t *m);
 /* Fill the five visible rows, top to bottom. False when the Menu is closed. */
 bool menu_rows(const menu_t *m, menu_row_t rows[MENU_ROWS]);
 
-/* The header's location: "Menu", "Settings", "Tracks", "Station", "Library", "About" or
- * "Browse" with the path from the root. Never NULL. */
+/* The header's location: "Menu", "Browse" with the path from the root, "Playlists",
+ * "Settings", "Wi-Fi" or "About". Never NULL. */
 const char *menu_title(const menu_t *m);
 
 /* The band's screen row (0..MENU_ROWS-1). */
@@ -155,6 +167,7 @@ void menu_step(menu_t *m, int rows);
  * row (no library, rescan running) returns MENU_ACTION_NONE. */
 menu_action_t menu_activate(menu_t *m);
 const char *menu_action_path(const menu_t *m);
+uint64_t    menu_action_playlist(const menu_t *m);
 int         menu_action_backlight(const menu_t *m);
 
 /* Go up one list. True when that closed the Menu (the band was on the root). The band is

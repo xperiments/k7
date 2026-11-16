@@ -763,23 +763,29 @@ superseded by ADR 0019 for the screens; the cover's new home is
 when the cassette became a Card.
 
 **The Menu is the cassette button's.** A tap on the mode bar's cassette, with the controls
-out, opens a mode of the controls on either page; a second tap on it closes the Menu again: the cassette area becomes the window's five-row page - Tracks,
-Browse, Shuffle and Settings, with Settings holding Backlight, Station, Library, Rescan and
-About - the block gives way to one Pad (a white plate with a dark inner and a dotted vertical guide, marking the touch area)
+out, opens a mode of the controls on either page; a second tap on it closes the Menu again:
+the cassette area becomes the window's five-row page - Browse, Playlists, Settings and
+Shuffle, with Settings holding Backlight, Rescan, Wi-Fi and About, and About carrying the
+player's, the broadcast's and the library's facts - the block gives way to one Pad (a white
+plate with a dark inner and a dotted vertical guide, marking the touch area)
 and the mode bar stays what it is. A vertical drag
 on the Pad ratchets the band one row per 54 px, and a faster drag 2x or 4x; a tap that never
 became a drag activates it, a leftward swipe on the Pad is the Menu's Back, and the up swipe
 closes the mode. The cassette container is
 hidden for the mode's lifetime, so the reel tick costs nothing and the Cover comes back
 untouched. The model is portable (`components/portable/menu`, host test `t18_menu`);
-`cassette_menu.c` draws it. Shuffle toggles the broadcast's shuffle mode (ADR 0023) and
+`cassette_menu.c` draws it. Playlists lists the card's lists - Library order first - and a
+tap walks one, the walking row dotted; the choice lands in the same `k7.select` record the
+App's select command writes (ADR 0096). Shuffle toggles the broadcast's shuffle mode (ADR 0023) and
 Backlight pins the panel with a hold until reboot. The page, tree and rules are
 [`docs/specs/menu.md`](docs/specs/menu.md), with ADRs
-[0022](docs/adr/0022-the-menu-is-a-controls-mode.md) and
-[0023](docs/adr/0023-shuffle-is-a-broadcast-mode.md). The icon set is drawn now - `books` for
-Browse and Library, `settings`, the two toggles for Shuffle, `brightness`, `k7logo` for About,
-`track`, the chip/tablet/disc of About's rows and the `angle-right` chevron - and the rows'
-right column is Jura 20 in capitals.
+[0022](docs/adr/0022-the-menu-is-a-controls-mode.md),
+[0023](docs/adr/0023-shuffle-is-a-broadcast-mode.md) and
+[0096](docs/adr/0096-the-menu-browses-the-library-and-walks-its-lists.md). The icon set is
+drawn now - `books` for Browse and Library order, `radio-waves` for Playlists and Wi-Fi,
+`settings`, the two toggles for Shuffle, `brightness`, `k7logo` for About, `track`, the
+chip/tablet/disc, `radio-waves` and `books` of About's rows, and the `angle-right` chevron -
+and the rows' right column is Jura 20 in capitals.
 
 **Backlight sleep.** GPIO 2 is now a 400 Hz, 8-bit LEDC duty instead of an on/off pin. The
 screen starts at full brightness, then fades to 60% after 2 minutes, 30% after 5

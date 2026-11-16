@@ -1,6 +1,7 @@
 /*
  * menu - the Menu's model: the tree, the navigation, the window, the band and the
- * pad's ratchet. Portable: no LVGL, no card, no board (docs/specs/menu.md, ADR 0022).
+ * pad's ratchet. Portable: no LVGL, no card, no board (docs/specs/menu.md, ADR 0022,
+ * ADR 0096).
  *
  * The model reads the Library through the pointer it is handed and never touches the
  * card. Everything the view can see is derived state: the five visible rows and the
@@ -34,11 +35,9 @@
 
 typedef enum {
     LIST_ROOT = 0,
+    LIST_PLAYLISTS,
     LIST_SETTINGS,
-    LIST_TRACKS,
     LIST_BROWSE,
-    LIST_STATION,
-    LIST_LIBRARY,
     LIST_ABOUT,
     LIST_WIFI,
 } menu_list_t;
@@ -50,16 +49,14 @@ typedef struct {
 } fixed_row_t;
 
 static const fixed_row_t k_root_rows[] = {
-    {"Tracks", MENU_ICON_TRACKS, MENU_ROW_SUBMENU},
     {"Browse", MENU_ICON_BROWSE, MENU_ROW_SUBMENU},
-    {"Shuffle", MENU_ICON_SHUFFLE, MENU_ROW_ACTION},
+    {"Playlists", MENU_ICON_PLAYLIST, MENU_ROW_SUBMENU},
     {"Settings", MENU_ICON_SETTINGS, MENU_ROW_SUBMENU},
+    {"Shuffle", MENU_ICON_SHUFFLE, MENU_ROW_ACTION},
 };
 
 static const fixed_row_t k_settings_rows[] = {
     {"Backlight", MENU_ICON_BACKLIGHT, MENU_ROW_ACTION},
-    {"Station", MENU_ICON_STATION, MENU_ROW_SUBMENU},
-    {"Library", MENU_ICON_LIBRARY, MENU_ROW_SUBMENU},
     {"Rescan", MENU_ICON_RESCAN, MENU_ROW_ACTION},
     {"Wi-Fi", MENU_ICON_WIFI, MENU_ROW_SUBMENU},
     {"About", MENU_ICON_ABOUT, MENU_ROW_SUBMENU},
@@ -85,6 +82,11 @@ struct menu {
     char     browse_path[LIB_PATH_MAX]; /* relative to the Library root; "" is the root */
     lib_node_t browse_node;
 
+    /* The card's Playlists in name order, as indices into the facts' array. The array
+     * belongs to the view; this is only the order the Menu draws. */
+    uint16_t playlist_order[MENU_PLAYLISTS_MAX];
+    int      playlist_n;
+
     const library_t *lib; /* the caller's lease; NULL when closed or cardless */
     uint32_t         lib_generation;
 
@@ -102,6 +104,7 @@ struct menu {
     uint32_t status_bitrate;
 
     char         action_path[LIB_PATH_MAX];
+    uint64_t     action_playlist;
     int          action_backlight;
 
     /* The ratchet. */
@@ -158,6 +161,39 @@ static void facts_copy(menu_t *m, const menu_facts_t *facts)
     copy_opt(m->version_buf, sizeof m->version_buf, facts->version, &m->facts.version);
     copy_opt(m->board_buf, sizeof m->board_buf, facts->board, &m->facts.board);
     copy_opt(m->partition_buf, sizeof m->partition_buf, facts->partition, &m->facts.partition);
+    m->facts.playlists = facts->playlists;
+    m->facts.playlist_count = facts->playlist_count;
+    m->facts.playlist_selected = facts->playlist_selected;
+}
+
+/* The index's name order, as indices into the caller's array. Byte order (the spec's
+ * A-Z), the id breaking a tie, so two lists with one name still have one order. A count
+ * past the cap is negative and draws the "Too many lists" note instead. */
+static void apply_playlists(menu_t *m)
+{
+    m->playlist_n = 0;
+    if (!m->facts.playlists || m->facts.playlist_count <= 0) return;
+
+    int n = m->facts.playlist_count;
+    if (n > (int)MENU_PLAYLISTS_MAX) n = (int)MENU_PLAYLISTS_MAX;
+    for (int i = 0; i < n; i++) m->playlist_order[i] = (uint16_t)i;
+
+    for (int i = 1; i < n; i++) {
+        uint16_t cur = m->playlist_order[i];
+        const char *cur_name = m->facts.playlists[cur].name;
+        uint64_t cur_id = m->facts.playlists[cur].id;
+        int j = i - 1;
+        while (j >= 0) {
+            const playlist_file_t *prev = &m->facts.playlists[m->playlist_order[j]];
+            int cmp = strcmp(prev->name, cur_name);
+            bool before = cmp < 0 || (cmp == 0 && prev->id < cur_id);
+            if (before) break;
+            m->playlist_order[j + 1] = m->playlist_order[j];
+            j--;
+        }
+        m->playlist_order[j + 1] = cur;
+    }
+    m->playlist_n = n;
 }
 
 static void status_copy(menu_t *m, const mini_icecast_status_t *status)
@@ -265,11 +301,6 @@ static const char *note_label(const menu_t *m)
     }
 }
 
-static bool tracks_empty(const menu_t *m)
-{
-    return !lib_ok(m) || library_track_count(m->lib) == 0;
-}
-
 static lib_node_t browse_dir(const menu_t *m)
 {
     if (!lib_ok(m)) return LIB_NODE_NONE;
@@ -285,12 +316,12 @@ static int list_count(const menu_t *m)
     case LIST_ROOT: return (int)(sizeof k_root_rows / sizeof k_root_rows[0]);
     case LIST_SETTINGS: return (int)(sizeof k_settings_rows / sizeof k_settings_rows[0]);
     case LIST_WIFI: return (int)(sizeof k_wifi_rows / sizeof k_wifi_rows[0]);
-    case LIST_STATION: return 3;
-    case LIST_LIBRARY: return 5;
-    case LIST_ABOUT: return 3;
-    case LIST_TRACKS:
-        if (tracks_empty(m)) return 1; /* the note row */
-        return (int)library_track_count(m->lib);
+    case LIST_PLAYLISTS:
+        if (!lib_ok(m)) return 1;                  /* No card */
+        if (m->facts.playlist_count < 0) return 2; /* Library order + Too many lists */
+        if (m->playlist_n == 0) return 2;          /* Library order + No playlists */
+        return 1 + m->playlist_n;
+    case LIST_ABOUT: return 11;
     case LIST_BROWSE:
         if (!lib_ok(m)) return 1; /* the note row */
         return (int)library_child_count(m->lib, browse_dir(m));
@@ -327,10 +358,8 @@ static void build_title(menu_t *m)
 {
     switch (m->list) {
     case LIST_ROOT: snprintf(m->title, sizeof m->title, "Menu"); return;
+    case LIST_PLAYLISTS: snprintf(m->title, sizeof m->title, "Playlists"); return;
     case LIST_SETTINGS: snprintf(m->title, sizeof m->title, "Settings"); return;
-    case LIST_TRACKS: snprintf(m->title, sizeof m->title, "Tracks"); return;
-    case LIST_STATION: snprintf(m->title, sizeof m->title, "Station"); return;
-    case LIST_LIBRARY: snprintf(m->title, sizeof m->title, "Library"); return;
     case LIST_ABOUT: snprintf(m->title, sizeof m->title, "About"); return;
     case LIST_WIFI: snprintf(m->title, sizeof m->title, "Wi-Fi"); return;
     case LIST_BROWSE: break;
@@ -384,15 +413,17 @@ static void set_track_label(const menu_t *m, lib_node_t node, menu_row_t *r)
     menu_clean_name(raw, r->label, sizeof r->label);
 }
 
-static void build_note(const menu_t *m, menu_row_t *r)
+static void build_note_text(const char *text, menu_row_t *r)
 {
     r->kind = MENU_ROW_NOTE;
     r->icon = MENU_ICON_NONE;
     r->enabled = false;
     r->chevron = false;
     r->playing = false;
-    snprintf(r->label, sizeof r->label, "%s", note_label(m));
+    snprintf(r->label, sizeof r->label, "%s", text);
 }
+
+static void build_note(const menu_t *m, menu_row_t *r) { build_note_text(note_label(m), r); }
 
 static void build_fixed(const fixed_row_t *f, menu_row_t *r)
 {
@@ -408,11 +439,11 @@ static void build_root_row(const menu_t *m, int index, menu_row_t *r)
     if (index < 0 || index >= (int)(sizeof k_root_rows / sizeof k_root_rows[0])) return;
     build_fixed(&k_root_rows[index], r);
     switch (index) {
-    case 0: /* Tracks */
-    case 1: /* Browse */
+    case 0: /* Browse */
+    case 1: /* Playlists */
         r->enabled = lib_ok(m);
         break;
-    case 2: /* Shuffle */
+    case 3: /* Shuffle */
         snprintf(r->value, sizeof r->value, "%s", m->facts.shuffle_on ? "On" : "Off");
         break;
     default: break;
@@ -427,7 +458,7 @@ static void build_settings_row(const menu_t *m, int index, menu_row_t *r)
     case 0: /* Backlight */
         snprintf(r->value, sizeof r->value, "%s", backlight_name(m->facts.backlight));
         break;
-    case 3: /* Rescan */
+    case 1: /* Rescan */
         snprintf(r->label, sizeof r->label, "%s",
                  m->facts.rescanning ? "Rescanning..." : "Rescan");
         r->enabled = !m->facts.rescanning;
@@ -495,64 +526,110 @@ static void build_browse_row(const menu_t *m, int index, menu_row_t *r)
     }
 }
 
-static void build_station_row(const menu_t *m, int index, menu_row_t *r)
+/* `Library order` is the broadcast's own tree order: the first Row, dotted when no list
+ * walks. */
+static void build_library_order(const menu_t *m, menu_row_t *r)
 {
-    static const char *const labels[3] = {"Format", "Rate", "Bitrate"};
-    if (index < 0 || index > 2) return;
-    r->kind = MENU_ROW_VALUE;
-    r->icon = MENU_ICON_NONE;
+    r->kind = MENU_ROW_PLAYLIST;
+    r->icon = MENU_ICON_LIBRARY;
     r->enabled = true;
     r->chevron = false;
-    snprintf(r->label, sizeof r->label, "%s", labels[index]);
-    switch (index) {
-    case 0: snprintf(r->value, sizeof r->value, "%s", format_name(m->status_format)); break;
-    case 1: format_hz(r->value, sizeof r->value, m->status_out_hz); break;
-    default:
-        if (m->status_bitrate) snprintf(r->value, sizeof r->value, "%" PRIu32 " kbps", m->status_bitrate);
-        else snprintf(r->value, sizeof r->value, "%s", MENU_EM_DASH);
-        break;
-    }
+    r->playing = m->facts.playlist_selected == 0;
+    snprintf(r->label, sizeof r->label, "Library order");
 }
 
-static void build_library_row(const menu_t *m, int index, menu_row_t *r)
+static void build_playlist_row(const menu_t *m, int index, menu_row_t *r)
 {
-    static const char *const labels[5] = {"State", "Tracks", "Directories", "Size", "Truncated"};
-    if (index < 0 || index > 4) return;
-    r->kind = MENU_ROW_VALUE;
-    r->icon = MENU_ICON_NONE;
-    r->enabled = true;
+    const playlist_file_t *list = &m->facts.playlists[m->playlist_order[index]];
+    r->kind = MENU_ROW_PLAYLIST;
+    r->icon = MENU_ICON_PLAYLIST;
+    r->enabled = list->rows > 0;
     r->chevron = false;
-    snprintf(r->label, sizeof r->label, "%s", labels[index]);
-    switch (index) {
-    case 0:
-        if (m->lib) snprintf(r->value, sizeof r->value, "%s", library_state_name(library_state(m->lib)));
-        else snprintf(r->value, sizeof r->value, "%s", MENU_EM_DASH);
-        break;
-    case 1: format_items(r->value, sizeof r->value, library_track_count(m->lib), "track", "tracks"); break;
-    case 2: format_items(r->value, sizeof r->value, library_dir_count(m->lib), "dir", "dirs"); break;
-    case 3: format_size(r->value, sizeof r->value, library_total_bytes(m->lib)); break;
-    default: snprintf(r->value, sizeof r->value, "%s", library_truncated(m->lib) ? "Yes" : "No"); break;
+    r->playing = list->id != 0 && list->id == m->facts.playlist_selected;
+    snprintf(r->label, sizeof r->label, "%s", list->name);
+    format_items(r->value, sizeof r->value, list->rows, "track", "tracks");
+}
+
+static void build_playlists_row(const menu_t *m, int index, menu_row_t *r)
+{
+    if (!lib_ok(m)) {
+        if (index == 0) build_note_text("No card", r);
+        return;
     }
+    if (index == 0) {
+        build_library_order(m, r);
+        return;
+    }
+    if (m->facts.playlist_count < 0) {
+        build_note_text("Too many lists", r);
+        return;
+    }
+    if (m->playlist_n == 0) {
+        build_note_text("No playlists", r);
+        return;
+    }
+    if (index - 1 < m->playlist_n) build_playlist_row(m, index - 1, r);
 }
 
 static void build_about_row(const menu_t *m, int index, menu_row_t *r)
 {
-    static const char *const labels[3] = {"Firmware", "Board", "Partition"};
-    static const menu_icon_t icons[3] = { MENU_ICON_FIRMWARE, MENU_ICON_BOARD,
-                                          MENU_ICON_PARTITION };
-    if (index < 0 || index > 2) return;
+    static const char *const labels[11] = {
+        "Firmware", "Board", "Partition",
+        "Format", "Rate", "Bitrate",
+        "State", "Tracks", "Directories", "Size", "Truncated",
+    };
+    static const menu_icon_t icons[11] = {
+        MENU_ICON_FIRMWARE, MENU_ICON_BOARD, MENU_ICON_PARTITION,
+        MENU_ICON_STATION, MENU_ICON_STATION, MENU_ICON_STATION,
+        MENU_ICON_LIBRARY, MENU_ICON_LIBRARY, MENU_ICON_LIBRARY,
+        MENU_ICON_LIBRARY, MENU_ICON_LIBRARY,
+    };
+    if (index < 0 || index >= 11) return;
     r->kind = MENU_ROW_VALUE;
     r->icon = icons[index];
     r->enabled = true;
     r->chevron = false;
     snprintf(r->label, sizeof r->label, "%s", labels[index]);
-    const char *v = NULL;
     switch (index) {
-    case 0: v = m->facts.version; break;
-    case 1: v = m->facts.board; break;
-    default: v = m->facts.partition; break;
+    case 0:
+        snprintf(r->value, sizeof r->value, "%s",
+                 m->facts.version ? m->facts.version : MENU_EM_DASH);
+        break;
+    case 1:
+        snprintf(r->value, sizeof r->value, "%s",
+                 m->facts.board ? m->facts.board : MENU_EM_DASH);
+        break;
+    case 2:
+        snprintf(r->value, sizeof r->value, "%s",
+                 m->facts.partition ? m->facts.partition : MENU_EM_DASH);
+        break;
+    case 3: snprintf(r->value, sizeof r->value, "%s", format_name(m->status_format)); break;
+    case 4: format_hz(r->value, sizeof r->value, m->status_out_hz); break;
+    case 5:
+        if (m->status_bitrate) {
+            snprintf(r->value, sizeof r->value, "%" PRIu32 " kbps", m->status_bitrate);
+        } else {
+            snprintf(r->value, sizeof r->value, "%s", MENU_EM_DASH);
+        }
+        break;
+    case 6:
+        if (m->lib) {
+            snprintf(r->value, sizeof r->value, "%s", library_state_name(library_state(m->lib)));
+        } else {
+            snprintf(r->value, sizeof r->value, "%s", MENU_EM_DASH);
+        }
+        break;
+    case 7:
+        format_items(r->value, sizeof r->value, library_track_count(m->lib), "track", "tracks");
+        break;
+    case 8:
+        format_items(r->value, sizeof r->value, library_dir_count(m->lib), "dir", "dirs");
+        break;
+    case 9: format_size(r->value, sizeof r->value, library_total_bytes(m->lib)); break;
+    default:
+        snprintf(r->value, sizeof r->value, "%s", library_truncated(m->lib) ? "Yes" : "No");
+        break;
     }
-    snprintf(r->value, sizeof r->value, "%s", v ? v : MENU_EM_DASH);
 }
 
 static void build_row(const menu_t *m, int index, menu_row_t *r)
@@ -565,22 +642,15 @@ static void build_row(const menu_t *m, int index, menu_row_t *r)
     case LIST_SETTINGS:
         build_settings_row(m, index, r);
         break;
+    case LIST_PLAYLISTS:
+        build_playlists_row(m, index, r);
+        break;
     case LIST_WIFI:
         build_wifi_row(m, index, r);
-        break;
-    case LIST_TRACKS:
-        if (tracks_empty(m)) build_note(m, r);
-        else build_track_row(m, library_track_at(m->lib, (uint32_t)index), r);
         break;
     case LIST_BROWSE:
         if (!lib_ok(m)) build_note(m, r);
         else build_browse_row(m, index, r);
-        break;
-    case LIST_STATION:
-        build_station_row(m, index, r);
-        break;
-    case LIST_LIBRARY:
-        build_library_row(m, index, r);
         break;
     case LIST_ABOUT:
         build_about_row(m, index, r);
@@ -674,6 +744,7 @@ void menu_open(menu_t *m, const library_t *lib, const menu_facts_t *facts)
 {
     if (!m) return;
     facts_copy(m, facts);
+    apply_playlists(m);
     bool was_open = m->open;
     m->lib = lib;
     m->lib_generation = library_generation(lib);
@@ -721,7 +792,9 @@ static bool facts_same(const menu_t *m, const menu_facts_t *f)
 {
     if (!f) {
         return !m->facts.version && !m->facts.board && !m->facts.partition &&
-               !m->facts.shuffle_on && !m->facts.rescanning && m->facts.backlight == 0;
+               !m->facts.shuffle_on && !m->facts.rescanning && m->facts.backlight == 0 &&
+               !m->facts.playlists && m->facts.playlist_count == 0 &&
+               m->facts.playlist_selected == 0;
     }
     return m->facts.shuffle_on == f->shuffle_on && m->facts.rescanning == f->rescanning &&
            m->facts.backlight == f->backlight && same_text(m->facts.version, f->version) &&
@@ -729,7 +802,10 @@ static bool facts_same(const menu_t *m, const menu_facts_t *f)
            m->facts.hotspot_on == f->hotspot_on &&
            m->facts.hotspot_failed == f->hotspot_failed && same_text(m->facts.network, f->network) &&
            same_text(m->facts.setup_password, f->setup_password) &&
-           same_text(m->facts.hotspot_address, f->hotspot_address);
+           same_text(m->facts.hotspot_address, f->hotspot_address) &&
+           m->facts.playlists == f->playlists &&
+           m->facts.playlist_count == f->playlist_count &&
+           m->facts.playlist_selected == f->playlist_selected;
 }
 
 void menu_update(menu_t *m, const library_t *lib, const menu_facts_t *facts,
@@ -742,6 +818,7 @@ void menu_update(menu_t *m, const library_t *lib, const menu_facts_t *facts,
 
     status_copy(m, status);
     facts_copy(m, facts);
+    apply_playlists(m);
     m->lib = lib;
     m->lib_generation = generation;
     if (new_tree) resolve_browse(m);
@@ -898,10 +975,10 @@ menu_action_t menu_activate(menu_t *m)
     switch (m->list) {
     case LIST_ROOT:
         switch (m->band) {
-        case 0: enter_list(m, LIST_TRACKS); break;
-        case 1: enter_browse_root(m); break;
-        case 2: return MENU_ACTION_SHUFFLE;
-        case 3: enter_list(m, LIST_SETTINGS); break;
+        case 0: enter_browse_root(m); break;
+        case 1: enter_list(m, LIST_PLAYLISTS); break;
+        case 2: enter_list(m, LIST_SETTINGS); break;
+        case 3: return MENU_ACTION_SHUFFLE;
         default: break;
         }
         break;
@@ -910,14 +987,22 @@ menu_action_t menu_activate(menu_t *m)
         case 0:
             m->action_backlight = next_backlight(m->facts.backlight);
             return MENU_ACTION_BACKLIGHT;
-        case 1: enter_list(m, LIST_STATION); break;
-        case 2: enter_list(m, LIST_LIBRARY); break;
-        case 3:
+        case 1:
             if (m->facts.rescanning) return MENU_ACTION_NONE;
             return MENU_ACTION_RESCAN;
-        case 4: enter_list(m, LIST_WIFI); break;
-        case 5: enter_list(m, LIST_ABOUT); break;
+        case 2: enter_list(m, LIST_WIFI); break;
+        case 3: enter_list(m, LIST_ABOUT); break;
         default: break;
+        }
+        break;
+    case LIST_PLAYLISTS:
+        if (m->band == 0) {
+            m->action_playlist = 0; /* the library's own order */
+            return MENU_ACTION_WALK;
+        }
+        if (m->band - 1 < m->playlist_n) {
+            m->action_playlist = m->facts.playlists[m->playlist_order[m->band - 1]].id;
+            return MENU_ACTION_WALK;
         }
         break;
     case LIST_WIFI:
@@ -927,8 +1012,6 @@ menu_action_t menu_activate(menu_t *m)
         default: break;
         }
         break;
-    case LIST_TRACKS:
-        return play_node(m, library_track_at(m->lib, (uint32_t)m->band));
     case LIST_BROWSE: {
         lib_node_t child = library_child(m->lib, browse_dir(m), (uint32_t)m->band);
         if (library_kind(m->lib, child) == LIB_DIR) {
@@ -944,6 +1027,7 @@ menu_action_t menu_activate(menu_t *m)
 }
 
 const char *menu_action_path(const menu_t *m) { return m ? m->action_path : ""; }
+uint64_t menu_action_playlist(const menu_t *m) { return m ? m->action_playlist : 0; }
 int menu_action_backlight(const menu_t *m) { return m ? m->action_backlight : 0; }
 
 bool menu_back(menu_t *m)
@@ -956,32 +1040,24 @@ bool menu_back(menu_t *m)
         return true;
     case LIST_SETTINGS:
         m->list = LIST_ROOT;
-        m->band = 3; /* the Settings row */
+        m->band = 2; /* the Settings row */
         break;
-    case LIST_TRACKS:
+    case LIST_PLAYLISTS:
         m->list = LIST_ROOT;
-        m->band = 0; /* the Tracks row */
-        break;
-    case LIST_STATION:
-        m->list = LIST_SETTINGS;
-        m->band = 1;
-        break;
-    case LIST_LIBRARY:
-        m->list = LIST_SETTINGS;
-        m->band = 2;
+        m->band = 1; /* the Playlists row */
         break;
     case LIST_ABOUT:
         m->list = LIST_SETTINGS;
-        m->band = 5;
+        m->band = 3;
         break;
     case LIST_WIFI:
         m->list = LIST_SETTINGS;
-        m->band = 4;
+        m->band = 2;
         break;
     case LIST_BROWSE: {
         if (!m->browse_path[0]) {
             m->list = LIST_ROOT;
-            m->band = 1; /* the Browse row */
+            m->band = 0; /* the Browse row */
             break;
         }
         /* The row that opened this list: the directory's own row in its parent. */

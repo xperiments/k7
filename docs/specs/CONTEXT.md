@@ -374,15 +374,15 @@ _Avoid_: cursor, highlight, select bar
 
 **Menu list**:
 One screen of the **Menu**: its **Rows** and what they are drawn from - the root's four
-destinations, Settings' five, the **broadcast order**, a directory of the **Library tree**, or one of
-the read-only lists. `<` goes up one, to the list that opened it - a directory's parent, or
-Settings - and the header names the one on top.
+destinations, Settings' four, the card's **Playlists**, a directory of the **Library tree**, or
+About's facts. `<` goes up one, to the list that opened it - a directory's parent, Settings, or
+the root - and the header names the one on top.
 _Avoid_: menu page, menu screen, level, sheet
 
 **Row**:
 One line of a **Menu list**: its icon, its label and, on the right, a chevron when it opens
-another list or a value when it shows a setting. Five rows share the page's 6 px inset. A
-row is never a touch target: only the **Pad** activates the **Band**.
+another list or a value when it shows a setting or a **Playlist**'s count. Five rows share the
+page's 6 px inset. A row is never a touch target: only the **Pad** activates the **Band**.
 _Avoid_: item, entry (a **Cell** is a **Bar**'s carcase, not a row)
 
 **Transport drawer**:
@@ -626,9 +626,10 @@ one image the device accepts over HTTP, and it carries measurements, never a **T
 _Avoid_: file upload, flash endpoint
 
 **Playlist selection**:
-`POST /api/playlists/select`: the command that tells the broadcast which **Playlist** to walk,
-or `none`. Written to `k7.select` at the card root and read back at boot; a selection naming a
-list the card no longer holds falls back to the library tree's order and clears the record.
+`POST /api/playlists/select`, and the **Menu**'s Playlists Rows: the command that tells the
+broadcast which **Playlist** to walk, or `none` for the library's own order. Written to
+`k7.select` at the card root and read back at boot; a selection naming a list the card no longer
+holds falls back to the library tree's order and clears the record.
 _Avoid_: switch, activate, load
 
 **Playlist file**:

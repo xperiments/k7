@@ -65,6 +65,8 @@ static void current_card_root(char *out, size_t cap)
     }
     card_path_root(out, cap);
 }
+
+void app_services_card_root(char *out, size_t cap) { current_card_root(out, cap); }
 /* The card's file lifetime. The gate is a mutex + a binary "idle" semaphore rather than a
  * pthread condition: the decoder and the artwork loader call it from FreeRTOS tasks, and
  * the watcher waits here while the card is being pulled. */

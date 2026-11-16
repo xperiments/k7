@@ -462,8 +462,9 @@ are the only source of names.
 - The global premise: the device still serves no Track and accepts none. A page is not a Track,
   and the card still leaves only as the live stream.
 - The host build's composition: it runs the same services, on the hand-written backend.
-- The panel's Menu still browses the library tree; nothing on the cassette screen names the
-  selected Playlist (ADR 0051).
+- The panel's Menu browses the library tree and walks the card's Playlists; nothing on the
+  cassette screen names the selected Playlist
+  ([ADR 0096](../adr/0096-the-menu-browses-the-library-and-walks-its-lists.md)).
 
 ---
 

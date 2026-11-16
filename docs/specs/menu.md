@@ -1,19 +1,20 @@
 # The Menu
 
 The Menu is the screen's way into everything that is not the cassette: the Library tree, the card's
-directories, the shuffle mode and the settings. It is a **mode of the Controls**, not a Level or
+Playlists, the shuffle mode and the settings. It is a **mode of the Controls**, not a Level or
 a screen: the cassette area becomes a five-row list, the right bar's group gives way to the
 **Pad**, and the mode bar's cassette button is the way in and out.
 [ADR 0022](../adr/0022-the-menu-is-a-controls-mode.md) records why;
 [ADR 0023](../adr/0023-shuffle-is-a-broadcast-mode.md) records the shuffle mode the root row
-toggles. The vocabulary is in [CONTEXT.md](./CONTEXT.md): **Menu**, **Menu list**, **Row**,
+toggles; [ADR 0096](../adr/0096-the-menu-browses-the-library-and-walks-its-lists.md) records this
+tree. The vocabulary is in [CONTEXT.md](./CONTEXT.md): **Menu**, **Menu list**, **Row**,
 **Band**, **Pad**, **Page**, **Controls**.
 
 This document is the operational spec: geometry, the tree, the interaction rules, the data the
-lists read, and the split between the portable model and the LVGL view. It describes what is
-built - `components/portable/menu` with `t18_menu`, `cassette_menu.c`, the chrome hooks in the
-five modules, and the shuffle mode of ADR 0023. The board pass is still owed: the Pad's feel and
-the acceleration thresholds.
+lists read, and the split between the portable model and the LVGL view. It describes the contract
+the firmware builds to: `components/portable/menu` with `t18_menu`, `cassette_menu.c`, the chrome
+hooks in the five modules, and the shuffle mode of ADR 0023. The board pass is still owed: the
+Pad's feel and the acceleration thresholds.
 
 ## What it is
 
@@ -57,9 +58,9 @@ Row internals, relative to the row:
 |---|---|---|
 | Band | 2 | inset 2 px on every side, 466x50 (49 on a 53 px row), radius 8, the selected row's own fill |
 | Icon | 16 | 24x24 from the icon font, vertically centred |
-| Label | 56 | Jura 28, vertically centred, at most 400 px (340 on a value row), ellipsized |
-| Playing dot | 364 | 6 px, centred vertically, the row's own ink |
-| Chevron or value | right, inset 16 | the `angle-right` glyph in the icon font's 24 px for a list, or the value for a setting in Jura 20 capitals (capped at 150 px); nothing for an action; the right edge is at 460 |
+| Label | 56 | Jura 28, vertically centred, at most 400 px (340 when the row carries a value), ellipsized |
+| Current dot | 364 | 6 px, centred vertically, the row's own ink; the playing Track, or the walking Playlist |
+| Chevron or value | right, inset 16 | the `angle-right` glyph in the icon font's 24 px for a list, or a value - a setting's, or a Playlist's declared count - in Jura 20 capitals (capped at 150 px); nothing for an action; the right edge is at 460 |
 
 The header title is Jura 36 at screen x=126 and vertically centred.
 The footer's first line (the song) is Jura 28 at (24, 21), the second (the group) at (24, 55);
@@ -70,60 +71,92 @@ nothing playing both footer lines are empty.
 
 ```
 MENU
-├─ Tracks        radio-waves     chevron   the Library tree, one Track per Row
 ├─ Browse        books           chevron   a directory of the Library tree
-├─ Shuffle       toggle-off/on   OFF / ON  toggles Shuffle mode (ADR 0023)
-└─ Settings      settings        chevron
-   ├─ Backlight  brightness      AUTO / 100% / 60% / 30%
-   ├─ Station    radio-waves     chevron
-   ├─ Library    books           chevron
-   ├─ Rescan     endless-loop    RESCAN / RESCANNING... (inert while running)
-   └─ About      k7logo          chevron
-      ├─ Firmware   micro-chip       the app's version
-      ├─ Board      tablet-android   the board's short name
-      └─ Partition  disc             the app partition's size
+├─ Playlists     radio-waves     chevron   the card's Playlists
+│  ├─ Library order  books                 the broadcast's own order
+│  └─ <a list>       radio-waves  12 tracks   the walking one carries the dot
+├─ Settings      settings        chevron
+│  ├─ Backlight  brightness      AUTO / 100% / 60% / 30%
+│  ├─ Rescan     endless-loop    RESCAN / RESCANNING... (inert while running)
+│  ├─ Wi-Fi      radio-waves     chevron
+│  └─ About      k7logo          chevron
+│     ├─ Firmware   micro-chip       the app's version
+│     ├─ Board      tablet-android   the board's short name
+│     ├─ Partition  disc             the app partition's size
+│     ├─ Format     radio-waves      the broadcast's container
+│     ├─ Rate       radio-waves      its sample rate
+│     ├─ Bitrate    radio-waves      its bit rate
+│     ├─ State      books            the Library's state
+│     ├─ Tracks     books            how many
+│     ├─ Directories books           how many
+│     ├─ Size       books            the total
+│     └─ Truncated  books            whether the scan dropped rows
+└─ Shuffle       toggle-off/on   OFF / ON  toggles Shuffle mode (ADR 0023)
 ```
 
 | List | Rows | Source | Title |
 |---|---|---|---|
 | Root | 4 | fixed | `Menu` |
-| Tracks | the whole Library tree, Track rows | `library_track_count()` / `library_track_at()` | `Tracks` |
 | Browse | the directory's children in the library's name order, directories and Tracks mixed | `library_child_count()` / `library_child()` / `library_kind()` | `Browse`, then `Browse /Jazz`, ... |
-| Settings | 5 | fixed | `Settings` |
-| Station | Format, Rate, Bitrate | `mini_icecast_status_t` | `Station` |
-| Library | State, Tracks, Directories, Size, Truncated | `library_*` | `Library` |
-| About | Firmware, Board, Partition | `esp_app_get_description()`, the board adapter, the partition table | `About` |
+| Playlists | `Library order`, then the card's lists, or one note | `playlist_list()` read by the view; `playlist_select_current()` | `Playlists` |
+| Settings | 4 | fixed | `Settings` |
+| Wi-Fi | Setup, Network, Password, Reset password, Address | fixed and `setup_status()` | `Wi-Fi` |
+| About | 11 | `esp_app_get_description()`, the board adapter, the partition table, `mini_icecast_status_t`, `library_*` | `About` |
 
 - A **directory Row** wears `cassette-tape` and opens the next Browse list; a **Track Row** wears
   `track` and plays. Inside Browse, the title is the path from the root, ellipsized.
-- The **playing Track's** Row carries a 6 px dot after its label, in the Row's own label ink (a
-  shape, so it reads on both pages and on the band); activating the Row restarts the Track.
+- The **broadcast's current Row** carries a 6 px dot after its label, in the Row's own label ink
+  (a shape, so it reads on both pages and on the band): a Track Row inside Browse, or the walking
+  Playlist's Row. Activating a Track Row restarts the Track; activating a Playlist Row walks it.
 - A **Track Row**'s label is the cleaned name: the library name without its extension,
   apostrophes (and the typographic U+2019) as spaces, parenthetical asides dropped, whitespace
   collapsed - the same string the Peek falls back to.
-- Station's values: `MP3`, `44.1 kHz`, `192 kbps`, an em dash when the status is idle.
-  Library's: the state's name, `1,204 tracks` (`1 track` in the singular), `38 dirs`, `12.4 GB`
-  (binary units, one decimal), `No`/`Yes`. About's: the app's version, the board's short name
-  (`8048S050C`), the app partition's size (`4 MB`). Station's and Library's value rows carry no
-  icon; About's three wear `micro-chip`, `tablet-android` and `disc`. Every right column is drawn
-  in capitals and in the smaller Jura 20, whatever the model writes.
-- **No card or no library**: Tracks and Browse are dimmed (40% opacity) and inert, and their
+- **Playlists**: `Library order` is first and returns the broadcast to the library tree's own
+  order; it wears `books` and carries the dot when no list walks. The card's lists follow in the
+  file's name order (A-Z, byte order); each Row's right column is the list's declared row count,
+  `12 tracks` / `1 track`, and a list with no rows is dimmed and inert
+  ([playlist-format.md](./playlist-format.md), ADR 0095). The list being walked carries the dot;
+  a Row is labelled with the file's name verbatim, ellipsized. A tap calls
+  `playlist_select_set(card_root, lib, id)` - the command behind `POST /api/playlists/select` -
+  with 0 for `Library order`; the choice is written to `k7.select` and survives a reboot
+  ([front-door.md](./front-door.md), U3). A refusal, or a list whose rows the Library cannot
+  resolve, leaves the walk as it was: the Row does not move and the panel has no message for it.
+- **Playlists with no card or no lists**: with no card or no library, the root's Playlists Row is
+  dimmed and inert. A card pulled while its list is open leaves one `No card` note; a usable card
+  with no `k7.playlists/` directory leaves `Library order` and one `No playlists` note; a
+  directory over the 64-list cap leaves `Library order` and one `Too many lists` note. The index
+  is read when the Menu opens and again on a new generation; the model reads that index from its
+  facts and never touches the card.
+- **Settings** changes things only: Backlight, Rescan, Wi-Fi and About. The Station and Library
+  destinations are gone; their facts live in About.
+- **About** is the player's diagnostics page, eleven value Rows in three icon groups: Firmware,
+  Board, Partition (the player); Format, Rate, Bitrate (the broadcast); State, Tracks,
+  Directories, Size, Truncated (the library). Its values: the app's version, the board's short
+  name (`8048S050C`), the app partition's size (`4 MB`); `MP3`, `44.1 kHz`, `192 kbps` (an em
+  dash when the status is idle); the library's state name, `1,204 tracks` (`1 track`), `38 dirs`,
+  `12.4 GB` (binary units, one decimal), `No`/`Yes`. The groups wear `micro-chip`,
+  `tablet-android` and `disc`; `radio-waves`; and `books`. Eleven Rows do not fit the page, so
+  About scrolls. Every right column is drawn in capitals and in the smaller Jura 20, whatever the
+  model writes.
+- **No card or no library**: Browse and Playlists are dimmed (40% opacity) and inert, and their
   lists hold one non-selectable Row that repeats the state - `No card` (no card, no library
   lease), `Library empty` (empty, or OK with zero Tracks), `Library error` (no directory or a
-  read error). Every other list works, so Rescan and Library stay reachable. An empty directory
-  inside a usable library is a blank Browse list, not a note.
+  read error) for Browse, and the Playlists notes above. Every other list works, so Rescan,
+  Wi-Fi and About stay reachable. An empty directory inside a usable library is a blank Browse
+  list, not a note.
 - **Rescan**: a tap starts `app_services_rescan()`; the Row reads `Rescanning...`, is dimmed and
-  ignores taps until the new generation lands. The Menu keeps its list; when the generation changes it
-  re-resolves the Browse path against the new tree and pops to Browse's root if the directory has
-  vanished. The Band clamps to the new count.
+  ignores taps until the new generation lands. The Menu keeps its list; when the generation
+  changes it re-resolves the Browse path against the new tree, pops to Browse's root if the
+  directory has vanished, and re-reads the Playlists index; a selection whose list has gone falls
+  back to the library's order. The Band clamps to the new count.
 - **Backlight**: a tap cycles `Auto`, `100%`, `60%`, `30%` in place. Auto is the idle ladder the
   screen already runs; any other value pins the panel with a hold so the ladder does not
   overwrite it, and the choice lives until reboot. No NVS. A hold also keeps the panel lit: the
   idle dim and the screen-off step are skipped until Auto is chosen again, which is the cost of
   a brightness the user chose.
-- **Shuffle**: the Row reads `mini_icecast_shuffle_enabled()` and toggles it; the order itself is
-  the broadcast's (ADR 0023). The mode starts **On** at boot, so the first pass is shuffled
-  without a Menu trip, and a toggle lasts until the next boot — the mode is not stored
+- **Shuffle**: the last root Row reads `mini_icecast_shuffle_enabled()` and toggles it; the order
+  itself is the broadcast's (ADR 0023). The mode starts **On** at boot, so the first pass is
+  shuffled without a Menu trip, and a toggle lasts until the next boot — the mode is not stored
   ([ADR 0091](../adr/0091-the-player-boots-shuffled.md)).
 
 ## The Pad
@@ -156,7 +189,7 @@ layer survive the swap, and an open edit ends with the panel, as any hidden cell
 - The ends **clamp**: a step past the first or last Row does nothing, and the window never leaves
   the list. There is no bounce and no partial Row.
 - The list is **virtual**: five Row slots are rebound to the window's indices on each step; no
-  object exists per Track and nothing is allocated per step. There is no LVGL scroll container,
+  object exists per Row and nothing is allocated per step. There is no LVGL scroll container,
   no spacer and no snap call.
 - A **short list** (fewer Rows than the page) leaves blank space below its last Row; the Band
   cannot leave the list and the window never shifts.
@@ -176,8 +209,8 @@ lit while the Menu is open.
 
 The mode bar keeps its group meanings while the Menu is up and its group buttons are inert for the
 mode's lifetime: the left bar never changes mode (ADR 0026). Back puts the Band on the Row that
-opened the list it returns to (the Settings Row, the directory Row), which is the one place the
-Band is set rather than remembered.
+opened the list it returns to (the Playlists Row, the Settings Row, the directory Row), which is
+the one place the Band is set rather than remembered.
 
 ## Ink
 
@@ -189,7 +222,7 @@ Band is set rather than remembered.
 | Band fill | `k_col_bg` | `k_col_primary` |
 | Band label, icon, chevron | `k_col_button_white` (0xEEEEEE) | `k_col_bg` |
 | Dimmed Row | 40% of the label ink | 40% of the label ink |
-| Playing Track's dot | the label ink | the label ink |
+| Current Row's dot | the label ink | the label ink |
 
 The band is the page's opposite, the same idiom as the M and R caps; unselected Rows take the
 page's own ink. The Menu's page fill is the window's own fill recoloured for the Menu's lifetime:
@@ -199,16 +232,21 @@ changes the page itself: the up swipe that closes it leaves the white or dark pa
 
 ## Data and lifecycle
 
-- The view takes a **library lease** when the Menu opens and releases it when the Menu closes;
-  the portable model reads the tree through the pointer it is given and never touches the card.
+- The view takes a **library lease** when the Menu opens and releases it when the Menu closes,
+  and reads `k7.playlists/` into the index it hands the model. The portable model reads the tree
+  through the pointer it is given and never touches the card.
 - The model owns the state: the list kind, the Browse path (a relative path string, not a node),
   the Band, the window's first index, the ratchet's accumulator and stage, and the remembered
-  list. It survives closing; the lease does not.
+  list. It survives closing; the lease and the index do not.
 - On a **generation change** while open, the model re-resolves its Browse path with
-  `library_find()`; a path that no longer exists pops to Browse's root. Tracks and the read-only
-  lists rebuild from the new generation; the Band clamps.
+  `library_find()`; a path that no longer exists pops to Browse's root. Browse and the Playlists
+  list rebuild from the new generation; a selection the card no longer holds has already fallen
+  back to the library's order; the Band clamps.
 - A **Track request** is a relative path: the view calls `mini_icecast_play(path)` for the
   broadcast to resolve, exactly as a Browse selection does today.
+- A **Playlist request** is an id, 0 for the library's own order: the view calls
+  `playlist_select_set(card_root, lib, id)`; a refusal leaves the walk as it was. The selection
+  module stores the id in `k7.select` and applies the resolved order to the broadcast.
 - Label text lives in five fixed buffers owned by the model (96 bytes each). The view copies a
   row's text into LVGL with `lv_label_set_text()` on every redraw rather than handing the buffer
   over as static text: LVGL 9's `LV_LABEL_LONG_DOT` writes its ellipsis into the label's copy, so
@@ -220,14 +258,19 @@ changes the page itself: the up swipe that closes it leaves the white or dark pa
 - **`components/portable/menu`** - the model: the tree, the navigation, the window, the Band, the
   ratchet, the row models and the name cleaning - `cassette_clean_name()`, the one function the
   Row label and the Peek's fallback share (the Menu passes `stem = true` to drop the file
-  extension; the Peek's title keeps its dots). It returns actions (`play this relative path`, `rescan`,
-  `next backlight`, `toggle shuffle`, `close`) and needs no LVGL. Host-tested in `host/tests/t18_menu.c`
-  through a small Library fixture, as `cassette` and `cassette_layout` are.
+  extension; the Peek's title keeps its dots). The Playlists list reads the index and the current
+  id from the facts. It returns actions (`play this relative path`, `walk this Playlist`,
+  `rescan`, `next backlight`, `toggle shuffle`, `close`) and needs no LVGL. Host-tested in
+  `host/tests/t18_menu.c` through a small Library fixture and a Playlist index, as `cassette`
+  and `cassette_layout` are.
 - **`screen_display/cassette_menu.c`** - the view: five Row slots, the band, the Pad's panel
   value (its plate, inner and guide), the header and footer texts, and the executor for the
-  model's actions. It installs the Pad on the right bar and hides the cassette, and gates
-  `screen_input` while open. On close it calls the view's restore hook, which reinstalls the
-  active group's panel (ADR 0026).
+  model's actions. It reads the card's Playlist index when the Menu opens and on a new
+  generation, executes a walk through `playlist_select_set()`, installs the Pad on the right bar
+  and hides the cassette, and gates `screen_input` while open. On close it calls the view's
+  restore hook, which reinstalls the active group's panel (ADR 0026).
+- **`app_services`** exposes the mounted card's root - `app_services_card_root()` - so the view
+  can call `playlist_list()` and `playlist_select_set()` without knowing how the card is mounted.
 - **`cassette_bars`** carries the panel swap: `cassette_bars_set_panel()` is what puts the Pad up
   and a group back, and there is no covered state any more. **`cassette_buttons`** is the mode
   bar (the Menu's toggle and the two group selectors); **`cassette_header`** and
@@ -249,11 +292,11 @@ while the Menu is up.
 |---|---|---|
 | U+F000 | `cassette-tape` | Browse directories; the mode bar's Menu door |
 | U+F001 | `voice-mail` | spare |
-| U+F002 | `radio-waves` | Tracks, Station |
+| U+F002 | `radio-waves` | Playlists and Wi-Fi; About's Format, Rate and Bitrate |
 | U+F003 | `toggle-off` | the Shuffle Row while shuffle is off |
 | U+F004 | `toggle-on` | the Shuffle Row while shuffle is on |
 | U+F005 | `settings` | Settings |
-| U+F006 | `books` | Browse and Library |
+| U+F006 | `books` | Browse, `Library order`; About's library facts |
 | U+F007 | `endless-loop` | Rescan |
 | U+F008 | `shuffle` | spare |
 | U+F009 | `disc-drive` | About's Partition |
@@ -273,6 +316,8 @@ while the Menu is up.
 | U+F017 | `mic` | the Home group's key 4 |
 | U+F018 | `pause` | spare: in the font, in no cut |
 
+The Playlists list adds no glyph: `radio-waves` and `books` are already in the font.
+
 `assets/fonts/xtape.ttf` is drawn in the icomoon project; `package.json` has a `font:xtape`
 script beside `font:jura`, `font:jura28` and `font:jura20`. It generates each cut at its own
 range, because one font is one pixel size and flash is what a glyph costs: `font_xtape_24.c`
@@ -288,6 +333,10 @@ footer is Jura 28 and the header Jura 36.
 
 - Whether the shuffle mode is shown anywhere outside the Menu (the Peek, the footer); this cut
   says nowhere.
+- Whether the panel may create, rename or delete a Playlist. This cut says no (ADR 0096): the App
+  authors the files and the panel only chooses which one walks.
+- A refused walk has no on-panel message: the Row stays and the broadcast keeps what it had. The
+  App reports the missing rows a list carries; the panel does not.
 - About's Partition shows the app partition's size. The running image's size has no runtime
   field in `esp_app_get_description()`; until a source is added the row cannot read
   "1.70 MB of 4 MB".
