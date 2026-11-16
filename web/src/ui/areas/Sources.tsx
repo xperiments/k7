@@ -588,18 +588,6 @@ export function SourcesColumn({
       </p>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 lg:overflow-auto">
-        {showingAnswer && reply ? (
-          <AnswerBlock
-            message={reply}
-            scope={scope}
-            listName={listName}
-            onAdd={add}
-            onSave={save}
-            onDismiss={dismiss}
-            onOpenDraft={(id) => navigate(routeHref({ name: 'playlist', id }))}
-          />
-        ) : null}
-
         {loading ? (
           <SourceLoading />
         ) : !hasSources ? (
@@ -632,6 +620,22 @@ export function SourcesColumn({
           />
         )}
       </div>
+
+      {/* The answer's offer, under the tree and over the field: a bar of its own, so a long
+          tree cannot scroll it out of sight and a short one cannot squeeze it. */}
+      {showingAnswer && reply ? (
+        <div className="shrink-0">
+          <AnswerBlock
+            message={reply}
+            scope={scope}
+            listName={listName}
+            onAdd={add}
+            onSave={save}
+            onDismiss={dismiss}
+            onOpenDraft={(id) => navigate(routeHref({ name: 'playlist', id }))}
+          />
+        </div>
+      ) : null}
 
       <div className="flex shrink-0 flex-col gap-2 border-t pt-3">
         {reply && !reply.answer ? (
