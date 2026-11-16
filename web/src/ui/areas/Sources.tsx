@@ -32,7 +32,7 @@ import {
   downloadModel,
   type AssistantState,
 } from '../../builtin-model';
-import { useCardScope, useDeviceView } from '../../card/session';
+import { useDeviceView } from '../../card/session';
 import { McpError, type McpSearch, type SearchArgs } from '../../device/mcp';
 import { keepFolderTree, type Folder } from '../../media/folders';
 import { resolveSource, type LibrarySource } from '../../library/source';
@@ -54,6 +54,7 @@ import {
 import { createDraft } from '../../playlists/drafts';
 import { plural } from '../format';
 import { FileTree } from '../file-tree';
+import { useListScope } from '../lists-scope';
 import { navigate, routeHref } from '../router';
 import { AskFilters } from './AskFilters';
 
@@ -290,7 +291,12 @@ export function SourcesColumn({
   listName: string;
   onAdd: (rows: readonly string[]) => void;
 }) {
-  const scope = useCardScope();
+  /* The scope is the **list's**, not this browser's card: rows added to the open list are filed
+   * under the card the list belongs to (ADR 0095), and with the Device card selected that is the
+   * player's mark rather than whatever card this browser last worked on. Comparing against the
+   * browser's card is what made an answer from the player read "another card" and refuse to be
+   * added. */
+  const scope = useListScope();
   const deviceView = useDeviceView();
   const [assistant, setAssistant] = useState<AssistantState | null>(null);
   const [downloadPercent, setDownloadPercent] = useState<number | null>(null);
