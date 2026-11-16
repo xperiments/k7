@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { CardSwitcher } from './CardSwitcher';
-import { GalleryGlyph } from './gallery-glyph';
+import { CassetteGlyph, GalleryGlyph } from './glyphs';
 import { InstallButton } from './InstallButton';
 import { useDrafts, findDraft } from '../playlists/drafts';
 import {
@@ -69,7 +69,7 @@ interface RailNavGroup {
 function iconFor(item: NavItem): React.ReactNode {
   switch (item.names[0]) {
     case 'prepare':
-      return <ListMusic aria-hidden="true" />;
+      return <CassetteGlyph />;
     case 'media':
       return <GalleryGlyph />;
     case 'playlists':
