@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ListMusic, Search, Sparkles, TriangleAlert } from 'lucide-react';
+import { ListMusic, Search, SlidersHorizontal, Sparkles, TriangleAlert } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/reui/alert';
 import { Button } from '@/components/ui/button';
@@ -658,8 +658,8 @@ export function SourcesColumn({
         {phase ? <Pending phase={phase} /> : null}
 
         {/* One bar for both jobs: the same words either filter the card's tree or go to the
-            model. The magnifier is the direct search and always there; Ask is the primary and
-            only present when this browser has the built-in model. */}
+            model. Filters and the magnifier are the two searches and are always there; Ask is
+            the primary and only present when this browser has the built-in model. */}
         <form onSubmit={submit} className="flex items-center gap-2">
           <label htmlFor="source-bar" className="sr-only">
             Search the sources, or ask
@@ -673,6 +673,16 @@ export function SourcesColumn({
             autoComplete="off"
             disabled={pending}
           />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Filters"
+            title="Filters"
+            onClick={() => openFilters(seed)}
+          >
+            <SlidersHorizontal aria-hidden="true" />
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -722,27 +732,19 @@ export function SourcesColumn({
           </p>
         ) : assistant === 'available' ? (
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1">
+            {reply ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="xs"
-                onClick={() => openFilters(seed)}
+                onClick={clear}
+                disabled={pending}
               >
-                Filters
+                New ask
               </Button>
-              {reply ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={clear}
-                  disabled={pending}
-                >
-                  New ask
-                </Button>
-              ) : null}
-            </div>
+            ) : (
+              <span />
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -778,14 +780,6 @@ export function SourcesColumn({
                   Check again
                 </Button>
               ) : null}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => openFilters(seed)}
-              >
-                Search by filters
-              </Button>
             </div>
           </div>
         )}

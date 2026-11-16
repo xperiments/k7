@@ -352,9 +352,11 @@ no track, artist, path or per-track measurement is described either way.
 
 **P3. One bar under the editor's tree searches the card and asks the model, and an answer is drawn in that tree.** The
 sources column is the card's folders, always: there is no Files / Ask switch and no second surface
-to learn, and one bar at the tree's foot serves both jobs. The bar is one field and two buttons: the
-magnifier filters the tree by its words, because a plain search is local and instant, and **Ask**
-sends the same words to the model and is drawn only when this browser has it. Enter does what the
+to learn, and one bar at the tree's foot serves both jobs. The bar is one field and three icon
+buttons: **Filters** opens the sheet of exact arguments, the **magnifier** filters the tree by the
+field's words — a plain search is local and instant — and **Ask** sends the same words to the model
+and is drawn only when this browser has it. The sheet is in the bar in every model state, which is
+why the setup's separate search control is gone. Enter does what the
 browser can do — Ask where there is a model, the direct search where there is not — and the field
 holds the filter while the tree is filtered, so **Clear** in the column's header is the way out of
 it. The last answer is what the column

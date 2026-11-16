@@ -314,8 +314,9 @@ The Queue, measured, written to the card by the run itself.
   ([ADR 0065](../adr/0065-the-card-is-the-only-way-to-the-player.md)).
 - `#/playlists/:id` is the editor, in two columns: the draft's blocks are on the left, and the
   card's folders as a **source tree** on the right, with the **IA Agent**'s bar at the tree's foot —
-  one surface, no switch. The bar is one field and two buttons: the magnifier filters the tree by
-  its words and **Ask** sends them to the model, and it is the same field either way. A file adds
+  one surface, no switch. The bar is one field and three icons: **Filters** for the exact
+  arguments, the magnifier for the tree filtered by the field's words, and **Ask** for the same
+  words sent to the model — one field either way. A file adds
   one row; a folder adds one block that carries every file under it and
   moves as a unit. A drag from the tree lands exactly where it is dropped, a block reorders by drag
   (with arrow-key alternatives), and a folder block opens to show its rows. The order is the
