@@ -2523,6 +2523,11 @@
           "at": "2026-11-16T01:07:38Z",
           "by": "deepseek",
           "text": "Changed by request: an answer's results are the list's own rows, a size smaller — number, title, path, BPM and key, a plus — in the answer's order, rather than the card's tree pruned to them. A search's results stay the card's tree filtered by its words. keepFolderTree and its four cases went with the pruned view."
+        },
+        {
+          "at": "2026-11-16T03:25:37Z",
+          "by": "deepseek",
+          "text": "The tree would not scroll once a folder opened: it was a flex child of the column's scroll box, and a flex child shrinks to fit instead of overflowing, so the rows below the fold were clipped with nothing to scroll. The grid above had the other half of the same hole — its row was auto, so the columns never had a height to scroll inside. The grid's row is minmax(0,1fr) now, the tree's box scrolls at every width, and the tree and the playlist's block card are shrink-0."
         }
       ]
     },
