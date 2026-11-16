@@ -606,7 +606,7 @@ function Editor({ draft }: { draft: Draft }) {
     <div className="mx-auto flex w-full flex-col gap-4 p-4 sm:p-6 lg:h-full lg:min-h-0">
       <h1 className="sr-only">Edit {draft.name}</h1>
 
-      <div className="grid min-w-0 gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+      <div className="grid min-w-0 gap-6 lg:min-h-0 lg:flex-1 lg:grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         {/* The list: blocks in order, each one a drop target and a drag handle. */}
         <section
           aria-labelledby="playlist-heading"
@@ -674,7 +674,7 @@ function Editor({ draft }: { draft: Draft }) {
           </div>
 
           <div className="flex min-h-0 flex-col gap-3 lg:flex-1 lg:overflow-auto">
-            <Card size="sm">
+            <Card size="sm" className="shrink-0">
               <CardContent className="p-0">
                 {draft.entries.length === 0 ? (
                   <div
