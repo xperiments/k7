@@ -2548,6 +2548,16 @@
           "at": "2026-11-16T01:18:39Z",
           "by": "dsh",
           "text": "The human asked for this directly in the conversation; implementing it now while the proposal waits for approval. Plan: port the reel model from components/portable/cassette/cassette.c, draw the entry-view cassette from cassette_tapes.c/cassette_layout.h as SVG, drive it from the Player's status, and keep the page's title, badges and progress."
+        },
+        {
+          "at": "2026-11-16T01:29:46Z",
+          "by": "dsh",
+          "text": "Implemented and committed as de69bb4. Player > Now playing now shows the panel's 800x480 cassette screen as SVG, with the two pack ring stacks, the hubs and their turning dividers, the guides, strands, run, frames and chips. The reels turn at v/r (counter-clockwise, 36 frames), the packs fill from elapsed/duration, a track change plays the 8 s rewind, paused holds, and reduced motion draws one frame. The title, badges and progress stay outside the screen; the empty state shows the cassette at rest. Verified: typecheck, 890 tests (12 new), build, host check (with a --no-sandbox CHROME wrapper), screenshots at 1440 and 390, and reduced motion at frame 0. The look checker's only hit is a pre-existing font-semibold heading in evals/sessions-main.tsx. Please approve this proposal on the board so the work can be recorded; the code is already in master."
+        },
+        {
+          "at": "2026-11-16T01:32:52Z",
+          "by": "dsh",
+          "text": "Restored the shelf's CassetteCase beside the screen after the review: the Player is now case | screen, with the track info under the screen. Desktop is a 13rem case on the left and an 872px screen with the title, badges and progress under it; a phone centres the case, then the screen, then the track, with no horizontal scroll. Committed as f528b88; the spec's K19/K21/K29 say both views."
         }
       ]
     },
