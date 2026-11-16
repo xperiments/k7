@@ -434,8 +434,9 @@ their drawing, their `hueOf` case colours, their 3D geometry, their masks and th
 `cubic-bezier(0.22, 1, 0.36, 1)` turn. They are not re-drawn as line art, not monochromed, and
 not retimed. The stage around them is K7. **[ADR]**
 
-The Player page keeps a case at the shelf's width, with the device's own cassette screen beside
-it (K29): the same face, frame and sheen, not a second drawing.
+The Player page keeps a case beside the device's own cassette screen (K29): the same face,
+frame and sheen, not a second drawing. Where the two stand side by side the case is the screen's
+height; below that breakpoint they stack, and the case keeps the shelf's width.
 
 An album with no picture is still drawn: its face is one of the cassette case reference's five
 covers — a gradient with a ring, colour bands with a cream box, an off-white with a colour
@@ -527,8 +528,8 @@ page transition and no entrance animation.
 **K29. The Player shows the device's screen.** The Player's right column is the panel's own entry
 view, drawn as an SVG at its 800x480 grid in the panel's inks: the two frames and the three chips,
 the two packs of concentric rings, the two hubs with their turning dividers, the guides, the
-strands and the bottom run. The shelf's case stands beside it at its own width (K19), not instead
-of it. The reels follow the broadcast: each turns at the tape speed at its own pack radius,
+strands and the bottom run. The shelf's case stands beside it at the screen's height (K19), not
+instead of it. The reels follow the broadcast: each turns at the tape speed at its own pack radius,
 counter-clockwise, in the device's 36 frames; the packs fill from elapsed/duration with the
 device's 80/1000 floor and square-root law; a track change plays the device's 8 s rewind. The
 page's title, badges and progress sit under the screen.

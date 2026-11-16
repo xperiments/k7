@@ -382,6 +382,15 @@
         cursor: default;
     }
 
+    /* The Player's case shares its height with the screen beside it (K29). The grid's two
+       columns carry the screen's 5:3 and the case's 16:25, so both land on one height; the
+       case reads its column's width through the container its wrapper establishes. */
+    @media (min-width: 64rem) {
+        .k7-case-player {
+            --cw: 100cqw;
+        }
+    }
+
     .k7-shelf:focus-visible {
         outline: 2px solid var(--ring);
         outline-offset: 4px;

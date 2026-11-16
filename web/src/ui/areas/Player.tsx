@@ -97,6 +97,9 @@ export function PlayerArea() {
   const duration = playing?.duration ?? 0;
   const percent = duration > 0 ? Math.min(100, Math.max(0, (elapsed / duration) * 100)) : 0;
 
+  /* The two columns are the screen's 5:3 and the case's 16:25 - 0.384 is their ratio - so
+   * the case lands on the screen's height. The cap keeps the screen at 42rem;
+   * `.k7-case-player` reads its column's width through its container. */
   return (
     <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
       {!status && !waited ? (
@@ -131,17 +134,19 @@ export function PlayerArea() {
           </Card>
         </div>
       ) : (
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
-          <CassetteCase
-            cover={cached?.cover ?? null}
-            initial={title}
-            hue={hueOf(title)}
-            art={{ title, artist, meta: album || undefined }}
-            size="shelf"
-            className="self-center lg:self-start"
-          />
+        <div className="grid gap-4 lg:max-w-[59.6rem] lg:grid-cols-[0.384fr_1fr] lg:items-start lg:gap-6">
+          <div className="min-w-0 self-center lg:w-full lg:self-start lg:[container-type:inline-size]">
+            <CassetteCase
+              cover={cached?.cover ?? null}
+              initial={title}
+              hue={hueOf(title)}
+              art={{ title, artist, meta: album || undefined }}
+              size="shelf"
+              className="k7-case-player"
+            />
+          </div>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-4 sm:gap-6 lg:max-w-[42rem]">
+          <div className="flex min-w-0 flex-col gap-4 sm:gap-6">
             <figure className="m-0 w-full overflow-hidden rounded-panel border border-border">
               <CassetteScreen
                 playing
