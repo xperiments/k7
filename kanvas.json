@@ -2444,6 +2444,11 @@
           "at": "2026-11-16T00:22:40Z",
           "by": "deepseek",
           "text": "Follow-up after the hand-over, asked for directly: the sources' own search field is gone and its job moved into the bar. One field at the tree's foot and two buttons — the magnifier filters the card's tree with the same words, Ask sends them to the model and is drawn only when this browser has it. Enter keeps Ask where there is a model and does the direct search where there is not. The field holds the filter while the tree is filtered, the column's header says what it is filtering by, and Clear there is the way out. k7-app P3, k7-look K21 and front-door §4.2 say so; typecheck, 885 tests, the build and the look checks are green."
+        },
+        {
+          "at": "2026-11-16T00:28:01Z",
+          "by": "deepseek",
+          "text": "Filters is an icon in the bar now, beside the magnifier: field, Filters, search, Ask — the two searches, then the primary. That retires the text Filters in the status row and the setup block's Search by filters, which were the same sheet behind two different labels; the per-answer Filters link in the answer's panel stays, because it opens the sheet seeded with that answer's intent. k7-app P3, k7-look K21 and front-door §4.2 record the three icons; typecheck, 885 tests, the build and the look checks are green."
         }
       ]
     },
