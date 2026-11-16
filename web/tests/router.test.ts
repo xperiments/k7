@@ -133,10 +133,11 @@ describe('the sidebar and the breadcrumb', () => {
   });
 
   it('every sidebar item opens its area and the right page', () => {
+    // The rail reads Player, then the card's sources, then the lists.
     expect(NAV_GROUPS.map((group) => group.label)).toEqual([
+      'Player',
       'Media Sources',
       'Playlists',
-      'Player',
     ]);
     for (const group of NAV_GROUPS) {
       for (const item of group.items) {

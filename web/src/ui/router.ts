@@ -128,6 +128,11 @@ export function routeHref(route: Route): string {
  */
 export const NAV_GROUPS: NavGroup[] = [
   {
+    id: 'player',
+    label: 'Player',
+    items: [{ label: 'Player', href: routeHref({ name: 'player' }), names: ['player'] }],
+  },
+  {
     id: 'sources',
     label: 'Media Sources',
     items: [
@@ -149,11 +154,6 @@ export const NAV_GROUPS: NavGroup[] = [
         names: ['playlists', 'playlist'],
       },
     ],
-  },
-  {
-    id: 'player',
-    label: 'Player',
-    items: [{ label: 'Player', href: routeHref({ name: 'player' }), names: ['player'] }],
   },
 ];
 
