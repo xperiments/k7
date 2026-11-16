@@ -313,8 +313,10 @@ The Queue, measured, written to the card by the run itself.
   carries measurements still, and Prepare is its only door
   ([ADR 0065](../adr/0065-the-card-is-the-only-way-to-the-player.md)).
 - `#/playlists/:id` is the editor, in two columns: the draft's blocks are on the left, and the
-  card's folders as a **source tree** on the right, with the **IA Agent**'s composer at the tree's
-  foot — one surface, no switch. A file adds one row; a folder adds one block that carries every file under it and
+  card's folders as a **source tree** on the right, with the **IA Agent**'s bar at the tree's foot —
+  one surface, no switch. The bar is one field and two buttons: the magnifier filters the tree by
+  its words and **Ask** sends them to the model, and it is the same field either way. A file adds
+  one row; a folder adds one block that carries every file under it and
   moves as a unit. A drag from the tree lands exactly where it is dropped, a block reorders by drag
   (with arrow-key alternatives), and a folder block opens to show its rows. The order is the
   author's: nothing re-sorts it. **Clear** empties the list behind an inline confirmation, and
@@ -324,7 +326,7 @@ The Queue, measured, written to the card by the run itself.
   card does not have reads *not in this card's library*. The Device card's rows come from the
   player (`library_track`), which is what the editor used for every card before this. A row the
   source no longer has is shown as missing and skipped by the broadcast, never deleted here.
-- The assistant is that composer, and an answer is drawn **in the tree**: the card's own folders
+- The assistant is that bar, and an answer is drawn **in the tree**: the card's own folders
   pruned to the rows the search answered, with the answer's words and its offer in a panel above
   them and **Files** in the column's header to give the whole card back. Nothing on the card
   changes until the person acts: one action adds the answer's rows to the open list — appended at

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ArrowUp, ListMusic, TriangleAlert } from 'lucide-react';
+import { ListMusic, Search, Sparkles, TriangleAlert } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/reui/alert';
 import { Button } from '@/components/ui/button';
@@ -523,9 +523,23 @@ export function SourcesColumn({
     setFilters({ open: false, initial: {} });
   }
 
+  /** The magnifier: the same words, filtering the card's tree instead of asking the model. */
+  function searchFiles(text: string) {
+    setQuery(text.trim());
+    setShowingAnswer(false);
+  }
+
+  function clearSearch() {
+    setQuery('');
+    setSentence('');
+  }
+
+  /* Enter does what the browser can do: Ask where there is a model, and the direct search
+   * where there is not. */
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    void ask(sentence);
+    if (assistant === 'available') void ask(sentence);
+    else searchFiles(sentence);
   };
 
   const setupNote =
@@ -546,6 +560,10 @@ export function SourcesColumn({
               {plural(answer.search.tracks.length, 'track')} · the card’s folders, pruned to
               them
             </p>
+          ) : query ? (
+            <p className="text-xs text-muted-foreground">
+              Searching the card for “{query}”
+            </p>
           ) : null}
         </div>
         {showing ? (
@@ -558,24 +576,19 @@ export function SourcesColumn({
           >
             Files
           </Button>
+        ) : query ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Clear the search"
+            onClick={clearSearch}
+          >
+            Clear
+          </Button>
         ) : null}
       </div>
 
-      {!showing && !loading && hasSources ? (
-        <div className="flex flex-col gap-1">
-          <label htmlFor="source-search" className="sr-only">
-            Search sources
-          </label>
-          <Input
-            id="source-search"
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search sources"
-            autoComplete="off"
-          />
-        </div>
-      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 lg:overflow-auto">
         {reply?.answer ? (
@@ -644,77 +657,94 @@ export function SourcesColumn({
 
         {phase ? <Pending phase={phase} /> : null}
 
+        {/* One bar for both jobs: the same words either filter the card's tree or go to the
+            model. The magnifier is the direct search and always there; Ask is the primary and
+            only present when this browser has the built-in model. */}
+        <form onSubmit={submit} className="flex items-center gap-2">
+          <label htmlFor="source-bar" className="sr-only">
+            Search the sources, or ask
+          </label>
+          <Input
+            id="source-bar"
+            value={sentence}
+            onChange={(event) => setSentence(event.target.value)}
+            placeholder="Search or ask — a mood, a tempo, a name…"
+            maxLength={280}
+            autoComplete="off"
+            disabled={pending}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Search the sources"
+            title="Search the sources"
+            onClick={() => searchFiles(sentence)}
+            disabled={pending || !hasSources}
+          >
+            <Search aria-hidden="true" />
+          </Button>
+          {assistant === 'available' ? (
+            <Button
+              type="submit"
+              variant="solid"
+              size="icon"
+              aria-label="Ask"
+              title="Ask"
+              disabled={pending || !sentence.trim()}
+            >
+              {pending ? <Spinner aria-hidden="true" /> : <Sparkles aria-hidden="true" />}
+            </Button>
+          ) : null}
+        </form>
+
+        {assistant === 'available' && messages.length === 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {OPENERS.map((opener) => (
+              <Button
+                key={opener}
+                type="button"
+                variant="outline"
+                size="xs"
+                disabled={pending}
+                onClick={() => void ask(opener)}
+              >
+                {opener}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+
         {assistant === null ? (
-          <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
             <Spinner aria-hidden="true" className="size-3.5" />
             Checking Chrome’s built-in model…
           </p>
         ) : assistant === 'available' ? (
-          <>
-            <form onSubmit={submit} className="flex items-center gap-2">
-              <label htmlFor="ask-sentence" className="sr-only">
-                Ask
-              </label>
-              <Input
-                id="ask-sentence"
-                value={sentence}
-                onChange={(event) => setSentence(event.target.value)}
-                placeholder="A mood, a tempo, a name, a key…"
-                maxLength={280}
-                autoComplete="off"
-                disabled={pending}
-              />
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
               <Button
-                type="submit"
-                variant="solid"
-                size="icon"
-                aria-label="Ask"
-                disabled={pending || !sentence.trim()}
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => openFilters(seed)}
               >
-                {pending ? <Spinner aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
+                Filters
               </Button>
-            </form>
-            {messages.length === 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {OPENERS.map((opener) => (
-                  <Button
-                    key={opener}
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    disabled={pending}
-                    onClick={() => void ask(opener)}
-                  >
-                    {opener}
-                  </Button>
-                ))}
-              </div>
-            ) : null}
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
+              {reply ? (
                 <Button
                   type="button"
                   variant="ghost"
                   size="xs"
-                  onClick={() => openFilters(seed)}
+                  onClick={clear}
+                  disabled={pending}
                 >
-                  Filters
+                  New ask
                 </Button>
-                {reply ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={clear}
-                    disabled={pending}
-                  >
-                    New ask
-                  </Button>
-                ) : null}
-              </div>
-              <span>The model never sees a track.</span>
+              ) : null}
             </div>
-          </>
+            <span>The model never sees a track.</span>
+          </div>
         ) : (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-muted-foreground">{setupNote}</p>
@@ -726,7 +756,7 @@ export function SourcesColumn({
                 {downloadError}
               </p>
             ) : null}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {assistant === 'downloadable' ? (
                 <Button
                   type="button"
