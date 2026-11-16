@@ -365,13 +365,16 @@ list beside the tree, they are the tree: the card's own folders, pruned to the r
 answered, kept in their folders so a folder can still be dragged as one block, with **Files** in
 the column's header giving the whole card back. The tree's shape is the card's, not the answer's
 order — that order is what **Add** appends, and it is never re-sorted. A sentence becomes a message
-from the person, and the answer is a message from Ask carrying the reading, the source and the
-offer to add its rows; a failure replaces the answer and leaves the tree alone, because there is
+from the person, and the answer is the rows themselves with a panel that names the source and the
+offer to add them; a failure replaces the answer and leaves the tree alone, because there is
 nothing to prune it to. The model writes no prose (ADR 0050's shape rule; ADR 0086), and
 [ADR 0093](../adr/0093-ask-edits-the-list-it-is-beside.md) still holds: Ask is beside the list it
-edits, with no page and no rail item. The answer names what was understood — "Found 10 tracks —
-techno, 124–132 BPM" — and **Filters** opens the exact `library_search` arguments, seeded with that
-Intent, for a misparse. There is no Intent panel and no separate **Run search**. An answer that
+edits, with no page and no rail item. The answer does not narrate itself: its count is the column's
+heading, its rows are the tree, and the panel says where they came from and offers to add them.
+The one thing the rows cannot say is that the ranges asked for found nothing and the retry dropped
+them, so the panel says that when it happens. **Filters** opens the exact `library_search`
+arguments, seeded with that Intent, for a misparse. There is no Intent panel and no separate
+**Run search**. An answer that
 names no group or artist is drawn from across the matched window, not from the search's first page:
 Ask reads up to the player's 200-row window and keeps one track per artist, spread across the
 window in library order, until the count is met, then fills any remainder at even steps through
@@ -405,8 +408,9 @@ where they are; the request is a local call, not a fetch. The profile is aggrega
 count, ranges and quartiles — never a track, artist, path or per-track measurement.
 
 **P8. The model's language set is Chrome's.** English, Japanese, Spanish, German and French at the
-time of writing; `web/README.md` names the set. A misparse is visible in the answer's reading and
-fixable by asking again or opening **Filters**, which is the rule (ADR 0053, ADR 0086).
+time of writing; `web/README.md` names the set. A misparse is visible in the rows that come back —
+not in a sentence about them — and is fixable by asking again or opening **Filters**, which is the
+rule (ADR 0053, ADR 0086).
 
 **P9. A range sees only measured tracks.** Every measurement filter — BPM, a track's length,
 energy, danceability, valence, arousal — needs a Snapshot row, so a track with no row still

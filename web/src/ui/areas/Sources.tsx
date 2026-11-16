@@ -33,12 +33,12 @@ import { purposeFilters, requestIntent, relaxRanges, spreadAnswer } from '../../
 import {
   addedNote,
   addQuestion,
-  answerText,
   CARD_CHANGED,
   filterWords,
   nameFor,
   OPENERS,
   READ_ONLY_SOURCE,
+  RELAXED_NOTE,
   SAVED_NOTE,
   sourceText,
   type ChatMessage,
@@ -199,12 +199,9 @@ function AnswerBlock({
   return (
     <Card size="sm">
       <CardContent className="flex flex-col gap-2">
-        {/* The answer is announced as it lands: the thread it used to sit in is not a live
-            region any more, and its rows are drawn in the tree without saying anything. */}
-        <p role="status" className="text-sm break-words">
-          <span className="sr-only">Ask said: </span>
-          {answerText(answer)}
-        </p>
+        {/* The rows and the count are the answer; the panel says where they came from, how to
+            read the sentence again (Filters), and the one thing the rows cannot: that the
+            ranges asked for found nothing and the retry dropped them. */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
           <span>{sourceText(answer.source)}</span>
           <span aria-hidden="true">·</span>
@@ -217,11 +214,18 @@ function AnswerBlock({
           >
             Filters
           </Button>
+          {answer.relaxed ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span role="status">{RELAXED_NOTE}</span>
+            </>
+          ) : null}
         </div>
 
         {count === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Every filter has to match at once, and a range only sees analysed tracks.
+          <p role="status" className="text-xs text-muted-foreground">
+            Nothing matched: every filter has to match at once, and a range only sees analysed
+            tracks.
           </p>
         ) : answer.draftId ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -556,7 +560,7 @@ export function SourcesColumn({
         <div className="flex min-w-0 flex-col gap-0.5">
           <p className="text-sm font-light">{showing ? 'Ask found' : 'Files'}</p>
           {showing && answer ? (
-            <p className="text-xs text-muted-foreground tabular-nums">
+            <p role="status" className="text-xs text-muted-foreground tabular-nums">
               {plural(answer.search.tracks.length, 'track')} · the card’s folders, pruned to
               them
             </p>

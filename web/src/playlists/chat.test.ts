@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { McpSearch, SearchArgs } from '../device/mcp';
+import type { SearchArgs } from '../device/mcp';
 import {
-  answerText,
   filterWords,
   nameFor,
   READ_ONLY_SOURCE,
@@ -9,16 +8,6 @@ import {
   addedNote,
   SAVED_NOTE,
 } from './chat';
-
-function search(partial: Partial<McpSearch> = {}): McpSearch {
-  return {
-    query: '',
-    matched: 0,
-    tracks: [],
-    truncated: false,
-    ...partial,
-  };
-}
 
 const INTENT: SearchArgs = {
   genre: 'techno',
@@ -64,53 +53,6 @@ describe('filterWords', () => {
   });
 });
 
-describe('answerText', () => {
-  it('counts what was found and says what was asked', () => {
-    const text = answerText({
-      intent: INTENT,
-      search: search({
-        matched: 18,
-        tracks: [{ path: 'a' }, { path: 'b' }] as McpSearch['tracks'],
-      }),
-    });
-    expect(text).toBe('Found 2 tracks — techno, party, key 8A, 124–132 BPM.');
-  });
-
-  it('says the whole count when the page is cut', () => {
-    const tracks = Array.from({ length: 20 }, (_, index) => ({ path: `t${index}` }));
-    const text = answerText({
-      intent: { genre: 'techno' },
-      search: search({ matched: 240, tracks: tracks as McpSearch['tracks'], truncated: true }),
-    });
-    expect(text).toBe('Found 20 of 240 tracks — techno.');
-  });
-
-  it('says nothing matched with the filters that ran', () => {
-    expect(answerText({ intent: INTENT, search: search() })).toBe(
-      'Nothing matched techno, party, key 8A, 124–132 BPM.',
-    );
-    expect(answerText({ intent: {}, search: search() })).toBe('Nothing matched.');
-  });
-
-  it('says why a relaxed answer lost its ranges', () => {
-    const text = answerText({
-      intent: { mood: ['relaxed'] },
-      search: search({ matched: 1, tracks: [{ path: 'a' }] as McpSearch['tracks'] }),
-      relaxed: true,
-    });
-    expect(text).toBe(
-      'Those ranges found nothing, so I dropped them. Found 1 track — relaxed.',
-    );
-  });
-
-  it('counts one track as one track', () => {
-    const text = answerText({
-      intent: { query: 'Rainy Sunday' },
-      search: search({ matched: 1, tracks: [{ path: 'a' }] as McpSearch['tracks'] }),
-    });
-    expect(text).toBe('Found 1 track — “Rainy Sunday”.');
-  });
-});
 
 describe('the save question', () => {
   it('asks about tracks, or about one', () => {

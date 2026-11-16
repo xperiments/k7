@@ -122,27 +122,12 @@ export function filterWords(intent: SearchArgs): string[] {
   return words;
 }
 
-function countOf(search: McpSearch): string {
-  const shown = search.tracks.length;
-  /* "1 of 240 tracks": the word follows the total when the page is cut, not the page. */
-  const word = !search.truncated && shown === 1 ? 'track' : 'tracks';
-  return search.truncated ? `${shown} of ${search.matched} ${word}` : `${shown} ${word}`;
-}
-
 /**
- * The assistant's sentence for one answer. The filters are the ones that ran: after a relaxed
- * retry that is the retry, and the prefix says why.
+ * Why an answer's rows are not the ranges that were asked for: the exact search found nothing,
+ * so the retry dropped them. The rows are the tree and the count is the heading, so this is the
+ * one thing the panel still has to say about how it read the sentence.
  */
-export function answerText(answer: Pick<Answer, 'intent' | 'search' | 'relaxed'>): string {
-  const { intent, search, relaxed } = answer;
-  const words = filterWords(intent);
-  const tail = words.length > 0 ? ` ${words.join(', ')}` : '';
-  const head =
-    search.tracks.length === 0
-      ? `Nothing matched${tail}.`
-      : `Found ${countOf(search)}${tail ? ` — ${words.join(', ')}` : ''}.`;
-  return relaxed ? `Those ranges found nothing, so I dropped them. ${head}` : head;
-}
+export const RELAXED_NOTE = 'Those ranges found nothing, so I dropped them.';
 
 /** The one line under an answer: which library it came from. */
 export function sourceText(source: AnswerSource): string {

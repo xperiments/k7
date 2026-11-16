@@ -397,8 +397,8 @@ _Avoid_: Ask page, assistant page, AI Agent, Ask tab
 
 **Ask**:
 The conversation on the **IA Agent**: the composer at the foot of the tree, what the person said,
-and the App's answer — the reading, the rows it found drawn in the tree, and the offer to add them
-to the list beside it. The model writes the **Intent**; the App writes what Ask says.
+and the App's answer — the rows it found, drawn in the tree, and the offer to add them to the list
+beside it. The model writes the **Intent**; the App writes what Ask says.
 _Avoid_: chatbot, AI assistant, generate
 
 **Intent**:
