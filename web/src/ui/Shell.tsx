@@ -160,34 +160,28 @@ function Nav({
   collapsed: boolean;
 }) {
   return (
-    <nav aria-label="Areas" className="flex flex-col gap-3">
+    <nav aria-label="Areas" className="flex flex-col">
       {groups.map((group) => (
-        <div key={group.id} className="flex flex-col gap-3">
-          <div
-            className={cn(
-              'flex w-full min-w-0 items-center gap-2 [@media(max-height:560px)]:hidden',
-              collapsed && 'hidden',
-            )}
-          >
-            <span className="shrink-0 text-xs font-medium tracking-[0.12em] uppercase text-muted-foreground">
-              {group.label}
-            </span>
-            <span aria-hidden="true" className="h-px min-w-0 flex-1 bg-foreground/20" />
-          </div>
-          <SidebarMenu className="gap-0 [&>li+li]:-mt-px">
-            {group.items.map((item) => (
-              <RailItem
-                key={item.href}
-                href={item.href}
-                label={item.label}
-                icon={item.icon}
-                active={item.names.includes(route.name)}
-                badge={item.badge}
-                collapsed={collapsed}
-              />
-            ))}
-          </SidebarMenu>
-        </div>
+        /* The rail prints no group titles: the areas are the breadcrumb's job, and the
+         * destinations are one column of domes split only by the gap between groups. Each
+         * list still carries its area's name for assistive tech. */
+        <SidebarMenu
+          key={group.id}
+          aria-label={group.label}
+          className="gap-0 [&>li+li]:-mt-px"
+        >
+          {group.items.map((item) => (
+            <RailItem
+              key={item.href}
+              href={item.href}
+              label={item.label}
+              icon={item.icon}
+              active={item.names.includes(route.name)}
+              badge={item.badge}
+              collapsed={collapsed}
+            />
+          ))}
+        </SidebarMenu>
       ))}
     </nav>
   );

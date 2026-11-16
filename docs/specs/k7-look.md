@@ -373,7 +373,7 @@ exception to the pill rule); the install control is a dome button in the rail's 
 default state the button is outlined and transparent, with a neutral icon and label; the current
 one fills only its dome with the secondary and turns its icon dark, while the button, its border
 and the label stay neutral. Above 768px the rail rests collapsed to its icons: the top logo
-is the toggle, the labels, the group rules and the counts go `sr-only`, the rail narrows to
+is the toggle, the labels and the counts go `sr-only`, the rail narrows to
 `w-16`, and the icons carry tooltips — the logo, every row, Install and Settings — after a
 two-second hover. Expanding it is the remembered choice; the first visit is collapsed. Below
 768px the rail is hidden; the stage header's logo opens it as the collapsed rail over the
@@ -393,8 +393,10 @@ stage, with a backdrop behind it and the mark at the drawer's top to close it. N
 - The area is the sidebar's group and the page is its item: **Media Sources > Sources**, **Media
   Sources > Albums**, **Playlists**. The album, artist, Drive
   and Video pages are **Media Sources >** that page; the Player's page says what it shows
-  (**Player > Now playing**); Settings has no area. The header and the sidebar read one
-  `NAV_GROUPS` definition, so a renamed item cannot drift from its breadcrumb.
+  (**Player > Now playing**); Settings has no area. The rail prints no group title or rule — the
+  area lives in the breadcrumb, and its destinations are one column of domes split by the gap
+  between groups, each group a list named by its area for assistive tech. The header and the
+  sidebar read one `NAV_GROUPS` definition, so a renamed item cannot drift from its breadcrumb.
 - The editor's page is the list's own name rather than a word for the screen, and that crumb is
   the field that renames the list: pressing the name opens a pill input of the same metrics,
   Enter or leaving it commits, Escape abandons it, and an empty name is refused by returning the
