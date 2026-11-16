@@ -2311,7 +2311,7 @@
     {
       "id": "APP-55",
       "title": "The image carries measurements only",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-54"],
       "at": "2026-11-15T21:54:57Z",
@@ -2333,7 +2333,7 @@
     {
       "id": "APP-56",
       "title": "The page and the editor stand on the files",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["APP-54", "FW-05"],
       "at": "2026-11-15T21:54:57Z",
@@ -2355,7 +2355,7 @@
     {
       "id": "APP-57",
       "title": "The list's name is edited in the stage header",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-15T23:19:27Z",
       "by": "deepseek",
@@ -2381,7 +2381,7 @@
     {
       "id": "LB-05",
       "title": "The editor's actions are agent tools",
-      "state": "review",
+      "state": "done",
       "group": "LB",
       "at": "2026-11-15T23:30:13Z",
       "by": "dsh",
@@ -2402,7 +2402,7 @@
     {
       "id": "LB-06",
       "title": "An agent can design a K7 label from a brief",
-      "state": "review",
+      "state": "done",
       "group": "LB",
       "at": "2026-11-15T23:41:26Z",
       "by": "dsh",
@@ -2423,7 +2423,7 @@
     {
       "id": "APP-58",
       "title": "Ask is the composer under the tree, and its answer is the tree",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "yolo": true,
       "at": "2026-11-15T23:46:39Z",
@@ -2455,7 +2455,7 @@
     {
       "id": "LB-07",
       "title": "An agent reads the guide in the page when a session blocks its routes",
-      "state": "proposed",
+      "state": "todo",
       "group": "LB",
       "at": "2026-11-15T23:54:25Z",
       "by": "dsh",
@@ -2473,7 +2473,7 @@
     {
       "id": "APP-59",
       "title": "The player link recovers without a reload",
-      "state": "proposed",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-16T00:22:15Z",
       "by": "deepseek",
