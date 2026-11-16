@@ -212,31 +212,13 @@ export function Shell({ route, children }: { route: Route; children: React.React
   }, []);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  /* The rail's width is this browser's, like the old theme: remembered so a reload does not
-   * throw the workspace back open. */
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      const stored = localStorage.getItem('k7.rail.v1');
-      /* Icons only is the resting state; expanding it is the choice. */
-      return stored === null ? true : stored === 'collapsed';
-    } catch {
-      return true;
-    }
-  });
+  /* Icons only, on every visit: the rail opens collapsed and expanding it lasts this page,
+   * so a reload never throws the workspace back open. */
+  const [collapsed, setCollapsed] = useState(true);
 
-  const toggleRail = () => {
-    setCollapsed((open) => {
-      const next = !open;
-      try {
-        localStorage.setItem('k7.rail.v1', next ? 'collapsed' : 'open');
-      } catch {
-        /* a browser that refuses storage keeps it for this page's life */
-      }
-      return next;
-    });
-  };
+  const toggleRail = () => setCollapsed((open) => !open);
 
-  /* The drawer is always the collapsed rail; the desktop follows the remembered state. */
+  /* The drawer is always the collapsed rail; the desktop follows the toggle above. */
   const compact = isMobile || collapsed;
   const railExpanded = isMobile ? mobileOpen : !collapsed;
   const railLabel = isMobile

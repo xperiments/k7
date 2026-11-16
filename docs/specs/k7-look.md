@@ -376,7 +376,8 @@ one fills only its dome with the secondary and turns its icon dark, while the bu
 and the label stay neutral. Above 768px the rail rests collapsed to its icons: the top logo
 is the toggle, the labels and the counts go `sr-only`, the rail narrows to
 `w-16`, and the icons carry tooltips — the logo, every row, Install and Settings — after a
-two-second hover. Expanding it is the remembered choice; the first visit is collapsed. Below
+two-second hover. The rail opens collapsed on every visit: expanding it lasts the page and is not
+remembered, so a reload never throws the workspace back open. Below
 768px the rail is hidden; the stage header's logo opens it as the collapsed rail over the
 stage, with a backdrop behind it and the mark at the drawer's top to close it. No `K7Shell`. **[ADR]**
 
