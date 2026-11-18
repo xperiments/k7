@@ -211,7 +211,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t32_label $(BIN)/t34_json $(BIN)/t35_card_use \
          $(BIN)/t36_wifi_record $(BIN)/t38_setup $(BIN)/t39_shuffle_default \
          $(BIN)/t40_playlist_file $(BIN)/t41_handover $(BIN)/t42_share \
-         $(BIN)/t43_espnow_stream
+         $(BIN)/t43_espnow_stream $(BIN)/t44_espnow_emitter
 
 .PHONY: all test integration layering label player check tools fixtures bench control control-check clean help
 
@@ -392,6 +392,10 @@ $(BIN)/t42_share: $(OBJ)/share.o $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t43_espnow_stream: $(OBJ)/espnow_stream.o $(OBJ)/t43_espnow_stream.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t44_espnow_emitter: $(OBJ)/espnow_stream.o $(OBJ)/t44_espnow_emitter.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

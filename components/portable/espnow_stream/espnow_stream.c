@@ -2,7 +2,6 @@
 
 #include <string.h>
 
-/* Status header: version, type, free (3), highest (2), nack count (1). */
 #define STATUS_HEADER 8
 
 size_t es_fragment(uint16_t seq, const uint8_t *frame, size_t len,
@@ -84,4 +83,93 @@ bool es_status_parse(const uint8_t *pkt, size_t len, es_status_t *out)
     for (unsigned i = 0; i < out->nack_count; i++)
         out->nack[i] = (uint16_t)((pkt[STATUS_HEADER + 2 * i] << 8) | pkt[STATUS_HEADER + 2 * i + 1]);
     return true;
+}
+
+/* ------------------------------------------------------------------- the sender */
+
+static bool send_frame(es_emitter_t *e, uint16_t seq, const uint8_t *frame, size_t len)
+{
+    size_t lens[ES_MAX_FRAGS];
+    size_t n = es_fragment(seq, frame, len, e->pktbuf, lens);
+    if (!n) return false;
+    for (size_t i = 0; i < n; i++) {
+        /* A radio that refuses one packet has lost the frame: the receiver's gap will name it
+         * again if it is still in the history. */
+        if (!e->send || !e->send(e->pktbuf + i * ES_MTU, lens[i], e->ctx)) return false;
+        e->packets++;
+    }
+    return true;
+}
+
+void es_emitter_init(es_emitter_t *e, uint8_t *arena, size_t arena_bytes,
+                     es_send_fn send, void *ctx)
+{
+    if (!e) return;
+    memset(e, 0, sizeof *e);
+    e->arena = arena;
+    e->slots = (unsigned)(arena_bytes / ES_MAX_FRAME);
+    if (e->slots > ES_HISTORY_FRAMES) e->slots = ES_HISTORY_FRAMES;
+    e->send = send;
+    e->ctx = ctx;
+}
+
+bool es_emitter_push(es_emitter_t *e, const uint8_t *frame, size_t len)
+{
+    if (!e || !frame || !e->arena || !e->slots || len == 0 || len > ES_MAX_FRAME) return false;
+
+    uint16_t seq = e->seq_next++;
+    unsigned slot = seq % e->slots;
+    memcpy(e->arena + (size_t)slot * ES_MAX_FRAME, frame, len);
+    e->ent[slot].seq = seq;
+    e->ent[slot].len = (uint16_t)len;
+    e->ent[slot].used = true;
+
+    if (e->credit >= len) {
+        e->credit -= (uint32_t)len;
+        if (send_frame(e, seq, frame, len)) {
+            e->sent++;
+        } else {
+            e->dropped++;
+        }
+    } else {
+        /* The ring is full for now: the frame waits in the history and the receiver's next gap
+         * names it. That is what makes a full ring a pause rather than a loss. */
+        e->held++;
+    }
+    return true;
+}
+
+unsigned es_emitter_status(es_emitter_t *e, const uint8_t *pkt, size_t len)
+{
+    es_status_t st;
+    if (!e || !pkt || !es_status_parse(pkt, len, &st)) return 0;
+
+    e->have_status = true;
+    e->credit = st.free_bytes;
+
+    unsigned resent = 0;
+    for (unsigned i = 0; i < st.nack_count; i++) {
+        uint16_t seq = st.nack[i];
+        unsigned slot = seq % e->slots;
+        if (!e->slots || !e->ent[slot].used || e->ent[slot].seq != seq) continue;
+        size_t flen = e->ent[slot].len;
+        if (e->credit < flen) break;
+        e->credit -= (uint32_t)flen;
+        if (send_frame(e, seq, e->arena + (size_t)slot * ES_MAX_FRAME, flen)) {
+            e->resent++;
+            resent++;
+        }
+    }
+    return resent;
+}
+
+void es_emitter_stats(const es_emitter_t *e, es_emitter_stats_t *out)
+{
+    if (!e || !out) return;
+    out->packets = e->packets;
+    out->sent = e->sent;
+    out->resent = e->resent;
+    out->dropped = e->dropped;
+    out->held = e->held;
+    out->have_status = e->have_status;
 }
