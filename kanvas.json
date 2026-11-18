@@ -41,6 +41,10 @@
     {
       "id": "PL",
       "name": "Player"
+    },
+    {
+      "id": "EN",
+      "name": "ESP-NOW"
     }
   ],
   "tasks": [
@@ -2845,7 +2849,7 @@
     {
       "id": "PL-09",
       "title": "Two boards, one stream",
-      "state": "review",
+      "state": "done",
       "group": "PL",
       "deps": ["PL-02", "PL-04", "PL-06"],
       "yolo": true,
@@ -2913,7 +2917,7 @@
     {
       "id": "FW-07",
       "title": "The broadcast reclaims stale stream clients",
-      "state": "review",
+      "state": "done",
       "group": "FW",
       "at": "2026-11-18T19:51:46Z",
       "by": "agent",
@@ -2930,6 +2934,45 @@
           "text": "Implemented and on the board: a dead client now wakes its sender (it never did - the ring was full and nothing else woke it), the sender's wait is timed so a missed wake cannot hold a slot, keepalive is set on client sockets, and the census reports 'clients N/4'. Host tier green. Reproduced the 503 with four SIGSTOPped listeners - and that case is correct, they are alive; the vanished-peer case is not reproducible on this bench, so the fix closes the paths by construction and the census is the next instrument. Ticket: docs/design/broadcast-decode-failures/issues/02-the-broadcast-reclaims-stale-clients.md"
         }
       ]
+    },
+    {
+      "id": "EN-01",
+      "title": "The audio packet: one MP3 frame in ESP-NOW fragments",
+      "state": "proposed",
+      "group": "EN",
+      "at": "2026-11-18T23:52:20Z",
+      "by": "agent",
+      "desc": "The bytes the audio travels in: every MP3 frame as two ESP-NOW packets with a sequence number, and the player's status packet carrying its free buffer and the frames it missed. Finished when the format is pinned by host tests and both firmwares agree on it byte for byte.\n\nAlready on branch `espnow-player` (ADR 0103, spec E1-E9, t43 with 101 checks) - approve it and I will move it straight to review.\n\nTicket: docs/design/espnow-player/issues/01-the-wire.md"
+    },
+    {
+      "id": "EN-02",
+      "title": "The K7 sends the player's audio over ESP-NOW",
+      "state": "proposed",
+      "group": "EN",
+      "deps": ["EN-01"],
+      "at": "2026-11-18T23:52:20Z",
+      "by": "agent",
+      "desc": "Every frame the broadcast encodes also goes to an ESP-NOW emitter: fragmented, sent only within the free buffer the player reports, and resent when the player names a missing frame. Finished when a listener hears the stream with no HTTP request at all and the K7's census counts frames sent, resends and drops.\n\nWhy it matters: the HTTP path goes through the access point and that hop is what stalls the audio for seconds at a time; ESP-NOW is one radio link between the two boards.\n\nTicket: docs/design/espnow-player/issues/02-the-k7-emits-audio-over-esp-now.md"
+    },
+    {
+      "id": "EN-03",
+      "title": "The player listens over ESP-NOW instead of HTTP",
+      "state": "proposed",
+      "group": "EN",
+      "deps": ["EN-01", "EN-02"],
+      "at": "2026-11-18T23:52:20Z",
+      "by": "agent",
+      "desc": "The player takes its audio from the K7's emitter and its HTTP stream client is deleted: no request, no reconnect schedule, no ten-second stall rules. The ring, its 4.5 s prime, the line output and the light are untouched; three seconds without a packet is Ready, not a reconnect. A frame that does not arrive is asked for again and the frames behind it wait, so a lost packet costs a click only when the resend misses its second.\n\nFinished when the player plays from the K7's emitter at 44.1 kHz with no web server involved, and the weak-link case is recorded in counters.\n\nTicket: docs/design/espnow-player/issues/03-the-player-receives-audio-over-esp-now.md"
+    },
+    {
+      "id": "EN-04",
+      "title": "The K7 chooses one emitter: HTTP or ESP-NOW",
+      "state": "proposed",
+      "group": "EN",
+      "deps": ["EN-02"],
+      "at": "2026-11-18T23:52:20Z",
+      "by": "agent",
+      "desc": "HTTP or ESP-NOW for the player's feed, one at a time, chosen at boot and logged. The web UI's own HTTP listeners keep working in either mode - this is about the feed the player consumes, and sending it twice would spend twice the radio for one listener.\n\nFinished when both modes boot and log their choice and neither ever runs two emitters. A Menu row that picks between them is the next surface and is not in this task.\n\nTicket: docs/design/espnow-player/issues/04-the-emitter-is-a-setting.md"
     }
   ]
 }
