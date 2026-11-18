@@ -45,6 +45,7 @@
 #include "cassette_style.h"
 #include "cassette_widgets.h"
 #include "setup.h"
+#include "share.h"
 #include "cassette_window.h"
 #include "library.h"
 #include "menu.h"
@@ -241,6 +242,12 @@ static menu_facts_t build_facts(void)
     f.network = setup.provisioned ? setup.network : NULL;
     f.setup_password = setup.password;
     f.hotspot_address = setup.session ? SETUP_NETWORK_IP : NULL;
+    /* The share window (ADR 0099), on the same terms: its own lock, read under it. */
+    static share_status_t share;
+    share_status(&share);
+    f.share_on = share.state != SHARE_CLOSED;
+    f.share_failed = share.failed;
+    f.share_left_s = (uint16_t)((share.left_ms + 999) / 1000);
     f.playlists = s_playlists;
     f.playlist_count = s_playlist_count;
     f.playlist_selected = playlist_select_current();
@@ -386,6 +393,14 @@ static void activate(void)
             if (st.session) setup_session_stop(now_ms());
             else if (!setup_session_start(now_ms()))
                 ESP_LOGW(TAG, "the setup network did not start");
+            break;
+        }
+        case MENU_ACTION_WIFI_SHARE: {
+            share_status_t st;
+            share_status(&st);
+            if (st.state != SHARE_CLOSED) share_stop(now_ms());
+            else if (!share_start(now_ms()))
+                ESP_LOGW(TAG, "the share window did not open");
             break;
         }
         case MENU_ACTION_WIFI_RESET:

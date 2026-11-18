@@ -94,6 +94,17 @@ size_t mi_ring_put(mi_ring_t *r, const void *data, size_t n)
     return k;
 }
 
+size_t mi_ring_drop(mi_ring_t *r, size_t n)
+{
+    if (!r || n == 0) return 0;
+    xSemaphoreTake(r->lock, portMAX_DELAY);
+    size_t k = n < r->used ? n : r->used;
+    r->tail = (r->tail + k) % r->size;
+    r->used -= k;
+    xSemaphoreGive(r->lock);
+    return k;
+}
+
 size_t mi_ring_get(mi_ring_t *r, void *out, size_t capacity)
 {
     if (!r || !out || capacity == 0) return 0;

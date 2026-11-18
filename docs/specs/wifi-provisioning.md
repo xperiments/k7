@@ -14,6 +14,9 @@ page and no runtime credentials.
 **Status:** designed and specified; **nothing is built.** Every number here that is a memory
 number is arithmetic until the board pass in §10 says otherwise, and this document must not be
 read as proof that the access point fits. The tickets are on the board under the **Setup** group.
+The **share window** — the other window on the same radio, the one that hands this device's network
+to a K7Player — is a separate feature with no access point, specified in
+[`network-handover.md`](./network-handover.md).
 
 ---
 
@@ -59,6 +62,13 @@ both.
 | Unprovisioned boot | No record in NVS. The setup network comes up before the join is even attempted |
 | Unreachable at boot | A record exists and no association is made within **20 s** of the boot |
 | On demand | The Menu's `Settings → Wi-Fi → Setup` row (the panel's label for the setup network), any time the device is running |
+
+**P9a. The share window is not one of them, and is not this network.** The **share window**
+— sixty seconds in which the device hands its network to a K7Player over ESP-NOW
+([`network-handover.md`](./network-handover.md)) — is opened from the Menu beside this one. It
+raises no access point, answers one player, and is a different window with a different job; a
+device can be sharing without serving the setup page, and can serve the setup page without
+sharing. What the two have in common is that a person opens each of them.
 
 **P10. A mid-session drop never raises it.** A device that has been associated and then loses its
 network — a router rebooting, a deauth, a moved microwave — retries forever in silence with the
@@ -262,8 +272,8 @@ says so on its next reload or in a join's answer.
 
 ## 7. The panel
 
-**P34.** The Menu gains one row and one list — the existing model, a five-row window, `MENU_ROWS`
-5, `MENU_LABEL_MAX` 96, `MENU_VALUE_MAX` 32. A new glyph for `Wi-Fi` joins `cassette_icons.h`, in
+**P34.** The Menu gains one list — the existing model, a five-row window, `MENU_ROWS` 5,
+`MENU_LABEL_MAX` 96, `MENU_VALUE_MAX` 32. A new glyph for `Wi-Fi` joins `cassette_icons.h`, in
 the strip's own style, and `MENU_ICON_WIFI` joins the closed enum.
 
 ```
@@ -271,11 +281,18 @@ Settings
 ├─ Backlight   Station   Library   Wi-Fi ›   About
    Wi-Fi
    ├─ Setup              action   START / STOP
+   ├─ Share              action   START / 43s / STOP
    ├─ Network            value    the stored SSID, or none
    ├─ Password           value    the setup password, in clear
    ├─ Reset password     action   RESET
    └─ Address            value    192.168.4.1 while up, — while down
 ```
+
+`Share` is the **share window**'s only trigger ([`network-handover.md`](./network-handover.md)):
+`START` when it is closed, the seconds left while it is open, `STOP` to end it early. It sits beside
+`Setup` and does nothing to it — one hands the network to a K7Player over the radio, the other
+raises the access point for a browser. Six rows do not fit the five-row window; the list scrolls,
+which the model already does for a directory with more than five children.
 
 **P35. A setup network that cannot start says so in the row** — `UNAVAILABLE` — and the firmware retries
 every 5 s with a throttled log line, rather than giving up. The retry is the same posture as the
@@ -315,6 +332,15 @@ window it was built for ([ADR 0077](../adr/0077-the-setup-surface-exists-only-wh
 from casually joining the speaker's setup network. It defends nothing against a person who can reach the
 device's LAN, and WPA2-PSK is readable by any client that joins. This is why it is shown on the
 panel and why it is not pretended to be more than it is.
+
+**P39a. The share window's curtain is the window, and the key is a lock on the wire.** Neither
+is a boundary in the WPA2 sense. The exchange's encryption (`network-handover.md`) keeps a passive
+listener from reading the home network's password in flight; the window keeps a drive-by request
+from being answered at all. What neither does is authenticate *who asked*: inside the sixty
+seconds, a device that reaches the beacon first is answered, because the K7 has nothing to check a
+stranger against. One player per window and a window that only a person opens are the two levers
+that make the exposure concrete rather than general
+([ADR 0099](../adr/0099-the-network-is-handed-over-esp-now-in-a-window.md)).
 
 ---
 

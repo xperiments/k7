@@ -37,6 +37,7 @@
 #include "snapshot_http.h"
 #include "front_door.h"
 #include "setup.h"
+#include "share.h"
 #include "setup_http.h"
 #include "flash_job.h"
 #include "playlist_select.h"
@@ -492,6 +493,12 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
      * says so (wifi-provisioning.md P35). */
     setup_init();
     setup_start_task();
+
+    /* The share window has no boot state: it is closed until a person opens it, and a
+     * device that never shares carries nothing for it (network-handover.md H13) - not even
+     * its task, which share_start() creates and which deletes itself when the window
+     * closes. */
+    share_init();
 
     /* 3. The card. A missing card is a report, not a failure (R8). */
     app_board_card_t card = app_board_card_mount(cfg->music_dir);

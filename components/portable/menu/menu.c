@@ -67,6 +67,7 @@ static const fixed_row_t k_settings_rows[] = {
  * setup password, which the view ellipsizes like any other label. */
 static const fixed_row_t k_wifi_rows[] = {
     {"Setup", MENU_ICON_WIFI, MENU_ROW_ACTION},
+    {"Share", MENU_ICON_WIFI, MENU_ROW_ACTION},
     {"Network", MENU_ICON_LIBRARY, MENU_ROW_VALUE},
     {"Password", MENU_ICON_SETTINGS, MENU_ROW_VALUE},
     {"Reset password", MENU_ICON_RESCAN, MENU_ROW_ACTION},
@@ -153,6 +154,9 @@ static void facts_copy(menu_t *m, const menu_facts_t *facts)
     m->facts.backlight = facts->backlight;
     m->facts.hotspot_on = facts->hotspot_on;
     m->facts.hotspot_failed = facts->hotspot_failed;
+    m->facts.share_on = facts->share_on;
+    m->facts.share_failed = facts->share_failed;
+    m->facts.share_left_s = facts->share_left_s;
     copy_opt(m->network_buf, sizeof m->network_buf, facts->network, &m->facts.network);
     copy_opt(m->setup_pass_buf, sizeof m->setup_pass_buf, facts->setup_password,
              &m->facts.setup_password);
@@ -476,20 +480,26 @@ static void build_wifi_row(const menu_t *m, int index, menu_row_t *r)
         snprintf(r->value, sizeof r->value, "%s",
                  m->facts.hotspot_failed ? "UNAVAILABLE" : m->facts.hotspot_on ? "STOP" : "START");
         break;
-    case 1: /* Network: what the device will try */
+    case 1: /* Share: the window's state, and the act (ADR 0099) */
+        if (m->facts.share_failed) snprintf(r->value, sizeof r->value, "UNAVAILABLE");
+        else if (m->facts.share_on)
+            snprintf(r->value, sizeof r->value, "%us", (unsigned)m->facts.share_left_s);
+        else snprintf(r->value, sizeof r->value, "START");
+        break;
+    case 2: /* Network: what the device will try */
         snprintf(r->value, sizeof r->value, "%s",
                  (m->facts.network && m->facts.network[0]) ? m->facts.network : "none");
         break;
-    case 2: /* Password: in clear, the panel is the only way back to it */
+    case 3: /* Password: in clear, the panel is the only way back to it */
         snprintf(r->value, sizeof r->value, "%s",
                  (m->facts.setup_password && m->facts.setup_password[0])
                      ? m->facts.setup_password
                      : "12345678");
         break;
-    case 3: /* Reset password: an act, and the row says what it does */
+    case 4: /* Reset password: an act, and the row says what it does */
         snprintf(r->value, sizeof r->value, "RESET");
         break;
-    case 4: /* Address: only meaningful while the hotspot is up */
+    case 5: /* Address: only meaningful while the hotspot is up */
         snprintf(r->value, sizeof r->value, "%s",
                  (m->facts.hotspot_address && m->facts.hotspot_address[0])
                      ? m->facts.hotspot_address
@@ -793,6 +803,7 @@ static bool facts_same(const menu_t *m, const menu_facts_t *f)
     if (!f) {
         return !m->facts.version && !m->facts.board && !m->facts.partition &&
                !m->facts.shuffle_on && !m->facts.rescanning && m->facts.backlight == 0 &&
+               !m->facts.share_on && !m->facts.share_failed && m->facts.share_left_s == 0 &&
                !m->facts.playlists && m->facts.playlist_count == 0 &&
                m->facts.playlist_selected == 0;
     }
@@ -800,7 +811,9 @@ static bool facts_same(const menu_t *m, const menu_facts_t *f)
            m->facts.backlight == f->backlight && same_text(m->facts.version, f->version) &&
            same_text(m->facts.board, f->board) && same_text(m->facts.partition, f->partition) &&
            m->facts.hotspot_on == f->hotspot_on &&
-           m->facts.hotspot_failed == f->hotspot_failed && same_text(m->facts.network, f->network) &&
+           m->facts.hotspot_failed == f->hotspot_failed &&
+           m->facts.share_on == f->share_on && m->facts.share_failed == f->share_failed &&
+           m->facts.share_left_s == f->share_left_s && same_text(m->facts.network, f->network) &&
            same_text(m->facts.setup_password, f->setup_password) &&
            same_text(m->facts.hotspot_address, f->hotspot_address) &&
            m->facts.playlists == f->playlists &&
@@ -1008,7 +1021,8 @@ menu_action_t menu_activate(menu_t *m)
     case LIST_WIFI:
         switch (m->band) {
         case 0: return MENU_ACTION_WIFI_TOGGLE;
-        case 3: return MENU_ACTION_WIFI_RESET;
+        case 1: return MENU_ACTION_WIFI_SHARE;
+        case 4: return MENU_ACTION_WIFI_RESET;
         default: break;
         }
         break;

@@ -34,6 +34,11 @@ size_t mi_ring_used(mi_ring_t *r);
  * means the consumer is behind (or the ring is full). */
 size_t mi_ring_put(mi_ring_t *r, const void *data, size_t n);
 
+/* Throw away the oldest n bytes. The producer uses it to make room for the newest audio when a
+ * listener falls behind: the connection survives and the gap is the price, which is the right
+ * trade for a radio (FW-07: dropping the listener used to cost a reconnect). */
+size_t mi_ring_drop(mi_ring_t *r, size_t n);
+
 /* Copy out at most `capacity` bytes. Returns 0 when the ring is empty. */
 size_t mi_ring_get(mi_ring_t *r, void *out, size_t capacity);
 

@@ -100,7 +100,7 @@ MENU
 | Browse | the directory's children in the library's name order, directories and Tracks mixed | `library_child_count()` / `library_child()` / `library_kind()` | `Browse`, then `Browse /Jazz`, ... |
 | Playlists | `Library order`, then the card's lists, or one note | `playlist_list()` read by the view; `playlist_select_current()` | `Playlists` |
 | Settings | 4 | fixed | `Settings` |
-| Wi-Fi | Setup, Network, Password, Reset password, Address | fixed and `setup_status()` | `Wi-Fi` |
+| Wi-Fi | Setup, Share, Network, Password, Reset password, Address | fixed, `setup_status()` and the share window's deadline | `Wi-Fi` |
 | About | 11 | `esp_app_get_description()`, the board adapter, the partition table, `mini_icecast_status_t`, `library_*` | `About` |
 
 - A **directory Row** wears `cassette-tape` and opens the next Browse list; a **Track Row** wears
@@ -132,7 +132,7 @@ MENU
 - **About** is the player's diagnostics page, eleven value Rows in three icon groups: Firmware,
   Board, Partition (the player); Format, Rate, Bitrate (the broadcast); State, Tracks,
   Directories, Size, Truncated (the library). Its values: the app's version, the board's short
-  name (`8048S050C`), the app partition's size (`4 MB`); `MP3`, `44.1 kHz`, `192 kbps` (an em
+  name (`8048S050C`), the app partition's size (`4 MB`); `MP3`, `44.1 kHz`, `128 kbps` (an em
   dash when the status is idle); the library's state name, `1,204 tracks` (`1 track`), `38 dirs`,
   `12.4 GB` (binary units, one decimal), `No`/`Yes`. The groups wear `micro-chip`,
   `tablet-android` and `disc`; `radio-waves`; and `books`. Eleven Rows do not fit the page, so

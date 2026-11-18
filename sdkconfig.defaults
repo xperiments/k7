@@ -99,10 +99,16 @@ CONFIG_LV_FONT_FMT_TXT_LARGE=y
 # CONFIG_LV_PERF_MONITOR_ALIGN_TOP_RIGHT=y
 
 # ----------------------------------------------------------------------- lwIP
-# MP3 at 128 kbps is 16 KB/s per client, but a burst on connect is sent at once:
-# give each socket room, and count enough sockets for the listener, the
-# connection tasks and every stream client.
-CONFIG_LWIP_TCP_SND_BUF_DEFAULT=32768
+# MP3 at 128 kbps is 16 KB/s per client, and the station's 500 ms burst is 19 KB at 256. That
+# used to argue for a 32 KB send buffer per connection - and that buffer is taken from
+# *internal* RAM, where this device has about 37 KB free in steady state with its panel, its
+# encoder and Wi-Fi up. Measured on the board (2026-11-18): with the player connected the
+# internal free fell to 5 539 B, the largest block to 2 944 B, and the SD driver's next DMA
+# allocation failed - "sdmmc_cmd: allocate_dma_buf: not enough mem" - which took the card down
+# and every decode with it. The burst never needed to sit in one write: the client's ring is in
+# PSRAM and its own sender task drains it at the network's pace. 8 KB is 250 ms of the station,
+# which is more than a LAN client's round trip, and it costs 24 KB less per connection.
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=8192
 CONFIG_LWIP_TCP_WND_DEFAULT=16384
 CONFIG_LWIP_MAX_SOCKETS=16
 

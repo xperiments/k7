@@ -89,6 +89,7 @@ typedef enum {
     MENU_ACTION_SHUFFLE,   /* toggle the mode (ADR 0023) */
     MENU_ACTION_CLOSE,     /* the view should close the Menu */
     MENU_ACTION_WIFI_TOGGLE, /* start the setup network, or stop it */
+    MENU_ACTION_WIFI_SHARE,  /* open the share window, or close it (ADR 0099) */
     MENU_ACTION_WIFI_RESET,  /* restore the default setup password */
 } menu_action_t;
 
@@ -110,6 +111,12 @@ typedef struct {
     const char *network;
     const char *setup_password;
     const char *hotspot_address;
+    /* The share window (ADR 0099): open or not, its countdown in whole seconds, and whether
+     * the radio refused to start it. It is not the setup network's state and does not
+     * follow it: one raises an access point, the other hands the network over the radio. */
+    bool        share_on;
+    bool        share_failed;
+    uint16_t    share_left_s;
     /* The card's Playlists, read by the view (ADR 0096); the model sorts them by name and
      * never touches the card. `playlist_count` is the number of entries, 0 for none, or -1
      * when the card holds more than MENU_PLAYLISTS_MAX of them; `playlist_selected` is the id

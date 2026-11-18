@@ -190,22 +190,26 @@ void appliance_run(void)
      *      96 kbps   2.4 dB      192 kbps   7.1 dB      320 kbps  15.5 dB
      *     128 kbps   3.3 dB      256 kbps  11.9 dB
      *
-     * This station therefore runs 44100 Hz at 256 kbps: the specification's
-     * recommended sample rate, with three and a half times the bits of the
-     * fallback it started from, for 3 % more CPU than 128 kbps and 32 KB/s per
-     * client. 320 kbps is the ceiling and is one line away. Above 192 kbps the
-     * perceptual gain is likely smaller than the SNR suggests, because shine's
-     * limit is its psychoacoustic model rather than its bit budget.
+     * The bit rate is therefore a link decision, not a CPU one. This station
+     * runs 44100 Hz at 128 kbps - the specification's recommended default
+     * (F3) - because its listener is a 2.4 GHz client whose downlink is
+     * measured losing the stream for one to nine seconds at a time, and the
+     * 96 KB ring in that player holds six seconds of this format instead of
+     * three, with half the bytes to recover after every outage. The cost is
+     * the table above: 11.9 dB of SNR at 256 kbps becomes 3.3 dB on the
+     * hardest signal. 256 kbps is one line away and was where this station
+     * started; it is the right choice for a link that is not the constraint.
      *
-     * What it costs is headroom, not correctness: 52.9 % of one core on that
-     * synthetic material, about 40 % on the tonal fixture corpus. The
-     * specification's 35 % threshold is not reachable at 44.1 kHz, and -
-     * measured - not at 32 kHz either (37.7 % on synthetic material); only
-     * 22.05 kHz meets it, at 23.6 %. The threshold was proposed rather than
-     * measured (the specification says so itself), the functional requirement
-     * is that the broadcast never starves, and that is what the soak checks.
-     * 32000 Hz / 96 kbps remains the documented fallback if headroom is ever
-     * needed for something else. */
+     * What the format costs in headroom, measured: 52.9 % of one core at
+     * 256 kbps on that synthetic material, about 40 % on the tonal fixture
+     * corpus, and the encoder's cost per frame is flat against the bit rate,
+     * so 128 kbps is within 3 % of it. The specification's 35 % threshold is
+     * not reachable at 44.1 kHz, and - measured - not at 32 kHz either
+     * (37.7 % on synthetic material); only 22.05 kHz meets it, at 23.6 %. The
+     * threshold was proposed rather than measured (the specification says so
+     * itself), the functional requirement is that the broadcast never
+     * starves, and that is what the soak checks. 32000 Hz / 96 kbps remains
+     * the documented fallback if headroom is ever needed for something else. */
     /* The chosen Playlist survives a power cut in the card's k7.select. The composition
      * takes it as two callbacks so playlist_select stays portable (ADR 0051); a card
      * that has never carried a record is "no choice", not an error. */
@@ -214,7 +218,7 @@ void appliance_run(void)
         .station_name = STATION_NAME,
         .port = HTTP_PORT,
         .out_hz = 44100,
-        .bitrate = 256,
+        .bitrate = 128,
         /* How many listeners the broadcast will carry at once. This is separate
          * from the HTTP connection pool (max_conns): a listener stops occupying a
          * connection worker as soon as it is registered. */

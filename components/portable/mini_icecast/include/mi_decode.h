@@ -15,6 +15,21 @@ typedef struct mi_dec mi_dec_t;
  * file is opened and end() after it is closed. NULL disables the gate. */
 void      mi_dec_set_card_hooks(bool (*begin)(void), void (*end)(void));
 
+/* Why the last mi_dec_open() returned NULL. One message for every failure is how a card that
+ * could not be read came to be reported as a corrupt file (2026-11-18). */
+typedef enum {
+    MI_OPEN_OK = 0,
+    MI_OPEN_FORMAT,  /* the extension names no format this decoder has */
+    MI_OPEN_MEMORY,  /* the decoder's own state could not be allocated */
+    MI_OPEN_CARD,    /* the card gate refused: no card, or it is being unmounted */
+    MI_OPEN_FILE,    /* the file could not be opened on a card that is there */
+    MI_OPEN_CODEC,   /* the container or the codec refused the bytes */
+    MI_OPEN_SCRATCH, /* the native-channel scratch buffer could not be allocated */
+} mi_dec_error_t;
+
+mi_dec_error_t mi_dec_last_error(void);
+const char *mi_dec_error_text(mi_dec_error_t error);
+
 mi_dec_t *mi_dec_open(const char *path); /* NULL if unsupported extension / unreadable / corrupt */
 uint32_t  mi_dec_hz(const mi_dec_t *d);
 

@@ -188,10 +188,14 @@ static bool client_sink(void *ctx, mi_icy_kind_t kind, const uint8_t *d, size_t 
     (void)kind;
     client_t *c = ctx;
     if (!c->ring) return false;
-    if (mi_ring_put(c->ring, d, n) != n) {
-        c->dead = true;
-        return false;
-    }
+    /* A listener that falls behind loses the *audio*, not the connection: the oldest bytes go
+     * to make room for the newest, and the sender resumes when the network does. Marking it
+     * dead here is what made a ten-second Wi-Fi stall become a reconnect - the player lost the
+     * link, re-joined, and the listener heard a gap with a jump. A listener that is really gone
+     * is still found by its sender's send timeout. */
+    size_t room = mi_ring_capacity(c->ring) - mi_ring_used(c->ring);
+    if (room < n) mi_ring_drop(c->ring, n - room);
+    if (mi_ring_put(c->ring, d, n) != n) return false;
     xSemaphoreGive(c->wake);
     return true;
 }
@@ -229,7 +233,9 @@ static void sender_close(int slot, int fd, const char *why)
     client_t *c = &S.clients[slot];
     xSemaphoreTake(S.lock, portMAX_DELAY);
     if (c->fd == fd) {
-        ESP_LOGI(TAG, "client %d gone (%s)", slot, why);
+        ESP_LOGI(TAG, "client %d gone (%s); internal %u B free, largest %u B", slot, why,
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
         close(fd);
         c->fd = -1;
         if (c->icy) {
@@ -248,7 +254,8 @@ static void sender_task(void *arg)
     int slot = (int)(intptr_t)arg;
     client_t *c = &S.clients[slot];
     for (;;) {
-        xSemaphoreTake(c->wake, portMAX_DELAY);
+        /* Timed, not forever: a wake that was never given must not hold the slot. */
+        xSemaphoreTake(c->wake, pdMS_TO_TICKS(1000));
         for (;;) {
             xSemaphoreTake(S.lock, portMAX_DELAY);
             int fd = c->fd;
@@ -407,6 +414,19 @@ static mini_icecast_register_result_t mini_icecast_register_client(int fd, bool 
                           .tv_usec = (CLIENT_SEND_TIMEOUT_MS % 1000) * 1000};
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof snd);
 
+    /* A listener that disappears without a FIN - a power cycle, a Wi-Fi drop, a player
+     * rebooted mid-stream - leaves a socket nothing will ever fail on if it is not sending.
+     * Keepalive gives the stack a reason to notice; the sender's timed wait gives it a reason
+     * to look. Failures here are not fatal: the timed wait still applies. */
+    int on = 1;
+    setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof on);
+#if defined(TCP_KEEPIDLE)
+    int idle = 5, intvl = 5, cnt = 2;
+    setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof idle);
+    setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof intvl);
+    setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof cnt);
+#endif
+
     /* Queue the history, then make the client live, both under the broadcast
      * lock: the burst is followed by the next live frame with no gap and no
      * duplicate. The sender drains it at the network's pace; the audio task does
@@ -427,7 +447,10 @@ static mini_icecast_register_result_t mini_icecast_register_client(int fd, bool 
     }
     c->reserved = false;
     xSemaphoreGive(S.lock);
-    ESP_LOGI(TAG, "client %d connected (icy=%d, burst=%u B)", slot, want_icy_metadata, (unsigned)burst);
+    ESP_LOGI(TAG, "client %d connected (icy=%d, burst=%u B); internal %u B free, largest %u B", slot,
+             want_icy_metadata, (unsigned)burst,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     return MINI_ICECAST_REGISTERED;
 }
 
@@ -706,9 +729,12 @@ static void src_task(void *arg)
         j->ok = j->hz != 0;
         /* The track change is the one moment the stream has nothing to send: how long
          * the open and the length took is what tells a slow card from a slow scan. */
-        ESP_LOGI(TAG, "track open: %s (%llu ms), %u Hz, length %u ms",
+        ESP_LOGI(TAG, "track open: %s (%llu ms), %u Hz, length %u ms; internal %u B free, "
+                      "largest %u B",
                  j->path, (unsigned long long)((esp_timer_get_time() - open_at) / 1000),
-                 (unsigned)j->hz, (unsigned)j->duration_ms);
+                 (unsigned)j->hz, (unsigned)j->duration_ms,
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     }
     xSemaphoreGive(j->ready);
     if (!j->ok) {
@@ -793,7 +819,8 @@ static void stream_file(const char *path)
     }
     xSemaphoreTake(j.ready, portMAX_DELAY);
     if (!j.ok) {
-        ESP_LOGW(TAG, "cannot decode %s (unsupported or corrupt): skipping", path);
+        ESP_LOGW(TAG, "cannot decode %s (%s): skipping", path,
+                 mi_dec_error_text(mi_dec_last_error()));
         xSemaphoreTake(j.done, portMAX_DELAY);
         src_job_free(&j);
         /* A card that cannot open files (pulled, or its gate closed while the watcher
@@ -1303,11 +1330,19 @@ static void telemetry_task(void *arg)
          * it is the number that actually constrains this firmware: esp_wifi_init()
          * needs roughly 25 KB of contiguous DMA-capable internal RAM, and a
          * fragmented heap with plenty free can still fail to produce it. */
-        ESP_LOGI(TAG, "memory: internal %u B free (largest block %u B), external %u B free; "
-                      "starvation rebases %" PRIu32 ", ring starved %" PRIu32 " ms",
+        int clients = 0;
+        xSemaphoreTake(S.lock, portMAX_DELAY);
+        for (int i = 0; i < S.station.max_clients; i++)
+            if (S.clients[i].fd >= 0) clients++;
+        xSemaphoreGive(S.lock);
+        ESP_LOGI(TAG, "memory: internal %u B free (largest block %u B), dma largest %u B, "
+                      "external %u B free; clients %d/%u, starvation rebases %" PRIu32
+                      ", ring starved %" PRIu32 " ms",
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), S.rebases, waited);
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA),
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), clients,
+                 (unsigned)S.station.max_clients, S.rebases, waited);
         /* The other half of fit: how much stack the deepest tasks have left. */
         /* The broadcast's own high-water mark, not this task's: the old line
          * passed NULL, which asks about the task doing the asking. */
@@ -1415,8 +1450,19 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
             ESP_LOGE(TAG, "no memory for client %d's send ring", i);
             return ESP_ERR_NO_MEM;
         }
-        if (xTaskCreatePinnedToCore(sender_task, "ice_send", SENDER_TASK_STACK,
-                                    (void *)(intptr_t)i, 4, NULL, 0) != pdPASS) {
+        /* The stack is external-preferred, for the same reason the HTTP workers' are:
+         * internal RAM is what the card's DMA and the encoder need, and this task spends its
+         * life blocked on a socket. Four of these were 16 KB of internal RAM that the SD
+         * driver could not use. They are created once and never deleted, so the capability
+         * stack's delete rule does not apply to them. */
+        BaseType_t made = xTaskCreatePinnedToCoreWithCaps(
+            sender_task, "ice_send", SENDER_TASK_STACK, (void *)(intptr_t)i, 4, NULL, 0,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (made != pdPASS)
+            made = xTaskCreatePinnedToCoreWithCaps(sender_task, "ice_send", SENDER_TASK_STACK,
+                                                   (void *)(intptr_t)i, 4, NULL, 0,
+                                                   MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        if (made != pdPASS) {
             ESP_LOGE(TAG, "no memory for client %d's sender task", i);
             return ESP_ERR_NO_MEM;
         }

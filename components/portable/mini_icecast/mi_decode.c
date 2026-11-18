@@ -169,17 +169,43 @@ static uint32_t mp3_estimate_ms(mi_dec_t *d)
     return ms > 0xFFFFFFFFu ? 0xFFFFFFFFu : (uint32_t)ms;
 }
 
+static mi_dec_error_t s_last_error;
+
+mi_dec_error_t mi_dec_last_error(void) { return s_last_error; }
+
+const char *mi_dec_error_text(mi_dec_error_t error)
+{
+    switch (error) {
+    case MI_OPEN_FORMAT: return "no format this decoder reads";
+    case MI_OPEN_MEMORY: return "not enough memory for the decoder";
+    case MI_OPEN_CARD: return "the card is not readable";
+    case MI_OPEN_FILE: return "the file could not be opened";
+    case MI_OPEN_CODEC: return "the codec refused the bytes";
+    case MI_OPEN_SCRATCH: return "not enough memory for the channel scratch";
+    case MI_OPEN_OK: break;
+    }
+    return "opened";
+}
+
 mi_dec_t *mi_dec_open(const char *path)
 {
+    s_last_error = MI_OPEN_OK;
     mi_fmt_t kind = mi_dec_format_of(path);
-    if (kind == MI_FMT_NONE) return NULL;
+    if (kind == MI_FMT_NONE) {
+        s_last_error = MI_OPEN_FORMAT;
+        return NULL;
+    }
     mi_dec_t *d = calloc(1, sizeof *d);
-    if (!d) return NULL;
+    if (!d) {
+        s_last_error = MI_OPEN_MEMORY;
+        return NULL;
+    }
     d->kind = kind;
 
     /* Hold the card for the file's whole life, not just fopen(): the watcher unmounts only
      * after every holder has closed, and FATFS cannot survive an unmount under an open FIL. */
     if (s_card_begin && !s_card_begin()) {
+        s_last_error = MI_OPEN_CARD;
         free(d);
         return NULL;
     }
@@ -187,7 +213,10 @@ mi_dec_t *mi_dec_open(const char *path)
 
     bool ok = false;
     d->f = fopen(path, "rb");
-    if (!d->f) goto out;
+    if (!d->f) {
+        s_last_error = MI_OPEN_FILE;
+        goto out;
+    }
     setvbuf(d->f, NULL, _IOFBF, 32768); /* fewer, larger card reads */
 
     switch (d->kind) {
@@ -221,9 +250,14 @@ mi_dec_t *mi_dec_open(const char *path)
          * more-than-stereo need the native-channel scratch. */
         d->tmp = malloc(sizeof(int16_t) * MI_READ_FRAMES * d->ch);
         ok = d->tmp != NULL;
+        if (!ok) s_last_error = MI_OPEN_SCRATCH;
     }
 out:
-    if (!ok) { mi_dec_close(d); return NULL; }
+    if (!ok) {
+        if (s_last_error == MI_OPEN_OK) s_last_error = MI_OPEN_CODEC;
+        mi_dec_close(d);
+        return NULL;
+    }
     return d;
 }
 

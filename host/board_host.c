@@ -432,3 +432,156 @@ int app_board_wifi_scan(app_board_scan_t *out, int max)
     }
     return count;
 }
+
+/* --------------------------------------------------------------- the share window
+ *
+ * There is no radio here either. The window's state machine is tested against a fake that
+ * records what it was asked to send, and whose curve is a stand-in - the real one is the
+ * board's and PL-09's evidence. Everything the test needs to know is in a file:
+ *
+ *   XTAPE_HOST_SHARE_STATE    "on"/"off", written when the radio starts and stops
+ *   XTAPE_HOST_SHARE_SENT     one line per frame, "<dst>|<data>", dst "bc" for a broadcast
+ *   XTAPE_HOST_SHARE_PEER     "<mac>|<lmk>", or "none" when the peer is dropped
+ *   XTAPE_HOST_SHARE_CHANNEL  the channel the window beacons on (default 6)
+ *   XTAPE_HOST_SHARE_AP_PASS  the setup password in force (default 12345678)
+ *   XTAPE_HOST_SHARE_FAIL     set: ESP-NOW refuses to start
+ *
+ * The stand-in curve is `pub = priv ^ 0xA5` and `shared = priv ^ peer ^ 0x3C`. A test that
+ * checks a key can compute the same two lines; what it is checking is that the window used
+ * the right two keys in the right order, not that X25519 works.
+ */
+
+static app_board_share_frame_fn s_share_cb;
+static void *s_share_ctx;
+static bool s_share_on;
+
+static void host_share_text(const char *env, const char *text)
+{
+    const char *path = getenv(env);
+    if (!path || !*path) return;
+    FILE *f = fopen(path, "wb");
+    if (!f) return;
+    fputs(text, f);
+    fclose(f);
+}
+
+static void host_share_hex(FILE *f, const uint8_t *b, size_t n)
+{
+    for (size_t i = 0; i < n; i++) fprintf(f, "%02x", b[i]);
+}
+
+void app_board_share_net(app_board_share_net_t *out)
+{
+    if (!out) return;
+    memset(out, 0, sizeof *out);
+
+    wifi_record_t rec;
+    if (app_board_wifi_record_load(&rec)) {
+        out->has_home = true;
+        snprintf(out->home_ssid, sizeof out->home_ssid, "%s", rec.ssid);
+        snprintf(out->home_pass, sizeof out->home_pass, "%s", rec.pass);
+    }
+
+    const char *ap = getenv("XTAPE_HOST_SHARE_AP_PASS");
+    snprintf(out->ap_pass, sizeof out->ap_pass, "%s",
+             (ap && *ap) ? ap : WIFI_RECORD_DEFAULT_SETUP_PASSWORD);
+
+    if (s_radio.associated && s_radio.ip[0]) {
+        unsigned a = 0, b = 0, c = 0, d = 0;
+        if (sscanf(s_radio.ip, "%u.%u.%u.%u", &a, &b, &c, &d) == 4)
+            out->ipv4 = ((uint32_t)a << 24) | ((uint32_t)b << 16) | ((uint32_t)c << 8) |
+                        (uint32_t)d;
+    }
+
+    const char *ch = getenv("XTAPE_HOST_SHARE_CHANNEL");
+    out->channel = (uint8_t)((ch && *ch) ? atoi(ch) : 6);
+}
+
+bool app_board_share_radio_start(app_board_share_frame_fn on_frame, void *ctx)
+{
+    if (getenv("XTAPE_HOST_SHARE_FAIL")) {
+        host_share_text("XTAPE_HOST_SHARE_STATE", "off");
+        return false;
+    }
+    s_share_cb = on_frame;
+    s_share_ctx = ctx;
+    s_share_on = true;
+    host_share_text("XTAPE_HOST_SHARE_STATE", "on");
+    return true;
+}
+
+void app_board_share_radio_stop(void)
+{
+    if (!s_share_on) return;
+    s_share_on = false;
+    s_share_cb = NULL;
+    s_share_ctx = NULL;
+    host_share_text("XTAPE_HOST_SHARE_STATE", "off");
+}
+
+bool app_board_share_send(const uint8_t *dst, const uint8_t *data, size_t len)
+{
+    if (!s_share_on || !data || !len) return false;
+    const char *path = getenv("XTAPE_HOST_SHARE_SENT");
+    if (!path || !*path) return true;
+    FILE *f = fopen(path, "ab");
+    if (!f) return false;
+    if (dst)
+        host_share_hex(f, dst, 6);
+    else
+        fputs("bc", f);
+    fputc('|', f);
+    host_share_hex(f, data, len);
+    fputc('\n', f);
+    fclose(f);
+    return true;
+}
+
+bool app_board_share_peer(const uint8_t mac[6], const uint8_t lmk[16])
+{
+    if (!s_share_on || !mac || !lmk) return false;
+    const char *path = getenv("XTAPE_HOST_SHARE_PEER");
+    if (!path || !*path) return true;
+    FILE *f = fopen(path, "wb");
+    if (!f) return false;
+    host_share_hex(f, mac, 6);
+    fputc('|', f);
+    host_share_hex(f, lmk, 16);
+    fclose(f);
+    return true;
+}
+
+void app_board_share_peer_drop(const uint8_t mac[6])
+{
+    (void)mac;
+    host_share_text("XTAPE_HOST_SHARE_PEER", "none");
+}
+
+void app_board_random(uint8_t *out, size_t len)
+{
+    if (!out) return;
+    for (size_t i = 0; i < len; i++) out[i] = (uint8_t)i; /* deterministic: the test's stand-in */
+}
+
+bool app_board_x25519_public(const uint8_t priv[32], uint8_t pub[32])
+{
+    if (!priv || !pub) return false;
+    for (int i = 0; i < 32; i++) pub[i] = (uint8_t)(priv[i] ^ 0xA5);
+    return true;
+}
+
+bool app_board_x25519(const uint8_t priv[32], const uint8_t peer_pub[32], uint8_t shared[32])
+{
+    if (!priv || !peer_pub || !shared) return false;
+    for (int i = 0; i < 32; i++) shared[i] = (uint8_t)(priv[i] ^ peer_pub[i] ^ 0x3C);
+    return true;
+}
+
+/* Host-only: deliver a frame through the callback the window registered, as the radio
+ * would. False when no window is listening. */
+bool host_share_deliver(const uint8_t src[6], const uint8_t *data, size_t len)
+{
+    if (!s_share_on || !s_share_cb) return false;
+    s_share_cb(src, data, len, s_share_ctx);
+    return true;
+}

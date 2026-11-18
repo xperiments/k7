@@ -82,6 +82,11 @@ esp_err_t app_board_setup_password_save(const char *password);
 #define SETUP_NETWORK_SSID "K7.local"
 #define SETUP_NETWORK_IP   "192.168.4.1"
 
+/* The name the device answers to: mDNS's `k7.local`, and the hostname the share window
+ * hands to a K7Player. One spelling, because a player that resolves a different one than
+ * the device advertises is a player that cannot find it. */
+#define APP_BOARD_HOSTNAME "k7"
+
 /* How long the device tries its stored network at boot before the setup network appears
  * (wifi-provisioning.md P9). Not a tuning knob: it is the point where "the router is slow"
  * stops being the explanation. */
@@ -111,6 +116,52 @@ void app_board_wifi_forget(void);
  * asking for the state it is already in is not an error. A failure is the caller's to
  * report and retry - on this board it means the radio could not allocate. */
 esp_err_t app_board_setup_ap(bool on);
+
+/* --------------------------------------------------------------- the share window
+ *
+ * The handover's only board-side part: ESP-NOW, the curve, randomness and the two network
+ * facts a **Network record** needs. The window, the one-player policy and the frames are
+ * portable (components/portable/share) and host-tested (network-handover.md §3–§6). */
+typedef struct {
+    bool     has_home;   /* the station has a record: there is a home network to offer */
+    char     home_ssid[WIFI_RECORD_SSID_MAX + 1];
+    char     home_pass[WIFI_RECORD_PASS_MAX + 1]; /* empty = the network is open */
+    char     ap_pass[WIFI_RECORD_PASS_MAX + 1];   /* the setup password in force */
+    uint32_t ipv4;       /* the station's address, 0 when it has none (the AP's, then) */
+    uint8_t  channel;    /* the channel the radio is on; 0 when it could not be read */
+} app_board_share_net_t;
+
+/* The record's facts, as the board has them right now. Never blocks on the radio. */
+void app_board_share_net(app_board_share_net_t *out);
+
+/* Called for every frame that arrives while a window is open. It runs on the Wi-Fi task,
+ * so it copies the frame and returns: the answer is built on the window's own task, where
+ * there is stack for the curve. */
+typedef void (*app_board_share_frame_fn)(const uint8_t src[6], const uint8_t *data, size_t len,
+                                         void *ctx);
+
+/* Start the radio for a window: ESP-NOW up, the broadcast peer added, the callback
+ * installed. False when it could not start, which the caller reports and retries nowhere -
+ * a window is a thing a person asked for, not a service. */
+bool app_board_share_radio_start(app_board_share_frame_fn on_frame, void *ctx);
+void app_board_share_radio_stop(void);
+
+/* One frame. A NULL `dst` is the beacon's broadcast; anything else is the window's one
+ * peer, and travels encrypted under the LMK it was registered with. */
+bool app_board_share_send(const uint8_t *dst, const uint8_t *data, size_t len);
+
+/* Register the window's one peer, or drop it when the window closes. The peer is the
+ * encryption: `lmk` is what makes the record unreadable to anyone else listening. */
+bool app_board_share_peer(const uint8_t mac[6], const uint8_t lmk[16]);
+void app_board_share_peer_drop(const uint8_t mac[6]);
+
+/* Random bytes from the board's generator, and X25519. The curve is the board's because
+ * both boards already link mbedTLS and the host links no crypto at all; the host adapter
+ * scripts both, so the window's policy is tested without a radio (and the curve itself is
+ * PL-09's board evidence). */
+void app_board_random(uint8_t *out, size_t len);
+bool app_board_x25519_public(const uint8_t priv[32], uint8_t pub[32]);
+bool app_board_x25519(const uint8_t priv[32], const uint8_t peer_pub[32], uint8_t shared[32]);
 
 /* One row per network the radio can see, strongest first. Returns the count, or -1 when
  * the scan could not run (a station mid-connection, out of memory, the radio down).

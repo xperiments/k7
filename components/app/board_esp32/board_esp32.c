@@ -20,6 +20,8 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_now.h"
+#include "esp_random.h"
 #include "esp_partition.h"
 #include "esp_psram.h"
 #include "esp_timer.h"
@@ -28,6 +30,7 @@
 
 #include "mdns.h"
 #include "nvs.h"
+#include "psa/crypto.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
@@ -884,4 +887,170 @@ void app_board_log_hardware(void)
     ESP_LOGI(TAG, "heap at startup: internal %u B free, external %u B free",
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+}
+
+/* --------------------------------------------------------------- the share window
+ *
+ * ESP-NOW is the board's; the window's policy is components/portable/share's. The receive
+ * callback runs on the Wi-Fi task and only hands the frame on: the portable side records
+ * it and answers from its own task, where there is stack for X25519.
+ *
+ * The interface matters. A provisioned, associated device sends on its station; a device
+ * with no network is an access point (the setup network is up), and its station interface
+ * has no channel of its own - so the window rides the AP interface, on the AP's channel.
+ */
+
+static app_board_share_frame_fn s_share_cb;
+static void *s_share_ctx;
+static bool s_share_on;
+static uint8_t s_share_ifidx = WIFI_IF_STA;
+
+static void share_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len)
+{
+    if (!s_share_cb || !info || !data || len <= 0) return;
+    s_share_cb(info->src_addr, data, (size_t)len, s_share_ctx);
+}
+
+/* 192.168.0.44 -> 0xC0A8002C, the numeric address, without a byte-order question. */
+static uint32_t ipv4_of(const char *s)
+{
+    unsigned a = 0, b = 0, c = 0, d = 0;
+    if (!s || sscanf(s, "%u.%u.%u.%u", &a, &b, &c, &d) != 4) return 0;
+    return ((uint32_t)a << 24) | ((uint32_t)b << 16) | ((uint32_t)c << 8) | (uint32_t)d;
+}
+
+void app_board_share_net(app_board_share_net_t *out)
+{
+    if (!out) return;
+    memset(out, 0, sizeof *out);
+
+    wifi_record_t rec;
+    if (app_board_wifi_record_load(&rec)) {
+        out->has_home = true;
+        snprintf(out->home_ssid, sizeof out->home_ssid, "%s", rec.ssid);
+        snprintf(out->home_pass, sizeof out->home_pass, "%s", rec.pass);
+    }
+    if (!app_board_setup_password_load(out->ap_pass, sizeof out->ap_pass) || !out->ap_pass[0])
+        snprintf(out->ap_pass, sizeof out->ap_pass, "%s", WIFI_RECORD_DEFAULT_SETUP_PASSWORD);
+
+    out->ipv4 = s_got_ip ? ipv4_of(s_local_ip) : 0;
+
+    uint8_t primary = 0;
+    wifi_second_chan_t second = WIFI_SECOND_CHAN_NONE;
+    if (esp_wifi_get_channel(&primary, &second) == ESP_OK) out->channel = primary;
+}
+
+bool app_board_share_radio_start(app_board_share_frame_fn on_frame, void *ctx)
+{
+    if (s_share_on) app_board_share_radio_stop();
+
+    if (esp_now_init() != ESP_OK) return false;
+    s_share_cb = on_frame;
+    s_share_ctx = ctx;
+    s_share_ifidx = s_got_ip ? WIFI_IF_STA : WIFI_IF_AP;
+    esp_now_register_recv_cb(share_recv_cb);
+
+    /* ESP-NOW sends to an address in its peer table, so the beacon's all-ones address has
+     * to be added. A broadcast is unencrypted by definition - there is no per-peer key for
+     * "everyone" - and it carries no secret (H15). */
+    esp_now_peer_info_t bcast;
+    memset(&bcast, 0, sizeof bcast);
+    memset(bcast.peer_addr, 0xFF, ESP_NOW_ETH_ALEN);
+    bcast.channel = 0; /* the current channel */
+    bcast.ifidx = s_share_ifidx;
+    bcast.encrypt = false;
+    if (esp_now_add_peer(&bcast) != ESP_OK) {
+        esp_now_unregister_recv_cb();
+        esp_now_deinit();
+        s_share_cb = NULL;
+        return false;
+    }
+
+    s_share_on = true;
+    return true;
+}
+
+void app_board_share_radio_stop(void)
+{
+    if (!s_share_on) return;
+    esp_now_unregister_recv_cb();
+    esp_now_deinit();
+    s_share_on = false;
+    s_share_cb = NULL;
+    s_share_ctx = NULL;
+}
+
+bool app_board_share_send(const uint8_t *dst, const uint8_t *data, size_t len)
+{
+    static const uint8_t bcast[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    if (!s_share_on || !data || len == 0 || len > ESP_NOW_MAX_DATA_LEN) return false;
+    return esp_now_send(dst ? dst : bcast, data, len) == ESP_OK;
+}
+
+bool app_board_share_peer(const uint8_t mac[6], const uint8_t lmk[16])
+{
+    if (!s_share_on || !mac || !lmk) return false;
+    esp_now_peer_info_t peer;
+    memset(&peer, 0, sizeof peer);
+    memcpy(peer.peer_addr, mac, ESP_NOW_ETH_ALEN);
+    memcpy(peer.lmk, lmk, ESP_NOW_KEY_LEN);
+    peer.channel = 0;
+    peer.ifidx = s_share_ifidx;
+    peer.encrypt = true;
+
+    esp_err_t e = esp_now_add_peer(&peer);
+    return e == ESP_OK || e == ESP_ERR_ESPNOW_EXIST;
+}
+
+void app_board_share_peer_drop(const uint8_t mac[6])
+{
+    if (!s_share_on || !mac) return;
+    esp_now_del_peer(mac);
+}
+
+void app_board_random(uint8_t *out, size_t len)
+{
+    if (out && len) esp_fill_random(out, len);
+}
+
+/* PSA rather than a curve of our own: mbedTLS is already linked, and the portable side
+ * takes it from the shared secret on (components/portable/handover). */
+static bool psa_x25519_key(const uint8_t priv[32], mbedtls_svc_key_id_t *key)
+{
+    static bool s_psa_ready;
+    if (!s_psa_ready) {
+        if (psa_crypto_init() != PSA_SUCCESS) return false;
+        s_psa_ready = true;
+    }
+    psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
+    psa_set_key_type(&attr, PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_MONTGOMERY));
+    psa_set_key_bits(&attr, 255);
+    psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_DERIVE | PSA_KEY_USAGE_EXPORT);
+    psa_set_key_algorithm(&attr, PSA_ALG_ECDH);
+    return psa_import_key(&attr, priv, 32, key) == PSA_SUCCESS;
+}
+
+bool app_board_x25519_public(const uint8_t priv[32], uint8_t pub[32])
+{
+    mbedtls_svc_key_id_t key;
+    if (!priv || !pub || !psa_x25519_key(priv, &key)) return false;
+    size_t n = 0;
+    psa_status_t st = psa_export_public_key(key, pub, 32, &n);
+    psa_destroy_key(key);
+    return st == PSA_SUCCESS && n == 32;
+}
+
+bool app_board_x25519(const uint8_t priv[32], const uint8_t peer_pub[32], uint8_t shared[32])
+{
+    mbedtls_svc_key_id_t key;
+    if (!priv || !peer_pub || !shared || !psa_x25519_key(priv, &key)) return false;
+    size_t n = 0;
+    psa_status_t st = psa_raw_key_agreement(PSA_ALG_ECDH, key, peer_pub, 32, shared, 32, &n);
+    psa_destroy_key(key);
+    if (st != PSA_SUCCESS || n != 32) return false;
+
+    /* A low-order point gives all zeroes, and H28 says that is not a network record. */
+    uint8_t any = 0;
+    for (int i = 0; i < 32; i++) any |= shared[i];
+    return any != 0;
 }

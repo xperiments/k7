@@ -33,6 +33,14 @@
     {
       "id": "SN",
       "name": "Snapshot"
+    },
+    {
+      "id": "MN",
+      "name": "Menu"
+    },
+    {
+      "id": "PL",
+      "name": "Player"
     }
   ],
   "tasks": [
@@ -1498,12 +1506,24 @@
     {
       "id": "LB-04",
       "title": "Retire the one-page canvas builder now that the editor lives in tools/LabelEditor",
-      "state": "proposed",
+      "state": "done",
       "group": "LB",
       "yolo": true,
       "at": "2026-11-14T00:29:04Z",
       "by": "dsh",
-      "desc": "The label editor is now a React app at `tools/LabelEditor` (ReUI, one Editor store, the same template engine, a real LVGL preview). Its exports were compared byte for byte with the one-page builder: the default design, a documented design with an aperture/rotation/static text, and a `label-template v1` round trip. They match.\n\nBut the repository still treats `resources/LVGL canvas builder.html` as the editor: `tools/label_pack.py --check-vocabulary` reads its generated VOCAB block and hashes the fonts embedded in it, and `make -C host label` boots that page in headless Chrome. So there are two copies of the editor and two vocabularies, and the day one changes the other is stale with nothing to catch it.\n\nThis retires the page and points the checks at the app: `label_pack.py`'s EDITOR and generated block move to `src/engine/vocab.generated.ts` (same markers, `export const VOCAB`), the font-hash check is replaced by the vocabulary's own face list (the fonts are files in `public/fonts/` now, not base64), the boot check opens the editor's built page and asserts the same things (stage, layer list, default slot values), and `make -C host label` builds `tools/LabelEditor` first. The paths named in `docs/specs/label-templates.md` follow.\n\nFinished when: `resources/LVGL canvas builder.html` is deleted, `make -C host check` is green with the editor's boot check, and removing a Slot from `assets/labels/vocabulary.json` makes the editor's copy fail the check."
+      "desc": "The label editor is now a React app at `tools/LabelEditor` (ReUI, one Editor store, the same template engine, a real LVGL preview). Its exports were compared byte for byte with the one-page builder: the default design, a documented design with an aperture/rotation/static text, and a `label-template v1` round trip. They match.\n\nBut the repository still treats `resources/LVGL canvas builder.html` as the editor: `tools/label_pack.py --check-vocabulary` reads its generated VOCAB block and hashes the fonts embedded in it, and `make -C host label` boots that page in headless Chrome. So there are two copies of the editor and two vocabularies, and the day one changes the other is stale with nothing to catch it.\n\nThis retires the page and points the checks at the app: `label_pack.py`'s EDITOR and generated block move to `src/engine/vocab.generated.ts` (same markers, `export const VOCAB`), the font-hash check is replaced by the vocabulary's own face list (the fonts are files in `public/fonts/` now, not base64), the boot check opens the editor's built page and asserts the same things (stage, layer list, default slot values), and `make -C host label` builds `tools/LabelEditor` first. The paths named in `docs/specs/label-templates.md` follow.\n\nFinished when: `resources/LVGL canvas builder.html` is deleted, `make -C host check` is green with the editor's boot check, and removing a Slot from `assets/labels/vocabulary.json` makes the editor's copy fail the check.",
+      "notes": [
+        {
+          "at": "2026-11-16T15:38:18Z",
+          "by": "agent",
+          "text": "Plan: read the vocabulary pipeline (tools/label_pack.py, its EDITOR/VOCAB block), the current boot check and makefile target, migrate the generated block into tools/LabelEditor/src/engine, replace the font-hash check with the vocab face list, point the boot check and make target at the built editor, delete the old page, update docs/specs/label-templates.md paths, then verify make -C host check and the vocabulary-removal failure case."
+        },
+        {
+          "at": "2026-11-16T15:59:54Z",
+          "by": "dsh",
+          "text": "The one-page canvas builder is retired. `resources/LVGL canvas builder.html` is deleted, and the label checks read the editor itself, so there is no second editor to go stale.\n\n- `tools/label_pack.py` now generates `tools/LabelEditor/src/engine/vocab.generated.ts` between the same markers, and the editor imports it. A stale copy fails `make -C host label`, naming that file.\n- The font check compares each face the editor offers with the file it serves from `public/fonts/` and the file `assets/fonts/` compiles, byte for byte.\n- `make -C host label` builds the editor and boots the built page in headless Chrome, asserting the design's tab, the layer list, the stage's objects and the default slot values. Host CI installs the editor's dependencies; a runner without Chrome skips that step loudly.\n- The spec, the context glossary and the vocabulary's own header now name the editor.\n\nVerified: `make -C host check` green (label page: stage 4 objects, 5 layers, 1 tab, \"Neon Skyline\" and \"124\" on the stage); editor typecheck, 26 unit tests and 9 Playwright tests green; web typecheck and 890 tests green. Removing the `bpm` Slot makes the check fail naming `vocab.generated.ts`; a missing `public/fonts` face fails naming the face; a bundle that throws at load fails all five boot assertions.\n\nTo check: run `make -C host label` on a machine with Chrome. One loose end: an untracked, byte-identical `resources/LVGL canvas builder copy.html` is still in the working tree; I left it alone because it is not in git and not mine to delete."
+        }
+      ]
     },
     {
       "id": "SN-01",
@@ -2455,7 +2475,7 @@
     {
       "id": "LB-07",
       "title": "An agent reads the guide in the page when a session blocks its routes",
-      "state": "todo",
+      "state": "done",
       "group": "LB",
       "at": "2026-11-15T23:54:25Z",
       "by": "dsh",
@@ -2464,7 +2484,7 @@
     {
       "id": "LB-08",
       "title": "A K7 label can be asked for by taste, not only built by hand",
-      "state": "proposed",
+      "state": "done",
       "group": "LB",
       "at": "2026-11-16T00:14:46Z",
       "by": "dsh",
@@ -2482,7 +2502,7 @@
     {
       "id": "APP-60",
       "title": "The answer is its rows, not a sentence about them",
-      "state": "proposed",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-16T00:38:46Z",
       "by": "deepseek",
@@ -2498,7 +2518,7 @@
     {
       "id": "APP-61",
       "title": "The sources column is two views, and nothing repeats the tree's counts",
-      "state": "proposed",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-16T00:46:13Z",
       "by": "deepseek",
@@ -2534,7 +2554,7 @@
     {
       "id": "APP-62",
       "title": "An answer from the player's card can go into its list",
-      "state": "proposed",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-16T00:49:08Z",
       "by": "deepseek",
@@ -2543,7 +2563,7 @@
     {
       "id": "APP-63",
       "title": "Show the device's cassette screen on the Player",
-      "state": "proposed",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-16T01:17:29Z",
       "by": "dsh",
@@ -2574,7 +2594,7 @@
     {
       "id": "APP-64",
       "title": "An answer divides its count between the artists and alternates them",
-      "state": "proposed",
+      "state": "done",
       "group": "APP",
       "at": "2026-11-16T01:20:21Z",
       "by": "deepseek",
@@ -2583,11 +2603,333 @@
     {
       "id": "LK-10",
       "title": "The shelf drags from any case, and the wheel walks it",
-      "state": "proposed",
+      "state": "done",
       "group": "LK",
       "at": "2026-11-16T03:29:52Z",
       "by": "deepseek",
       "desc": "The album carousel let a drag begin only on the turned case, so grabbing the row by a spine did nothing, and the wheel scrolled the page past the shelf. A drag begins on any case now — a press that never moves is still a click on that case — and the wheel steps one case per notch or per a trackpad's travel adding up to one, with a short rest after each step so a fling does not run the row to its end. The listener is native and not passive, because React's onWheel is passive at the root and preventDefault there does nothing.\n\n  Finished when a drag can start on any case and the wheel walks the row without scrolling the page under it.\n\n  To check: grab the row by a side case and flick it; then turn the wheel over the shelf and watch one case step per notch. The code is in the tree already; approving records it."
+    },
+    {
+      "id": "MN-01",
+      "title": "The Menu leads with Browse and walks the card's lists",
+      "state": "done",
+      "group": "MN",
+      "at": "2026-11-16T03:45:42Z",
+      "by": "deepseek",
+      "desc": "The player's Menu becomes four root rows, in this order:\n\n- **Browse** — the Library tree. The separate **Tracks** list goes: Browse's root is the same tree, so it was a second way into the same Library.\n- **Playlists** — new. The card's lists, in name order, with **Library order** first to return to the broadcast's own order; the walking list carries the dot; the right column is the list's declared track count. Tapping a row walks it, through the same selection the App's `POST /api/playlists/select` writes, so it survives a reboot.\n- **Settings** — Backlight, Rescan, Wi-Fi, About. **Station** and **Library** leave it: they were read-only facts, not settings. About grows from three value rows to eleven — the player's three, the broadcast's three and the library's five — grouped by icon (`chip`/`tablet`/`disc` for the player, `radio-waves` for the broadcast, `books` for the library), so About scrolls.\n- **Shuffle** — last, after Settings.\n\nThis task is the contract only: `docs/specs/menu.md`, the Menu glossary in `docs/specs/CONTEXT.md`, and a new ADR 0096 that supersedes ADR 0022's tree. Finished when the tree, the Playlists rules (no card, no lists, a list with no rows, more than 64 lists, a refused walk) and About's row layout are written down and consistent. No code.",
+      "notes": [
+        {
+          "at": "2026-11-16T04:03:17Z",
+          "by": "deepseek",
+          "text": "Plan: rewrite the Menu's tree and Playlists rules in docs/specs/menu.md, update the Menu and Playlist glossary in docs/specs/CONTEXT.md, and write ADR 0096 superseding ADR 0022's tree. Contract only, no code."
+        },
+        {
+          "at": "2026-11-16T04:07:06Z",
+          "by": "deepseek",
+          "text": "The contract is written and the three documents agree on the new tree.\n\nWhat changed:\n- `docs/specs/menu.md`: the root is Browse, Playlists, Settings, Shuffle. Tracks, Station and Library are gone from the tree and the list table; Playlists adds `Library order` plus the card's lists in name order, the dot on what is walking, the declared row count, and the no-card/no-lists/too-many/refused rules. Settings is Backlight, Rescan, Wi-Fi, About; About is eleven value rows in three icon groups and scrolls. The model reads the Playlist index, the view reads the card.\n- `docs/specs/CONTEXT.md`: **Menu list**, **Row** and **Playlist selection** now say the new tree and that the Menu's Playlists Rows write the same selection as the App.\n- `docs/adr/0096-the-menu-browses-the-library-and-walks-its-lists.md`: the decision, the rejected options and the consequences; it supersedes ADR 0022's tree and its icon sentence.\n\nTo check: the tree and the Playlists bullet in `docs/specs/menu.md`, then ADR 0096's Decision and Supersedes.\n\nNo code and no tests in this task, as scoped. MN-02 is the model and its host test; MN-03 is the view and the board. I left a note on MN-03: the README's Menu paragraph and icon line (~`README.md:766` and ~780) still describe the old tree and change with the view."
+        }
+      ]
+    },
+    {
+      "id": "MN-02",
+      "title": "The Menu's model draws the new tree and the card's Playlists",
+      "state": "done",
+      "group": "MN",
+      "deps": ["MN-01"],
+      "at": "2026-11-16T03:45:42Z",
+      "by": "deepseek",
+      "desc": "The portable model and its host test:\n\n- The root is Browse, Playlists, Settings, Shuffle; the Tracks, Station and Library lists and their icons are deleted.\n- The Playlists list reads an index from its facts (id, name, declared rows, active id): **Library order** first, then the card's lists in name order; the active row carries the dot; a zero-row list is dimmed; `No playlists`, `No card` and `Too many lists` are its empty lines; activation returns a walk action with the list's id, 0 for the library's order.\n- About becomes eleven value rows, the broadcast's and the library's facts coming from the status and the lease.\n- Settings becomes four rows, and Back re-targets each list.\n\nFinished when `make -C host test` and `make -C host layering` pass and `t18_menu` covers the new tree, the Playlists fixture (name order, dot, empty states, walk ids) and About's eleven rows. Not proven on the board; the view is the next task.",
+      "notes": [
+        {
+          "at": "2026-11-16T04:34:53Z",
+          "by": "deepseek",
+          "text": "Plan: move the Menu's lists in menu.h/menu.c to Browse, Playlists, Settings (Backlight, Rescan, Wi-Fi, About) and Shuffle; add the Playlist index + walk action and the eleven-row About; rewrite t18_menu's tree, Playlists fixture and About checks. Run host test + layering."
+        },
+        {
+          "at": "2026-11-16T04:41:03Z",
+          "by": "deepseek",
+          "text": "The Menu's model now has the new tree, the Playlists list and the eleven-row About.\n\nWhat changed for you:\n- The root is Browse, Playlists, Settings, Shuffle; Tracks, Station and Library are gone as lists.\n- Playlists reads the card's index from its facts, sorts it by name, puts Library order first, dots the walking row, shows each list's declared count, dims a zero-row list, and returns a walk action with the id (0 for Library order). No and too-many lists both have their note.\n- Settings is Backlight, Rescan, Wi-Fi, About. About is eleven read-only rows in three icon groups.\n- Back re-targets Playlists, Settings, Wi-Fi and About.\n\nVerified on the host tier:\n- `make -C host test` — all unit tests pass; `t18_menu` is 637 checks, covering the new tree, the Playlists fixture (name order, dot, empty states, walk ids), About's eleven rows and the window.\n- `make -C host layering` — all checks pass.\n\nTo check: the Playlists block in `components/portable/menu/menu.c` and the Playlists/About tests in `host/tests/t18_menu.c`.\n\nNot proven, and deliberately so: MN-03 is the view. Until it lands, `cassette_menu.c` still names the retired `MENU_ICON_TRACKS` and does not pass the playlist index, so the device build is red — that is the next task, not a host failure."
+        }
+      ]
+    },
+    {
+      "id": "MN-03",
+      "title": "The player's screen shows and walks the card's Playlists",
+      "state": "done",
+      "group": "MN",
+      "deps": ["MN-02"],
+      "yolo": true,
+      "at": "2026-11-16T03:45:42Z",
+      "by": "deepseek",
+      "desc": "The LVGL view (`cassette_menu.c`) and the one seam it needs:\n\n- Read `k7.playlists/` when the Menu opens and again when a new library generation lands; hand the index and `playlist_select_current()` to the model.\n- Execute the walk with `playlist_select_set(card_root, lib, id)`, 0 for **Library order**; a refusal keeps the current walk.\n- Add `app_services_card_root()`, because the view needs the mounted root and only `app_services` owns it.\n- Map the icons: **Playlists** and a list row wear `radio-waves`, **Library order** wears `books`, and About's three groups wear their section glyph. No font change.\n\nFinished when `./tools/build.sh sunton build` is clean, the board is flashed, and on the panel: Browse leads; Playlists lists the card's lists and walks one (dotted, still walking after a reboot); Shuffle is after Settings; Settings has no Station or Library; About scrolls through eleven rows. That is the board tier — the host tier is the previous task.",
+      "notes": [
+        {
+          "at": "2026-11-16T04:06:26Z",
+          "by": "deepseek",
+          "text": "README's Menu paragraph and icon line (README.md ~766 and ~780) still describe Tracks, Shuffle and Settings with Station/Library; they change with this view, per ADR 0096's Consequences."
+        },
+        {
+          "at": "2026-11-16T15:17:17Z",
+          "by": "deepseek",
+          "text": "Plan: app_services_card_root(), cassette_menu reads k7.playlists/ at open and on a new generation and executes MENU_ACTION_WALK, icon maps for Playlists/About, README/front-door tree lines. Then build sunton, flash, board checks."
+        },
+        {
+          "at": "2026-11-16T15:33:14Z",
+          "by": "deepseek",
+          "text": "The Menu's screen has the new tree, and the sunton image is on the board.\n\nWhat changed:\n- Browse, Playlists, Settings, Shuffle, in that order. Settings is Backlight, Rescan, Wi-Fi, About; About scrolls through eleven value rows in three icon groups.\n- Playlists lists the card's lists, Library order first, with the walking row dotted and each list's declared count. Walking one calls the same selection the App's POST does, so it lands in `k7.select` and survives a reboot. `app_services_card_root()` is the seam the view reads through.\n- The README's Menu paragraph and icon line, and the front-door line about the panel's Menu, describe the new tree.\n\nVerified:\n- `./tools/build.sh sunton build` — clean; image 2,086,096 B, 50% of the app partition free.\n- Flash — 2,086,096 B written and the hash verified; the board hard-reset.\n- Boot log — library ok (1,495 tracks), stream up, panel and touch started, no crash.\n- `make -C host test` and `make -C host layering` — pass.\n\nTo check on the panel (the board tier; I cannot see the glass):\n1. Open the Menu: Browse first, then Playlists, Settings, and Shuffle last.\n2. Playlists: the card's lists with Library order first. Walk one and see the dot; power-cycle and it still walks it.\n3. Settings: Backlight, Rescan, Wi-Fi, About — no Station or Library.\n4. About: drag the Pad through all eleven rows.\n\nThe serial port is free again; I stopped the dev monitor with your approval."
+        }
+      ]
+    },
+    {
+      "id": "PL-01",
+      "title": "The handover's frames and its key",
+      "state": "done",
+      "group": "PL",
+      "at": "2026-11-18T13:40:13Z",
+      "by": "agent",
+      "desc": "The bytes both firmwares have to agree on, in one module the host can test: the beacon, the request and the network record, and the X25519 key both ends derive. Finished when the frames round-trip, the longest record is proven under the 250-byte ceiling, and both sides derive the same key from a fixed pair. Nothing in the feature can be tested before this. Ticket: docs/design/k7player/issues/01-handover-codec-and-keys.md",
+      "notes": [
+        {
+          "at": "2026-11-18T13:43:22Z",
+          "by": "agent",
+          "text": "Plan: spec first (name the CRC-8 and pin the derivation inputs), then one portable component - frame codec + X25519/HKDF - with host tests: round-trips, the 235-byte ceiling, RFC 7748 and RFC 5869 vectors, and the low-order point refused. No target conditionals; the host build compiles the same sources."
+        },
+        {
+          "at": "2026-11-18T13:50:30Z",
+          "by": "agent",
+          "text": "The protocol both firmwares will share now exists and is proven on the host: the three frames\n(beacon, request, record) with their byte layouts and checksum, and the key derivation that turns\nan X25519 shared secret into the handover's 16-byte key. 97 host checks, 0 failures.\n\n- Where it lives: `components/portable/handover/`, compiled by the host build and by the ESP32\n  toolchain from the same two sources. 3,238 B of flash, no RAM.\n- What to look at: the vectors are independent of the code (FIPS 180-4, RFC 4231, RFC 5869, and a\n  Python oracle for the handover key itself), and the longest legal record is proven at 235 B\n  under ESP-NOW's 250. I planted two bugs on purpose (a changed KDF label, a changed CRC\n  polynomial) and each failed exactly the check that owns it.\n- The spec gained the two details two implementations could have guessed differently: the\n  checksum is named CRC-8/ATM with its check value, and the KDF's transcript is pinned to 78\n  bytes.\n- Not done, deliberately: the X25519 curve itself stays with each board's mbedTLS; this module\n  starts from the shared secret. Nothing has crossed a radio — that is PL-09.\n\nOne thing to know about the repo's check: `make -C host check` fails at its `label` step in this\nenvironment because headless Chrome cannot start (GPU process exit), before it reaches any label\nassertion. Unit, layering and integration pass. Ticket: docs/design/k7player/issues/01-handover-codec-and-keys.md"
+        }
+      ]
+    },
+    {
+      "id": "PL-02",
+      "title": "The K7's share window",
+      "state": "done",
+      "group": "PL",
+      "at": "2026-11-18T13:40:13Z",
+      "by": "agent",
+      "desc": "A Share row in the K7's Wi-Fi menu opens sixty seconds in which the K7 hands its network to a K7Player over the air: a beacon four times a second, one player answered, the record encrypted, and ESP-NOW that exists only while the window does. Finished when the row counts down, one player is answered and another ignored, and the peer is gone when the window closes. Ticket: docs/design/k7player/issues/02-the-k7-share-window.md",
+      "notes": [
+        {
+          "at": "2026-11-18T13:52:32Z",
+          "by": "agent",
+          "text": "Plan: spec already fixed by PL-01. Add a portable share window state machine (first-MAC policy, 60 s, retries, record assembly from network facts) behind a board seam for ESP-NOW; wire the Menu's Share row to it; compile handover into the K7; host tests against the scripted radio."
+        },
+        {
+          "at": "2026-11-18T14:03:10Z",
+          "by": "agent",
+          "text": "The K7 can now share its network. A `Share` row in the Wi-Fi menu opens a sixty-second window: the\ndevice beacons on its own channel, answers the first player that asks with an encrypted network\nrecord, ignores everybody else, and takes the peer away when the window closes. Nothing about the\nshare survives it — no MAC, no key, no task, no ESP-NOW state.\n\n- Where to look: the row is `Menu → Settings → Wi-Fi → Share`, showing START, then a countdown,\n  then STOP (and UNAVAILABLE if the radio refuses). The window itself is\n  `components/portable/share/`, the radio is the board's, and the bytes are PL-01's module.\n- How it was checked: 109 host checks drive a fake clock and a fake radio — the beacon's key, the\n  one player answered and the second ignored, the key registered for the player matching the one\n  both keys derive, the record's fields decoded one by one, the fourth answer capped, the peer\n  gone on close. The Menu's own test grew to the six-row list and its three states. Firmware\n  builds: image 0x201130 in the 4 MB partition, 50 % free.\n- A bug worth knowing about: the Menu copies its facts field by field, so the new share state was\n  being dropped and the row would have said START forever. The menu test now asserts it, and the\n  fix is in `facts_copy()`/`facts_same()`.\n- Not proven yet, and only a board can: a K7 with no router at all sending ESP-NOW on its access\n  point's interface (the adapter chooses the interface for exactly that case), and the window's\n  memory cost. Both are PL-09's.\n\nTicket: docs/design/k7player/issues/02-the-k7-share-window.md"
+        },
+        {
+          "at": "2026-11-18T14:17:24Z",
+          "by": "agent",
+          "text": "Board tier, 2026-11-18: the K7 flashed and ran. The window opened at 46.8 s and closed itself at 106.7 s (59.9 s); the census with it open is 34,355 B free / 25,600 B largest; a second board acting as an ESP-NOW sniffer heard 23 beacons (36 B, v1, channel 1, one key, 210 ms apart in one dwell) and nothing after the deadline. The encrypted exchange still needs the player (PL-09). The classic ESP32 now runs the sniffer from .scratch/sniff."
+        }
+      ]
+    },
+    {
+      "id": "PL-03",
+      "title": "A second project for the player, and a host that runs it",
+      "state": "done",
+      "group": "PL",
+      "at": "2026-11-18T13:40:13Z",
+      "by": "agent",
+      "desc": "The K7Player gets its own ESP-IDF project beside web/, sharing only the portable pieces it needs, with a host build so its logic can be proven without a board. Finished when player/ builds for the classic ESP32 with one command, its core runs on the host, and one command runs both firmwares' host tiers. Ticket: docs/design/k7player/issues/03-the-player-project-and-host-harness.md",
+      "notes": [
+        {
+          "at": "2026-11-18T14:18:28Z",
+          "by": "agent",
+          "text": "Plan: player/ as its own IDF project on esp32 (target pinned, shared components read-only via EXTRA_COMPONENT_DIRS), a portable core that runs on the host, a board seam with two adapters, a host harness reusing the K7's shim, a layering gate, and the root check recursing into it so CI covers both."
+        },
+        {
+          "at": "2026-11-18T14:22:11Z",
+          "by": "agent",
+          "text": "The K7Player now has a firmware project of its own and a way to prove its logic without a board.\n\n- One command builds it: `./player/build.sh build` produces `player/build/k7player.bin` for the\n  classic ESP32; `./player/build.sh flash` puts it on the board, where it boots and says\n  `k7player on esp32: searching`. That is the board in your hands now, on the newer serial port.\n- One command tests it: `make -C host check` now runs the player's host tests as well as the K7's,\n  so CI covers both firmwares on every pull request without a new step.\n- The player's first real module is the status light's rule — four states, with \"playing\" needing\n  both a stream and audio leaving an output, and a missing speaker answered as ready rather than\n  a fault. 15 host checks.\n- The project links exactly one shared component (the handover's bytes) and its own; a layering\n  check fails the build if it ever names one of the K7's UI, card or panel components, or if a\n  target conditional appears in the code it compiles.\n- Bluetooth is deliberately off until the speaker output lands; there is no network, stream or\n  output yet — those are PL-04 onwards.\n\nTicket: docs/design/k7player/issues/03-the-player-project-and-host-harness.md"
+        }
+      ]
+    },
+    {
+      "id": "PL-04",
+      "title": "The player sweeps, asks and stores",
+      "state": "done",
+      "group": "PL",
+      "deps": ["PL-01", "PL-03"],
+      "at": "2026-11-18T13:40:13Z",
+      "by": "agent",
+      "desc": "The K7Player's half of the handover: it walks channels 1-13 while it has no network, hears a beacon, asks, and stores the encrypted record it gets back - then prefers the home network, falls back to the K7's own, and alternates 20 s of retrying with 10 s of sweeping when both fail. Finished when a scripted beacon produces a stored record and the preference order is exercised on the host. Ticket: docs/design/k7player/issues/04-the-player-sweep-and-handover.md",
+      "notes": [
+        {
+          "at": "2026-11-18T14:24:43Z",
+          "by": "agent",
+          "text": "Plan: player_net as a tick-driven state machine (sweep 1-13 at 250 ms, ask + 3 retries, record validation and store, home-then-AP preference with 25 s/5 tries, then 20 s retry / 10 s sweep), a wider player_board seam (record store, wifi, handover radio, channel, curve, mDNS), the esp32 adapter, and a host test against a scripted K7."
+        },
+        {
+          "at": "2026-11-18T14:37:40Z",
+          "by": "agent",
+          "text": "The two boards did the handover. With a Share window opened on the K7, the player - which had\nnever been told anything - heard the beacon, asked once, took the encrypted network record, joined\nthe home network at 192.168.0.24 and found the K7 by name at 192.168.0.13. Its whole console:\n\n  heard a K7 on channel 1: asking\n  record stored: xperiments-2.4G and K7.local\n  joining xperiments-2.4G\n  the K7 is at 192.168.0.13\n\n- What it proves: the record crossed the radio encrypted and was decrypted, which can only happen\n  if both ends derived the same key; the network is the K7's own, not a typed one.\n- The bug the board found: the player registered the K7 as an encrypted peer before sending its\n  request, which encrypts the request too - so the K7 never answered. Fixed by ordering the\n  registrations around the send, written into the spec, and the host fake now models encryption\n  direction so the test fails if it comes back.\n- Host tier: 59 checks for the state machine (sweep order and dwell, retries, a damaged record\n  refused, the store, home-then-AP, the 20 s/10 s alternation, a drop, the record surviving a\n  restart) and 15 for the light's rule.\n- Not yet: playing the stream. That is PL-05, and the player now knows where the K7 is.\n\nTicket: docs/design/k7player/issues/04-the-player-sweep-and-handover.md"
+        }
+      ]
+    },
+    {
+      "id": "PL-05",
+      "title": "The player's stream client and ring",
+      "state": "done",
+      "group": "PL",
+      "deps": ["PL-03"],
+      "at": "2026-11-18T13:40:13Z",
+      "by": "agent",
+      "desc": "The player fetches /stream and turns a close-delimited MP3 byte stream into frames on a fixed ring that discards rather than growing: the burst on connect, a ten-second stall ending the connection, and reconnection at 1 s then 5 s. Finished when a deliberately ragged body decodes frame by frame on the host and the ring never grows. Ticket: docs/design/k7player/issues/05-the-player-stream-client-and-ring.md",
+      "notes": [
+        {
+          "at": "2026-11-18T14:39:34Z",
+          "by": "agent",
+          "text": "Plan: ring (fixed slots, overrun drops oldest), MP3 streaming framer with a one-frame carry, HTTP/1.0 head parser, and a tick-driven stream machine (connect, head, body, 10 s stall, 1 s then 5 s backoff, fault on a non-MPEG body) over a non-blocking socket seam; host test with a scripted transport; then the board."
+        },
+        {
+          "at": "2026-11-18T14:46:22Z",
+          "by": "agent",
+          "text": "The player is now receiving the K7's broadcast. On the board its console read:\n\n  net: joined xperiments-2.4G at 192.168.0.24\n  stream: streaming 192.168.0.13: 44100 Hz, 256 kbps, 100 frames, ring 8/8, dropped 92\n  ...\n  stream: streaming 192.168.0.13: 44100 Hz, 256 kbps, 451 frames, ring 8/8, dropped 443\n\n- What it means: it fetched /stream from the K7, read the head, and took whole MP3 frames out of\n  a close-delimited body — 38.2 frames a second, which is exactly 44100/1152. The rate and bit\n  rate are read from the frame headers, not assumed.\n- The ring is full and dropping one frame per frame: there is no output yet, so nothing takes them\n  out. That is the next ticket (the wire) and it is what \"discards to the newest\" is for.\n- The board found the bug that mattered: the task read 512 bytes a tick, 10 KB/s against a 32 KB/s\n  stream, so it fell behind for ever. It now drains the socket each tick, and the host test scripts\n  the same read size.\n- Host tier: 87 checks — head split byte by byte, frames across arbitrary boundaries, a burst that\n  needs several reads a tick, the ten-second stall, the 1 s/5 s reconnect, a body of noise refused\n  as a fault, and the ring keeping the newest under overrun.\n- Not yet: sound. PL-06 puts the ring's frames on a wire.\n\nTicket: docs/design/k7player/issues/05-the-player-stream-client-and-ring.md"
+        }
+      ]
+    },
+    {
+      "id": "PL-06",
+      "title": "The line output, and the first sound",
+      "state": "done",
+      "group": "PL",
+      "deps": ["PL-05"],
+      "at": "2026-11-18T13:40:13Z",
+      "by": "agent",
+      "desc": "The wired output: I2S to a DAC board, clocked to the rate in the stream's own frame header, fed from the ring. Finished when a devkit and a DAC play the K7's stream, and the output's seam has a second, silent implementation behind it. Ticket: docs/design/k7player/issues/06-the-player-line-output.md",
+      "notes": [
+        {
+          "at": "2026-11-18T15:05:00Z",
+          "by": "agent",
+          "text": "Plan: decode the ring's frames with dr_mp3, write them to I2S at the stream's rate (PCM5102A on 26/25/22, no MCLK), silence on an empty ring; host test with the null output and the fixture corpus."
+        },
+        {
+          "at": "2026-11-18T15:05:00Z",
+          "by": "agent",
+          "text": "Everything but the listening test is built and running on the board, and it is paused rather than\nfinished because the last acceptance needs a wire.\n\n- Working now: the player decodes the K7's stream and writes it to I2S at 44.1 kHz. Its console\n  reads `i2s: line output: 44100 Hz, BCK 26, LRCK 25, DIN 22`, then `output 44100 Hz: 452736\n  frames, ... 0 refused`, and the PCM frames climb by 46 080 a second - the audio rate. The ring\n  stopped dropping once the playout drained it.\n- To finish it: a PCM5102A (or any I2S DAC) on BCK 26, LRCK 25, DIN 22, with SCK to GND (the\n  part's PLL needs no master clock) and FMT to GND for I2S, then an amplifier on LOUT/ROUT.\n  Nothing in the firmware changes when it is wired - the pins are named once, in the board adapter.\n- The board found a real bug on the way: a five-millisecond delay is zero ticks at 100 Hz, so the\n  playout task spun and starved every other task on its core. One tick, with a comment.\n- Host tier: 17 checks for the output path, including the 32 kHz station opening the output at\n  32 000 instead of 44 100.\n\nTicket: docs/design/k7player/issues/06-the-player-line-output.md"
+        },
+        {
+          "at": "2026-11-18T16:51:59Z",
+          "by": "agent",
+          "text": "The DAC is wired and the player makes sound: the K7's stream, decoded, at 44.1 kHz, through a\nPCM5102A. That is B1, heard rather than inferred.\n\nListening then found three defects that the host tests could never show, all fixed and all\nmeasured on the board:\n- A cut every 100 ms: the player's Wi-Fi was in IDF's default modem sleep, so the radio parked\n  between beacons and the stream arrived at about 1 KB/s. Fixing it took the stream from 3 to 38\n  frames a second.\n- An occasional cut: the I2S buffer was 33 ms deep, so any stall longer than that left a hole.\n  It is now 93 ms, and the playout's counters proved the ring was never the cause (zero underruns).\n- A connection that stays open but dribbles: the player now reconnects after three seconds without\n  a frame, which the old byte-based rule could not see.\n\nThe ring is now 418 ms (16 frames) instead of 209, as a trade measured by listening.\n\nWhat is left is not the player: in the same period the K7 logged 76 \"cannot decode ... skipping\"\nlines on ordinary MP3s while its internal RAM dipped to 5,539 B - an allocation failure at the\ntrack change, not a corrupt file. That is FW-06, proposed on the board. The player cannot buffer\nits way out of a source that stops sending.\n\nTicket: docs/design/k7player/issues/06-the-player-line-output.md"
+        }
+      ]
+    },
+    {
+      "id": "PL-07",
+      "title": "The status light",
+      "state": "done",
+      "group": "PL",
+      "deps": ["PL-05"],
+      "yolo": true,
+      "at": "2026-11-18T13:40:13Z",
+      "by": "agent",
+      "desc": "One LED reading four states - searching, ready, playing, fault - from the state the player already keeps. Finished when the four patterns are the spec's and playing means audio is actually leaving an output. Ticket: docs/design/k7player/issues/07-the-player-status-light.md",
+      "notes": [
+        {
+          "at": "2026-11-18T15:12:07Z",
+          "by": "agent",
+          "text": "Plan: player_light folds the three machines' status into player_status and drives one level (1 Hz blink, dim, bright, 4 Hz); a player_board_light(level) seam with an LEDC PWM pin on the board and a recorder on the host; host test for the four patterns."
+        },
+        {
+          "at": "2026-11-18T15:31:15Z",
+          "by": "agent",
+          "text": "The player has its surface: one LED, four states.\n\n- Seen on the board: blinking at about 1 Hz while it searched, then steadily bright once the\n  stream was playing. The console carries the transitions: `searching -> ready -> playing`, with\n  `(net connected, stream streaming, audio 1)` behind the last one.\n- How it decides: it reads the network's, the stream's and the output's state and folds them with\n  the rule that was already tested - Playing is a stream *and* audio actually leaving an output,\n  which is why a missing speaker is Ready and not a fault; a body that is not audio, or an output\n  that will not open, is Fault. Fault blinks four times a second.\n- The board found a starvation the host could never show: the audio task held its lock across the\n  blocking I2S write, and being higher priority it starved the light completely - the LED showed\n  ready and then froze while the audio played perfectly. The fix keeps the write outside the lock.\n- Host tier: 32 checks for the light, 17 for the output, 87 for the stream, 64 for the network, 15\n  for the state rule.\n\nTicket: docs/design/k7player/issues/07-the-status-light.md"
+        }
+      ]
+    },
+    {
+      "id": "PL-09",
+      "title": "Two boards, one stream",
+      "state": "review",
+      "group": "PL",
+      "deps": ["PL-02", "PL-04", "PL-06"],
+      "yolo": true,
+      "at": "2026-11-18T13:40:13Z",
+      "by": "agent",
+      "desc": "The wired path end to end on hardware: a K7 with a network and a player with none, a share window opened on the panel, and a player that finds it, joins and plays - including the case where the K7 has no router and hands over its own network. Finished with the K7's memory census and the player's heap recorded beside the boot log's numbers. Ticket: docs/design/k7player/issues/09-two-boards-one-stream.md",
+      "notes": [
+        {
+          "at": "2026-11-18T19:51:47Z",
+          "by": "agent",
+          "text": "Scope is now the line-only player (ADR 0100): the record should be the line build's board tier - 908 KB in a 3 MB partition, 177 KB internal free, the stream at 38-40 frames/s, the light's four states, the DAC at 44.1 kHz on pins 26/25/22 - with the speaker explicitly out of scope and the speaker variant named as later firmware."
+        },
+        {
+          "at": "2026-11-18T20:02:34Z",
+          "by": "agent",
+          "text": "Plan: erase the player's record so it must be handed one, open the K7's share window from the panel, capture both consoles through the handover, join and playback, then the no-router case; close with the K7's census and the player's heap."
+        },
+        {
+          "at": "2026-11-18T20:05:28Z",
+          "by": "agent",
+          "text": "Wired case passed in one run with the player's record erased: window found, record stored, joined at 192.168.0.24, playing at 44.1 kHz. Numbers in the README's board tier: K7 window costs 6,624 B (56,695 -> 50,071) with largest 31,744; player 201,020 B free at the handover and 177,212 with the stream up. Five of six boxes ticked. The AP fallback (unprovisioned K7 handing over K7.local) is the one left, and it takes the K7 off the router while it runs."
+        },
+        {
+          "at": "2026-11-18T20:10:22Z",
+          "by": "agent",
+          "text": "Both cases on hardware, in one evening, with the numbers in the README's board tier.\n\n- Wired: the player's record erased, a window opened on the panel by hand, and the player heard\n  the beacon, asked, stored the record (home network + K7.local), joined at 192.168.0.24 and\n  played at 44.1 kHz - with the K7 seeing it as an ordinary listener (client 0).\n- No router: the K7's record erased through its own setup surface, the K7 rebooted unprovisioned,\n  and the same one-tap window handed over 'no home network' and K7.local; the player joined it at\n  192.168.4.2 and streamed from 192.168.4.1.\n- Numbers: the K7's window costs 6,624 B of internal RAM (56,695 -> 50,071) and its largest block\n  stays 31,744 B, so the SD DMA is not at risk; the player's boot heap is 201,020 B and 177,212 B\n  with the stream, decoder and ring up (largest 110,592); the line build is 908 KB in a 3 MB\n  partition with no Bluetooth (ADR 0100).\n- One consequence for the next run: the player's record now names the AP, so it needs one more\n  window to take the home network once the K7 is back on the router.\n\nTicket: docs/design/k7player/issues/09-two-boards-one-stream.md"
+        }
+      ]
+    },
+    {
+      "id": "LB-09",
+      "title": "A browser that cannot start its GPU process skips the boot check, not fails it",
+      "state": "proposed",
+      "group": "LB",
+      "at": "2026-11-18T14:07:25Z",
+      "by": "dsh",
+      "desc": "`make -C host check` is meant to be green on any machine that has Chrome. On this one it is not: headless Chrome's GPU process exits the moment it starts (exit_code=6, `GPU process isn't usable. Goodbye.`), the page never paints, and the label boot step reports `FAIL label page: Chrome rendered an empty document` — the same line a genuinely broken page gets. LB-03 built that step to skip loudly when no Chrome is installed; it should also skip, just as loudly, when Chrome starts and dies before the page's own script.\n\nDone means:\n- `make -C host label` exits 0 on this machine and prints a `SKIP` naming the GPU-process failure, so the step stops blocking `make -C host check` here.\n- A page that really throws at load still fails it: re-run LB-03's 905313d page and confirm the check still reports the empty render (the skip keys on Chrome's own stderr, never on an empty document alone).\n- A machine with a working Chrome still runs all five assertions and never skips.\n- Both paths shown on this machine: faulty Chrome (skip) and `CHROME=` pointing at a working browser (assertions run).\n\nNo `--no-sandbox` in the committed command: it makes this machine pass by weakening the browser sandbox for every developer, so the fix belongs in how the harness reads Chrome's failure, not in the flags it passes."
+    },
+    {
+      "id": "FW-06",
+      "title": "The broadcast stops skipping tracks it can decode",
+      "state": "done",
+      "group": "FW",
+      "at": "2026-11-18T16:51:48Z",
+      "by": "agent",
+      "desc": "The K7 reports 76 'cannot decode (unsupported or corrupt): skipping' in under five minutes of listening, on ordinary MP3s - while its internal RAM dips to 5,539 B with a largest block of 2,944 B, and the decoder needs about 28 KB. The dip and the track change coincide, so the device is probably opening the next track's decoder before releasing the outgoing one, then blaming the file for its own headroom. Listener-visible as the occasional cut the player hears. Ticket: docs/design/broadcast-decode-failures/issues/01-the-broadcast-skips-tracks-it-can-decode.md",
+      "notes": [
+        {
+          "at": "2026-11-18T16:52:45Z",
+          "by": "agent",
+          "text": "Plan: find why a decode fails at the track change (read mi_decode + the broadcast's advance), measure the internal free block at the failure, and fix the lifecycle or the headroom - then stop blaming the file."
+        },
+        {
+          "at": "2026-11-18T17:09:26Z",
+          "by": "agent",
+          "text": "Fixed on the board: the send buffer was 32 KB per connection from internal RAM, so one listener took the device to 5,539 B and the SD driver's DMA allocation failed, losing the card and 76 decodes. Send buffer now 8 KB, lwIP falls back to PSRAM, the sender stacks moved to PSRAM, and the decoder reports why it refused. Verified: 56,211 B internal free / 31,744 B largest with a client, and 110 s with 0 SD failures, 0 decode skips."
+        },
+        {
+          "at": "2026-11-18T17:09:26Z",
+          "by": "agent",
+          "text": "The files were never the problem. A stream client's TCP send buffer was 32 KB, taken from the\nsame internal RAM the SD card needs for DMA; one listener took the device from 37 KB free to 5.5,\nthe card's next DMA allocation failed, and the device then reported every track as \"unsupported or\ncorrupt\" for the card it had lost.\n\nFixed, and measured on the board:\n- the send buffer is 8 KB (the burst drains from the client's PSRAM ring, it never needed to sit in\n  one write);\n- lwIP/Wi-Fi may fall back to PSRAM on the Sunton, whose 155 KB premise was true at boot and false\n  at steady state;\n- the four sender tasks' stacks moved to PSRAM, 16 KB back to internal RAM;\n- the decoder now says why it refused: format, memory, card, file, codec or scratch.\n\nAfter: 56,211 B internal free with a client connected, largest block and DMA largest both 31,744,\nand 110 s with zero SD failures, zero decode skips, zero rebases. The census now carries the DMA\nlargest block, because that is the number that actually constrains this firmware.\n\nTicket: docs/design/broadcast-decode-failures/issues/01-the-broadcast-skips-tracks-it-can-decode.md"
+        }
+      ]
+    },
+    {
+      "id": "FW-07",
+      "title": "The broadcast reclaims stale stream clients",
+      "state": "review",
+      "group": "FW",
+      "at": "2026-11-18T19:51:46Z",
+      "by": "agent",
+      "desc": "All four icecast slots filled with clients that had silently vanished and the K7 answered 503 to every listener until it was reset - measured on 2026-11-18 while testing the player: 'refusing a client: all 4 slots are taken' with the Mac and the player both refused, and a clean 200 and 146 KB in 4 s after the reset. The slots are freed when a sender task notices a failed send, so a client that disappears without a FIN (Wi-Fi drop, power cycle, a player rebooted mid-stream) holds its slot until that send fails - and a player that reconnects quickly can wedge the origin for everyone. Needs a reclaim rule: a sender with no progress for N seconds drops its client, and the census reports slots in use. Ticket: docs/design/broadcast-decode-failures/issues/02-the-broadcast-reclaims-stale-clients.md",
+      "notes": [
+        {
+          "at": "2026-11-18T19:52:49Z",
+          "by": "agent",
+          "text": "Plan: find why a vanished client keeps its slot (reservation leak, or a sender that never notices), reclaim it with a progress watchdog plus keepalive, and put slots-in-use in the census; reproduce the 503 on the board before and after."
+        },
+        {
+          "at": "2026-11-18T19:58:54Z",
+          "by": "agent",
+          "text": "Implemented and on the board: a dead client now wakes its sender (it never did - the ring was full and nothing else woke it), the sender's wait is timed so a missed wake cannot hold a slot, keepalive is set on client sockets, and the census reports 'clients N/4'. Host tier green. Reproduced the 503 with four SIGSTOPped listeners - and that case is correct, they are alive; the vanished-peer case is not reproducible on this bench, so the fix closes the paths by construction and the census is the next instrument. Ticket: docs/design/broadcast-decode-failures/issues/02-the-broadcast-reclaims-stale-clients.md"
+        }
+      ]
     }
   ]
 }

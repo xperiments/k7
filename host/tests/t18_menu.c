@@ -439,47 +439,71 @@ static void test_wifi_list(void)
     menu_step(m, 2);                  /* the Wi-Fi row */
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Wi-Fi is not an action");
     want_str(menu_title(m), "Wi-Fi", "Wi-Fi title");
-    CHECK_EQ(menu_count(m), 5, "the Wi-Fi list has five rows");
+    CHECK_EQ(menu_count(m), 6, "the Wi-Fi list has six rows");
 
     menu_row_t r[MENU_ROWS];
     read_rows(m, r);
     want_label(&r[0], "Setup", "Wi-Fi row 0 label");
     want_kind(&r[0], MENU_ROW_ACTION, "Wi-Fi row 0 kind");
     want_value(&r[0], "STOP", "a running hotspot offers STOP");
-    want_label(&r[1], "Network", "Wi-Fi row 1 label");
-    want_kind(&r[1], MENU_ROW_VALUE, "Wi-Fi row 1 kind");
-    want_value(&r[1], "xperiments-2.4G", "the chosen network is named");
-    want_label(&r[2], "Password", "Wi-Fi row 2 label");
-    want_value(&r[2], "newpass99", "the setup password is shown in clear");
-    want_label(&r[3], "Reset password", "Wi-Fi row 3 label");
-    want_kind(&r[3], MENU_ROW_ACTION, "Wi-Fi row 3 kind");
-    want_value(&r[3], "RESET", "the reset row says RESET");
-    want_label(&r[4], "Address", "Wi-Fi row 4 label");
-    want_value(&r[4], "192.168.4.1", "the address is shown while the hotspot is up");
+    want_label(&r[1], "Share", "Wi-Fi row 1 label");
+    want_kind(&r[1], MENU_ROW_ACTION, "Wi-Fi row 1 kind");
+    want_value(&r[1], "START", "a closed share window offers START");
+    want_label(&r[2], "Network", "Wi-Fi row 2 label");
+    want_kind(&r[2], MENU_ROW_VALUE, "Wi-Fi row 2 kind");
+    want_value(&r[2], "xperiments-2.4G", "the chosen network is named");
+    want_label(&r[3], "Password", "Wi-Fi row 3 label");
+    want_value(&r[3], "newpass99", "the setup password is shown in clear");
+    want_label(&r[4], "Reset password", "Wi-Fi row 4 label");
+    want_kind(&r[4], MENU_ROW_ACTION, "Wi-Fi row 4 kind");
+    want_value(&r[4], "RESET", "the reset row says RESET");
 
     CHECK_EQ(menu_activate(m), MENU_ACTION_WIFI_TOGGLE, "the Setup row toggles the hotspot");
+    menu_step(m, 1);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_WIFI_SHARE, "the Share row opens the window");
     menu_step(m, 3);
     CHECK_EQ(menu_activate(m), MENU_ACTION_WIFI_RESET, "the Reset row resets the password");
 
-    /* The three other states of the Setup row. */
+    /* The Address row is the sixth; the five-row window scrolls to it. */
+    menu_step(m, 1);
+    read_rows(m, r);
+    want_label(&r[4], "Address", "Wi-Fi row 5 label");
+    want_value(&r[4], "192.168.4.1", "the address is shown while the hotspot is up");
+
+    /* The other states of the Setup row. */
     facts.hotspot_on = false;
     facts.hotspot_address = NULL;
     menu_update(m, lib, &facts, NULL);
-    menu_step(m, -3);
+    menu_step(m, -5);
     read_rows(m, r);
     want_value(&r[0], "START", "a stopped hotspot offers START");
+    menu_step(m, 5);
+    read_rows(m, r);
     want_value(&r[4], "\xe2\x80\x94", "and the address is an em dash");
 
+    menu_step(m, -5);
     facts.hotspot_failed = true;
     menu_update(m, lib, &facts, NULL);
     read_rows(m, r);
     want_value(&r[0], "UNAVAILABLE", "a hotspot that could not start says so");
 
+    /* The share window's own states, on its own row. */
+    facts.share_on = true;
+    facts.share_left_s = 43;
+    facts.share_failed = false;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "43s", "an open window counts down");
+    facts.share_failed = true;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "UNAVAILABLE", "a window that could not start says so");
+
     /* A device with no network names none. */
     facts.network = NULL;
     menu_update(m, lib, &facts, NULL);
     read_rows(m, r);
-    want_value(&r[1], "none", "no chosen network reads as none");
+    want_value(&r[2], "none", "no chosen network reads as none");
 
     /* Back returns to the row that opened the list. */
     /* menu_back() answers only "did this close the Menu"; going up a level is false. */

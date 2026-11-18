@@ -577,6 +577,25 @@ result, the disconnect reason and the number of tries. The **Setup page** report
 a browser dropped mid-flow still learns why a join failed.
 _Avoid_: connection, connect result, retry
 
+**Share window**:
+The sixty seconds during which the K7 will hand its network to a [**K7Player**](../../player/CONTEXT.md), opened by a person
+from the Menu and reported by the row's countdown. It raises no access point, it answers one
+player, and it exists only while it is open (ADR 0099).
+_Avoid_: pairing mode, provisioning mode, hotspot
+
+**Network record**:
+What a **Share window** hands over: the **Home network** and its **Network password** when there
+is one, `K7.local` and the **Setup password** always, and the K7's hostname and address. It is
+composed by the K7, encrypted in flight, stored by the player, and never returned by a route or
+drawn on the panel.
+_Avoid_: credentials blob, Wi-Fi config, provisioning file
+
+**Handover**:
+The exchange inside a **Share window**: the player's request, the key the two derive, and the
+encrypted **Network record**. It leaves nothing behind — the K7 remembers no player, addresses no
+player, and cannot tell one from another afterwards (ADR 0098).
+_Avoid_: pairing, linking, registration
+
 ### Clients and access
 
 **Client**:
