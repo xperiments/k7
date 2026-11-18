@@ -2938,16 +2938,28 @@
     {
       "id": "EN-01",
       "title": "The audio packet: one MP3 frame in ESP-NOW fragments",
-      "state": "proposed",
+      "state": "review",
       "group": "EN",
       "at": "2026-11-18T23:52:20Z",
       "by": "agent",
-      "desc": "The bytes the audio travels in: every MP3 frame as two ESP-NOW packets with a sequence number, and the player's status packet carrying its free buffer and the frames it missed. Finished when the format is pinned by host tests and both firmwares agree on it byte for byte.\n\nAlready on branch `espnow-player` (ADR 0103, spec E1-E9, t43 with 101 checks) - approve it and I will move it straight to review.\n\nTicket: docs/design/espnow-player/issues/01-the-wire.md"
+      "desc": "The bytes the audio travels in: every MP3 frame as two ESP-NOW packets with a sequence number, and the player's status packet carrying its free buffer and the frames it missed. Finished when the format is pinned by host tests and both firmwares agree on it byte for byte.\n\nAlready on branch `espnow-player` (ADR 0103, spec E1-E9, t43 with 101 checks) - approve it and I will move it straight to review.\n\nTicket: docs/design/espnow-player/issues/01-the-wire.md",
+      "notes": [
+        {
+          "at": "2026-11-18T23:52:59Z",
+          "by": "agent",
+          "text": "Plan: the wire is already committed on espnow-player (0ffdeab). Re-run its host test and the full host check to confirm the state, then move it to review with what the format promises."
+        },
+        {
+          "at": "2026-11-18T23:54:23Z",
+          "by": "agent",
+          "text": "The format the audio will travel in is settled and pinned: one whole MP3 frame (417 bytes at the station's 128 kbps) as two ESP-NOW packets of at most 244 bytes, a sequence per frame so a gap is a lost 26 ms frame, and a status packet the player sends every 100 ms with its free buffer and the frames it is missing. That status packet is both the flow control and the retransmission request - the design decision is ADR 0103 and the contract is docs/specs/espnow-stream.md E1-E9.\n\nVerified on the host: t43_espnow_stream, 101 checks - every legal frame length (244, 417, 836, 1441 bytes) reassembled byte for byte, a seventh fragment refused rather than truncated, every malformed header refused, and the status packet round-tripped with and without gaps. `make -C host check` is green.\n\nWhat to check: that the packet sizes are the ones you expect (two packets per frame, six at the largest legal frame) and that the status packet carries everything the sender needs to pace itself and answer a miss. Nothing is on the radio yet - EN-02 is what makes a board send it."
+        }
+      ]
     },
     {
       "id": "EN-02",
       "title": "The K7 sends the player's audio over ESP-NOW",
-      "state": "proposed",
+      "state": "todo",
       "group": "EN",
       "deps": ["EN-01"],
       "at": "2026-11-18T23:52:20Z",
@@ -2957,7 +2969,7 @@
     {
       "id": "EN-03",
       "title": "The player listens over ESP-NOW instead of HTTP",
-      "state": "proposed",
+      "state": "todo",
       "group": "EN",
       "deps": ["EN-01", "EN-02"],
       "at": "2026-11-18T23:52:20Z",
@@ -2967,7 +2979,7 @@
     {
       "id": "EN-04",
       "title": "The K7 chooses one emitter: HTTP or ESP-NOW",
-      "state": "proposed",
+      "state": "todo",
       "group": "EN",
       "deps": ["EN-02"],
       "at": "2026-11-18T23:52:20Z",
