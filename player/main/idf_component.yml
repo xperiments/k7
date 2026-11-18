@@ -1,0 +1,5 @@
+## The player's own dependencies. The shared portable components are in this repository; the
+## only fetched one is mDNS, which resolves the K7 by name (network-handover.md H36).
+dependencies:
+  idf: ">=5.4"
+  espressif/mdns: "^1.8.0"

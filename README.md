@@ -491,6 +491,38 @@ Four things the host cannot establish, by construction:
    reason: requesting a track in the wrong case resolves on a case-insensitive
    host filesystem and need not on FATFS.)
 
+### The K7Player's board tier
+
+The player's acceptance is its own, and it is recorded here rather than on the host: what a
+sweeping player does with a window, what the two devices' heaps are while it happens, and what
+the line does with the stream once it is playing. Measured on 2026-11-18 with a WROOM-32 and a
+PCM5102A, the K7 on `192.168.0.13`, and the player's network record erased so the handover had to
+happen:
+
+```
+K7:     share window open for 60 s on channel 1; internal free 56695 B before, 50071 B after, largest 31744 B
+K7:     answered 3c:8a:1f:7f:f5:c8
+K7:     client 0 connected (icy=0, burst=19226 B); internal 47899 B free, largest 31744 B
+player: heard a K7 on channel 1: asking
+player: record stored: xperiments-2.4G and K7.local
+player: the K7 is at 192.168.0.13
+player: joined xperiments-2.4G at 192.168.0.24
+player: internal 201020 free, largest 110592 (at the handover)
+light:  playing (net connected, stream streaming, audio 1, failed 0) level 255; internal 177212 free, largest 110592
+playout: output 44100 Hz: ... 0 refused
+```
+
+- The player's boot heap is **201 020 B free** and, with the stream, decoder and ring up,
+  **177 212 B**, largest block 110 592 B.
+- The K7's window costs it **6 624 B** of internal RAM while it is open (56 695 → 50 071), and
+  its largest block stays 31 744 B — the SD driver's DMA allocation is not at risk while a
+  window is open (the failure mode FW-06 fixed).
+- The player is an ordinary listener from the K7's side: `client 0 connected`, no special case.
+- The line build is **908 KB in a 3 MB partition** with no Bluetooth (ADR 0100).
+
+The AP fallback — an unprovisioned K7 handing over `K7.local` — is the one box this run did not
+close; the ticket records it.
+
 ### The same audio from host and board
 
 ```bash

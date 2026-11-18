@@ -29,7 +29,8 @@ names the behaviour.
 | `components/portable/` | The C that runs on the board **and** on the host. No target conditionals: the shim is what knows it is a Mac |
 | `components/app/` | Board-only adapter, entry policy, panel. Not compiled on the host, and `make -C host layering` enforces that |
 | `main/` | The firmware entry |
-| `host/` | The host build, its shim, and the C and Python tests |
+| `player/` | The K7Player's firmware: its own ESP-IDF project on the classic ESP32, its own board adapter and host harness, sharing only `components/portable` ([ADR 0097](./docs/adr/0097-the-player-is-an-esp32-classic-in-its-own-project.md)) |
+| `host/` | The host build, its shim, and the C and Python tests; `make -C host check` runs the player's host tier too |
 | `web/` | The K7 app: React, its tests, the artefact |
 | `tools/` | `build.sh` (every firmware variant), screen capture, asset conversion |
 | `docs/` | Specs, ADRs, research, and the tickets under `docs/design/` |
@@ -103,6 +104,7 @@ lands.
 make -C host check                          # unit, layering and HTTP acceptance, no board
 cd web && npm run typecheck && npm test && npm run build
 ./tools/build.sh sunton build               # firmware, when the change reaches the device
+./player/build.sh build                     # the K7Player's firmware, when it reaches that board
 ```
 
 - CI (`.github/workflows/ci.yml`) runs the first two. The firmware is not in CI: it is proven by

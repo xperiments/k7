@@ -1,0 +1,44 @@
+/*
+ * The K7Player's entry point: bring the board up, start the machine that finds a K7, and get
+ * out of the way. The stream client (PL-05), the outputs (PL-06, PL-08) and the light (PL-07)
+ * are later tickets, each behind the same seams.
+ */
+#include "esp_log.h"
+
+#include "player_board.h"
+#include "player_net.h"
+#include "sdkconfig.h"
+
+#include "player_light.h"
+#include "player_playout.h"
+#include "player_stream.h"
+
+static const char *TAG = "player";
+
+void app_main(void)
+{
+    if (!player_board_init()) {
+        ESP_LOGE(TAG, "the board did not come up: nothing to play with");
+        return;
+    }
+
+    player_net_init();
+    player_net_start_task();
+
+    /* The stream waits for the network machine to have an address; it starts now so its
+     * clock is running when the K7 appears. */
+    player_stream_init();
+    player_stream_start_task();
+
+    /* The last stage: the ring's frames decoded and sent to the line output. */
+    player_playout_init();
+    player_playout_start_task();
+
+    /* The whole surface: one LED, four states, decided from the three machines above. */
+    player_light_init();
+    player_light_start_task();
+
+    player_net_status_t st;
+    player_net_status(&st);
+    ESP_LOGI(TAG, "k7player on %s: %s", player_board_name(), player_net_state_name(st.state));
+}

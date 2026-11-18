@@ -45,21 +45,35 @@ refused, not scheduled.
   [`docs/specs/k7-site.md`](./docs/specs/k7-site.md); its look in
   [`docs/specs/k7-look.md`](./docs/specs/k7-look.md); deployment in
   [`docs/specs/k7-deploy.md`](./docs/specs/k7-deploy.md).
-- [Radio player](./docs/research/01-library-architecture.md) — an ESP32-S3 that consumes
-  someone else's internet radio stream and plays it out to a DAC over I2S. Researched in
-  [`docs/research/`](./docs/research/); no `CONTEXT.md` yet, because work has not resumed
-  there.
+- [K7Player](./player/CONTEXT.md) — the second device: an ESP32 **classic** that joins a
+  network, plays the K7's live stream and turns it into sound at a Bluetooth speaker (A2DP) or a
+  line output (I2S to a DAC). It is a **Client** and nothing more: the K7 keeps no record of it,
+  and the one service the K7 performs for it is a **handover** of its own network during a
+  **share window** a person opens
+  ([ADR 0098](./docs/adr/0098-the-player-is-a-client-the-k7-keeps-no-record-of.md),
+  [ADR 0099](./docs/adr/0099-the-network-is-handed-over-esp-now-in-a-window.md)). Its own
+  firmware is a second ESP-IDF project at [`player/`](./player/)
+  ([ADR 0097](./docs/adr/0097-the-player-is-an-esp32-classic-in-its-own-project.md)). Specified
+  in [`docs/specs/k7player.md`](./docs/specs/k7player.md), and its protocol in
+  [`docs/specs/network-handover.md`](./docs/specs/network-handover.md). The earlier
+  internet-radio research in [`docs/research/`](./docs/research/) is evidence about a general
+  stream client, not a plan for this one.
 
 ## Relationships
 
-- **Stream server ↔ Radio player**: they share no code and flow in opposite directions. The
-  player is an HTTP/ICY *client*; the server is the *origin*. The only thing they share is a
-  vocabulary — "station", "ICY metadata", "burst" — which is why they are separate contexts
-  and not one.
+- **Stream server ↔ K7Player**: they flow in opposite directions. The player is an HTTP *client*
+  of the live stream; the server is the *origin*. They share one vocabulary with the server's
+  meaning — **Client**, **live stream**, **station format** — and nothing else, because the
+  player has no card, no library and no Snapshot, and the server has no per-player state.
 
-- **Stream server → Radio player**: the server is the natural loopback fixture for testing a
-  client-side ICY parser. This is why the server's header emission is held to canonical
-  Icecast form rather than "whatever a permissive parser accepts".
+- **Stream server → K7Player**: the server is the natural loopback fixture for the player, as it
+  was for the researched ICY parser: the player's first opponent is the stream this repo already
+  serves, so a player bug that a general station would hide is visible here.
+
+- **Stream server → K7Player, once**: the one thing the K7 does for a player beyond serving is
+  hand over its **network record** inside a **share window** a person opens from its Menu. It is
+  not a relationship: the K7 remembers nothing, addresses nothing, and cannot tell one player
+  from another afterwards.
 
 - **K7 app ↔ Stream server**: the App fetches the device directly, from the HTTPS origin to
   `http://k7.local`, once a person has granted the `local-network` permission (ADR 0067); the

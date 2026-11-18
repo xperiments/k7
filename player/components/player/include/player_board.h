@@ -1,0 +1,110 @@
+#pragma once
+/*
+ * player_board - what the K7Player's firmware needs from its board, and nothing else.
+ *
+ * Two adapters: the ESP32 classic (player/components/board_player/, NVS, the radio and
+ * ESP-NOW, the curve) and the host build (player/host/board_player_host.c, which scripts all
+ * of it). The policy that uses them is portable and host-tested (player_net, and later the
+ * stream and the outputs); this file is machinery.
+ *
+ * The network record is the handover's own type (components/portable/handover): the bytes
+ * are the same on both sides of the pair, so there is one definition of what a record is.
+ */
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "handover.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* The board's short name, for the boot line. A value, never hardware: "esp32" or "host". */
+const char *player_board_name(void);
+
+/* Bring the board up: NVS (where the record lives) and the radio's stack. False when
+ * something the player cannot work without refused. */
+bool player_board_init(void);
+
+/* --------------------------------------------------------------- the record
+ *
+ * One blob in NVS (k7player.md R16). Load decodes and validates, so a damaged record reads
+ * as no record - a player with none sweeps, which is the state that can recover. Save is
+ * given a record that already encoded and decoded, and stores exactly its bytes. */
+bool player_board_record_load(ho_record_t *out);
+bool player_board_record_save(const ho_record_t *rec);
+void player_board_record_drop(void);
+
+/* --------------------------------------------------------------- the station
+ *
+ * The join attempt is the K7's own model applied to the player (wifi-provisioning.md P29):
+ * an empty password is an open network, disconnects are counted per attempt, and an
+ * attempt's failure is the caller's decision (25 s or five tries). */
+typedef struct {
+    bool associated;  /* the station has an address */
+    int  disconnects; /* disconnect events since the last join() */
+    int  last_reason; /* the most recent one's reason, 0 when there has been none */
+    char ip[16];      /* the station's address, "" when it has none */
+} player_board_wifi_t;
+
+bool player_board_wifi_join(const char *ssid, const char *pass);
+void player_board_wifi_state(player_board_wifi_t *out);
+
+/* The K7's address by name (mDNS): `k7.local` on whichever interface is up. Bounded and
+ * blocking (about a second when nothing answers); false means the name did not resolve and
+ * the caller should use the record's address instead. */
+bool player_board_resolve(const char *hostname, char *out, size_t cap);
+
+/* --------------------------------------------------------------- the light
+ *
+ * One level, 0..255: 0 is off, the middle of the range is "dim" and the top is "bright"
+ * (k7player.md R31's patterns). The board decides what that means - a PWM duty on one GPIO
+ * here - and the light's policy stays portable. */
+void player_board_light(uint8_t level);
+
+/* --------------------------------------------------------------- the stream's socket
+ *
+ * A poll, never a block: the stream task ticks at 50 ms and a quiet second on the wire must
+ * cost a tick, not a stalled task. `poll` returns >0 for bytes, 0 for "nothing yet", -1 for a
+ * connection that ended or failed. */
+int  player_board_stream_connect(const char *host, uint16_t port);
+int  player_board_stream_send(int fd, const uint8_t *data, size_t len);
+int  player_board_stream_poll(int fd, uint8_t *buf, size_t cap);
+void player_board_stream_close(int fd);
+
+/* --------------------------------------------------------------- the handover's radio
+ *
+ * The other side of components/portable/share's frame exchange: the player sets the
+ * channel, listens for a beacon, asks, and receives one encrypted record. The callback runs
+ * on the Wi-Fi task and only copies; the state machine answers on its own tick. */
+typedef void (*player_board_frame_fn)(const uint8_t src[6], const uint8_t *data, size_t len,
+                                      void *ctx);
+
+bool player_board_handover_start(player_board_frame_fn on_frame, void *ctx);
+void player_board_handover_stop(void);
+
+/* One frame to the K7. The request is unicast to the address the beacon came from. */
+bool player_board_handover_send(const uint8_t *dst, const uint8_t *data, size_t len);
+
+/* Register the K7 as a plaintext peer, so a request can be sent to it. The request has to
+ * travel in clear: the K7 cannot derive the key for an answer until it has read the
+ * request's public key, so an encrypted request is one it cannot read.
+ *
+ * `peer` then registers the same address *encrypted*, which is how the record comes back
+ * (H30): both ends derive the LMK from the same two public keys. Both calls are idempotent
+ * and may be repeated; a request is sent between them, every time. */
+bool player_board_handover_address(const uint8_t mac[6]);
+bool player_board_handover_peer(const uint8_t mac[6], const uint8_t lmk[16]);
+void player_board_handover_peer_drop(const uint8_t mac[6]);
+
+/* The channel to listen on. False when the radio would not take it (a station mid-join). */
+bool player_board_set_channel(uint8_t channel);
+
+void player_board_random(uint8_t *out, size_t len);
+bool player_board_x25519_public(const uint8_t priv[32], uint8_t pub[32]);
+bool player_board_x25519(const uint8_t priv[32], const uint8_t peer_pub[32], uint8_t shared[32]);
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,0 +1,13 @@
+# The K7Player is an ESP32 classic with 4 MB of flash and no PSRAM (ADR 0097): its ring,
+# its decoder and later its A2DP buffers live in the 520 KB of internal SRAM, so nothing
+# here may assume external memory.
+
+# No Bluetooth. The output is the line and this chip's radio belongs to Wi-Fi: compiling the
+# stack in costs the line half its stream rate before a speaker is even connected (ADR 0100), and
+# no speaker ever answered the player's inquiry. The A2DP work lives in the history and in
+# PL-08's ticket, not in this tree (ADR 0101).
+CONFIG_BT_ENABLED=n
+
+# The board has 4 MB. The app partition is sized in partitions.csv when there is something
+# to flash beyond this skeleton.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
