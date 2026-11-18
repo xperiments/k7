@@ -65,6 +65,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/app_board/include \
        -I$(ROOT)/components/portable/wifi_record/include \
        -I$(ROOT)/components/portable/handover/include \
+       -I$(ROOT)/components/portable/espnow_stream/include \
        -I$(ROOT)/components/portable/share/include \
        -I$(ROOT)/components/portable/setup/include \
        -I$(ROOT)/components/portable/dr_libs/include \
@@ -101,6 +102,7 @@ PROD_SRC := \
   $(ROOT)/components/portable/mini_icecast/mi_encode.c \
   $(ROOT)/components/portable/mini_icecast/mi_decode.c \
   $(ROOT)/components/portable/mini_icecast/mi_resample.c \
+  $(ROOT)/components/portable/espnow_stream/espnow_stream.c \
   $(ROOT)/components/portable/tone_eq/tone_eq.c \
   $(ROOT)/components/portable/mini_files/mini_files.c \
   $(ROOT)/components/portable/cassette/cassette.c \
@@ -144,6 +146,7 @@ PROD_SRC := \
   $(SHINE_SRC)
 
 vpath %.c $(ROOT)/components/portable/http_server \
+          $(ROOT)/components/portable/espnow_stream \
           $(ROOT)/components/portable/json \
           $(ROOT)/components/portable/card_use \
           $(ROOT)/components/portable/card_path \
@@ -207,7 +210,8 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t29_snapshot $(BIN)/t30_playlist_select $(BIN)/t31_card_select \
          $(BIN)/t32_label $(BIN)/t34_json $(BIN)/t35_card_use \
          $(BIN)/t36_wifi_record $(BIN)/t38_setup $(BIN)/t39_shuffle_default \
-         $(BIN)/t40_playlist_file $(BIN)/t41_handover $(BIN)/t42_share
+         $(BIN)/t40_playlist_file $(BIN)/t41_handover $(BIN)/t42_share \
+         $(BIN)/t43_espnow_stream
 
 .PHONY: all test integration layering label player check tools fixtures bench control control-check clean help
 
@@ -384,6 +388,10 @@ $(BIN)/t41_handover: $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $(OBJ)/t41_ha
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t42_share: $(OBJ)/share.o $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $(OBJ)/wifi_record.o $(OBJ)/board_host.o $(OBJ)/shim.o $(OBJ)/t42_share.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t43_espnow_stream: $(OBJ)/espnow_stream.o $(OBJ)/t43_espnow_stream.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
