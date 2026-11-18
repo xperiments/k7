@@ -2938,7 +2938,7 @@
     {
       "id": "EN-01",
       "title": "The audio packet: one MP3 frame in ESP-NOW fragments",
-      "state": "review",
+      "state": "done",
       "group": "EN",
       "at": "2026-11-18T23:52:20Z",
       "by": "agent",
@@ -2964,7 +2964,19 @@
       "deps": ["EN-01"],
       "at": "2026-11-18T23:52:20Z",
       "by": "agent",
-      "desc": "Every frame the broadcast encodes also goes to an ESP-NOW emitter: fragmented, sent only within the free buffer the player reports, and resent when the player names a missing frame. Finished when a listener hears the stream with no HTTP request at all and the K7's census counts frames sent, resends and drops.\n\nWhy it matters: the HTTP path goes through the access point and that hop is what stalls the audio for seconds at a time; ESP-NOW is one radio link between the two boards.\n\nTicket: docs/design/espnow-player/issues/02-the-k7-emits-audio-over-esp-now.md"
+      "desc": "Every frame the broadcast encodes also goes to an ESP-NOW emitter: fragmented, sent only within the free buffer the player reports, and resent when the player names a missing frame. Finished when a listener hears the stream with no HTTP request at all and the K7's census counts frames sent, resends and drops.\n\nWhy it matters: the HTTP path goes through the access point and that hop is what stalls the audio for seconds at a time; ESP-NOW is one radio link between the two boards.\n\nTicket: docs/design/espnow-player/issues/02-the-k7-emits-audio-over-esp-now.md",
+      "notes": [
+        {
+          "at": "2026-11-18T23:55:39Z",
+          "by": "agent",
+          "text": "Plan: the emitter in the portable component (history, credit, resend) with a host loop test that plays sender and receiver against each other; then the broadcast's frame sink and the K7's ESP-NOW glue; then build the K7."
+        },
+        {
+          "at": "2026-11-18T23:58:30Z",
+          "by": "agent",
+          "text": "Paused at the portable half, which is committed (45cf759): the emitter, its credit, its resend and a host loop test, 22 checks plus the wire's 101, `make -C host check` green.\n\nWhat is left, and why it is not a glue line: the K7's ESP-NOW radio is only up during the share window (`app_board_share_radio_start/stop` in `board_esp32.c`), and a stream needs it up permanently. The rest of EN-02 is:\n- `mini_icecast`: a frame sink called with every encoded frame, outside its lock.\n- The K7's radio: ESP-NOW up at boot and left up, with the share window becoming a beacon over an always-on radio instead of owning the radio.\n- The board: learn the player's MAC from its status packet, add it as a peer, send fragments to it, and a mutex between the broadcast task's push and the radio callback's status.\n- The appliance: wire the sink when the transport is ESP-NOW (EN-04's setting), and a census line of frames, resends and drops.\n\nThere is nothing to hear yet either way: with no receiver on the player (EN-03) nothing sends a status packet, so the emitter holds and sends nothing - which is the design working as specified."
+        }
+      ]
     },
     {
       "id": "EN-03",
