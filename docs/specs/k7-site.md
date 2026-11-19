@@ -11,7 +11,7 @@ The origin does not move: `xperiments.dev` and its certificate are the ones alre
 the root ([ADR 0078](../adr/0078-the-site-owns-the-root-and-the-app-moves-to-app.md)) and how the
 firmware reaches a board ([ADR 0079](../adr/0079-the-firmware-is-flashed-in-parts-from-the-browser.md)).
 
-**Status:** S1–S14, R1–R6, D1–D4 and F1–F13 are built; **K7 0.6.1 and K7Player 0.6.1 are
+**Status:** S1–S14, R1–R6, D1–D4 and F1–F13 are built; **K7 0.6.2 and K7Player 0.6.2 are
 released** — `web/firmware.json` and `web/firmware-player.json`, with their parts under
 `web/public/firmware/` and `web/public/firmware/player/`. The flash's rules are tested over a
 fake board and a fake origin — **not on hardware** — and **no board has been flashed from a
@@ -145,18 +145,18 @@ support burden in a dropdown.
 **F3. The flash writes the chosen board's three parts at their own offsets, and never the
 gaps:**
 
-| Board | Part | Offset | Size at 0.6.1 |
+| Board | Part | Offset | Size at 0.6.2 |
 |---|---|---:|---:|
 | K7 | `bootloader.bin` | `0x0` | 21,120 B |
 | K7 | `partition-table.bin` | `0x8000` | 3,072 B |
-| K7 | `sd_stream_server.bin` | `0x10000` | 2,073,008 B |
+| K7 | `sd_stream_server.bin` | `0x10000` | 2,111,536 B |
 | K7Player | `bootloader.bin` | `0x1000` | 26,176 B |
 | K7Player | `partition-table.bin` | `0x8000` | 3,072 B |
 | K7Player | `k7player.bin` | `0x10000` | 891,712 B |
 
 The K7's table is the one it has always had. The K7Player's bootloader sits at **`0x1000`**, not
 `0x0`: that is where a classic ESP32's ROM looks, and the K7's offsets would leave the player not
-booting. On the K7, `nvs` sits at `0x9000` and `phy_init` at `0xF000`; the app ends at `0x20A1B0`,
+booting. On the K7, `nvs` sits at `0x9000` and `phy_init` at `0xF000`; the app ends at `0x2138F0`,
 far below the Snapshot at `0x410000`. A **merged** image written from `0x0` pads those gaps with
 `0xFF` and so erases the stored WiFi network — a factory reset disguised as an update. The Site
 therefore never serves or writes a merged image, and the download path (F10) is the same parts

@@ -1,6 +1,6 @@
 {
-  "version": "0.6.1",
-  "commit": "63b7c066b48c3cad691809ff93a42e44e44e7a06",
+  "version": "0.6.2",
+  "commit": "98d2d3ed4953091c1b12be2e43e7aa9020301bfd",
   "idf": "ESP-IDF v6.1",
   "chip": "esp32",
   "flash": {
@@ -8,7 +8,7 @@
     "size": "4MB",
     "freq": "40m"
   },
-  "built_at": "2026-11-19T13:16:30Z",
+  "built_at": "2026-11-19T15:18:29Z",
   "parts": [
     {
       "file": "bootloader.bin",
@@ -26,7 +26,7 @@
       "file": "k7player.bin",
       "offset": 65536,
       "size": 891712,
-      "sha256": "4e99d6d0cbe39a89ee33fa4427f80fc35828f8632861154a84efc4db4b16491d"
+      "sha256": "ec554b6bf396ddd5dc6e3b6b90c1fff185888a2553aada330fe848947f0a5d19"
     }
   ]
 }
