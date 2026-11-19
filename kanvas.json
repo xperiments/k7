@@ -3145,7 +3145,7 @@
     {
       "id": "SI-08",
       "title": "The Site installs the K7Player as well as the K7",
-      "state": "doing",
+      "state": "review",
       "group": "SI",
       "at": "2026-11-19T13:07:09Z",
       "by": "lead",
@@ -3155,6 +3155,11 @@
           "at": "2026-11-19T13:11:16Z",
           "by": "lead",
           "text": "Plan: spec first (F2/F3/F4/F5/F9/F11 per board), then the player's release action and its manifest, then the page's board choice with per-board chip/flash checks and post-flash steps; verify the artifact on the player board, leave the Chrome pass to the human."
+        },
+        {
+          "at": "2026-11-19T13:18:21Z",
+          "by": "lead",
+          "text": "The install page now installs both boards. Open https://k7.xperiments.dev/, choose **K7** or **K7Player**, plug the board in, and press Connect: the page checks the chip and the flash against the board you chose, writes the board's own parts at the board's own offsets, and then tells you what to do next.\n\n**What is new:**\n- **The K7Player's firmware is published for the first time**, under `/firmware/player/0.6.1/`, with its own manifest. `./player/build.sh release` publishes it from now on, the peer of the K7's release.\n- The board's chip and flash size are checked before a byte is written: an ESP32-S3 with 16 MB for K7, a classic ESP32 with 4 MB for the player. A wrong board is refused and nothing is written.\n- Erasing says what it costs on that board: the K7's WiFi network and Snapshot, or the player's network record — which the K7's Share window then has to hand over again.\n- The steps after the flash are the board's: the K7's setup network and App install; the player goes near the K7 and the K7's **Menu → Wi-Fi → Share** gives it the network.\n- CI now hashes both manifests against both boards' files, so a half-published release fails there instead of on a board.\n\n**Checked on the player board, not the host:** the published player release (26,176 B at 0x1000, 3,072 B at 0x8000, 891,712 B at 0x10000) was written with the manifest's own offsets and flash parameters — the exact command the page's manual path shows — the hash verified, and the board booted and played: receiving 192.168.0.13 at 44.1 kHz / 128 kbps, 0 underruns, no error in the log.\n\n**What is left for you:** the browser pass. The page is served from the deployed origin, so deploy it (or run `npm run dev`), then flash a bare ESP32 classic from Chrome and confirm the two sentences — the board picker and the chip refusal — read right on the real page. That is the one box a host cannot tick, and it is the same pass ticket 06 owes the K7.\n\n**Worth knowing:** the player's bootloader sits at `0x1000`, not at the S3's `0x0`; the manifests carry the offsets, and the release refuses a part table that is not the board's, so that difference cannot rot."
         }
       ]
     }
