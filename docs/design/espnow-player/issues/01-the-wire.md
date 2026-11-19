@@ -7,7 +7,7 @@ the host can prove it.
 
 **Blocked by:** nothing.
 
-**Status:** done — host tier, `t43_espnow_stream`, 101 checks.
+**Status:** done and accepted on the board — host tier, `t43_espnow_stream`, 101 checks.
 
 - [x] A frame of every legal length fragments and reassembles byte for byte; a 417-byte frame is two packets and a 1 441-byte one is six.
 - [x] A frame that needs a seventh fragment is refused rather than truncated.
