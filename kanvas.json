@@ -2959,7 +2959,7 @@
     {
       "id": "EN-02",
       "title": "The K7 sends the player's audio over ESP-NOW",
-      "state": "review",
+      "state": "done",
       "group": "EN",
       "deps": ["EN-01"],
       "at": "2026-11-18T23:52:20Z",
@@ -2996,7 +2996,19 @@
       "deps": ["EN-01", "EN-02"],
       "at": "2026-11-18T23:52:20Z",
       "by": "agent",
-      "desc": "The player takes its audio from the K7's emitter and its HTTP stream client is deleted: no request, no reconnect schedule, no ten-second stall rules. The ring, its 4.5 s prime, the line output and the light are untouched; three seconds without a packet is Ready, not a reconnect. A frame that does not arrive is asked for again and the frames behind it wait, so a lost packet costs a click only when the resend misses its second.\n\nFinished when the player plays from the K7's emitter at 44.1 kHz with no web server involved, and the weak-link case is recorded in counters.\n\nTicket: docs/design/espnow-player/issues/03-the-player-receives-audio-over-esp-now.md"
+      "desc": "The player takes its audio from the K7's emitter and its HTTP stream client is deleted: no request, no reconnect schedule, no ten-second stall rules. The ring, its 4.5 s prime, the line output and the light are untouched; three seconds without a packet is Ready, not a reconnect. A frame that does not arrive is asked for again and the frames behind it wait, so a lost packet costs a click only when the resend misses its second.\n\nFinished when the player plays from the K7's emitter at 44.1 kHz with no web server involved, and the weak-link case is recorded in counters.\n\nTicket: docs/design/espnow-player/issues/03-the-player-receives-audio-over-esp-now.md",
+      "notes": [
+        {
+          "at": "2026-11-19T00:09:03Z",
+          "by": "agent",
+          "text": "Plan: the portable receiver first (reassembly, gap, NACK, abandon) with host tests; then the player's radio seam and the HTTP client's removal; then the bench."
+        },
+        {
+          "at": "2026-11-19T00:11:45Z",
+          "by": "agent",
+          "text": "Paused at the receiver, which is committed (6cb72b7): fragments reassemble in order across the wrap, a gap holds the frames behind it and is named in the status packet, a resend inside the second restores the order, one that outlives it is abandoned and counted, and a duplicate fragment neither doubles a frame nor rewinds the stream. `t06_recv` plus `make -C host check`, green.\n\nWhat is left is the player's own plumbing, and it is the riskier half because it deletes things:\n- The player's stream module still speaks HTTP. Its client, the connect burst, the 10-second stall rules and the reconnect schedule come out; the ring, the framer, the rate and the prime stay. Packets arrive from the board's radio callback and go into the receiver, whose frames land in the ring.\n- The player's board: ESP-NOW must be up from boot, not only during a handover sweep, for the same reason the K7's was (45cf759). The status packet is broadcast until the K7 has the player's MAC; the player never needs the K7's.\n- The output and light host tests are scripted against an HTTP body; they need the same frames delivered as packets through the new seam, which is a test-harness change, not a test change.\n- Then the bench: the K7 is already emitting and holding (EN-02), so a player that sends status packets turns `0 packets` into a stream, and the numbers to compare against are in the README's board tier.\n\nOne decision recorded so it is not rediscovered: the status packet is broadcast, because the player has no way to know the K7's MAC and the K7 learns the player's from the packet's source address."
+        }
+      ]
     },
     {
       "id": "EN-04",
