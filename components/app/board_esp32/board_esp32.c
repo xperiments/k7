@@ -36,6 +36,7 @@
 #include "psa/crypto.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 #include "sdmmc_cmd.h"
 #include "snapshot.h"
@@ -943,6 +944,47 @@ static int64_t s_audio_logged_us;
  * watchdog: after this many in a row, drop the association and dial it again. */
 #define AUDIO_SEND_DISCONNECTED 30 /* about a second of frames at 38 a second */
 
+/* ------------------------------------------------------------- the radio's work queue
+ *
+ * Nothing that can block runs in the Wi-Fi task. The receive callback copies the packet into
+ * this queue and returns; one task of ours does the sends, the credit and the NACKs, and the
+ * recovery. Before it, a status packet made the callback take the emitter's lock and send from
+ * inside the Wi-Fi task - and when a send, or the re-association it starts, wedged, the lock
+ * stayed taken: the broadcast blocked on its way to the radio and the station stopped encoding
+ * while the device still looked alive (EN-10, found on the bench after 9 h 46 m).
+ *
+ * The queue is also what keeps the producer out of the lock: the broadcast copies a frame and
+ * returns. A full queue drops the frame; the player's next gap names it and the history answers
+ * it if it is still there.
+ */
+#define AUDIO_FRAME_QUEUE 4
+#define AUDIO_CTRL_QUEUE  4
+
+typedef struct {
+    uint16_t len;
+    uint8_t data[ES_MAX_FRAME];
+} audio_frame_item_t;
+
+typedef struct {
+    uint8_t kind; /* 0 = the player's status, 1 = a share-window frame */
+    uint8_t src[ESP_NOW_ETH_ALEN];
+    uint16_t len;
+    uint8_t data[ESP_NOW_MAX_DATA_LEN];
+} audio_ctrl_item_t;
+
+static QueueHandle_t s_audio_frames;
+static QueueHandle_t s_audio_ctrl;
+static StaticQueue_t s_audio_frames_struct;
+static StaticQueue_t s_audio_ctrl_struct;
+/* The frame queue's storage is external: 4 frames of room is 5.8 KB, and internal RAM is what
+ * the card's DMA and the encoder need. The control queue is small enough to stay in .bss. */
+static uint8_t s_audio_ctrl_store[AUDIO_CTRL_QUEUE * sizeof(audio_ctrl_item_t)];
+static SemaphoreHandle_t s_audio_signal;
+static TaskHandle_t s_audio_worker;
+static uint32_t s_audio_lost;
+
+static void audio_apply_status(const uint8_t src[6], const uint8_t *data, size_t len);
+
 static bool audio_send(const uint8_t *pkt, size_t len, void *ctx)
 {
     (void)ctx;
@@ -992,11 +1034,18 @@ static void audio_log_census(void)
     ESP_LOGI(TAG, "espnow audio: %u frames, %u resent, %u held, %u dropped, %u packets, %s",
              (unsigned)st.sent, (unsigned)st.resent, (unsigned)st.held, (unsigned)st.dropped,
              (unsigned)st.packets, s_audio_has_peer ? "a player is listening" : "no player yet");
+    /* A frame the worker could not take: the station never waited for it, which is the point,
+     * but the player's gap will name it and the history has it only if it got in. */
+    if (s_audio_lost) {
+        ESP_LOGW(TAG, "espnow audio: %u frames lost to a full queue", (unsigned)s_audio_lost);
+        s_audio_lost = 0;
+    }
 }
 
-/* A status packet is the first thing a player says, so it is what names it: the address it
- * came from becomes the peer the audio is sent to. */
-static void audio_status(const uint8_t src[6], const uint8_t *data, size_t len)
+/* The player's status packet: the first one names the player, and every one opens the credit
+ * and asks for frames again. Runs in the worker, so every send and the re-association it may
+ * start happen in a task. */
+static void audio_apply_status(const uint8_t src[6], const uint8_t *data, size_t len)
 {
     if (!s_audio_on || !s_audio_lock) return;
 
@@ -1032,19 +1081,123 @@ static void audio_status(const uint8_t src[6], const uint8_t *data, size_t len)
         es_emitter_status(&s_audio, data, len);
         xSemaphoreGive(s_audio_lock);
     }
-    audio_log_census();
 }
 
-/* One dispatcher for the whole radio: the audio's two types, then the window's. */
+/* A share-window frame, handled by the window's own code - in the worker, not in the Wi-Fi
+ * task, for the same reason: the answer is a send. */
+static void audio_dispatch_share(const uint8_t src[6], const uint8_t *data, size_t len)
+{
+    app_board_share_frame_fn cb = s_share_cb;
+    void *ctx = s_share_ctx;
+    if (cb) cb(src, data, len, ctx);
+}
+
+static void audio_worker_task(void *arg)
+{
+    (void)arg;
+    audio_frame_item_t frame;
+    audio_ctrl_item_t ctrl;
+    for (;;) {
+        if (xSemaphoreTake(s_audio_signal, portMAX_DELAY) != pdTRUE) continue;
+        for (;;) {
+            bool worked = false;
+            while (s_audio_frames && xQueueReceive(s_audio_frames, &frame, 0) == pdTRUE) {
+                if (s_audio_on && s_audio_lock &&
+                    xSemaphoreTake(s_audio_lock, portMAX_DELAY) == pdTRUE) {
+                    es_emitter_push(&s_audio, frame.data, frame.len);
+                    xSemaphoreGive(s_audio_lock);
+                }
+                worked = true;
+            }
+            while (s_audio_ctrl && xQueueReceive(s_audio_ctrl, &ctrl, 0) == pdTRUE) {
+                if (ctrl.kind == 0) audio_apply_status(ctrl.src, ctrl.data, ctrl.len);
+                else audio_dispatch_share(ctrl.src, ctrl.data, ctrl.len);
+                worked = true;
+            }
+            if (!worked) break;
+            audio_log_census();
+        }
+    }
+}
+
+/* One task, created on first use: the worker carries the audio's sends, so it must exist even
+ * when the transport is HTTP, because the share window uses the same radio and the same queue. */
+static bool audio_worker_start(void)
+{
+    if (s_audio_worker) return true;
+    if (!s_audio_signal &&
+        !(s_audio_signal = xSemaphoreCreateCounting(AUDIO_FRAME_QUEUE + AUDIO_CTRL_QUEUE, 0)))
+        return false;
+    if (!s_audio_frames) {
+        size_t bytes = AUDIO_FRAME_QUEUE * sizeof(audio_frame_item_t);
+        uint8_t *store = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!store) store = heap_caps_malloc(bytes, MALLOC_CAP_8BIT);
+        if (!store) return false;
+        s_audio_frames = xQueueCreateStatic(AUDIO_FRAME_QUEUE, sizeof(audio_frame_item_t), store,
+                                            &s_audio_frames_struct);
+        if (!s_audio_frames) return false;
+    }
+    if (!s_audio_ctrl) {
+        s_audio_ctrl = xQueueCreateStatic(AUDIO_CTRL_QUEUE, sizeof(audio_ctrl_item_t),
+                                          s_audio_ctrl_store, &s_audio_ctrl_struct);
+        if (!s_audio_ctrl) return false;
+    }
+    if (xTaskCreatePinnedToCore(audio_worker_task, "espnow", 6144, NULL, 5, &s_audio_worker, 0) !=
+        pdPASS) {
+        s_audio_worker = NULL;
+        return false;
+    }
+    return true;
+}
+
+/* The producer's side: copy and return. Never a lock, never a send, never a wait. */
+static void audio_post_frame(const uint8_t *data, size_t len)
+{
+    if (!s_audio_on || !s_audio_frames || !data || len == 0 || len > ES_MAX_FRAME) return;
+    audio_frame_item_t it;
+    it.len = (uint16_t)len;
+    memcpy(it.data, data, len);
+    if (xQueueSend(s_audio_frames, &it, 0) == pdTRUE)
+        xSemaphoreGive(s_audio_signal);
+    else
+        s_audio_lost++;
+}
+
+static void audio_post_status(const uint8_t src[6], const uint8_t *data, size_t len)
+{
+    if (!s_audio_ctrl || !data || len == 0 || len > ESP_NOW_MAX_DATA_LEN) return;
+    audio_ctrl_item_t it = {.kind = 0, .len = (uint16_t)len};
+    memcpy(it.src, src, sizeof it.src);
+    memcpy(it.data, data, len);
+    if (xQueueSend(s_audio_ctrl, &it, 0) == pdTRUE)
+        xSemaphoreGive(s_audio_signal);
+    else
+        s_audio_lost++;
+}
+
+static void audio_post_share(const uint8_t src[6], const uint8_t *data, size_t len)
+{
+    if (!s_audio_ctrl || !data || len == 0 || len > ESP_NOW_MAX_DATA_LEN) return;
+    audio_ctrl_item_t it = {.kind = 1, .len = (uint16_t)len};
+    memcpy(it.src, src, sizeof it.src);
+    memcpy(it.data, data, len);
+    if (xQueueSend(s_audio_ctrl, &it, 0) == pdTRUE)
+        xSemaphoreGive(s_audio_signal);
+    else
+        s_audio_lost++;
+}
+
+/* The radio's only receive path, and it does nothing but hand over: the Wi-Fi task must return
+ * to the driver, whatever the packet asked for. */
 static void espnow_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len)
 {
     if (!info || !data || len < 2) return;
     if (data[0] == ES_VERSION && data[1] == ES_TYPE_STATUS) {
-        audio_status(info->src_addr, data, (size_t)len);
+        audio_post_status(info->src_addr, data, (size_t)len);
         return;
     }
     if (!s_share_cb || len <= 0) return;
-    s_share_cb(info->src_addr, data, (size_t)len, s_share_ctx);
+    audio_post_share(info->src_addr, data, (size_t)len);
 }
 
 /* The player's transport, in NVS beside the Wi-Fi record: one byte, read once at boot and
@@ -1076,7 +1229,23 @@ esp_err_t app_board_player_espnow_save(bool on)
     return e;
 }
 
+static bool audio_set_locked(bool on);
+
 bool app_board_audio_set(bool on)
+{
+    if (!audio_worker_start()) {
+        ESP_LOGE(TAG, "no memory for the radio's worker");
+        return false;
+    }
+    if (!s_audio_lock && !(s_audio_lock = xSemaphoreCreateMutex())) return false;
+    if (xSemaphoreTake(s_audio_lock, portMAX_DELAY) != pdTRUE) return false;
+    bool ok = audio_set_locked(on);
+    xSemaphoreGive(s_audio_lock);
+    return ok;
+}
+
+/* Called with the emitter's lock held: the worker may be running and is the only other user. */
+static bool audio_set_locked(bool on)
 {
     if (!on) {
         s_audio_on = false;
@@ -1090,7 +1259,6 @@ bool app_board_audio_set(bool on)
         return true;
     }
     if (s_audio_on) return true;
-    if (!s_audio_lock && !(s_audio_lock = xSemaphoreCreateMutex())) return false;
     if (!s_audio_arena) {
         size_t bytes = ES_HISTORY_FRAMES * ES_MAX_FRAME;
         s_audio_arena = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -1113,11 +1281,9 @@ bool app_board_audio_set(bool on)
 void app_board_audio_frame(void *ctx, const uint8_t *frame, size_t bytes)
 {
     (void)ctx;
-    if (!s_audio_on || !frame || !bytes || !s_audio_lock) return;
-    if (xSemaphoreTake(s_audio_lock, portMAX_DELAY) != pdTRUE) return;
-    es_emitter_push(&s_audio, frame, bytes);
-    xSemaphoreGive(s_audio_lock);
-    audio_log_census();
+    /* The broadcast's task: copy into the queue and go back to encoding. The worker does the
+     * rest, because a send can block and the station must never wait on the radio (EN-10). */
+    audio_post_frame(frame, bytes);
 }
 
 bool app_board_share_radio_start(app_board_share_frame_fn on_frame, void *ctx)
@@ -1125,6 +1291,10 @@ bool app_board_share_radio_start(app_board_share_frame_fn on_frame, void *ctx)
     if (s_share_on) app_board_share_radio_stop();
 
     if (!espnow_up()) return false;
+    if (!audio_worker_start()) {
+        ESP_LOGE(TAG, "no memory for the radio's worker");
+        return false;
+    }
     esp_now_register_recv_cb(espnow_recv_cb);
     s_share_cb = on_frame;
     s_share_ctx = ctx;

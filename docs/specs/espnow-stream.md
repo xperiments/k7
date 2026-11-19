@@ -101,6 +101,16 @@ and stays up while the player's audio uses it, so the share window stops owning 
 adds its beacon to it (`network-handover.md` H13). When the station emits over HTTP instead, the
 radio keeps the window's old lifecycle and costs nothing outside it.
 
+**E11. Nothing that can block runs in the radio's receive callback.** The callback copies the
+packet — the player's status, or a share-window frame — into a queue and returns to the Wi-Fi
+driver. One task of the board owns the emitter: it applies the credit, answers the NACKs, sends,
+and runs the recovery (a re-association, and a restart as the last resort). The station's publish
+path never takes the emitter's lock either: the broadcast copies the frame into that queue and goes
+back to encoding, and a full queue drops it, which the player's next gap names again. A send that
+blocks costs the player frames; it must never cost the station, and it must never hold a lock
+another task waits on (EN-10: a send from the callback froze the K7 for hours, with the radio and
+the encoder down and the panel still painting).
+
 ## 6. What this replaces
 
 The player has no HTTP stream client any more: no `GET /stream`, no `Connection: close`, no
