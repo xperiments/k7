@@ -225,7 +225,8 @@ reads it (`cassette_menu.c`), and `firmware.json` repeats it. The first release 
 the one tag the repository has, `v0.4.0`.
 
 **R2. Each board has a release action, and both publish through one script.**
-`./tools/build.sh sunton release` publishes the K7 and `./player/build.sh release` the K7Player.
+`./tools/build.sh sunton release` publishes the K7 and `./player/build.sh release` the K7Player;
+`npm run release` runs both, in that order, and stops at the first failure.
 Each
 
 1. refuses a dirty tree (`git status --porcelain`) over its own source — a binary from
