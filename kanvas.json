@@ -3081,7 +3081,7 @@
     {
       "id": "EN-06",
       "title": "The player hears either transport",
-      "state": "doing",
+      "state": "todo",
       "group": "EN",
       "deps": ["EN-05"],
       "at": "2026-11-19T01:28:08Z",
@@ -3092,8 +3092,22 @@
           "at": "2026-11-19T01:56:43Z",
           "by": "agent",
           "text": "Plan: restore the HTTP parser and the socket seam from before EN-03, add an HTTP source behind the radio in player_stream, cover the fallback and the preemption on the host, then the bench."
+        },
+        {
+          "at": "2026-11-19T02:04:17Z",
+          "by": "agent",
+          "text": "Stopped by the design, not by the work. The design is: the K7's setting chooses ESP-NOW or HTTP; with ESP-NOW the ESP32 player plays off the air, and with HTTP the K7 serves HTTP to browsers and the player hears nothing. So the player stays ESP-NOW only and the fallback this task was building contradicts it.\n\nThe work is not lost: it is committed on the branch `en06-fallback-parked` (49a5391) - the HTTP parser, the socket seam on both boards, the source behind the radio, the preemption and `t03_fallback`, all passing on the host. ADR 0105 supersedes ADR 0104's fallback half and records why.\n\nWhat this needs from you: withdraw this task or re-scope it. If it is withdrawn, the parked branch is the record and the acceptance of EN-05 covers the setting."
         }
       ]
+    },
+    {
+      "id": "EN-07",
+      "title": "One audio client at a time",
+      "state": "proposed",
+      "group": "EN",
+      "at": "2026-11-19T02:25:35Z",
+      "by": "agent",
+      "desc": "The K7 serves one audio client, not four. It is a personal player, not a station: a second listener on /stream is refused rather than added to the airtime budget. The connection pool stays as it is for the API and the UI - only one of them may be a stream at a time.\n\nThe ESP-NOW player is not an HTTP client, so it does not take the slot: one browser and the player can coexist, which is the shape you described.\n\nTicket: docs/design/espnow-player/issues/07-one-audio-client-at-a-time.md"
     }
   ]
 }
