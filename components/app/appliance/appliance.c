@@ -210,6 +210,13 @@ void appliance_run(void)
      * itself), the functional requirement is that the broadcast never
      * starves, and that is what the soak checks. 32000 Hz / 96 kbps remains
      * the documented fallback if headroom is ever needed for something else. */
+    /* The player's audio travels one way, never two (docs/specs/espnow-stream.md E9). Over
+     * ESP-NOW the K7 pushes every encoded frame to the player and the player answers with its
+     * credit; over HTTP the player fetches /stream as it always did and the emitter stays off.
+     * The web UI's own listeners are a different client and work either way. The setting is a
+     * constant until the Menu grows a row for it, and a build cannot run both. */
+    static const bool player_audio_espnow = true;
+
     /* The chosen Playlist survives a power cut in the card's k7.select. The composition
      * takes it as two callbacks so playlist_select stays portable (ADR 0051); a card
      * that has never carried a record is "no choice", not an error. */
@@ -292,14 +299,18 @@ void appliance_run(void)
         for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    /* The player's audio, over ESP-NOW (ADR 0103). The emitter is up from boot; nothing leaves
-     * the board until a player's status packet names itself and its credit, which is E6. Which
-     * transport the station emits on is EN-04's decision; until it exists, the HTTP listeners
-     * and the emitter are both available and the player is what chooses by asking. */
-    if (app_board_audio_start())
-        mini_icecast_set_frame_sink(app_board_audio_frame, NULL);
-    else
-        ESP_LOGW(TAG, "no ESP-NOW audio emitter: the player keeps to HTTP");
+    /* One transport, chosen above. In ESP-NOW mode the emitter is up from boot and nothing
+     * leaves the board until a player's status packet names itself and opens its credit (E6). */
+    if (player_audio_espnow) {
+        if (app_board_audio_start()) {
+            mini_icecast_set_frame_sink(app_board_audio_frame, NULL);
+            ESP_LOGI(TAG, "the player's audio goes out over ESP-NOW");
+        } else {
+            ESP_LOGW(TAG, "no ESP-NOW emitter: the player is left with HTTP");
+        }
+    } else {
+        ESP_LOGI(TAG, "the player's audio is fetched over HTTP; the ESP-NOW emitter is off");
+    }
 
     /* The boot's flash work is behind us, so the panel's first clock can start now. The mark
      * is painted on a quiet bus, the backlight is lit over it, and it is held for its dwell
