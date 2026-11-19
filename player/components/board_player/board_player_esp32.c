@@ -365,9 +365,9 @@ bool player_board_init(void)
 
     esp_chip_info_t chip;
     esp_chip_info(&chip);
-    ESP_LOGI(TAG, "esp32 classic: %d core(s), revision %d.%d; internal %u B free, largest %u B",
+    ESP_LOGI(TAG, "esp32 classic: %d core(s), revision %d.%d; heap %u B free, largest %u B",
              chip.cores, chip.revision / 100, chip.revision % 100,
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_DEFAULT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
     return true;
 }

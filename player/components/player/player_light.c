@@ -91,12 +91,12 @@ player_light_t player_light_tick(uint32_t now)
         player_net_status(&net);
         player_stream_status(&stream);
         player_playout_status(&out);
-        ESP_LOGI(TAG, "%s (net %s, stream %s, audio %d, failed %d) level %u; internal %u free, "
+        ESP_LOGI(TAG, "%s (net %s, stream %s, audio %d, failed %d) level %u; heap %u free, "
                       "largest %u",
                  player_light_name(state), player_net_state_name(net.state),
                  player_stream_state_name(stream.state), (int)out.audio_now, (int)out.failed,
-                 (unsigned)level, (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+                 (unsigned)level, (unsigned)heap_caps_get_free_size(MALLOC_CAP_DEFAULT),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
     }
     return state;
 }

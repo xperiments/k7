@@ -82,11 +82,11 @@ bool player_output_open(uint32_t hz)
     }
 
     s_hz = hz;
-    ESP_LOGI(TAG, "line output: %u Hz at %d dB (Q15 %d), BCK %d, LRCK %d, DIN %d; internal %u B "
-                  "free, largest %u B",
+    ESP_LOGI(TAG, "line output: %u Hz at %d dB (Q15 %d), BCK %d, LRCK %d, DIN %d; heap %u B free, "
+                  "largest %u B",
              (unsigned)hz, -20, (int)OUT_GAIN_Q15, OUT_BCK, OUT_LRCK, OUT_DIN,
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_DEFAULT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
     return true;
 }
 
