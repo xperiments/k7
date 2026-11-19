@@ -3012,6 +3012,11 @@
           "at": "2026-11-19T00:18:59Z",
           "by": "agent",
           "text": "The player's radio seam is done and committed (3a1a02e): ESP-NOW up from boot with one dispatcher, the audio callback, and the broadcast status send. Nothing calls it yet - the stream module still speaks HTTP - so the tree is green and the player still plays. Left for the next sitting: player_stream becomes the receiver over this seam, the HTTP client and its seam functions go, and t04/t05 move from a scripted body to scripted packets."
+        },
+        {
+          "at": "2026-11-19T00:19:56Z",
+          "by": "agent",
+          "text": "Second attempt at the stream rewrite, backed out again, and the reason is now precise enough to plan around: the receiver and the module are straightforward, but the *test harness* carries the old contract. t04's program() builds an HTTP response and t05's test_fault asserts a Fault state that only existed because a body could be 'not MPEG'; over ESP-NOW the same bytes are just frames that fail to decode, so R31's Fault needs either a new source (a stream that keeps delivering non-MPEG frames) or a spec decision to drop it. t04's test_primes and test_silence also assume a body that ends, while a packet stream simply stops. The work item is therefore: write the new player_stream (done twice, both times reverted), then decide Fault's fate, then move t04/t05 onto injected packets and delete t03. Not a mechanical change, and it needs an uninterrupted sitting."
         }
       ]
     },
