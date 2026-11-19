@@ -11,11 +11,11 @@ The origin does not move: `xperiments.dev` and its certificate are the ones alre
 the root ([ADR 0078](../adr/0078-the-site-owns-the-root-and-the-app-moves-to-app.md)) and how the
 firmware reaches a board ([ADR 0079](../adr/0079-the-firmware-is-flashed-in-parts-from-the-browser.md)).
 
-**Status:** S1–S14, R1–R6, D1–D4 and F1–F12 are built; **K7 0.5.0 is released**
-(`web/firmware.json` and `web/public/firmware/0.5.0/`: `bootloader.bin` 21,120 B,
-`partition-table.bin` 3,072 B, `sd_stream_server.bin` 2,073,008 B). The flash's rules are tested
-over a fake board and a fake origin — **not on hardware** — and **no board has been flashed
-from a browser**; SI-06 is the board and browser pass. The hero uses the panel's own render in
+**Status:** S1–S14, R1–R6, D1–D4 and F1–F13 are built; **K7 0.6.1 and K7Player 0.6.1 are
+released** — `web/firmware.json` and `web/firmware-player.json`, with their parts under
+`web/public/firmware/` and `web/public/firmware/player/`. The flash's rules are tested over a
+fake board and a fake origin — **not on hardware** — and **no board has been flashed from a
+browser**; SI-06 is the K7's board and browser pass and SI-08 the player's. The hero uses the panel's own render in
 its slot until a photograph of the device exists. The two ADRs are 0078 and 0079. The sizes in
 §3 are the released bytes; no timing in §6 is measured yet. S15 now names the K7 look
 ([`k7-look.md`](./k7-look.md)), applied by LK-06.
@@ -134,37 +134,52 @@ the port picker, the progress, the recovery copy and the design are ours; the pr
 Espressif's. Web Serial is desktop Chromium only — Chrome and Edge, not Safari, not Firefox, not
 any phone — and that is a fact the page states rather than routes around.
 
-**F2. One variant is offered: `sunton`, the board that ships.** `backlight-test`, `dump`,
-`capture`, `verify` and `headless` are development builds; a product page with a build matrix is
-a support burden in a dropdown.
+**F2. Two boards are offered, and the person chooses one before a port is asked for:** **K7**
+(`sunton`, the ESP32-S3 that ships) and **K7Player** (the classic ESP32 with no surface, ADR
+0097). The choice comes first because the chip, the flash size, the parts and the steps
+afterwards are each board's own; choosing the other board starts the section over rather than
+carrying a port across. `backlight-test`, `dump`, `capture`, `verify` and `headless` are
+development builds and are not offered on either board: a product page with a build matrix is a
+support burden in a dropdown.
 
-**F3. The flash writes three parts at their own offsets, and never the gaps:**
+**F3. The flash writes the chosen board's three parts at their own offsets, and never the
+gaps:**
 
-| Part | Offset | Size today |
-|---|---:|---:|
-| `bootloader.bin` | `0x0` | 21,120 B |
-| `partition-table.bin` | `0x8000` | 3,072 B |
-| `sd_stream_server.bin` | `0x10000` | 2,073,008 B |
+| Board | Part | Offset | Size at 0.6.1 |
+|---|---|---:|---:|
+| K7 | `bootloader.bin` | `0x0` | 21,120 B |
+| K7 | `partition-table.bin` | `0x8000` | 3,072 B |
+| K7 | `sd_stream_server.bin` | `0x10000` | 2,073,008 B |
+| K7Player | `bootloader.bin` | `0x1000` | 26,176 B |
+| K7Player | `partition-table.bin` | `0x8000` | 3,072 B |
+| K7Player | `k7player.bin` | `0x10000` | 891,712 B |
 
-`nvs` sits at `0x9000` and `phy_init` at `0xF000`; the app ends at `0x20A1B0`, far below the
-Snapshot at `0x410000`. A **merged** image written from `0x0` pads those gaps with `0xFF` and so
-erases the stored WiFi network — a factory reset disguised as an update. The Site therefore never
-serves or writes a merged image, and the download path (F10) is the same three parts with the
-same offsets.
+The K7's table is the one it has always had. The K7Player's bootloader sits at **`0x1000`**, not
+`0x0`: that is where a classic ESP32's ROM looks, and the K7's offsets would leave the player not
+booting. On the K7, `nvs` sits at `0x9000` and `phy_init` at `0xF000`; the app ends at `0x20A1B0`,
+far below the Snapshot at `0x410000`. A **merged** image written from `0x0` pads those gaps with
+`0xFF` and so erases the stored WiFi network — a factory reset disguised as an update. The Site
+therefore never serves or writes a merged image, and the download path (F10) is the same parts
+with the same offsets.
 
-**F4. The chip is checked before a byte is written.** `ESP32-S3` or refuse.
+**F4. The chip is checked before a byte is written, against the chosen board.** `ESP32-S3` for
+K7, `ESP32` for the K7Player. A mismatch is refused with a sentence naming the board and the chip
+it needs, and the port is closed.
 
-**F5. The flash size is checked before a byte is written.** 16 MB or refuse. The partition table
-places `snapshot` at `0x410000` with 2 MB; a module smaller than 16 MB cannot hold this table,
-and flashing it produces a board that does not boot.
+**F5. The flash size is checked before a byte is written, against the board.** 16 MB for K7 — its
+partition table places `snapshot` at `0x410000` with 2 MB, and a smaller module cannot hold it —
+and 4 MB for the K7Player, whose table is the single-app default. Either way, flashing a table a
+module cannot hold produces a board that does not boot.
 
-**F6. Nothing is written before a confirmation naming the port, the chip, the flash size and the
-firmware version.** The person sees exactly what will be written and where.
+**F6. Nothing is written before a confirmation naming the port, the chip, the flash size, the
+board and the firmware version.** The person sees exactly what will be written and where.
 
-**F7. Erase is a separate, explicit choice.** *Erase and install fresh* wipes the whole chip: the
-stored WiFi network, the setup password and the device's Snapshot, including the playlists in it.
-The card's music is untouched, and the App can re-send its **Last image**. The choice is never
-made for someone, and a device the page cannot read is a reason to say so, not a reason to wipe.
+**F7. Erase is a separate, explicit choice, and its cost is named.** On K7, *Erase and install
+fresh* wipes the stored WiFi network, the setup password and the device's Snapshot, including the
+playlists in it; the card's music is untouched, and the App can re-send its **Last image**. On the
+K7Player it wipes the network record the K7 handed over, so the share window must hand it over
+again. The choice is never made for someone, and a device the page cannot read is a reason to say
+so, not a reason to wipe.
 
 **F8. The flash is a state machine, and every failure names a likely cause.** `idle → port →
 identified → confirmed → writing → verifying → done`, and a failure state that says one of: the
@@ -172,20 +187,25 @@ BOOT button (hold BOOT, tap RESET, release), a port held by another program, a L
 (`dialout`), a cable that does not carry data, a chip that is not an S3, a flash that is not
 16 MB. A failure never leaves the page saying only "error".
 
-**F9. `firmware.json` is the only source of the version, the offsets and the hashes.** The page
-has no constant for any of them. It reads the manifest at build time and fetches each part from
-`/firmware/<version>/<file>`, checking the part's sha256 before writing it.
+**F9. Each board's manifest is the only source of its version, offsets, flash parameters and
+hashes.** `web/firmware.json` is the K7's and `web/firmware-player.json` the K7Player's; the page
+has no constant for any of them. It reads both at build time and fetches each part from the
+board's own directory — `/firmware/<version>/<file>` for the K7, `/firmware/player/<version>/<file>`
+for the player — checking the part's sha256 before writing it.
 
 **F10. A browser without Web Serial gets the sentence and a manual path.** The manual path is
-disclosed, not primary: the same three parts plus an `esptool` command generated from
-`firmware.json`, so the command cannot drift from the files. It is a real route for a builder on
-Firefox; it is not presented as the normal one.
+disclosed, not primary: the same parts plus an `esptool` command generated from the chosen
+board's manifest — `--chip esp32s3` or `--chip esp32` — so the command cannot drift from the
+files. It is a real route for a builder on Firefox; it is not presented as the normal one.
 
-**F11. A successful flash ends in the setup, not in "done".** Three steps: join the network
-`K7.local`, open `http://192.168.4.1/setup`, then install K7 from this Site
-([`wifi-provisioning.md`](./wifi-provisioning.md)). The Site does not provision over serial: the
-setup network is the one channel a person already uses, and a second one would carry the same
-password twice (ADR 0076).
+**F11. A successful flash ends in the board's own next step, not in "done".** For **K7**: join
+the network `K7.local`, open `http://192.168.4.1/setup`, then install K7 from this Site
+([`wifi-provisioning.md`](./wifi-provisioning.md)). For the **K7Player**: unplug it, put it
+within range of the K7, and open the K7's **Menu → Wi-Fi → Share** window — the K7 hands it the
+network over ESP-NOW and it starts playing
+([`network-handover.md`](./network-handover.md)). The Site does not provision either over
+serial: on the K7 the setup network is the one channel a person already uses (ADR 0076), and the
+player has no credential to type at all.
 
 **F12. No account, no upload, no analytics, no stored port.** The page writes the board and
 forgets it.
@@ -204,31 +224,38 @@ semver; CMake passes it as `PROJECT_VER`; the image carries it, the panel's **Ab
 reads it (`cassette_menu.c`), and `firmware.json` repeats it. The first release is `0.5.0`, after
 the one tag the repository has, `v0.4.0`.
 
-**R2. `./tools/build.sh sunton release` builds and publishes one release.** It
+**R2. Each board has a release action, and both publish through one script.**
+`./tools/build.sh sunton release` publishes the K7 and `./player/build.sh release` the K7Player.
+Each
 
-1. refuses a dirty tree (`git status --porcelain`) — a binary from uncommitted source is not a
-   release;
+1. refuses a dirty tree (`git status --porcelain`) over its own source — a binary from
+   uncommitted source is not a release;
 2. refuses a `VERSION` that does not match a tag `v<VERSION>` pointing at `HEAD`;
-3. builds `sunton` and copies the three parts from `build/sunton/` to
-   `web/public/firmware/<version>/`;
-4. writes `web/firmware.json` — version, commit, IDF version, and for each part its file, offset,
-   size and sha256;
+3. builds, and hands the build to `tools/release_publish.py`, which copies the parts from that
+   build's own `flasher_args.json` — refusing a part table that is not the board's — to
+   `web/public/firmware/<version>/` for the K7 and `web/public/firmware/player/<version>/` for the
+   player;
+4. writes the board's manifest — version, commit, IDF version, chip, flash parameters, and for
+   each part its file, offset, size and sha256;
 5. prints the version, the sizes and the hashes, and stops. It does not commit, tag or deploy.
 
-**R3. `firmware.json` and the parts are committed.** A clone that has never seen ESP-IDF deploys
-a Site whose flasher works. The cost is ~2.1 MB of history per release; the alternative is a
-deployment that 404s the one button the page exists for.
+**R3. Both manifests and both boards' parts are committed.** A clone that has never seen
+ESP-IDF deploys a Site whose flasher works. The cost is ~2.1 MB of history per K7 release and
+~1 MB per player release; the alternative is a deployment that 404s the one button the page
+exists for.
 
-**R4. CI proves the manifest against the files.** A check reads `web/firmware.json`, hashes every
-part under `web/public/firmware/<version>/`, and fails on a size or hash mismatch, on a missing
-file, and on a `VERSION` that disagrees with the manifest. The manifest shape check that already
+**R4. CI proves each manifest against its files.** `web/scripts/check-firmware.mjs` reads both
+manifests, hashes every part under their directories, and fails on a size or hash mismatch, on a
+missing file, on a `VERSION` that disagrees with either manifest, and on a shape the page cannot
+read. It runs in the web job of CI and as `npm run check:firmware`. The manifest shape check that already
 guards the PWA keeps its job (D4a, A9).
 
 **R5. The Site never publishes what it cannot verify.** The bytes the page writes are the bytes
 whose hashes are in the manifest, and the manifest is the file CI checked.
 
 **R6. The download path is generated, not written.** The `esptool` command and every link in the
-manual path are rendered from `firmware.json`; a hand-written command is how offsets rot.
+manual path are rendered from the chosen board's manifest; a hand-written command is how offsets
+rot.
 
 ---
 

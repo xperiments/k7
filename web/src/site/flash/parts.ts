@@ -6,7 +6,7 @@
  * match is refused before a byte reaches the board.
  */
 import { FlashError } from './errors';
-import { partUrl, type FirmwarePart } from './manifest';
+import { partUrl, type Board, type FirmwarePart } from './manifest';
 
 export async function sha256Hex(data: Uint8Array): Promise<string> {
   /* A view's `buffer` may be a SharedArrayBuffer in the type system; digests take an
@@ -19,12 +19,13 @@ export async function sha256Hex(data: Uint8Array): Promise<string> {
 }
 
 export async function downloadPart(
+  board: Board,
   part: FirmwarePart,
   fetchImpl: typeof fetch = fetch,
 ): Promise<Uint8Array> {
   let response: Response;
   try {
-    response = await fetchImpl(partUrl(part), { cache: 'no-store' });
+    response = await fetchImpl(partUrl(board, part), { cache: 'no-store' });
   } catch {
     throw new FlashError('download', `${part.file} could not be downloaded.`);
   }

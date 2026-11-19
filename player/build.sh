@@ -2,10 +2,12 @@
 #
 # Build, flash or monitor the K7Player's firmware.
 #
-#   ./player/build.sh [build|flash|monitor|fullclean]
+#   ./player/build.sh [build|flash|monitor|fullclean|release]
 #
 # The project is its own ESP-IDF project on the classic ESP32 (ADR 0097), so it has its own
-# sdkconfig and its own build directory; the target is set once, on the first build.
+# sdkconfig and its own build directory; the target is set once, on the first build. Its
+# release is published beside the K7's by tools/release_publish.py, from this build's own
+# flasher_args.json (k7-site.md §4).
 #
 # Environment:
 #   IDF_EXPORT   path to export.sh   (default ~/esp/esp-idf-6.1/export.sh)
@@ -14,6 +16,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$ROOT/.." && pwd)"
 IDF_EXPORT="${IDF_EXPORT:-$HOME/esp/esp-idf-6.1/export.sh}"
 PORT="${PLAYER_PORT:-/dev/cu.usbserial-8344420}"
 
@@ -45,6 +48,39 @@ export PATH
 # shellcheck disable=SC1090
 . "$IDF_EXPORT" >/dev/null
 
+# A release is cut from a commit, never from a working tree (ADR 0079): the same rule the K7's
+# release follows, over this project's own source.
+release_prepare() {
+  [ -f "$REPO/VERSION" ] || { echo "no VERSION at the repository root" >&2; exit 1; }
+  local version tag tracked untracked
+  version="$(tr -d '[:space:]' < "$REPO/VERSION")"
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+    || { echo "VERSION is \"$version\", not a semver number" >&2; exit 1; }
+
+  tracked="$(git -C "$REPO" status --porcelain --untracked-files=no -- player)"
+  untracked="$(git -C "$REPO" ls-files --others --exclude-standard -- player)"
+  if [ -n "$tracked$untracked" ]; then
+    { printf '%s\n' "$tracked"; printf '%s\n' "$untracked"; } >&2
+    echo "player: the tree has uncommitted source; a release is built from a commit" >&2
+    exit 1
+  fi
+
+  tag="$(git -C "$REPO" describe --exact-match --tags HEAD 2>/dev/null || true)"
+  [ "$tag" = "v$version" ] \
+    || { echo "player: HEAD is ${tag:-untagged}, VERSION is $version: tag v$version at HEAD first" >&2; exit 1; }
+}
+
+release_publish() {
+  local version commit idf
+  version="$(tr -d '[:space:]' < "$REPO/VERSION")"
+  commit="$(git -C "$REPO" rev-parse HEAD)"
+  idf="$(idf.py --version 2>/dev/null | head -1 || true)"
+  [ -n "$idf" ] || { echo "could not read the IDF version from idf.py --version" >&2; exit 1; }
+
+  python3 "$REPO/tools/release_publish.py" --board player \
+    --version "$version" --commit "$commit" --idf "$idf"
+}
+
 cd "$ROOT"
 [ -f sdkconfig ] || idf.py set-target esp32 >/dev/null
 
@@ -56,8 +92,13 @@ case "$action" in
   # several seconds every time a console was opened.
   monitor) idf.py -p "$PORT" monitor --no-reset ;;
   fullclean) idf.py fullclean ;;
+  release)
+    release_prepare
+    idf.py build
+    release_publish
+    ;;
   *)
-    echo "usage: $0 [build|flash|monitor|fullclean]" >&2
+    echo "usage: $0 [build|flash|monitor|fullclean|release]" >&2
     exit 2
     ;;
 esac

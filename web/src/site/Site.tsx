@@ -64,7 +64,7 @@ export function Site() {
           </figure>
         </section>
 
-        <section id="flash" aria-label="Flash K7" className="scroll-mt-6">
+        <section id="flash" aria-label="Flash a board" className="scroll-mt-6">
           <Flash />
         </section>
 

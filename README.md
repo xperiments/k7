@@ -58,17 +58,25 @@ rate and encoded to MP3 for the stream.
 ## Install K7 on a board
 
 The normal way is the Site: open **`https://k7.xperiments.dev/`** in Chrome or Edge on a
-computer, plug the board in with a USB-C cable that carries data, and press **Connect a
-board**. It reads the chip and the flash, refuses anything that is not an ESP32-S3 with
-16 MB, and writes the bootloader, the partition table and the app at `0x0`, `0x8000` and
-`0x10000` — never a merged image, so the stored WiFi network and the Snapshot survive.
-Erasing is a separate, explicit choice ([`docs/specs/k7-site.md`](./docs/specs/k7-site.md)).
-If no port appears, the board's USB bridge is a CH340 (`1a86:7523`): macOS usually already has
-a driver for it, Windows may need WCH's, and a charge-only cable is the other common cause.
+computer, choose the board you are flashing — **K7** or **K7Player** — plug it in with a USB
+cable that carries data, and press **Connect K7** or **Connect K7Player**. It reads the chip and
+the flash, refuses a board that is not the one you chose (an ESP32-S3 with 16 MB for K7; a
+classic ESP32 with 4 MB for the K7Player), and writes the bootloader, the partition table and
+the app at the board's own offsets — `0x0`, `0x8000` and `0x10000` on K7, `0x1000`, `0x8000` and
+`0x10000` on the player — never a merged image, so the stored WiFi network and the Snapshot
+survive. Erasing is a separate, explicit choice
+([`docs/specs/k7-site.md`](./docs/specs/k7-site.md)). If no port appears, the board's USB bridge
+is a CH340 (`1a86:7523`): macOS usually already has a driver for it, Windows may need WCH's, and
+a charge-only cable is the other common cause.
 
 After it restarts, give it a network: join **`K7.local`** (the default password is
 `12345678`), open **`http://192.168.4.1/setup`**, and choose the network. The rest of this
 section is the developer path, for building and flashing from source.
+
+The **K7Player** has no setup network of its own. After it restarts, put it within range of a
+K7 and open the K7's **Menu → Wi-Fi → Share** window: the K7 hands it the network over ESP-NOW
+and it starts playing ([`docs/specs/network-handover.md`](./docs/specs/network-handover.md)).
+There is no credential to type into it, and none is compiled in.
 
 ### Build and flash from source
 

@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { FlashDevice, FlashPart, WriteOptions } from './device';
 import { FlashError } from './errors';
 import type { Identity } from './identity';
-import { FIRMWARE } from './manifest';
+import { boardById, type Board } from './manifest';
 import { FlashMachine, type MachineState } from './machine';
 
+const K7: Board = boardById('k7');
+const PLAYER: Board = boardById('player');
 const GOOD: Identity = { chip: 'ESP32-S3', flashSize: '16MB', port: 'USB 1a86:7523' };
+const GOOD_PLAYER: Identity = { chip: 'ESP32', flashSize: '4MB', port: 'USB 1a86:7523' };
 
 interface Recorder {
   writes: { parts: FlashPart[]; options: WriteOptions }[];
@@ -27,13 +30,17 @@ function fakeDevice(identity: Identity, log: Recorder, fail?: FlashError): Flash
   };
 }
 
-function machineFor(device: FlashDevice | (() => Promise<FlashDevice>)) {
+function machineFor(
+  device: FlashDevice | (() => Promise<FlashDevice>),
+  board: Board = K7,
+) {
   const states: MachineState[] = [];
   const downloaded: string[] = [];
   const machine = new FlashMachine(
+    board,
     {
       openDevice: typeof device === 'function' ? device : async () => device,
-      download: async (part) => {
+      download: async (_board, part) => {
         downloaded.push(part.file);
         return new Uint8Array(1);
       },
@@ -86,7 +93,7 @@ describe('the flash machine', () => {
 
     expect(machine.current.step).toBe('ready');
     expect(machine.current.identity).toEqual(GOOD);
-    expect(machine.current.version).toBe(FIRMWARE.version);
+    expect(machine.current.version).toBe(K7.firmware.version);
     expect(recorder.writes).toHaveLength(0);
     expect(downloaded).toHaveLength(0);
   });
@@ -98,10 +105,10 @@ describe('the flash machine', () => {
     await machine.prepare();
     await machine.flash({ erase: false });
 
-    expect(downloaded).toEqual(FIRMWARE.parts.map((part) => part.file));
+    expect(downloaded).toEqual(K7.firmware.parts.map((part) => part.file));
     expect(recorder.writes).toHaveLength(1);
     expect(recorder.writes[0]?.parts.map((part) => part.address)).toEqual(
-      FIRMWARE.parts.map((part) => part.offset),
+      K7.firmware.parts.map((part) => part.offset),
     );
     expect(recorder.writes[0]?.options.erase).toBe(false);
     expect(machine.current.step).toBe('done');
@@ -122,6 +129,7 @@ describe('the flash machine', () => {
     const recorder: Recorder = { writes: [], closes: 0 };
     const states: MachineState[] = [];
     const machine = new FlashMachine(
+      K7,
       {
         openDevice: async () => fakeDevice(GOOD, recorder),
         download: async () => {
@@ -163,5 +171,43 @@ describe('the flash machine', () => {
 
     expect(machine.current.written).toBe(123);
     expect(machine.current.total).toBe(456);
+  });
+
+  /* The second board is the reason this file has a `board`: the same rules, another chip and
+   * another flash, and a K7 module must be refused for it exactly as a player module is
+   * refused for the K7. */
+  it('accepts a classic ESP32 with 4 MB for the K7Player', async () => {
+    const recorder: Recorder = { writes: [], closes: 0 };
+    const { machine, downloaded } = machineFor(fakeDevice(GOOD_PLAYER, recorder), PLAYER);
+
+    await machine.prepare();
+    await machine.flash({ erase: false });
+
+    expect(machine.current.step).toBe('done');
+    expect(machine.current.version).toBe(PLAYER.firmware.version);
+    expect(downloaded).toEqual(PLAYER.firmware.parts.map((part) => part.file));
+    expect(recorder.writes[0]?.parts.map((part) => part.address)).toEqual(
+      PLAYER.firmware.parts.map((part) => part.offset),
+    );
+  });
+
+  it('refuses an ESP32-S3 for the K7Player, naming the board', async () => {
+    const recorder: Recorder = { writes: [], closes: 0 };
+    const { machine } = machineFor(fakeDevice(GOOD, recorder), PLAYER);
+
+    await machine.prepare();
+
+    expect(machine.current.cause).toBe('wrong-chip');
+    expect(machine.current.message).toContain('K7Player');
+    expect(recorder.writes).toHaveLength(0);
+  });
+
+  it('refuses 16 MB of flash for the K7Player', async () => {
+    const recorder: Recorder = { writes: [], closes: 0 };
+    const { machine } = machineFor(fakeDevice({ ...GOOD_PLAYER, flashSize: '16MB' }, recorder), PLAYER);
+
+    await machine.prepare();
+
+    expect(machine.current.cause).toBe('wrong-flash');
   });
 });

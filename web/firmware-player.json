@@ -1,0 +1,32 @@
+{
+  "version": "0.6.1",
+  "commit": "63b7c066b48c3cad691809ff93a42e44e44e7a06",
+  "idf": "ESP-IDF v6.1",
+  "chip": "esp32",
+  "flash": {
+    "mode": "dio",
+    "size": "4MB",
+    "freq": "40m"
+  },
+  "built_at": "2026-11-19T13:16:30Z",
+  "parts": [
+    {
+      "file": "bootloader.bin",
+      "offset": 4096,
+      "size": 26176,
+      "sha256": "2dcaaf02abca6dbc5eb29ceeec812dd5ae5e4e94d8191c7844c36479ca5fde3e"
+    },
+    {
+      "file": "partition-table.bin",
+      "offset": 32768,
+      "size": 3072,
+      "sha256": "7f00b6c042a89b15b0cac534f82ed988caf29278ff5700b0c511eb1b5bb7c820"
+    },
+    {
+      "file": "k7player.bin",
+      "offset": 65536,
+      "size": 891712,
+      "sha256": "4e99d6d0cbe39a89ee33fa4427f80fc35828f8632861154a84efc4db4b16491d"
+    }
+  ]
+}

@@ -150,9 +150,9 @@ release_prepare() {
     || die "HEAD is ${tag:-untagged}, VERSION is $version: tag v$version at HEAD first"
 }
 
-# The three parts and the manifest. The offsets are read from the build's own
-# `flasher_args.json` rather than written here twice, and a part list that is not the three
-# the flasher knows (k7-site.md F3) is refused instead of guessed at.
+# The three parts and the manifest, published by tools/release_publish.py - the same mechanism
+# the K7Player's release uses, so the offsets and the flash parameters come from the build's
+# flasher_args.json rather than from a second list written here.
 release_publish() {
   local version commit idf
   version="$(tr -d '[:space:]' < "$ROOT/VERSION")"
@@ -160,69 +160,8 @@ release_publish() {
   idf="$(idf.py --version 2>/dev/null | head -1 || true)"
   [ -n "$idf" ] || die "could not read the IDF version from idf.py --version"
 
-  python3 - "$ROOT" "$version" "$commit" "$idf" <<'PY'
-import datetime
-import hashlib
-import json
-import os
-import shutil
-import sys
-
-root, version, commit, idf = sys.argv[1:5]
-build = os.path.join(root, "build", "sunton")
-args = json.load(open(os.path.join(build, "flasher_args.json")))
-flash = args["flash_files"]
-
-expected = {"0x0", "0x8000", "0x10000"}
-if set(flash) != expected:
-    sys.exit(
-        f"release: flasher_args.json carries {sorted(flash)}, "
-        f"expected {sorted(expected)} (k7-site.md F3)"
-    )
-
-dest = os.path.join(root, "web", "public", "firmware", version)
-os.makedirs(dest, exist_ok=True)
-
-parts = []
-for offset, relative in sorted(flash.items(), key=lambda item: int(item[0], 16)):
-    source = os.path.join(build, relative)
-    if not os.path.isfile(source):
-        sys.exit(f"release: missing {source}; build the sunton variant first")
-    name = os.path.basename(relative)
-    shutil.copyfile(source, os.path.join(dest, name))
-    with open(source, "rb") as handle:
-        data = handle.read()
-    parts.append(
-        {
-            "file": name,
-            "offset": int(offset, 16),
-            "size": len(data),
-            "sha256": hashlib.sha256(data).hexdigest(),
-        }
-    )
-
-manifest = {
-    "version": version,
-    "commit": commit,
-    "idf": idf,
-    "chip": "esp32s3",
-    "flash": {"mode": "dio", "size": "16MB", "freq": "80m"},
-    "built_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    "parts": parts,
-}
-with open(os.path.join(root, "web", "firmware.json"), "w") as handle:
-    json.dump(manifest, handle, indent=2)
-    handle.write("\n")
-
-print(f"release: K7 {version} ({commit[:12]})")
-for part in parts:
-    print(
-        f"  {part['offset']:#07x}  {part['size']:>9} B  "
-        f"{part['sha256'][:16]}...  {part['file']}"
-    )
-print(f"  wrote web/firmware.json and {len(parts)} parts in web/public/firmware/{version}/")
-print("  nothing is committed: review and commit them with the change")
-PY
+  python3 "$ROOT/tools/release_publish.py" --board k7 \
+    --version "$version" --commit "$commit" --idf "$idf"
 }
 
 actions=("$@")

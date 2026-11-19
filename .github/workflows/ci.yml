@@ -46,6 +46,10 @@ jobs:
       # a manifest regression fails here instead of in a broken install on the real origin.
       - name: Manifest shape (A9)
         run: node scripts/check-manifest.mjs
+      # R4 (k7-site.md §4): every part the Site flashes from hashes to what its board's
+      # manifest says, so a release that was half published fails here and not on a board.
+      - name: Firmware manifests (R4)
+        run: node scripts/check-firmware.mjs
       # S5: the worker precaches the App at /app and never the Site at /, which must always
       # come from the network because it names a firmware version.
       - name: Worker shell (S5)

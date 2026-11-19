@@ -13,7 +13,8 @@
     "models": "node scripts/fetch-models.mjs",
     "assets": "node scripts/prepare-assets.mjs",
     "icons": "node scripts/make-icons.mjs",
-    "check:look": "node scripts/check-look.mjs"
+    "check:look": "node scripts/check-look.mjs",
+    "check:firmware": "node scripts/check-firmware.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

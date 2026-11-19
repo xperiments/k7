@@ -1,15 +1,17 @@
 /**
  * The flash as a state machine (k7-site.md F8), with the board and the parts behind seams.
  *
- * The rules are here, not in the page: the board must be an ESP32-S3 with 16 MB, nothing is
- * written until the confirmation, the three parts go at their own offsets in order, and an
- * erase happens only when it was asked for. The tests drive this with a fake device and a
- * fake download; the browser drives it with Web Serial and the Site's own parts.
+ * The rules are here, not in the page: the board must be the chip and the flash size the
+ * chosen board needs, nothing is written until the confirmation, its parts go at their own
+ * offsets in order, and an erase happens only when it was asked for. One machine serves one
+ * board: a different board is a different release and a different identity. The tests drive
+ * this with a fake device and a fake download; the browser drives it with Web Serial and the
+ * Site's own parts.
  */
 import type { FlashDevice, FlashPart, OpenDevice } from './device';
 import { failureOf, type FailureCause } from './errors';
 import { assertIdentity, type Identity } from './identity';
-import { FIRMWARE, partsTotal, type FirmwarePart } from './manifest';
+import { partsTotal, type Board, type FirmwarePart } from './manifest';
 
 export type Step =
   | 'idle'
@@ -33,21 +35,23 @@ export interface MachineState {
 
 export interface FlashDeps {
   openDevice: OpenDevice;
-  download: (part: FirmwarePart) => Promise<Uint8Array>;
+  download: (board: Board, part: FirmwarePart) => Promise<Uint8Array>;
 }
 
-export function initialState(): MachineState {
-  return { step: 'idle', version: FIRMWARE.version, erase: false, written: 0, total: 0 };
+export function initialState(board: Board): MachineState {
+  return { step: 'idle', version: board.firmware.version, erase: false, written: 0, total: 0 };
 }
 
 export class FlashMachine {
   private device: FlashDevice | null = null;
-  private state: MachineState = initialState();
+  private state: MachineState;
 
   constructor(
+    private readonly board: Board,
     private readonly deps: FlashDeps,
     private readonly onChange: (state: MachineState) => void,
   ) {
+    this.state = initialState(board);
     this.onChange(this.state);
   }
 
@@ -69,9 +73,9 @@ export class FlashMachine {
 
     this.set({ step: 'opening', cause: undefined, message: undefined, written: 0, total: 0 });
     try {
-      const device = await this.deps.openDevice();
+      const device = await this.deps.openDevice(this.board);
       try {
-        assertIdentity(device.identity);
+        assertIdentity(device.identity, this.board);
       } catch (error) {
         await device.close().catch(() => undefined);
         throw error;
@@ -90,11 +94,16 @@ export class FlashMachine {
     const device = this.device;
     if (this.state.step !== 'ready' || device === null) return;
 
-    this.set({ step: 'downloading', erase: options.erase, written: 0, total: partsTotal() });
+    this.set({
+      step: 'downloading',
+      erase: options.erase,
+      written: 0,
+      total: partsTotal(this.board),
+    });
     try {
       const parts: FlashPart[] = [];
-      for (const part of FIRMWARE.parts) {
-        parts.push({ data: await this.deps.download(part), address: part.offset });
+      for (const part of this.board.firmware.parts) {
+        parts.push({ data: await this.deps.download(this.board, part), address: part.offset });
       }
 
       this.set({
@@ -120,7 +129,7 @@ export class FlashMachine {
     const device = this.device;
     this.device = null;
     await device?.close().catch(() => undefined);
-    this.state = initialState();
+    this.state = initialState(this.board);
     this.onChange(this.state);
   }
 }

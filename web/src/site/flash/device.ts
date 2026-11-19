@@ -15,7 +15,7 @@ import {
 
 import { FlashError } from './errors';
 import { assertIdentity, type Identity } from './identity';
-import { FIRMWARE } from './manifest';
+import type { Board } from './manifest';
 import { resetIntoApp } from './reset';
 
 export interface FlashPart {
@@ -34,7 +34,7 @@ export interface FlashDevice {
   close(): Promise<void>;
 }
 
-export type OpenDevice = () => Promise<FlashDevice>;
+export type OpenDevice = (board: Board) => Promise<FlashDevice>;
 
 /** The browser does not expose a path, only the bridge's USB ids. That is what it can say. */
 function portLabel(port: SerialPort): string {
@@ -62,9 +62,10 @@ function failure(error: unknown): FlashError {
 
 /**
  * Ask the browser for a port, connect, and report who is on the other end. Nothing is
- * written here: the confirmation is the machine's job (k7-site.md F6).
+ * written here: the confirmation is the machine's job (k7-site.md F6). The board decides
+ * which chip and which flash are right for it (F4–F5).
  */
-export async function openSerialDevice(): Promise<FlashDevice> {
+export async function openSerialDevice(board: Board): Promise<FlashDevice> {
   const serial = navigator.serial;
   if (!serial) {
     throw new FlashError('no-port', 'This browser has no Web Serial. Use Chrome or Edge.');
@@ -97,7 +98,7 @@ export async function openSerialDevice(): Promise<FlashDevice> {
 
   const identity: Identity = { chip, flashSize, port: portLabel(port) };
   try {
-    assertIdentity(identity);
+    assertIdentity(identity, board);
   } catch (error) {
     await transport.disconnect().catch(() => undefined);
     throw error;
@@ -110,9 +111,9 @@ export async function openSerialDevice(): Promise<FlashDevice> {
       try {
         await loader.writeFlash({
           fileArray: parts,
-          flashMode: FIRMWARE.flash.mode as FlashModeValues,
-          flashFreq: FIRMWARE.flash.freq as FlashFreqValues,
-          flashSize: FIRMWARE.flash.size as FlashSizeValues,
+          flashMode: board.firmware.flash.mode as FlashModeValues,
+          flashFreq: board.firmware.flash.freq as FlashFreqValues,
+          flashSize: board.firmware.flash.size as FlashSizeValues,
           eraseAll: erase,
           compress: true,
           reportProgress: (_file, written, total) => onProgress?.(written, total),
