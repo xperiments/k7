@@ -3056,6 +3056,37 @@
           "text": "The K7 now emits the player's audio one way and says which, at boot. Over ESP-NOW it pushes every encoded frame to the player; over HTTP it starts nothing and the player fetches /stream as before. The web UI's own listeners work either way - the rule is about the feed the player consumes, and sending it twice would spend the radio twice for one listener.\n\nBoth modes were booted on the board, by flipping one constant and reflashing: `app: the player's audio goes out over ESP-NOW` and `app: the player's audio is fetched over HTTP; the ESP-NOW emitter is off`. The board is left on the ESP-NOW build, which is the source's default.\n\nTo change it: one constant in `components/app/appliance/appliance.c`. A Menu row that picks between them is the next surface and is not in this task."
         }
       ]
+    },
+    {
+      "id": "EN-05",
+      "title": "The player's transport is a setting",
+      "state": "review",
+      "group": "EN",
+      "at": "2026-11-19T01:28:08Z",
+      "by": "agent",
+      "desc": "A row in the K7's Settings menu chooses how the player's audio is sent: ESP-NOW or HTTP. It is remembered across a power cut, takes effect without a reboot, and is the same call the micro switch on the player will make when the hardware exists.\n\nFinished when flipping the row starts or stops the ESP-NOW feed on the board, the choice survives a restart, and the log names the transport at boot.\n\nTicket: docs/design/espnow-player/issues/05-the-player-transport-is-a-setting.md",
+      "notes": [
+        {
+          "at": "2026-11-19T01:38:39Z",
+          "by": "agent",
+          "text": "Closing: the row, the runtime switch, the storage and the boot path are in; the tap needs a finger."
+        },
+        {
+          "at": "2026-11-19T01:38:39Z",
+          "by": "agent",
+          "text": "The K7's Settings menu now has a fifth row, `Player`, showing `ESP-NOW` or `HTTP`. Activating it switches the player's transport there and then: ESP-NOW feeds the emitter, HTTP clears the feed, stops the resends and forgets the player's peer. The choice is stored in NVS and read back at boot, defaulting to ESP-NOW, and the log names the transport it chose.\n\nChecked on the host: all unit tests, including the row's label, icon, kind and value, and the value following a change to the facts. Checked on the board: the K7 builds, flashes and boots through the loader saying `the player's audio goes out over ESP-NOW`.\n\nWhat needs your finger: tapping the row. The panel is the one input a headless bench cannot drive, so the stored path - set it to HTTP, power-cycle, see it come back on HTTP - is the thing to try. If it comes back on ESP-NOW instead, the NVS key (`k7.prefs`/`player`) is the first place to look.\n\nTwo things worth knowing: the setting lives in `app_services`, because the appliance already depends on the screen's component and would have been a cycle; and every other menu test navigates Settings by index, which is why the new row went last."
+        }
+      ]
+    },
+    {
+      "id": "EN-06",
+      "title": "The player hears either transport",
+      "state": "todo",
+      "group": "EN",
+      "deps": ["EN-05"],
+      "at": "2026-11-19T01:28:08Z",
+      "by": "agent",
+      "desc": "The player can play from either end of the setting. The HTTP client returns as the fallback behind the radio: three seconds without an ESP-NOW packet and it fetches the K7's /stream; the first audio packet after that closes the connection and the radio is the stream again. Both paths feed the same ring, prime, rate and Fault rule.\n\nFinished when one player firmware plays through both transports with the setting choosing, and the fallback and the preemption are covered on the host.\n\nTicket: docs/design/espnow-player/issues/06-the-player-hears-either-transport.md"
     }
   ]
 }
