@@ -238,7 +238,8 @@ bool app_services_player_espnow(void) { return s_player_espnow; }
 /* The emitter and the broadcast's sink move together, so no frame is fed to an emitter that is
  * off and none is missed by one that is on (espnow-stream.md E9). The Settings row and the micro
  * switch both end up here. */
-void app_services_player_espnow_set(bool on)
+/* Apply without storing: the boot reads a value, it does not write one. */
+static void player_transport_apply(bool on)
 {
     s_player_espnow = on;
     if (on) {
@@ -254,6 +255,11 @@ void app_services_player_espnow_set(bool on)
         app_board_audio_set(false);
         ESP_LOGI(TAG, "the player's audio is fetched over HTTP; the ESP-NOW emitter is off");
     }
+}
+
+void app_services_player_espnow_set(bool on)
+{
+    player_transport_apply(on);
     if (app_board_player_espnow_save(on) != ESP_OK)
         ESP_LOGW(TAG, "the transport choice did not store");
 }
@@ -261,8 +267,7 @@ void app_services_player_espnow_set(bool on)
 void app_services_player_transport_init(void)
 {
     bool stored = true;
-    s_player_espnow = app_board_player_espnow_load(&stored) ? stored : true;
-    app_services_player_espnow_set(s_player_espnow);
+    player_transport_apply(app_board_player_espnow_load(&stored) ? stored : true);
 }
 
 bool app_services_rescan_running(void)
