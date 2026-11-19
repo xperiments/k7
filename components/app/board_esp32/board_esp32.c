@@ -928,6 +928,9 @@ static uint8_t *s_audio_arena;
 static SemaphoreHandle_t s_audio_lock;
 static uint8_t s_audio_peer[ESP_NOW_ETH_ALEN];
 static bool s_audio_has_peer;
+/* The stream's PHY rate. ESP-NOW defaults to 1 Mbps, which at 256 kbps is a third of the radio;
+ * HT20/MCS0 is 6.5 Mbps, and the peer is one ESP32 a room away, so the rate has margin. */
+#define AUDIO_ESPNOW_RATE WIFI_PHY_RATE_MCS0_LGI
 static bool s_audio_on;
 static int64_t s_audio_logged_us;
 
@@ -973,6 +976,19 @@ static void audio_status(const uint8_t src[6], const uint8_t *data, size_t len)
         if (e != ESP_OK && e != ESP_ERR_ESPNOW_EXIST) return;
         memcpy(s_audio_peer, src, ESP_NOW_ETH_ALEN);
         s_audio_has_peer = true;
+
+        esp_now_rate_config_t rate = {
+            .phymode = WIFI_PHY_MODE_HT20,
+            .rate = AUDIO_ESPNOW_RATE,
+            .ersu = false,
+            .dcm = false,
+        };
+        esp_err_t re = esp_now_set_peer_rate_config(s_audio_peer, &rate);
+        if (re != ESP_OK)
+            ESP_LOGW(TAG, "the player's radio would not take the pinned rate: %s",
+                     esp_err_to_name(re));
+        else
+            ESP_LOGI(TAG, "espnow audio: the player pinned to HT20/MCS0, 6.5 Mbps");
         ESP_LOGI(TAG, "espnow audio: a player at %02x:%02x:%02x:%02x:%02x:%02x",
                  src[0], src[1], src[2], src[3], src[4], src[5]);
     }
