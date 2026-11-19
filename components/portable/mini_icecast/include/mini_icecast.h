@@ -92,8 +92,24 @@ esp_err_t mini_icecast_check_station(const mini_icecast_cfg_t *cfg, char *err, s
  * broadcast and telemetry tasks, and register the "/stream" route with
  * http_server. Call http_server_start() afterwards. Returns ESP_ERR_INVALID_ARG,
  * naming the offending value in the log, for a format or client limit that cannot
- * be served. Call it after the network is up: see mini_icecast_check_station(). */
+ * be served, and ESP_ERR_INVALID_STATE when a station is already running. Call it
+ * after the network is up: see mini_icecast_check_station(). */
 esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg);
+
+/* The pair of mini_icecast_start(): end the station, then start it again with another
+ * format (ADR 0106). The broadcast, telemetry and sender tasks are asked to end and
+ * waited for, every client's socket is closed, and the encoder, the order, the rings
+ * and the burst are freed. The listening socket, the routes and the rest of the
+ * device are untouched: the route stays registered and answers 503 while stopped.
+ *
+ * Safe to call when nothing is running (it does nothing) and from any task, but not
+ * from the broadcast task itself. Blocks until the tasks have ended; a card read in
+ * flight is waited for, which is what the broadcast's own track loop does anyway. */
+void      mini_icecast_stop(void);
+
+/* True between a successful start and the next stop: what a caller checks before it
+ * reads the station's format or asks it to play. */
+bool      mini_icecast_running(void);
 
 /* What the broadcast is playing, for a display.
  *

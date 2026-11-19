@@ -131,6 +131,9 @@ MENU
   Library destinations are gone; their facts live in About. **Player** is how the player's audio
   is sent — `ESP-NOW` or `HTTP` — and it is the same choice the micro switch on the player will
   make (ADR 0104, `espnow-stream.md` E9): one transport at a time, remembered across a power cut.
+  Choosing applies at once: the station stops and starts at that transport's format — 128 kbps
+  for `ESP-NOW`, 256 for `HTTP` — so About's Bitrate follows the row without a reboot
+  ([ADR 0106](../adr/0106-the-station-stops-and-starts-so-the-format-can-follow-the-transport.md)).
 - **About** is the player's diagnostics page, eleven value Rows in three icon groups: Firmware,
   Board, Partition (the player); Format, Rate, Bitrate (the broadcast); State, Tracks,
   Directories, Size, Truncated (the library). Its values: the app's version, the board's short

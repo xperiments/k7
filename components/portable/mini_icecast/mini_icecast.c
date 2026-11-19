@@ -75,6 +75,12 @@ typedef struct {
     mi_ring_t *ring;      /* framed bytes waiting for the sender */
     uint8_t   *send_buf;  /* per-client: the sender tasks run concurrently */
     SemaphoreHandle_t wake; /* given whenever the ring gains data */
+    /* The sender task that owns this slot, and how the stop knows it has gone. A task
+     * whose stack came from a capability allocation has to delete itself (see
+     * http_loop.c), so it is told to stop and signals `done` on its way out. */
+    TaskHandle_t task;
+    SemaphoreHandle_t done;
+    volatile bool stop;
 } client_t;
 
 static struct {
@@ -151,6 +157,17 @@ static struct {
     volatile uint32_t  dec_audio_us, ring_wait_ms;
     mi_burst_t        *burst;         /* history for a client connecting mid-track */
     TaskHandle_t       broadcast_handle; /* for the stack-headroom telemetry */
+    /* The station's lifecycle (ADR 0106). `running` is set at the end of a successful
+     * start and cleared by stop; every task of the station reads it and exits, which is
+     * what makes a restart possible. The two completion semaphores are created once and
+     * reused - a binary semaphore is taken after every give, so it is 0 when the station
+     * is down - and the routes stay registered across a stop so the listening surface is
+     * untouched: they answer 503 while stopped. */
+    volatile bool      running;
+    SemaphoreHandle_t  broadcast_done;
+    SemaphoreHandle_t  telemetry_done;
+    TaskHandle_t       telemetry_handle;
+    bool               routes_registered;
     mi_enc_t          *enc;
     uint32_t           rebases;       /* starvation rebases: 0 over a healthy soak */
     /* How far behind real time the last pacing call found the broadcast. Read by
@@ -250,16 +267,18 @@ static void sender_close(int slot, int fd, const char *why)
     xSemaphoreGive(S.lock);
 }
 
-/* One permanent task per client slot. It owns the socket: the audio task only
- * queues bytes, so a stalled listener costs its own sender and nothing else. */
+/* One permanent task per client slot, for as long as the station runs. It owns the
+ * socket: the audio task only queues bytes, so a stalled listener costs its own sender
+ * and nothing else. */
 static void sender_task(void *arg)
 {
     int slot = (int)(intptr_t)arg;
     client_t *c = &S.clients[slot];
-    for (;;) {
+    while (!c->stop) {
         /* Timed, not forever: a wake that was never given must not hold the slot. */
         xSemaphoreTake(c->wake, pdMS_TO_TICKS(1000));
         for (;;) {
+            if (c->stop) break;
             xSemaphoreTake(S.lock, portMAX_DELAY);
             int fd = c->fd;
             bool dead = c->dead;
@@ -277,6 +296,15 @@ static void sender_task(void *arg)
             }
         }
     }
+    /* The station is stopping. The broadcast owns a registered client's socket, so it is
+     * closed here, by the task that was writing it; then the slot says its task is gone.
+     * The stack came from a capability allocation, so only the task itself may free it. */
+    xSemaphoreTake(S.lock, portMAX_DELAY);
+    int fd = c->fd;
+    xSemaphoreGive(S.lock);
+    if (fd >= 0) sender_close(slot, fd, "the station is stopping");
+    xSemaphoreGive(c->done);
+    vTaskDeleteWithCaps(NULL);
 }
 
 static void broadcast(const uint8_t *d, size_t n)
@@ -334,6 +362,12 @@ static void send_json(int fd, int status, const char *body)
 static http_result_t play_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
+    /* The route outlives the station (ADR 0106), so a pick that arrives while it is
+     * stopped is refused here rather than queued for a station that may never come. */
+    if (!S.running) {
+        send_json(fd, 503, "{\"ok\":false,\"error\":\"the station is restarting\"}");
+        return HTTP_HANDLED;
+    }
     char rel[LIB_PATH_MAX];
     if (!req->body || !json_play_path((const char *)req->body, rel, sizeof rel)) {
         send_json(fd, 400, "{\"ok\":false,\"error\":\"bad request\"}");
@@ -354,6 +388,10 @@ static http_result_t play_route(int fd, const http_request_t *req, void *ctx)
 static http_result_t stream_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
+    if (!S.running) {
+        http_send_error(fd, 503, "the station is restarting; try again in a moment");
+        return HTTP_HANDLED;
+    }
     switch (mini_icecast_register_client(fd, req->want_icy_metadata)) {
     case MINI_ICECAST_REGISTERED:
         return HTTP_UPGRADED; /* the broadcast owns the fd now; do not close it */
@@ -871,7 +909,9 @@ static void stream_file(const char *path)
 
     static int16_t in[MI_READ_FRAMES * 2];
     for (;;) {
-        if (S.skip || S.prev || S.play_pending) break;
+        /* A stop ends the track as a skip does, so the decode task is shut down and its
+         * ring freed by the path every track already takes (ADR 0106). */
+        if (S.skip || S.prev || S.play_pending || !S.running) break;
         if (parked()) { idle_pump(); continue; }   /* a scan owns the card */
         size_t got = mi_ring_get(j.fifo, in, sizeof in);
         if (got == 0) {
@@ -1069,6 +1109,13 @@ static bool shuffle_pass_begin(uint32_t count, uint32_t generation, bool have_cu
     return true;
 }
 
+/* Wait up to `ms`, in slices, so a station stop is noticed long before the wait ends. */
+static void settle_while_running(uint32_t ms)
+{
+    for (uint32_t waited = 0; waited < ms && S.running; waited += 100)
+        vTaskDelay(pdMS_TO_TICKS(100));
+}
+
 static void broadcast_task(void *arg)
 {
     (void)arg;
@@ -1085,6 +1132,7 @@ static void broadcast_task(void *arg)
     uint32_t history_generation = 0;
     uint32_t history_tracks = 0;
     for (;;) {
+        if (!S.running) break;
         bool owned = false;
         xSemaphoreTake(S.lock, portMAX_DELAY);
         const library_t *lib = S.library;
@@ -1108,7 +1156,7 @@ static void broadcast_task(void *arg)
                               library_state_name(library_state(lib)));
             }
             if (owned) library_release(lib);
-            vTaskDelay(pdMS_TO_TICKS(2000));
+            settle_while_running(2000);
             continue;
         }
         quiet = 0;
@@ -1285,15 +1333,18 @@ static void broadcast_task(void *arg)
             stream_file(path);
             played++;
             back = S.prev;
+            if (!S.running) break;
         }
 
         if (owned) library_release(lib);
         if (!played) {
             if (quiet++ % QUIET_PASSES == 0)
                 ESP_LOGW(TAG, "no Track could be played from the Library");
-            vTaskDelay(pdMS_TO_TICKS(2000));
+            settle_while_running(2000);
         }
     }
+    xSemaphoreGive(S.broadcast_done);
+    vTaskDelete(NULL); /* created without caps: the plain delete is the right one */
 }
 
 /* P2/P3/F4: what the station format costs, and how much memory is left. */
@@ -1301,7 +1352,10 @@ static void telemetry_task(void *arg)
 {
     (void)arg;
     for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(TELEMETRY_PERIOD_MS));
+        /* Sliced, so a stop does not wait out the minute between reports (ADR 0106). */
+        for (int waited = 0; waited < TELEMETRY_PERIOD_MS && S.running; waited += 100)
+            vTaskDelay(pdMS_TO_TICKS(100));
+        if (!S.running) break;
         uint64_t frames = mi_enc_frames_encoded(S.enc);
         uint64_t us = mi_enc_encode_us(S.enc);
         double per_frame = frames ? (double)us / (double)frames : 0.0;
@@ -1359,6 +1413,8 @@ static void telemetry_task(void *arg)
                                 : 0),
                  (unsigned)http_server_conn_stack_headroom_bytes());
     }
+    xSemaphoreGive(S.telemetry_done);
+    vTaskDelete(NULL); /* created without caps: the plain delete is the right one */
 }
 
 /* ---------------------------------------------------------------- API */
@@ -1377,6 +1433,10 @@ esp_err_t mini_icecast_check_station(const mini_icecast_cfg_t *cfg, char *err, s
 esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
 {
     if (!cfg) return ESP_ERR_INVALID_ARG;
+    if (S.running) {
+        ESP_LOGW(TAG, "a station is already running; stop it before starting another format");
+        return ESP_ERR_INVALID_STATE;
+    }
     mi_dec_set_card_hooks(cfg->card_use_begin, cfg->card_use_end);
 
     /* Resolve once, before anything is allocated: a format that cannot be
@@ -1388,11 +1448,9 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     }
     S.library = cfg->library;
 
-    /* Neutral tone: the bands and the trim start at 0 dB, the same as the screen's
-     * knobs. A hot source is the owner's to trim down. */
+    /* The filter state is built for the new station rate; the knobs' targets survive a
+     * restart, so a format change does not silently undo the owner's tone. */
     tone_eq_init(&S.eq, S.station.out_hz);
-    for (int b = 0; b < TONE_EQ_BANDS; b++) S.eq_db[b] = 0.0f;
-    S.eq_gain_db = TONE_EQ_GAIN_DEFAULT;
 
     ESP_LOGI(TAG, "station format: %u Hz, %u kbps CBR, joint stereo, %s",
              (unsigned)S.station.out_hz, (unsigned)S.station.bitrate,
@@ -1403,6 +1461,7 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     size_t internal_after = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!S.enc) {
         ESP_LOGE(TAG, "encoder: %s", err);
+        mini_icecast_stop(); /* nothing to free yet, but one failure path is one path */
         return ESP_ERR_NO_MEM;
     }
     /* The encoder allocates its own state, so this delta is the only way to see
@@ -1429,6 +1488,7 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
     S.burst = mi_burst_new(ring_bytes, true);
     if (!S.burst) {
         ESP_LOGE(TAG, "out of memory for the %u B burst ring", (unsigned)ring_bytes);
+        mini_icecast_stop();
         return ESP_ERR_NO_MEM;
     }
     ESP_LOGI(TAG, "burst ring: %u B (~%u ms of audio) in %s, sends at most %u clients",
@@ -1436,8 +1496,21 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
              mi_burst_uses_external_memory(S.burst) ? "external memory" : "internal RAM (fallback)",
              (unsigned)S.station.max_clients);
 
-    S.lock = xSemaphoreCreateMutex();
-    if (!S.lock) return ESP_ERR_NO_MEM;
+    /* The lock and the completion signals outlive one station: a stop frees the audio
+     * path, not the station's identity in the process (ADR 0106), and the routes stay
+     * registered so the listening surface never goes down. */
+    if (!S.lock) {
+        S.lock = xSemaphoreCreateMutex();
+        if (!S.lock) return ESP_ERR_NO_MEM; /* nothing else is allocated yet */
+    }
+    if (!S.broadcast_done && !(S.broadcast_done = xSemaphoreCreateBinary())) {
+        mini_icecast_stop();
+        return ESP_ERR_NO_MEM;
+    }
+    if (!S.telemetry_done && !(S.telemetry_done = xSemaphoreCreateBinary())) {
+        mini_icecast_stop();
+        return ESP_ERR_NO_MEM;
+    }
     size_t client_ring_bytes = (size_t)S.station.bitrate * 1000 / 8 * CLIENT_RING_MS / 1000 + 4096;
     for (int i = 0; i < MAX_CLIENTS; i++) {
         client_t *c = &S.clients[i];
@@ -1448,62 +1521,200 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
         c->ring = NULL;
         c->wake = NULL;
         c->send_buf = NULL;
+        c->task = NULL;
+        c->done = NULL;
+        c->stop = false;
         if (i >= S.station.max_clients) continue;
         c->ring = mi_ring_new(client_ring_bytes, true);
         c->wake = xSemaphoreCreateBinary();
+        c->done = xSemaphoreCreateBinary();
         c->send_buf = heap_caps_malloc(SEND_BUF_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!c->send_buf) c->send_buf = malloc(SEND_BUF_BYTES);
-        if (!c->ring || !c->wake || !c->send_buf) {
+        if (!c->ring || !c->wake || !c->done || !c->send_buf) {
             ESP_LOGE(TAG, "no memory for client %d's send ring", i);
+            mini_icecast_stop();
             return ESP_ERR_NO_MEM;
         }
         /* The stack is external-preferred, for the same reason the HTTP workers' are:
          * internal RAM is what the card's DMA and the encoder need, and this task spends its
          * life blocked on a socket. Four of these were 16 KB of internal RAM that the SD
-         * driver could not use. They are created once and never deleted, so the capability
-         * stack's delete rule does not apply to them. */
+         * driver could not use. A station stop ends the task and the task frees its own
+         * capability-allocated stack (see sender_task). */
         BaseType_t made = xTaskCreatePinnedToCoreWithCaps(
-            sender_task, "ice_send", SENDER_TASK_STACK, (void *)(intptr_t)i, 4, NULL, 0,
+            sender_task, "ice_send", SENDER_TASK_STACK, (void *)(intptr_t)i, 4, &c->task, 0,
             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (made != pdPASS)
             made = xTaskCreatePinnedToCoreWithCaps(sender_task, "ice_send", SENDER_TASK_STACK,
-                                                   (void *)(intptr_t)i, 4, NULL, 0,
+                                                   (void *)(intptr_t)i, 4, &c->task, 0,
                                                    MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
         if (made != pdPASS) {
             ESP_LOGE(TAG, "no memory for client %d's sender task", i);
+            c->task = NULL;
+            mini_icecast_stop();
             return ESP_ERR_NO_MEM;
         }
     }
     ESP_LOGI(TAG, "stream: %u client slot(s), %u B send ring each (~%u ms); the audio task never writes a socket",
              (unsigned)S.station.max_clients, (unsigned)client_ring_bytes, (unsigned)CLIENT_RING_MS);
-    S.skip = false;
-    S.prev = false;
 
     /* /stream is the one route on the plain listener: port 80, no TLS, ever
      * (front door R2 - hardware players and car head units cannot trust a private
-     * CA). /api/play is the app's, so it stays on the TLS listener. */
-    esp_err_t err2 = http_server_register_route_on(HTTP_LISTENER_PLAIN, "/stream", stream_route,
-                                                  NULL);
-    if (err2 == ESP_OK)
-        err2 = http_server_register_route_method("/api/play", "POST", play_route, NULL);
-    if (err2 != ESP_OK) {
-        ESP_LOGE(TAG, "cannot register the broadcast routes: %s", esp_err_to_name(err2));
-        return err2;
+     * CA). /api/play is the app's, so it stays on the TLS listener. The routes are
+     * registered once for the process: a stop keeps them, and they answer 503 while the
+     * station is down (both routes read S.running), because a restart must not take the
+     * device's listening surface with it - and registering again would fill the table. */
+    if (!S.routes_registered) {
+        esp_err_t err2 = http_server_register_route_on(HTTP_LISTENER_PLAIN, "/stream", stream_route,
+                                                      NULL);
+        if (err2 == ESP_OK)
+            err2 = http_server_register_route_method("/api/play", "POST", play_route, NULL);
+        if (err2 != ESP_OK) {
+            ESP_LOGE(TAG, "cannot register the broadcast routes: %s", esp_err_to_name(err2));
+            mini_icecast_stop();
+            return err2;
+        }
+        S.routes_registered = true;
     }
 
-    /* Wi-Fi lives on core 0; keep the broadcast on core 1. The handle is kept for
-     * the telemetry's stack-headroom line. */
+    /* A fresh station, not a resumed one: the per-run counters, the Track and the format
+     * start empty, so a restart begins at the top of the broadcast order. A pending pick is
+     * kept on purpose: it was a request made while the station was down or stopping, and
+     * the first pass of the new station honours it. */
+    S.skip = false;
+    S.prev = false;
+    S.chunk_n = 0;
+    S.track_frames = 0;
+    S.idle_frames = 0;
+    S.played_frames = 0;
+    S.t0 = esp_timer_get_time();
+    S.rebases = 0;
+    S.lag_ms = 0;
+    S.dec_ms = 0;
+    S.dec_io_ms = 0;
+    S.rs_ms = 0;
+    S.eq_ms = 0;
+    S.dec_audio_us = 0;
+    S.ring_wait_ms = 0;
+    S.level_l = 0.0f;
+    S.level_r = 0.0f;
+    S.generation = 0;
+    S.track_index = 0;
+    S.cur_src_hz = 0;
+    S.cur_total_ms = 0;
+    S.library_count = 0;
+    S.cur_fmt = MI_FMT_NONE;
+    S.title[0] = 0;
+    S.file[0] = 0;
+    S.path[0] = 0;
+    S.title_ver++;
+    /* Running before the tasks exist: both check it at the top of their loop, so the other
+     * order would have them exit before they started. A failed task is a stop. */
+    S.running = true;
+
+    /* Wi-Fi lives on core 0; keep the broadcast on core 1. The handles are kept for the
+     * telemetry's stack-headroom line and for the stop. */
     BaseType_t ok_broadcast =
         xTaskCreatePinnedToCore(broadcast_task, "ice_broadcast", BROADCAST_TASK_STACK, NULL, 6,
                                 &S.broadcast_handle, 1);
     BaseType_t ok_telem =
-        xTaskCreatePinnedToCore(telemetry_task, "ice_telem", TELEMETRY_TASK_STACK, NULL, 3, NULL, 1);
+        xTaskCreatePinnedToCore(telemetry_task, "ice_telem", TELEMETRY_TASK_STACK, NULL, 3,
+                                &S.telemetry_handle, 1);
     if (ok_broadcast != pdPASS || ok_telem != pdPASS) {
         ESP_LOGE(TAG, "no memory for the broadcast task");
+        mini_icecast_stop();
         return ESP_ERR_NO_MEM;
     }
     ESP_LOGI(TAG, "GET /stream is ready on port 80, beside the app");
     return ESP_OK;
+}
+
+bool mini_icecast_running(void) { return S.running; }
+
+void mini_icecast_stop(void)
+{
+    if (!S.lock) return; /* nothing was ever started: there is nothing to free */
+    S.running = false;
+
+    /* Ask every task of the station to end and wait for it. The senders are told
+     * explicitly, because they block on their own wake with a one-second timeout. */
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        client_t *c = &S.clients[i];
+        if (c->task) {
+            c->stop = true;
+            if (c->wake) xSemaphoreGive(c->wake);
+        }
+    }
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        client_t *c = &S.clients[i];
+        if (c->task && c->done) xSemaphoreTake(c->done, portMAX_DELAY);
+        c->task = NULL;
+    }
+    if (S.broadcast_handle) {
+        xSemaphoreTake(S.broadcast_done, portMAX_DELAY);
+        S.broadcast_handle = NULL;
+    }
+    if (S.telemetry_handle) {
+        xSemaphoreTake(S.telemetry_done, portMAX_DELAY);
+        S.telemetry_handle = NULL;
+    }
+
+    /* Every task that could touch the audio path has ended, so the path can be freed.
+     * The sockets are already closed: a sender closes its slot's fd on the way out, and
+     * what is left here is a client that never reached a sender. */
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        client_t *c = &S.clients[i];
+        if (c->fd >= 0) {
+            close(c->fd);
+            c->fd = -1;
+        }
+        if (c->icy) {
+            mi_icy_free(c->icy);
+            c->icy = NULL;
+        }
+        if (c->ring) {
+            mi_ring_free(c->ring);
+            c->ring = NULL;
+        }
+        if (c->send_buf) {
+            free(c->send_buf);
+            c->send_buf = NULL;
+        }
+        if (c->wake) {
+            vSemaphoreDelete(c->wake);
+            c->wake = NULL;
+        }
+        if (c->done) {
+            vSemaphoreDelete(c->done);
+            c->done = NULL;
+        }
+        c->reserved = false;
+        c->dead = false;
+        c->stop = false;
+    }
+    if (S.enc) {
+        mi_enc_free(S.enc);
+        S.enc = NULL;
+    }
+    if (S.burst) {
+        mi_burst_free(S.burst);
+        S.burst = NULL;
+    }
+    /* The order and the shuffle plan belong to the run that walked them; the next start
+     * resolves them again (app_services re-applies the Playlist after a restart). */
+    free(S.order.items);
+    S.order.items = NULL;
+    S.order.count = 0;
+    S.order.generation = 0;
+    free(S.order_pending.items);
+    S.order_pending.items = NULL;
+    S.order_pending.count = 0;
+    S.order_pending.generation = 0;
+    S.order_pending_set = false;
+    shuffle_forget();
+    /* The card's park belongs to the card, not the station: a park in force while the
+     * station stops is a scan that still owns the card, and the next station honours it. */
+    clear_track();
+    ESP_LOGI(TAG, "the station is stopped");
 }
 
 void mini_icecast_set_order(const uint32_t *indices, uint32_t count, uint32_t generation)

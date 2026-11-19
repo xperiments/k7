@@ -3102,16 +3102,23 @@
     {
       "id": "EN-08",
       "title": "The station stops and starts",
-      "state": "todo",
+      "state": "doing",
       "group": "EN",
       "at": "2026-11-19T02:47:11Z",
       "by": "agent",
-      "desc": "The format should follow the transport the moment the setting changes, and today it waits for the next start because the encoder is built at boot. This gives the station a lifecycle: a stop that pairs with the start (tasks ended, clients closed, encoder and rings freed) and an app_services restart that re-resolves the format without touching the network, the card, the HTTP server or the panel. The Player row then applies both the emitter and the station: ESP-NOW is 128 kbps, HTTP is 256, immediately.\n\nFinished when ten consecutive restarts run on the board with the census and the heap recorded each time, and the row changes the format without a reboot.\n\nTicket: docs/design/espnow-player/issues/08-the-station-stops-and-starts.md"
+      "desc": "The format should follow the transport the moment the setting changes, and today it waits for the next start because the encoder is built at boot. This gives the station a lifecycle: a stop that pairs with the start (tasks ended, clients closed, encoder and rings freed) and an app_services restart that re-resolves the format without touching the network, the card, the HTTP server or the panel. The Player row then applies both the emitter and the station: ESP-NOW is 128 kbps, HTTP is 256, immediately.\n\nFinished when ten consecutive restarts run on the board with the census and the heap recorded each time, and the row changes the format without a reboot.\n\nTicket: docs/design/espnow-player/issues/08-the-station-stops-and-starts.md",
+      "notes": [
+        {
+          "at": "2026-11-19T03:02:51Z",
+          "by": "lead",
+          "text": "Plan: give the station a real stop that pairs with its start (tasks, clients, encoder, rings freed), an app_services restart that re-resolves the format, and the Player row applying both; prove it with ten restarts on the board recording census and heap."
+        }
+      ]
     },
     {
       "id": "EN-09",
       "title": "A refused listener is told so",
-      "state": "proposed",
+      "state": "todo",
       "group": "EN",
       "deps": ["EN-07"],
       "at": "2026-11-19T03:01:03Z",

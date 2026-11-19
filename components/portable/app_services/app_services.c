@@ -262,10 +262,12 @@ void app_services_player_espnow_set(bool on)
     player_transport_apply(on);
     if (app_board_player_espnow_save(on) != ESP_OK)
         ESP_LOGW(TAG, "the transport choice did not store");
-    /* The station's format follows the transport and is fixed at boot (the encoder is built
-     * once), so the bit rate changes with the next start. */
-    ESP_LOGI(TAG, "the station will run %s at the next start",
-             on ? "128 kbps for the ESP-NOW player" : "256 kbps for the web");
+    /* The format follows the transport, and the encoder is built for one format: the station
+     * stops and starts at the new rate, now rather than at the next boot (ADR 0106). */
+    esp_err_t e = app_services_station_restart(app_services_station_bitrate(on));
+    if (e != ESP_OK)
+        ESP_LOGW(TAG, "the station did not restart at %u kbps: %s",
+                 (unsigned)app_services_station_bitrate(on), esp_err_to_name(e));
 }
 
 void app_services_player_transport_init(void)
@@ -498,6 +500,73 @@ static http_result_t cors_preflight_route(int fd, const http_request_t *req, voi
     return HTTP_HANDLED;
 }
 
+/* The station, composed identically at boot and on a restart: the same broadcast
+ * configuration (a format the caller has already resolved into s_cfg) and the same Playlist
+ * choice, so a restarted station walks the order the listener had selected. Only the station
+ * is touched - the network, the card, the HTTP server and the panel are the boot's. */
+static esp_err_t start_station(const library_t *lib)
+{
+    mini_icecast_cfg_t ice = {
+        .library = NULL, /* the broadcast leases the published generation */
+        .station_name = s_cfg.station_name,
+        .port = s_cfg.port,
+        .max_clients = s_cfg.max_clients,
+        .out_hz = s_cfg.out_hz,
+        .bitrate = s_cfg.bitrate,
+        .metaint = s_cfg.metaint,
+        .lead_ms = s_cfg.lead_ms,
+        .burst_ms = s_cfg.burst_ms,
+        .card_use_begin = card_use_begin,
+        .card_use_end = card_use_end,
+    };
+    esp_err_t e = mini_icecast_start(&ice);
+    if (e != ESP_OK) return e;
+    /* Which Playlist the broadcast walks, now that the card and the Library exist: the
+     * remembered choice is resolved from its file and handed over, or the Library plays. */
+    if (lib) {
+        char root[160];
+        current_card_root(root, sizeof root);
+        playlist_select_sync(root, lib);
+    }
+    return ESP_OK;
+}
+
+uint32_t app_services_station_bitrate(bool player_espnow)
+{
+    return player_espnow ? 128 : 256;
+}
+
+esp_err_t app_services_station_restart(uint32_t kbps)
+{
+    if (!s_cfg.music_dir) {
+        ESP_LOGW(TAG, "the station has never started; there is nothing to restart");
+        return ESP_ERR_INVALID_STATE;
+    }
+    /* What was playing, so the new station can continue it after the start (below). Position
+     * is not kept: the station starts at the top of a Track, which is what a restart of the
+     * encoder means. */
+    mini_icecast_status_t before;
+    mini_icecast_status(&before);
+    mini_icecast_stop();
+    s_cfg.bitrate = kbps;
+    const library_t *lib = library_acquire();
+    esp_err_t e = start_station(lib);
+    if (lib) library_release(lib);
+    if (e != ESP_OK) {
+        ESP_LOGE(TAG, "the station did not come back at %u kbps: %s", (unsigned)kbps,
+                 esp_err_to_name(e));
+        return e;
+    }
+    ESP_LOGI(TAG, "the station restarted at %u kbps", (unsigned)kbps);
+    /* The Track that was playing continues on the new station, so a format change does not
+     * sound like a skip. Only with no Playlist walking: a pick that names a Track outside
+     * the selected order drops the order (and with it the owner's choice), and a restart
+     * must never do that to a selection the row did not touch. */
+    if (!mini_icecast_order_active() && before.path[0] && !mini_icecast_play(before.path))
+        ESP_LOGW(TAG, "the Track that was playing is not in the Library; the station walks on");
+    return ESP_OK;
+}
+
 esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_t *report)
 {
     app_services_report_t local;
@@ -683,30 +752,9 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
 
     /* 7. The broadcast, now that Wi-Fi's buffers exist. It starts even with no
      * card: the task waits for the directory rather than failing the boot. */
-    mini_icecast_cfg_t ice = {
-        .library = NULL, /* the broadcast leases the published generation */
-        .station_name = cfg->station_name,
-        .port = cfg->port,
-        .max_clients = cfg->max_clients,
-        .out_hz = cfg->out_hz,
-        .bitrate = cfg->bitrate,
-        .metaint = cfg->metaint,
-        .lead_ms = cfg->lead_ms,
-        .burst_ms = cfg->burst_ms,
-        .card_use_begin = card_use_begin,
-        .card_use_end = card_use_end,
-    };
-    e = mini_icecast_start(&ice);
+    e = start_station(s_library);
     if (e != ESP_OK) return fail(report, e, "broadcast");
     if (report) report->broadcast_up = true;
-
-    /* Which Playlist the broadcast walks, now that the card and the Library exist: the
-     * remembered choice is resolved from its file and handed over, or the Library plays. */
-    {
-        char root[160];
-        current_card_root(root, sizeof root);
-        playlist_select_sync(root, s_library);
-    }
 
     /* The MCP endpoint is registered before the listener, after the broadcast
      * exists because player_status reads its snapshot. */

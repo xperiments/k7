@@ -386,7 +386,9 @@ static void activate(void)
             backlight_set_hold(menu_action_backlight(s_model));
             break;
         case MENU_ACTION_PLAYER:
-            /* One row, two transports, never both (espnow-stream.md E9, ADR 0104). */
+            /* One row, two transports, never both (espnow-stream.md E9, ADR 0105). The
+             * setter applies the emitter and restarts the station at that transport's
+             * format, so the row's effect is immediate (ADR 0106). */
             app_services_player_espnow_set(!app_services_player_espnow());
             break;
         case MENU_ACTION_SHUFFLE:

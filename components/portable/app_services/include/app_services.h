@@ -83,12 +83,26 @@ esp_err_t app_services_rescan(void);
  * starting a scan to find out would be the bug. */
 bool app_services_rescan_running(void);
 
-/* The player's transport (espnow-stream.md E9, ADR 0104): true is ESP-NOW, false is HTTP.
+/* The player's transport (espnow-stream.md E9, ADR 0105): true is ESP-NOW, false is HTTP.
  * The setter applies it now and remembers it; the init reads it back at boot and defaults to
- * ESP-NOW. The micro switch on the player and the K7's Settings row both call the setter. */
+ * ESP-NOW. The micro switch on the player and the K7's Settings row both call the setter.
+ *
+ * The station's format follows the transport, so the setter also restarts the station at the
+ * new bit rate (ADR 0106) - the one place the 128/256 rule lives is
+ * app_services_station_bitrate(). */
 bool app_services_player_espnow(void);
 void app_services_player_espnow_set(bool on);
 void app_services_player_transport_init(void);
+
+/* The station's bit rate for a transport: 128 kbps when the radio carries the player's
+ * audio, 256 when the web's icecast does (espnow-stream.md E9). */
+uint32_t app_services_station_bitrate(bool player_espnow);
+
+/* Stop the station and start it again at `kbps`, leaving the network, the card, the HTTP
+ * server and the panel alone (ADR 0106). A listener is disconnected, which is what a station
+ * restart means, and the Track that was playing is asked for again on the new station. The
+ * boot has no need for this: it starts once, at the format the transport implies. */
+esp_err_t app_services_station_restart(uint32_t kbps);
 
 /* Tell the composition whether the retry task has a mounted card. The rescan
  * uses the no-card generation when there is none, so the state stays

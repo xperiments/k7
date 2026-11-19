@@ -93,7 +93,7 @@ radio stays up, because the share window borrows it. The player is **ESP-NOW onl
 HTTP it hears nothing and says *Ready*, while the web UI's own listener, a different client on the
 same broadcast, keeps working — and it is the only one, because the K7 carries one listener
 (ADR 0107). The station's format follows the transport — 128 kbps on ESP-NOW,
-256 on HTTP — and the change restarts the station rather than the device (ADR 0106). Sending the player's feed twice would spend twice the airtime for one
+256 on HTTP — and the change restarts the station rather than the device, at once (ADR 0106). Sending the player's feed twice would spend twice the airtime for one
 listener.
 
 **E10. The radio stays up.** A stream cannot be a window: ESP-NOW is initialised once, at boot,

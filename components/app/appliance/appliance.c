@@ -231,7 +231,7 @@ void appliance_run(void)
         .station_name = STATION_NAME,
         .port = HTTP_PORT,
         .out_hz = 44100,
-        .bitrate = player_espnow ? 128 : 256,
+        .bitrate = app_services_station_bitrate(player_espnow),
         /* One listener: this is a personal player, one pair of ears, so a second browser
          * that asks for /stream is refused rather than given airtime (EN-07). Separate
          * from the HTTP connection pool (max_conns), which stays at four for the API and
