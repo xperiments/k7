@@ -491,6 +491,16 @@ Four things the host cannot establish, by construction:
    reason: requesting a track in the wrong case resolves on a case-insensitive
    host filesystem and need not on FATFS.)
 
+### The ESP-NOW emitter
+
+The sender the player's audio will travel on (ADR 0103) is up from boot. Its history is 96
+frames of 1 441 bytes — **135 KB, allocated from PSRAM** — so the internal RAM the station and
+the card already fight over is unchanged: the icecast census still reads about **51 KB free**
+with a **31 744-byte** largest block while the stream plays. With no player speaking it holds
+every frame (38 a second) and sends none — `0 packets` — while the HTTP listener keeps answering
+200 and the card keeps playing. That is what the feature costs when nobody is listening, and it
+is the number to compare against once a player does.
+
 ### The K7Player's board tier
 
 The player's acceptance is its own, and it is recorded here rather than on the host: what a
