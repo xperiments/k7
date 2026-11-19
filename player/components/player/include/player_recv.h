@@ -50,8 +50,10 @@ typedef struct {
 } player_recv_held_t;
 
 typedef struct {
-    player_recv_part_t part[PLAYER_RECV_PARTS];
-    player_recv_held_t held[PLAYER_RECV_HELD];
+    player_recv_part_t *part; /* the caller's memory, carved by player_recv_init */
+    unsigned part_n;
+    player_recv_held_t *held;
+    unsigned held_max;
     unsigned held_n;
     bool     have_next;
     uint16_t next;   /* the sequence the stream is waiting for */
@@ -63,7 +65,10 @@ typedef struct {
 /* A delivered frame, in order. The pointer is only valid during the call. */
 typedef void (*player_recv_frame_fn)(void *ctx, const uint8_t *frame, size_t len);
 
-void player_recv_init(player_recv_t *r);
+/* The frame buffers are the caller's: twelve kilobytes is a third of what is left of this
+ * chip's DRAM after the ring, so they live on the heap rather than in .bss. False when the
+ * storage is too small for one part and one held frame. */
+bool player_recv_init(player_recv_t *r, void *storage, size_t bytes);
 
 /* One packet from the radio. Anything that is not an audio fragment is ignored here: the status
  * packets are the player's to send, not to receive. */

@@ -63,16 +63,6 @@ bool player_board_resolve(const char *hostname, char *out, size_t cap);
  * here - and the light's policy stays portable. */
 void player_board_light(uint8_t level);
 
-/* --------------------------------------------------------------- the stream's socket
- *
- * A poll, never a block: the stream task ticks at 50 ms and a quiet second on the wire must
- * cost a tick, not a stalled task. `poll` returns >0 for bytes, 0 for "nothing yet", -1 for a
- * connection that ended or failed. */
-int  player_board_stream_connect(const char *host, uint16_t port);
-int  player_board_stream_send(int fd, const uint8_t *data, size_t len);
-int  player_board_stream_poll(int fd, uint8_t *buf, size_t cap);
-void player_board_stream_close(int fd);
-
 /* --------------------------------------------------------------- the handover's radio
  *
  * The other side of components/portable/share's frame exchange: the player sets the

@@ -38,7 +38,6 @@ CORE_SRC := $(PLAYER)/components/player/player_recv.c \
             $(PLAYER)/components/player/player_net.c \
             $(PLAYER)/components/player/player_ring.c \
             $(PLAYER)/components/player/player_mp3.c \
-            $(PLAYER)/components/player/player_http.c \
             $(PLAYER)/components/player/player_stream.c \
             $(PLAYER)/components/player/player_playout.c \
             $(PLAYER)/components/player/player_light.c
@@ -49,7 +48,7 @@ HANDOVER_SRC := $(ROOT)/components/portable/handover/handover_frame.c \
                 $(ROOT)/components/portable/handover/handover_key.c
 HANDOVER_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(HANDOVER_SRC)))
 
-TESTS := $(BIN)/t01_status $(BIN)/t02_net $(BIN)/t03_stream $(BIN)/t04_output \
+TESTS := $(BIN)/t01_status $(BIN)/t02_net $(BIN)/t04_output \
          $(BIN)/t05_light $(BIN)/t06_recv
 
 .PHONY: all test layering check clean
@@ -61,10 +60,6 @@ $(BIN)/t01_status: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(BIN)/t02_net: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t02_net.o
-	@mkdir -p $(BIN)
-	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
-
-$(BIN)/t03_stream: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t03_stream.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

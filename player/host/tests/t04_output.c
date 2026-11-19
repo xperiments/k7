@@ -17,6 +17,7 @@
 #include "handover.h"
 #include "player_board.h"
 #include "player_net.h"
+#include "espnow_stream.h"
 #include "player_playout.h"
 #include "player_stream.h"
 
@@ -57,31 +58,40 @@ static uint8_t *read_fixture(const char *name, size_t *len)
     return NULL;
 }
 
-/* The K7's head, then `body` - the fixture's MP3 frames exactly as they are. */
-static uint8_t *response_with(const uint8_t *body, size_t body_len, size_t *out_len)
+/* The fixture, as the K7's emitter would send it: whole MP3 frames, fragmented into ESP-NOW
+ * packets and handed to the stream where the radio's callback would hand them. A couple of
+ * frames a tick keeps the shape a live stream has - the ring fills over time, which is what
+ * every case here is about. */
+static const uint8_t *s_body;
+static size_t s_body_len, s_body_off;
+static uint16_t s_seq;
+
+static void deliver(int frames)
 {
-    static const char head[] = "HTTP/1.0 200 OK\r\nContent-Type: audio/mpeg\r\n"
-                               "Connection: close\r\n\r\n";
-    size_t head_len = sizeof head - 1;
-    uint8_t *resp = malloc(head_len + body_len);
-    if (!resp) return NULL;
-    memcpy(resp, head, head_len);
-    memcpy(resp + head_len, body, body_len);
-    *out_len = head_len + body_len;
-    return resp;
+    while (frames-- > 0 && s_body_off + 4 <= s_body_len) {
+        size_t flen = mp3_frame_len(s_body + s_body_off);
+        if (!flen) { s_body_off++; continue; } /* an ID3 tag or padding before the first sync */
+        if (s_body_off + flen > s_body_len) break;
+        uint8_t pkts[ES_MAX_FRAGS * ES_MTU];
+        size_t lens[ES_MAX_FRAGS];
+        size_t n = es_fragment(s_seq++, s_body + s_body_off, flen, pkts, lens);
+        for (size_t i = 0; i < n; i++) player_stream_packet(pkts + i * ES_MTU, lens[i]);
+        s_body_off += flen;
+    }
 }
 
 static void pump(int ticks)
 {
     for (int i = 0; i < ticks; i++) {
         g_now += 10;
+        deliver(2);
         player_net_tick(g_now);
         player_stream_tick(g_now);
         player_playout_tick();
     }
 }
 
-static void program(const uint8_t *resp, size_t len, size_t chunk)
+static void program(const uint8_t *body, size_t len)
 {
     host_player_reset();
     host_player_resolve("192.168.0.13");
@@ -99,7 +109,10 @@ static void program(const uint8_t *resp, size_t len, size_t chunk)
     rec.ipv4 = 0xC0A8000Du;
     CHECK(player_board_record_save(&rec), "a record is stored");
 
-    if (resp) host_player_stream_script(resp, len, chunk);
+    s_body = body;
+    s_body_len = len;
+    s_body_off = 0;
+    s_seq = 0;
 
     g_now = 0;
     player_net_init();
@@ -116,9 +129,7 @@ static void test_line_44100(void)
     CHECK(body != NULL, "the fixture is readable (run make -C host fixtures)");
     if (!body) return;
 
-    size_t resp_len = 0;
-    uint8_t *resp = response_with(body, body_len, &resp_len);
-    program(resp, resp_len, 100);
+    program(body, body_len);
     pump(200);
 
     CHECK_EQ(player_output_opens(), 1, "the output was opened once");
@@ -134,7 +145,6 @@ static void test_line_44100(void)
     CHECK_EQ(st.refused, 0, "and refused none of them");
     CHECK(st.primes >= 1, "and it waited for the ring to hold a buffer first (%u)", st.primes);
 
-    free(resp);
     free(body);
 }
 
@@ -146,15 +156,12 @@ static void test_line_32000(void)
     CHECK(body != NULL, "the 32 kHz fixture is readable");
     if (!body) return;
 
-    size_t resp_len = 0;
-    uint8_t *resp = response_with(body, body_len, &resp_len);
-    program(resp, resp_len, 100);
+    program(body, body_len);
     pump(200);
 
     CHECK_EQ(player_output_rate(), 32000, "the output followed the station's rate");
     CHECK(player_output_peak() > 1000, "and still made sound");
 
-    free(resp);
     free(body);
 }
 
@@ -166,9 +173,7 @@ static void test_silence(void)
     CHECK(body != NULL, "the fixture is readable");
     if (!body) return;
 
-    size_t resp_len = 0;
-    uint8_t *resp = response_with(body, body_len, &resp_len);
-    program(resp, resp_len, 256);
+    program(body, body_len);
 
     /* Until there is something to play, then past the end of it. */
     player_playout_status_t st;
@@ -180,13 +185,15 @@ static void test_silence(void)
     }
     CHECK(st.open, "the output opened on the fixture's rate");
 
-    pump(200); /* the script is consumed, the ring empties */
+    /* The frames stop. Three seconds of no packets is what releases the prime (E8) - the
+     * fixture is 0.65 s, too short to reach a 128 kbps station's buffer - and then the ring
+     * plays out and the line gets silence. */
+    pump(400);
     player_playout_status(&st);
     CHECK(st.silent > 0, "silence was written when there was nothing to play (%u frames)",
           (unsigned)st.silent);
     CHECK(player_output_peak() > 1000, "after the audio had played");
 
-    free(resp);
     free(body);
 }
 
@@ -200,11 +207,7 @@ static void test_primes(void)
     CHECK(body != NULL, "the fixture is readable");
     if (!body) return;
 
-    size_t resp_len = 0;
-    uint8_t *resp = response_with(body, body_len, &resp_len);
-    /* Small reads, so program()'s four settling ticks cannot deliver the whole buffer before
-     * the test is watching. */
-    program(resp, resp_len, 64);
+    program(body, body_len);
 
     player_playout_status_t po;
     player_stream_status_t sr;
@@ -222,7 +225,6 @@ static void test_primes(void)
     CHECK(held, "and held silence while it already had audio to play");
     CHECK(po.frames > 0, "then it played (%u PCM frames)", (unsigned)po.frames);
 
-    free(resp);
     free(body);
 }
 

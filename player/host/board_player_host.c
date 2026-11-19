@@ -348,101 +348,14 @@ bool player_board_x25519(const uint8_t priv[32], const uint8_t peer[32], uint8_t
     return true;
 }
 
-/* ------------------------------------------------------------------ the stream's socket
+/* --------------------------------------------------------------- the stream's transport
  *
- * A scripted byte source: the test sets the response (head and body), the size of each read,
- * and whether the connection goes quiet or ends. `poll` never blocks, so the machine's own
- * tick is the clock.
+ * There is no socket any more: the firmware's stream module takes whole ESP-NOW packets from
+ * the radio's callback, and a host test hands them to player_stream_packet itself. This stub
+ * stays for the reset path the other suites share.
  */
 
-#include <stdlib.h>
-
-static uint8_t *s_stream;
-static size_t s_stream_len;
-static size_t s_stream_off;
-static size_t s_stream_chunk = 512;
-static bool s_stream_stall;
-static int s_connects;
-static char s_request[256];
-static size_t s_request_len;
-
-void host_player_stream_script(const uint8_t *data, size_t len, size_t chunk)
-{
-    free(s_stream);
-    s_stream = NULL;
-    s_stream_len = 0;
-    s_stream_off = 0;
-    s_stream_chunk = chunk ? chunk : 512;
-    s_stream_stall = false;
-    if (data && len) {
-        s_stream = malloc(len);
-        if (s_stream) {
-            memcpy(s_stream, data, len);
-            s_stream_len = len;
-        }
-    }
-}
-
-void host_player_stream_stall(void) { s_stream_stall = true; }
-
-size_t host_player_stream_request(char *out, size_t cap)
-{
-    if (!out || cap == 0) return 0;
-    size_t n = s_request_len < cap - 1 ? s_request_len : cap - 1;
-    memcpy(out, s_request, n);
-    out[n] = '\0';
-    return n;
-}
-
-int host_player_stream_connects(void) { return s_connects; }
-
-void host_player_stream_reset(void)
-{
-    free(s_stream);
-    s_stream = NULL;
-    s_stream_len = 0;
-    s_stream_off = 0;
-    s_stream_chunk = 512;
-    s_stream_stall = false;
-    s_connects = 0;
-    s_request[0] = '\0';
-    s_request_len = 0;
-}
-
-int player_board_stream_connect(const char *host, uint16_t port)
-{
-    (void)host;
-    (void)port;
-    s_connects++;
-    /* A consumed script stays consumed: a real stream does not restart when we reconnect. */
-    return 1;
-}
-
-int player_board_stream_send(int fd, const uint8_t *data, size_t len)
-{
-    (void)fd;
-    if (!data) return -1;
-    size_t n = len < sizeof s_request - 1 ? len : sizeof s_request - 1;
-    memcpy(s_request, data, n);
-    s_request[n] = '\0';
-    s_request_len = n;
-    return 0;
-}
-
-int player_board_stream_poll(int fd, uint8_t *buf, size_t cap)
-{
-    (void)fd;
-    if (s_stream_stall) return 0;
-    if (!s_stream || s_stream_off >= s_stream_len) return -1;
-    size_t n = s_stream_len - s_stream_off;
-    if (n > cap) n = cap;
-    if (s_stream_chunk && n > s_stream_chunk) n = s_stream_chunk;
-    memcpy(buf, s_stream + s_stream_off, n);
-    s_stream_off += n;
-    return (int)n;
-}
-
-void player_board_stream_close(int fd) { (void)fd; }
+void host_player_stream_reset(void) { }
 
 /* ------------------------------------------------------------------ the line output
  *

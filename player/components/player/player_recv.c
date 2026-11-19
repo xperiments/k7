@@ -2,10 +2,29 @@
 
 #include <string.h>
 
-void player_recv_init(player_recv_t *r)
+bool player_recv_init(player_recv_t *r, void *storage, size_t bytes)
 {
-    if (!r) return;
+    if (!r) return false;
     memset(r, 0, sizeof *r);
+    if (!storage) return false;
+
+    /* The held frames first, then the parts: the parts are transient and the held ones are what
+     * a gap costs, so a small budget keeps as many held frames as it can. */
+    player_recv_held_t *held = storage;
+    unsigned held_max = (unsigned)(bytes / sizeof *held);
+    if (held_max > PLAYER_RECV_HELD) held_max = PLAYER_RECV_HELD;
+    if (held_max < 1) return false;
+    size_t held_bytes = (size_t)held_max * sizeof *held;
+    player_recv_part_t *parts = (player_recv_part_t *)((uint8_t *)storage + held_bytes);
+    unsigned part_n = (unsigned)((bytes - held_bytes) / sizeof *parts);
+    if (part_n > PLAYER_RECV_PARTS) part_n = PLAYER_RECV_PARTS;
+    if (part_n < 1) return false;
+
+    r->held = held;
+    r->held_max = held_max;
+    r->part = parts;
+    r->part_n = part_n;
+    return true;
 }
 
 /* A sequence is "newer" when the 16-bit difference is positive, so the stream survives the
@@ -14,16 +33,27 @@ static bool newer(uint16_t a, uint16_t b) { return (int16_t)(a - b) > 0; }
 
 static player_recv_part_t *find_part(player_recv_t *r, uint16_t seq)
 {
-    for (unsigned i = 0; i < PLAYER_RECV_PARTS; i++)
+    for (unsigned i = 0; i < r->part_n; i++)
         if (r->part[i].used && r->part[i].seq == seq) return &r->part[i];
     return NULL;
 }
 
+/* A slot, or the oldest one cleared for reuse. The receiver starts listening in the middle of
+ * a frame, so its first slots hold fragments whose partners were never heard; they would sit
+ * there for ever and the stream would never assemble anything. The oldest incomplete frame is
+ * the least likely to complete - its fragments are behind the stream - so it gives way. */
 static player_recv_part_t *free_part(player_recv_t *r)
 {
-    for (unsigned i = 0; i < PLAYER_RECV_PARTS; i++)
+    player_recv_part_t *oldest = NULL;
+    for (unsigned i = 0; i < r->part_n; i++) {
         if (!r->part[i].used) return &r->part[i];
-    return NULL;
+        if (!oldest || newer(oldest->seq, r->part[i].seq)) oldest = &r->part[i];
+    }
+    if (oldest) {
+        memset(oldest, 0, sizeof *oldest);
+        r->parts_dropped++;
+    }
+    return oldest;
 }
 
 static int find_held(const player_recv_t *r, uint16_t seq)
@@ -74,7 +104,7 @@ static void complete(player_recv_t *r, player_recv_part_t *p, player_recv_frame_
     }
 
     /* Ahead of a gap: it waits, and it is what the status packet will ask about. */
-    if (r->held_n == PLAYER_RECV_HELD) {
+    if (r->held_n == r->held_max) {
         r->parts_dropped++;
         drop_part(r, p);
         return;
@@ -168,7 +198,7 @@ void player_recv_tick(player_recv_t *r, uint32_t now_ms,
         r->abandoned++;
     }
 
-    for (unsigned i = 0; i < PLAYER_RECV_PARTS; i++) {
+    for (unsigned i = 0; i < r->part_n; i++) {
         if (r->part[i].used && !newer(r->part[i].seq, (uint16_t)(r->next - 1)))
             drop_part(r, &r->part[i]);
     }
@@ -191,7 +221,7 @@ void player_recv_status(player_recv_t *r, uint32_t free_bytes, es_status_t *out)
     uint16_t top = (uint16_t)(r->next - 1);
     for (unsigned i = 0; i < r->held_n; i++)
         if (newer(r->held[i].seq, top)) top = r->held[i].seq;
-    for (unsigned i = 0; i < PLAYER_RECV_PARTS; i++)
+    for (unsigned i = 0; i < r->part_n; i++)
         if (r->part[i].used && newer(r->part[i].seq, top)) top = r->part[i].seq;
 
     for (uint16_t seq = r->next; !newer(seq, top) && out->nack_count < ES_MAX_NACK; seq++) {

@@ -16,6 +16,7 @@
 #include "player_board.h"
 #include "player_light.h"
 #include "player_net.h"
+#include "espnow_stream.h"
 #include "player_playout.h"
 #include "player_stream.h"
 
@@ -56,21 +57,37 @@ static uint8_t *read_fixture(const char *name, size_t *len)
     return NULL;
 }
 
-static uint8_t *response_with(const uint8_t *body, size_t body_len, size_t *out_len)
+/* The fixture's frames, or - for the fault case - frames that are not MP3 at all, handed to
+ * the stream as the radio's callback would. Two frames a tick, so the ring fills over time. */
+static const uint8_t *s_body;
+static size_t s_body_len, s_body_off;
+static uint16_t s_seq;
+static bool s_noise;
+
+static void deliver(int frames)
 {
-    static const char head[] = "HTTP/1.0 200 OK\r\nContent-Type: audio/mpeg\r\n"
-                               "Connection: close\r\n\r\n";
-    size_t head_len = sizeof head - 1;
-    uint8_t *resp = malloc(head_len + body_len);
-    if (!resp) return NULL;
-    memcpy(resp, head, head_len);
-    memcpy(resp + head_len, body, body_len);
-    *out_len = head_len + body_len;
-    return resp;
+    while (frames-- > 0) {
+        uint8_t pkts[ES_MAX_FRAGS * ES_MTU];
+        size_t lens[ES_MAX_FRAGS];
+        if (s_noise) {
+            static uint8_t junk[417];
+            memset(junk, 0x55, sizeof junk);
+            size_t n = es_fragment(s_seq++, junk, sizeof junk, pkts, lens);
+            for (size_t i = 0; i < n; i++) player_stream_packet(pkts + i * ES_MTU, lens[i]);
+            continue;
+        }
+        if (s_body_off + 4 > s_body_len) return;
+        size_t flen = mp3_frame_len(s_body + s_body_off);
+        if (!flen) { s_body_off++; continue; } /* an ID3 tag or padding before the first sync */
+        if (s_body_off + flen > s_body_len) return;
+        size_t n = es_fragment(s_seq++, s_body + s_body_off, flen, pkts, lens);
+        for (size_t i = 0; i < n; i++) player_stream_packet(pkts + i * ES_MTU, lens[i]);
+        s_body_off += flen;
+    }
 }
 
-/* Bring every machine up with a scripted K7. `resp` may be NULL: then nothing is sent. */
-static void program(const uint8_t *resp, size_t len, size_t chunk)
+/* Bring every machine up. `body` may be NULL: then nothing is sent. */
+static void program(const uint8_t *body, size_t len)
 {
     host_player_reset();
     host_player_resolve("192.168.0.13");
@@ -88,7 +105,11 @@ static void program(const uint8_t *resp, size_t len, size_t chunk)
     rec.ipv4 = 0xC0A8000Du;
     CHECK(player_board_record_save(&rec), "a record is stored");
 
-    if (resp) host_player_stream_script(resp, len, chunk);
+    s_body = body;
+    s_body_len = len;
+    s_body_off = 0;
+    s_seq = 0;
+    s_noise = false;
 
     g_now = 0;
     player_net_init();
@@ -101,6 +122,7 @@ static void pump(int ticks)
 {
     for (int i = 0; i < ticks; i++) {
         g_now += 50;
+        deliver(2);
         player_net_tick(g_now);
         player_stream_tick(g_now);
         player_playout_tick();
@@ -134,7 +156,7 @@ static void test_searching(void)
 /* On a network, nothing playing: ready, and steady rather than blinking. */
 static void test_ready(void)
 {
-    program(NULL, 0, 0);
+    program(NULL, 0);
     pump(6); /* the network machine connects; the stream has nothing to read */
 
     CHECK_EQ(player_light_tick(0), PLAYER_LIGHT_READY, "a network and no stream: ready");
@@ -151,9 +173,7 @@ static void test_playing(void)
     CHECK(body != NULL, "the fixture is readable");
     if (!body) return;
 
-    size_t resp_len = 0;
-    uint8_t *resp = response_with(body, body_len, &resp_len);
-    program(resp, resp_len, 100);
+    program(body, body_len);
 
     player_light_t state = PLAYER_LIGHT_SEARCHING;
     int guard = 0;
@@ -166,30 +186,24 @@ static void test_playing(void)
     CHECK_EQ(player_light_tick(g_now + 300), PLAYER_LIGHT_PLAYING, "and steady");
     CHECK_EQ(player_light_level(), PLAYER_LIGHT_BRIGHT, "still bright");
 
-    free(resp);
     free(body);
 }
 
 /* A body that is not audio: fault, and the 4 Hz pattern's two halves. */
 static void test_fault(void)
 {
-    static const char head[] = "HTTP/1.0 200 OK\r\nContent-Type: audio/mpeg\r\n\r\n";
-    size_t len = sizeof head - 1 + 5000;
-    uint8_t *resp = malloc(len);
-    CHECK(resp != NULL, "a noise body");
-    if (!resp) return;
-    memcpy(resp, head, sizeof head - 1);
-    memset(resp + sizeof head - 1, 0x55, 5000);
-
-    program(resp, len, 256);
+    /* R26 over the radio: two seconds of frames that never decode is two firmwares disagreeing
+     * about the format, so it is a Fault and not a wait. */
+    program(NULL, 0);
+    s_noise = true;
 
     player_light_t state = PLAYER_LIGHT_SEARCHING;
     int guard = 0;
-    while (state != PLAYER_LIGHT_FAULT && guard++ < 300) {
+    while (state != PLAYER_LIGHT_FAULT && guard++ < 400) {
         pump(1);
         state = player_light_tick(g_now);
     }
-    CHECK_EQ(state, PLAYER_LIGHT_FAULT, "noise is a fault, not a retry loop");
+    CHECK_EQ(state, PLAYER_LIGHT_FAULT, "two seconds of undecodable frames is a fault");
 
     CHECK_EQ(player_light_tick(0), PLAYER_LIGHT_FAULT, "at the start of the cycle");
     CHECK_EQ(player_light_level(), PLAYER_LIGHT_BRIGHT, "lit");
@@ -197,8 +211,6 @@ static void test_fault(void)
     CHECK_EQ(player_light_level(), PLAYER_LIGHT_BRIGHT, "still lit");
     CHECK_EQ(player_light_tick(130), PLAYER_LIGHT_FAULT, "past the half period");
     CHECK_EQ(player_light_level(), 0, "and out - four cycles a second");
-
-    free(resp);
 }
 
 /* An output that will not open is the other fault R31 names. */
@@ -207,10 +219,7 @@ static void test_no_output(void)
     size_t body_len = 0;
     uint8_t *body = read_fixture("long-44100.mp3", &body_len);
     if (!body) return;
-    size_t resp_len = 0;
-    uint8_t *resp = response_with(body, body_len, &resp_len);
-
-    program(resp, resp_len, 100);
+    program(body, body_len);
     host_player_output_fail(true); /* after program: a fresh fake has no failure armed */
 
     player_light_t state = PLAYER_LIGHT_SEARCHING;
@@ -222,7 +231,6 @@ static void test_no_output(void)
     CHECK_EQ(state, PLAYER_LIGHT_FAULT, "an output that cannot open is a fault");
     host_player_output_fail(false);
 
-    free(resp);
     free(body);
 }
 

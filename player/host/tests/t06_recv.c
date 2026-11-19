@@ -51,7 +51,9 @@ static void feed_frame(player_recv_t *r, uint16_t seq, uint32_t now)
 static void test_in_order(void)
 {
     static player_recv_t r;
-    player_recv_init(&r);
+    static uint8_t storage[(PLAYER_RECV_HELD * sizeof(player_recv_held_t)) +
+                           (PLAYER_RECV_PARTS * sizeof(player_recv_part_t))];
+    CHECK(player_recv_init(&r, storage, sizeof storage), "the receiver's buffers are given");
     out_reset();
     for (uint16_t seq = 0; seq < 5; seq++) feed_frame(&r, seq, 100);
 
@@ -69,7 +71,9 @@ static void test_in_order(void)
 static void test_gap_and_resend(void)
 {
     static player_recv_t r;
-    player_recv_init(&r);
+    static uint8_t storage[(PLAYER_RECV_HELD * sizeof(player_recv_held_t)) +
+                           (PLAYER_RECV_PARTS * sizeof(player_recv_part_t))];
+    CHECK(player_recv_init(&r, storage, sizeof storage), "the receiver's buffers are given");
     out_reset();
 
     feed_frame(&r, 0, 1000); /* delivered */
@@ -98,7 +102,9 @@ static void test_gap_and_resend(void)
 static void test_abandon(void)
 {
     static player_recv_t r;
-    player_recv_init(&r);
+    static uint8_t storage[(PLAYER_RECV_HELD * sizeof(player_recv_held_t)) +
+                           (PLAYER_RECV_PARTS * sizeof(player_recv_part_t))];
+    CHECK(player_recv_init(&r, storage, sizeof storage), "the receiver's buffers are given");
     out_reset();
 
     feed_frame(&r, 0, 1000);
@@ -128,7 +134,9 @@ static void test_abandon(void)
 static void test_wrap(void)
 {
     static player_recv_t r;
-    player_recv_init(&r);
+    static uint8_t storage[(PLAYER_RECV_HELD * sizeof(player_recv_held_t)) +
+                           (PLAYER_RECV_PARTS * sizeof(player_recv_part_t))];
+    CHECK(player_recv_init(&r, storage, sizeof storage), "the receiver's buffers are given");
     out_reset();
 
     feed_frame(&r, 65534, 100);
@@ -150,7 +158,9 @@ static void test_wrap(void)
 static void test_duplicate_fragment(void)
 {
     static player_recv_t r;
-    player_recv_init(&r);
+    static uint8_t storage[(PLAYER_RECV_HELD * sizeof(player_recv_held_t)) +
+                           (PLAYER_RECV_PARTS * sizeof(player_recv_part_t))];
+    CHECK(player_recv_init(&r, storage, sizeof storage), "the receiver's buffers are given");
     out_reset();
 
     static uint8_t frame[417];
