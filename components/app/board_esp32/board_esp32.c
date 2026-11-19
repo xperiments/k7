@@ -936,11 +936,36 @@ static int64_t s_audio_logged_us;
 
 /* The emitter's radio: unicast, plaintext, to the player that last spoke. A player that has not
  * spoken has no peer and nothing is sent to it - the status packet opens the credit first. */
+/* A run of failed sends is the association, not the packet: the station can sit on an
+ * access point that has stopped serving it without ever getting WIFI_EVENT_STA_DISCONNECTED,
+ * and then nothing reconnects it - the board is alive, its counters freeze, and only a reset
+ * brings it back (found on the bench, 2026-11-19). So the stream's own failures are the
+ * watchdog: after this many in a row, drop the association and dial it again. */
+#define AUDIO_SEND_DISCONNECTED 30 /* about a second of frames at 38 a second */
+
 static bool audio_send(const uint8_t *pkt, size_t len, void *ctx)
 {
     (void)ctx;
     if (!s_audio_has_peer || !s_now_up) return false;
-    return esp_now_send(s_audio_peer, pkt, len) == ESP_OK;
+
+    static uint16_t s_failures;
+    static int64_t s_last_reconnect_us;
+    if (esp_now_send(s_audio_peer, pkt, len) == ESP_OK) {
+        s_failures = 0;
+        return true;
+    }
+
+    if (++s_failures >= AUDIO_SEND_DISCONNECTED) {
+        int64_t now = esp_timer_get_time();
+        if (now - s_last_reconnect_us > 10000000) { /* at most once every ten seconds */
+            s_last_reconnect_us = now;
+            ESP_LOGW(TAG, "the radio stopped sending: re-associating");
+            esp_wifi_disconnect();
+            esp_wifi_connect();
+        }
+        s_failures = 0;
+    }
+    return false;
 }
 
 static void audio_log_census(void)

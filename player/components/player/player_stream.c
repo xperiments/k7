@@ -115,8 +115,14 @@ void player_stream_tick(uint32_t now)
     M.now = now;
     player_recv_tick(&M.recv, now, push_frame, NULL);
 
-    if (M.state == PLAYER_STREAM_BODY && now - M.last_packet_ms >= PLAYER_STREAM_SILENT_MS)
+    if (M.state == PLAYER_STREAM_BODY && now - M.last_packet_ms >= PLAYER_STREAM_SILENT_MS) {
         M.state = PLAYER_STREAM_IDLE;
+        /* The Fault is "frames arrive and do not decode", so a radio that has gone quiet is
+         * not one: the light says Ready until frames come back (found on the bench, when the
+         * K7's association died and the player lit its Fault at a stream that had simply
+         * stopped arriving). */
+        M.fault = false;
+    }
 
     /* R26: two seconds of frames that never decode is a firmware mismatch, not a link. */
     if (M.ever_received) {
