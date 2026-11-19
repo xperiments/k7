@@ -154,6 +154,11 @@ void app_board_share_radio_stop(void);
  * player's peer is forgotten, and the radio stays up for the share window. The Settings row and
  * the micro switch both call it. */
 bool app_board_audio_set(bool on);
+
+/* The choice itself, over a power cut (espnow-stream.md E9). No stored value means ESP-NOW,
+ * which is what this firmware ships and what the player expects. */
+bool app_board_player_espnow_load(bool *on);
+esp_err_t app_board_player_espnow_save(bool on);
 void app_board_audio_frame(void *ctx, const uint8_t *frame, size_t bytes);
 
 /* One frame. A NULL `dst` is the beacon's broadcast; anything else is the window's one

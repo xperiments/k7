@@ -525,7 +525,7 @@ static void test_settings_rows(void)
     CHECK_EQ(menu_band(m), 2, "the band is on Settings");
     CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "opening Settings is not an action");
     want_str(menu_title(m), "Settings", "Settings title");
-    CHECK_EQ(menu_count(m), 4, "Settings has four rows");
+    CHECK_EQ(menu_count(m), 5, "Settings has five rows");
     CHECK_EQ(menu_band(m), 0, "a pushed list starts at its first row");
     CHECK_EQ(menu_position(m), 1, "Settings position 1");
 
@@ -554,7 +554,14 @@ static void test_settings_rows(void)
     want_kind(&r[3], MENU_ROW_SUBMENU, "Settings row 3 kind");
     CHECK(r[3].chevron, "About wears a chevron");
 
-    CHECK(r[4].label[0] == 0, "the Settings list leaves its fifth slot blank");
+    /* The player's transport (espnow-stream.md E9, ADR 0104): the row says which way the
+     * audio goes, and the model reports a change rather than carrying a value. */
+    want_label(&r[4], "Player", "Settings row 4 label");
+    want_icon(&r[4], MENU_ICON_STATION, "Settings row 4 icon");
+    want_kind(&r[4], MENU_ROW_ACTION, "Settings row 4 kind");
+    CHECK(!r[4].chevron, "Player has no chevron");
+    want_value(&r[4], "HTTP", "no stored choice shows HTTP (the facts say so)");
+
 
     /* Backlight cycles Auto -> 100 -> 60 -> 30 -> Auto, in place. */
     CHECK_EQ(menu_activate(m), MENU_ACTION_BACKLIGHT, "Backlight returns its action");
@@ -600,6 +607,15 @@ static void test_settings_rows(void)
     read_rows(m, r);
     CHECK(r[1].enabled, "Rescan is live again");
     want_label(&r[1], "Rescan", "Rescan's label when idle");
+
+    /* The Player row flips the stored choice, and the row follows it. */
+    menu_step(m, 3); /* Rescan -> Wi-Fi -> About -> Player */
+    CHECK_EQ(menu_band(m), 4, "the band is on Player");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_PLAYER, "Player returns its action");
+    facts.player_espnow = true;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[4], "ESP-NOW", "the row follows the setting");
 
     menu_free(m);
     library_close(lib);

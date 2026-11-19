@@ -155,6 +155,20 @@ static void utf8_prefix(char *out, size_t out_size, const char *s, size_t max)
 
 /* --------------------------------------------------------------- the appliance */
 
+static void player_transport_set(bool espnow); /* defined below, declared for the setter */
+
+static bool s_player_espnow = true; /* the value before anything is stored */
+
+bool appliance_player_espnow(void) { return s_player_espnow; }
+
+void appliance_player_espnow_set(bool on)
+{
+    s_player_espnow = on;
+    player_transport_set(on);
+    if (app_board_player_espnow_save(on) != ESP_OK)
+        ESP_LOGW(TAG, "the transport choice did not store");
+}
+
 /* The player's transport: the emitter and the broadcast's sink move together, so no frame is fed
  * to an emitter that is off and none is missed by one that is on (espnow-stream.md E9). The
  * Settings row and the micro switch both end up here. */
@@ -235,7 +249,6 @@ void appliance_run(void)
      * credit; over HTTP the player fetches /stream as it always did and the emitter stays off.
      * The web UI's own listeners are a different client and work either way. The setting is a
      * constant until the Menu grows a row for it, and a build cannot run both. */
-    static const bool player_audio_espnow = true;
 
     /* The chosen Playlist survives a power cut in the card's k7.select. The composition
      * takes it as two callbacks so playlist_select stays portable (ADR 0051); a card
@@ -321,7 +334,9 @@ void appliance_run(void)
 
     /* One transport, chosen above. In ESP-NOW mode the emitter is up from boot and nothing
      * leaves the board until a player's status packet names itself and opens its credit (E6). */
-    player_transport_set(player_audio_espnow);
+    bool stored = true;
+    s_player_espnow = app_board_player_espnow_load(&stored) ? stored : true;
+    player_transport_set(s_player_espnow);
 
     /* The boot's flash work is behind us, so the panel's first clock can start now. The mark
      * is painted on a quiet bus, the backlight is lit over it, and it is held for its dwell

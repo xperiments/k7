@@ -86,6 +86,7 @@ typedef enum {
     MENU_ACTION_WALK,      /* menu_action_playlist() is the id, 0 for library order */
     MENU_ACTION_RESCAN,
     MENU_ACTION_BACKLIGHT, /* menu_action_backlight() is the new percent (0 = Auto) */
+    MENU_ACTION_PLAYER,    /* flips how the player's audio is sent (espnow-stream.md E9) */
     MENU_ACTION_SHUFFLE,   /* toggle the mode (ADR 0023) */
     MENU_ACTION_CLOSE,     /* the view should close the Menu */
     MENU_ACTION_WIFI_TOGGLE, /* start the setup network, or stop it */
@@ -99,6 +100,7 @@ typedef struct {
     bool        shuffle_on;
     bool        rescanning;
     int         backlight; /* 0 = Auto, else 30, 60 or 100 */
+    bool        player_espnow; /* the player's audio goes out over ESP-NOW, not HTTP */
     const char *version;
     const char *board;
     const char *partition;

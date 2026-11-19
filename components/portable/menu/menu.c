@@ -60,6 +60,7 @@ static const fixed_row_t k_settings_rows[] = {
     {"Rescan", MENU_ICON_RESCAN, MENU_ROW_ACTION},
     {"Wi-Fi", MENU_ICON_WIFI, MENU_ROW_SUBMENU},
     {"About", MENU_ICON_ABOUT, MENU_ROW_SUBMENU},
+    {"Player", MENU_ICON_STATION, MENU_ROW_ACTION},
 };
 
 /* The setup network's list: what it is, its password, and the two acts (ADR 0076,
@@ -152,6 +153,7 @@ static void facts_copy(menu_t *m, const menu_facts_t *facts)
     m->facts.shuffle_on = facts->shuffle_on;
     m->facts.rescanning = facts->rescanning;
     m->facts.backlight = facts->backlight;
+    m->facts.player_espnow = facts->player_espnow;
     m->facts.hotspot_on = facts->hotspot_on;
     m->facts.hotspot_failed = facts->hotspot_failed;
     m->facts.share_on = facts->share_on;
@@ -461,6 +463,9 @@ static void build_settings_row(const menu_t *m, int index, menu_row_t *r)
     switch (index) {
     case 0: /* Backlight */
         snprintf(r->value, sizeof r->value, "%s", backlight_name(m->facts.backlight));
+        break;
+    case 4: /* Player: how the audio reaches it (ADR 0104) */
+        snprintf(r->value, sizeof r->value, "%s", m->facts.player_espnow ? "ESP-NOW" : "HTTP");
         break;
     case 1: /* Rescan */
         snprintf(r->label, sizeof r->label, "%s",
@@ -803,12 +808,14 @@ static bool facts_same(const menu_t *m, const menu_facts_t *f)
     if (!f) {
         return !m->facts.version && !m->facts.board && !m->facts.partition &&
                !m->facts.shuffle_on && !m->facts.rescanning && m->facts.backlight == 0 &&
+               !m->facts.player_espnow &&
                !m->facts.share_on && !m->facts.share_failed && m->facts.share_left_s == 0 &&
                !m->facts.playlists && m->facts.playlist_count == 0 &&
                m->facts.playlist_selected == 0;
     }
     return m->facts.shuffle_on == f->shuffle_on && m->facts.rescanning == f->rescanning &&
-           m->facts.backlight == f->backlight && same_text(m->facts.version, f->version) &&
+           m->facts.backlight == f->backlight && m->facts.player_espnow == f->player_espnow &&
+           same_text(m->facts.version, f->version) &&
            same_text(m->facts.board, f->board) && same_text(m->facts.partition, f->partition) &&
            m->facts.hotspot_on == f->hotspot_on &&
            m->facts.hotspot_failed == f->hotspot_failed &&
@@ -1005,6 +1012,7 @@ menu_action_t menu_activate(menu_t *m)
             return MENU_ACTION_RESCAN;
         case 2: enter_list(m, LIST_WIFI); break;
         case 3: enter_list(m, LIST_ABOUT); break;
+        case 4: return MENU_ACTION_PLAYER;
         default: break;
         }
         break;

@@ -1012,6 +1012,35 @@ static void espnow_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data,
     s_share_cb(info->src_addr, data, (size_t)len, s_share_ctx);
 }
 
+/* The player's transport, in NVS beside the Wi-Fi record: one byte, read once at boot and
+ * written when the row is touched. */
+#define PLAYER_PREFS_NS  "k7.prefs"
+#define PLAYER_PREF_KEY  "player"
+
+bool app_board_player_espnow_load(bool *on)
+{
+    if (!on) return false;
+    nvs_handle_t h;
+    if (nvs_open(PLAYER_PREFS_NS, NVS_READONLY, &h) != ESP_OK) return false;
+    uint8_t v = 1;
+    esp_err_t e = nvs_get_u8(h, PLAYER_PREF_KEY, &v);
+    nvs_close(h);
+    if (e != ESP_OK) return false;
+    *on = v != 0;
+    return true;
+}
+
+esp_err_t app_board_player_espnow_save(bool on)
+{
+    nvs_handle_t h;
+    esp_err_t e = nvs_open(PLAYER_PREFS_NS, NVS_READWRITE, &h);
+    if (e != ESP_OK) return e;
+    e = nvs_set_u8(h, PLAYER_PREF_KEY, on ? 1 : 0);
+    if (e == ESP_OK) e = nvs_commit(h);
+    nvs_close(h);
+    return e;
+}
+
 bool app_board_audio_set(bool on)
 {
     if (!on) {
