@@ -3017,6 +3017,11 @@
           "at": "2026-11-19T00:19:56Z",
           "by": "agent",
           "text": "Second attempt at the stream rewrite, backed out again, and the reason is now precise enough to plan around: the receiver and the module are straightforward, but the *test harness* carries the old contract. t04's program() builds an HTTP response and t05's test_fault asserts a Fault state that only existed because a body could be 'not MPEG'; over ESP-NOW the same bytes are just frames that fail to decode, so R31's Fault needs either a new source (a stream that keeps delivering non-MPEG frames) or a spec decision to drop it. t04's test_primes and test_silence also assume a body that ends, while a packet stream simply stops. The work item is therefore: write the new player_stream (done twice, both times reverted), then decide Fault's fate, then move t04/t05 onto injected packets and delete t03. Not a mechanical change, and it needs an uninterrupted sitting."
+        },
+        {
+          "at": "2026-11-19T00:20:06Z",
+          "by": "agent",
+          "text": "Fault is decided so the next sitting does not have to: R26 and R31 now say the Fault is two seconds of delivered frames that never decode - a firmware mismatch, not a link that will recover - rather than an HTTP body that is not MPEG. That removes the last design question from the rewrite; what is left is mechanical (t04/t05 onto injected packets, t03 deleted, the Fault case rewritten against frames)."
         }
       ]
     },
