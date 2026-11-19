@@ -3081,7 +3081,7 @@
     {
       "id": "EN-07",
       "title": "One audio client at a time",
-      "state": "doing",
+      "state": "review",
       "group": "EN",
       "at": "2026-11-19T02:25:35Z",
       "by": "agent",
@@ -3091,6 +3091,11 @@
           "at": "2026-11-19T02:50:45Z",
           "by": "lead",
           "text": "Plan: one number (max_clients 1) plus the spec that says why; the pool stays 4. Then build and check on the board that a second /stream is refused."
+        },
+        {
+          "at": "2026-11-19T03:00:54Z",
+          "by": "lead",
+          "text": "The K7 now carries one listener. A second page that presses play is refused, and nothing changes for the one already listening.\n\n**What you will see:** one browser tab listens as before; a second tab's play button gets nothing but the page's reconnecting message. The ESP-NOW player still does not take the slot, because it is not an HTTP client — one browser and the player coexist.\n\n**Checked on the board (256 kbps, the transport was on HTTP when I flashed):**\n- Boot log: `sends at most 1 clients` and `stream: 1 client slot(s), 324096 B send ring each`.\n- With one listener holding the stream, a second got `503` in 0.24 s: *every stream slot is taken; try again in a moment*.\n- 5 of 5 connections were admitted 300 ms after the previous socket died, so a refresh recovers on the page's first retry.\n- The three rings and sender tasks of the old slots are gone: `external 2 536 652 B free, clients 0/1`.\n\n**What to check:** open two browser tabs on k7.local and press play in both; the second one should not take the sound away from the first. Refresh the playing tab; it should come back within a second or two.\n\n**Worth knowing:** the refusal is correct but its sentence is not — a browser's audio element cannot read the 503 body, so the second tab says \"The stream stopped; reconnecting…\" instead of \"someone else is listening\". Fixing that needs the page to ask the K7 whether a listener is present; it is not in this task.\n\n**Also found:** `k7.local` takes 5.01 s to resolve on this Mac, because the board's answer arrives on both interfaces (en0 and en1 are on the same /24). The board itself answers in 70 ms by IP (192.168.0.13), so the timeouts I saw were the Mac's resolver, not the K7."
         }
       ]
     },
@@ -3102,6 +3107,16 @@
       "at": "2026-11-19T02:47:11Z",
       "by": "agent",
       "desc": "The format should follow the transport the moment the setting changes, and today it waits for the next start because the encoder is built at boot. This gives the station a lifecycle: a stop that pairs with the start (tasks ended, clients closed, encoder and rings freed) and an app_services restart that re-resolves the format without touching the network, the card, the HTTP server or the panel. The Player row then applies both the emitter and the station: ESP-NOW is 128 kbps, HTTP is 256, immediately.\n\nFinished when ten consecutive restarts run on the board with the census and the heap recorded each time, and the row changes the format without a reboot.\n\nTicket: docs/design/espnow-player/issues/08-the-station-stops-and-starts.md"
+    },
+    {
+      "id": "EN-09",
+      "title": "A refused listener is told so",
+      "state": "proposed",
+      "group": "EN",
+      "deps": ["EN-07"],
+      "at": "2026-11-19T03:01:03Z",
+      "by": "lead",
+      "desc": "The second tab's refusal is correct; its sentence is not. A browser's audio element cannot read the 503 body, so the page says 'The stream stopped; reconnecting…' to someone who never started, and retries every ten seconds until the first listener leaves.\n\nThis gives the page a way to know: the device reports whether a listener is present, and the page uses it to say 'another page is already listening' and to wait for the slot instead of pretending it lost a stream.\n\nFinished when a second tab says what is happening, and starts on its own when the first one closes."
     }
   ]
 }
