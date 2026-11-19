@@ -446,6 +446,49 @@ makes ADR 0101's cost argument ("a day's work") rest on prose only.
 
 ---
 
+## 6. What the bench answered (19 November)
+
+Sections 1–5 are desk work. This is the board: the K7Player (ESP32-D0WD, WROOM-32) and the
+"BT5.0-Audio" sink at `4b:68:00:36:09:6d`, heard between −38 and −52 dBm.
+
+**The controller mode was the first wall.** BR/EDR-only — `BTDM_CTRL_MODE_BR_EDR_ONLY` with
+`esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT)`, with and without
+`esp_bt_controller_mem_release(ESP_BT_MODE_BLE)` — is **deaf on IDF 6.1**: six inquiries across
+two independent firmwares (the player's own, and the ESP32-A2DP library built for the same board)
+returned **0 devices**, while the same board in dual mode heard the same speaker and a phone at
+−52. Every earlier "coexistence" reading on this bench was this, not the arbiter.
+
+**Dual mode pages, with the radio quiet.** BTDM (`BTDM_CTRL_MODE_BTDM`,
+`esp_bt_controller_enable(ESP_BT_MODE_BTDM)`, BLE host enabled — with it disabled the inquiry is
+deaf too) and Wi-Fi up but idle: the inquiry finds the speaker at −40 dBm and
+`esp_a2d_source_connect` completes — `hcif conn complete: hdl 0x80, st 0x0`, A2DP connected, and
+the stack pulls PCM (845 data callbacks of silence).
+
+**The stream starves the page.** With ESP-NOW receiving 38 frames a second, four page attempts in
+a row ended `hcif conn complete: hdl 0xfff, st 0x4` (page timeout). Stopping the Wi-Fi driver for
+the page and restarting it on the same channel landed one (`st 0x0`, 2.2 s) in about ten
+attempts; the rest timed out even with the radio handed over.
+
+**The SBC frame buffer does not fit.** `btc_media_aa_prep_sbc_2_send` allocates 4 112 B per frame
+(`btc_a2dp_source.c:85,1383`). With Wi-Fi running, `MALLOC_CAP_DEFAULT` free on this board was
+**3 104 B, largest block 2 816 B**, and every frame logged `no buffer TxCnt 2`. Note what the
+player's own log said at the same moment: "internal 27 352 free, largest 24 576" — `MALLOC_CAP_INTERNAL`
+counts IRAM that the allocator cannot hand out. Paused for the page the same line has 27 284 B
+free; resuming Wi-Fi takes it back to ~3 KB.
+
+**The right sequencing is the library's.** ESP32-A2DP 1.8.12 does
+`esp_bt_gap_cancel_discovery()` → wait for `ESP_BT_GAP_DISCOVERY_STOPPED` → one `esp_a2d_connect`.
+A connect issued while the inquiry is still winding down is refused `0x0c: Command Disallowed`,
+which is what a hand-rolled scanner does when it pages from the inquiry callback.
+
+**So the question is closed, and not by the code:** one radio delivering a stream cannot also
+page and hold a link, and the RAM the A2DP source needs while Wi-Fi is up is not there. A speaker
+for this player is a second radio — a bridge fed from the line, or an off-the-shelf transmitter
+plugged into it — not another build of this firmware. [ADR 0108](../adr/0108-the-speaker-needs-a-second-radio-not-a-second-build.md)
+records the decision.
+
+---
+
 ## Sources
 
 **The repo (read-only for this note; the only file written is this one).**
