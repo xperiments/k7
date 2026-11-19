@@ -497,7 +497,8 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     /* The share window has no boot state: it is closed until a person opens it, and a
      * device that never shares carries nothing for it (network-handover.md H13) - not even
      * its task, which share_start() creates and which deletes itself when the window
-     * closes. */
+     * closes. The exception H13 now names: when the player's audio travels over ESP-NOW the
+     * radio is up from boot and the window only borrows it (espnow-stream.md E10). */
     share_init();
 
     /* 3. The card. A missing card is a report, not a failure (R8). */
