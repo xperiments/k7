@@ -3102,7 +3102,7 @@
     {
       "id": "EN-08",
       "title": "The station stops and starts",
-      "state": "doing",
+      "state": "review",
       "group": "EN",
       "at": "2026-11-19T02:47:11Z",
       "by": "agent",
@@ -3112,6 +3112,11 @@
           "at": "2026-11-19T03:02:51Z",
           "by": "lead",
           "text": "Plan: give the station a real stop that pairs with its start (tasks, clients, encoder, rings freed), an app_services restart that re-resolves the format, and the Player row applying both; prove it with ten restarts on the board recording census and heap."
+        },
+        {
+          "at": "2026-11-19T03:21:34Z",
+          "by": "lead",
+          "text": "The Player row now changes the format the moment you touch it: the station stops and starts at 128 kbps for ESP-NOW or 256 for HTTP. Nothing else restarts — the network, the card, the panel and the HTTP server stay up, so About's Bitrate follows the row and there is no reboot.\n\n**What to try:** Settings → Player, flip it, and watch About (Format/Rate/Bitrate) without leaving the menu. The panel should not blink and the stream should not die; a browser listening over HTTP reconnects by itself within a second or two, and the ESP-NOW player starts at the new rate.\n\n**Measured on the board:** ten restarts in one go, alternating 128 and 256 — 5.1 s for all ten, about 380 ms each, every one succeeded. Internal RAM stayed at 47.8–50.8 KB free and external at 2.54–2.80 MB; the swing is the format's ring size, not a leak: twenty more restarts in earlier runs came back to the same levels.\n\n**Two things this found, both fixed:**\n- The first version wiped your Playlist selection on every restart: continuing the playing Track counts as a pick outside the list, and a pick outside the list drops it. The restart now leaves a selected Playlist alone and starts at its top. Your \"Mi nueva Playlist\" is selected again (it is missing one row because that Track is not in the Library any more).\n- The tone knobs now survive a format change; before, the restart would have quietly reset them to neutral.\n\n**What to check:** that the Settings → Player flip feels immediate, and that the tracks keep playing (a Playlist now restarts at its first track, the Library's order continues the Track that was playing)."
         }
       ]
     },
