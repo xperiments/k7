@@ -3013,12 +3013,24 @@
     {
       "id": "EN-04",
       "title": "The K7 chooses one emitter: HTTP or ESP-NOW",
-      "state": "todo",
+      "state": "review",
       "group": "EN",
       "deps": ["EN-02"],
       "at": "2026-11-18T23:52:20Z",
       "by": "agent",
-      "desc": "HTTP or ESP-NOW for the player's feed, one at a time, chosen at boot and logged. The web UI's own HTTP listeners keep working in either mode - this is about the feed the player consumes, and sending it twice would spend twice the radio for one listener.\n\nFinished when both modes boot and log their choice and neither ever runs two emitters. A Menu row that picks between them is the next surface and is not in this task.\n\nTicket: docs/design/espnow-player/issues/04-the-emitter-is-a-setting.md"
+      "desc": "HTTP or ESP-NOW for the player's feed, one at a time, chosen at boot and logged. The web UI's own HTTP listeners keep working in either mode - this is about the feed the player consumes, and sending it twice would spend twice the radio for one listener.\n\nFinished when both modes boot and log their choice and neither ever runs two emitters. A Menu row that picks between them is the next surface and is not in this task.\n\nTicket: docs/design/espnow-player/issues/04-the-emitter-is-a-setting.md",
+      "notes": [
+        {
+          "at": "2026-11-19T00:13:01Z",
+          "by": "agent",
+          "text": "Plan: name the transport once in appliance.c, start the emitter only in ESP-NOW mode, log the choice, build both branches, boot the shipping one."
+        },
+        {
+          "at": "2026-11-19T00:16:50Z",
+          "by": "agent",
+          "text": "The K7 now emits the player's audio one way and says which, at boot. Over ESP-NOW it pushes every encoded frame to the player; over HTTP it starts nothing and the player fetches /stream as before. The web UI's own listeners work either way - the rule is about the feed the player consumes, and sending it twice would spend the radio twice for one listener.\n\nBoth modes were booted on the board, by flipping one constant and reflashing: `app: the player's audio goes out over ESP-NOW` and `app: the player's audio is fetched over HTTP; the ESP-NOW emitter is off`. The board is left on the ESP-NOW build, which is the source's default.\n\nTo change it: one constant in `components/app/appliance/appliance.c`. A Menu row that picks between them is the next surface and is not in this task."
+        }
+      ]
     }
   ]
 }
