@@ -232,10 +232,12 @@ void appliance_run(void)
         .port = HTTP_PORT,
         .out_hz = 44100,
         .bitrate = player_espnow ? 128 : 256,
-        /* How many listeners the broadcast will carry at once. This is separate
-         * from the HTTP connection pool (max_conns): a listener stops occupying a
-         * connection worker as soon as it is registered. */
-        .max_clients = 4,
+        /* One listener: this is a personal player, one pair of ears, so a second browser
+         * that asks for /stream is refused rather than given airtime (EN-07). Separate
+         * from the HTTP connection pool (max_conns), which stays at four for the API and
+         * the page: a listener stops occupying a worker as soon as it is registered. The
+         * ESP-NOW player never asks, so it never takes the slot. */
+        .max_clients = 1,
         .max_conns = 4,
         .app_origin_dev = DEV_APP_ORIGIN,
         .selection_load = selection_load,

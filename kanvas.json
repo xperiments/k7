@@ -3081,16 +3081,23 @@
     {
       "id": "EN-07",
       "title": "One audio client at a time",
-      "state": "todo",
+      "state": "doing",
       "group": "EN",
       "at": "2026-11-19T02:25:35Z",
       "by": "agent",
-      "desc": "The K7 serves one audio client, not four. It is a personal player, not a station: a second listener on /stream is refused rather than added to the airtime budget. The connection pool stays as it is for the API and the UI - only one of them may be a stream at a time.\n\nThe ESP-NOW player is not an HTTP client, so it does not take the slot: one browser and the player can coexist, which is the shape you described.\n\nTicket: docs/design/espnow-player/issues/07-one-audio-client-at-a-time.md"
+      "desc": "The K7 serves one audio client, not four. It is a personal player, not a station: a second listener on /stream is refused rather than added to the airtime budget. The connection pool stays as it is for the API and the UI - only one of them may be a stream at a time.\n\nThe ESP-NOW player is not an HTTP client, so it does not take the slot: one browser and the player can coexist, which is the shape you described.\n\nTicket: docs/design/espnow-player/issues/07-one-audio-client-at-a-time.md",
+      "notes": [
+        {
+          "at": "2026-11-19T02:50:45Z",
+          "by": "lead",
+          "text": "Plan: one number (max_clients 1) plus the spec that says why; the pool stays 4. Then build and check on the board that a second /stream is refused."
+        }
+      ]
     },
     {
       "id": "EN-08",
       "title": "The station stops and starts",
-      "state": "proposed",
+      "state": "todo",
       "group": "EN",
       "at": "2026-11-19T02:47:11Z",
       "by": "agent",

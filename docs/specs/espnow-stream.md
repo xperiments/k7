@@ -90,8 +90,9 @@ persisted in NVS, with the micro switch to become the same call (EN-05). With ES
 every encoded frame is fed to the emitter, resends are answered and the player's peer is
 remembered. With HTTP chosen, nothing is fed, nothing is resent and the peer is forgotten — but the
 radio stays up, because the share window borrows it. The player is **ESP-NOW only** (ADR 0105): on
-HTTP it hears nothing and says *Ready*, while the web UI's own listeners, a different client on the
-same broadcast, keep working. The station's format follows the transport — 128 kbps on ESP-NOW,
+HTTP it hears nothing and says *Ready*, while the web UI's own listener, a different client on the
+same broadcast, keeps working — and it is the only one, because the K7 carries one listener
+(ADR 0107). The station's format follows the transport — 128 kbps on ESP-NOW,
 256 on HTTP — and the change restarts the station rather than the device (ADR 0106). Sending the player's feed twice would spend twice the airtime for one
 listener.
 

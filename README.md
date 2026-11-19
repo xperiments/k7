@@ -322,7 +322,7 @@ app_services_cfg_t svc = {
     .music_dir = MUSIC_DIR,
     .out_hz = 44100,      /* 44100 48000 32000 22050 24000 16000 11025 12000 8000 */
     .bitrate = 256,       /* must be one the encoder accepts at that rate */
-    .max_clients = 4,     /* 1..4; anything else is refused, not coerced */
+    .max_clients = 1,     /* one listener; 1..4, anything else is refused, not coerced */
 };
 ```
 

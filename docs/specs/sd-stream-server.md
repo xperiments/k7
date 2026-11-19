@@ -430,7 +430,8 @@ broadcast.
 ### 6.1 `GET /stream` — the live stream
 
 The stream consumes the Library tree in broadcast order: depth-first, name-sorted, no per-pass
-`readdir()`. Unchanged from today except for the output format:
+`readdir()`. Unchanged from today except for the output format, and with one listener
+at a time:
 
 - `Content-Type: audio/mpeg` (was `audio/wav`, `mini_icecast.c:224`).
 - The WAV header emission is **deleted** — both `wav_header()` (`mini_icecast.c:181-191`) and
@@ -444,6 +445,15 @@ The stream consumes the Library tree in broadcast order: depth-first, name-sorte
 - Default `metaint` stays **16 000**, which **[measured]** is exactly 1.000 s of audio at
   128 kbps. That is a fine metadata cadence and it preserves `mini_icecast.h:24`'s existing
   default, so nothing needs changing.
+- **One listener, and a second one is refused.** The K7 is a personal player, not a station:
+  one pair of ears, so the broadcast carries one `/stream` client and a second is answered
+  with the station's existing `503` and its sentence, `every stream slot is taken; try again
+  in a moment`, rather than being given airtime ([EN-07](../design/espnow-player/issues/07-one-audio-client-at-a-time.md),
+  [ADR 0107](../adr/0107-the-k7-carries-one-listener.md)). The HTTP connection pool
+  (`max_conns`) is a separate budget and stays at four, because the API and the page need it
+  and a registered listener releases its worker. The ESP-NOW player is not an HTTP client at
+  all ([ADR 0105](../adr/0105-the-player-is-esp-now-only.md)), so it takes no slot: one
+  browser and the player coexist by design.
 
 ### 6.2 `GET /` — the index
 

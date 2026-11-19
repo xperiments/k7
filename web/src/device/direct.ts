@@ -159,8 +159,8 @@ export function createDirectDevice(options: DirectOptions = {}): DirectTransport
   const doFetch: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
 
   /* O3: the page's own `<audio>`. It is made on the first stream operation rather than at
-   * boot, because an element with a `src` may open a connection and the device carries four
-   * of them. */
+   * boot, because an element with a `src` may open a connection and the device carries one
+   * of them: a second listener is refused (ADR 0107). */
   let audio: DirectAudio | null | undefined;
   function streamAudio(): DirectAudio | null {
     if (audio === undefined) {
