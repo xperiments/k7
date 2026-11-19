@@ -23,8 +23,6 @@
 extern void host_player_reset(void);
 extern void host_player_wifi_script(const char *ssid, bool ok, int disconnects, int reason);
 extern void host_player_resolve(const char *ip);
-extern void host_player_stream_script(const uint8_t *data, size_t len, size_t chunk);
-extern void host_player_stream_stall(void);
 extern void host_player_output_fail(bool fail);
 extern uint8_t host_player_light(void);
 extern int host_player_light_sets(void);

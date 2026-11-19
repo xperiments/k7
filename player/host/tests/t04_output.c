@@ -24,7 +24,6 @@
 extern void host_player_reset(void);
 extern void host_player_wifi_script(const char *ssid, bool ok, int disconnects, int reason);
 extern void host_player_resolve(const char *ip);
-extern void host_player_stream_script(const uint8_t *data, size_t len, size_t chunk);
 extern int player_output_opens(void);
 extern uint32_t player_output_rate(void);
 extern uint32_t player_output_frames(void);

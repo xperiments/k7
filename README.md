@@ -533,6 +533,23 @@ playout: output 44100 Hz: ... 0 refused
 The AP fallback — an unprovisioned K7 handing over `K7.local` — is the one box this run did not
 close; the ticket records it.
 
+### The K7Player over ESP-NOW
+
+Since EN-03 the player takes its audio from the K7's emitter (ADR 0103) and its board tier moved
+with it: no HTTP client, no reconnect schedule, a 96 KB ring of whole frames, and the receiver's
+12 KB of assembly buffers on the heap because `.dram0.bss` would not hold them beside the ring.
+Measured with the K7 emitting and the player on this firmware:
+
+```
+K7:     espnow audio: 1204 frames, 174 resent, 22670 held, 2 dropped, 2757 packets, a player is listening
+player: receiving 192.168.0.13: 44100 Hz, 128 kbps, 905 frames, ring 70/96 KB, flushed 0, lost 0, dups 28
+playout: output 44100 Hz: 847872 frames, 0 underruns, 0 refused, 1 primes
+```
+
+The image is **891 KB with 15 %** of its 1 MB partition free. The one thing not re-measured since
+the radio became always-on is the handover itself: a share window needs a finger on the panel,
+and until it is done the two boards' sweep is the first place to look if sharing misbehaves.
+
 ### The same audio from host and board
 
 ```bash
