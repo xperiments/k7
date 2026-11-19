@@ -33,7 +33,6 @@
 
 #include "app_board.h"
 #include "app_services.h"
-#include "appliance.h"
 #include "backlight.h"
 #include "cassette_bars.h"
 #include "cassette_buttons.h"
@@ -231,7 +230,7 @@ static menu_facts_t build_facts(void)
     f.shuffle_on = mini_icecast_shuffle_enabled();
     f.rescanning = app_services_rescan_running();
     f.backlight = backlight_hold();
-    f.player_espnow = appliance_player_espnow();
+    f.player_espnow = app_services_player_espnow();
     f.version = s_version;
     f.board = s_board;
     f.partition = s_partition;
@@ -388,7 +387,7 @@ static void activate(void)
             break;
         case MENU_ACTION_PLAYER:
             /* One row, two transports, never both (espnow-stream.md E9, ADR 0104). */
-            appliance_player_espnow_set(!appliance_player_espnow());
+            app_services_player_espnow_set(!app_services_player_espnow());
             break;
         case MENU_ACTION_SHUFFLE:
             mini_icecast_shuffle_set(!mini_icecast_shuffle_enabled());

@@ -155,40 +155,6 @@ static void utf8_prefix(char *out, size_t out_size, const char *s, size_t max)
 
 /* --------------------------------------------------------------- the appliance */
 
-static void player_transport_set(bool espnow); /* defined below, declared for the setter */
-
-static bool s_player_espnow = true; /* the value before anything is stored */
-
-bool appliance_player_espnow(void) { return s_player_espnow; }
-
-void appliance_player_espnow_set(bool on)
-{
-    s_player_espnow = on;
-    player_transport_set(on);
-    if (app_board_player_espnow_save(on) != ESP_OK)
-        ESP_LOGW(TAG, "the transport choice did not store");
-}
-
-/* The player's transport: the emitter and the broadcast's sink move together, so no frame is fed
- * to an emitter that is off and none is missed by one that is on (espnow-stream.md E9). The
- * Settings row and the micro switch both end up here. */
-static void player_transport_set(bool espnow)
-{
-    if (espnow) {
-        if (app_board_audio_set(true)) {
-            mini_icecast_set_frame_sink(app_board_audio_frame, NULL);
-            ESP_LOGI(TAG, "the player's audio goes out over ESP-NOW");
-        } else {
-            mini_icecast_set_frame_sink(NULL, NULL);
-            ESP_LOGW(TAG, "no ESP-NOW emitter: the player is left with HTTP");
-        }
-    } else {
-        mini_icecast_set_frame_sink(NULL, NULL);
-        app_board_audio_set(false);
-        ESP_LOGI(TAG, "the player's audio is fetched over HTTP; the ESP-NOW emitter is off");
-    }
-}
-
 void appliance_run(void)
 {
     esp_err_t err = nvs_flash_init();
@@ -334,9 +300,9 @@ void appliance_run(void)
 
     /* One transport, chosen above. In ESP-NOW mode the emitter is up from boot and nothing
      * leaves the board until a player's status packet names itself and opens its credit (E6). */
-    bool stored = true;
-    s_player_espnow = app_board_player_espnow_load(&stored) ? stored : true;
-    player_transport_set(s_player_espnow);
+    /* The player's transport is a stored setting with a runtime switch (espnow-stream.md E9);
+     * app_services owns it because it owns the broadcast. */
+    app_services_player_transport_init();
 
     /* The boot's flash work is behind us, so the panel's first clock can start now. The mark
      * is painted on a quiet bus, the backlight is lit over it, and it is held for its dwell

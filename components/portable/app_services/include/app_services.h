@@ -83,6 +83,13 @@ esp_err_t app_services_rescan(void);
  * starting a scan to find out would be the bug. */
 bool app_services_rescan_running(void);
 
+/* The player's transport (espnow-stream.md E9, ADR 0104): true is ESP-NOW, false is HTTP.
+ * The setter applies it now and remembers it; the init reads it back at boot and defaults to
+ * ESP-NOW. The micro switch on the player and the K7's Settings row both call the setter. */
+bool app_services_player_espnow(void);
+void app_services_player_espnow_set(bool on);
+void app_services_player_transport_init(void);
+
 /* Tell the composition whether the retry task has a mounted card. The rescan
  * uses the no-card generation when there is none, so the state stays
  * diagnostic instead of turning into a filesystem error. */

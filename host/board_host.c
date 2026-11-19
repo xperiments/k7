@@ -31,6 +31,33 @@ static const char *host_record_path(void)
     return (path && path[0]) ? path : NULL;
 }
 
+/* The ESP-NOW emitter's seam. The host has no radio, so a test that asks for ESP-NOW is told
+ * there is none and the transport falls back to HTTP, which is what the firmware does too. */
+bool app_board_audio_set(bool on)
+{
+    (void)on;
+    return false;
+}
+
+void app_board_audio_frame(void *ctx, const uint8_t *frame, size_t bytes)
+{
+    (void)ctx;
+    (void)frame;
+    (void)bytes;
+}
+
+bool app_board_player_espnow_load(bool *on)
+{
+    (void)on;
+    return false; /* no stored choice: the firmware's default is ESP-NOW */
+}
+
+esp_err_t app_board_player_espnow_save(bool on)
+{
+    (void)on;
+    return ESP_OK;
+}
+
 bool app_board_wifi_record_load(wifi_record_t *out)
 {
     if (!out) return false;

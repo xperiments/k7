@@ -19,8 +19,3 @@ void appliance_run(void);
 #ifdef __cplusplus
 }
 #endif
-
-/* The player's transport (espnow-stream.md E9): true is ESP-NOW, false is HTTP. The setter
- * applies it now and remembers it; the boot reads it back and defaults to ESP-NOW. */
-bool appliance_player_espnow(void);
-void appliance_player_espnow_set(bool on);
