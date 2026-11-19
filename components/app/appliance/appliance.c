@@ -292,6 +292,15 @@ void appliance_run(void)
         for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
+    /* The player's audio, over ESP-NOW (ADR 0103). The emitter is up from boot; nothing leaves
+     * the board until a player's status packet names itself and its credit, which is E6. Which
+     * transport the station emits on is EN-04's decision; until it exists, the HTTP listeners
+     * and the emitter are both available and the player is what chooses by asking. */
+    if (app_board_audio_start())
+        mini_icecast_set_frame_sink(app_board_audio_frame, NULL);
+    else
+        ESP_LOGW(TAG, "no ESP-NOW audio emitter: the player keeps to HTTP");
+
     /* The boot's flash work is behind us, so the panel's first clock can start now. The mark
      * is painted on a quiet bus, the backlight is lit over it, and it is held for its dwell
      * before the cassette replaces it. app_services_start() has mounted and scanned the card,

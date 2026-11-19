@@ -100,6 +100,9 @@ static struct {
     bool               order_pending_set;
     void             (*order_dropped_cb)(void *ctx);
     void              *order_dropped_ctx;
+    /* The ESP-NOW emitter's feed: called for every encoded frame, outside S.lock. */
+    mini_icecast_frame_fn frame_fn;
+    void                 *frame_ctx;
     /* Audio broadcast from the current track. Written only by the broadcast task and
      * read by mini_icecast_status(); an aligned 32-bit load or store is atomic on this
      * core, so the reader needs no lock for it. At 44.1 kHz it holds 27 hours. */
@@ -278,6 +281,10 @@ static void sender_task(void *arg)
 
 static void broadcast(const uint8_t *d, size_t n)
 {
+    /* Before the clients and outside their lock: the frame goes to the ESP-NOW emitter too, and
+     * that sink must not be inside the window that holds every HTTP client's ring. */
+    if (S.frame_fn) S.frame_fn(S.frame_ctx, d, n);
+
     xSemaphoreTake(S.lock, portMAX_DELAY);
     mi_burst_put(S.burst, d, n);
     for (int i = 0; i < S.station.max_clients; i++) {
@@ -1551,6 +1558,12 @@ bool mini_icecast_order_contains(uint32_t track_index)
     bool in = !n || order_has(items, n, track_index);
     xSemaphoreGive(S.lock);
     return in;
+}
+
+void mini_icecast_set_frame_sink(mini_icecast_frame_fn fn, void *ctx)
+{
+    S.frame_fn = fn;
+    S.frame_ctx = ctx;
 }
 
 void mini_icecast_set_order_dropped_cb(void (*cb)(void *ctx), void *ctx)

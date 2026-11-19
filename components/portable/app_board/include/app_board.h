@@ -146,6 +146,13 @@ typedef void (*app_board_share_frame_fn)(const uint8_t src[6], const uint8_t *da
 bool app_board_share_radio_start(app_board_share_frame_fn on_frame, void *ctx);
 void app_board_share_radio_stop(void);
 
+/* The player's audio over ESP-NOW (docs/specs/espnow-stream.md, ADR 0103). Starting it brings
+ * the radio up and keeps it up: the share window stops owning ESP-NOW, it borrows it. The
+ * frame function is what the broadcast's sink feeds - one whole encoded MP3 frame per call -
+ * and it never blocks the caller longer than a memcpy and a queue. */
+bool app_board_audio_start(void);
+void app_board_audio_frame(void *ctx, const uint8_t *frame, size_t bytes);
+
 /* One frame. A NULL `dst` is the beacon's broadcast; anything else is the window's one
  * peer, and travels encrypted under the LMK it was registered with. */
 bool app_board_share_send(const uint8_t *dst, const uint8_t *data, size_t len);

@@ -21,6 +21,9 @@
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_now.h"
+#include "esp_timer.h"
+#include "espnow_stream.h"
+#include "freertos/semphr.h"
 #include "esp_random.h"
 #include "esp_partition.h"
 #include "esp_psram.h"
@@ -905,10 +908,173 @@ static void *s_share_ctx;
 static bool s_share_on;
 static uint8_t s_share_ifidx = WIFI_IF_STA;
 
-static void share_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len)
+/* The radio is the board's, and it now has two callers: the share window and the player's
+ * audio (ADR 0103). ESP-NOW is initialised once and stays up while the audio uses it, so a
+ * window opening and closing does not take the stream's radio with it. */
+static bool s_now_up;
+
+static bool espnow_up(void)
 {
-    if (!s_share_cb || !info || !data || len <= 0) return;
+    if (s_now_up) return true;
+    if (esp_now_init() != ESP_OK) return false;
+    s_now_up = true;
+    return true;
+}
+
+/* ------------------------------------------------------------------ the audio emitter */
+
+static es_emitter_t s_audio;
+static uint8_t *s_audio_arena;
+static SemaphoreHandle_t s_audio_lock;
+static uint8_t s_audio_peer[ESP_NOW_ETH_ALEN];
+static bool s_audio_has_peer;
+static bool s_audio_on;
+static int64_t s_audio_logged_us;
+
+/* The emitter's radio: unicast, plaintext, to the player that last spoke. A player that has not
+ * spoken has no peer and nothing is sent to it - the status packet opens the credit first. */
+static bool audio_send(const uint8_t *pkt, size_t len, void *ctx)
+{
+    (void)ctx;
+    if (!s_audio_has_peer || !s_now_up) return false;
+    return esp_now_send(s_audio_peer, pkt, len) == ESP_OK;
+}
+
+static void audio_log_census(void)
+{
+    int64_t now = esp_timer_get_time();
+    if (now - s_audio_logged_us < 5000000) return;
+    s_audio_logged_us = now;
+
+    es_emitter_stats_t st;
+    if (xSemaphoreTake(s_audio_lock, portMAX_DELAY) == pdTRUE) {
+        es_emitter_stats(&s_audio, &st);
+        xSemaphoreGive(s_audio_lock);
+    }
+    ESP_LOGI(TAG, "espnow audio: %u frames, %u resent, %u held, %u dropped, %u packets, %s",
+             (unsigned)st.sent, (unsigned)st.resent, (unsigned)st.held, (unsigned)st.dropped,
+             (unsigned)st.packets, s_audio_has_peer ? "a player is listening" : "no player yet");
+}
+
+/* A status packet is the first thing a player says, so it is what names it: the address it
+ * came from becomes the peer the audio is sent to. */
+static void audio_status(const uint8_t src[6], const uint8_t *data, size_t len)
+{
+    if (!s_audio_on || !s_audio_lock) return;
+
+    if (!s_audio_has_peer) {
+        esp_now_peer_info_t peer;
+        memset(&peer, 0, sizeof peer);
+        memcpy(peer.peer_addr, src, ESP_NOW_ETH_ALEN);
+        peer.channel = 0; /* the current channel */
+        peer.ifidx = s_got_ip ? WIFI_IF_STA : WIFI_IF_AP;
+        peer.encrypt = false;
+        esp_err_t e = esp_now_add_peer(&peer);
+        if (e != ESP_OK && e != ESP_ERR_ESPNOW_EXIST) return;
+        memcpy(s_audio_peer, src, ESP_NOW_ETH_ALEN);
+        s_audio_has_peer = true;
+        ESP_LOGI(TAG, "espnow audio: a player at %02x:%02x:%02x:%02x:%02x:%02x",
+                 src[0], src[1], src[2], src[3], src[4], src[5]);
+    }
+
+    if (xSemaphoreTake(s_audio_lock, portMAX_DELAY) == pdTRUE) {
+        es_emitter_status(&s_audio, data, len);
+        xSemaphoreGive(s_audio_lock);
+    }
+    audio_log_census();
+}
+
+/* One dispatcher for the whole radio: the audio's two types, then the window's. */
+static void espnow_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len)
+{
+    if (!info || !data || len < 2) return;
+    if (data[0] == ES_VERSION && data[1] == ES_TYPE_STATUS) {
+        audio_status(info->src_addr, data, (size_t)len);
+        return;
+    }
+    if (!s_share_cb || len <= 0) return;
     s_share_cb(info->src_addr, data, (size_t)len, s_share_ctx);
+}
+
+bool app_board_audio_start(void)
+{
+    if (s_audio_on) return true;
+    if (!s_audio_lock && !(s_audio_lock = xSemaphoreCreateMutex())) return false;
+    if (!s_audio_arena) {
+        size_t bytes = ES_HISTORY_FRAMES * ES_MAX_FRAME;
+        s_audio_arena = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!s_audio_arena) s_audio_arena = heap_caps_malloc(bytes, MALLOC_CAP_8BIT);
+        if (!s_audio_arena) {
+            ESP_LOGE(TAG, "no memory for the ESP-NOW emitter: %u bytes", (unsigned)bytes);
+            return false;
+        }
+        ESP_LOGI(TAG, "espnow audio: %u slots of %u bytes (%u KB)",
+                 (unsigned)ES_HISTORY_FRAMES, (unsigned)ES_MAX_FRAME,
+                 (unsigned)(bytes / 1024));
+    }
+    es_emitter_init(&s_audio, s_audio_arena, ES_HISTORY_FRAMES * ES_MAX_FRAME, audio_send, NULL);
+    if (!espnow_up()) return false;
+    esp_now_register_recv_cb(espnow_recv_cb);
+    s_audio_on = true;
+    return true;
+}
+
+void app_board_audio_frame(void *ctx, const uint8_t *frame, size_t bytes)
+{
+    (void)ctx;
+    if (!s_audio_on || !frame || !bytes || !s_audio_lock) return;
+    if (xSemaphoreTake(s_audio_lock, portMAX_DELAY) != pdTRUE) return;
+    es_emitter_push(&s_audio, frame, bytes);
+    xSemaphoreGive(s_audio_lock);
+    audio_log_census();
+}
+
+bool app_board_share_radio_start(app_board_share_frame_fn on_frame, void *ctx)
+{
+    if (s_share_on) app_board_share_radio_stop();
+
+    if (!espnow_up()) return false;
+    esp_now_register_recv_cb(espnow_recv_cb);
+    s_share_cb = on_frame;
+    s_share_ctx = ctx;
+    s_share_ifidx = s_got_ip ? WIFI_IF_STA : WIFI_IF_AP;
+
+    /* ESP-NOW sends to an address in its peer table, so the beacon's all-ones address has
+     * to be added. A broadcast is unencrypted by definition - there is no per-peer key for
+     * "everyone" - and it carries no secret (H15). */
+    esp_now_peer_info_t bcast;
+    memset(&bcast, 0, sizeof bcast);
+    memset(bcast.peer_addr, 0xFF, ESP_NOW_ETH_ALEN);
+    bcast.channel = 0; /* the current channel */
+    bcast.ifidx = s_share_ifidx;
+    bcast.encrypt = false;
+    esp_err_t be = esp_now_add_peer(&bcast);
+    if (be != ESP_OK && be != ESP_ERR_ESPNOW_EXIST) {
+        s_share_cb = NULL;
+        s_share_ctx = NULL;
+        if (!s_audio_on) {
+            esp_now_unregister_recv_cb();
+            esp_now_deinit();
+            s_now_up = false;
+        }
+        return false;
+    }
+
+    s_share_on = true;
+    return true;
+}
+
+void app_board_share_radio_stop(void)
+{
+    if (!s_share_on) return;
+    s_share_on = false;
+    s_share_cb = NULL;
+    s_share_ctx = NULL;
+    /* The stream still owns the radio when the audio is on: the window borrows it. */
+    if (s_audio_on) return;
+    esp_now_unregister_recv_cb();
+    esp_now_deinit();
+    s_now_up = false;
 }
 
 /* 192.168.0.44 -> 0xC0A8002C, the numeric address, without a byte-order question. */
@@ -938,46 +1104,6 @@ void app_board_share_net(app_board_share_net_t *out)
     uint8_t primary = 0;
     wifi_second_chan_t second = WIFI_SECOND_CHAN_NONE;
     if (esp_wifi_get_channel(&primary, &second) == ESP_OK) out->channel = primary;
-}
-
-bool app_board_share_radio_start(app_board_share_frame_fn on_frame, void *ctx)
-{
-    if (s_share_on) app_board_share_radio_stop();
-
-    if (esp_now_init() != ESP_OK) return false;
-    s_share_cb = on_frame;
-    s_share_ctx = ctx;
-    s_share_ifidx = s_got_ip ? WIFI_IF_STA : WIFI_IF_AP;
-    esp_now_register_recv_cb(share_recv_cb);
-
-    /* ESP-NOW sends to an address in its peer table, so the beacon's all-ones address has
-     * to be added. A broadcast is unencrypted by definition - there is no per-peer key for
-     * "everyone" - and it carries no secret (H15). */
-    esp_now_peer_info_t bcast;
-    memset(&bcast, 0, sizeof bcast);
-    memset(bcast.peer_addr, 0xFF, ESP_NOW_ETH_ALEN);
-    bcast.channel = 0; /* the current channel */
-    bcast.ifidx = s_share_ifidx;
-    bcast.encrypt = false;
-    if (esp_now_add_peer(&bcast) != ESP_OK) {
-        esp_now_unregister_recv_cb();
-        esp_now_deinit();
-        s_share_cb = NULL;
-        return false;
-    }
-
-    s_share_on = true;
-    return true;
-}
-
-void app_board_share_radio_stop(void)
-{
-    if (!s_share_on) return;
-    esp_now_unregister_recv_cb();
-    esp_now_deinit();
-    s_share_on = false;
-    s_share_cb = NULL;
-    s_share_ctx = NULL;
 }
 
 bool app_board_share_send(const uint8_t *dst, const uint8_t *data, size_t len)

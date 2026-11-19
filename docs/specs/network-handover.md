@@ -74,9 +74,12 @@ then, because the rest of the window is what answers that player's retries (H25)
 job; opening a share window does not raise `K7.local` and does not spend its memory. The measured
 cost of the window is its beacon and ESP-NOW itself — the census is T15.
 
-**H13. ESP-NOW exists only while the window does.** `esp_now_init()` on open,
-`esp_now_deinit()` on close, so a device that is not sharing carries nothing for this feature. A
-window in a boot that never opens one costs no radio state at all.
+**H13. ESP-NOW is up while the K7 has a use for it, and the window borrows it.** The radio is
+initialised once — by the window, or at boot when the player's audio travels over ESP-NOW
+(`espnow-stream.md` E10) — and a window's close only tears it down when nothing else is using it.
+With the audio on HTTP that is exactly the old rule: a boot that never opens a window carries
+nothing for this feature. With the audio on ESP-NOW the radio is already up, and the window costs
+its beacon and nothing else.
 
 **H14. One beacon every 200 ms**, on the channel the radio is already on, to the broadcast
 address. Five a second for at most 60 s is 300 frames, which is the whole airtime cost of a

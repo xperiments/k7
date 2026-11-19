@@ -175,6 +175,12 @@ void      mini_icecast_set_order(const uint32_t *indices, uint32_t count, uint32
 bool      mini_icecast_order_active(void);
 bool      mini_icecast_order_contains(uint32_t track_index);
 
+/* Every frame the encoder emits, before it reaches any HTTP client: the ESP-NOW emitter's
+ * feed (docs/specs/espnow-stream.md E1, ADR 0103). Called from the broadcast task, outside the
+ * clients' lock, so a sink that blocks would hold the whole broadcast. */
+typedef void (*mini_icecast_frame_fn)(void *ctx, const uint8_t *frame, size_t bytes);
+void mini_icecast_set_frame_sink(mini_icecast_frame_fn fn, void *ctx);
+
 /* A play command for a Track outside the order drops the order; this is told after
  * the fact, outside the broadcast's lock, so the page layer can clear its selection
  * and its stored id. */

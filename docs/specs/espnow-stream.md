@@ -89,6 +89,11 @@ over ESP-NOW; `appliance.c` chooses at boot and the choice is logged. The web UI
 listeners are a different client and are unaffected — this rule is about the feed the player
 consumes, and sending it twice would spend twice the airtime for one listener.
 
+**E10. The radio stays up.** A stream cannot be a window: ESP-NOW is initialised once, at boot,
+and stays up while the player's audio uses it, so the share window stops owning the radio and only
+adds its beacon to it (`network-handover.md` H13). When the station emits over HTTP instead, the
+radio keeps the window's old lifecycle and costs nothing outside it.
+
 ## 6. What this replaces
 
 The player has no HTTP stream client any more: no `GET /stream`, no `Connection: close`, no
