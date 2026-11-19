@@ -3123,7 +3123,7 @@
     {
       "id": "EN-09",
       "title": "A refused listener is told so",
-      "state": "doing",
+      "state": "review",
       "group": "EN",
       "deps": ["EN-07"],
       "at": "2026-11-19T03:01:03Z",
@@ -3134,6 +3134,11 @@
           "at": "2026-11-19T03:37:51Z",
           "by": "lead",
           "text": "Plan: the device reports its listener slots in /api/status, the page classifies a never-started stream as refused (busy) rather than dropped, says so, and polls the slot to start when it frees."
+        },
+        {
+          "at": "2026-11-19T03:42:48Z",
+          "by": "lead",
+          "text": "A second tab now says why it did not start, and starts by itself when the first one closes.\n\n**What you will see:** press play in a second tab and it says *Another page is listening. This one starts when it closes.* — not \"the stream stopped\". Close or stop the first tab and the second one starts on its own within a couple of seconds, with no reload and no play button.\n\n**How it knows:** the K7 now reports its listener slot in `/api/status` (`listeners: {used, slots}`), and the page uses the fact it already has — whether this tab ever played — to tell a refusal from a dropped link. A tab that was playing still reconnects at once, exactly as before; a tab that never played asks the device once instead of pretending it lost a stream. An older firmware that does not report the slot falls back to the old behaviour.\n\n**Checked:** on the board, `listeners` went `{0 of 1}` → `{1 of 1}` while a stream was held → `{0 of 1}` a second after it was released. On the host: 5 new cases for the rule, 4 for the status parsing, 2 in the device's status test, and the full host check, typecheck, 896 web tests and the build all pass.\n\n**What to check:** two tabs on the player, play in both. The second should say another page is listening; close the first and watch the second start by itself.\n\n**One thing before you look:** the device half is flashed, but the page is served from the deployed App, so this needs the App deployed (or `npm run dev`) — the firmware did not need to carry it."
         }
       ]
     }
