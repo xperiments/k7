@@ -149,8 +149,11 @@ void app_board_share_radio_stop(void);
 /* The player's audio over ESP-NOW (docs/specs/espnow-stream.md, ADR 0103). Starting it brings
  * the radio up and keeps it up: the share window stops owning ESP-NOW, it borrows it. The
  * frame function is what the broadcast's sink feeds - one whole encoded MP3 frame per call -
- * and it never blocks the caller longer than a memcpy and a queue. */
-bool app_board_audio_start(void);
+ * and it never blocks the caller longer than a memcpy and a queue. `app_board_audio_set(false)`
+ * is the other half of the setting (espnow-stream.md E9): nothing is fed, nothing is resent, the
+ * player's peer is forgotten, and the radio stays up for the share window. The Settings row and
+ * the micro switch both call it. */
+bool app_board_audio_set(bool on);
 void app_board_audio_frame(void *ctx, const uint8_t *frame, size_t bytes);
 
 /* One frame. A NULL `dst` is the beacon's broadcast; anything else is the window's one

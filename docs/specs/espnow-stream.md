@@ -84,10 +84,14 @@ does not retry and does not sweep — the handover gave it an address, and the s
 there or it is not. A packet at any time after that starts the stream again.
 ([`k7player.md`](./k7player.md) R29–R30.)
 
-**E9. The emitter is a setting, never two at once.** The K7 emits the player's audio over HTTP or
-over ESP-NOW; `appliance.c` chooses at boot and the choice is logged. The web UI's own HTTP
-listeners are a different client and are unaffected — this rule is about the feed the player
-consumes, and sending it twice would spend twice the airtime for one listener.
+**E9. The emitter is a setting, never two at once.** The player's audio goes out one way: over
+ESP-NOW (E1-E8) or over HTTP (`/stream`), and the way is a row in the K7's Settings menu, persisted
+in NVS, with the micro switch on the player to become the same call (ADR 0104). With ESP-NOW
+chosen, every encoded frame is fed to the emitter, resends are answered and the player's peer is
+remembered. With HTTP chosen, nothing is fed, nothing is resent and the peer is forgotten — but the
+radio stays up, because the share window borrows it. The web UI's own HTTP listeners are a
+different client and are unaffected either way; sending the player's feed twice would spend twice
+the airtime for one listener.
 
 **E10. The radio stays up.** A stream cannot be a window: ESP-NOW is initialised once, at boot,
 and stays up while the player's audio uses it, so the share window stops owning the radio and only

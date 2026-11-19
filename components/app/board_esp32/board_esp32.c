@@ -1012,8 +1012,19 @@ static void espnow_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data,
     s_share_cb(info->src_addr, data, (size_t)len, s_share_ctx);
 }
 
-bool app_board_audio_start(void)
+bool app_board_audio_set(bool on)
 {
+    if (!on) {
+        s_audio_on = false;
+        if (s_audio_has_peer) {
+            esp_now_del_peer(s_audio_peer);
+            s_audio_has_peer = false;
+        }
+        if (s_audio_arena)
+            es_emitter_init(&s_audio, s_audio_arena, ES_HISTORY_FRAMES * ES_MAX_FRAME, audio_send,
+                            NULL);
+        return true;
+    }
     if (s_audio_on) return true;
     if (!s_audio_lock && !(s_audio_lock = xSemaphoreCreateMutex())) return false;
     if (!s_audio_arena) {

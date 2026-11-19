@@ -113,10 +113,13 @@ after that but `GET /stream`.
 
 ## 4. The stream
 
-**R23. The audio arrives over ESP-NOW**, from the K7's own emitter, one MP3 frame at a time:
-no request, no response, no body. The packet, its sequence, the resend and the status packet are
-[`espnow-stream.md`](./espnow-stream.md); the decision is ADR 0103. There is no HTTP client in
-this firmware and nothing to reconnect to.
+**R23. The audio arrives over ESP-NOW, or over HTTP when the radio is silent.** ESP-NOW is the
+first choice and the one that is always listening: the packets, their sequence, the resend and the
+status packet are [`espnow-stream.md`](./espnow-stream.md), and the decision is ADR 0103. When the
+K7's setting puts the audio on HTTP, the radio goes quiet and the player falls back to
+`/stream` — the client, the close-delimited body and its rules return for as long as that body is
+the stream (ADR 0104). Both paths feed the same framer, the same ring, the same prime and the same
+Fault rule; they differ only in where the bytes come from.
 
 **R24. Nothing is asked for.** The K7 emits as it encodes, and the player takes what arrives. The
 web UI's own HTTP listeners are a different client and are not this.
@@ -151,13 +154,14 @@ hard way, primed to 1.5 s the ring sat at 38 KB of its 96 and a three-second out
 The wait is bounded by the connection — a body that has ended is played, not waited on — and its
 price is 4.5 s of silence before the first sound. The socket never blocks on the ring.
 
-**R29. Three seconds without an audio packet is a silent stream.** The ring drains, the light
-says *Ready*, and nothing happens: no reboot, no retry, no sweep. The K7 is either emitting or it
-is not, and the network machine owns every question about the network (R20).
+**R29. Three seconds without an audio packet is the fallback's signal.** The player asks the K7 for
+`/stream` and plays it if it answers; if it does not, the ring drains, the light says *Ready*, and
+nothing reboots or sweeps. The radio keeps listening throughout, and the first audio packet after
+that closes the HTTP connection and the radio is the stream again (ADR 0104).
 
-**R30. There is no reconnection schedule** because there is no connection. A stream that stops
-resumes when packets resume, with the ring's prime and the receiver's gap window doing what R28
-and espnow-stream.md E4 say they do.
+**R30. The HTTP fallback keeps its own rules while it is the stream** — a ten second silence ends
+that connection and it retries at 1 s, then 5 s — and the radio's silence is what takes it back.
+The ESP-NOW side still has no connection to reconnect: packets resume where they resume.
 
 ---
 
