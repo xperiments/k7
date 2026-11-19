@@ -128,7 +128,11 @@ takes to go by, and R28's buffer is reached before a whole track has played. The
 burst with room to spare. When the first sound comes is R28's business, not this burst's.
 
 **R26. It decodes MP3 only**, because the station format is MP3 and the station format is chosen
-at boot and fixed. A body whose first frames are not MPEG audio is a *Fault*, not a retry loop.
+at boot and fixed. The radio carries frames from the K7's encoder, so a frame that is not MPEG
+audio is a *Fault*: not a link that will recover, but two firmwares disagreeing about the format.
+The line between the two is time, not bytes — **two seconds of frames that never decode** is the
+Fault, and anything shorter is a packet that arrived while something else did (E5's abandoned
+frames are not this).
 
 **R27. The output's rate follows the stream.** The station rate is read from the MP3 frame header
 (44.1 kHz by default) and the line output is configured to it, so a station at any rate the DAC
@@ -168,7 +172,7 @@ itself has failed (R20).
 | **Searching** | No network it can use: sweeping, or retrying a network that will not take it | 1 Hz blink |
 | **Ready** | On a network, no stream established: connecting, retrying, or nothing to play to | steady, dim |
 | **Playing** | The stream is established and audio is going out of an output | steady, bright |
-| **Fault** | It cannot do its job for a reason the network is not (a body that is not MPEG audio, an output path that will not initialise) | 4 Hz blink |
+| **Fault** | It cannot do its job for a reason the network is not (two seconds of frames that never decode, R26, or an output path that will not initialise) | 4 Hz blink |
 
 **R32. The light is the whole surface.** No beep, no screen, no web page, no button. A person
 diagnoses the player by looking at it and by the K7's own panel, which is where the share window
@@ -188,7 +192,7 @@ without a board. The handover's own tests are in [`network-handover.md`](./netwo
 | T2 | A 10 s silence ends the connection and schedules a reconnect; the backoff is 1 s then 5 s | host |
 | T3 | The ring holds two seconds of the station's frames; an overrun clears it once and keeps the newest, and its depth never grows; an underrun repeats silence rather than blocking the socket | host |
 | T4 | The record's validation and the preference order: home, then the K7's own network, then the 20 s/10 s alternation | host |
-| T5 | The state machine drives the four light states, including *Fault* on a non-MPEG body | host |
+| T5 | The state machine drives the four light states, including *Fault* when two seconds of delivered frames never decode | host |
 | T6 | The station rate from the frame header configures the line output; a 32 kHz station opens it at 32 000 | host |
 | T7 | The output holds silence while the ring is shallow even with audio in it, and plays once it holds the buffer | host |
 | B1 | The line output makes sound at 44.1 kHz, and a 48 kHz station follows it | **board only** |
