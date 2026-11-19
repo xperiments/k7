@@ -16,6 +16,12 @@ export interface PlayingPlaylist {
   name: string;
 }
 
+/** The broadcast's stream slots: how many are taken and how many there are. */
+export interface StreamSlots {
+  used: number;
+  slots: number;
+}
+
 export interface DeviceStatus {
   card: boolean;
   /**
@@ -37,6 +43,12 @@ export interface DeviceStatus {
   /** The Playlist being walked, or null when the library's own order is playing. */
   playlist: PlayingPlaylist | null;
   playing: PlayingStatus | null;
+  /**
+   * The station's stream slots. Absent on firmware that predates the field, which the page
+   * reads as "not known", never as "free": guessing wrong here would tell a listener to keep
+   * retrying a station that is full.
+   */
+  listeners?: StreamSlots;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -60,6 +72,14 @@ function parsePlaylist(value: unknown): PlayingPlaylist | null {
  * rather than throwing the whole status away, because the Card state is the fact the view
  * selection needs. A missing or malformed `playing` becomes `null`.
  */
+function parseStreamSlots(value: unknown): StreamSlots | undefined {
+  if (!isRecord(value)) return undefined;
+  const used = finiteNumber(value.used);
+  const slots = finiteNumber(value.slots);
+  if (used === undefined || slots === undefined) return undefined;
+  return { used, slots };
+}
+
 function parsePlaying(value: unknown): PlayingStatus | null {
   if (!isRecord(value)) return null;
 
@@ -106,6 +126,8 @@ export function parseStatus(value: unknown): DeviceStatus | null {
     playing: parsePlaying(value.playing),
   };
   if (typeof value.rescanning === 'boolean') status.rescanning = value.rescanning;
+  const listeners = parseStreamSlots(value.listeners);
+  if (listeners) status.listeners = listeners;
   return status;
 }
 

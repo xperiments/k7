@@ -9,7 +9,9 @@ import {
 } from 'react';
 
 import { DEVICE_ORIGIN } from '../config';
+import { fetchStatus } from '../device/useDeviceStatus';
 import type { CachedCover } from '../storage/media';
+import { classifyStreamFailure } from './stream-slot';
 
 /**
  * The page's one audio element, and what it is playing.
@@ -143,12 +145,23 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
    * listener hears a gap instead of silence until a reload. */
   const stream = useRef<{ timer: number | null; attempt: number }>({ timer: null, attempt: 0 });
 
+  /* Whether the stream on air right now ever played. A refusal arrives before the first
+   * `play`, so this is what separates "another page has the station" from "the link died"
+   * without guessing from timing (EN-09). */
+  const playedThisStream = useRef(false);
+  /** The poll that waits for the station's one slot to come free, while the page is refused. */
+  const slotWait = useRef<{ timer: number | null }>({ timer: null });
+
   const cancelReconnect = useCallback(() => {
     if (stream.current.timer !== null) {
       window.clearTimeout(stream.current.timer);
       stream.current.timer = null;
     }
     stream.current.attempt = 0;
+    if (slotWait.current.timer !== null) {
+      window.clearTimeout(slotWait.current.timer);
+      slotWait.current.timer = null;
+    }
   }, []);
 
   const reconnectStream = useCallback(() => {
@@ -169,6 +182,41 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       });
     }, wait);
   }, []);
+
+  /* Wait for the station's slot rather than retrying into a refusal: a two-second poll,
+   * because the thing being waited for is another page closing, not a network recovering. */
+  const waitForSlot = useCallback(() => {
+    if (slotWait.current.timer !== null) return;
+    const tick = async () => {
+      slotWait.current.timer = null;
+      if (sourceRef.current?.kind !== 'stream') return;
+      const status = await fetchStatus();
+      if (sourceRef.current?.kind !== 'stream') return;
+      const slots = status?.listeners;
+      if (!slots || slots.used < slots.slots) {
+        setError('The station is free; reconnecting…');
+        stream.current.attempt = 0;
+        reconnectStream();
+        return;
+      }
+      slotWait.current.timer = window.setTimeout(() => void tick(), 2000);
+    };
+    slotWait.current.timer = window.setTimeout(() => void tick(), 300);
+  }, [reconnectStream]);
+
+  /* The device is the one that knows: a stream that never played and finds every slot taken
+   * was refused, and the page says so. Anything else reconnects as it always has. */
+  const checkStreamFailure = useCallback(async () => {
+    const status = await fetchStatus();
+    if (sourceRef.current?.kind !== 'stream') return;
+    if (classifyStreamFailure(playedThisStream.current, status) === 'busy') {
+      setError('Another page is listening. This one starts when it closes.');
+      waitForSlot();
+      return;
+    }
+    setError('The stream stopped; reconnecting…');
+    reconnectStream();
+  }, [reconnectStream, waitForSlot]);
 
   const start = useCallback(async () => {
     const element = audio.current;
@@ -240,7 +288,12 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     releaseObjectUrl();
     forgetAlbum();
     const url = streamUrl();
-    if (element.src !== new URL(url, location.href).href) element.src = url;
+    /* Only a new source resets the fact: pressing play on a stream that is already on air
+     * must not turn its next drop into a refusal. */
+    if (element.src !== new URL(url, location.href).href) {
+      element.src = url;
+      playedThisStream.current = false;
+    }
     setSource({ kind: 'stream' });
     setTime(0);
     setDuration(0);
@@ -281,6 +334,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     }
     releaseObjectUrl();
     forgetAlbum();
+    playedThisStream.current = false;
     setSource(null);
     setPlaying(false);
     setTime(0);
@@ -317,6 +371,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       setPlaying(true);
       setError(null);
       stream.current.attempt = 0;
+      playedThisStream.current = true;
     };
     const onPause = () => setPlaying(false);
     const onTime = () => setTime(element.currentTime);
@@ -324,10 +379,18 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     const onError = () => {
       setPlaying(false);
       if (sourceRef.current?.kind === 'stream') {
-        /* A dropped client, a lost Wi-Fi link, a rebooted player: all the same from the
-         * page's side, and all recovered the same way. */
-        setError('The stream stopped; reconnecting…');
-        reconnectStream();
+        if (playedThisStream.current) {
+          /* A dropped client, a lost Wi-Fi link, a station restart: all recovered by
+           * reconnecting, as the page has always done. */
+          setError('The stream stopped; reconnecting…');
+          reconnectStream();
+        } else {
+          /* It never played, so it may have been refused the station's only slot. One
+           * request to the device tells the two apart; until it answers, the sentence says
+           * what is true either way. */
+          setError('Reconnecting…');
+          void checkStreamFailure();
+        }
         return;
       }
       setError(mediaError(element));
@@ -363,7 +426,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       element.removeEventListener('error', onError);
       element.removeEventListener('ended', onEnded);
     };
-  }, [reconnectStream]);
+  }, [checkStreamFailure, reconnectStream]);
 
   useEffect(() => cancelReconnect, [cancelReconnect]);
 

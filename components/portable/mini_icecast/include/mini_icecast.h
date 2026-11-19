@@ -137,6 +137,11 @@ typedef struct {
     uint32_t library_count;                        /* Tracks in the Library generation */
     uint32_t generation;                           /* the generation the Library came from */
     uint32_t track_index;                          /* position in the broadcast order, 0-based; 0 when idle */
+    /* How many stream slots are taken, and how many the station carries. The page asks this
+     * to tell "another page is listening" from "the link dropped": the two are different
+     * sentences and different waits (EN-09). */
+    uint8_t  listeners;
+    uint8_t  listener_slots;
     /* RMS of the chunk being encoded, 0..1 per channel: the display's level, not
      * the wire's. Written by the broadcast task per chunk and read without the
      * lock like elapsed_ms - a 32-bit float store is atomic on this core. */

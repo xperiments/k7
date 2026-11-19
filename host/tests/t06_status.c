@@ -109,6 +109,10 @@ int main(void)
     CHECK(st.out_hz == HZ && st.bitrate == KBPS,
           "the station's own format is reported (%u Hz, %u kbps)",
           (unsigned)st.out_hz, (unsigned)st.bitrate);
+    /* The page reads these to tell a refused listener from a dropped one (EN-09). This test
+     * never opens a socket, so the slot is free. */
+    CHECK_EQ(st.listener_slots, 1, "the station reports how many listeners it carries");
+    CHECK_EQ(st.listeners, 0, "and how many are listening now");
     CHECK(st.library_count == 11, "the library's size is known (%u files, expected 11)",
           (unsigned)st.library_count);
 

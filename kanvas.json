@@ -3081,7 +3081,7 @@
     {
       "id": "EN-07",
       "title": "One audio client at a time",
-      "state": "review",
+      "state": "done",
       "group": "EN",
       "at": "2026-11-19T02:25:35Z",
       "by": "agent",
@@ -3102,7 +3102,7 @@
     {
       "id": "EN-08",
       "title": "The station stops and starts",
-      "state": "review",
+      "state": "done",
       "group": "EN",
       "at": "2026-11-19T02:47:11Z",
       "by": "agent",
@@ -3123,12 +3123,19 @@
     {
       "id": "EN-09",
       "title": "A refused listener is told so",
-      "state": "todo",
+      "state": "doing",
       "group": "EN",
       "deps": ["EN-07"],
       "at": "2026-11-19T03:01:03Z",
       "by": "lead",
-      "desc": "The second tab's refusal is correct; its sentence is not. A browser's audio element cannot read the 503 body, so the page says 'The stream stopped; reconnecting…' to someone who never started, and retries every ten seconds until the first listener leaves.\n\nThis gives the page a way to know: the device reports whether a listener is present, and the page uses it to say 'another page is already listening' and to wait for the slot instead of pretending it lost a stream.\n\nFinished when a second tab says what is happening, and starts on its own when the first one closes."
+      "desc": "The second tab's refusal is correct; its sentence is not. A browser's audio element cannot read the 503 body, so the page says 'The stream stopped; reconnecting…' to someone who never started, and retries every ten seconds until the first listener leaves.\n\nThis gives the page a way to know: the device reports whether a listener is present, and the page uses it to say 'another page is already listening' and to wait for the slot instead of pretending it lost a stream.\n\nFinished when a second tab says what is happening, and starts on its own when the first one closes.",
+      "notes": [
+        {
+          "at": "2026-11-19T03:37:51Z",
+          "by": "lead",
+          "text": "Plan: the device reports its listener slots in /api/status, the page classifies a never-started stream as refused (busy) rather than dropped, says so, and polls the slot to start when it frees."
+        }
+      ]
     }
   ]
 }

@@ -105,8 +105,10 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
     json_escaped(&w, b->st.title);
     json_puts(&w, "\",\"path\":\"");
     json_escaped(&w, b->st.path);
-    json_printf(&w, "\",\"elapsed_ms\":%u,\"duration_ms\":%u}}",
-                (unsigned)b->st.elapsed_ms, (unsigned)b->st.duration_ms);
+    json_printf(&w, "\",\"elapsed_ms\":%u,\"duration_ms\":%u},"
+                "\"listeners\":{\"used\":%u,\"slots\":%u}}",
+                (unsigned)b->st.elapsed_ms, (unsigned)b->st.duration_ms,
+                (unsigned)b->st.listeners, (unsigned)b->st.listener_slots);
     if (lib) library_release(lib);
     if (!json_ok(&w)) {
         free(b);

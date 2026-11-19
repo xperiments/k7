@@ -161,7 +161,10 @@ id, or `null`), the Library's count and generation, what is Playing (`title`, `p
 `elapsed_ms`, `duration_ms`), and the order: `order` is `"tree"` or `"list"`, and `playlist` is
 `{"id","name"}` or `null`. `rescanning` is `true` while a Library rescan is running, so the
 App's Device card can say the card is being re-read and show the new generation when it
-publishes. It is `no-store` and answers only on its own path.
+publishes. `listeners` is `{"used","slots"}`, the broadcast's stream slots taken and total: it
+is how the page tells a listener the station refused from one whose link dropped, and waits
+for the slot instead of reporting a dead stream. It is `no-store` and answers only on its own
+path.
 
 **U4.** There is **no TLS**. No certificate is compiled in, no trust step exists, and a browser
 shows "Not secure" and no interstitial. The consequences are accepted, not hidden: no service

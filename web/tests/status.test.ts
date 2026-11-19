@@ -46,6 +46,21 @@ describe('the device status contract', () => {
     expect(parseStatus(valid)).toEqual(parsed);
   });
 
+  it('reads the station\'s stream slots, and their absence as not known', () => {
+    expect(parseStatus({ ...valid, listeners: { used: 1, slots: 1 } })?.listeners).toEqual({
+      used: 1,
+      slots: 1,
+    });
+    /* Firmware that predates the field: the page must read "unknown", never "free". */
+    expect(parseStatus(valid)?.listeners).toBeUndefined();
+    expect(parseStatus({ ...valid, listeners: 'one' })?.listeners).toBeUndefined();
+    expect(parseStatus({ ...valid, listeners: { used: 1 } })?.listeners).toBeUndefined();
+    expect(parseStatus({ ...valid, listeners: { used: 0, slots: 1 } })?.listeners).toEqual({
+      used: 0,
+      slots: 1,
+    });
+  });
+
   it('reads the card mark, and an absent one as no mark', () => {
     expect(parseStatus(valid)?.mark).toBe('f0b1c2d3-e4f5-4a6b-8c9d-0e1f2a3b4c5d');
     const { mark: _mark, ...beforeTheMark } = valid;

@@ -1930,6 +1930,10 @@ void mini_icecast_status(mini_icecast_status_t *out)
     out->bitrate = S.station.bitrate;
     out->duration_ms = S.cur_total_ms;
     out->library_count = S.library_count;
+    /* The client table is the lock's, so it is read here rather than by the caller. */
+    out->listener_slots = S.station.max_clients;
+    for (int i = 0; i < S.station.max_clients; i++)
+        if (S.clients[i].fd >= 0) out->listeners++;
     xSemaphoreGive(S.lock);
     /* Read outside the lock on purpose: see the field comments. */
     /* The bed is broadcast but it is not the track: a park that lasts 105 s must
