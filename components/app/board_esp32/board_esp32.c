@@ -950,8 +950,10 @@ static bool audio_send(const uint8_t *pkt, size_t len, void *ctx)
 
     static uint16_t s_failures;
     static int64_t s_last_reconnect_us;
+    static uint8_t s_reconnects;
     if (esp_now_send(s_audio_peer, pkt, len) == ESP_OK) {
         s_failures = 0;
+        s_reconnects = 0;
         return true;
     }
 
@@ -959,7 +961,15 @@ static bool audio_send(const uint8_t *pkt, size_t len, void *ctx)
         int64_t now = esp_timer_get_time();
         if (now - s_last_reconnect_us > 10000000) { /* at most once every ten seconds */
             s_last_reconnect_us = now;
-            ESP_LOGW(TAG, "the radio stopped sending: re-associating");
+            s_reconnects++;
+            if (s_reconnects > 3) {
+                /* Three re-associations in a row and still nothing: the station is wedged in a
+                 * way disconnect/connect does not clear, and a dead K7 is worse than a reboot. */
+                ESP_LOGE(TAG, "the radio will not come back: rebooting");
+                vTaskDelay(pdMS_TO_TICKS(100));
+                esp_restart();
+            }
+            ESP_LOGW(TAG, "the radio stopped sending: re-associating (%u)", s_reconnects);
             esp_wifi_disconnect();
             esp_wifi_connect();
         }

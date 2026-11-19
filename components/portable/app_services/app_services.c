@@ -262,6 +262,10 @@ void app_services_player_espnow_set(bool on)
     player_transport_apply(on);
     if (app_board_player_espnow_save(on) != ESP_OK)
         ESP_LOGW(TAG, "the transport choice did not store");
+    /* The station's format follows the transport and is fixed at boot (the encoder is built
+     * once), so the bit rate changes with the next start. */
+    ESP_LOGI(TAG, "the station will run %s at the next start",
+             on ? "128 kbps for the ESP-NOW player" : "256 kbps for the web");
 }
 
 void app_services_player_transport_init(void)

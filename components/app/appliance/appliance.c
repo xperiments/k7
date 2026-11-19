@@ -216,6 +216,13 @@ void appliance_run(void)
      * The web UI's own listeners are a different client and work either way. The setting is a
      * constant until the Menu grows a row for it, and a build cannot run both. */
 
+    /* The station's format follows the transport the player is on. ESP-NOW gets 128 kbps: two
+     * fragments a frame instead of four, half the packets, and twice the seconds in the player's
+     * ring - the radio is the constraint there, not the ear. The web's icecast keeps 256, which
+     * is where it was before the player existed and where only the access point carries it. */
+    bool stored_transport = true;
+    bool player_espnow = app_board_player_espnow_load(&stored_transport) ? stored_transport : true;
+
     /* The chosen Playlist survives a power cut in the card's k7.select. The composition
      * takes it as two callbacks so playlist_select stays portable (ADR 0051); a card
      * that has never carried a record is "no choice", not an error. */
@@ -224,7 +231,7 @@ void appliance_run(void)
         .station_name = STATION_NAME,
         .port = HTTP_PORT,
         .out_hz = 44100,
-        .bitrate = 192,
+        .bitrate = player_espnow ? 128 : 256,
         /* How many listeners the broadcast will carry at once. This is separate
          * from the HTTP connection pool (max_conns): a listener stops occupying a
          * connection worker as soon as it is registered. */
