@@ -84,6 +84,21 @@ typedef void (*player_board_frame_fn)(const uint8_t src[6], const uint8_t *data,
 bool player_board_handover_start(player_board_frame_fn on_frame, void *ctx);
 void player_board_handover_stop(void);
 
+/* ------------------------------------------------------- the stream's radio
+ *
+ * ESP-NOW again, and now for the audio (docs/specs/espnow-stream.md, ADR 0103). It is the same
+ * radio as the handover's, so it is started once and left up: the sweep borrows it and a window
+ * closing does not take the stream with it. The board dispatches by type - 0x04 audio to the
+ * stream, the handover's 0x01-0x03 to its callback - so neither knows the other exists.
+ *
+ * `on_packet` runs on the Wi-Fi task and must be short. */
+typedef void (*player_board_packet_fn)(const uint8_t *data, size_t len);
+bool player_board_espnow_start(player_board_packet_fn on_packet);
+
+/* The status packet, to the broadcast address: the player has no way to know the K7's MAC, and
+ * the K7 learns the player's from the packet's own source address. */
+bool player_board_espnow_send(const uint8_t *data, size_t len);
+
 /* One frame to the K7. The request is unicast to the address the beacon came from. */
 bool player_board_handover_send(const uint8_t *dst, const uint8_t *data, size_t len);
 

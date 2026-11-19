@@ -40,6 +40,8 @@ static ho_record_t s_record;
 static char s_resolve_ip[32];
 
 static player_board_frame_fn s_frame_cb;
+static player_board_packet_fn s_audio_cb;
+static int s_audio_sent;
 static void *s_frame_ctx;
 static bool s_now_on;
 static uint8_t s_channel;
@@ -252,6 +254,19 @@ bool player_board_resolve(const char *hostname, char *out, size_t cap)
     if (!out || cap == 0) return false;
     snprintf(out, cap, "%s", s_resolve_ip);
     return s_resolve_ip[0] != '\0';
+}
+
+bool player_board_espnow_start(player_board_packet_fn on_packet)
+{
+    s_audio_cb = on_packet;
+    return true;
+}
+
+bool player_board_espnow_send(const uint8_t *data, size_t len)
+{
+    (void)data;
+    s_audio_sent = (int)len;
+    return true;
 }
 
 bool player_board_handover_start(player_board_frame_fn on_frame, void *ctx)

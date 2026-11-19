@@ -23,6 +23,7 @@
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_now.h"
+#include "espnow_stream.h"
 #include "esp_random.h"
 #include "esp_wifi.h"
 #include "mdns.h"
@@ -233,34 +234,76 @@ void player_board_record_drop(void)
 
 static player_board_frame_fn s_frame_cb;
 static void *s_frame_ctx;
+static player_board_packet_fn s_audio_cb;
+
+/* The radio is the board's and it has two callers, so it is initialised once and stays up while
+ * either of them needs it (the K7's rule, mirrored: espnow-stream.md E10). */
 static bool s_now_on;
 
+static bool espnow_up(void)
+{
+    if (s_now_on) return true;
+    if (esp_now_init() != ESP_OK) return false;
+    s_now_on = true;
+    return true;
+}
+
+/* One dispatcher: the audio's type to the stream, everything else to the handover. */
 static void recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len)
 {
-    if (!s_frame_cb || !info || !data || len <= 0) return;
+    if (!info || !data || len < 2) return;
+    if (data[0] == ES_VERSION && data[1] == ES_TYPE_AUDIO) {
+        if (s_audio_cb) s_audio_cb(data, (size_t)len);
+        return;
+    }
+    if (!s_frame_cb || len <= 0) return;
     s_frame_cb(info->src_addr, data, (size_t)len, s_frame_ctx);
+}
+
+bool player_board_espnow_start(player_board_packet_fn on_packet)
+{
+    if (!espnow_up()) return false;
+    s_audio_cb = on_packet;
+    esp_now_register_recv_cb(recv_cb);
+
+    /* The status packet goes to everyone: the player cannot know the K7's address, and the K7
+     * turns the packet's source into the peer it sends audio to. */
+    esp_now_peer_info_t bcast;
+    memset(&bcast, 0, sizeof bcast);
+    memset(bcast.peer_addr, 0xFF, ESP_NOW_ETH_ALEN);
+    bcast.channel = 0;
+    bcast.ifidx = WIFI_IF_STA;
+    bcast.encrypt = false;
+    esp_err_t e = esp_now_add_peer(&bcast);
+    return e == ESP_OK || e == ESP_ERR_ESPNOW_EXIST;
+}
+
+bool player_board_espnow_send(const uint8_t *data, size_t len)
+{
+    static const uint8_t bcast[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    if (!s_now_on || !data || len == 0 || len > ESP_NOW_MAX_DATA_LEN) return false;
+    return esp_now_send(bcast, data, len) == ESP_OK;
 }
 
 bool player_board_handover_start(player_board_frame_fn on_frame, void *ctx)
 {
-    if (s_now_on) player_board_handover_stop();
-    if (esp_now_init() != ESP_OK) return false;
-
+    if (!espnow_up()) return false;
     s_frame_cb = on_frame;
     s_frame_ctx = ctx;
     esp_now_register_recv_cb(recv_cb);
-    s_now_on = true;
     return true;
 }
 
 void player_board_handover_stop(void)
 {
+    s_frame_cb = NULL;
+    s_frame_ctx = NULL;
+    /* The stream still owns the radio when it is on: the sweep borrows it. */
+    if (s_audio_cb) return;
     if (!s_now_on) return;
     esp_now_unregister_recv_cb();
     esp_now_deinit();
     s_now_on = false;
-    s_frame_cb = NULL;
-    s_frame_ctx = NULL;
 }
 
 bool player_board_handover_send(const uint8_t *dst, const uint8_t *data, size_t len)
