@@ -225,7 +225,7 @@ void appliance_run(void)
         .station_name = STATION_NAME,
         .port = HTTP_PORT,
         .out_hz = 44100,
-        .bitrate = 128,
+        .bitrate = 192,
         /* How many listeners the broadcast will carry at once. This is separate
          * from the HTTP connection pool (max_conns): a listener stops occupying a
          * connection worker as soon as it is registered. */

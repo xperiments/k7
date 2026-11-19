@@ -78,7 +78,14 @@ void player_stream_packet(const uint8_t *pkt, size_t len)
         M.ever_received = true;
         M.first_packet_ms = now;
     }
+    uint32_t resyncs = M.recv.resyncs;
     player_recv_packet(&M.recv, pkt, len, now, push_frame, NULL);
+    if (M.recv.resyncs != resyncs) {
+        /* A sender that restarted may also be a station at a new format: forget the header we
+         * read, so the next frame says what this stream actually is. */
+        player_mp3_init(&M.mp3);
+        ESP_LOGI(TAG, "a new stream on the radio: sequence restarted");
+    }
     M.bytes += (uint32_t)len;
     M.last_packet_ms = now;
     M.state = PLAYER_STREAM_BODY;

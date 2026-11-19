@@ -176,6 +176,38 @@ static void test_duplicate_fragment(void)
     (void)n;
 }
 
+/* A sender that restarted - a reflash, a power cut - begins its sequence again at zero. The
+ * receiver follows the new stream instead of discarding it as stale. */
+static void test_restart(void)
+{
+    static player_recv_t r;
+    static uint8_t storage[(PLAYER_RECV_HELD * sizeof(player_recv_held_t)) +
+                           (PLAYER_RECV_PARTS * sizeof(player_recv_part_t))];
+    CHECK(player_recv_init(&r, storage, sizeof storage), "the receiver's buffers are given");
+    out_reset();
+
+    for (uint16_t seq = 0; seq < 4; seq++) feed_frame(&r, seq, 100);
+    CHECK_EQ(out.n, 4, "four frames before the restart");
+
+    /* The K7 reflashed and began again at zero. */
+    out_reset();
+    feed_frame(&r, 0, 5000);
+    feed_frame(&r, 1, 5000);
+    CHECK_EQ(out.n, 2, "the restarted stream is delivered, not discarded");
+
+    player_recv_stats_t st;
+    player_recv_stats(&r, &st);
+    CHECK_EQ(st.resyncs, 1, "one resync is counted");
+    CHECK_EQ(st.lost, 0, "and the restart is not a loss");
+
+    /* A real duplicate, well inside the window, is still a duplicate. */
+    out_reset();
+    feed_frame(&r, 1, 5200);
+    CHECK_EQ(out.n, 0, "a frame already delivered is not delivered twice");
+    player_recv_stats(&r, &st);
+    CHECK_EQ(st.dups, 2, "both fragments of a delivered frame are duplicates");
+}
+
 int main(void)
 {
     test_in_order();
@@ -183,5 +215,6 @@ int main(void)
     test_abandon();
     test_wrap();
     test_duplicate_fragment();
+    test_restart();
     TEST_END();
 }

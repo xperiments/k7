@@ -132,10 +132,25 @@ void player_recv_packet(player_recv_t *r, const uint8_t *pkt, size_t len, uint32
         r->next = f.seq;
     }
 
-    /* Behind the stream: a duplicate, or a frame whose gap was already abandoned. */
+    /* Behind the stream: a duplicate, or a frame whose gap was already abandoned - unless it is
+     * so far behind that the sender cannot be the same stream. A restart begins again at zero,
+     * and everything held here belongs to a stream that no longer exists. */
     if (!newer(f.seq, (uint16_t)(r->next - 1))) {
-        r->dups++;
-        return;
+        /* A sender always begins again at zero, so a zero that looks behind is a restart and
+         * never a duplicate - at the sequence wrap `next` is zero too, and that frame is not
+         * behind at all. The distance rule catches a sender that restarts to something else. */
+        if (f.seq == 0 || (uint16_t)(r->next - f.seq) > PLAYER_RECV_RESTART_BACK) {
+            memset(r->part, 0, r->part_n * sizeof *r->part);
+            memset(r->held, 0, r->held_max * sizeof *r->held);
+            r->held_n = 0;
+            r->gap = false;
+            r->gap_at = 0;
+            r->next = f.seq;
+            r->resyncs++;
+        } else {
+            r->dups++;
+            return;
+        }
     }
 
     player_recv_part_t *p = find_part(r, f.seq);
@@ -188,9 +203,9 @@ void player_recv_tick(player_recv_t *r, uint32_t now_ms,
             oldest = r->held[i].seq;
             have = true;
         }
-    if (have && newer(oldest, r->next)) {
+    if (have && newer(oldest, r->next) && (uint16_t)(oldest - r->next) < 32768) {
         r->abandoned++;
-        r->lost += (uint32_t)(oldest - r->next);
+        r->lost += (uint32_t)(uint16_t)(oldest - r->next);
         r->next = oldest;
     } else {
         /* Nothing to move to: the gap is all there is, so it is abandoned frame by frame as the
@@ -239,4 +254,5 @@ void player_recv_stats(const player_recv_t *r, player_recv_stats_t *out)
     out->abandoned = r->abandoned;
     out->dups = r->dups;
     out->parts_dropped = r->parts_dropped;
+    out->resyncs = r->resyncs;
 }

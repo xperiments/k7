@@ -34,6 +34,12 @@ extern "C" {
 /* How long a gap is given to be filled by a resend before it is abandoned. */
 #define PLAYER_RECV_GAP_MS 1000
 
+/* A sender that restarts - a reflash, a power cut - begins its sequence again at zero. Anything
+ * more than this many frames behind the stream is not a duplicate frame; it is a new stream, and
+ * the receiver resets to it rather than discarding everything as stale (found on the bench when a
+ * bit-rate change reflashed the K7: `lost` wrapped to four billion and the ring drained). */
+#define PLAYER_RECV_RESTART_BACK 128
+
 typedef struct {
     bool     used;
     uint16_t seq;
@@ -59,7 +65,7 @@ typedef struct {
     uint16_t next;   /* the sequence the stream is waiting for */
     bool     gap;    /* a frame before a held one is missing */
     uint32_t gap_at;
-    uint32_t frames, lost, abandoned, dups, parts_dropped;
+    uint32_t frames, lost, abandoned, dups, parts_dropped, resyncs;
 } player_recv_t;
 
 /* A delivered frame, in order. The pointer is only valid during the call. */
@@ -90,6 +96,7 @@ typedef struct {
     uint32_t abandoned;    /* gaps given up on */
     uint32_t dups;         /* fragments or frames behind the stream */
     uint32_t parts_dropped; /* frames that could not be assembled for want of a slot */
+    uint32_t resyncs;       /* a sender that restarted, seen as a sequence that jumped back */
 } player_recv_stats_t;
 
 void player_recv_stats(const player_recv_t *r, player_recv_stats_t *out);
