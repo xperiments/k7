@@ -113,19 +113,17 @@ after that but `GET /stream`.
 
 ## 4. The stream
 
-**R23. `GET http://<k7>/stream`**, and nothing about the request. No `Icy-MetaData` header, no
-range, no conditional request.
+**R23. The audio arrives over ESP-NOW**, from the K7's own emitter, one MP3 frame at a time:
+no request, no response, no body. The packet, its sequence, the resend and the status packet are
+[`espnow-stream.md`](./espnow-stream.md); the decision is ADR 0103. There is no HTTP client in
+this firmware and nothing to reconnect to.
 
-**R24. The body is close-delimited.** The K7 answers `HTTP/1.0 200 OK`, `Content-Type:
-audio/mpeg`, `Connection: close`
-([`mini_icecast.c:390`](../../components/portable/mini_icecast/mini_icecast.c#L390)) — no
-`Content-Length` and no chunking. The player reads MP3 frames out of the byte stream as they
-arrive and treats the close as the end of the stream, never as a length it forgot.
+**R24. Nothing is asked for.** The K7 emits as it encodes, and the player takes what arrives. The
+web UI's own HTTP listeners are a different client and are not this.
 
-**R25. The burst is the point of connecting.** The K7 sends up to 500 ms of recent audio on
-connect, so the player's ring fills in a fraction of a second rather than in the time a track
-takes to go by, and R28's buffer is reached before a whole track has played. The ring holds the
-burst with room to spare. When the first sound comes is R28's business, not this burst's.
+**R25. The player answers every 100 ms** with the ring's free bytes and the sequences it is
+missing, and that is the transport's only flow control and its only retransmission request
+(espnow-stream.md E3, E6). A player that has not spoken yet is not sent anything.
 
 **R26. It decodes MP3 only**, because the station format is MP3 and the station format is chosen
 at boot and fixed. The radio carries frames from the K7's encoder, so a frame that is not MPEG
@@ -153,13 +151,13 @@ hard way, primed to 1.5 s the ring sat at 38 KB of its 96 and a three-second out
 The wait is bounded by the connection — a body that has ended is played, not waited on — and its
 price is 4.5 s of silence before the first sound. The socket never blocks on the ring.
 
-**R29. A stall of 10 s is a dead connection.** No bytes for ten seconds and the player drops it
-and reconnects, because a live stream that has stopped delivering is not a stream that will
-resume with the same audio in it.
+**R29. Three seconds without an audio packet is a silent stream.** The ring drains, the light
+says *Ready*, and nothing happens: no reboot, no retry, no sweep. The K7 is either emitting or it
+is not, and the network machine owns every question about the network (R20).
 
-**R30. Reconnection is 1 s, then 5 s, then forever at 5 s**, with the light moving to *Ready*
-while it retries. It does not reboot, and it does not go back to sweeping until the network
-itself has failed (R20).
+**R30. There is no reconnection schedule** because there is no connection. A stream that stops
+resumes when packets resume, with the ring's prime and the receiver's gap window doing what R28
+and espnow-stream.md E4 say they do.
 
 ---
 
@@ -188,8 +186,8 @@ without a board. The handover's own tests are in [`network-handover.md`](./netwo
 
 | # | Test | Tier |
 |---|---|---|
-| T1 | The HTTP client accepts `HTTP/1.0 200 OK` with `Connection: close`, extracts MP3 frames from a body of arbitrary chunk boundaries, and treats the close as the end | host |
-| T2 | A 10 s silence ends the connection and schedules a reconnect; the backoff is 1 s then 5 s | host |
+| T1 | The receiver reassembles fragments into whole frames in sequence order, across the sequence wrap, and hands a fragment that arrives twice to the stream once | host |
+| T2 | Three seconds without a packet is a silent stream and not a fault; two seconds of frames that never decode is a fault | host |
 | T3 | The ring holds two seconds of the station's frames; an overrun clears it once and keeps the newest, and its depth never grows; an underrun repeats silence rather than blocking the socket | host |
 | T4 | The record's validation and the preference order: home, then the K7's own network, then the 20 s/10 s alternation | host |
 | T5 | The state machine drives the four light states, including *Fault* when two seconds of delivered frames never decode | host |
