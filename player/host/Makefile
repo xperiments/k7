@@ -25,13 +25,16 @@ LDLIBS := -lpthread -lm
 
 INC := -I$(PLAYER)/components/player/include \
        -I$(ROOT)/components/portable/handover/include \
+       -I$(ROOT)/components/portable/espnow_stream/include \
        -I$(ROOT)/components/portable/dr_libs/include \
        -I$(ROOT)/host/include \
        -I$(ROOT)/host/tests
 
 # The production sources this harness compiles - the same files the firmware compiles. A
 # source that is not named here is not tested, and layering.sh P2 fails the build.
-CORE_SRC := $(PLAYER)/components/player/player_status.c \
+CORE_SRC := $(PLAYER)/components/player/player_recv.c \
+            $(ROOT)/components/portable/espnow_stream/espnow_stream.c \
+            $(PLAYER)/components/player/player_status.c \
             $(PLAYER)/components/player/player_net.c \
             $(PLAYER)/components/player/player_ring.c \
             $(PLAYER)/components/player/player_mp3.c \
@@ -47,7 +50,7 @@ HANDOVER_SRC := $(ROOT)/components/portable/handover/handover_frame.c \
 HANDOVER_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(HANDOVER_SRC)))
 
 TESTS := $(BIN)/t01_status $(BIN)/t02_net $(BIN)/t03_stream $(BIN)/t04_output \
-         $(BIN)/t05_light
+         $(BIN)/t05_light $(BIN)/t06_recv
 
 .PHONY: all test layering check clean
 
@@ -69,6 +72,10 @@ $(BIN)/t04_output: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
+$(BIN)/t06_recv: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t06_recv.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
 $(BIN)/t05_light: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t05_light.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
@@ -78,7 +85,8 @@ $(OBJ)/%.o: %.c
 	@mkdir -p $(OBJ)
 	$(CC) $(CFLAGS) -MMD -MP $(INC) -c $< -o $@
 
-vpath %.c $(PLAYER)/components/player $(ROOT)/components/portable/handover $(HERE) $(ROOT)/host/shim $(HERE)/tests
+vpath %.c $(PLAYER)/components/player \
+            $(ROOT)/components/portable/espnow_stream $(ROOT)/components/portable/handover $(HERE) $(ROOT)/host/shim $(HERE)/tests
 -include $(wildcard $(OBJ)/*.d)
 
 test: $(TESTS)
