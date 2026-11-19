@@ -2991,7 +2991,7 @@
     {
       "id": "EN-03",
       "title": "The player listens over ESP-NOW instead of HTTP",
-      "state": "review",
+      "state": "done",
       "group": "EN",
       "deps": ["EN-01", "EN-02"],
       "at": "2026-11-18T23:52:20Z",
@@ -3038,7 +3038,7 @@
     {
       "id": "EN-04",
       "title": "The K7 chooses one emitter: HTTP or ESP-NOW",
-      "state": "review",
+      "state": "done",
       "group": "EN",
       "deps": ["EN-02"],
       "at": "2026-11-18T23:52:20Z",
@@ -3060,7 +3060,7 @@
     {
       "id": "EN-05",
       "title": "The player's transport is a setting",
-      "state": "review",
+      "state": "done",
       "group": "EN",
       "at": "2026-11-19T01:28:08Z",
       "by": "agent",
@@ -3081,12 +3081,19 @@
     {
       "id": "EN-06",
       "title": "The player hears either transport",
-      "state": "todo",
+      "state": "doing",
       "group": "EN",
       "deps": ["EN-05"],
       "at": "2026-11-19T01:28:08Z",
       "by": "agent",
-      "desc": "The player can play from either end of the setting. The HTTP client returns as the fallback behind the radio: three seconds without an ESP-NOW packet and it fetches the K7's /stream; the first audio packet after that closes the connection and the radio is the stream again. Both paths feed the same ring, prime, rate and Fault rule.\n\nFinished when one player firmware plays through both transports with the setting choosing, and the fallback and the preemption are covered on the host.\n\nTicket: docs/design/espnow-player/issues/06-the-player-hears-either-transport.md"
+      "desc": "The player can play from either end of the setting. The HTTP client returns as the fallback behind the radio: three seconds without an ESP-NOW packet and it fetches the K7's /stream; the first audio packet after that closes the connection and the radio is the stream again. Both paths feed the same ring, prime, rate and Fault rule.\n\nFinished when one player firmware plays through both transports with the setting choosing, and the fallback and the preemption are covered on the host.\n\nTicket: docs/design/espnow-player/issues/06-the-player-hears-either-transport.md",
+      "notes": [
+        {
+          "at": "2026-11-19T01:56:43Z",
+          "by": "agent",
+          "text": "Plan: restore the HTTP parser and the socket seam from before EN-03, add an HTTP source behind the radio in player_stream, cover the fallback and the preemption on the host, then the bench."
+        }
+      ]
     }
   ]
 }
