@@ -2959,7 +2959,7 @@
     {
       "id": "EN-02",
       "title": "The K7 sends the player's audio over ESP-NOW",
-      "state": "todo",
+      "state": "review",
       "group": "EN",
       "deps": ["EN-01"],
       "at": "2026-11-18T23:52:20Z",
@@ -2975,6 +2975,16 @@
           "at": "2026-11-18T23:58:30Z",
           "by": "agent",
           "text": "Paused at the portable half, which is committed (45cf759): the emitter, its credit, its resend and a host loop test, 22 checks plus the wire's 101, `make -C host check` green.\n\nWhat is left, and why it is not a glue line: the K7's ESP-NOW radio is only up during the share window (`app_board_share_radio_start/stop` in `board_esp32.c`), and a stream needs it up permanently. The rest of EN-02 is:\n- `mini_icecast`: a frame sink called with every encoded frame, outside its lock.\n- The K7's radio: ESP-NOW up at boot and left up, with the share window becoming a beacon over an always-on radio instead of owning the radio.\n- The board: learn the player's MAC from its status packet, add it as a peer, send fragments to it, and a mutex between the broadcast task's push and the radio callback's status.\n- The appliance: wire the sink when the transport is ESP-NOW (EN-04's setting), and a census line of frames, resends and drops.\n\nThere is nothing to hear yet either way: with no receiver on the player (EN-03) nothing sends a status packet, so the emitter holds and sends nothing - which is the design working as specified."
+        },
+        {
+          "at": "2026-11-19T00:05:59Z",
+          "by": "agent",
+          "text": "Resuming for the radio half: the sink, the always-on ESP-NOW, the emitter behind it."
+        },
+        {
+          "at": "2026-11-19T00:05:59Z",
+          "by": "agent",
+          "text": "The K7 can now send the player's audio over ESP-NOW. Every frame the station encodes goes to an emitter that keeps the last two and a half seconds, sends inside the credit the player reports, and resends a frame the player names - so a full buffer becomes a pause, not lost music. Until a player speaks, the emitter holds and sends nothing, exactly as designed.\n\nVerified on the board: the K7 boots with the emitter up (135 KB of history in PSRAM), holds the stream at 38 frames a second with `0 packets` sent, and its normal HTTP listener still answers and the card still plays - so with nobody listening it costs the broadcast nothing. Verified on the host: `make -C host check` green, with the wire and emitter checks around the credit, the resend and a refused radio.\n\nWhat you cannot hear yet: a player receiving it. The receiver is EN-03, and it is what turns `0 packets` into a stream. I finished this one because the sender is complete and testable on its own; the listening test belongs to EN-03 rather than to a sender with no counterpart.\n\nAlso changed: the share window no longer owns the radio - with the audio on, ESP-NOW stays up and the window only adds its beacon (spec H13 revised, E10 added). Worth knowing before the next handover test."
         }
       ]
     },
