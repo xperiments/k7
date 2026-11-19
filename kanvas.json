@@ -2991,7 +2991,7 @@
     {
       "id": "EN-03",
       "title": "The player listens over ESP-NOW instead of HTTP",
-      "state": "todo",
+      "state": "review",
       "group": "EN",
       "deps": ["EN-01", "EN-02"],
       "at": "2026-11-18T23:52:20Z",
@@ -3022,6 +3022,16 @@
           "at": "2026-11-19T00:20:06Z",
           "by": "agent",
           "text": "Fault is decided so the next sitting does not have to: R26 and R31 now say the Fault is two seconds of delivered frames that never decode - a firmware mismatch, not a link that will recover - rather than an HTTP body that is not MPEG. That removes the last design question from the rewrite; what is left is mechanical (t04/t05 onto injected packets, t03 deleted, the Fault case rewritten against frames)."
+        },
+        {
+          "at": "2026-11-19T00:30:27Z",
+          "by": "agent",
+          "text": "Resuming to close: the rewrite, the bench and the docs are done."
+        },
+        {
+          "at": "2026-11-19T00:30:27Z",
+          "by": "agent",
+          "text": "The player now takes its audio from the K7 over ESP-NOW and plays it - no HTTP request at all. Bench numbers with the K7 emitting: `receiving 44100 Hz, 128 kbps, 905 frames, ring 70/96 KB, flushed 0, lost 0, dups 28, assembled 905, dropped 1`, and the line output at `847872 frames, 0 underruns, 0 refused`. The K7 answers with `a player is listening` and sends two packets per frame; nothing was lost or stuttered in that window.\n\nWhat is gone: the HTTP stream client, the connect burst, the ten-second stall rules, the reconnect schedule and the suite that tested them. What replaced it: a receiver that reassembles fragments, holds the frames behind a gap for a second while the status packet names what is missing, and abandons the gap when the second is up. The Fault state survives with a new source: two seconds of delivered frames that never decode - two firmwares disagreeing about the format, not a link that will recover.\n\nThree things the bench taught, now fixed: the stream could not own a clock (the host harness drives a virtual one), the receiver's 12 KB of buffers could not live in .bss (the player's DRAM overflowed by 7 KB - they are heap now and the image is 891 KB with 15 % free), and a receiver that starts listening mid-frame fills every assembly slot with orphans and assembles nothing (`assembled 0, dropped 1498`) until a slot is evicted for the oldest incomplete frame.\n\nWhat to check: whether it sounds right - I have the counters, not your ears. And one risk this ticket leaves: the handover has not been re-tested since the radio's lifecycle changed to always-on, because that needs a window opened on the panel. If the share window misbehaves, that is the first place to look."
         }
       ]
     },
