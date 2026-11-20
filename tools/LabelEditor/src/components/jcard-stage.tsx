@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Ruler, Scan } from "lucide-react";
+import { Scan } from "lucide-react";
 
-import { Badge } from "@/components/reui/badge";
 import {
   Select,
   SelectContent,
@@ -188,20 +187,6 @@ export function JCardStage() {
   return (
     <section className="flex min-h-0 min-w-0 flex-col bg-background h-full" aria-label="J-card canvas">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
-        <Badge variant="outline" size="sm" className="gap-1.5 tabnum">
-          <Ruler className="size-3" />
-          Sheet {JCARD_W} × {JCARD_H}
-        </Badge>
-        <Badge
-          variant="outline"
-          size="sm"
-          className="hidden gap-1.5 text-muted-foreground 2xl:inline-flex"
-        >
-          320 units / in
-        </Badge>
-        <span className="hidden whitespace-nowrap text-xs text-muted-foreground tabnum xl:inline">
-          Flap 320 · Spine 160 · Cover 820
-        </span>
         <div className="ml-auto flex items-center gap-1.5">
           <ToggleGroup
             value={[ed.focus]}
