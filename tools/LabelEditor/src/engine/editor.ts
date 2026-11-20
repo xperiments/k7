@@ -216,8 +216,10 @@ export class Editor {
     return list.filter((o) => ids.includes(o.id));
   }
   roleColor(r: string): string | null {
-    // The J-card has no LayerMask: its paper is the container's sheet colour, and its roles
-    // are the same eleven.
+    // The J-card has no LayerMask, and its paper is the sheet's own: the label's paper and
+    // the sheet's move independently (Spec §2), and the webapp draws `jcard.paper` on the
+    // case. Its other roles are the container's, the same eleven.
+    if (this.surface === "jcard" && r === "paper") return this.jcard.paper;
     return roleColorOf(r, this.surface === "jcard" ? null : this.mask, this.tpl);
   }
   fillOf(o: Obj): string {
@@ -1312,9 +1314,12 @@ export class Editor {
   }
   setRoleColor(role: string, c: string, coalesce = true) {
     if (role === "paper") {
-      // The label's paper is the mask's, and the mask's colour is the container's ink.
-      this.tpl.inks.paper = c;
-      if (this.mask) this.mask.color = c;
+      // Two papers: the label's is the mask's, and the J-card's sheet is its own (Spec §2).
+      if (this.surface === "jcard") this.jcard.paper = c;
+      else {
+        this.tpl.inks.paper = c;
+        if (this.mask) this.mask.color = c;
+      }
     } else if (role === "ink") this.tpl.inks.ink = c;
     else if (role === "rule") this.tpl.inks.rule = c;
     else if (/^band\.[0-7]$/.test(role)) this.tpl.inks.band[+role.slice(5)] = c;
