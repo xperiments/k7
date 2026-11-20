@@ -3127,7 +3127,7 @@
     {
       "id": "EN-09",
       "title": "A refused listener is told so",
-      "state": "review",
+      "state": "done",
       "group": "EN",
       "deps": ["EN-07"],
       "at": "2026-11-19T03:01:03Z",
@@ -3149,7 +3149,7 @@
     {
       "id": "SI-08",
       "title": "The Site installs the K7Player as well as the K7",
-      "state": "review",
+      "state": "done",
       "group": "SI",
       "at": "2026-11-19T13:07:09Z",
       "by": "lead",
@@ -3175,7 +3175,7 @@
     {
       "id": "EN-10",
       "title": "The radio's receive callback sends, and one stuck callback takes the station with it",
-      "state": "review",
+      "state": "done",
       "group": "EN",
       "at": "2026-11-19T13:30:39Z",
       "by": "lead",
@@ -3196,7 +3196,7 @@
     {
       "id": "TN-01",
       "title": "The tone moves to the output that makes the sound",
-      "state": "review",
+      "state": "done",
       "group": "TN",
       "at": "2026-11-20T00:14:36Z",
       "by": "lead",
@@ -3217,12 +3217,24 @@
     {
       "id": "TN-02",
       "title": "The K7 sends its tone to the player",
-      "state": "todo",
+      "state": "review",
       "group": "TN",
       "deps": ["TN-01"],
       "at": "2026-11-20T00:14:36Z",
       "by": "lead",
-      "desc": "The panel's four knobs get one owner in app_services; the K7 sends the current GAIN, HI, MID and LOW over ESP-NOW as a 10-byte packet on every change and once a second. The player's status says whether it can apply them, and the broadcast's tone is bypassed only when it has said so, so an old player or an old K7 keeps today's behaviour. The send goes through the existing radio worker, never the receive callback. Finished when the host tests pin the bytes, the capability and the fallback, and the K7's firmware builds."
+      "desc": "The panel's four knobs get one owner in app_services; the K7 sends the current GAIN, HI, MID and LOW over ESP-NOW as a 10-byte packet on every change and once a second. The player's status says whether it can apply them, and the broadcast's tone is bypassed only when it has said so, so an old player or an old K7 keeps today's behaviour. The send goes through the existing radio worker, never the receive callback. Finished when the host tests pin the bytes, the capability and the fallback, and the K7's firmware builds.",
+      "notes": [
+        {
+          "at": "2026-11-20T00:23:04Z",
+          "by": "lead",
+          "text": "Plan: the 0x06 wire and status flag, the K7's tone source in app_services, the board send through the radio worker, the capability fallback, the host tests, and the K7 build. The player's DSP stays TN-03."
+        },
+        {
+          "at": "2026-11-20T00:32:51Z",
+          "by": "lead",
+          "text": "The K7's half is built: one owner for the four values, the 10-byte tone packet on the radio, and the capability fallback.\n\n- **For you:** the EQ knobs publish through app_services now. The K7's broadcast keeps the tone unless a player's status says it applies it; then the K7 goes flat and starts sending the four values. With today's player (no flag) nothing audible changes; with the TN-03 player the knob will be heard at once.\n- **The wire:** `0x06`, 10 bytes, GAIN/LOW/MID/HIGH in centi-dB, sent on every change and once a second by the radio worker. No ack; the repeat is the repair. The status gains one optional trailing flags byte; an old player's shorter packet reads as 0 and an old K7 ignores the extra byte.\n- **The guard:** only the current peer's status can set the capability, so another device's status cannot flip it. A failed send stays dirty for the next pass, and the tone's lock never serialises with the audio's.\n- **Checked:** host unit tests (124 checks in t43, 53 in t44), layering, integration and the player's host check pass; the K7 and player firmwares build. The full `make -C host check` stops at the label page because Chrome's GPU process is unusable here (the proposed LB-09), not this change. One setup integration check flaked once and passed on the rerun.\n- **Not covered:** the radio send and the audible fallback are board-tier, in TN-04. No board flash.\n\nWhat to check: with today's player the board should log no `espnow tone:` line and the S3 tone should behave exactly as before; that is the fallback. The new path needs TN-03's player."
+        }
+      ]
     },
     {
       "id": "TN-03",
