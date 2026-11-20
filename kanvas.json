@@ -3239,12 +3239,24 @@
     {
       "id": "TN-03",
       "title": "The player applies the K7's tone",
-      "state": "todo",
+      "state": "review",
       "group": "TN",
       "deps": ["TN-01"],
       "at": "2026-11-20T00:14:36Z",
       "by": "lead",
-      "desc": "The player takes the K7's tone packet, holds the four targets, and runs the existing tone_eq on the decoded PCM just before the line output. It starts neutral, so an old K7's tone is not doubled; a rate change rebuilds the filters and keeps the targets. Finished when the player's host tests show the gain, the low shelf and the neutral case, the player's firmware builds, and nothing in the K7's UI or the web app changes."
+      "desc": "The player takes the K7's tone packet, holds the four targets, and runs the existing tone_eq on the decoded PCM just before the line output. It starts neutral, so an old K7's tone is not doubled; a rate change rebuilds the filters and keeps the targets. Finished when the player's host tests show the gain, the low shelf and the neutral case, the player's firmware builds, and nothing in the K7's UI or the web app changes.",
+      "notes": [
+        {
+          "at": "2026-11-20T00:34:51Z",
+          "by": "lead",
+          "text": "Plan: a player_tone module (parse, targets, rate, tone_eq), the playout call after decode, the 0x06 dispatch on the player's radio, the status tone flag, the host tone test, the player build, and the README/context lines that now describe both halves."
+        },
+        {
+          "at": "2026-11-20T00:38:11Z",
+          "by": "lead",
+          "text": "The player's half is built: the K7's tone now runs at the player's output.\n\n- **What it does:** the radio hands `0x06` to a `player_tone` module, which keeps the four targets and runs `tone_eq` on the decoded PCM after the ring and before the line output. It starts neutral, so an old K7's broadcast tone is not doubled, and a rate change rebuilds the filters while keeping the targets.\n- **The handshake:** the player's status now carries the tone flag, so a new K7 goes flat and sends the values; an old K7 ignores the byte and keeps its own tone, and the player stays neutral for it. Both old pairs behave exactly as before.\n- **What is not changed:** the K7's UI and the web app. This task is the player's DSP, the radio dispatch and the status bit; the README and the player's glossary now describe both halves.\n\nChecked: the player's host check passes (t04 now proves the tone is applied at the output, t07 pins neutral, GAIN +6, LOW +6 and -26, a malformed packet and a rate change), layering passes, and the player's firmware builds (0xdb870, 14% of the app partition free). The K7's firmware is unchanged from TN-02. No board flash; that is TN-04.\n\nWhat to check: the two test cases above and the player's build. TN-04 is the one that hears it: a new K7 and a new player, a knob at once, the old-player fallback and the browser's flat stream."
+        }
+      ]
     },
     {
       "id": "TN-04",
