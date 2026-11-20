@@ -154,7 +154,9 @@ the sheet's proportions are exact.
   is a rect whose `r` is `min(w, h) / 2`; a `text` with `x, y, w, rot?, font, color, align`
   and either `slot` (dynamic) or `text` (static, at the back of the same array). A dynamic text
   carries `preview` for the editor; the webapp ignores it. The primitive record is the label
-  spec's, with the J-card's font roles and no `still`.
+  spec's, with the J-card's font roles and no `still`. **A text's height is its own lines'**:
+  that box is what `rot` turns about, as the label's and the editor's canvas do, and the
+  sheet's bottom caps it - the lines that do not fit end in an ellipsis.
 - **The cover has a safe square.** The App's album card is square, so the editor draws the
   central 820x820 of the cover - x 480-1300, y 230-1050 - as the region the card shows. The
   design's words belong inside it; the rest is the case's portrait face.

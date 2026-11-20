@@ -115,8 +115,8 @@ function textNode(
    * A text's own box has a width and no height (k7art.md §4). The sheet's bottom is
    * therefore its only bound: it wraps to `w` and grows downward, and a value taller than
    * the rest of the sheet is clamped to the lines that fit and ends in an ellipsis, as the
-   * label's printed box is cropped. `lines` is in design units; the height is the same
-   * number as a share of the sheet.
+   * label's printed box is cropped. `lines` is in design units; the cap is the same number
+   * as a share of the sheet.
    */
   const lines = Math.max(1, Math.floor((JCARD_HEIGHT - prim.y) / (font.size * LINE_HEIGHT)));
   const color = roleColor(design.inks, design.jcard.paper, prim.color) ?? design.inks.ink;
@@ -129,7 +129,10 @@ function textNode(
       left: `${(prim.x / JCARD_WIDTH) * 100}%`,
       top: `${(prim.y / JCARD_HEIGHT) * 100}%`,
       width: `${(prim.w / JCARD_WIDTH) * 100}%`,
-      height: `${((lines * font.size * LINE_HEIGHT) / JCARD_HEIGHT) * 100}%`,
+      /* A cap, not a height: the box is the text's own, which is what its rotation turns
+       * about (the editor's canvas draws the same box). A stretched box would swing a
+       * rotated line off its panel. */
+      maxHeight: `${((lines * font.size * LINE_HEIGHT) / JCARD_HEIGHT) * 100}%`,
       color,
       fontFamily: face.family,
       fontWeight: face.weight,

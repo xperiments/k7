@@ -96,7 +96,7 @@ describe('the J-card renderer', () => {
     expect(number(spine.nodes[0]?.style.fontSize)).toBeCloseTo((136 / 160) * 100);
   });
 
-  it('rotates a prim about its own centre', () => {
+  it('rotates a prim about its own box, which for a text is its lines', () => {
     const drawn = design([
       { t: 'rect', x: 320, y: 40, w: 160, h: 1200, fill: 'band.1', rot: 90 },
       { t: 'text', slot: 'title', x: 540, y: 900, w: 700, font: 'numeral', color: 'ink', align: 'left', rot: -12 },
@@ -106,6 +106,10 @@ describe('the J-card renderer', () => {
     expect(nodes[0]?.style.transform).toBe('rotate(90deg)');
     expect(nodes[1]?.style.transform).toBe('rotate(-12deg)');
     expect(nodes[1]?.style.transformOrigin).toBe('50% 50%');
+    /* The box the rotation turns about is the text's own: the sheet's bottom caps it, it
+       does not stretch it. A stretched box would swing the rotated line off its panel. */
+    expect(nodes[1]?.style.height).toBeUndefined();
+    expect(number(nodes[1]?.style.maxHeight)).toBeGreaterThan(0);
   });
 
   it('wraps a text to its width and ellipsises the lines that run off the sheet', () => {
@@ -125,7 +129,7 @@ describe('the J-card renderer', () => {
     /* 220 units are left below y=1060; a 56-unit title needs 67.2 a line, so three fit. */
     const lines = Math.floor((1280 - 1060) / (56 * 1.2));
     expect(node?.style.WebkitLineClamp).toBe(lines);
-    expect(number(node?.style.height)).toBeCloseTo(((lines * 56 * 1.2) / 1280) * 100);
+    expect(number(node?.style.maxHeight)).toBeCloseTo(((lines * 56 * 1.2) / 1280) * 100);
   });
 
   it('ignores the editor preview and binds a slot to the App field', () => {
