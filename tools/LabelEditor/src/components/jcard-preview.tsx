@@ -2,7 +2,6 @@ import { useEditor } from "@/hooks/use-editor";
 import { JCARD_H, JCARD_PARTS } from "@/engine/jcard";
 import type { JCardPart } from "@/engine/jcard";
 import { alignOf } from "@/engine/tpl";
-import type { Obj } from "@/engine/types";
 
 /**
  * The J-card's preview: the same case the albums draw, carrying the sheet's own parts.
