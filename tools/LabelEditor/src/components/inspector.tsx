@@ -12,6 +12,7 @@ import {
   MousePointerClick,
   PanelRightClose,
   PanelRightOpen,
+  Plus,
   SquareDashed,
   Trash2,
 } from "lucide-react";
@@ -52,6 +53,7 @@ import {
 import { useEditor } from "@/hooks/use-editor";
 import type { Obj } from "@/engine/types";
 import {
+  CANVAS_MAX,
   FROLES,
   PAL,
   PALETTE,
@@ -331,13 +333,61 @@ function DesignPanel() {
       </Section>
 
       <Section title="Canvas">
-        <ColourRow label="Background" value={ed.bg} onChange={(v) => ed.setBg(v)} />
+        <ColourRow label="Active background" value={ed.bg} onChange={(v) => ed.setBg(v)} />
+        <div
+          className="flex flex-wrap items-center gap-1.5"
+          role="group"
+          aria-label="Canvas backgrounds"
+        >
+          {ed.bgs.map((c, i) => (
+            <button
+              key={i}
+              type="button"
+              title={`Background ${i + 1} · ${c}`}
+              aria-label={`Background ${i + 1}`}
+              aria-pressed={i === ed.bgi}
+              onClick={() => ed.selectBg(i)}
+              className={`size-6 rounded-full border transition-colors ${
+                i === ed.bgi
+                  ? "border-primary ring-2 ring-primary/40"
+                  : "border-border hover:border-foreground/50"
+              }`}
+              style={{ background: c }}
+            />
+          ))}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => ed.addBg()}
+                  disabled={ed.bgs.length >= CANVAS_MAX}
+                  aria-label="Add a background"
+                >
+                  <Plus />
+                </Button>
+              }
+            />
+            <TooltipContent>Add a background (copies the active one)</TooltipContent>
+          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => ed.removeBg()}
+            disabled={ed.bgs.length <= 1}
+            aria-label="Remove the active background"
+          >
+            <Trash2 />
+          </Button>
+        </div>
         <div className="flex items-center justify-between rounded-md border border-border px-2 py-1.5">
           <span className="text-xs text-muted-foreground">Screen</span>
           <span className="text-xs tabnum">800 × 480</span>
         </div>
         <p className="text-xs text-muted-foreground">
-          The print sits at 25, 19 on the panel: the label the device draws.
+          The page behind the label while the two-finger pose shows the tape. Only the active
+          background is packed; the print sits at 25, 19.
         </p>
       </Section>
 

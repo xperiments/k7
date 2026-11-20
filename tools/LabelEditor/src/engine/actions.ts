@@ -1,5 +1,6 @@
 import type { Editor } from "./editor";
 import { downloadBlob } from "./files";
+import { DEFAULT_CANVAS } from "./tpl";
 import { PRINT_H, PRINT_W } from "./vocab";
 
 /** The document as the editor's own file: reopens here, and is not a label template. */
@@ -9,6 +10,8 @@ export function saveDocument(ed: Editor): string {
     w: PRINT_W,
     h: PRINT_H,
     bg: ed.bg,
+    bgs: ed.bgs,
+    bgi: ed.bgi,
     objs: ed.objs,
     groups: ed.groups,
     mask: ed.mask,
@@ -40,6 +43,8 @@ export async function openFile(ed: Editor, file: File): Promise<string> {
     w?: number;
     h?: number;
     bg?: string;
+    bgs?: string[];
+    bgi?: number;
     groups?: import("./types").Group[];
     mask?: import("./types").Mask | null;
     tpl?: import("./types").Tpl | null;
@@ -62,7 +67,9 @@ export async function openFile(ed: Editor, file: File): Promise<string> {
     {
       w: d.w ?? PRINT_W,
       h: d.h ?? PRINT_H,
-      bg: d.bg || "#ffffff",
+      bg: d.bg || DEFAULT_CANVAS,
+      bgs: d.bgs,
+      bgi: d.bgi,
       objs,
       groups: d.groups || [],
       mask: d.mask ?? null,

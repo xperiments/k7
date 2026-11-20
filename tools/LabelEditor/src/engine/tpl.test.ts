@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildTemplate,
+  canvasOf,
+  DEFAULT_CANVAS,
   defaultTpl,
   importTemplate,
   syncSlots,
@@ -78,11 +80,48 @@ describe("buildTemplate", () => {
       "id",
       "name",
       "space",
+      "canvas",
       "slots",
       "inks",
       "fonts",
       "prims",
     ]);
+  });
+
+  it("carries the canvas presets and the active one", () => {
+    const { doc, errs } = buildTemplate(objs, mask, design(), {
+      backgrounds: ["#101010", "#f5f1e6"],
+      active: 1,
+    });
+    expect(errs).toEqual([]);
+    expect(doc.canvas).toEqual({ backgrounds: ["#101010", "#f5f1e6"], active: 1 });
+  });
+
+  it("refuses a canvas with no background, over the cap, or a bad colour", () => {
+    expect(
+      buildTemplate(objs, mask, design(), { backgrounds: [], active: 0 }).errs.join("\n"),
+    ).toContain("canvas: 0 backgrounds");
+    expect(
+      buildTemplate(objs, mask, design(), {
+        backgrounds: Array.from({ length: 9 }, () => "#101010"),
+        active: 0,
+      }).errs.join("\n"),
+    ).toContain("canvas: 9 backgrounds");
+    expect(
+      buildTemplate(objs, mask, design(), {
+        backgrounds: ["#nope", "#101010"],
+        active: 0,
+      }).errs.join("\n"),
+    ).toContain('canvas.backgrounds[0] "#nope" is not #RRGGBB');
+  });
+
+  it("refuses an active background outside the list", () => {
+    expect(
+      buildTemplate(objs, mask, design(), {
+        backgrounds: ["#101010", "#f5f1e6"],
+        active: 2,
+      }).errs.join("\n"),
+    ).toContain("canvas.active 2 is not an index into 2 backgrounds");
   });
 
   it("refuses an id that does not look like label.my-name", () => {
@@ -179,9 +218,37 @@ describe("importTemplate", () => {
     const tpl = design();
     const { doc } = buildTemplate(objs, mask, tpl);
     const back = importTemplate(tplText(doc), "#c7a867");
-    const again = buildTemplate(back.objs, back.mask, back.tpl);
+    const again = buildTemplate(back.objs, back.mask, back.tpl, back.canvas);
     expect(again.errs).toEqual([]);
     expect(tplText(again.doc)).toBe(tplText(doc));
+  });
+
+  it("carries the canvas back, and refuses a malformed one", () => {
+    const { doc } = buildTemplate(objs, mask, design(), {
+      backgrounds: ["#101010", "#f5f1e6"],
+      active: 1,
+    });
+    expect(importTemplate(tplText(doc), "#c7a867").canvas).toEqual({
+      backgrounds: ["#101010", "#f5f1e6"],
+      active: 1,
+    });
+    doc.canvas = { backgrounds: ["#101010"], active: 3 };
+    expect(() => importTemplate(JSON.stringify(doc), "#c7a867")).toThrow(
+      "canvas.active 3 is not an index into 1 backgrounds",
+    );
+    doc.canvas = { backgrounds: ["#101010", "#nope"], active: 0 };
+    expect(() => importTemplate(JSON.stringify(doc), "#c7a867")).toThrow(
+      'canvas.backgrounds[1] "#nope" is not #RRGGBB',
+    );
+  });
+
+  it("opens a design without a canvas on the panel's page", () => {
+    const { doc } = buildTemplate(objs, mask, design());
+    delete doc.canvas;
+    expect(importTemplate(tplText(doc), "#c7a867").canvas).toEqual({
+      backgrounds: [DEFAULT_CANVAS],
+      active: 0,
+    });
   });
 
   it("refuses a space that is not the print", () => {
@@ -217,5 +284,25 @@ describe("importTemplate", () => {
     expect(() => importTemplate(JSON.stringify(noPaper), "#c7a867")).toThrow(
       "aperture without a paper",
     );
+  });
+});
+
+describe("canvasOf", () => {
+  it("turns a document's single bg into one preset", () => {
+    expect(canvasOf({ bg: "#ffffff" })).toEqual({
+      backgrounds: ["#ffffff"],
+      active: 0,
+    });
+  });
+
+  it("keeps a preset list and clamps an active index that is past it", () => {
+    expect(canvasOf({ bgs: ["#101010", "#f5f1e6"], bgi: 5 })).toEqual({
+      backgrounds: ["#101010", "#f5f1e6"],
+      active: 1,
+    });
+  });
+
+  it("starts a document with neither on the panel's page", () => {
+    expect(canvasOf({})).toEqual({ backgrounds: [DEFAULT_CANVAS], active: 0 });
   });
 });

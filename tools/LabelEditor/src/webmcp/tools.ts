@@ -3,6 +3,7 @@ import type { Obj, Tool } from "@/engine/types";
 import type { LabelTool } from "@/webmcp/types";
 import { skillProse } from "./skill";
 import {
+  CANVAS_MAX,
   FROLES,
   PRINT_H,
   PRINT_W,
@@ -139,6 +140,8 @@ function designSummary(ed: Editor) {
     templateId: ed.tpl.id,
     templateName: ed.tpl.name,
     background: ed.bg,
+    backgrounds: ed.bgs,
+    backgroundIndex: ed.bgi,
     inks: { ink: ed.tpl.inks.ink, rule: ed.tpl.inks.rule, band: ed.tpl.inks.band },
     paper: ed.mask ? { colour: ed.mask.color, radius: ed.mask.radius } : null,
     fonts: FROLES.map((role) => ({
@@ -196,6 +199,8 @@ export function labelEditorTools(
             templateId: ed.tpl.id,
             templateName: ed.tpl.name,
             background: ed.bg,
+            backgrounds: ed.bgs,
+            backgroundIndex: ed.bgi,
             layers: ed.objs.map((o) => layerSummary(ed, o)),
             mask: ed.mask
               ? { colour: ed.mask.color, radius: ed.mask.radius }
@@ -554,11 +559,18 @@ export function labelEditorTools(
     {
       name: "label-editor-set-design",
       description:
-        "Set the design's template id, name or background, its colourway (ink, rule, the eight bands, the paper), its paper radius, or one of its type roles' face and size. Every colour is a hex string; a face and size must be a pair the sheet carries.",
+        "Set the design's template id or name, its canvas backgrounds (the presets and the active one), its colourway (ink, rule, the eight bands, the paper), its paper radius, or one of its type roles' face and size. Every colour is a hex string; a face and size must be a pair the sheet carries.",
       inputSchema: schema({
         templateId: str("The template id, like label.my-design; it names the exported file."),
         name: str("The design's human name."),
-        background: str("The screen background behind the print, as #rrggbb."),
+        background: str("The active canvas background, as #rrggbb; it sets the active preset."),
+        backgrounds: list(
+          `The canvas background presets, as #rrggbb strings, in order: one to ${CANVAS_MAX}.`,
+          { type: "string" },
+        ),
+        activeBackground: num("The index of the active canvas background preset.", {
+          minimum: 0,
+        }),
         ink: str("The colour of the ink role, as #rrggbb."),
         rule: str("The colour of the rule role, as #rrggbb."),
         bands: list("The eight band colours, as #rrggbb strings, in band order.", {
@@ -596,8 +608,30 @@ export function labelEditorTools(
         }
         const name = readStr(args, "name");
         if (name !== undefined) ed.tpl.name = name;
+        if (args.backgrounds !== undefined) {
+          if (
+            !Array.isArray(args.backgrounds) ||
+            args.backgrounds.length < 1 ||
+            args.backgrounds.length > CANVAS_MAX
+          )
+            throw new Error(`backgrounds must be one to ${CANVAS_MAX} colours`);
+          const backgrounds = args.backgrounds.map((c, i) => {
+            if (typeof c !== "string" || !HEX.test(c))
+              throw new Error(`backgrounds[${i}] must be a colour like #909090`);
+            return c.toLowerCase();
+          });
+          ed.setCanvas(backgrounds, ed.bgi);
+        }
+        const activeBackground = readNum(args, "activeBackground", 0);
+        if (activeBackground !== undefined) {
+          if (!Number.isInteger(activeBackground))
+            throw new Error("activeBackground must be an integer");
+          if (activeBackground >= ed.bgs.length)
+            throw new Error(`activeBackground must be below ${ed.bgs.length}`);
+          ed.selectBg(activeBackground);
+        }
         const background = readHex(args, "background");
-        if (background) ed.bg = background;
+        if (background) ed.setBg(background);
         const ink = readHex(args, "ink");
         if (ink) ed.tpl.inks.ink = ink;
         const rule = readHex(args, "rule");

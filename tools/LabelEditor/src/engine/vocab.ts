@@ -47,6 +47,7 @@ export const DEFAULT_BANDS = [
 // The vocabulary, read the way the editor needs it.
 export const SLOTS = VOCAB.slots;
 export const SLOT_CEILING = VOCAB.value;
+export const CANVAS_MAX = VOCAB.canvas;
 export const WIN = VOCAB.aperture;
 export const LIMITS = VOCAB.limits;
 export const COORDS = VOCAB.coords;

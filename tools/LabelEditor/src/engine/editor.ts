@@ -1,5 +1,6 @@
 import {
   BUILTIN_FONTS,
+  CANVAS_MAX,
   FROLES,
   PAL,
   PALETTE,
@@ -12,6 +13,8 @@ import {
 import {
   alignOf,
   buildTemplate,
+  canvasOf,
+  DEFAULT_CANVAS,
   defaultTpl,
   importTemplate,
   migrateBands,
@@ -67,7 +70,10 @@ export class Editor {
   active = 0;
   objs: Obj[] = [];
   nid = 0;
-  bg = "#ffffff";
+  /** The active canvas background; `bgs` and `bgi` carry the presets and the active index. */
+  bg = DEFAULT_CANVAS;
+  bgs: string[] = [DEFAULT_CANVAS];
+  bgi = 0;
   groups: Group[] = [];
   mask: Mask | null = null;
   tpl: Tpl = defaultTpl();
@@ -304,7 +310,9 @@ export class Editor {
         ({
           w: PRINT_W,
           h: PRINT_H,
-          bg: "#ffffff",
+          bg: DEFAULT_CANVAS,
+          bgs: [DEFAULT_CANVAS],
+          bgi: 0,
           objs: [],
           nid: 0,
           mask: { color: "#c7a867", radius: 10, collapsed: false },
@@ -322,6 +330,8 @@ export class Editor {
       w: PRINT_W,
       h: PRINT_H,
       bg: this.bg,
+      bgs: this.bgs,
+      bgi: this.bgi,
       objs: this.objs,
       nid: this.nid,
       groups: this.groups,
@@ -357,7 +367,9 @@ export class Editor {
             this.docNew("Untitled 1", {
               w: PRINT_W,
               h: PRINT_H,
-              bg: "#ffffff",
+              bg: DEFAULT_CANVAS,
+              bgs: [DEFAULT_CANVAS],
+              bgi: 0,
               objs: this.defaultObjs(),
               nid: 4,
               mask: { color: "#c7a867", radius: 10, collapsed: false },
@@ -417,7 +429,10 @@ export class Editor {
     ];
   }
   applyDoc(d: Doc) {
-    this.bg = d.data.bg || "#ffffff";
+    const canvas = canvasOf(d.data);
+    this.bgs = canvas.backgrounds;
+    this.bgi = canvas.active;
+    this.bg = this.bgs[this.bgi] ?? DEFAULT_CANVAS;
     this.objs = d.data.objs;
     this.nid = d.data.nid || 0;
     this.groups = d.data.groups || [];
@@ -516,6 +531,8 @@ export class Editor {
       w: PRINT_W,
       h: PRINT_H,
       bg: this.bg,
+      bgs: this.bgs,
+      bgi: this.bgi,
       objs: this.objs,
       groups: this.groups,
       mask: this.mask,
@@ -545,12 +562,17 @@ export class Editor {
   private restore(s: string) {
     const d = JSON.parse(s) as {
       bg: string;
+      bgs?: string[];
+      bgi?: number;
       objs: Obj[];
       groups?: Group[];
       mask?: Mask | null;
       tpl?: Tpl;
     };
-    this.bg = d.bg;
+    const canvas = canvasOf(d);
+    this.bgs = canvas.backgrounds;
+    this.bgi = canvas.active;
+    this.bg = this.bgs[this.bgi] ?? DEFAULT_CANVAS;
     this.objs = d.objs;
     this.groups = d.groups || [];
     this.mask = d.mask || null;
@@ -1140,8 +1162,44 @@ export class Editor {
     this.emit();
   }
   setBg(v: string) {
+    if (!v || !this.bgs.length) return;
+    this.bgs[this.bgi] = v;
     this.bg = v;
     this.commit(true);
+    this.emit();
+  }
+  /** Replace the presets and the active one, from the agent tools or an import. */
+  setCanvas(backgrounds: string[], active = 0) {
+    if (!backgrounds.length || backgrounds.length > CANVAS_MAX) return;
+    this.bgs = backgrounds.slice();
+    this.bgi = clamp(active, 0, this.bgs.length - 1);
+    this.bg = this.bgs[this.bgi];
+    this.commit(false);
+    this.emit();
+  }
+  /** Add a preset after the active one, copying it, and select the copy. */
+  addBg(v = this.bg) {
+    if (this.bgs.length >= CANVAS_MAX) return;
+    this.bgs.splice(this.bgi + 1, 0, v);
+    this.bgi += 1;
+    this.bg = v;
+    this.commit(false);
+    this.emit();
+  }
+  selectBg(i: number) {
+    if (i < 0 || i >= this.bgs.length || i === this.bgi) return;
+    this.bgi = i;
+    this.bg = this.bgs[i];
+    this.commit(false);
+    this.emit();
+  }
+  removeBg(i = this.bgi) {
+    if (this.bgs.length <= 1 || i < 0 || i >= this.bgs.length) return;
+    this.bgs.splice(i, 1);
+    if (this.bgi > i) this.bgi -= 1;
+    this.bgi = clamp(this.bgi, 0, this.bgs.length - 1);
+    this.bg = this.bgs[this.bgi];
+    this.commit(false);
     this.emit();
   }
   setZoom(z: number) {
@@ -1179,7 +1237,10 @@ export class Editor {
     // never carries a width the canvas has not measured.
     this.fitStaticText();
     syncSlots(this.objs, this.tpl);
-    return buildTemplate(this.objs, this.mask, this.tpl);
+    return buildTemplate(this.objs, this.mask, this.tpl, {
+      backgrounds: this.bgs,
+      active: this.bgi,
+    });
   }
   templateText(): string {
     return tplText(this.buildTemplate().doc);
@@ -1187,6 +1248,9 @@ export class Editor {
   importTemplate(text: string) {
     const r = importTemplate(text, PALETTE[7].c);
     this.tpl = r.tpl;
+    this.bgs = r.canvas.backgrounds;
+    this.bgi = r.canvas.active;
+    this.bg = this.bgs[this.bgi] ?? DEFAULT_CANVAS;
     this.mask = r.mask;
     this.objs = r.objs;
     this.nid = r.nid;
@@ -1209,7 +1273,7 @@ export class Editor {
       syncSlots(objs, tpl);
       return {
         name: d.name,
-        errs: buildTemplate(objs, d.data.mask ?? null, tpl).errs,
+        errs: buildTemplate(objs, d.data.mask ?? null, tpl, canvasOf(d.data)).errs,
       };
     });
   }

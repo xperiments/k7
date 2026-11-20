@@ -14,7 +14,25 @@ import {
   slotOf,
 } from "./vocab";
 import { VOCAB } from "./vocab.generated";
-import type { FontRole, Group, Mask, Obj, Tpl } from "./types";
+import type { CanvasDoc, FontRole, Group, Mask, Obj, Tpl } from "./types";
+
+/** The panel's white page at the two-finger pose (`k_col_white`): a new design starts here. */
+export const DEFAULT_CANVAS = "#909090";
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+/**
+ * The canvas a document has: its presets and the active one. A document made before the
+ * presets existed carries one `bg`; that becomes its one preset.
+ */
+export function canvasOf(data: { bg?: string; bgs?: string[]; bgi?: number }): CanvasDoc {
+  const backgrounds =
+    Array.isArray(data.bgs) && data.bgs.length ? data.bgs.slice() : [data.bg || DEFAULT_CANVAS];
+  const active = Number.isInteger(data.bgi)
+    ? Math.min(Math.max(0, data.bgi!), backgrounds.length - 1)
+    : 0;
+  return { backgrounds, active };
+}
 
 /** The design a document starts from: its id, name, inks, font roles, slots and sims. */
 export function defaultTpl(): Tpl {
@@ -173,6 +191,7 @@ export interface TemplateDoc {
   name: string;
   space: { w: number; h: number };
   aperture?: { x: number; y: number; w: number; h: number; r: number };
+  canvas?: CanvasDoc;
   slots: Record<string, { max: number }>;
   inks: { paper: string | null; ink: string; rule: string; band: string[] };
   fonts: Record<FontRole, { ff: string; px: number }>;
@@ -188,6 +207,7 @@ export function buildTemplate(
   objs: Obj[],
   mask: Mask | null,
   tpl: Tpl,
+  canvas: CanvasDoc = { backgrounds: [DEFAULT_CANVAS], active: 0 },
 ): { doc: TemplateDoc; errs: string[] } {
   // The slots are the text layers' own list: settle it before the file is read.
   syncSlots(objs, tpl);
@@ -232,6 +252,22 @@ export function buildTemplate(
   )
     errs.push(
       `aperture: the Card's window is ${WIN.x},${WIN.y} ${WIN.w}x${WIN.h} r${WIN.r}, not ${AB.x},${AB.y} ${AB.w}x${AB.h} r${Math.round(ap!.r || 0)}`,
+    );
+
+  // The canvas presets are the editor's; the active colour is what the sheet carries. Check
+  // both here, so a design that cannot be packed says so at Export rather than at the build.
+  const bgs = Array.isArray(canvas?.backgrounds) ? canvas.backgrounds : [];
+  if (bgs.length < 1 || bgs.length > VOCAB.canvas)
+    errs.push(
+      `canvas: ${bgs.length} backgrounds, and a design carries one to ${VOCAB.canvas}`,
+    );
+  bgs.forEach((c, i) => {
+    if (!HEX.test(c || "")) errs.push(`canvas.backgrounds[${i}] "${c}" is not #RRGGBB`);
+  });
+  const canvasActive = canvas?.active ?? 0;
+  if (!Number.isInteger(canvasActive) || canvasActive < 0 || canvasActive >= bgs.length)
+    errs.push(
+      `canvas.active ${canvasActive} is not an index into ${bgs.length} backgrounds`,
     );
 
   // A role's face and size are the design's, but only the sheet's pairs exist as compiled fonts.
@@ -351,6 +387,15 @@ export function buildTemplate(
   // the only two answers the packer reads.
   if (AB)
     doc.aperture = { x: AB.x, y: AB.y, w: AB.w, h: AB.h, r: Math.round(ap!.r || 0) };
+  // The canvas travels with the design: the active preset is what the sheet carries, the
+  // rest are the editor's. A design without one leaves the panel's page alone.
+  doc.canvas = {
+    backgrounds: bgs.slice(),
+    active:
+      Number.isInteger(canvasActive) && canvasActive >= 0 && canvasActive < bgs.length
+        ? canvasActive
+        : 0,
+  };
   doc.slots = {};
   // The colourway and the typography travel with the design: a prim names a role, and a
   // role's colour and face are the design's, not the firmware's. paper is the LayerMask's
@@ -383,6 +428,7 @@ export interface ImportResult {
   groups: Group[];
   nid: number;
   name: string;
+  canvas: CanvasDoc;
 }
 
 /**
@@ -434,6 +480,30 @@ export function importTemplate(text: string, fallbackPaper: string): ImportResul
     throw new Error(
       `space is ${d.space ? `${d.space.w}x${d.space.h}` : "missing"}, not ${PRINT_W}x${PRINT_H}`,
     );
+  // The canvas is optional in the file - a design without one leaves the panel's page alone -
+  // but a declared one is the packer's problem too, so it is refused here at Open.
+  let canvas: CanvasDoc = canvasOf({});
+  if (d.canvas !== undefined) {
+    const c = d.canvas;
+    if (
+      !c ||
+      !Array.isArray(c.backgrounds) ||
+      c.backgrounds.length < 1 ||
+      c.backgrounds.length > VOCAB.canvas
+    )
+      throw new Error(
+        `canvas: ${c && Array.isArray(c.backgrounds) ? c.backgrounds.length : "no"} backgrounds, and a design carries one to ${VOCAB.canvas}`,
+      );
+    c.backgrounds.forEach((v, i) => {
+      if (typeof v !== "string" || !HEX.test(v))
+        throw new Error(`canvas.backgrounds[${i}] ${JSON.stringify(v)} is not #RRGGBB`);
+    });
+    if (!Number.isInteger(c.active) || c.active < 0 || c.active >= c.backgrounds.length)
+      throw new Error(
+        `canvas.active ${c.active} is not an index into ${c.backgrounds.length} backgrounds`,
+      );
+    canvas = { backgrounds: c.backgrounds.slice(), active: c.active };
+  }
   Object.keys(d.slots).forEach((k) => {
     tpl.slots[k] = { max: d.slots[k].max };
   });
@@ -514,5 +584,5 @@ export function importTemplate(text: string, fallbackPaper: string): ImportResul
       }),
     );
   }
-  return { tpl, mask, objs: out, groups: [], nid: id, name: d.name || "" };
+  return { tpl, mask, objs: out, groups: [], nid: id, name: d.name || "", canvas };
 }

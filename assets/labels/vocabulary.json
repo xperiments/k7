@@ -8,6 +8,7 @@
 
   "bands": 8,
   "value": 96,
+  "canvas": 8,
 
   "limits": { "prims": 48, "slots": 16, "templates": 32 },
 

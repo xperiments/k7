@@ -41,6 +41,9 @@ it, which is how a stripe runs off a sleeve.
 
 - **Paper** is the design's background: a rounded rect filling the print, its colour and
   radius the LayerMask's. A design without paper has no background.
+- **Canvas background** is the screen behind the print while the label is up: up to eight
+  presets with one active. Only the active colour is packed; a design without one leaves the
+  panel's page alone, and a new design starts on the panel's page grey (`#909090`).
 - **Ink, rule and eight bands** are the colour roles. A shape paints with any role (or one
   literal hex, explained in a note); a text prints in the ink or in one of the bands, never
   on the paper.

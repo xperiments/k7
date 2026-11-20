@@ -58,6 +58,12 @@ export interface Mask {
   collapsed: boolean;
 }
 
+/** The canvas backgrounds a design carries, and the one it shows while the tape is up. */
+export interface CanvasDoc {
+  backgrounds: string[];
+  active: number;
+}
+
 export interface Tpl {
   id: string;
   name: string;
@@ -70,7 +76,12 @@ export interface Tpl {
 export interface DocData {
   w: number;
   h: number;
+  /** The active canvas background; `bgs` carries the presets and `bgi` the active one. */
   bg: string;
+  /** The canvas background presets. Absent on a document made before they existed. */
+  bgs?: string[];
+  /** The active preset's index into `bgs`. */
+  bgi?: number;
   objs: Obj[];
   nid: number;
   groups?: Group[];

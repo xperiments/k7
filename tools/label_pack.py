@@ -597,6 +597,10 @@ def vocabulary_errors(v):
     if not isinstance(v.get("value"), int) or not 1 <= v["value"] <= 255:
         errors.append(f"{VOCABULARY}: value is {v.get('value')!r}, not 1..255")
 
+    canvas = v.get("canvas")
+    if not isinstance(canvas, int) or not 1 <= canvas <= 8:
+        errors.append(f"{VOCABULARY}: canvas is {canvas!r}, not 1..8 presets")
+
     limits = v.get("limits") or {}
     for key in ("prims", "slots", "templates"):
         if not isinstance(limits.get(key), int) or limits[key] < 1:
@@ -685,6 +689,7 @@ def vocab_header(v):
         f"#define LABEL_SPACE_H       {v['space']['h']}u",
         f"#define LABEL_BAND_COUNT    {v['bands']}u",
         f"#define LABEL_VALUE_MAX     {v['value']}u",
+        f"#define LABEL_CANVAS_MAX    {v['canvas']}u",
         f"#define LABEL_PRIM_MAX      {v['limits']['prims']}u",
         f"#define LABEL_SLOT_MAX      {v['limits']['slots']}u",
         f"#define LABEL_TEMPLATE_MAX  {v['limits']['templates']}u",
@@ -730,6 +735,7 @@ def vocab_block(v):
         f"r: {ap['r']} }},",
         f"  bands: {v['bands']},",
         f"  value: {v['value']},",
+        f"  canvas: {v['canvas']},",
         f"  limits: {{ prims: {lm['prims']}, slots: {lm['slots']}, "
         f"templates: {lm['templates']} }},",
         "  coords: {",

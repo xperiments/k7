@@ -33,6 +33,10 @@ route is blocked.
   radius taken from the LayerMask. `set-design` gives you one, and a new document starts with
   `#c7a867` at radius 10. Without paper a design has no background, and a shape may not fill
   with `paper` when there is none.
+- The **canvas background** is the 800 × 480 page behind the print while the two-finger pose
+  shows the tape: up to eight presets with one active, set through `set-design`'s `backgrounds`
+  and `activeBackground` (`background` sets the active preset's colour). Only the active preset
+  is packed; a design without one leaves the panel's page as it is.
 - Everything is drawn once, at one size. There is no zoom and no responsive layout.
 
 ## Before your first call
@@ -102,9 +106,11 @@ cut at 96 characters. A design with no layer at all is refused.
 
 1. **Read** — `label-editor-read`; note the window's strips, and the active design's errors.
 2. **A document** — `label-editor-document { action: "new", name: "…" }` for a clean design, or
-   work in the active one. A new document is a white screen, a paper mask and no layers.
+   work in the active one. A new document is the panel's page grey (`#909090`), a paper mask
+   and no layers.
 3. **The colourway** — `label-editor-set-design`: `templateId` (`label.my-name`), `name`,
-   `ink`, `rule`, the eight `bands`, `paper`, `paperRadius`.
+   `backgrounds` and `activeBackground` (or `background` for the active one), `ink`, `rule`, the
+   eight `bands`, `paper`, `paperRadius`.
 4. **Layers, back to front.** A layer added now prints over the ones before it;
    `label-editor-move-layer` raises, lowers, or sends one to the top or bottom. Rects make
    bands, rules and blocks.
@@ -216,13 +222,15 @@ Group layers into one layer group, or ungroup a group. Grouping needs the layers
 
 ### `label-editor-set-design`
 
-Set the design's template id, name or background, its colourway (ink, rule, the eight bands, the paper), its paper radius, or one of its type roles' face and size. Every colour is a hex string; a face and size must be a pair the sheet carries.
+Set the design's template id or name, its canvas backgrounds (the presets and the active one), its colourway (ink, rule, the eight bands, the paper), its paper radius, or one of its type roles' face and size. Every colour is a hex string; a face and size must be a pair the sheet carries.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
 | `templateId` | `string` |  | The template id, like label.my-design; it names the exported file. |
 | `name` | `string` |  | The design's human name. |
-| `background` | `string` |  | The screen background behind the print, as #rrggbb. |
+| `background` | `string` |  | The active canvas background, as #rrggbb; it sets the active preset. |
+| `backgrounds` | array of `string` |  | The canvas background presets, as #rrggbb strings, in order: one to 8. |
+| `activeBackground` | `number` |  | The index of the active canvas background preset. Minimum 0. |
 | `ink` | `string` |  | The colour of the ink role, as #rrggbb. |
 | `rule` | `string` |  | The colour of the rule role, as #rrggbb. |
 | `bands` | array of `string` |  | The eight band colours, as #rrggbb strings, in band order. |
