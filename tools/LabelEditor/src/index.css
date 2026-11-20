@@ -229,14 +229,13 @@
 }
 .k7-case-preview {
   position: relative;
-  width: 420px;
-  height: 540px;
-  transform: rotateY(-24deg) rotateX(-6deg);
   transform-style: preserve-3d;
-  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.k7-case-preview:hover {
-  transform: rotateY(-10deg) rotateX(-3deg);
+.k7-case-preview.is-spine {
+  transform: rotateY(90deg) rotateX(-4deg);
+}
+.k7-case-preview.is-cover {
+  transform: rotateY(0deg) rotateX(-4deg);
 }
 .k7-face {
   position: absolute;
