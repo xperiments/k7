@@ -194,7 +194,17 @@ export function jcardFrame(
   );
 
   return {
-    sheet: { position: 'absolute', left, top, width, height },
+    sheet: {
+      position: 'absolute',
+      left,
+      top,
+      width,
+      height,
+      /* The sheet is paper, and its colour is the design's own: the case's face under it is
+       * the chrome's orange, so a design that does not lay a `paper` rect over the sheet
+       * used to show the moulding through it. */
+      background: design.jcard.paper,
+    },
     nodes,
   };
 }

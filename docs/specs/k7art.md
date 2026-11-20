@@ -93,7 +93,9 @@ three the editor draws. Both sections use them; a role is a role on both media.
 - **`inks`** is `paper`, `ink`, `rule` and `band[0..7]`. `paper` is always a `#RRGGBB` colour:
   it is the label's LayerMask when the label has one. The J-card's sheet is its own
   `jcard.paper`, a `#RRGGBB` colour of the J-card section; the two start equal and move
-  independently, so changing one never changes the other. `band` has four to eight colours; the
+  independently, so changing one never changes the other. **The sheet itself is painted in
+  it**, so a design is papered with or without a full-sheet rect; the case's moulding is the
+  chrome's and never shows through a J-card. `band` has four to eight colours; the
   J-card may use any of the eight, and a design with four leaves the rest to the editor's
   defaults.
 - **The faces are the same three**: `Archivo Narrow 600`, `Barlow Condensed 700` and

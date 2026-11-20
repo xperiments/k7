@@ -96,6 +96,16 @@ describe('the J-card renderer', () => {
     expect(number(spine.nodes[0]?.style.fontSize)).toBeCloseTo((136 / 160) * 100);
   });
 
+  it('lays the sheet in the design paper, with or without a paper rect', () => {
+    /* The sheet is paper: a design that never paints a `paper` rect still has one, and the
+       case's orange face is the chrome's, not the J-card's. */
+    const bare = design([
+      { t: 'text', slot: 'title', x: 540, y: 900, w: 700, font: 'numeral', color: 'ink', align: 'left' },
+    ]);
+    const { sheet } = jcardFrame(bare, FIELDS, 'cover');
+    expect(sheet.background).toBe(INKS.paper);
+  });
+
   it('rotates a prim about its own box, which for a text is its lines', () => {
     const drawn = design([
       { t: 'rect', x: 320, y: 40, w: 160, h: 1200, fill: 'band.1', rot: 90 },
