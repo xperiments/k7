@@ -113,6 +113,20 @@ static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
     }
 }
 
+/* The panel shares the memory bus with the flash: a write takes the PSRAM window away from
+ * the scan for a few microseconds, and the picture stays a band to one side until the LCD
+ * engine is restarted (ADR 0055). The composition installs the screen's re-establish here,
+ * and every runtime NVS write below calls it once the commit has returned. */
+static app_board_flash_settled_fn s_flash_settled;
+
+void app_board_set_flash_settled(app_board_flash_settled_fn fn) { s_flash_settled = fn; }
+
+static void flash_settled(void)
+{
+    app_board_flash_settled_fn fn = s_flash_settled;
+    if (fn) fn();
+}
+
 /* An earlier build compiled the network in, and ESP-IDF persisted that station
  * configuration into its own NVS namespace on the first boot. The record is the only copy
  * now, so the old one is erased: wifi-provisioning.md P24 says the flash holds the
@@ -235,6 +249,7 @@ esp_err_t app_board_wifi_record_save(const wifi_record_t *rec)
     }
     if (e == ESP_OK) e = nvs_commit(h);
     nvs_close(h);
+    flash_settled();
     return e;
 }
 
@@ -273,6 +288,7 @@ esp_err_t app_board_setup_password_save(const char *password)
     }
     if (e == ESP_OK) e = nvs_commit(h);
     nvs_close(h);
+    flash_settled();
     return e;
 }
 
@@ -1324,6 +1340,7 @@ esp_err_t app_board_player_espnow_save(bool on)
     e = nvs_set_u8(h, PLAYER_PREF_KEY, on ? 1 : 0);
     if (e == ESP_OK) e = nvs_commit(h);
     nvs_close(h);
+    flash_settled();
     return e;
 }
 

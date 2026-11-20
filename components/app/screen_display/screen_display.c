@@ -740,6 +740,26 @@ esp_err_t screen_display_start(const char *music_dir)
     return ESP_OK;
 }
 
+void screen_display_flash_settled(void)
+{
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    /* The boot's own flash work runs before the first clock, so there is nothing to settle;
+     * the same is true of any write before the mark is on the glass. */
+    if (!s_disp || !s_frame_live) return;
+    if (!lvgl_port_lock(1000)) {
+        ESP_LOGW(TAG, "the picture was not settled: the LVGL port did not give its lock");
+        return;
+    }
+    esp_err_t err = panel_rgb_reinit();
+    lvgl_port_unlock();
+    if (err != ESP_OK)
+        ESP_LOGW(TAG, "the picture may sit offset: the scan did not restart (%s)",
+                 esp_err_to_name(err));
+    else
+        ESP_LOGI(TAG, "the panel's scan settled after a flash write");
+#endif
+}
+
 /* --------------------------------------------------------- the screen's lock */
 
 bool screen_capture_lock(void)

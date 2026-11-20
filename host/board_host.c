@@ -66,6 +66,10 @@ esp_err_t app_board_player_espnow_save(bool on)
     return ESP_OK;
 }
 
+/* The host draws into a PSRAM framebuffer with no scan-out behind it: there is no picture
+ * to settle. */
+void app_board_set_flash_settled(app_board_flash_settled_fn fn) { (void)fn; }
+
 bool app_board_wifi_record_load(wifi_record_t *out)
 {
     if (!out) return false;

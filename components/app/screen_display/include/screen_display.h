@@ -48,6 +48,14 @@ esp_err_t screen_display_mark(void);
  * Returns ESP_OK, or the reason the cassette could not be built; the mark stays up. */
 esp_err_t screen_display_start(const char *music_dir);
 
+/* Re-establish the panel's frame boundary after a flash write. The scan-out reads the
+ * framebuffers from PSRAM, and a flash access takes that window away for long enough to put
+ * the DMA and the LCD engine out of step: the picture then sits a band to one side until the
+ * engine is restarted (ADR 0055). The board calls this once a runtime NVS write has returned,
+ * from whatever task made it; before a picture is on the glass, or on a board with no panel,
+ * it does nothing. Safe to call from any task. */
+void screen_display_flash_settled(void);
+
 /* Where the RGB group's state goes: the strip's adapter (`components/app/strip`) installs here,
  * and nothing else does. `cb` is called with the whole state after every knob move, and once
  * when it is installed; NULL clears it.

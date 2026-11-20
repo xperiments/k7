@@ -268,6 +268,14 @@ void app_board_reboot_soon(uint32_t ms);
  * file. */
 app_board_update_t app_board_snapshot_update(void);
 
+/* A flash write has finished on the calling task, and the panel's scan may have lost the
+ * frame boundary while the cache was away. The adapter that owns the flash calls this after
+ * every runtime NVS write; the composition installs the screen's re-establish in it. NULL
+ * does nothing - the host has no panel, and a board without one has nothing to settle.
+ * Called on the writing task, so the callback must be safe from any task. */
+typedef void (*app_board_flash_settled_fn)(void);
+void app_board_set_flash_settled(app_board_flash_settled_fn fn);
+
 #ifdef __cplusplus
 }
 #endif

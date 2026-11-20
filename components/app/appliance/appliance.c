@@ -166,6 +166,11 @@ void appliance_run(void)
 
     app_board_log_hardware();
 
+    /* An NVS write while the panel scans takes the PSRAM window away from the scan-out and
+     * leaves the picture a band to one side (ADR 0055). The board calls this after every
+     * runtime write; before the first clock it is a no-op. */
+    app_board_set_flash_settled(screen_display_flash_settled);
+
     /* The Playlist selection's writer exists before a route or the broadcast can ask
      * for a write. A failure costs persistence, not the appliance: the RAM choice stands
      * for this session and the reason is in the log. */

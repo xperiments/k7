@@ -301,7 +301,10 @@ after the tape body and shown and hidden with the
   refresh timer is paused until then, because an RGB flush waits for the panel's vsync and a
   stopped engine never sends one. Nothing at runtime reads flash while the scan runs: the Shell
   is gone, the Snapshot is copied into PSRAM before the first clock, and the Playlist selection
-  is written to the SD card (ADR 0069). The black-frame guard that used to hide flash reads —
+  is written to the SD card (ADR 0069). A runtime NVS write — the Settings' transport choice, a
+  Wi-Fi record — still takes the window for the few microseconds of the commit, so the board
+  calls `screen_display_flash_settled()` once it returns and the scan is re-established before
+  the picture can stay a band to one side. The black-frame guard that used to hide flash reads —
   `screen_display_page_service()` — was removed with the last reader. `panel_rgb_reinit()` is
   still called at the mark-to-cassette handover, so a slip from anything that touched flash
   after the mark started is corrected before the cassette. `panel_rgb_clear()` fills both black
