@@ -35,8 +35,9 @@ route is blocked.
   with `paper` when there is none.
 - The **canvas background** is the cassette's body and the 800 × 480 screen behind it while the
   two-finger pose shows the tape: up to eight presets with one active, set through `set-design`'s
-  `backgrounds` and `activeBackground` (`background` sets the active preset's colour). Only the
-  active preset is packed; a design without one leaves the Track's cassette row as it is.
+  `backgrounds` and `activeBackground` (`background` sets the active preset's colour). The whole
+  cycle is packed; the K7 picks one by the Track's cassette row (`row % count`), so define seven
+  to pin one per row. A design without one leaves the Track's cassette row as it is.
 - Everything is drawn once, at one size. There is no zoom and no responsive layout.
 
 ## Before your first call
@@ -222,15 +223,15 @@ Group layers into one layer group, or ungroup a group. Grouping needs the layers
 
 ### `label-editor-set-design`
 
-Set the design's template id or name, its canvas backgrounds (the presets and the active one), its colourway (ink, rule, the eight bands, the paper), its paper radius, or one of its type roles' face and size. Every colour is a hex string; a face and size must be a pair the sheet carries.
+Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), its colourway (ink, rule, the eight bands, the paper), its paper radius, or one of its type roles' face and size. Every colour is a hex string; a face and size must be a pair the sheet carries.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
 | `templateId` | `string` |  | The template id, like label.my-design; it names the exported file. |
 | `name` | `string` |  | The design's human name. |
-| `background` | `string` |  | The active canvas background, as #rrggbb; it sets the active preset. |
-| `backgrounds` | array of `string` |  | The canvas background presets, as #rrggbb strings, in order: one to 8. |
-| `activeBackground` | `number` |  | The index of the active canvas background preset. Minimum 0. |
+| `background` | `string` |  | The active canvas background, as #rrggbb; it sets the editor's preview preset. |
+| `backgrounds` | array of `string` |  | The canvas background cycle, as #rrggbb strings: one to 8. The K7 picks one by the Track's cassette row. |
+| `activeBackground` | `number` |  | The index of the editor's preview preset. Minimum 0. |
 | `ink` | `string` |  | The colour of the ink role, as #rrggbb. |
 | `rule` | `string` |  | The colour of the rule role, as #rrggbb. |
 | `bands` | array of `string` |  | The eight band colours, as #rrggbb strings, in band order. |

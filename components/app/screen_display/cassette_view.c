@@ -104,6 +104,7 @@ static bool s_page_painted;           /* the screen's backdrop has been set once
 static lv_color_t s_painted_page;     /* and the colour it was set to */
 static cassette_ink_t s_row_ink;      /* the Track's cassette row, for the pose's restore */
 static bool s_row_ink_valid;
+static uint16_t s_cassette_row;       /* the row the track was given; picks the canvas */
 #if CONFIG_APP_UI_RENDER_BENCH
 static uint32_t s_bench_changed;      /* what the live bench's next frame will carry */
 #endif
@@ -166,6 +167,8 @@ static controls_intent_t controls_intent(screen_intent_t intent)
  * one frame. The flag keeps a repeated request from invalidating the whole panel for a colour
  * that is already there. */
 
+static bool label_canvas_rgb(lv_color_t *out);
+
 /* The screen's backdrop is the page - or, at the two-finger pose, the label's own canvas.
  * Painted only when the colour changes: the pose's entry and a design change are the only
  * things that can move it, and a repeated paint would invalidate the whole panel. */
@@ -173,12 +176,22 @@ static void page_paint(void)
 {
     if (!s_screen) return;
     lv_color_t colour = s_painted_white ? k_col_white : k_col_bg;
-    uint32_t rgb;
-    if (s_ctl.full && cassette_label_canvas(&rgb)) colour = lv_color_hex(rgb);
+    lv_color_t canvas;
+    if (label_canvas_rgb(&canvas)) colour = canvas;
     if (s_page_painted && lv_color_eq(colour, s_painted_page)) return;
     s_painted_page = colour;
     s_page_painted = true;
     lv_obj_set_style_bg_color(s_screen, colour, 0);
+}
+
+/* The canvas for this Track: the design's list cycled by the cassette row. Only the
+ * two-finger pose shows it. */
+static bool label_canvas_rgb(lv_color_t *out)
+{
+    uint32_t rgb;
+    if (!s_ctl.full || !cassette_label_canvas(s_cassette_row, &rgb)) return false;
+    *out = lv_color_hex(rgb);
+    return true;
 }
 
 /* The cassette's body is the label's canvas while the two-finger pose is up: the Card's
@@ -189,8 +202,8 @@ static void card_inks_apply(void)
 {
     if (!s_row_ink_valid) return;
     lv_color_t plastic = s_row_ink.plastic;
-    uint32_t rgb;
-    if (s_ctl.full && cassette_label_canvas(&rgb)) plastic = lv_color_hex(rgb);
+    lv_color_t canvas;
+    if (label_canvas_rgb(&canvas)) plastic = canvas;
     cassette_card_set_ink(plastic);
     cassette_cover_set_inks(plastic, s_row_ink.ink, s_row_ink.label);
 }
@@ -398,6 +411,7 @@ static void apply_frame(const cassette_frame_t *f)
         const cassette_ink_t *ink = &k_col_cassette[row];
         ESP_LOGI(TAG, "cassette %u of %u: %s", (unsigned)row, (unsigned)n,
                  f->title[0] ? f->title : "(no track)");
+        s_cassette_row = (uint16_t)row;
         s_row_ink = *ink;
         s_row_ink_valid = true;
         /* The print is the same row's: the label fill, the ink it would print in, and the

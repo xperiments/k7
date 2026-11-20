@@ -69,14 +69,16 @@ the packer uses; the rest are the editor's.
 }
 ```
 
-- **`canvas` is the cassette's background at the two-finger pose.** `backgrounds` is one to eight `#RRGGBB`
-  presets — `assets/labels/vocabulary.json`'s `canvas` is the cap — and `active` is the one the
-  player paints on the cassette's body and the screen behind it while the two-finger pose shows
-  the tape. The sheet carries only the active colour; the other presets are the editor's. The field is optional: a design
-  without it leaves the panel's own page alone, and its sheet record carries `has_canvas = 0`. A
-  design that declares `backgrounds` must declare `active`, and `active` must index one of them.
-  The editor writes the field for every design it exports, and a new design starts on the panel's
-  page (`#909090`, the palette's white page), so an untouched export is the page it replaces.
+- **`canvas` is the cassette's background at the two-finger pose, chosen by the cassette row.**
+  `backgrounds` is one to eight `#RRGGBB` colours — `assets/labels/vocabulary.json`'s `canvas` is
+  the cap — and the sheet carries the whole list. The player uses
+  `backgrounds[cassette_row % count]`, where `cassette_row` is the Track's palette row: a design
+  with seven colours pins one per cassette, and a shorter list cycles. `active` is the editor's
+  preview preset and is not the player's choice. The field is optional: a design without it
+  leaves the Track's cassette row alone. A design that declares `backgrounds` must declare
+  `active`, and `active` must index one of them. The editor writes the field for every design it
+  exports, and a new design starts on the panel's page (`#909090`), so an untouched export is the
+  page it replaces.
 - **A text prints in the ink or in one of the eight bands.** `color` is `ink` (the default) or
   `band.0`..`band.7`, so the type that sits on a band can print in that band's own colour; the
   paper is refused because there is nothing to read against it, and the one literal colour is a
@@ -126,20 +128,21 @@ saying why.
 ```text
 header        32 B
 templates     template_count x 64 B, ascending by id
+canvases      template_count x 8 x 4 B, flat; a template's eight colours start at template x 32
 prims         prim_count x 24 B, flat; a template's slice starts at its prim_start
 slots         slot_count x 8 B, flat; a template's slice starts at its slot_start
 string pool   pool_size B, UTF-8, NUL-terminated; every offset is relative to its start
 ```
 
-`total_size == 32 + 64 * template_count + 24 * prim_count + 8 * slot_count + pool_size`, checked
-rather than assumed.
+`total_size == 32 + 64 * template_count + 32 * template_count + 24 * prim_count + 8 * slot_count
++ pool_size`, checked rather than assumed.
 
 ### 3.1 Header (32 bytes)
 
 | Offset | Size | Field | Value |
 |---|---|---|---|
 | 0 | 8 | `magic` | `K7LBL`, NUL-padded to 8 |
-| 8 | 2 | `version` | `3` |
+| 8 | 2 | `version` | `4` |
 | 10 | 2 | `header_size` | `32` |
 | 12 | 4 | `total_size` | the file's whole length |
 | 16 | 4 | `crc32` | CRC-32/IEEE over `[32, total_size)` |
@@ -162,7 +165,7 @@ rather than assumed.
 | 12 | 1 | `font[0]` | the `title` role's index into the font table |
 | 13 | 1 | `font[1]` | the `numeral` role's |
 | 14 | 1 | `font[2]` | the `caption` role's |
-| 15 | 1 | `flags` | bit 0 `has_canvas`; bits 1..7 `0` |
+| 15 | 1 | `canvas_count` | `0..8`; the entries in the template's canvas row |
 | 16 | 4 | `paper` | RGB888 in the low 24 bits |
 | 20 | 4 | `ink` | |
 | 24 | 4 | `rule` | |
@@ -174,14 +177,13 @@ rather than assumed.
 | 48 | 4 | `band[5]` | |
 | 52 | 4 | `band[6]` | |
 | 56 | 4 | `band[7]` | |
-| 60 | 4 | `canvas` | RGB888 in the low 24 bits; only read when `has_canvas` |
+| 60 | 4 | `reserved` | `0` |
 
-Version 3 is the canvas: the record's old reserved byte 15 became `flags` and its last four
-reserved bytes became `canvas`. The record is still 64 bytes, so the sheet's size is unchanged.
-
-`has_canvas = 0` means the design declares no canvas background: `canvas` is 0 and the player
-leaves the panel's page alone. `has_canvas = 1` means the player paints the 800x480 screen with
-`canvas` while the two-finger pose shows the tape (§6).
+Version 4 is the canvas list: byte 15 is the count, the record is still 64 bytes, and the
+eight-colour row follows the template array. The count is 0 for a design without a canvas; the
+row's entries past the count are 0. The player picks `canvas[row % count]` by the Track's
+cassette row and paints the cassette's body and the screen with it while the two-finger pose is
+up (§6).
 
 ### 3.3 Prim (24 bytes)
 
@@ -219,12 +221,12 @@ built apart, which is a bug, not a state.
 
 The reader refuses the whole sheet — and the screen falls back to the flat palette fill — when:
 
-`magic` is not `K7LBL`, `version` is not 3, `header_size` is not 32, `total_size` disagrees with
+`magic` is not `K7LBL`, `version` is not 4, `header_size` is not 32, `total_size` disagrees with
 the counts, the CRC disagrees, `space_*` is not 748x359, a count is past its cap, a template's
 `prim_start + prim_count` or `slot_start + slot_count` runs past its array, a prim's
 `text_offset` is past `pool_size`, a string is not NUL-terminated inside the pool, a font index
-is past the font table, a template's `flags` has a bit above `has_canvas` set, `has_canvas = 0`
-with a nonzero `canvas`, or `has_canvas = 1` with a `canvas` above `0xFFFFFF`.
+is past the font table, a template's `canvas_count` is above eight, its reserved word is not 0,
+a canvas before the count is above `0xFFFFFF`, or a canvas past the count is nonzero.
 
 ## 4. The vocabulary — `assets/labels/vocabulary.json`
 
@@ -253,9 +255,9 @@ file. The editor and the firmware do not each keep a copy of it:
   show, so a role picker never offers one.
 - **`space`, `aperture`, `bands`, `value`, `canvas`, `limits` and `coords`** are the numbers the
   packer used to hold alone. `coords` is what a prim's record can say — `x` and `y` int16, `w` and
-  `h` uint16 — which is a refusal, not a clamp (ADR 0072). `canvas` is the most background presets
-  a design may declare: eight. It bounds the design file, not the sheet, which carries only the
-  active colour.
+  `h` uint16 — which is a refusal, not a clamp (ADR 0072). `canvas` is the most colours a design
+  may declare: eight. It bounds the design file and the sheet's per-template row; the player's
+  cassette table has seven rows, so seven pins one per row and fewer cycles.
 - **`defaults.fonts`** is the face roles a new design starts with.
 
 Two copies are generated from it, and both are committed:
@@ -344,11 +346,11 @@ by the print's own box exactly as a picture is.
 - **The print's background stays the palette's label fill**; a design's paper is a prim like any
   other, so a design without one still reads as a cassette label.
 - **The cassette's body is the design's canvas, and only at the two-finger pose.** When the
-  sheet record's `has_canvas` is 1, the Card's plastic, its mat and front plate, the window's rim
-  and the 800x480 screen behind them are its `canvas` while the pose is up. The pose's exit
-  restores the Track's cassette row (the plastic, the rim and the print's fallback), and a Track
-  change that swaps the design while the pose is up repaints them. A design with
-  `has_canvas = 0` leaves the row exactly as it is. The canvas is outside the print: the print's
+  design carries canvases, the Card's plastic, its mat and front plate, the window's rim and the
+  800x480 screen behind them wear `canvas[cassette_row % count]` while the pose is up. The pose's
+  exit restores the Track's cassette row (the plastic, the rim and the print's fallback); a Track
+  change while the pose is up picks the next entry by the new row and repaints them. A design
+  with no canvas leaves the row exactly as it is. The canvas is outside the print: the print's
   background is still the design's paper.
 - **The design is built once per template and re-texted per Track.** A Track change sets the
   texts; a change of selected template (a different `ink_seed % template_count`) deletes and
@@ -401,6 +403,6 @@ they refuse by are one table.
 | PSRAM | **0 B** — the sheet is read in place from flash, like the Snapshot |
 | flash | the sheet (a few KB for a handful of designs) **plus the fonts**, which are the real cost: a 4 bpp Latin face at 36 px is tens of KB, and `font_jura_36.c` is 230 KB of source |
 | objects | at most `LABEL_PRIM_MAX` (48) per design, alive only while the two-finger pose is up |
-| canvas | the four bytes the template record already reserved, so the sheet does not grow; no object; the Card's plastic/mat and the window's rim are repainted once on pose entry and again only when the design changes while the pose is up, the 800x480 page behind them with them |
+| canvas | 32 B per design (its eight-colour row); no object; the Card's plastic/mat and the window's rim are repainted on pose entry and on a Track change that changes the colour, the 800x480 page behind them with them |
 | per frame | **0** at the Controls pose. At the two-finger pose the reel tick redraws the print's area at 8 Hz (`CASSETTE_POSE_TICK_MS`), so the label is repainted with it - measured 11 ms a pass, and the label is not what that cost is made of |
 | per Track change | the print's 748x359 = 268,280 px repainted, once, at the two-finger pose; the pose's own entry is one 75 ms frame |

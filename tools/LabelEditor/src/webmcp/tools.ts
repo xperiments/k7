@@ -559,16 +559,17 @@ export function labelEditorTools(
     {
       name: "label-editor-set-design",
       description:
-        "Set the design's template id or name, its canvas backgrounds (the presets and the active one), its colourway (ink, rule, the eight bands, the paper), its paper radius, or one of its type roles' face and size. Every colour is a hex string; a face and size must be a pair the sheet carries.",
+        "Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), its colourway (ink, rule, the eight bands, the paper), its paper radius, or one of its type roles' face and size. Every colour is a hex string; a face and size must be a pair the sheet carries.",
       inputSchema: schema({
         templateId: str("The template id, like label.my-design; it names the exported file."),
         name: str("The design's human name."),
-        background: str("The active canvas background, as #rrggbb; it sets the active preset."),
+        background: str(
+          "The active canvas background, as #rrggbb; it sets the editor's preview preset."),
         backgrounds: list(
-          `The canvas background presets, as #rrggbb strings, in order: one to ${CANVAS_MAX}.`,
+          `The canvas background cycle, as #rrggbb strings: one to ${CANVAS_MAX}. The K7 picks one by the Track's cassette row.`,
           { type: "string" },
         ),
-        activeBackground: num("The index of the active canvas background preset.", {
+        activeBackground: num("The index of the editor's preview preset.", {
           minimum: 0,
         }),
         ink: str("The colour of the ink role, as #rrggbb."),

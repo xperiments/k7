@@ -54,8 +54,7 @@ static uint16_t       s_template = UINT16_MAX;
 static text_node_t    s_text[LABEL_PRIM_MAX];
 static uint16_t       s_text_count;
 static bool           s_full;
-static bool           s_has_canvas;
-static uint32_t       s_canvas;
+static uint8_t        s_canvas_count;
 
 static lv_color_t fill_colour(const label_inks_t *inks, uint8_t fill, uint32_t literal)
 {
@@ -147,8 +146,7 @@ static void build(uint16_t t)
 
     const label_inks_t inks = label_inks(s_sheet, t);
     const uint16_t n = label_prim_count(s_sheet, t);
-    s_canvas = 0;
-    s_has_canvas = label_canvas(s_sheet, t, &s_canvas);
+    s_canvas_count = label_canvas_count(s_sheet, t);
 
     for (uint16_t i = 0; i < n; i++) {
         label_prim_t p;
@@ -252,11 +250,10 @@ uint16_t cassette_label_templates(void)
     return s_sheet ? label_templates(s_sheet) : 0;
 }
 
-bool cassette_label_canvas(uint32_t *rgb)
+bool cassette_label_canvas(uint16_t row, uint32_t *rgb)
 {
-    if (!s_has_canvas || !rgb) return false;
-    *rgb = s_canvas;
-    return true;
+    if (!s_sheet || s_canvas_count == 0 || !rgb) return false;
+    return label_canvas_at(s_sheet, s_template, (uint8_t)(row % s_canvas_count), rgb);
 }
 
 #if CONFIG_APP_UI_RENDER_BENCH

@@ -63,8 +63,6 @@ import {
   SLOTS,
   TEXT_ROLES,
   WIN,
-  sheetFaces,
-  sheetSizes,
   slotOf,
 } from "@/engine/vocab";
 
@@ -108,7 +106,7 @@ export function Inspector({ onCollapse }: { onCollapse: () => void }) {
   }
 
   return (
-    <aside className="flex min-h-0 flex-col border-l border-border bg-background" aria-label="Inspector">
+    <aside className="flex min-h-0 w-full flex-col border-l border-border bg-background" aria-label="Inspector">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
         <SlidersHorizontal className="size-4 text-muted-foreground" />
         <div className="min-w-0">
@@ -195,7 +193,7 @@ function DesignPanel() {
     <SectionGroup initial="Template">
       <Section title="Template">
         <Field className="gap-1.5">
-          <FieldLabel className="text-xs text-muted-foreground">Id</FieldLabel>
+          <FieldLabel className="text-xs text-muted-foreground">ID</FieldLabel>
           <Input
             value={ed.tpl.id}
             onChange={(e) => ed.setTplField("id", e.target.value)}
@@ -203,9 +201,6 @@ function DesignPanel() {
             spellCheck={false}
             aria-label="Template id"
           />
-          <p className="text-xs text-muted-foreground">
-            label.my-name · the file is named after this
-          </p>
         </Field>
         <Field className="gap-1.5">
           <FieldLabel className="text-xs text-muted-foreground">Name</FieldLabel>
@@ -224,7 +219,7 @@ function DesignPanel() {
         </div>
       </Section>
 
-      <Section title="Colourway">
+      <Section title="Colors">
         <p className="text-xs text-muted-foreground">
           A layer names a role; every layer with that role follows its colour.
         </p>
@@ -284,7 +279,7 @@ function DesignPanel() {
         )}
       </Section>
 
-      <Section title="Type roles">
+      {/* <Section title="Type roles">
         {FROLES.map((k) => {
           const cur = ed.tpl.fonts[k];
           return (
@@ -330,7 +325,7 @@ function DesignPanel() {
         <p className="text-xs text-muted-foreground">
           Only the pairs the sheet compiles are offered; a design can only print them.
         </p>
-      </Section>
+      </Section> */}
 
       <Section title="Canvas">
         <ColourRow label="Active background" value={ed.bg} onChange={(v) => ed.setBg(v)} />
@@ -388,7 +383,8 @@ function DesignPanel() {
         </div>
         <p className="text-xs text-muted-foreground">
           The cassette's background while the two-finger pose is up: its body and the screen
-          behind it. Add copies the active background; only the active one is packed.
+          behind it. The K7 picks one by the Track's cassette row (the list cycles); the
+          active is your preview. Add copies it.
         </p>
       </Section>
 

@@ -92,9 +92,10 @@ static void patch32(uint8_t *p, size_t at, uint32_t v)
 /* ------------------------------------------------------------ sheet builder */
 
 #define T_AT(t)        (32u + 64u * (size_t)(t))
-#define P_AT(i)        (32u + 64u * 2u + 24u * (size_t)(i))
-#define S_AT(i)        (32u + 64u * 2u + 24u * 5u + 8u * (size_t)(i))
-#define POOL_AT         (32u + 64u * 2u + 24u * 5u + 8u * 2u)
+#define CANVAS_AT(t, i) (32u + 64u * 2u + 32u * (size_t)(t) + 4u * (size_t)(i))
+#define P_AT(i)        (32u + 64u * 2u + 32u * 2u + 24u * (size_t)(i))
+#define S_AT(i)        (32u + 64u * 2u + 32u * 2u + 24u * 5u + 8u * (size_t)(i))
+#define POOL_AT         (32u + 64u * 2u + 32u * 2u + 24u * 5u + 8u * 2u)
 
 enum {
     POOL_NIGHT = 0,
@@ -129,7 +130,7 @@ static void put_prim(tbuf_t *b, uint8_t kind, uint8_t fill, uint8_t font, uint8_
 
 static void put_template(tbuf_t *b, uint32_t name, uint16_t prim_start, uint16_t prim_count,
                          uint16_t slot_start, uint16_t slot_count, uint8_t f0, uint8_t f1,
-                         uint8_t f2, uint8_t flags, uint32_t canvas)
+                         uint8_t f2, uint8_t canvas_count)
 {
     put32(b, name);
     put16(b, prim_start);
@@ -139,7 +140,7 @@ static void put_template(tbuf_t *b, uint32_t name, uint16_t prim_start, uint16_t
     put8(b, f0);
     put8(b, f1);
     put8(b, f2);
-    put8(b, flags);
+    put8(b, canvas_count);
     put32(b, 0xF2EDE3);      /* paper */
     put32(b, 0x24211D);      /* ink */
     put32(b, 0xB9AC8E);      /* rule */
@@ -151,7 +152,7 @@ static void put_template(tbuf_t *b, uint32_t name, uint16_t prim_start, uint16_t
     put32(b, 0x7A3B52);      /* band 5 */
     put32(b, 0xB9AC8E);      /* band 6 */
     put32(b, 0x2F4B3A);      /* band 7 */
-    put32(b, canvas);
+    put32(b, 0);             /* reserved */
 }
 
 /* The canonical sheet: two designs, five prims, two slots, one shared pool. Its header's
@@ -160,7 +161,7 @@ static uint8_t *build_sheet(size_t *n_out)
 {
     tbuf_t b = {0};
     put(&b, "K7LBL\0\0\0", 8);
-    put16(&b, 3);              /* version */
+    put16(&b, 4);              /* version */
     put16(&b, 32);             /* header size */
     put32(&b, 0);              /* total, patched */
     put32(&b, 0);              /* crc, patched */
@@ -171,8 +172,13 @@ static uint8_t *build_sheet(size_t *n_out)
     put16(&b, 2);              /* slots */
     put16(&b, POOL_N);         /* pool size */
 
-    put_template(&b, POOL_NIGHT, 0, 4, 0, 2, 0, 1, 2, 1, 0xF5F1E6);
-    put_template(&b, POOL_SECOND, 4, 1, 2, 0, 1, 1, 1, 0, 0);
+    put_template(&b, POOL_NIGHT, 0, 4, 0, 2, 0, 1, 2, 1);
+    put_template(&b, POOL_SECOND, 4, 1, 2, 0, 1, 1, 1, 0);
+
+    /* The canvas arrays, eight slots each, after the two templates. */
+    put32(&b, 0xF5F1E6);
+    for (int i = 1; i < 8; i++) put32(&b, 0);
+    for (int i = 0; i < 8; i++) put32(&b, 0);
 
     put_prim(&b, LABEL_RECT, LABEL_FILL_PAPER, 0, 0, 0, 0, 748, 359, 19, 0, 0xFFFFFFFFu, 0);
     put_prim(&b, LABEL_RECT, LABEL_FILL_LITERAL, 0, 0, 700, 292, 20, 20, 3, 0, 0xFFFFFFFFu,
@@ -306,11 +312,14 @@ static void test_reader(void)
     CHECK_EQ(label_font(s, 0, LABEL_FONT_CAPTION), 2, "caption face");
 
     uint32_t canvas = 0;
-    CHECK(label_canvas(s, 0, &canvas), "template 0 carries a canvas");
-    CHECK_EQ(canvas, 0xF5F1E6, "template 0's canvas");
-    CHECK(!label_canvas(s, 1, &canvas), "template 1 has no canvas");
-    CHECK(!label_canvas(s, 9, &canvas), "canvas out of range");
-    CHECK(!label_canvas(s, 0, NULL), "no canvas without somewhere to put it");
+    CHECK_EQ(label_canvas_count(s, 0), 1, "template 0's canvas count");
+    CHECK(label_canvas_at(s, 0, 0, &canvas), "template 0's canvas");
+    CHECK_EQ(canvas, 0xF5F1E6, "template 0's canvas colour");
+    CHECK(!label_canvas_at(s, 0, 1, &canvas), "past the design's one canvas");
+    CHECK_EQ(label_canvas_count(s, 1), 0, "template 1 has no canvas");
+    CHECK(!label_canvas_at(s, 1, 0, &canvas), "template 1 has no canvas 0");
+    CHECK(!label_canvas_at(s, 9, 0, &canvas), "canvas out of range");
+    CHECK(!label_canvas_at(s, 0, 0, NULL), "no canvas without somewhere to put it");
 
     label_close(s);
     free(blob);
@@ -329,7 +338,7 @@ static void test_refusals(void)
     free(b);
 
     b = mutate(8, 1, 2, &n);
-    CHECK(refuses(b, n, "version 3"), "version 1");
+    CHECK(refuses(b, n, "version 4"), "version 1");
     free(b);
 
     b = mutate(10, 40, 2, &n);
@@ -361,15 +370,19 @@ static void test_refusals(void)
     CHECK(refuses(b, n, "template"), "font index past the table");
     free(b);
 
-    b = mutate(T_AT(0) + 15, 0x02, 1, &n);       /* a reserved flags bit */
-    CHECK(refuses(b, n, "template"), "a reserved flag bit is refused");
+    b = mutate(T_AT(1) + 60, 1, 4, &n);          /* the reserved word */
+    CHECK(refuses(b, n, "template"), "a non-zero reserved word is refused");
     free(b);
 
-    b = mutate(T_AT(1) + 60, 0x123456, 4, &n);   /* no has_canvas, but a colour */
-    CHECK(refuses(b, n, "template"), "a canvas without the flag is refused");
+    b = mutate(T_AT(1) + 15, 9, 1, &n);          /* a count past the sheet's eight */
+    CHECK(refuses(b, n, "template"), "a canvas count past eight is refused");
     free(b);
 
-    b = mutate(T_AT(0) + 60, 0x01000000, 4, &n); /* above RGB888 */
+    b = mutate(CANVAS_AT(1, 0), 0x123456, 4, &n); /* a colour past the count */
+    CHECK(refuses(b, n, "template"), "a canvas past the count is refused");
+    free(b);
+
+    b = mutate(CANVAS_AT(0, 0), 0x01000000, 4, &n); /* above RGB888 */
     CHECK(refuses(b, n, "template"), "a canvas above RGB888 is refused");
     free(b);
 

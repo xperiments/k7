@@ -42,9 +42,9 @@ it, which is how a stripe runs off a sleeve.
 - **Paper** is the design's background: a rounded rect filling the print, its colour and
   radius the LayerMask's. A design without paper has no background.
 - **Canvas background** is the cassette's body and the screen behind it while the label is up:
-  up to eight presets with one active. Only the active colour is packed; a design without one
-  leaves the Track's cassette row alone, and a new design starts on the panel's page grey
-  (`#909090`).
+  up to eight colours, cycled by the Track's cassette row (`row % count`). The whole list is
+  packed; the editor's active one is only the preview. A design without one leaves the Track's
+  cassette row alone, and a new design starts on the panel's page grey (`#909090`).
 - **Ink, rule and eight bands** are the colour roles. A shape paints with any role (or one
   literal hex, explained in a note); a text prints in the ink or in one of the bands, never
   on the paper.

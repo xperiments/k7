@@ -23,6 +23,7 @@ struct label_sheet {
     uint16_t       slots;
     uint16_t       pool_size;
     const uint8_t *tmpl;   /* the template array: templates x 64 */
+    const uint8_t *canvas; /* the canvas array: templates x LABEL_CANVAS_MAX x 4 */
     const uint8_t *prim;   /* the prim array: prims x 24 */
     const uint8_t *slot;   /* the slot array: slots x 8 */
     const uint8_t *pool;   /* the string pool: pool_size bytes, offsets relative to it */
@@ -69,6 +70,11 @@ static bool string_in(const uint8_t *pool, uint32_t pool_size, uint32_t off)
 static const uint8_t *template_at(const label_sheet_t *s, uint16_t t)
 {
     return s->tmpl + (size_t)t * LABEL_TEMPLATE_SIZE;
+}
+
+static const uint8_t *canvas_at(const label_sheet_t *s, uint16_t t, uint8_t i)
+{
+    return s->canvas + ((size_t)t * LABEL_CANVAS_MAX + i) * 4u;
 }
 
 static const uint8_t *prim_at(const label_sheet_t *s, uint16_t i)
@@ -140,16 +146,19 @@ static bool template_ok(const label_sheet_t *s, uint16_t t, uint8_t font_count)
     if ((uint32_t)slot_start + slot_count > s->slots) return false;
     for (int role = 0; role < 3; role++)
         if (p[12 + role] >= font_count) return false;
-    /* Version 3: bit 0 says the design carries an active canvas background, and the last
-     * four bytes hold it. The rest of the flags byte is reserved, and a canvas without the
-     * flag (or a flag without a colour) is a record that disagrees with itself. */
-    const uint8_t flags = p[15];
-    const uint32_t canvas = rd32(p + 60);
-    if (flags & 0xFEu) return false;
-    if (flags & 1u) {
-        if (canvas > 0xFFFFFFu) return false;
-    } else if (canvas != 0) {
-        return false;
+    /* Version 4: byte 15 is the canvas count and the last four bytes are reserved. The list
+     * follows the template array; entries past the count are zero, and the count may not
+     * exceed the sheet's eight slots. */
+    const uint8_t canvas_count = p[15];
+    if (canvas_count > LABEL_CANVAS_MAX) return false;
+    if (rd32(p + 60) != 0) return false;
+    for (uint8_t i = 0; i < LABEL_CANVAS_MAX; i++) {
+        const uint32_t colour = rd32(canvas_at(s, t, i));
+        if (i < canvas_count) {
+            if (colour > 0xFFFFFFu) return false;
+        } else if (colour != 0) {
+            return false;
+        }
     }
     return true;
 }
@@ -164,7 +173,7 @@ label_result_t label_open_why(const uint8_t *blob, size_t size, uint8_t font_cou
     if (size < LABEL_HEADER_SIZE) return fail(why, why_size, "shorter than its header");
 
     if (memcmp(blob, LABEL_MAGIC, 8) != 0) return fail(why, why_size, "magic is not K7LBL");
-    if (rd16(blob + 8) != LABEL_VERSION) return fail(why, why_size, "not sheet version 3");
+    if (rd16(blob + 8) != LABEL_VERSION) return fail(why, why_size, "not sheet version 4");
     if (rd16(blob + 10) != LABEL_HEADER_SIZE) return fail(why, why_size, "header size is not 32");
     if (rd16(blob + 20) != LABEL_SPACE_W || rd16(blob + 22) != LABEL_SPACE_H)
         return fail(why, why_size, "space is not 748x359");
@@ -183,6 +192,7 @@ label_result_t label_open_why(const uint8_t *blob, size_t size, uint8_t font_cou
 
     const uint64_t want = (uint64_t)LABEL_HEADER_SIZE +
                           (uint64_t)templates * LABEL_TEMPLATE_SIZE +
+                          (uint64_t)templates * LABEL_CANVAS_MAX * 4u +
                           (uint64_t)prims * LABEL_PRIM_SIZE +
                           (uint64_t)slots * LABEL_SLOT_SIZE + pool_size;
     if (rd32(blob + 12) != want || want != (uint64_t)size)
@@ -200,7 +210,8 @@ label_result_t label_open_why(const uint8_t *blob, size_t size, uint8_t font_cou
     s->slots = slots;
     s->pool_size = pool_size;
     s->tmpl = blob + LABEL_HEADER_SIZE;
-    s->prim = s->tmpl + (size_t)templates * LABEL_TEMPLATE_SIZE;
+    s->canvas = s->tmpl + (size_t)templates * LABEL_TEMPLATE_SIZE;
+    s->prim = s->canvas + (size_t)templates * LABEL_CANVAS_MAX * 4u;
     s->slot = s->prim + (size_t)prims * LABEL_PRIM_SIZE;
     s->pool = s->slot + (size_t)slots * LABEL_SLOT_SIZE;
 
@@ -321,12 +332,17 @@ uint8_t label_font(const label_sheet_t *s, uint16_t t, uint8_t role)
     return template_at(s, t)[12 + role];
 }
 
-bool label_canvas(const label_sheet_t *s, uint16_t t, uint32_t *rgb)
+uint8_t label_canvas_count(const label_sheet_t *s, uint16_t t)
+{
+    if (!s || t >= s->templates) return 0;
+    return template_at(s, t)[15];
+}
+
+bool label_canvas_at(const label_sheet_t *s, uint16_t t, uint8_t index, uint32_t *rgb)
 {
     if (!s || !rgb || t >= s->templates) return false;
-    const uint8_t *p = template_at(s, t);
-    if ((p[15] & 1u) == 0) return false;
-    *rgb = rd32(p + 60);
+    if (index >= template_at(s, t)[15]) return false;
+    *rgb = rd32(canvas_at(s, t, index));
     return true;
 }
 

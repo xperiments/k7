@@ -132,7 +132,7 @@ guide says which visible controls do what.
 | `label-editor-select-layer` | Select layers, so the person at the screen sees what the agent is working on. |
 | `label-editor-move-layer` | Raise, lower, or send a layer to the top or bottom of the stack. |
 | `label-editor-group-layers` | Group the selection, or ungroup it. |
-| `label-editor-set-design` | Template id and name, the canvas presets and the active background, ink, rule, the eight bands, paper and its radius, a type role's face and size. |
+| `label-editor-set-design` | Template id and name, the canvas background cycle and the editor's preview, ink, rule, the eight bands, paper and its radius, a type role's face and size. |
 | `label-editor-set-field-value` | Set what a field previews (its simulated value). |
 | `label-editor-import-template` | Open a `label-template v1` object (or JSON text) in a new document, with the packer's refusals. |
 | `label-editor-export-template` | Return the active or a named design as `label-template v1` plus the errors that would stop an export. |

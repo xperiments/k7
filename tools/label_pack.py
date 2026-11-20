@@ -27,7 +27,7 @@ from pathlib import Path
 
 MAGIC = b"K7LBL\0\0\0"
 DESIGN_VERSION = 1
-SHEET_VERSION = 3
+SHEET_VERSION = 4
 HEADER_SIZE = 32
 TEMPLATE_SIZE = 64
 PRIM_SIZE = 24
@@ -187,11 +187,12 @@ def pack_design(design, font_index, pool):
         else:
             font_ids.append(font_index[key])
 
-    # The canvas is optional: a design without one leaves the panel's page alone. When it is
-    # there, only the active preset is packed; the rest are the editor's.
+    # The canvas is optional. When present, the whole list travels: the player picks an entry
+    # by the Track's cassette row (row % count), so the entries are not editor-only. `active`
+    # is the editor's preview, not the player's choice, but a design that names the list must
+    # name a valid one.
     canvas = design.get("canvas")
-    canvas_flags = 0
-    canvas_rgb = 0
+    canvas_colors = []
     if canvas is not None:
         if not isinstance(canvas, dict):
             errors.append(f"{did}: canvas must be an object with backgrounds and active")
@@ -201,16 +202,13 @@ def pack_design(design, font_index, pool):
                 errors.append(
                     f"{did}: canvas.backgrounds must be one to {CANVAS_MAX} colours")
                 backgrounds = []
-            parsed = [_hex(c, f"{did}: canvas.backgrounds[{i}]", errors)
-                      for i, c in enumerate(backgrounds)]
+            canvas_colors = [_hex(c, f"{did}: canvas.backgrounds[{i}]", errors)
+                             for i, c in enumerate(backgrounds)]
             active = canvas.get("active")
             if (isinstance(active, bool) or not isinstance(active, int)
-                    or not 0 <= active < len(parsed)):
+                    or not 0 <= active < len(canvas_colors)):
                 errors.append(
                     f"{did}: canvas.active {active!r} is not an index into backgrounds")
-            elif parsed:
-                canvas_flags = 1
-                canvas_rgb = parsed[active]
 
     slots = design.get("slots") or {}
     if not isinstance(slots, dict):
@@ -347,8 +345,8 @@ def pack_design(design, font_index, pool):
         "slot_count": len(slot_records),
         "font": font_ids,
         "inks": (paper or 0, ink, rule, *band),
-        "flags": canvas_flags,
-        "canvas": canvas_rgb,
+        "canvas_count": len(canvas_colors),
+        "canvases": canvas_colors,
     }
     # The slot names travel back with the records, in the order they were packed, so the
     # manifest below is derived from the same list the sheet is - not from the design's
@@ -364,11 +362,11 @@ def manifest_text(rows):
     from the designs, not a re-reading of the blob: a manifest read back out of the sheet
     would agree with it whatever the packer did.
 
-    Tab-separated: the counts, the canvas (`#RRGGBB`, or `-` when the design has none), the
-    Slots, and the design's name last - so a name containing a tab only makes the name longer.
-    The slots are comma-joined: a Slot's name is an identifier.
+    Tab-separated: the counts, the canvas list (comma-joined `#RRGGBB`, or `-` when the design
+    has none), the Slots, and the design's name last - so a name containing a tab only makes the
+    name longer. The slots are comma-joined: a Slot's name is an identifier.
     """
-    lines = ["label_manifest\t2", f"count\t{len(rows)}"]
+    lines = ["label_manifest\t3", f"count\t{len(rows)}"]
     for i, (name, prim_count, slot_names, canvas) in enumerate(rows):
         lines.append(
             f"{i}\t{prim_count}\t{len(slot_names)}\t{canvas}\t{','.join(slot_names)}\t{name}")
@@ -413,24 +411,28 @@ def pack_sheet(designs, fonts):
             design.get("name") or design["id"],
             len(tp),
             slot_names,
-            f"#{fields['canvas']:06X}" if fields["flags"] else "-",
+            ",".join(f"#{c:06X}" for c in fields["canvases"]) or "-",
         ))
 
     if errors:
         raise PackError(errors)
 
     pool_bytes = pool.bytes()
-    total = (HEADER_SIZE + TEMPLATE_SIZE * len(templates) + PRIM_SIZE * len(prims)
-             + SLOT_SIZE * len(slots) + len(pool_bytes))
+    total = (HEADER_SIZE + TEMPLATE_SIZE * len(templates)
+             + CANVAS_MAX * 4 * len(templates)
+             + PRIM_SIZE * len(prims) + SLOT_SIZE * len(slots) + len(pool_bytes))
     body = bytearray()
     for t in templates:
-        # 16 B of name/counts/fonts/flags, the eleven role colours (paper, ink, rule, eight
-        # bands), then the active canvas: 64 B.
+        # 16 B of name/counts/fonts/canvas_count, the eleven role colours (paper, ink, rule,
+        # eight bands), then four reserved bytes: 64 B. The canvas list follows the templates.
         body += struct.pack(
             "<IHHHHBBBB11II",
             t["name"], t["prim_start"], t["prim_count"], t["slot_start"], t["slot_count"],
-            t["font"][0], t["font"][1], t["font"][2], t["flags"],
-            *t["inks"], t["canvas"])
+            t["font"][0], t["font"][1], t["font"][2], t["canvas_count"],
+            *t["inks"], 0)
+    for t in templates:
+        for i in range(CANVAS_MAX):
+            body += struct.pack("<I", t["canvases"][i] if i < t["canvas_count"] else 0)
     body += b"".join(prims)
     body += b"".join(slots)
     body += pool_bytes
@@ -464,7 +466,8 @@ def verify_sheet(blob):
         errors.append(f"version is {version}, not {SHEET_VERSION}")
     if header_size != HEADER_SIZE:
         errors.append(f"header_size is {header_size}, not {HEADER_SIZE}")
-    want = HEADER_SIZE + TEMPLATE_SIZE * templates + PRIM_SIZE * prims + SLOT_SIZE * slots + pool_size
+    want = (HEADER_SIZE + TEMPLATE_SIZE * templates + CANVAS_MAX * 4 * templates
+            + PRIM_SIZE * prims + SLOT_SIZE * slots + pool_size)
     if total != want or total != len(blob):
         errors.append(f"total_size {total} disagrees with the parts ({want}) and the file ({len(blob)})")
     if (sw, sh) != (SPACE_W, SPACE_H):
@@ -474,21 +477,26 @@ def verify_sheet(blob):
     if crc != zlib.crc32(blob[HEADER_SIZE:]):
         errors.append("crc32 disagrees with the body")
     pool_start = total - pool_size
+    canvas_start = HEADER_SIZE + TEMPLATE_SIZE * templates
     for i in range(templates):
-        (_, p_start, p_count, s_start, s_count, f0, f1, f2, flags,
+        (_, p_start, p_count, s_start, s_count, f0, f1, f2, canvas_count,
          *rest) = struct.unpack_from("<IHHHHBBBB11II", blob, HEADER_SIZE + i * TEMPLATE_SIZE)
-        canvas = rest[11]
         if p_start + p_count > prims or s_start + s_count > slots:
             errors.append(f"template {i} runs past its arrays")
-        if flags & 0xFE:
-            errors.append(f"template {i}: flags {flags} are not has_canvas and zero")
-        if flags & 1:
-            if canvas > 0xFFFFFF:
-                errors.append(f"template {i}: canvas is above RGB888")
-        elif canvas != 0:
-            errors.append(f"template {i}: has no canvas but carries a colour")
+        if rest[11] != 0:
+            errors.append(f"template {i}: the reserved word is not zero")
+        if canvas_count > CANVAS_MAX:
+            errors.append(f"template {i}: {canvas_count} canvases, more than {CANVAS_MAX}")
+            continue
+        for j in range(CANVAS_MAX):
+            colour = struct.unpack_from("<I", blob, canvas_start + (i * CANVAS_MAX + j) * 4)[0]
+            if j < canvas_count:
+                if colour > 0xFFFFFF:
+                    errors.append(f"template {i}: canvas {j} is above RGB888")
+            elif colour != 0:
+                errors.append(f"template {i}: canvas {j} is past the design's {canvas_count}")
     for i in range(prims):
-        off = HEADER_SIZE + TEMPLATE_SIZE * templates + i * PRIM_SIZE
+        off = canvas_start + CANVAS_MAX * 4 * templates + i * PRIM_SIZE
         kind, fill, font, align, x, y, w, h, r, rot, text_off, _ = struct.unpack_from(
             "<BBBBhhHHHhII", blob, off)
         if kind == 0 and text_off != 0xFFFFFFFF:
@@ -928,19 +936,23 @@ def selftest():
     assert "1 designs, 4 prims, 1 slots" in summary, summary
     assert "LABEL_FONT_JURA_20 0" in header and "LABEL_FONT_COUNT 2" in header
     # The manifest is what t33 compares the opened sheet against, so its shape is part of
-    # the packer's contract: index, prim count, slot count, canvas, the packed slot names,
-    # the name.
-    assert manifest == ("label_manifest\t2\ncount\t1\n"
-                        "0\t4\t1\t#F5F1E6\tsong_title\tSelf\n"), repr(manifest)
-    # Version 3: the active preset is what the record carries, beside the flags byte.
+    # the packer's contract: index, prim count, slot count, the canvas list, the packed slot
+    # names, the name.
+    assert manifest == ("label_manifest\t3\ncount\t1\n"
+                        "0\t4\t1\t#101010,#F5F1E6\tsong_title\tSelf\n"), repr(manifest)
+    # Version 4: the count is in the record, the list follows the templates.
     fields = struct.unpack_from("<IHHHHBBBB11II", blob, HEADER_SIZE)
-    assert fields[8] == 1 and fields[-1] == 0xF5F1E6, fields
+    assert fields[8] == 2 and fields[-1] == 0, fields
+    canvas_at = HEADER_SIZE + TEMPLATE_SIZE
+    assert struct.unpack_from("<II", blob, canvas_at) == (0x101010, 0xF5F1E6)
+    assert struct.unpack_from("<II", blob, canvas_at + 8) == (0, 0)
     no_canvas = json.loads(json.dumps(good))
     del no_canvas["canvas"]
     bare, _, bare_manifest = pack_sheet([no_canvas], fonts)
     assert verify_sheet(bare)
     fields = struct.unpack_from("<IHHHHBBBB11II", bare, HEADER_SIZE)
     assert fields[8] == 0 and fields[-1] == 0, fields
+    assert struct.unpack_from("<II", bare, HEADER_SIZE + TEMPLATE_SIZE) == (0, 0)
     assert bare_manifest.endswith("0\t4\t1\t-\tsong_title\tSelf\n"), bare_manifest
 
     # a folder is the set: every *.json in templates/ is a design, a stray file fails naming

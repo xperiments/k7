@@ -172,8 +172,8 @@ int main(int argc, char **argv)
     char line[512];
     bool ok = fgets(line, sizeof line, m) != NULL;
     chomp(line);
-    CHECK(ok && strcmp(line, "label_manifest\t2") == 0,
-          "the manifest's first line is not \"label_manifest<TAB>2\": %s", ok ? line : "(empty)");
+    CHECK(ok && strcmp(line, "label_manifest\t3") == 0,
+          "the manifest's first line is not \"label_manifest<TAB>3\": %s", ok ? line : "(empty)");
 
     unsigned wanted = 0;
     ok = fgets(line, sizeof line, m) != NULL;
@@ -202,16 +202,29 @@ int main(int argc, char **argv)
         CHECK_EQ(label_slot_count(sheet, i), strtoul(f[2], NULL, 10),
                  "a template's Slot count");
 
-        uint32_t rgb = 0;
-        const bool has_canvas = label_canvas(sheet, i, &rgb);
+        const unsigned canvas_count = label_canvas_count(sheet, i);
         if (strcmp(f[3], "-") == 0) {
-            CHECK(!has_canvas, "template %u: the manifest has no canvas, the sheet one", i);
+            CHECK(canvas_count == 0,
+                  "template %u: the manifest has no canvas, the sheet %u", i, canvas_count);
         } else {
-            CHECK(f[3][0] == '#' && strlen(f[3]) == 7,
-                  "template %u: the manifest canvas \"%s\" is not #RRGGBB", i, f[3]);
-            CHECK(has_canvas, "template %u: the manifest has a canvas, the sheet none", i);
-            CHECK_EQ(rgb, (uint32_t)strtoul(f[3] + 1, NULL, 16),
-                     "a template's canvas");
+            const char *p = f[3];
+            unsigned seen = 0;
+            while (*p) {
+                const char *comma = strchr(p, ',');
+                const size_t len = comma ? (size_t)(comma - p) : strlen(p);
+                CHECK(len == 7 && p[0] == '#',
+                      "template %u: canvas %u \"%.*s\" is not #RRGGBB", i, seen,
+                      (int)len, p);
+                const uint32_t want = (uint32_t)strtoul(p + 1, NULL, 16);
+                uint32_t got = 0;
+                CHECK(seen < canvas_count && label_canvas_at(sheet, i, (uint8_t)seen, &got),
+                      "template %u: the sheet has fewer canvases than the manifest", i);
+                CHECK_EQ(got, want, "a template's canvas");
+                seen++;
+                if (!comma) break;
+                p = comma + 1;
+            }
+            CHECK_EQ(seen, canvas_count, "a template's canvas count");
         }
 
         const char *name = label_template_name(sheet, i);

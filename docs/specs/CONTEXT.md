@@ -485,8 +485,9 @@ _Avoid_: skin, theme, label design, cover
 **Canvas background**:
 The cassette's background while the two-finger pose shows a **Label template**: the Card's
 plastic and mat, the window's rim and the 800x480 screen behind them. It is the design's, not the
-palette's: one of up to eight presets, one active; a design without one leaves the Track's
-cassette row alone. The print's own background is still the design's **paper**.
+palette's: a list of up to eight colours, picked by the Track's cassette row (`row % count`); the
+editor's active one is only its preview. A design without one leaves the Track's cassette row
+alone. The print's own background is still the design's **paper**.
 _Avoid_: screen colour, backdrop, background fill
 
 **Label sheet**:
