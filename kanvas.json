@@ -49,6 +49,10 @@
     {
       "id": "TN",
       "name": "Tone"
+    },
+    {
+      "id": "DC",
+      "name": "Docs"
     }
   ],
   "tasks": [
@@ -2886,7 +2890,7 @@
     {
       "id": "LB-09",
       "title": "A browser that cannot start its GPU process skips the boot check, not fails it",
-      "state": "review",
+      "state": "done",
       "group": "LB",
       "at": "2026-11-18T14:07:25Z",
       "by": "dsh",
@@ -3375,7 +3379,7 @@
     {
       "id": "LB-13",
       "title": "Prove the canvas background on the panel",
-      "state": "review",
+      "state": "done",
       "group": "LB",
       "deps": ["LB-12"],
       "yolo": true,
@@ -3409,6 +3413,41 @@
           "text": "The canvas now follows the Track's cassette row: sheet v4 carries the whole colour list and the player picks canvas[row % count]. The one-label has #C7A867/#326A97, so cassette rows 0/2/4/6 wear beige and 1/3/5 blue; the editor's active is only the preview. Master e8464be, flashed; the current track is row 6 (beige). make -C host check and the editor checks are green."
         }
       ]
+    },
+    {
+      "id": "DC-01",
+      "title": "Five status lines still say the product does not exist, and the board says it does",
+      "state": "doing",
+      "group": "DC",
+      "at": "2026-11-20T17:58:28Z",
+      "by": "dsh",
+      "desc": "Five documents of record open by saying the thing they specify is unbuilt or undeployed. A reader who checks one status line and stops concludes K7 has no network setup, no handover, no player firmware and no site — and the repo's honesty is the product's differentiator, so a status line that has stopped being true costs more here than elsewhere.\n\nWhat each line says now, and what is actually there:\n\n| Document | Its status line | What exists |\n|---|---|---|\n| `wifi-provisioning.md:14` | nothing is built | built, and its own §10 carries the board pass (2026-11-10): the hotspot up, a real wrong password with reason 15 and 2, the join closing it |\n| `network-handover.md:14` | nothing is built | happened on a board 2026-11-18: beam heard, request answered, record stored, the player joined (README, the player's board tier) |\n| `k7player.md:14` | nothing is built; the board is not chosen | ADR 0097 chose the ESP32 classic; PL, EN and TN are done; the image measured 891 KB with 15 % free |\n| `k7-deploy.md:13` | nothing has been deployed | `https://k7.xperiments.dev/` and `/app` answer 200 on Vercel today, with the CSP and HSTS the spec asks for |\n| `k7-app.md:18` | not deployed | the App is at `/app` on that origin |\n\nRewriting the line is not enough for three of them: handover, player and deploy carry no measured section, so the evidence goes into each document the way `wifi-provisioning.md` §10 already carries it, with the date and the command or log line it rests on.\n\nWhat stays unproven, and must stay named rather than smoothed away:\n- provisioning: proven from the device's side; nobody has fetched the page from a real phone (README, known limitations)\n- handover: everything but the AP fallback, where an unprovisioned K7 hands over `K7.local`\n- player: the handover itself has not been re-measured since the radio became always-on\n- deploy: A13 installability has not been re-signed on the real origin, and the browser's write still has not flashed a board\n\nFinished when no status line claims less than the evidence shows, each one names the evidence and its date, and no requirement, threshold or number changes.",
+      "notes": [
+        {
+          "at": "2026-11-20T17:59:39Z",
+          "by": "dsh",
+          "text": "Plan: read each of the five status lines and the tests section beside it; establish what the evidence actually is, with its date (the README's board runs, the live origins); rewrite each line to claim no less than that evidence; carry the board numbers into the three specs that have no measured section; then sweep for any other claim of the same kind."
+        }
+      ]
+    },
+    {
+      "id": "DC-02",
+      "title": "The player's spec still promises an HTTP client that ADR 0105 removed",
+      "state": "todo",
+      "group": "DC",
+      "at": "2026-11-20T17:58:28Z",
+      "by": "dsh",
+      "desc": "`k7player.md` describes two different players. R2 requires it to play `GET /stream` continuously from the first bytes, and R22 ends with \"nothing after that but `GET /stream`\". R23, in the same document, says the audio arrives over ESP-NOW and only over it, and that the player has no HTTP client. ADR 0105 decided the question: ESP-NOW only, with the K7's Settings row choosing whether its radio emits at all.\n\nThe code follows R23 — EN-03 is done and the player's HTTP client is not in the firmware — so R2 and R22 are the stale half. Today a reader who starts at §1 builds the wrong player.\n\nFinished when R2 and R22 say what the player does now (it takes the K7's ESP-NOW frames; after the record arrives it only listens), both cite R23 and ADR 0105, and nothing in the document still promises an HTTP client. The file's status line is DC-01's, not this task's."
+    },
+    {
+      "id": "DC-03",
+      "title": "One map from a bare board to music in the room",
+      "state": "proposed",
+      "group": "DC",
+      "deps": ["DC-01", "DC-02"],
+      "at": "2026-11-20T17:59:23Z",
+      "by": "dsh",
+      "desc": "A person with a bare board and a card of music has twenty-two specs, a hundred and nine ADRs and no page that shows the path they take. Each context documents its own stretch of it; nothing documents the joins — what the Site hands off after a flash, what the device does when it has no network, what \"installed but not linked\" means, what a written SD looks like to a K7 that has never seen it. This is that page.\n\n`docs/journey.md` is a **map that cites and asserts nothing**: every step names the spec row that owns it, and where the map and a spec disagree the spec wins. It adds one line to `CONTEXT-MAP.md` so the front door reaches it, and changes no other document.\n\nFive sections, five diagrams, one table:\n1. **The whole path** — a flowchart of the person's way from the Site to a room with sound, then a table of every step with the spec row that owns it and a status word plus its evidence (`measured · board, 2026-11-18 · …`).\n2. **The K7** — its boot and broadcast decisions: network stored? card mounted? Update file? selected Playlist? No state machine here, because its facts are orthogonal and one moving dot would lie.\n3. **The App** — the gate and the Link, the card switcher, the Sources page's Prepare, Playlists and their Reach, Albums over the player or the Last image, the IA Agent.\n4. **The K7Player** — the one honest state machine in the product: its four-light Status light.\n5. **The loop** — drop a folder, see it measured, make a tape, share the label, someone else drops a folder. Drawn, and labelled as what it is: a campaign plan, not a page that exists.\n\nIt opens with what it is not: not a spec, not the manual, not proof of anything on a board.\n\nFinished when the document exists with its five diagrams, every relative link resolves, each mermaid block renders in a browser (rendered headlessly and looked at, not eyeballed as text), and every step's owner is a real heading or requirement row. What the writing finds goes in a `note` on this card — if it finds a contradiction, it is a repair card, not a paragraph in this document."
     }
   ]
 }

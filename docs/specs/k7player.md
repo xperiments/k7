@@ -11,8 +11,14 @@ The decisions are [ADR 0097](../adr/0097-the-player-is-an-esp32-classic-in-its-o
 (the handover). The words are [`player/CONTEXT.md`](../../player/CONTEXT.md); the protocol's own
 document is [`network-handover.md`](./network-handover.md).
 
-**Status:** designed and specified; **nothing is built**. The board is not chosen, so every pin
-and every buffer depth below is a requirement on a board adapter that does not exist yet.
+**Status:** built, and measured on the board on **2026-11-18** (§6): the line output making sound
+at 44.1 kHz, the ESP-NOW receiver with the ring at 70/96 KB and nothing refused or underrun, and
+the memory census with the stream, decoder and ring up. The board is ADR 0097's — a WROOM-32 with
+a PCM5102A — and the image is 891 KB with 15 % of its 1 MB partition free. The handover is not
+this document's to prove: its own board pass is
+[`network-handover.md`](./network-handover.md) §7, which records the 2026-11-18 run. What is not
+measured here: the outages B2–B4 inject, and B6's four patterns by eye. The tone was heard on both
+boards on **2026-11-20** (B7, TN-04), without the 0.6.2 old-player fallback.
 
 ---
 
@@ -213,18 +219,34 @@ without a board. The handover's own tests are in [`network-handover.md`](./netwo
 | B6 | The light's four patterns, by eye | **board only** |
 | B7 | The tone on the board: with a new K7 and a new player a knob is heard at once; with an old player the S3 tone and the late knob stand; a browser hears the flat stream while the player owns the tone; a player reboot restores the tone within a second | **board only** |
 
+**Measured on the board, 2026-11-18**, with a WROOM-32 and a PCM5102A, the K7 on `192.168.0.13`:
+
+| # | Result |
+|---|---|
+| B1 | **proven** — the line makes sound: `playout: output 44100 Hz: 847872 frames, 0 underruns, 0 refused, 1 primes`, and the image is 891 KB with 15 % of its 1 MB partition free |
+| B5 | **proven** — boot heap 201 020 B free; **177 212 B** with the stream, decoder and ring up; largest free block 110 592 B |
+| B7 | **proven 2026-11-20** — a knob turn is heard at once, the browser hears the flat broadcast, a player reboot gets its tone back, and station restarts keep it. The 0.6.2 old-player fallback was not run |
+| B2, B3 | **not proven** — the run injected no outage; it recorded `flushed 0, lost 0, dups 28` |
+| B4 | **not proven** — no ten-minute Wi-Fi soak is recorded |
+| B6 | **not recorded by eye** — the light logged `playing (net connected, stream streaming, audio 1, failed 0) level 255` |
+
+The receiver's own numbers, from the same pair over ESP-NOW: the K7 logged `espnow audio: 1204
+frames, 174 resent, 22670 held, 2 dropped, 2757 packets, a player is listening`, and the player
+`receiving 192.168.0.13: 44100 Hz, 128 kbps, 905 frames, ring 70/96 KB, flushed 0, lost 0, dups 28`.
+
 ---
 
 ## 7. Open questions
 
-1. **Does the board exist?** A WROOM-32 devkit with a PCM5102A is the first target. The PCB
-   follows B4 and B5, because those two numbers decide whether a WROVER (PSRAM) is needed.
+1. **Does the board exist? Answered.** The first target is a WROOM-32 devkit with a PCM5102A, and
+   it is the board every run above used. The PCB follows B4 and B5, because those two numbers
+   decide whether a WROVER (PSRAM) is needed.
 2. **How deep is the ring?** Answered: 96 KB, six seconds at the station's 128 kbps
    ([ADR 0102](../adr/0102-the-players-ring-is-96-kb-and-clears-itself-rather-than-dropping-frames.md)). The number
    comes from the measured outages of the 2.4 GHz link (T3) — one to nine seconds, 6 % to 24 % of a
    session — against the 96 KB that still leaves the Wi-Fi 85 KB of internal heap. The A2DP buffer
    that used to bound it is gone with the speaker, and the station's format is the other half of
    this number: 128 kbps buys twice the seconds of 256.
-3. **Does the site flash it?** The K7's firmware is flashed from the browser
-   ([ADR 0079](../adr/0079-the-firmware-is-flashed-in-parts-from-the-browser.md)); a second
-   board with a second image is a second set of parts, and it is not in version one.
+3. **Does the site flash it? Answered.** The Site offers it as its own board with its own three
+   parts at `0x1000`, `0x8000` and `0x10000` ([`k7-site.md`](./k7-site.md) F2–F3,
+   [ADR 0079](../adr/0079-the-firmware-is-flashed-in-parts-from-the-browser.md)).

@@ -15,8 +15,10 @@ The page the device used to serve is gone: **Front door**, **Launcher**, **Devic
 **Shell** and **Bridge** are retired words.
 
 **Status:** M1–M3 are built and tested in this repository — the card's mark and the scoped
-stores, installability, and the one offline weights store with a gated prefetch. Not deployed
-and not flashed. The `/app` split is built; the Site at `/` is its first shape
+stores, installability, and the one offline weights store with a gated prefetch. The App is
+deployed at `/app` on the origin ([`k7-deploy.md`](./k7-deploy.md) records what it answers), and
+the device serves no page of it, so there is nothing of it to flash (ADR 0067). The `/app` split
+is built; the Site at `/` is its first shape
 ([`k7-site.md`](./k7-site.md)). M4 is partly built: the direct transport exists; the
 Library's image source answers Ask's search, the Playlists area reads and writes the selected
 card's own list files, and the image is format 5 with no list area

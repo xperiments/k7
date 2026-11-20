@@ -11,8 +11,11 @@ two glossaries: **handover**, **share window**, **sweep**, **beacon**, **network
 [`player/CONTEXT.md`](../../player/CONTEXT.md), and the network vocabulary the K7 already owns in
 [`CONTEXT.md`](./CONTEXT.md#the-network).
 
-**Status:** designed and specified; **nothing is built**. Every timing here is arithmetic except
-where it says "measured", and none of it has crossed a radio yet.
+**Status:** built, and proven over the air on **2026-11-18** (§7): a window opened on the K7, a
+player whose record had been erased swept, asked, and stored the record, and it then joined the
+home network and played. What the same run did not close: the AP fallback (T14), a sweep that has
+to walk every channel (T12 — the K7 was on channel 1), and the window closing on its own (T16).
+The handover has not been re-measured since the radio became always-on.
 
 ---
 
@@ -272,6 +275,21 @@ answer.
 | T14 | An unprovisioned K7 hands over `K7.local` and the player streams from `192.168.4.1` | **board only** |
 | T15 | The census with a window open: internal RAM, largest block, and the encoder's frame cost beside the boot log's | **board only** |
 | T16 | A window left to expire closes itself and the peer list is empty afterwards | **board only** |
+
+**Measured on the board, 2026-11-18**, with a WROOM-32 and a PCM5102A, the K7 on `192.168.0.13`,
+and the player's network record erased so the handover had to happen:
+
+| # | Result |
+|---|---|
+| T11 | **proven** — `share window open for 60 s on channel 1`; the player logged `heard a K7 on channel 1: asking`; the K7 `answered 3c:8a:1f:7f:f5:c8`; the player stored it — `record stored: xperiments-2.4G and K7.local` |
+| T13 | **proven** — `joined xperiments-2.4G at 192.168.0.24`, and the light reported `playing (net connected, stream streaming, audio 1, failed 0)` |
+| T15 | **proven for the census** — the window costs **6 624 B** of internal RAM (56 695 → 50 071 B) and the largest free block stays **31 744 B** throughout; the player's boot heap is 201 020 B free, 177 212 B with the stream, decoder and ring up. The encoder's frame cost beside the boot log's was not read in this run, so §8.1 stays open |
+| T12 | **not proven** — the K7 was on channel 1, so the walk across 1–13 was not exercised |
+| T14 | **not proven** — the AP fallback: an unprovisioned K7 handing over `K7.local` |
+| T16 | **not recorded** — the run opened a window for 60 s and did not log whether it closed itself |
+
+The player is an ordinary listener from the K7's side — `client 0 connected`, no special case — and
+the handover has not been re-measured since the radio became always-on.
 
 ---
 

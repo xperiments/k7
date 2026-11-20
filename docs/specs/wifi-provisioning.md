@@ -11,9 +11,12 @@ listener and its access model, so [`front-door.md`](./front-door.md) and
 [`sd-stream-server.md`](./sd-stream-server.md) are amended where they claimed the device had no
 page and no runtime credentials.
 
-**Status:** designed and specified; **nothing is built.** Every number here that is a memory
-number is arithmetic until the board pass in §10 says otherwise, and this document must not be
-read as proof that the access point fits. The tickets are on the board under the **Setup** group.
+**Status:** built, and proven on the board on **2026-11-10** (§10): an unprovisioned device raises
+`K7.local`, `/setup` answers from a machine joined to it, a wrong password is reported with its
+reason, a good one joins and the hotspot closes itself, the record survives a flash, B5's
+eight-minute soak held, and the access point fits (§9, P40). What is not proven: the page fetched
+from a phone rather than from the machine the pass joined, the cached App over the hotspot
+(§11.3), and B8's rows on the glass. The tickets are on the board under the **Setup** group.
 The **share window** — the other window on the same radio, the one that hands this device's network
 to a K7Player — is a separate feature with no access point, specified in
 [`network-handover.md`](./network-handover.md).
@@ -423,9 +426,11 @@ or B8 — a cable and eyes are the only instruments those have.
 
 ## 11. Open questions
 
-1. **Does the access point fit?** §9 is arithmetic. `esp_netif`'s AP netif, its DHCP server and the
-   AP's own accounting are not measured here, and the allocation is late by design. B4 settles it,
-   and P41 is what happens if it does not.
+1. **Does the access point fit? Partly answered on 2026-11-10.** §9 carries the board's census
+   with the setup network up and the stream playing: `internal free 43815 B, largest 31744 B`,
+   better than the pre-change worst case because the measured device was unprovisioned. The
+   station-associated case, with an on-demand hotspot beside it, is still unmeasured — that is
+   B4's remaining question — and P41 is the lever if it does not fit.
 2. **Does a client survive the channel move?** If it always drops — not sometimes — the page's
    "reload and read the reason" loop becomes the only feedback, and the grace window may need to
    start reporting differently. B2 is the experiment.
