@@ -3196,16 +3196,28 @@
     {
       "id": "TN-01",
       "title": "The tone moves to the output that makes the sound",
-      "state": "proposed",
+      "state": "review",
       "group": "TN",
       "at": "2026-11-20T00:14:36Z",
       "by": "lead",
-      "desc": "Right now the four EQ knobs on the K7 change the broadcast before the encoder. With the player on ESP-NOW that means a knob turn is heard about 4.5 s later, because the encoded frames wait in the player's ring. This task records the decision to move the tone to the player when the radio carries its audio: the K7 sends the four values over ESP-NOW, the player applies them after decoding, and the broadcast is flat. A browser listening at the same time therefore hears no tone while ESP-NOW; that is the trade. docs/research/player-tone.md has the arithmetic, the 10-byte packet and the status flag that keeps an old player on today's path. Finished when the ADR is written and the specs say where the tone runs and what the browser hears."
+      "desc": "Right now the four EQ knobs on the K7 change the broadcast before the encoder. With the player on ESP-NOW that means a knob turn is heard about 4.5 s later, because the encoded frames wait in the player's ring. This task records the decision to move the tone to the player when the radio carries its audio: the K7 sends the four values over ESP-NOW, the player applies them after decoding, and the broadcast is flat. A browser listening at the same time therefore hears no tone while ESP-NOW; that is the trade. docs/research/player-tone.md has the arithmetic, the 10-byte packet and the status flag that keeps an old player on today's path. Finished when the ADR is written and the specs say where the tone runs and what the browser hears.",
+      "notes": [
+        {
+          "at": "2026-11-20T00:16:56Z",
+          "by": "agent",
+          "text": "Plan: write the ADR and the spec changes for the tone's move, then hand it to review."
+        },
+        {
+          "at": "2026-11-20T00:20:55Z",
+          "by": "lead",
+          "text": "The decision is recorded: the tone belongs to the output that makes the sound.\n\n- **What it decides:** when the K7's transport is ESP-NOW, the player applies the four EQ values at its output and the broadcast is flat; when it is HTTP, the S3 applies them to the stream. The player hears a knob at once instead of after its 4.5 s ring.\n- **The trade:** a browser listening while the player is on hears the stream untinted, and the K7's VU stays the broadcast's level. That is the one-encoder cost, and the ADR states it.\n- **The compatibility:** the values go in a 10-byte 0x06 packet; the player's status gains one optional flags byte. An old player keeps the S3 tone, an old K7 keeps a new player neutral, and a new pair takes the new path. Nothing needs reflashing in lockstep.\n- **Where it is written:** ADR 0109; `espnow-stream.md` E3a, E12 and E13; `k7player.md` R33 with T8/B7; `sd-stream-server.md` section 4.6 with T19; the stream server's glossary. ADR 0018 carries the amendment.\n\nDocs only: no code changed, and no host or board test. The links are checked. Read the ADR and the browser trade; if you accept it, TN-02 and TN-03 can start. The browser's own tone is deferred in the ADR, not part of this decision."
+        }
+      ]
     },
     {
       "id": "TN-02",
       "title": "The K7 sends its tone to the player",
-      "state": "proposed",
+      "state": "todo",
       "group": "TN",
       "deps": ["TN-01"],
       "at": "2026-11-20T00:14:36Z",
@@ -3215,7 +3227,7 @@
     {
       "id": "TN-03",
       "title": "The player applies the K7's tone",
-      "state": "proposed",
+      "state": "todo",
       "group": "TN",
       "deps": ["TN-01"],
       "at": "2026-11-20T00:14:36Z",
@@ -3225,7 +3237,7 @@
     {
       "id": "TN-04",
       "title": "The tone is heard on both boards",
-      "state": "proposed",
+      "state": "todo",
       "group": "TN",
       "deps": ["TN-02", "TN-03"],
       "at": "2026-11-20T00:14:36Z",
