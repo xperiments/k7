@@ -26,6 +26,9 @@ import { PRINT_H, PRINT_W, PRINT_X, PRINT_Y, SCREEN_H, SCREEN_W } from "@/engine
 import type { Obj } from "@/engine/types";
 
 const PASTEBOARD = 48;
+/** The line under the canvas (its text and the gap above it), which the fit leaves room
+ *  for so the caption is not what makes the stage scroll. */
+const CAPTION = 32;
 
 /** The print's stage: the design at its one real size, on the screen it prints from. */
 export function CanvasStage() {
@@ -34,24 +37,31 @@ export function CanvasStage() {
   const printRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const captured = useRef<number | null>(null);
-  const fitted = useRef(false);
   const [hover, setHover] = useState<number | null>(null);
 
   const zoom = ed.zoom;
   const run = ed.run;
 
-  // Open on a canvas that fits: a print is 800 x 480 at 100%, and a 1440 window is
-  // narrower than the panels allow. The user's own zoom wins from then on.
+  // The canvas fits the stage it is in: a print is 800 x 480 at 100%, and the panels leave
+  // less room than that in most windows. When the stage is smaller than the chosen zoom the
+  // zoom comes down to the size that fits - and stays there, because a stage that grows is
+  // not a reason to change the size the author picked.
   useEffect(() => {
-    if (fitted.current) return;
     const box = wrapRef.current;
-    if (!box || !box.clientWidth || !box.clientHeight) return;
-    fitted.current = true;
-    const z = Math.min(
-      (box.clientWidth - PASTEBOARD * 2) / SCREEN_W,
-      (box.clientHeight - PASTEBOARD * 2) / SCREEN_H,
-    );
-    if (z < 0.95) ed.setZoom(Math.max(0.25, Math.floor(z * 20) / 20));
+    if (!box) return;
+    const fitToStage = () => {
+      if (!box.clientWidth || !box.clientHeight) return;
+      const z = Math.min(
+        (box.clientWidth - PASTEBOARD * 2) / SCREEN_W,
+        (box.clientHeight - PASTEBOARD * 2 - CAPTION) / SCREEN_H,
+      );
+      const fit = Math.max(0.25, Math.floor(z * 20) / 20);
+      if (fit < ed.zoom - 0.001) ed.setZoom(fit);
+    };
+    const observer = new ResizeObserver(fitToStage);
+    observer.observe(box);
+    fitToStage();
+    return () => observer.disconnect();
   }, [ed]);
 
   // Static text hugs its ink: measure once the faces are in, and settle.
@@ -225,7 +235,7 @@ export function CanvasStage() {
   }
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-col bg-background" aria-label="Canvas">
+    <section className="flex min-h-0 min-w-0 flex-col bg-background h-full" aria-label="Canvas">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
         <Badge variant="outline" size="sm" className="gap-1.5 tabnum">
           <FrameIcon className="size-3" />

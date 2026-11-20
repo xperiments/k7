@@ -17,6 +17,9 @@ import { JCARD_H, JCARD_PARTS, JCARD_W } from "@/engine/jcard";
 import type { JCardFocus, Obj } from "@/engine/types";
 
 const PASTEBOARD = 48;
+/** The line under the canvas (its text and the gap above it), which the fit leaves room
+ *  for so the caption is not what makes the stage scroll. */
+const CAPTION = 32;
 
 const FOCUS_LABELS: Array<{ value: JCardFocus; label: string; width: number | null }> = [
   { value: "sheet", label: "Sheet", width: JCARD_W },
@@ -36,7 +39,6 @@ export function JCardStage() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const captured = useRef<number | null>(null);
-  const fitted = useRef(false);
   const [hover, setHover] = useState<number | null>(null);
 
   const zoom = ed.zoom;
@@ -47,16 +49,25 @@ export function JCardStage() {
   const JCARD_DISPLAY = 0.5;
   const display = zoom * JCARD_DISPLAY;
 
+  /* The sheet fits the stage it is in: when the stage is smaller than the chosen zoom the
+   * zoom comes down to the size that fits, and stays there - a stage that grows is not a
+   * reason to change the size the author picked. */
   useEffect(() => {
-    if (fitted.current) return;
     const box = wrapRef.current;
-    if (!box || !box.clientWidth || !box.clientHeight) return;
-    fitted.current = true;
-    const z = Math.min(
-      (box.clientWidth - PASTEBOARD * 2) / (JCARD_W * JCARD_DISPLAY),
-      (box.clientHeight - PASTEBOARD * 2) / (JCARD_H * JCARD_DISPLAY),
-    );
-    if (z < 0.95) ed.setZoom(Math.max(0.1, Math.floor(z * 20) / 20));
+    if (!box) return;
+    const fitToStage = () => {
+      if (!box.clientWidth || !box.clientHeight) return;
+      const z = Math.min(
+        (box.clientWidth - PASTEBOARD * 2) / (JCARD_W * JCARD_DISPLAY),
+        (box.clientHeight - PASTEBOARD * 2 - CAPTION) / (JCARD_H * JCARD_DISPLAY),
+      );
+      const fit = Math.max(0.1, Math.floor(z * 20) / 20);
+      if (fit < ed.zoom - 0.001) ed.setZoom(fit);
+    };
+    const observer = new ResizeObserver(fitToStage);
+    observer.observe(box);
+    fitToStage();
+    return () => observer.disconnect();
   }, [ed]);
 
   if (ed.run) return <JCardPreview />;
@@ -175,7 +186,7 @@ export function JCardStage() {
       : `${ed.focus[0].toUpperCase()}${ed.focus.slice(1)} · ${JCARD_PARTS[ed.focus].w} × ${JCARD_H}`;
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-col bg-background" aria-label="J-card canvas">
+    <section className="flex min-h-0 min-w-0 flex-col bg-background h-full" aria-label="J-card canvas">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
         <Badge variant="outline" size="sm" className="gap-1.5 tabnum">
           <Ruler className="size-3" />
