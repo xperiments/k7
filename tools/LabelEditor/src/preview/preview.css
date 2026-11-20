@@ -453,10 +453,4 @@
         -webkit-mask-image: none;
         mask-image: none;
     }
-
-    /* The preview's third case, back to the reader: the design's flap as the case's back.
-       A view, not a turn-over - the shelf turns a case to its spine and no further. */
-    .k7app-preview .k7-case[data-view='back'] {
-        transform: rotateY(180deg);
-    }
 }
