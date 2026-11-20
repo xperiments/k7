@@ -13,6 +13,13 @@
     "h": 166,
     "r": 83
   },
+  "canvas": {
+    "backgrounds": [
+      "#c7a867",
+      "#326a97"
+    ],
+    "active": 1
+  },
   "slots": {
     "song_title": {
       "max": 96
