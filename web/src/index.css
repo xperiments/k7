@@ -202,6 +202,12 @@
     letter-spacing: 0.02em;
     }
 
+  /* The scrollbar's width is reserved whether or not it is showing: the page reloads often,
+   * and a scrollbar that appears with the content shifts every column sideways by 6 px. */
+  html {
+    scrollbar-gutter: stable;
+    }
+
   *, *::before, *::after {
     border-color: var(--k7-line);
     }
