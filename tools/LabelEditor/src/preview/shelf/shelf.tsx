@@ -35,12 +35,13 @@ const HOVER_OUT_DELAY = 260;
 const FIRST_STEP = 9.7;
 const SPINE_STEP = 3.25;
 
-/** The two cases: the design is drawn on both, and the turned one shows it as a cover. */
-const CASES = [0, 1];
+/** The shelf the preview fills: three cases either side of the turned one. The design is
+ *  drawn on all seven; only the middle one is turned, so it shows the cover and the six
+ *  beside it show their spines. */
+const CASES = [0, 1, 2, 3, 4, 5, 6];
+/** The turned case: the middle, so three spines flank it each way. */
+const CENTRE = 3;
 
-/** Where the back view stands: a case's width and the shelf's gap to the left of the turned
- *  case, so a face turned to the reader has the room a spine does not need. */
-const BACK_AT = "translate3d(calc((var(--cw) + var(--cg)) * -1), 0, 0)";
 
 /** Where a case at distance `d` from the selection sits. The terms are the stylesheet's
  *  `--cw`, `--cd`, `--cg` and `--csg`, so the row scales with the case when the stage is
@@ -68,7 +69,7 @@ export function JcardShelf({ design, fields }: { design: JcardDesign; fields: Jc
    * the layout shrinks too. */
   const [fit, setFit] = useState(1);
   /* Which case is turned; the shelf's own fact, as it is on the media page. */
-  const [at, setAt] = useState(0);
+  const [at, setAt] = useState(CENTRE);
   /* Which case the pointer is on, read from the flat hit layer below. It is deliberately not
    * the case's own :hover: the case turns and rises while the pointer stays put, and a hover
    * that moved with the 3D box would keep dropping out from under the pointer. */
@@ -99,12 +100,14 @@ export function JcardShelf({ design, fields }: { design: JcardDesign; fields: Jc
          * does — on a wide stage the height is the only bound, as it is on the media page. */
         const centre = box.left + box.width / 2;
         let reach = 0;
-        for (const face of el.querySelectorAll<HTMLElement>(".k7-front, .k7-left, .k7-back")) {
+        for (const face of el.querySelectorAll<HTMLElement>(".k7-front, .k7-left")) {
           const rect = face.getBoundingClientRect();
           reach = Math.max(reach, Math.abs(rect.left - centre), Math.abs(rect.right - centre));
         }
         const byHeight = parent.clientHeight / natural;
-        const byWidth = reach === 0 ? Infinity : parent.clientWidth / 2 / (reach / current);
+        /* A little room, so the case's frame and its sheen are not cut by the shelf's clip. */
+        const byWidth =
+          reach === 0 ? Infinity : (parent.clientWidth * 0.48) / (reach / current);
         return Math.max(0.25, Math.min(1.4, byHeight, byWidth));
       });
     };
@@ -220,15 +223,6 @@ export function JcardShelf({ design, fields }: { design: JcardDesign; fields: Jc
           onPointerCancel={() => endRef.current(null)}
         >
           <div className="k7-shelf-row">
-            {/* The design's third panel, from behind: the flap, on the case's back. A view,
-                not a case on the row - the shelf turns a case to its spine and no further.
-                It is a case's width away rather than a spine-step, because it faces the
-                reader and needs the room one takes. */}
-            <div className="k7-shelf-item" data-active={false} style={{ transform: BACK_AT }}>
-              <div className="k7-case" data-active={false} data-view="back" aria-hidden="true">
-                <Faces design={design} fields={fields} />
-              </div>
-            </div>
             {CASES.map((index) => {
               const distance = index - at;
               if (Math.abs(distance) > WINDOW) return null;

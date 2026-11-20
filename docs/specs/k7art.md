@@ -179,9 +179,9 @@ stable name hash ([`art-packs.md`](./art-packs.md) §6).
   not drawn over it.
 - **The flap is the case's back.** It folds around the spine, so on the back it is the strip
   at the spine's edge - 1 in of the 2.5625 in back, `320 / 820` of the case's width - and the
-  App draws it there, on every case whose album has no picture. The editor's Preview shows
-  that face: a case turned away from the reader stands beside the cover and the spine. There
-  is no turn-over in the App: a shelf case faces front or shows its spine, never its back.
+  App draws it there, on every case whose album has no picture. There is no turn-over: a shelf
+  case faces front or shows its spine, never its back, so the editor's Preview shows those two
+  faces and not the flap.
 - **The renderer** draws the `jcard` prims in the DOM: the roles from the container's `inks`,
   the faces from the page's font loading, the sizes as a share of the sheet's width (a `size`
   of 56 on 1300 is 4.31% of the width, whatever the surface's pixel size), the rotation, the
