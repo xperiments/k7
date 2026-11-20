@@ -93,6 +93,13 @@ refused, not scheduled.
   arrives by flashing an image on the card, and flashes a restart; a list arrives as a file and
   does not.
 
+## The journey
+
+[`docs/journey.md`](./docs/journey.md) maps one person's path across all three contexts — the
+Site's flash and install, the card prepared in the App, the broadcast, the player's handover — with
+a diagram for each stretch and a table naming the spec that owns every step. It cites and asserts
+nothing: where it and a spec disagree, the spec wins.
+
 ## Note on the research tree
 
 `docs/research/` currently mixes the player's and server's evidence at its top level: the player's evidence
