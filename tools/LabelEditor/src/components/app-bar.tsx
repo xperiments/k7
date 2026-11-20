@@ -9,7 +9,6 @@ import {
   FilePlus2,
   FolderOpen,
   Keyboard,
-  PencilRuler,
   Redo2,
   Save,
   StickyNote,
@@ -136,23 +135,16 @@ export function AppBar({
 
         <Separator orientation="vertical" className="mx-1 h-6" />
 
-        <ToggleGroup
-          value={[ed.run ? "preview" : "design"]}
-          onValueChange={(v) => ed.setRun(v.includes("preview"))}
+        <Button
           variant="outline"
           size="sm"
-          spacing={0}
-          aria-label="Mode"
+          aria-pressed={ed.run}
+          onClick={() => ed.setRun(!ed.run)}
+          className="gap-1.5 px-2.5 aria-pressed:border-primary/60 aria-pressed:text-primary"
         >
-          <ToggleGroupItem value="design" className="gap-1.5 px-2.5">
-            <PencilRuler className="size-3.5" />
-            Design
-          </ToggleGroupItem>
-          <ToggleGroupItem value="preview" className="gap-1.5 px-2.5">
-            <Eye className="size-3.5" />
-            Preview
-          </ToggleGroupItem>
-        </ToggleGroup>
+          <Eye className="size-3.5" />
+          Preview
+        </Button>
 
         <Separator orientation="vertical" className="mx-1 h-6" />
 
