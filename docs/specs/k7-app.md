@@ -512,10 +512,10 @@ makes that a deployment requirement, not a nicety.
 
 | What | Why it is not known |
 |---|---|
-| A `library.list` / `library.search` response for 5 000 tracks | the bridge's 1 MiB cap is a guess until measured |
+| A `library.list` / `library.search` response for 5 000 tracks | no library that large has been measured: the Snapshot is **~280 KB at 5 000 tracks** (README), and the response beside it is not |
 | ~~Shell image size with the Launcher and `app.html`~~ | measured: 392 783 bytes packed with the App copy; the Launcher alone is **14 613 bytes** (index.html + `launcher.js.gz` + `launcher-origins.js`) |
-| A page load's black frame with the Launcher | ADR 0055 measured 187 KB; the Launcher is 30× smaller |
-| Writing `k7.card` on a real FAT32 card through the picker | the writer is unbuilt |
+| A page load's black frame, now that the worker serves the shell | ADR 0055 measured 187 KB with the Launcher, which is retired ([ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md)); the shell's own first paint is unmeasured |
+| Writing `k7.card` on a real FAT32 card through the picker | the writer exists (`web/src/card/`, with `web/tests/card-write.test.ts`); no run against a real FAT32 card is recorded |
 | Cold 41 MB prefetch over the LAN and over a WAN | the offline promise's first-run cost |
 | The built-in model's first ask on a machine at Chrome's floor | the spike measured 12.6 s on one Mac; the floor is not measured |
 
