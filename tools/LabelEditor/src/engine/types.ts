@@ -101,6 +101,8 @@ export interface JObj {
  * carries each text's `preview`, which the panel writes through.
  */
 export interface JCardDoc {
+  /** The sheet's own colour: independent of the label's paper, so one does not move the other. */
+  paper: string;
   fonts: Record<FontRole, { ff: string; size: number }>;
   prims: JObj[];
   nid: number;

@@ -26,7 +26,7 @@ describe("buildJCard", () => {
     expect(errs).toEqual([]);
     expect(doc.space).toEqual({ w: 1300, h: 1280, unit: 320 });
     expect(doc.parts).toEqual(JCARD_PARTS);
-    expect(Object.keys(doc)).toEqual(["space", "parts", "fonts", "prims"]);
+    expect(Object.keys(doc)).toEqual(["space", "parts", "paper", "fonts", "prims"]);
     expect(doc.fonts.numeral).toEqual({ ff: "Barlow Condensed 700", size: 136 });
     expect(doc.prims).toHaveLength(4);
   });

@@ -469,6 +469,7 @@
         "h": 1280
       }
     },
+    "paper": "#8a5d34",
     "fonts": {
       "title": {
         "ff": "Archivo Narrow 600",
@@ -597,7 +598,7 @@
         "font": "caption",
         "color": "band.1",
         "align": "left",
-        "text": "HIGH FIDELITY · STEREO"
+        "text": "HIGH FIDELITY \u00b7 STEREO"
       },
       {
         "t": "rect",
@@ -845,7 +846,7 @@
         "font": "caption",
         "color": "band.0",
         "align": "left",
-        "preview": "Side A · Side B"
+        "preview": "Side A \u00b7 Side B"
       },
       {
         "t": "rect",
@@ -863,7 +864,7 @@
         "font": "caption",
         "color": "band.0",
         "align": "left",
-        "text": "SIDE A · STEREO"
+        "text": "SIDE A \u00b7 STEREO"
       },
       {
         "t": "rect",

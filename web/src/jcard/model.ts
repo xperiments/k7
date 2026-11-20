@@ -111,6 +111,8 @@ export type JcardPrim = JcardRect | JcardText;
 
 export interface JcardSection {
   space: { w: number; h: number; unit: number };
+  /** The sheet's own colour; the design's inks are the label's and do not move with it. */
+  paper: string;
   fonts: Record<JcardFontRole, JcardFont>;
   prims: JcardPrim[];
 }
@@ -312,6 +314,7 @@ export function readJcardDesign(raw: unknown): JcardDesign | null {
   const fonts = readsFonts(jcard.fonts);
   if (!fonts) return null;
   if (!Array.isArray(jcard.prims) || jcard.prims.length > JCARD_PRIM_MAX) return null;
+  const paper = isString(jcard.paper) ? jcard.paper : inks.paper;
 
   const prims: JcardPrim[] = [];
   for (const prim of jcard.prims) {
@@ -319,7 +322,7 @@ export function readJcardDesign(raw: unknown): JcardDesign | null {
     if (read) prims.push(read);
   }
 
-  return { id, name, inks, jcard: { space, fonts, prims } };
+  return { id, name, inks, jcard: { space, paper, fonts, prims } };
 }
 
 /**

@@ -212,6 +212,7 @@
         "h": 1280
       }
     },
+    "paper": "#142538",
     "fonts": {
       "title": {
         "ff": "Archivo Narrow 600",
@@ -266,7 +267,7 @@
         "font": "caption",
         "color": "ink",
         "align": "left",
-        "preview": "Side A · Side B"
+        "preview": "Side A \u00b7 Side B"
       }
     ]
   }

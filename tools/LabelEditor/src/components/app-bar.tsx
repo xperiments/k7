@@ -83,7 +83,7 @@ export function AppBar({
         </span>
         <div className="flex flex-col leading-none">
           <span className="whitespace-nowrap text-sm font-medium tracking-tight text-foreground">
-            Label Editor
+            K7Art
           </span>
         </div>
       </div>

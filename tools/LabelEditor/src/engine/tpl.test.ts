@@ -150,7 +150,7 @@ describe("buildTemplate", () => {
       "prims",
     ]);
     expect(Object.keys(doc.label.fonts)).toEqual(["title", "numeral", "caption"]);
-    expect(Object.keys(doc.jcard)).toEqual(["space", "parts", "fonts", "prims"]);
+    expect(Object.keys(doc.jcard)).toEqual(["space", "parts", "paper", "fonts", "prims"]);
     expect(Object.keys(doc.jcard.space)).toEqual(["w", "h", "unit"]);
     expect(Object.keys(doc.jcard.parts)).toEqual(["flap", "spine", "cover"]);
     expect(Object.keys(doc.jcard.fonts)).toEqual(["title", "numeral", "caption"]);

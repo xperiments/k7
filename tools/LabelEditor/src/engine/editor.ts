@@ -1312,13 +1312,18 @@ export class Editor {
   }
   setRoleColor(role: string, c: string, coalesce = true) {
     if (role === "paper") {
-      // One paper on both media: the mask's colour is the container's, and a design without a
-      // mask still carries it for the J-card.
+      // The label's paper is the mask's, and the mask's colour is the container's ink.
       this.tpl.inks.paper = c;
       if (this.mask) this.mask.color = c;
     } else if (role === "ink") this.tpl.inks.ink = c;
     else if (role === "rule") this.tpl.inks.rule = c;
     else if (/^band\.[0-7]$/.test(role)) this.tpl.inks.band[+role.slice(5)] = c;
+    this.commit(coalesce);
+    this.emit();
+  }
+  /** The J-card's paper is the sheet's own: the label's paper and inks do not move with it. */
+  setJCardPaper(c: string, coalesce = true) {
+    this.jcard.paper = c;
     this.commit(coalesce);
     this.emit();
   }

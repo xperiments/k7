@@ -57,9 +57,13 @@ const FACE_CSS: Record<string, { family: string; weight: number }> = {
   },
 };
 
-/** The role's colour from the container's inks; null for a role this design does not carry. */
-export function roleColor(inks: JcardDesign['inks'], role: JcardRole): string | null {
-  if (role === 'paper') return inks.paper;
+/** The role's colour: the sheet's own paper, or one of the design's inks. */
+export function roleColor(
+  inks: JcardDesign['inks'],
+  paper: string,
+  role: JcardRole,
+): string | null {
+  if (role === 'paper') return paper;
   if (role === 'ink') return inks.ink;
   if (role === 'rule') return inks.rule;
   const band = /^band\.([0-7])$/.exec(role);
@@ -74,11 +78,11 @@ function rotate(prim: JcardPrim): CSSProperties {
 
 function rectNode(
   prim: Extract<JcardPrim, { t: 'rect' }>,
-  inks: JcardDesign['inks'],
+  design: JcardDesign,
   viewWidth: number,
   key: string,
 ): JcardNode {
-  const color = roleColor(inks, prim.fill) ?? 'transparent';
+  const color = roleColor(design.inks, design.jcard.paper, prim.fill) ?? 'transparent';
   return {
     key,
     kind: 'rect',
@@ -115,7 +119,7 @@ function textNode(
    * number as a share of the sheet.
    */
   const lines = Math.max(1, Math.floor((JCARD_HEIGHT - prim.y) / (font.size * LINE_HEIGHT)));
-  const color = roleColor(design.inks, prim.color) ?? design.inks.ink;
+  const color = roleColor(design.inks, design.jcard.paper, prim.color) ?? design.inks.ink;
 
   return {
     key,
@@ -182,7 +186,7 @@ export function jcardFrame(
 
   const nodes = design.jcard.prims.map((prim, index) =>
     prim.t === 'rect'
-      ? rectNode(prim, design.inks, view.w, `${index}:rect`)
+      ? rectNode(prim, design, view.w, `${index}:rect`)
       : textNode(prim, design, fields, view.w, `${index}:text`),
   );
 

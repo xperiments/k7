@@ -252,6 +252,7 @@
         "h": 1280
       }
     },
+    "paper": "#1b3a63",
     "fonts": {
       "title": {
         "ff": "Archivo Narrow 600",
@@ -388,7 +389,7 @@
         "font": "caption",
         "color": "ink",
         "align": "left",
-        "text": "DRUM MACHINE · STEREO"
+        "text": "DRUM MACHINE \u00b7 STEREO"
       },
       {
         "t": "rect",
@@ -507,7 +508,7 @@
         "font": "caption",
         "color": "band.3",
         "align": "left",
-        "preview": "Side A · Side B"
+        "preview": "Side A \u00b7 Side B"
       },
       {
         "t": "rect",
@@ -525,7 +526,7 @@
         "font": "caption",
         "color": "ink",
         "align": "left",
-        "text": "STEREO · SIDE B"
+        "text": "STEREO \u00b7 SIDE B"
       },
       {
         "t": "rect",

@@ -778,8 +778,8 @@ function JCardDesignPanel() {
       <Section title="Sheet">
         <ColourRow
           label="Paper (the sheet's colour)"
-          value={ed.tpl.inks.paper}
-          onChange={(v) => ed.setRoleColor("paper", v)}
+          value={ed.jcard.paper}
+          onChange={(v) => ed.setJCardPaper(v)}
         />
         <div className="grid grid-cols-2 gap-2">
           <ReadOnly label="Sheet" value={`${JCARD_W} × ${JCARD_H}`} />

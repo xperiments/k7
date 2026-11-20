@@ -56,6 +56,7 @@ J-card without a label.
       "spine": { "x": 320, "y": 0, "w": 160, "h": 1280 },
       "cover": { "x": 480, "y": 0, "w": 820, "h": 1280 }
     },
+    "paper": "#F5F1E6",
     "fonts": { "title":   { "ff": "Archivo Narrow 600",   "size": 56 },
                "numeral": { "ff": "Barlow Condensed 700", "size": 136 },
                "caption": { "ff": "IBM Plex Mono 500",    "size": 31 } },
@@ -90,10 +91,11 @@ The container's `inks` are the design's eleven colour roles and the container's 
 three the editor draws. Both sections use them; a role is a role on both media.
 
 - **`inks`** is `paper`, `ink`, `rule` and `band[0..7]`. `paper` is always a `#RRGGBB` colour:
-  it is the label's LayerMask when the label has one, and the J-card's sheet. The label's
-  `paper` prim and the J-card's sheet are the same colour - the design's paper. `band` has four
-  to eight colours; the J-card may use any of the eight, and a design with four leaves the rest
-  to the editor's defaults.
+  it is the label's LayerMask when the label has one. The J-card's sheet is its own
+  `jcard.paper`, a `#RRGGBB` colour of the J-card section; the two start equal and move
+  independently, so changing one never changes the other. `band` has four to eight colours; the
+  J-card may use any of the eight, and a design with four leaves the rest to the editor's
+  defaults.
 - **The faces are the same three**: `Archivo Narrow 600`, `Barlow Condensed 700` and
   `IBM Plex Mono 500`. The label sizes them by the sheet's compiled pairs (`32`, `78` and `18`
   px) - only those pairs exist as firmware fonts. The J-card sizes them in its own units (§4).

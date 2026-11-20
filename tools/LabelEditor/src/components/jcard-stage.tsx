@@ -48,14 +48,18 @@ export function JCardStage() {
   const list = ed.jcard.prims as unknown as Obj[];
   const sel = ed.sel;
 
+  /** The zoom is relative to a 50% sheet: this stage's 100% is half the old stage's. */
+  const JCARD_DISPLAY = 0.5;
+  const display = zoom * JCARD_DISPLAY;
+
   useEffect(() => {
     if (fitted.current) return;
     const box = wrapRef.current;
     if (!box || !box.clientWidth || !box.clientHeight) return;
     fitted.current = true;
     const z = Math.min(
-      (box.clientWidth - PASTEBOARD * 2) / JCARD_W,
-      (box.clientHeight - PASTEBOARD * 2) / JCARD_H,
+      (box.clientWidth - PASTEBOARD * 2) / (JCARD_W * JCARD_DISPLAY),
+      (box.clientHeight - PASTEBOARD * 2) / (JCARD_H * JCARD_DISPLAY),
     );
     if (z < 0.95) ed.setZoom(Math.max(0.1, Math.floor(z * 20) / 20));
   }, [ed]);
@@ -63,7 +67,7 @@ export function JCardStage() {
   const toDesign = (e: React.PointerEvent) => {
     const r = sheetRef.current?.getBoundingClientRect();
     if (!r) return { x: 0, y: 0 };
-    return { x: (e.clientX - r.left) / zoom, y: (e.clientY - r.top) / zoom };
+    return { x: (e.clientX - r.left) / display, y: (e.clientY - r.top) / display };
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -270,10 +274,10 @@ export function JCardStage() {
               onPointerUp={end}
               onPointerCancel={end}
               style={{
-                width: JCARD_W * zoom,
-                height: JCARD_H * zoom,
+                width: JCARD_W * display,
+                height: JCARD_H * display,
                 outline: "1px solid var(--k7-line)",
-                background: ed.tpl.inks.paper,
+                background: ed.jcard.paper ?? ed.tpl.inks.paper,
                 cursor: ed.tool === "select" ? "default" : "crosshair",
               }}
             >
@@ -282,9 +286,9 @@ export function JCardStage() {
                 style={{
                   width: JCARD_W,
                   height: JCARD_H,
-                  transform: `scale(${zoom})`,
+                  transform: `scale(${display})`,
                   transformOrigin: "0 0",
-                  background: ed.tpl.inks.paper,
+                  background: ed.jcard.paper ?? ed.tpl.inks.paper,
                   position: "relative",
                 }}
               >
@@ -378,14 +382,14 @@ export function JCardStage() {
                         data-handle="rotate"
                         title="Drag to rotate · hold Shift for 15° steps"
                         aria-label="Rotate"
-                        style={handleStyle(handles.rotate, 1 / zoom, "grab")}
+                        style={handleStyle(handles.rotate, 1 / display, "grab")}
                       />
                       <div
                         data-handle="resize"
                         title="Drag to resize"
                         aria-label="Resize"
                         style={{
-                          ...handleStyle(handles.resize, 1 / zoom, "nwse-resize"),
+                          ...handleStyle(handles.resize, 1 / display, "nwse-resize"),
                           borderRadius: 2,
                         }}
                       />

@@ -243,6 +243,7 @@
         "h": 1280
       }
     },
+    "paper": "#c68b2e",
     "fonts": {
       "title": {
         "ff": "Archivo Narrow 600",
@@ -387,7 +388,7 @@
         "font": "caption",
         "color": "ink",
         "align": "left",
-        "text": "1969 · FERRO · STEREO"
+        "text": "1969 \u00b7 FERRO \u00b7 STEREO"
       },
       {
         "t": "rect",
@@ -441,7 +442,7 @@
         "font": "caption",
         "color": "band.1",
         "align": "left",
-        "text": "HiFi 1969 · FERRO"
+        "text": "HiFi 1969 \u00b7 FERRO"
       },
       {
         "t": "rect",
@@ -498,7 +499,7 @@
         "font": "caption",
         "color": "ink",
         "align": "left",
-        "preview": "Side A · Side B"
+        "preview": "Side A \u00b7 Side B"
       },
       {
         "t": "rect",
@@ -516,7 +517,7 @@
         "font": "caption",
         "color": "ink",
         "align": "left",
-        "text": "STEREO · SIDE A"
+        "text": "STEREO \u00b7 SIDE A"
       },
       {
         "t": "rect",

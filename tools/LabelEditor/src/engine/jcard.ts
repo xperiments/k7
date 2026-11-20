@@ -1,5 +1,6 @@
 import { VOCAB } from "./vocab.generated";
 import { FROLES, ROLES, TEXT_ROLES } from "./vocab";
+import { DEFAULT_PAPER } from "./tpl";
 import type { FontRole, JCardDoc, JObj, Tpl } from "./types";
 
 /**
@@ -75,6 +76,8 @@ export const JCARD_BOUND = 4096;
 export interface JCardFile {
   space: { w: number; h: number; unit: number };
   parts: Record<JCardPart, { x: number; y: number; w: number; h: number }>;
+  /** The sheet's own colour; the label's paper is its own and does not move with this. */
+  paper: string;
   fonts: Record<FontRole, { ff: string; size: number }>;
   prims: Array<Record<string, unknown>>;
 }
@@ -102,8 +105,8 @@ export function jcardFonts(tpl: Tpl): JCardDoc["fonts"] {
 /**
  * The J-card a design starts with, and the one a document or a retired label template is
  * migrated with: the paper, and the three fields at the defaults (§8). The fold guides are
- * the editor's, not prims. The paper is the `paper` role, so it is the container's ink and
- * moves with the label's own paper.
+ * the editor's, not prims. The paper is the sheet's own colour: it starts at the label's
+ * paper, and thereafter the two move independently.
  */
 export function starterJCard(tpl: Tpl): JCardDoc {
   const texts: Array<[JCardField, FontRole, number]> = [
@@ -112,6 +115,7 @@ export function starterJCard(tpl: Tpl): JCardDoc {
     ["meta", "caption", 1120],
   ];
   return {
+    paper: tpl.inks.paper,
     fonts: jcardFonts(tpl),
     prims: [
       { id: 1, type: "rect", name: "", x: 0, y: 0, w: JCARD_W, h: JCARD_H, role: "paper" },
@@ -248,6 +252,7 @@ export function buildJCard(jcard: JCardDoc): { doc: JCardFile; errs: string[] } 
       spine: { ...JCARD_PARTS.spine },
       cover: { ...JCARD_PARTS.cover },
     },
+    paper: jcard.paper ?? DEFAULT_PAPER,
     fonts,
     prims,
   };
@@ -445,7 +450,13 @@ export function importJCard(raw: unknown, tpl: Tpl): JCardDoc {
       `jcard: the section is ${bytes} B, over the ${JCARD_BYTES_MAX} the App bundles`,
     );
 
-  return { fonts, prims: out, nid: Math.max(0, ...out.map((o) => o.id)), sims };
+  return {
+    paper: typeof raw.paper === "string" ? raw.paper : tpl.inks.paper,
+    fonts,
+    prims: out,
+    nid: Math.max(0, ...out.map((o) => o.id)),
+    sims,
+  };
 }
 
 /**
@@ -460,6 +471,7 @@ export function migrateJCard(
   const starter = starterJCard(tpl);
   if (!isObject(jcard)) return starter;
   const doc = jcard as unknown as Record<string, unknown>;
+  const paper = typeof doc.paper === "string" ? doc.paper : starter.paper;
 
   const fonts = {} as JCardDoc["fonts"];
   const rawFonts = (isObject(doc.fonts) ? doc.fonts : {}) as Record<string, unknown>;
@@ -491,6 +503,6 @@ export function migrateJCard(
       if (!o.static && o.name && o.sim !== undefined && o.sim !== "") sims[o.name] = o.sim;
     });
   }
-  if (!prims.length) return { ...starter, fonts, sims };
-  return { fonts, prims, sims, nid: Math.max(0, ...prims.map((o) => o.id)) };
+  if (!prims.length) return { ...starter, paper, fonts, sims };
+  return { paper, fonts, prims, sims, nid: Math.max(0, ...prims.map((o) => o.id)) };
 }

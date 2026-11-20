@@ -244,6 +244,7 @@
         "h": 1280
       }
     },
+    "paper": "#f5f1e6",
     "fonts": {
       "title": {
         "ff": "Archivo Narrow 600",
@@ -363,7 +364,7 @@
         "font": "caption",
         "color": "ink",
         "align": "left",
-        "text": "C-60 · STEREO"
+        "text": "C-60 \u00b7 STEREO"
       },
       {
         "t": "rect",
@@ -447,7 +448,7 @@
         "font": "caption",
         "color": "ink",
         "align": "left",
-        "preview": "Side A · Side B"
+        "preview": "Side A \u00b7 Side B"
       },
       {
         "t": "rect",
@@ -465,7 +466,7 @@
         "font": "caption",
         "color": "ink",
         "align": "left",
-        "text": "C-60 · STEREO"
+        "text": "C-60 \u00b7 STEREO"
       },
       {
         "t": "rect",
