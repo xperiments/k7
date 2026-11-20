@@ -45,6 +45,10 @@
     {
       "id": "EN",
       "name": "ESP-NOW"
+    },
+    {
+      "id": "TN",
+      "name": "Tone"
     }
   ],
   "tasks": [
@@ -3188,6 +3192,45 @@
           "text": "The K7 can no longer lose its radio and its encoder to one stuck send. The frozen state you saw this afternoon — alive, painting, but not decoding, not reachable, the player waiting — is what this removes.\n\n**What changed:** the ESP-NOW receive callback now only copies the packet into a queue and returns to the Wi-Fi driver. One task of the board does all of the radio's work: the credit, the NACKed frames, the sends, and the recovery. The broadcast copies a frame into that queue and goes back to encoding — it never takes the emitter's lock, so a radio that stops answering costs the player frames, never the station.\n\n**Checked on the board, with every send forced to fail:**\n- 0.78 s after the failures began: *the radio stopped sending: re-associating (1)*, the re-association, and **no reboot** — the uptime kept counting.\n- The station never stopped: the VU meters kept moving and the broadcast advanced to a new track *during* the failure window.\n- With the failures cleared, the player came back on its own — receiving 44.1 kHz / 128 kbps with the frame count climbing — without resetting either board.\n- The build running now plays with `0 resent, 0 dropped, a player is listening`.\n\n**What to check:** it is already running on the K7 and the player is playing. The one path this bench could not exercise is the **share window** from the panel (Menu → Wi-Fi → Share) — the responder moved into the same task, and a handover needs a player with no network record to prove it.\n\n**Also worth knowing:** a transport change (Settings → Player) still takes the emitter's lock for its state change. It is rare and brief, and it is the only remaining task that could wait on a send."
         }
       ]
+    },
+    {
+      "id": "TN-01",
+      "title": "The tone moves to the output that makes the sound",
+      "state": "proposed",
+      "group": "TN",
+      "at": "2026-11-20T00:14:36Z",
+      "by": "lead",
+      "desc": "Right now the four EQ knobs on the K7 change the broadcast before the encoder. With the player on ESP-NOW that means a knob turn is heard about 4.5 s later, because the encoded frames wait in the player's ring. This task records the decision to move the tone to the player when the radio carries its audio: the K7 sends the four values over ESP-NOW, the player applies them after decoding, and the broadcast is flat. A browser listening at the same time therefore hears no tone while ESP-NOW; that is the trade. docs/research/player-tone.md has the arithmetic, the 10-byte packet and the status flag that keeps an old player on today's path. Finished when the ADR is written and the specs say where the tone runs and what the browser hears."
+    },
+    {
+      "id": "TN-02",
+      "title": "The K7 sends its tone to the player",
+      "state": "proposed",
+      "group": "TN",
+      "deps": ["TN-01"],
+      "at": "2026-11-20T00:14:36Z",
+      "by": "lead",
+      "desc": "The panel's four knobs get one owner in app_services; the K7 sends the current GAIN, HI, MID and LOW over ESP-NOW as a 10-byte packet on every change and once a second. The player's status says whether it can apply them, and the broadcast's tone is bypassed only when it has said so, so an old player or an old K7 keeps today's behaviour. The send goes through the existing radio worker, never the receive callback. Finished when the host tests pin the bytes, the capability and the fallback, and the K7's firmware builds."
+    },
+    {
+      "id": "TN-03",
+      "title": "The player applies the K7's tone",
+      "state": "proposed",
+      "group": "TN",
+      "deps": ["TN-01"],
+      "at": "2026-11-20T00:14:36Z",
+      "by": "lead",
+      "desc": "The player takes the K7's tone packet, holds the four targets, and runs the existing tone_eq on the decoded PCM just before the line output. It starts neutral, so an old K7's tone is not doubled; a rate change rebuilds the filters and keeps the targets. Finished when the player's host tests show the gain, the low shelf and the neutral case, the player's firmware builds, and nothing in the K7's UI or the web app changes."
+    },
+    {
+      "id": "TN-04",
+      "title": "The tone is heard on both boards",
+      "state": "proposed",
+      "group": "TN",
+      "deps": ["TN-02", "TN-03"],
+      "at": "2026-11-20T00:14:36Z",
+      "by": "lead",
+      "desc": "Flash the K7 and the player and prove what the host cannot: a knob turn is heard at once on the player; the same K7 with an old player keeps today's late knob and the VU moves; a browser listening while the player is on hears no tone; a player reboot gets its tone back within a second; ten station restarts keep the tone. Record the serial evidence and the listening check on this task. Board-only."
     }
   ]
 }
