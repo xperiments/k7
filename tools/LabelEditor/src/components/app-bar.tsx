@@ -81,9 +81,6 @@ export function AppBar({
           <span className="whitespace-nowrap text-sm font-medium tracking-tight text-foreground">
             Label Editor
           </span>
-          <span className="mt-0.5 hidden whitespace-nowrap text-xs uppercase tracking-[0.14em] text-muted-foreground xl:block">
-            K7 · cassette print
-          </span>
         </div>
       </div>
 

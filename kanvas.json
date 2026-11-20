@@ -2886,11 +2886,28 @@
     {
       "id": "LB-09",
       "title": "A browser that cannot start its GPU process skips the boot check, not fails it",
-      "state": "proposed",
+      "state": "review",
       "group": "LB",
       "at": "2026-11-18T14:07:25Z",
       "by": "dsh",
-      "desc": "`make -C host check` is meant to be green on any machine that has Chrome. On this one it is not: headless Chrome's GPU process exits the moment it starts (exit_code=6, `GPU process isn't usable. Goodbye.`), the page never paints, and the label boot step reports `FAIL label page: Chrome rendered an empty document` — the same line a genuinely broken page gets. LB-03 built that step to skip loudly when no Chrome is installed; it should also skip, just as loudly, when Chrome starts and dies before the page's own script.\n\nDone means:\n- `make -C host label` exits 0 on this machine and prints a `SKIP` naming the GPU-process failure, so the step stops blocking `make -C host check` here.\n- A page that really throws at load still fails it: re-run LB-03's 905313d page and confirm the check still reports the empty render (the skip keys on Chrome's own stderr, never on an empty document alone).\n- A machine with a working Chrome still runs all five assertions and never skips.\n- Both paths shown on this machine: faulty Chrome (skip) and `CHROME=` pointing at a working browser (assertions run).\n\nNo `--no-sandbox` in the committed command: it makes this machine pass by weakening the browser sandbox for every developer, so the fix belongs in how the harness reads Chrome's failure, not in the flags it passes."
+      "desc": "`make -C host check` is meant to be green on any machine that has Chrome. On this one it is not: headless Chrome's GPU process exits the moment it starts (exit_code=6, `GPU process isn't usable. Goodbye.`), the page never paints, and the label boot step reports `FAIL label page: Chrome rendered an empty document` — the same line a genuinely broken page gets. LB-03 built that step to skip loudly when no Chrome is installed; it should also skip, just as loudly, when Chrome starts and dies before the page's own script.\n\nDone means:\n- `make -C host label` exits 0 on this machine and prints a `SKIP` naming the GPU-process failure, so the step stops blocking `make -C host check` here.\n- A page that really throws at load still fails it: re-run LB-03's 905313d page and confirm the check still reports the empty render (the skip keys on Chrome's own stderr, never on an empty document alone).\n- A machine with a working Chrome still runs all five assertions and never skips.\n- Both paths shown on this machine: faulty Chrome (skip) and `CHROME=` pointing at a working browser (assertions run).\n\nNo `--no-sandbox` in the committed command: it makes this machine pass by weakening the browser sandbox for every developer, so the fix belongs in how the harness reads Chrome's failure, not in the flags it passes.",
+      "notes": [
+        {
+          "at": "2026-11-20T13:38:12Z",
+          "by": "deepseek",
+          "text": "Plan: reproduce the GPU-process exit, then read Chrome's own stderr in the label boot harness. Skip only on that signature, with a SKIP line naming it; keep the empty-render failure for a page that really throws. Prove both paths on this machine and with CHROME= pointing at a working browser."
+        },
+        {
+          "at": "2026-11-20T13:43:54Z",
+          "by": "deepseek",
+          "text": "`make -C host check` is green on this machine now. The label boot step reads Chrome's own fatal line (`GPU process isn't usable. Goodbye.`) from stderr and, when no DOM was dumped, prints `SKIP label page: Chrome could not start its GPU process: …` and exits 0 instead of failing on an empty document. A page that really throws still fails: the 905313d page reports 0 tabs, 0 layers, 0 objects. A browser that can start runs all five assertions and never skips. The command still passes no `--no-sandbox`.\n\nTo check:\n- `make -C host label` here: the SKIP, exit 0.\n- On a machine with a working Chrome: the five `ok` lines and `label page: ok`.\n- The 905313d page with a working browser: the five FAIL lines, exit 1.\n\nBranch `label-boot-gpu-skip`, one commit. Caveat: to reach the assertions path here I used a local `CHROME=` wrapper that appends `--no-sandbox`, because this harness's sandbox blocks Chrome's GPU sandbox. The wrapper is not committed and the harness's own command still passes no such flag."
+        },
+        {
+          "at": "2026-11-20T14:45:21Z",
+          "by": "deepseek",
+          "text": "Merged to master (baad49c, linear) together with the canvas chain; master's make -C host check is green and the editor boot check runs its five assertions."
+        }
+      ]
     },
     {
       "id": "FW-06",
@@ -3261,7 +3278,7 @@
     {
       "id": "TN-04",
       "title": "The tone is heard on both boards",
-      "state": "doing",
+      "state": "done",
       "group": "TN",
       "deps": ["TN-02", "TN-03"],
       "at": "2026-11-20T00:14:36Z",
@@ -3277,6 +3294,119 @@
           "at": "2026-11-20T01:43:19Z",
           "by": "lead",
           "text": "The pair is flashed: the K7 has the tone sender and the peer fix, the player applies the tone. On the board the K7 logs `espnow tone: the player applies the tone; the broadcast is flat` at 4.96 s, and the player logs `receiving 192.168.0.13: 44100 Hz, 128 kbps` and `output 44100 Hz`, i.e. it is playing.\n\nThe board test found and fixed a pre-existing audio bug: the player's first status arrived before the K7's IP, so the peer was registered on the AP interface; the peer then sent only while the setup AP was up (the audio waited 16 s for it, and the stream dropped when the AP closed). The peer now follows the station: `espnow audio: the player's peer follows the station` at 5.06 s, and 65 frames had gone out by 6.16 s. That is its own commit, 69975a0.\n\nThe listening checks are with the user: the immediate knob, the browser's flat stream, the player reboot, the station restarts, and the old-player fallback."
+        },
+        {
+          "at": "2026-11-20T02:27:13Z",
+          "by": "lead",
+          "text": "The transport toggle exposed a pre-existing panel regression: the Player row's NVS write ran on the panel's task, and the flash access left the picture a band to one side. Fixed in 48f6688: every runtime NVS write now settles the panel through app_board_set_flash_settled, and the scan is re-established before the station restarts. The board shows 'screen: the panel's scan settled after a flash write' on every toggle, and the owner confirms the picture stays centred. TN-04 remains open for the old-player fallback (0.6.2) if it is wanted."
+        },
+        {
+          "at": "2026-11-20T02:28:52Z",
+          "by": "lead",
+          "text": "Accepted on the board: the tone follows the player. A knob turn is heard at once, the browser hears the flat broadcast, a player reboot gets its tone back, and station restarts keep it. Two pre-existing faults were found and fixed on the way: the player's peer now follows the station (69975a0), and the panel settles after the transport's NVS write (48f6688). The old-player 0.6.2 fallback was not run; accepted without it. Both boards are flashed; the K7 is on ESP-NOW and the player is listening."
+        }
+      ]
+    },
+    {
+      "id": "LB-10",
+      "title": "A label carries its own canvas background",
+      "state": "done",
+      "group": "LB",
+      "at": "2026-11-20T13:36:19Z",
+      "by": "deepseek",
+      "desc": "The contract first. A label design gains up to eight canvas background presets and one active preset: the active one is the 800x480 page the player paints behind the print while the two-finger pose shows the tape, and it falls back to the palette's white page when the design carries none.\n\nSettle in docs/specs/label-templates.md: the file shape `canvas: { backgrounds: [\"#rrggbb\", ...], active: n }`; the sheet's active colour and the version bump 2 to 3 (byte 15 becomes flags, the last 4 bytes the RGB canvas); when the player paints it (the two-finger pose only, and no override when absent); and the packer's refusals (a bad hex, an empty or over-eight list, an active index out of range). Add the design ticket under docs/design/label-templates/issues/.\n\nFinished means a person can read the spec and implement or review the change without asking where the colour lives. No code in this task.",
+      "notes": [
+        {
+          "at": "2026-11-20T13:44:28Z",
+          "by": "deepseek",
+          "text": "Plan: write the contract in docs/specs/label-templates.md (the canvas object, sheet v3, the two-finger page rule, the refusals) and add the design ticket; then the editor, the sheet and the panel follow."
+        },
+        {
+          "at": "2026-11-20T13:46:34Z",
+          "by": "deepseek",
+          "text": "The contract is in. `label-template v1` gains `canvas` (one to eight presets, one active); the sheet goes to version 3, with the active RGB in the template record's old last four bytes and `has_canvas` in its old reserved byte, so the record stays 64 B. The player paints the active colour on the 800x480 screen only while the two-finger pose shows the tape; a design without one leaves the page alone. The packer refuses a malformed canvas and an active index outside the list, and the vocabulary's `canvas` is the eight-preset cap.\n\nRecorded in `docs/specs/label-templates.md` (§1, §2, §3, §4, §6, §7, §8), the `docs/specs/CONTEXT.md` glossary and ticket 12. Branch `label-canvas-background`, commit 687ad9f. Next: LB-11, the editor."
+        }
+      ]
+    },
+    {
+      "id": "LB-11",
+      "title": "The editor authors the label's canvas presets",
+      "state": "done",
+      "group": "LB",
+      "deps": ["LB-10"],
+      "at": "2026-11-20T13:36:19Z",
+      "by": "deepseek",
+      "desc": "A label document keeps several screen-background presets and the active one. The Canvas section lists them (add, select, recolour, remove; eight max), the design canvas and the LVGL preview use the active one, and a document saved with the old single `bg` migrates to one preset. New designs start on the panel's page grey (#909090), so an untouched export does not change the screen by accident.\n\nExport writes `canvas` and import reads it. The agent surface follows: `label-editor-read` returns the presets and the active one, `label-editor-set-design` can set the active preset and the list, and the skill and README regenerate. The new controls follow the ReUI and K7 look like the rest of the inspector.",
+      "notes": [
+        {
+          "at": "2026-11-20T13:46:36Z",
+          "by": "deepseek",
+          "text": "Plan: add the canvas cap to the vocabulary and regenerate; give the document presets plus the active one; build/import the canvas in the template; add the Canvas section's preset list; expose it through the WebMCP tools; regenerate the skill and update the README; cover the round trip and the old-document migration in the unit tests."
+        },
+        {
+          "at": "2026-11-20T13:52:17Z",
+          "by": "deepseek",
+          "text": "The editor now keeps up to eight canvas background presets and the active one. The Canvas section adds (a copy of the active), selects, recolours and removes them; the design canvas and the LVGL preview use the active one, and a document saved with the old single `bg` migrates to one preset. A new design starts on the panel's page grey `#909090`.\n\nExport writes `canvas` (`backgrounds` and `active`); import reads it and refuses a malformed one by the packer's rules. `label-editor-read` / `label-editor-set-design` expose the list and the active one; the skill and README regenerate. The vocabulary gains `canvas: 8` and both generated copies are regenerated.\n\nVerified: `npm run typecheck`, 34 unit tests, `npm run build`, `npm run skill:check`; the built editor boots in Chrome with all five assertions; the packer selftest and t33 pass. `make -C host label` still fails at its boot step on this branch because master lacks LB-09's GPU-process skip; that fix is in review on `label-boot-gpu-skip`, and the final proof rebases on it.\n\nBranch `label-canvas-background`, commit bb7a375. Next: LB-12, the sheet and the panel."
+        }
+      ]
+    },
+    {
+      "id": "LB-12",
+      "title": "The sheet and the panel carry the canvas",
+      "state": "done",
+      "group": "LB",
+      "deps": ["LB-11"],
+      "at": "2026-11-20T13:36:19Z",
+      "by": "deepseek",
+      "desc": "The packer reads the design's active preset, refuses a canvas it cannot pack, and writes sheet version 3 with the flags byte and the RGB canvas. The reader validates the flags, exposes the canvas, and the manifest lets t33 cross-check it. Designs without a canvas keep no override.\n\nIn the app, the two-finger pose paints the 800x480 screen with the label's canvas, restores the normal page when the pose ends, and repaints it when a track change swaps the design while the pose is up. A design with no canvas leaves the palette's white page untouched.",
+      "notes": [
+        {
+          "at": "2026-11-20T13:52:20Z",
+          "by": "deepseek",
+          "text": "Plan: pack the active preset and bump the sheet to version 3; validate the flags and canvas in the reader and expose the colour; update the manifest, t32 and t33; paint the two-finger page from the label's canvas and restore the palette's page, then build the firmware."
+        },
+        {
+          "at": "2026-11-20T13:57:41Z",
+          "by": "deepseek",
+          "text": "Sheet version 3 is in. The template record's old reserved byte is `flags` (bit 0 `has_canvas`) and its last four bytes are the active canvas RGB888. The packer reads the design's active preset, refuses a malformed canvas, and writes the canvas into the manifest; the reader validates the flags and exposes `label_canvas`. A design without a canvas keeps no override.\n\nIn the app, the two-finger page paints the label's canvas while the pose is up, restores the palette's page when it goes down, and follows a design change while the pose is up. The page is painted only when its colour changes, so the reel tick's repaint is untouched.\n\nVerified: packer selftest; t32 (reader and canvas accessor); t33 (84 checks on the shipping sheet, 86 on a temp design with a canvas); `make -C host test`; `./tools/build.sh sunton build` (0x202cd0, 50% of the app partition free). `make -C host label`'s boot step still hits LB-09's GPU issue on this branch.\n\nBranch `label-canvas-background`, commit 0b3b4bf. Next: LB-13, the proof."
+        }
+      ]
+    },
+    {
+      "id": "LB-13",
+      "title": "Prove the canvas background on the panel",
+      "state": "review",
+      "group": "LB",
+      "deps": ["LB-12"],
+      "yolo": true,
+      "at": "2026-11-20T13:36:19Z",
+      "by": "deepseek",
+      "desc": "Run the whole gate and the board check: with a design that carries a canvas, hold the cassette and see the page in that colour; release and see the page return; change track and see the design's canvas follow. With a design that carries none, the page must stay the palette's white page. Record what was seen, with the design named, in the design ticket.",
+      "notes": [
+        {
+          "at": "2026-11-20T13:57:44Z",
+          "by": "deepseek",
+          "text": "Plan: run the full host gate with the boot check driven by a working Chrome, confirm the firmware build, update the design ticket with the evidence, and leave the board check named for the human (the board is shared with TN-04)."
+        },
+        {
+          "at": "2026-11-20T13:59:35Z",
+          "by": "deepseek",
+          "text": "The host and firmware gates are green. The board paint is the one step left, and I did not flash it: the board carries TN-04's tone branch under review, and a flash would replace it.\n\n- `make -C host check` is green with the label boot check driven by a Chrome that can start; the default Chrome's GPU-process failure is LB-09, in review. The local `CHROME=` wrapper (adds `--no-sandbox`) is not part of the change.\n- The packer selftest, t32 and t33 pass (84 checks on the shipping sheet, 86 on a temp design with a canvas); the editor's typecheck, 34 unit tests, build and skill check pass.\n- `./tools/build.sh sunton build` is green: `sd_stream_server.bin` 0x202cd0, 50% of the app partition free.\n\nTo check on the panel, with the board free:\n1. Flash this branch's firmware.\n2. On a design that carries a canvas: hold the cassette and see the 800x480 page in that colour; put it down and see the palette's page return; change track and see the design's canvas follow.\n3. On a design without a canvas: the page stays the palette's white page.\n\nThe canvas branch is `label-canvas-background` (four commits from master, spec and ticket 12 included); LB-09 is separate on `label-boot-gpu-skip` (1dbb202). Tell me when the board is free and I will flash and run the check, or run it yourself."
+        },
+        {
+          "at": "2026-11-20T14:06:52Z",
+          "by": "deepseek",
+          "text": "Review feedback: the Canvas section's bare `+` now says Add, the row is labelled Backgrounds with `n / m`, and the copy says Add copies the active background. The branch moved to 24e1a38; typecheck, 34 tests, build and skill check pass.\n\nHow to see it: the editor on 5178 is the main tree (tone branch), which has no canvas UI. The canvas branch's editor is running at http://localhost:5179: Design -> Canvas -> Backgrounds -> Add, then pick the active colour; the 800x480 screen behind the print updates, and Export writes `canvas` into the JSON. For the panel, put that exported template in the branch worktree's `assets/labels/templates/`, pack it and flash; the shipped designs carry no canvas, so they keep the palette's page."
+        },
+        {
+          "at": "2026-11-20T14:45:21Z",
+          "by": "deepseek",
+          "text": "Merged to master (baad49c, linear) and rebuilt: master packs the one neon label (13 prims, canvas #326A97) and the sunton firmware builds. The board runs the same code with that one-label sheet, so its cassette body is the canvas; the human's board look is the last review step."
+        },
+        {
+          "at": "2026-11-20T17:11:34Z",
+          "by": "deepseek",
+          "text": "The canvas now follows the Track's cassette row: sheet v4 carries the whole colour list and the player picks canvas[row % count]. The one-label has #C7A867/#326A97, so cassette rows 0/2/4/6 wear beige and 1/3/5 blue; the editor's active is only the preview. Master e8464be, flashed; the current track is row 6 (beige). make -C host check and the editor checks are green."
         }
       ]
     }
