@@ -12,8 +12,12 @@ This is that missing seam. It serves the build over HTTP (the app's modules and 
 will not load from `file://`), opens it with a fresh Chrome profile, reads the rendered DOM,
 and requires what the boot paints: the design's tab, the layer list, and the stage with its
 default slot values. A page that throws before the tail of its own script leaves all three
-empty, so the check fails for the right reason. When Chrome is not installed it skips loudly
-and succeeds, so a machine without a browser is not a failed host check.
+empty, so the check fails for the right reason.
+
+Two browser failures skip loudly and succeed, so a machine that cannot run the check is not a
+failed host check: no Chrome at all, and a Chrome whose GPU process dies before the page's own
+script (the fatal line is on Chrome's stderr and no DOM is dumped). The skip is keyed on that
+line, never on an empty document alone: a page that really throws leaves a DOM and still fails.
 
 Usage: label_boot_tests.py [DIST] [--timeout SECONDS]
 """
@@ -62,6 +66,18 @@ def find_chrome():
         if found:
             return found
     return None
+
+
+# Chrome's own report that its GPU process cannot start: it exits before the page's script
+# runs and dumps no DOM. The phrase is Chrome's, not the page's, and it is the one reason a
+# found browser may skip; an empty document alone is still a failure.
+GPU_UNUSABLE = re.compile(r"GPU process isn't usable\.(?: Goodbye\.)?", re.I)
+
+
+def gpu_unusable(stderr):
+    """The phrase Chrome prints when its GPU process cannot start, or None."""
+    match = GPU_UNUSABLE.search(stderr or "")
+    return match.group(0) if match else None
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -139,6 +155,12 @@ def main():
 
         dom = run.stdout
         if not dom.strip():
+            gpu = gpu_unusable(run.stderr)
+            if gpu:
+                print(f"SKIP label page: Chrome could not start its GPU process: {gpu}",
+                      file=sys.stderr)
+                print("SKIP label page: the label editor boot check did not run.")
+                return 0
             tail = (run.stderr or "").strip().splitlines()[-5:]
             print("FAIL label page: Chrome rendered an empty document")
             for line in tail:
