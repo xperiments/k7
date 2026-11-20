@@ -735,9 +735,8 @@ void app_board_snapshot_release(void)
 #define ART_PART 0x41
 
 struct label_store_image {
-    const uint8_t             *bytes;
+    uint8_t                   *bytes;
     size_t                     size;
-    esp_partition_mmap_handle_t handle;
 };
 
 static const esp_partition_t *art_partition(void)
@@ -776,20 +775,37 @@ label_store_state_t label_store_image_get(label_store_image_t **out, const uint8
         return LABEL_STORE_NONE;
     }
 
+    /* The pack's bytes live in RAM, not in a mapping of the partition: the panel's RGB DMA
+     * reads PSRAM continuously, and every mapped-flash line is a stall it cannot fetch
+     * through - the ADR 0055 screen shift, and the App's reload is the reliable way to meet
+     * it. The header names the pack's total size; copy that much once, then the serving path
+     * never touches flash. */
+    uint32_t total = (uint32_t)hdr[12] | ((uint32_t)hdr[13] << 8) | ((uint32_t)hdr[14] << 16) |
+                     ((uint32_t)hdr[15] << 24);
+    if (total < LABEL_PACK_HEADER_SIZE || total > part->size) {
+        if (why) snprintf(why, why_size, "the art partition's pack size is out of range");
+        return LABEL_STORE_UNREADABLE;
+    }
+
     label_store_image_t *image = calloc(1, sizeof *image);
     if (!image) {
         if (why) snprintf(why, why_size, "no memory for the art image");
         return LABEL_STORE_UNREADABLE;
     }
-    const void *ptr = NULL;
-    e = esp_partition_mmap(part, 0, part->size, ESP_PARTITION_MMAP_DATA, &ptr, &image->handle);
-    if (e != ESP_OK) {
+    image->bytes = malloc(total);
+    if (!image->bytes) {
         free(image);
-        if (why) snprintf(why, why_size, "the art partition is unmappable: %s", esp_err_to_name(e));
+        if (why) snprintf(why, why_size, "no memory for the art pack");
         return LABEL_STORE_UNREADABLE;
     }
-    image->bytes = (const uint8_t *)ptr;
-    image->size = part->size;
+    e = esp_partition_read(part, 0, image->bytes, total);
+    if (e != ESP_OK) {
+        free(image->bytes);
+        free(image);
+        if (why) snprintf(why, why_size, "the art partition is unreadable: %s", esp_err_to_name(e));
+        return LABEL_STORE_UNREADABLE;
+    }
+    image->size = total;
     if (out) *out = image;
     if (bytes) *bytes = image->bytes;
     if (size) *size = image->size;
@@ -799,7 +815,7 @@ label_store_state_t label_store_image_get(label_store_image_t **out, const uint8
 void label_store_image_put(label_store_image_t *image)
 {
     if (!image) return;
-    esp_partition_munmap(image->handle);
+    free(image->bytes);
     free(image);
 }
 
