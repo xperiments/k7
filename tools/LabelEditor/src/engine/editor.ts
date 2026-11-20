@@ -1455,12 +1455,12 @@ export class Editor {
   }
   setRun(run: boolean) {
     this.run = run;
-    // The LVGL preview is the label's: the J-card is drawn in the DOM.
-    if (run) this.surface = "label";
+    // The label's preview is the LVGL render; the J-card's is its own DOM preview, so the
+    // surface stays where the person put it.
     this.sel = null;
     this.selSet = new Set();
     this.selGroup = null;
-    if (run && this.lvgl.module) this.lvBuild();
+    if (run && this.surface === "label" && this.lvgl.module) this.lvBuild();
     this.emit();
   }
   setRunValue(id: number, k: "text" | "color" | "font", v: string) {
