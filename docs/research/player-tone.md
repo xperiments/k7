@@ -89,7 +89,7 @@ A tone applied at the output is not. The control path is:
 | next decoded frame applies the new targets | ≤ 26 ms, plus the tone's own 2 dB-per-frame glide (~0.3 s for a full move) |
 
 So the first audible difference is **tens of milliseconds**, then the same glide the S3 has. The
-audio being filtered is 4.5 s old; the **change** is not.
+audio being filtered is at the head of a 4.5 s ring; the **change** is not.
 
 This is the one product-visible improvement the move buys, and it is the one a board test can
 show: turn GAIN and listen. It does not make the stream itself lower latency.
@@ -220,8 +220,9 @@ layering check's P5 rule (the player names no K7 component) is unaffected.
   depend on audio flowing.
 - **A K7 reboot** resets the panel to 0 dB and the player to neutral, exactly as the S3 resets
   today. The values are not persisted on either board; nothing new to persist.
-- **The player's output is 4.5 s behind the broadcast**, so the tone applies to audio that is
-  4.5 s old. That is the ring's latency, not the tone's; the change is heard when it is made.
+- **The player's output sits at the head of a 4.5 s ring**, so the tone applies to audio that
+  entered the ring 4.5 s earlier. That is the ring's latency, not the tone's; the change is heard
+  when it is made.
 - **CPU:** 160 B of state, three biquads per channel, no allocation. The neutral path returns
   before touching a sample; the active path is the same code the S3 runs today, whose comment
   puts it at about 1.4 % of a core. The player's decode is the heavier stage. The board test
