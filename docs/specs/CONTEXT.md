@@ -471,6 +471,13 @@ or fixed, and its paper cut at the **Window** by the Card's own mask. A Track's 
 always pair (ADR 0071). The layout is in [`label-templates.md`](./label-templates.md).
 _Avoid_: skin, theme, label design, cover
 
+**Canvas background**:
+The colour of the 800x480 screen behind the Card, the print and the tape while the two-finger
+pose shows a **Label template**. It is the design's, not the panel's: one of up to eight presets,
+one active, with a design without one leaving the palette's page alone. The print's own
+background is still the design's **paper**.
+_Avoid_: screen colour, backdrop, background fill
+
 **Label sheet**:
 Every **Label template** in the build, packed into one binary: `label_sheet.bin`, written by
 `tools/label_pack.py`, embedded in the image and read in place - a pointer and a length, never
