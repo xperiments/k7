@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Maximize2,
   Monitor,
   Scan,
   Frame as FrameIcon,
@@ -100,15 +99,6 @@ export function CanvasStage() {
     ed.pointerUp();
   };
 
-  const fit = () => {
-    const box = wrapRef.current;
-    if (!box) return;
-    const z = Math.min(
-      (box.clientWidth - PASTEBOARD * 2) / SCREEN_W,
-      (box.clientHeight - PASTEBOARD * 2) / SCREEN_H,
-    );
-    ed.setZoom(Math.max(0.25, Math.round(z * 20) / 20));
-  };
 
   const ap = ed.apOf();
   const mask = ed.mask;
@@ -291,16 +281,6 @@ export function CanvasStage() {
               <SelectItem value="1.5">150%</SelectItem>
             </SelectContent>
           </Select>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button variant="ghost" size="icon-sm" onClick={fit} aria-label="Fit to window">
-                  <Maximize2 />
-                </Button>
-              }
-            />
-            <TooltipContent>Fit to window</TooltipContent>
-          </Tooltip>
         </div>
       </div>
 

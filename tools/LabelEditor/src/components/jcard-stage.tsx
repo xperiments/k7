@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Maximize2, Ruler, Scan } from "lucide-react";
+import { Ruler, Scan } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -10,11 +9,6 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useEditor } from "@/hooks/use-editor";
 import { JCardPreview } from "@/components/jcard-preview";
@@ -101,15 +95,6 @@ export function JCardStage() {
     ed.pointerUp();
   };
 
-  const fit = () => {
-    const box = wrapRef.current;
-    if (!box) return;
-    const z = Math.min(
-      (box.clientWidth - PASTEBOARD * 2) / JCARD_W,
-      (box.clientHeight - PASTEBOARD * 2) / JCARD_H,
-    );
-    ed.setZoom(Math.max(0.1, Math.round(z * 20) / 20));
-  };
 
   const handles =
     sel && !ed.run
@@ -242,16 +227,6 @@ export function JCardStage() {
               <SelectItem value="1">100%</SelectItem>
             </SelectContent>
           </Select>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button variant="ghost" size="icon-sm" onClick={fit} aria-label="Fit to window">
-                  <Maximize2 />
-                </Button>
-              }
-            />
-            <TooltipContent>Fit to window</TooltipContent>
-          </Tooltip>
         </div>
       </div>
 
