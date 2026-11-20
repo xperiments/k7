@@ -930,6 +930,10 @@ static uint8_t *s_audio_arena;
 static SemaphoreHandle_t s_audio_lock;
 static uint8_t s_audio_peer[ESP_NOW_ETH_ALEN];
 static bool s_audio_has_peer;
+/* The interface the peer was registered on. A player can speak before the station has an IP,
+ * and the peer then lands on the AP interface; it has to follow the station when the IP
+ * arrives, or every send waits for the setup AP (and stops when the AP closes). */
+static uint8_t s_audio_peer_ifidx;
 /* The stream's PHY rate. ESP-NOW defaults to 1 Mbps, which at 256 kbps is a third of the radio;
  * HT20/MCS0 is 6.5 Mbps, and the peer is one ESP32 a room away, so the rate has margin. */
 #define AUDIO_ESPNOW_RATE WIFI_PHY_RATE_MCS0_LGI
@@ -1073,6 +1077,7 @@ static void audio_apply_status(const uint8_t src[6], const uint8_t *data, size_t
         if (e != ESP_OK && e != ESP_ERR_ESPNOW_EXIST) return;
         memcpy(s_audio_peer, src, ESP_NOW_ETH_ALEN);
         s_audio_has_peer = true;
+        s_audio_peer_ifidx = (uint8_t)peer.ifidx;
 
         esp_now_rate_config_t rate = {
             .phymode = WIFI_PHY_MODE_HT20,
@@ -1088,6 +1093,30 @@ static void audio_apply_status(const uint8_t src[6], const uint8_t *data, size_t
             ESP_LOGI(TAG, "espnow audio: the player pinned to HT20/MCS0, 6.5 Mbps");
         ESP_LOGI(TAG, "espnow audio: a player at %02x:%02x:%02x:%02x:%02x:%02x",
                  src[0], src[1], src[2], src[3], src[4], src[5]);
+    }
+
+    /* The peer follows the station, not the moment the player first spoke: a status can
+     * arrive before the IP event, and a peer left on the AP interface sends only while the
+     * setup AP is up. Move it once, on the status after the interface changes. */
+    if (s_audio_has_peer) {
+        uint8_t want = (uint8_t)(s_got_ip ? WIFI_IF_STA : WIFI_IF_AP);
+        if (s_audio_peer_ifidx != want) {
+            esp_now_peer_info_t peer;
+            memset(&peer, 0, sizeof peer);
+            memcpy(peer.peer_addr, s_audio_peer, ESP_NOW_ETH_ALEN);
+            peer.channel = 0;
+            peer.ifidx = (wifi_interface_t)want;
+            peer.encrypt = false;
+            esp_err_t e = esp_now_mod_peer(&peer);
+            if (e == ESP_OK) {
+                s_audio_peer_ifidx = want;
+                ESP_LOGI(TAG, "espnow audio: the player's peer follows the %s",
+                         want == WIFI_IF_STA ? "station" : "access point");
+            } else {
+                ESP_LOGW(TAG, "espnow audio: the player's peer will not move: %s",
+                         esp_err_to_name(e));
+            }
+        }
     }
 
     bool from_peer = s_audio_has_peer && memcmp(src, s_audio_peer, ESP_NOW_ETH_ALEN) == 0;
@@ -1327,6 +1356,7 @@ static bool audio_set_locked(bool on)
         if (s_audio_has_peer) {
             esp_now_del_peer(s_audio_peer);
             s_audio_has_peer = false;
+            s_audio_peer_ifidx = 0;
         }
         if (s_audio_arena)
             es_emitter_init(&s_audio, s_audio_arena, ES_HISTORY_FRAMES * ES_MAX_FRAME, audio_send,
