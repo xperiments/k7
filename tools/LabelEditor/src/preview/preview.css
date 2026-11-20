@@ -432,4 +432,12 @@
             transition: none;
         }
     }
+
+    /* The preview holds exactly two cases, so there is no row continuing past the fold for
+       the fade to promise: in a stage this narrow it only dims the spine the preview is
+       meant to show. */
+    .k7app-preview .k7-shelf {
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
 }

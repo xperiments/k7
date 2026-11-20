@@ -195,6 +195,11 @@ The **K7Art Editor** edits one K7Art as one document with two surfaces.
   for the sheet and for each of the flap, spine and cover, the shared Colours, the Type panel's
   three J-card sizes, and the Fields panel's three test values. It renders in the DOM - there
   is no LVGL for a paper design - with the safe-square guide on the cover.
+- **The J-card surface's Preview is the App's shelf**, drawn by the App's own renderer: two
+  cases, the turned one showing the cover part and the one beside it, spine out, the spine
+  part - the drawing an album with no picture wears ([§5](#5-the-webapps-face)). It is a
+  preview of the design, not of a library: the media page's arrows, album name, index rail,
+  wheel and arrow keys are not part of it.
 - **One document, one history, one export.** Switching surfaces does not clear the undo; the
   document autosaves both sections; Export writes the K7Art; Publish writes a pack
   ([`art-packs.md`](./art-packs.md) §3). The label's Canvas, Mask and Aperture sections are the

@@ -1,13 +1,13 @@
 import { useEditor } from "@/hooks/use-editor";
 import { buildJCard } from "@/engine/jcard";
-import { Jcard } from "../preview/jcard/face";
+import { JcardShelf } from "../preview/shelf/shelf";
 import type { JcardDesign, JcardFields, JcardSection } from "../preview/jcard/model";
 import "../preview/preview.css";
 
 /**
- * The J-card preview: the app's own case and J-card renderer, fed with this design and
- * scoped so its stylesheet cannot touch the editor. One case faces the camera with its
- * spine and one with its cover — the two views the shelf uses.
+ * The J-card preview: the app's own shelf, drawing this design with the app's own J-card
+ * renderer, scoped so its stylesheet cannot touch the editor. Two cases, as on the media
+ * page: the turned one shows the cover part, the one beside it, spine out, the spine part.
  */
 export function JCardPreview() {
   const ed = useEditor();
@@ -29,23 +29,9 @@ export function JCardPreview() {
     meta: ed.jcard.sims?.meta ?? "",
   } as unknown as JcardFields;
 
-  const Case = ({ facing }: { facing: "spine" | "cover" }) => (
-    <div className="k7-case-shelf">
-      <div className="k7-case" data-active={facing === "cover"}>
-        <span className="k7-face k7-front">
-          <Jcard design={design} fields={fields} part="cover" fit="fill" />
-        </span>
-        <span className="k7-face k7-left">
-          <Jcard design={design} fields={fields} part="spine" fit="fill" />
-        </span>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="k7app-preview flex h-full min-h-[480px] w-full items-center justify-center gap-16 overflow-hidden bg-k7-well">
-      <Case facing="spine" />
-      <Case facing="cover" />
+    <div className="k7app-preview flex h-full min-h-[480px] w-full flex-col justify-center overflow-hidden bg-k7-well px-6 pt-8">
+      <JcardShelf design={design} fields={fields} />
     </div>
   );
 }
