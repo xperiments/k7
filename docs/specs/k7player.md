@@ -29,7 +29,7 @@ boards on **2026-11-20** (B7, TN-04), without the 0.6.2 old-player fallback.
 | # | Requirement |
 |---|---|
 | R1 | It joins a network it was handed, preferring the home network and falling back to the K7's own |
-| R2 | It plays `GET /stream` continuously, from the first bytes, with no transport of any kind |
+| R2 | It receives the K7's ESP-NOW audio continuously, from the first frames the K7 emits, and has no transport of its own: nothing to pause, seek or replay (R23, [ADR 0105](../adr/0105-the-player-is-esp-now-only.md)) |
 | R3 | It decodes the station format (MP3) and passes stereo 16-bit frames to one output |
 | R4 | Its output is a line: I2S to an external DAC, configured to the station's rate |
 | R5 | It has no Bluetooth, no volume and no control surface of any kind |
@@ -83,7 +83,7 @@ is the starting point, not a design.
 
 **R15. The board's pins, the I2S peripheral and the DAC parts live in the board adapter**, as
 they do on the K7 ([`components/app/`](../../components/app/)). The first target is a WROOM-32
-devkit and a PCM5102A breakout; the PCB follows the two board-only numbers in § 7.
+devkit and a PCM5102A breakout; the PCB follows the two board-only numbers in § 6.
 
 ---
 
@@ -112,8 +112,10 @@ it would be leaving.
 **R21. A player that has never been provisioned sweeps from boot** and is *Searching* until a
 handover happens (§ [`network-handover.md`](./network-handover.md), H19–H21).
 
-**R22. It never writes to the K7.** One request frame, one encrypted record arriving, and nothing
-after that but `GET /stream`.
+**R22. It never writes to the K7.** One request frame, one encrypted record arriving, and after
+that it asks for nothing: the audio is the K7's own ESP-NOW emission, taken as it arrives, and the
+player's frames only report the ring's free bytes and the sequences it is missing (R23, R25,
+[ADR 0105](../adr/0105-the-player-is-esp-now-only.md)).
 
 ---
 
@@ -142,10 +144,11 @@ frames are not this).
 (44.1 kHz by default) and the line output is configured to it, so a station at any rate the DAC
 can clock plays at that rate.
 
-**R28. One ring, six seconds deep, and it never grows.** The socket task writes and the output
-task reads, whole frames only. A push that does not fit **clears the ring once** and keeps the
-newest audio, so an outage the ring cannot ride costs one discontinuity instead of one per frame.
-Its depth is the jitter budget and a board number (§ 7): on this board the 2.4 GHz link loses the
+**R28. One ring, six seconds deep, and it never grows.** The radio's receive callback writes and the
+output task reads, whole frames only. A push that does not fit **clears the ring once** and keeps
+the newest audio, so an outage the ring cannot ride costs one discontinuity instead of one per
+frame.
+Its depth is the jitter budget and a board number (§ 6): on this board the 2.4 GHz link loses the
 stream for one to nine seconds at a time (T3), so the ring holds six seconds of the station at the
 format it runs (128 kbps; three at 256) — outages up to that are absorbed and the listener hears
 nothing, and a longer one is a single click rather than a hundred small jumps.
@@ -154,8 +157,9 @@ The output **does not play until the ring holds 4.5 s** (or all it can hold, whe
 rate makes that more than 96 KB), and waits one second again after it has run dry. A realtime feed
 never fills a buffer by itself, so **the ring is only ever as deep as the prime**: measured the
 hard way, primed to 1.5 s the ring sat at 38 KB of its 96 and a three-second outage ran it dry.
-The wait is bounded by the connection — a body that has ended is played, not waited on — and its
-price is 4.5 s of silence before the first sound. The socket never blocks on the ring.
+The wait is bounded by the ring — a station slow enough that 4.5 s is more than 96 KB primes it
+full rather than waiting for a depth that cannot fit — and its price is 4.5 s of silence before the
+first sound. The receiver never blocks on the ring.
 
 **R29. Three seconds without an audio packet is a silent stream.** The ring drains, the light says
 *Ready*, and nothing happens: no reboot, no retry, no sweep, no fallback. The K7 is either emitting
@@ -197,15 +201,15 @@ they would open is.
 
 ## 6. Tests
 
-Host tests run the player's core against a scripted socket and a null output, so the stream
-client, the ring policy, the record's validation and the network preference are all shown wrong
-without a board. The handover's own tests are in [`network-handover.md`](./network-handover.md).
+Host tests run the player's core against a scripted radio and a null output, so the receiver, the
+ring policy, the record's validation and the network preference are all shown wrong without a
+board. The handover's own tests are in [`network-handover.md`](./network-handover.md).
 
 | # | Test | Tier |
 |---|---|---|
 | T1 | The receiver reassembles fragments into whole frames in sequence order, across the sequence wrap, and hands a fragment that arrives twice to the stream once | host |
 | T2 | Three seconds without a packet is a silent stream and not a fault; two seconds of frames that never decode is a fault | host |
-| T3 | The ring holds two seconds of the station's frames; an overrun clears it once and keeps the newest, and its depth never grows; an underrun repeats silence rather than blocking the socket | host |
+| T3 | The ring holds the station's frames up to its 96 KB and never grows; an overrun clears it once and keeps the newest; an underrun repeats silence rather than blocking the receiver | host |
 | T4 | The record's validation and the preference order: home, then the K7's own network, then the 20 s/10 s alternation | host |
 | T5 | The state machine drives the four light states, including *Fault* when two seconds of delivered frames never decode | host |
 | T6 | The station rate from the frame header configures the line output; a 32 kHz station opens it at 32 000 | host |
