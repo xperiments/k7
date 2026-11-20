@@ -158,11 +158,13 @@ preview` serves the shipping artifact itself — worker, headers and the gate �
 checking that shape, not for connected work: from the development origin it cannot answer the
 gate.
 
-**D12a. The development firmware trusts the development origin.** `./tools/build.sh dev build
-flash` compiles the panel variant with `CONFIG_K7_TRUST_DEV_ORIGIN=y`
-(`sdkconfig.defaults.dev`), so the device's CORS reply and its MCP guard accept both
+**D12a. The development firmware trusts the development origin.** `./tools/build.sh sunton
+build flash` — the panel's test build — compiles with `CONFIG_K7_TRUST_DEV_ORIGIN=y`
+(`sdkconfig.defaults.sunton`), so the device's CORS reply and its MCP guard accept both
 `https://k7.xperiments.dev` and `https://k7-dev.xperiments.dev:8000`, naming the request's own
-origin. The shipping `sunton` variant leaves the option off and carries one origin. Recorded in
+origin. Only the release leaves the option out: `./tools/build.sh sunton release` rebuilds from
+`sdkconfig.defaults.release`, so its binary carries the deployed origin alone. The `dev` variant
+is kept for a build that names the option itself. Recorded in
 [ADR 0082](../adr/0082-the-development-origin-is-trusted-by-a-development-build.md).
 
 ---

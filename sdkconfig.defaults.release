@@ -1,0 +1,5 @@
+# A release trusts the deployed App's origin alone (ADR 0082). The panel's build and flash
+# take the dev origin so connected mode can be developed against the board; the release is
+# the one build that leaves it out. Applied by tools/build.sh's release action, after the
+# sunton defaults that turn it on.
+# CONFIG_K7_TRUST_DEV_ORIGIN is not set

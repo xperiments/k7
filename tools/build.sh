@@ -176,7 +176,11 @@ for action in "${actions[@]}"; do
       ;;
     release)
       release_prepare
-      idf.py "${args[@]}" build
+      # The release is the one build that leaves the dev origin out (ADR 0082): the panel's
+      # build and flash take it, so the release rebuilds the configuration without it.
+      idf.py -B "$build_dir" -D "SDKCONFIG=sdkconfig.release" \
+        -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.sunton;sdkconfig.defaults.release" \
+        build
       release_publish
       ;;
     flash | monitor)
