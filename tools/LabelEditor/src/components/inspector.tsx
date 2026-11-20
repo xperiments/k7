@@ -334,60 +334,61 @@ function DesignPanel() {
 
       <Section title="Canvas">
         <ColourRow label="Active background" value={ed.bg} onChange={(v) => ed.setBg(v)} />
-        <div
-          className="flex flex-wrap items-center gap-1.5"
-          role="group"
-          aria-label="Canvas backgrounds"
-        >
-          {ed.bgs.map((c, i) => (
-            <button
-              key={i}
-              type="button"
-              title={`Background ${i + 1} · ${c}`}
-              aria-label={`Background ${i + 1}`}
-              aria-pressed={i === ed.bgi}
-              onClick={() => ed.selectBg(i)}
-              className={`size-6 rounded-full border transition-colors ${
-                i === ed.bgi
-                  ? "border-primary ring-2 ring-primary/40"
-                  : "border-border hover:border-foreground/50"
-              }`}
-              style={{ background: c }}
-            />
-          ))}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  onClick={() => ed.addBg()}
-                  disabled={ed.bgs.length >= CANVAS_MAX}
-                  aria-label="Add a background"
-                >
-                  <Plus />
-                </Button>
-              }
-            />
-            <TooltipContent>Add a background (copies the active one)</TooltipContent>
-          </Tooltip>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => ed.removeBg()}
-            disabled={ed.bgs.length <= 1}
-            aria-label="Remove the active background"
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Backgrounds</span>
+            <span className="text-xs text-muted-foreground tabnum">
+              {ed.bgi + 1} / {ed.bgs.length}
+            </span>
+          </div>
+          <div
+            className="flex flex-wrap items-center gap-1.5"
+            role="group"
+            aria-label="Canvas backgrounds"
           >
-            <Trash2 />
-          </Button>
+            {ed.bgs.map((c, i) => (
+              <button
+                key={i}
+                type="button"
+                title={`Background ${i + 1} · ${c}`}
+                aria-label={`Background ${i + 1}`}
+                aria-pressed={i === ed.bgi}
+                onClick={() => ed.selectBg(i)}
+                className={`size-6 rounded-full border transition-colors ${
+                  i === ed.bgi
+                    ? "border-primary ring-2 ring-primary/40"
+                    : "border-border hover:border-foreground/50"
+                }`}
+                style={{ background: c }}
+              />
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => ed.addBg()}
+              disabled={ed.bgs.length >= CANVAS_MAX}
+            >
+              <Plus />
+              Add
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => ed.removeBg()}
+              disabled={ed.bgs.length <= 1}
+              aria-label="Remove the active background"
+            >
+              <Trash2 />
+            </Button>
+          </div>
         </div>
         <div className="flex items-center justify-between rounded-md border border-border px-2 py-1.5">
           <span className="text-xs text-muted-foreground">Screen</span>
           <span className="text-xs tabnum">800 × 480</span>
         </div>
         <p className="text-xs text-muted-foreground">
-          The page behind the label while the two-finger pose shows the tape. Only the active
-          background is packed; the print sits at 25, 19.
+          The page behind the label while the two-finger pose shows the tape. Add copies the
+          active background; only the active one is packed.
         </p>
       </Section>
 
