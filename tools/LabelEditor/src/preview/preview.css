@@ -252,6 +252,19 @@
         border-radius: 0.25rem;
         background: color-mix(in srgb, var(--primary) 5%, black);
         border: 2px solid color-mix(in srgb, var(--primary) 30%, black);
+        /* The flap's own corners are square; the case's are not. */
+        overflow: clip;
+    }
+
+    /* The flap folds around the spine onto the back: the printed inch of the case's back, at
+       the edge the spine turns on. The back is the rotated face, so that edge is its right. */
+.k7app-preview .k7-back-flap {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        width: calc(var(--cw) * 320 / 820);
+        overflow: clip;
     }
 
 .k7app-preview .k7-side {
@@ -439,5 +452,11 @@
     .k7app-preview .k7-shelf {
         -webkit-mask-image: none;
         mask-image: none;
+    }
+
+    /* The preview's third case, back to the reader: the design's flap as the case's back.
+       A view, not a turn-over - the shelf turns a case to its spine and no further. */
+    .k7app-preview .k7-case[data-view='back'] {
+        transform: rotateY(180deg);
     }
 }

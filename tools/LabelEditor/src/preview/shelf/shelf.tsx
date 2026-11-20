@@ -38,6 +38,10 @@ const SPINE_STEP = 3.25;
 /** The two cases: the design is drawn on both, and the turned one shows it as a cover. */
 const CASES = [0, 1];
 
+/** Where the back view stands: a case's width and the shelf's gap to the left of the turned
+ *  case, so a face turned to the reader has the room a spine does not need. */
+const BACK_AT = "translate3d(calc((var(--cw) + var(--cg)) * -1), 0, 0)";
+
 /** Where a case at distance `d` from the selection sits. The terms are the stylesheet's
  *  `--cw`, `--cd`, `--cg` and `--csg`, so the row scales with the case when the stage is
  *  short. */
@@ -95,7 +99,7 @@ export function JcardShelf({ design, fields }: { design: JcardDesign; fields: Jc
          * does — on a wide stage the height is the only bound, as it is on the media page. */
         const centre = box.left + box.width / 2;
         let reach = 0;
-        for (const face of el.querySelectorAll<HTMLElement>(".k7-front, .k7-left")) {
+        for (const face of el.querySelectorAll<HTMLElement>(".k7-front, .k7-left, .k7-back")) {
           const rect = face.getBoundingClientRect();
           reach = Math.max(reach, Math.abs(rect.left - centre), Math.abs(rect.right - centre));
         }
@@ -216,6 +220,15 @@ export function JcardShelf({ design, fields }: { design: JcardDesign; fields: Jc
           onPointerCancel={() => endRef.current(null)}
         >
           <div className="k7-shelf-row">
+            {/* The design's third panel, from behind: the flap, on the case's back. A view,
+                not a case on the row - the shelf turns a case to its spine and no further.
+                It is a case's width away rather than a spine-step, because it faces the
+                reader and needs the room one takes. */}
+            <div className="k7-shelf-item" data-active={false} style={{ transform: BACK_AT }}>
+              <div className="k7-case" data-active={false} data-view="back" aria-hidden="true">
+                <Faces design={design} fields={fields} />
+              </div>
+            </div>
             {CASES.map((index) => {
               const distance = index - at;
               if (Math.abs(distance) > WINDOW) return null;
@@ -266,22 +279,7 @@ export function JcardShelf({ design, fields }: { design: JcardDesign; fields: Jc
                       select(index);
                     }}
                   >
-                    <span className="k7-face k7-front">
-                      <Jcard design={design} fields={fields} part="cover" />
-                      <span className="k7-frame" aria-hidden="true" />
-                      <span className="k7-sheen" aria-hidden="true" />
-                    </span>
-                    <span className="k7-face k7-back" aria-hidden="true">
-                      <span className="k7-sheen" aria-hidden="true" />
-                    </span>
-                    <span className="k7-face k7-side k7-right" aria-hidden="true">
-                      <span className="k7-sheen" aria-hidden="true" />
-                    </span>
-                    <span className="k7-face k7-side k7-left" aria-hidden="true">
-                      <Jcard design={design} fields={fields} part="spine" />
-                      <span className="k7-frame" />
-                      <span className="k7-sheen" aria-hidden="true" />
-                    </span>
+                    <Faces design={design} fields={fields} />
                   </button>
                 </div>
               );
@@ -290,5 +288,36 @@ export function JcardShelf({ design, fields }: { design: JcardDesign; fields: Jc
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * The four faces of a case, as the shelf draws them: the cover on the front, the flap on the
+ * back (folded around the spine, so it sits at the back's spine edge), and the two sides -
+ * the spine on the left, the case's own on the right.
+ */
+function Faces({ design, fields }: { design: JcardDesign; fields: JcardFields }) {
+  return (
+    <>
+      <span className="k7-face k7-front">
+        <Jcard design={design} fields={fields} part="cover" />
+        <span className="k7-frame" aria-hidden="true" />
+        <span className="k7-sheen" aria-hidden="true" />
+      </span>
+      <span className="k7-face k7-back" aria-hidden="true">
+        <span className="k7-back-flap">
+          <Jcard design={design} fields={fields} part="flap" />
+        </span>
+        <span className="k7-sheen" aria-hidden="true" />
+      </span>
+      <span className="k7-face k7-side k7-right" aria-hidden="true">
+        <span className="k7-sheen" aria-hidden="true" />
+      </span>
+      <span className="k7-face k7-side k7-left" aria-hidden="true">
+        <Jcard design={design} fields={fields} part="spine" />
+        <span className="k7-frame" />
+        <span className="k7-sheen" aria-hidden="true" />
+      </span>
+    </>
   );
 }

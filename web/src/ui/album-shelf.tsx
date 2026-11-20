@@ -337,6 +337,7 @@ export function AlbumShelf({
                       <span className="k7-sheen" aria-hidden="true" />
                     </span>
                     <span className="k7-face k7-back" aria-hidden="true">
+                      <CaseFlap album={album} />
                       <span className="k7-sheen" aria-hidden="true" />
                     </span>
                     <span className="k7-face k7-side k7-right" aria-hidden="true">
@@ -561,6 +562,25 @@ function CaseCover({ album }: { album: Album }) {
       initial={initialOf(album)}
       art={{ title: album.album, artist: byline(album) }}
     />
+  );
+}
+
+/**
+ * The case's back: the J-card's flap, folded around the spine onto the back's spine edge
+ * (k7art.md §5). An album with a picture has no J-card, so its back is the case's own.
+ */
+function CaseFlap({ album }: { album: Album }) {
+  const artist = byline(album);
+  const design = useJcardDesign(album.album, artist);
+  if (album.cover || !design) return null;
+  return (
+    <span className="k7-back-flap">
+      <Jcard
+        design={design}
+        fields={{ title: album.album, artist, meta: DEFAULT_META }}
+        part="flap"
+      />
+    </span>
   );
 }
 

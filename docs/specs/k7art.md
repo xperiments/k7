@@ -177,8 +177,11 @@ stable name hash ([`art-packs.md`](./art-packs.md) §6).
   spine's 0.5/2.5625 = 0.195; the webapp draws the spine into that face, and the 2.5 % stretch
   is the case's own geometry. The spine's own type is the design's; the App's byline text is
   not drawn over it.
-- **The flap is authored and exported, and has no surface yet.** A later view - the case's
-  back, or an unfolded sheet - is where it would show; this change does not add one.
+- **The flap is the case's back.** It folds around the spine, so on the back it is the strip
+  at the spine's edge - 1 in of the 2.5625 in back, `320 / 820` of the case's width - and the
+  App draws it there, on every case whose album has no picture. The editor's Preview shows
+  that face: a case turned away from the reader stands beside the cover and the spine. There
+  is no turn-over in the App: a shelf case faces front or shows its spine, never its back.
 - **The renderer** draws the `jcard` prims in the DOM: the roles from the container's `inks`,
   the faces from the page's font loading, the sizes as a share of the sheet's width (a `size`
   of 56 on 1300 is 4.31% of the width, whatever the surface's pixel size), the rotation, the
