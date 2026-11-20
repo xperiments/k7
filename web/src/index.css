@@ -472,6 +472,14 @@
         filter: brightness(0.94);
     }
 
+    /* The turned case is the one the eye should land on: the faces of the cases beside it
+       are halved - the front (the strip of cover a spine-out case shows at its edge) and the
+       back (the flap). The shelf turns one case; this is what makes it the one. */
+    .k7-case[data-active='false'] .k7-front,
+    .k7-case[data-active='false'] .k7-back {
+        filter: brightness(0.5);
+    }
+
     .k7-face {
         position: absolute;
         backface-visibility: hidden;
