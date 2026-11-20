@@ -314,33 +314,6 @@ export function JCardStage() {
                       }}
                     />
                   ))}
-                  <div
-                    className="absolute text-[30px] uppercase tracking-[0.18em]"
-                    style={{ left: 16, top: 16, color: "color-mix(in srgb, var(--k7-accent) 80%, transparent)" }}
-                  >
-                    flap
-                  </div>
-                  <div
-                    className="absolute text-[30px] uppercase tracking-[0.18em]"
-                    style={{
-                      left: JCARD_PARTS.spine.x + 12,
-                      top: 16,
-                      color: "color-mix(in srgb, var(--k7-accent) 80%, transparent)",
-                    }}
-                  >
-                    spine
-                  </div>
-                  <div
-                    className="absolute text-[30px] uppercase tracking-[0.18em]"
-                    style={{
-                      left: JCARD_PARTS.cover.x + 16,
-                      top: 16,
-                      color: "color-mix(in srgb, var(--k7-accent) 80%, transparent)",
-                    }}
-                  >
-                    cover
-                  </div>
-
                   {/* The focus dims everything outside the part being authored. */}
                   {focused ? (
                     <div
