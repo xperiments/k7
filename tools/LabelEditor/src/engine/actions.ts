@@ -1,5 +1,6 @@
 import type { Editor } from "./editor";
 import { downloadBlob } from "./files";
+import { buildArtPack, PackError, type ArtPack, type PackMeta } from "./labelPack";
 import { DEFAULT_CANVAS } from "./tpl";
 import { PRINT_H, PRINT_W } from "./vocab";
 
@@ -16,6 +17,7 @@ export function saveDocument(ed: Editor): string {
     groups: ed.groups,
     mask: ed.mask,
     tpl: ed.tpl,
+    jcard: ed.jcard,
   };
   const name = `${ed.doc?.name ?? "Untitled"}.lvgl.json`;
   downloadBlob(
@@ -25,7 +27,7 @@ export function saveDocument(ed: Editor): string {
   return name;
 }
 
-/** One design as `label-template v1`; it refuses what the packer would refuse. */
+/** One design as a K7Art v1; it refuses what the packer and the App would refuse. */
 export function exportTemplate(ed: Editor): { name?: string; errs: string[] } {
   const r = ed.buildTemplate();
   if (r.errs.length) return { errs: r.errs };
@@ -34,10 +36,48 @@ export function exportTemplate(ed: Editor): { name?: string; errs: string[] } {
   return { name, errs: [] };
 }
 
-/** Open a `.lvgl.json` document or a `label-template v1` file into a new tab. */
+/**
+ * Publish a `.k7artpack` from a subset of the open designs (docs/specs/art-packs.md §3).
+ * The pack is built in the browser; the editor has no device client and downloads the file
+ * for the App's Art packs page.
+ */
+export function publishPack(
+  ed: Editor,
+  indices: number[],
+  meta: PackMeta,
+): { pack?: ArtPack; errs: string[] } {
+  const built = ed.buildSelected(indices);
+  if (built.errs.length) return { errs: built.errs };
+  try {
+    const pack = buildArtPack(
+      [...built.built].sort((a, b) => a.i - b.i).map((b) => b.doc),
+      meta,
+    );
+    return { pack, errs: [] };
+  } catch (err) {
+    if (err instanceof PackError) return { errs: err.errors };
+    throw err;
+  }
+}
+
+/** Download a published pack and return its file name. */
+export function downloadPack(pack: ArtPack): string {
+  downloadBlob(
+    pack.filename,
+    new Blob([pack.bytes as unknown as BlobPart], { type: "application/octet-stream" }),
+  );
+  return pack.filename;
+}
+
+/**
+ * Open a K7Art, a retired `label-template v1` (migrated into a K7Art) or an editor document
+ * into a new tab. The file's shape decides: a container names `format`; a retired template is
+ * `v` with `prims` beside it; an editor document has `objs`.
+ */
 export async function openFile(ed: Editor, file: File): Promise<string> {
   const txt = await file.text();
   const d = JSON.parse(txt) as {
+    format?: string;
     objs?: import("./types").Obj[];
     prims?: unknown[];
     w?: number;
@@ -48,8 +88,10 @@ export async function openFile(ed: Editor, file: File): Promise<string> {
     groups?: import("./types").Group[];
     mask?: import("./types").Mask | null;
     tpl?: import("./types").Tpl | null;
+    jcard?: import("./types").JCardDoc | null;
   };
-  if (Array.isArray(d.prims)) {
+  const k7art = d.format === "k7art";
+  if (k7art || Array.isArray(d.prims)) {
     const back = ed.active;
     ed.newDoc(undefined, file.name.replace(/\.json$/, ""));
     try {
@@ -59,9 +101,9 @@ export async function openFile(ed: Editor, file: File): Promise<string> {
       if (back !== ed.active) ed.switchDoc(back);
       throw err;
     }
-    return "Template imported";
+    return k7art ? "K7Art opened" : "Label template migrated to a K7Art";
   }
-  if (!Array.isArray(d.objs)) throw new Error("not a layout or a template");
+  if (!Array.isArray(d.objs)) throw new Error("not a K7Art, a label template or an editor document");
   const objs = d.objs;
   ed.newDoc(
     {
@@ -75,6 +117,7 @@ export async function openFile(ed: Editor, file: File): Promise<string> {
       mask: d.mask ?? null,
       nid: Math.max(0, ...objs.map((o) => o.id)),
       tpl: d.tpl ?? undefined,
+      jcard: d.jcard ?? undefined,
     },
     file.name.replace(/\.lvgl\.json$|\.json$/, ""),
   );

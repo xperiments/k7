@@ -1,10 +1,12 @@
 # Design prompts for K7 labels
 
-A label brief is two things: the look, in words, and the fields the player fills. The mechanics
-— the print's box, the Card's window, the caps — are the
-[agent skill](../skills/k7-labels/SKILL.md)'s, and the editor enforces them. This page is the
-taste half: what makes a design read as a cassette label rather than a form, and seven prompts
-you can paste at an agent that has the page open.
+A K7Art is two designs on one file: the label, whose brief is the look in words and the fields
+the player fills, and the J-card, whose one sheet shares the palette and the faces. The
+mechanics — the print's box, the Card's window, the J-card's sheet and panels, the caps — are
+the [agent skill](../skills/k7-art/SKILL.md)'s, and the editor enforces them. This page is the
+taste half: what makes a design read as a cassette sleeve rather than a form, seven prompts you
+can paste at an agent that has the page open, and the pack that carries the finished pair to
+the K7.
 
 ## What makes a cassette label read as one
 
@@ -29,7 +31,7 @@ instead of decorated; lean on colour fields and type, not effects.
 
 ## The sleeve devices
 
-The J-card grid in a good collection is mostly one of six moves, and every one of them is
+A sleeve in a good collection is mostly one of six moves, and every one of them is
 built from filled shapes and the three faces:
 
 | Device | The editor's moves | Seen on |
@@ -43,6 +45,32 @@ built from filled shapes and the three faces:
 
 A wordmark is the seventh: a static text at 78 px as the brand line.
 
+## The J-card, on the same sheet
+
+Every K7Art carries a **J-card** beside its label, and the pair shares the paper, the ink, the
+rule, the eight bands and the three faces. The J-card is one printed side of a cassette case,
+drawn as **1300 × 1280 units at 320 units per inch** — 4.0625 × 4 in — scored into three
+panels:
+
+| Panel | x | What the App does with it |
+|---|---|---|
+| Flap | 0…320 (1 in) | nothing yet: authored and exported, with no surface to draw it on |
+| Spine | 320…480 (0.5 in) | the shelf's left face |
+| Cover | 480…1300 (2.5625 in) | the case front and the album card |
+
+The folds are guides, not clipping: art may cross them, and the editor draws them at x = 320
+and x = 480. Its texts bind to three **J-card fields**, not the label's fields: `title` is the
+album's name, `artist` the byline (one artist, or "N artists" for a compilation), and `meta`
+the line the App passes — `Side A · Side B` by default, the album's name on a Track's case.
+The three faces keep their roles but take the J-card's own sizes; the defaults are `title` 56,
+`numeral` 136 and `caption` 31 units.
+
+The webapp draws the cover part on the case front and the album card, and the spine part on
+the shelf's left face. The album card is square and centre-cropped, so the cover's **safe
+square** is its central 820 × 820 — x 480…1300, y 230…1050 — and the words belong inside it;
+the rest is the case's portrait face. One printed side: no back, no tracklist and no print
+export. A real cover picture still wins.
+
 ## The shape of a prompt
 
 Five parts, in this order, then the deliverable:
@@ -51,12 +79,14 @@ Five parts, in this order, then the deliverable:
 > **paper `#…` with `#…` ink**, the accent is **`#…`**. The hero is **<field>** at 78 px, top
 > left; the side letter **[A|B]** sits in a solid circle top right. Below the window, a **`#…`**
 > bar carries **<field>** in the title face and the small print as captions: **<field>**,
-> **`STEREO`**, **<field>**. Template id **`label.…`**. Export the JSON.
+> **`STEREO`**, **<field>**. Template id **`k7.…`**. Export the K7Art.
 
 Everything else — the coordinates, the type roles, the window — the agent takes from its guide,
-so leave them out unless you want them exact. The prompts below give the coordinates because
-they are the two designs that were built and checked; copy them when you want that label, or
-use them as a shape for your own.
+so leave them out unless you want them exact. Every prompt makes a K7Art, so its J-card is part
+of the design: the editor starts one from the paper and the three fields, and a line can name
+what the cover carries. The prompts below describe the label; the pair is exported together.
+The prompts give coordinates because they are the designs that were built and checked; copy them
+when you want that label, or use them as a shape for your own.
 
 ## The prompts
 
@@ -71,7 +101,7 @@ use them as a shape for your own.
 > 2 px #8a5d34 rule runs under the top strip at y 94. Below the window, a #b9ac8e bar from
 > y 267 to 359 carries the album at 32 px, the mood as a caption under it, and STEREO and the
 > musical key as right-aligned captions. An 8 px #a24e2c line frames the top and the bottom.
-> Paper #c68b2e, radius 10. Template id label.hifi-1969. Export the JSON.
+> Paper #c68b2e, radius 10. Template id k7.hifi-1969. Export the K7Art.
 
 ### 2. Navy, magenta and pinstripes — "808 Stripes"
 
@@ -86,7 +116,7 @@ use them as a shape for your own.
 > magenta line closes the window's bottom edge at y 262. Below it, the album in cream at
 > 32 px, the mood in mustard as a caption, STEREO in magenta and the key in cream, right
 > aligned. An 8 px magenta line frames the bottom. Paper #1b3a63, radius 10. Template id
-> label.808-stripes. Export the JSON.
+> k7.808-stripes. Export the K7Art.
 
 ### 3. Overlapping discs — "Discs C-60"
 
@@ -99,7 +129,7 @@ use them as a shape for your own.
 > is the BPM at 78 px, top right, right-aligned to 724. A 2 px orange rule runs under the
 > strip at y 94. Below the window, a sand bar (#c7a867) carries the genre at 32 px, the mood
 > as a caption, C-60 and the key as right-aligned captions. A 4 px orange line frames the
-> bottom. Paper #f5f1e6, radius 6, template id label.discs-c60.
+> bottom. Paper #f5f1e6, radius 6, template id k7.discs-c60. Export the K7Art.
 
 ### 4. Dot grid and a wordmark — "Voice"
 
@@ -108,7 +138,7 @@ use them as a shape for your own.
 > 22 px spacing from (24,12). Over the grid, a static wordmark `VOICE` at 78 px in cream, and
 > to its right the title at 32 px and the artist as a caption. The side letter A sits in a
 > cream circle top right, the letter in #8a5d34. Below the window, cream rules and the album,
-> mood and key as captions. Paper #8a5d34, radius 8, template id label.voice.
+> mood and key as captions. Paper #8a5d34, radius 8, template id k7.voice. Export the K7Art.
 
 ### 5. Concentric rings — "Sunel"
 
@@ -118,7 +148,7 @@ use them as a shape for your own.
 > the middle. The title is cream at 32 px to its right; the hero is the BPM at 78 px,
 > right-aligned top right. Below the window, a cream rule at y 267 and the album, mood and key
 > as captions, a cream rule closing the bottom. Paper #1b3a63, radius 8, template id
-> label.sunel-rings.
+> k7.sunel-rings. Export the K7Art.
 
 ### 6. Sunflower — "C-60"
 
@@ -127,7 +157,7 @@ use them as a shape for your own.
 > the artist under it as a caption. The hero is a static `C-60` at 78 px, top right, in dark
 > ink — the tape, not the track. A cream badge with the side letter sits behind it, and the
 > bottom strip carries the album, STEREO and the key on cream. Paper #df7b35, radius 12,
-> template id label.sunflower-c60.
+> template id k7.sunflower-c60. Export the K7Art.
 
 ### 7. Avocado grid — "Graph C90"
 
@@ -136,26 +166,44 @@ use them as a shape for your own.
 > horizontal across the top strip and three vertical down the left margin, so the type sits
 > in the grid. The hero is the BPM at 78 px, top left, over the rules; the side letter A in a
 > red circle top right. The bottom strip is paper-coloured with the album at 32 px and the
-> small print as captions. Paper #6b7a2f, radius 6, template id label.graph-c90.
+> small print as captions. Paper #6b7a2f, radius 6, template id k7.graph-c90. Export the K7Art.
 
 ## What not to ask for
 
 - **A photo, a texture, a gradient, a shadow, an outline or a custom font.** The sheet draws
-  filled rects and circles, and three faces at 32, 78 and 18 px; anything else the editor will
-  refuse or approximate badly.
+  filled rects and circles, and the label's three face-and-size pairs (32, 78 and 18 px); the
+  J-card has the same three faces at its own sizes. Anything else the editor will refuse or
+  approximate badly.
 - **A second colour on one text.** A text prints in the ink or in one of the bands, never on
   the paper.
-- **Anything important in the window.** It is a hole; the tape shows through it.
-- **More than you need.** The sheet holds 48 layers, 16 fields and up to 8 band colours per
+- **Anything important in the window.** It is a hole; the tape shows through it. On the J-card,
+  keep the words inside the cover's safe square rather than treating the whole sheet as the
+  front.
+- **More than you need.** The sheet holds 48 layers, 16 Slots and up to 8 band colours per
   design; the three built prompts above use 14, 15 and 14 layers — the dot grid prompts will
   need about 28 because every dot is a layer.
 
 ## The built ones
 
 Prompts 1, 2 and 3 were built with the editor's own tools, through the bridge, and exported
-with no errors (14, 15 and 14 prims; `label.hifi-1969`, `label.808-stripes` and
-`label.discs-c60`). The pictures are the print at 748 × 359, which is the size the panel
-draws. They were built in a scratch browser session, so they are not in
-`assets/labels/templates/` — build one from its prompt, then Export it there. Their middles
-are quiet on purpose: on the device that is the Card's window, and the tape is what shows
-there.
+with no errors (14, 15 and 14 prims; `k7.hifi-1969`, `k7.808-stripes` and
+`k7.discs-c60`). The pictures are the label's print at 748 × 359, which is the size the panel
+draws. They were built in a scratch browser session, so they are not in `assets/k7art/` — build
+one from its prompt, then Export it there. Their middles are quiet on purpose: on the device
+that is the Card's window, and the tape is what shows there. Each export is a K7Art, so give
+its J-card the design's paper and its three fields.
+
+## The pack
+
+A design that leaves the editor by **Export** is the factory road: the file goes in
+`assets/k7art/`, and the build packs its label section into the K7's sheet and bundles its
+J-card into the App. **Publish** is the user's road: it takes any subset of the open K7Arts, a
+pack id, a name and an author, and writes one `.k7artpack` as a download — the binary label
+sheet built in the browser, the designs' J-card sections and a header
+([`docs/specs/art-packs.md`](../../../docs/specs/art-packs.md)).
+
+The file is installed by the App, not the editor: **Settings → Art packs** imports it, shows
+its designs and their J-cards, uploads it to the K7's `POST /api/art`, and caches its J-cards
+for the covers. One **User pack** is active at a time and it is additive — its designs join the
+factory's in one pool, factory first — and **Reset to factory** removes it. The editor never
+reaches the device; a pack is art in flash, not a Track.

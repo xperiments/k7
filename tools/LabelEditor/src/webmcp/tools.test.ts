@@ -10,7 +10,7 @@ describe("the WebMCP tool surface", () => {
   it("has unique, kebab-case names", () => {
     const names = tools.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    for (const name of names) expect(name).toMatch(/^label-editor-[a-z0-9-]+$/);
+    for (const name of names) expect(name).toMatch(/^k7art-[a-z0-9-]+$/);
   });
 
   it("stays inside an agent's tool budget", () => {
@@ -42,7 +42,7 @@ describe("the WebMCP tool surface", () => {
   });
 
   it("can read before it writes", () => {
-    expect(tools.map((t) => t.name)).toContain("label-editor-read");
-    expect(tools.map((t) => t.name)).toContain("label-editor-export-template");
+    expect(tools.map((t) => t.name)).toContain("k7art-read");
+    expect(tools.map((t) => t.name)).toContain("k7art-export-template");
   });
 });

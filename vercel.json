@@ -1,7 +1,7 @@
 {
-  "framework": "vite",
+  "installCommand": "npm --prefix web ci && npm --prefix tools/LabelEditor ci",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+  "outputDirectory": "web/dist",
   "rewrites": [
     {
       "source": "/app",
@@ -23,7 +23,43 @@
       ]
     },
     {
-      "source": "/(sw.js|index|index.html|app|app.html|manifest.webmanifest|shell.json|weights.lock.json|models.lock.json)",
+      "source": "/k7art/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/k7art/fonts/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
+    },
+    {
+      "source": "/k7art/(lvgl.js|skill.md)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
+    },
+    {
+      "source": "/k7art/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/(sw.js|index|index.html|app|app.html|k7art|k7art/index.html|manifest.webmanifest|shell.json|weights.lock.json|models.lock.json)",
       "headers": [
         {
           "key": "Cache-Control",

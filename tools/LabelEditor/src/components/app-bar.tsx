@@ -12,6 +12,8 @@ import {
   PencilRuler,
   Redo2,
   Save,
+  StickyNote,
+  Tag,
   Undo2,
   Upload,
 } from "lucide-react";
@@ -40,11 +42,13 @@ import { exportTemplate, saveDocument } from "@/engine/actions";
 
 export function AppBar({
   onExport,
+  onPublish,
   onShortcuts,
   onProblems,
   onImport,
 }: {
   onExport: () => void;
+  onPublish: () => void;
   onShortcuts: () => void;
   onProblems: (title: string, errors: string[]) => void;
   onImport: () => void;
@@ -65,7 +69,7 @@ export function AppBar({
       onProblems("This design cannot be exported yet", r.errs);
       return;
     }
-    toast.success("Template exported", { description: r.name });
+    toast.success("K7Art exported", { description: r.name });
   };
 
   return (
@@ -89,7 +93,7 @@ export function AppBar({
       <div className="flex min-w-0 items-center gap-1.5">
         <span className="max-w-56 truncate text-xs font-medium text-foreground">{docName}</span>
         <Badge variant="outline" className="tabnum">
-          {ed.objs.length} layers
+          {ed.activeObjs().length} layers
         </Badge>
       </div>
 
@@ -109,6 +113,26 @@ export function AppBar({
             <ClipboardPaste />
           </IconButton>
         </div>
+
+        <Separator orientation="vertical" className="mx-1 h-6" />
+
+        <ToggleGroup
+          value={[ed.surface]}
+          onValueChange={(v) => ed.setSurface((v[0] as "label" | "jcard") || "label")}
+          variant="outline"
+          size="sm"
+          spacing={0}
+          aria-label="Surface"
+        >
+          <ToggleGroupItem value="label" className="gap-1.5 px-2.5">
+            <Tag className="size-3.5" />
+            Label
+          </ToggleGroupItem>
+          <ToggleGroupItem value="jcard" className="gap-1.5 px-2.5">
+            <StickyNote className="size-3.5" />
+            J-card
+          </ToggleGroupItem>
+        </ToggleGroup>
 
         <Separator orientation="vertical" className="mx-1 h-6" />
 
@@ -156,7 +180,7 @@ export function AppBar({
                 size="sm"
                 className="gap-1.5"
                 onClick={onImport}
-                aria-label="Import a label template or an editor document"
+                aria-label="Import a K7Art or an editor document"
               >
                 <FolderOpen className="size-3.5" />
                 <span className="hidden xl:inline">Import</span>
@@ -164,7 +188,7 @@ export function AppBar({
             }
           />
           <TooltipContent>
-            Import a label-template JSON or an editor document
+            Import a K7Art JSON or an editor document
           </TooltipContent>
         </Tooltip>
 
@@ -182,13 +206,18 @@ export function AppBar({
               <DropdownMenuLabel>Export</DropdownMenuLabel>
               <DropdownMenuItem onClick={onExportOne}>
                 <FileJson />
-                Template JSON
+                K7Art JSON
                 <span className="ml-auto text-xs text-muted-foreground">⌘E</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onExport}>
                 <Download />
                 All open designs…
                 <span className="ml-auto text-xs text-muted-foreground">zip</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onPublish}>
+                <CassetteTape />
+                Publish a pack…
+                <span className="ml-auto text-xs text-muted-foreground">k7artpack</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

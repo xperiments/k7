@@ -10,3 +10,8 @@ factory,  app,  factory, 0x10000, 4M,
 # never written except by the update path (ADR 0047). 64 KB-aligned so it can be
 # mmapped, and after the app so the app's size is free to grow.
 snapshot, data, 0x40,    0x410000, 2M,
+# The art pack: the one user K7Art pack (ADR 0111, art-packs.md §5). 1 MB bounds
+# the upload, read in place, and 64 KB-aligned so it can be mmapped. A flash that
+# does not erase it leaves the user's designs in place; a full erase restores the
+# factory sheet, which stays embedded in the app.
+art,      data, 0x41,    0x610000, 1M,

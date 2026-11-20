@@ -128,7 +128,10 @@ PROD_SRC := \
   $(ROOT)/components/portable/flash_job/flash_job.c \
   $(ROOT)/components/portable/front_door/front_door.c \
   $(ROOT)/components/portable/app_services/app_services.c \
+  $(ROOT)/components/portable/app_services/art.c \
   $(ROOT)/components/portable/label/label.c \
+  $(ROOT)/components/portable/label/label_pack.c \
+  $(ROOT)/components/portable/label/label_pool.c \
   $(ROOT)/components/portable/label/label_values.c \
   $(ROOT)/components/portable/wifi_record/wifi_record.c \
   $(ROOT)/components/portable/handover/handover_frame.c \
@@ -188,10 +191,10 @@ BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
-SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/card_path.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/snapshot_http.o $(OBJ)/covers_http.o $(OBJ)/app_services.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_file.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o $(OBJ)/setup.o $(OBJ)/setup_http.o $(OBJ)/wifi_record.o
+SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/card_path.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/snapshot_http.o $(OBJ)/covers_http.o $(OBJ)/app_services.o $(OBJ)/art.o $(OBJ)/label.o $(OBJ)/label_pack.o $(OBJ)/label_pool.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_file.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o $(OBJ)/setup.o $(OBJ)/setup_http.o $(OBJ)/wifi_record.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/http_loop.o $(OBJ)/http_backend_single.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
-SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/share.o $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $(OBJ)/board_host.o $(OBJ)/icecast_host.o
+SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/share.o $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $(OBJ)/board_host.o $(OBJ)/icecast_host.o $(OBJ)/art_store_host.o
 
 TOOLS := $(BIN)/mi_bench $(BIN)/mi_encode_file $(BIN)/mi_frames
 # The harness helpers are Python; override PYTHON where the default python3 is not the
@@ -212,7 +215,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t36_wifi_record $(BIN)/t38_setup $(BIN)/t39_shuffle_default \
          $(BIN)/t40_playlist_file $(BIN)/t41_handover $(BIN)/t42_share \
          $(BIN)/t43_espnow_stream $(BIN)/t44_espnow_emitter \
-         $(BIN)/t45_station_restart
+         $(BIN)/t45_station_restart $(BIN)/t46_art_pack
 
 .PHONY: all test integration layering label player check tools fixtures bench control control-check clean help
 
@@ -404,6 +407,12 @@ $(BIN)/t45_station_restart: $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/t45_station_restart.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
+# The K7Art pack and the two-sheet pool: the pack header and CRC, the sheet at its
+# offset, the design-count agreement, the factory-first mapping and the fallback.
+$(BIN)/t46_art_pack: $(OBJ)/label.o $(OBJ)/label_pack.o $(OBJ)/label_pool.o $(OBJ)/t46_art_pack.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
 $(BIN)/t36_wifi_record: $(OBJ)/wifi_record.o $(OBJ)/t36_wifi_record.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
@@ -439,6 +448,8 @@ integration: $(SERVER)
 	@$(PYTHON) $(HERE)/tests/upload_tests.py $(SERVER) $(HERE)/fixtures
 	@echo "--- playlists over HTTP"
 	@$(PYTHON) $(HERE)/tests/playlist_tests.py $(SERVER) $(HERE)/fixtures
+	@echo "--- the art pack"
+	@$(PYTHON) $(HERE)/tests/art_tests.py $(SERVER) $(HERE)/fixtures
 	@echo "--- the card watcher"
 	@$(PYTHON) $(HERE)/tests/card_watch_tests.py $(SERVER) $(HERE)/fixtures
 
@@ -460,7 +471,7 @@ LABEL_OUT    := $(BUILD)/label
 LABEL_SHEET  := $(LABEL_OUT)/label_sheet.bin
 LABEL_HEADER := $(LABEL_OUT)/label_fonts.h
 LABEL_INPUTS := $(ROOT)/assets/labels/vocabulary.json $(ROOT)/tools/label_pack.py \
-                $(wildcard $(ROOT)/assets/labels/templates/*.json)
+                $(wildcard $(ROOT)/assets/k7art/*.json)
 
 EDITOR      := $(ROOT)/tools/LabelEditor
 EDITOR_DIST := $(EDITOR)/dist/index.html
@@ -476,7 +487,7 @@ EDITOR_SRC  := $(EDITOR)/index.html $(EDITOR)/package.json $(EDITOR)/tsconfig.js
 # and costs about 50 ms.
 $(LABEL_SHEET) $(LABEL_HEADER): $(LABEL_INPUTS)
 	@mkdir -p $(LABEL_OUT)
-	$(PYTHON) $(ROOT)/tools/label_pack.py $(ROOT)/assets/labels $(LABEL_OUT)
+	$(PYTHON) $(ROOT)/tools/label_pack.py $(ROOT)/assets/k7art $(LABEL_OUT)
 
 # t33 includes the generated label_fonts.h, so it needs the packer's output on its include path
 # and as a prerequisite: the font table it compiles has to be the one the sheet was packed with.

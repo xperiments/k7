@@ -5,9 +5,9 @@ import { AlbumArt, type AlbumArtData } from './album-art';
 import { useCoverUrl } from './cover';
 
 /**
- * The picture on a case's face: the art, or the album's drawn cover when it has no picture,
- * or a tinted face with its initial where neither is available (the 30px player case). The
- * moulding is drawn on top either way.
+ * The picture on a case's face: the real cover, or the album's J-card when it has no
+ * picture, or a tinted face with its initial where neither is available (the 30px player
+ * case). The moulding is drawn on top either way.
  */
 export function CassetteFront({
   cover,
@@ -20,6 +20,11 @@ export function CassetteFront({
   art?: AlbumArtData;
 }) {
   const url = useCoverUrl(cover);
+  const fallback = (
+    <span className="k7-cover-fallback" aria-hidden="true">
+      {initial}
+    </span>
+  );
   return (
     <>
       {url ? (
@@ -36,11 +41,11 @@ export function CassetteFront({
           />
         </>
       ) : art ? (
-        <AlbumArt {...art} />
+        /* The cover part fills the case's 16:25 face; the 0.1% difference from the part's
+           0.640625 is the case's own geometry (k7art.md §5). */
+        <AlbumArt {...art} fit="fill" fallback={fallback} />
       ) : (
-        <span className="k7-cover-fallback" aria-hidden="true">
-          {initial}
-        </span>
+        fallback
       )}
       <span className="k7-frame" aria-hidden="true" />
       <span className="k7-sheen" aria-hidden="true" />

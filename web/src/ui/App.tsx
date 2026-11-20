@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { DEVICE_NEEDS_PERMISSION } from '../config';
 import { restoreCardScope } from '../card/session';
+import { useArtPackSync } from '../jcard/active';
 import { loadDrafts } from '../playlists/drafts';
 import { useDeviceStatus } from '../device/useDeviceStatus';
 import { countMedia } from '../storage/media';
@@ -53,6 +54,10 @@ export function App() {
  * mounted while another route is shown, so navigating never destroys a running Queue.
  */
 function AppContent() {
+  /* The active user pack: cached first, then the player's answer, so a coverless album
+   * draws before the first fetch and follows a pack that is installed or reset while the
+   * App is open (art-packs.md §4/§6). */
+  useArtPackSync();
   const route = useRoute();
   const { status, reachable } = useDeviceStatus();
   const landed = useRef(false);

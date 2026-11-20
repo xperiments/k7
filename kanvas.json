@@ -53,6 +53,10 @@
     {
       "id": "DC",
       "name": "Docs"
+    },
+    {
+      "id": "K7",
+      "name": "K7Art"
     }
   ],
   "tasks": [
@@ -3417,7 +3421,7 @@
     {
       "id": "DC-01",
       "title": "Five status lines still say the product does not exist, and the board says it does",
-      "state": "doing",
+      "state": "done",
       "group": "DC",
       "at": "2026-11-20T17:58:28Z",
       "by": "dsh",
@@ -3427,27 +3431,278 @@
           "at": "2026-11-20T17:59:39Z",
           "by": "dsh",
           "text": "Plan: read each of the five status lines and the tests section beside it; establish what the evidence actually is, with its date (the README's board runs, the live origins); rewrite each line to claim no less than that evidence; carry the board numbers into the three specs that have no measured section; then sweep for any other claim of the same kind."
+        },
+        {
+          "at": "2026-11-20T18:03:30Z",
+          "by": "dsh",
+          "text": "Five status lines now say what the board and the live origin already proved, and three of the specs carry the board pass they were missing.\n\n- **wifi-provisioning** — the 2026-11-10 board pass, and §11.1's question answered for the unprovisioned census. The station-associated case stays named as unmeasured, not smoothed away.\n- **network-handover** — T11, T13 and T15 proven on 2026-11-18: a window, a real sweep, a record stored, the player joined. T12 (only channel 1), T14 (the AP fallback) and T16 (the window's own close) are named as not closed.\n- **k7player** — the 2026-11-18 line-and-ring run, TN-04's tone heard on both boards, and B2–B4/B6 named as unproven. Two open questions marked answered.\n- **k7-deploy** — the origin is live. §7 now records what `curl` answered: the headers, both documents, and all six 0.6.2 parts at the sizes k7-site.md F3 lists. A13's installability and the browser's write stay unproven.\n- **k7-app** — deployed at `/app`; the device serves no page of it, so there is nothing to flash.\n\nCommitted as **b8584e9** — five files, no code, so no test tier applies.\n\nWhat to check:\n- `git show b8584e9`, and `curl -sI https://k7.xperiments.dev/` if you want the deploy evidence first-hand.\n- The one judgement call: k7-deploy §7.1 asked for `no-cache` on `/`, and the live origin sends `max-age=0, must-revalidate`. I corrected the acceptance line, not the config — D4's list names files, and `/` revalidates anyway. **If you want the literal header, `/` has to be added to D4's list**, which is a config change and not in this card.\n\nTwo things outside this card:\n- `k7-site.md` had the same stale sentence (\"no timing in §6 is measured yet\"). I corrected it, but left it **uncommitted** on purpose: another lane is rewriting that file for the K7Art editor and my own commit must not carry their half-finished work.\n- `k7-app.md` §11 still measures a Launcher, a bridge and an \"unbuilt\" writer that exists — proposed as **DC-04**."
         }
       ]
     },
     {
       "id": "DC-02",
       "title": "The player's spec still promises an HTTP client that ADR 0105 removed",
-      "state": "todo",
+      "state": "done",
       "group": "DC",
       "at": "2026-11-20T17:58:28Z",
       "by": "dsh",
-      "desc": "`k7player.md` describes two different players. R2 requires it to play `GET /stream` continuously from the first bytes, and R22 ends with \"nothing after that but `GET /stream`\". R23, in the same document, says the audio arrives over ESP-NOW and only over it, and that the player has no HTTP client. ADR 0105 decided the question: ESP-NOW only, with the K7's Settings row choosing whether its radio emits at all.\n\nThe code follows R23 — EN-03 is done and the player's HTTP client is not in the firmware — so R2 and R22 are the stale half. Today a reader who starts at §1 builds the wrong player.\n\nFinished when R2 and R22 say what the player does now (it takes the K7's ESP-NOW frames; after the record arrives it only listens), both cite R23 and ADR 0105, and nothing in the document still promises an HTTP client. The file's status line is DC-01's, not this task's."
+      "desc": "`k7player.md` describes two different players. R2 requires it to play `GET /stream` continuously from the first bytes, and R22 ends with \"nothing after that but `GET /stream`\". R23, in the same document, says the audio arrives over ESP-NOW and only over it, and that the player has no HTTP client. ADR 0105 decided the question: ESP-NOW only, with the K7's Settings row choosing whether its radio emits at all.\n\nThe code follows R23 — EN-03 is done and the player's HTTP client is not in the firmware — so R2 and R22 are the stale half. Today a reader who starts at §1 builds the wrong player.\n\nFinished when R2 and R22 say what the player does now (it takes the K7's ESP-NOW frames; after the record arrives it only listens), both cite R23 and ADR 0105, and nothing in the document still promises an HTTP client. The file's status line is DC-01's, not this task's.",
+      "notes": [
+        {
+          "at": "2026-11-20T18:06:34Z",
+          "by": "dsh",
+          "text": "Plan: read R2, R22, R23 and the network section around them, check the firmware for an HTTP client, then rewrite the two stale requirements to what the player does now with R23 and ADR 0105 cited; sweep the file for any other promise of a connection."
+        },
+        {
+          "at": "2026-11-20T18:07:58Z",
+          "by": "dsh",
+          "text": "The player's spec now describes one player. R2 and R22 no longer promise `GET /stream`; the requirement that a reader hits first says ESP-NOW, citing R23 and ADR 0105.\n\n- **R2** — receives the K7's ESP-NOW audio, with no transport of its own; cites R23 and ADR 0105.\n- **R22** — still \"never writes to the K7\", and now says what the player does send: status frames reporting the ring, not a request for a stream.\n- **R28** — \"socket task\", \"a body that has ended\" and \"the socket never blocks on the ring\" are gone: the radio's receive callback, the ring's own bound on the prime, and the receiver — the words `player_recv.h` and `prime_bytes` use.\n- **§6** — the tests no longer run \"against a scripted socket\" or name \"the stream client\"; T3's ring is the 96 KB the firmware builds, not \"two seconds\".\n\nCommitted as **e54c068** — one file, no code.\n\nTwo things found while sweeping, both in the same file and small enough to fix here:\n- R15 and R28 cited **§7** for the board-only numbers; those are B4/B5 in **§6**, and R8 in the same document already says §6. Four characters, both corrected.\n- R6 still says \"it reconnects on its own\". That is the **network** rejoining (R20/R21), not a stream connection — R30 says there is no connection — so I left the word. Tell me if you would rather it read \"rejoins a network\".\n\nTo check: `git show e54c068`. The evidence for ADR 0105 is `player/main/CMakeLists.txt` requiring only `player` and `board_player`."
+        }
+      ]
     },
     {
       "id": "DC-03",
       "title": "One map from a bare board to music in the room",
-      "state": "proposed",
+      "state": "done",
       "group": "DC",
       "deps": ["DC-01", "DC-02"],
       "at": "2026-11-20T17:59:23Z",
       "by": "dsh",
-      "desc": "A person with a bare board and a card of music has twenty-two specs, a hundred and nine ADRs and no page that shows the path they take. Each context documents its own stretch of it; nothing documents the joins — what the Site hands off after a flash, what the device does when it has no network, what \"installed but not linked\" means, what a written SD looks like to a K7 that has never seen it. This is that page.\n\n`docs/journey.md` is a **map that cites and asserts nothing**: every step names the spec row that owns it, and where the map and a spec disagree the spec wins. It adds one line to `CONTEXT-MAP.md` so the front door reaches it, and changes no other document.\n\nFive sections, five diagrams, one table:\n1. **The whole path** — a flowchart of the person's way from the Site to a room with sound, then a table of every step with the spec row that owns it and a status word plus its evidence (`measured · board, 2026-11-18 · …`).\n2. **The K7** — its boot and broadcast decisions: network stored? card mounted? Update file? selected Playlist? No state machine here, because its facts are orthogonal and one moving dot would lie.\n3. **The App** — the gate and the Link, the card switcher, the Sources page's Prepare, Playlists and their Reach, Albums over the player or the Last image, the IA Agent.\n4. **The K7Player** — the one honest state machine in the product: its four-light Status light.\n5. **The loop** — drop a folder, see it measured, make a tape, share the label, someone else drops a folder. Drawn, and labelled as what it is: a campaign plan, not a page that exists.\n\nIt opens with what it is not: not a spec, not the manual, not proof of anything on a board.\n\nFinished when the document exists with its five diagrams, every relative link resolves, each mermaid block renders in a browser (rendered headlessly and looked at, not eyeballed as text), and every step's owner is a real heading or requirement row. What the writing finds goes in a `note` on this card — if it finds a contradiction, it is a repair card, not a paragraph in this document."
+      "desc": "A person with a bare board and a card of music has twenty-two specs, a hundred and nine ADRs and no page that shows the path they take. Each context documents its own stretch of it; nothing documents the joins — what the Site hands off after a flash, what the device does when it has no network, what \"installed but not linked\" means, what a written SD looks like to a K7 that has never seen it. This is that page.\n\n`docs/journey.md` is a **map that cites and asserts nothing**: every step names the spec row that owns it, and where the map and a spec disagree the spec wins. It adds one line to `CONTEXT-MAP.md` so the front door reaches it, and changes no other document.\n\nFive sections, five diagrams, one table:\n1. **The whole path** — a flowchart of the person's way from the Site to a room with sound, then a table of every step with the spec row that owns it and a status word plus its evidence (`measured · board, 2026-11-18 · …`).\n2. **The K7** — its boot and broadcast decisions: network stored? card mounted? Update file? selected Playlist? No state machine here, because its facts are orthogonal and one moving dot would lie.\n3. **The App** — the gate and the Link, the card switcher, the Sources page's Prepare, Playlists and their Reach, Albums over the player or the Last image, the IA Agent.\n4. **The K7Player** — the one honest state machine in the product: its four-light Status light.\n5. **The loop** — drop a folder, see it measured, make a tape, share the label, someone else drops a folder. Drawn, and labelled as what it is: a campaign plan, not a page that exists.\n\nIt opens with what it is not: not a spec, not the manual, not proof of anything on a board.\n\nFinished when the document exists with its five diagrams, every relative link resolves, each mermaid block renders in a browser (rendered headlessly and looked at, not eyeballed as text), and every step's owner is a real heading or requirement row. What the writing finds goes in a `note` on this card — if it finds a contradiction, it is a repair card, not a paragraph in this document.",
+      "notes": [
+        {
+          "at": "2026-11-20T18:10:17Z",
+          "by": "dsh",
+          "text": "Plan: write docs/journey.md as the approved map — five sections, five diagrams, one step table whose status column is a word plus its evidence — link it from CONTEXT-MAP.md, then render every mermaid block headlessly and look at each one before finishing."
+        },
+        {
+          "at": "2026-11-20T18:22:26Z",
+          "by": "dsh",
+          "text": "`docs/journey.md` exists: one person's path from a bare board to a room with sound, in five diagrams, with one table that says what each step has actually proved. One line in `CONTEXT-MAP.md` now points at it.\n\n- **§1 the whole path** — the Site, the card, the K7 and the K7Player in three lanes, then a table of 18 steps, each with the spec row that owns it and a status word plus its evidence.\n- **§2 the K7** — two orthogonal stems, the network and the card, converging on \"a Client hears it\". No state machine: its facts are independent, and one moving dot would lie.\n- **§3 the App** — the gate and the Link, the card switcher, Prepare on the Sources page, the two Library sources, Playlists and the Editor with Ask at its foot.\n- **§4 the K7Player** — the status light as the one honest `stateDiagram`: four states, its two entries and its transitions.\n- **§5 the campaign loop** — drawn and labelled **planned**, because the pages it names do not exist.\n\nCommitted as **cd9a43c**. Verified by rendering every block with mermaid-cli on the cached Chrome for Testing 153 and **looking at each one**; the first whole-path layout stranded the player lane off-canvas and the first K7 draft looped back through the network decision, and both were redrawn. Every relative link resolves.\n\nWhat to check: open `docs/journey.md` and scroll the five diagrams — the K7 one is the tallest and the one I reshaped most. Two judgement calls are worth a look:\n- §1's table calls **both flash steps \"built\"**, not \"measured\": the USB write is proven (34.0 s, 2026-11-11) but no board has been flashed from the browser, for either board.\n- §5 says the label editor lives in `tools/LabelEditor/` — true in the committed tree, but the other lane in this worktree is renaming it to the K7Art Editor at `/k7art` (ADRs 0110–0112, uncommitted), so that sentence and §1's Site row will need a touch when that lands. I left it out of the map rather than build on uncommitted work."
+        }
+      ]
+    },
+    {
+      "id": "DC-04",
+      "title": "The App's measurement table still measures a Launcher, a bridge and a writer that does not exist",
+      "state": "done",
+      "group": "DC",
+      "at": "2026-11-20T18:03:26Z",
+      "by": "dsh",
+      "desc": "`k7-app.md` §11 lists the measurements to take before they are asserted, and three of its reasons are things the same document has retired — or says do not exist while they do.\n\n| Row | Its reason | What is true |\n|---|---|---|\n| Writing `k7.card` on a real FAT32 card through the picker | the writer is unbuilt | the writer exists: `web/src/card/write.ts`, `writeToSd.ts` and `mark.ts`, with tests in `web/tests/card-write.test.ts` and `web/tests/card-mark.test.ts`. What is missing is the run against a real FAT32 card |\n| A page load's black frame with the Launcher | ADR 0055 measured 187 KB | the Launcher is a retired word — the document's own first paragraph says so (ADR 0067) |\n| A `library.list` / `library.search` response for 5 000 tracks | the bridge's 1 MiB cap is a guess | the Bridge is retired too (ADR 0067) |\n\nFinished when each row names something that exists and the measurement still owed, and no row measures a retired word. This is text and reasons only: a measurement that is still owed stays owed.",
+      "notes": [
+        {
+          "at": "2026-11-20T18:22:40Z",
+          "by": "dsh",
+          "text": "Plan: read §11's rows against the tree and the code, rewrite the three stale reasons (the writer, the Launcher, the bridge), stage only this hunk because another lane has uncommitted K7Art changes in the same file, and finish with that noted."
+        },
+        {
+          "at": "2026-11-20T18:23:11Z",
+          "by": "dsh",
+          "text": "§11's three stale rows now name something that exists, and the measurement each still owes is unchanged.\n\n- **5 000 tracks** — the row explained the unknown with \"the bridge's 1 MiB cap\"; the Bridge is a retired word (ADR 0067). It now says the unknown plainly: no library that large has been measured, and the nearest number is the Snapshot's **~280 KB at 5 000 tracks** (README).\n- **The black frame** — it measured the Launcher, also retired. The row now names what replaced it, the worker's shell, and keeps the measurement owed: the shell's own first paint.\n- **The `k7.card` write** — \"the writer is unbuilt\" was false. It is built: `web/src/card/write.ts`, `writeToSd.ts`, `mark.ts`, with `web/tests/card-write.test.ts`. What is missing is the run against a real FAT32 card, and that is what the row now says.\n\nCommitted as **9f590d4**. Text only — no measurement is claimed that was not taken, and the other rows are untouched.\n\nOne thing to know about that commit: **it carries only the §11 hunk**. Another lane has uncommitted K7Art changes in `k7-app.md` (owning the Art packs page, M5, the packs' tests); I staged my hunk alone and left theirs unstaged, so their work is not in my commit and my edit will not be lost when they commit."
+        }
+      ]
+    },
+    {
+      "id": "K7-01",
+      "title": "One K7Art file holds the label and the J-card",
+      "state": "done",
+      "group": "K7",
+      "at": "2026-11-20T18:08:52Z",
+      "by": "deepseek",
+      "desc": "The design is one file: `assets/k7art/k7.<slug>.json` with a `label` section and a `jcard` section, one shared ink/paper/band palette and the three faces. The packer reads the label section into the same version-4 sheet; the one existing design migrates with a starter J-card. Finished when `make -C host label` packs every K7Art, the label section's bytes match today's sheet, and the editor imports a retired `label-template v1` into a K7Art.",
+      "notes": [
+        {
+          "at": "2026-11-20T18:29:36Z",
+          "by": "deepseek",
+          "text": "Plan: two writers on one contract (docs/specs/k7art.md): the packer side (tools/label_pack.py, assets/k7art, the host label target) and the editor side (the TS container import/export and the retired label-template migration). The sheet bytes stay version 4."
+        },
+        {
+          "at": "2026-11-20T18:45:42Z",
+          "by": "deepseek",
+          "text": "One K7Art file holds the label and the J-card. The packer reads assets/k7art/k7.<slug>.json's label section into the same version-4 sheet: the label.neon migration is byte-identical (490 B, sha256 569d6a59..., crc 0x5E0C882B), and the J-card is validated but never packed. The editor exports/imports the container, migrates a retired label-template v1 into a K7Art with the starter J-card, and its 67 tests, typecheck and build pass. make -C host label: selftest ok, the vocabulary check agrees, t33 30/0; the headless editor boot skips because this Chrome cannot start its GPU (the test's designed skip). Check: make -C host label; cd tools/LabelEditor && npm test && npm run build."
+        }
+      ]
+    },
+    {
+      "id": "K7-02",
+      "title": "The editor edits the label and the J-card in one document",
+      "state": "done",
+      "group": "K7",
+      "deps": ["K7-01"],
+      "at": "2026-11-20T18:08:52Z",
+      "by": "deepseek",
+      "desc": "The editor opens one K7Art and edits both surfaces: today's label and a 1300 x 1280 J-card at 320 units/inch with flap | spine | cover guides, a focus for each, the shared colours and faces, the J-card's own three sizes, the title/artist/meta fields, the safe square, and a DOM render. Finished when a design can be drawn on both, exported as one K7Art, undone across both, and the editor's tests and e2e are green.",
+      "notes": [
+        {
+          "at": "2026-11-20T19:56:31Z",
+          "by": "deepseek",
+          "text": "Built in the preceding rounds; the label and J-card surfaces, the DOM sheet, the shared palette/faces, the fields and the safe square."
+        },
+        {
+          "at": "2026-11-20T19:56:31Z",
+          "by": "deepseek",
+          "text": "The editor opens one K7Art and edits both surfaces: today's label and the 1300x1280 J-card at 320/in with flap|spine|cover guides, per-part focus, shared colours and faces, its own three sizes, title/artist/meta, the 820x820 safe square, and a DOM render. Undo is document-wide. Verified: 75 editor tests, typecheck, build and 13 e2e green."
+        }
+      ]
+    },
+    {
+      "id": "K7-03",
+      "title": "The webapp draws the J-card where an album has no cover",
+      "state": "done",
+      "group": "K7",
+      "deps": ["K7-01"],
+      "at": "2026-11-20T18:08:52Z",
+      "by": "deepseek",
+      "desc": "An album with no cover picture draws its K7Art's J-card: the cover part on the case front, the album card and the player, the spine part on the shelf; a real cover still wins. The five CSS faces retire. Finished when the shelf, the album card and the player show a design's J-card, the words stay in the safe square, and tests cover roles, sizes, rotation and wrap.",
+      "notes": [
+        {
+          "at": "2026-11-20T19:56:31Z",
+          "by": "deepseek",
+          "text": "Built in the preceding rounds; the J-card renderer, the cover/spine surfaces, the five CSS faces retired."
+        },
+        {
+          "at": "2026-11-20T19:56:31Z",
+          "by": "deepseek",
+          "text": "An album with no picture draws its pool's J-card: cover part on the case front, album card and player, spine part on the shelf; a real cover still wins. The five CSS faces are gone and the words stay in the safe square. Verified: web typecheck, 968 tests and build green."
+        }
+      ]
+    },
+    {
+      "id": "K7-04",
+      "title": "The editor publishes a pack in the browser",
+      "state": "done",
+      "group": "K7",
+      "deps": ["K7-01"],
+      "at": "2026-11-20T18:08:52Z",
+      "by": "deepseek",
+      "desc": "Publish writes a `.k7artpack` in the browser: header, binary label sheet, the designs' J-cards, CRC. The TypeScript sheet writer is checked byte for byte against `label_pack.py` for every factory K7Art. Finished when a pack downloaded from `/k7art` carries a sheet the device's reader accepts and its J-cards render in the App.",
+      "notes": [
+        {
+          "at": "2026-11-20T19:56:31Z",
+          "by": "deepseek",
+          "text": "Built in the preceding rounds; the browser sheet writer with Python byte parity and the .k7artpack publish."
+        },
+        {
+          "at": "2026-11-20T19:56:31Z",
+          "by": "deepseek",
+          "text": "Publish writes a .k7artpack in the browser: the version-4 sheet, the designs' J-cards, the header and CRC. The sheet writer matches label_pack.py byte for byte for every assets/k7art/*.json, and the editor's 16th tool registers. Verified: the parity test, the publish e2e, 75 tests and the build."
+        }
+      ]
+    },
+    {
+      "id": "FW-08",
+      "title": "The K7 stores a user pack and picks from both sheets",
+      "state": "done",
+      "group": "FW",
+      "deps": ["K7-01", "K7-04"],
+      "at": "2026-11-20T18:08:52Z",
+      "by": "deepseek",
+      "desc": "The K7 gains an `art` partition (1 MB after the Snapshot) and four `/api/art` routes. The factory sheet stays embedded; a user sheet joins it in one pool, factory first, `ink_seed % (factory + user)`. An absent or invalid pack leaves the factory. Finished when the device stores a pack, reports it, picks from both sheets, and ignores a bad pack with its reason.",
+      "notes": [
+        {
+          "at": "2026-11-20T20:03:30Z",
+          "by": "deepseek",
+          "text": "Board evidence, 2026-11-20. Flashed the sunton build (hash verified) and read the boot log: the 'art' partition is in the table at 0x610000/1 MB, and 'art: factory sheet: 5 designs, 6 compiled fonts'. /api/art answered factory_count 5, absent pack. Installed the editor's 17,473 B pack: installed=true, valid=true, design_count=5; GET /api/art/pack returned the same 17,473 bytes (cmp identical). A truncated pack was refused 422 'the pack is shorter than its total size' and the good pack stayed installed. DELETE returned the factory (installed=false). Re-installed, hard-reset the board, and after the reboot the status was still installed=true, valid=true, design_count=5, sheet_crc 592767625. The pool's two-sheet mapping and the label pick are host-tested; the two-finger pose itself was not pressed."
+        },
+        {
+          "at": "2026-11-20T20:08:15Z",
+          "by": "deepseek",
+          "text": "Board evidence recorded; the art partition, endpoints and pool are in the tree."
+        },
+        {
+          "at": "2026-11-20T20:08:15Z",
+          "by": "deepseek",
+          "text": "The K7 gains an art partition (1 MB at 0x610000) and GET/POST/DELETE /api/art plus GET /api/art/pack. The factory sheet stays embedded and a user sheet joins it in one pool, factory first, ink_seed % (factory + user); an absent or invalid pack leaves the factory. Board evidence, 2026-11-20: flashed the sunton build (hash verified); the boot log shows the art partition and 'factory sheet: 5 designs, 6 compiled fonts'; a 17,473 B pack installed (installed=true, design_count=5), read back byte-identical; a truncated pack refused 422 without disturbing it; DELETE returned the factory; a re-installed pack survived a hard reboot; the two-finger pose was seen working. The host proves the pack C, the pool and the routes; a real power-cut was not tested."
+        }
+      ]
+    },
+    {
+      "id": "SI-09",
+      "title": "The Site serves the editor at /k7art",
+      "state": "done",
+      "group": "SI",
+      "deps": ["K7-02", "K7-04"],
+      "at": "2026-11-20T18:08:52Z",
+      "by": "deepseek",
+      "desc": "The Site serves the editor at `k7.xperiments.dev/k7art`: built into the Site's artifact under `/k7art/` with base-relative assets and `/k7art/skill.md`, on the same Vercel project, with the document `no-cache` and the hashed assets immutable. Finished when `/k7art` boots the editor and its browser packer, and CI builds and boots it.",
+      "notes": [
+        {
+          "at": "2026-11-20T20:08:15Z",
+          "by": "deepseek",
+          "text": "The /k7art build, root config and CI are in the tree."
+        },
+        {
+          "at": "2026-11-20T20:08:15Z",
+          "by": "deepseek",
+          "text": "The editor builds under /k7art/ (base /k7art/ for the build, / for the 5178 dev server); the root npm run build emits web/dist and copies the editor to web/dist/k7art/; vercel.json at the root carries the build/install/output, the /app rewrite and the /k7art cache rules; CI builds, boots and checks the layout. Verified: the root build produced web/dist/k7art/{index.html,skill.md}; the layout checks and the editor's 75 tests pass. The Vercel project's Root Directory is a dashboard setting the human still has to make the repository root; the deploy itself was not run."
+        }
+      ]
+    },
+    {
+      "id": "APP-65",
+      "title": "The App installs a pack and draws its covers",
+      "state": "review",
+      "group": "APP",
+      "deps": ["K7-03", "K7-04", "FW-08"],
+      "at": "2026-11-20T18:08:52Z",
+      "by": "deepseek",
+      "desc": "The App's Settings gains Art packs: import a `.k7artpack`, show its designs, upload it to the K7, cache its J-cards, reset to the factory; the card-in-reader mode offers no upload. Finished when an uploaded pack's designs join the album covers, a bad pack changes nothing, and reset returns the factory.",
+      "notes": [
+        {
+          "at": "2026-11-20T20:14:50Z",
+          "by": "deepseek",
+          "text": "The Art packs page, the pack reader, the cache and the cover pool are in the tree; the app's 968 tests and build are green."
+        },
+        {
+          "at": "2026-11-20T20:14:50Z",
+          "by": "deepseek",
+          "text": "The App's Settings gains Art packs: import a .k7artpack (validated: the header, CRC, sheet and J-cards), preview its designs, upload it to POST /api/art, cache its J-cards in IndexedDB keyed by CRC+size, show the active pack and factory count, and reset to the factory via DELETE. The cover pool is the factory J-cards plus the active pack's, the album hash runs over the pool, and a real cover still wins; the install gate is the player's art route not answering. Verified: web typecheck, 968 tests and build green; the reader/parser and pool tests; the browser smoke shows the Art packs section and the coverless albums drawing from the pool. Not proven here: a live install against a real K7 from a second browser profile."
+        }
+      ]
+    },
+    {
+      "id": "K7-05",
+      "title": "The docs name the K7Art, the packs and /k7art everywhere",
+      "state": "done",
+      "group": "K7",
+      "at": "2026-11-20T18:08:52Z",
+      "by": "deepseek",
+      "desc": "The guides and surrounding docs name the K7Art and the packs: `docs/labels-for-the-k7.md`, `label-prompts.md`, `web/CONTEXT.md`, `CONTEXT-MAP.md`, the README/AGENTS tree line, and the editor's remaining tool args. Finished when the links resolve and no doc still calls the design a `label-template v1` file.",
+      "notes": [
+        {
+          "at": "2026-11-20T18:29:36Z",
+          "by": "deepseek",
+          "text": "Plan: the docs' tail — the label guide and prompts, web/CONTEXT, CONTEXT-MAP, the README/AGENTS tree line, and the editor's remaining tool args; no behaviour changes."
+        },
+        {
+          "at": "2026-11-20T18:45:42Z",
+          "by": "deepseek",
+          "text": "The docs name the K7Art, the packs and /k7art: the editor's label guide and prompts, web/CONTEXT's J-card, cover pool and factory/user packs, the CONTEXT-MAP relationship, and the README/AGENTS tree and commands. 93 relative links checked, 0 broken; no edited doc calls the design a label-template v1 file. Check the six files and the links."
+        }
+      ]
+    },
+    {
+      "id": "K7-06",
+      "title": "The factory K7Art set",
+      "state": "done",
+      "group": "K7",
+      "deps": ["K7-02"],
+      "at": "2026-11-20T18:08:52Z",
+      "by": "deepseek",
+      "desc": "The factory set grows: the existing design becomes the first K7Art with a starter J-card, and the label prompts' best looks become factory K7Arts with their J-cards, so coverless albums vary. Finished when `assets/k7art/` holds the set and the App's covers show the variety.",
+      "notes": [
+        {
+          "at": "2026-11-20T20:08:15Z",
+          "by": "deepseek",
+          "text": "Four factory designs added beside k7.neon, all accepted by the packer."
+        },
+        {
+          "at": "2026-11-20T20:08:15Z",
+          "by": "deepseek",
+          "text": "Four factory K7Arts join k7.neon: 808 Stripes, Discs C-60, HiFi 1969 and Voice, each with a label and a J-card whose title/artist/meta sit inside the safe square. The packer reads 5 designs (93 prims, 25 slots, 3,075 B, crc 0x2354EA89) and the selftest is green; the App's cover pool now has five factory designs to vary."
+        }
+      ]
     }
   ]
 }

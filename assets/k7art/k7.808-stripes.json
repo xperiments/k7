@@ -1,0 +1,588 @@
+{
+  "format": "k7art",
+  "v": 1,
+  "id": "k7.808-stripes",
+  "name": "808 Stripes",
+  "inks": {
+    "paper": "#1b3a63",
+    "ink": "#f2ecdf",
+    "rule": "#3b6e8f",
+    "band": [
+      "#c23b66",
+      "#3b6e8f",
+      "#df7b35",
+      "#c68b2e",
+      "#f2ecdf",
+      "#142b4a",
+      "#e06b8a",
+      "#c7a867"
+    ]
+  },
+  "label": {
+    "space": {
+      "w": 748,
+      "h": 359
+    },
+    "aperture": {
+      "x": 95,
+      "y": 101,
+      "w": 556,
+      "h": 166,
+      "r": 83
+    },
+    "canvas": {
+      "backgrounds": [
+        "#1b3a63",
+        "#c23b66",
+        "#3b6e8f"
+      ],
+      "active": 0
+    },
+    "fonts": {
+      "title": {
+        "ff": "Archivo Narrow 600",
+        "px": 32
+      },
+      "numeral": {
+        "ff": "Barlow Condensed 700",
+        "px": 78
+      },
+      "caption": {
+        "ff": "IBM Plex Mono 500",
+        "px": 18
+      }
+    },
+    "slots": {
+      "bpm": {
+        "max": 96
+      },
+      "song_title": {
+        "max": 96
+      },
+      "song_artist": {
+        "max": 96
+      },
+      "song_album": {
+        "max": 96
+      },
+      "mood": {
+        "max": 96
+      },
+      "musical_key": {
+        "max": 96
+      }
+    },
+    "prims": [
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 748,
+        "h": 359,
+        "r": 10,
+        "fill": "paper",
+        "still": true
+      },
+      {
+        "t": "text",
+        "slot": "bpm",
+        "x": 24,
+        "y": 2,
+        "w": 140,
+        "font": "numeral",
+        "color": "band.0",
+        "align": "left",
+        "preview": "124"
+      },
+      {
+        "t": "text",
+        "slot": "song_title",
+        "x": 302,
+        "y": 6,
+        "w": 330,
+        "font": "title",
+        "color": "ink",
+        "align": "left",
+        "preview": "Neon Skyline"
+      },
+      {
+        "t": "text",
+        "slot": "song_artist",
+        "x": 301,
+        "y": 44,
+        "w": 330,
+        "font": "title",
+        "color": "band.1",
+        "align": "left",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "rect",
+        "x": 640,
+        "y": 8,
+        "w": 76,
+        "h": 76,
+        "r": 38,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "text",
+        "x": 640,
+        "y": 22,
+        "w": 76,
+        "font": "title",
+        "color": "ink",
+        "align": "center",
+        "text": "B"
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 150,
+        "w": 748,
+        "h": 2,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 190,
+        "w": 748,
+        "h": 2,
+        "fill": "band.2",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 230,
+        "w": 748,
+        "h": 2,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 262,
+        "w": 748,
+        "h": 5,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "text",
+        "slot": "song_album",
+        "x": 24,
+        "y": 272,
+        "w": 480,
+        "font": "title",
+        "color": "ink",
+        "align": "left",
+        "preview": "Night Drive"
+      },
+      {
+        "t": "text",
+        "slot": "mood",
+        "x": 24,
+        "y": 318,
+        "w": 260,
+        "font": "caption",
+        "color": "band.3",
+        "align": "left",
+        "preview": "relaxed"
+      },
+      {
+        "t": "text",
+        "x": 600,
+        "y": 272,
+        "w": 124,
+        "font": "caption",
+        "color": "band.0",
+        "align": "right",
+        "text": "STEREO"
+      },
+      {
+        "t": "text",
+        "slot": "musical_key",
+        "x": 600,
+        "y": 318,
+        "w": 124,
+        "font": "caption",
+        "color": "ink",
+        "align": "right",
+        "preview": "8A"
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 351,
+        "w": 748,
+        "h": 8,
+        "fill": "band.0",
+        "still": true
+      }
+    ]
+  },
+  "jcard": {
+    "space": {
+      "w": 1300,
+      "h": 1280,
+      "unit": 320
+    },
+    "parts": {
+      "flap": {
+        "x": 0,
+        "y": 0,
+        "w": 320,
+        "h": 1280
+      },
+      "spine": {
+        "x": 320,
+        "y": 0,
+        "w": 160,
+        "h": 1280
+      },
+      "cover": {
+        "x": 480,
+        "y": 0,
+        "w": 820,
+        "h": 1280
+      }
+    },
+    "fonts": {
+      "title": {
+        "ff": "Archivo Narrow 600",
+        "size": 54
+      },
+      "numeral": {
+        "ff": "Barlow Condensed 700",
+        "size": 112
+      },
+      "caption": {
+        "ff": "IBM Plex Mono 500",
+        "size": 30
+      }
+    },
+    "prims": [
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 1300,
+        "h": 1280,
+        "fill": "paper"
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 60,
+        "h": 1280,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 60,
+        "y": 0,
+        "w": 20,
+        "h": 1280,
+        "fill": "band.2"
+      },
+      {
+        "t": "rect",
+        "x": 80,
+        "y": 0,
+        "w": 20,
+        "h": 1280,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 180,
+        "y": 460,
+        "w": 120,
+        "h": 120,
+        "r": 60,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 180,
+        "y": 496,
+        "w": 120,
+        "font": "title",
+        "color": "ink",
+        "align": "center",
+        "text": "B"
+      },
+      {
+        "t": "rect",
+        "x": 320,
+        "y": 0,
+        "w": 160,
+        "h": 1280,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 320,
+        "y": 0,
+        "w": 12,
+        "h": 1280,
+        "fill": "band.2"
+      },
+      {
+        "t": "text",
+        "x": 330,
+        "y": 560,
+        "w": 140,
+        "font": "title",
+        "color": "ink",
+        "align": "center",
+        "text": "808"
+      },
+      {
+        "t": "text",
+        "x": 330,
+        "y": 630,
+        "w": 140,
+        "font": "caption",
+        "color": "ink",
+        "align": "center",
+        "text": "STEREO"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 0,
+        "w": 820,
+        "h": 230,
+        "fill": "paper"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 0,
+        "w": 820,
+        "h": 8,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 540,
+        "y": 30,
+        "w": 700,
+        "font": "numeral",
+        "color": "ink",
+        "align": "left",
+        "text": "808"
+      },
+      {
+        "t": "text",
+        "x": 540,
+        "y": 168,
+        "w": 700,
+        "font": "caption",
+        "color": "ink",
+        "align": "left",
+        "text": "DRUM MACHINE · STEREO"
+      },
+      {
+        "t": "rect",
+        "x": 1040,
+        "y": 20,
+        "w": 160,
+        "h": 160,
+        "r": 80,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 1040,
+        "y": 58,
+        "w": 160,
+        "font": "title",
+        "color": "ink",
+        "align": "center",
+        "text": "B"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 205,
+        "w": 820,
+        "h": 4,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 940,
+        "y": 240,
+        "w": 300,
+        "h": 300,
+        "r": 150,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 260,
+        "w": 820,
+        "h": 4,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 300,
+        "w": 820,
+        "h": 4,
+        "fill": "band.2"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 340,
+        "w": 820,
+        "h": 4,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 940,
+        "y": 305,
+        "w": 300,
+        "font": "numeral",
+        "color": "ink",
+        "align": "center",
+        "text": "B"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 700,
+        "w": 820,
+        "h": 2,
+        "fill": "rule"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 720,
+        "w": 820,
+        "h": 5,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "slot": "title",
+        "x": 540,
+        "y": 760,
+        "w": 700,
+        "font": "numeral",
+        "color": "ink",
+        "align": "left",
+        "preview": "Neon Skyline"
+      },
+      {
+        "t": "text",
+        "slot": "artist",
+        "x": 540,
+        "y": 890,
+        "w": 700,
+        "font": "title",
+        "color": "band.1",
+        "align": "left",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "text",
+        "slot": "meta",
+        "x": 540,
+        "y": 975,
+        "w": 700,
+        "font": "caption",
+        "color": "band.3",
+        "align": "left",
+        "preview": "Side A · Side B"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 1050,
+        "w": 820,
+        "h": 6,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 540,
+        "y": 1090,
+        "w": 700,
+        "font": "caption",
+        "color": "ink",
+        "align": "left",
+        "text": "STEREO · SIDE B"
+      },
+      {
+        "t": "rect",
+        "x": 540,
+        "y": 1170,
+        "w": 14,
+        "h": 70,
+        "fill": "ink"
+      },
+      {
+        "t": "rect",
+        "x": 568,
+        "y": 1170,
+        "w": 6,
+        "h": 70,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 596,
+        "y": 1170,
+        "w": 14,
+        "h": 70,
+        "fill": "ink"
+      },
+      {
+        "t": "rect",
+        "x": 624,
+        "y": 1170,
+        "w": 6,
+        "h": 70,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 652,
+        "y": 1170,
+        "w": 14,
+        "h": 70,
+        "fill": "ink"
+      },
+      {
+        "t": "rect",
+        "x": 680,
+        "y": 1170,
+        "w": 6,
+        "h": 70,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 1272,
+        "w": 820,
+        "h": 8,
+        "fill": "band.0"
+      }
+    ]
+  }
+}

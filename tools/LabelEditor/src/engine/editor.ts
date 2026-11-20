@@ -17,28 +17,50 @@ import {
   DEFAULT_CANVAS,
   defaultTpl,
   importTemplate,
-  migrateBands,
-  migrateFonts,
+  migrateDocData,
   normalizeRoles,
   roleColorOf,
   simText,
   syncSlots,
   tplText,
-  type TemplateDoc,
+  type K7ArtDoc,
 } from "./tpl";
+import {
+  JCARD_FACES,
+  JCARD_FIELDS,
+  JCARD_H,
+  JCARD_SIMS,
+  JCARD_W,
+  jcardSim,
+  jcardSims,
+  migrateJCard,
+  type JCardField,
+} from "./jcard";
 import type {
   Doc,
   DocData,
   FontRec,
   Group,
+  JCardDoc,
+  JCardFocus,
+  JObj,
   Mask,
   Obj,
+  Surface,
   Tpl,
   Tool,
 } from "./types";
 
-export const STORE_KEY = "label-editor.docs.v2";
-export const LEGACY_STORE_KEY = "lvgl-canvas.docs.v1";
+/**
+ * The document store: `v3` is the K7Art document, which carries the J-card. `v2` is the
+ * retired label-editor document and `v1` the one-page builder's; both are read and migrated
+ * on load (docs/specs/k7art.md §8).
+ */
+export const STORE_KEY = "label-editor.docs.v3";
+export const LEGACY_STORE_KEYS = [
+  "label-editor.docs.v2",
+  "lvgl-canvas.docs.v1",
+] as const;
 const OUTSIDE_KEY = "label-editor.outside";
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(lo, n), hi);
@@ -77,6 +99,16 @@ export class Editor {
   groups: Group[] = [];
   mask: Mask | null = null;
   tpl: Tpl = defaultTpl();
+  /** The design's J-card: the other half of the one document, and of every undo step. */
+  jcard: JCardDoc = migrateJCard(undefined, defaultTpl());
+  /**
+   * Which of the one document's two surfaces is active. The model is one: the selection,
+   * the undo, the autosave and the file cover both surfaces; only the stage and the
+   * inspector's sections differ (docs/specs/k7art.md §6).
+   */
+  surface: Surface = "label";
+  /** The J-card's focus: the whole sheet, or one of the flap / spine / cover. */
+  focus: JCardFocus = "sheet";
   sel: Obj | null = null;
   selSet = new Set<number>();
   selGroup: string | null = null;
@@ -140,28 +172,71 @@ export class Editor {
   get selIds(): number[] {
     return this.selSet.size ? [...this.selSet] : this.sel ? [this.sel.id] : [];
   }
+  /** The active surface's prims: the label's layers or the J-card's. */
+  activeObjs(): Obj[] {
+    return this.surface === "jcard" ? (this.jcard.prims as unknown as Obj[]) : this.objs;
+  }
+  /** The active surface's prims, replaced with a new array (a reorder or a deletion). */
+  setActiveObjs(next: Obj[]): void {
+    if (this.surface === "jcard") this.jcard = { ...this.jcard, prims: next as unknown as JObj[] };
+    else this.objs = next;
+  }
+  setSurface(surface: Surface) {
+    if (surface === this.surface) return;
+    this.run = false;
+    this.surface = surface;
+    this.focus = "sheet";
+    // One selection: a layer on the other surface is no longer what the next edit means.
+    this.sel = null;
+    this.selSet = new Set();
+    this.selGroup = null;
+    this.selMask = false;
+    this.emit();
+  }
+  setFocus(focus: JCardFocus) {
+    if (this.surface !== "jcard") {
+      this.run = false;
+      this.surface = "jcard";
+      this.sel = null;
+      this.selSet = new Set();
+      this.selGroup = null;
+      this.selMask = false;
+    }
+    this.focus = focus;
+    this.emit();
+  }
+  isJCard(): boolean {
+    return this.surface === "jcard";
+  }
   selMembers(): Obj[] {
+    const list = this.activeObjs();
     if (this.selGroup && this.sel && this.sel.g === this.selGroup)
-      return this.objs.filter((o) => o.g === this.selGroup);
+      return list.filter((o) => o.g === this.selGroup);
     const ids = this.selIds;
-    return this.objs.filter((o) => ids.includes(o.id));
+    return list.filter((o) => ids.includes(o.id));
   }
   roleColor(r: string): string | null {
-    return roleColorOf(r, this.mask, this.tpl);
+    // The J-card has no LayerMask: its paper is the container's sheet colour, and its roles
+    // are the same eleven.
+    return roleColorOf(r, this.surface === "jcard" ? null : this.mask, this.tpl);
   }
   fillOf(o: Obj): string {
     return (o.role && this.roleColor(o.role)) || (o.type === "text" ? o.tc : o.color) || "#000000";
   }
-  frOf(o: Obj) {
+  frOf(o: Obj, surface: Surface = this.surface) {
+    if (surface === "jcard") {
+      const role = FROLES.includes(o.fr!) ? o.fr! : "caption";
+      return this.jcard.fonts[role];
+    }
     return this.tpl.fonts[FROLES.includes(o.fr!) ? o.fr! : "caption"];
   }
-  ffOf(o: Obj): string {
-    const f = this.frOf(o);
+  ffOf(o: Obj, surface: Surface = this.surface): string {
+    const f = this.frOf(o, surface);
     return f ? f.ff : (o.ff ?? "");
   }
-  pxOf(o: Obj): number {
-    const f = this.frOf(o);
-    return f ? f.px : (o.font ?? 20);
+  pxOf(o: Obj, surface: Surface = this.surface): number {
+    const f = this.frOf(o, surface);
+    return f ? ("px" in f ? f.px : f.size) : (o.font ?? 20);
   }
   apOf(): Obj | null {
     return this.objs.find((o) => o.ap && o.type === "rect") || null;
@@ -169,11 +244,25 @@ export class Editor {
   simOf(id: string): string {
     return this.tpl.sim[id] !== undefined ? this.tpl.sim[id] : (slotOf(id)?.sim ?? "");
   }
-  simText(o: Obj): string {
+  simText(o: Obj, surface: Surface = this.surface): string {
+    if (surface === "jcard")
+      return o.static
+        ? (o.text ?? "")
+        : o.sim !== undefined && o.sim !== ""
+          ? o.sim
+          : (jcardSim(this.jcard, o.name as JCardField) || "");
     return simText(o, this.tpl);
+  }
+  /** What the Fields panel shows for one J-card field: the document's own test value. */
+  jcardSim(field: JCardField): string {
+    return jcardSims(this.jcard)[field] ?? JCARD_SIMS[field];
   }
   outOfSpace(o: Obj): boolean {
     if (o.ap) return false;
+    if (this.surface === "jcard") {
+      const h = o.type === "text" ? Math.round(this.pxOf(o) * 1.2) : (o.h || 0);
+      return o.x < 0 || o.y < 0 || o.x + o.w > JCARD_W || o.y + h > JCARD_H;
+    }
     if (o.type === "text") {
       if (o.x < 0 || o.x + o.w > PRINT_W) return true;
       const ink = this.textInk(o);
@@ -197,13 +286,14 @@ export class Editor {
     return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
   }
   blockOf(o: Obj) {
-    const i = this.objs.indexOf(o);
+    const list = this.activeObjs();
+    const i = list.indexOf(o);
     if (i < 0) return { lo: 0, hi: -1 };
     if (!o.g) return { lo: i, hi: i };
     let lo = i;
     let hi = i;
-    while (lo > 0 && this.objs[lo - 1].g === o.g) lo--;
-    while (hi < this.objs.length - 1 && this.objs[hi + 1].g === o.g) hi++;
+    while (lo > 0 && list[lo - 1].g === o.g) lo--;
+    while (hi < list.length - 1 && list[hi + 1].g === o.g) hi++;
     return { lo, hi };
   }
   maskRange(): { lo: number; hi: number } | null {
@@ -212,16 +302,16 @@ export class Editor {
       .filter((i) => i >= 0);
     return idx.length ? { lo: idx[0], hi: idx[idx.length - 1] } : null;
   }
-  private textHeight(o: Obj): number {
-    return Math.round(this.pxOf(o) * 1.2);
+  private textHeight(o: Obj, surface: Surface = this.surface): number {
+    return Math.round(this.pxOf(o, surface) * 1.2);
   }
-  private textFont(o: Obj): string {
-    return `${this.pxOf(o)}px "${this.ffOf(o)}", sans-serif`;
+  private textFont(o: Obj, surface: Surface = this.surface): string {
+    return `${this.pxOf(o, surface)}px "${this.ffOf(o, surface)}", sans-serif`;
   }
-  private inkOf(o: Obj) {
+  private inkOf(o: Obj, surface: Surface = this.surface) {
     this.mctx = this.mctx || document.createElement("canvas").getContext("2d");
     if (!this.mctx) return null;
-    this.mctx.font = this.textFont(o);
+    this.mctx.font = this.textFont(o, surface);
     return this.mctx.measureText(o.text || "");
   }
   /**
@@ -230,9 +320,9 @@ export class Editor {
    */
   textInk(o: Obj): { top: number; bottom: number } | null {
     if (o.type !== "text" || !o.static || !(o.text || "").trim()) return null;
-    const m = this.inkOf(o);
+    const m = this.inkOf(o, "label");
     if (!m) return null;
-    const px = this.pxOf(o);
+    const px = this.pxOf(o, "label");
     const asc = m.fontBoundingBoxAscent !== undefined ? m.fontBoundingBoxAscent : px * 0.8;
     const inkAsc = m.actualBoundingBoxAscent || asc;
     const inkDesc = m.actualBoundingBoxDescent || 0;
@@ -245,15 +335,15 @@ export class Editor {
    * measured and its layer moved by the same amount, which leaves the glyphs where they
    * were and makes the box, the selection and the out-of-print mark hug the text.
    */
-  fitStaticText(): boolean {
+  fitStaticText(list: Obj[] = this.objs, surface: Surface = "label"): boolean {
     let dirty = false;
-    for (const o of this.objs) {
+    for (const o of list) {
       if (o.type !== "text" || !o.static) continue;
       const txt = o.text || "";
       if (!txt.trim()) continue;
       this.mctx = this.mctx || document.createElement("canvas").getContext("2d");
       if (!this.mctx) continue;
-      this.mctx.font = this.textFont(o);
+      this.mctx.font = this.textFont(o, surface);
       const ink = Math.ceil(this.mctx.measureText(txt).width) + 1;
       if (Math.abs(ink - o.w) < 1) continue;
       const d = o.w - ink;
@@ -302,22 +392,25 @@ export class Editor {
 
   // ---- documents: several open at once, persisted to localStorage ----
   private docNew(name: string, data?: DocData): Doc {
+    // A stored document, or the one a new tab starts from, is migrated the moment it is
+    // opened: the K7Art id, the paper, and the J-card a document without one gets.
+    const d: DocData =
+      data ||
+      ({
+        w: PRINT_W,
+        h: PRINT_H,
+        bg: DEFAULT_CANVAS,
+        bgs: [DEFAULT_CANVAS],
+        bgi: 0,
+        objs: [],
+        nid: 0,
+        mask: { color: "#c7a867", radius: 10, collapsed: false },
+        tpl: defaultTpl(),
+      } as DocData);
     return {
       id: uid(),
       name,
-      data:
-        data ||
-        ({
-          w: PRINT_W,
-          h: PRINT_H,
-          bg: DEFAULT_CANVAS,
-          bgs: [DEFAULT_CANVAS],
-          bgi: 0,
-          objs: [],
-          nid: 0,
-          mask: { color: "#c7a867", radius: 10, collapsed: false },
-          tpl: defaultTpl(),
-        } as DocData),
+      data: migrateDocData(d),
       undo: [],
       redo: [],
       cur: null,
@@ -337,6 +430,7 @@ export class Editor {
       groups: this.groups,
       mask: this.mask,
       tpl: this.tpl,
+      jcard: this.jcard,
     };
     d.undo = this.undo;
     d.redo = this.redo;
@@ -346,7 +440,7 @@ export class Editor {
     let st: { active?: number; docs?: Array<{ id: string; name: string; data: DocData }> } | null =
       null;
     // A document made in the one-page builder opens here: same shape, new key.
-    for (const key of [STORE_KEY, LEGACY_STORE_KEY]) {
+    for (const key of [STORE_KEY, ...LEGACY_STORE_KEYS]) {
       try {
         const raw = localStorage.getItem(key);
         if (!raw) continue;
@@ -429,19 +523,19 @@ export class Editor {
     ];
   }
   applyDoc(d: Doc) {
-    const canvas = canvasOf(d.data);
+    const data = migrateDocData(d.data);
+    const canvas = canvasOf(data);
     this.bgs = canvas.backgrounds;
     this.bgi = canvas.active;
     this.bg = this.bgs[this.bgi] ?? DEFAULT_CANVAS;
-    this.objs = d.data.objs;
-    this.nid = d.data.nid || 0;
-    this.groups = d.data.groups || [];
-    this.mask = d.data.mask || null;
+    this.objs = data.objs;
+    this.nid = data.nid || 0;
+    this.groups = data.groups || [];
+    this.mask = data.mask || null;
     this.selMask = false;
     this.fixMask();
-    this.tpl = d.data.tpl || defaultTpl();
-    migrateFonts(this.tpl);
-    migrateBands(this.tpl);
+    this.tpl = data.tpl || defaultTpl();
+    this.jcard = migrateJCard(data.jcard, this.tpl);
     normalizeRoles(this.objs, this.mask, this.tpl);
     this.undo = d.undo;
     this.redo = d.redo;
@@ -473,7 +567,7 @@ export class Editor {
     if (this.saveT) clearTimeout(this.saveT);
     this.saveT = setTimeout(() => this.persist(), 300);
   }
-  freeTplId(base = "label.untitled"): string {
+  freeTplId(base = "k7.untitled"): string {
     const used = new Set(
       [...this.docs.map((d) => d.data && d.data.tpl && d.data.tpl.id), this.tpl && this.tpl.id].filter(
         Boolean,
@@ -489,11 +583,13 @@ export class Editor {
     const d = this.docNew(name || `Untitled ${this.docs.length + 1}`, data);
     if (!d.data.tpl) d.data.tpl = defaultTpl();
     d.data.tpl.id = this.freeTplId(
-      d.data.tpl.id === defaultTpl().id ? "label.untitled" : d.data.tpl.id,
+      d.data.tpl.id === defaultTpl().id ? "k7.untitled" : d.data.tpl.id,
     );
     this.docs.push(d);
     this.active = this.docs.length - 1;
     this.applyDoc(this.docs[this.active]);
+    this.surface = "label";
+    this.focus = "sheet";
     this.commit(false);
     this.emit();
     this.persist();
@@ -537,6 +633,7 @@ export class Editor {
       groups: this.groups,
       mask: this.mask,
       tpl: this.tpl,
+      jcard: this.jcard,
     });
   }
   commit(coalesce: boolean) {
@@ -568,6 +665,7 @@ export class Editor {
       groups?: Group[];
       mask?: Mask | null;
       tpl?: Tpl;
+      jcard?: JCardDoc;
     };
     const canvas = canvasOf(d);
     this.bgs = canvas.backgrounds;
@@ -578,8 +676,10 @@ export class Editor {
     this.mask = d.mask || null;
     if (!this.mask) this.selMask = false;
     this.tpl = d.tpl || defaultTpl();
-    this.sel = this.sel ? this.objs.find((o) => o.id === this.sel!.id) || null : null;
-    this.selSet = new Set([...this.selSet].filter((id) => this.objs.some((o) => o.id === id)));
+    this.jcard = migrateJCard(d.jcard, this.tpl);
+    const list = this.activeObjs();
+    this.sel = this.sel ? list.find((o) => o.id === this.sel!.id) || null : null;
+    this.selSet = new Set([...this.selSet].filter((id) => list.some((o) => o.id === id)));
     this.schedulePersist();
     this.emit();
   }
@@ -603,14 +703,40 @@ export class Editor {
   }
   pasteAct() {
     if (!this.clip || this.run) return;
+    const jcard = this.surface === "jcard";
     const o = {
       ...JSON.parse(JSON.stringify(this.clip)),
-      id: ++this.nid,
-      name: this.clip.name ? `${this.clip.name}_copy` : "",
+      id: this.nextId(),
+      // A J-card field is one of three, so a pasted dynamic text keeps its field; a label
+      // Slot gets the `_copy` suffix it always has, and the check below makes it static.
+      name: jcard ? this.clip.name : this.clip.name ? `${this.clip.name}_copy` : "",
       label: this.clip.label ? `${this.clip.label} copy` : "",
       locked: false,
       g: undefined,
     } as Obj;
+    if (jcard && o.name && !o.static) delete o.text;
+    if (this.surface === "jcard") {
+      delete o.m;
+      delete o.ap;
+      delete o.note;
+      delete o.color;
+      delete o.tc;
+      delete o.ff;
+      delete o.font;
+      delete o.s;
+    }
+    // A copied dynamic text may name the other surface's vocabulary. It becomes static
+    // rather than a design Export refuses.
+    if (o.type === "text" && !o.static) {
+      const valid = this.surface === "jcard"
+        ? JCARD_FIELDS.includes(o.name as JCardField)
+        : !!slotOf(o.name);
+      if (!valid) {
+        o.static = true;
+        o.text = o.text || o.sim || o.name || "Text";
+        o.name = "";
+      }
+    }
     this.insertNew(o);
     this.sel = o;
     this.selSet = new Set();
@@ -625,28 +751,44 @@ export class Editor {
     this.emit();
   }
   add(t: Tool, p: { x: number; y: number }) {
-    const type = t === "square" ? "rect" : t;
+    const jcard = this.surface === "jcard";
+    const kind = t === "text" ? "text" : "rect";
     const [w, hh] = SZ[t];
-    const o: Obj = {
-      id: ++this.nid,
-      type: type === "text" ? "text" : "rect",
-      name: "",
-      x: Math.round(p.x),
-      y: Math.round(p.y),
-      w,
-      h: hh,
-      color: PAL[this.nid % PAL.length],
-      r: 8,
-      text: "Text",
-      font: 20,
-      tc: "#151515",
-      ff: "",
-      static: type === "text" ? true : undefined,
-      role: type === "text" ? "ink" : "band.0",
-      fr: type === "text" ? "caption" : undefined,
-    };
+    const o: Obj = jcard
+      ? {
+          id: this.nextId(),
+          type: t === "circle" ? "circle" : kind,
+          name: "",
+          x: Math.round(p.x),
+          y: Math.round(p.y),
+          w: t === "text" ? 400 : w,
+          h: t === "text" ? undefined : hh,
+          r: 8,
+          text: "Text",
+          static: t === "text" ? true : undefined,
+          role: t === "text" ? "ink" : "band.0",
+          fr: t === "text" ? "caption" : undefined,
+        }
+      : {
+          id: this.nextId(),
+          type: t === "circle" ? "circle" : kind,
+          name: "",
+          x: Math.round(p.x),
+          y: Math.round(p.y),
+          w,
+          h: hh,
+          color: PAL[this.nid % PAL.length],
+          r: 8,
+          text: "Text",
+          font: 20,
+          tc: "#151515",
+          ff: "",
+          static: kind === "text" ? true : undefined,
+          role: kind === "text" ? "ink" : "band.0",
+          fr: kind === "text" ? "caption" : undefined,
+        };
     if (t === "circle") o.type = "circle";
-    if (this.mask) o.m = true;
+    if (!jcard && this.mask) o.m = true;
     this.insertNew(o);
     this.sel = o;
     this.selSet = new Set();
@@ -654,6 +796,14 @@ export class Editor {
     this.tool = "select";
     this.commit(false);
     this.emit();
+  }
+  /** The active surface's next layer id: label ids and J-card ids are independent. */
+  private nextId(): number {
+    if (this.surface === "jcard") {
+      this.jcard.nid += 1;
+      return this.jcard.nid;
+    }
+    return ++this.nid;
   }
   pointerDown(hit: Hit, p: { x: number; y: number }, mods: { add: boolean }) {
     if (this.run) return;
@@ -680,7 +830,7 @@ export class Editor {
       this.emit();
       return;
     }
-    const obj = this.objs.find((o) => o.id === hit.id);
+    const obj = this.activeObjs().find((o) => o.id === hit.id);
     if (!obj) return;
     if (mods.add) {
       if (!this.selSet.size && this.sel) this.selSet.add(this.sel.id);
@@ -811,12 +961,16 @@ export class Editor {
     if (!this.mask) this.objs.forEach((o) => delete o.m);
   }
   insertNew(o: Obj) {
+    if (this.surface === "jcard") {
+      (this.jcard.prims as unknown as Obj[]).push(o);
+      return;
+    }
     const mr = this.mask && o.m ? this.maskRange() : null;
     if (mr) this.objs.splice(mr.hi + 1, 0, o);
     else this.objs.push(o);
   }
   setMembers(list: Obj[], flag: boolean) {
-    if (!this.mask) return;
+    if (!this.mask || this.surface !== "label") return;
     const S = new Set<Obj>();
     list.forEach((o) => {
       S.add(o);
@@ -845,13 +999,17 @@ export class Editor {
     this.emit();
   }
   toggleSelMembers() {
+    if (this.surface !== "label") return;
     const ids = this.selIds;
     const list = this.objs.filter((o) => ids.includes(o.id));
     if (!list.length) return;
     this.setMembers(list, !list.every((o) => o.m));
   }
   addMask() {
-    this.mask = { color: PALETTE[7].c, radius: 10, collapsed: false };
+    if (this.surface !== "label") return;
+    // The paper is the container's: a design that had no mask still had a paper ink, and the
+    // mask it adds is that same paper.
+    this.mask = { color: this.tpl.inks.paper || PALETTE[7].c, radius: 10, collapsed: false };
     this.objs.forEach((o) => (o.m = true));
     this.selMask = true;
     this.sel = null;
@@ -860,6 +1018,7 @@ export class Editor {
     this.emit();
   }
   removeMask() {
+    if (this.surface !== "label") return;
     this.mask = null;
     this.objs.forEach((o) => delete o.m);
     this.selMask = false;
@@ -867,6 +1026,7 @@ export class Editor {
     this.emit();
   }
   toggleMask() {
+    if (this.surface !== "label") return;
     if (this.mask) this.removeMask();
     else this.addMask();
   }
@@ -881,6 +1041,22 @@ export class Editor {
     return true;
   }
   moveBlock(a: number, b: number, insertAt: number, flag?: boolean, gid?: string | null) {
+    if (this.surface === "jcard") {
+      // The J-card has no groups and no LayerMask: a block is one layer, reordered.
+      const arr = this.activeObjs();
+      if (a < 0 || b >= arr.length || a > b) return;
+      const block = arr.slice(a, b + 1);
+      if (block.some((o) => o.locked)) return;
+      const next = [...arr];
+      next.splice(a, block.length);
+      next.splice(insertAt > b ? insertAt - block.length : insertAt, 0, ...block);
+      this.setActiveObjs(next);
+      this.sel = block[block.length - 1];
+      this.selSet = new Set();
+      this.commit(false);
+      this.emit();
+      return;
+    }
     if (a < 0 || b >= this.objs.length || a > b) return;
     const block = this.objs.slice(a, b + 1);
     if (block.some((o) => o.locked)) return;
@@ -943,6 +1119,7 @@ export class Editor {
     this.moveBlock(s, s, insertAt);
   }
   groupWhy(): string {
+    if (this.surface !== "label") return "Groups belong to the label's LayerMask, not the J-card.";
     const ids = this.selIds;
     const mem = this.objs.filter((o) => ids.includes(o.id));
     if (mem.length < 2) return "Select two or more layers first (Cmd-click them in Layers).";
@@ -958,6 +1135,7 @@ export class Editor {
     return "";
   }
   groupSel() {
+    if (this.surface !== "label") return;
     if (this.groupWhy()) return;
     const ids = this.selIds;
     const mem = this.objs.filter((o) => ids.includes(o.id));
@@ -976,6 +1154,7 @@ export class Editor {
     this.emit();
   }
   ungroupSel() {
+    if (this.surface !== "label") return;
     const ids = this.selIds;
     const gids = new Set(this.objs.filter((o) => o.g && ids.includes(o.id)).map((o) => o.g!));
     if (!gids.size) return;
@@ -1009,6 +1188,18 @@ export class Editor {
   }
   mv(d: 1 | -1) {
     if (!this.sel) return;
+    if (this.surface === "jcard") {
+      const arr = this.activeObjs();
+      const i = arr.indexOf(this.sel);
+      const j = i + d;
+      if (i < 0 || j < 0 || j >= arr.length) return;
+      const next = [...arr];
+      [next[i], next[j]] = [next[j], next[i]];
+      this.setActiveObjs(next);
+      this.commit(false);
+      this.emit();
+      return;
+    }
     const b = this.blockOf(this.sel);
     const mr = this.maskRange();
     if (d > 0) {
@@ -1030,10 +1221,12 @@ export class Editor {
   }
   delSel() {
     const ids = this.selIds;
-    const targets = this.objs.filter((o) => ids.includes(o.id) && !o.locked);
+    const list = this.activeObjs();
+    const targets = list.filter((o) => ids.includes(o.id) && !o.locked);
     if (!targets.length) return;
-    this.objs = this.objs.filter((o) => !targets.includes(o));
-    this.groups = this.groups.filter((g) => this.objs.some((o) => o.g === g.id));
+    this.setActiveObjs(list.filter((o) => !targets.includes(o)));
+    if (this.surface === "label")
+      this.groups = this.groups.filter((g) => this.objs.some((o) => o.g === g.id));
     this.sel = null;
     this.selSet = new Set();
     this.selGroup = null;
@@ -1077,6 +1270,7 @@ export class Editor {
     this.emit();
   }
   selectMask() {
+    if (this.surface !== "label") return;
     this.selMask = true;
     this.sel = null;
     this.selSet = new Set();
@@ -1084,8 +1278,9 @@ export class Editor {
     this.emit();
   }
   /** Select one or more layers by id, as a Cmd-click selection would. */
-  selectLayers(ids: number[]) {
-    const mem = this.objs.filter((o) => ids.includes(o.id));
+  selectLayers(ids: number[], surface?: Surface) {
+    if (surface && surface !== this.surface) this.setSurface(surface);
+    const mem = this.activeObjs().filter((o) => ids.includes(o.id));
     if (!mem.length) return;
     this.selSet = new Set(mem.map((o) => o.id));
     this.sel = mem[mem.length - 1];
@@ -1117,6 +1312,9 @@ export class Editor {
   }
   setRoleColor(role: string, c: string, coalesce = true) {
     if (role === "paper") {
+      // One paper on both media: the mask's colour is the container's, and a design without a
+      // mask still carries it for the J-card.
+      this.tpl.inks.paper = c;
       if (this.mask) this.mask.color = c;
     } else if (role === "ink") this.tpl.inks.ink = c;
     else if (role === "rule") this.tpl.inks.rule = c;
@@ -1130,6 +1328,7 @@ export class Editor {
     else if (k === "ink") this.tpl.inks.ink = v;
     else if (k === "rule") this.tpl.inks.rule = v;
     else if (k === "paper") {
+      this.tpl.inks.paper = v;
       if (this.mask) this.mask.color = v;
     } else if (k.startsWith("band")) this.tpl.inks.band[+k.slice(4)] = v;
     else if (k.startsWith("ff:")) {
@@ -1154,10 +1353,44 @@ export class Editor {
     this.commit(true);
     this.emit();
   }
+  /** One of the J-card's three type sizes (4..640 units), and optionally its face. */
+  setJCardFont(role: keyof JCardDoc["fonts"], patch: { ff?: string; size?: number }) {
+    const cur = this.jcard.fonts[role];
+    if (!cur) return;
+    if (patch.ff !== undefined && !JCARD_FACES.includes(patch.ff))
+      throw new Error(`jcard: font role ${role} is "${patch.ff}", and the J-card wears the container's three faces`);
+    if (patch.size !== undefined) {
+      const size = Math.round(patch.size);
+      if (!Number.isInteger(size) || size < 4 || size > 640)
+        throw new Error(`jcard: font role ${role} size ${patch.size} is outside 4..640 units`);
+    }
+    if (patch.ff !== undefined) cur.ff = patch.ff;
+    if (patch.size !== undefined) cur.size = Math.round(patch.size);
+    this.jcard = { ...this.jcard, fonts: this.jcard.fonts };
+    this.commit(true);
+    this.emit();
+  }
+  /** What a J-card field previews: the Fields panel's value, shared by every text on it. */
+  setJCardSim(field: JCardField, v: string) {
+    const sims = { ...jcardSims(this.jcard) };
+    if (v.trim() === "") sims[field] = JCARD_SIMS[field];
+    else sims[field] = v;
+    this.jcard = { ...this.jcard, sims };
+    // The field's value is the panel's; a per-layer test value would otherwise keep previewing
+    // the old one.
+    this.jcard.prims.forEach((o) => {
+      if (!o.static && o.name === field) delete o.sim;
+    });
+    this.commit(true);
+    this.emit();
+  }
   setMaskField(k: "color" | "radius", v: string | number) {
     if (!this.mask) return;
     if (k === "radius") this.mask.radius = +v || 0;
-    else this.mask.color = String(v);
+    else {
+      this.mask.color = String(v);
+      this.tpl.inks.paper = this.mask.color;
+    }
     this.commit(true);
     this.emit();
   }
@@ -1217,6 +1450,8 @@ export class Editor {
   }
   setRun(run: boolean) {
     this.run = run;
+    // The LVGL preview is the label's: the J-card is drawn in the DOM.
+    if (run) this.surface = "label";
     this.sel = null;
     this.selSet = new Set();
     this.selGroup = null;
@@ -1231,16 +1466,49 @@ export class Editor {
     this.emit();
   }
 
-  // ---- the template as a file ----
-  buildTemplate(): { doc: TemplateDoc; errs: string[] } {
+  // ---- the K7Art as a file ----
+  buildTemplate(): { doc: K7ArtDoc; errs: string[] } {
     // A static text's box hugs its ink: settle it before the file is written, so Export
-    // never carries a width the canvas has not measured.
-    this.fitStaticText();
+    // never carries a width the canvas has not measured. The label's rule is the label's:
+    // a J-card text keeps its wrap width.
+    this.fitStaticText(this.objs, "label");
     syncSlots(this.objs, this.tpl);
-    return buildTemplate(this.objs, this.mask, this.tpl, {
-      backgrounds: this.bgs,
-      active: this.bgi,
+    return buildTemplate(
+      this.objs,
+      this.mask,
+      this.tpl,
+      { backgrounds: this.bgs, active: this.bgi },
+      this.jcard,
+    );
+  }
+  /** Build a named subset of the open documents, for Publish and its tools. */
+  buildSelected(indices: number[]): {
+    built: Array<{ i: number; doc: K7ArtDoc }>;
+    errs: string[];
+  } {
+    const back = this.active;
+    const built: Array<{ i: number; doc: K7ArtDoc }> = [];
+    const errs: string[] = [];
+    for (const i of [...new Set(indices)].sort((a, b) => a - b)) {
+      if (!this.docs[i]) {
+        errs.push(`no open document at index ${i}`);
+        continue;
+      }
+      if (i !== this.active) this.switchDoc(i);
+      const r = this.buildTemplate();
+      if (r.errs.length) errs.push(...r.errs.map((e) => `${this.docs[i].name}: ${e}`));
+      else built.push({ i, doc: r.doc });
+    }
+    if (this.active !== back) this.switchDoc(back);
+    const seen: Record<string, number> = {};
+    built.forEach((b) => {
+      if (seen[b.doc.id] !== undefined)
+        errs.push(
+          `duplicate id ${b.doc.id}: ${this.docs[seen[b.doc.id]].name} and ${this.docs[b.i].name}. Change the Id in Design of one of them.`,
+        );
+      else seen[b.doc.id] = b.i;
     });
+    return { built, errs };
   }
   templateText(): string {
     return tplText(this.buildTemplate().doc);
@@ -1248,6 +1516,9 @@ export class Editor {
   importTemplate(text: string) {
     const r = importTemplate(text, PALETTE[7].c);
     this.tpl = r.tpl;
+    this.jcard = r.jcard;
+    this.surface = "label";
+    this.focus = "sheet";
     this.bgs = r.canvas.backgrounds;
     this.bgi = r.canvas.active;
     this.bg = this.bgs[this.bgi] ?? DEFAULT_CANVAS;
@@ -1273,30 +1544,20 @@ export class Editor {
       syncSlots(objs, tpl);
       return {
         name: d.name,
-        errs: buildTemplate(objs, d.data.mask ?? null, tpl, canvasOf(d.data)).errs,
+        errs: buildTemplate(
+          objs,
+          d.data.mask ?? null,
+          tpl,
+          canvasOf(d.data),
+          migrateJCard(d.data.jcard, tpl),
+        ).errs,
       };
     });
   }
 
   /** Every open document, validated together; refused as a whole if any has errors. */
-  buildAll(): { built: Array<{ i: number; doc: TemplateDoc }>; errs: string[] } {
-    const built: Array<{ i: number; doc: TemplateDoc }> = [];
-    const errs: string[] = [];
-    for (let i = 0; i < this.docs.length; i++) {
-      if (i !== this.active) this.switchDoc(i);
-      const r = this.buildTemplate();
-      if (r.errs.length) errs.push(...r.errs.map((e) => `${this.docs[i].name}: ${e}`));
-      else built.push({ i, doc: r.doc });
-    }
-    const seen: Record<string, number> = {};
-    built.forEach((b) => {
-      if (seen[b.doc.id] !== undefined)
-        errs.push(
-          `duplicate id ${b.doc.id}: ${this.docs[seen[b.doc.id]].name} and ${this.docs[b.i].name}. Change the Id in Design of one of them.`,
-        );
-      else seen[b.doc.id] = b.i;
-    });
-    return { built, errs };
+  buildAll(): { built: Array<{ i: number; doc: K7ArtDoc }>; errs: string[] } {
+    return this.buildSelected(this.docs.map((_, i) => i));
   }
 
   // ---- the LVGL preview: real LVGL (v9.6) compiled to WebAssembly ----
@@ -1378,7 +1639,7 @@ export class Editor {
             o.y,
             o.w,
             e.fid,
-            this.pxOf(o),
+            this.pxOf(o, "label"),
             hex(e.color),
             Math.round((o.s || 1) * 256),
             r10(o),
@@ -1427,10 +1688,11 @@ export class Editor {
     ctx.putImageData(img, 0, 0);
   }
   eff(o: Obj): { text: string; color: string; fid: number } {
+    // The LVGL preview is the label's, whatever surface the page is on.
     const r = this.rv[o.id] || {};
-    const f = this.fonts.find((x) => x.name === this.ffOf(o));
+    const f = this.fonts.find((x) => x.name === this.ffOf(o, "label"));
     return {
-      text: r.text ?? this.simText(o),
+      text: r.text ?? this.simText(o, "label"),
       color: r.color ?? this.fillOf(o),
       fid: r.font ?? f?.id ?? 0,
     };

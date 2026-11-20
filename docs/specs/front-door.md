@@ -439,6 +439,12 @@ the server did send. Test says that when it is the reason, names the origin to a
 that adds it, and never calls a running Provider unreachable (ADR 0056). The recipe is in
 `web/README.md`.
 
+**Art packs.** The page also installs a user's **K7Art pack**: the file picker takes a
+`.k7artpack`, the page shows its designs, the upload goes to `POST /api/art`, and **Reset to
+factory** clears it. The device needs the `local-network` grant and the player's art route to
+answer; with the card in the reader, or no player, the page says so and offers no upload. The
+pack's format, its checks and the pool are [`art-packs.md`](./art-packs.md) §4.
+
 ---
 
 ## 5. What the page reads, and from where
@@ -450,7 +456,9 @@ that adds it, and never calls a running Provider unreachable (ADR 0056). The rec
 | Titles, artists, albums | this browser's `xtape-media` cache | "not measured", with Process |
 | One track's measurements | `library_track` over `/mcp` | a dash, not an error |
 | Playlists, the selection | the selected card: the player's `GET /api/playlists` for the Device card, the card's own `k7.playlists/` otherwise | this browser's pending edits, and the page says the card is not open |
-| Covers | this browser's `xtape-media` store | placeholder tile, never an error |
+| Covers | this browser's `xtape-media` store, else the active pool's J-card | the factory J-card, never an error |
+| The active K7Art pack, the factory count | `GET /api/art` | no device: the factory J-cards only, and the page says the pack is unreachable |
+| The active pack's J-cards | `GET /api/art/pack`, cached once per pack | the factory's bundled J-cards |
 | Videos | the Invidious **Instance** | a note and the setting |
 | A sentence's filters | the **Provider** | the filter form alone |
 
@@ -463,7 +471,10 @@ are the only source of names.
 
 - The cassette on the panel, `/stream`, `/library`, the Snapshot flow and the existing MCP tools.
 - The global premise: the device still serves no Track and accepts none. A page is not a Track,
-  and the card still leaves only as the live stream.
+  and the card still leaves only as the live stream. An art pack is not a Track either:
+  `POST /api/art` writes a bounded, CRC-checked art blob to flash, the device reads it in place
+  and serves it read-only ([`art-packs.md`](./art-packs.md) §7, ADR 0111). It never touches the
+  SD card.
 - The host build's composition: it runs the same services, on the hand-written backend.
 - The panel's Menu browses the library tree and walks the card's Playlists; nothing on the
   cassette screen names the selected Playlist
@@ -481,6 +492,8 @@ are the only source of names.
 | An upload that is not a snapshot, or is a version this reader refuses | The reader's reason, `400`, partition untouched |
 | An upload larger than the route allows | `413` before the body is read |
 | An image from an older format version | Refused as an unknown version; the running snapshot is untouched |
+| An art upload larger than the pack's 1 MB bound | `413` before the body is read |
+| An art pack whose header, CRC or sheet fails | `422` with the reason; nothing is written; the factory stays |
 | The device restarts after an upload | The reply is written first; the reader re-opens the new image at boot |
 | A selected Playlist disappears from a new image | Falls back to the tree's order, reported in status |
 | A Playlist row's file is gone or resized | Skipped at playback; shown as missing in the editor |

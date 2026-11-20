@@ -5,7 +5,8 @@ import { openFile } from "@/engine/actions";
 import type { Editor } from "@/engine/editor";
 
 /**
- * Import one or more `.json` files: a `label-template v1` design, or an editor document.
+ * Import one or more `.json` files: a K7Art, a retired `label-template v1` design, or an
+ * editor document. A retired template is migrated into a K7Art on the way in.
  * A file the editor refuses is reported and nothing is left behind; several files open in
  * order, each in its own tab.
  */
@@ -21,7 +22,7 @@ export function useImport(
       if (!list.length) {
         toast.error("That is not a JSON file", {
           description:
-            "Import a label template (label-template v1) or an editor document (.lvgl.json).",
+            "Import a K7Art, a retired label template or an editor document (.lvgl.json).",
         });
         return;
       }

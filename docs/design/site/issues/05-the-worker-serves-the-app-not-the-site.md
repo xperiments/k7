@@ -9,7 +9,7 @@
   replaced.
 - The Site registers `/sw.js` itself, so an install offered on `/` has the worker Chrome
   requires even when the visitor has never opened `/app`.
-- `web/vercel.json`: `/` and `/app.html` on `no-cache` with `sw.js` and the manifest; `/assets/`
+- `vercel.json`: `/` and `/app.html` on `no-cache` with `sw.js` and the manifest; `/assets/`
   stays `immutable`; the `/app` rewrite from ticket 01 is the only rewrite.
 - The worker's cache version changes, so an old installed worker drops its `/`-as-shell cache
   instead of serving the Site under the App's name.
@@ -25,7 +25,7 @@
       `/assets/`, and no `COOP`.
 - [ ] An existing install survives the change: the icon opens `/app`, not the Site.
 
-**Files:** `web/public/sw.js`, `web/vercel.json`, `web/src/pwa.ts`, the Site's entry (the
+**Files:** `web/public/sw.js`, `vercel.json`, `web/src/pwa.ts`, the Site's entry (the
 registration).
 
 **Tests:** k7-site.md T8; the existing worker tests.

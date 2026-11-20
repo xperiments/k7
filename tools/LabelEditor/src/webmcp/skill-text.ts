@@ -6,6 +6,6 @@
  * (jiti) to regenerate the skill's tool reference, and a `?raw` import would not resolve
  * there. The page passes the text in; the registry stays plain TypeScript.
  */
-import skillText from "../../skills/k7-labels/SKILL.md?raw";
+import skillText from "../../skills/k7-art/SKILL.md?raw";
 
 export const SKILL_TEXT = skillText;

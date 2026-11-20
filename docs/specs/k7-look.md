@@ -442,12 +442,13 @@ The Player page keeps a case beside the device's own cassette screen (K29): the 
 frame and sheen, not a second drawing. Where the two stand side by side the case is the screen's
 height; below that breakpoint they stack, and the case keeps the shelf's width.
 
-An album with no picture is still drawn: its face is one of the cassette case reference's five
-covers — a gradient with a ring, colour bands with a cream box, an off-white with a colour
-rule, a retro sunburst, a dark grid — seeded by its name, with its title, artist and cassette
-meta. The case, its `hueOf` colour, geometry, masks and timing are unchanged; the drawn face is
-cover art inside the preserved case, and its words hide when the face is too small to carry
-them. The same face fills the album card and the player bar's mini case.
+An album with no picture is still drawn: its face is the **J-card** the active pool carries —
+the factory J-cards and a user pack's, seeded by the album's name, with its title, artist and
+meta ([`art-packs.md`](./art-packs.md) §6). The J-card's cover part fills the case front, the
+album card (centre-cropped to the design's safe square) and the player bar's mini case; its spine
+part fills the shelf's left face. A real cover picture still wins. The case, its `hueOf` colour,
+geometry, masks and timing are unchanged; the drawn face is cover art inside the preserved case,
+and its words hide when the face is too small to carry them.
 Every face of every case carries the sheen, so a spine has the same moulded gloss as a front.
 A case under the pointer comes towards the reader — a side case 10rem, the active front
 4rem — while the row steps back and turns towards the hovered side; the left and right turns

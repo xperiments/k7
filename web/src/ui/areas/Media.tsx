@@ -61,7 +61,7 @@ export function AlbumCard({ album }: { album: Album }) {
           cover={album.cover}
           initial={album.album}
           art={{ title: album.album, artist }}
-          className="aspect-[16/25]"
+          className="aspect-square"
         />
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-sm font-medium">{album.album}</span>
@@ -241,7 +241,7 @@ function ShelfView({
      whether or not it is. */
   const notice = state.loading ? (
     <div className="flex justify-center py-6">
-      <Skeleton className="aspect-[16/25] w-40" />
+      <Skeleton className="aspect-square w-40" />
     </div>
   ) : !hasAlbums ? (
     <NoAlbums reachable={state.reachable} />

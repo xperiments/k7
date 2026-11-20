@@ -15,7 +15,7 @@ import {
 
 // The skill ships with the app: `src/webmcp` is two levels below `tools/LabelEditor`.
 const skillPath = fileURLToPath(
-  new URL("../../skills/k7-labels/SKILL.md", import.meta.url),
+  new URL("../../skills/k7-art/SKILL.md", import.meta.url),
 );
 const skill = readFileSync(skillPath, "utf8");
 const tools = labelEditorTools({} as Editor, { guide: skill });
@@ -54,12 +54,12 @@ describe("the K7 label skill", () => {
   });
 
   it("hands an agent the guide as a tool result, for a session that blocks routes", () => {
-    const guide = tools.find((t) => t.name === "label-editor-guide");
+    const guide = tools.find((t) => t.name === "k7art-guide");
     expect(guide).toBeTruthy();
     const out = guide!.execute({}) as { ok: boolean; guide: string; url: string };
     expect(out.ok).toBe(true);
     expect(out.url).toBe("/skill.md");
-    expect(out.guide.startsWith("# A label for the K7")).toBe(true);
+    expect(out.guide.startsWith("# A K7Art for the K7")).toBe(true);
     expect(out.guide).toContain("748 × 359");
     expect(out.guide).toContain("Driving the visible controls");
     // The tool list is the caller's own; the generated block does not travel with the prose.

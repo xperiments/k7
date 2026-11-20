@@ -224,15 +224,15 @@ static void page_set(bool white)
      * cover on the white page. The Cover is the model's wish, applied after this by COVER. */
 }
 
-/* The packed Label sheet, embedded at build time (components/app/screen_display/CMakeLists.txt,
- * ADR 0071): every design assets/labels/ holds, read in place by the label module. */
-extern const uint8_t label_sheet_bin_start[] asm("_binary_label_sheet_bin_start");
-extern const uint8_t label_sheet_bin_end[] asm("_binary_label_sheet_bin_end");
-
 /* What the label was last printed for, so a Track change is the only thing that re-resolves
- * its row: the seed picks the design and the path picks the values, and both are compared. */
+ * its row: the seed picks the design and the path picks the values, and both are compared.
+ * The values are kept too, because the pose's entry re-picks the pool: an upload that lands
+ * while the pose is down is drawn then, and an upload while it is up is drawn on the next
+ * entry or Track change (art-packs.md §5). */
 static uint32_t s_label_seed = UINT32_MAX;
 static char     s_label_path[LIB_PATH_MAX];
+static label_values_t s_label_values;
+static bool     s_label_values_ok;
 
 /* The last frame the model produced, so a pose change can draw the tape once against the new
  * window: a tick redraws a hub only when the model moved it (cassette_view.c, apply_frame). */
@@ -270,6 +270,10 @@ static void controls_apply(controls_changed_t changed)
         /* The design is the two-finger pose's: the print is the Cover's at the Controls pose,
          * and one frame after the layout changes the other one is up. */
         cassette_label_set_pose(s_ctl.full);
+        /* The pose's entry is a label build: it commits a pack an upload installed while the
+         * pose was down, and rebuilds the objects if the pool moved. */
+        if (s_ctl.full && s_label_seed != UINT32_MAX)
+            cassette_label_update(s_label_seed, s_label_values_ok ? &s_label_values : NULL);
         /* FULL can change without PAGE: the level stays Real while the print switches from
          * the picture to the template, so the cover request has to follow it here. */
         cassette_levels_set_cover_visible(cover);
@@ -796,9 +800,9 @@ void cassette_view_create(void)
      * the object, the tapes own the paint. */
     cassette_cover_create(s_cassette);
     /* The label prints inside the Cover's print, above the picture: same box, same mask, same
-     * clip. It is created after the cover so it draws over the picture the pose hides. */
-    cassette_label_create(cassette_cover_print(), label_sheet_bin_start,
-                          (size_t)(label_sheet_bin_end - label_sheet_bin_start));
+     * clip. It is created after the cover so it draws over the picture the pose hides. The
+     * pool it draws from is the embedded factory sheet plus the `art` partition's pack. */
+    cassette_label_create(cassette_cover_print());
     cassette_cover_set_window_draw(cassette_tapes_draw_slice);
     cassette_place();
 
@@ -895,12 +899,13 @@ void cassette_view_update(const mini_icecast_status_t *st)
 
             const library_t *lib = library_acquire();
             const snapshot_t *snap = app_services_snapshot();
-            label_values_t values;
-            label_values_fill(&values, lib, snap, path);
+            label_values_t *values = &s_label_values;
+            label_values_fill(values, lib, snap, path);
+            s_label_values_ok = true;
             /* The slots are joined on the path and the file's size, so an empty design is worth
              * one line: it says which half of the join missed (label-templates.md 5). */
-            if (path[0] && !label_values_get(&values, "song_title")[0] &&
-                !label_values_get(&values, "song_artist")[0]) {
+            if (path[0] && !label_values_get(values, "song_title")[0] &&
+                !label_values_get(values, "song_artist")[0]) {
                 lib_node_t n = lib ? library_find(lib, path) : LIB_NODE_NONE;
                 ESP_LOGW(TAG, "no label values for %s: library %s, size %u, snapshot %s",
                          path, n == LIB_NODE_NONE ? "misses it" : "has it",
@@ -908,7 +913,7 @@ void cassette_view_update(const mini_icecast_status_t *st)
                          snap ? "open" : "none");
             }
             if (lib) library_release(lib);
-            cassette_label_update(f->ink_seed, &values);
+            cassette_label_update(f->ink_seed, values);
             /* A new design can carry a different canvas: the page and the cassette's body
              * follow it while the two-finger pose is up. */
             if (s_ctl.full) {

@@ -56,7 +56,8 @@ export function LayersPanel() {
   );
 
   const rows = buildRows(ed);
-  const maskRange = ed.maskRange();
+  const maskRange = ed.isJCard() ? null : ed.maskRange();
+  const count = ed.activeObjs().length;
 
   const join = (li: { lo: number; hi: number }, blk: DragBlock, above: boolean) => {
     if (li.lo <= blk.hi && li.hi >= blk.lo) return null;
@@ -190,22 +191,26 @@ export function LayersPanel() {
         <Layers2 className="size-4 text-muted-foreground" />
         <h2 className="text-xs font-medium tracking-tight text-foreground">Layers</h2>
         <Badge variant="outline" className="tabnum">
-          {ed.objs.length}
+          {count}
         </Badge>
         <div className="ml-auto flex items-center gap-0.5">
-          <IconAction
-            label={ed.groupWhy() || "Group selected (⌘G)"}
-            disabled={!!ed.groupWhy()}
-            onClick={() => ed.groupSel()}
-          >
-            <FolderPlus />
-          </IconAction>
-          <IconAction
-            label={ed.mask ? "Remove the LayerMask" : "Add a LayerMask"}
-            onClick={() => ed.toggleMask()}
-          >
-            <SquareDashed />
-          </IconAction>
+          {!ed.isJCard() ? (
+            <>
+              <IconAction
+                label={ed.groupWhy() || "Group selected (⌘G)"}
+                disabled={!!ed.groupWhy()}
+                onClick={() => ed.groupSel()}
+              >
+                <FolderPlus />
+              </IconAction>
+              <IconAction
+                label={ed.mask ? "Remove the LayerMask" : "Add a LayerMask"}
+                onClick={() => ed.toggleMask()}
+              >
+                <SquareDashed />
+              </IconAction>
+            </>
+          ) : null}
           <IconAction label="Raise" disabled={!ed.sel} onClick={() => ed.mv(1)}>
             <ArrowUp />
           </IconAction>
@@ -381,7 +386,7 @@ export function LayersPanel() {
                   )}
                   {o.name ? (
                     <Badge variant="outline" className="shrink-0">
-                      input
+                      {ed.isJCard() ? "field" : "input"}
                     </Badge>
                   ) : null}
                   {o.type === "text" && o.static && !(o.text ?? "").trim() ? (
@@ -425,6 +430,14 @@ function layerNameOf(o: Obj): string {
 
 function buildRows(ed: ReturnType<typeof useEditor>): Row[] {
   const rows: Row[] = [];
+  // The J-card has plain layers: no LayerMask and no groups, so the tree is the stack.
+  if (ed.isJCard()) {
+    for (let i = ed.jcard.prims.length - 1; i >= 0; i--) {
+      const o = ed.jcard.prims[i] as unknown as Obj;
+      rows.push({ kind: "layer", depth: 0, o, i, locked: !!o.locked });
+    }
+    return rows;
+  }
   const mr = ed.maskRange();
   const maskDepth = ed.mask ? 1 : 0;
   if (ed.mask && !mr)

@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Pack `label-template v1` designs into one label sheet.
+"""Pack the `label` section of every K7Art into one label sheet.
 
-`docs/specs/label-templates.md` is the contract: §2 is the design file this reads, §3 is the
-sheet it writes, §7 is the list of things it refuses. It refuses rather than substitutes -- a
-design that does not fit the panel is a build failure, not a design that quietly prints
-something else.
+`docs/specs/k7art.md` is the container: §1 is the file this reads and §7 what it refuses. Its
+label section, and the sheet it packs, are `docs/specs/label-templates.md`'s: §2 is the section,
+§3 the sheet, §7 the refusals. It refuses rather than substitutes -- a design that does not fit
+the panel is a build failure, not a design that quietly prints something else.
 
-    python3 tools/label_pack.py assets/labels build/      # write the sheet, label_fonts.h and the
-                                                          # manifest (reads templates/*.json)
-    python3 tools/label_pack.py assets/labels build/ --check   # validate, write, then re-read
+    python3 tools/label_pack.py assets/k7art build/      # write the sheet, label_fonts.h and the
+                                                         # manifest (reads assets/k7art/*.json)
+    python3 tools/label_pack.py assets/k7art build/ --check   # validate, write nothing
     python3 tools/label_pack.py --selftest
     python3 tools/label_pack.py --generate-vocabulary   # write label_vocab.h and the editor's block
     python3 tools/label_pack.py --check-vocabulary      # both current, and the faces the editor
                                                         # serves are the files the build compiles
+
+The designs are the folder: every *.json in it is a K7Art and nothing is skipped silently. The
+vocabulary is not a design and does not move with them: assets/labels/ keeps vocabulary.json and
+the K7's pictures, and the font table is read from there.
 
 Standard library only: the firmware build runs this, and the build has no network.
 """
@@ -26,6 +30,7 @@ import zlib
 from pathlib import Path
 
 MAGIC = b"K7LBL\0\0\0"
+FORMAT = "k7art"
 DESIGN_VERSION = 1
 SHEET_VERSION = 4
 HEADER_SIZE = 32
@@ -33,11 +38,10 @@ TEMPLATE_SIZE = 64
 PRIM_SIZE = 24
 SLOT_SIZE = 8
 
-# The designs sit in their own folder: assets/labels/ also holds the K7 art (k7logo.png,
-# cover.jpg), and a sheet is packed from templates/ alone. Every *.json in it is a design -
-# nothing is skipped silently - and vocabulary.json stays at the root because it is the
-# vocabulary and the font table, not a design.
-TEMPLATES = "templates"
+# Where the factory designs live. The folder is the set: every *.json in it is a K7Art - nothing
+# is skipped silently. It is not the vocabulary's folder; assets/labels/ keeps vocabulary.json
+# and the K7's pictures.
+K7ART_DIR = "assets/k7art"
 
 ROOT = Path(__file__).resolve().parent.parent
 EDITOR = ROOT / "tools" / "LabelEditor" / "src" / "engine" / "vocab.generated.ts"
@@ -78,7 +82,23 @@ ALIGN_INDEX = {"left": 0, "center": 1, "right": 2}
 # The device's vocabulary: one table, generated into the editor and the reader.
 SLOT_NAMES = [slot["id"] for slot in VOCAB["slots"]]
 
-ID_RE = re.compile(r"^label\.[a-z0-9][a-z0-9-]*$")
+# The J-card's sheet, folds and bounds (docs/specs/k7art.md 4 and 7). The packer never draws a
+# J-card and never puts one in the sheet; it holds the pair's jcard to the format's refusals so a
+# design the webapp cannot draw is a build failure naming itself.
+JCARD_SPACE = (1300, 1280, 320)
+JCARD_PARTS = {
+    "flap": (0, 0, 320, 1280),
+    "spine": (320, 0, 160, 1280),
+    "cover": (480, 0, 820, 1280),
+}
+JCARD_FACES = tuple(VOCAB["defaults"]["fonts"][role]["ff"] for role in FONT_ROLES)
+JCARD_SIZE_MIN, JCARD_SIZE_MAX = 4, 640
+JCARD_FIELDS = ("title", "artist", "meta")
+JCARD_PRIM_MAX = 64
+JCARD_BYTES_MAX = 16 * 1024
+JCARD_BOUND = 4096
+
+ID_RE = re.compile(r"^k7\.[a-z0-9][a-z0-9-]*$")
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 SLOT_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -135,25 +155,133 @@ def _tag(prim, i):
     return f"prim {i}"
 
 
+def jcard_errors(jcard, did, band_declared):
+    """The pair's J-card refusals (docs/specs/k7art.md 7). It never enters the sheet.
+
+    The J-card is the App's, not the panel's: the packer refuses one the webapp could not draw,
+    so a design the editor would refuse at Export is a build failure here too, but it packs only
+    the label section. `band_declared` is the container's own list - a J-card role names a shared
+    ink or there is nothing to print.
+    """
+    errors = []
+
+    def add(line):
+        errors.append(f"{did}: jcard {line}")
+
+    space = jcard.get("space")
+    got = (space.get("w"), space.get("h"), space.get("unit")) if isinstance(space, dict) else None
+    if got != JCARD_SPACE:
+        add(f"space is {got}, not {JCARD_SPACE[0]}x{JCARD_SPACE[1]} at "
+            f"{JCARD_SPACE[2]} units per inch")
+
+    parts = jcard.get("parts")
+    if not isinstance(parts, dict):
+        add("parts is missing -- the fold lines are the case's")
+    else:
+        for part, want in JCARD_PARTS.items():
+            rect = parts.get(part)
+            got = (tuple(rect.get(k) for k in ("x", "y", "w", "h"))
+                   if isinstance(rect, dict) else None)
+            if got != want:
+                add(f'part "{part}" is {got}, not {want}')
+        extra = sorted(set(parts) - set(JCARD_PARTS))
+        if extra:
+            add(f"parts names {', '.join(extra)}; the case is flap, spine and cover")
+
+    fonts = jcard.get("fonts")
+    if not isinstance(fonts, dict):
+        add("fonts is missing -- the three faces are the pair's")
+        fonts = {}
+    for role in FONT_ROLES:
+        face = fonts.get(role) or {}
+        ff, size = face.get("ff"), face.get("size")
+        if ff not in JCARD_FACES:
+            add(f"font role {role} is {ff!r}, not one of {', '.join(JCARD_FACES)}")
+        if (isinstance(size, bool) or not isinstance(size, int)
+                or not JCARD_SIZE_MIN <= size <= JCARD_SIZE_MAX):
+            add(f"font role {role} size {size!r} is outside "
+                f"{JCARD_SIZE_MIN}..{JCARD_SIZE_MAX} units")
+
+    prims = jcard.get("prims")
+    if not isinstance(prims, list):
+        add("prims is not a list")
+        prims = []
+    if len(prims) > JCARD_PRIM_MAX:
+        add(f"{len(prims)} prims, more than the {JCARD_PRIM_MAX} the App draws")
+
+    def role_names(prim, i, allow_paper):
+        what = "fill" if prim.get("t") == "rect" else "color"
+        role = prim.get("fill") if what == "fill" else prim.get("color", "ink")
+        if isinstance(role, str) and role.startswith("#"):
+            add(f"prim {i}: {what} {role!r} is a literal colour; the J-card is role-coloured")
+        elif role not in ROLE_INDEX:
+            add(f"prim {i}: {what} {role!r} is not a role")
+        elif role == "paper" and not allow_paper:
+            add(f"prim {i}: {what} paper has nothing to read against it")
+        elif role.startswith("band.") and int(role[5:]) >= band_declared:
+            add(f"prim {i}: {what} {role} is past this design's {band_declared} bands")
+
+    for i, prim in enumerate(prims, 1):
+        if not isinstance(prim, dict):
+            add(f"prim {i}: not an object")
+            continue
+        kind = prim.get("t")
+        if kind not in ("rect", "text"):
+            add(f"prim {i}: t must be rect or text")
+            continue
+        x = _int(prim.get("x"), f"{did}: jcard prim {i}: x", errors,
+                 -JCARD_BOUND, JCARD_BOUND)
+        y = _int(prim.get("y"), f"{did}: jcard prim {i}: y", errors,
+                 -JCARD_BOUND, JCARD_BOUND)
+        w = _int(prim.get("w"), f"{did}: jcard prim {i}: w", errors, 1, JCARD_BOUND)
+        _int(prim.get("rot", 0), f"{did}: jcard prim {i}: rot", errors, default=0)
+        if kind == "rect":
+            h = _int(prim.get("h"), f"{did}: jcard prim {i}: h", errors, 1, JCARD_BOUND)
+            _int(prim.get("r", 0), f"{did}: jcard prim {i}: r", errors, lo=0, default=0)
+            role_names(prim, i, allow_paper=True)
+        else:
+            h = 0
+            if prim.get("align", "left") not in ALIGN_INDEX:
+                add(f"prim {i}: align {prim.get('align')!r} is not left, center or right")
+            if prim.get("font") not in FONT_ROLES:
+                add(f"prim {i}: font {prim.get('font')!r} is not title, numeral or caption")
+            role_names(prim, i, allow_paper=False)
+            if "slot" in prim:
+                if prim["slot"] not in JCARD_FIELDS:
+                    add(f'prim {i}: "{prim["slot"]}" is not a J-card field '
+                        f'({" / ".join(JCARD_FIELDS)})')
+                if "preview" in prim and not isinstance(prim["preview"], str):
+                    add(f"prim {i}: preview is not a string")
+            elif "text" in prim:
+                if not isinstance(prim["text"], str) or not prim["text"].strip():
+                    add(f"prim {i}: a static text is empty")
+            else:
+                add(f"prim {i}: a text needs a slot or a text")
+        if not (-JCARD_BOUND <= x and x + w <= JCARD_BOUND
+                and -JCARD_BOUND <= y and y + h <= JCARD_BOUND):
+            add(f"prim {i}: the box leaves the sheet's +/-{JCARD_BOUND} units")
+
+    size = len(json.dumps(jcard, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    if size > JCARD_BYTES_MAX:
+        add(f"the section is {size} B, over the {JCARD_BYTES_MAX} the App bundles")
+    return errors
+
+
 def pack_design(design, font_index, pool):
-    """One design -> (template fields, prims, slots). Raises PackError(errors)."""
+    """One K7Art -> (template fields, prims, slots). Raises PackError(errors).
+
+    The container names the design: its `id` is what every refusal names it by, its `name` is
+    the sheet's template name, and its `inks` are the label's colours. The label section is the
+    sheet's; the J-card is checked against the pair's refusals and never enters the sheet.
+    """
     errors = []
     did = design.get("id")
     before = len(errors)
 
+    if design.get("format") != FORMAT:
+        errors.append(f"{did}: format is {design.get('format')!r}, not {FORMAT!r}")
     if design.get("v") != DESIGN_VERSION:
         errors.append(f"{did}: v is not {DESIGN_VERSION}")
-
-    space = design.get("space") or {}
-    if (space.get("w"), space.get("h")) != (SPACE_W, SPACE_H):
-        errors.append(f"{did}: space is {space.get('w')}x{space.get('h')}, not {SPACE_W}x{SPACE_H}")
-
-    aperture = design.get("aperture")
-    if aperture is not None:
-        got = (aperture.get("x"), aperture.get("y"), aperture.get("w"),
-               aperture.get("h"), aperture.get("r", 0))
-        if got != APERTURE:
-            errors.append(f"{did}: aperture {got} is not the Card's window {APERTURE}")
 
     inks = design.get("inks")
     if not isinstance(inks, dict):
@@ -171,7 +299,34 @@ def pack_design(design, font_index, pool):
     # The sheet always has eight slots; a design that declares four leaves the rest 0.
     band += [0] * (BAND_MAX - len(band))
 
-    fonts = design.get("fonts")
+    design_name = design.get("name")
+    if not isinstance(design_name, str) or not design_name.strip():
+        errors.append(f"{did}: no name -- the sheet's template is named for the log")
+        design_name = did
+
+    label = design.get("label")
+    if not isinstance(label, dict):
+        errors.append(f"{did}: no label -- the design is the pair")
+        label = {}
+
+    jcard = design.get("jcard")
+    if not isinstance(jcard, dict):
+        errors.append(f"{did}: no jcard -- the design is the pair")
+    else:
+        errors.extend(jcard_errors(jcard, did, band_declared))
+
+    space = label.get("space") or {}
+    if (space.get("w"), space.get("h")) != (SPACE_W, SPACE_H):
+        errors.append(f"{did}: space is {space.get('w')}x{space.get('h')}, not {SPACE_W}x{SPACE_H}")
+
+    aperture = label.get("aperture")
+    if aperture is not None:
+        got = (aperture.get("x"), aperture.get("y"), aperture.get("w"),
+               aperture.get("h"), aperture.get("r", 0))
+        if got != APERTURE:
+            errors.append(f"{did}: aperture {got} is not the Card's window {APERTURE}")
+
+    fonts = label.get("fonts")
     if not isinstance(fonts, dict):
         errors.append(f"{did}: no fonts -- a design without faces is type with no glyphs")
         fonts = {}
@@ -191,7 +346,7 @@ def pack_design(design, font_index, pool):
     # by the Track's cassette row (row % count), so the entries are not editor-only. `active`
     # is the editor's preview, not the player's choice, but a design that names the list must
     # name a valid one.
-    canvas = design.get("canvas")
+    canvas = label.get("canvas")
     canvas_colors = []
     if canvas is not None:
         if not isinstance(canvas, dict):
@@ -210,7 +365,7 @@ def pack_design(design, font_index, pool):
                 errors.append(
                     f"{did}: canvas.active {active!r} is not an index into backgrounds")
 
-    slots = design.get("slots") or {}
+    slots = label.get("slots") or {}
     if not isinstance(slots, dict):
         errors.append(f"{did}: slots must be an object")
         slots = {}
@@ -226,7 +381,7 @@ def pack_design(design, font_index, pool):
         slot_max[name] = _int((spec or {}).get("max"), f'{did}: slot "{name}".max',
                               errors, lo=1, hi=VALUE_MAX)
 
-    prims = design.get("prims")
+    prims = label.get("prims")
     if not isinstance(prims, list) or not prims:
         errors.append(f"{did}: no prims")
         prims = []
@@ -262,7 +417,7 @@ def pack_design(design, font_index, pool):
             elif isinstance(fill, str) and HEX_RE.match(fill):
                 fill_index = FILL_LITERAL
                 literal = int(fill[1:], 16)
-                literals.append((tag, design.get("notes") or []))
+                literals.append((tag, label.get("notes") or []))
             else:
                 errors.append(f"{tag}: fill {fill!r} is not a role and not #RRGGBB")
                 fill_index = 0
@@ -340,7 +495,7 @@ def pack_design(design, font_index, pool):
     slot_records = [struct.pack("<IB3x", pool.add(name), slot_max[name])
                     for name in slot_names]
     fields = {
-        "name": pool.add(design.get("name") or design["id"]),
+        "name": pool.add(design_name),
         "prim_count": len(out_prims),
         "slot_count": len(slot_records),
         "font": font_ids,
@@ -379,7 +534,7 @@ def pack_sheet(designs, fonts):
     Raises PackError."""
     errors = []
     if not designs:
-        raise PackError([f"no designs: assets/labels/{TEMPLATES}/ has no *.json to pack"])
+        raise PackError([f"no designs: {K7ART_DIR}/ has no *.json to pack"])
     if len(designs) > TEMPLATE_MAX:
         raise PackError([f"{len(designs)} designs, more than the {TEMPLATE_MAX} a sheet holds"])
 
@@ -390,7 +545,7 @@ def pack_sheet(designs, fonts):
     for design in ordered:
         did = design.get("id")
         if not isinstance(did, str) or not ID_RE.match(did):
-            errors.append(f'{did}: id must look like label.my-name')
+            errors.append(f'{did}: id must look like k7.my-name')
         if did in ids:
             errors.append(f"{did}: duplicate id")
         ids.add(did)
@@ -408,7 +563,7 @@ def pack_sheet(designs, fonts):
         slots.extend(ts)
         templates.append(fields)
         rows.append((
-            design.get("name") or design["id"],
+            design.get("name") or str(did),
             len(tp),
             slot_names,
             ",".join(f"#{c:06X}" for c in fields["canvases"]) or "-",
@@ -514,14 +669,15 @@ def verify_sheet(blob):
             f"{len(blob)} B, crc 0x{crc:08X}")
 
 
-def load_fonts(src):
+def load_fonts():
     """The sheet's font table: the faces the build compiles, in index order.
 
-    The table lives in the same vocabulary file as the Slots and the limits, because a face
-    that the editor offers and the build cannot compile is exactly the drift it exists to
-    stop. `editor: true` marks the faces the editor offers and can draw.
+    The table lives in assets/labels/vocabulary.json, beside the K7's pictures and not with the
+    designs, because it is the format's, not a design's: a face the editor offers and the build
+    cannot compile is exactly the drift it exists to stop. `editor: true` marks the faces the
+    editor offers and can draw.
     """
-    path = Path(src) / VOCABULARY
+    path = ROOT / "assets" / "labels" / VOCABULARY
     data = json.loads(path.read_text(encoding="utf-8"))
     fonts = data.get("fonts")
     if not isinstance(fonts, list) or not fonts:
@@ -534,14 +690,16 @@ def load_fonts(src):
 
 
 def load_designs(src):
-    """Every *.json in <src>/templates is a design; a file that is not one is an error.
+    """Every *.json in <src> is a K7Art; a file that is not one is an error.
 
-    Nothing is skipped silently: a design left in the folder and not packed would be a Track
-    that prints the wrong label and no line saying why. A name starting with a dot is not a
-    design (the Export's zip, a .DS_Store or an AppleDouble sidecar), which is the one thing
-    ignored, and it is ignored by name rather than by guessing.
+    <src> is the K7Art folder itself (`assets/k7art` in the build). Nothing is skipped silently:
+    a design left in the folder and not packed would be a Track that prints the wrong label and
+    no line saying why. A name starting with a dot is not a design (an Export's zip, a
+    .DS_Store or an AppleDouble sidecar), which is the one thing ignored, and it is ignored by
+    name rather than by guessing. The retired `label-template v1` file and the old Export's
+    labels.json are refused by name, with where to take them.
     """
-    root = Path(src) / TEMPLATES
+    root = Path(src)
     paths = sorted(p for p in root.glob("*.json") if not p.name.startswith("."))
     if not paths:
         raise PackError([f"no designs: {root} has no *.json to pack"])
@@ -555,15 +713,18 @@ def load_designs(src):
             errors.append(f"{path}: {exc}")
             continue
         if not isinstance(design, dict):
-            errors.append(f"{path}: not a JSON object, so not a design")
+            errors.append(f"{path}: not a JSON object, so not a K7Art")
             continue
-        if "templates" in design and "prims" not in design:
-            errors.append(f"{path}: that is the Export's labels.json manifest, not a design; "
-                          f"copy its label.*.json files into {root}")
-            continue
-        if not all(k in design for k in ("v", "id", "space", "prims")):
-            errors.append(f"{path}: not a label-template v1 design (it needs v, id, space and "
-                          f"prims; the editor's Export writes one, its Save writes a document)")
+        if "format" not in design:
+            if "templates" in design:
+                errors.append(f"{path}: that is the old Export's labels.json manifest, not a "
+                              f"design; import it in the editor and export a K7Art into {root}")
+            elif all(k in design for k in ("v", "space", "prims")):
+                errors.append(f"{path}: that is a label-template v1 file, the retired format; "
+                              f"import it in the editor and export a K7Art into {root}")
+            else:
+                errors.append(f"{path}: not a K7Art (it needs format, v, id, name, inks, label "
+                              f"and jcard)")
             continue
         designs.append(design)
     if errors:
@@ -603,11 +764,11 @@ def main(argv):
 
     if len(args) != 2:
         print(__doc__.strip().splitlines()[0], file=sys.stderr)
-        print("usage: label_pack.py <assets/labels> <out-dir> [--check]", file=sys.stderr)
+        print("usage: label_pack.py <assets/k7art> <out-dir> [--check]", file=sys.stderr)
         return 2
     src, out = Path(args[0]), Path(args[1])
     try:
-        fonts = load_fonts(src)
+        fonts = load_fonts()
         designs = load_designs(src)
         blob, font_header, manifest = pack_sheet(designs, fonts)
         summary = verify_sheet(blob)
@@ -899,25 +1060,47 @@ def selftest():
     fonts = [{"name": "Jura", "px": 20, "symbol": "jura_20"},
              {"name": "Archivo Narrow 600", "px": 32, "symbol": "archivo_narrow_600_32"}]
     good = {
-        "v": 1, "id": "label.self", "name": "Self", "space": {"w": 748, "h": 359},
-        "aperture": {"x": 95, "y": 101, "w": 556, "h": 166, "r": 83},
-        "canvas": {"backgrounds": ["#101010", "#F5F1E6"], "active": 1},
+        "format": "k7art", "v": 1, "id": "k7.self", "name": "Self",
         "inks": {"paper": "#F2EDE3", "ink": "#24211D", "rule": "#B9AC8E",
                  "band": ["#C68B2E", "#A24E2C", "#8A5D34", "#6B7A2F",
                           "#3B6E8F", "#7A3B52", "#B9AC8E", "#2F4B3A"]},
-        "fonts": {"title": {"ff": "Archivo Narrow 600", "px": 32},
-                  "numeral": {"ff": "Jura", "px": 20},
-                  "caption": {"ff": "Jura", "px": 20}},
-        "slots": {"song_title": {"max": 24}},
-        "prims": [
-            {"t": "rect", "x": 0, "y": 0, "w": 748, "h": 359, "r": 19, "fill": "paper"},
-            {"t": "rect", "x": 0, "y": 300, "w": 40, "h": 20, "r": 0, "fill": "#C63A2E"},
-            {"t": "text", "slot": "song_title", "x": 32, "y": 280, "w": 400,
-             "font": "title", "color": "ink", "align": "left", "preview": "Neon Skyline"},
-            {"t": "text", "text": "SIDE A", "x": 32, "y": 20, "w": 200,
-             "font": "caption", "color": "ink", "align": "right"},
-        ],
-        "notes": ["the mark is the one literal colour"],
+        "label": {
+            "space": {"w": 748, "h": 359},
+            "aperture": {"x": 95, "y": 101, "w": 556, "h": 166, "r": 83},
+            "canvas": {"backgrounds": ["#101010", "#F5F1E6"], "active": 1},
+            "fonts": {"title": {"ff": "Archivo Narrow 600", "px": 32},
+                      "numeral": {"ff": "Jura", "px": 20},
+                      "caption": {"ff": "Jura", "px": 20}},
+            "slots": {"song_title": {"max": 24}},
+            "prims": [
+                {"t": "rect", "x": 0, "y": 0, "w": 748, "h": 359, "r": 19, "fill": "paper"},
+                {"t": "rect", "x": 0, "y": 300, "w": 40, "h": 20, "r": 0, "fill": "#C63A2E"},
+                {"t": "text", "slot": "song_title", "x": 32, "y": 280, "w": 400,
+                 "font": "title", "color": "ink", "align": "left", "preview": "Neon Skyline"},
+                {"t": "text", "text": "SIDE A", "x": 32, "y": 20, "w": 200,
+                 "font": "caption", "color": "ink", "align": "right"},
+            ],
+            "notes": ["the mark is the one literal colour"],
+        },
+        "jcard": {
+            "space": {"w": 1300, "h": 1280, "unit": 320},
+            "parts": {"flap": {"x": 0, "y": 0, "w": 320, "h": 1280},
+                      "spine": {"x": 320, "y": 0, "w": 160, "h": 1280},
+                      "cover": {"x": 480, "y": 0, "w": 820, "h": 1280}},
+            "fonts": {"title": {"ff": "Archivo Narrow 600", "size": 56},
+                      "numeral": {"ff": "Barlow Condensed 700", "size": 136},
+                      "caption": {"ff": "IBM Plex Mono 500", "size": 31}},
+            "prims": [
+                {"t": "rect", "x": 0, "y": 0, "w": 1300, "h": 1280, "fill": "paper"},
+                {"t": "text", "slot": "title", "x": 540, "y": 900, "w": 700,
+                 "font": "numeral", "color": "ink", "align": "left", "preview": "Neon Skyline"},
+                {"t": "text", "slot": "artist", "x": 540, "y": 1060, "w": 700,
+                 "font": "title", "color": "ink", "align": "left", "preview": "The Analog Sons"},
+                {"t": "text", "slot": "meta", "x": 540, "y": 1120, "w": 700,
+                 "font": "caption", "color": "ink", "align": "left",
+                 "preview": "Side A · Side B"},
+            ],
+        },
     }
 
     def expect_refusal(mutate, needle):
@@ -935,6 +1118,8 @@ def selftest():
     summary = verify_sheet(blob)
     assert "1 designs, 4 prims, 1 slots" in summary, summary
     assert "LABEL_FONT_JURA_20 0" in header and "LABEL_FONT_COUNT 2" in header
+    # The J-card is the App's and never a byte of the sheet: its previews are not in the pool.
+    assert b"The Analog Sons" not in blob and b"Side A" not in blob, "a J-card entered the sheet"
     # The manifest is what t33 compares the opened sheet against, so its shape is part of
     # the packer's contract: index, prim count, slot count, the canvas list, the packed slot
     # names, the name.
@@ -947,7 +1132,7 @@ def selftest():
     assert struct.unpack_from("<II", blob, canvas_at) == (0x101010, 0xF5F1E6)
     assert struct.unpack_from("<II", blob, canvas_at + 8) == (0, 0)
     no_canvas = json.loads(json.dumps(good))
-    del no_canvas["canvas"]
+    del no_canvas["label"]["canvas"]
     bare, _, bare_manifest = pack_sheet([no_canvas], fonts)
     assert verify_sheet(bare)
     fields = struct.unpack_from("<IHHHHBBBB11II", bare, HEADER_SIZE)
@@ -955,69 +1140,137 @@ def selftest():
     assert struct.unpack_from("<II", bare, HEADER_SIZE + TEMPLATE_SIZE) == (0, 0)
     assert bare_manifest.endswith("0\t4\t1\t-\tsong_title\tSelf\n"), bare_manifest
 
-    # a folder is the set: every *.json in templates/ is a design, a stray file fails naming
-    # itself, the Export's manifest says what it is, and a dot-name is not a design
-    with tempfile.TemporaryDirectory() as d:
-        templates = Path(d) / TEMPLATES
-        templates.mkdir()
-        try:
-            load_designs(d)
-            raise SystemExit("selftest: an empty templates/ was accepted")
-        except PackError as exc:
-            assert "no *.json" in exc.errors[0], exc.errors
+    # the container is the identity: format, version and the k7.<slug> id are the file's
+    expect_refusal(lambda d: d.update(format="label-template"), "format is 'label-template'")
+    expect_refusal(lambda d: d.update(v=2), "v is not 1")
+    expect_refusal(lambda d: d.update(id="label.self"), "id must look like k7.my-name")
+    expect_refusal(lambda d: d.update(name="  "), "no name")
+    expect_refusal(lambda d: d.pop("label"), "no label")
+    expect_refusal(lambda d: d.pop("jcard"), "no jcard")
+    try:
+        pack_sheet([good, good], fonts)
+        raise SystemExit("selftest: the same id twice was accepted")
+    except PackError as exc:
+        assert any("duplicate id" in e for e in exc.errors), exc.errors
+    try:
+        pack_sheet([], fonts)
+        raise SystemExit("selftest: an empty folder was accepted")
+    except PackError as exc:
+        assert "no designs" in exc.errors[0], exc.errors
 
-        (templates / "label.self.json").write_text(json.dumps(good))
-        (templates / ".DS_Store").write_text("junk")
-        (templates / "._label.self.json").write_text("junk")
-        assert [x["id"] for x in load_designs(d)] == ["label.self"], "the dot-names were read"
-
-        (templates / "labels.json").write_text(json.dumps({"v": 1, "templates": []}))
-        try:
-            load_designs(d)
-            raise SystemExit("selftest: the Export's manifest was accepted as a design")
-        except PackError as exc:
-            assert "labels.json manifest" in exc.errors[0], exc.errors
-
-        (templates / "labels.json").unlink()
-        (templates / "label.stray.json").write_text(json.dumps({"hello": 1}))
-        try:
-            load_designs(d)
-            raise SystemExit("selftest: a file that is not a design was accepted")
-        except PackError as exc:
-            assert "not a label-template v1 design" in exc.errors[0], exc.errors
-
-    expect_refusal(lambda d: d.update(space={"w": 800, "h": 359}), "space is 800x359")
+    # the label section is the sheet's, and every rule the sheet had still refuses by name
+    expect_refusal(lambda d: d["label"].update(space={"w": 800, "h": 359}), "space is 800x359")
+    expect_refusal(lambda d: d["label"].update(
+        aperture={"x": 0, "y": 0, "w": 556, "h": 166, "r": 83}), "is not the Card's window")
     # a design may bleed past the print; the print crops it (ADR 0072)
     bleed = json.loads(json.dumps(good))
-    bleed["prims"][0].update(x=400)
+    bleed["label"]["prims"][0].update(x=400)
     pack_sheet([bleed], fonts)
-    expect_refusal(lambda d: d["prims"][2].update(font="numeral2"), "font 'numeral2'")
-    expect_refusal(lambda d: d["prims"][2].update(slot="year"), "not a slot in the vocabulary")
-    expect_refusal(lambda d: d["fonts"].update(title={"ff": "Nope", "px": 12}), "does not carry")
-    expect_refusal(lambda d: d.update(notes=[]), "no note says why")
-    expect_refusal(lambda d: d["prims"].append({"t": "rect", "x": 0, "y": 0, "w": 4, "h": 4,
-                                               "fill": "#111111"}), "may have one")
+    expect_refusal(lambda d: d["label"]["prims"][2].update(font="numeral2"), "font 'numeral2'")
+    expect_refusal(lambda d: d["label"]["prims"][2].update(slot="year"),
+                   "not a slot in the vocabulary")
+    expect_refusal(lambda d: d["label"]["fonts"].update(title={"ff": "Nope", "px": 12}),
+                   "does not carry")
+    expect_refusal(lambda d: d["label"].update(notes=[]), "no note says why")
+    expect_refusal(lambda d: d["label"]["prims"].append(
+        {"t": "rect", "x": 0, "y": 0, "w": 4, "h": 4, "fill": "#111111"}), "may have one")
     expect_refusal(lambda d: d["inks"].update(band=["#000000"] * 3), "four to eight")
     expect_refusal(lambda d: d["inks"].update(band=["#000000"] * 9), "four to eight")
-    expect_refusal(lambda d: d.update(canvas={"backgrounds": [], "active": 0}),
+    expect_refusal(lambda d: d["label"].update(canvas={"backgrounds": [], "active": 0}),
                    "canvas.backgrounds must be one to 8")
-    expect_refusal(lambda d: d.update(canvas={"backgrounds": ["#101010"] * 9, "active": 0}),
-                   "canvas.backgrounds must be one to 8")
-    expect_refusal(lambda d: d.update(canvas={"backgrounds": ["#nope"], "active": 0}),
+    expect_refusal(lambda d: d["label"].update(
+        canvas={"backgrounds": ["#101010"] * 9, "active": 0}),
+        "canvas.backgrounds must be one to 8")
+    expect_refusal(lambda d: d["label"].update(canvas={"backgrounds": ["#nope"], "active": 0}),
                    "canvas.backgrounds[0]")
-    expect_refusal(lambda d: d.update(canvas={"backgrounds": ["#101010"], "active": 2}),
+    expect_refusal(lambda d: d["label"].update(canvas={"backgrounds": ["#101010"], "active": 2}),
                    "canvas.active 2")
 
     # A design may keep four bands; a prim may not name a band it did not declare.
     short = json.loads(json.dumps(good))
     short["inks"]["band"] = short["inks"]["band"][:4]
-    short["prims"][0]["fill"] = "band.4"
+    short["label"]["prims"][0]["fill"] = "band.4"
     try:
         pack_sheet([short], fonts)
         raise SystemExit("selftest: an undeclared band was accepted")
     except PackError as exc:
         if not any("past this design's 4 bands" in e for e in exc.errors):
             raise SystemExit(f"selftest: expected the undeclared band, got {exc.errors}")
+
+    # The J-card is checked against the pair's refusals and is never packed.
+    expect_refusal(lambda d: d["jcard"].update(space={"w": 1200, "h": 1280, "unit": 320}),
+                   "jcard space is (1200, 1280, 320), not 1300x1280 at 320 units per inch")
+    expect_refusal(lambda d: d["jcard"]["parts"].update(
+        spine={"x": 320, "y": 0, "w": 200, "h": 1280}), 'jcard part "spine"')
+    expect_refusal(lambda d: d["jcard"]["parts"].update(
+        back={"x": 0, "y": 0, "w": 10, "h": 10}), "jcard parts names back")
+    expect_refusal(lambda d: d["jcard"]["fonts"]["title"].update(ff="Jura"), "not one of")
+    expect_refusal(lambda d: d["jcard"]["fonts"]["title"].update(size=3), "outside 4..640")
+    expect_refusal(lambda d: d["jcard"]["prims"][1].update(slot="year"),
+                   '"year" is not a J-card field')
+    expect_refusal(lambda d: d["jcard"]["prims"][1].update(color="paper"),
+                   "paper has nothing to read against it")
+    expect_refusal(lambda d: d["jcard"]["prims"][0].update(fill="#C63A2E"), "literal colour")
+    expect_refusal(lambda d: d["jcard"]["prims"][0].update(t="circle"), "t must be rect or text")
+
+    def jcard_band(d):
+        d["inks"]["band"] = d["inks"]["band"][:4]
+        d["jcard"]["prims"][0]["fill"] = "band.4"
+
+    expect_refusal(jcard_band, "jcard prim 1: fill band.4 is past this design's 4 bands")
+    expect_refusal(lambda d: d["jcard"]["prims"][1].update(x=JCARD_BOUND + 1),
+                   "outside -4096..4096")
+    expect_refusal(lambda d: d["jcard"]["prims"][0].update(x=1, w=JCARD_BOUND),
+                   "the box leaves the sheet's +/-4096 units")
+    expect_refusal(lambda d: d["jcard"]["prims"].extend(
+        [{"t": "rect", "x": 0, "y": 0, "w": 4, "h": 4, "fill": "ink"}] * 61),
+        "more than the 64 the App draws")
+    expect_refusal(lambda d: d["jcard"]["prims"].append(
+        {"t": "text", "text": "x" * JCARD_BYTES_MAX, "x": 0, "y": 0, "w": 100,
+         "font": "title", "color": "ink", "align": "left"}),
+        "over the 16384 the App bundles")
+
+    # a folder is the set: every *.json in it is a K7Art, a stray file fails naming itself, the
+    # retired format and the old Export's manifest say what they are, and a dot-name is not one
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        try:
+            load_designs(d)
+            raise SystemExit("selftest: an empty K7Art folder was accepted")
+        except PackError as exc:
+            assert "no *.json" in exc.errors[0], exc.errors
+
+        (root / "k7.self.json").write_text(json.dumps(good))
+        (root / ".DS_Store").write_text("junk")
+        (root / "._k7.self.json").write_text("junk")
+        assert [x["id"] for x in load_designs(d)] == ["k7.self"], "the dot-names were read"
+
+        (root / "labels.json").write_text(json.dumps({"v": 1, "templates": []}))
+        try:
+            load_designs(d)
+            raise SystemExit("selftest: the old Export's manifest was accepted as a design")
+        except PackError as exc:
+            assert "labels.json manifest" in exc.errors[0], exc.errors
+
+        (root / "labels.json").unlink()
+        retired = {"v": 1, "id": "label.self", "name": "Self", "space": {"w": 748, "h": 359},
+                   "prims": good["label"]["prims"]}
+        (root / "label.self.json").write_text(json.dumps(retired))
+        try:
+            load_designs(d)
+            raise SystemExit("selftest: the retired label-template v1 was accepted")
+        except PackError as exc:
+            assert "retired format" in exc.errors[0] and "label.self.json" in exc.errors[0], \
+                exc.errors
+
+        (root / "label.self.json").unlink()
+        (root / "stray.json").write_text(json.dumps({"hello": 1}))
+        try:
+            load_designs(d)
+            raise SystemExit("selftest: a file that is not a K7Art was accepted")
+        except PackError as exc:
+            assert "not a K7Art" in exc.errors[0], exc.errors
+
     print("label_pack: selftest ok")
     return 0
 

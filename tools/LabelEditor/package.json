@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "The label editor: design the cassette label's print at its one real size, preview it with LVGL, and export label-template v1.",
+  "description": "The K7Art editor: design a cassette's label and J-card, preview the label with LVGL, export the K7Art and publish a pack.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

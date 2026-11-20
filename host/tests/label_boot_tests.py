@@ -130,7 +130,11 @@ def main():
         print("SKIP label page: the label editor boot check did not run.")
         return 0
 
-    httpd, url = serve(dist)
+    # The production build's base is /k7art/, so serve a parent with the build as k7art/.
+    root = Path(tempfile.mkdtemp(prefix="k7-label-boot-root-"))
+    (root / "k7art").symlink_to(dist, target_is_directory=True)
+    httpd, url = serve(root)
+    url += "k7art/"
     profile = tempfile.mkdtemp(prefix="k7-label-boot-")
     try:
         command = [
@@ -203,6 +207,7 @@ def main():
         httpd.shutdown()
         httpd.server_close()
         shutil.rmtree(profile, ignore_errors=True)
+        shutil.rmtree(root, ignore_errors=True)
 
 
 if __name__ == "__main__":

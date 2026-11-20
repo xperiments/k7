@@ -253,12 +253,23 @@ export default defineConfig(({ mode }) => {
     ],
     /* The dev origin is `https://k7-dev.xperiments.dev:8000`; the port is part of it, and
      * the certificate only exists once someone has run mkcert (k7-deploy.md §4). */
-    server: { host: true, port: 8000, https: devHttps, proxy: mcpProxy },
+    server: {
+      host: true,
+      port: 8000,
+      https: devHttps,
+      proxy: mcpProxy,
+      /* The factory K7Arts live at `../assets/k7art`, outside the web root; the dev server
+       * serves their JSON to the same glob the build bundles (jcard/factory.ts). */
+      fs: { allow: [root, resolve(root, '..')] },
+    },
     preview: { host: true, port: 8000, https: devHttps, proxy: mcpProxy },
     publicDir: 'public',
     resolve: {
       conditions: ['onnxruntime-web-use-extern-wasm'],
-      alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+        '@k7art': fileURLToPath(new URL('../assets/k7art', import.meta.url)),
+      },
     },
     define: {
       __APP_VERSION__: JSON.stringify(packageVersion),

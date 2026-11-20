@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Create a test label through the editor's own tool surface and save it as
- * `label-template v1`. It drives `window.__labelEditorMcp` — the same tools WebMCP
- * registers — so it exercises exactly what an agent would.
+ * Create a test K7Art through the editor's own tool surface and save it as `k7art v1`.
+ * It drives `window.__labelEditorMcp` — the same tools WebMCP registers — so it
+ * exercises exactly what an agent would.
  *
  *   1. the editor is open (npm run dev), and
  *   2. node scripts/test-label.mjs
@@ -10,7 +10,7 @@
  * Options:
  *   --url <url>    the editor (default http://localhost:5178)
  *   --text <s>     the printed string (default HOLA)
- *   --id <s>       the template id (default label.test-hola)
+ *   --id <s>       the K7Art id (default k7.test-hola)
  *   --name <s>     the document name (default HOLA Test)
  *   --out <path>   where the JSON goes (default .scratch/<id>.json; "-" for stdout)
  *   --head         show the browser
@@ -28,9 +28,9 @@ function parse(argv) {
   const opts = {
     url: "http://localhost:5178",
     text: "HOLA",
-    id: "label.test-hola",
+    id: "k7.test-hola",
     name: "HOLA Test",
-    out: join(root, ".scratch", "label.test-hola.json"),
+    out: join(root, ".scratch", "k7.test-hola.json"),
     head: false,
     shot: true,
   };
@@ -87,8 +87,8 @@ try {
     );
 
   // A fresh document, then the design's identity and paper.
-  await call("label-editor-document", { action: "new", name: opts.name });
-  await call("label-editor-set-design", {
+  await call("k7art-document", { action: "new", name: opts.name });
+  await call("k7art-set-design", {
     templateId: opts.id,
     name: opts.name,
     background: "#ffffff",
@@ -97,7 +97,7 @@ try {
   });
 
   // A dark print with the word in the sheet's display face, centred.
-  await call("label-editor-add-layer", {
+  await call("k7art-add-layer", {
     type: "rect",
     x: 0,
     y: 0,
@@ -105,7 +105,7 @@ try {
     height: 359,
     role: "band.7",
   });
-  await call("label-editor-add-layer", {
+  await call("k7art-add-layer", {
     type: "text",
     text: opts.text,
     x: 274,
@@ -117,8 +117,8 @@ try {
     layerName: opts.text,
   });
 
-  const validation = await call("label-editor-validate");
-  const exported = await call("label-editor-export-template");
+  const validation = await call("k7art-validate");
+  const exported = await call("k7art-export-template");
   const template = exported.template;
   const problems = [...new Set([...(validation.documents ?? []).flatMap((d) => d.errs), ...exported.errors])];
 
@@ -132,13 +132,18 @@ try {
   if (opts.shot && opts.out !== "-") {
     // A label-only image: deselect so no handles print, then capture the print itself.
     await page.keyboard.press("Escape");
-    const shot = join(dirname(opts.out), `${opts.id.replace(/^label\./, "")}.png`);
+    const shot = join(dirname(opts.out), `${opts.id.replace(/^k7\./, "")}.png`);
     await page.locator(".canvas-surface").screenshot({ path: shot });
     opts.shotPath = shot;
   }
 
   console.log(`Created ${template.id} — "${opts.name}"`);
-  console.log(`  ${template.prims.length} prims, ${Object.keys(template.slots).length} fields`);
+  console.log(
+    `  label: ${template.label.prims.length} prims, ${Object.keys(template.label.slots).length} fields`,
+  );
+  console.log(
+    `  J-card: ${template.jcard.prims.length} prims, ${Object.keys(template.jcard.fonts).length} type roles`,
+  );
   console.log(`  validation: ${problems.length ? `${problems.length} issue(s)` : "ok"}`);
   for (const p of problems) console.log(`    - ${p}`);
   if (opts.out !== "-") console.log(`  template: ${opts.out}`);

@@ -1,7 +1,18 @@
 import type { Editor } from "@/engine/editor";
-import type { Obj, Tool } from "@/engine/types";
+import type { Obj, Surface, Tool } from "@/engine/types";
 import type { LabelTool } from "@/webmcp/types";
 import { skillProse } from "./skill";
+import {
+  JCARD_FACES,
+  JCARD_FIELDS,
+  JCARD_FIELD_LABELS,
+  JCARD_H,
+  JCARD_PARTS,
+  JCARD_SAFE,
+  JCARD_W,
+  type JCardField,
+} from "@/engine/jcard";
+import { buildArtPack, PackError, toBase64 } from "@/engine/labelPack";
 import {
   CANVAS_MAX,
   FROLES,
@@ -13,6 +24,7 @@ import {
   SHEET_FONTS,
   SLOTS,
   TEXT_ROLES,
+  WIN,
   onSheet,
   sheetFaces,
   sheetSizes,
@@ -44,7 +56,7 @@ const schema = (properties: Record<string, unknown>, required?: string[]) => ({
 });
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
-const TEMPLATE_ID = /^label\.[a-z0-9][a-z0-9-]*$/;
+const TEMPLATE_ID = /^k7\.[a-z0-9][a-z0-9-]*$/;
 
 // ---- argument readers: schema hints are loose, so the checks here are the strict ones ----
 
@@ -97,20 +109,59 @@ function readIds(args: Args): number[] | undefined {
   const v = args.ids;
   if (v === undefined || v === null) return undefined;
   if (!Array.isArray(v) || !v.length || v.some((n) => typeof n !== "number"))
-    throw new Error("ids must be a non-empty array of layer ids from label-editor-read");
+    throw new Error("ids must be a non-empty array of layer ids from k7art-read");
   return v as number[];
 }
 
-function layerById(ed: Editor, id: unknown): Obj {
+const SURFACES = ["label", "jcard"] as const;
+
+/** The surface a call names, or the one the person at the page is on. */
+function readSurface(ed: Editor, args: Args): Surface {
+  const surface = readEnum(args, "surface", SURFACES) ?? ed.surface;
+  if (surface !== ed.surface) ed.setSurface(surface);
+  return surface;
+}
+
+function readField(
+  args: Args,
+  surface: Surface,
+  key = "field",
+): string | undefined {
+  const field = readStr(args, key);
+  if (field === undefined) return undefined;
+  if (surface === "jcard") {
+    if (!JCARD_FIELDS.includes(field as JCardField))
+      throw new Error(
+        `field "${field}" is not a J-card field (${JCARD_FIELDS.join(", ")})`,
+      );
+    return field;
+  }
+  if (!slotOf(field))
+    throw new Error(`field "${field}" is not one of ${SLOTS.map((s) => s.id).join(", ")}`);
+  return field;
+}
+
+function readStrings(args: Args, key: string): string[] | undefined {
+  const v = args[key];
+  if (v === undefined || v === null) return undefined;
+  if (!Array.isArray(v) || v.some((x) => typeof x !== "string"))
+    throw new Error(`${key} must be an array of names or ids`);
+  return v as string[];
+}
+
+function layerById(ed: Editor, id: unknown, surface: Surface): Obj {
   if (typeof id !== "number")
-    throw new Error("id must be the number from label-editor-read");
-  const o = ed.objs.find((x) => x.id === id);
-  if (!o) throw new Error(`there is no layer ${id} in the active design`);
+    throw new Error("id must be the number from k7art-read");
+  const o = ed.activeObjs().find((x) => x.id === id);
+  if (!o)
+    throw new Error(
+      `there is no ${surface === "jcard" ? "J-card " : ""}layer ${id} in the active design`,
+    );
   return o;
 }
 
 /** A compact view of one layer, enough for an agent to reason and then edit it. */
-function layerSummary(ed: Editor, o: Obj) {
+function layerSummary(ed: Editor, o: Obj, surface: Surface = ed.surface) {
   return {
     id: o.id,
     type: o.type,
@@ -127,7 +178,7 @@ function layerSummary(ed: Editor, o: Obj) {
     x: Math.round(o.x),
     y: Math.round(o.y),
     width: Math.round(o.w),
-    height: o.type === "text" ? Math.round(ed.pxOf(o) * 1.2) : (o.h ?? 0),
+    height: o.type === "text" ? Math.round(ed.pxOf(o, surface) * 1.2) : (o.h ?? 0),
     rotation: Math.round(o.rot || 0),
     locked: !!o.locked,
     insideMask: !!o.m,
@@ -139,25 +190,66 @@ function designSummary(ed: Editor) {
   return {
     templateId: ed.tpl.id,
     templateName: ed.tpl.name,
+    surface: ed.surface,
     background: ed.bg,
     backgrounds: ed.bgs,
     backgroundIndex: ed.bgi,
-    inks: { ink: ed.tpl.inks.ink, rule: ed.tpl.inks.rule, band: ed.tpl.inks.band },
+    inks: {
+      paper: ed.tpl.inks.paper,
+      ink: ed.tpl.inks.ink,
+      rule: ed.tpl.inks.rule,
+      band: ed.tpl.inks.band,
+    },
     paper: ed.mask ? { colour: ed.mask.color, radius: ed.mask.radius } : null,
     fonts: FROLES.map((role) => ({
       role,
       face: ed.tpl.fonts[role].ff,
       size: ed.tpl.fonts[role].px,
     })),
+    jcardFonts: FROLES.map((role) => ({
+      role,
+      face: ed.jcard.fonts[role].ff,
+      size: ed.jcard.fonts[role].size,
+    })),
     layers: ed.objs.length,
+    jcardLayers: ed.jcard.prims.length,
     errors: ed.buildTemplate().errs,
   };
 }
+
+function jcardSummary(ed: Editor) {
+  return {
+    space: { w: JCARD_W, h: JCARD_H, unit: 320 },
+    parts: JCARD_PARTS,
+    safe: JCARD_SAFE,
+    fields: JCARD_FIELDS.map((field) => ({
+      id: field,
+      label: JCARD_FIELD_LABELS[field],
+      preview: ed.jcardSim(field),
+    })),
+    focus: ed.focus,
+    typeRoles: FROLES.map((role) => ({
+      role,
+      face: ed.jcard.fonts[role].ff,
+      size: ed.jcard.fonts[role].size,
+      faces: JCARD_FACES,
+    })),
+    layers: ed.jcard.prims.map((o) =>
+      layerSummary(ed, o as unknown as Obj, "jcard"),
+    ),
+    errors: ed.buildTemplate().errs,
+  };
+}
+
+/** A pack id from a template id: k7.neon-skyline -> neon-skyline. */
+const slugOf = (id: string) => id.replace(/^k7\./, "").replace(/[^a-z0-9-]/g, "-");
 
 function docsSummary(ed: Editor) {
   return ed.docs.map((d, i) => ({
     name: d.name,
     templateId: d.data.tpl?.id ?? null,
+    labelLayers: d.data.objs.length,
+    jcardLayers: d.data.jcard?.prims.length ?? 0,
     active: i === ed.active,
   }));
 }
@@ -168,21 +260,25 @@ export function labelEditorTools(
 ): LabelTool[] {
   return [
     {
-      name: "label-editor-read",
+      name: "k7art-read",
       description:
-        "Read the label editor: the print's coordinate space, the fields, roles and type faces a design may use, the open documents, the active design's layers, mask, groups, selection and export errors.",
+        "Read the K7Art editor: both surfaces — the label's 748x359 print, fields, roles and compiled type pairs, and the J-card's 1300x1280 sheet, folds, safe square, three fields and sizes — the active surface and focus, the open documents, both surfaces' layers, the label's mask and groups, the selection and the export errors.",
       inputSchema: schema({
         includeTemplate: bool(
-          "Also return the active design as a label-template v1 object.",
+          "Also return the active design as a K7Art object.",
         ),
       }),
       execute: (args) => {
         const tpl = ed.buildTemplate();
+        const active = ed.activeObjs();
         return {
           ok: true,
+          surface: ed.surface,
+          focus: ed.focus,
           board: {
             print: { width: PRINT_W, height: PRINT_H },
             screen: { width: SCREEN_W, height: SCREEN_H },
+            jcard: { width: JCARD_W, height: JCARD_H, unit: 320 },
           },
           fields: SLOTS.map((s) => ({ id: s.id, label: s.label })),
           roles: { shape: ROLES, text: TEXT_ROLES },
@@ -193,15 +289,34 @@ export function labelEditorTools(
             faces: sheetFaces,
             sizes: sheetSizes(ed.tpl.fonts[role].ff),
           })),
+          jcard: jcardSummary(ed),
+          label: {
+            space: { w: PRINT_W, h: PRINT_H },
+            aperture: WIN,
+            canvas: { backgrounds: ed.bgs, active: ed.bgi },
+            typeRoles: FROLES.map((role) => ({
+              role,
+              face: ed.tpl.fonts[role].ff,
+              size: ed.tpl.fonts[role].px,
+            })),
+            fields: SLOTS.map((s) => ({ id: s.id, label: s.label })),
+            layers: ed.objs.map((o) => layerSummary(ed, o, "label")),
+            mask: ed.mask ? { colour: ed.mask.color, radius: ed.mask.radius } : null,
+          },
           documents: docsSummary(ed),
           active: {
             name: ed.doc?.name ?? null,
             templateId: ed.tpl.id,
             templateName: ed.tpl.name,
+            surface: ed.surface,
             background: ed.bg,
             backgrounds: ed.bgs,
             backgroundIndex: ed.bgi,
-            layers: ed.objs.map((o) => layerSummary(ed, o)),
+            layers: active.map((o) => layerSummary(ed, o)),
+            labelLayers: ed.objs.map((o) => layerSummary(ed, o, "label")),
+            jcardLayers: ed.jcard.prims.map((o) =>
+              layerSummary(ed, o as unknown as Obj, "jcard"),
+            ),
             mask: ed.mask
               ? { colour: ed.mask.color, radius: ed.mask.radius }
               : null,
@@ -219,9 +334,9 @@ export function labelEditorTools(
     },
 
     {
-      name: "label-editor-guide",
+      name: "k7art-guide",
       description:
-        "Read this once before designing: what a K7 label is for, how the print and the Card's window shape a layout, the fields and the three type roles, the workflow, what gets refused, and how to do all of it from the visible controls when the tools cannot be reached. The same guide is served at /skill.md.",
+        "Read this once before designing: what a K7Art is for — the label's print and the J-card's sheet — how the print and the Card's window shape the label, the J-card's flap | spine | cover, the fields and the three faces, the workflow, what gets refused, and how to do all of it from the visible controls when the tools cannot be reached. The same guide is served at /k7art/skill.md.",
       inputSchema: schema({}),
       execute: () => ({
         ok: true,
@@ -231,29 +346,33 @@ export function labelEditorTools(
     },
 
     {
-      name: "label-editor-add-layer",
+      name: "k7art-add-layer",
       description:
-        "Add a layer to the active design. Coordinates are design pixels in the 748x359 print, origin at its top-left; a layer may sit outside the print and still export, where the print crops it. A text is static unless a field is given, and starts in the caption type role; set fontRole for title or numeral.",
+        "Add a layer to the active design, on the label's 748x359 print or the J-card's 1300x1280 sheet. Coordinates are design units of that surface, origin at its top-left; a layer may sit outside and still export, where the label's print crops it. A text is static unless a field is given; on the J-card the field is title, artist or meta.",
       inputSchema: schema(
         {
+          surface: str(
+            "Which surface to add to. Defaults to the active surface.",
+            { enum: SURFACES },
+          ),
           type: str("What to add.", {
             enum: ["rect", "square", "circle", "text"],
             default: "rect",
           }),
-          x: num("Left edge in design pixels. Default 40."),
-          y: num("Top edge in design pixels. Default 40."),
-          width: num("Width in design pixels; for a text this is its wrap width.", {
+          x: num("Left edge in design units. Default 40."),
+          y: num("Top edge in design units. Default 40."),
+          width: num("Width in design units; for a text this is its wrap width.", {
             minimum: 1,
           }),
-          height: num("Height in design pixels, for a shape. A text's height follows its type.", {
+          height: num("Height in design units, for a shape. A text's height follows its type.", {
             minimum: 1,
           }),
           text: str(
             "The string a static text prints. Do not combine with field.",
           ),
           field: str(
-            `The field a dynamic text prints. Do not combine with text. One of: ${SLOTS.map((s) => s.id).join(", ")}.`,
-            { enum: SLOTS.map((s) => s.id) },
+            `The field a dynamic text prints. The label's: ${SLOTS.map((s) => s.id).join(", ")}. The J-card's: ${JCARD_FIELDS.join(", ")}. Do not combine with text.`,
+            { enum: [...SLOTS.map((s) => s.id), ...JCARD_FIELDS] },
           ),
           role: str(
             `The colour role. A shape takes ${ROLES.join(", ")}; a text takes ${TEXT_ROLES.join(", ")}.`,
@@ -268,12 +387,13 @@ export function labelEditorTools(
         [],
       ),
       execute: (args) => {
+        const surface = readSurface(ed, args);
         const type = (readEnum(args, "type", ["rect", "square", "circle", "text"] as const) ??
           "rect") as Tool;
         const x = Math.round(readNum(args, "x") ?? 40);
         const y = Math.round(readNum(args, "y") ?? 40);
         const text = readStr(args, "text");
-        const field = readStr(args, "field");
+        const field = readField(args, surface);
         const w = readNum(args, "width", 1);
         const h = readNum(args, "height", 1);
         const role = readStr(args, "role");
@@ -288,10 +408,6 @@ export function labelEditorTools(
           throw new Error("only a text prints a string; set type to text");
         if (field !== undefined && type !== "text")
           throw new Error("only a text prints a field; set type to text");
-        if (field !== undefined && !slotOf(field))
-          throw new Error(
-            `field "${field}" is not one of ${SLOTS.map((s) => s.id).join(", ")}`,
-          );
         if (text !== undefined && !text.trim()) throw new Error("text must not be empty");
         if (h !== undefined && type === "text")
           throw new Error("a text's height follows its type; set width (the wrap width)");
@@ -321,6 +437,7 @@ export function labelEditorTools(
           o.name = field;
           delete o.static;
           delete o.text;
+          if (surface === "jcard") delete o.sim;
         }
         if (role !== undefined) o.role = role;
         if (fontRole !== undefined) o.fr = fontRole;
@@ -331,7 +448,8 @@ export function labelEditorTools(
         ed.emit();
         return {
           ok: true,
-          message: `Added ${o.type} ${o.id}.`,
+          message: `Added ${o.type} ${o.id} on the ${surface}.`,
+          surface,
           id: o.id,
           layer: layerSummary(ed, o),
         };
@@ -339,21 +457,25 @@ export function labelEditorTools(
     },
 
     {
-      name: "label-editor-update-layer",
+      name: "k7art-update-layer",
       description:
-        "Change one layer of the active design: position or size in design pixels, rotation, its text or field, colour role, font role, alignment, layer name, test value or lock. Only the fields given change.",
+        "Change one layer of the active design, on the label or the J-card: position or size in that surface's units, rotation, its text or field, colour role, font role, alignment, layer name, test value or lock. Only the fields given change.",
       inputSchema: schema(
         {
-          id: num("The layer id from label-editor-read.", { minimum: 1 }),
-          x: num("Left edge in design pixels."),
-          y: num("Top edge in design pixels."),
-          width: num("Width in design pixels; a text's wrap width.", { minimum: 1 }),
-          height: num("Height in design pixels, for a shape.", { minimum: 1 }),
+          surface: str(
+            "Which surface the layer is on. Defaults to the active surface.",
+            { enum: SURFACES },
+          ),
+          id: num("The layer id from k7art-read.", { minimum: 1 }),
+          x: num("Left edge in design units."),
+          y: num("Top edge in design units."),
+          width: num("Width in design units; a text's wrap width.", { minimum: 1 }),
+          height: num("Height in design units, for a shape.", { minimum: 1 }),
           rotation: num("Rotation in degrees, clockwise."),
           text: str("Make the text static and print this string."),
           field: str(
-            `Make the text dynamic and print this field. One of: ${SLOTS.map((s) => s.id).join(", ")}.`,
-            { enum: SLOTS.map((s) => s.id) },
+            `Make the text dynamic and print this field. The label's: ${SLOTS.map((s) => s.id).join(", ")}. The J-card's: ${JCARD_FIELDS.join(", ")}.`,
+            { enum: [...SLOTS.map((s) => s.id), ...JCARD_FIELDS] },
           ),
           role: str("The colour role to print in."),
           fontRole: str("The text's type role.", { enum: FROLES }),
@@ -367,7 +489,8 @@ export function labelEditorTools(
         ["id"],
       ),
       execute: (args) => {
-        const o = layerById(ed, args.id);
+        const surface = readSurface(ed, args);
+        const o = layerById(ed, args.id, surface);
         const locked = readBool(args, "locked");
         const x = readNum(args, "x");
         const y = readNum(args, "y");
@@ -375,7 +498,7 @@ export function labelEditorTools(
         const h = readNum(args, "height", 1);
         const rot = readNum(args, "rotation");
         const text = readStr(args, "text");
-        const field = readStr(args, "field");
+        const field = readField(args, surface);
         const role = readStr(args, "role");
         const fontRole = readEnum(args, "fontRole", FROLES);
         const align = readEnum(args, "align", ["left", "center", "right"] as const);
@@ -390,10 +513,6 @@ export function labelEditorTools(
           throw new Error("only a text prints a string");
         if (field !== undefined && o.type !== "text")
           throw new Error("only a text prints a field");
-        if (field !== undefined && !slotOf(field))
-          throw new Error(
-            `field "${field}" is not one of ${SLOTS.map((s) => s.id).join(", ")}`,
-          );
         if (text !== undefined && !text.trim()) throw new Error("text must not be empty");
         if (h !== undefined && o.type === "text")
           throw new Error("a text's height follows its type; set width (the wrap width)");
@@ -426,6 +545,7 @@ export function labelEditorTools(
           o.name = field;
           delete o.static;
           delete o.text;
+          if (surface === "jcard") delete o.sim;
         }
         if (role !== undefined) o.role = role;
         if (fontRole !== undefined) o.fr = fontRole;
@@ -439,57 +559,80 @@ export function labelEditorTools(
         ed.emit();
         return {
           ok: true,
-          message: `Updated layer ${o.id}.`,
+          message: `Updated layer ${o.id} on the ${surface}.`,
+          surface,
           layer: layerSummary(ed, o),
         };
       },
     },
 
     {
-      name: "label-editor-delete-layer",
-      description: "Delete one layer of the active design.",
+      name: "k7art-delete-layer",
+      description: "Delete one layer of the active design, on the label or the J-card.",
       inputSchema: schema(
-        { id: num("The layer id from label-editor-read.", { minimum: 1 }) },
+        {
+          surface: str(
+            "Which surface the layer is on. Defaults to the active surface.",
+            { enum: SURFACES },
+          ),
+          id: num("The layer id from k7art-read.", { minimum: 1 }),
+        },
         ["id"],
       ),
       execute: (args) => {
-        const o = layerById(ed, args.id);
+        const surface = readSurface(ed, args);
+        const o = layerById(ed, args.id, surface);
         if (o.locked) throw new Error(`layer ${o.id} is locked; unlock it first`);
-        ed.selectLayers([o.id]);
+        ed.selectLayers([o.id], surface);
         ed.delSel();
-        return { ok: true, message: `Deleted layer ${o.id}.`, layers: ed.objs.length };
+        return {
+          ok: true,
+          message: `Deleted layer ${o.id} from the ${surface}.`,
+          surface,
+          layers: ed.activeObjs().length,
+        };
       },
     },
 
     {
-      name: "label-editor-select-layer",
+      name: "k7art-select-layer",
       description:
-        "Select one or more layers, so the person at the screen sees the same selection the tools are working on.",
+        "Select one or more layers on the label or the J-card, so the person at the screen sees the same selection the tools are working on. Naming the surface switches the page to it.",
       inputSchema: schema(
         {
+          surface: str(
+            "Which surface the layers are on. Defaults to the active surface.",
+            { enum: SURFACES },
+          ),
           ids: list(
-            "Layer ids from label-editor-read. The last one is the primary selection.",
+            "Layer ids from k7art-read. The last one is the primary selection.",
             { type: "number" },
           ),
         },
         ["ids"],
       ),
       execute: (args) => {
+        const surface = readSurface(ed, args);
         const ids = readIds(args)!;
-        const missing = ids.filter((id) => !ed.objs.some((o) => o.id === id));
-        if (missing.length) throw new Error(`no layer ${missing.join(", ")} in the active design`);
-        ed.selectLayers(ids);
-        return { ok: true, selection: ed.selIds };
+        const missing = ids.filter((id) => !ed.activeObjs().some((o) => o.id === id));
+        if (missing.length)
+          throw new Error(`no layer ${missing.join(", ")} on the ${surface}`);
+        ed.selectLayers(ids, surface);
+        return { ok: true, surface, selection: ed.selIds };
       },
     },
 
     {
-      name: "label-editor-move-layer",
+      name: "k7art-move-layer",
       description:
-        "Move a layer through the stack: one step up or down, or straight to the top or bottom. The top of the stack prints last, over the layers below it.",
+        "Move a layer through its surface's stack: one step up or down, or straight to the top or bottom. The top of the stack prints last, over the layers below it.",
       inputSchema: schema(
         {
-          id: num("The layer id from label-editor-read.", { minimum: 1 }),
+          surface: str(
+            "Which surface the layer is on. Defaults to the active surface.",
+            { enum: SURFACES },
+          ),
+          id: num("The layer id from k7art-read.", { minimum: 1 }),
           direction: str("Which way to move it.", {
             enum: ["up", "down", "top", "bottom"],
           }),
@@ -497,34 +640,40 @@ export function labelEditorTools(
         ["id", "direction"],
       ),
       execute: (args) => {
-        const o = layerById(ed, args.id);
+        const surface = readSurface(ed, args);
+        const o = layerById(ed, args.id, surface);
         const direction = readEnum(args, "direction", [
           "up",
           "down",
           "top",
           "bottom",
         ] as const)!;
-        ed.selectLayers([o.id]);
+        ed.selectLayers([o.id], surface);
         if (direction === "up" || direction === "down") ed.mv(direction === "up" ? 1 : -1);
         else {
           const b = ed.blockOf(o);
-          if (direction === "top") ed.moveBlock(b.lo, b.hi, ed.objs.length);
+          if (direction === "top") ed.moveBlock(b.lo, b.hi, ed.activeObjs().length);
           else ed.moveBlock(b.lo, b.hi, 0);
         }
         return {
           ok: true,
-          message: `Moved layer ${o.id} ${direction}.`,
-          index: ed.objs.findIndex((x) => x.id === o.id),
+          message: `Moved layer ${o.id} ${direction} on the ${surface}.`,
+          surface,
+          index: ed.activeObjs().findIndex((x) => x.id === o.id),
         };
       },
     },
 
     {
-      name: "label-editor-group-layers",
+      name: "k7art-group-layers",
       description:
-        "Group layers into one layer group, or ungroup a group. Grouping needs the layers to be contiguous and on one side of the LayerMask, which the tool checks.",
+        "Group layers into one layer group, or ungroup a group, on the label. Grouping needs the layers to be contiguous and on one side of the LayerMask, which the tool checks. The J-card has plain layers and no groups.",
       inputSchema: schema(
         {
+          surface: str(
+            "Which surface. Groups belong to the label's LayerMask, not the J-card.",
+            { enum: SURFACES },
+          ),
           action: str("Group or ungroup. Default group.", {
             enum: ["group", "ungroup"],
             default: "group",
@@ -535,9 +684,12 @@ export function labelEditorTools(
         },
       ),
       execute: (args) => {
+        const surface = readSurface(ed, args);
+        if (surface === "jcard")
+          throw new Error("the J-card has plain layers and no groups");
         const action = readEnum(args, "action", ["group", "ungroup"] as const) ?? "group";
         const ids = readIds(args);
-        if (ids) ed.selectLayers(ids);
+        if (ids) ed.selectLayers(ids, surface);
         if (!ed.sel) throw new Error("nothing is selected");
         if (action === "group") {
           const why = ed.groupWhy();
@@ -557,11 +709,11 @@ export function labelEditorTools(
     },
 
     {
-      name: "label-editor-set-design",
+      name: "k7art-set-design",
       description:
-        "Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), its colourway (ink, rule, the eight bands, the paper), its paper radius, or one of its type roles' face and size. Every colour is a hex string; a face and size must be a pair the sheet carries.",
+        "Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), its colourway (ink, rule, the eight bands, the paper), its paper radius, one of the label's type roles' face and size, or one of the J-card's three type sizes. Every colour is a hex string; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.",
       inputSchema: schema({
-        templateId: str("The template id, like label.my-design; it names the exported file."),
+        templateId: str("The design id, like k7.my-design; it names the exported file."),
         name: str("The design's human name."),
         background: str(
           "The active canvas background, as #rrggbb; it sets the editor's preview preset."),
@@ -584,16 +736,34 @@ export function labelEditorTools(
         fonts: {
           type: "object",
           description:
-            `Type roles to change: a face from ${sheetFaces.join(", ")} and one of that face's sizes.`,
+            `The label's type roles to change: a face from ${sheetFaces.join(", ")} and one of that face's sizes.`,
           properties: Object.fromEntries(
             FROLES.map((role) => [
               role,
               {
                 type: "object",
-                description: `The ${role} role.`,
+                description: `The label's ${role} role.`,
                 properties: {
                   face: str("The face name.", { enum: sheetFaces }),
                   size: num("The pixel size the sheet carries for that face."),
+                },
+              },
+            ]),
+          ),
+        },
+        jcardFonts: {
+          type: "object",
+          description:
+            "The J-card's type roles to change: the same three faces at the J-card's own sizes in units (4..640).",
+          properties: Object.fromEntries(
+            FROLES.map((role) => [
+              role,
+              {
+                type: "object",
+                description: `The J-card's ${role} role.`,
+                properties: {
+                  face: str("The face name.", { enum: JCARD_FACES }),
+                  size: num("The size in units, 4..640.", { minimum: 4, maximum: 640 }),
                 },
               },
             ]),
@@ -604,7 +774,7 @@ export function labelEditorTools(
         const templateId = readStr(args, "templateId");
         if (templateId !== undefined) {
           if (!TEMPLATE_ID.test(templateId))
-            throw new Error('templateId must look like label.my-design');
+            throw new Error('templateId must look like k7.my-design');
           ed.tpl.id = templateId;
         }
         const name = readStr(args, "name");
@@ -649,10 +819,14 @@ export function labelEditorTools(
         }
         const paper = readHex(args, "paper");
         const paperRadius = readNum(args, "paperRadius", 0);
-        if (paper !== undefined || paperRadius !== undefined) {
+        if (paperRadius !== undefined && ed.surface !== "label")
+          throw new Error(
+            "paperRadius is the label's LayerMask; the J-card's sheet has no corner radius",
+          );
+        if (paper !== undefined) ed.setRoleColor("paper", paper);
+        if (paperRadius !== undefined) {
           if (!ed.mask) ed.addMask();
-          if (paper !== undefined) ed.mask!.color = paper;
-          if (paperRadius !== undefined) ed.mask!.radius = Math.round(paperRadius);
+          if (ed.mask) ed.mask.radius = Math.round(paperRadius);
         }
         if (args.fonts !== undefined) {
           if (typeof args.fonts !== "object" || args.fonts === null)
@@ -686,6 +860,41 @@ export function labelEditorTools(
             }
           }
         }
+        if (args.jcardFonts !== undefined) {
+          if (typeof args.jcardFonts !== "object" || args.jcardFonts === null)
+            throw new Error("jcardFonts must be an object keyed by role");
+          const fonts = args.jcardFonts as Record<string, unknown>;
+          const patches: Array<{
+            role: (typeof FROLES)[number];
+            patch: { ff?: string; size?: number };
+          }> = [];
+          for (const key of Object.keys(fonts)) {
+            if (!FROLES.includes(key as (typeof FROLES)[number]))
+              throw new Error(`jcardFonts may only name ${FROLES.join(", ")}`);
+            const entry = fonts[key];
+            if (typeof entry !== "object" || entry === null)
+              throw new Error(`jcardFonts.${key} must be an object with face and size`);
+            const face = readStr(entry as Args, "face");
+            const size = readNum(entry as Args, "size", 4, 640);
+            const role = key as (typeof FROLES)[number];
+            const patch: { ff?: string; size?: number } = {};
+            if (face !== undefined) {
+              if (!JCARD_FACES.includes(face))
+                throw new Error(
+                  `face "${face}" is not one the J-card wears (${JCARD_FACES.join(", ")})`,
+                );
+              patch.ff = face;
+            }
+            if (size !== undefined) {
+              if (!Number.isInteger(size))
+                throw new Error(`jcardFonts.${key}.size must be a whole number of units`);
+              patch.size = size;
+            }
+            patches.push({ role, patch });
+          }
+          // Validate the whole object before applying any of it.
+          for (const { role, patch } of patches) ed.setJCardFont(role, patch);
+        }
         ed.commit(false);
         ed.emit();
         return {
@@ -697,45 +906,51 @@ export function labelEditorTools(
     },
 
     {
-      name: "label-editor-set-field-value",
+      name: "k7art-set-field-value",
       description:
-        "Set what a field prints in the editor and in Preview — its simulated value, shown until the resolver sends a real one. An empty string restores the field's default.",
+        "Set what a field prints in the editor and in Preview — its simulated value, shown until the resolver sends a real one. On the label the field is a Slot; on the J-card it is title, artist or meta. An empty string restores the default.",
       inputSchema: schema(
         {
+          surface: str(
+            "Which surface's field to set. Defaults to the active surface.",
+            { enum: SURFACES },
+          ),
           field: str(
-            `The field id. One of: ${SLOTS.map((s) => s.id).join(", ")}.`,
-            { enum: SLOTS.map((s) => s.id) },
+            `The field id. The label's: ${SLOTS.map((s) => s.id).join(", ")}. The J-card's: ${JCARD_FIELDS.join(", ")}.`,
+            { enum: [...SLOTS.map((s) => s.id), ...JCARD_FIELDS] },
           ),
           value: str("The value to preview; empty restores the default."),
         },
         ["field", "value"],
       ),
       execute: (args) => {
-        const field = readStr(args, "field");
-        if (!field || !slotOf(field))
-          throw new Error(`field must be one of ${SLOTS.map((s) => s.id).join(", ")}`);
+        const surface = readSurface(ed, args);
+        const field = readField(args, surface);
+        if (!field) throw new Error("field is required");
         const value = readStr(args, "value") ?? "";
-        ed.setSim(field, value);
+        if (surface === "jcard") ed.setJCardSim(field as JCardField, value);
+        else ed.setSim(field, value);
         return {
           ok: true,
           message: value
-            ? `Field ${field} now previews "${value}".`
-            : `Field ${field} is back to its default.`,
+            ? `${surface === "jcard" ? "J-card field" : "Field"} ${field} now previews "${value}".`
+            : `${surface === "jcard" ? "J-card field" : "Field"} ${field} is back to its default.`,
+          surface,
           field,
-          value: ed.simOf(field),
+          value: surface === "jcard" ? ed.jcardSim(field as JCardField) : ed.simOf(field),
         };
       },
     },
 
     {
-      name: "label-editor-import-template",
+      name: "k7art-import-template",
       description:
-        "Open a label-template v1 design in a new document. Accepts the template object or its JSON text. A design the packer would refuse is refused here with the reason, and leaves no half-open document.",
+        "Open a K7Art design in a new document. Accepts the template object or its JSON text. A design the packer would refuse is refused here with the reason, and leaves no half-open document.",
       inputSchema: schema(
         {
           template: {
             type: "object",
-            description: "The label-template v1 object (or pass JSON text in this field).",
+            description: "The K7Art object (or pass JSON text in this field).",
           },
           name: str("The document's tab name; defaults to the template's name."),
         },
@@ -744,7 +959,7 @@ export function labelEditorTools(
       execute: (args) => {
         const raw = args.template;
         if (raw === undefined)
-          throw new Error("template is required: a label-template v1 object or its JSON text");
+          throw new Error("template is required: a K7Art object or its JSON text");
         const text = typeof raw === "string" ? raw : JSON.stringify(raw);
         const back = ed.active;
         ed.newDoc(undefined, readStr(args, "name"));
@@ -768,9 +983,9 @@ export function labelEditorTools(
     },
 
     {
-      name: "label-editor-export-template",
+      name: "k7art-export-template",
       description:
-        "Return the active design (or a named one) as a label-template v1 object, together with the validation errors that would stop it being exported.",
+        "Return the active design (or a named one) as a K7Art object, together with the validation errors that would stop it being exported.",
       inputSchema: schema({
         document: str(
           "The tab name or template id to export; defaults to the active design.",
@@ -797,7 +1012,7 @@ export function labelEditorTools(
           ok: r.errs.length === 0,
           message:
             r.errs.length === 0
-              ? `${r.doc.id} is valid label-template v1.`
+              ? `${r.doc.id} is valid k7art v1.`
               : `${r.errs.length} issue(s) would stop the export.`,
           document: docName,
           template: r.doc,
@@ -807,7 +1022,97 @@ export function labelEditorTools(
     },
 
     {
-      name: "label-editor-validate",
+      name: "k7art-publish-pack",
+      description:
+        "Build a .k7artpack from named designs (all open designs by default): the version-4 label sheet, the designs' J-cards and the 128-byte header with the CRC. Returns the pack as base64 with its header facts, or the packer's refusals; it does not download a file or call the device.",
+      inputSchema: schema(
+        {
+          designs: list(
+            "The tab names or template ids to include; omit for every open design.",
+            { type: "string" },
+          ),
+          packId: str(
+            "The pack's slug id: lowercase letters, digits and dashes, up to 16 characters. Defaults to the active design's slug.",
+          ),
+          name: str("The pack's name for the App's list. Defaults to the active design's name."),
+          author: str("The pack's author. Defaults to K7Art."),
+        },
+        [],
+      ),
+      execute: (args) => {
+        const wanted = readStrings(args, "designs");
+        let indices: number[];
+        if (wanted) {
+          indices = wanted.map((w) => {
+            const i = ed.docs.findIndex(
+              (d) => d.name === w || d.data.tpl?.id === w,
+            );
+            if (i < 0)
+              throw new Error(
+                `no document "${w}"; open documents are ${ed.docs.map((d) => d.name).join(", ")}`,
+              );
+            return i;
+          });
+        } else indices = ed.docs.map((_, i) => i);
+        const built = ed.buildSelected(indices);
+        if (built.errs.length)
+          return {
+            ok: false,
+            message: `${built.errs.length} issue(s) would stop the pack.`,
+            errors: built.errs,
+          };
+        const meta = {
+          packId:
+            readStr(args, "packId") ?? (slugOf(ed.tpl.id).slice(0, 16) || "k7art"),
+          name: readStr(args, "name") ?? ed.tpl.name,
+          author: readStr(args, "author") ?? "K7Art",
+        };
+        try {
+          const pack = buildArtPack(
+            [...built.built].sort((a, b) => a.i - b.i).map((b) => b.doc),
+            meta,
+          );
+          return {
+            ok: true,
+            message: `${pack.designCount} design(s) packed as ${pack.filename}.`,
+            filename: pack.filename,
+            size: pack.totalSize,
+            crc32: pack.crc,
+            designCount: pack.designCount,
+            designIds: pack.designIds,
+            sheetVersion: pack.sheetVersion,
+            fontCount: pack.fontCount,
+            header: {
+              magic: "K7ART",
+              version: 1,
+              headerSize: 128,
+              totalSize: pack.totalSize,
+              crc32: pack.crc,
+              designCount: pack.designCount,
+              sheetVersion: pack.sheetVersion,
+              fontCount: pack.fontCount,
+              sheetSize: pack.sheet.length,
+              jcardsSize: pack.jcards.length,
+              packId: meta.packId,
+              name: meta.name,
+              author: meta.author,
+            },
+            base64: toBase64(pack.bytes),
+          };
+        } catch (err) {
+          if (err instanceof PackError)
+            return {
+              ok: false,
+              message: `${err.errors.length} issue(s) would stop the pack.`,
+              errors: err.errors,
+            };
+          throw err;
+        }
+      },
+    },
+
+    {
+      name: "k7art-validate",
       description:
         "Check every open design and return the packer's reasons for any that would not export.",
       inputSchema: schema({}),
@@ -825,7 +1130,7 @@ export function labelEditorTools(
     },
 
     {
-      name: "label-editor-document",
+      name: "k7art-document",
       description:
         "Work with the open documents: create a new one, switch to one, rename the active one, or close one. Closing the last document leaves an empty one open.",
       inputSchema: schema(
@@ -881,7 +1186,7 @@ export function labelEditorTools(
     },
 
     {
-      name: "label-editor-history",
+      name: "k7art-history",
       description: "Undo or redo the last edit of the active design.",
       inputSchema: schema(
         {

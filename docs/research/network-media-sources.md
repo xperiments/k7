@@ -200,7 +200,7 @@ needs the CSP change in §3.3, and an HTTPS server needs a certificate real enou
 
 ### 3.3 The CSP is narrower than the browser
 
-The deployed app sends ([`web/vercel.json`](../../web/vercel.json)):
+The deployed app sends ([`vercel.json`](../../vercel.json)):
 
 ```
 connect-src 'self' https: http://k7.local data: blob:;
@@ -732,7 +732,7 @@ with a CORS policy that can change without notice; that is a reason not to take 
 
 **Repo (VERIFIED by reading this checkout):** `docs/specs/k7-app.md` §2, §4, §8 (X2, X4);
 `docs/specs/k7-deploy.md` D6; `docs/adr/0084-the-assistant-is-the-browsers-built-in-model.md`;
-`web/vercel.json` (CSP); `web/src/card/compose.ts`; `web/src/library/source.ts`;
+`vercel.json` (CSP); `web/src/card/compose.ts`; `web/src/library/source.ts`;
 `web/src/media/albums.ts`; `web/src/ui/playback.tsx`; `web/src/ui/areas/Player.tsx`;
 `web/src/settings.ts`.
 

@@ -4,7 +4,9 @@
 flashes the player's firmware from a browser, and installs the App. The App itself moves to
 `/app` and is otherwise unchanged, behind its gate. The Site is the only place a person with no
 ESP-IDF environment can put K7 on a board, and the only page that offers the install where the
-App can actually run.
+App can actually run. The origin also serves the **K7Art Editor** at `/k7art`
+([ADR 0112](../adr/0112-the-k7art-editor-is-the-sites-k7art-page.md)): the design tool for a
+cassette's label and J-card, public and static, with no device access.
 
 The origin does not move: `xperiments.dev` and its certificate are the ones already deployed
 ([ADR 0057](../adr/0057-the-app-lives-at-a-public-origin.md)). What moves is which document owns
@@ -17,7 +19,8 @@ released** — `web/firmware.json` and `web/firmware-player.json`, with their pa
 fake board and a fake origin — **not on hardware** — and **no board has been flashed from a
 browser**; SI-06 is the K7's board and browser pass and SI-08 the player's. The hero uses the panel's own render in
 its slot until a photograph of the device exists. The two ADRs are 0078 and 0079. The sizes in
-§3 are the released bytes; no timing in §6 is measured yet. S15 now names the K7 look
+§3 are the released bytes, and §6's one timed flash is the **USB** write — 34.0 s at 488.4 kbit/s
+over `esptool`; the browser's own write has not been timed. S15 now names the K7 look
 ([`k7-look.md`](./k7-look.md)), applied by LK-06.
 
 **Vocabulary:** [`web/CONTEXT.md`](../../web/CONTEXT.md) — **Site**, **Flash**, **Install**. The
@@ -27,22 +30,28 @@ is given after a flash is [`wifi-provisioning.md`](./wifi-provisioning.md).
 
 ---
 
-## 1. Two documents at one origin
+## 1. Three documents at one origin
 
-**S1. The origin serves two documents, and only one of them is the App.**
+**S1. The origin serves three documents, and only one of them is the App.**
 
 | Path | Document | Gated | Who it is for |
 |---|---|---|---|
 | `/` | the **Site** | no | someone with a bare board, or with a K7 and no app |
 | `/app` | the **App** | `local-network` | someone using K7 |
+| `/k7art` | the **K7Art Editor** | no | someone making a cassette's label and J-card |
 
 The Site is public in the same sense the App is public (L5 of the App spec): it holds no
 credential. It makes no device request at all — the player is reached over USB, not the network.
+The editor is public too: its documents live in the visitor's browser, its packs are downloads,
+and it never reaches a device ([ADR 0112](../adr/0112-the-k7art-editor-is-the-sites-k7art-page.md)).
 
 **S2. `/app` is a rewrite, not a second origin.** Vercel rewrites `/app` to the App's document;
 the browser's address bar keeps `/app`, and the App's hash routes follow it — `/app#/prepare`,
 `/app#/playlists/:id`, `/app#/media/album/:album`. A route that exists only inside the App still
-does (web/CONTEXT.md, **Route**); it now hangs off a path instead of the bare origin.
+does (web/CONTEXT.md, **Route**); it now hangs off a path instead of the bare origin. **`/k7art`
+is a directory, not a rewrite**: it serves the editor's own `index.html` and its base-relative
+assets — `/k7art/assets/`, `/k7art/fonts/`, `/k7art/lvgl.js` and `/k7art/skill.md` — and nothing
+else is rewritten for it.
 
 **S3. The manifest describes the App, and both documents link it.**
 
@@ -57,12 +66,14 @@ does (web/CONTEXT.md, **Route**); it now hangs off a path instead of the bare or
 
 **S4. The Site registers the worker.** A visitor who installs from `/` may never have loaded
 `/app`, and an installed App with no worker is an App with no offline shell. `/sw.js` is
-therefore registered by both documents; the install control does not wait on it.
+therefore registered by the Site and the App — not by the editor; the install control does not
+wait on it.
 
-**S5. The worker never stands in front of the Site.** It precaches the App's document and assets
-and answers a navigation for `/app` and `/app.html`; any other navigation goes to the network.
-The Site must never be served from a worker's stale copy — it is the page that carries a
-version's flash and install.
+**S5. The worker never stands in front of the Site or the editor.** It precaches the App's
+document and assets and answers a navigation for `/app` and `/app.html`; any other navigation —
+`/`, `/k7art` and `/k7art/` included — goes to the network. The Site must never be served from a
+worker's stale copy — it is the page that carries a version's flash and install — and the editor
+must never be served from one either: it is a tool whose publish writes a pack.
 
 **S6. The Site's install control and the App's must agree.** The Site reuses
 `web/src/ui/install.ts` (`readInstallState`, `promptInstall`) and
@@ -81,9 +92,13 @@ host test's expected `Location` change with it. Every existing local `sdkconfig`
 string until it is reconfigured — a change of default does not rewrite a generated config, and a
 build that is not reconfigured flashes a doorbell to the Site.
 
-**S9. Headers are the App's, unchanged, with the new document added.** `/app.html` joins
-`index.html`, `sw.js` and `manifest.webmanifest` on `no-cache`; `/assets/` stays `immutable`; the
-CSP stays one policy for the origin (D4–D6 of [`k7-deploy.md`](./k7-deploy.md)).
+**S9. Headers are the App's, unchanged, with the new documents added.** `/app.html` joins
+`index.html`, `sw.js` and `manifest.webmanifest` on `no-cache`; `/k7art` and `/k7art/index.html`
+join them. `/assets/` and `/k7art/assets/` (the editor's content-hashed Vite files) stay
+`immutable`; the editor's `public` files — `/k7art/fonts/`, `/k7art/lvgl.js`, `/k7art/skill.md` —
+are not hashed and carry a short `max-age` instead of `immutable`. The CSP stays one policy for
+the origin, and it already carries `wasm-unsafe-eval`, which the editor's LVGL module needs
+(D4–D6 of [`k7-deploy.md`](./k7-deploy.md)).
 
 ---
 
@@ -262,17 +277,23 @@ rot.
 
 ## 5. Delivery
 
-**D1. Two Vite entries in one artifact.** `web/index.html` is the Site, `web/app.html` is the
-App; `npm run build` emits both, and `npm test`, `npm run typecheck` and the artifact guard apply
-to both. There is no second project, package or deploy.
+**D1. Three documents in one artifact.** `web/index.html` is the Site, `web/app.html` is the
+App, and the **K7Art Editor** is `tools/LabelEditor/`, its own Vite build with `base: "/k7art/"`,
+copied under `dist/k7art/`. `npm run build` emits the first two and builds and copies the editor;
+`npm test`, `npm run typecheck` and the artifact guard apply to the Site and the App, and the
+editor's own `npm test` and `npm run build` to it. One deploy, two packages: the editor is a
+second Vite project, not a second origin or a second Vercel project.
 
-**D2. One rewrite.** `/app` → `/app.html` on Vercel; the development server answers `/app` with
-the same document through a middleware, so `k7-dev.xperiments.dev:8000/app` has the shape it
-ships in (D11–D12 of [`k7-deploy.md`](./k7-deploy.md)).
+**D2. One rewrite, and one directory.** `/app` → `/app.html` on Vercel; `/k7art/` is served from
+its own directory (`/k7art/index.html` with the base-relative assets). The development server
+answers `/app` with the same document through a middleware, so
+`k7-dev.xperiments.dev:8000/app` has the shape it ships in (D11–D12 of
+[`k7-deploy.md`](./k7-deploy.md)); the editor's development server is its own `npm run dev` at
+`:5178`, with `base: "/"` (ADR 0112).
 
 **D3. The worker's shell list moves with the App.** `/` and `/index.html` leave it; `/app` and
-`/app.html` replace them, and the navigation handler answers only those (S5). The Site is not
-precached and is never served from a cache-first path.
+`/app.html` replace them, and the navigation handler answers only those (S5). The Site and the
+editor are not precached and are never served from a cache-first path.
 
 **D4. A shipping build still refuses the development origin** (D14), and now also refuses a Site
 that names a firmware version absent from `web/public/firmware/`.
@@ -288,17 +309,18 @@ flashed from a browser, and the timings below are not yet measured.
 
 | # | Test | Tier |
 |---|---|---|
-| T1 | The build emits `/` and `/app`, and `/app` renders the App while `/` renders the Site | web |
+| T1 | The build emits `/`, `/app` and `/k7art`, and `/app` renders the App, `/` the Site and `/k7art` the editor | web |
 | T2 | The manifest is `id: "/"`, `start_url: "/app"`, `scope: "/app"`, with the icons A9 requires | web/CI |
 | T3 | The Site's install section renders the control only when `queryLocalNetwork()` is not `unsupported`, and *Open the app* when installed | web |
 | T4 | Over a fake serial transport: a non-S3 chip is refused, an 8 MB flash is refused, nothing is written before confirmation, the happy path writes `0x0`/`0x8000`/`0x10000`, erase happens only when chosen, and every failure has its named cause | web |
 | T5 | A part whose sha256 does not match `firmware.json` is refused before it is written | web |
 | T6 | CI: every part matches the manifest's size and hash; `VERSION` matches the manifest; a missing part fails the build | CI |
 | T7 | `./tools/build.sh`'s release refuses a dirty tree and a tag that does not match `VERSION` | host (shell) |
-| T8 | The worker precaches `/app` and answers navigation there; a navigation to `/` goes to the network | web |
+| T8 | The worker precaches `/app` and answers navigation there; a navigation to `/` or `/k7art` goes to the network | web |
 | T9 | The device's 302 names `https://k7.xperiments.dev/app#/player` | host (`http_tests.sh`) |
 | T10 | The Site's flash section is absent-but-honest without `'serial' in navigator`, and the manual command carries the manifest's offsets | web |
 | T11 | The reset that ends a flash moves the enable line — `DTR false, RTS true`, a wait, `DTR false, RTS false` — instead of releasing a line that is already released | web |
+| T12 | `/k7art` serves the editor and `/k7art/skill.md` the guide; every asset resolves under `/k7art/`; the editor's page boots from the built artifact | web |
 
 **Board-only, by hand**
 

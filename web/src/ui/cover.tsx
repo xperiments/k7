@@ -44,6 +44,7 @@ export function Cover({
   art?: AlbumArtData;
 }) {
   const url = useCoverUrl(cover);
+  const placeholder = (initial.trim().slice(0, 1) || '?').toUpperCase();
 
   if (!cover || !url) {
     return (
@@ -54,7 +55,14 @@ export function Cover({
           className,
         )}
       >
-        {art ? <AlbumArt {...art} /> : (initial.trim().slice(0, 1) || '?').toUpperCase()}
+        {art ? (
+          /* A square card shows exactly the cover's 820x820 safe square, centre-cropped,
+             as a cover picture would; a 16:25 tile (the Media grid's case) shows the whole
+             cover part, as a picture does there too (k7art.md §5). */
+          <AlbumArt {...art} fit="cover" fallback={placeholder} />
+        ) : (
+          placeholder
+        )}
       </div>
     );
   }

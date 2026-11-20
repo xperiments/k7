@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "app_board.h"
+#include "art.h"
 #include "card_path.h"
 #include "card_use.h"
 #include "esp_heap_caps.h"
@@ -831,6 +832,13 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
 
     e = snapshot_http_start();
     if (e != ESP_OK) return fail(report, e, "snapshot endpoint");
+
+    /* The user's K7Art pack: the partition is opened here, before the listener, and the
+     * four routes go on the same front door as the rest of the App's API (art-packs.md §5).
+     * The factory sheet was handed over by the screen's boot; without one the pack still
+     * installs and reports, it just has no factory designs to join. */
+    e = app_services_art_start();
+    if (e != ESP_OK) return fail(report, e, "art endpoints");
 
     /* The one page the device serves, and the routes behind it (ADR 0076). */
     e = setup_http_start();

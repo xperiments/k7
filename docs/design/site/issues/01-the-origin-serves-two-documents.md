@@ -32,7 +32,7 @@ one artifact, two documents, one origin.
 - [ ] The gate's link opens `/` in a new tab and leaves a standalone window for a browser.
 - [ ] `npm run typecheck`, `npm test` and `make -C host check` are green.
 
-**Files:** `web/index.html`, `web/app.html` (new), `web/vite.config.ts`, `web/vercel.json`,
+**Files:** `web/index.html`, `web/app.html` (new), `web/vite.config.ts`, `vercel.json`,
 `web/public/manifest.webmanifest`, `web/src/main.tsx` (the App entry's document),
 `web/src/ui/LocalNetworkGate.tsx`, `components/portable/front_door/front_door.c`,
 `components/portable/front_door/Kconfig`, `host/tests/http_tests.sh`.

@@ -477,7 +477,7 @@
         transform: translateZ(calc(var(--cd) / 2));
         border-radius: 0.25rem;
         overflow: clip;
-        /* The drawn cover's type sizes are a share of the face's width (cqw). */
+        /* The J-card's type sizes are a share of the face's width (cqi). */
         container-type: inline-size;
         background: var(--primary);
         box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.12);
@@ -604,174 +604,53 @@
         container-type: inline-size;
     }
 
-    /* A coverless face, drawn: the cassette case reference's five covers. The face fills its
-       container and every size below is a share of the container's width (`cqw`), so the
-       same drawing works at the shelf's 13rem case, in a card and in the Player's square.
-       The words are hidden by the container query at the end of this block when the face is
-       too small to carry them (the player bar's 30px case). */
-    .k7-album-art {
+    /*
+     * A K7Art J-card, drawn in the DOM (k7art.md §5). The sheet is the design's whole
+     * 1300x1280 drawing, scaled by the surface and clipped to the panel the surface shows
+     * (.k7-jcard-sheet's inline geometry); every prim is placed as a share of that sheet.
+     * The inks are the design container's, so a user pack repaints without a stylesheet
+     * change.
+     */
+    .k7-jcard {
         position: absolute;
         inset: 0;
-        display: flex;
-        flex-direction: column;
         overflow: clip;
-        padding: 9.6cqw;
-        color: #fff;
+        /* The face's type sizes are a share of its own width (cqi). */
+        container-type: inline-size;
+        pointer-events: none;
     }
 
-    .k7-album-artist {
-        overflow: clip;
-        font: 600 4.8cqw/1 system-ui, sans-serif;
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        opacity: 0.9;
-    }
-
-    .k7-album-title {
-        display: -webkit-box;
-        overflow: clip;
-        margin-block-start: auto;
-        font: 700 13cqw/1.05 Georgia, serif;
-        text-wrap: balance;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 3;
-    }
-
-    .k7-album-rule {
-        display: block;
-        inline-size: 24.3cqw;
-        block-size: 0.9cqw;
-        margin-block: 6.1cqw 4.3cqw;
-        background: currentColor;
-        opacity: 0.85;
-    }
-
-    .k7-album-meta {
-        overflow: clip;
-        font: 600 4.8cqw/1.3 system-ui, sans-serif;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        opacity: 0.8;
-    }
-
-    .k7-album-ring {
-        display: none;
+    .k7-jcard-sheet {
         position: absolute;
-        inset-block-start: 47.8cqw;
-        inset-inline-end: -21.7cqw;
-        inline-size: 78.3cqw;
-        block-size: 78.3cqw;
-        border: 0.9cqw solid rgba(255, 255, 255, 0.22);
-        border-radius: 50%;
-        box-shadow:
-            0 0 0 9.6cqw rgba(255, 255, 255, 0.05),
-            0 0 0 19.1cqw rgba(255, 255, 255, 0.04);
-    }
-
-    /* 1: classic gradient with the ring motif */
-    .k7-album-art-tpl-1 {
-        background: linear-gradient(160deg, hsl(var(--hue) 65% 58%), hsl(var(--hue) 55% 30%));
-    }
-    .k7-album-art-tpl-1 .k7-album-ring {
         display: block;
     }
 
-    /* 2: colour bands with a cream band and a boxed title */
-    .k7-album-art-tpl-2 {
-        background: linear-gradient(
-            180deg,
-            hsl(var(--hue) 70% 55%) 0 30%,
-            #f5efdf 30% 70%,
-            hsl(var(--hue) 60% 25%) 70% 100%
-        );
-    }
-    .k7-album-art-tpl-2 .k7-album-title {
-        align-self: flex-start;
-        padding: 1.7cqw 3.5cqw;
-        background: #f5efdf;
-        color: #111;
-        font: 800 12.2cqw/1.05 system-ui, sans-serif;
-        text-transform: uppercase;
+    .k7-jcard-rect,
+    .k7-jcard-text {
+        position: absolute;
+        display: block;
+        margin: 0;
+        padding: 0;
+        border: 0;
     }
 
-    /* 3: off-white with bold type and a colour rule */
-    .k7-album-art-tpl-3 {
-        background: #f4f1ea;
-        color: #111;
-    }
-    .k7-album-art-tpl-3 .k7-album-title {
-        font: 800 14.8cqw/1 system-ui, sans-serif;
-        letter-spacing: -0.02em;
-        text-transform: uppercase;
-    }
-    .k7-album-art-tpl-3 .k7-album-rule {
-        inline-size: 100%;
-        block-size: 3.5cqw;
-        background: hsl(var(--hue) 80% 50%);
-        opacity: 1;
-    }
-    .k7-album-art-tpl-3 .k7-album-artist,
-    .k7-album-art-tpl-3 .k7-album-meta {
-        opacity: 0.7;
+    /* A text wraps to its box's width and is cropped by the sheet; the renderer's line clamp
+       gives the last visible line an ellipsis. */
+    .k7-jcard-text {
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+        line-height: 1.2;
+        letter-spacing: normal;
+        text-overflow: ellipsis;
+        overflow: hidden;
     }
 
-    /* 4: retro sunburst with a cream title */
-    .k7-album-art-tpl-4 {
-        background: repeating-conic-gradient(
-            from 0deg at 50% 35%,
-            hsl(var(--hue) 70% 52%) 0 12deg,
-            hsl(var(--hue) 70% 40%) 12deg 24deg
-        );
-    }
-    .k7-album-art-tpl-4 .k7-album-title {
-        align-self: flex-start;
-        padding: 2.6cqw 4.3cqw;
-        border-radius: 4.3cqw;
-        background: #f5efdf;
-        color: #222;
-        font: italic 700 13cqw/1.05 Georgia, serif;
-    }
-    .k7-album-art-tpl-4 .k7-album-meta {
-        align-self: flex-start;
-        padding: 1.3cqw 2.6cqw;
-        border-radius: 1.3cqw;
-        background: #222;
-        color: #f5efdf;
-    }
-
-    /* 5: dark grid with bold sans and an accent bar */
-    .k7-album-art-tpl-5 {
-        background-color: #151518;
-        background-image:
-            linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-        background-size: 9.6cqw 9.6cqw;
-    }
-    .k7-album-art-tpl-5 .k7-album-title {
-        font: 800 14.8cqw/1 system-ui, sans-serif;
-        letter-spacing: -0.01em;
-        text-transform: uppercase;
-    }
-    .k7-album-art-tpl-5 .k7-album-rule {
-        inline-size: 100%;
-        block-size: 5.2cqw;
-        background: hsl(var(--hue) 90% 60%);
-    }
-    .k7-album-art-tpl-5 .k7-album-artist {
-        color: hsl(var(--hue) 90% 72%);
-    }
-
-    /* The player bar's case is 30px wide: the words would be four pixels tall. The colour
-       and the pattern still identify the face, so only the words go. */
-    @container (max-width: 6rem) {
-        .k7-album-artist,
-        .k7-album-title,
-        .k7-album-rule,
-        .k7-album-meta {
+    /* The player bar's case is 1.9rem wide: the words would be a few pixels tall. The paper
+       and the bands still identify the face, so only the words go, as they did for the five
+       drawn faces the J-card replaces. The shelf's spine is 2.6rem wide and keeps its
+       design's own type. */
+    @container (max-width: 2.4rem) {
+        .k7-jcard-text {
             display: none;
         }
     }
@@ -806,4 +685,35 @@
             transition: none;
         }
     }
+}
+
+/*
+ * The J-card's three faces (k7art.md §2): the same Archivo Narrow 600, Barlow Condensed
+ * 700 and IBM Plex Mono 500 the label sheet compiles into the firmware, and the same files
+ * the K7Art Editor registers. A J-card is paper, not the App's chrome, so it wears these
+ * rather than Jura. The files are the editor's public copy; Vite hashes them into the App's
+ * artifact, where the service worker caches them like the rest of the shell.
+ */
+@font-face {
+    font-family: 'Archivo Narrow 600';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('../../tools/LabelEditor/public/fonts/archivo-narrow-600.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Barlow Condensed 700';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../../tools/LabelEditor/public/fonts/barlow-condensed-700.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono 500';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../../tools/LabelEditor/public/fonts/ibm-plex-mono-500.ttf') format('truetype');
 }

@@ -9,7 +9,7 @@
  * operation is called and how long the caller waits.
  */
 
-/** The sixteen operations. */
+/** The twenty operations. */
 export type OpName =
   | 'status'
   | 'playlists'
@@ -26,7 +26,11 @@ export type OpName =
   | 'stream.play'
   | 'stream.pause'
   | 'stream.volume'
-  | 'stream.state';
+  | 'stream.state'
+  | 'art.status'
+  | 'art.upload'
+  | 'art.pack'
+  | 'art.reset';
 
 /** What the table says about one operation. */
 export interface OpSpec {
@@ -51,6 +55,12 @@ export const OP_SPECS: Readonly<Record<OpName, OpSpec>> = {
   'stream.pause': { timeout: 2_000 },
   'stream.volume': { timeout: 2_000 },
   'stream.state': { timeout: 2_000 },
+  /* The art routes: a pack is at most 1 MB, and the device validates all of it and writes
+     flash before it answers. The status and the reset are the ordinary read/write budget. */
+  'art.status': { timeout: 6_000 },
+  'art.upload': { timeout: 30_000 },
+  'art.pack': { timeout: 15_000 },
+  'art.reset': { timeout: 15_000 },
 };
 
 const OP_NAME_SET: ReadonlySet<string> = new Set(Object.keys(OP_SPECS));

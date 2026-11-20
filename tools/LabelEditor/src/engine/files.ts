@@ -1,22 +1,7 @@
 import type { Editor } from "./editor";
 import { tplText } from "./tpl";
 
-/** ZIP without compression: a single file is one download, not one per design. */
-const CRC_T = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-
-const crc32 = (u8: Uint8Array) => {
-  let c = 0xffffffff;
-  for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-};
+import { crc32 } from "./crc";
 
 export interface ZipEntry {
   name: string;
@@ -93,8 +78,8 @@ export interface ExportResult {
 }
 
 /**
- * Export every open template: its JSON, a PNG preview and labels.json in one zip. Refused as
- * a whole if any design has errors, because a half-packed sheet is worse than none.
+ * Export every open design: its K7Art JSON, a PNG preview and labels.json in one zip. Refused
+ * as a whole if any design has errors, because a half-packed sheet is worse than none.
  */
 export async function exportAll(editor: Editor): Promise<ExportResult> {
   const back = editor.active;
@@ -123,7 +108,7 @@ export async function exportAll(editor: Editor): Promise<ExportResult> {
       bytes: new TextEncoder().encode(tplText(b.doc)),
     });
     entries.push({
-      name: `${b.doc.id.replace(/^label\./, "")}.png`,
+      name: `${b.doc.id.replace(/^k7\./, "")}.png`,
       bytes: new Uint8Array(await png.arrayBuffer()),
     });
     filenames.push(`${b.doc.id}.json`);
@@ -134,7 +119,7 @@ export async function exportAll(editor: Editor): Promise<ExportResult> {
     templates: sorted.map((b) => ({
       id: b.doc.id,
       file: `${b.doc.id}.json`,
-      preview: `${b.doc.id.replace(/^label\./, "")}.png`,
+      preview: `${b.doc.id.replace(/^k7\./, "")}.png`,
     })),
   };
   entries.push({
@@ -145,7 +130,7 @@ export async function exportAll(editor: Editor): Promise<ExportResult> {
   editor.switchDoc(back);
   return {
     blob: makeZip(entries),
-    filenames: [`label-templates.zip`, ...filenames],
+    filenames: [`k7art.zip`, ...filenames],
     errors: [],
   };
 }

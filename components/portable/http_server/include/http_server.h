@@ -41,19 +41,22 @@ extern "C" {
 
 #define HTTP_PATH_MAX 512 /* raw (percent-encoded) request target */
 #define HTTP_BODY_MAX 8192 /* a POST body larger than this is 413 */
-/* The largest body a route may opt into with http_server_route_body_limit. A snapshot
- * image is ~12 KB for a few hundred tracks and ~400 KB for several thousand; this is the
- * ceiling, and the buffer lives in PSRAM. */
+/* The largest body the snapshot route takes: an image is ~12 KB for a few hundred tracks
+ * and ~400 KB for several thousand, and the route's own limit is this. The buffer lives in
+ * PSRAM. */
 #define HTTP_UPLOAD_MAX (256u * 1024u)
+/* The ceiling any route may opt into with http_server_route_body_limit. A K7Art pack is
+ * bounded by its 1 MB `art` partition and is the largest body this device accepts. */
+#define HTTP_ROUTE_BODY_MAX (1024u * 1024u)
 #define HTTP_QUERY_MAX 256 /* raw (percent-encoded) query string, without the ? */
 #define HTTP_HEADER_MAX 1024
 /* The appliance registers seventeen (the stream, play, the front door's two, MCP's three,
- * the app's eight, library.bin, /library); the screen's two diagnostics make nineteen, and
- * the setup page and its six routes make twenty-six. The table had 18 once, so a
- * screen-HTTP build failed the last registration with ESP_ERR_NO_MEM and never started its
- * listener - the capture build could not serve at all. Headroom is cheap; a dead listener is
- * not. */
-#define HTTP_MAX_ROUTES 28
+ * the app's eight, library.bin, /library); the screen's two diagnostics make nineteen, the
+ * setup page and its six routes make twenty-six, and the art pack's four make thirty. A
+ * screen-HTTP build is thirty-two. The table had 18 once, so a screen-HTTP build failed the
+ * last registration with ESP_ERR_NO_MEM and never started its listener - the capture build
+ * could not serve at all. Headroom is cheap; a dead listener is not. */
+#define HTTP_MAX_ROUTES 36
 #define HTTP_LISTEN_BACKLOG 16
 #define HTTP_MAX_CONNS 6
 

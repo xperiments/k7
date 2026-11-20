@@ -10,6 +10,10 @@
     "doc": "docs"
   },
   "scripts": {
+    "build": "npm run build:web && npm run build:editor && npm run build:k7art",
+    "build:web": "npm --prefix web run build",
+    "build:editor": "npm --prefix tools/LabelEditor run build",
+    "build:k7art": "node -e \"const fs=require('node:fs');const from='tools/LabelEditor/dist';const to='web/dist/k7art';if(!fs.existsSync(from+'/index.html')){console.error('build:k7art: '+from+'/index.html is missing; build the editor first');process.exit(1);}fs.rmSync(to,{recursive:true,force:true});fs.cpSync(from,to,{recursive:true});console.log('build:k7art: copied '+from+' to '+to);\"",
     "test": "npm --prefix web test",
     "font:jura": "npx --yes lv_font_conv --font assets/fonts/Jura-VariableFont_wght.ttf --size 36 --bpp 4 --format lvgl --no-compress --range '0x20-0x7F,0xA0-0xFF,0x2010-0x2015,0x2018-0x201D,0x2026' --lv-include lvgl.h --lv-font-name jura_36 --output components/app/screen_display/font_jura_36.c",
     "font:jura28": "npx --yes lv_font_conv --font assets/fonts/Jura-VariableFont_wght.ttf --size 28 --bpp 4 --format lvgl --no-compress --range '0x20-0x7F,0xA0-0xFF,0x2010-0x2015,0x2018-0x201D,0x2026' --lv-include lvgl.h --lv-font-name jura_28 --output components/app/screen_display/font_jura_28.c",

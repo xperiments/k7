@@ -9,27 +9,32 @@ import {
 } from "@/components/ui/tooltip";
 import { useEditor } from "@/hooks/use-editor";
 import { PRINT_H, PRINT_W, SCREEN_H, SCREEN_W } from "@/engine/vocab";
+import { JCARD_H, JCARD_W } from "@/engine/jcard";
 
 export function StatusBar({ onAgentTools }: { onAgentTools: () => void }) {
   const ed = useEditor();
   const sel = ed.sel;
-  const fields = ed.objs.filter((o) => o.type === "text" && !o.static).length;
+  const active = ed.activeObjs();
+  const jcard = ed.isJCard();
+  const fields = active.filter((o) => o.type === "text" && !o.static).length;
   const lv = ed.lvgl;
 
   return (
     <footer className="flex h-6 shrink-0 items-center gap-2 border-t border-border bg-background px-3 text-xs text-muted-foreground">
       <span className="tabnum">
-        {SCREEN_W} × {SCREEN_H} panel
+        {jcard ? `J-card ${JCARD_W} × ${JCARD_H}` : `${SCREEN_W} × ${SCREEN_H} panel`}
       </span>
       <Separator orientation="vertical" className="hidden h-3 xl:block" />
       <span className="hidden tabnum xl:inline">
-        print {PRINT_W} × {PRINT_H}
+        {jcard ? "flap | spine | cover" : `print ${PRINT_W} × ${PRINT_H}`}
       </span>
       <Separator orientation="vertical" className="h-3" />
-      <span className="tabnum">{ed.objs.length} layers</span>
+      <span className="tabnum">{active.length} layers</span>
       <Separator orientation="vertical" className="hidden h-3 xl:block" />
-      <span className="hidden tabnum xl:inline">{fields} fields</span>
-      {ed.mask ? (
+      <span className="hidden tabnum xl:inline">
+        {fields} {jcard ? "J-card fields" : "fields"}
+      </span>
+      {!jcard && ed.mask ? (
         <>
           <Separator orientation="vertical" className="hidden h-3 xl:block" />
           <span className="hidden xl:inline">LayerMask</span>
@@ -72,7 +77,12 @@ export function StatusBar({ onAgentTools }: { onAgentTools: () => void }) {
         </span>
         <Separator orientation="vertical" className="h-3" />
         <span className="flex items-center gap-1">
-          {lv.error ? (
+          {jcard ? (
+            <>
+              <CircleDot className="size-3 text-primary" />
+              J-card · DOM
+            </>
+          ) : lv.error ? (
             <>
               <TriangleAlert className="size-3" />
               preview unavailable

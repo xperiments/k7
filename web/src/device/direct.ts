@@ -14,6 +14,7 @@
  * device's own origin, which is how the hosted App reaches `http://k7.local/api/…`.
  */
 
+import { parseArtStatus, type ArtStatus } from './art';
 import { OP_SPECS, type OpName } from './protocol';
 import {
   parseListing,
@@ -145,6 +146,9 @@ function searchArguments(args: SearchArgs): Record<string, unknown> {
 
 const MCP_PATH = '/mcp';
 const MCP_PROTOCOL = '2025-11-25';
+
+/** The art partition's size: a pack is at most this, and the App reads no more than it. */
+const ART_PACK_MAX = 1024 * 1024;
 
 /** What `local.ts` wraps: the requests and parsers, with no link identity of its own. */
 export interface DirectTransport {
@@ -493,6 +497,86 @@ export function createDirectDevice(options: DirectOptions = {}): DirectTransport
 
     async 'stream.state'() {
       return audioState();
+    },
+
+    async 'art.status'() {
+      return parsed<ArtStatus>(
+        await read('art.status', '/api/art', {
+          cache: 'no-store',
+          headers: { accept: 'application/json' },
+        }),
+        parseArtStatus,
+        'status document',
+      );
+    },
+
+    async 'art.upload'(args: { pack: Uint8Array<ArrayBuffer> }) {
+      return parsed<ArtStatus>(
+        await read('art.upload', '/api/art', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-k7artpack',
+            accept: 'application/json',
+          },
+          body: args.pack,
+        }),
+        parseArtStatus,
+        'status document',
+      );
+    },
+
+    async 'art.pack'() {
+      /* The one operation whose answer is bytes, not JSON. A refusal is still the device's
+       * JSON sentence, so it is read the same way as every other refusal (E1). */
+      const response = await call('art.pack', '/api/art/pack', {
+        cache: 'no-store',
+        headers: { accept: 'application/octet-stream' },
+      });
+      if (!response.ok) {
+        let text = '';
+        try {
+          text = await response.text();
+        } catch {
+          /* the status is the fact; the body is not readable */
+        }
+        throw new DeviceError(
+          replyDetail(text) ?? `the device answered ${response.status}`,
+          'refused',
+          response.status,
+        );
+      }
+      let bytes: Uint8Array<ArrayBuffer>;
+      try {
+        bytes = new Uint8Array(await response.arrayBuffer());
+      } catch {
+        throw new DeviceError(
+          'the player did not answer with the pack',
+          'unreachable',
+          0,
+        );
+      }
+      if (bytes.length === 0) {
+        throw new DeviceError('the player answered an empty pack', 'unreachable', 0);
+      }
+      if (bytes.length > ART_PACK_MAX) {
+        throw new DeviceError(
+          'the player answered a pack larger than the art partition',
+          'unreachable',
+          0,
+        );
+      }
+      return { bytes };
+    },
+
+    async 'art.reset'() {
+      return parsed<ArtStatus>(
+        await read('art.reset', '/api/art', {
+          method: 'DELETE',
+          headers: { accept: 'application/json' },
+        }),
+        parseArtStatus,
+        'status document',
+      );
     },
   };
 

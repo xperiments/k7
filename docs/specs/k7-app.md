@@ -45,11 +45,13 @@ is [ADR 0057](../adr/0057-the-app-lives-at-a-public-origin.md); the direct trans
 | Served by | Vercel, with headers; the device serves no page of the App (`/setup` is the one
 page it serves, and only for provisioning) |
 | Secure context | yes |
-| Owns | library processing, card writes, the PWA, every view |
+| Owns | library processing, card writes, the PWA, every view, and the **Art packs** page that installs a K7Art pack and the cover pool it feeds |
 | Never | serves a Track, accepts a Track upload |
 
-**A1. One artifact.** `npm run build` produces the Site and the App from one build; there is no
-device packaging to keep in step with it.
+**A1. One artifact, three documents.** `npm run build` produces the Site and the App from one
+build, and builds the K7Art Editor (`tools/LabelEditor/`) into `/k7art/`; there is no device
+packaging to keep in step with it. The editor's pack is a download the App installs
+([`art-packs.md`](./art-packs.md)).
 
 **A2. The App reaches the device over the local network.** `fetch('http://k7.local/api/…')` from
 the HTTPS origin, allowed because LNA §2.5 exempts a `.local` host from mixed content once the
@@ -549,13 +551,23 @@ source, the Device copy's gating, the built-in model. Acceptance: every area wor
 with a device, send/play/stream work; the built-in model produces an Intent with no key and no
 network; with the model unavailable, Ask says what is missing and the **Filters** sheet works.
 
+**M5 — the K7Art covers and the packs.** The App draws an album's no-cover face from the active
+pool's J-card ([`art-packs.md`](./art-packs.md) §6), and the Art packs page imports a
+`.k7artpack`, uploads it to `POST /api/art`, caches its J-cards and resets to the factory
+([`art-packs.md`](./art-packs.md) §4). Acceptance: an album with no picture wears the pool's
+J-card; a valid pack's designs join the covers after its upload; a bad pack changes nothing;
+reset returns the factory; the card-in-reader mode offers no upload and keeps the factory covers.
+
 ---
 
 ## 13. Tests
 
 - **vitest** — protocol state machines (§T1 of the bridge spec), the card mark's policy table,
   the fingerprint, the Image's `LibrarySource` over the conformance corpus, the Intent validator
-  against malformed built-in model output (fixtures, not the model).
+  against malformed built-in model output (fixtures, not the model), and the packs and the
+  covers: a `.k7artpack`'s header and CRC, the import/upload/reset, the J-card cache, the pool's
+  modulo and the three fields, and the J-card renderer's roles, sizes, rotation and wrap
+  ([`art-packs.md`](./art-packs.md) §8).
 - **Playwright** — two origins: handshake each way, one round trip, COOP/opener regression,
   disconnect and reconnect, offline reload, a blocked popup. Plus an installability assertion
   where the test browser fires `beforeinstallprompt` — desktop Chrome and Edge do, the headless

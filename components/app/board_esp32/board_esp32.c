@@ -43,6 +43,8 @@
 #include "snapshot.h"
 
 #include "app_board.h"
+#include "label_pack.h"
+#include "label_store.h"
 
 /* No network is compiled in: the one this device joins lives in an NVS record and is
  * chosen on the device's own setup network (ADR 0076). The record's bytes and its rules
@@ -721,6 +723,151 @@ void app_board_snapshot_release(void)
     mapped = NULL;
     mapped_size = 0;
     mapped_handle = 0;
+}
+
+/* ------------------------------------------------------------------- art */
+
+/* The user's one K7Art pack (ADR 0111, art-packs.md §5): 1 MB at 0x610000, read in place
+ * and written whole. The factory sheet is not here - it stays embedded in the app - so an
+ * erased partition means "factory alone", not "no art". Two images may be open at once
+ * (the active pack and one being read out by GET /api/art/pack), which is why the mapping
+ * is per-image and the writer only runs after the portable endpoint has let its own go. */
+#define ART_PART 0x41
+
+struct label_store_image {
+    const uint8_t             *bytes;
+    size_t                     size;
+    esp_partition_mmap_handle_t handle;
+};
+
+static const esp_partition_t *art_partition(void)
+{
+    return esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ART_PART, NULL);
+}
+
+label_store_state_t label_store_image_get(label_store_image_t **out, const uint8_t **bytes,
+                                          size_t *size, char *why, size_t why_size)
+{
+    if (out) *out = NULL;
+    if (bytes) *bytes = NULL;
+    if (size) *size = 0;
+    if (why && why_size) why[0] = 0;
+
+    const esp_partition_t *part = art_partition();
+    if (!part) {
+        if (why) snprintf(why, why_size, "no art partition in this build");
+        return LABEL_STORE_NONE;
+    }
+
+    /* A full erase leaves the partition at 0xFF. That is the factory state, not a bad
+     * pack: the portable reader would otherwise report "magic is not K7ART" on a device
+     * that has never been given art. */
+    uint8_t hdr[16];
+    esp_err_t e = esp_partition_read(part, 0, hdr, sizeof hdr);
+    if (e != ESP_OK) {
+        if (why) snprintf(why, why_size, "the art partition is unreadable: %s", esp_err_to_name(e));
+        return LABEL_STORE_UNREADABLE;
+    }
+    bool erased = true;
+    for (size_t i = 0; i < sizeof hdr; i++)
+        if (hdr[i] != 0xFF) erased = false;
+    if (erased) {
+        if (why) snprintf(why, why_size, "the art partition holds no pack");
+        return LABEL_STORE_NONE;
+    }
+
+    label_store_image_t *image = calloc(1, sizeof *image);
+    if (!image) {
+        if (why) snprintf(why, why_size, "no memory for the art image");
+        return LABEL_STORE_UNREADABLE;
+    }
+    const void *ptr = NULL;
+    e = esp_partition_mmap(part, 0, part->size, ESP_PARTITION_MMAP_DATA, &ptr, &image->handle);
+    if (e != ESP_OK) {
+        free(image);
+        if (why) snprintf(why, why_size, "the art partition is unmappable: %s", esp_err_to_name(e));
+        return LABEL_STORE_UNREADABLE;
+    }
+    image->bytes = (const uint8_t *)ptr;
+    image->size = part->size;
+    if (out) *out = image;
+    if (bytes) *bytes = image->bytes;
+    if (size) *size = image->size;
+    return LABEL_STORE_PRESENT;
+}
+
+void label_store_image_put(label_store_image_t *image)
+{
+    if (!image) return;
+    esp_partition_munmap(image->handle);
+    free(image);
+}
+
+/* Read the partition back over what was just written. The writer has an internal stack;
+ * the comparison is done in small pages so neither buffer is large. */
+static bool art_reads_back(const esp_partition_t *part, const uint8_t *bytes, size_t len,
+                           char *why, size_t why_size)
+{
+    uint8_t page[256];
+    for (size_t off = 0; off < len; off += sizeof page) {
+        size_t n = len - off < sizeof page ? len - off : sizeof page;
+        esp_err_t e = esp_partition_read(part, off, page, n);
+        if (e != ESP_OK) {
+            if (why) snprintf(why, why_size, "the art partition did not read back: %s",
+                              esp_err_to_name(e));
+            return false;
+        }
+        if (memcmp(page, bytes + off, n) != 0) {
+            if (why) snprintf(why, why_size, "the art partition did not read back the same bytes");
+            return false;
+        }
+    }
+    return true;
+}
+
+bool label_store_write(const uint8_t *bytes, size_t len, char *why, size_t why_size)
+{
+    if (why && why_size) why[0] = 0;
+    const esp_partition_t *part = art_partition();
+    if (!part) {
+        if (why) snprintf(why, why_size, "no art partition in this build");
+        return false;
+    }
+    if (!bytes || len < LABEL_PACK_HEADER_SIZE || len > LABEL_PACK_MAX || len > part->size) {
+        if (why) snprintf(why, why_size, "the pack is not between %u and %u bytes",
+                          (unsigned)LABEL_PACK_HEADER_SIZE, (unsigned)LABEL_PACK_MAX);
+        return false;
+    }
+    esp_err_t e = esp_partition_erase_range(part, 0, part->size);
+    if (e != ESP_OK) {
+        if (why) snprintf(why, why_size, "the art partition would not erase: %s", esp_err_to_name(e));
+        return false;
+    }
+    e = esp_partition_write(part, 0, bytes, len);
+    if (e != ESP_OK) {
+        if (why) snprintf(why, why_size, "the art partition refused the write: %s", esp_err_to_name(e));
+        return false;
+    }
+    if (!art_reads_back(part, bytes, len, why, why_size)) return false;
+    ESP_LOGI(TAG, "art: %u bytes written and verified", (unsigned)len);
+    return true;
+}
+
+bool label_store_erase(char *why, size_t why_size)
+{
+    if (why && why_size) why[0] = 0;
+    const esp_partition_t *part = art_partition();
+    if (!part) {
+        if (why) snprintf(why, why_size, "no art partition in this build");
+        return false;
+    }
+    esp_err_t e = esp_partition_erase_range(part, 0, part->size);
+    if (e != ESP_OK) {
+        if (why) snprintf(why, why_size, "the art partition would not erase: %s", esp_err_to_name(e));
+        return false;
+    }
+    ESP_LOGI(TAG, "art: erased; the factory sheet alone");
+    return true;
 }
 
 /* --- the update -------------------------------------------------------- */

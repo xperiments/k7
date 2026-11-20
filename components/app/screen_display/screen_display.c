@@ -43,8 +43,10 @@
 #include "lvgl.h"
 
 #include "artwork_loader.h"
+#include "art.h"
 #include "card_mark.h"
 #include "cassette_rgb.h"
+#include "cassette_label.h"
 #include "cassette_view.h"
 #include "cassette_bench.h"
 #include "app_services.h"
@@ -474,6 +476,27 @@ static void screen_task(void *arg)
     }
 }
 
+/* The upload's bridge to the screen's lock (art.h). An upload has to let the label forget
+ * the user sheet before the pack's bytes can be unmapped, and the objects and Slot names
+ * live under this lock. The host has no screen; the art endpoint then clears directly. */
+static bool screen_art_quiesce(void *ctx)
+{
+    (void)ctx;
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    if (!lvgl_port_lock(1000)) return false;
+#else
+    if (!s_ui_lock || xSemaphoreTake(s_ui_lock, pdMS_TO_TICKS(1000)) != pdTRUE) return false;
+#endif
+    app_services_art_quiesced();
+    cassette_label_pool_dropped();
+#if CONFIG_APP_BOARD_SUNTON_8048S050C
+    lvgl_port_unlock();
+#else
+    xSemaphoreGive(s_ui_lock);
+#endif
+    return true;
+}
+
 esp_err_t screen_display_boot(void)
 {
     size_t internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
@@ -548,6 +571,13 @@ esp_err_t screen_display_boot(void)
              (unsigned)internal_before, (unsigned)largest_before,
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+
+    /* The label's pool exists before app_services_start(): the factory sheet is embedded in
+     * this component and `GET /api/art` reports the pool's count from its first request.
+     * The quiesce hook is the screen's half of an upload - the upload takes this lock and
+     * asks the label to let go of the user sheet before its bytes are unmapped. */
+    (void)cassette_label_factory_register();
+    app_services_art_set_quiesce(screen_art_quiesce, NULL);
     return ESP_OK;
 }
 

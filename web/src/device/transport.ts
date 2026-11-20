@@ -1,7 +1,7 @@
 /**
  * The seam between the App and a device.
  *
- * Every view asks the same sixteen questions, and there is one way to answer them: over the
+ * Every view asks the same twenty questions, and there is one way to answer them: over the
  * local network when Chrome's Local Network Access permission allows it (see `local.ts`). A
  * window with no player answers `none` and rejects every request. The seam exists so a view
  * never knows which, and so the link and the views cannot drift in what they accept or
@@ -11,6 +11,7 @@
  * here is a second thing to forget.
  */
 
+import type { ArtStatus } from './art';
 import type { OpName } from './protocol';
 import type { McpSearch, McpStats, McpTrack, LibraryListing, SearchArgs } from './mcp';
 import type {
@@ -58,6 +59,11 @@ export interface OpArgs {
   'stream.pause': undefined;
   'stream.volume': { level: number };
   'stream.state': undefined;
+  'art.status': undefined;
+  /** The whole `.k7artpack`, exactly as it was read from the file. */
+  'art.upload': { pack: Uint8Array<ArrayBuffer> };
+  'art.pack': undefined;
+  'art.reset': undefined;
 }
 
 /** What each operation answers, already parsed. Nothing unvalidated reaches a view. */
@@ -78,6 +84,10 @@ export interface OpData {
   'stream.pause': AudioState;
   'stream.volume': AudioState;
   'stream.state': AudioState;
+  'art.status': ArtStatus;
+  'art.upload': ArtStatus;
+  'art.pack': { bytes: Uint8Array<ArrayBuffer> };
+  'art.reset': ArtStatus;
 }
 
 /** The closed error vocabulary the device API answers with, plus `direct`'s own failures. */

@@ -9,6 +9,8 @@ import { AppBar } from "@/components/app-bar";
 import { CanvasStage } from "@/components/canvas-stage";
 import { DocTabs } from "@/components/doc-tabs";
 import { ExportDialog, ProblemsDialog, ShortcutsDialog } from "@/components/dialogs";
+import { JCardStage } from "@/components/jcard-stage";
+import { PublishDialog } from "@/components/publish-dialog";
 import { AgentToolsDialog } from "@/components/agent-tools-dialog";
 import { Inspector, InspectorRail } from "@/components/inspector";
 import { LayersPanel } from "@/components/layers-panel";
@@ -21,6 +23,7 @@ import { useImport } from "@/hooks/use-import";
 export function App() {
   const ed = useEditor();
   const [exportOpen, setExportOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [agentToolsOpen, setAgentToolsOpen] = useState(false);
   const [problems, setProblems] = useState<{ title: string; errors: string[] } | null>(null);
@@ -80,7 +83,7 @@ export function App() {
         e.preventDefault();
         const r = exportTemplate(ed);
         if (r.errs.length) onProblems("This design cannot be exported yet", r.errs);
-        else toast.success("Template exported", { description: r.name });
+        else toast.success("K7Art exported", { description: r.name });
         return;
       }
       if (mod && k === "o") {
@@ -191,6 +194,7 @@ export function App() {
       >
         <AppBar
           onExport={() => setExportOpen(true)}
+          onPublish={() => setPublishOpen(true)}
           onShortcuts={() => setShortcutsOpen(true)}
           onProblems={onProblems}
           onImport={() => openRef.current?.click()}
@@ -202,7 +206,7 @@ export function App() {
             <LayersPanel />
           </div>
           <div className="min-w-0 flex-1">
-            <CanvasStage />
+            {ed.isJCard() ? <JCardStage /> : <CanvasStage />}
           </div>
           {inspectorOpen ? (
             <div className="hidden w-72 shrink-0 lg:flex">
@@ -219,7 +223,7 @@ export function App() {
               <FileJson className="size-6 text-primary" />
               <p className="text-sm font-medium tracking-tight">Drop to import</p>
               <p className="text-xs text-muted-foreground">
-                A label template (label-template v1) or an editor document (.lvgl.json)
+                A K7Art, a retired label template or an editor document (.lvgl.json)
               </p>
             </div>
           </div>
@@ -242,6 +246,7 @@ export function App() {
 
       <AgentToolsDialog open={agentToolsOpen} onOpenChange={setAgentToolsOpen} />
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} onProblems={onProblems} />
+      <PublishDialog open={publishOpen} onOpenChange={setPublishOpen} onProblems={onProblems} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       {problems ? (
         <ProblemsDialog

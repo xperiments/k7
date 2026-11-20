@@ -51,7 +51,17 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useEditor } from "@/hooks/use-editor";
-import type { Obj } from "@/engine/types";
+import {
+  JCARD_FACES,
+  JCARD_FIELDS,
+  JCARD_FIELD_LABELS,
+  JCARD_H,
+  JCARD_PARTS,
+  JCARD_SAFE,
+  JCARD_W,
+  type JCardField,
+} from "@/engine/jcard";
+import type { JCardFocus, Obj } from "@/engine/types";
 import {
   CANVAS_MAX,
   FROLES,
@@ -71,11 +81,13 @@ export function Inspector({ onCollapse }: { onCollapse: () => void }) {
   const ed = useEditor();
   const sel = ed.sel;
   const ids = ed.selIds;
-  const selected = ed.objs.filter((o) => ids.includes(o.id));
+  const active = ed.activeObjs();
+  const selected = active.filter((o) => ids.includes(o.id));
   const many = selected.length > 1;
+  const jcard = ed.isJCard();
 
-  let title = "Design";
-  let subtitle = "Colourway, type and fields";
+  let title = jcard ? "J-card" : "Design";
+  let subtitle = jcard ? "One sheet · flap | spine | cover" : "Colourway, type and fields";
   let body: React.ReactNode;
 
   if (ed.run) {
@@ -86,6 +98,23 @@ export function Inspector({ onCollapse }: { onCollapse: () => void }) {
     title = "LayerMask";
     subtitle = "A rounded clip, the size of the print";
     body = <MaskPanel />;
+  } else if (jcard && many) {
+    title = `${selected.length} J-card layers`;
+    subtitle = "Bulk actions and colour roles";
+    body = <JCardMultiPanel key={[...ids].sort().join(",")} />;
+  } else if (jcard && sel) {
+    title = sel.type === "text" ? "J-card text" : sel.type === "circle" ? "J-card circle" : "J-card rectangle";
+    subtitle = sel.name
+      ? `field · ${sel.name}`
+      : sel.label ||
+        (sel.type === "text" && sel.static
+          ? sel.text?.trim()
+            ? sel.text.trim().slice(0, 32)
+            : "empty text"
+          : `layer ${sel.id}`);
+    body = <JCardLayerPanel key={sel.id} o={sel} />;
+  } else if (jcard) {
+    body = <JCardDesignPanel />;
   } else if (many) {
     title = `${selected.length} layers`;
     subtitle = "Bulk actions and colour roles";
@@ -728,6 +757,513 @@ function LayerPanel({ o }: { o: Obj }) {
           <SquareDashed />
           Select the LayerMask
         </Button>
+      </Section>
+    </SectionGroup>
+  );
+}
+
+// ---- the J-card: one sheet, its Type roles and its three Fields ----
+
+const JCARD_FOCUS: Array<{ value: JCardFocus; label: string; detail: string }> = [
+  { value: "sheet", label: "Sheet", detail: `${JCARD_W} × ${JCARD_H}` },
+  { value: "flap", label: "Flap", detail: `${JCARD_PARTS.flap.w} × ${JCARD_H}` },
+  { value: "spine", label: "Spine", detail: `${JCARD_PARTS.spine.w} × ${JCARD_H}` },
+  { value: "cover", label: "Cover", detail: `${JCARD_PARTS.cover.w} × ${JCARD_H}` },
+];
+
+function JCardDesignPanel() {
+  const ed = useEditor();
+  return (
+    <SectionGroup initial="Sheet">
+      <Section title="Sheet">
+        <ColourRow
+          label="Paper (the sheet's colour)"
+          value={ed.tpl.inks.paper}
+          onChange={(v) => ed.setRoleColor("paper", v)}
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <ReadOnly label="Sheet" value={`${JCARD_W} × ${JCARD_H}`} />
+          <ReadOnly label="Resolution" value="320 units / in" />
+          <ReadOnly label="Flap" value={`0–${JCARD_PARTS.flap.w}`} />
+          <ReadOnly label="Spine" value={`${JCARD_PARTS.spine.x}–${JCARD_PARTS.spine.x + JCARD_PARTS.spine.w}`} />
+          <ReadOnly label="Cover" value={`${JCARD_PARTS.cover.x}–${JCARD_W}`} />
+          <ReadOnly label="Safe square" value={`${JCARD_SAFE.x},${JCARD_SAFE.y} ${JCARD_SAFE.w}×${JCARD_SAFE.h}`} />
+        </div>
+        <Field className="gap-1.5">
+          <FieldLabel className="text-xs text-muted-foreground">Focus</FieldLabel>
+          <ToggleGroup
+            value={[ed.focus]}
+            onValueChange={(v) => ed.setFocus((v[0] as JCardFocus) || "sheet")}
+            variant="outline"
+            size="sm"
+            spacing={0}
+            aria-label="J-card focus"
+            className="w-full"
+          >
+            {JCARD_FOCUS.map((f) => (
+              <ToggleGroupItem key={f.value} value={f.value} className="flex-1 px-1 text-xs">
+                {f.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <p className="text-xs text-muted-foreground">
+            The focus dims everything outside the part being authored. The folds are guides:
+            art may cross one.
+          </p>
+        </Field>
+      </Section>
+
+      <Section title="Colours">
+        <p className="text-xs text-muted-foreground">
+          The container&apos;s eleven roles: the label and the J-card paint from one palette.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <ColourCell label="Ink" value={ed.tpl.inks.ink} onChange={(v) => ed.setRoleColor("ink", v)} />
+          <ColourCell label="Rule" value={ed.tpl.inks.rule} onChange={(v) => ed.setRoleColor("rule", v)} />
+          {ed.tpl.inks.band.map((c, i) => (
+            <ColourCell
+              key={i}
+              label={`Band ${i}`}
+              value={c}
+              onChange={(v) => ed.setRoleColor(`band.${i}`, v)}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {ed.jcard.prims.filter((o) => o.role?.startsWith("band.")).length} J-card layers use a
+          band · {ed.jcard.prims.filter((o) => o.role === "ink").length} use the ink. The sheet is
+          the paper role.
+        </p>
+      </Section>
+
+      <Section title="Type">
+        <p className="text-xs text-muted-foreground">
+          The label&apos;s three faces at the J-card&apos;s own sizes, in units (4–640).
+        </p>
+        {FROLES.map((role) => {
+          const f = ed.jcard.fonts[role];
+          return (
+            <div key={role} className="flex flex-col gap-1.5 rounded-md border border-border p-2">
+              <span className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                {role}
+              </span>
+              <Select
+                value={f.ff}
+                onValueChange={(v) => v && ed.setJCardFont(role, { ff: v })}
+                items={JCARD_FACES.map((face) => ({ value: face, label: face }))}
+              >
+                <SelectTrigger size="sm" className="w-full" aria-label={`J-card ${role} face`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  {JCARD_FACES.map((face) => (
+                    <SelectItem key={face} value={face}>
+                      {face}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Num
+                label={`Size ${role} (units)`}
+                value={f.size}
+                min={4}
+                max={640}
+                onChange={(v) => ed.setJCardFont(role, { size: v })}
+              />
+            </div>
+          );
+        })}
+      </Section>
+
+      <Section title="Fields">
+        <p className="text-xs text-muted-foreground">
+          What the App passes for each J-card field. These are the editor&apos;s test values;
+          the App supplies the album&apos;s.
+        </p>
+        {JCARD_FIELDS.map((field) => (
+          <Field key={field} className="gap-1">
+            <FieldLabel className="text-xs text-muted-foreground">
+              {JCARD_FIELD_LABELS[field]}
+            </FieldLabel>
+            <Input
+              value={ed.jcardSim(field)}
+              onChange={(e) => ed.setJCardSim(field, e.target.value)}
+              className="h-7 text-xs"
+              aria-label={`J-card ${JCARD_FIELD_LABELS[field]} test value`}
+            />
+          </Field>
+        ))}
+      </Section>
+
+      <Section title="Template">
+        <Field className="gap-1.5">
+          <FieldLabel className="text-xs text-muted-foreground">ID</FieldLabel>
+          <Input
+            value={ed.tpl.id}
+            onChange={(e) => ed.setTplField("id", e.target.value)}
+            className="h-8 font-mono text-xs"
+            spellCheck={false}
+            aria-label="Template id"
+          />
+        </Field>
+        <Field className="gap-1.5">
+          <FieldLabel className="text-xs text-muted-foreground">Name</FieldLabel>
+          <Input
+            value={ed.tpl.name}
+            onChange={(e) => ed.setTplField("name", e.target.value)}
+            className="h-8"
+            aria-label="Template name"
+          />
+        </Field>
+      </Section>
+    </SectionGroup>
+  );
+}
+
+function JCardLayerPanel({ o }: { o: Obj }) {
+  const ed = useEditor();
+  const locked = !!o.locked;
+  const isText = o.type === "text";
+  const dynamic = isText && !o.static;
+  const jcRole = (role: string) => ed.jcard.fonts[FROLES.includes(role as never) ? (role as (typeof FROLES)[number]) : "caption"];
+  return (
+    <SectionGroup initial={isText ? "Content" : "Layout"}>
+      {isText ? (
+        <Section title="Content">
+          <Field className="gap-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Kind</FieldLabel>
+            <Select
+              value={dynamic ? "dynamic" : "static"}
+              onValueChange={(v) => {
+                if (v === "static") {
+                  if (!o.text) o.text = ed.simText(o);
+                  o.static = true;
+                } else {
+                  delete o.static;
+                }
+                ed.commit(false);
+                ed.emit();
+              }}
+              items={[
+                { value: "dynamic", label: "Dynamic text (from a J-card field)" },
+                { value: "static", label: "Static text" },
+              ]}
+            >
+              <SelectTrigger size="sm" className="w-full" disabled={locked} aria-label="Text kind">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectItem value="dynamic">Dynamic text (from a J-card field)</SelectItem>
+                <SelectItem value="static">Static text</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          {dynamic ? (
+            <>
+              <Field className="gap-1.5">
+                <FieldLabel className="text-xs text-muted-foreground">Field</FieldLabel>
+                <Select
+                  value={o.name || ""}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    o.name = v;
+                    delete o.static;
+                    delete o.sim;
+                    ed.commit(false);
+                    ed.emit();
+                  }}
+                  items={JCARD_FIELDS.map((f) => ({ value: f, label: JCARD_FIELD_LABELS[f] }))}
+                >
+                  <SelectTrigger size="sm" className="w-full" disabled={locked} aria-label="J-card field">
+                    <SelectValue placeholder="Choose a field…" />
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    {JCARD_FIELDS.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {JCARD_FIELD_LABELS[f]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!o.name ? (
+                  <p className="text-xs text-muted-foreground">
+                    Choose a field: a dynamic text with none prints nothing.
+                  </p>
+                ) : null}
+              </Field>
+              <Field className="gap-1.5">
+                <FieldLabel className="text-xs text-muted-foreground">Test value</FieldLabel>
+                <Input
+                  value={o.sim ?? ""}
+                  placeholder={ed.jcardSim(o.name as JCardField)}
+                  onChange={(e) => {
+                    if (e.target.value.trim() === "") delete o.sim;
+                    else o.sim = e.target.value;
+                    ed.commit(true);
+                    ed.emit();
+                  }}
+                  disabled={locked}
+                  className="h-7 text-xs"
+                  aria-label="Test value"
+                />
+              </Field>
+            </>
+          ) : (
+            <Field className="gap-1.5">
+              <FieldLabel className="text-xs text-muted-foreground">Text</FieldLabel>
+              <Input
+                value={o.text ?? ""}
+                placeholder="What this text prints"
+                onChange={(e) => {
+                  o.text = e.target.value;
+                  ed.commit(false);
+                  ed.emit();
+                }}
+                disabled={locked}
+                className="h-8"
+                aria-label="Text"
+              />
+              {!(o.text ?? "").trim() ? (
+                <p className="text-xs text-muted-foreground">
+                  Empty prints nothing. Type the string here, or set Kind to a dynamic text and
+                  choose a field.
+                </p>
+              ) : null}
+            </Field>
+          )}
+        </Section>
+      ) : null}
+
+      <Section title="Layout">
+        <div className="grid grid-cols-2 gap-2">
+          <Num label="X" value={o.x} onChange={(v) => ed.setObjField(o, "x", v)} disabled={locked} />
+          <Num label="Y" value={o.y} onChange={(v) => ed.setObjField(o, "y", v)} disabled={locked} />
+          <Num
+            label={isText ? "Wrap width" : "Width"}
+            value={o.w}
+            min={1}
+            onChange={(v) => ed.setObjField(o, "w", v)}
+            disabled={locked}
+          />
+          {isText ? (
+            <ReadOnly label="Height" value={`${Math.round(ed.pxOf(o) * 1.2)} auto`} />
+          ) : (
+            <Num
+              label="Height"
+              value={o.h ?? 0}
+              min={1}
+              onChange={(v) => ed.setObjField(o, "h", v)}
+              disabled={locked}
+            />
+          )}
+          {o.type === "rect" ? (
+            <Num
+              label="Radius"
+              value={o.r ?? 0}
+              min={0}
+              onChange={(v) => ed.setObjField(o, "r", v)}
+              disabled={locked}
+            />
+          ) : null}
+          <Num
+            label="Rotation °"
+            value={Math.round(o.rot ?? 0)}
+            onChange={(v) => ed.setObjField(o, "rot", v)}
+            disabled={locked}
+          />
+        </div>
+      </Section>
+
+      {isText ? (
+        <Section title="Typography">
+          <Field className="gap-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Font role</FieldLabel>
+            <Select
+              value={o.fr ?? "caption"}
+              onValueChange={(v) => ed.setObjField(o, "fr", v as Obj["fr"])}
+              items={FROLES.map((f) => ({ value: f, label: f }))}
+            >
+              <SelectTrigger size="sm" className="w-full" disabled={locked} aria-label="Font role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                {FROLES.map((f) => {
+                  const face = jcRole(f);
+                  return (
+                    <SelectItem key={f} value={f}>
+                      {f} · {face.ff} {face.size}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field className="gap-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Align</FieldLabel>
+            <ToggleGroup
+              value={[o.align ?? "left"]}
+              onValueChange={(v) => {
+                if (v[0]) ed.setObjField(o, "align", v[0] as Obj["align"]);
+              }}
+              variant="outline"
+              size="sm"
+              spacing={0}
+              aria-label="Text align"
+              className="w-full"
+            >
+              <ToggleGroupItem value="left" className="flex-1" aria-label="Align left">
+                <AlignLeft />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="center" className="flex-1" aria-label="Align centre">
+                <AlignCenter />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="right" className="flex-1" aria-label="Align right">
+                <AlignRight />
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </Field>
+          <Field className="gap-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Colour role</FieldLabel>
+            <RoleSelect
+              value={o.role ?? "ink"}
+              roles={TEXT_ROLES}
+              onChange={(v) => ed.setObjField(o, "role", v)}
+              disabled={locked}
+            />
+          </Field>
+        </Section>
+      ) : (
+        <Section title="Appearance">
+          <Field className="gap-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Colour role</FieldLabel>
+            <RoleSelect
+              value={o.role ?? "band.0"}
+              roles={ROLES}
+              onChange={(v) => ed.setObjField(o, "role", v)}
+              disabled={locked}
+            />
+          </Field>
+          {o.role ? (
+            <>
+              <ColourRow
+                label={`Colour of "${o.role}"`}
+                value={ed.roleColor(o.role) ?? "#000000"}
+                onChange={(v) => ed.setRoleColor(o.role!, v)}
+              />
+              <SwatchStrip
+                value={ed.roleColor(o.role) ?? ""}
+                onPick={(c) => ed.setRoleColor(o.role!, c)}
+              />
+            </>
+          ) : null}
+        </Section>
+      )}
+
+      {isText ? (
+        <Section title="Appearance">
+          <ColourRow
+            label={o.role ? `Colour of "${o.role}"` : "Colour"}
+            value={o.role ? (ed.roleColor(o.role) ?? "#000000") : "#000000"}
+            onChange={(v) => (o.role ? ed.setRoleColor(o.role, v) : undefined)}
+          />
+          {o.role ? (
+            <SwatchStrip
+              value={ed.roleColor(o.role) ?? ""}
+              onPick={(c) => ed.setRoleColor(o.role!, c)}
+            />
+          ) : null}
+        </Section>
+      ) : null}
+
+      <Section title="Layer">
+        <Field className="gap-1.5">
+          <FieldLabel className="text-xs text-muted-foreground">Name</FieldLabel>
+          <Input
+            value={o.label ?? ""}
+            placeholder={`${o.type} ${o.id}`}
+            onChange={(e) => {
+              o.label = e.target.value;
+              ed.commit(false);
+              ed.emit();
+            }}
+            className="h-8"
+            aria-label="Layer name"
+          />
+        </Field>
+        <label className="flex items-center gap-2 text-xs">
+          <Switch checked={locked} onCheckedChange={() => ed.toggleLock(o)} />
+          Locked
+          <span className="text-muted-foreground">· no edits, drags or deletes</span>
+        </label>
+      </Section>
+    </SectionGroup>
+  );
+}
+
+function JCardMultiPanel() {
+  const ed = useEditor();
+  const ids = ed.selIds;
+  const selected = ed.activeObjs().filter((o) => ids.includes(o.id));
+  const bulkRole = (v: string) => {
+    selected.forEach((o) => {
+      if (o.locked) return;
+      if (o.type === "text") {
+        if (TEXT_ROLES.includes(v)) o.role = v;
+        return;
+      }
+      if (v !== "ink") o.role = v;
+    });
+    ed.commit(false);
+    ed.emit();
+  };
+  return (
+    <SectionGroup initial="Selection">
+      <Section title="Selection">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button variant="destructive" size="sm" onClick={() => ed.delSel()}>
+            <Trash2 />
+            Delete
+          </Button>
+        </div>
+      </Section>
+      <Section title="Colour role">
+        <p className="text-xs text-muted-foreground">
+          Set the role of every selected J-card layer. A text takes the ink or a band; a shape
+          takes any role.
+        </p>
+        <Select
+          value=""
+          onValueChange={(v) => v && bulkRole(v)}
+          items={["", ...ROLES].map((r) => ({ value: r, label: r || "Set role…" }))}
+        >
+          <SelectTrigger size="sm" className="w-full" aria-label="Set the role of the selection">
+            <SelectValue placeholder="Set role of selection…" />
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            {ROLES.map((r) => (
+              <SelectItem key={r} value={r}>
+                {r}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Section>
+      <Section title="Layers">
+        <div className="flex flex-col gap-1">
+          {selected.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              className="flex items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs transition-colors hover:bg-k7-surface"
+              onClick={() => ed.select(o)}
+            >
+              <span className="truncate">{o.label || o.name || `${o.type} ${o.id}`}</span>
+              <Badge variant="outline" className="ml-auto shrink-0">
+                {o.type}
+              </Badge>
+            </button>
+          ))}
+        </div>
       </Section>
     </SectionGroup>
   );

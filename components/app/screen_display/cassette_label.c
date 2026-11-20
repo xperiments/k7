@@ -12,6 +12,7 @@
  */
 #include "cassette_label.h"
 
+#include "art.h"
 #include "label.h"
 #include "label_fonts.h"
 #include "screen_caps.h"
@@ -26,6 +27,12 @@ LV_FONT_DECLARE(jura_36);
 LV_FONT_DECLARE(archivo_narrow_600_32);
 LV_FONT_DECLARE(barlow_condensed_700_78);
 LV_FONT_DECLARE(ibm_plex_mono_500_18);
+
+/* The packed factory sheet, embedded at build time (CMakeLists.txt, ADR 0071). It is handed
+ * to the art pool at boot; the pool reads the sheet in place from here and from the `art`
+ * partition alike. */
+extern const uint8_t label_sheet_bin_start[] asm("_binary_label_sheet_bin_start");
+extern const uint8_t label_sheet_bin_end[] asm("_binary_label_sheet_bin_end");
 
 static const char *TAG = "label";
 
@@ -48,9 +55,10 @@ typedef struct {
     bool        rotated;/* the pivot sits on the label's centre, which the text moves */
 } text_node_t;
 
-static label_sheet_t *s_sheet;
+static const label_sheet_t *s_sheet;
 static lv_obj_t      *s_root;
 static uint16_t       s_template = UINT16_MAX;
+static uint32_t       s_generation = UINT32_MAX;
 static text_node_t    s_text[LABEL_PRIM_MAX];
 static uint16_t       s_text_count;
 static bool           s_full;
@@ -197,21 +205,22 @@ static void set_texts(const label_values_t *values)
     }
 }
 
-void cassette_label_create(lv_obj_t *print, const uint8_t *sheet, size_t sheet_size)
+bool cassette_label_factory_register(void)
+{
+    const size_t size = (size_t)(label_sheet_bin_end - label_sheet_bin_start);
+    if (!app_services_art_set_factory(label_sheet_bin_start, size, LABEL_FONT_COUNT)) {
+        ESP_LOGE(TAG, "the label sheet did not open; the print keeps its flat fill");
+        return false;
+    }
+    return true;
+}
+
+void cassette_label_create(lv_obj_t *print)
 {
     if (s_root || !print) return;
 
     /* A board with no cover has no white page and no print: there is nothing to print on. */
     if (!screen_caps()->cover) return;
-
-    char why[96];
-    if (!sheet || sheet_size == 0) return;
-    if (label_open_why(sheet, sheet_size, LABEL_FONT_COUNT, &s_sheet, why, sizeof why) !=
-        LABEL_OK) {
-        ESP_LOGE(TAG, "the label sheet did not open (%s); the print keeps its flat fill", why);
-        s_sheet = NULL;
-        return;
-    }
 
     s_root = lv_obj_create(print);
     lv_obj_remove_style_all(s_root);
@@ -224,7 +233,7 @@ void cassette_label_create(lv_obj_t *print, const uint8_t *sheet, size_t sheet_s
     lv_obj_set_size(s_root, LABEL_SPACE_W, LABEL_SPACE_H);
     lv_obj_set_hidden(s_root, true);
 
-    ESP_LOGI(TAG, "label sheet: %u designs", (unsigned)label_templates(s_sheet));
+    ESP_LOGI(TAG, "label pool: %u designs", (unsigned)app_services_art_count());
 }
 
 void cassette_label_set_pose(bool full)
@@ -235,11 +244,20 @@ void cassette_label_set_pose(bool full)
 
 void cassette_label_update(uint32_t ink_seed, const label_values_t *values)
 {
-    if (!s_sheet || !s_root) return;
+    if (!s_root) return;
 
-    const uint16_t t = label_pick(s_sheet, ink_seed);
-    if (t != s_template) {
+    const label_sheet_t *sheet = NULL;
+    uint16_t t = 0;
+    uint32_t generation = 0;
+    if (!app_services_art_pick(ink_seed, &sheet, &t, &generation)) return;
+
+    /* The generation moves whenever the pool does, so a user pack that lands on the same
+     * template index as the factory design still rebuilds: the Slot names and the colours
+     * come from the sheet, not from the index. */
+    if (sheet != s_sheet || t != s_template || generation != s_generation) {
+        s_sheet = sheet;
         s_template = t;
+        s_generation = generation;
         build(t);
     }
     set_texts(values);
@@ -248,6 +266,21 @@ void cassette_label_update(uint32_t ink_seed, const label_values_t *values)
 uint16_t cassette_label_templates(void)
 {
     return s_sheet ? label_templates(s_sheet) : 0;
+}
+
+void cassette_label_pool_dropped(void)
+{
+    /* Called under the screen's lock by the upload's quiesce hook. The text nodes' Slot
+     * names point into the sheet's string pool, and the sheet is about to be released, so
+     * the nodes are forgotten - but the objects are not cleaned: the picture on the print
+     * is made of copied text and needs no sheet. The next update sees the generation
+     * sentinel and rebuilds them. */
+    s_text_count = 0;
+    memset(s_text, 0, sizeof s_text);
+    s_sheet = NULL;
+    s_template = UINT16_MAX;
+    s_generation = UINT32_MAX;
+    s_canvas_count = 0;
 }
 
 bool cassette_label_canvas(uint16_t row, uint32_t *rgb)

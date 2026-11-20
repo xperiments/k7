@@ -59,9 +59,10 @@ export function AgentToolsDialog({
             Agent tools
           </DialogTitle>
           <DialogDescription>
-            The editor's actions as tools an agent can call: read the design, add and change
-            layers, set the colourway, import and export templates. Every call is an ordinary
-            edit of the open design, and undoable.
+            The editor's actions as tools an agent can call: read both surfaces, add and change
+            layers on the label or the J-card, set the colourway and type, bind the fields,
+            import and export K7Arts, and publish a pack. Every call is an ordinary edit of the
+            open design, and undoable.
           </DialogDescription>
         </DialogHeader>
 
@@ -90,7 +91,7 @@ export function AgentToolsDialog({
               browser the same tools are on{" "}
               <code className="text-foreground">window.__labelEditorMcp</code>:{" "}
               <code className="text-foreground">
-                __labelEditorMcp.call("label-editor-read")
+                __labelEditorMcp.call("k7art-read")
               </code>
               .
               {status.error ? ` ${status.error}` : ""}

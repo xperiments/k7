@@ -32,7 +32,9 @@ names the behaviour.
 | `player/` | The K7Player's firmware: its own ESP-IDF project on the classic ESP32, its own board adapter and host harness, sharing only `components/portable` ([ADR 0097](./docs/adr/0097-the-player-is-an-esp32-classic-in-its-own-project.md)) |
 | `host/` | The host build, its shim, and the C and Python tests; `make -C host check` runs the player's host tier too |
 | `web/` | The K7 app: React, its tests, the artefact |
+| `assets/k7art/` | The factory K7Arts: each file's label section packs into the K7's label sheet, and its J-card is the App's cover for an album with no picture |
 | `tools/` | `build.sh` (every firmware variant), screen capture, asset conversion |
+| `tools/LabelEditor/` | The K7Art editor: one K7Art's label and J-card on two surfaces, served at `/k7art`; Export writes a K7Art, Publish a `.k7artpack` |
 | `docs/` | Specs, ADRs, research, and the tickets under `docs/design/` |
 
 ## Working alongside other agents
@@ -103,11 +105,12 @@ lands.
 ```bash
 make -C host check                          # unit, layering and HTTP acceptance, no board
 cd web && npm run typecheck && npm test && npm run build
+cd tools/LabelEditor && npm test && npm run build   # the editor, and its sheet writer's parity with label_pack.py
 ./tools/build.sh sunton build               # firmware, when the change reaches the device
 ./player/build.sh build                     # the K7Player's firmware, when it reaches that board
 ```
 
-- CI (`.github/workflows/ci.yml`) runs the first two. The firmware is not in CI: it is proven by
+- CI (`.github/workflows/ci.yml`) runs the first three. The firmware is not in CI: it is proven by
   flashing.
 - **Host evidence is not board evidence.** A phase is finished when it passes on the host *and*
   on the board. Never report a board claim from a host test. The four things the host cannot
@@ -123,6 +126,10 @@ the exceptions it names (the coverflow, content images). It governs colour, shap
 motion. [ADR 0080](./docs/adr/0080-the-k7-look-is-the-products-one-skin.md) records the skin, and
 [ADR 0081](./docs/adr/0081-the-look-has-a-primary-and-a-secondary.md) the primary and the
 secondary.
+
+An album with no cover picture wears a K7Art's J-card — its cover part on the case front and
+the album card, its spine on the shelf — not one of the five drawn CSS faces; a real cover
+picture still wins ([`docs/specs/art-packs.md`](./docs/specs/art-packs.md) §6).
 
 The ReUI skill is installed under `.agents/skills/reui` and is loaded before any UI work. ReUI is
 the component source: components are installed rather than hand-rolled, and its rules — the

@@ -1,0 +1,528 @@
+{
+  "format": "k7art",
+  "v": 1,
+  "id": "k7.discs-c60",
+  "name": "Discs C-60",
+  "inks": {
+    "paper": "#f5f1e6",
+    "ink": "#241a12",
+    "rule": "#df7b35",
+    "band": [
+      "#df7b35",
+      "#c68b2e",
+      "#c7a867",
+      "#8a5d34",
+      "#3b6e8f",
+      "#7a3b52",
+      "#6b7a2f",
+      "#b9ac8e"
+    ]
+  },
+  "label": {
+    "space": {
+      "w": 748,
+      "h": 359
+    },
+    "aperture": {
+      "x": 95,
+      "y": 101,
+      "w": 556,
+      "h": 166,
+      "r": 83
+    },
+    "canvas": {
+      "backgrounds": [
+        "#c7a867",
+        "#df7b35",
+        "#f5f1e6"
+      ],
+      "active": 0
+    },
+    "fonts": {
+      "title": {
+        "ff": "Archivo Narrow 600",
+        "px": 32
+      },
+      "numeral": {
+        "ff": "Barlow Condensed 700",
+        "px": 78
+      },
+      "caption": {
+        "ff": "IBM Plex Mono 500",
+        "px": 18
+      }
+    },
+    "slots": {
+      "bpm": {
+        "max": 96
+      },
+      "song_title": {
+        "max": 96
+      },
+      "song_artist": {
+        "max": 96
+      },
+      "genre": {
+        "max": 96
+      },
+      "mood": {
+        "max": 96
+      },
+      "musical_key": {
+        "max": 96
+      }
+    },
+    "prims": [
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 748,
+        "h": 359,
+        "r": 6,
+        "fill": "paper",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 18,
+        "y": 4,
+        "w": 94,
+        "h": 94,
+        "r": 47,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 78,
+        "y": 4,
+        "w": 94,
+        "h": 94,
+        "r": 47,
+        "fill": "band.1",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 138,
+        "y": 4,
+        "w": 94,
+        "h": 94,
+        "r": 47,
+        "fill": "band.2",
+        "still": true
+      },
+      {
+        "t": "text",
+        "slot": "song_title",
+        "x": 272,
+        "y": 8,
+        "w": 330,
+        "font": "title",
+        "color": "ink",
+        "align": "left",
+        "preview": "Neon Skyline"
+      },
+      {
+        "t": "text",
+        "slot": "song_artist",
+        "x": 272,
+        "y": 50,
+        "w": 330,
+        "font": "caption",
+        "color": "ink",
+        "align": "left",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "text",
+        "slot": "bpm",
+        "x": 600,
+        "y": 2,
+        "w": 124,
+        "font": "numeral",
+        "color": "ink",
+        "align": "right",
+        "preview": "124"
+      },
+      {
+        "t": "rect",
+        "x": 32,
+        "y": 94,
+        "w": 684,
+        "h": 2,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 267,
+        "w": 748,
+        "h": 92,
+        "fill": "band.2",
+        "still": true
+      },
+      {
+        "t": "text",
+        "slot": "genre",
+        "x": 26,
+        "y": 276,
+        "w": 480,
+        "font": "title",
+        "color": "ink",
+        "align": "left",
+        "preview": "Synthwave"
+      },
+      {
+        "t": "text",
+        "slot": "mood",
+        "x": 26,
+        "y": 320,
+        "w": 260,
+        "font": "caption",
+        "color": "ink",
+        "align": "left",
+        "preview": "relaxed"
+      },
+      {
+        "t": "text",
+        "x": 600,
+        "y": 276,
+        "w": 124,
+        "font": "caption",
+        "color": "ink",
+        "align": "right",
+        "text": "C-60"
+      },
+      {
+        "t": "text",
+        "slot": "musical_key",
+        "x": 600,
+        "y": 320,
+        "w": 124,
+        "font": "caption",
+        "color": "ink",
+        "align": "right",
+        "preview": "8A"
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 355,
+        "w": 748,
+        "h": 4,
+        "fill": "band.0",
+        "still": true
+      }
+    ]
+  },
+  "jcard": {
+    "space": {
+      "w": 1300,
+      "h": 1280,
+      "unit": 320
+    },
+    "parts": {
+      "flap": {
+        "x": 0,
+        "y": 0,
+        "w": 320,
+        "h": 1280
+      },
+      "spine": {
+        "x": 320,
+        "y": 0,
+        "w": 160,
+        "h": 1280
+      },
+      "cover": {
+        "x": 480,
+        "y": 0,
+        "w": 820,
+        "h": 1280
+      }
+    },
+    "fonts": {
+      "title": {
+        "ff": "Archivo Narrow 600",
+        "size": 54
+      },
+      "numeral": {
+        "ff": "Barlow Condensed 700",
+        "size": 112
+      },
+      "caption": {
+        "ff": "IBM Plex Mono 500",
+        "size": 30
+      }
+    },
+    "prims": [
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 1300,
+        "h": 1280,
+        "fill": "paper"
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 80,
+        "h": 1280,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 120,
+        "y": 260,
+        "w": 160,
+        "h": 160,
+        "r": 80,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 160,
+        "y": 300,
+        "w": 80,
+        "h": 80,
+        "r": 40,
+        "fill": "band.2"
+      },
+      {
+        "t": "rect",
+        "x": 320,
+        "y": 0,
+        "w": 160,
+        "h": 1280,
+        "fill": "band.2"
+      },
+      {
+        "t": "rect",
+        "x": 320,
+        "y": 0,
+        "w": 10,
+        "h": 1280,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 330,
+        "y": 560,
+        "w": 140,
+        "font": "title",
+        "color": "ink",
+        "align": "center",
+        "text": "C-60"
+      },
+      {
+        "t": "text",
+        "x": 325,
+        "y": 630,
+        "w": 150,
+        "font": "caption",
+        "color": "ink",
+        "align": "center",
+        "text": "STANDARD"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 0,
+        "w": 820,
+        "h": 230,
+        "fill": "band.2"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 0,
+        "w": 820,
+        "h": 8,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 540,
+        "y": 30,
+        "w": 700,
+        "font": "numeral",
+        "color": "ink",
+        "align": "left",
+        "text": "STANDARD"
+      },
+      {
+        "t": "text",
+        "x": 540,
+        "y": 168,
+        "w": 700,
+        "font": "caption",
+        "color": "ink",
+        "align": "left",
+        "text": "C-60 · STEREO"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 205,
+        "w": 820,
+        "h": 4,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 490,
+        "y": 250,
+        "w": 300,
+        "h": 300,
+        "r": 150,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 660,
+        "y": 250,
+        "w": 300,
+        "h": 300,
+        "r": 150,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 830,
+        "y": 250,
+        "w": 300,
+        "h": 300,
+        "r": 150,
+        "fill": "band.2"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 720,
+        "w": 820,
+        "h": 4,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 780,
+        "w": 820,
+        "h": 270,
+        "fill": "band.2"
+      },
+      {
+        "t": "text",
+        "slot": "title",
+        "x": 540,
+        "y": 795,
+        "w": 700,
+        "font": "numeral",
+        "color": "ink",
+        "align": "left",
+        "preview": "Neon Skyline"
+      },
+      {
+        "t": "text",
+        "slot": "artist",
+        "x": 540,
+        "y": 920,
+        "w": 700,
+        "font": "title",
+        "color": "ink",
+        "align": "left",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "text",
+        "slot": "meta",
+        "x": 540,
+        "y": 995,
+        "w": 700,
+        "font": "caption",
+        "color": "ink",
+        "align": "left",
+        "preview": "Side A · Side B"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 1050,
+        "w": 820,
+        "h": 6,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 540,
+        "y": 1090,
+        "w": 700,
+        "font": "caption",
+        "color": "ink",
+        "align": "left",
+        "text": "C-60 · STEREO"
+      },
+      {
+        "t": "rect",
+        "x": 540,
+        "y": 1170,
+        "w": 14,
+        "h": 70,
+        "fill": "ink"
+      },
+      {
+        "t": "rect",
+        "x": 568,
+        "y": 1170,
+        "w": 6,
+        "h": 70,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 596,
+        "y": 1170,
+        "w": 14,
+        "h": 70,
+        "fill": "ink"
+      },
+      {
+        "t": "rect",
+        "x": 624,
+        "y": 1170,
+        "w": 6,
+        "h": 70,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 652,
+        "y": 1170,
+        "w": 14,
+        "h": 70,
+        "fill": "ink"
+      },
+      {
+        "t": "rect",
+        "x": 680,
+        "y": 1170,
+        "w": 6,
+        "h": 70,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 1276,
+        "w": 820,
+        "h": 4,
+        "fill": "band.0"
+      }
+    ]
+  }
+}

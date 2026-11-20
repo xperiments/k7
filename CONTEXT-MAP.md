@@ -40,7 +40,11 @@ refused, not scheduled.
   the App's **Install** and the player's firmware **Flash**, the latter over USB rather than the
   network — the only browser surface that writes a board
   ([ADR 0078](./docs/adr/0078-the-site-owns-the-root-and-the-app-moves-to-app.md),
-  [ADR 0079](./docs/adr/0079-the-firmware-is-flashed-in-parts-from-the-browser.md)). Specified in
+  [ADR 0079](./docs/adr/0079-the-firmware-is-flashed-in-parts-from-the-browser.md)). The same
+  origin serves the **K7Art Editor** at `/k7art`, where a cassette's label and J-card are
+  designed and a **K7Art pack** is published; the App installs that pack and draws its J-cards
+  on the albums that have no cover picture ([`docs/specs/k7art.md`](./docs/specs/k7art.md),
+  [`docs/specs/art-packs.md`](./docs/specs/art-packs.md)). Specified in
   [`docs/specs/k7-app.md`](./docs/specs/k7-app.md) and
   [`docs/specs/k7-site.md`](./docs/specs/k7-site.md); its look in
   [`docs/specs/k7-look.md`](./docs/specs/k7-look.md); deployment in
@@ -92,6 +96,12 @@ refused, not scheduled.
   ([ADR 0095](./docs/adr/0095-a-playlist-is-a-file-on-its-card.md)). A measurement only ever
   arrives by flashing an image on the card, and flashes a restart; a list arrives as a file and
   does not.
+
+- **K7Art Editor → K7 app → Stream server**: the editor at `/k7art` publishes a `.k7artpack` as
+  a download; the App's **Art packs** page installs it on the K7. The K7 stores it in its `art`
+  partition, reads its label sheet in place and serves the pack read-only, while the App caches
+  its J-cards for the covers. The editor never reaches the device; the pack is art in flash,
+  not a Track.
 
 ## The journey
 

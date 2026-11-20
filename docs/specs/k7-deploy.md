@@ -171,16 +171,20 @@ origin. The shipping `sunton` variant leaves the option off and carries one orig
 
 | | Command | What it bakes in |
 |---|---|---|
-| The Site and the App (Vercel) | `npm run build` | trusts `http://k7.local`; the `local-network` permission is asked for at first render; the Site's firmware version and hashes come from `firmware.json`; the parts under `public/firmware/<version>/` ship with the deploy |
+| The Site and the App | `npm run build` in `web/` | trusts `http://k7.local`; the `local-network` permission is asked for at first render; the Site's firmware version and hashes come from `firmware.json`; the parts under `public/firmware/<version>/` ship with the deploy |
+| The K7Art Editor (the same deploy) | `npm run build` in `tools/LabelEditor/`, copied under `web/dist/k7art/` | the `/k7art/` base; the browser packer and its parity with `label_pack.py`; no device access, no network |
 
 **D13. There is no device artifact.** ADR 0067 removed the Launcher and the Shell: the firmware
-packs no page of the Site or the App, `/` and `/bridge` answer 302 to the App at `/app`, and the
-App at `/app` is the only UI a browser is sent to. The one page the firmware serves is `GET
-/setup` ([ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)).
+packs no page of the Site, the App or the editor, `/` and `/bridge` answer 302 to the App at
+`/app`, and the App at `/app` and the editor at `/k7art` are the UI a browser is sent to. The one
+page the firmware serves is `GET /setup`
+([ADR 0076](../adr/0076-the-network-is-chosen-on-the-devices-setup-network.md)).
 
 **D14. A shipping build refuses a development origin.** The deployed App artifact fails the check
-if the development origin's string appears anywhere in `dist`; the release firmware compiles
-without `CONFIG_K7_TRUST_DEV_ORIGIN` (D12a), so its binary carries no development origin either.
+if the development origin's string appears anywhere in `dist`; the editor's artifact, under
+`dist/k7art/`, fails it the same way — its built `skill.md` names `/k7art`, not the development
+server at `:5178`. The release firmware compiles without `CONFIG_K7_TRUST_DEV_ORIGIN` (D12a), so
+its binary carries no development origin either.
 
 **D15. A shipping build refuses a Flash it cannot serve.** The Site may name only a firmware
 version whose parts are present in `web/public/firmware/<version>/`, and every part's size and
@@ -195,7 +199,7 @@ Three jobs, all on a pull request:
 
 | Job | What it runs |
 |---|---|
-| `web` | `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, the artifact guard (D14), the firmware manifest guard (D15, k7-site.md R4), the worker shell check (k7-site.md D3), and a manifest shape check — `id`, `name`/`short_name`, `start_url: "/app"`, `scope: "/app"`, `display`, `theme_color`, and 192/512/512-maskable icons — so A9 cannot regress silently |
+| `web` | `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, the artifact guard (D14), the firmware manifest guard (D15, k7-site.md R4), the worker shell check (k7-site.md D3), and a manifest shape check — `id`, `name`/`short_name`, `start_url: "/app"`, `scope: "/app"`, `display`, `theme_color`, and 192/512/512-maskable icons — so A9 cannot regress silently; plus the editor's build and tests: `npm ci`, `npm test` and `npm run build` in `tools/LabelEditor/`, its sheet writer against `label_pack.py` for every `assets/k7art/*.json`, and its `/k7art` boot |
 | `host` | `make -C host check` — the device's own fixtures, including the two Update-file names |
 | `e2e` | documented but commented until a Playwright dependency lands: one status round trip from the App's origin to `http://k7.local` with the `local-network` permission granted |
 
@@ -206,11 +210,11 @@ the flash.
 
 ## 7. First run, in order
 
-1. `k7.xperiments.dev/` serves the Site and `/app` serves the App; `curl -sI` shows no `COOP`,
-   `no-cache` on `/app`, `/app.html`, `/index.html` and `/sw.js`, Vercel's
-   `max-age=0, must-revalidate` on `/` (D4's list names the files, and the root path revalidates
-   before every use anyway), `immutable` on `/assets/`, and `application/manifest+json` on the
-   manifest.
+1. `k7.xperiments.dev/` serves the Site, `/app` the App and `/k7art` the editor; `curl -sI` shows
+   no `COOP`, `no-cache` on `/app`, `/app.html`, `/k7art`, `/k7art/index.html`, `/index.html` and
+   `/sw.js`, Vercel's `max-age=0, must-revalidate` on `/` (D4's list names the files, and the root
+   path revalidates before every use anyway), `immutable` on `/assets/` and `/k7art/assets/`, and
+   `application/manifest+json` on the manifest.
 2. The Site offers the flash only in Chrome or Edge on a computer, and the install only where
    `local-network` can answer; Safari and Firefox get a sentence and the manual flash path.
 3. The App reports `isSecureContext: true` and a registered worker, and Ask reports the built-in

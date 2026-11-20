@@ -1,0 +1,932 @@
+{
+  "format": "k7art",
+  "v": 1,
+  "id": "k7.voice",
+  "name": "Voice",
+  "inks": {
+    "paper": "#8a5d34",
+    "ink": "#f5f1e6",
+    "rule": "#c7a867",
+    "band": [
+      "#f5f1e6",
+      "#c7a867",
+      "#5c3d20",
+      "#df7b35",
+      "#6b7a2f",
+      "#3b6e8f",
+      "#7a3b52",
+      "#241a12"
+    ]
+  },
+  "label": {
+    "space": {
+      "w": 748,
+      "h": 359
+    },
+    "aperture": {
+      "x": 95,
+      "y": 101,
+      "w": 556,
+      "h": 166,
+      "r": 83
+    },
+    "canvas": {
+      "backgrounds": [
+        "#8a5d34",
+        "#c7a867"
+      ],
+      "active": 0
+    },
+    "fonts": {
+      "title": {
+        "ff": "Archivo Narrow 600",
+        "px": 32
+      },
+      "numeral": {
+        "ff": "Barlow Condensed 700",
+        "px": 78
+      },
+      "caption": {
+        "ff": "IBM Plex Mono 500",
+        "px": 18
+      }
+    },
+    "slots": {
+      "song_title": {
+        "max": 96
+      },
+      "song_artist": {
+        "max": 96
+      },
+      "song_album": {
+        "max": 96
+      },
+      "mood": {
+        "max": 96
+      },
+      "musical_key": {
+        "max": 96
+      }
+    },
+    "prims": [
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 748,
+        "h": 359,
+        "r": 8,
+        "fill": "paper",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 24,
+        "y": 12,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 46,
+        "y": 12,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 68,
+        "y": 12,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 90,
+        "y": 12,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 112,
+        "y": 12,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 134,
+        "y": 12,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 24,
+        "y": 34,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 46,
+        "y": 34,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 68,
+        "y": 34,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 90,
+        "y": 34,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 112,
+        "y": 34,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 134,
+        "y": 34,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 24,
+        "y": 56,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 46,
+        "y": 56,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 68,
+        "y": 56,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 90,
+        "y": 56,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 112,
+        "y": 56,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 134,
+        "y": 56,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 24,
+        "y": 78,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 46,
+        "y": 78,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 68,
+        "y": 78,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 90,
+        "y": 78,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 112,
+        "y": 78,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 134,
+        "y": 78,
+        "w": 8,
+        "h": 8,
+        "r": 4,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "text",
+        "x": 150,
+        "y": 2,
+        "w": 220,
+        "font": "numeral",
+        "color": "band.0",
+        "align": "left",
+        "text": "VOICE"
+      },
+      {
+        "t": "text",
+        "slot": "song_title",
+        "x": 390,
+        "y": 6,
+        "w": 245,
+        "font": "title",
+        "color": "ink",
+        "align": "left",
+        "preview": "Neon Skyline"
+      },
+      {
+        "t": "text",
+        "slot": "song_artist",
+        "x": 390,
+        "y": 44,
+        "w": 245,
+        "font": "caption",
+        "color": "band.1",
+        "align": "left",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "rect",
+        "x": 640,
+        "y": 8,
+        "w": 76,
+        "h": 76,
+        "r": 38,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "text",
+        "x": 640,
+        "y": 22,
+        "w": 76,
+        "font": "title",
+        "color": "band.2",
+        "align": "center",
+        "text": "A"
+      },
+      {
+        "t": "rect",
+        "x": 24,
+        "y": 94,
+        "w": 700,
+        "h": 2,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 24,
+        "y": 267,
+        "w": 700,
+        "h": 2,
+        "fill": "band.0",
+        "still": true
+      },
+      {
+        "t": "text",
+        "slot": "song_album",
+        "x": 26,
+        "y": 276,
+        "w": 480,
+        "font": "title",
+        "color": "ink",
+        "align": "left",
+        "preview": "Night Drive"
+      },
+      {
+        "t": "text",
+        "slot": "mood",
+        "x": 26,
+        "y": 318,
+        "w": 260,
+        "font": "caption",
+        "color": "band.1",
+        "align": "left",
+        "preview": "relaxed"
+      },
+      {
+        "t": "text",
+        "x": 600,
+        "y": 276,
+        "w": 124,
+        "font": "caption",
+        "color": "band.0",
+        "align": "right",
+        "text": "STEREO"
+      },
+      {
+        "t": "text",
+        "slot": "musical_key",
+        "x": 600,
+        "y": 318,
+        "w": 124,
+        "font": "caption",
+        "color": "ink",
+        "align": "right",
+        "preview": "8A"
+      },
+      {
+        "t": "rect",
+        "x": 24,
+        "y": 351,
+        "w": 700,
+        "h": 2,
+        "fill": "band.0",
+        "still": true
+      }
+    ]
+  },
+  "jcard": {
+    "space": {
+      "w": 1300,
+      "h": 1280,
+      "unit": 320
+    },
+    "parts": {
+      "flap": {
+        "x": 0,
+        "y": 0,
+        "w": 320,
+        "h": 1280
+      },
+      "spine": {
+        "x": 320,
+        "y": 0,
+        "w": 160,
+        "h": 1280
+      },
+      "cover": {
+        "x": 480,
+        "y": 0,
+        "w": 820,
+        "h": 1280
+      }
+    },
+    "fonts": {
+      "title": {
+        "ff": "Archivo Narrow 600",
+        "size": 54
+      },
+      "numeral": {
+        "ff": "Barlow Condensed 700",
+        "size": 112
+      },
+      "caption": {
+        "ff": "IBM Plex Mono 500",
+        "size": 30
+      }
+    },
+    "prims": [
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 1300,
+        "h": 1280,
+        "fill": "paper"
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 80,
+        "h": 1280,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 1280,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 120,
+        "y": 260,
+        "w": 160,
+        "h": 160,
+        "r": 80,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 120,
+        "y": 318,
+        "w": 160,
+        "font": "title",
+        "color": "band.2",
+        "align": "center",
+        "text": "A"
+      },
+      {
+        "t": "rect",
+        "x": 320,
+        "y": 0,
+        "w": 160,
+        "h": 1280,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 320,
+        "y": 0,
+        "w": 10,
+        "h": 1280,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 325,
+        "y": 540,
+        "w": 150,
+        "font": "title",
+        "color": "band.2",
+        "align": "center",
+        "text": "VOICE"
+      },
+      {
+        "t": "text",
+        "x": 330,
+        "y": 620,
+        "w": 140,
+        "font": "caption",
+        "color": "band.2",
+        "align": "center",
+        "text": "SIDE A"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 0,
+        "w": 820,
+        "h": 230,
+        "fill": "paper"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 0,
+        "w": 820,
+        "h": 8,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 540,
+        "y": 30,
+        "w": 700,
+        "font": "numeral",
+        "color": "band.0",
+        "align": "left",
+        "text": "VOICE"
+      },
+      {
+        "t": "text",
+        "x": 540,
+        "y": 168,
+        "w": 700,
+        "font": "caption",
+        "color": "band.1",
+        "align": "left",
+        "text": "HIGH FIDELITY · STEREO"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 222,
+        "w": 820,
+        "h": 8,
+        "fill": "band.0"
+      },
+      {
+        "t": "rect",
+        "x": 530,
+        "y": 270,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 576,
+        "y": 270,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 622,
+        "y": 270,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 668,
+        "y": 270,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 714,
+        "y": 270,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 530,
+        "y": 316,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 576,
+        "y": 316,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 622,
+        "y": 316,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 668,
+        "y": 316,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 714,
+        "y": 316,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 530,
+        "y": 362,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 576,
+        "y": 362,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 622,
+        "y": 362,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 668,
+        "y": 362,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 714,
+        "y": 362,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 530,
+        "y": 408,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 576,
+        "y": 408,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 622,
+        "y": 408,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 668,
+        "y": 408,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 714,
+        "y": 408,
+        "w": 18,
+        "h": 18,
+        "r": 9,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 1000,
+        "y": 250,
+        "w": 240,
+        "h": 240,
+        "r": 120,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 1000,
+        "y": 300,
+        "w": 240,
+        "font": "numeral",
+        "color": "band.2",
+        "align": "center",
+        "text": "A"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 700,
+        "w": 820,
+        "h": 3,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "slot": "title",
+        "x": 540,
+        "y": 740,
+        "w": 700,
+        "font": "numeral",
+        "color": "band.0",
+        "align": "left",
+        "preview": "Neon Skyline"
+      },
+      {
+        "t": "text",
+        "slot": "artist",
+        "x": 540,
+        "y": 875,
+        "w": 700,
+        "font": "title",
+        "color": "band.1",
+        "align": "left",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "text",
+        "slot": "meta",
+        "x": 540,
+        "y": 960,
+        "w": 700,
+        "font": "caption",
+        "color": "band.0",
+        "align": "left",
+        "preview": "Side A · Side B"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 1050,
+        "w": 820,
+        "h": 6,
+        "fill": "band.0"
+      },
+      {
+        "t": "text",
+        "x": 540,
+        "y": 1090,
+        "w": 700,
+        "font": "caption",
+        "color": "band.0",
+        "align": "left",
+        "text": "SIDE A · STEREO"
+      },
+      {
+        "t": "rect",
+        "x": 540,
+        "y": 1180,
+        "w": 14,
+        "h": 14,
+        "r": 7,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 578,
+        "y": 1180,
+        "w": 14,
+        "h": 14,
+        "r": 7,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 616,
+        "y": 1180,
+        "w": 14,
+        "h": 14,
+        "r": 7,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 654,
+        "y": 1180,
+        "w": 14,
+        "h": 14,
+        "r": 7,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 692,
+        "y": 1180,
+        "w": 14,
+        "h": 14,
+        "r": 7,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 730,
+        "y": 1180,
+        "w": 14,
+        "h": 14,
+        "r": 7,
+        "fill": "band.1"
+      },
+      {
+        "t": "rect",
+        "x": 480,
+        "y": 1274,
+        "w": 820,
+        "h": 6,
+        "fill": "band.0"
+      }
+    ]
+  }
+}

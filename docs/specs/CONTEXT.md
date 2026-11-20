@@ -470,40 +470,111 @@ What the white page - the **Real** Level - prints on the **Card**: the Track art
 the outer frame's width, top-aligned, clipped to that frame and masked by the inner one. It is
 the **label**, above the Card: cinta < Card < label. The window is a real transparent hole in
 both, so the tape shows through it. The up swipe turns it off with the Page; every way off Real
-hides it. It is part of Real, not a Level of its own and not the removed Label cover.
+hides it. It is part of Real, not a Level of its own and not the removed Label cover. It is not
+a J-card's **cover panel**: that is the paper insert's front, not the Track's picture on the
+Card.
 _Avoid_: artwork screen, Case, portada
 
 **Label template**:
-The design the two-finger pose prints on the Card's print: a 748x359 `label-template v1` file in
-`assets/labels/templates/`, authored in the Label Editor (`tools/LabelEditor/`). Its prims are
-rects and texts coloured by role — paper, ink, rule and band 0..7 — its texts bound to **Slots**
-or fixed, and its paper cut at the **Window** by the Card's own mask. A Track's template is
-`ink_seed % template_count`, the same seed that picks its palette row, so shell and design
-always pair (ADR 0071). The layout is in [`label-templates.md`](./label-templates.md).
-_Avoid_: skin, theme, label design, cover
+The design the two-finger pose prints on the Card's print: the `label` section of a **K7Art**
+([`k7art.md`](./k7art.md)), a 748x359 design in `assets/k7art/`, authored in the **K7Art
+Editor**. Its prims are rects and texts coloured by role — paper, ink, rule and band 0..7 — its
+texts bound to **Slots** or fixed, and its paper cut at the **Window** by the Card's own mask. A
+Track's template is a pick from the **Pool** — `ink_seed % (factory + user)` — the same seed
+that picks its palette row, so shell and design always pair (ADR 0071). The layout is in
+[`label-templates.md`](./label-templates.md).
+_Avoid_: skin, theme, label design, cover, file (the **K7Art** is the file)
 
 **Canvas background**:
 The cassette's background while the two-finger pose shows a **Label template**: the Card's
-plastic and mat, the window's rim and the 800x480 screen behind them. It is the design's, not the
+plastic and mat, the window's rim and the 800x480 screen behind them. It is the label's, not the
 palette's: a list of up to eight colours, picked by the Track's cassette row (`row % count`); the
-editor's active one is only its preview. A design without one leaves the Track's cassette row
-alone. The print's own background is still the design's **paper**.
+editor's active one is only its preview. A label without one leaves the Track's cassette row
+alone. The print's own background is still the design's **paper**. The **J-card** has none: it
+is paper, and its sheet is the **K7Art**'s `paper`.
 _Avoid_: screen colour, backdrop, background fill
 
 **Label sheet**:
-Every **Label template** in the build, packed into one binary: `label_sheet.bin`, written by
-`tools/label_pack.py`, embedded in the image and read in place - a pointer and a length, never
-copied, never parsed at runtime. One sheet, one CRC, one format version; the templates are
-addressed by index. It is not the parked **Sheet**, which was a Level's overlay.
-_Avoid_: pack, blob, bundle
+The binary the K7 reads in place: the factory sheet, packed from every **K7Art**'s label section
+by `tools/label_pack.py` and embedded in the image, or a **User pack**'s sheet, written from the
+same format by the editor and stored in the **Art partition**. One sheet, one CRC, one format
+version; the templates are addressed by index. The factory and the user's sheets are one
+**Pool**. It is not the parked **Sheet**, which was a Level's overlay, and not a **K7Art pack**,
+which is the file the App installs.
+_Avoid_: blob, bundle, pack (the **K7Art pack**)
 
 **Slot**:
 One of the eleven fields a **Label template**'s text can be bound to, filled from the playing
 Track's **Snapshot** row: `song_title`, `song_artist`, `song_album`, `genre`, `bpm`,
 `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood` - the editor's own ids. A
 slot carries a `max`, the most characters the design allows, and an unknown value prints nothing.
-The vocabulary is the Snapshot's, not the editor's: `year` and `album_artist` are not on it.
-_Avoid_: field, variable, token, placeholder
+The vocabulary is the Snapshot's, not the editor's: `year` and `album_artist` are not on it. It
+is not a **J-card field**: a J-card's three words are the App's album or Track data, not the
+Snapshot's.
+_Avoid_: variable, token, placeholder; field (the **J-card field**)
+
+**K7Art**:
+One cassette artwork: a **Label template** and its **J-card**, one id `k7.<slug>`, one file in
+`assets/k7art/`, one-to-one. The two sections share the K7Art's `inks` - paper, ink, rule and
+band 0..7 - and its three faces; the label's text binds to **Slots**, the J-card's to **J-card
+fields**. `label_pack.py` reads its label section and the App reads its J-card section; the
+device never parses it. It is not the retired `label-template v1` file.
+_Avoid_: label template (the design, not the file), artwork, skin, theme
+
+**J-card**:
+The paper insert of a cassette case: one side, 4.0625x4 in, scored into a **flap**, a **spine**
+and a **cover**; the face the App draws for an album with no cover picture. It has three
+**J-card fields** and its own three type sizes; its cover is the App's case front and album
+card, its spine the shelf's spine, and its flap has no surface yet. It is not the K7's
+**Cover** - that is the Track picture on the Card - and it is not a **Slot**.
+_Avoid_: sleeve, insert card, cover (the K7's **Cover**)
+
+**J-card panel**:
+One of the flap (1 in), the spine (0.5 in) or the cover (2.5625 in): the three regions of the
+J-card's one sheet, divided by the folds at 1 in and 1.5 in and drawn as guides in the **K7Art
+Editor**. The App draws the cover and the spine; the flap waits for a surface.
+_Avoid_: part, section, face
+
+**J-card field**:
+One of `title`, `artist` or `meta`: the three words a J-card's text binds to, filled by the App
+from an album's - or a Track's - name, byline and meta line. It is not a **Slot** and carries no
+`max`.
+_Avoid_: slot, variable, token, placeholder
+
+**K7Art pack**:
+A user's set of **K7Art**s, published from the **K7Art Editor** as one `.k7artpack`: the binary
+label sheet, the designs' J-card sections and a header. The App installs it on the K7; one is
+active at a time and it is additive to the **Factory pack**. It is not a **Label sheet** and not
+a single **K7Art**.
+_Avoid_: sheet, bundle, preset, theme
+
+**Factory pack**:
+The designs the build ships: every K7Art in `assets/k7art/`, packed into the embedded **Label
+sheet** and bundled into the App as J-cards. It is always selectable and is never replaced by a
+user's pack.
+_Avoid_: default pack, built-in pack
+
+**User pack**:
+The active **K7Art pack** in the K7's **Art partition**, whose label sheet and J-cards join the
+**Pool** behind the factory's. "Reset to factory" removes it.
+_Avoid_: custom pack, my pack
+
+**Art partition**:
+The 1 MB flash data partition (`partitions.csv`) that holds the active **User pack**; read in
+place and served read-only. It is flash, not the SD card, and it never holds a Track.
+_Avoid_: pack partition, flash area
+
+**Pool**:
+The designs a picker draws from: the **Factory pack**'s and the active **User pack**'s, factory
+first, each in id order. The K7's two-finger label picker and the App's album covers both draw
+from it.
+_Avoid_: set, library, rotation
+
+**K7Art Editor**:
+The design tool for a **K7Art**, served at `/k7art`: the label and J-card surfaces, the shared
+palette and faces, the J-card's fields and sizes, and the publish of a **K7Art pack**. It does
+not reach the K7; the App installs.
+_Avoid_: Label Editor (the old name), art editor
 
 **Peek**:
 The bottom **Level**: raised by an up swipe from **Initial**, and put away by a down swipe. It

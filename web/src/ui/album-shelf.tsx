@@ -11,7 +11,8 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button';
 import type { Album } from '../media/albums';
-import { hueOf } from './album-art';
+import { Jcard, useJcardDesign } from '../jcard';
+import { DEFAULT_META, hueOf } from './album-art';
 import { CassetteFront } from './cassette';
 import { plural } from './format';
 
@@ -342,10 +343,7 @@ export function AlbumShelf({
                       <span className="k7-sheen" aria-hidden="true" />
                     </span>
                     <span className="k7-face k7-side k7-left" aria-hidden="true">
-                      <span className="k7-spine">
-                        <span className="k7-spine-group">{byline(album)}</span> -{' '}
-                        {album.album}
-                      </span>
+                      <CaseSpine album={album} />
                       <span className="k7-frame" />
                       <span className="k7-sheen" aria-hidden="true" />
                     </span>
@@ -563,5 +561,29 @@ function CaseCover({ album }: { album: Album }) {
       initial={initialOf(album)}
       art={{ title: album.album, artist: byline(album) }}
     />
+  );
+}
+
+/**
+ * The case's left face: the J-card's spine for a coverless album, the byline for one with a
+ * picture. The spine's own type is the design's; the App's byline is not drawn over it
+ * (k7art.md §5). A pool with no design leaves the byline, so the shelf still names the case.
+ */
+function CaseSpine({ album }: { album: Album }) {
+  const artist = byline(album);
+  const design = useJcardDesign(album.album, artist);
+  if (!album.cover && design) {
+    return (
+      <Jcard
+        design={design}
+        fields={{ title: album.album, artist, meta: DEFAULT_META }}
+        part="spine"
+      />
+    );
+  }
+  return (
+    <span className="k7-spine">
+      <span className="k7-spine-group">{artist}</span> - {album.album}
+    </span>
   );
 }

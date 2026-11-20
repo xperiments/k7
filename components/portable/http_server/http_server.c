@@ -324,7 +324,7 @@ int http_post_rules(const http_request_t *req, const char *route_method, const c
 
 esp_err_t http_server_route_body_limit(const char *prefix, const char *method, uint32_t max)
 {
-    if (!prefix || !method || !max || max > HTTP_UPLOAD_MAX) return ESP_ERR_INVALID_ARG;
+    if (!prefix || !method || !max || max > HTTP_ROUTE_BODY_MAX) return ESP_ERR_INVALID_ARG;
     for (int i = 0; i < S.nroutes; i++) {
         if (strcmp(S.routes[i].prefix, prefix) == 0 &&
             strcasecmp(S.routes[i].method ? S.routes[i].method : "GET", method) == 0) {

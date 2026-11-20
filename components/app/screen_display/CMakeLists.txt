@@ -43,21 +43,22 @@ idf_component_register(SRCS ${screen_srcs}
                        REQUIRES ${screen_reqs}
                        EMBED_FILES "assets/header_logo.bin")
 
-# The Label sheet is packed here, at build time, from assets/labels/templates/ (ADR 0071): the
-# sheet the firmware reads in place can never be older than the designs it was made from. The
-# packer refuses rather than substitutes, so a design that does not fit the panel is a build
-# failure. Every *.json in templates/ is a design: a new one is noticed, not registered.
+# The Label sheet is packed here, at build time, from the factory K7Arts in assets/k7art/ (ADR
+# 0071): the sheet the firmware reads in place can never be older than the designs it was made
+# from. The packer refuses rather than substitutes, so a design that does not fit the panel is a
+# build failure. Every *.json in assets/k7art/ is a K7Art: a new one is noticed, not registered.
+# Its vocabulary and font table stay in assets/labels/, beside the K7's pictures.
 set(label_packer "${CMAKE_CURRENT_LIST_DIR}/../../../tools/label_pack.py")
-set(label_designs "${CMAKE_CURRENT_LIST_DIR}/../../../assets/labels")
-set(label_templates "${label_designs}/templates")
+set(label_designs "${CMAKE_CURRENT_LIST_DIR}/../../../assets/k7art")
+set(label_vocabulary "${CMAKE_CURRENT_LIST_DIR}/../../../assets/labels/vocabulary.json")
 set(label_sheet "${CMAKE_CURRENT_BINARY_DIR}/label_sheet.bin")
-file(GLOB label_json CONFIGURE_DEPENDS "${label_templates}/*.json")
+file(GLOB label_json CONFIGURE_DEPENDS "${label_designs}/*.json")
 
 add_custom_command(
     OUTPUT "${label_sheet}" "${CMAKE_CURRENT_BINARY_DIR}/label_fonts.h"
     COMMAND python3 "${label_packer}" "${label_designs}" "${CMAKE_CURRENT_BINARY_DIR}"
-    DEPENDS ${label_json} "${label_designs}/vocabulary.json" "${label_packer}"
-    COMMENT "Packing the label sheet from assets/labels/templates/"
+    DEPENDS ${label_json} "${label_vocabulary}" "${label_packer}"
+    COMMENT "Packing the label sheet from assets/k7art/"
     VERBATIM)
 add_custom_target(label_sheet ALL DEPENDS "${label_sheet}")
 

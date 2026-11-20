@@ -362,7 +362,8 @@ _Avoid_: group, folder row, item
 
 **Cover**:
 The picture a Track carries, kept in this browser because the player serves paths and
-measurements and never a picture. A Track with no cover is ordinary, not an error.
+measurements and never a picture. A Track with no cover is ordinary, not an error: its face
+comes from the **Cover pool**'s J-cards, and a real Cover always wins.
 _Avoid_: artwork, album art, thumbnail
 
 **Library source**:
@@ -386,6 +387,46 @@ _Avoid_: queued delete, tombstone, soft delete
 The Track the live stream is carrying at this moment, as the player reports it. A fact about the
 broadcast, not a control.
 _Avoid_: now playing, current song, track
+
+### The covers and the packs
+
+**J-card**:
+The paper insert of a cassette case: one printed side, 4.0625 × 4 in, scored into a **flap**, a
+**spine** and a **cover**. It is the face the App draws for an album that has no cover picture:
+the cover part on the case front (the shelf and the Player), the album card (centre-cropped to
+its safe square) and the Player bar's mini case, the spine part on the shelf's left face, the
+flap nowhere yet. Its texts are the **J-card fields** — **title**, **artist** and **meta**,
+filled by the App from an album's or a Track's name, byline and meta line. It is not the
+**Cover** — that is the Track's own picture — and a real **Cover** always wins over it. The
+file, the sheet and the fields are [`k7art.md`](../docs/specs/k7art.md)'s.
+_Avoid_: sleeve, insert card, album art
+
+**Cover pool**:
+The J-cards the App draws when there is no cover picture, for an album's face or a Track's case:
+the **Factory pack**'s and the active **User pack**'s, factory first. The album's stable name
+hash picks one; an album with a real **Cover** needs none. It is the App's pool, not the K7's
+label picker, though both draw from the same two packs.
+_Avoid_: cover cache, artwork store, fallback set
+
+**Factory pack**:
+The K7Arts the build ships: every file in `assets/k7art/`, its label section packed into the
+K7's embedded **Label sheet** and its J-card bundled into the App. It is always present and is
+never replaced by a **User pack**.
+_Avoid_: default pack, built-in pack, bundled art
+
+**User pack**:
+One **K7Art pack** a person published and installed on the K7, stored in its **Art partition**.
+It is additive: its label sheet joins the K7's picker and its J-cards join the **Cover pool**
+behind the **Factory pack**'s. **Reset to factory** removes it.
+_Avoid_: custom pack, my pack, uploaded art
+
+**Art packs page**:
+The **Settings** page that installs a **User pack**: import a `.k7artpack`, see its designs and
+their J-cards, upload it to `POST /api/art`, and reset to the factory. It links to `/k7art` for
+a person who wants to make a pack, and it needs the player's link; with the card in the reader
+it offers no upload, and the factory covers still draw. The format and its checks are
+[`art-packs.md`](../docs/specs/art-packs.md)'s.
+_Avoid_: art page, pack manager, upload page
 
 ### The assistant
 

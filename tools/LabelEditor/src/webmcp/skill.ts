@@ -107,7 +107,7 @@ export function renderSkillSection(tools: LabelTool[]): string {
 
 /**
  * The hand-written guide, with the generated tool list taken out. This is what the page hands
- * an agent through `label-editor-guide`, whose own tool list already carries the schemas.
+ * an agent through `k7art-guide`, whose own tool list already carries the schemas.
  */
 export function skillProse(skill: string): string {
   const start = skill.indexOf(SKILL_TOOLS_START);

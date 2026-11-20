@@ -26,6 +26,10 @@ const OPS: readonly OpName[] = [
   'stream.pause',
   'stream.volume',
   'stream.state',
+  'art.status',
+  'art.upload',
+  'art.pack',
+  'art.reset',
 ];
 
 describe('the device operation table', () => {

@@ -64,10 +64,63 @@ export interface CanvasDoc {
   active: number;
 }
 
+/**
+ * One J-card layer: the editor's object for a prim of the 1300x1280 sheet. It keeps the label
+ * object's field names so a surface's selection, undo and tools can be one code path; the
+ * differences are the J-card's three fields, its own type sizes and no LayerMask.
+ */
+export interface JObj {
+  id: number;
+  type: ObjType;
+  /** The colour role a shape fills or a text prints in: the container's inks, never a literal. */
+  role?: string;
+  /** The J-card type role. */
+  fr?: FontRole;
+  align?: "left" | "center" | "right";
+  x: number;
+  y: number;
+  w: number;
+  h?: number;
+  r?: number;
+  rot?: number;
+  /** The J-card field a dynamic text prints (`title`, `artist` or `meta`); empty otherwise. */
+  name: string;
+  /** A static text's string. */
+  text?: string;
+  static?: boolean;
+  /** The test value a dynamic text shows in the editor (the file's `preview`). */
+  sim?: string;
+  /** The layer's name in the Layers panel. */
+  label?: string;
+  locked?: boolean;
+}
+
+/**
+ * The J-card section as the editor holds it: the three sizes, the sheet's layers and the
+ * three test values the Fields panel edits. The values are the editor's only; the file
+ * carries each text's `preview`, which the panel writes through.
+ */
+export interface JCardDoc {
+  fonts: Record<FontRole, { ff: string; size: number }>;
+  prims: JObj[];
+  nid: number;
+  sims?: Record<string, string>;
+}
+
+/** The two surfaces of one document: the label's print and the J-card's one sheet. */
+export type Surface = "label" | "jcard";
+
+/** The J-card's focus: the whole sheet, or one of the three panels. */
+export type JCardFocus = "sheet" | "flap" | "spine" | "cover";
+
 export interface Tpl {
   id: string;
   name: string;
-  inks: { ink: string; band: string[]; rule: string };
+  /**
+   * The container's eleven roles. The paper is the LayerMask's colour when the label has a
+   * mask and the J-card's sheet either way, so it is always a colour here.
+   */
+  inks: { paper: string; ink: string; band: string[]; rule: string };
   fonts: Record<FontRole, { ff: string; px: number }>;
   slots: Record<string, { max: number }>;
   sim: Record<string, string>;
@@ -87,6 +140,8 @@ export interface DocData {
   groups?: Group[];
   mask?: Mask | null;
   tpl?: Tpl | null;
+  /** The design's J-card section. A document stored before it existed gets a starter. */
+  jcard?: JCardDoc | null;
 }
 
 export interface Doc {

@@ -1,7 +1,9 @@
-# CI for the App artifact and the device's own fixtures (k7-deploy.md §6).
+# CI for the Site's artifact and the device's own fixtures (k7-deploy.md §6).
 #
-#   web    the App: typecheck, unit tests, build, A9 manifest shape, S5 worker shell,
-#          D14 artifact guard
+#   web    the one artifact: the Site and the App, then the K7Art editor under /k7art/.
+#          Typecheck, unit tests, build, A9 manifest shape, R4 firmware manifests, S5 worker
+#          shell, D14 artifact guard (which now walks /k7art too), the editor's own tests and
+#          sheet-writer parity with label_pack.py, and its boot from the built /k7art page.
 #   host   the device's portable C and the Label Editor, on the host build
 #          (host/Makefile `check`)
 #   e2e    documented but commented: it needs a Playwright dependency that does not exist yet
@@ -22,51 +24,121 @@ concurrency:
 
 jobs:
   web:
-    name: web (HTTPS artifact)
+    name: web (the Site, the App and /k7art)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Install
+          cache-dependency-path: |
+            web/package-lock.json
+            tools/LabelEditor/package-lock.json
+      - name: Install the Site and the App's dependencies
+        working-directory: web
+        run: npm ci
+      - name: Install the K7Art editor's dependencies
+        working-directory: tools/LabelEditor
         run: npm ci
       - name: Typecheck
+        working-directory: web
         run: npm run typecheck
       - name: Unit tests
+        working-directory: web
         run: npm test
-      - name: Build
+      # The deploy's build command (k7-deploy D1): web/ emits the Site and the App, then the
+      # editor builds with its `/k7art/` base and its dist/ is copied to web/dist/k7art/.
+      # Every check below reads that one artifact.
+      - name: Build the Site, the App and the editor
         run: npm run build
+      # The editor's own tier (k7-deploy D6): the engine tests, the browser packer against
+      # tools/label_pack.py for every assets/k7art/*.json (the parity test skips itself when
+      # python3 is absent, which is why this job installs nothing extra: ubuntu-latest has it).
+      - name: Editor unit tests and sheet-writer parity
+        working-directory: tools/LabelEditor
+        run: npm test
       # A9: Chrome's install criteria, checked against the artifact that was just built, so
       # a manifest regression fails here instead of in a broken install on the real origin.
       - name: Manifest shape (A9)
+        working-directory: web
         run: node scripts/check-manifest.mjs
       # R4 (k7-site.md §4): every part the Site flashes from hashes to what its board's
       # manifest says, so a release that was half published fails here and not on a board.
       - name: Firmware manifests (R4)
+        working-directory: web
         run: node scripts/check-firmware.mjs
       # S5: the worker precaches the App at /app and never the Site at /, which must always
       # come from the network because it names a firmware version.
       - name: Worker shell (S5)
+        working-directory: web
         run: node scripts/check-shell.mjs
-      # D14's second guard: no development origin and no pre-rename host anywhere in dist.
+      # D14's second guard: no development origin and no pre-rename host anywhere in dist,
+      # including the editor's artifact under dist/k7art/.
       - name: Artifact origins (D14)
+        working-directory: web
         run: node scripts/check-artifact.mjs
+      # T12: the editor is the Site's own directory. The document is /k7art/index.html, its
+      # hashed Vite files are /k7art/assets/, and its public files — fonts, lvgl.js, skill.md —
+      # sit under the same base. None of them may resolve from the origin's root.
+      - name: The editor is a directory under /k7art (T12)
+        run: |
+          test -f web/dist/k7art/index.html
+          test -f web/dist/k7art/skill.md
+          test -f web/dist/k7art/lvgl.js
+          test -d web/dist/k7art/assets
+          test -d web/dist/k7art/fonts
+          grep -q 'src="/k7art/assets/' web/dist/k7art/index.html
+          grep -q 'href="/k7art/assets/' web/dist/k7art/index.html
+          ! grep -q 'src="/assets/' web/dist/k7art/index.html
+          echo "/k7art: the editor's document, hashed assets, fonts, lvgl.js and skill.md are in the Site artifact"
+      # The boot check is the seam unit tests cannot cross: it opens the built page in a
+      # browser and requires the tabs, the layers and the stage to be painted. The
+      # ubuntu-latest image carries Google Chrome, so the check runs here instead of skipping.
+      # The document's URLs are absolute under /k7art/ — the base the deploy serves — and the
+      # boot check opens `/`. Stage the artifact as the origin does: the document at `/`, its
+      # files at `/k7art/`. That boots the real copied build, not a differently-based one.
+      - name: Boot the editor from the Site artifact (T12)
+        run: |
+          stage="${RUNNER_TEMP}/k7art-boot"
+          rm -rf "${stage}"
+          mkdir -p "${stage}"
+          cp -R web/dist/k7art "${stage}/k7art"
+          cp web/dist/k7art/index.html "${stage}/index.html"
+          # The built page's hashed bundle is absolute (`/k7art/assets/`) and its public files
+          # are fetched relatively (`./fonts/`, `./lvgl.js`). Stage both, so the boot runs the
+          # built page unchanged with every one of its URLs answering.
+          cp -R web/dist/k7art/fonts "${stage}/fonts"
+          cp web/dist/k7art/lvgl.js "${stage}/lvgl.js"
+          cp web/dist/k7art/skill.md "${stage}/skill.md"
+          if command -v google-chrome >/dev/null; then CHROME="$(command -v google-chrome)"
+          elif command -v google-chrome-stable >/dev/null; then CHROME="$(command -v google-chrome-stable)"
+          elif [ -x /opt/google/chrome/chrome ]; then CHROME=/opt/google/chrome/chrome
+          else echo "no Chrome for the /k7art boot check" >&2; exit 1
+          fi
+          # A skip is not a pass here: this job installed Chrome to run the check. The only
+          # skip the script allows is a machine without a browser, and that is not CI.
+          if ! report="$(CHROME="${CHROME}" python3 host/tests/label_boot_tests.py "${stage}" 2>&1)"; then
+            printf '%s\n' "${report}"
+            exit 1
+          fi
+          printf '%s\n' "${report}"
+          if printf '%s\n' "${report}" | grep -q 'the label editor boot check did not run'; then
+            echo "the /k7art boot check skipped instead of booting the artifact" >&2
+            exit 1
+          fi
 
   host:
     name: host (portable C)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # `host check` builds tools/LabelEditor and boots its built page, so the editor's
-      # dependencies are part of this job. Chrome is not installed on the runner, so the
-      # boot check skips loudly there; the build itself (tsc + vite) still runs and fails
-      # the job on a type or bundle error.
+      # `host check` builds tools/LabelEditor and its label target boots the built page. The
+      # editor now builds with the Site's `/k7art/` base (k7-site.md D1), so that page has to
+      # be served from a directory named k7art; the standalone dist/ is not. The web job boots
+      # the copied artifact from under /k7art, so this job runs every other label check — the
+      # packer's selftest, the vocabulary check and t33 — and skips only the redundant
+      # standalone browser boot (a missing CHROME is the boot check's documented skip).
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -80,6 +152,8 @@ jobs:
       # xtape.db fallback lives in board_esp32.c, which needs a card and a board: it is
       # proven on hardware, not here.
       - name: make -C host check
+        env:
+          CHROME: /nonexistent
         run: make -C host check
 
   # e2e: activates when the Playwright suite lands — one status round trip from the hosted

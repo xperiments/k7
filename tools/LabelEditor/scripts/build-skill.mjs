@@ -2,7 +2,7 @@
 /**
  * Write the agent skill's tool reference from the page's own tool registry.
  *
- * The skill (`skills/k7-labels/SKILL.md`) is hand-written prose with one generated
+ * The skill (`skills/k7-art/SKILL.md`) is hand-written prose with one generated
  * section between its markers, so a tool or an argument cannot leave the guide stale.
  *
  *   node scripts/build-skill.mjs           # rewrite the section
@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
-const skillPath = resolve(root, "skills/k7-labels/SKILL.md");
+const skillPath = resolve(root, "skills/k7-art/SKILL.md");
 
 const jiti = createJiti(resolve(here, "build-skill.ts"), {
   alias: { "@": resolve(root, "src") },

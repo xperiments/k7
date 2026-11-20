@@ -1,17 +1,19 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+
+import {
+  Jcard,
+  hueOf,
+  useJcardDesign,
+  type JcardFit,
+  type JcardPart,
+} from '../jcard';
+
+export { hueOf } from '../jcard';
 
 /**
- * A hue per name: the drawn cover, the spine, the side and the no-cover face need *a*
- * colour, and a hash of the name is stable across visits, machines and the device's own
- * table.
+ * The words a drawn face carries. `meta` is the cassette line the reference uses; a Track's
+ * case passes its album, and an album's its default (k7art.md §4).
  */
-export function hueOf(text: string): number {
-  let hue = 0;
-  for (let at = 0; at < text.length; at += 1) hue = (hue * 31 + text.charCodeAt(at)) % 360;
-  return hue;
-}
-
-/** The words a drawn cover carries. The meta is the cassette line the reference uses. */
 export interface AlbumArtData {
   title: string;
   artist: string;
@@ -19,42 +21,51 @@ export interface AlbumArtData {
   meta?: string;
 }
 
-/**
- * Which of the reference's five faces this title and artist get.
- *
- * The pair, not the title alone, is the seed: two albums may share a title, and a track's
- * face should not have to equal its album's. The same pair always gets the same face, so a
- * coverless album looks the same on the shelf, in its card and in the player.
- */
-export function coverTemplateOf(title: string, artist: string): 1 | 2 | 3 | 4 | 5 {
-  return ((hueOf(`${title}\u0000${artist}`) % 5) + 1) as 1 | 2 | 3 | 4 | 5;
+/** The line an album's case prints when the caller has nothing more specific. */
+export const DEFAULT_META = 'Side A · Side B';
+
+export interface AlbumArtOptions {
+  /** Which J-card panel the surface shows; the cover on a case, the spine on the shelf. */
+  part?: JcardPart;
+  /**
+   * `fill` stretches the panel over a case face (the 0.1% difference between 16:25 and the
+   * cover's proportions is the case's own); `cover` scales uniformly and centres, which is
+   * how a square card shows the cover's safe square (k7art.md §5).
+   */
+  fit?: JcardFit;
+  /** What the slot shows if the pool has no design at all; the initial, as before. */
+  fallback?: ReactNode;
 }
 
 /**
- * The cover art a picture would have been: one of the cassette case reference's five faces,
- * with the title, artist and cassette meta. It fills its container and takes its type sizes
- * from the container's width (`cqw`), so the same face works at the shelf's 13rem case, in
- * an album card and in the player's square. The container query in `index.css` hides the
- * words when the face is too small to carry them.
+ * The face of an album or Track with no cover picture: its pool's J-card, chosen by the
+ * name's stable seed (art-packs.md §6). It fills its container and takes its type sizes from
+ * the container's width, so the same design works at the shelf's 13rem case, in an album
+ * card and in the Player bar's mini case. The stylesheet hides its words when the face is too
+ * small to carry them.
  *
- * It is decorative: the album or track it belongs to is named beside it, and the case's own
- * label is the accessible name. The hues and the cream are cover art, the coverflow's own
- * exception to the skin (k7-look.md §5.3/K19).
+ * It is decorative: the album or Track is named beside it. The case's `hueOf` tint stays
+ * outside this component; a real cover picture never reaches here, because the cover's own
+ * branch wins before the face is chosen.
  */
-export function AlbumArt({ title, artist, meta = 'Side A · Side B' }: AlbumArtData) {
+export function AlbumArt({
+  title,
+  artist,
+  meta = DEFAULT_META,
+  part = 'cover',
+  fit = 'fill',
+  fallback = null,
+}: AlbumArtData & AlbumArtOptions) {
+  const design = useJcardDesign(title, artist);
   const hue = hueOf(title);
-  const template = coverTemplateOf(title, artist);
+  if (!design) return <>{fallback}</>;
   return (
-    <span
-      aria-hidden="true"
-      className={`k7-album-art k7-album-art-tpl-${template}`}
+    <Jcard
+      design={design}
+      fields={{ title, artist, meta }}
+      part={part}
+      fit={fit}
       style={{ '--hue': `${hue}deg` } as CSSProperties}
-    >
-      <span className="k7-album-ring" />
-      <span className="k7-album-artist">{artist}</span>
-      <span className="k7-album-title">{title}</span>
-      <span className="k7-album-rule" />
-      <span className="k7-album-meta">{meta}</span>
-    </span>
+    />
   );
 }

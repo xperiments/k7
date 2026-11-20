@@ -1040,6 +1040,13 @@ components/
                             composition and its parts (bars, tapes, meter, levels, peek,
                             buttons, eq, input)
 host/                       the host build: shim, board adapter, fixtures, tests, tools
+assets/
+  k7art/                    the factory K7Arts: each file's label section packs into the K7's
+                            label sheet, each J-card is the App's cover for an album with no
+                            picture
+tools/
+  LabelEditor/              the K7Art editor: one K7Art's label and J-card on two surfaces,
+                            served at /k7art
 ```
 
 The cassette screen is the composition: `cassette_bars` (the two edge strips' shared

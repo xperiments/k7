@@ -44,7 +44,7 @@ export function ExportDialog({
       onProblems("This design cannot be exported yet", r.errs);
       return;
     }
-    toast.success("Template exported", { description: r.name });
+    toast.success("K7Art exported", { description: r.name });
   };
 
   const onAll = async () => {
@@ -56,9 +56,10 @@ export function ExportDialog({
         return;
       }
       if (!r.blob) return;
-      downloadBlob("label-templates.zip", r.blob);
-      toast.success("Templates exported", {
-        description: `${r.filenames.length} files · label-templates.zip`,
+      const zip = r.filenames[0] ?? "k7art.zip";
+      downloadBlob(zip, r.blob);
+      toast.success("K7Arts exported", {
+        description: `${r.filenames.length} files · ${zip}`,
       });
       onOpenChange(false);
     } catch (err) {
@@ -72,10 +73,11 @@ export function ExportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Export templates</DialogTitle>
+          <DialogTitle>Export K7Arts</DialogTitle>
           <DialogDescription>
-            One JSON per design, a PNG preview each and a <code>labels.json</code> manifest,
-            in one zip. The sheet is {PRINT_W} × {PRINT_H}; every design is checked first.
+            One K7Art JSON per design, a PNG preview each and a <code>labels.json</code>
+            manifest, in one zip. The label is {PRINT_W} × {PRINT_H}; every design is checked
+            first.
           </DialogDescription>
         </DialogHeader>
 
@@ -135,7 +137,7 @@ export function ExportDialog({
           <div className="flex items-center gap-1.5">
             <Button variant="outline" size="sm" onClick={onOne}>
               <FileJson />
-              Template JSON
+              K7Art JSON
             </Button>
             <Button
               size="sm"

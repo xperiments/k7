@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
 import { autoWorkerCount, coresOf, memoryOf } from '../../audio/workers';
+import { ArtPacksCard } from '../ArtPacks';
 import { isAbort, searchVideos } from '../../media/youtube';
 import {
   getSettings,
@@ -26,14 +27,16 @@ import { plural } from '../format';
 import { useWorkerCapacity } from '../state/analysis';
 
 /**
- * What this browser remembers for itself.
+ * What this browser remembers for itself, and the one thing here that reaches the player.
  *
  * Two settings, neither of which the device ever sees: the Invidious **Instance** the video
  * search talks to, and the size of the analysis worker pool. The assistant has no setting — it
  * is Chrome's **Built-in model** (ADR 0084) — and this browser stores no key for anything.
- *
  * Clearing site data loses both, which is the honest cost of putting nothing in the device's
  * flash.
+ *
+ * The Art packs card is the exception: a pack is uploaded to the K7's flash, and its J-cards
+ * are cached here so the covers draw before the player answers (`art-packs.md` §4/§6).
  */
 
 interface Notice {
@@ -157,7 +160,8 @@ export function SettingsArea() {
       <header className="flex flex-col gap-0.5">
         <h1 className="text-xl font-light tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
-          What this browser remembers for itself. None of it is sent to the device.
+          What this browser remembers for itself, and the K7Art pack it installs on the player.
+          The browser settings below are never sent to the device.
         </p>
       </header>
 
@@ -268,9 +272,13 @@ export function SettingsArea() {
         </CardContent>
       </Card>
 
+      <ArtPacksCard />
+
       <p className="text-xs text-muted-foreground">
-        These live in this browser&apos;s local storage and are never written to the device. Clearing
-        site data loses them.
+        The settings above live in this browser&apos;s local storage and are never written to the
+        device; clearing site data loses them. An art pack is different: it is written to the
+        player&apos;s flash, and its J-cards are cached in this browser so the covers draw before
+        the next answer.
       </p>
     </div>
   );

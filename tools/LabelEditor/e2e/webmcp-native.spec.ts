@@ -25,17 +25,17 @@ test("registers with Chrome's WebMCP and runs a tool", async ({ page }) => {
         page.evaluate(async () => {
           const mc = (document as unknown as { modelContext: ModelContext }).modelContext;
           const tools = await mc.getTools();
-          return tools.filter((t) => t.name.startsWith("label-editor-")).length;
+          return tools.filter((t) => t.name.startsWith("k7art-")).length;
         }),
       { timeout: 10_000 },
     )
-    .toBe(15);
+    .toBe(16);
 
   // Chrome's testing API serialises a tool's return value to JSON text.
   const added = await page.evaluate(async () => {
     const mc = (document as unknown as { modelContext: ModelContext }).modelContext;
     const tools = await mc.getTools();
-    const tool = tools.find((t) => t.name === "label-editor-add-layer");
+    const tool = tools.find((t) => t.name === "k7art-add-layer");
     const result = await mc.executeTool(tool, {
       type: "text",
       text: "Native agent",
