@@ -44,7 +44,7 @@ export function JCardPreview() {
   );
 
   return (
-    <div className="flex h-full w-full items-center justify-center overflow-hidden bg-[var(--k7-bg)]">
+    <div className="flex h-full min-h-[480px] w-full items-center justify-center overflow-hidden bg-[var(--k7-bg)]">
       <div style={{ perspective: 1500 }}>
         <div
           className="relative"
