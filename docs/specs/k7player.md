@@ -159,6 +159,17 @@ to this player or it is not, and the network machine owns every question about t
 resumes when packets resume, with the ring's prime and the receiver's gap window doing what R28
 and espnow-stream.md E4 say they do.
 
+**R33. The K7's tone is applied after decode when the K7 says the player owns it.** The player's
+status advertises the capability in its optional flags byte
+([espnow-stream.md](./espnow-stream.md) E3a, E12); the K7 then sends the four values over the
+radio, and the player applies them to the decoded PCM just before the output, with the same
+`tone_eq` module the S3 uses
+([ADR 0018](../adr/0018-dj-eq-knobs-and-transport-arrows.md)). It starts neutral,
+ignores a packet that is not version 1, type `0x06` and 10 bytes, and rebuilds the filters on a
+rate change without losing the targets. It has no tone control of its own and persists nothing:
+the K7 repeats the values, so a reboot is neutral for at most a second. The player is still a
+client; the K7 keeps no record of it or of the tone.
+
 ---
 
 ## 5. The status light
@@ -193,12 +204,14 @@ without a board. The handover's own tests are in [`network-handover.md`](./netwo
 | T5 | The state machine drives the four light states, including *Fault* when two seconds of delivered frames never decode | host |
 | T6 | The station rate from the frame header configures the line output; a 32 kHz station opens it at 32 000 | host |
 | T7 | The output holds silence while the ring is shallow even with audio in it, and plays once it holds the buffer | host |
+| T8 | The player's tone is the K7's: a tone packet sets the four targets, a boost and a cut reach the PCM after the glide, no packet is neutral, a malformed packet is ignored, and a rate change keeps the targets | host |
 | B1 | The line output makes sound at 44.1 kHz, and a 48 kHz station follows it | **board only** |
 | B2 | A one-second outage of the link is inaudible: the ring absorbs it and nothing is discarded | **board only** |
 | B3 | An outage longer than the ring is one discontinuity, not a stream of them: `flushed` counts them | **board only** |
 | B4 | Ten minutes of Wi-Fi with the stream: outages, underruns and discarded audio counted, and the line's own rate beside them | **board only** |
 | B5 | The memory census with the stream, the decoder, the ring and the Wi-Fi up | **board only** |
 | B6 | The light's four patterns, by eye | **board only** |
+| B7 | The tone on the board: with a new K7 and a new player a knob is heard at once; with an old player the S3 tone and the late knob stand; a browser hears the flat stream while the player owns the tone; a player reboot restores the tone within a second | **board only** |
 
 ---
 

@@ -155,7 +155,9 @@ _Avoid_: block, packet, MP3 frame
 
 **Live stream**:
 The single continuous broadcast every client shares. Every listener hears the same track at
-the same moment, so it cannot be paused, seeked or replayed.
+the same moment, so it cannot be paused, seeked or replayed. The track is shared; the **Tone** is
+the output's (ADR 0109), so while the player applies it an HTTP listener hears the same broadcast
+untinted.
 _Avoid_: feed, radio, channel
 
 **Shuffle mode**:
@@ -176,8 +178,8 @@ _Avoid_: buffer, block, window
 The module that turns a **Track**'s **Original bytes** into stereo frames at the Track's own
 rate: it owns the decoder, the card reads and the decode, on its own task on core 0. Its
 interface to the broadcast is a ring of decoded frames; the broadcast keeps the **Track**
-lifecycle, the resampling, the tone and the encoder. It exists so the card and the codec do not
-sit on the encoder's core.
+lifecycle, the resampling, the encoder, and the **Tone** when the broadcast is the output. It
+exists so the card and the codec do not sit on the encoder's core.
 _Avoid_: decoder task, audio thread, producer
 
 **Metadata block**:
@@ -400,8 +402,17 @@ _Avoid_: menu, toolbar, controls
 **DJ block**:
 The right **Bar**'s EQ **Panel**: four knobs - GAIN, then HI, MID and LOW - and the R button,
 all in 96 px **Cells**, with the Menu's M in the bar's chrome. It gives way to the **Pad**
-while the **Menu** is up. R is a placeholder.
+while the **Menu** is up. R is a placeholder. The knobs publish the **Tone**, which the output
+applies (ADR 0109).
 _Avoid_: EQ block, right bar (that is the **Bar**)
+
+**Tone**:
+The K7's one audio effect: a low shelf, a bell and a high shelf plus a trim, at the DJ ranges,
+published by the **DJ block** and applied by the output that makes the sound - the broadcast
+before the encoder when the HTTP listener is the output, or the player after decode when it is
+(ADR 0109; [`espnow-stream.md`](./espnow-stream.md) E12, [`k7player.md`](./k7player.md) R33).
+Only one output applies it at a time, and neither board persists the values.
+_Avoid_: EQ block (the UI), effects, filter
 
 **Label cover**:
 *(Parked with the removed Label cover screen, ADR 0019; the asset is not embedded.)*

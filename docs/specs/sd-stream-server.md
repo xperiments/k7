@@ -389,6 +389,33 @@ about a third of core 0 and the deficit this section describes was contention, n
 encoder read 63.9–64.3 %, which is the configured 256 kbps format's cost (F4's 35 % target is
 for the recommended 128 kbps) and is not this path's.
 
+### 4.6 The tone's owner
+
+The tone is the one audio effect: a 200 Hz low shelf, a 1 kHz bell and a 4 kHz high shelf plus a
+trim, at the DJ ranges (GAIN −12..+12 dB, bands −26..+6 dB;
+[ADR 0018](../adr/0018-dj-eq-knobs-and-transport-arrows.md)). Its stage is the 1024-frame
+PCM chunk the encoder is about to take; its four values are the DJ block's knobs.
+
+**Requirement U1 — the tone follows the output.** When the broadcast is the output — the HTTP
+transport, or an ESP-NOW player that has not advertised that it applies the tone — the stage runs
+before the encoder as it does today, and the HTTP listener hears it. When the player is the output
+and advertises the tone, the stage is **bypassed** and the encoded stream is flat: the K7 sends
+the four values over ESP-NOW ([`espnow-stream.md`](./espnow-stream.md) E12), and the player
+applies them after decode ([`k7player.md`](./k7player.md) R33). The reason is one encoder: the
+tone is either in the broadcast or applied per output, never both. The player's ring is primed to
+4.5 s, so a tone baked before the encoder would be heard after the ring.
+
+**Requirement U2 — the browser is untinted while the player owns the tone.** That is the
+consequence of U1 and one encoder, not a fault. A per-listener tone in the browser is a later Web
+Audio option fed by the same four values; the App spec does not gain a tone here.
+
+**Requirement U3 — the VU is the broadcast's level.** It is measured after the tone stage, so
+when the player owns the tone it shows the source; it does not report the player's output. A
+player level report is a separate change.
+
+The transport's E-T5 and E-T6 and the player's T8/B7 are the tests; T19 is the board's
+end-to-end check.
+
 ---
 
 ## 5. Defects to fix
@@ -617,6 +644,7 @@ host result transfers.
 | T16 | MCP read-only surface | `initialize` in three legacy revisions, notifications, `tools/list`, all five tools and the error table | **host** | Version echo/fallback, 202 notifications, 411/413/415 JSON-RPC, no session header, `Accept` ignored |
 | T17 | Rescan generations | A slow `/api/library` reader, a rescan with one added Track, a second simultaneous rescan and a card-less rescan | **host** | Old JSON completes; generation advances; broadcast sees the new count; one 202 and one 409; `no_card` stays diagnosable |
 | T18 | Board Library tree and soak | A real card (64 tracks), a temporary three-level fixture, mDNS/MCP through `xtape.local`, and a 10-minute stream + rescan soak | **board** | Boot logs scan/arena/JSON/PSRAM/truncated; nested JSON/blob/play agree; `dns-sd` sees `_mcp._tcp`; 0 rebases/faults over 10 min; synchronous scan stays |
+| T19 | Tone ownership | A new K7 and a new player on ESP-NOW: turn GAIN; then listen to `GET /stream` from a browser; repeat with an old player | **board only** | The player's level changes at once and the browser's stream is untinted; with an old player (no flag) the S3 tone and the late knob return |
 
 ---
 

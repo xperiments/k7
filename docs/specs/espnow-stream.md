@@ -7,7 +7,7 @@ transport.
 
 Both boards are ESP-IDF 6.1 and both already speak ESP-NOW for the handover
 ([`network-handover.md`](./network-handover.md)), so the version byte and the type byte are shared:
-`0x01` beacon, `0x02` request, `0x03` record, and now `0x04` audio and `0x05` status.
+`0x01` beacon, `0x02` request, `0x03` record, `0x04` audio, `0x05` status and `0x06` tone.
 
 ## 1. The frame the K7 sends
 
@@ -46,9 +46,15 @@ the only flow control the transport has, and it is also how the receiver asks fo
 | 5 | 2 | highest sequence received without a gap, big-endian |
 | 7 | 1 | how many sequences follow, 0..8 |
 | 8 | 2 each | the sequences it is missing, oldest first |
+| 8 + 2 × count | 1 | flags, optional (absent means 0); bit 0 = the player applies the tone (E12) |
 
 Eight missing frames is 209 ms of audio and the reorder window (§ 3) is wider than that; a receiver
 that is missing more than eight is in a state a retransmission will not repair.
+
+**E3a. The flags byte is optional and additive.** It follows the sequence list, and a receiver
+reads the list by its declared length and ignores anything after it, so an old K7 accepts a new
+player's longer packet. A new K7 reads no byte from an old player's shorter packet as flags `0`.
+Bit 0 is "this player applies the K7's tone" (E12); the other bits are reserved and sent `0`.
 
 ## 3. Loss, and what it costs
 
@@ -111,13 +117,44 @@ blocks costs the player frames; it must never cost the station, and it must neve
 another task waits on (EN-10: a send from the callback froze the K7 for hours, with the radio and
 the encoder down and the panel still painting).
 
-## 6. What this replaces
+## 6. The tone
+
+**E12. The tone travels beside the audio when the player owns it.** The K7 sends the four values
+as one 10-byte packet:
+
+| offset | size | field |
+|---|---|---|
+| 0 | 1 | version, `1` |
+| 1 | 1 | type, `0x06` |
+| 2 | 2 | GAIN, big-endian int16, centi-dB, −1200..+1200 |
+| 4 | 2 | LOW, big-endian int16, centi-dB, −2600..+600 |
+| 6 | 2 | MID, big-endian int16, centi-dB, −2600..+600 |
+| 8 | 2 | HIGH, big-endian int16, centi-dB, −2600..+600 |
+
+The packet is one ESP-NOW frame: it is not fragmented and it does not count against the audio
+credit. It is the whole state, not a delta, so it is idempotent. The K7 sends it on every change
+and repeats it once a second while the emitter is on and the player is listening; there is no
+acknowledgement, and the repeat is the repair. The sender is the emitter's worker, never the
+radio's receive callback (E11). The receiver clamps an out-of-range value and ignores a packet
+that is not version 1, type `0x06` and 10 bytes. The values are targets for the same `tone_eq` the
+S3 uses ([ADR 0018](../adr/0018-dj-eq-knobs-and-transport-arrows.md)), applied after the MP3 decode
+and before the output (`k7player.md` R33).
+
+**E13. The player's flag chooses where the tone runs.** When the current peer's status carries the
+tone flag (E3a), the K7 bypasses the broadcast's tone stage and sends E12; the encoded stream is
+then flat, and a browser listening to the same broadcast hears it untinted
+([`sd-stream-server.md`](./sd-stream-server.md) § 4.6). When the flag is absent — an old player, a
+player that has not spoken, or the HTTP transport — the K7 applies the tone to the broadcast before
+the encoder as before, and sends no E12. A player that does not set the flag is never sent E12, and
+a new player starts neutral, so an old K7's tone is not doubled.
+
+## 7. What this replaces
 
 The player has no HTTP stream client any more: no `GET /stream`, no `Connection: close`, no
 close-delimited body, no reconnect schedule, no 500 ms connect burst. `k7player.md` R23–R25 and
 R29–R30 change with it; R26–R28 stand. The web UI keeps its listener against the same broadcast.
 
-## 7. Tests
+## 8. Tests
 
 | # | Test | Tier |
 |---|---|---|
@@ -125,5 +162,8 @@ R29–R30 change with it; R26–R28 stand. The web UI keeps its listener against
 | E-T2 | A gap in the sequence is detected, the status packet names it, and the held frames wait; a resend that arrives inside the second is played in order, and one that arrives after it is discarded | host |
 | E-T3 | A gap abandoned after a second releases what was held, counts the frame lost, and the stream continues | host |
 | E-T4 | The sender sends nothing without credit, sends up to the credit, and resends on request without exceeding it | host |
+| E-T5 | A tone packet round-trips the four values, clamps a value outside the knobs' ranges, and refuses a short, wrong-version or wrong-type packet | host |
+| E-T6 | A status packet with the tone flag parses it, one without the byte parses 0, and a longer packet is accepted while a malformed list is still refused | host |
 | E-B1 | The player makes sound at 44.1 kHz from the K7's emitter, with the station's census beside it | **board only** |
 | E-B2 | A weak link loses frames and the player recovers them: the counters show resends and a count of abandoned frames | **board only** |
+| E-B3 | A new K7 and a new player: the player applies the K7's tone and the knob is heard at once; an old player keeps the S3 tone; a browser hears the flat stream. A new player beside an old K7 is neutral. | **board only** |

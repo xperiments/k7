@@ -48,7 +48,7 @@ player
 The tone is part of the **encoded** signal. Every listener hears it, and there is exactly one
 encoder, which is why ADR 0018 could say the EQ is a broadcast tone control "and there is no
 local audio path to fight with" ([ADR 0018](../adr/0018-dj-eq-knobs-and-transport-arrows.md),
-lines 40-42). The player did not exist then.
+the paragraph beginning "The output is the Icecast stream"). The player did not exist then.
 
 The stream is smooth but not immediate: a knob moved at *t* is in frames that are behind a 4.5 s
 prime, so the player's listener hears it at *t + 4.5 s*. The VU on the panel is measured after the
@@ -306,7 +306,7 @@ The repository, read for this note; no code was changed.
 - [`components/portable/app_services/app_services.c`](../../components/portable/app_services/app_services.c) — the transport apply 243-276.
 - [`player/components/player/player_playout.c`](../../player/components/player/player_playout.c) — the decode and mono copy 96-112, the prime 125-141; [`player_playout.h`](../../player/components/player/include/player_playout.h) — the 4.5 s prime 24-36.
 - [`player/components/player/player_stream.c`](../../player/components/player/player_stream.c) — the receive path 72-141; [`player/components/board_player/board_player_esp32.c`](../../player/components/board_player/board_player_esp32.c) — the dispatcher 180-190.
-- [`docs/adr/0018-dj-eq-knobs-and-transport-arrows.md`](../adr/0018-dj-eq-knobs-and-transport-arrows.md) — the broadcast-tone premise, lines 40-42.
+- [`docs/adr/0018-dj-eq-knobs-and-transport-arrows.md`](../adr/0018-dj-eq-knobs-and-transport-arrows.md) — the broadcast-tone premise, the paragraph beginning "The output is the Icecast stream".
 - [`docs/adr/0102-the-players-ring-is-96-kb-and-clears-itself-rather-than-dropping-frames.md`](../adr/0102-the-players-ring-is-96-kb-and-clears-itself-rather-than-dropping-frames.md) — the 96 KB ring and the 4.5 s prime, lines 33-53.
 - [`docs/adr/0107-the-k7-carries-one-listener.md`](../adr/0107-the-k7-carries-one-listener.md) — one browser plus the player.
 - [`docs/specs/espnow-stream.md`](../specs/espnow-stream.md) — E3 and E11; [`docs/specs/k7player.md`](../specs/k7player.md) — R23 and R28.

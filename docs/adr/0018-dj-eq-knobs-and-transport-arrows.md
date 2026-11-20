@@ -30,6 +30,11 @@ block's drawn ink is 594..784, 190 wide, and its first column is nudged 2 px fro
 six cells are the right bar's DJ panel; the strip, its entrance and its page ink belong to the
 bar.
 
+**Amended by [ADR 0109](./0109-the-tone-follows-the-output-and-the-player-applies-it.md):** the
+EQ is the output's tone now. The broadcast applies it when the broadcast is the output; when
+ESP-NOW carries the player's audio and the player says it can apply it, the player does so after
+decode and the broadcast is flat. The block, its ranges, its gestures and `tone_eq` stand.
+
 The owner wants the cassette screen to carry a DJ channel strip, not a spectrum analyser:
 HI, MID and LOW plus a GAIN, in the same line-art language as the left drawer's P/</>. The
 block has six cells because it sits on a 2x3 grid; the four cells the strip needs leave two,
