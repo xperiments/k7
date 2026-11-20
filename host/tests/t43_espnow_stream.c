@@ -91,20 +91,32 @@ static void test_status(void)
     memset(&s, 0, sizeof s);
     s.free_bytes = 96000;
     s.highest = 4321;
-    CHECK_EQ(es_status_encode(&s, g_packets, ES_MTU), 8, "a status with no gaps is eight bytes");
+    CHECK_EQ(es_status_encode(&s, g_packets, ES_MTU), 9,
+             "a status with no gaps is nine bytes with the flags byte");
 
     es_status_t back;
-    CHECK(es_status_parse(g_packets, 8, &back), "it parses");
+    CHECK(es_status_parse(g_packets, 9, &back), "it parses");
     CHECK_EQ(back.free_bytes, 96000, "the credit survives");
     CHECK_EQ(back.highest, 4321, "and the highest sequence");
     CHECK_EQ(back.nack_count, 0, "with no gaps");
+    CHECK_EQ(back.flags, 0, "and no flags");
 
+    /* An old player's packet ends after the list: the flags byte is absent, not zero-length. */
+    CHECK(es_status_parse(g_packets, 8, &back), "a packet without the flags byte parses");
+    CHECK_EQ(back.flags, 0, "as flags 0, which is an old player");
+
+    s.flags = ES_STATUS_FLAG_TONE;
+    CHECK_EQ(es_status_encode(&s, g_packets, ES_MTU), 9, "the flags byte is still one byte");
+    CHECK(es_status_parse(g_packets, 9, &back), "it parses");
+    CHECK_EQ(back.flags, ES_STATUS_FLAG_TONE, "and the tone flag survives");
+
+    s.flags = 0;
     s.nack_count = 3;
     s.nack[0] = 9;
     s.nack[1] = 11;
     s.nack[2] = 12;
     size_t n = es_status_encode(&s, g_packets, ES_MTU);
-    CHECK_EQ(n, 8 + 6, "three gaps add six bytes");
+    CHECK_EQ(n, 8 + 6 + 1, "three gaps add six bytes and the flags byte");
     CHECK(es_status_parse(g_packets, n, &back), "it parses");
     CHECK_EQ(back.nack_count, 3, "the gap count");
     CHECK_EQ(back.nack[0], 9, "the first gap");
@@ -122,10 +134,54 @@ static void test_status(void)
     CHECK(!es_status_parse(g_packets, n, &back), "a wrong version is not a status packet");
 }
 
+/* E12: the tone packet is ten bytes, absolute centi-dB, and both ends clamp. */
+static void test_tone(void)
+{
+    es_tone_t t = {
+        .gain_cdb = 600,
+        .low_cdb = -2600,
+        .mid_cdb = 0,
+        .high_cdb = 600,
+    };
+    uint8_t pkt[ES_MTU];
+    es_tone_t back;
+    CHECK_EQ(es_tone_encode(&t, pkt, sizeof pkt), ES_TONE_SIZE, "the packet is ten bytes");
+    CHECK(es_tone_parse(pkt, ES_TONE_SIZE, &back), "it parses");
+    CHECK_EQ(back.gain_cdb, 600, "the gain");
+    CHECK_EQ(back.low_cdb, -2600, "the low band");
+    CHECK_EQ(back.mid_cdb, 0, "the mid band");
+    CHECK_EQ(back.high_cdb, 600, "the high band");
+
+    /* A value past the knob's end is clamped, not dropped. */
+    t.gain_cdb = 5000;
+    t.low_cdb = -5000;
+    CHECK_EQ(es_tone_encode(&t, pkt, sizeof pkt), ES_TONE_SIZE, "an out-of-range value still encodes");
+    CHECK(es_tone_parse(pkt, ES_TONE_SIZE, &back), "and parses");
+    CHECK_EQ(back.gain_cdb, ES_TONE_GAIN_MAX_CDB, "the gain is clamped");
+    CHECK_EQ(back.low_cdb, ES_TONE_BAND_MIN_CDB, "the band is clamped");
+
+    /* The parser clamps a packet that was built by hand, so the player never has to. */
+    pkt[1] = ES_TYPE_TONE;
+    pkt[2] = 0x7F;
+    pkt[3] = 0xFF;
+    CHECK(es_tone_parse(pkt, ES_TONE_SIZE, &back), "a too-large value parses");
+    CHECK_EQ(back.gain_cdb, ES_TONE_GAIN_MAX_CDB, "and is clamped by the receiver");
+
+    CHECK_EQ(es_tone_encode(&t, pkt, ES_TONE_SIZE - 1), 0, "a short buffer is refused");
+    CHECK(!es_tone_parse(pkt, ES_TONE_SIZE - 1, &back), "a short packet is refused");
+    CHECK(!es_tone_parse(pkt, ES_TONE_SIZE + 1, &back), "a long packet is refused");
+    pkt[0] = 2;
+    CHECK(!es_tone_parse(pkt, ES_TONE_SIZE, &back), "a wrong version is not a tone");
+    pkt[0] = ES_VERSION;
+    pkt[1] = ES_TYPE_AUDIO;
+    CHECK(!es_tone_parse(pkt, ES_TONE_SIZE, &back), "an audio packet is not a tone");
+}
+
 int main(void)
 {
     test_fragments();
     test_parse_refuses();
     test_status();
+    test_tone();
     TEST_END();
 }

@@ -738,11 +738,14 @@ their own `s_shown`.
 The EQ's audio side is `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell (Q 0.7)
 and a 4 kHz high shelf, plus a trim applied before them. The knobs map to the DJ ranges:
 GAIN -12..+12 dB (default 0) and the bands -26..+6 dB (default 0). The targets are
-published by `mini_icecast_eq_set()` / `mini_icecast_gain_set()`, read by the broadcast
-task once per 1024-frame chunk, and slewed at 2 dB per chunk before the coefficients are
-rebuilt, so a moved knob glides rather than steps. The EQ runs in `emit_chunk()` and on the
-partial tail in `flush_pipeline()` before `measure_level()`, so the VU is the level that
-goes out and a track's last 23 ms is shaped too. The int16 clamp is the last stage; a hot
+published by `app_services_tone_band_set()` / `app_services_tone_gain_set()`: app_services owns
+them and gives the board a copy for the player, while the broadcast asks a source once per
+1024-frame chunk. The source answers "the player owns it" when the transport is ESP-NOW and the
+player's status says so, and the broadcast is then flat (ADR 0109); otherwise it returns the
+four values, slewed at 2 dB per chunk before the coefficients are rebuilt, so a moved knob glides
+rather than steps. The EQ runs in `emit_chunk()` and on the partial tail in `flush_pipeline()`
+before `measure_level()`, so the VU is the broadcast's level and a track's last 23 ms is shaped
+too. The int16 clamp is the last stage; a hot
 trim and a boosted band can reach it, like a mixer.
 
 The RGB group's side is `components/portable/rgb`: three channels 0..100, a brightness 0..100

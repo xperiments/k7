@@ -49,18 +49,24 @@ static void fresh(void)
     radio_reset();
 }
 
-static void give(uint32_t free_bytes, const uint16_t *nack, unsigned n_nack)
+static void give_flags(uint32_t free_bytes, const uint16_t *nack, unsigned n_nack, uint8_t flags)
 {
     es_status_t st;
     memset(&st, 0, sizeof st);
     st.free_bytes = free_bytes;
     st.nack_count = (uint8_t)n_nack;
+    st.flags = flags;
     for (unsigned i = 0; i < n_nack && i < ES_MAX_NACK; i++) st.nack[i] = nack[i];
 
     uint8_t pkt[ES_MTU];
     size_t n = es_status_encode(&st, pkt, sizeof pkt);
     CHECK(n > 0, "the status packet builds");
     es_emitter_status(g_emit, pkt, n);
+}
+
+static void give(uint32_t free_bytes, const uint16_t *nack, unsigned n_nack)
+{
+    give_flags(free_bytes, nack, n_nack, 0);
 }
 
 /* Reassemble the packets in the radio into frames, keyed by sequence. */
@@ -159,6 +165,29 @@ static void test_resend(void)
     CHECK_EQ(radio.n, 0, "a frame outside the history is not resent");
 }
 
+/* E13's fallback: the tone capability is whatever the current peer's last status said. */
+static void test_tone_capability(void)
+{
+    fresh();
+    es_emitter_stats_t st;
+    es_emitter_stats(g_emit, &st);
+    CHECK(!st.tone_capable, "no status, no tone capability");
+
+    give_flags(50000, NULL, 0, ES_STATUS_FLAG_TONE);
+    es_emitter_stats(g_emit, &st);
+    CHECK(st.tone_capable, "the player's flag is read");
+    CHECK(g_emit->tone_capable, "and it is the emitter's state");
+
+    /* An old player's next status has no flags byte: the K7 goes back to the S3 tone. */
+    give(50000, NULL, 0);
+    es_emitter_stats(g_emit, &st);
+    CHECK(!st.tone_capable, "a status without the flag clears it");
+
+    give_flags(50000, NULL, 0, ES_STATUS_FLAG_TONE);
+    es_emitter_stats(g_emit, &st);
+    CHECK(st.tone_capable, "and it can come back");
+}
+
 /* Six frames through the radio and back, bytes for bytes, then a radio that refuses one. */
 static void test_loop(void)
 {
@@ -204,6 +233,7 @@ int main(void)
     test_gate();
     test_credit();
     test_resend();
+    test_tone_capability();
     test_loop();
 
     free(g_arena);

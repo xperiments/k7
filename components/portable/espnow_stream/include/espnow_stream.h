@@ -8,8 +8,8 @@
  * is ADR 0103. The assembler, the gap window and the credit arithmetic are the two boards'
  * business and live beside their own state, not here.
  *
- * The version and the type bytes are the handover's: 0x01 beacon, 0x02 request, 0x03 record, and
- * these two (0x04 audio, 0x05 status). One receiver dispatches on them, over one radio.
+ * The version and the type bytes are the handover's: 0x01 beacon, 0x02 request, 0x03 record,
+ * 0x04 audio, 0x05 status and 0x06 tone. One receiver dispatches on them, over one radio.
  */
 #include <stdbool.h>
 #include <stddef.h>
@@ -23,6 +23,7 @@ extern "C" {
 
 #define ES_TYPE_AUDIO  0x04
 #define ES_TYPE_STATUS 0x05
+#define ES_TYPE_TONE   0x06
 
 /* ESP_NOW_MAX_DATA_LEN: v2 raises it to 1470, but the handover's frames are v1 and share the
  * radio, so every packet this component builds stays under the smaller number. */
@@ -56,20 +57,53 @@ size_t es_fragment(uint16_t seq, const uint8_t *frame, size_t len,
  * a fragment. */
 bool es_parse_frag(const uint8_t *pkt, size_t len, es_frag_t *out);
 
-/* The player's status (E3): free ring bytes, the highest sequence it holds without a gap, and the
- * sequences it is missing, oldest first. */
+/* E3a's optional flags byte, after the sequence list. Bit 0 says the player applies the K7's
+ * tone (E12/E13); the other bits are reserved. An absent byte reads as 0. */
+#define ES_STATUS_FLAG_TONE 0x01
+
+/* The player's status (E3): free ring bytes, the highest sequence it holds without a gap, the
+ * sequences it is missing, oldest first, and the optional flags byte. */
 typedef struct {
     uint32_t free_bytes;
     uint16_t highest;
     uint8_t  nack_count;
     uint16_t nack[ES_MAX_NACK];
+    uint8_t  flags;
 } es_status_t;
 
-/* 8 + 2 * nack_count bytes, or 0 when the packet would not fit `cap`. */
+/* 9 + 2 * nack_count bytes, or 0 when the packet would not fit `cap`. */
 size_t es_status_encode(const es_status_t *s, uint8_t *out, size_t cap);
 
-/* False unless it is a version-1 status packet whose declared list fits its length. */
+/* False unless it is a version-1 status packet whose declared list fits its length. A packet
+ * without the flags byte parses with flags 0: that is an old player, not a malformed one. */
 bool es_status_parse(const uint8_t *pkt, size_t len, es_status_t *out);
+
+/* ------------------------------------------------------------------- the tone (E12)
+
+ * The K7 sends the player the four EQ values when the player says it can apply them: 10 bytes,
+ * absolute centi-dB, clamped to the knobs' ranges. The player side's conversion to dB and the
+ * tone_eq that consumes it are k7player.md R33's. */
+
+#define ES_TONE_SIZE 10
+#define ES_TONE_GAIN_MIN_CDB (-1200) /* -12 dB */
+#define ES_TONE_GAIN_MAX_CDB (1200)  /* +12 dB */
+#define ES_TONE_BAND_MIN_CDB (-2600) /* -26 dB */
+#define ES_TONE_BAND_MAX_CDB (600)   /* +6 dB */
+
+typedef struct {
+    int16_t gain_cdb;
+    int16_t low_cdb;
+    int16_t mid_cdb;
+    int16_t high_cdb;
+} es_tone_t;
+
+/* 10 bytes, or 0 when `cap` cannot hold the packet. Out-of-range values are clamped, so a
+ * caller's bad number becomes the end of the knob rather than a packet the receiver drops. */
+size_t es_tone_encode(const es_tone_t *t, uint8_t *out, size_t cap);
+
+/* False unless it is a version-1 tone packet of exactly 10 bytes. The encoder clamps and the
+ * parser clamps again, so a hand-built packet cannot exceed the knobs' ranges. */
+bool es_tone_parse(const uint8_t *pkt, size_t len, es_tone_t *out);
 
 /* ------------------------------------------------------------- the sender (E4, E6)
 
@@ -100,6 +134,7 @@ typedef struct {
     uint16_t       seq_next;
     uint32_t       credit;     /* bytes the receiver last said it could take, net of sends */
     bool           have_status;
+    bool           tone_capable; /* the player's last status carried ES_STATUS_FLAG_TONE */
     es_send_fn     send;
     void          *ctx;
     uint32_t       packets, sent, resent, dropped, held;
@@ -112,6 +147,7 @@ typedef struct {
     uint32_t dropped; /* frames the history could not hold, or the radio refused */
     uint32_t held;    /* frames held back for want of credit */
     bool     have_status; /* whether the receiver has ever spoken */
+    bool     tone_capable; /* the last status said the player applies the tone (E13) */
 } es_emitter_stats_t;
 
 /* The arena is divided into ES_MAX_FRAME-byte slots: at 96 slots that is 138 KB, which is why

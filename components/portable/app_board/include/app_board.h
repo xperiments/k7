@@ -161,6 +161,19 @@ bool app_board_player_espnow_load(bool *on);
 esp_err_t app_board_player_espnow_save(bool on);
 void app_board_audio_frame(void *ctx, const uint8_t *frame, size_t bytes);
 
+/* The K7's tone, for the player (espnow-stream.md E12/E13). `band_db` is LOW, MID, HIGH in
+ * dB. The call copies the four values and returns; the emitter's worker sends the 10-byte
+ * packet, on the change and once a second, only when the player's last status said it can
+ * apply the tone. A no-op before the emitter has a worker. Never call it from the radio's
+ * receive callback. */
+void app_board_audio_tone(const float band_db[3], float gain_db);
+
+/* Whether the current player's last status carried the tone flag (E13). The broadcast's tone
+ * source asks this per chunk: true means the player owns the tone and the broadcast is flat.
+ * False when the emitter is off, no player has spoken, or the tone's worker could not be
+ * allocated, in which case the broadcast keeps the tone. */
+bool app_board_player_tone_capable(void);
+
 /* One frame. A NULL `dst` is the beacon's broadcast; anything else is the window's one
  * peer, and travels encrypted under the LMK it was registered with. */
 bool app_board_share_send(const uint8_t *dst, const uint8_t *data, size_t len);

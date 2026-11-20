@@ -98,6 +98,14 @@ void app_services_player_transport_init(void);
  * audio, 256 when the web's icecast does (espnow-stream.md E9). */
 uint32_t app_services_station_bitrate(bool player_espnow);
 
+/* The tone's one owner (ADR 0109). The panel publishes the four values here; the broadcast asks
+ * for them through a source, and the board gets a copy to send to the player over ESP-NOW. The
+ * values are in dB at the DJ ranges: bands -26..+6, gain -12..+12. The source answers "the
+ * player owns it" only while the transport is ESP-NOW and the current player's status says it
+ * applies the tone; the broadcast is then flat. Safe from the UI task. */
+void app_services_tone_band_set(int band, float db);
+void app_services_tone_gain_set(float db);
+
 /* Stop the station and start it again at `kbps`, leaving the network, the card, the HTTP
  * server and the panel alone (ADR 0106). A listener is disconnected, which is what a station
  * restart means, and the Track that was playing is asked for again on the new station. The

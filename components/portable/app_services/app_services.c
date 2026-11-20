@@ -235,6 +235,45 @@ static bool s_player_espnow = true;
 
 bool app_services_player_espnow(void) { return s_player_espnow; }
 
+/* The tone's one owner (ADR 0109). The screen publishes the four values here; the broadcast
+ * asks the source below, and the board gets a copy for the player. The source is the one place
+ * that decides whether the broadcast owns the tone: it answers false only when ESP-NOW is the
+ * transport and the player's last status said it applies the tone. */
+static volatile float s_tone_band_db[TONE_EQ_BANDS];
+static volatile float s_tone_gain_db;
+
+static bool tone_source(float band_db[TONE_EQ_BANDS], float *gain_db, void *ctx)
+{
+    (void)ctx;
+    if (s_player_espnow && app_board_player_tone_capable()) return false;
+    for (int b = 0; b < TONE_EQ_BANDS; b++) band_db[b] = s_tone_band_db[b];
+    *gain_db = s_tone_gain_db;
+    return true;
+}
+
+void app_services_tone_band_set(int band, float db)
+{
+    if (band < 0 || band >= TONE_EQ_BANDS) return;
+    s_tone_band_db[band] = db;
+    float all[TONE_EQ_BANDS] = {
+        s_tone_band_db[0],
+        s_tone_band_db[1],
+        s_tone_band_db[2],
+    };
+    app_board_audio_tone(all, s_tone_gain_db);
+}
+
+void app_services_tone_gain_set(float db)
+{
+    s_tone_gain_db = db;
+    float all[TONE_EQ_BANDS] = {
+        s_tone_band_db[0],
+        s_tone_band_db[1],
+        s_tone_band_db[2],
+    };
+    app_board_audio_tone(all, s_tone_gain_db);
+}
+
 /* The emitter and the broadcast's sink move together, so no frame is fed to an emitter that is
  * off and none is missed by one that is on (espnow-stream.md E9). The Settings row and the micro
  * switch both end up here. */
@@ -519,6 +558,9 @@ static esp_err_t start_station(const library_t *lib)
         .card_use_begin = card_use_begin,
         .card_use_end = card_use_end,
     };
+    /* The broadcast's tone source is the composition's: the station asks on every chunk and
+     * the source answers with the panel's four values, or with "the player owns it". */
+    mini_icecast_set_tone_source(tone_source, NULL);
     esp_err_t e = mini_icecast_start(&ice);
     if (e != ESP_OK) return e;
     /* Which Playlist the broadcast walks, now that the card and the Library exist: the

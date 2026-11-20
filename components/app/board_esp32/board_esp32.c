@@ -7,6 +7,7 @@
  * app_board.h and knows none of it. The host build has the other adapter.
  */
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -983,6 +984,18 @@ static SemaphoreHandle_t s_audio_signal;
 static TaskHandle_t s_audio_worker;
 static uint32_t s_audio_lost;
 
+/* The tone: the panel's four values, copied by the UI task and sent by the worker only when the
+ * player's last status said it applies them (espnow-stream.md E12/E13). The values are absolute
+ * and the worker repeats them once a second, so a lost packet is repaired without an ack. The
+ * lock is only ever held for the four floats, never across a send. */
+static SemaphoreHandle_t s_tone_lock;
+static float s_tone_band_db[3];
+static float s_tone_gain_db;
+static uint32_t s_tone_gen;   /* bumped on every copy, so a send cannot clear a newer change */
+static bool s_tone_dirty;
+static int64_t s_tone_sent_us;
+static volatile bool s_tone_capable;
+
 static void audio_apply_status(const uint8_t src[6], const uint8_t *data, size_t len);
 
 static bool audio_send(const uint8_t *pkt, size_t len, void *ctx)
@@ -1077,10 +1090,65 @@ static void audio_apply_status(const uint8_t src[6], const uint8_t *data, size_t
                  src[0], src[1], src[2], src[3], src[4], src[5]);
     }
 
+    bool from_peer = s_audio_has_peer && memcmp(src, s_audio_peer, ESP_NOW_ETH_ALEN) == 0;
     if (xSemaphoreTake(s_audio_lock, portMAX_DELAY) == pdTRUE) {
         es_emitter_status(&s_audio, data, len);
+        /* Only the peer's status may speak for the player: another device's status must not
+         * clear the capability the player set. */
+        bool capable = s_tone_capable;
+        if (from_peer) capable = s_audio.tone_capable && s_tone_lock != NULL;
+        if (capable != s_tone_capable) {
+            s_tone_capable = capable;
+            if (capable) {
+                if (s_tone_lock && xSemaphoreTake(s_tone_lock, portMAX_DELAY) == pdTRUE) {
+                    s_tone_gen++;
+                    s_tone_dirty = true;
+                    xSemaphoreGive(s_tone_lock);
+                }
+                ESP_LOGI(TAG, "espnow tone: the player applies the tone; the broadcast is flat");
+            } else {
+                ESP_LOGI(TAG, "espnow tone: the tone stays on the broadcast");
+            }
+        }
         xSemaphoreGive(s_audio_lock);
     }
+}
+
+/* The tone packet: one 10-byte unicast to the player, sent by the worker. The repeat is the
+ * repair; a send that fails leaves the values dirty and the next pass tries again. */
+static void audio_send_tone(void)
+{
+    if (!s_audio_on || !s_audio_has_peer || !s_tone_capable || !s_tone_lock) return;
+    int64_t now = esp_timer_get_time();
+
+    float band[3], gain;
+    uint32_t gen;
+    bool dirty;
+    if (xSemaphoreTake(s_tone_lock, portMAX_DELAY) != pdTRUE) return;
+    band[0] = s_tone_band_db[0];
+    band[1] = s_tone_band_db[1];
+    band[2] = s_tone_band_db[2];
+    gain = s_tone_gain_db;
+    gen = s_tone_gen;
+    dirty = s_tone_dirty;
+    xSemaphoreGive(s_tone_lock);
+
+    if (!dirty && s_tone_sent_us != 0 && now - s_tone_sent_us < 1000000) return;
+
+    es_tone_t t = {
+        .gain_cdb = (int16_t)lroundf(gain * 100.0f),
+        .low_cdb = (int16_t)lroundf(band[0] * 100.0f),
+        .mid_cdb = (int16_t)lroundf(band[1] * 100.0f),
+        .high_cdb = (int16_t)lroundf(band[2] * 100.0f),
+    };
+    uint8_t pkt[ES_TONE_SIZE];
+    if (!es_tone_encode(&t, pkt, sizeof pkt)) return;
+    if (!audio_send(pkt, sizeof pkt, NULL)) return;
+
+    s_tone_sent_us = now;
+    if (xSemaphoreTake(s_tone_lock, portMAX_DELAY) != pdTRUE) return;
+    if (s_tone_gen == gen) s_tone_dirty = false; /* a newer value stays dirty */
+    xSemaphoreGive(s_tone_lock);
 }
 
 /* A share-window frame, handled by the window's own code - in the worker, not in the Wi-Fi
@@ -1114,6 +1182,7 @@ static void audio_worker_task(void *arg)
                 else audio_dispatch_share(ctrl.src, ctrl.data, ctrl.len);
                 worked = true;
             }
+            audio_send_tone();
             if (!worked) break;
             audio_log_census();
         }
@@ -1238,6 +1307,10 @@ bool app_board_audio_set(bool on)
         return false;
     }
     if (!s_audio_lock && !(s_audio_lock = xSemaphoreCreateMutex())) return false;
+    /* The tone needs a lock of its own so a copy can never race a send. Without it the tone
+     * stays on the broadcast: app_board_player_tone_capable() then answers false. */
+    if (!s_tone_lock && !(s_tone_lock = xSemaphoreCreateMutex()))
+        ESP_LOGW(TAG, "no memory for the tone's lock: the tone stays on the broadcast");
     if (xSemaphoreTake(s_audio_lock, portMAX_DELAY) != pdTRUE) return false;
     bool ok = audio_set_locked(on);
     xSemaphoreGive(s_audio_lock);
@@ -1249,6 +1322,8 @@ static bool audio_set_locked(bool on)
 {
     if (!on) {
         s_audio_on = false;
+        s_tone_capable = false;
+        s_tone_sent_us = 0;
         if (s_audio_has_peer) {
             esp_now_del_peer(s_audio_peer);
             s_audio_has_peer = false;
@@ -1275,6 +1350,8 @@ static bool audio_set_locked(bool on)
     if (!espnow_up()) return false;
     esp_now_register_recv_cb(espnow_recv_cb);
     s_audio_on = true;
+    s_tone_capable = false;
+    s_tone_sent_us = 0;
     return true;
 }
 
@@ -1284,6 +1361,27 @@ void app_board_audio_frame(void *ctx, const uint8_t *frame, size_t bytes)
     /* The broadcast's task: copy into the queue and go back to encoding. The worker does the
      * rest, because a send can block and the station must never wait on the radio (EN-10). */
     audio_post_frame(frame, bytes);
+}
+
+void app_board_audio_tone(const float band_db[3], float gain_db)
+{
+    if (!band_db || !s_tone_lock) return;
+    if (xSemaphoreTake(s_tone_lock, portMAX_DELAY) != pdTRUE) return;
+    s_tone_band_db[0] = band_db[0];
+    s_tone_band_db[1] = band_db[1];
+    s_tone_band_db[2] = band_db[2];
+    s_tone_gain_db = gain_db;
+    s_tone_gen++;
+    s_tone_dirty = true;
+    xSemaphoreGive(s_tone_lock);
+    /* Wake the worker now; the next status would wake it anyway, but a knob should not wait
+     * for it. */
+    if (s_audio_signal) xSemaphoreGive(s_audio_signal);
+}
+
+bool app_board_player_tone_capable(void)
+{
+    return s_audio_on && s_tone_capable && s_tone_lock != NULL;
 }
 
 bool app_board_share_radio_start(app_board_share_frame_fn on_frame, void *ctx)

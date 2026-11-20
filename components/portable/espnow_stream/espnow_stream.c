@@ -51,7 +51,7 @@ size_t es_status_encode(const es_status_t *s, uint8_t *out, size_t cap)
 {
     if (!s || !out) return 0;
     if (s->nack_count > ES_MAX_NACK) return 0;
-    size_t need = STATUS_HEADER + 2u * s->nack_count;
+    size_t need = STATUS_HEADER + 2u * s->nack_count + 1u;
     if (cap < need) return 0;
 
     out[0] = ES_VERSION;
@@ -66,6 +66,9 @@ size_t es_status_encode(const es_status_t *s, uint8_t *out, size_t cap)
         out[STATUS_HEADER + 2 * i] = (uint8_t)(s->nack[i] >> 8);
         out[STATUS_HEADER + 2 * i + 1] = (uint8_t)(s->nack[i] & 0xFF);
     }
+    /* E3a: the optional flags byte is always written by this firmware and ignored by a receiver
+     * that predates it, which is what makes an old K7 and a new player a valid pair. */
+    out[STATUS_HEADER + 2u * s->nack_count] = s->flags;
     return need;
 }
 
@@ -82,6 +85,50 @@ bool es_status_parse(const uint8_t *pkt, size_t len, es_status_t *out)
     out->nack_count = pkt[7];
     for (unsigned i = 0; i < out->nack_count; i++)
         out->nack[i] = (uint16_t)((pkt[STATUS_HEADER + 2 * i] << 8) | pkt[STATUS_HEADER + 2 * i + 1]);
+    /* An old player's packet ends after the list; that is flags 0, not a short packet. */
+    if (len > STATUS_HEADER + 2u * out->nack_count)
+        out->flags = pkt[STATUS_HEADER + 2u * out->nack_count];
+    return true;
+}
+
+/* ------------------------------------------------------------------- the tone */
+
+static int16_t clamp_cdb(int v, int lo, int hi)
+{
+    if (v < lo) return (int16_t)lo;
+    if (v > hi) return (int16_t)hi;
+    return (int16_t)v;
+}
+
+static int16_t get16(const uint8_t *p) { return (int16_t)((uint16_t)p[0] << 8 | p[1]); }
+
+static void put16(uint8_t *p, int16_t v)
+{
+    p[0] = (uint8_t)((uint16_t)v >> 8);
+    p[1] = (uint8_t)((uint16_t)v & 0xFF);
+}
+
+size_t es_tone_encode(const es_tone_t *t, uint8_t *out, size_t cap)
+{
+    if (!t || !out || cap < ES_TONE_SIZE) return 0;
+    out[0] = ES_VERSION;
+    out[1] = ES_TYPE_TONE;
+    put16(out + 2, clamp_cdb(t->gain_cdb, ES_TONE_GAIN_MIN_CDB, ES_TONE_GAIN_MAX_CDB));
+    put16(out + 4, clamp_cdb(t->low_cdb, ES_TONE_BAND_MIN_CDB, ES_TONE_BAND_MAX_CDB));
+    put16(out + 6, clamp_cdb(t->mid_cdb, ES_TONE_BAND_MIN_CDB, ES_TONE_BAND_MAX_CDB));
+    put16(out + 8, clamp_cdb(t->high_cdb, ES_TONE_BAND_MIN_CDB, ES_TONE_BAND_MAX_CDB));
+    return ES_TONE_SIZE;
+}
+
+bool es_tone_parse(const uint8_t *pkt, size_t len, es_tone_t *out)
+{
+    if (!pkt || !out || len != ES_TONE_SIZE) return false;
+    if (pkt[0] != ES_VERSION || pkt[1] != ES_TYPE_TONE) return false;
+
+    out->gain_cdb = clamp_cdb(get16(pkt + 2), ES_TONE_GAIN_MIN_CDB, ES_TONE_GAIN_MAX_CDB);
+    out->low_cdb = clamp_cdb(get16(pkt + 4), ES_TONE_BAND_MIN_CDB, ES_TONE_BAND_MAX_CDB);
+    out->mid_cdb = clamp_cdb(get16(pkt + 6), ES_TONE_BAND_MIN_CDB, ES_TONE_BAND_MAX_CDB);
+    out->high_cdb = clamp_cdb(get16(pkt + 8), ES_TONE_BAND_MIN_CDB, ES_TONE_BAND_MAX_CDB);
     return true;
 }
 
@@ -145,6 +192,7 @@ unsigned es_emitter_status(es_emitter_t *e, const uint8_t *pkt, size_t len)
     if (!e || !pkt || !es_status_parse(pkt, len, &st)) return 0;
 
     e->have_status = true;
+    e->tone_capable = (st.flags & ES_STATUS_FLAG_TONE) != 0;
     e->credit = st.free_bytes;
 
     unsigned resent = 0;
@@ -172,4 +220,5 @@ void es_emitter_stats(const es_emitter_t *e, es_emitter_stats_t *out)
     out->dropped = e->dropped;
     out->held = e->held;
     out->have_status = e->have_status;
+    out->tone_capable = e->tone_capable;
 }

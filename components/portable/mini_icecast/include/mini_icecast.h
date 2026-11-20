@@ -24,6 +24,7 @@
 
 #include "audio_format.h" /* mi_fmt_t: the status struct reports a container */
 #include "library.h"       /* the immutable Library the broadcast walks */
+#include "tone_eq.h"       /* TONE_EQ_BANDS, for the tone source's signature */
 
 #include "esp_err.h"
 
@@ -245,13 +246,14 @@ void      mini_icecast_shuffle_seed(uint32_t seed);
 void      mini_icecast_shuffle_set(bool on);
 bool      mini_icecast_shuffle_enabled(void);
 
-/* The screen's tone controls: three band targets (0 = low, 1 = mid, 2 = high) and the
- * trim, in dB. The ranges are the DJ ones: bands -26..+6, trim -12..+12. These only
- * publish a target; the broadcast task applies it at its next chunk, at its slew rate.
- * The trim's default is 0 dB, the same neutral as the bands. Safe to call from another
- * task. */
-void      mini_icecast_eq_set(int band, float db);
-void      mini_icecast_gain_set(float db);
+/* Where the tone's four values come from. The source is asked once per 1024-frame chunk on
+ * the broadcast task. It fills `band_db` (LOW, MID, HIGH) and `gain_db` and returns true when
+ * the broadcast is the output; it returns false when the player owns the tone, in which case the
+ * broadcast is flat. It may read the board's capability but must not block. No source means no
+ * tone: the broadcast encodes neutral PCM, which is the host's shape and a station with no
+ * panel. The panel publishes through app_services (ADR 0109), not through this module. */
+typedef bool (*mini_icecast_tone_fn)(float band_db[TONE_EQ_BANDS], float *gain_db, void *ctx);
+void      mini_icecast_set_tone_source(mini_icecast_tone_fn fn, void *ctx);
 
 size_t    mini_icecast_now_playing(char *out, size_t out_size); /* current title, for the index */
 

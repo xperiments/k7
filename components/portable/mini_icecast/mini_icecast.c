@@ -116,13 +116,11 @@ static struct {
     /* Level of the chunk being encoded, for the display. Same lock-free discipline
      * as track_frames; a 32-bit float store is atomic on this core. */
     volatile float     level_l, level_r;
-    /* The broadcast's tone: the three band targets and the trim, written by the screen
-     * and read by the broadcast task at its next chunk. Same lock-free discipline as
-     * the level; a 32-bit float store is atomic on this core. The filter state itself
-     * belongs to the broadcast task and is never touched from the screen. */
+    /* The broadcast's tone filter. Its four values come from the composition's source each
+     * chunk; the source and the filter state both run on the broadcast task. */
     tone_eq_t          eq;
-    volatile float     eq_db[TONE_EQ_BANDS];
-    volatile float     eq_gain_db;
+    mini_icecast_tone_fn tone_fn;
+    void              *tone_ctx;
     uint32_t           title_ver;
     volatile bool      skip;
     /* A request for the track before this one. The broadcast task owns the
@@ -652,14 +650,20 @@ void mini_icecast_unpark_card(void)
 
 bool mini_icecast_card_parked(void) { return parked(); }
 
-/* Publish the screen's tone targets and run the EQ on `frames` of S.chunk. Both the full
- * chunk and the partial tail at a track boundary take this path, so the trim and the bands
- * never miss the last 23 ms. */
+/* Ask the composition where the tone runs, and run it on `frames` of S.chunk. Both the full
+ * chunk and the partial tail at a track boundary take this path, so the trim and the bands never
+ * miss the last 23 ms. A false answer means the player owns the tone: the broadcast stays flat.
+ * No source means no tone. */
 static void tone_apply(size_t frames)
 {
+    if (!S.tone_fn) return;
+    float band_db[TONE_EQ_BANDS];
+    float gain_db = 0.0f;
+    if (!S.tone_fn(band_db, &gain_db, S.tone_ctx)) return;
+
     for (int b = 0; b < TONE_EQ_BANDS; b++)
-        tone_eq_set_band(&S.eq, b, S.eq_db[b]);
-    tone_eq_set_gain(&S.eq, S.eq_gain_db);
+        tone_eq_set_band(&S.eq, b, band_db[b]);
+    tone_eq_set_gain(&S.eq, gain_db);
     int64_t t0 = esp_timer_get_time();
     tone_eq_process(&S.eq, S.chunk, frames);
     S.eq_ms += (uint32_t)((esp_timer_get_time() - t0) / 1000);
@@ -1777,6 +1781,12 @@ void mini_icecast_set_frame_sink(mini_icecast_frame_fn fn, void *ctx)
     S.frame_ctx = ctx;
 }
 
+void mini_icecast_set_tone_source(mini_icecast_tone_fn fn, void *ctx)
+{
+    S.tone_fn = fn;
+    S.tone_ctx = ctx;
+}
+
 void mini_icecast_set_order_dropped_cb(void (*cb)(void *ctx), void *ctx)
 {
     if (S.lock) xSemaphoreTake(S.lock, portMAX_DELAY);
@@ -1895,20 +1905,6 @@ bool mini_icecast_shuffle_enabled(void)
     bool on = S.shuffle_on;
     xSemaphoreGive(S.lock);
     return on;
-}
-
-/* The screen's four knobs. The values are targets for the broadcast task's next chunk;
- * the filter state and the slew belong to that task, so these only publish a float. The
- * ranges are enforced where the values are consumed (tone_eq_set_band/gain). */
-void mini_icecast_eq_set(int band, float db)
-{
-    if (band < 0 || band >= TONE_EQ_BANDS) return;
-    S.eq_db[band] = db;
-}
-
-void mini_icecast_gain_set(float db)
-{
-    S.eq_gain_db = db;
 }
 
 uint32_t mini_icecast_lag_ms(void) { return S.lag_ms; }

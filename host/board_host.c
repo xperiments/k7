@@ -46,6 +46,14 @@ void app_board_audio_frame(void *ctx, const uint8_t *frame, size_t bytes)
     (void)bytes;
 }
 
+void app_board_audio_tone(const float band_db[3], float gain_db)
+{
+    (void)band_db;
+    (void)gain_db;
+}
+
+bool app_board_player_tone_capable(void) { return false; }
+
 bool app_board_player_espnow_load(bool *on)
 {
     (void)on;

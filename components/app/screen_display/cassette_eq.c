@@ -32,7 +32,7 @@
 #include "cassette_meter.h"
 #include "knob.h"
 #include "knob_panel.h"
-#include "mini_icecast.h"
+#include "app_services.h"
 
 /* The knobs, in the bank's id order: the inside cell's gain, then the outer column's three
  * bands. The ids are contiguous because the editor indexes its bank by them. */
@@ -89,8 +89,8 @@ static bool s_created;
 static void knob_send(int id)
 {
     float db = knob_db(&s_knob[id]);
-    if (id == KNOB_GAIN) mini_icecast_gain_set(db);
-    else mini_icecast_eq_set(k_knob_band[id], db);
+    if (id == KNOB_GAIN) app_services_tone_gain_set(db);
+    else app_services_tone_band_set(k_knob_band[id], db);
 }
 
 /* --------------------------------------------------------------------- plate */
