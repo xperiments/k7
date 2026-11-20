@@ -1,46 +1,88 @@
 import { useEditor } from "@/hooks/use-editor";
+import { JCARD_H, JCARD_PARTS } from "@/engine/jcard";
+import type { JCardPart } from "@/engine/jcard";
+import { alignOf } from "@/engine/tpl";
+import type { Obj } from "@/engine/types";
 
 /**
- * The J-card's preview: the same case the albums draw (k7-case) — the cover on the front
- * face with the frame and the sheen, the title on the spine, and the slow turn that shows
- * both. The paper and the three fields come from the design; the case is the appliance's.
+ * The J-card's preview: the same case the albums draw, carrying the sheet's own parts.
+ * The cover part is the front, the spine part the left face; every prim comes from the
+ * J-card's sheet, so what the case shows is what the shelf will show. Nothing is invented.
  */
 export function JCardPreview() {
   const ed = useEditor();
   const jc = ed.jcard;
   const paper = jc.paper ?? ed.tpl.inks.paper;
-  const ink = ed.tpl.inks.ink;
-  const field = (name: string, fallback: string) => jc.sims?.[name] || fallback;
+
+  const frontW = 420;
+  const frontH = Math.round((frontW * JCARD_H) / JCARD_PARTS.cover.w);
+  const spineW = Math.round((JCARD_PARTS.spine.w / JCARD_PARTS.cover.w) * frontW);
+
+  const part = (p: JCardPart) => {
+    const box = JCARD_PARTS[p];
+    const s = (p === "spine" ? spineW : frontW) / box.w;
+    return jc.prims
+      .filter((o) => o.x >= box.x && o.x < box.x + box.w)
+      .map((o) => {
+        const left = (o.x - box.x) * s;
+        const top = o.y * s;
+        const w = o.w * s;
+        const h = (o.h || 0) * s;
+        const colour = ed.roleColor(o.role ?? "") ?? "transparent";
+        return o.type === "text" ? (
+          <div
+            key={o.id}
+            style={{
+              position: "absolute",
+              left,
+              top,
+              width: w,
+              color: colour,
+              fontSize: ed.pxOf(o) * s,
+              fontFamily: `"${ed.ffOf(o)}", sans-serif`,
+              textAlign: alignOf(o),
+              lineHeight: 1.2,
+              whiteSpace: "pre-wrap",
+              overflow: "hidden",
+              transform: o.rot ? `rotate(${o.rot}deg)` : undefined,
+              transformOrigin: "50% 50%",
+            }}
+          >
+            {ed.simText(o)}
+          </div>
+        ) : (
+          <div
+            key={o.id}
+            style={{
+              position: "absolute",
+              left,
+              top,
+              width: w,
+              height: h,
+              background: colour,
+              borderRadius: o.type === "circle" ? "50%" : (o.r ?? 0) * s,
+              transform: o.rot ? `rotate(${o.rot}deg)` : undefined,
+              transformOrigin: "50% 50%",
+            }}
+          />
+        );
+      });
+  };
 
   return (
     <div className="flex h-full min-h-[480px] w-full items-center justify-center overflow-hidden bg-k7-well">
       <div className="k7-case-stage">
-        <div className="k7-case-preview">
-          {/* The cover: the sheet's paper, its three fields, the case's frame and sheen. */}
-          <div className="k7-face k7-front" style={{ background: paper, color: ink }}>
+        <div className="k7-case-preview" style={{ width: frontW, height: frontH }}>
+          <div className="k7-face k7-front" style={{ background: paper }}>
             <div className="k7-frame" />
             <div className="k7-sheen" />
-            <div className="relative flex h-full w-full flex-col justify-between px-[7%] py-[6%]">
-              <div className="flex items-center justify-between text-[11px] font-medium tracking-[0.28em] opacity-80">
-                <span>K7</span>
-                <span>C-60</span>
-              </div>
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="truncate text-[42px] font-semibold leading-none tracking-tight">
-                  {field("title", "Untitled")}
-                </span>
-                <span className="truncate text-[18px] leading-tight opacity-90">
-                  {field("artist", "Unknown artist")}
-                </span>
-                <span className="truncate text-[12px] tracking-[0.14em] opacity-70">
-                  {field("meta", "Side A · Side B")}
-                </span>
-              </div>
-            </div>
+            <div style={{ position: "absolute", inset: 0 }}>{part("cover")}</div>
           </div>
-          {/* The spine: the left face, printed with the same paper and the title. */}
-          <div className="k7-face k7-left" style={{ background: paper, color: ink }}>
-            <span className="k7-spine-title">{field("title", "Untitled")}</span>
+          <div
+            className="k7-face k7-left"
+            style={{ background: paper, width: spineW, transform: `rotateY(-90deg) translateZ(${spineW / 2}px)` }}
+          >
+            <div style={{ position: "absolute", inset: 0 }}>{part("spine")}</div>
           </div>
         </div>
       </div>
