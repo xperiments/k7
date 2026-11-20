@@ -129,7 +129,7 @@ static void put_prim(tbuf_t *b, uint8_t kind, uint8_t fill, uint8_t font, uint8_
 
 static void put_template(tbuf_t *b, uint32_t name, uint16_t prim_start, uint16_t prim_count,
                          uint16_t slot_start, uint16_t slot_count, uint8_t f0, uint8_t f1,
-                         uint8_t f2)
+                         uint8_t f2, uint8_t flags, uint32_t canvas)
 {
     put32(b, name);
     put16(b, prim_start);
@@ -139,7 +139,7 @@ static void put_template(tbuf_t *b, uint32_t name, uint16_t prim_start, uint16_t
     put8(b, f0);
     put8(b, f1);
     put8(b, f2);
-    put8(b, 0);              /* reserved */
+    put8(b, flags);
     put32(b, 0xF2EDE3);      /* paper */
     put32(b, 0x24211D);      /* ink */
     put32(b, 0xB9AC8E);      /* rule */
@@ -151,7 +151,7 @@ static void put_template(tbuf_t *b, uint32_t name, uint16_t prim_start, uint16_t
     put32(b, 0x7A3B52);      /* band 5 */
     put32(b, 0xB9AC8E);      /* band 6 */
     put32(b, 0x2F4B3A);      /* band 7 */
-    put32(b, 0);             /* reserved */
+    put32(b, canvas);
 }
 
 /* The canonical sheet: two designs, five prims, two slots, one shared pool. Its header's
@@ -160,7 +160,7 @@ static uint8_t *build_sheet(size_t *n_out)
 {
     tbuf_t b = {0};
     put(&b, "K7LBL\0\0\0", 8);
-    put16(&b, 2);              /* version */
+    put16(&b, 3);              /* version */
     put16(&b, 32);             /* header size */
     put32(&b, 0);              /* total, patched */
     put32(&b, 0);              /* crc, patched */
@@ -171,8 +171,8 @@ static uint8_t *build_sheet(size_t *n_out)
     put16(&b, 2);              /* slots */
     put16(&b, POOL_N);         /* pool size */
 
-    put_template(&b, POOL_NIGHT, 0, 4, 0, 2, 0, 1, 2);
-    put_template(&b, POOL_SECOND, 4, 1, 2, 0, 1, 1, 1);
+    put_template(&b, POOL_NIGHT, 0, 4, 0, 2, 0, 1, 2, 1, 0xF5F1E6);
+    put_template(&b, POOL_SECOND, 4, 1, 2, 0, 1, 1, 1, 0, 0);
 
     put_prim(&b, LABEL_RECT, LABEL_FILL_PAPER, 0, 0, 0, 0, 748, 359, 19, 0, 0xFFFFFFFFu, 0);
     put_prim(&b, LABEL_RECT, LABEL_FILL_LITERAL, 0, 0, 700, 292, 20, 20, 3, 0, 0xFFFFFFFFu,
@@ -305,6 +305,13 @@ static void test_reader(void)
     CHECK_EQ(label_font(s, 0, LABEL_FONT_NUMERAL), 1, "numeral face");
     CHECK_EQ(label_font(s, 0, LABEL_FONT_CAPTION), 2, "caption face");
 
+    uint32_t canvas = 0;
+    CHECK(label_canvas(s, 0, &canvas), "template 0 carries a canvas");
+    CHECK_EQ(canvas, 0xF5F1E6, "template 0's canvas");
+    CHECK(!label_canvas(s, 1, &canvas), "template 1 has no canvas");
+    CHECK(!label_canvas(s, 9, &canvas), "canvas out of range");
+    CHECK(!label_canvas(s, 0, NULL), "no canvas without somewhere to put it");
+
     label_close(s);
     free(blob);
 
@@ -322,7 +329,7 @@ static void test_refusals(void)
     free(b);
 
     b = mutate(8, 1, 2, &n);
-    CHECK(refuses(b, n, "version 2"), "version 1");
+    CHECK(refuses(b, n, "version 3"), "version 1");
     free(b);
 
     b = mutate(10, 40, 2, &n);
@@ -352,6 +359,18 @@ static void test_refusals(void)
 
     b = mutate(T_AT(0) + 12, 3, 1, &n);          /* font index == font_count */
     CHECK(refuses(b, n, "template"), "font index past the table");
+    free(b);
+
+    b = mutate(T_AT(0) + 15, 0x02, 1, &n);       /* a reserved flags bit */
+    CHECK(refuses(b, n, "template"), "a reserved flag bit is refused");
+    free(b);
+
+    b = mutate(T_AT(1) + 60, 0x123456, 4, &n);   /* no has_canvas, but a colour */
+    CHECK(refuses(b, n, "template"), "a canvas without the flag is refused");
+    free(b);
+
+    b = mutate(T_AT(0) + 60, 0x01000000, 4, &n); /* above RGB888 */
+    CHECK(refuses(b, n, "template"), "a canvas above RGB888 is refused");
     free(b);
 
     b = mutate(P_AT(0) + 0, 3, 1, &n);           /* kind 3 */

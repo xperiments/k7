@@ -24,7 +24,7 @@ extern "C" {
 
 /* The only magic this reader accepts: `K7LBL`, NUL-padded to eight bytes. */
 #define LABEL_MAGIC        "K7LBL\0\0\0"
-#define LABEL_VERSION      2u   /* the template record carries eight bands */
+#define LABEL_VERSION      3u   /* the template record carries the canvas */
 #define LABEL_HEADER_SIZE  32u
 #define LABEL_TEMPLATE_SIZE 64u
 #define LABEL_PRIM_SIZE    24u
@@ -142,6 +142,11 @@ bool     label_slot_at(const label_sheet_t *s, uint16_t t, uint16_t i, label_slo
 
 /* The design's colours. */
 label_inks_t label_inks(const label_sheet_t *s, uint16_t t);
+
+/* The design's active canvas background, RGB888: the page the player paints while the
+ * two-finger pose shows the tape. False when the design carries none, which leaves the
+ * panel's page alone. */
+bool label_canvas(const label_sheet_t *s, uint16_t t, uint32_t *rgb);
 
 /* The compiled font a role names, as an index into k_label_font[]. */
 uint8_t label_font(const label_sheet_t *s, uint16_t t, uint8_t role);

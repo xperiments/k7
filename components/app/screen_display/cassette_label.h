@@ -43,6 +43,11 @@ void cassette_label_update(uint32_t ink_seed, const label_values_t *values);
 /* How many designs the embedded sheet carries; 0 when it did not open. */
 uint16_t cassette_label_templates(void);
 
+/* The current design's active canvas background, RGB888: the page the view paints while the
+ * two-finger pose shows the tape. False when the design carries none, which leaves the page
+ * as it is. Before the first design is built it is false too. */
+bool cassette_label_canvas(uint32_t *rgb);
+
 #if CONFIG_APP_UI_RENDER_BENCH
 /* The render bench's fixture and its Track change. Blank slots draw almost nothing, so the
  * bench prints a sample title into every field once the two-finger pose is up; the text

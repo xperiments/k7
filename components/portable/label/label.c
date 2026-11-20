@@ -140,6 +140,17 @@ static bool template_ok(const label_sheet_t *s, uint16_t t, uint8_t font_count)
     if ((uint32_t)slot_start + slot_count > s->slots) return false;
     for (int role = 0; role < 3; role++)
         if (p[12 + role] >= font_count) return false;
+    /* Version 3: bit 0 says the design carries an active canvas background, and the last
+     * four bytes hold it. The rest of the flags byte is reserved, and a canvas without the
+     * flag (or a flag without a colour) is a record that disagrees with itself. */
+    const uint8_t flags = p[15];
+    const uint32_t canvas = rd32(p + 60);
+    if (flags & 0xFEu) return false;
+    if (flags & 1u) {
+        if (canvas > 0xFFFFFFu) return false;
+    } else if (canvas != 0) {
+        return false;
+    }
     return true;
 }
 
@@ -153,7 +164,7 @@ label_result_t label_open_why(const uint8_t *blob, size_t size, uint8_t font_cou
     if (size < LABEL_HEADER_SIZE) return fail(why, why_size, "shorter than its header");
 
     if (memcmp(blob, LABEL_MAGIC, 8) != 0) return fail(why, why_size, "magic is not K7LBL");
-    if (rd16(blob + 8) != LABEL_VERSION) return fail(why, why_size, "not sheet version 2");
+    if (rd16(blob + 8) != LABEL_VERSION) return fail(why, why_size, "not sheet version 3");
     if (rd16(blob + 10) != LABEL_HEADER_SIZE) return fail(why, why_size, "header size is not 32");
     if (rd16(blob + 20) != LABEL_SPACE_W || rd16(blob + 22) != LABEL_SPACE_H)
         return fail(why, why_size, "space is not 748x359");
@@ -308,6 +319,15 @@ uint8_t label_font(const label_sheet_t *s, uint16_t t, uint8_t role)
 {
     if (!s || t >= s->templates || role > LABEL_FONT_CAPTION) return 0;
     return template_at(s, t)[12 + role];
+}
+
+bool label_canvas(const label_sheet_t *s, uint16_t t, uint32_t *rgb)
+{
+    if (!s || !rgb || t >= s->templates) return false;
+    const uint8_t *p = template_at(s, t);
+    if ((p[15] & 1u) == 0) return false;
+    *rgb = rd32(p + 60);
+    return true;
 }
 
 /* ------------------------------------------------------------------ the cut */

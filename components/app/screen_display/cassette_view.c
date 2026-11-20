@@ -100,6 +100,8 @@ static controls_t *s_controls;        /* the ladder: the level and the Menu */
 static groups_t s_groups;             /* which of the right bar's panels is up */
 static controls_state_t s_ctl;        /* its latest snapshot */
 static bool s_painted_white;          /* the page the screen is painted for */
+static bool s_page_painted;           /* the screen's backdrop has been set once */
+static lv_color_t s_painted_page;     /* and the colour it was set to */
 #if CONFIG_APP_UI_RENDER_BENCH
 static uint32_t s_bench_changed;      /* what the live bench's next frame will carry */
 #endif
@@ -162,11 +164,25 @@ static controls_intent_t controls_intent(screen_intent_t intent)
  * one frame. The flag keeps a repeated request from invalidating the whole panel for a colour
  * that is already there. */
 
+/* The screen's backdrop is the page - or, at the two-finger pose, the label's own canvas.
+ * Painted only when the colour changes: the pose's entry and a design change are the only
+ * things that can move it, and a repeated paint would invalidate the whole panel. */
+static void page_paint(void)
+{
+    if (!s_screen) return;
+    lv_color_t colour = s_painted_white ? k_col_white : k_col_bg;
+    uint32_t rgb;
+    if (s_ctl.full && cassette_label_canvas(&rgb)) colour = lv_color_hex(rgb);
+    if (s_page_painted && lv_color_eq(colour, s_painted_page)) return;
+    s_painted_page = colour;
+    s_page_painted = true;
+    lv_obj_set_style_bg_color(s_screen, colour, 0);
+}
+
 static void page_set(bool white)
 {
     if (white == s_painted_white) return;
     s_painted_white = white;
-    if (s_screen) lv_obj_set_style_bg_color(s_screen, white ? k_col_white : k_col_bg, 0);
     /* The Card is the page's body: it arrives with the flip, in one frame, and with it the
      * packs' clamp, so the reel tick never invalidates anything the Card would re-render. */
     cassette_card_set_shown(white);
@@ -240,6 +256,10 @@ static void controls_apply(controls_changed_t changed)
          * the two-finger pose's template is the print. */
         cassette_levels_set_cover_visible(cover);
     }
+
+    /* The page colour is the page's, or the label's while the two-finger pose is up. Paint
+     * it after both branches, so a PAGE and a FULL change land on one colour. */
+    if (changed & (CONTROLS_CHANGED_FULL | CONTROLS_CHANGED_PAGE)) page_paint();
 
     if (changed & CONTROLS_CHANGED_PEEK) {
         cassette_levels_set_peek(s_ctl.level == CONTROLS_LEVEL_PEEK);
@@ -696,6 +716,8 @@ void cassette_view_create(void)
     lv_obj_set_style_bg_color(scr, k_col_bg, 0);
     lv_obj_set_scrollable(scr, false);
     s_screen = scr;
+    s_painted_page = k_col_bg;
+    s_page_painted = true;
 
     s_controls = controls_new();
     if (!s_controls) ESP_LOGW(TAG, "no model for the Controls: the swipes do nothing");
@@ -851,6 +873,9 @@ void cassette_view_update(const mini_icecast_status_t *st)
             }
             if (lib) library_release(lib);
             cassette_label_update(f->ink_seed, &values);
+            /* A new design can carry a different canvas: the page follows it while the
+             * two-finger pose is up. */
+            if (s_ctl.full) page_paint();
 #if CONFIG_APP_UI_RENDER_BENCH
             s_bench_changed |= CASSETTE_BENCH_CH_LABEL;
 #endif

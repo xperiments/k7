@@ -68,19 +68,19 @@ static void chomp(char *s)
     while (n && (s[n - 1] == '\n' || s[n - 1] == '\r')) s[--n] = '\0';
 }
 
-/* Splits `line` on its first four tabs, in place. The fifth field is the design's name and
- * runs to the end of the line, so a name containing a tab only makes the name longer. */
-static bool split5(char *line, char **f)
+/* Splits `line` on its first five tabs, in place. The sixth field is the design's name
+ * and runs to the end of the line, so a name containing a tab only makes the name longer. */
+static bool split6(char *line, char **f)
 {
     int n = 0;
     f[n++] = line;
     for (char *p = line; *p; p++) {
-        if (*p == '\t' && n < 5) {
+        if (*p == '\t' && n < 6) {
             *p = '\0';
             f[n++] = p + 1;
         }
     }
-    return n == 5;
+    return n == 6;
 }
 
 /* The template's Slot names, in the order the sheet lists them, against the manifest's. */
@@ -172,8 +172,8 @@ int main(int argc, char **argv)
     char line[512];
     bool ok = fgets(line, sizeof line, m) != NULL;
     chomp(line);
-    CHECK(ok && strcmp(line, "label_manifest\t1") == 0,
-          "the manifest's first line is not \"label_manifest<TAB>1\": %s", ok ? line : "(empty)");
+    CHECK(ok && strcmp(line, "label_manifest\t2") == 0,
+          "the manifest's first line is not \"label_manifest<TAB>2\": %s", ok ? line : "(empty)");
 
     unsigned wanted = 0;
     ok = fgets(line, sizeof line, m) != NULL;
@@ -191,9 +191,9 @@ int main(int argc, char **argv)
         if (!ok) break;
         chomp(line);
 
-        char *f[5];
-        bool split = split5(line, f);
-        CHECK(split, "template %u: the manifest line has fewer than five fields", i);
+        char *f[6];
+        bool split = split6(line, f);
+        CHECK(split, "template %u: the manifest line has fewer than six fields", i);
         if (!split) continue;
 
         CHECK_EQ(strtoul(f[0], NULL, 10), i, "a manifest line's index");
@@ -202,12 +202,24 @@ int main(int argc, char **argv)
         CHECK_EQ(label_slot_count(sheet, i), strtoul(f[2], NULL, 10),
                  "a template's Slot count");
 
-        const char *name = label_template_name(sheet, i);
-        CHECK(name != NULL && strcmp(name, f[4]) == 0,
-              "template %u: the sheet says \"%s\", the manifest \"%s\"", i, name ? name : "(null)",
-              f[4]);
+        uint32_t rgb = 0;
+        const bool has_canvas = label_canvas(sheet, i, &rgb);
+        if (strcmp(f[3], "-") == 0) {
+            CHECK(!has_canvas, "template %u: the manifest has no canvas, the sheet one", i);
+        } else {
+            CHECK(f[3][0] == '#' && strlen(f[3]) == 7,
+                  "template %u: the manifest canvas \"%s\" is not #RRGGBB", i, f[3]);
+            CHECK(has_canvas, "template %u: the manifest has a canvas, the sheet none", i);
+            CHECK_EQ(rgb, (uint32_t)strtoul(f[3] + 1, NULL, 16),
+                     "a template's canvas");
+        }
 
-        check_slots(sheet, i, f[3]);
+        const char *name = label_template_name(sheet, i);
+        CHECK(name != NULL && strcmp(name, f[5]) == 0,
+              "template %u: the sheet says \"%s\", the manifest \"%s\"", i, name ? name : "(null)",
+              f[5]);
+
+        check_slots(sheet, i, f[4]);
         check_declared_slots(sheet, i);
     }
 
