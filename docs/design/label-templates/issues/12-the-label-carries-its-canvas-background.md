@@ -21,13 +21,14 @@ for the player. [`label-templates.md`](../../../specs/label-templates.md) §1, �
   `bg` migrates to one preset. Export and import, and the WebMCP tools, carry the presets and the
   active one.
 
-**Status:** in progress
+**Status:** in progress — the host gate and the firmware build are green; the board check is the remaining step.
 
 - [x] The spec is updated (§1, §2, §3, §4, §6, §7, §8) and this ticket exists.
 - [ ] The editor authors, stores, exports and imports the presets.
 - [ ] The packer, sheet v3 and reader carry the active colour; the host tests cover present,
       absent and a malformed canvas.
-- [ ] The panel paints it at the two-finger pose and restores the page on exit.
+- [ ] The panel paints it at the two-finger pose and restores the page on exit (the firmware
+      builds; the board has not been flashed because it is shared with the tone review).
 - [ ] A design without a canvas behaves exactly as it does today.
 
 **Files:** `docs/specs/label-templates.md`, `assets/labels/vocabulary.json` and its two generated
@@ -40,3 +41,23 @@ copies, `tools/LabelEditor/…`, `tools/label_pack.py`, `components/portable/lab
 
 **Source:** the board's LB-10..LB-13; `docs/specs/label-templates.md` §1 (the screen is the
 design's), §2 (the file), §3 (the sheet), §6 (the rendering) and §7 (the refusals).
+
+## Comments
+
+2026-11-20 — the host and firmware evidence:
+
+- `make -C host check` is green with the label boot check driven by a Chrome that can start. The
+  default Chrome on this machine aborts in its GPU process (LB-09, in review, covers the skip);
+  the local `CHROME=` wrapper that adds `--no-sandbox` is not part of the change.
+- `make -C host test`, t32 (the reader and the `label_canvas` refusals), t33 (84 checks on the
+  shipping sheet; 86 on a temp design that carries a canvas), and the packer selftest pass.
+- `./tools/build.sh sunton build`: `sd_stream_server.bin` 0x202cd0, 50 % of the app partition
+  free.
+
+The board check, still to do:
+
+1. Flash this branch's firmware (`./tools/build.sh sunton build flash`).
+2. A design that carries a canvas: hold the cassette for the two-finger pose and see the page in
+   that colour; put it down and see the palette's page return; change track and see the design's
+   canvas follow.
+3. A design without a canvas: the page must stay the palette's white page.
