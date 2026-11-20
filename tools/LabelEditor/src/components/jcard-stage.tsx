@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Maximize2, Ruler, Scan, SquareDashed } from "lucide-react";
+import { Maximize2, Ruler, Scan } from "lucide-react";
 
 import { Badge } from "@/components/reui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useEditor } from "@/hooks/use-editor";
 import { JCardPreview } from "@/components/jcard-preview";
 import { alignOf } from "@/engine/tpl";
-import { JCARD_H, JCARD_PARTS, JCARD_SAFE, JCARD_W } from "@/engine/jcard";
+import { JCARD_H, JCARD_PARTS, JCARD_W } from "@/engine/jcard";
 import type { JCardFocus, Obj } from "@/engine/types";
 
 const PASTEBOARD = 48;
@@ -34,8 +34,8 @@ const FOCUS_LABELS: Array<{ value: JCardFocus; label: string; width: number | nu
 /**
  * The J-card's stage: one 1300x1280 sheet at 320 units per inch, drawn in the DOM because
  * the webapp draws it and there is no firmware rendering of a paper design. The fold guides
- * are the case's, the safe square is the album card's, and the focus dims the part that is
- * not being authored.
+ * are the case's, and the focus dims the part that is not being authored. The album card's
+ * square is not drawn: the canvas is the sheet, and where the card crops is the App's fact.
  */
 export function JCardStage() {
   const ed = useEditor();
@@ -341,29 +341,6 @@ export function JCardStage() {
                     cover
                   </div>
 
-                  {/* The album card is square: the central 820x820 of the cover. */}
-                  <div
-                    className="absolute flex items-start justify-start"
-                    style={{
-                      left: JCARD_SAFE.x,
-                      top: JCARD_SAFE.y,
-                      width: JCARD_SAFE.w,
-                      height: JCARD_SAFE.h,
-                      border: "1px dashed color-mix(in srgb, var(--k7-accent) 55%, transparent)",
-                    }}
-                  >
-                    <span
-                      className="ml-2 mt-2 flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-[26px] tabnum"
-                      style={{
-                        background: "color-mix(in srgb, var(--k7-bg) 78%, transparent)",
-                        color: "var(--k7-ink)",
-                      }}
-                    >
-                      <SquareDashed className="size-4" />
-                      Safe 820 × 820
-                    </span>
-                  </div>
-
                   {/* The focus dims everything outside the part being authored. */}
                   {focused ? (
                     <div
@@ -403,7 +380,7 @@ export function JCardStage() {
             </div>
             <p className="flex items-center gap-2 text-xs text-muted-foreground tabnum">
               <Scan className="size-3" />
-              {focusLabel} · folds at 320 and 480 · safe square at 480,230 820×820
+              {focusLabel} · folds at 320 and 480
             </p>
           </div>
         </div>

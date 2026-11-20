@@ -159,9 +159,10 @@ the sheet's proportions are exact.
   spec's, with the J-card's font roles and no `still`. **A text's height is its own lines'**:
   that box is what `rot` turns about, as the label's and the editor's canvas do, and the
   sheet's bottom caps it - the lines that do not fit end in an ellipsis.
-- **The cover has a safe square.** The App's album card is square, so the editor draws the
-  central 820x820 of the cover - x 480-1300, y 230-1050 - as the region the card shows. The
-  design's words belong inside it; the rest is the case's portrait face.
+- **The cover has a safe square.** The App's album card is square and shows the central
+  820x820 of the cover - x 480-1300, y 230-1050 - as a centre crop. The design's words belong
+  inside it; the rest is the case's portrait face. The editor does not draw it: the canvas is
+  the sheet, and where the card crops is the App's fact, not a guide.
 
 ## 5. The webapp's face
 
