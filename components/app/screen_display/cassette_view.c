@@ -102,6 +102,8 @@ static controls_state_t s_ctl;        /* its latest snapshot */
 static bool s_painted_white;          /* the page the screen is painted for */
 static bool s_page_painted;           /* the screen's backdrop has been set once */
 static lv_color_t s_painted_page;     /* and the colour it was set to */
+static cassette_ink_t s_row_ink;      /* the Track's cassette row, for the pose's restore */
+static bool s_row_ink_valid;
 #if CONFIG_APP_UI_RENDER_BENCH
 static uint32_t s_bench_changed;      /* what the live bench's next frame will carry */
 #endif
@@ -177,6 +179,20 @@ static void page_paint(void)
     s_painted_page = colour;
     s_page_painted = true;
     lv_obj_set_style_bg_color(s_screen, colour, 0);
+}
+
+/* The cassette's body is the label's canvas while the two-finger pose is up: the Card's
+ * plastic, its front plate, the window's rim and the print's fallback are one material, so
+ * they move together. The print itself stays the design's paper. With no canvas, or the pose
+ * down, the Track's row is back. */
+static void card_inks_apply(void)
+{
+    if (!s_row_ink_valid) return;
+    lv_color_t plastic = s_row_ink.plastic;
+    uint32_t rgb;
+    if (s_ctl.full && cassette_label_canvas(&rgb)) plastic = lv_color_hex(rgb);
+    cassette_card_set_ink(plastic);
+    cassette_cover_set_inks(plastic, s_row_ink.ink, s_row_ink.label);
 }
 
 static void page_set(bool white)
@@ -258,8 +274,12 @@ static void controls_apply(controls_changed_t changed)
     }
 
     /* The page colour is the page's, or the label's while the two-finger pose is up. Paint
-     * it after both branches, so a PAGE and a FULL change land on one colour. */
-    if (changed & (CONTROLS_CHANGED_FULL | CONTROLS_CHANGED_PAGE)) page_paint();
+     * it after both branches, so a PAGE and a FULL change land on one colour. The cassette's
+     * body follows the same rule; it is what the viewer actually sees. */
+    if (changed & (CONTROLS_CHANGED_FULL | CONTROLS_CHANGED_PAGE)) {
+        page_paint();
+        card_inks_apply();
+    }
 
     if (changed & CONTROLS_CHANGED_PEEK) {
         cassette_levels_set_peek(s_ctl.level == CONTROLS_LEVEL_PEEK);
@@ -378,10 +398,12 @@ static void apply_frame(const cassette_frame_t *f)
         const cassette_ink_t *ink = &k_col_cassette[row];
         ESP_LOGI(TAG, "cassette %u of %u: %s", (unsigned)row, (unsigned)n,
                  f->title[0] ? f->title : "(no track)");
-        cassette_card_set_ink(ink->plastic);
+        s_row_ink = *ink;
+        s_row_ink_valid = true;
         /* The print is the same row's: the label fill, the ink it would print in, and the
-         * window's rim in the row's plastic. */
-        cassette_cover_set_inks(ink->plastic, ink->ink, ink->label);
+         * window's rim in the row's plastic. The label's canvas, when it has one, takes the
+         * body over while the two-finger pose is up. */
+        card_inks_apply();
     }
     /* The hubs are white while the Cover is what the page shows: the spools read as plain
      * plastic and the artwork has the page's colour to itself. Asked every frame, because the
@@ -873,9 +895,12 @@ void cassette_view_update(const mini_icecast_status_t *st)
             }
             if (lib) library_release(lib);
             cassette_label_update(f->ink_seed, &values);
-            /* A new design can carry a different canvas: the page follows it while the
-             * two-finger pose is up. */
-            if (s_ctl.full) page_paint();
+            /* A new design can carry a different canvas: the page and the cassette's body
+             * follow it while the two-finger pose is up. */
+            if (s_ctl.full) {
+                page_paint();
+                card_inks_apply();
+            }
 #if CONFIG_APP_UI_RENDER_BENCH
             s_bench_changed |= CASSETTE_BENCH_CH_LABEL;
 #endif

@@ -472,10 +472,10 @@ always pair (ADR 0071). The layout is in [`label-templates.md`](./label-template
 _Avoid_: skin, theme, label design, cover
 
 **Canvas background**:
-The colour of the 800x480 screen behind the Card, the print and the tape while the two-finger
-pose shows a **Label template**. It is the design's, not the panel's: one of up to eight presets,
-one active, with a design without one leaving the palette's page alone. The print's own
-background is still the design's **paper**.
+The cassette's background while the two-finger pose shows a **Label template**: the Card's
+plastic and mat, the window's rim and the 800x480 screen behind them. It is the design's, not the
+palette's: one of up to eight presets, one active; a design without one leaves the Track's
+cassette row alone. The print's own background is still the design's **paper**.
 _Avoid_: screen colour, backdrop, background fill
 
 **Label sheet**:

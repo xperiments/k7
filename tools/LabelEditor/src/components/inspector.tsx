@@ -387,8 +387,8 @@ function DesignPanel() {
           <span className="text-xs tabnum">800 × 480</span>
         </div>
         <p className="text-xs text-muted-foreground">
-          The page behind the label while the two-finger pose shows the tape. Add copies the
-          active background; only the active one is packed.
+          The cassette's background while the two-finger pose is up: its body and the screen
+          behind it. Add copies the active background; only the active one is packed.
         </p>
       </Section>
 

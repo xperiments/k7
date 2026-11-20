@@ -33,11 +33,11 @@ radius 83** in these coordinates.
   layouts, and a second cut would be a second source of truth.
 - **Rotation is honoured**: `rot10` is tenths of a degree about the object's own centre
   (`transform_pivot` = width/2, height/2). A rotated object costs a layer per paint.
-- **The screen behind the print is the design's own, at the two-finger pose.** A design may carry
-  a **canvas background** (§2): while the pose shows the tape, the 800x480 screen behind the Card
-  and the print is that colour. It is outside the print and the print never crops it; it is not
-  the design's `paper`, which is a prim inside the print. A design without one leaves the panel's
-  page alone.
+- **The cassette's background is the design's own, at the two-finger pose.** A design may carry
+  a **canvas background** (§2): while the pose shows the tape, the Card's plastic, its mat and
+  front plate, the window's rim and the 800x480 screen behind them are that colour. It is outside
+  the print and the print never crops it; it is not the design's `paper`, which is a prim inside
+  the print. A design without one leaves the Track's cassette row alone.
 
 ## 2. The design file — `label-template v1`
 
@@ -69,10 +69,10 @@ the packer uses; the rest are the editor's.
 }
 ```
 
-- **`canvas` is the screen the label is shown on.** `backgrounds` is one to eight `#RRGGBB`
+- **`canvas` is the cassette's background at the two-finger pose.** `backgrounds` is one to eight `#RRGGBB`
   presets — `assets/labels/vocabulary.json`'s `canvas` is the cap — and `active` is the one the
-  player paints on the 800x480 screen while the two-finger pose shows the tape. The sheet carries
-  only the active colour; the other presets are the editor's. The field is optional: a design
+  player paints on the cassette's body and the screen behind it while the two-finger pose shows
+  the tape. The sheet carries only the active colour; the other presets are the editor's. The field is optional: a design
   without it leaves the panel's own page alone, and its sheet record carries `has_canvas = 0`. A
   design that declares `backgrounds` must declare `active`, and `active` must index one of them.
   The editor writes the field for every design it exports, and a new design starts on the panel's
@@ -343,13 +343,13 @@ by the print's own box exactly as a picture is.
   `k_label_font[]` of its role.
 - **The print's background stays the palette's label fill**; a design's paper is a prim like any
   other, so a design without one still reads as a cassette label.
-- **The page behind the Card is the design's canvas, and only at the two-finger pose.** When the
-  sheet record's `has_canvas` is 1, the 800x480 screen is its `canvas` while the pose is up — the
-  page behind the Card, the print and the tape. The pose's exit restores the palette's page (the
-  white page at Real, the dark page elsewhere), and a Track change that swaps the design while
-  the pose is up repaints it. A design with `has_canvas = 0` leaves the page exactly as it is.
-  The canvas is outside the print: the print's background is still the design's paper, and the
-  Card's mat is still the row's plastic.
+- **The cassette's body is the design's canvas, and only at the two-finger pose.** When the
+  sheet record's `has_canvas` is 1, the Card's plastic, its mat and front plate, the window's rim
+  and the 800x480 screen behind them are its `canvas` while the pose is up. The pose's exit
+  restores the Track's cassette row (the plastic, the rim and the print's fallback), and a Track
+  change that swaps the design while the pose is up repaints them. A design with
+  `has_canvas = 0` leaves the row exactly as it is. The canvas is outside the print: the print's
+  background is still the design's paper.
 - **The design is built once per template and re-texted per Track.** A Track change sets the
   texts; a change of selected template (a different `ink_seed % template_count`) deletes and
   rebuilds the objects, and repaints the page if the new design's canvas differs. Both happen
@@ -401,6 +401,6 @@ they refuse by are one table.
 | PSRAM | **0 B** — the sheet is read in place from flash, like the Snapshot |
 | flash | the sheet (a few KB for a handful of designs) **plus the fonts**, which are the real cost: a 4 bpp Latin face at 36 px is tens of KB, and `font_jura_36.c` is 230 KB of source |
 | objects | at most `LABEL_PRIM_MAX` (48) per design, alive only while the two-finger pose is up |
-| canvas | the four bytes the template record already reserved, so the sheet does not grow; no object; the 800x480 page is painted once on pose entry and again only when the design changes while the pose is up |
+| canvas | the four bytes the template record already reserved, so the sheet does not grow; no object; the Card's plastic/mat and the window's rim are repainted once on pose entry and again only when the design changes while the pose is up, the 800x480 page behind them with them |
 | per frame | **0** at the Controls pose. At the two-finger pose the reel tick redraws the print's area at 8 Hz (`CASSETTE_POSE_TICK_MS`), so the label is repainted with it - measured 11 ms a pass, and the label is not what that cost is made of |
 | per Track change | the print's 748x359 = 268,280 px repainted, once, at the two-finger pose; the pose's own entry is one 75 ms frame |

@@ -33,10 +33,10 @@ route is blocked.
   radius taken from the LayerMask. `set-design` gives you one, and a new document starts with
   `#c7a867` at radius 10. Without paper a design has no background, and a shape may not fill
   with `paper` when there is none.
-- The **canvas background** is the 800 × 480 page behind the print while the two-finger pose
-  shows the tape: up to eight presets with one active, set through `set-design`'s `backgrounds`
-  and `activeBackground` (`background` sets the active preset's colour). Only the active preset
-  is packed; a design without one leaves the panel's page as it is.
+- The **canvas background** is the cassette's body and the 800 × 480 screen behind it while the
+  two-finger pose shows the tape: up to eight presets with one active, set through `set-design`'s
+  `backgrounds` and `activeBackground` (`background` sets the active preset's colour). Only the
+  active preset is packed; a design without one leaves the Track's cassette row as it is.
 - Everything is drawn once, at one size. There is no zoom and no responsive layout.
 
 ## Before your first call
