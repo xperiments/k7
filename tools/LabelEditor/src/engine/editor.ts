@@ -1563,7 +1563,7 @@ export class Editor {
   // ---- the LVGL preview: real LVGL (v9.6) compiled to WebAssembly ----
   async loadLvgl() {
     try {
-      await loadScript("./lvgl.js");
+      await loadScript(`${import.meta.env.BASE_URL}lvgl.js`);
       const create = (window as unknown as { createLvgl?: () => Promise<any> }).createLvgl;
       if (!create) throw new Error("createLvgl missing");
       const m = await create();
