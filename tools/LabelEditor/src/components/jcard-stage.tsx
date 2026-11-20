@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useEditor } from "@/hooks/use-editor";
+import { JCardPreview } from "@/components/jcard-preview";
 import { alignOf } from "@/engine/tpl";
 import { JCARD_H, JCARD_PARTS, JCARD_SAFE, JCARD_W } from "@/engine/jcard";
 import type { JCardFocus, Obj } from "@/engine/types";
@@ -63,6 +64,8 @@ export function JCardStage() {
     );
     if (z < 0.95) ed.setZoom(Math.max(0.1, Math.floor(z * 20) / 20));
   }, [ed]);
+
+  if (ed.run) return <JCardPreview />;
 
   const toDesign = (e: React.PointerEvent) => {
     const r = sheetRef.current?.getBoundingClientRect();
