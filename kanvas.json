@@ -3217,7 +3217,7 @@
     {
       "id": "TN-02",
       "title": "The K7 sends its tone to the player",
-      "state": "review",
+      "state": "done",
       "group": "TN",
       "deps": ["TN-01"],
       "at": "2026-11-20T00:14:36Z",
@@ -3239,7 +3239,7 @@
     {
       "id": "TN-03",
       "title": "The player applies the K7's tone",
-      "state": "review",
+      "state": "done",
       "group": "TN",
       "deps": ["TN-01"],
       "at": "2026-11-20T00:14:36Z",
@@ -3261,12 +3261,24 @@
     {
       "id": "TN-04",
       "title": "The tone is heard on both boards",
-      "state": "todo",
+      "state": "doing",
       "group": "TN",
       "deps": ["TN-02", "TN-03"],
       "at": "2026-11-20T00:14:36Z",
       "by": "lead",
-      "desc": "Flash the K7 and the player and prove what the host cannot: a knob turn is heard at once on the player; the same K7 with an old player keeps today's late knob and the VU moves; a browser listening while the player is on hears no tone; a player reboot gets its tone back within a second; ten station restarts keep the tone. Record the serial evidence and the listening check on this task. Board-only."
+      "desc": "Flash the K7 and the player and prove what the host cannot: a knob turn is heard at once on the player; the same K7 with an old player keeps today's late knob and the VU moves; a browser listening while the player is on hears no tone; a player reboot gets its tone back within a second; ten station restarts keep the tone. Record the serial evidence and the listening check on this task. Board-only.",
+      "notes": [
+        {
+          "at": "2026-11-20T01:35:06Z",
+          "by": "lead",
+          "text": "Plan: flash both boards on the connected ports, capture the K7's tone transition and the player's stream, then the listening checks with the user: immediate knob, old-player fallback, browser flat, player reboot and station restarts."
+        },
+        {
+          "at": "2026-11-20T01:43:19Z",
+          "by": "lead",
+          "text": "The pair is flashed: the K7 has the tone sender and the peer fix, the player applies the tone. On the board the K7 logs `espnow tone: the player applies the tone; the broadcast is flat` at 4.96 s, and the player logs `receiving 192.168.0.13: 44100 Hz, 128 kbps` and `output 44100 Hz`, i.e. it is playing.\n\nThe board test found and fixed a pre-existing audio bug: the player's first status arrived before the K7's IP, so the peer was registered on the AP interface; the peer then sent only while the setup AP was up (the audio waited 16 s for it, and the stream dropped when the AP closed). The peer now follows the station: `espnow audio: the player's peer follows the station` at 5.06 s, and 65 frames had gone out by 6.16 s. That is its own commit, 69975a0.\n\nThe listening checks are with the user: the immediate knob, the browser's flat stream, the player reboot, the station restarts, and the old-player fallback."
+        }
+      ]
     }
   ]
 }
