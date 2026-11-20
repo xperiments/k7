@@ -12,6 +12,7 @@
 #include "player_light.h"
 #include "player_playout.h"
 #include "player_stream.h"
+#include "player_tone.h"
 
 static const char *TAG = "player";
 
@@ -24,6 +25,11 @@ void app_main(void)
 
     player_net_init();
     player_net_start_task();
+
+    /* The tone's targets and its radio dispatch, before the stream task starts the radio:
+     * a 0x06 that arrives early has somewhere to go. */
+    player_tone_init();
+    player_tone_start();
 
     /* The stream waits for the network machine to have an address; it starts now so its
      * clock is running when the K7 appears. */

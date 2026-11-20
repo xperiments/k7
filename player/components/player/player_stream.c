@@ -103,6 +103,9 @@ static void send_status(void)
     lock();
     uint32_t free_bytes = player_ring_capacity() - player_ring_used(&M.ring);
     player_recv_status(&M.recv, free_bytes, &st);
+    /* E3a: this firmware applies the K7's tone at the output (R33), so the K7 may go flat and
+     * send the four values. An old K7 ignores the byte; a new one reads it. */
+    st.flags = ES_STATUS_FLAG_TONE;
     n = es_status_encode(&st, pkt, sizeof pkt);
     unlock();
 

@@ -163,6 +163,7 @@ void player_board_record_drop(void)
 static player_board_frame_fn s_frame_cb;
 static void *s_frame_ctx;
 static player_board_packet_fn s_audio_cb;
+static player_board_packet_fn s_tone_cb;
 
 /* The radio is the board's and it has two callers, so it is initialised once and stays up while
  * either of them needs it (the K7's rule, mirrored: espnow-stream.md E10). */
@@ -176,12 +177,17 @@ static bool espnow_up(void)
     return true;
 }
 
-/* One dispatcher: the audio's type to the stream, everything else to the handover. */
+/* One dispatcher: audio to the stream, the tone to the output, everything else to the
+ * handover. */
 static void recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len)
 {
     if (!info || !data || len < 2) return;
     if (data[0] == ES_VERSION && data[1] == ES_TYPE_AUDIO) {
         if (s_audio_cb) s_audio_cb(data, (size_t)len);
+        return;
+    }
+    if (data[0] == ES_VERSION && data[1] == ES_TYPE_TONE) {
+        if (s_tone_cb) s_tone_cb(data, (size_t)len);
         return;
     }
     if (!s_frame_cb || len <= 0) return;
@@ -204,6 +210,11 @@ bool player_board_espnow_start(player_board_packet_fn on_packet)
     bcast.encrypt = false;
     esp_err_t e = esp_now_add_peer(&bcast);
     return e == ESP_OK || e == ESP_ERR_ESPNOW_EXIST;
+}
+
+void player_board_espnow_set_tone(player_board_packet_fn on_tone)
+{
+    s_tone_cb = on_tone;
 }
 
 bool player_board_espnow_send(const uint8_t *data, size_t len)

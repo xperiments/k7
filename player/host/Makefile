@@ -26,6 +26,7 @@ LDLIBS := -lpthread -lm
 INC := -I$(PLAYER)/components/player/include \
        -I$(ROOT)/components/portable/handover/include \
        -I$(ROOT)/components/portable/espnow_stream/include \
+       -I$(ROOT)/components/portable/tone_eq/include \
        -I$(ROOT)/components/portable/dr_libs/include \
        -I$(ROOT)/host/include \
        -I$(ROOT)/host/tests
@@ -40,6 +41,8 @@ CORE_SRC := $(PLAYER)/components/player/player_recv.c \
             $(PLAYER)/components/player/player_mp3.c \
             $(PLAYER)/components/player/player_stream.c \
             $(PLAYER)/components/player/player_playout.c \
+            $(PLAYER)/components/player/player_tone.c \
+            $(ROOT)/components/portable/tone_eq/tone_eq.c \
             $(PLAYER)/components/player/player_light.c
 CORE_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(CORE_SRC)))
 
@@ -49,7 +52,7 @@ HANDOVER_SRC := $(ROOT)/components/portable/handover/handover_frame.c \
 HANDOVER_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(HANDOVER_SRC)))
 
 TESTS := $(BIN)/t01_status $(BIN)/t02_net $(BIN)/t04_output \
-         $(BIN)/t05_light $(BIN)/t06_recv
+         $(BIN)/t05_light $(BIN)/t06_recv $(BIN)/t07_tone
 
 .PHONY: all test layering check clean
 
@@ -71,6 +74,10 @@ $(BIN)/t06_recv: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/s
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
+$(BIN)/t07_tone: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t07_tone.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
 $(BIN)/t05_light: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t05_light.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
@@ -81,7 +88,8 @@ $(OBJ)/%.o: %.c
 	$(CC) $(CFLAGS) -MMD -MP $(INC) -c $< -o $@
 
 vpath %.c $(PLAYER)/components/player \
-            $(ROOT)/components/portable/espnow_stream $(ROOT)/components/portable/handover $(HERE) $(ROOT)/host/shim $(HERE)/tests
+            $(ROOT)/components/portable/espnow_stream $(ROOT)/components/portable/tone_eq \
+            $(ROOT)/components/portable/handover $(HERE) $(ROOT)/host/shim $(HERE)/tests
 -include $(wildcard $(OBJ)/*.d)
 
 test: $(TESTS)

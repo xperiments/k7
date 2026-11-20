@@ -20,6 +20,7 @@
 #include "espnow_stream.h"
 #include "player_playout.h"
 #include "player_stream.h"
+#include "player_tone.h"
 
 extern void host_player_reset(void);
 extern void host_player_wifi_script(const char *ssid, bool ok, int disconnects, int reason);
@@ -227,11 +228,41 @@ static void test_primes(void)
     free(body);
 }
 
+/* The tone the K7 sends is applied where the PCM is written, not only in the module: the
+ * same fixture with GAIN -6 must come out quieter than the neutral run. */
+static void test_tone_at_output(void)
+{
+    size_t body_len = 0;
+    uint8_t *body = read_fixture("long-44100.mp3", &body_len);
+    CHECK(body != NULL, "the fixture is readable");
+    if (!body) return;
+
+    player_tone_init();
+    program(body, body_len);
+    pump(200);
+    int32_t neutral = player_output_peak();
+    CHECK(neutral > 1000, "the neutral run makes sound (peak %d)", (int)neutral);
+
+    program(body, body_len);
+    es_tone_t t = {.gain_cdb = -600};
+    uint8_t pkt[ES_TONE_SIZE];
+    CHECK_EQ(es_tone_encode(&t, pkt, sizeof pkt), ES_TONE_SIZE, "the tone packet builds");
+    player_tone_packet(pkt, sizeof pkt);
+    pump(200);
+    int32_t toned = player_output_peak();
+    CHECK(toned > 0, "the toned run makes sound too (peak %d)", (int)toned);
+    CHECK(toned < neutral * 3 / 4, "the tone is applied at the output (%d vs %d)",
+          (int)toned, (int)neutral);
+
+    free(body);
+}
+
 int main(void)
 {
     test_line_44100();
     test_line_32000();
     test_silence();
     test_primes();
+    test_tone_at_output();
     TEST_END();
 }

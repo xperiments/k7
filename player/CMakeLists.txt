@@ -11,6 +11,7 @@ set(EXTRA_COMPONENT_DIRS
     "${CMAKE_CURRENT_LIST_DIR}/components"
     "${CMAKE_CURRENT_LIST_DIR}/../components/portable/handover"
     "${CMAKE_CURRENT_LIST_DIR}/../components/portable/espnow_stream"
+    "${CMAKE_CURRENT_LIST_DIR}/../components/portable/tone_eq"
     "${CMAKE_CURRENT_LIST_DIR}/../components/portable/dr_libs")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

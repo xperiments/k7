@@ -41,6 +41,7 @@ static char s_resolve_ip[32];
 
 static player_board_frame_fn s_frame_cb;
 static player_board_packet_fn s_audio_cb;
+static player_board_packet_fn s_tone_cb;
 static int s_audio_sent;
 static void *s_frame_ctx;
 static bool s_now_on;
@@ -260,6 +261,11 @@ bool player_board_espnow_start(player_board_packet_fn on_packet)
 {
     s_audio_cb = on_packet;
     return true;
+}
+
+void player_board_espnow_set_tone(player_board_packet_fn on_tone)
+{
+    s_tone_cb = on_tone;
 }
 
 bool player_board_espnow_send(const uint8_t *data, size_t len)

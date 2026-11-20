@@ -24,6 +24,7 @@
 #include "player_output.h"
 #include "player_ring.h"
 #include "player_stream.h"
+#include "player_tone.h"
 
 static const char *TAG = "playout";
 
@@ -83,10 +84,14 @@ static void follow_rate(uint32_t rate)
     M.open = player_output_open(rate);
     M.rate = rate;
     M.failed = !M.open;
-    if (M.open)
+    if (M.open) {
+        /* The tone's biquads are built for the output's rate; the targets survive the
+         * rebuild (k7player.md R33). */
+        player_tone_set_rate(rate);
         ESP_LOGI(TAG, "output open at %u Hz on the line", (unsigned)rate);
-    else
+    } else {
         ESP_LOGW(TAG, "no output at %u Hz", (unsigned)rate);
+    }
 }
 
 /* One MP3 frame decoded and written. No lock is held here: the write blocks until the I2S DMA
@@ -107,6 +112,9 @@ static int decode_and_play(const uint8_t *frame, size_t len)
             M.pcm[i * 2 + 1] = M.pcm[i];
         }
     }
+    /* The K7's tone, after the decode and before the line: the broadcast is flat when the
+     * K7 has handed the tone over, so this is the only stage that tints it (ADR 0109). */
+    player_tone_process(M.pcm, (size_t)samples);
     player_output_write(M.pcm, (size_t)samples);
     return samples;
 }

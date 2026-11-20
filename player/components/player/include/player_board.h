@@ -85,6 +85,11 @@ void player_board_handover_stop(void);
 typedef void (*player_board_packet_fn)(const uint8_t *data, size_t len);
 bool player_board_espnow_start(player_board_packet_fn on_packet);
 
+/* The K7's tone packets (espnow-stream.md E12). The player's status advertises that it
+ * applies them (E3a); this is where one lands. The callback runs on the Wi-Fi task and must
+ * be short - player_tone_packet() parses ten bytes and copies four floats. */
+void player_board_espnow_set_tone(player_board_packet_fn on_tone);
+
 /* The status packet, to the broadcast address: the player has no way to know the K7's MAC, and
  * the K7 learns the player's from the packet's own source address. */
 bool player_board_espnow_send(const uint8_t *data, size_t len);

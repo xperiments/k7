@@ -70,7 +70,8 @@ _Avoid_: fallback, priority, mode
 **Client**:
 *(The K7's word, defined in the [stream server's glossary](../docs/specs/CONTEXT.md#clients-and-access).)*
 One connected consumer of the live stream. Every K7Player is one, and is indistinguishable from a
-browser to the K7.
+browser to the K7 for the stream's purposes. The one capability the K7 reads from it is the tone
+flag in its status (ADR 0109), and the K7 keeps no record of that either.
 _Avoid_: listener, subscriber, user
 
 **Live stream**:
@@ -82,3 +83,10 @@ _Avoid_: feed, radio, channel
 *(The K7's word.)* The single format every track is converted to before it goes on the wire. The
 K7Player's decoder follows whatever the K7 sends; it does not choose.
 _Avoid_: output format, codec
+
+**Tone**:
+The K7's EQ values (GAIN, HI, MID, LOW) sent over ESP-NOW once the player's status has advertised
+that it applies them. The player runs the same `tone_eq` on the decoded PCM before the output; it
+has no tone control of its own and starts neutral, so a K7 that sends none is heard as encoded
+(ADR 0109; [`k7player.md`](../docs/specs/k7player.md) R33).
+_Avoid_: EQ block (the K7's panel), effects, filter

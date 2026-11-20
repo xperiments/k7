@@ -770,9 +770,12 @@ uncovered, so a tap on any of its three buttons puts the dial away - and runs no
 tap that dismisses cannot also open the Menu or drop the group (ADR 0034). The EQ's audio is
 `components/portable/tone_eq`: a 200 Hz low shelf, a 1 kHz bell and a 4 kHz high shelf plus
 a trim before them, with the DJ ranges (GAIN -12..+12 dB, default 0; bands -26..+6 dB,
-default 0) and a 2 dB-per-chunk slew on the PCM chunk before the encoder. The RGB group
-publishes `components/portable/rgb`'s state (three channels, a brightness applied last, an
-effect); there is no strip driver in the firmware yet, so the publish seam
+default 0) and a 2 dB-per-chunk slew. The broadcast applies it to the PCM chunk before the
+encoder when the broadcast is the output; when ESP-NOW carries the player's audio and the
+player's status advertises it, the broadcast is flat and the player applies the same module
+after decode (ADR 0109). The RGB group publishes `components/portable/rgb`'s state (three
+channels, a brightness applied last, an effect); there is no strip driver in the firmware yet,
+so the publish seam
 (`cassette_rgb_set_publish()`) is what a driver will hang from.
 
 The screen is four fixed rungs, top to bottom: **Real** (the controls on the white page,
@@ -1020,7 +1023,8 @@ components/
       mi_ring.c/.h          the per-client send ring: the audio task never writes a socket
       mini_icecast.c/.h     the decoded source (ice_decode, core 0), pacing, client list,
                             station status
-    tone_eq/                the stream's three-band DJ EQ and trim, before the encoder
+    tone_eq/                the three-band DJ EQ and trim; the broadcast applies it,
+                            or the player over ESP-NOW
     library/                the immutable tree, arena, broadcast order and lookup
     library_http/           GET /api/library.bin from the prebuilt arena
     mini_files/             GET /library index: a listing, not a file browser
