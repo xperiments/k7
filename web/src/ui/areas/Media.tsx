@@ -4,6 +4,7 @@ import { cn } from 'cn';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import {
   Empty,
   EmptyContent,
@@ -166,6 +167,7 @@ function ViewSwitch({
  */
 function Remembering({ scope, reload }: { scope: string; reload: () => void }) {
   const [failure, setFailure] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
   const tried = useRef<string | null>(null);
   useEffect(() => {
     if (tried.current === scope) return;
@@ -179,7 +181,9 @@ function Remembering({ scope, reload }: { scope: string; reload: () => void }) {
         /* A player that stops answering mid-card must not leave the page saying
          * "remembering" forever: the attempt has a budget, and its sentence names it. */
         const written = await Promise.race([
-          rememberCardFromPlayer(scope),
+          rememberCardFromPlayer(scope, (fraction) => {
+            if (live()) setProgress(fraction);
+          }),
           new Promise<never>((_, reject) => {
             window.setTimeout(() => reject(new Error('the player did not finish the card in 90 s')), 90_000);
           }),
@@ -204,9 +208,9 @@ function Remembering({ scope, reload }: { scope: string; reload: () => void }) {
     );
   }
   return (
-    <div className="flex flex-col items-center gap-3 py-6" role="status">
-      <Skeleton className="aspect-square w-40" />
-      <p className="text-sm text-muted-foreground">Remembering the card in the player…</p>
+    <div className="mx-auto flex w-full max-w-sm flex-col gap-3 py-10" role="status">
+      <p className="text-sm text-muted-foreground">Loading Media Database</p>
+      <Progress value={progress * 100} aria-label="Loading the media database" />
     </div>
   );
 }

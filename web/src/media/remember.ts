@@ -25,7 +25,13 @@ import { countMedia, putMediaMany, type CachedMedia } from '../storage/media';
  * the player refused: a card with no image is one the App has never measured anywhere, and
  * no listing can invent the names it never wrote.
  */
-export async function rememberCardFromPlayer(scope: string): Promise<number> {
+export async function rememberCardFromPlayer(
+  scope: string,
+  onProgress: (fraction: number) => void = () => {},
+): Promise<number> {
+  /* Three steps worth naming: the image and the listing, the pictures, the rows. The writes
+   * are each one transaction, so there is no finer grain to report than their edges. */
+  onProgress(0.05);
   const [image, library] = await Promise.all([
     localRequest('/api/snapshot', { cache: 'no-store' }),
     localRequest('/api/library.bin', { cache: 'no-store' }),
@@ -34,6 +40,7 @@ export async function rememberCardFromPlayer(scope: string): Promise<number> {
   if (!image.ok) throw new Error(`the player refused its image (${image.status})`);
   if (!library.ok) throw new Error(`the player refused its library (${library.status})`);
 
+  onProgress(0.25);
   const rows = readImageRows(new Uint8Array(await image.arrayBuffer()));
   const presence = presenceFromLibraryBlob(new Uint8Array(await library.arrayBuffer()));
   /* The pictures are the archive's, and the archive says which album wears which: without
@@ -42,6 +49,7 @@ export async function rememberCardFromPlayer(scope: string): Promise<number> {
   try {
     const restored = await restoreCoversFromDevice();
     albums = restored.albums;
+    onProgress(0.55);
   } catch {
     /* A card with no archive is a card with no pictures: the names still come back. */
   }
@@ -66,11 +74,13 @@ export async function rememberCardFromPlayer(scope: string): Promise<number> {
   }
   /* One transaction for the card: a remembered library is thousands of rows, and one write
    * each is slow enough that a closed connection could catch it half-written. */
+  onProgress(0.75);
   await putMediaMany(scope, fresh);
   /* Read it back: a transaction that silently did nothing (a closed connection, a store
    * that answered with an abort) must not leave the page waiting on rows that are not
    * there. */
   const landed = await countMedia(scope);
   if (landed === 0) throw new Error('the rows did not land in this browser’s store');
+  onProgress(1);
   return fresh.length;
 }
