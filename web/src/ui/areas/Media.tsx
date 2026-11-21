@@ -506,7 +506,13 @@ export function MediaView({
       return;
     }
     if (chosen.current || state.loading || status === null) return;
-    const at = albumIndexOfPath(albums, playingPath);
+    let at = albumIndexOfPath(albums, playingPath);
+    /* A path that joins to nothing still leaves the track's own name, which is what the
+     * player reports beside it: the row that carries that title names the album. */
+    const title = status.playing?.title?.trim();
+    if (at < 0 && title) {
+      at = albums.findIndex((entry) => entry.rows.some((row) => row.title === title));
+    }
     if (at >= 0) setSelected(at);
   }, [album, drive, state.loading, status, playingPath, albums]);
 

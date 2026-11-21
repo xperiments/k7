@@ -442,8 +442,20 @@ export function albumIndexOfPath(
 ): number {
   if (!path) return -1;
   const needle = foldPath(path);
-  return albums.findIndex((entry) =>
+  const exact = albums.findIndex((entry) =>
     entry.rows.some((row) => foldPath(row.path) === needle),
+  );
+  if (exact >= 0) return exact;
+  /* The player's path and this browser's rows need not wear the same prefix: a card's root
+   * adds `music/` on one side, a leading slash on the other. The tail both share is the
+   * file, and that is enough to name the album it is on. */
+  const trim = (value: string) => value.replace(/^\/+/, '');
+  const tail = trim(needle);
+  return albums.findIndex((entry) =>
+    entry.rows.some((row) => {
+      const rowPath = trim(foldPath(row.path));
+      return rowPath === tail || rowPath.endsWith(`/${tail}`) || tail.endsWith(`/${rowPath}`);
+    }),
   );
 }
 
