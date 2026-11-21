@@ -141,6 +141,23 @@ test("groups two selected layers from the panel header", async ({ page }) => {
   await expect(page.getByText("Group 1")).toBeVisible();
 });
 
+test("hides a layer with the panel's eye, and shows it again", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "J-card", exact: true }).click();
+  const layers = page.locator('aside[aria-label="Layers"]');
+  const canvas = page.locator(".canvas-surface");
+  await expect(canvas).toContainText("Neon Skyline");
+
+  const row = layers.getByRole("treeitem").filter({ hasText: "title" }).first();
+  await row.getByRole("button", { name: "Hide" }).click();
+  // Off the sheet, and off the export: the K7Art is what the canvas shows.
+  await expect(canvas).not.toContainText("Neon Skyline");
+  await expect(row.getByRole("button", { name: "Show" })).toBeVisible();
+
+  await row.getByRole("button", { name: "Show" }).click();
+  await expect(canvas).toContainText("Neon Skyline");
+});
+
 test("copies a group on the J-card as a group", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "J-card", exact: true }).click();

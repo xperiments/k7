@@ -1241,6 +1241,27 @@ export class Editor {
     this.commit(false);
     this.emit();
   }
+  /** Hide a layer, or show it: hidden is in the document and the panel, not on the sheet. */
+  toggleHidden(o: Obj) {
+    if (o.locked) return;
+    if (o.hidden) delete o.hidden;
+    else o.hidden = true;
+    this.commit(false);
+    this.emit();
+  }
+  /** A group's eye sets every member the same way, so a group is shown or hidden whole. */
+  toggleHiddenGroup(gid: string) {
+    const mem = this.activeObjs().filter((o) => o.g === gid);
+    if (!mem.length) return;
+    const hide = !mem.every((o) => o.hidden);
+    mem.forEach((o) => {
+      if (o.locked) return;
+      if (hide) o.hidden = true;
+      else delete o.hidden;
+    });
+    this.commit(false);
+    this.emit();
+  }
   delSel() {
     const ids = this.selIds;
     const list = this.activeObjs();
@@ -1646,6 +1667,7 @@ export class Editor {
       this.call("lvp_root", null, [], []);
     }
     for (const o of this.objs) {
+      if (o.hidden) continue;
       const e = this.eff(o);
       if (this.mask) {
         if (o.m && !inM) {

@@ -140,6 +140,7 @@ export function CanvasStage() {
       : null;
 
   const layerEl = (o: Obj, i: number) => {
+    if (o.hidden) return null;
     const selected = o === sel;
     const multi = o !== sel && ed.selSet.has(o.id);
     const out = ed.outOfSpace(o);

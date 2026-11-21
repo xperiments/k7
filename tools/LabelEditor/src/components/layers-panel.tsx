@@ -9,6 +9,8 @@ import {
   Layers2,
   Lock,
   LockOpen,
+  Eye,
+  EyeOff,
   Square,
   SquareDashed,
   Trash2,
@@ -29,7 +31,17 @@ import type { Group, Obj } from "@/engine/types";
 
 type Row =
   | { kind: "mask"; depth: 0; count: number }
-  | { kind: "group"; depth: number; g: Group; lo: number; hi: number; count: number; locked: boolean }
+  | {
+      kind: "group";
+      depth: number;
+      g: Group;
+      lo: number;
+      hi: number;
+      count: number;
+      locked: boolean;
+      /** Every member is hidden: the group's eye is off. */
+      hidden: boolean;
+    }
   | { kind: "layer"; depth: number; o: Obj; i: number; locked: boolean; gid?: string };
 
 interface DragBlock {
@@ -323,13 +335,23 @@ export function LayersPanel() {
                     )}
                     <span className="ml-auto text-xs text-muted-foreground tabnum">{row.count}</span>
                     <IconAction
+                      label={row.hidden ? "Show the group" : "Hide the group"}
+                      reveal
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        ed.toggleHiddenGroup(row.g.id);
+                      }}
+                      className="ml-1"
+                    >
+                      {row.hidden ? <EyeOff /> : <Eye />}
+                    </IconAction>
+                    <IconAction
                       label={row.locked ? "Unlock the group" : "Lock the group"}
                       reveal
                       onClick={(e) => {
                         e.stopPropagation();
                         ed.groupLock(row.g.id);
                       }}
-                      className="ml-1"
                     >
                       {row.locked ? <Lock /> : <LockOpen />}
                     </IconAction>
@@ -399,13 +421,22 @@ export function LayersPanel() {
                     </Badge>
                   ) : null}
                   <IconAction
+                    label={o.hidden ? "Show" : "Hide"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      ed.toggleHidden(o);
+                    }}
+                    className="ml-auto"
+                  >
+                    {o.hidden ? <EyeOff /> : <Eye />}
+                  </IconAction>
+                  <IconAction
                     label={o.locked ? "Unlock" : "Lock"}
                     reveal
                     onClick={(e) => {
                       e.stopPropagation();
                       ed.toggleLock(o);
                     }}
-                    className="ml-auto"
                   >
                     {o.locked ? <Lock /> : <LockOpen />}
                   </IconAction>
@@ -469,6 +500,7 @@ function buildRows(ed: ReturnType<typeof useEditor>): Row[] {
       hi: b.hi,
       count: mem.length,
       locked: mem.every((m) => m.locked),
+      hidden: mem.every((m) => !!m.hidden),
     });
     if (!g.collapsed)
       for (let k = b.hi; k >= b.lo; k--)

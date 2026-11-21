@@ -91,6 +91,11 @@ If the tools themselves cannot be reached, every action still has a visible cont
 **Colour roles.** `paper`, `ink`, `rule`, `band.0` … `band.7`. A shape (rect, square, circle)
 may use any of them; a text may print only `ink` or a band. `paper` is the LayerMask's colour.
 
+**Visibility.** A layer can be hidden: `k7art-update-layer { hidden: true }` or the eye in the
+Layers panel. A hidden layer stays in the document and the panel, and it is not drawn — canvas,
+Preview, App — and not exported: Export and Publish carry the visible layers only. A group's eye
+hides or shows all its members together.
+
 **Groups.** Two or more layers of one surface can become a group: they must be a contiguous run
 of that surface's stack, and on the label they must sit on one side of the LayerMask. A group
 moves, locks and collapses as one, and copying a selected group and pasting it makes a second
@@ -215,7 +220,7 @@ Add a layer to the active design, on the label's 748x359 print or the J-card's 1
 
 ### `k7art-update-layer`
 
-Change one layer of the active design, on the label or the J-card: position or size in that surface's units, rotation, its text or field, colour role, font role, alignment, layer name, test value or lock. Only the fields given change.
+Change one layer of the active design, on the label or the J-card: position or size in that surface's units, rotation, its text or field, colour role, font role, alignment, layer name, test value, lock or visibility. Only the fields given change. A hidden layer is not drawn and not exported.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
@@ -234,6 +239,7 @@ Change one layer of the active design, on the label or the J-card: position or s
 | `layerName` | `string` |  | The layer's name in the Layers panel. |
 | `testValue` | `string` |  | What a dynamic text previews in the editor and Preview. |
 | `locked` | `boolean` |  | Lock or unlock the layer. Other changes need it unlocked. |
+| `hidden` | `boolean` |  | Hide the layer, or show it again. A hidden layer is not drawn on the canvas, in Preview or in the App, and Export and Publish leave it out. |
 
 ### `k7art-delete-layer`
 

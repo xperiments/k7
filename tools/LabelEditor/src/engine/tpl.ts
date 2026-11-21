@@ -381,7 +381,7 @@ export function buildTemplate(
     });
 
   objs.forEach((o) => {
-    if (o.ap) return;
+    if (o.ap || o.hidden) return;
     const tag = tagOf(o);
     const X = Math.round(o.x);
     const Y = Math.round(o.y);

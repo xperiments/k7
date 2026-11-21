@@ -137,6 +137,36 @@ test("keeps the bridge when the browser has no WebMCP", async ({ page }) => {
   await expect(page.getByRole("dialog")).toContainText("WebMCP unavailable");
 });
 
+test("hides a layer from the read, the canvas and the export", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "modelContext", { value: undefined, configurable: true });
+    Object.defineProperty(document, "modelContext", { value: undefined, configurable: true });
+  });
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.__labelEditorMcp);
+
+  const out = await page.evaluate(async () => {
+    const call = (name: string, args: Record<string, unknown> = {}) =>
+      (window as unknown as AnyWindow).__labelEditorMcp!.call(name, args);
+    const first = await call("k7art-read");
+    const title = (first.jcard.layers as Array<{ id: number; field: string | null }>).find(
+      (layer) => layer.field === "title",
+    )!;
+    const before = (await call("k7art-export-template")).template.jcard.prims.length;
+    await call("k7art-update-layer", { surface: "jcard", id: title.id, hidden: true });
+    const hidden = await call("k7art-read");
+    const after = (await call("k7art-export-template")).template.jcard.prims.length;
+    await call("k7art-update-layer", { surface: "jcard", id: title.id, hidden: false });
+    const shown = (await call("k7art-export-template")).template.jcard.prims.length;
+    return { before, after, shown, hidden: hidden.jcard.layers.find((l: { id: number }) => l.id === title.id) };
+  });
+
+  expect(out.before).toBe(4);
+  expect(out.after).toBe(3);
+  expect(out.shown).toBe(4);
+  expect(out.hidden.hidden).toBe(true);
+});
+
 test("edits the J-card surface and publishes a pack", async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "modelContext", { value: undefined, configurable: true });

@@ -173,7 +173,9 @@ export function buildJCard(jcard: JCardDoc): { doc: JCardFile; errs: string[] } 
     };
   }
 
-  const list = Array.isArray(jcard.prims) ? jcard.prims : [];
+  /* A hidden layer is in the document and in the panel, but not on the sheet: the App draws
+   * what the editor shows, so the file carries the visible prims only. */
+  const list = (Array.isArray(jcard.prims) ? jcard.prims : []).filter((o) => !o.hidden);
   if (list.length > JCARD_PRIM_MAX)
     errs.push(
       `jcard: ${list.length} prims, and the App draws ${JCARD_PRIM_MAX} on a sheet`,

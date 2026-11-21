@@ -35,6 +35,8 @@ export interface Obj {
   font?: number;
   s?: number;
   locked?: boolean;
+  /** Hidden: not drawn and not exported, but still in the document and in the panel. */
+  hidden?: boolean;
   /** Inside the LayerMask: masked layers must be one contiguous run. */
   m?: boolean;
   /** The group this layer belongs to. */
@@ -93,6 +95,8 @@ export interface JObj {
   /** The layer's name in the Layers panel. */
   label?: string;
   locked?: boolean;
+  /** Hidden: not drawn and not exported, but still in the document and in the panel. */
+  hidden?: boolean;
   /** The group it belongs to: one list of groups, a run of layers on either surface. */
   g?: string;
 }

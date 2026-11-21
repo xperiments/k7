@@ -181,6 +181,7 @@ function layerSummary(ed: Editor, o: Obj, surface: Surface = ed.surface) {
     height: o.type === "text" ? Math.round(ed.pxOf(o, surface) * 1.2) : (o.h ?? 0),
     rotation: Math.round(o.rot || 0),
     locked: !!o.locked,
+    hidden: !!o.hidden,
     insideMask: !!o.m,
     group: ed.groups.find((g) => g.id === o.g)?.name ?? null,
   };
@@ -468,7 +469,7 @@ export function labelEditorTools(
     {
       name: "k7art-update-layer",
       description:
-        "Change one layer of the active design, on the label or the J-card: position or size in that surface's units, rotation, its text or field, colour role, font role, alignment, layer name, test value or lock. Only the fields given change.",
+        "Change one layer of the active design, on the label or the J-card: position or size in that surface's units, rotation, its text or field, colour role, font role, alignment, layer name, test value, lock or visibility. Only the fields given change. A hidden layer is not drawn and not exported.",
       inputSchema: schema(
         {
           surface: str(
@@ -494,6 +495,9 @@ export function labelEditorTools(
           layerName: str("The layer's name in the Layers panel."),
           testValue: str("What a dynamic text previews in the editor and Preview."),
           locked: bool("Lock or unlock the layer. Other changes need it unlocked."),
+          hidden: bool(
+            "Hide the layer, or show it again. A hidden layer is not drawn on the canvas, in Preview or in the App, and Export and Publish leave it out.",
+          ),
         },
         ["id"],
       ),
@@ -540,6 +544,11 @@ export function labelEditorTools(
           throw new Error("only a text has a test value");
 
         if (locked !== undefined) o.locked = locked;
+        const hidden = readBool(args, "hidden");
+        if (hidden !== undefined) {
+          if (hidden) o.hidden = true;
+          else delete o.hidden;
+        }
         if (x !== undefined) o.x = Math.round(x);
         if (y !== undefined) o.y = Math.round(y);
         if (w !== undefined) o.w = Math.round(w);
