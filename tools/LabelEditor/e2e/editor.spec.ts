@@ -141,6 +141,112 @@ test("groups two selected layers from the panel header", async ({ page }) => {
   await expect(page.getByText("Group 1")).toBeVisible();
 });
 
+test("scales a group as one from the selection's corner", async ({ page }) => {
+  await page.goto("/");
+  await page.getByText("circle 2").click();
+  await page.getByText("rect 1").click({ modifiers: ["Meta"] });
+
+  const handle = page.locator('[data-handle="scale"]');
+  await expect(handle).toHaveAttribute("aria-label", "Scale the selection");
+  const before = await page.evaluate(() => {
+    const ed = (window as unknown as {
+      __editor: {
+        zoom: number;
+        selMembers: () => Array<{ id: number }>;
+        selBounds: (mem: unknown[]) => { x0: number; y0: number; x1: number; y1: number };
+      };
+    }).__editor;
+    const b = ed.selBounds(ed.selMembers());
+    return { zoom: ed.zoom, b };
+  });
+
+  // Drag the corner out by half the selection's own size: one factor of 1.5 for every member.
+  const box = (await handle.boundingBox())!;
+  const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const half = {
+    x: ((before.b.x1 - before.b.x0) / 2) * before.zoom,
+    y: ((before.b.y1 - before.b.y0) / 2) * before.zoom,
+  };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + half.x, from.y + half.y, { steps: 8 });
+  await page.mouse.up();
+
+  const after = await page.evaluate(() => {
+    const ed = (window as unknown as {
+      __editor: { objs: Array<{ id: number; x: number; y: number; w: number; h?: number }> };
+    }).__editor;
+    return ed.objs.map((o) => ({ id: o.id, x: o.x, y: o.y, w: o.w, h: o.h }));
+  });
+  const rect = after.find((o) => o.id === 1)!;
+  const circle = after.find((o) => o.id === 2)!;
+  // The default design's rect is 708x319 at (20, 20) and its circle 200x200 at (50, 60).
+  const f = rect.w / 708;
+  expect(f).toBeGreaterThan(1.4);
+  expect(f).toBeLessThan(1.6);
+  expect(rect.x).toBe(20);
+  expect(rect.y).toBe(20);
+  expect(Math.abs(rect.h! - 319 * f)).toBeLessThanOrEqual(1);
+  // The member's position is scaled about the same anchor, and its box by the same factor.
+  expect(Math.abs(circle.x - (20 + 30 * f))).toBeLessThanOrEqual(1);
+  expect(Math.abs(circle.y - (20 + 40 * f))).toBeLessThanOrEqual(1);
+  expect(Math.abs(circle.w - 200 * f)).toBeLessThanOrEqual(1);
+  expect(Math.abs(circle.h! - 200 * f)).toBeLessThanOrEqual(1);
+});
+
+test("scales two J-card layers as one", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "J-card", exact: true }).click();
+  const layers = page.locator('aside[aria-label="Layers"]');
+  await layers.getByText("title", { exact: true }).click();
+  await layers.getByText("artist", { exact: true }).click({ modifiers: ["Meta"] });
+
+  const handle = page.locator('[data-handle="scale"]');
+  await expect(handle).toBeVisible();
+  // The J-card's stage draws the 1300-unit sheet at half the label's zoom.
+  const before = await page.evaluate(() => {
+    const ed = (window as unknown as {
+      __editor: {
+        zoom: number;
+        selMembers: () => Array<{ id: number }>;
+        selBounds: (mem: unknown[]) => { x0: number; y0: number; x1: number; y1: number };
+      };
+    }).__editor;
+    const b = ed.selBounds(ed.selMembers());
+    return { display: ed.zoom * 0.5, b };
+  });
+
+  // Pull the corner in by a fifth of the selection: one factor of 0.8 for both texts.
+  const box = (await handle.boundingBox())!;
+  const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const shrink = {
+    x: ((before.b.x1 - before.b.x0) * 0.2) * before.display,
+    y: ((before.b.y1 - before.b.y0) * 0.2) * before.display,
+  };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x - shrink.x, from.y - shrink.y, { steps: 8 });
+  await page.mouse.up();
+
+  const after = await page.evaluate(() =>
+    (window as unknown as {
+      __editor: {
+        jcard: { prims: Array<{ name: string; x: number; y: number; w: number }> };
+      };
+    }).__editor.jcard.prims.map((o) => ({ name: o.name, x: o.x, y: o.y, w: o.w })),
+  );
+  const title = after.find((o) => o.name === "title")!;
+  const artist = after.find((o) => o.name === "artist")!;
+  // The starter's two texts are 700 wide at x 540, the title at y 900 and the artist at 1060.
+  const f = title.w / 700;
+  expect(f).toBeGreaterThan(0.78);
+  expect(f).toBeLessThan(0.82);
+  expect(title.x).toBe(540);
+  expect(title.y).toBe(900);
+  expect(Math.abs(artist.w - 700 * f)).toBeLessThanOrEqual(1);
+  expect(Math.abs(artist.y - (900 + 160 * f))).toBeLessThanOrEqual(1);
+});
+
 test("hides a layer with the panel's eye, and shows it again", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "J-card", exact: true }).click();

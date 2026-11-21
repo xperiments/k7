@@ -84,7 +84,7 @@ export function CanvasStage() {
   const onPointerDown = (e: React.PointerEvent) => {
     if (run) return;
     const target = e.target as HTMLElement;
-    const handle = target.dataset.handle as "rotate" | "resize" | undefined;
+    const handle = target.dataset.handle as "rotate" | "resize" | "scale" | undefined;
     const objEl = target.closest<HTMLElement>("[data-obj-id]");
     const hit =
       handle !== undefined
@@ -118,7 +118,8 @@ export function CanvasStage() {
   const handles =
     sel && !run
       ? (() => {
-          const mem = members;
+          const mem = members.length ? members : [sel];
+          const group = mem.length > 1;
           const sc = sel.type === "text" ? sel.s || 1 : 1;
           const hh = sel.type === "text" ? Math.round(ed.pxOf(sel) * 1.2) : sel.h || 0;
           const r = ((sel.rot || 0) * Math.PI) / 180;
@@ -132,10 +133,16 @@ export function CanvasStage() {
             x: cx + vx * cos - vy * sin,
             y: cy + vx * sin + vy * cos,
           });
-          const resize = rt(hw, hhs);
-          const rotate = rt(0, -hhs - 26);
+          // One layer turns and resizes its own box. A group does both about its bounds, so
+          // every member follows: the rotate handle sits over the bounds' middle, the scale
+          // handle on their far corner.
           const b = ed.selBounds(mem);
-          return { mem, resize, rotate, groupRotate: { x: b.cx, y: b.y0 - 26 } };
+          return {
+            mem,
+            group,
+            resize: group ? { x: b.x1, y: b.y1 } : rt(hw, hhs),
+            rotate: group ? { x: b.cx, y: b.y0 - 26 } : rt(0, -hhs - 26),
+          };
         })()
       : null;
 
@@ -398,26 +405,7 @@ export function CanvasStage() {
                   }}
                 >
                   {nodes}
-                  {handles && handles.mem.length > 1 && !handles.mem.some((o) => o.locked) ? (
-                    <div
-                      data-handle="rotate"
-                      title="Drag to rotate · hold Shift for 15° steps"
-                      aria-label="Rotate"
-                      style={{
-                        position: "absolute",
-                        left: handles.groupRotate.x,
-                        top: handles.groupRotate.y,
-                        width: 12,
-                        height: 12,
-                        transform: "translate(-50%, -50%)",
-                        background: "var(--k7-accent)",
-                        border: "1px solid var(--k7-text, #111)",
-                        borderRadius: 2,
-                        cursor: "grab",
-                        zIndex: 9999,
-                      }}
-                    />
-                  ) : handles && sel && !sel.locked ? (
+                  {handles && sel && !handles.mem.some((o) => o.locked) ? (
                     <>
                       <div
                         data-handle="rotate"
@@ -426,9 +414,9 @@ export function CanvasStage() {
                         style={handleStyle(handles.rotate, 1 / zoom, "grab")}
                       />
                       <div
-                        data-handle="resize"
-                        title="Drag to resize"
-                        aria-label="Resize"
+                        data-handle={handles.group ? "scale" : "resize"}
+                        title={handles.group ? "Drag to scale the selection" : "Drag to resize"}
+                        aria-label={handles.group ? "Scale the selection" : "Resize"}
                         style={{
                           ...handleStyle(handles.resize, 1 / zoom, "nwse-resize"),
                           borderRadius: 2,

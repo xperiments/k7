@@ -34,6 +34,13 @@ import {
   migrateJCard,
   type JCardField,
 } from "./jcard";
+import {
+  frameOf,
+  scaleFactor,
+  scaleMembers,
+  type ScaleFrame,
+  type ScaleMember,
+} from "./scale";
 import type {
   Doc,
   DocData,
@@ -67,7 +74,9 @@ const uid = () => crypto.randomUUID();
 
 /** A pointer position in design coordinates, and which layer or handle it hit. */
 export interface Hit {
-  kind: "empty" | "obj" | "rotate" | "resize";
+  /** `resize` is the active layer's own corner; `scale` is the selection's, which grows every
+   *  member of a group together. */
+  kind: "empty" | "obj" | "rotate" | "resize" | "scale";
   id?: number;
 }
 
@@ -75,6 +84,7 @@ interface Gesture {
   drag: { dx: number; dy: number; x0: number; y0: number } | null;
   group: { ox: number; oy: number; m: Array<{ o: Obj; x: number; y: number }> } | null;
   resize: boolean;
+  scale: { frame: ScaleFrame; mem: ScaleMember[] } | null;
   ra: { x: number; y: number } | null;
   rotate: {
     cx: number;
@@ -138,6 +148,7 @@ export class Editor {
     drag: null,
     group: null,
     resize: false,
+    scale: null,
     ra: null,
     rotate: null,
   };
@@ -844,6 +855,23 @@ export class Editor {
       this.gesture.ra = { x: g.cx - b.x, y: g.cy - b.y };
       return;
     }
+    if (hit.kind === "scale") {
+      // A group's corner: every member moves and grows together, about the corner the handle
+      // is not.
+      const mem: ScaleMember[] = this.selMembers()
+        .filter((o) => !o.locked)
+        .map((o) => ({
+          o,
+          x: o.x,
+          y: o.y,
+          w: o.w,
+          h: o.type === "text" ? this.textHeight(o) : (o.h ?? 0),
+          r: o.r ?? 0,
+        }));
+      const frame = frameOf(mem);
+      if (frame) this.gesture.scale = { frame, mem };
+      return;
+    }
     if (this.tool !== "select") {
       this.add(this.tool, p);
       return;
@@ -908,6 +936,11 @@ export class Editor {
       this.emit();
       return;
     }
+    if (g.scale) {
+      scaleMembers(g.scale.mem, g.scale.frame, scaleFactor(g.scale.frame, p));
+      this.emit();
+      return;
+    }
     if (g.resize && this.sel) {
       const sel = this.sel;
       const v = this.V(sel);
@@ -942,8 +975,9 @@ export class Editor {
     this.emit();
   }
   pointerUp() {
-    const wasEditing = this.gesture.drag || this.gesture.resize || this.gesture.rotate;
-    this.gesture = { drag: null, group: null, resize: false, ra: null, rotate: null };
+    const wasEditing =
+      this.gesture.drag || this.gesture.resize || this.gesture.scale || this.gesture.rotate;
+    this.gesture = { drag: null, group: null, resize: false, scale: null, ra: null, rotate: null };
     if (wasEditing) this.commit(false);
   }
   private V(o: Obj) {

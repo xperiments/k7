@@ -43,6 +43,7 @@ export function JCardStage() {
   const zoom = ed.zoom;
   const list = ed.jcard.prims as unknown as Obj[];
   const sel = ed.sel;
+  const members = ed.selMembers();
 
   /** The zoom is relative to a 50% sheet: this stage's 100% is half the old stage's. */
   const JCARD_DISPLAY = 0.5;
@@ -80,7 +81,7 @@ export function JCardStage() {
   const onPointerDown = (e: React.PointerEvent) => {
     if (ed.run) return;
     const target = e.target as HTMLElement;
-    const handle = target.dataset.handle as "rotate" | "resize" | undefined;
+    const handle = target.dataset.handle as "rotate" | "resize" | "scale" | undefined;
     const objEl = target.closest<HTMLElement>("[data-obj-id]");
     const hit =
       handle !== undefined
@@ -109,6 +110,8 @@ export function JCardStage() {
   const handles =
     sel && !ed.run
       ? (() => {
+          const mem = members.length ? members : [sel];
+          const group = mem.length > 1;
           const hh = sel.type === "text" ? Math.round(ed.pxOf(sel) * 1.2) : sel.h || 0;
           const r = ((sel.rot || 0) * Math.PI) / 180;
           const cos = Math.cos(r);
@@ -119,7 +122,16 @@ export function JCardStage() {
             x: cx + vx * cos - vy * sin,
             y: cy + vx * sin + vy * cos,
           });
-          return { resize: rt(sel.w / 2, hh / 2), rotate: rt(0, -hh / 2 - 26) };
+          // One layer turns and resizes its own box. A group does both about its bounds, so
+          // every member follows: the rotate handle sits over the bounds' middle, the scale
+          // handle on their far corner.
+          const b = ed.selBounds(mem);
+          return {
+            mem,
+            group,
+            resize: group ? { x: b.x1, y: b.y1 } : rt(sel.w / 2, hh / 2),
+            rotate: group ? { x: b.cx, y: b.y0 - 26 } : rt(0, -hh / 2 - 26),
+          };
         })()
       : null;
 
@@ -243,7 +255,7 @@ export function JCardStage() {
           <div className="flex flex-col items-center gap-3">
             <div
               ref={sheetRef}
-              className="canvas-surface relative shrink-0 overflow-hidden"
+              className="canvas-surface relative shrink-0"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={end}
@@ -256,72 +268,75 @@ export function JCardStage() {
                 cursor: ed.tool === "select" ? "default" : "crosshair",
               }}
             >
-              <div
-                className="absolute"
-                style={{
-                  width: JCARD_W,
-                  height: JCARD_H,
-                  transform: `scale(${display})`,
-                  transformOrigin: "0 0",
-                  background: ed.jcard.paper ?? ed.tpl.inks.paper,
-                  position: "relative",
-                }}
-              >
-                {list.map((o, i) => layerEl(o, i))}
-
-                {/* The fold guides: the case's, not the design's. */}
+              {/* The sheet clips what bleeds past it. The handles are its siblings, outside
+                  that clip, so the layer that fills the sheet can still be turned and scaled. */}
+              <div className="absolute inset-0 overflow-hidden">
                 <div
-                  className="pointer-events-none absolute inset-0"
-                  style={{ zIndex: 5000 }}
-                  aria-hidden
+                  className="absolute"
+                  style={{
+                    width: JCARD_W,
+                    height: JCARD_H,
+                    transform: `scale(${display})`,
+                    transformOrigin: "0 0",
+                    background: ed.jcard.paper ?? ed.tpl.inks.paper,
+                  }}
                 >
-                  {[JCARD_PARTS.spine.x, JCARD_PARTS.cover.x].map((x) => (
-                    <div
-                      key={x}
-                      className="absolute top-0 h-full"
-                      style={{
-                        left: x,
-                        width: 1,
-                        background: "color-mix(in srgb, var(--k7-accent) 70%, transparent)",
-                      }}
-                    />
-                  ))}
-                  {/* The focus dims everything outside the part being authored. */}
-                  {focused ? (
-                    <div
-                      className="absolute"
-                      style={{
-                        left: focused.x,
-                        top: focused.y,
-                        width: focused.w,
-                        height: focused.h,
-                        outline: "2px solid var(--k7-accent)",
-                        boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.22)",
-                      }}
-                    />
-                  ) : null}
+                  {list.map((o, i) => layerEl(o, i))}
 
-                  {handles && sel && !sel.locked ? (
-                    <>
+                  {/* The fold guides: the case's, not the design's. */}
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{ zIndex: 5000 }}
+                    aria-hidden
+                  >
+                    {[JCARD_PARTS.spine.x, JCARD_PARTS.cover.x].map((x) => (
                       <div
-                        data-handle="rotate"
-                        title="Drag to rotate · hold Shift for 15° steps"
-                        aria-label="Rotate"
-                        style={handleStyle(handles.rotate, 1 / display, "grab")}
-                      />
-                      <div
-                        data-handle="resize"
-                        title="Drag to resize"
-                        aria-label="Resize"
+                        key={x}
+                        className="absolute top-0 h-full"
                         style={{
-                          ...handleStyle(handles.resize, 1 / display, "nwse-resize"),
-                          borderRadius: 2,
+                          left: x,
+                          width: 1,
+                          background: "color-mix(in srgb, var(--k7-accent) 70%, transparent)",
                         }}
                       />
-                    </>
-                  ) : null}
+                    ))}
+                    {/* The focus dims everything outside the part being authored. */}
+                    {focused ? (
+                      <div
+                        className="absolute"
+                        style={{
+                          left: focused.x,
+                          top: focused.y,
+                          width: focused.w,
+                          height: focused.h,
+                          outline: "2px solid var(--k7-accent)",
+                          boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.22)",
+                        }}
+                      />
+                    ) : null}
+                  </div>
                 </div>
               </div>
+
+              {handles && sel && !handles.mem.some((o) => o.locked) ? (
+                <>
+                  <div
+                    data-handle="rotate"
+                    title="Drag to rotate · hold Shift for 15° steps"
+                    aria-label="Rotate"
+                    style={gripStyle(handles.rotate, display, "grab")}
+                  />
+                  <div
+                    data-handle={handles.group ? "scale" : "resize"}
+                    title={handles.group ? "Drag to scale the selection" : "Drag to resize"}
+                    aria-label={handles.group ? "Scale the selection" : "Resize"}
+                    style={{
+                      ...gripStyle(handles.resize, display, "nwse-resize"),
+                      borderRadius: 2,
+                    }}
+                  />
+                </>
+              ) : null}
             </div>
             <p className="flex items-center gap-2 text-xs text-muted-foreground tabnum">
               <Scan className="size-3" />
@@ -334,20 +349,22 @@ export function JCardStage() {
   );
 }
 
-function handleStyle(p: { x: number; y: number }, inv: number, cursor: string) {
+/** A handle's screen position, from the design point it marks: the sheet's handles are drawn
+ *  over it rather than inside its clip, so they are in screen pixels already. */
+function gripStyle(p: { x: number; y: number }, display: number, cursor: string) {
   return {
     position: "absolute" as const,
-    left: p.x,
-    top: p.y,
+    left: p.x * display,
+    top: p.y * display,
     width: 11,
     height: 11,
-    transform: `translate(-50%, -50%) scale(${Math.max(inv, 0.5)})`,
+    transform: "translate(-50%, -50%)",
     background: "var(--k7-accent)",
     border: "1px solid #111",
     borderRadius: 2,
     pointerEvents: "auto" as const,
     cursor,
-    zIndex: 9999,
+    zIndex: 10_000,
     touchAction: "none" as const,
   };
 }

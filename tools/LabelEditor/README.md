@@ -46,6 +46,12 @@ npm run build      # dist/
   one, its three compiled type pairs, its Slots and test values, groups and the LayerMask, which
   clips to a rounded print. The J-card has its own three type sizes, its `title`/`artist`/`meta`
   fields and its safe square.
+- **A selection that moves, turns and scales as one.** One layer's corner resizes its own box; a
+  group — or a ⌘-click selection — turns about its bounds and scales from their far corner, every
+  member following, with one factor for both axes so a circle stays a circle and a rotated layer
+  stays a rotated layer. A text's box scales with the rest and its type does not: a role is one of
+  the sheet's three compiled pairs (or, on the J-card, one of its three sizes), not a size of the
+  layer's own.
 - **An inspector that gives the open section the whole column.** Sections open one at a time
   (click the open header to close it), so no section is half-hidden behind a scrollbar; the
   inspector itself collapses to a rail and remembers that across reloads. An empty static
