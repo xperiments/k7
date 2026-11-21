@@ -49,7 +49,9 @@ function decode(segment: string): string {
 export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#/, '');
   const parts = path.split('/').filter((p) => p.length > 0);
-  if (parts.length === 0) return { name: 'prepare' };
+  /* No address at all is the Player: a reload lands on what the device is doing, not on the
+   * page a person was last editing. */
+  if (parts.length === 0) return { name: 'player' };
 
   switch (parts[0]) {
     case 'prepare':

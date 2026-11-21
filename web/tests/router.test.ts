@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { NAV_GROUPS, parseRoute, routeHref, routeTitle, type Route } from '../src/ui/router';
 
 describe('the shell routes', () => {
-  it('a bare hash is Prepare: the shell has a landing, not a not-found', () => {
-    expect(parseRoute('')).toEqual({ name: 'prepare' });
-    expect(parseRoute('#/')).toEqual({ name: 'prepare' });
+  it('a bare hash is the Player: the shell has a landing, not a not-found', () => {
+    expect(parseRoute('')).toEqual({ name: 'player' });
+    expect(parseRoute('#/')).toEqual({ name: 'player' });
   });
 
   it('reads every page the shell renders', () => {
