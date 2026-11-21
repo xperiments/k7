@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert';
 import { Badge } from '@/components/reui/badge';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -36,7 +35,7 @@ function fromPath(path: string): string {
 }
 
 export function PlayerArea() {
-  const { status, reachable } = useDeviceStatus();
+  const { status } = useDeviceStatus();
   const playing = status?.playing ?? null;
   const path = playing?.path?.trim() || null;
 
@@ -102,19 +101,12 @@ export function PlayerArea() {
    * `.k7-case-player` reads its column's width through its container. */
   return (
     <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+      {/* The chrome already says when the device stops answering, at the top of the page;
+          a second banner here would say it twice. */}
       {!status && !waited ? (
         <p className="text-sm text-muted-foreground" role="status">
           Waiting for the device to answer…
         </p>
-      ) : !reachable && (status || waited) ? (
-        <Alert variant="warning">
-          <AlertTitle>The device is not answering</AlertTitle>
-          <AlertDescription>
-            {status
-              ? 'What you last saw is below. The live stream keeps playing while the page cannot ask what it is playing.'
-              : 'The page has never reached it. The live stream still plays; this page just cannot say what is on it.'}
-          </AlertDescription>
-        </Alert>
       ) : null}
 
       {!path ? (
