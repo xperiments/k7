@@ -39,7 +39,11 @@ export interface OpSpec {
 }
 
 export const OP_SPECS: Readonly<Record<OpName, OpSpec>> = {
-  status: { timeout: 4_000 },
+  /* The heartbeat, and the one op the page asks on a timer. The K7 may be mid-draw, mid-scan
+     or writing flash when the poll arrives, so this budget is generous on purpose: a status
+     that gives up in four seconds reports a busy player as an absent one, which is exactly
+     what the page then shows. */
+  status: { timeout: 10_000 },
   playlists: { timeout: 6_000 },
   playlist: { timeout: 6_000 },
   'playlist.put': { timeout: 10_000 },
