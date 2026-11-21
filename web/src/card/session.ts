@@ -124,6 +124,20 @@ export function setDeviceView(next: boolean): void {
   for (const listener of listeners) listener();
 }
 
+/**
+ * Whether this browser has ever *chosen* a view, as opposed to holding the default. The App
+ * selects the player's card the first time it sees one, and must not do that to someone who
+ * has already said which card they are looking at.
+ */
+export function deviceViewChosen(): boolean {
+  try {
+    return localStorage.getItem(DEVICE_VIEW_KEY) !== null;
+  } catch {
+    /* No storage means no way to know a choice was made: leave the view alone. */
+    return true;
+  }
+}
+
 export function currentDeviceView(): boolean {
   return deviceView;
 }

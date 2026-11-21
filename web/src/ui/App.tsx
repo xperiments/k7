@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { DEVICE_NEEDS_PERMISSION } from '../config';
-import { restoreCardScope } from '../card/session';
+import { deviceViewChosen, restoreCardScope, setDeviceView } from '../card/session';
 import { useArtPackSync } from '../jcard/active';
 import { loadDrafts } from '../playlists/drafts';
 import { useDeviceStatus } from '../device/useDeviceStatus';
@@ -60,6 +60,15 @@ function AppContent() {
   useArtPackSync();
   const route = useRoute();
   const { status, reachable } = useDeviceStatus();
+  /* The first time the player answers with a card, and only if this browser has never
+   * chosen a view, show the player's card: it is what most people come here for, and the
+   * choice is remembered once it is made. */
+  const autoViewed = useRef(false);
+  useEffect(() => {
+    if (autoViewed.current || !reachable || status?.card !== true || status.mark === null) return;
+    autoViewed.current = true;
+    if (!deviceViewChosen()) setDeviceView(true);
+  }, [reachable, status]);
   const landed = useRef(false);
 
   useEffect(() => {
