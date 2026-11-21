@@ -470,7 +470,6 @@
     .k7-case:active .k7-front,
     .k7-case:active .k7-left {
         filter: brightness(0.94);
-        /* transition: all 1300ms cubic-bezier(0.22, 1, 0.36, 1); */
     }
 
     /* The turned case is the one the eye should land on: the faces of the cases beside it
@@ -479,6 +478,7 @@
     .k7-case[data-active='false'] .k7-front,
     .k7-case[data-active='false'] .k7-back {
         filter: brightness(0.3);
+        transition: all 1000ms ease-in-out;
     }
 
     .k7-face {
@@ -712,7 +712,7 @@
         .k7-shelf-item[data-hover='true'] .k7-front,
         .k7-shelf-item[data-hover='true'] .k7-back {
             filter: brightness(0.94);
-            transition: all 1300ms ease-in-out;
+            transition: all 1000ms ease-in-out;
         }
     }
 

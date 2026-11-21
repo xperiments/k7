@@ -18,7 +18,8 @@
     "mcp": "node src/webmcp/mcp-server.ts",
     "mcp:http": "node src/webmcp/mcp-server.ts --http 8787",
     "skill": "node scripts/build-skill.mjs",
-    "skill:check": "node scripts/build-skill.mjs --check"
+    "skill:check": "node scripts/build-skill.mjs --check",
+    "preview:css": "node scripts/build-preview-css.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
