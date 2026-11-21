@@ -170,7 +170,10 @@ function Remembering({ scope, reload }: { scope: string; reload: () => void }) {
   useEffect(() => {
     if (tried.current === scope) return;
     tried.current = scope;
-    let live = true;
+    /* The attempt outlives a render: the status poll re-renders this page every five
+     * seconds, and the answer of a request it did not start must still be delivered. */
+    const attempt = { cancelled: false };
+    let live = () => !attempt.cancelled;
     void (async () => {
       try {
         /* A player that stops answering mid-card must not leave the page saying
@@ -181,15 +184,15 @@ function Remembering({ scope, reload }: { scope: string; reload: () => void }) {
             window.setTimeout(() => reject(new Error('the player did not finish the card in 90 s')), 90_000);
           }),
         ]);
-        if (!live) return;
+        if (!live()) return;
         if (written > 0) reload();
         else setFailure('The player\'s image names no track this card holds.');
       } catch (error) {
-        if (live) setFailure(error instanceof Error ? error.message : String(error));
+        if (live()) setFailure(error instanceof Error ? error.message : String(error));
       }
     })();
     return () => {
-      live = false;
+      attempt.cancelled = true;
     };
   }, [scope, reload]);
 

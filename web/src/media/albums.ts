@@ -23,7 +23,7 @@
  *    measured** here. They are reported as such and link to Prepare, never guessed at.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useCardScope, useDeviceView } from '../card/session';
 import { scopeFor } from '../card/mark';
 import { measureableName } from '../domain/analysis';
@@ -356,8 +356,10 @@ export function useMediaIndex(): MediaIndexState {
   const [cache, setCache] = useState<Map<string, CachedMedia> | null>(null);
   const [deviceImage, setDeviceImage] = useState<DeviceImage | null>(null);
   /* A remembered card is written after this hook mounted, so the read has a revision the
-   * page can knock on. */
+   * page can knock on. The knock is stable: a fresh function per render would re-run every
+   * effect that lists it, and one of those is the remember itself. */
   const [revision, setRevision] = useState(0);
+  const reload = useCallback(() => setRevision((n) => n + 1), []);
 
   const tracks = status?.tracks ?? 0;
   const generation = status?.generation ?? 0;
@@ -420,7 +422,7 @@ export function useMediaIndex(): MediaIndexState {
     deviceTracks: tracks,
     deviceImage,
     scope,
-    reload: () => setRevision((n) => n + 1),
+    reload,
   };
 }
 
