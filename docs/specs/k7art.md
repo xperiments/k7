@@ -147,11 +147,15 @@ the sheet's proportions are exact.
   faces with the J-card's own **sizes** in units. The defaults are the label's proportions on
   the sheet's width, rounded: `title` 56, `numeral` 136, `caption` 31 (0.175 in, 0.425 in and
   0.097 in). A size is an integer 4..640 units; the editor's Type panel edits the three.
-- **Its texts bind to three J-card fields**: `title`, `artist` and `meta`. `title` is the
-  album's name, `artist` its byline (one artist, or "N artists" for a compilation), and `meta`
-  the line the App passes - `Side A · Side B` by default, the album's name on a Track's case
-  ([`../web/src/ui/album-art.tsx`](../../web/src/ui/album-art.tsx)'s `AlbumArtData`). The
-  editor's simulations are `Neon Skyline`, `The Analog Sons` and `Side A · Side B`.
+- **Its texts bind to the label's fields as well as its own.** A J-card text may name any of
+  the eleven Slots (§3) - a tempo, a key, a genre - and the J-card's three: `title` (the
+  album's name, or the Track's), `artist` (the byline: one artist, or "N artists" for a
+  compilation) and `meta` (the line the App passes - `Side A · Side B` by default, the album's
+  name on a Track's case). The App fills the fields the surface knows and prints nothing for
+  the rest, as the label does with no value: an album's case has its name, its byline, its
+  genre and the cassette line, and the tempo and the key are a Track's. `title` and `artist`
+  stay accepted for the designs made before the vocabulary grew; the panel offers the Slots
+  and `meta`.
 - **The prims are the label's shapes**: a `rect` with `x, y, w, h, r?, rot?, fill`; a `circle`
   is a rect whose `r` is `min(w, h) / 2`; a `text` with `x, y, w, rot?, font, color, align`
   and either `slot` (dynamic) or `text` (static, at the back of the same array). A dynamic text

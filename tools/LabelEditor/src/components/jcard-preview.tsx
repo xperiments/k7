@@ -11,7 +11,7 @@ import "../preview/preview.css";
  */
 export function JCardPreview() {
   const ed = useEditor();
-  const built = buildJCard(ed.jcard);
+  const built = buildJCard(ed.jcard, ed.tpl);
   const design = {
     id: ed.tpl.id,
     name: ed.tpl.name,
@@ -23,10 +23,17 @@ export function JCardPreview() {
       prims: built.doc.prims,
     } as unknown as JcardSection,
   } as unknown as JcardDesign;
+  /* What an album's case fills, which is what the shelf draws: its name and byline, the
+   * cassette line and its genre. A design bound to a Track's field — a tempo, a key — prints
+   * nothing here, as it would on the shelf: the design's own test value is the canvas's. */
   const fields = {
-    title: ed.jcard.sims?.title ?? "",
-    artist: ed.jcard.sims?.artist ?? "",
-    meta: ed.jcard.sims?.meta ?? "",
+    title: ed.jcardSim("title"),
+    artist: ed.jcardSim("artist"),
+    meta: ed.jcardSim("meta"),
+    song_title: ed.jcardSim("song_title"),
+    song_artist: ed.jcardSim("song_artist"),
+    song_album: ed.jcardSim("song_album"),
+    genre: ed.jcardSim("genre"),
   } as unknown as JcardFields;
 
   return (

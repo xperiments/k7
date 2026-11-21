@@ -34,10 +34,31 @@ export type JcardPart = keyof typeof JCARD_PARTS;
  */
 export const JCARD_SAFE = { x: 480, y: 230, w: 820, h: 820 } as const;
 
-/** The three fields the App fills: an album's or Track's title, byline and cassette line. */
-export const JCARD_FIELDS = ['title', 'artist', 'meta'] as const;
+/**
+ * The fields a J-card text may print. A design binds to the K7's own field vocabulary — the
+ * label's eleven — and to the J-card's three: `title` (the album's name or the Track's),
+ * `artist` (the byline) and `meta` (the cassette line). A surface fills the ones it has; a
+ * field it does not carry prints nothing, as the label's do when the K7 has no value.
+ */
+export const JCARD_FIELDS = [
+  'song_title',
+  'song_artist',
+  'song_album',
+  'genre',
+  'bpm',
+  'musical_key',
+  'energy',
+  'danceability',
+  'valence',
+  'arousal',
+  'mood',
+  'title',
+  'artist',
+  'meta',
+] as const;
 export type JcardField = (typeof JCARD_FIELDS)[number];
-export type JcardFields = Record<JcardField, string>;
+/** What a surface has, field by field: a missing one prints nothing. */
+export type JcardFields = Partial<Record<JcardField, string>>;
 
 /** The three faces the container's fonts name, and the J-card's own sizes per role. */
 export const JCARD_FACES = [

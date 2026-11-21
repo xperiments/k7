@@ -14,13 +14,14 @@ import {
   type RetiredTemplateDoc,
 } from "./tpl";
 import {
+  JCARD_FIELD_CHOICES,
   JCARD_FIELDS,
   JCARD_PARTS,
   JCARD_SIMS,
   JCARD_SPACE,
   starterJCard,
 } from "./jcard";
-import { WIN } from "./vocab";
+import { SLOTS, WIN } from "./vocab";
 import type { DocData, Mask, Obj, Tpl } from "./types";
 
 const mask: Mask = { color: "#c7a867", radius: 10, collapsed: false };
@@ -745,13 +746,16 @@ describe("migrateDocData", () => {
 });
 
 describe("the J-card's own vocabulary", () => {
-  it("names the three App fields and their simulations", () => {
-    expect(JCARD_FIELDS).toEqual(["title", "artist", "meta"]);
-    expect(JCARD_SIMS).toEqual({
-      title: "Neon Skyline",
-      artist: "The Analog Sons",
-      meta: "Side A · Side B",
-    });
+  it("binds to the label's Slots as well as its own three fields", () => {
+    /* The label's eleven come first: a J-card text may print a tempo or a key where the
+     * surface has one. The J-card's own three are the album's name, its byline and the
+     * cassette line. */
+    expect(JCARD_FIELDS).toEqual([...SLOTS.map((slot) => slot.id), "title", "artist", "meta"]);
+    expect(JCARD_FIELD_CHOICES).toEqual([...SLOTS.map((slot) => slot.id), "meta"]);
+    expect(JCARD_SIMS.title).toBe("Neon Skyline");
+    expect(JCARD_SIMS.artist).toBe("The Analog Sons");
+    expect(JCARD_SIMS.meta).toBe("Side A · Side B");
+    expect(JCARD_SIMS.bpm).toBe(SLOTS.find((slot) => slot.id === "bpm")?.sim);
     expect(JCARD_PARTS.cover.x + JCARD_PARTS.cover.w).toBe(JCARD_SPACE.w);
     expect(JCARD_PARTS.flap.w + JCARD_PARTS.spine.w + JCARD_PARTS.cover.w).toBe(
       JCARD_SPACE.w,

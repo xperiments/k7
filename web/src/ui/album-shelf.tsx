@@ -12,7 +12,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import type { Album } from '../media/albums';
 import { Jcard, useJcardDesign } from '../jcard';
-import { DEFAULT_META, hueOf } from './album-art';
+import { DEFAULT_META, hueOf, type AlbumArtData } from './album-art';
 import { CassetteFront } from './cassette';
 import { plural } from './format';
 
@@ -554,14 +554,26 @@ export function IndexRail({
   );
 }
 
+/**
+ * The J-card fields an album's case can fill: its name and byline, the cassette line, and the
+ * genre its rows carry. The tempo, the key and the rest are a Track's, so an album's case has
+ * none — a design that prints one of them prints nothing there, as the label's do with no value.
+ */
+function fieldsOf(album: Album): AlbumArtData {
+  const artist = byline(album);
+  return {
+    title: album.album,
+    artist,
+    meta: DEFAULT_META,
+    album: album.album,
+    genre: album.rows[0]?.genre,
+  };
+}
+
 /** The album's face: its own art, or the drawn cover it gets when it has no picture. */
 function CaseCover({ album }: { album: Album }) {
   return (
-    <CassetteFront
-      cover={album.cover}
-      initial={initialOf(album)}
-      art={{ title: album.album, artist: byline(album) }}
-    />
+    <CassetteFront cover={album.cover} initial={initialOf(album)} art={fieldsOf(album)} />
   );
 }
 
@@ -577,7 +589,15 @@ function CaseFlap({ album }: { album: Album }) {
     <span className="k7-back-flap">
       <Jcard
         design={design}
-        fields={{ title: album.album, artist, meta: DEFAULT_META }}
+        fields={{
+          title: album.album,
+          artist,
+          meta: DEFAULT_META,
+          song_title: album.album,
+          song_artist: artist,
+          song_album: album.album,
+          genre: album.rows[0]?.genre ?? '',
+        }}
         part="flap"
       />
     </span>
@@ -596,7 +616,15 @@ function CaseSpine({ album }: { album: Album }) {
     return (
       <Jcard
         design={design}
-        fields={{ title: album.album, artist, meta: DEFAULT_META }}
+        fields={{
+          title: album.album,
+          artist,
+          meta: DEFAULT_META,
+          song_title: album.album,
+          song_artist: artist,
+          song_album: album.album,
+          genre: album.rows[0]?.genre ?? '',
+        }}
         part="spine"
       />
     );

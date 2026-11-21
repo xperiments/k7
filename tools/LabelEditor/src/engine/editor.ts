@@ -28,10 +28,10 @@ import {
 import {
   JCARD_FACES,
   JCARD_FIELDS,
+  JCARD_OWN_FIELDS,
   JCARD_H,
   JCARD_SIMS,
   JCARD_W,
-  jcardSim,
   jcardSims,
   migrateJCard,
   type JCardField,
@@ -253,12 +253,14 @@ export class Editor {
         ? (o.text ?? "")
         : o.sim !== undefined && o.sim !== ""
           ? o.sim
-          : (jcardSim(this.jcard, o.name as JCardField) || "");
+          : this.jcardSim(o.name);
     return simText(o, this.tpl);
   }
-  /** What the Fields panel shows for one J-card field: the document's own test value. */
+  /** What a J-card text previews: a label Slot's test value is the label's (one field, one
+   *  test value), and the J-card's own three keep the document's. */
   jcardSim(field: JCardField): string {
-    return jcardSims(this.jcard)[field] ?? JCARD_SIMS[field];
+    if (!JCARD_OWN_FIELDS.includes(field)) return this.simOf(field);
+    return jcardSims(this.jcard)[field] ?? JCARD_SIMS[field] ?? "";
   }
   outOfSpace(o: Obj): boolean {
     if (o.ap) return false;

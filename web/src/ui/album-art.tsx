@@ -19,6 +19,10 @@ export interface AlbumArtData {
   artist: string;
   /** The small line under the rule; "Side A · Side B" when it is not given. */
   meta?: string;
+  /** The album's name when the surface knows it apart from the title (a Track's case). */
+  album?: string;
+  /** The album's genre, when the surface has it. */
+  genre?: string;
 }
 
 /** The line an album's case prints when the caller has nothing more specific. */
@@ -52,6 +56,8 @@ export function AlbumArt({
   title,
   artist,
   meta = DEFAULT_META,
+  album,
+  genre,
   part = 'cover',
   fit = 'fill',
   fallback = null,
@@ -59,10 +65,21 @@ export function AlbumArt({
   const design = useJcardDesign(title, artist);
   const hue = hueOf(title);
   if (!design) return <>{fallback}</>;
+  /* A design may bind a text to the K7's own fields as well as the J-card's three. The
+   * surface fills what it knows — an album's card has its name and genre, a Track's case its
+   * own title and album — and the rest print nothing. */
   return (
     <Jcard
       design={design}
-      fields={{ title, artist, meta }}
+      fields={{
+        title,
+        artist,
+        meta,
+        song_title: title,
+        song_artist: artist,
+        song_album: album ?? '',
+        genre: genre ?? '',
+      }}
       part={part}
       fit={fit}
       style={{ '--hue': `${hue}deg` } as CSSProperties}

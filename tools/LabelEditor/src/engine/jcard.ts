@@ -1,5 +1,5 @@
 import { VOCAB } from "./vocab.generated";
-import { FROLES, ROLES, TEXT_ROLES } from "./vocab";
+import { FROLES, ROLES, SLOTS, TEXT_ROLES } from "./vocab";
 import { DEFAULT_PAPER } from "./tpl";
 import type { FontRole, JCardDoc, JObj, Tpl } from "./types";
 
@@ -30,21 +30,37 @@ export type JCardPart = keyof typeof JCARD_PARTS;
  */
 export const JCARD_SAFE = { x: 480, y: 230, w: 820, h: 820 } as const;
 
-/** The three fields the App fills: an album's title, its byline and its cassette line. */
-export const JCARD_FIELDS = ["title", "artist", "meta"] as const;
-export type JCardField = (typeof JCARD_FIELDS)[number];
-export const JCARD_FIELD_LABELS: Record<JCardField, string> = {
-  title: "Title",
-  artist: "Artist",
-  meta: "Meta",
-};
+/**
+ * The fields a J-card text may bind to: the label's eleven Slots and the J-card's own three.
+ * A J-card text binds to the same vocabulary as the label's, so an album's case can print a
+ * tempo or a key where the surface has one; `title`, `artist` and `meta` are the J-card's own
+ * words — the album's name and byline, and the cassette line the App passes.
+ */
+export const JCARD_OWN_FIELDS: string[] = ["title", "artist", "meta"];
+export const JCARD_SLOT_FIELDS: string[] = SLOTS.map((slot) => slot.id);
+export const JCARD_FIELDS: string[] = [...JCARD_SLOT_FIELDS, ...JCARD_OWN_FIELDS];
+/**
+ * What the panel offers for a text: the label's Slots and `meta`. `title` and `artist` are
+ * accepted — the factory designs and every design made before this — but no longer offered:
+ * the Slot beside each is the same field with the label's name.
+ */
+export const JCARD_FIELD_CHOICES = [...JCARD_SLOT_FIELDS, "meta"];
+/** The J-card's field names are a vocabulary, not a closed set: a design may name any. */
+export type JCardField = string;
+export const JCARD_FIELD_LABELS: Record<string, string> = Object.fromEntries([
+  ...SLOTS.map((slot) => [slot.id, slot.label] as const),
+  ["title", "Title"],
+  ["artist", "Artist"],
+  ["meta", "Meta"],
+]);
 
 /** The editor's simulations, which are the App's own default words (§4). */
-export const JCARD_SIMS: Record<JCardField, string> = {
-  title: "Neon Skyline",
-  artist: "The Analog Sons",
-  meta: "Side A · Side B",
-};
+export const JCARD_SIMS: Record<string, string> = Object.fromEntries([
+  ...SLOTS.map((slot) => [slot.id, slot.sim] as const),
+  ["title", "Neon Skyline"],
+  ["artist", "The Analog Sons"],
+  ["meta", "Side A · Side B"],
+]);
 
 /** The three test values a document carries, defaulted for a section stored without them. */
 export function jcardSims(jcard: JCardDoc | null | undefined): Record<string, string> {
@@ -148,7 +164,7 @@ function tagOf(o: JObj, i: number): string {
  * The `jcard` section from the document. It refuses what docs/specs/k7art.md §7 refuses, so a
  * design the App cannot draw says so at Export rather than at the App's import.
  */
-export function buildJCard(jcard: JCardDoc): { doc: JCardFile; errs: string[] } {
+export function buildJCard(jcard: JCardDoc, tpl?: Tpl): { doc: JCardFile; errs: string[] } {
   const errs: string[] = [];
 
   const fonts = {} as JCardFile["fonts"];
@@ -223,12 +239,19 @@ export function buildJCard(jcard: JCardDoc): { doc: JCardFile; errs: string[] } 
         // A dynamic text always carries a preview: the layer's own test value, the Fields
         // panel's value for the field, or the App's default word.
         const field = o.name as JCardField;
+        /* A label Slot's test value is the label's — one field, one test value — so the
+         * preview for one comes from the container when the caller has it. */
+        const slotSim = JCARD_SLOT_FIELDS.includes(field)
+          ? (tpl?.sim as Record<string, string> | undefined)?.[field]
+          : undefined;
         pr.preview =
           o.sim !== undefined && o.sim !== ""
             ? o.sim
-            : JCARD_FIELDS.includes(field)
-              ? jcardSim(jcard, field)
-              : "";
+            : slotSim !== undefined && slotSim !== ""
+              ? slotSim
+              : JCARD_FIELDS.includes(field)
+                ? jcardSim(jcard, field)
+                : "";
       }
       prims.push(pr);
       return;

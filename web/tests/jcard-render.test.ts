@@ -263,14 +263,17 @@ describe('the J-card reader', () => {
       { t: 'rect', x: 0, y: 0, w: 10, h: 10, fill: 'paper' },
       { t: 'rect', x: 0, y: 10, w: 10, h: 10, fill: 'band.9' },
       { t: 'rect', x: 0, y: 20, w: 10, h: 10, fill: '#ff0000' },
-      { t: 'text', slot: 'song_title', x: 0, y: 30, w: 10, font: 'title', color: 'ink', align: 'left' },
+      /* The K7's own fields are the J-card's too: a tempo on a case is drawn. */
+      { t: 'text', slot: 'bpm', x: 0, y: 30, w: 10, font: 'title', color: 'ink', align: 'left' },
+      { t: 'text', slot: 'nope', x: 0, y: 35, w: 10, font: 'title', color: 'ink', align: 'left' },
       { t: 'text', slot: 'title', x: 0, y: 40, w: 10, font: 'nope', color: 'ink', align: 'left' },
       { t: 'text', slot: 'title', x: 0, y: 50, w: 10, font: 'title', color: 'paper', align: 'left' },
       { t: 'text', text: '', x: 0, y: 60, w: 10, font: 'title', color: 'ink', align: 'left' },
     ]);
 
-    expect(drawn.jcard.prims).toHaveLength(1);
+    expect(drawn.jcard.prims).toHaveLength(2);
     expect(drawn.jcard.prims[0]).toMatchObject({ t: 'rect', fill: 'paper' });
+    expect(drawn.jcard.prims[1]).toMatchObject({ t: 'text', slot: 'bpm' });
   });
 
   it('refuses a section over the App prim cap', () => {

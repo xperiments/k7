@@ -121,7 +121,7 @@ describe("importJCard", () => {
   it("reads the prims back as the editor's layers, and the fields' values", () => {
     const back = importJCard(buildJCard(starterJCard(tpl())).doc, tpl());
     expect(back.prims.map((o) => o.id)).toEqual([1, 2, 3, 4]);
-    expect(back.sims).toEqual({
+    expect(back.sims).toMatchObject({
       title: "Neon Skyline",
       artist: "The Analog Sons",
       meta: "Side A · Side B",

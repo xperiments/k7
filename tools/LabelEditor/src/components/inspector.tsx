@@ -53,8 +53,9 @@ import {
 import { useEditor } from "@/hooks/use-editor";
 import {
   JCARD_FACES,
-  JCARD_FIELDS,
+  JCARD_FIELD_CHOICES,
   JCARD_FIELD_LABELS,
+  JCARD_OWN_FIELDS,
   JCARD_H,
   JCARD_PARTS,
   JCARD_SAFE,
@@ -880,7 +881,7 @@ function JCardDesignPanel() {
           What the App passes for each J-card field. These are the editor&apos;s test values;
           the App supplies the album&apos;s.
         </p>
-        {JCARD_FIELDS.map((field) => (
+        {JCARD_OWN_FIELDS.map((field) => (
           <Field key={field} className="gap-1">
             <FieldLabel className="text-xs text-muted-foreground">
               {JCARD_FIELD_LABELS[field]}
@@ -925,6 +926,12 @@ function JCardLayerPanel({ o }: { o: Obj }) {
   const locked = !!o.locked;
   const isText = o.type === "text";
   const dynamic = isText && !o.static;
+  /* The panel offers the label's Slots and `meta`; a design made before the vocabulary
+   * grew may name `title` or `artist`, and its own name stays in the list so it shows. */
+  const fieldChoices =
+    o.name && !JCARD_FIELD_CHOICES.includes(o.name)
+      ? [...JCARD_FIELD_CHOICES, o.name]
+      : JCARD_FIELD_CHOICES;
   const jcRole = (role: string) => ed.jcard.fonts[FROLES.includes(role as never) ? (role as (typeof FROLES)[number]) : "caption"];
   return (
     <SectionGroup initial={isText ? "Content" : "Layout"}>
@@ -972,13 +979,13 @@ function JCardLayerPanel({ o }: { o: Obj }) {
                     ed.commit(false);
                     ed.emit();
                   }}
-                  items={JCARD_FIELDS.map((f) => ({ value: f, label: JCARD_FIELD_LABELS[f] }))}
+                  items={fieldChoices.map((f) => ({ value: f, label: JCARD_FIELD_LABELS[f] }))}
                 >
                   <SelectTrigger size="sm" className="w-full" disabled={locked} aria-label="J-card field">
                     <SelectValue placeholder="Choose a field…" />
                   </SelectTrigger>
                   <SelectContent alignItemWithTrigger={false}>
-                    {JCARD_FIELDS.map((f) => (
+                    {fieldChoices.map((f) => (
                       <SelectItem key={f} value={f}>
                         {JCARD_FIELD_LABELS[f]}
                       </SelectItem>

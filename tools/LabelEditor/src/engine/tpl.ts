@@ -465,7 +465,9 @@ export function buildTemplate(
       `${Object.keys(tpl.slots).length} fields, and the sheet holds ${LIMITS.slots} per design`,
     );
 
-  const jc = buildJCard(jcard);
+  /* The container comes along for the J-card's previews: a label Slot's test value is the
+   * label's, and the file carries what the editor shows. */
+  const jc = buildJCard(jcard, tpl);
   errs.push(...jc.errs);
 
   // The label section's key order is the section's own: space, aperture, canvas, fonts,

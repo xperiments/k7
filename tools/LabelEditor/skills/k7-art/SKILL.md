@@ -52,7 +52,11 @@ The J-card half:
   the **spine** 320–480 and the **cover** 480–1300; the folds are guides, and art may cross
   them.
 - It uses the same eleven colour roles and the same three faces as the label, with its own three
-  sizes; its texts bind to **`title`**, **`artist`** and **`meta`**, not to Slots.
+  sizes. Its texts bind to the **label's eleven Slots** (`song_title`, `bpm`, `musical_key`, …) as
+  well as the J-card's own **`title`** (the album's name or the Track's), **`artist`** (the
+  byline) and **`meta`** (the cassette line). A surface fills the fields it knows and prints
+  nothing for the rest: an album's case has the name, byline, genre and cassette line, so a
+  tempo on a case prints empty — the design's test value is the canvas's, not the App's.
 - The sheet has **its own paper**, `jcardPaper` on `set-design`: it starts equal to the label's
   and moves independently, and the webapp paints the sheet with it. `paper` stays the label's
   (the LayerMask); the two are never set by the same argument.
@@ -211,7 +215,7 @@ Add a layer to the active design, on the label's 748x359 print or the J-card's 1
 | `width` | `number` |  | Width in design units; for a text this is its wrap width. Minimum 1. |
 | `height` | `number` |  | Height in design units, for a shape. A text's height follows its type. Minimum 1. |
 | `text` | `string` |  | The string a static text prints. Do not combine with field. |
-| `field` | `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `title`, `artist`, `meta` |  | The field a dynamic text prints. The label's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood. The J-card's: title, artist, meta. Do not combine with text. |
+| `field` | `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `title`, `artist`, `meta` |  | The field a dynamic text prints. The label's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood. The J-card's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood, title, artist, meta. Do not combine with text. |
 | `role` | `string` |  | The colour role. A shape takes paper, ink, band.0, band.1, band.2, band.3, band.4, band.5, band.6, band.7, rule; a text takes ink, band.0, band.1, band.2, band.3, band.4, band.5, band.6, band.7. |
 | `fontRole` | `title`, `numeral`, `caption` |  | Which type role a text prints in. |
 | `align` | `left`, `center`, `right` |  | A text's horizontal alignment. |
@@ -232,7 +236,7 @@ Change one layer of the active design, on the label or the J-card: position or s
 | `height` | `number` |  | Height in design units, for a shape. Minimum 1. |
 | `rotation` | `number` |  | Rotation in degrees, clockwise. |
 | `text` | `string` |  | Make the text static and print this string. |
-| `field` | `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `title`, `artist`, `meta` |  | Make the text dynamic and print this field. The label's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood. The J-card's: title, artist, meta. |
+| `field` | `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `title`, `artist`, `meta` |  | Make the text dynamic and print this field. The label's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood. The J-card's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood, title, artist, meta. |
 | `role` | `string` |  | The colour role to print in. |
 | `fontRole` | `title`, `numeral`, `caption` |  | The text's type role. |
 | `align` | `left`, `center`, `right` |  | The text's horizontal alignment. |
@@ -324,7 +328,7 @@ Set what a field prints in the editor and in Preview — its simulated value, sh
 | Argument | Type | Required | Notes |
 |---|---|---|---|
 | `surface` | `label`, `jcard` |  | Which surface's field to set. Defaults to the active surface. |
-| `field` | `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `title`, `artist`, `meta` | yes | The field id. The label's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood. The J-card's: title, artist, meta. |
+| `field` | `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `title`, `artist`, `meta` | yes | The field id. The label's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood. The J-card's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood, title, artist, meta. |
 | `value` | `string` | yes | The value to preview; empty restores the default. |
 
 ### `k7art-import-template`

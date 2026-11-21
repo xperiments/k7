@@ -167,6 +167,41 @@ test("hides a layer from the read, the canvas and the export", async ({ page }) 
   expect(out.hidden.hidden).toBe(true);
 });
 
+test("binds a J-card text to the label's fields", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "modelContext", { value: undefined, configurable: true });
+    Object.defineProperty(document, "modelContext", { value: undefined, configurable: true });
+  });
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.__labelEditorMcp);
+
+  const out = await page.evaluate(async () => {
+    const call = (name: string, args: Record<string, unknown> = {}) =>
+      (window as unknown as AnyWindow).__labelEditorMcp!.call(name, args);
+    const added = await call("k7art-add-layer", {
+      surface: "jcard",
+      type: "text",
+      field: "bpm",
+      x: 520,
+      y: 300,
+      role: "ink",
+      fontRole: "numeral",
+    });
+    const exported = await call("k7art-export-template");
+    return {
+      added,
+      prims: exported.template.jcard.prims as Array<Record<string, unknown>>,
+      sims: exported.template.jcard,
+    };
+  });
+
+  expect(out.added.ok).toBe(true);
+  // The label's own test value rides along as the file's preview.
+  const bpm = out.prims.find((prim) => prim.slot === "bpm");
+  expect(bpm).toMatchObject({ t: "text", slot: "bpm", preview: "124" });
+  expect(out.added.layer.field).toBe("bpm");
+});
+
 test("edits the J-card surface and publishes a pack", async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "modelContext", { value: undefined, configurable: true });

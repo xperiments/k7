@@ -140,7 +140,7 @@ export function PlayerArea() {
               cover={cached?.cover ?? null}
               initial={title}
               hue={hueOf(title)}
-              art={{ title, artist, meta: album || undefined }}
+              art={{ title, artist, meta: album || undefined, album: album || undefined }}
               size="shelf"
               className="k7-case-player"
             />

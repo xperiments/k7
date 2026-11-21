@@ -109,7 +109,9 @@ function textNode(
 ): JcardNode {
   const font = design.jcard.fonts[prim.font];
   const face = FACE_CSS[font.ff] ?? { family: 'sans-serif', weight: 400 };
-  const content = prim.slot ? fields[prim.slot] : (prim.text ?? '');
+  /* A field this surface has no value for prints nothing: the same rule the label's fields
+   * follow when the K7 has none. */
+  const content = (prim.slot ? fields[prim.slot] : prim.text) ?? '';
 
   /*
    * A text's own box has a width and no height (k7art.md §4). The sheet's bottom is
