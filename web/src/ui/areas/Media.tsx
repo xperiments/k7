@@ -26,6 +26,7 @@ import {
   type MediaIndexState,
 } from '../../media/albums';
 import { useDeviceStatus } from '../../device/useDeviceStatus';
+import { rememberCardFromPlayer } from '../../media/remember';
 import { AlbumDetail } from '../album-detail';
 import { AlbumShelf, IndexRail, type IndexGroup } from '../album-shelf';
 import { Cover } from '../cover';
@@ -161,11 +162,35 @@ function NoAlbums({
   reachable,
   card,
   tracks,
+  scope,
+  reload,
 }: {
   reachable: boolean;
   card: boolean;
   tracks: number;
+  scope: string;
+  reload: () => void;
 }) {
+  /* A card in the player can be remembered from the card itself: its image carries the
+   * names, and the device serves it (front-door.md S3). */
+  const [remembering, setRemembering] = useState<'idle' | 'busy' | 'empty'>('idle');
+  const [failure, setFailure] = useState<string | null>(null);
+  const remember = async () => {
+    setRemembering('busy');
+    setFailure(null);
+    try {
+      const written = await rememberCardFromPlayer(scope);
+      if (written === 0) {
+        setRemembering('empty');
+        return;
+      }
+      setRemembering('idle');
+      reload();
+    } catch (error) {
+      setRemembering('idle');
+      setFailure(error instanceof Error ? error.message : String(error));
+    }
+  };
   /* Three different empty pages wear one title, so the sentence has to say which one it is.
    * A cleared browser on a full card is the case worth naming: the player is holding the
    * tracks and answering, and what is missing is this browser's memory of them - a rescan
@@ -193,15 +218,32 @@ function NoAlbums({
           Open Prepare
         </Button>
         {holding ? (
-          <Button
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={<a href={routeHref({ name: 'drive', path: '' })} />}
-          >
-            Drive
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void remember()}
+              disabled={remembering === 'busy'}
+            >
+              {remembering === 'busy' ? 'Remembering…' : 'Remember from the player'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<a href={routeHref({ name: 'drive', path: '' })} />}
+            >
+              Drive
+            </Button>
+          </>
         ) : null}
+        {remembering === 'empty' ? (
+          <p className="text-xs text-muted-foreground">
+            The card in the player has no image on it — nothing measured it, so there are no
+            names to bring back. Measure it in the computer once.
+          </p>
+        ) : null}
+        {failure ? <p className="text-xs text-destructive">{failure}</p> : null}
       </EmptyContent>
     </Empty>
   );
@@ -271,7 +313,13 @@ function ShelfView({
       <Skeleton className="aspect-square w-40" />
     </div>
   ) : !hasAlbums ? (
-    <NoAlbums reachable={state.reachable} card={state.card} tracks={state.deviceTracks} />
+    <NoAlbums
+      reachable={state.reachable}
+      card={state.card}
+      tracks={state.deviceTracks}
+      scope={state.scope}
+      reload={state.reload}
+    />
   ) : nothingMatches ? (
     <Empty className="border">
       <EmptyHeader>

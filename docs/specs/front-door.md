@@ -176,6 +176,14 @@ There is no route for this: an address that has to be requested separately is on
 that can fail. The address is a lease, not a fact, so a request that fails to reach it forgets
 it and the next one goes back to the name.
 
+**S3.** `GET /api/k7db` serves the card's Snapshot image verbatim — the `k7.db` the App wrote
+when it measured the card — or `404` when the card carries none. Its rows hold each Track's
+title, artist, album and genre beside its measurements (snapshot-format.md), so a browser that
+has never met the card (a cleared store, another machine) can join them to the library arena's
+paths and rebuild its albums. That is what makes naming a card in the player possible without
+putting it in a computer; the pictures are the cover archive's, restored separately. The device
+never parses the file — it is the App's, served as it stands.
+
 **U4.** There is **no TLS**. No certificate is compiled in, no trust step exists, and a browser
 shows "Not secure" and no interstitial. The consequences are accepted, not hidden: no service
 worker and no installable PWA, no `crypto.subtle` (a pure-JS SHA-256 replaces it), and no

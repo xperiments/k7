@@ -332,6 +332,10 @@ export interface MediaIndexState {
   deviceTracks: number;
   /** The image the player answers from; null when it does not say or has none. */
   deviceImage: DeviceImage | null;
+  /** The store this page is reading: the scope a remembered card is written into. */
+  scope: string;
+  /** Re-read the store, for a write that happened after the mount. */
+  reload: () => void;
 }
 
 /**
@@ -351,6 +355,9 @@ export function useMediaIndex(): MediaIndexState {
   const scope = deviceView && deviceScope !== null ? deviceScope : picked;
   const [cache, setCache] = useState<Map<string, CachedMedia> | null>(null);
   const [deviceImage, setDeviceImage] = useState<DeviceImage | null>(null);
+  /* A remembered card is written after this hook mounted, so the read has a revision the
+   * page can knock on. */
+  const [revision, setRevision] = useState(0);
 
   const tracks = status?.tracks ?? 0;
   const generation = status?.generation ?? 0;
@@ -369,7 +376,7 @@ export function useMediaIndex(): MediaIndexState {
     return () => {
       cancelled = true;
     };
-  }, [scope]);
+  }, [scope, revision]);
 
   /* Which image is answering. Its own poll: the library listing says what exists, this says
    * what the device knows about it, and the two changes are independent. */
@@ -412,6 +419,8 @@ export function useMediaIndex(): MediaIndexState {
     card: status?.card === true,
     deviceTracks: tracks,
     deviceImage,
+    scope,
+    reload: () => setRevision((n) => n + 1),
   };
 }
 
