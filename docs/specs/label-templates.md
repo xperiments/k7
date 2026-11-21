@@ -6,8 +6,9 @@ The cassette's **label** is the design the two-finger screen prints on the Card'
 and read in place by `components/portable/label/`. The same K7Art carries the design's
 **J-card**, the paper face the App draws when an album has no picture; the two are one-to-one.
 [ADR 0071](../adr/0071-the-two-finger-screen-prints-a-packed-label-sheet.md) records why the
-device does not parse the JSON; this document is the label's contract with the editor, the
-packer and the reader. A user's **K7Art pack** ([`art-packs.md`](./art-packs.md)) adds a second
+device does not parse the JSON; [ADR 0113](../adr/0113-a-k7arts-colours-are-literal.md) why a
+prim paints its own colour and the sheet is version 5; this document is the label's contract
+with the editor, the packer and the reader. A user's **K7Art pack** ([`art-packs.md`](./art-packs.md)) adds a second
 sheet of this format at runtime; it does not change this one.
 
 The vocabulary — **Label**, **Label sheet**, **Slot**, **K7Art** — is in
@@ -39,36 +40,42 @@ radius 83** in these coordinates.
 - **The cassette's background is the label's own, at the two-finger pose.** A label may carry a
   **canvas background** (§2): while the pose shows the tape, the Card's plastic, its mat and
   front plate, the window's rim and the 800x480 screen behind them are that colour. It is
-  outside the print and the print never crops it; it is not the label's `paper`, which is a prim
-  inside the print. A label without one leaves the Track's cassette row alone. The J-card has no
-  canvas: it is paper, and its sheet is the container's `paper`
+  outside the print and the print never crops it; it is not the label's paper, which is the
+  mask's rect inside the print. A label without one leaves the Track's cassette row alone. The
+  J-card has no canvas: it is paper, and its sheet is the section's `background`
   ([`k7art.md`](./k7art.md) §4).
 
 ## 2. The label section — what a K7Art's `label` holds
 
 What the editor writes inside a K7Art's `label`, and what the packer reads. The container's
-`id`, `name` and `inks` are [`k7art.md`](./k7art.md) §1's; the fields below are the section's,
-and the ones the packer uses. The rest are the editor's.
+`id` and `name` are [`k7art.md`](./k7art.md) §1's; the fields below are the section's, and the
+ones the packer uses. The rest are the editor's.
 
 ```json
 {
   "space": { "w": 748, "h": 359 },
+  "mask": { "color": "#F5F1E6", "r": 19 },
   "aperture": { "x": 95, "y": 101, "w": 556, "h": 166, "r": 83 },
   "canvas": { "backgrounds": ["#909090"], "active": 0 },
   "fonts": { "title":   { "ff": "Archivo Narrow 600", "px": 32 },
              "numeral": { "ff": "Barlow Condensed 700", "px": 78 },
              "caption": { "ff": "IBM Plex Mono 500", "px": 18 } },
   "slots": { "song_title": { "max": 96 } },
-  "notes": ["the spike is the one literal colour: it is the sleeve's, not the sheet's"],
   "prims": [
-    { "t": "rect", "x": 0, "y": 0, "w": 748, "h": 359, "r": 19,
-      "fill": "paper", "still": true },
+    { "t": "rect", "x": 0, "y": 0, "w": 748, "h": 120, "fill": "#6B7A2F", "still": true },
     { "t": "text", "slot": "song_title", "x": 40, "y": 300, "w": 400,
-      "font": "title", "color": "ink", "align": "left", "preview": "Neon Skyline" }
+      "font": "title", "color": "#242424", "align": "left", "preview": "Neon Skyline" }
   ]
 }
 ```
 
+- **`mask` is the design's paper, and it is optional.** It is the LayerMask: the print's box
+  (748x359) in a `#RRGGBB` colour, clipped to a corner radius `r`. It is not among the `prims`;
+  both sheet writers put it in front of them as a rect
+  (`x 0, y 0, w 748, h 359, r r, fill color`), so the print has a background the reader paints
+  like any other prim. A design without a mask has no paper: the print shows the panel behind
+  it. The mask's colour is its own; it is not the J-card's `background`
+  ([`k7art.md`](./k7art.md) §2).
 - **`canvas` is the cassette's background at the two-finger pose, chosen by the cassette row.**
   `backgrounds` is one to eight `#RRGGBB` colours — `assets/labels/vocabulary.json`'s `canvas` is
   the cap — and the sheet carries the whole list. The player uses
@@ -79,29 +86,21 @@ and the ones the packer uses. The rest are the editor's.
   `active`, and `active` must index one of them. The editor writes the field for every design it
   exports, and a new design starts on the panel's page (`#909090`), so an untouched export is the
   page it replaces.
-- **A text prints in the ink or in one of the eight bands.** `color` is `ink` (the default) or
-  `band.0`..`band.7`, so the type that sits on a band can print in that band's own colour; the
-  paper is refused because there is nothing to read against it, and the one literal colour is a
-  rect's. The editor offers those nine in the text's Colour control, and `ink` when none is set.
-- **The container's `inks` are the design's, and the label's `fonts` are the sheet's.** The
-  eleven colours are exactly the roles — `paper`, `ink`, `rule` and `band[0..7]` — which is why
-  a prim names a role and not a colour. A design may declare four to eight bands: the sheet
-  always carries eight slots, and a design that declares four leaves the rest `0`. `paper` is
-  always a colour in the K7Art: it is the LayerMask's when the label has a mask, and the
-  J-card's sheet. A prim that fills with `paper` needs the LayerMask, and the packer refuses it
-  without one. The palette and the faces live on the container
-  ([`k7art.md`](./k7art.md) §2); the label's `fonts` are the three compiled pairs.
-- **A font role is one of the sheet's pairs.** `ff` and `px` must be a pair
+- **A prim paints its own colour.** A `rect`'s `fill` and a `text`'s `color` are `#RRGGBB`, both
+  cases exactly seven characters. Any colour may go on any element: the type that sits on a band
+  may print in the band's own colour, or in white, or in a colour nothing else uses. There is no
+  role, no declared band list and no `notes`: the label's colours are the design's own.
+- **The label's `fonts` are the sheet's.** `ff` and `px` must be a pair
   [`assets/labels/vocabulary.json`](../../assets/labels/vocabulary.json) carries: the sheet
   addresses a font by its index in that table, and the packer refuses a pair it does not. A
   label's faces are the three the editor embeds — `Archivo Narrow 600` at 32, `Barlow Condensed
   700` at 78 and `IBM Plex Mono 500` at 18 — and it offers only those, because a face it cannot
-  draw is a face it cannot show. A role is a face *and* a size, not a face with a size typed
+  draw is a face it cannot show. A type role is a face *and* a size, not a face with a size typed
   beside it. The J-card uses the same three faces at its own sizes
   ([`k7art.md`](./k7art.md) §4); those sizes are the J-card's units, not the sheet's pairs.
-- **`prims` are painted in order**, first at the back. `still: true` means nothing animates it.
-- **A `rect`** has `x, y, w, h, r?, rot?, fill` and, for the one literal colour a design may
-  use, `fill` is a `#RRGGBB` instead of a role, and `notes` must say why.
+- **`prims` are painted in order**, first at the back, after the mask's rect. `still: true`
+  means nothing animates it.
+- **A `rect`** has `x, y, w, h, r?, rot?, fill`, and `fill` is a `#RRGGBB` colour.
 - **A `text`** has `x, y, w, rot?`, `font` (`title`/`numeral`/`caption`), `color`, `align`
   (`left`/`center`/`right`), and either
   `slot` (a Slot name, dynamic) or `text` (static, at the back of the same array). Its `w` is a
@@ -131,14 +130,14 @@ sheets are one pool, the factory first (§6).
 
 ```text
 header        32 B
-templates     template_count x 64 B, ascending by id
+templates     template_count x 16 B, ascending by id
 canvases      template_count x 8 x 4 B, flat; a template's eight colours start at template x 32
 prims         prim_count x 24 B, flat; a template's slice starts at its prim_start
 slots         slot_count x 8 B, flat; a template's slice starts at its slot_start
 string pool   pool_size B, UTF-8, NUL-terminated; every offset is relative to its start
 ```
 
-`total_size == 32 + 64 * template_count + 32 * template_count + 24 * prim_count + 8 * slot_count
+`total_size == 32 + 16 * template_count + 32 * template_count + 24 * prim_count + 8 * slot_count
 + pool_size`, checked rather than assumed.
 
 ### 3.1 Header (32 bytes)
@@ -146,7 +145,7 @@ string pool   pool_size B, UTF-8, NUL-terminated; every offset is relative to it
 | Offset | Size | Field | Value |
 |---|---|---|---|
 | 0 | 8 | `magic` | `K7LBL`, NUL-padded to 8 |
-| 8 | 2 | `version` | `4` |
+| 8 | 2 | `version` | `5` |
 | 10 | 2 | `header_size` | `32` |
 | 12 | 4 | `total_size` | the file's whole length |
 | 16 | 4 | `crc32` | CRC-32/IEEE over `[32, total_size)` |
@@ -157,7 +156,7 @@ string pool   pool_size B, UTF-8, NUL-terminated; every offset is relative to it
 | 28 | 2 | `slot_count` | total, `<= 32 * 16` |
 | 30 | 2 | `pool_size` | bytes |
 
-### 3.2 Template (64 bytes)
+### 3.2 Template (16 bytes)
 
 | Offset | Size | Field | Notes |
 |---|---|---|---|
@@ -170,31 +169,19 @@ string pool   pool_size B, UTF-8, NUL-terminated; every offset is relative to it
 | 13 | 1 | `font[1]` | the `numeral` role's |
 | 14 | 1 | `font[2]` | the `caption` role's |
 | 15 | 1 | `canvas_count` | `0..8`; the entries in the template's canvas row |
-| 16 | 4 | `paper` | RGB888 in the low 24 bits |
-| 20 | 4 | `ink` | |
-| 24 | 4 | `rule` | |
-| 28 | 4 | `band[0]` | |
-| 32 | 4 | `band[1]` | |
-| 36 | 4 | `band[2]` | |
-| 40 | 4 | `band[3]` | |
-| 44 | 4 | `band[4]` | |
-| 48 | 4 | `band[5]` | |
-| 52 | 4 | `band[6]` | |
-| 56 | 4 | `band[7]` | |
-| 60 | 4 | `reserved` | `0` |
 
-Version 4 is the canvas list: byte 15 is the count, the record is still 64 bytes, and the
-eight-colour row follows the template array. The count is 0 for a design without a canvas; the
-row's entries past the count are 0. The player picks `canvas[row % count]` by the Track's
-cassette row and paints the cassette's body and the screen with it while the two-finger pose is
-up (§6).
+Version 5 is the literal colours: a template carries no inks, so the record is 16 bytes where
+version 4's was 64. The eight-colour canvas row still follows the template array, and the count
+is still the canvas list's: 0 for a design without a canvas, the row's entries past the count
+0. The player picks `canvas[row % count]` by the Track's cassette row and paints the cassette's
+body and the screen with it while the two-finger pose is up (§6).
 
 ### 3.3 Prim (24 bytes)
 
 | Offset | Size | Field | Notes |
 |---|---|---|---|
 | 0 | 1 | `kind` | `0` rect, `1` static text, `2` slot text |
-| 1 | 1 | `fill` | `0` paper, `1` ink, `2` rule, `3..10` band 0..7, `11` literal |
+| 1 | 1 | `reserved` | `0` |
 | 2 | 1 | `font` | `0` title, `1` numeral, `2` caption; `0` for a rect |
 | 3 | 1 | `align` | `0` left, `1` center, `2` right; `0` for a rect |
 | 4 | 2 | `x` | signed |
@@ -204,9 +191,11 @@ up (§6).
 | 12 | 2 | `r` | rect only; `0` for a text |
 | 14 | 2 | `rot10` | tenths of a degree, `0..3599` |
 | 16 | 4 | `text_offset` | static text or Slot name; `0xFFFFFFFF` for a rect |
-| 20 | 4 | `literal_colour` | RGB888; only read when `fill == 11` |
+| 20 | 4 | `colour` | RGB888 in the low 24 bits, always painted |
 
-A text may carry the ink or any of the eight bands; the paper and the literal colour are refused.
+A prim paints its own colour: a rect's fill, a text's colour. The mask's rect, which the writer
+puts in front of the design's prims, is a rect like any other. There is no fill index and no
+one-literal exception: a colour the design uses is a colour a prim carries.
 
 ### 3.4 Slot (8 bytes)
 
@@ -225,12 +214,13 @@ built apart, which is a bug, not a state.
 
 The reader refuses the whole sheet — and the screen falls back to the flat palette fill — when:
 
-`magic` is not `K7LBL`, `version` is not 4, `header_size` is not 32, `total_size` disagrees with
+`magic` is not `K7LBL`, `version` is not 5, `header_size` is not 32, `total_size` disagrees with
 the counts, the CRC disagrees, `space_*` is not 748x359, a count is past its cap, a template's
 `prim_start + prim_count` or `slot_start + slot_count` runs past its array, a prim's
 `text_offset` is past `pool_size`, a string is not NUL-terminated inside the pool, a font index
-is past the font table, a template's `canvas_count` is above eight, its reserved word is not 0,
-a canvas before the count is above `0xFFFFFF`, or a canvas past the count is nonzero.
+is past the font table, a template's `canvas_count` is above eight, a prim's `reserved` byte is
+not 0, a prim's `colour` is above `0xFFFFFF`, a canvas before the count is above `0xFFFFFF`, or
+a canvas past the count is nonzero.
 
 The factory sheet is a build product; a user pack's sheet that fails any of these is ignored,
 and the factory sheet alone is used ([`art-packs.md`](./art-packs.md) §5).
@@ -241,10 +231,10 @@ What a design may say, and the bounds the sheet and the panel hold it to, is one
 file. The editor and the firmware do not each keep a copy of it:
 
 ```json
-{ "v": 1,
+{ "v": 2,
   "space": { "w": 748, "h": 359 },
   "aperture": { "x": 95, "y": 101, "w": 556, "h": 166, "r": 83 },
-  "bands": 8, "value": 96, "canvas": 8,
+  "value": 96, "canvas": 8,
   "limits": { "prims": 48, "slots": 16, "templates": 32 },
   "coords": { "x": [-32768, 32767], "y": [-32768, 32767],
               "w": [1, 65535], "h": [1, 65535] },
@@ -260,13 +250,14 @@ file. The editor and the firmware do not each keep a copy of it:
 - **`fonts`** is the sheet's font table. The first three rows are what the screen already
   compiles; the last three are the editor's own faces. `"editor": true` marks the faces the
   editor offers — the ones it serves and can draw. A face it cannot draw is a face it cannot
-  show, so a role picker never offers one. The J-card uses the same three faces at its own
+  show, so a type picker never offers one. The J-card uses the same three faces at its own
   sizes; those sizes are not a table entry.
-- **`space`, `aperture`, `bands`, `value`, `canvas`, `limits` and `coords`** are the numbers the
-  packer used to hold alone. `coords` is what a prim's record can say — `x` and `y` int16, `w`
-  and `h` uint16 — which is a refusal, not a clamp (ADR 0072). `canvas` is the most colours a
-  design may declare: eight. It bounds the design file and the sheet's per-template row; the
-  player's cassette table has seven rows, so seven pins one per row and fewer cycles.
+- **`space`, `aperture`, `value`, `canvas`, `limits` and `coords`** are the numbers the packer
+  used to hold alone. `coords` is what a prim's record can say — `x` and `y` int16, `w` and `h`
+  uint16 — which is a refusal, not a clamp (ADR 0072). `canvas` is the most colours a design may
+  declare: eight. It bounds the design file and the sheet's per-template row; the player's
+  cassette table has seven rows, so seven pins one per row and fewer cycles. Version 2 drops
+  `bands`: with a colour on every prim there is no declared palette to count.
 - **`defaults.fonts`** is the face roles a new label starts with. The J-card's default sizes are
   the editor's ([`k7art.md`](./k7art.md) §4).
 
@@ -289,7 +280,7 @@ load is a host failure.
 - **The packer's font index is the table's index**, and it also writes `label_fonts.h` with
   `#define LABEL_FONT_<SLUG> <index>` and `LABEL_FONT_COUNT`, so the app's `k_label_font[]` is
   checked by the compiler rather than by hope.
-- **A face or size not in the table is refused**, naming the design and the role: a label
+- **A face or size not in the table is refused**, naming the design and the type role: a label
   cannot quietly wear a different face on the panel than in the editor. The J-card's sizes are
   its own; its faces are the three, and a fourth is refused with the design named.
 - Adding a face is adding a converted font (a committed `font_<face>_<px>.c`, like
@@ -316,7 +307,7 @@ way, so it is the same file. It is a tolerance, not a normalisation: the analyse
 the composed form, and an image that does makes the second try unnecessary.
 
 A Track with no row (an unanalysed card, a file replaced under the same name, or a fingerprint
-that disagrees) leaves every slot empty: the design prints its paper, bands and rules with blank
+that disagrees) leaves every slot empty: the design prints its shapes and its paper with blank
 text, and the screen says which half of the join missed.
 
 | Slot | Value | Unknown |
@@ -352,14 +343,14 @@ At the **two-finger pose only** (`controls.full`, the entry grid). The label's o
 children of the print — the 748x359 box the Cover uses — so they are cut by the Card's mask and
 by the print's own box exactly as a picture is.
 
-- **A rect** is a box with every style removed: `bg_color` = its role's colour, `bg_opa` cover,
-  `radius` = `r`, no border, no padding, not clickable, not scrollable, and, when `rot10 != 0`,
-  `transform_rotation` about the box's centre.
+- **A rect** is a box with every style removed: `bg_color` = `lv_color_hex(p.colour)`, `bg_opa`
+  cover, `radius` = `r`, no border, no padding, not clickable, not scrollable, and, when
+  `rot10 != 0`, `transform_rotation` about the box's centre.
 - **A text** is an `lv_label` with its slot's value (or the static text), `width` = `w`,
-  `LV_LABEL_LONG_WRAP`, `text_align` = `align`, `text_color` = ink, and `text_font` =
-  `k_label_font[]` of its role.
-- **The print's background stays the palette's label fill**; a design's paper is a prim like any
-  other, so a design without one still reads as a cassette label.
+  `LV_LABEL_LONG_WRAP`, `text_align` = `align`, `text_color` = `lv_color_hex(p.colour)`, and
+  `text_font` = `k_label_font[]` of its type role.
+- **The print's background stays the palette's label fill**; a design's paper is the mask's
+  rect, a prim like any other, so a design without one still reads as a cassette label.
 - **The cassette's body is the label's canvas, and only at the two-finger pose.** When the
   design carries canvases, the Card's plastic, its mat and front plate, the window's rim and the
   800x480 screen behind them wear `canvas[cassette_row % count]` while the pose is up. The pose's
@@ -395,25 +386,22 @@ different moments — that is why there are two — but the facts they refuse by
 
 | Refusal | Why |
 |---|---|
-| `format` is not `k7art`, or `v` is not 1 | a different file |
+| `format` is not `k7art`, or `v` is not 2 | a different file, and v1 is the editor's to migrate |
 | the id is not `k7.<slug>`, or the same id twice in a sheet | the folder is the set |
 | no `label` or no `jcard` | the design is the pair |
 | `space` is not 748x359 | the print is one box |
-| `inks.band` has fewer than 4 or more than 8 colours | the sheet carries eight slots; the first four are required |
-| a prim names `band.N` with `N` past the design's own list | there is no colour to print |
 | the aperture is neither absent nor `(95,101,556,166,r83)` | the window is the Card's |
+| an aperture without a `mask` | there is no paper to cut the window out of |
+| a `mask` whose colour is not `#RRGGBB`, or whose radius is not a non-negative integer | the paper has no paint, or no such corner |
 | `canvas` is present but `backgrounds` is not one to eight `#RRGGBB` colours | there is no screen colour to paint |
 | `canvas.active` is missing or outside `backgrounds` | which preset would the player paint? |
 | a coordinate outside int16, or a size outside uint16 | the record cannot hold it |
-| a prim with no role and no literal colour, or an unknown role | what would it paint? |
-| a `paper` prim when the design has no LayerMask | there is no paper without the mask |
-| more than one literal colour, or one with no `note` | the sheet is role-coloured |
-| a text whose `color` is `paper` or a literal | nothing to read against it, and the literal is a rect's |
+| a prim with no `fill`/`color`, or one that is not `#RRGGBB` | what would it paint? |
 | an unknown Slot name, a slot a text uses but does not declare, or a declared slot no text uses | the vocabulary is one table |
 | a font role not in `vocabulary.json` | the glyphs are not compiled |
 | a design with no prims, or a text with neither a slot nor a static text | there is nothing to draw |
 | a slot whose `max` is 0 or over 96 | the resolver carries 96; the editor writes that |
-| more than 48 prims, 16 slots or 32 designs per sheet | a bounded build, a bounded repaint, a bounded sheet |
+| more than 48 prims (the mask's rect included), 16 slots or 32 designs per sheet | a bounded build, a bounded repaint, a bounded sheet |
 | the same `id` twice | selection would be ambiguous |
 | no designs at all in `assets/k7art/` | nothing to embed |
 | a file in `assets/k7art/` that is not a K7Art | it would be a design nobody wrote |

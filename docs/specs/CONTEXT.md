@@ -478,8 +478,8 @@ _Avoid_: artwork screen, Case, portada
 **Label template**:
 The design the two-finger pose prints on the Card's print: the `label` section of a **K7Art**
 ([`k7art.md`](./k7art.md)), a 748x359 design in `assets/k7art/`, authored in the **K7Art
-Editor**. Its prims are rects and texts coloured by role — paper, ink, rule and band 0..7 — its
-texts bound to **Slots** or fixed, and its paper cut at the **Window** by the Card's own mask. A
+Editor**. Its prims are rects and texts, each in its own `#RRGGBB` colour, its texts bound to
+**Slots** or fixed, and its **LayerMask** cut at the **Window** by the Card's own mask. A
 Track's template is a pick from the **Pool** — `ink_seed % (factory + user)` — the same seed
 that picks its palette row, so shell and design always pair (ADR 0071). The layout is in
 [`label-templates.md`](./label-templates.md).
@@ -515,11 +515,12 @@ _Avoid_: variable, token, placeholder; field (the **J-card field**)
 
 **K7Art**:
 One cassette artwork: a **Label template** and its **J-card**, one id `k7.<slug>`, one file in
-`assets/k7art/`, one-to-one. The two sections share the K7Art's `inks` - paper, ink, rule and
-band 0..7 - and its three faces; the label's text binds to **Slots**, the J-card's to **J-card
-fields**. `label_pack.py` reads its label section and the App reads its J-card section; the
-device never parses it. It is not the retired `label-template v1` file.
-_Avoid_: label template (the design, not the file), artwork, skin, theme
+`assets/k7art/`, one-to-one. Every layer carries its own `#RRGGBB` colour - there are no colour
+roles - and the two sections share the identity and the three faces; the label's text binds to
+**Slots**, the J-card's to **J-card fields**. `label_pack.py` reads its label section and the
+App reads its J-card section; the device never parses it. It is not the retired
+`label-template v1` file.
+_Avoid_: label template (the design, not the file), artwork, skin, theme, palette
 
 **J-card**:
 The paper insert of a cassette case: one side, 4.0625x4 in, scored into a **flap**, a **spine**

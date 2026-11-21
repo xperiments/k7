@@ -7,7 +7,8 @@ designs and the user's are one pool.
 
 [ADR 0111](../adr/0111-a-pack-is-art-in-flash-and-the-factory-and-user-designs-are-one-pool.md)
 records the decision; [ADR 0112](../adr/0112-the-k7art-editor-is-the-sites-k7art-page.md) the
-editor's page. The design file is [`k7art.md`](./k7art.md)'s, the sheet's binary is
+editor's page; [ADR 0113](../adr/0113-a-k7arts-colours-are-literal.md) the literal colours that
+make a v1 pack read no longer. The design file is [`k7art.md`](./k7art.md)'s, the sheet's binary is
 [`label-templates.md`](./label-templates.md)'s, and the App's device link is
 [`k7-app.md`](./k7-app.md)'s.
 
@@ -18,7 +19,7 @@ and the J-cards.
 
 ```text
 header        128 B
-label sheet   sheet_size B at sheet_offset   (the binary label_sheet.bin, version 4)
+label sheet   sheet_size B at sheet_offset   (the binary label_sheet.bin, version 5)
 J-cards       jcards_size B at jcards_offset (UTF-8 JSON)
 ```
 
@@ -30,7 +31,7 @@ J-cards       jcards_size B at jcards_offset (UTF-8 JSON)
 | 12 | 4 | `total_size` | the file's whole length |
 | 16 | 4 | `crc32` | CRC-32/IEEE over `[128, total_size)` |
 | 20 | 2 | `design_count` | `1..32`, equal to the sheet's `template_count` |
-| 22 | 2 | `sheet_version` | `4` |
+| 22 | 2 | `sheet_version` | `5` |
 | 24 | 2 | `font_count` | the firmware's `LABEL_FONT_COUNT` the sheet was built against |
 | 26 | 2 | `reserved` | `0` |
 | 28 | 4 | `sheet_offset` | `128` |
@@ -43,22 +44,24 @@ J-cards       jcards_size B at jcards_offset (UTF-8 JSON)
 | 124 | 4 | `reserved` | `0` |
 
 - **The sheet is the packer's, unchanged.** It is the same `label_sheet.bin` the build embeds:
-  magic `K7LBL`, version 4, its own CRC, the label sections of the pack's designs in id order,
+  magic `K7LBL`, version 5, its own CRC, the label sections of the pack's designs in id order,
   the font table compiled into the firmware. The pack's `sheet_version` and `font_count` are
   the compatibility contract: a pack whose sheet is another version, or built against another
-  font table, is refused by name.
+  font table, is refused by name. **Version 5 is the literal colours**
+  ([`label-templates.md`](./label-templates.md) §3): a pack published by an older editor has a
+  version-4 sheet and is not read; the App says so and the designs are published again.
 - **The J-cards are the designs' `jcard` sections**, in the same id order as the sheet:
 
   ```json
-  { "v": 1,
+  { "v": 2,
     "designs": [
       { "id": "k7.neon", "name": "Neon Skyline", "jcard": { "space": { … }, "parts": { … },
-        "fonts": { … }, "prims": [ … ] } }
+        "background": "#F5F1E6", "fonts": { … }, "prims": [ … ] } }
     ] }
   ```
 
-  The App renders them; the K7 never parses one. The design's `inks` travel with each design
-  (they are the container's), because the App's renderer needs the role colours.
+  The App renders them; the K7 never parses one. Every prim carries its own colour, so the
+  J-card needs no design-wide inks; its own `background` is the sheet's colour.
 - **The bounds**: `total_size` at most 1 MB (the `art` partition), `design_count` at most 32
   (the sheet's cap), each J-card at most 16 KB ([`k7art.md`](./k7art.md) §7). A pack with no
   designs is refused.
@@ -68,10 +71,9 @@ J-cards       jcards_size B at jcards_offset (UTF-8 JSON)
 ## 2. The factory pack
 
 The repo's `assets/k7art/*.json` are the factory designs. At build, `label_pack.py` reads their
-`label` sections and writes the embedded `label_sheet.bin` - the factory sheet, unchanged in
-format. The webapp's build reads the same files and bundles their `jcard` sections (with the
-`inks`) as the **factory J-cards**: the default pool that every album without a picture draws
-from. The factory pack is not a `.k7artpack` on the device; it is the app's embedded sheet plus
+`label` sections and writes the embedded `label_sheet.bin` - the factory sheet, version 5. The
+webapp's build reads the same files and bundles their `jcard` sections as the **factory
+J-cards**: the default pool that every album without a picture draws from. The factory pack is not a `.k7artpack` on the device; it is the app's embedded sheet plus
 the app's bundled J-cards.
 
 ## 3. The editor's publish
@@ -87,9 +89,9 @@ Publishing is a browser build, not a request to a server.
 - **Byte parity is the seam.** CI runs the TypeScript writer and `label_pack.py` over every
   `assets/k7art/*.json` and compares the bytes; a disagreement fails the build. The Python
   packer stays the build's; the TypeScript one is the editor's.
-- **Build the J-cards and the header**: each design's `jcard` with the container's `inks`, the
-  pack's header (the sheet's size and CRC, the design count, the font count, the name, the
-  author, the CRC) and the download. A design the editor would refuse at Export is refused
+- **Build the J-cards and the header**: each design's `jcard` under `v: 2`, the pack's header
+  (the sheet's size and CRC, the design count, the sheet's version, the font count, the name,
+  the author, the CRC) and the download. A design the editor would refuse at Export is refused
   here, by name, before the pack exists.
 - **The editor does not install.** It has no device client; the App installs
   ([ADR 0111](../adr/0111-a-pack-is-art-in-flash-and-the-factory-and-user-designs-are-one-pool.md)).
@@ -168,9 +170,9 @@ none, the face is the pool's J-card, chosen by the same stable hash that picks a
 - **The five CSS faces retire**; `web/src/ui/album-art.tsx` keeps the no-cover slot and the
   album's hue and loses the five drawings. The look's K19 records it
   ([`k7-look.md`](./k7-look.md) §5.3).
-- **The renderer** is [`k7art.md`](./k7art.md) §5's: the prims in the DOM, the roles from the
-  design's `inks`, the faces and sizes, the rotation and the wrap. The J-card is decorative;
-  the album's name is beside it.
+- **The renderer** is [`k7art.md`](./k7art.md) §5's: the prims in the DOM, each in its own
+  colour, the faces and sizes, the rotation and the wrap. The J-card is decorative; the
+  album's name is beside it.
 - **A Track's case** (the Player, the Player bar) uses the same pool and the Track's
   `title`/`artist`/`album` as the three fields, as the CSS faces did; an album's case uses the
   album's name, its byline and the default meta.
