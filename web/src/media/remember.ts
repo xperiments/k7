@@ -18,7 +18,7 @@ import { fnv1a64 } from '../domain/snapshot';
 import { readImageRows } from '../library/imageSource';
 import { folderOf } from './paths';
 import { restoreCoversFromDevice } from '../ui/cardWriter';
-import { putMediaMany, type CachedMedia } from '../storage/media';
+import { countMedia, putMediaMany, type CachedMedia } from '../storage/media';
 
 /**
  * Write the player's card into `scope` and answer how many rows were written. Throws what
@@ -67,5 +67,10 @@ export async function rememberCardFromPlayer(scope: string): Promise<number> {
   /* One transaction for the card: a remembered library is thousands of rows, and one write
    * each is slow enough that a closed connection could catch it half-written. */
   await putMediaMany(scope, fresh);
+  /* Read it back: a transaction that silently did nothing (a closed connection, a store
+   * that answered with an abort) must not leave the page waiting on rows that are not
+   * there. */
+  const landed = await countMedia(scope);
+  if (landed === 0) throw new Error('the rows did not land in this browser’s store');
   return fresh.length;
 }

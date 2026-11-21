@@ -173,7 +173,14 @@ function Remembering({ scope, reload }: { scope: string; reload: () => void }) {
     let live = true;
     void (async () => {
       try {
-        const written = await rememberCardFromPlayer(scope);
+        /* A player that stops answering mid-card must not leave the page saying
+         * "remembering" forever: the attempt has a budget, and its sentence names it. */
+        const written = await Promise.race([
+          rememberCardFromPlayer(scope),
+          new Promise<never>((_, reject) => {
+            window.setTimeout(() => reject(new Error('the player did not finish the card in 90 s')), 90_000);
+          }),
+        ]);
         if (!live) return;
         if (written > 0) reload();
         else setFailure('The player\'s image names no track this card holds.');
