@@ -194,22 +194,21 @@ export function LayersPanel() {
           {count}
         </Badge>
         <div className="ml-auto flex items-center gap-0.5">
+          <IconAction
+            label={ed.groupWhy() || "Group selected (⌘G)"}
+            disabled={!!ed.groupWhy()}
+            onClick={() => ed.groupSel()}
+          >
+            <FolderPlus />
+          </IconAction>
+          {/* The LayerMask is the label's: the sheet has no mask to add. */}
           {!ed.isJCard() ? (
-            <>
-              <IconAction
-                label={ed.groupWhy() || "Group selected (⌘G)"}
-                disabled={!!ed.groupWhy()}
-                onClick={() => ed.groupSel()}
-              >
-                <FolderPlus />
-              </IconAction>
-              <IconAction
-                label={ed.mask ? "Remove the LayerMask" : "Add a LayerMask"}
-                onClick={() => ed.toggleMask()}
-              >
-                <SquareDashed />
-              </IconAction>
-            </>
+            <IconAction
+              label={ed.mask ? "Remove the LayerMask" : "Add a LayerMask"}
+              onClick={() => ed.toggleMask()}
+            >
+              <SquareDashed />
+            </IconAction>
           ) : null}
           <IconAction label="Raise" disabled={!ed.sel} onClick={() => ed.mv(1)}>
             <ArrowUp />
@@ -430,28 +429,24 @@ function layerNameOf(o: Obj): string {
 
 function buildRows(ed: ReturnType<typeof useEditor>): Row[] {
   const rows: Row[] = [];
-  // The J-card has plain layers: no LayerMask and no groups, so the tree is the stack.
-  if (ed.isJCard()) {
-    for (let i = ed.jcard.prims.length - 1; i >= 0; i--) {
-      const o = ed.jcard.prims[i] as unknown as Obj;
-      rows.push({ kind: "layer", depth: 0, o, i, locked: !!o.locked });
-    }
-    return rows;
-  }
-  const mr = ed.maskRange();
-  const maskDepth = ed.mask ? 1 : 0;
-  if (ed.mask && !mr)
+  /* One stack per surface: the J-card's layers group like the label's, but it has no
+   * LayerMask, so the mask rows and the mask's extra depth are the label's alone. */
+  const list = ed.activeObjs();
+  const mask = ed.isJCard() ? null : ed.mask;
+  const mr = ed.isJCard() ? null : ed.maskRange();
+  const maskDepth = mask ? 1 : 0;
+  if (mask && !mr)
     rows.push({ kind: "mask", depth: 0, count: 0 });
-  let i = ed.objs.length - 1;
+  let i = list.length - 1;
   while (i >= 0) {
     if (mr && i === mr.hi) {
       rows.push({ kind: "mask", depth: 0, count: mr.hi - mr.lo + 1 });
-      if (ed.mask?.collapsed) {
+      if (mask?.collapsed) {
         i = mr.lo - 1;
         continue;
       }
     }
-    const o = ed.objs[i];
+    const o = list[i];
     const g = o.g ? ed.groups.find((x) => x.id === o.g) : null;
     if (!g) {
       rows.push({
@@ -465,7 +460,7 @@ function buildRows(ed: ReturnType<typeof useEditor>): Row[] {
       continue;
     }
     const b = ed.blockOf(o);
-    const mem = ed.objs.slice(b.lo, b.hi + 1);
+    const mem = list.slice(b.lo, b.hi + 1);
     rows.push({
       kind: "group",
       depth: maskDepth,
@@ -480,9 +475,9 @@ function buildRows(ed: ReturnType<typeof useEditor>): Row[] {
         rows.push({
           kind: "layer",
           depth: maskDepth + 1,
-          o: ed.objs[k],
+          o: list[k],
           i: k,
-          locked: !!ed.objs[k].locked,
+          locked: !!list[k].locked,
           gid: g.id,
         });
     i = b.lo - 1;

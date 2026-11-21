@@ -1220,11 +1220,27 @@ function JCardMultiPanel() {
     <SectionGroup initial="Selection">
       <Section title="Selection">
         <div className="flex flex-wrap items-center gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => ed.groupSel()} disabled={!!ed.groupWhy()}>
+            <FolderPlus />
+            Group
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => ed.ungroupSel()}
+            disabled={!selected.some((o) => o.g)}
+          >
+            <FolderMinus />
+            Ungroup
+          </Button>
           <Button variant="destructive" size="sm" onClick={() => ed.delSel()}>
             <Trash2 />
             Delete
           </Button>
         </div>
+        {ed.groupWhy() ? (
+          <p className="text-xs text-muted-foreground">{ed.groupWhy()}</p>
+        ) : null}
       </Section>
       <Section title="Colour role">
         <p className="text-xs text-muted-foreground">

@@ -93,6 +93,8 @@ export interface JObj {
   /** The layer's name in the Layers panel. */
   label?: string;
   locked?: boolean;
+  /** The group it belongs to: one list of groups, a run of layers on either surface. */
+  g?: string;
 }
 
 /**

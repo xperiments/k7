@@ -158,6 +158,22 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
       role: "ink",
       fontRole: "title",
     });
+    /* A second J-card layer, so the two can be a group: the grouping is the same feature
+       the label has, on the sheet. */
+    const rect = await call("k7art-add-layer", {
+      surface: "jcard",
+      type: "rect",
+      x: 520,
+      y: 240,
+      width: 140,
+      height: 60,
+      role: "band.1",
+    });
+    const grouped = await call("k7art-group-layers", {
+      surface: "jcard",
+      action: "group",
+      ids: [added.id, rect.id],
+    });
     const design = await call("k7art-set-design", {
       jcardFonts: { title: { size: 60 } },
       /* The sheet's own paper, which is not the label's: one argument each. */
@@ -169,6 +185,11 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
       value: "Case Study",
     });
     const read = await call("k7art-read");
+    const ungrouped = await call("k7art-group-layers", {
+      surface: "jcard",
+      action: "ungroup",
+      ids: [added.id, rect.id],
+    });
     const pub = await call("k7art-publish-pack", {
       packId: "neon-2026",
       name: "Neon Skyline",
@@ -183,6 +204,9 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
       labelLayers: first.active.labelLayers.length,
       jcardLayers: first.jcard.layers.length,
       added,
+      rect,
+      grouped,
+      ungrouped,
       design,
       field,
       read,
@@ -194,7 +218,7 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
   expect(out.added.ok).toBe(true);
   expect(out.added.surface).toBe("jcard");
   expect(out.read.surface).toBe("jcard");
-  expect(out.read.active.layers.length).toBe(out.jcardLayers + 1);
+  expect(out.read.active.layers.length).toBe(out.jcardLayers + 2);
   expect(out.read.active.labelLayers.length).toBe(out.labelLayers);
   expect(
     (out.design.design.jcardFonts as Array<{ role: string; size: number }>).find(
@@ -204,6 +228,12 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
   expect(out.field.value).toBe("Case Study");
   /* The J-card's paper is readable and did not move the label's. */
   expect(out.read.jcard.paper).toBe("#142538");
+  /* The sheet's layers group like the label's, and ungroup again. */
+  expect(out.grouped.groups.length).toBe(1);
+  expect((out.grouped.groups[0] as { layers: number[] }).layers.length).toBe(2);
+  expect(out.read.active.groups.length).toBe(1);
+  expect((out.read.active.groups[0] as { layers: number[] }).layers.length).toBe(2);
+  expect(out.ungrouped.groups.length).toBe(0);
 
   expect(out.bad.ok).toBe(false);
   expect((out.bad.errors as string[]).join("\n")).toContain("slug");

@@ -1034,6 +1034,15 @@ export class Editor {
   }
 
   // ---- groups: a contiguous run of layers sharing g ----
+  /** Drop the groups no layer belongs to any more. One list serves both surfaces, so a
+   *  group stays alive while either holds one of its layers. */
+  private pruneGroups() {
+    this.groups = this.groups.filter(
+      (g) =>
+        this.objs.some((o) => o.g === g.id) ||
+        (this.jcard.prims as unknown as Obj[]).some((o) => o.g === g.id),
+    );
+  }
   private groupsContig(arr: Obj[], gOf: (o: Obj) => string | undefined) {
     const ids = new Set(arr.map(gOf).filter(Boolean) as string[]);
     for (const id of ids) {
@@ -1043,37 +1052,23 @@ export class Editor {
     return true;
   }
   moveBlock(a: number, b: number, insertAt: number, flag?: boolean, gid?: string | null) {
-    if (this.surface === "jcard") {
-      // The J-card has no groups and no LayerMask: a block is one layer, reordered.
-      const arr = this.activeObjs();
-      if (a < 0 || b >= arr.length || a > b) return;
-      const block = arr.slice(a, b + 1);
-      if (block.some((o) => o.locked)) return;
-      const next = [...arr];
-      next.splice(a, block.length);
-      next.splice(insertAt > b ? insertAt - block.length : insertAt, 0, ...block);
-      this.setActiveObjs(next);
-      this.sel = block[block.length - 1];
-      this.selSet = new Set();
-      this.commit(false);
-      this.emit();
-      return;
-    }
-    if (a < 0 || b >= this.objs.length || a > b) return;
-    const block = this.objs.slice(a, b + 1);
+    const arr = this.activeObjs();
+    const mask = this.surface === "label" ? this.mask : null;
+    if (a < 0 || b >= arr.length || a > b) return;
+    const block = arr.slice(a, b + 1);
     if (block.some((o) => o.locked)) return;
     if (typeof gid === "string" && !this.groups.some((g) => g.id === gid)) return;
     if (
       typeof gid === "string" &&
       this.groups.some((g) => {
-        const mem = this.objs.filter((o) => o.g === g.id);
+        const mem = arr.filter((o) => o.g === g.id);
         return g.id !== gid && mem.length > 1 && mem.every((o) => block.includes(o));
       })
     )
       return;
     if (insertAt >= a && insertAt <= b) {
-      if (flag === undefined || !this.mask) return;
-      if (!this.maskContig(this.objs, (o) => !!(block.includes(o) ? flag : o.m))) return;
+      if (flag === undefined || !mask) return;
+      if (!this.maskContig(arr, (o) => !!(block.includes(o) ? flag : o.m))) return;
       block.forEach((o) => {
         if (flag) o.m = true;
         else delete o.m;
@@ -1082,7 +1077,7 @@ export class Editor {
       this.emit();
       return;
     }
-    const next = [...this.objs];
+    const next = [...arr];
     next.splice(a, block.length);
     next.splice(insertAt > b ? insertAt - block.length : insertAt, 0, ...block);
     const gOf = (o: Obj) =>
@@ -1095,23 +1090,21 @@ export class Editor {
         : o.g;
     if (!this.groupsContig(next, gOf)) return;
     if (
-      !this.maskContig(
-        next,
-        (o) => !!(this.mask && (block.includes(o) && flag !== undefined ? flag : o.m)),
-      )
+      mask &&
+      !this.maskContig(next, (o) => !!(block.includes(o) && flag !== undefined ? flag : o.m))
     )
       return;
     block.forEach((o) => {
       if (gid === null) delete o.g;
       else if (typeof gid === "string") o.g = gid;
     });
-    if (flag !== undefined && this.mask)
+    if (flag !== undefined && mask)
       block.forEach((o) => {
         if (flag) o.m = true;
         else delete o.m;
       });
-    this.objs = next;
-    this.groups = this.groups.filter((g) => this.objs.some((o) => o.g === g.id));
+    this.setActiveObjs(next);
+    this.pruneGroups();
     this.sel = block[block.length - 1];
     this.selSet = new Set();
     this.commit(false);
@@ -1120,47 +1113,49 @@ export class Editor {
   moveLayer(s: number, insertAt: number) {
     this.moveBlock(s, s, insertAt);
   }
-  groupWhy(): string {
-    if (this.surface !== "label") return "Groups belong to the label's LayerMask, not the J-card.";
+  /** Where the selection would sit once grouped: the members become one run, on the active
+   *  surface, at the top member's place. */
+  private groupPlan() {
+    const list = this.activeObjs();
     const ids = this.selIds;
-    const mem = this.objs.filter((o) => ids.includes(o.id));
+    const mem = list.filter((o) => ids.includes(o.id));
+    const topIdx = Math.max(...mem.map((m) => list.indexOf(m)));
+    const rest = list.filter((o) => !mem.includes(o));
+    const ins = list.slice(0, topIdx).filter((o) => !mem.includes(o)).length;
+    const block = list.filter((o) => mem.includes(o));
+    return { list, mem, block, next: [...rest.slice(0, ins), ...block, ...rest.slice(ins)] };
+  }
+  groupWhy(): string {
+    const { mem, next } = this.groupPlan();
     if (mem.length < 2) return "Select two or more layers first (Cmd-click them in Layers).";
-    if (this.mask && new Set(mem.map((m) => !!m.m)).size > 1)
+    const mask = this.surface === "label" ? this.mask : null;
+    if (mask && new Set(mem.map((m) => !!m.m)).size > 1)
       return "A group cannot mix layers inside and outside the LayerMask.";
-    const topIdx = Math.max(...mem.map((m) => this.objs.indexOf(m)));
-    const rest = this.objs.filter((o) => !mem.includes(o));
-    const ins = this.objs.slice(0, topIdx).filter((o) => !mem.includes(o)).length;
-    const block = this.objs.filter((o) => mem.includes(o));
-    const nextG = [...rest.slice(0, ins), ...block, ...rest.slice(ins)];
-    if (this.mask && !this.maskContig(nextG, (o) => !!o.m))
+    if (!this.groupsContig(next, (o) => o.g))
+      return "Grouping these would split another group.";
+    if (mask && !this.maskContig(next, (o) => !!o.m))
       return "Grouping these would split the LayerMask run in two.";
     return "";
   }
   groupSel() {
-    if (this.surface !== "label") return;
     if (this.groupWhy()) return;
-    const ids = this.selIds;
-    const mem = this.objs.filter((o) => ids.includes(o.id));
-    const topIdx = Math.max(...mem.map((m) => this.objs.indexOf(m)));
-    const rest = this.objs.filter((o) => !mem.includes(o));
-    const ins = this.objs.slice(0, topIdx).filter((o) => !mem.includes(o)).length;
+    const { block, next } = this.groupPlan();
     const gid = "g" + crypto.randomUUID();
-    mem.forEach((m) => (m.g = gid));
-    const block = this.objs.filter((o) => mem.includes(o));
-    this.objs = [...rest.slice(0, ins), ...block, ...rest.slice(ins)];
-    this.groups = this.groups.filter((g) => this.objs.some((o) => o.g === g.id));
+    block.forEach((m) => (m.g = gid));
+    this.pruneGroups();
     this.groups.push({ id: gid, name: `Group ${this.groups.length + 1}`, collapsed: false });
+    this.setActiveObjs(next);
     this.sel = block[block.length - 1];
     this.selSet = new Set(block.map((b) => b.id));
     this.commit(false);
     this.emit();
   }
   ungroupSel() {
-    if (this.surface !== "label") return;
+    const list = this.activeObjs();
     const ids = this.selIds;
-    const gids = new Set(this.objs.filter((o) => o.g && ids.includes(o.id)).map((o) => o.g!));
+    const gids = new Set(list.filter((o) => o.g && ids.includes(o.id)).map((o) => o.g!));
     if (!gids.size) return;
-    this.objs.forEach((o) => {
+    list.forEach((o) => {
       if (o.g && gids.has(o.g)) delete o.g;
     });
     this.groups = this.groups.filter((g) => !gids.has(g.id));
@@ -1227,8 +1222,7 @@ export class Editor {
     const targets = list.filter((o) => ids.includes(o.id) && !o.locked);
     if (!targets.length) return;
     this.setActiveObjs(list.filter((o) => !targets.includes(o)));
-    if (this.surface === "label")
-      this.groups = this.groups.filter((g) => this.objs.some((o) => o.g === g.id));
+    this.pruneGroups();
     this.sel = null;
     this.selSet = new Set();
     this.selGroup = null;

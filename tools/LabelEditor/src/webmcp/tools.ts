@@ -264,7 +264,7 @@ export function labelEditorTools(
     {
       name: "k7art-read",
       description:
-        "Read the K7Art editor: both surfaces — the label's 748x359 print, fields, roles and compiled type pairs, and the J-card's 1300x1280 sheet, folds, safe square, three fields and sizes — the active surface and focus, the open documents, both surfaces' layers, the label's mask and groups, the selection and the export errors.",
+        "Read the K7Art editor: both surfaces — the label's 748x359 print, fields, roles and compiled type pairs, and the J-card's 1300x1280 sheet, folds, safe square, three fields and sizes — the active surface and focus, the open documents, both surfaces' layers, each surface's groups, the label's mask, the selection and the export errors.",
       inputSchema: schema({
         includeTemplate: bool(
           "Also return the active design as a K7Art object.",
@@ -322,11 +322,18 @@ export function labelEditorTools(
             mask: ed.mask
               ? { colour: ed.mask.color, radius: ed.mask.radius }
               : null,
-            groups: ed.groups.map((g) => ({
-              id: g.id,
-              name: g.name,
-              layers: ed.objs.filter((o) => o.g === g.id).map((o) => o.id),
-            })),
+            /* The active surface's groups: one list holds both surfaces', and a group is
+             * only this surface's when a layer here belongs to it. */
+            groups: ed.groups
+              .map((g) => ({
+                id: g.id,
+                name: g.name,
+                layers: ed
+                  .activeObjs()
+                  .filter((o) => o.g === g.id)
+                  .map((o) => o.id),
+              }))
+              .filter((g) => g.layers.length > 0),
             selection: ed.selIds,
             errors: tpl.errs,
           },
@@ -669,11 +676,11 @@ export function labelEditorTools(
     {
       name: "k7art-group-layers",
       description:
-        "Group layers into one layer group, or ungroup a group, on the label. Grouping needs the layers to be contiguous and on one side of the LayerMask, which the tool checks. The J-card has plain layers and no groups.",
+        "Group layers into one layer group, or ungroup a group, on either surface. Grouping needs two or more layers, and on the label it keeps them on one side of the LayerMask; a group is a contiguous run, which the tool checks. Groups belong to the surface they were made on.",
       inputSchema: schema(
         {
           surface: str(
-            "Which surface. Groups belong to the label's LayerMask, not the J-card.",
+            "Which surface's layers to group: the label's print or the J-card's sheet. Groups do not span the two.",
             { enum: SURFACES },
           ),
           action: str("Group or ungroup. Default group.", {
@@ -687,8 +694,6 @@ export function labelEditorTools(
       ),
       execute: (args) => {
         const surface = readSurface(ed, args);
-        if (surface === "jcard")
-          throw new Error("the J-card has plain layers and no groups");
         const action = readEnum(args, "action", ["group", "ungroup"] as const) ?? "group";
         const ids = readIds(args);
         if (ids) ed.selectLayers(ids, surface);
@@ -703,7 +708,9 @@ export function labelEditorTools(
           message: action === "group" ? "Grouped the selection." : "Ungrouped the selection.",
           groups: ed.groups.map((g) => ({
             name: g.name,
-            layers: ed.objs.filter((o) => o.g === g.id).map((o) => o.id),
+            layers: ed.activeObjs()
+              .filter((o) => o.g === g.id)
+              .map((o) => o.id),
           })),
           selection: ed.selIds,
         };

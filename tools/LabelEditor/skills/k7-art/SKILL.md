@@ -77,7 +77,8 @@ If the tools themselves cannot be reached, every action still has a visible cont
 *Driving the visible controls*, below — so a label is still finishable in this session.
 
 - **Read first, every time.** `k7art-read` returns the board, the fields, the colour
-  roles, the type roles, the open documents, and the active design's layers and export errors.
+  roles, the type roles, the open documents, and the active design's layers, groups and export
+  errors.
 - **The page is the truth; this file is the guide.** If a number here and the page disagree,
   the page wins: `fields` and `typeRoles` in the read are the live vocabulary.
 - **A refused call throws and changes nothing.** The message names the argument and the
@@ -89,6 +90,11 @@ If the tools themselves cannot be reached, every action still has a visible cont
 
 **Colour roles.** `paper`, `ink`, `rule`, `band.0` … `band.7`. A shape (rect, square, circle)
 may use any of them; a text may print only `ink` or a band. `paper` is the LayerMask's colour.
+
+**Groups.** Two or more layers of one surface can become a group: they must be a contiguous run
+of that surface's stack, and on the label they must sit on one side of the LayerMask. A group
+moves, locks and collapses as one, and it is the editor's: the file carries the layers, not the
+grouping. `k7art-group-layers` groups or ungroups the selection.
 
 **Bands.** The eight band colours are the design's palette. Declare 4 to 8 of them; the sheet
 always carries eight slots, so a design with four pads the rest.
@@ -174,7 +180,7 @@ out, because your tool list already carries the same schemas.
 <!-- generated: tools:start -->
 ### `k7art-read`
 
-Read the K7Art editor: both surfaces — the label's 748x359 print, fields, roles and compiled type pairs, and the J-card's 1300x1280 sheet, folds, safe square, three fields and sizes — the active surface and focus, the open documents, both surfaces' layers, the label's mask and groups, the selection and the export errors.
+Read the K7Art editor: both surfaces — the label's 748x359 print, fields, roles and compiled type pairs, and the J-card's 1300x1280 sheet, folds, safe square, three fields and sizes — the active surface and focus, the open documents, both surfaces' layers, each surface's groups, the label's mask, the selection and the export errors.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
@@ -258,11 +264,11 @@ Move a layer through its surface's stack: one step up or down, or straight to th
 
 ### `k7art-group-layers`
 
-Group layers into one layer group, or ungroup a group, on the label. Grouping needs the layers to be contiguous and on one side of the LayerMask, which the tool checks. The J-card has plain layers and no groups.
+Group layers into one layer group, or ungroup a group, on either surface. Grouping needs two or more layers, and on the label it keeps them on one side of the LayerMask; a group is a contiguous run, which the tool checks. Groups belong to the surface they were made on.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
-| `surface` | `label`, `jcard` |  | Which surface. Groups belong to the label's LayerMask, not the J-card. |
+| `surface` | `label`, `jcard` |  | Which surface's layers to group: the label's print or the J-card's sheet. Groups do not span the two. |
 | `action` | `group`, `ungroup` |  | Group or ungroup. Default group. Default `group`. |
 | `ids` | array of `number` |  | The layers to group; omit to use the current selection. |
 
