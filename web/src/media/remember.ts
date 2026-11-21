@@ -13,6 +13,7 @@
  * restores separately by hash (`restoreCoversFromDevice`, `/api/covers`).
  */
 import { presenceFromLibraryBlob } from '../device/libraryBlob';
+import { readBody } from '../device/readBody';
 import { localRequest } from '../device/local';
 import { fnv1a64 } from '../domain/snapshot';
 import { readImageRows } from '../library/imageSource';
@@ -41,13 +42,13 @@ export async function rememberCardFromPlayer(
   if (!library.ok) throw new Error(`the player refused its library (${library.status})`);
 
   onProgress(0.25);
-  const rows = readImageRows(new Uint8Array(await image.arrayBuffer()));
+  const rows = readImageRows(await readBody(image, (fraction) => onProgress(0.05 + 0.2 * fraction)));
   const presence = presenceFromLibraryBlob(new Uint8Array(await library.arrayBuffer()));
   /* The pictures are the archive's, and the archive says which album wears which: without
    * the index a cleared browser has the names and nothing to draw (cover-archive.md). */
   let albums = new Map<string, string>();
   try {
-    const restored = await restoreCoversFromDevice();
+    const restored = await restoreCoversFromDevice((fraction) => onProgress(0.25 + 0.3 * fraction));
     albums = restored.albums;
     onProgress(0.55);
   } catch {

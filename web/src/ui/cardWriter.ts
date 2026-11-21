@@ -57,6 +57,7 @@ import {
 import { UNSCOPED } from '../card/session';
 import { putCoverRecord, putCoverRecords } from '../storage/media';
 import { localRequest } from '../device/local';
+import { readBody } from '../device/readBody';
 import { readCoverArchive } from '../storage/coverArchive';
 
 /** The archive's name at the card root, beside k7.db, k7.card and k7.select. */
@@ -136,14 +137,14 @@ export async function writeSnapshotToCard(
  * deliberate action, never a page-load fetch. It goes through the device's `/api/covers`,
  * which streams the archive from the card and touches no flash.
  */
-export async function restoreCoversFromDevice(): Promise<{
-  count: number;
-  albums: Map<string, string>;
-}> {
+export async function restoreCoversFromDevice(
+  onProgress?: (fraction: number) => void,
+): Promise<{ count: number; albums: Map<string, string> }> {
   const response = await localRequest('/api/covers', { cache: 'no-store' });
   if (response.status === 404) throw new Error('the player has no cover archive on its card');
   if (!response.ok) throw new Error(`the player refused the cover archive (${response.status})`);
-  const { covers, albums } = readCoverArchive(new Uint8Array(await response.arrayBuffer()));
+  const bytes = await readBody(response, onProgress);
+  const { covers, albums } = readCoverArchive(bytes);
   await putCoverRecords(
     new Map(
       covers.map((cover) => [

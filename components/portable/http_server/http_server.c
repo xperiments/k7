@@ -184,7 +184,10 @@ esp_err_t http_send_headers(int fd, int status, const char *content_type,
                 "Access-Control-Allow-Headers: Content-Type, Accept, Mcp-Protocol-Version\r\n");
         /* The address header below is one the App reads from this origin, so it is named
          * here beside the MCP version - a page can only read what a CORS reply exposes. */
-        hdr_add(&w, "Access-Control-Expose-Headers: Mcp-Protocol-Version, X-K7-Net\r\n");
+        /* `Content-Length` is exposed so the App can show a file's download progress: a
+         * cross-origin page may only read a header the reply names here. */
+        hdr_add(&w,
+                "Access-Control-Expose-Headers: Mcp-Protocol-Version, X-K7-Net, Content-Length\r\n");
         hdr_add(&w, "Access-Control-Max-Age: 600\r\n");
         if (two_origins) hdr_add(&w, "Vary: Origin\r\n");
     }
