@@ -16,6 +16,8 @@ import { presenceFromLibraryBlob } from '../device/libraryBlob';
 import { localRequest } from '../device/local';
 import { fnv1a64 } from '../domain/snapshot';
 import { readImageRows } from '../library/imageSource';
+import { folderOf } from './paths';
+import { restoreCoversFromDevice } from '../ui/cardWriter';
 import { putMedia, type CachedMedia } from '../storage/media';
 
 /**
@@ -34,6 +36,15 @@ export async function rememberCardFromPlayer(scope: string): Promise<number> {
 
   const rows = readImageRows(new Uint8Array(await image.arrayBuffer()));
   const presence = presenceFromLibraryBlob(new Uint8Array(await library.arrayBuffer()));
+  /* The pictures are the archive's, and the archive says which album wears which: without
+   * the index a cleared browser has the names and nothing to draw (cover-archive.md). */
+  let albums = new Map<string, string>();
+  try {
+    const restored = await restoreCoversFromDevice();
+    albums = restored.albums;
+  } catch {
+    /* A card with no archive is a card with no pictures: the names still come back. */
+  }
   const byFingerprint = new Map(rows.map((row) => [row.fingerprint.toString(), row] as const));
   const encoder = new TextEncoder();
   const at = new Date().toISOString();
@@ -41,6 +52,7 @@ export async function rememberCardFromPlayer(scope: string): Promise<number> {
   for (const track of presence.tracks) {
     const row = byFingerprint.get(fnv1a64(encoder.encode(track.path)).toString());
     if (!row) continue;
+    const coverHash = albums.get(folderOf(track.path));
     const media: CachedMedia = {
       path: track.path,
       title: row.title,
@@ -48,6 +60,7 @@ export async function rememberCardFromPlayer(scope: string): Promise<number> {
       album: row.album,
       genre: row.genre,
       at,
+      ...(coverHash ? { coverHash } : {}),
       ...(row.size > 0 ? { size: row.size } : {}),
     };
     await putMedia(scope, media);

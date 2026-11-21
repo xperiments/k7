@@ -18,6 +18,7 @@ import { coverSource, type EmbeddablePicture } from '../../audio/covers';
 import { encodeCover } from '../../audio/avif';
 import type { Analysis, ModelManifest } from '../../domain/analysis';
 import { snapshotPath } from '../../domain/snapshot';
+import { folderOf } from '../../media/paths';
 import { newId } from '../../lib/id';
 import { runItem } from '../../queue/run';
 import {
@@ -1182,11 +1183,19 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           ];
           if (hashes.length > 0) {
             const records = await getCoverRecords(hashes);
+            /* Which album wears which picture, so a browser with no store of its own can
+             * draw the shelf from the card alone (cover-archive.md). */
+            const albums = new Map<string, string>();
+            for (const row of rows) {
+              if (!row.coverHash || albums.has(folderOf(row.path))) continue;
+              albums.set(folderOf(row.path), row.coverHash);
+            }
             const archive = buildCoverArchive(
               hashes.flatMap((hash) => {
                 const record = records.get(hash);
                 return record ? [{ hash, ...record }] : [];
               }),
+              [...albums.entries()].map(([path, hash]) => ({ path, hash })),
             );
             await writeSnapshotToCard(directory, archive, 'k7.covers');
           }

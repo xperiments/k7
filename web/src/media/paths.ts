@@ -18,6 +18,15 @@ export function fileName(path: string): string {
   return path.split('/').pop() ?? path;
 }
 
+/**
+ * The folder a track sits in, below the card's `music`: the album a cover belongs to. A
+ * track at the card's root has no folder at all, which is the empty string.
+ */
+export function folderOf(path: string): string {
+  const at = path.lastIndexOf('/');
+  return at <= 0 ? '' : path.slice(0, at);
+}
+
 /** A track's name without the extension the card gave it: the title a row falls back to. */
 export function fileTitle(path: string): string {
   return fileName(path).replace(/\.[^.]+$/, '');

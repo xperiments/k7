@@ -57,7 +57,7 @@ import {
 import { UNSCOPED } from '../card/session';
 import { putCoverRecord } from '../storage/media';
 import { localRequest } from '../device/local';
-import { parseCoverArchive } from '../storage/coverArchive';
+import { readCoverArchive } from '../storage/coverArchive';
 
 /** The archive's name at the card root, beside k7.db, k7.card and k7.select. */
 export const COVERS_NAME = 'k7.covers';
@@ -74,7 +74,7 @@ export async function restoreCoversFromCard(directory: CardDirectory): Promise<n
   try {
     const handle = await directory.getFileHandle(COVERS_NAME);
     const file = await handle.getFile();
-    const covers = parseCoverArchive(new Uint8Array(await file.arrayBuffer()));
+    const { covers } = readCoverArchive(new Uint8Array(await file.arrayBuffer()));
     for (const cover of covers) {
       await putCoverRecord(cover.hash, {
         bytes: cover.bytes,
@@ -136,11 +136,14 @@ export async function writeSnapshotToCard(
  * deliberate action, never a page-load fetch. It goes through the device's `/api/covers`,
  * which streams the archive from the card and touches no flash.
  */
-export async function restoreCoversFromDevice(): Promise<number> {
+export async function restoreCoversFromDevice(): Promise<{
+  count: number;
+  albums: Map<string, string>;
+}> {
   const response = await localRequest('/api/covers', { cache: 'no-store' });
   if (response.status === 404) throw new Error('the player has no cover archive on its card');
   if (!response.ok) throw new Error(`the player refused the cover archive (${response.status})`);
-  const covers = parseCoverArchive(new Uint8Array(await response.arrayBuffer()));
+  const { covers, albums } = readCoverArchive(new Uint8Array(await response.arrayBuffer()));
   for (const cover of covers) {
     await putCoverRecord(cover.hash, {
       bytes: cover.bytes,
@@ -149,7 +152,7 @@ export async function restoreCoversFromDevice(): Promise<number> {
       height: cover.height,
     });
   }
-  return covers.length;
+  return { count: covers.length, albums };
 }
 
 /**

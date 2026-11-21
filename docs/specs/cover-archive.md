@@ -21,10 +21,19 @@ every track.
 | header      32 B   magic, version, sizes, count, total, CRC       |
 | records     count x 52 B, strictly ascending by source hash      |
 | payloads    the encoded pictures, in record order                |
+| albums      4 B count, then (hash[32], path_len u16, path)       |
+|             strictly ascending by path - version 2 only           |
 +------------------------------------------------------------------+
 ```
 
-`total_size = 32 + count * 52 + sum(length)`. Little-endian. The header CRC covers
+`total_size = 32 + count * 52 + sum(length) + 4 + sum(34 + path_len)`.
+
+**The album index is what a browser with no store can draw.** A media row's `coverHash` is the
+mapping between an album and a picture, and a browser whose storage was cleared has lost it;
+the archive carries it, so a card in the player can be *remembered* - names from its image,
+pictures and their albums from this file (`front-door.md` S3). One entry per album folder,
+naming a hash the records hold; a version 1 archive is the same file without the index and is
+read, never written. Little-endian. The header CRC covers
 `[32, total_size)`; a record's CRC covers its payload alone, so a damaged cover can be named
 without rejecting the archive.
 

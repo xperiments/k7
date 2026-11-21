@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildCoverArchive, parseCoverArchive, type ArchiveCover } from '../src/storage/coverArchive';
+import {
+  buildCoverArchive,
+  parseCoverArchive,
+  readCoverArchive,
+  type ArchiveCover,
+} from '../src/storage/coverArchive';
 
 const hash = (byte: string) => byte.repeat(64).slice(0, 64);
 
@@ -41,5 +46,39 @@ describe('k7.covers', () => {
 
   it('accepts an empty archive', () => {
     expect(parseCoverArchive(buildCoverArchive([]))).toEqual([]);
+  });
+
+  it('carries which album wears which picture', () => {
+    const archive = buildCoverArchive(
+      [cover('b', [2, 2]), cover('a', [1, 1, 1])],
+      [
+        { path: 'Sting/Ten Summoner\'s Tales', hash: hash('a') },
+        { path: 'Sting/Nothing Like the Sun', hash: hash('b') },
+        { path: 'Gone/Not in the archive', hash: hash('f') },
+      ],
+    );
+    const { covers, albums } = readCoverArchive(archive);
+    expect(covers).toHaveLength(2);
+    expect([...albums.entries()]).toEqual([
+      ["Sting/Nothing Like the Sun", hash('b')],
+      ["Sting/Ten Summoner's Tales", hash('a')],
+    ]);
+  });
+
+  it('writes the same bytes as before when there is no index', () => {
+    const one = buildCoverArchive([cover('b', [2]), cover('a', [1])]);
+    const two = buildCoverArchive([cover('a', [1]), cover('b', [2])], []);
+    expect([...one]).toEqual([...two]);
+    expect(readCoverArchive(one).albums.size).toBe(0);
+  });
+
+  it('refuses an index that names a cover it does not hold', () => {
+    const archive = buildCoverArchive([cover('a', [1])], [{ path: 'x', hash: hash('a') }]);
+    const broken = Uint8Array.from(archive);
+    /* The index's hash is the last 32-byte run before its path: corrupt its first byte. */
+    const hashAt = archive.length - (2 + 1) - 32;
+    broken[hashAt] = 0x00;
+    broken[hashAt + 1] = 0x00;
+    expect(() => readCoverArchive(broken)).toThrow();
   });
 });
