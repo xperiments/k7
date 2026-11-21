@@ -9,7 +9,7 @@ const sectionButton = (page: import("@playwright/test").Page, title: string) =>
 
 test("boots with the Design panel and one section open", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("Label Editor")).toBeVisible();
+  await expect(page.getByText("K7Art")).toBeVisible();
   await expect(sectionButton(page, "Template")).toHaveAttribute("aria-expanded", "true");
   await expect(sectionButton(page, "Colors")).toHaveAttribute("aria-expanded", "false");
 });
@@ -141,14 +141,65 @@ test("groups two selected layers from the panel header", async ({ page }) => {
   await expect(page.getByText("Group 1")).toBeVisible();
 });
 
+test("copies a group on the J-card as a group", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "J-card", exact: true }).click();
+  await page.waitForFunction(() => !!window.__labelEditorMcp);
+
+  await page.evaluate(async () => {
+    const call = (name: string, args: Record<string, unknown> = {}) =>
+      (window as unknown as {
+        __labelEditorMcp: { call: (n: string, a?: Record<string, unknown>) => Promise<any> };
+      }).__labelEditorMcp.call(name, args);
+    const text = await call("k7art-add-layer", {
+      surface: "jcard",
+      type: "text",
+      text: "Note",
+      x: 520,
+      y: 300,
+      role: "ink",
+      fontRole: "caption",
+    });
+    const rect = await call("k7art-add-layer", {
+      surface: "jcard",
+      type: "rect",
+      x: 500,
+      y: 250,
+      width: 120,
+      height: 60,
+      role: "band.1",
+    });
+    await call("k7art-group-layers", {
+      surface: "jcard",
+      action: "group",
+      ids: [text.id, rect.id],
+    });
+  });
+
+  // The group row selects its members; copy takes the group, paste makes another.
+  await page.getByText("Group 1", { exact: true }).click();
+  await page.keyboard.press("Meta+c");
+  await page.keyboard.press("Meta+v");
+  await expect(page.getByText("Group 2")).toBeVisible();
+
+  const groups = await page.evaluate(async () => {
+    const read = await (window as unknown as {
+      __labelEditorMcp: { call: (n: string) => Promise<any> };
+    }).__labelEditorMcp.call("k7art-read");
+    return (read.active.groups as Array<{ layers: number[] }>).map((g) => g.layers.length);
+  });
+  expect(groups).toEqual([2, 2]);
+});
+
 test("switches to the J-card, edits it, and keeps one document history", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "J-card", exact: true }).click();
 
   const canvas = page.getByRole("region", { name: "J-card canvas" });
   await expect(canvas).toBeVisible();
-  await expect(canvas).toContainText("Sheet 1300 × 1280");
-  await expect(canvas).toContainText("Safe 820 × 820");
+  // The toolbar is the focus and the zoom; the sheet's numbers live in the Sheet panel.
+  await expect(canvas.getByRole("button", { name: "Sheet", exact: true })).toBeVisible();
+  await expect(canvas.getByLabel("Zoom")).toBeVisible();
   await expect(page.locator('aside[aria-label="Layers"]').getByText("4", { exact: true })).toBeVisible();
 
   // The J-card's inspector is its own: Sheet, Type and Fields, not the label's Canvas and Mask.
@@ -184,10 +235,9 @@ test("switches to the J-card, edits it, and keeps one document history", async (
   await expect(canvas).toContainText("Whole sheet");
 });
 
-test("publishes a .k7artpack from the Export menu", async ({ page }) => {
+test("publishes a .k7artpack from the toolbar", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Export", exact: true }).click();
-  await page.getByRole("menuitem", { name: /Publish a pack/ }).click();
+  await page.getByRole("button", { name: "Publish a K7Art pack" }).click();
 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Publish a K7Art pack");

@@ -93,8 +93,9 @@ may use any of them; a text may print only `ink` or a band. `paper` is the Layer
 
 **Groups.** Two or more layers of one surface can become a group: they must be a contiguous run
 of that surface's stack, and on the label they must sit on one side of the LayerMask. A group
-moves, locks and collapses as one, and it is the editor's: the file carries the layers, not the
-grouping. `k7art-group-layers` groups or ungroups the selection.
+moves, locks and collapses as one, and copying a selected group and pasting it makes a second
+group of its own. It is the editor's: the file carries the layers, not the grouping.
+`k7art-group-layers` groups or ungroups the selection.
 
 **Bands.** The eight band colours are the design's palette. Declare 4 to 8 of them; the sheet
 always carries eight slots, so a design with four pads the rest.

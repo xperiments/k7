@@ -117,7 +117,8 @@ export class Editor {
   run = false;
   zoom = 1;
   outside = true;
-  clip: Obj | null = null;
+  /** The clipboard: the layers copied, and the group id they shared (if they made one). */
+  clip: { objs: Obj[]; group: string | null } | null = null;
   undo: string[] = [];
   redo: string[] = [];
   cur: string | null = null;
@@ -700,24 +701,33 @@ export class Editor {
     this.restore(this.cur);
   }
   copyAct() {
-    if (this.sel && !this.run) this.clip = JSON.parse(JSON.stringify(this.sel));
+    if (this.run || !this.sel) return;
+    const mem = this.selMembers();
+    if (!mem.length) return;
+    /* A group travels with its members: the clip remembers which group they made, so the
+     * paste can be a group of its own rather than loose layers. */
+    const gid = mem[0].g ?? null;
+    const group = gid && mem.every((o) => o.g === gid) && this.groups.some((g) => g.id === gid)
+      ? gid
+      : null;
+    this.clip = { objs: JSON.parse(JSON.stringify(mem)), group };
     this.emit();
   }
-  pasteAct() {
-    if (!this.clip || this.run) return;
+  /** One pasted copy of a clipped layer: a fresh id, the copy's name, no group of its own. */
+  private copyOf(src: Obj): Obj {
     const jcard = this.surface === "jcard";
     const o = {
-      ...JSON.parse(JSON.stringify(this.clip)),
+      ...JSON.parse(JSON.stringify(src)),
       id: this.nextId(),
       // A J-card field is one of three, so a pasted dynamic text keeps its field; a label
       // Slot gets the `_copy` suffix it always has, and the check below makes it static.
-      name: jcard ? this.clip.name : this.clip.name ? `${this.clip.name}_copy` : "",
-      label: this.clip.label ? `${this.clip.label} copy` : "",
+      name: jcard ? src.name : src.name ? `${src.name}_copy` : "",
+      label: src.label ? `${src.label} copy` : "",
       locked: false,
       g: undefined,
     } as Obj;
     if (jcard && o.name && !o.static) delete o.text;
-    if (this.surface === "jcard") {
+    if (jcard) {
       delete o.m;
       delete o.ap;
       delete o.note;
@@ -730,18 +740,33 @@ export class Editor {
     // A copied dynamic text may name the other surface's vocabulary. It becomes static
     // rather than a design Export refuses.
     if (o.type === "text" && !o.static) {
-      const valid = this.surface === "jcard"
-        ? JCARD_FIELDS.includes(o.name as JCardField)
-        : !!slotOf(o.name);
+      const valid = jcard ? JCARD_FIELDS.includes(o.name as JCardField) : !!slotOf(o.name);
       if (!valid) {
         o.static = true;
         o.text = o.text || o.sim || o.name || "Text";
         o.name = "";
       }
     }
-    this.insertNew(o);
-    this.sel = o;
-    this.selSet = new Set();
+    return o;
+  }
+  pasteAct() {
+    const clip = this.clip;
+    if (!clip?.objs.length || this.run) return;
+    const copies = clip.objs.map((src) => this.copyOf(src));
+    let gid: string | null = null;
+    if (clip.group) {
+      /* The copy is a group of its own: new id, its members in the clip's order, and the
+       * selection lands on it so the next copy takes the whole thing again. */
+      const next = "g" + crypto.randomUUID();
+      gid = next;
+      copies.forEach((o) => (o.g = next));
+    }
+    copies.forEach((o) => this.insertNew(o));
+    if (gid)
+      this.groups.push({ id: gid, name: `Group ${this.groups.length + 1}`, collapsed: false });
+    this.sel = copies[copies.length - 1];
+    this.selSet = new Set(copies.map((c) => c.id));
+    this.selGroup = gid ?? null;
     this.tool = "select";
     this.commit(false);
     this.emit();
@@ -1177,7 +1202,7 @@ export class Editor {
     this.emit();
   }
   groupLock(gid: string) {
-    const mem = this.objs.filter((o) => o.g === gid);
+    const mem = this.activeObjs().filter((o) => o.g === gid);
     const all = mem.every((m) => m.locked);
     mem.forEach((m) => (m.locked = !all));
     this.commit(false);
@@ -1258,7 +1283,7 @@ export class Editor {
   selectGroup(id: string) {
     const g = this.groups.find((x) => x.id === id);
     if (!g) return;
-    const mem = this.objs.filter((o) => o.g === id);
+    const mem = this.activeObjs().filter((o) => o.g === id);
     this.selGroup = id;
     this.selSet = new Set(mem.map((m) => m.id));
     this.sel = mem[mem.length - 1] ?? null;
