@@ -262,6 +262,21 @@ export async function listMedia(scope: string): Promise<CachedMedia[]> {
   return hydrate(rows);
 }
 
+/**
+ * The picture an album wears, from whichever of its rows carries one. A row's own
+ * `coverHash` is the common case; a remembered card can leave a row without one, and the
+ * album is still the album its siblings name.
+ */
+export async function albumCover(scope: string, album: string): Promise<CachedCover | null> {
+  if (!album) return null;
+  const db = await database();
+  const rows = await db.getAllFromIndex('media', 'scope', scope);
+  const hit = rows.find((row) => row.album === album && row.coverHash);
+  if (!hit?.coverHash) return null;
+  const record = await db.get('covers', hit.coverHash);
+  return record ? { bytes: record.bytes, format: record.format } : null;
+}
+
 /** How many tracks this card has cached, for the page's status line. */
 export async function countMedia(scope: string): Promise<number> {
   return (await database()).countFromIndex('media', 'scope', scope);

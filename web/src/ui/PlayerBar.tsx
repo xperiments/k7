@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { Disc3, Pause, Play, Radio, SkipBack, SkipForward, Square } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { useCardScope } from '../card/session';
+import { scopeFor } from '../card/mark';
+import { useCardScope, useDeviceView } from '../card/session';
 import { useDeviceStatus } from '../device/useDeviceStatus';
-import { getMedia, type CachedCover } from '../storage/media';
+import { albumCover, getMedia, type CachedCover } from '../storage/media';
 import { hueOf } from './album-art';
 import { CassetteCase } from './cassette';
 import { formatDuration } from './format';
@@ -22,8 +23,11 @@ import { usePlayback } from './playback';
  */
 
 /** The metadata the bar shows for what the device is playing, when the bar is on the stream. */
-function useDeviceTrack(path: string | null): { title: string; artist: string; cover: CachedCover | null } {
-  const scope = useCardScope();
+function useDeviceTrack(
+  path: string | null,
+  scope: string,
+): { title: string; artist: string; cover: CachedCover | null } {
+
   const [row, setRow] = useState<{ title: string; artist: string; cover: CachedCover | null } | null>(
     null,
   );
@@ -35,13 +39,17 @@ function useDeviceTrack(path: string | null): { title: string; artist: string; c
     }
     let cancelled = false;
     getMedia(scope, path)
-      .then((found) => {
+      .then(async (found) => {
         if (cancelled) return;
-        setRow(
-          found
-            ? { title: found.title, artist: found.artist, cover: found.cover ?? null }
-            : null,
-        );
+        if (!found) {
+          setRow(null);
+          return;
+        }
+        /* The bar wears the album's picture, not only the row's: a row can arrive without
+         * one - a remembered card - and the shelf still draws the album's. */
+        const cover = found.cover ?? (await albumCover(scope, found.album));
+        if (cancelled) return;
+        setRow({ title: found.title, artist: found.artist, cover });
       })
       .catch(() => {
         if (!cancelled) setRow(null);
@@ -57,10 +65,16 @@ function useDeviceTrack(path: string | null): { title: string; artist: string; c
 export function PlayerBar() {
   const playback = usePlayback();
   const { status } = useDeviceStatus();
+  const picked = useCardScope();
+  const deviceView = useDeviceView();
+  /* The player's card is a card of its own: its rows live under its mark, and the bar must
+   * read them where they are, not where the last card in the computer was filed. */
+  const scope =
+    deviceView && status?.mark ? scopeFor({ id: status.mark }) : picked;
   const playing = status?.playing ?? null;
   const onStream = playback.source === null || playback.source.kind === 'stream';
   const cardTrack = playback.source?.kind === 'card' ? playback.source.track : null;
-  const deviceTrack = useDeviceTrack(onStream ? (playing?.path ?? null) : null);
+  const deviceTrack = useDeviceTrack(onStream ? (playing?.path ?? null) : null, scope);
 
   const title = cardTrack
     ? cardTrack.title

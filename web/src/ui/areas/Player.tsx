@@ -41,15 +41,6 @@ export function PlayerArea() {
 
   const [cached, setCached] = useState<CachedMedia | null>(null);
   const [measured, setMeasured] = useState<McpTrack | null>(null);
-  // A failed poll is silent about whether the device is off or merely slow, so the page
-  // waits before it says "not answering" rather than flashing it on every cold load.
-  const [waited, setWaited] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setWaited(true), 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
   // The cover and the names, joined by the Snapshot path in `/api/status`.
   useEffect(() => {
     if (!path) {
@@ -101,14 +92,6 @@ export function PlayerArea() {
    * `.k7-case-player` reads its column's width through its container. */
   return (
     <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-      {/* The chrome already says when the device stops answering, at the top of the page;
-          a second banner here would say it twice. */}
-      {!status && !waited ? (
-        <p className="text-sm text-muted-foreground" role="status">
-          Waiting for the device to answer…
-        </p>
-      ) : null}
-
       {!path ? (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
           <figure className="m-0 w-full min-w-0 max-w-full shrink-0 overflow-hidden rounded-panel border border-border lg:w-[min(58%,42rem)]">
