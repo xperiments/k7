@@ -184,6 +184,26 @@ export function AppBar({
           </TooltipContent>
         </Tooltip>
 
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={onPublish}
+                aria-label="Publish a K7Art pack"
+              >
+                <CassetteTape className="size-3.5" />
+                <span className="hidden xl:inline">Publish</span>
+              </Button>
+            }
+          />
+          <TooltipContent>
+            Publish a pack of these designs to install on the K7
+          </TooltipContent>
+        </Tooltip>
+
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -205,11 +225,6 @@ export function AppBar({
                 <Download />
                 All open designs…
                 <span className="ml-auto text-xs text-muted-foreground">zip</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onPublish}>
-                <CassetteTape />
-                Publish a pack…
-                <span className="ml-auto text-xs text-muted-foreground">k7artpack</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
