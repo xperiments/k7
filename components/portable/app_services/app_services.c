@@ -181,35 +181,11 @@ static void rescan_task(void *arg)
 
 
 
-/* Where this device is on the network: the App resolves `k7.local` once, asks this, and
- * sends every later request to the address it names. */
+/* Where this device is on the network. The server puts it in every reply's `X-K7-Net`, so
+ * the App reads it off a request it was making anyway (front-door.md S2). */
 static app_services_ip_fn s_ip_fn;
-static uint16_t s_http_port = 80;
 
 void app_services_set_ip(app_services_ip_fn fn) { s_ip_fn = fn; }
-
-static http_result_t net_route(int fd, const http_request_t *req, void *ctx)
-{
-    (void)ctx;
-    if (strcmp(req->path, "/api/net") != 0) {
-        http_send_error(fd, 404, "no such path");
-        return HTTP_HANDLED;
-    }
-    char ip[24] = {0};
-    if (!s_ip_fn || !s_ip_fn(ip, sizeof ip) || !ip[0]) {
-        http_json_send(fd, 503, "{\"ok\":false,\"error\":\"no address on the network yet\"}",
-                       NULL);
-        return HTTP_HANDLED;
-    }
-    char body[96];
-    int n = snprintf(body, sizeof body, "{\"ip\":\"%s\",\"port\":%u}", ip, (unsigned)s_http_port);
-    if (n <= 0 || (size_t)n >= sizeof body) {
-        http_send_error(fd, 500, "cannot describe the address");
-        return HTTP_HANDLED;
-    }
-    http_json_send(fd, 200, body, NULL);
-    return HTTP_HANDLED;
-}
 
 static http_result_t rescan_route(int fd, const http_request_t *req, void *ctx)
 {
@@ -851,9 +827,6 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
      * the whole Library per reload. */
     mcp_refresh_coverage();
 
-    e = http_server_register_route_method("/api/net", "GET", net_route, NULL);
-    if (e != ESP_OK) return fail(report, e, "net endpoint");
-
     e = http_server_register_route_method("/api/rescan", "POST", rescan_route, NULL);
     if (e != ESP_OK) return fail(report, e, "rescan endpoint");
 
@@ -887,9 +860,9 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     if (e != ESP_OK) return fail(report, e, "CORS preflight");
 
     /* 8. The listener, last: every route is registered by now. */
-    s_http_port = cfg->port;
     http_server_cfg_t http = {
         .port = cfg->port,
+        .net_ip = s_ip_fn,
         .server_name = cfg->server_name ? cfg->server_name : "sd-stream/1.0",
         .max_conns = cfg->max_conns ? cfg->max_conns : 4,
         .cors_origin = K7_APP_ORIGIN,

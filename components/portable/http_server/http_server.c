@@ -158,6 +158,11 @@ esp_err_t http_send_headers(int fd, int status, const char *content_type,
     if (reply.has_length) hdr_add(&w, "Content-Length: %u\r\n", (unsigned)reply.length);
     if (reply.default_cache_control) hdr_add(&w, "Cache-Control: no-cache\r\n");
     hdr_add(&w, "Connection: close\r\n");
+    /* Where this device is, on every reply: the App asked `k7.local` once for this page or
+     * this status, and its next request goes to the address instead of resolving again. */
+    char net_ip[24];
+    if (S.cfg.net_ip && S.cfg.net_ip(net_ip, sizeof net_ip) && net_ip[0])
+        hdr_add(&w, "X-K7-Net: %s:%u\r\n", net_ip, (unsigned)S.cfg.port);
     if (reply.extra_headers) hdr_add(&w, "%s", reply.extra_headers);
     /* The App reads this device's JSON from another origin, and a browser only allows that
      * with these headers. A development build trusts a second origin and answers with the
@@ -177,7 +182,9 @@ esp_err_t http_send_headers(int fd, int status, const char *content_type,
          * the same header back, which `Expose-Headers` is what lets a page read. */
         hdr_add(&w,
                 "Access-Control-Allow-Headers: Content-Type, Accept, Mcp-Protocol-Version\r\n");
-        hdr_add(&w, "Access-Control-Expose-Headers: Mcp-Protocol-Version\r\n");
+        /* The address header below is one the App reads from this origin, so it is named
+         * here beside the MCP version - a page can only read what a CORS reply exposes. */
+        hdr_add(&w, "Access-Control-Expose-Headers: Mcp-Protocol-Version, X-K7-Net\r\n");
         hdr_add(&w, "Access-Control-Max-Age: 600\r\n");
         if (two_origins) hdr_add(&w, "Vary: Origin\r\n");
     }

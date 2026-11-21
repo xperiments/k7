@@ -2,10 +2,10 @@
  * Where the device answers.
  *
  * `k7.local` is a name the browser resolves over mDNS, and every request to it pays that
- * lookup again: on a page that asks for the status on a timer, the heartbeat spends its
- * time resolving rather than asking. The device can name its own address -
- * `GET /api/net` answers `{ ip, port }` - so the App asks once over the name and sends every
- * later request to `http://<ip>:<port>`.
+ * lookup again: on a page that asks for the status on a timer, the heartbeat spends its time
+ * resolving rather than asking. The device knows its own address and says it on **every
+ * reply**, as `X-K7-Net: <ip>:<port>` (front-door.md S2), so the App learns it from a reply
+ * it was making anyway - the page load or the first status - and never has to ask for it.
  *
  * The address is a lease, not a fact: the router may hand the device a different one. A
  * request that fails to reach it forgets it, and the next one goes back to the name, which
@@ -13,54 +13,29 @@
  */
 import { DEVICE_ORIGIN } from '../config';
 
-/** The option Local Network Access reads; `RequestInit` does not declare it. */
-interface LocalRequestInit extends RequestInit {
-  targetAddressSpace?: 'local';
-}
+/** The reply header the device names its address on. */
+export const ADDRESS_HEADER = 'x-k7-net';
 
 let resolved: string | null = null;
 
-/** The base every device request is sent to: the name until the address is known. */
+/** The base every device request is sent to: the name until a reply has named the address. */
 export function deviceOrigin(): string {
   return resolved ?? DEVICE_ORIGIN;
 }
 
-/** True while the base is still the mDNS name. */
-export function deviceOriginIsName(): boolean {
-  return resolved === null;
+/** Take the address a reply named. A reply without one says nothing about the address. */
+export function noteDeviceOrigin(raw: string | null | undefined): void {
+  const value = raw?.trim();
+  if (!value) return;
+  const at = value.lastIndexOf(':');
+  if (at <= 0) return;
+  const ip = value.slice(0, at).trim();
+  const port = Number(value.slice(at + 1));
+  if (!ip || !Number.isInteger(port) || port <= 0 || port > 65535) return;
+  resolved = `http://${ip}:${port}`;
 }
 
-/**
- * Ask the device for its address over the name, and keep it. Returns the base it settled on:
- * the address, or the name when the device did not answer or named something that is not a
- * port and an address.
- */
-export async function resolveDeviceOrigin(
-  fetchImpl: typeof fetch = fetch,
-): Promise<string> {
-  try {
-    const init: LocalRequestInit = { mode: 'cors', targetAddressSpace: 'local' };
-    const response = await fetchImpl(`${DEVICE_ORIGIN}/api/net`, init);
-    if (!response.ok) {
-      resolved = null;
-      return deviceOrigin();
-    }
-    const body = (await response.json()) as { ip?: unknown; port?: unknown };
-    const ip = typeof body.ip === 'string' ? body.ip.trim() : '';
-    const port = typeof body.port === 'number' ? body.port : Number(body.port);
-    if (!ip || !Number.isInteger(port) || port <= 0 || port > 65535) {
-      resolved = null;
-      return deviceOrigin();
-    }
-    resolved = `http://${ip}:${port}`;
-  } catch {
-    /* No address yet, or the request was refused: the name is still the way in. */
-    resolved = null;
-  }
-  return deviceOrigin();
-}
-
-/** Forget the address: the next request goes back to the name and resolves again. */
+/** Forget the address: the next request goes back to the name. */
 export function forgetDeviceOrigin(): void {
   resolved = null;
 }

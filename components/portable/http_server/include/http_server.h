@@ -124,6 +124,11 @@ typedef struct {
     http_listener_t listener;
     /* Answer a path this listener has no route for with a redirect to HTTPS. Off in this
      * build - there is no TLS - and kept for a device that serves one again. */
+    /* The device's address on the network, for the App's direct path. Every reply carries
+     * `X-K7-Net: <ip>:<port>` when this names one, so the App learns the address from a
+     * reply it was making anyway and never resolves `k7.local` twice. NULL, or an empty
+     * answer, is a device with no address yet: no header, and the name stays the way in. */
+    bool (*net_ip)(char *out, size_t size);
     bool        redirect_to_tls;
     const char *tls_host; /* the name to redirect to when the request has no Host */
     uint16_t    tls_port; /* 0 = 443; only named in Location when it is not 443 */

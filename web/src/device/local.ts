@@ -27,7 +27,7 @@
  * permitted.
  */
 
-import { deviceOrigin } from './origin';
+import { ADDRESS_HEADER, deviceOrigin, noteDeviceOrigin } from './origin';
 import { createDirectDevice } from './direct';
 import type { Device } from './transport';
 
@@ -58,7 +58,13 @@ interface LocalRequestInit extends RequestInit {
 export function localRequest(input: string, init?: RequestInit): Promise<Response> {
   const absolute = input.startsWith('http') ? input : `${deviceOrigin()}${input}`;
   const withSpace: LocalRequestInit = { ...init, mode: 'cors', targetAddressSpace: 'local' };
-  return fetch(absolute, withSpace);
+  return fetch(absolute, withSpace).then(readAddress);
+}
+
+/** Every reply may name the device's address; the one that does is the one that matters. */
+function readAddress(response: Response): Response {
+  noteDeviceOrigin(response.headers.get(ADDRESS_HEADER));
+  return response;
 }
 
 export function createLocalDevice(options: LocalOptions = {}): LocalDevice {
@@ -69,7 +75,7 @@ export function createLocalDevice(options: LocalOptions = {}): LocalDevice {
     // permission instead of blocking the request as mixed content.
     const absolute = input.startsWith('http') ? input : `${deviceOrigin()}${input}`;
     const withSpace: LocalRequestInit = { ...init, mode: 'cors', targetAddressSpace: 'local' };
-    return pageFetch(absolute, withSpace);
+    return pageFetch(absolute, withSpace).then(readAddress);
   };
 
   const inner = createDirectDevice({
