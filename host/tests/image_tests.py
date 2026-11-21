@@ -17,13 +17,23 @@ import tempfile
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from snapshot_image import build_image, fnv1a64  # noqa: E402
+
 SERVER = sys.argv[1]
 FIXTURES = Path(sys.argv[2])
 FAIL = 0
 DEPLOYED = "https://k7.xperiments.dev"
 
-# A stand-in for the App's k7.db: the route serves it as it stands, and never parses it.
-IMAGE = b"K7SNAP\0\0" + bytes(range(64))
+# A real image, built the way the host producer builds one: the route serves the copy the
+# reader validated at boot, so the bytes have to be an image the reader accepts.
+_ROW = {
+    "path": "Sting/Blue/01.flac", "size": 100, "bpm_x10": 1200, "key": 1, "energy": 70,
+    "dance": 60, "valence": 50, "arousal": 40, "mood": 1, "conf": 90, "src": 1,
+    "title": "Ten Summoner's Tales", "artist": "Sting", "album": "Ten Summoner's Tales",
+    "genre": "rock",
+}
+IMAGE = build_image([_ROW])
 
 
 def check(label, got, want):

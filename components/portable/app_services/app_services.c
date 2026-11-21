@@ -75,6 +75,7 @@ void app_services_card_root(char *out, size_t cap) { current_card_root(out, cap)
 static snapshot_t *s_snapshot;
 /* The PSRAM copy the Snapshot reads in place; owned for the life of the process. */
 static uint8_t *s_snapshot_copy;
+static size_t s_snapshot_size;
 static snapshot_result_t s_snapshot_state = SNAPSHOT_NO_PARTITION;
 static char s_snapshot_reason[96];
 static char s_card_error[160];
@@ -210,6 +211,15 @@ bool app_services_card_present(void) { return s_card_present; }
 
 
 const snapshot_t *app_services_snapshot(void) { return s_snapshot; }
+
+/* The image itself, as the device holds it: the PSRAM copy the reader reads in place, so a
+ * caller serves it without touching the flash mapping (which cannot be mapped from a task
+ * whose stack is in PSRAM - the HTTP workers'). */
+const uint8_t *app_services_snapshot_image(size_t *size)
+{
+    if (size) *size = s_snapshot_copy ? s_snapshot_size : 0;
+    return s_snapshot_copy;
+}
 
 /* The front door asks the question through a callback so it need not depend on this
  * module - the composition depends on both, and the arrow stays one-way. */
@@ -720,6 +730,7 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
                                                      sizeof open_why);
                 if (s_snapshot_state == SNAPSHOT_OK) {
                     s_snapshot_copy = copy;
+                    s_snapshot_size = snap_size;
                     ESP_LOGI(TAG, "snapshot: %u rows, generation %u, analyser %u",
                              (unsigned)snapshot_rows(s_snapshot),
                              (unsigned)snapshot_generation(s_snapshot),

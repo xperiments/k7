@@ -89,6 +89,13 @@ void app_services_set_ip(app_services_ip_fn fn);
  * the scan task started, ESP_ERR_INVALID_STATE when one is already running, and
  * ESP_ERR_NO_MEM when the task could not be created. The broadcast finishes its
  * current Track on the old generation. */
+/* The image the device is answering from, resident in PSRAM: NULL when it has none (never
+ * given one, or too large to hold). Served verbatim - the App reads the album names it wrote
+ * the last time it measured the card, so a browser that has never met the card can name it
+ * (front-door.md S3). No flash mapping is taken: the HTTP workers' stacks are in PSRAM and a
+ * mapping disables the cache they live behind. */
+const uint8_t *app_services_snapshot_image(size_t *size);
+
 esp_err_t app_services_rescan(void);
 
 /* Whether a rescan task is running. The Menu's Rescan row shows "Rescanning..." from it;
