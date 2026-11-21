@@ -161,6 +161,14 @@ function database(): Promise<IDBPDatabase<MediaDB>> {
     },
   }).then((db) => {
     openedDb = db;
+    /* A connection the browser closed (a delete, a version change in another tab, the page
+     * going away) must not be handed out again: the next caller opens a new one. */
+    db.onclose = () => {
+      if (openedDb === db) {
+        openedDb = null;
+        dbPromise = null;
+      }
+    };
     return db;
   });
   return dbPromise;
@@ -205,6 +213,37 @@ export async function putMedia(scope: string, media: CachedMedia): Promise<void>
     stored = { ...media, scope };
   }
   await (await database()).put('media', stored);
+}
+
+/**
+ * Store many rows in one transaction. A measured card writes thousands of them, and one
+ * transaction each is both slow and fragile: a connection closed between two of them fails
+ * the run half-written, where a single transaction either lands or does not.
+ */
+export async function putMediaMany(
+  scope: string,
+  rows: readonly CachedMedia[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  const db = await database();
+  const tx = db.transaction('media', 'readwrite');
+  for (const row of rows) {
+    const stored: StoredMedia = { ...row, scope };
+    if (stored.coverHash) delete stored.cover;
+    tx.store.put(stored);
+  }
+  await tx.done;
+}
+
+/** Store many pictures in one transaction, for the same reason. */
+export async function putCoverRecords(
+  records: ReadonlyMap<string, CoverRecord>,
+): Promise<void> {
+  if (records.size === 0) return;
+  const db = await database();
+  const tx = db.transaction('covers', 'readwrite');
+  for (const [hash, record] of records) tx.store.put(record, hash);
+  await tx.done;
 }
 
 /** One track's cached media, for the card and path given. */

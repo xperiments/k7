@@ -55,7 +55,7 @@ import {
   serialiseCardMark,
 } from '../card/mark';
 import { UNSCOPED } from '../card/session';
-import { putCoverRecord } from '../storage/media';
+import { putCoverRecord, putCoverRecords } from '../storage/media';
 import { localRequest } from '../device/local';
 import { readCoverArchive } from '../storage/coverArchive';
 
@@ -144,14 +144,14 @@ export async function restoreCoversFromDevice(): Promise<{
   if (response.status === 404) throw new Error('the player has no cover archive on its card');
   if (!response.ok) throw new Error(`the player refused the cover archive (${response.status})`);
   const { covers, albums } = readCoverArchive(new Uint8Array(await response.arrayBuffer()));
-  for (const cover of covers) {
-    await putCoverRecord(cover.hash, {
-      bytes: cover.bytes,
-      format: cover.format,
-      width: cover.width,
-      height: cover.height,
-    });
-  }
+  await putCoverRecords(
+    new Map(
+      covers.map((cover) => [
+        cover.hash,
+        { bytes: cover.bytes, format: cover.format, width: cover.width, height: cover.height },
+      ]),
+    ),
+  );
   return { count: covers.length, albums };
 }
 

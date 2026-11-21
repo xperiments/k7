@@ -18,7 +18,7 @@ import { fnv1a64 } from '../domain/snapshot';
 import { readImageRows } from '../library/imageSource';
 import { folderOf } from './paths';
 import { restoreCoversFromDevice } from '../ui/cardWriter';
-import { putMedia, type CachedMedia } from '../storage/media';
+import { putMediaMany, type CachedMedia } from '../storage/media';
 
 /**
  * Write the player's card into `scope` and answer how many rows were written. Throws what
@@ -48,12 +48,12 @@ export async function rememberCardFromPlayer(scope: string): Promise<number> {
   const byFingerprint = new Map(rows.map((row) => [row.fingerprint.toString(), row] as const));
   const encoder = new TextEncoder();
   const at = new Date().toISOString();
-  let written = 0;
+  const fresh: CachedMedia[] = [];
   for (const track of presence.tracks) {
     const row = byFingerprint.get(fnv1a64(encoder.encode(track.path)).toString());
     if (!row) continue;
     const coverHash = albums.get(folderOf(track.path));
-    const media: CachedMedia = {
+    fresh.push({
       path: track.path,
       title: row.title,
       artist: row.artist,
@@ -62,9 +62,10 @@ export async function rememberCardFromPlayer(scope: string): Promise<number> {
       at,
       ...(coverHash ? { coverHash } : {}),
       ...(row.size > 0 ? { size: row.size } : {}),
-    };
-    await putMedia(scope, media);
-    written += 1;
+    });
   }
-  return written;
+  /* One transaction for the card: a remembered library is thousands of rows, and one write
+   * each is slow enough that a closed connection could catch it half-written. */
+  await putMediaMany(scope, fresh);
+  return fresh.length;
 }
