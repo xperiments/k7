@@ -56,6 +56,8 @@ The J-card half:
 - The sheet has **its own paper**, `jcardPaper` on `set-design`: it starts equal to the label's
   and moves independently, and the webapp paints the sheet with it. `paper` stays the label's
   (the LayerMask); the two are never set by the same argument.
+- A text's box is **its own lines**, capped by the sheet's bottom, and `rotation` turns it about
+  that box — a spine line at 90° runs up the panel rather than across it.
 - The webapp draws the cover on the case front and the album card — a centre crop, so keep the
   words in the safe square (x 480–1300, y 230–1050) — the spine on the shelf's left face, and
   the flap on the case's back, folded around the spine.
@@ -133,7 +135,8 @@ cut at 96 characters. A design with no layer at all is refused.
    and no layers.
 3. **The colourway** — `k7art-set-design`: `templateId` (`k7.my-name`), `name`,
    `backgrounds` and `activeBackground` (or `background` for the active one), `ink`, `rule`, the
-   eight `bands`, `paper`, `paperRadius`.
+   eight `bands`, `paper`, `paperRadius`. `paper` is the label's; `jcardPaper` is the sheet's
+   own and is the one the J-card is painted with.
 4. **Layers, back to front.** A layer added now prints over the ones before it;
    `k7art-move-layer` raises, lowers, or sends one to the top or bottom. Rects make
    bands, rules and blocks.
@@ -143,15 +146,24 @@ cut at 96 characters. A design with no layer at all is refused.
    its ink at export, so its `width` is replaced rather than respected.
 6. **Previews are yours, not the player's.** A dynamic text previews its simulated value;
    `k7art-set-field-value` changes that preview only, never what the player prints.
-7. **Validate** — `k7art-validate` checks every open design; fix until it is clean.
-8. **Export** — `k7art-export-template` returns the `K7Art` object and its
+7. **The J-card** — the same document's other side. `k7art-add-layer { surface: "jcard" }`
+   takes design units of its 1300 × 1280 sheet: the flap 0–320, the spine 320–480 and the
+   cover 480–1300, with the folds as guides — art may cross them. Its texts bind to `title`,
+   `artist` and `meta` through `field` (never a label Slot), its three sizes are `jcardFonts`,
+   and its sheet colour is `jcardPaper`. Keep the cover's words inside the safe square,
+   x 480–1300 and y 230–1050: the album card is exactly that centre crop.
+8. **Validate** — `k7art-validate` checks every open design, both surfaces; fix until it is
+   clean.
+9. **Export** — `k7art-export-template` returns the `K7Art` object and its
    errors. Hand the JSON to the human: it is saved as `assets/k7art/<id>.json` and
    packed into the sheet by `make -C host label`.
+10. **Publish** — `k7art-publish-pack { packId, name, author }` builds the `.k7artpack` the
+   App installs on the K7 (Settings → Art packs). It refuses the same designs Export does, and
+   its bytes are the sheet the K7 prints plus the J-cards the App draws.
 
-The J-card is the same document's second surface. Pass `surface: "jcard"` to the layer tools,
-bind its texts to `title`, `artist` or `meta` (never a label Slot), and set its three sizes
-through `k7art-set-design`'s `jcardFonts`. `k7art-read` returns both sections and the active
-surface; `k7art-publish-pack` builds the `.k7artpack` when the label and the J-card are ready.
+Both surfaces are one document with one history: a J-card edit undoes like a label edit, and
+Export and Publish write the two together. `k7art-read` always returns both sections and the
+active surface, so read it again after switching.
 
 ## The tools
 
