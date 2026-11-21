@@ -14,6 +14,7 @@ import type { Album } from '../media/albums';
 import { Jcard, useJcardDesign } from '../jcard';
 import { DEFAULT_META, hueOf, type AlbumArtData } from './album-art';
 import { CassetteFront } from './cassette';
+import { useCoverUrl } from './cover';
 import { plural } from './format';
 
 /**
@@ -337,13 +338,27 @@ export function AlbumShelf({
                       <span className="k7-sheen" aria-hidden="true" />
                     </span>
                     <span className="k7-face k7-back" aria-hidden="true">
-                      <CaseFlap album={album} />
+                      {album.cover ? (
+                        <CoverArt album={album} />
+                      ) : (
+                        <CaseFlap album={album} />
+                      )}
                       <span className="k7-sheen" aria-hidden="true" />
                     </span>
                     <span className="k7-face k7-side k7-right" aria-hidden="true">
+                      <CoverArt album={album} />
                       <span className="k7-sheen" aria-hidden="true" />
                     </span>
                     <span className="k7-face k7-side k7-left" aria-hidden="true">
+                      {/* The cover runs across every face: the spine keeps its own dark read
+                          over it, 15% of the picture showing through. */}
+                      <CoverArt album={album} />
+                      {album.cover ? (
+                        <span
+                          className="absolute inset-0"
+                          style={{ background: "rgb(0 0 0 / 0.85)" }}
+                        />
+                      ) : null}
                       <CaseSpine album={album} />
                       <span className="k7-frame" />
                       <span className="k7-sheen" aria-hidden="true" />
@@ -551,6 +566,25 @@ export function IndexRail({
         <ChevronDown aria-hidden="true" />
       </Button>
     </nav>
+  );
+}
+
+/**
+ * The album's picture, filling a face of its case. The picture is a square - a CD or an LP
+ * sleeve - and the case's faces are its own proportions, so it is cropped to each, as the
+ * front has always done; that is what lets one picture run across every side.
+ */
+function CoverArt({ album }: { album: Album }) {
+  const url = useCoverUrl(album.cover);
+  if (!url) return null;
+  return (
+    <img
+      src={url}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+      className="absolute inset-0 h-full w-full object-cover"
+    />
   );
 }
 
