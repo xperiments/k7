@@ -500,6 +500,7 @@ export function MediaView({
    * one in the middle, and it moves when the broadcast moves. Any choice - a case, an arrow,
    * a letter, a search - spends it, and coming back to the shelf arms it again. */
   const chosen = useRef(false);
+  const logged = useRef<string | null>(null);
   useEffect(() => {
     if (album !== undefined || drive !== undefined) {
       chosen.current = false;
@@ -513,7 +514,18 @@ export function MediaView({
     if (at < 0 && title) {
       at = albums.findIndex((entry) => entry.rows.some((row) => row.title === title));
     }
-    if (at >= 0) setSelected(at);
+    if (at >= 0) {
+      setSelected(at);
+    } else if (logged.current !== playingPath) {
+      /* Nothing joined. Say what the two sides actually carry, once per track: a path that
+       * differs by a prefix or a separator cannot be guessed at from the result alone. */
+      logged.current = playingPath;
+      console.info('[shelf] the playing track joined to no row', {
+        playingPath,
+        title,
+        rows: albums.slice(0, 4).map((entry) => entry.rows[0]?.path),
+      });
+    }
   }, [album, drive, state.loading, status, playingPath, albums]);
 
   /* The route's album is applied once, when it arrives: a search that keeps it visible must
@@ -633,7 +645,18 @@ export function MediaView({
     if (!name) return;
     const ordered = orderAlbums(state.index?.albums ?? [], needle, next);
     const at = ordered.findIndex((entry) => entry.album === name);
-    if (at >= 0) setSelected(at);
+    if (at >= 0) {
+      setSelected(at);
+    } else if (logged.current !== playingPath) {
+      /* Nothing joined. Say what the two sides actually carry, once per track: a path that
+       * differs by a prefix or a separator cannot be guessed at from the result alone. */
+      logged.current = playingPath;
+      console.info('[shelf] the playing track joined to no row', {
+        playingPath,
+        title,
+        rows: albums.slice(0, 4).map((entry) => entry.rows[0]?.path),
+      });
+    }
   };
 
   if (readingDrive) {
