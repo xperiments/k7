@@ -167,6 +167,7 @@ function ViewSwitch({
  */
 function Remembering({ scope, reload }: { scope: string; reload: () => void }) {
   const [failure, setFailure] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
   const tried = useRef<string | null>(null);
   useEffect(() => {
     if (tried.current === scope) return;
@@ -180,7 +181,9 @@ function Remembering({ scope, reload }: { scope: string; reload: () => void }) {
         /* A player that stops answering mid-card must not leave the page saying
          * "remembering" forever: the attempt has a budget, and its sentence names it. */
         const written = await Promise.race([
-          rememberCardFromPlayer(scope),
+          rememberCardFromPlayer(scope, (fraction) => {
+            if (live()) setProgress(fraction);
+          }),
           new Promise<never>((_, reject) => {
             window.setTimeout(() => reject(new Error('the player did not finish the card in 90 s')), 90_000);
           }),
@@ -207,10 +210,7 @@ function Remembering({ scope, reload }: { scope: string; reload: () => void }) {
   return (
     <div className="mx-auto flex w-full max-w-sm flex-col gap-3 py-10" role="status">
       <p className="text-sm text-muted-foreground">Loading Media Database</p>
-      {/* Indeterminate on purpose: the card is three requests and three transactions, and
-          the whole of it is a second's work - a determinate bar would sit at one number and
-          then be full, which reads as a bug rather than as progress. */}
-      <Progress value={null} aria-label="Loading the media database" />
+      <Progress value={progress * 100} aria-label="Loading the media database" />
     </div>
   );
 }

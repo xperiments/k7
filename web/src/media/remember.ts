@@ -74,8 +74,13 @@ export async function rememberCardFromPlayer(
   }
   /* One transaction for the card: a remembered library is thousands of rows, and one write
    * each is slow enough that a closed connection could catch it half-written. */
-  onProgress(0.75);
-  await putMediaMany(scope, fresh);
+  /* Rows go in batches so the bar can count them: each is one transaction, and the count is
+   * the only real number this operation has. */
+  const BATCH = 250;
+  for (let at = 0; at < fresh.length; at += BATCH) {
+    await putMediaMany(scope, fresh.slice(at, at + BATCH));
+    onProgress(0.55 + 0.4 * (Math.min(at + BATCH, fresh.length) / Math.max(1, fresh.length)));
+  }
   /* Read it back: a transaction that silently did nothing (a closed connection, a store
    * that answered with an abort) must not leave the page waiting on rows that are not
    * there. */
