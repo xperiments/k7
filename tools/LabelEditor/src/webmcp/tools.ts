@@ -228,6 +228,8 @@ function jcardSummary(ed: Editor) {
       preview: ed.jcardSim(field),
     })),
     focus: ed.focus,
+    /* The sheet's own paper: the label's is `label.mask`'s, and the two are independent. */
+    paper: ed.jcard.paper,
     typeRoles: FROLES.map((role) => ({
       role,
       face: ed.jcard.fonts[role].ff,
@@ -711,7 +713,7 @@ export function labelEditorTools(
     {
       name: "k7art-set-design",
       description:
-        "Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), its colourway (ink, rule, the eight bands, the paper), its paper radius, one of the label's type roles' face and size, or one of the J-card's three type sizes. Every colour is a hex string; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.",
+        "Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), its colourway (ink, rule, the eight bands, the label's paper and the J-card's own paper), its paper radius, one of the label's type roles' face and size, or one of the J-card's three type sizes. Every colour is a hex string; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.",
       inputSchema: schema({
         templateId: str("The design id, like k7.my-design; it names the exported file."),
         name: str("The design's human name."),
@@ -730,7 +732,10 @@ export function labelEditorTools(
           type: "string",
         }),
         paper: str(
-          "The paper's colour, as #rrggbb. Adds the LayerMask paper if the design has none.",
+          "The label's paper, as #rrggbb: the LayerMask's colour. Adds the LayerMask paper if the design has none.",
+        ),
+        jcardPaper: str(
+          "The J-card sheet's own paper, as #rrggbb. It starts equal to the label's and moves independently; the webapp paints the sheet with it.",
         ),
         paperRadius: num("The paper's corner radius in design pixels.", { minimum: 0 }),
         fonts: {
@@ -818,12 +823,16 @@ export function labelEditorTools(
           ed.tpl.inks.band = bands;
         }
         const paper = readHex(args, "paper");
+        const jcardPaper = readHex(args, "jcardPaper");
         const paperRadius = readNum(args, "paperRadius", 0);
         if (paperRadius !== undefined && ed.surface !== "label")
           throw new Error(
             "paperRadius is the label's LayerMask; the J-card's sheet has no corner radius",
           );
-        if (paper !== undefined) ed.setRoleColor("paper", paper);
+        /* Named apart on purpose: `setRoleColor("paper")` answers by the active surface, and
+         * a tool call should not mean one thing on the label and another on the sheet. */
+        if (paper !== undefined) ed.setTplField("paper", paper);
+        if (jcardPaper !== undefined) ed.setJCardPaper(jcardPaper);
         if (paperRadius !== undefined) {
           if (!ed.mask) ed.addMask();
           if (ed.mask) ed.mask.radius = Math.round(paperRadius);

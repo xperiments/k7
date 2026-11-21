@@ -53,9 +53,12 @@ The J-card half:
   them.
 - It uses the same eleven colour roles and the same three faces as the label, with its own three
   sizes; its texts bind to **`title`**, **`artist`** and **`meta`**, not to Slots.
+- The sheet has **its own paper**, `jcardPaper` on `set-design`: it starts equal to the label's
+  and moves independently, and the webapp paints the sheet with it. `paper` stays the label's
+  (the LayerMask); the two are never set by the same argument.
 - The webapp draws the cover on the case front and the album card — a centre crop, so keep the
-  words in the safe square (x 480–1300, y 230–1050) — and the spine on the shelf's left face.
-  The flap has no surface yet.
+  words in the safe square (x 480–1300, y 230–1050) — the spine on the shelf's left face, and
+  the flap on the case's back, folded around the spine.
 - One printed side: no back, no tracklist, no print export.
 
 ## Before your first call
@@ -253,7 +256,7 @@ Group layers into one layer group, or ungroup a group, on the label. Grouping ne
 
 ### `k7art-set-design`
 
-Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), its colourway (ink, rule, the eight bands, the paper), its paper radius, one of the label's type roles' face and size, or one of the J-card's three type sizes. Every colour is a hex string; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.
+Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), its colourway (ink, rule, the eight bands, the label's paper and the J-card's own paper), its paper radius, one of the label's type roles' face and size, or one of the J-card's three type sizes. Every colour is a hex string; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
@@ -265,7 +268,8 @@ Set the design's template id or name, its canvas background cycle (the K7 picks 
 | `ink` | `string` |  | The colour of the ink role, as #rrggbb. |
 | `rule` | `string` |  | The colour of the rule role, as #rrggbb. |
 | `bands` | array of `string` |  | The eight band colours, as #rrggbb strings, in band order. |
-| `paper` | `string` |  | The paper's colour, as #rrggbb. Adds the LayerMask paper if the design has none. |
+| `paper` | `string` |  | The label's paper, as #rrggbb: the LayerMask's colour. Adds the LayerMask paper if the design has none. |
+| `jcardPaper` | `string` |  | The J-card sheet's own paper, as #rrggbb. It starts equal to the label's and moves independently; the webapp paints the sheet with it. |
 | `paperRadius` | `number` |  | The paper's corner radius in design pixels. Minimum 0. |
 | `fonts` | object |  | The label's type roles to change: a face from Archivo Narrow 600, Barlow Condensed 700, IBM Plex Mono 500 and one of that face's sizes. |
 | `fonts.title` | object |  | The label's title role. |

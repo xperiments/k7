@@ -160,6 +160,8 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
     });
     const design = await call("k7art-set-design", {
       jcardFonts: { title: { size: 60 } },
+      /* The sheet's own paper, which is not the label's: one argument each. */
+      jcardPaper: "#142538",
     });
     const field = await call("k7art-set-field-value", {
       surface: "jcard",
@@ -200,6 +202,8 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
     )!.size,
   ).toBe(60);
   expect(out.field.value).toBe("Case Study");
+  /* The J-card's paper is readable and did not move the label's. */
+  expect(out.read.jcard.paper).toBe("#142538");
 
   expect(out.bad.ok).toBe(false);
   expect((out.bad.errors as string[]).join("\n")).toContain("slug");
