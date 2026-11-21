@@ -158,92 +158,69 @@ function ViewSwitch({
   );
 }
 
-function NoAlbums({
-  reachable,
-  card,
-  tracks,
-  scope,
-  reload,
-}: {
-  reachable: boolean;
-  card: boolean;
-  tracks: number;
-  scope: string;
-  reload: () => void;
-}) {
-  /* A card in the player can be remembered from the card itself: its image carries the
-   * names, and the device serves it (front-door.md S3). */
-  const [remembering, setRemembering] = useState<'idle' | 'busy' | 'empty'>('idle');
+/**
+ * A card in the player that this browser has never met: it is remembered from the player
+ * itself, without asking - the device serves the image its names come from and the archive
+ * its covers do (front-door.md S3, cover-archive.md), so there is nothing for the person to
+ * press. The attempt is made once per card; a failure says what happened and stops.
+ */
+function Remembering({ scope, reload }: { scope: string; reload: () => void }) {
   const [failure, setFailure] = useState<string | null>(null);
-  const remember = async () => {
-    setRemembering('busy');
-    setFailure(null);
-    try {
-      const written = await rememberCardFromPlayer(scope);
-      if (written === 0) {
-        setRemembering('empty');
-        return;
+  const tried = useRef<string | null>(null);
+  useEffect(() => {
+    if (tried.current === scope) return;
+    tried.current = scope;
+    let live = true;
+    void (async () => {
+      try {
+        const written = await rememberCardFromPlayer(scope);
+        if (!live) return;
+        if (written > 0) reload();
+        else setFailure('The player\'s image names no track this card holds.');
+      } catch (error) {
+        if (live) setFailure(error instanceof Error ? error.message : String(error));
       }
-      setRemembering('idle');
-      reload();
-    } catch (error) {
-      setRemembering('idle');
-      setFailure(error instanceof Error ? error.message : String(error));
-    }
-  };
-  /* Three different empty pages wear one title, so the sentence has to say which one it is.
-   * A cleared browser on a full card is the case worth naming: the player is holding the
-   * tracks and answering, and what is missing is this browser's memory of them - a rescan
-   * rebuilds the player's image and cannot bring the names back. */
-  const holding = reachable && card && tracks > 0;
+    })();
+    return () => {
+      live = false;
+    };
+  }, [scope, reload]);
+
+  if (failure) {
+    return (
+      <p className="mx-auto max-w-prose text-center text-sm text-muted-foreground" role="status">
+        {failure}
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col items-center gap-3 py-6" role="status">
+      <Skeleton className="aspect-square w-40" />
+      <p className="text-sm text-muted-foreground">Remembering the card in the player…</p>
+    </div>
+  );
+}
+
+function NoAlbums({ reachable, card }: { reachable: boolean; card: boolean }) {
   return (
     <Empty className="border">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Disc3 aria-hidden="true" />
         </EmptyMedia>
-        <EmptyTitle>{holding ? 'This browser has not met this card' : 'No albums here yet'}</EmptyTitle>
+        <EmptyTitle>No albums here yet</EmptyTitle>
         <EmptyDescription>
           {!reachable
-            ? 'The device is not answering, and this browser has not measured a card. Put the card in the computer and measure it once.'
-            : holding
-              ? `The player lists ${tracks} ${tracks === 1 ? 'track' : 'tracks'}; the names and the covers are what this browser remembers of a card it measured, and it has none for this one. Put the card in the computer and measure it once — or open Drive to see the folders as the card holds them.`
-              : card
-                ? 'The card in the player has no tracks on its library side. Prepare a card here and its albums appear.'
-                : 'Put a card in the player, or measure one in this browser, and its albums appear here.'}
+            ? 'The device is not answering. Put the card in the computer and measure it once, or plug the player in and let it answer.'
+            : card
+              ? 'The card in the player has no tracks on its library side. Prepare a card here and its albums appear.'
+              : 'Put a card in the player, or measure one in this browser, and its albums appear here.'}
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'prepare' }))}>
           Open Prepare
         </Button>
-        {holding ? (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void remember()}
-              disabled={remembering === 'busy'}
-            >
-              {remembering === 'busy' ? 'Remembering…' : 'Remember from the player'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<a href={routeHref({ name: 'drive', path: '' })} />}
-            >
-              Drive
-            </Button>
-          </>
-        ) : null}
-        {remembering === 'empty' ? (
-          <p className="text-xs text-muted-foreground">
-            The card in the player has no image on it — nothing measured it, so there are no
-            names to bring back. Measure it in the computer once.
-          </p>
-        ) : null}
-        {failure ? <p className="text-xs text-destructive">{failure}</p> : null}
       </EmptyContent>
     </Empty>
   );
@@ -308,18 +285,20 @@ function ShelfView({
      opens its tracks to one side, and the arrows keep walking the row with the panel open.
      The loading, empty and no-match states are the page's, not the panel's, so they show
      whether or not it is. */
+  /* A card in the player with tracks and no rows here is not an empty page: the player can
+   * be remembered from itself, so it is remembered. */
+  const holding = state.reachable && state.card && state.deviceTracks > 0;
+
   const notice = state.loading ? (
     <div className="flex justify-center py-6">
       <Skeleton className="aspect-square w-40" />
     </div>
   ) : !hasAlbums ? (
-    <NoAlbums
-      reachable={state.reachable}
-      card={state.card}
-      tracks={state.deviceTracks}
-      scope={state.scope}
-      reload={state.reload}
-    />
+    holding ? (
+      <Remembering scope={state.scope} reload={state.reload} />
+    ) : (
+      <NoAlbums reachable={state.reachable} card={state.card} />
+    )
   ) : nothingMatches ? (
     <Empty className="border">
       <EmptyHeader>
