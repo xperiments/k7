@@ -50,4 +50,34 @@ describe('the device link', () => {
     expect(deviceSnapshot().reachable).toBe(true);
     expect(deviceSnapshot().status?.tracks).toBe(2);
   });
+
+  it('keeps the device on one missed beat, and calls it absent after a run', async () => {
+    let missing = false;
+    const fetchMock = vi.fn().mockImplementation(() =>
+      missing ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve(answer()),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { deviceSnapshot, refreshDevice } = await import('../src/device/useDeviceStatus');
+
+    await refreshDevice();
+    expect(deviceSnapshot().reachable).toBe(true);
+
+    /* One beat lost is not a device that is off: the page keeps what it knows. */
+    missing = true;
+    await refreshDevice();
+    expect(deviceSnapshot().reachable).toBe(true);
+    await refreshDevice();
+    expect(deviceSnapshot().reachable).toBe(true);
+    expect(deviceSnapshot().status?.tracks).toBe(2);
+
+    /* A run of them is. */
+    await refreshDevice();
+    expect(deviceSnapshot().reachable).toBe(false);
+
+    /* And an answer brings it straight back. */
+    missing = false;
+    await refreshDevice();
+    expect(deviceSnapshot().reachable).toBe(true);
+  });
 });

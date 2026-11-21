@@ -36,7 +36,17 @@ let snapshot: DeviceSnapshot = INITIAL;
 let timer: ReturnType<typeof setInterval> | null = null;
 let stopWatchingLink: (() => void) | null = null;
 let inFlight = false;
+/** Polls in a row that failed. One is a beat; a run is an absent device. */
+let misses = 0;
 const listeners = new Set<() => void>();
+
+/**
+ * How many polls in a row may fail before the page says the device is absent. A single
+ * missed beat is a busy player, a request lost on the way, or a cold `k7.local` lookup -
+ * none of them a device that is off, and each of them used to flip the page, its badge
+ * and the Player for five seconds.
+ */
+const ABSENT_AFTER = 3;
 
 function publish(next: DeviceSnapshot): void {
   snapshot = next;
@@ -52,7 +62,16 @@ async function pollOnce(): Promise<void> {
      * from waiting on a `none` device until someone reloads it. */
     if (getDevice().link() === 'none') await tryLocalConnect();
     const status = await fetchStatus();
-    publish(status ? { status, reachable: true } : { status: snapshot.status, reachable: false });
+    if (status) {
+      misses = 0;
+      publish({ status, reachable: true });
+      return;
+    }
+    misses += 1;
+    publish({
+      status: snapshot.status,
+      reachable: misses < ABSENT_AFTER ? snapshot.reachable : false,
+    });
   } finally {
     inFlight = false;
   }
