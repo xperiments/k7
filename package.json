@@ -33,6 +33,7 @@
     "release": "./tools/build.sh sunton release && ./player/build.sh release",
     "assets": "python3 tools/convert_cassette_assets.py",
     "screens": "python3 tools/capture_screens.py",
-    "reconfigure": "./tools/build.sh default reconfigure"
+    "reconfigure": "./tools/build.sh default reconfigure",
+    "mcp": "cd tools/LabelEditor && npm run mcp -- --http 8787"
   }
 }

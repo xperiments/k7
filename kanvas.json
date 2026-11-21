@@ -3642,7 +3642,7 @@
     {
       "id": "APP-65",
       "title": "The App installs a pack and draws its covers",
-      "state": "review",
+      "state": "done",
       "group": "APP",
       "deps": ["K7-03", "K7-04", "FW-08"],
       "at": "2026-11-20T18:08:52Z",

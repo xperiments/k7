@@ -360,7 +360,7 @@ export function AlbumShelf({
                       {album.cover ? (
                         <span
                           className="absolute inset-0"
-                          style={{ background: "rgb(0 0 0 / 0.85)" }}
+                          style={{ background: "rgb(0 0 0 / 0.65)" }}
                         />
                       ) : null}
                       <CaseSpine album={album} />
