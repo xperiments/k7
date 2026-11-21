@@ -712,6 +712,7 @@
         .k7-shelf-item[data-hover='true'] .k7-front,
         .k7-shelf-item[data-hover='true'] .k7-back {
             filter: brightness(0.94);
+            transition: all 1300ms ease-in-out;
         }
     }
 

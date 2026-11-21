@@ -391,7 +391,9 @@ export function AlbumShelf({
         </Button>
         {/* One width for every album: the buttons are the row's controls, and a control
             that moves as the name beside it changes length is a control you have to chase. */}
-        <span className="w-52 truncate text-center text-sm font-medium">{active.album}</span>
+        <span className="w-82 truncate text-center text-sm font-medium">
+          {active.artists.join(', ')} - {active.album}
+        </span>
         <Button
           size="icon-sm"
           variant="outline"
