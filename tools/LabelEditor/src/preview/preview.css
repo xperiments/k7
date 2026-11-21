@@ -221,6 +221,7 @@
     .k7app-preview .k7-case:active .k7-front,
     .k7app-preview .k7-case:active .k7-left {
         filter: brightness(0.94);
+        /* transition: all 1300ms cubic-bezier(0.22, 1, 0.36, 1); */
     }
 
     /* The turned case is the one the eye should land on: the faces of the cases beside it
@@ -228,7 +229,7 @@
        back (the flap). The shelf turns one case; this is what makes it the one. */
     .k7app-preview .k7-case[data-active='false'] .k7-front,
     .k7app-preview .k7-case[data-active='false'] .k7-back {
-        filter: brightness(0.5);
+        filter: brightness(0.3);
     }
 
     .k7app-preview .k7-face {
@@ -457,12 +458,18 @@
         .k7app-preview .k7-shelf-item[data-hover='true']:not([data-active='true']) .k7-left {
             filter: brightness(1.18);
         }
+        /* The case the pointer brought forward is the one being looked at, so it is not
+           dimmed like the row's others while it is out of the row. */
+        .k7app-preview .k7-shelf-item[data-hover='true'] .k7-front,
+        .k7app-preview .k7-shelf-item[data-hover='true'] .k7-back {
+            filter: brightness(0.94);
+        }
     }
 
     @media (prefers-reduced-motion: reduce) {
         .k7app-preview .k7-shelf-row,
-    .k7app-preview .k7-shelf-item,
-    .k7app-preview .k7-case {
+        .k7app-preview .k7-shelf-item,
+        .k7app-preview .k7-case {
             transition: none;
         }
     }
