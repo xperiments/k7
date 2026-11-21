@@ -15,6 +15,8 @@
     "connect": "node scripts/connect.mjs",
     "e2e:webmcp": "playwright test --project=webmcp-native",
     "test-label": "node scripts/test-label.mjs",
+    "mcp": "node src/webmcp/mcp-server.ts",
+    "mcp:http": "node src/webmcp/mcp-server.ts --http 8787",
     "skill": "node scripts/build-skill.mjs",
     "skill:check": "node scripts/build-skill.mjs --check"
   },

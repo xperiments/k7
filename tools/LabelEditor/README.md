@@ -228,9 +228,35 @@ emits `dist/skill.md`, so an agent that can read the page can read what its tool
 [`docs/label-prompts.md`](docs/label-prompts.md) is the taste half: the devices a sleeve uses,
 and seven prompts to paste (three of them built and pictured).
 
-Give it to an agent that can drive WebMCP — ChatGPT desktop with the page open, or Chrome with
-`--enable-features=WebMCP` — and describe the label you want. The agent reads the design, lays
-out paper, bands and type, binds the fields, validates, and hands back the exported JSON.
+Give it to an agent that can drive WebMCP — Chrome with `--enable-features=WebMCP`, or any
+desktop client over the MCP bridge below — and describe the label you want. The agent reads the
+design, lays out paper, bands and type, binds the fields, validates, and hands back the exported
+JSON.
+
+### From a desktop client: the MCP bridge
+
+`src/webmcp/mcp-server.ts` serves the editor's own tools over the Model Context Protocol, for a
+client whose browser has no WebMCP. It opens the editor in Chrome — or drives one already on
+`--remote-debugging-port` with `--attach` — reads `window.__labelEditorMcp`, and forwards every
+call to the page:
+
+```
+npm run mcp                        # stdio: Claude Desktop, Claude Code, any stdio client
+npm run mcp -- --http 8787         # http://127.0.0.1:8787/mcp: ChatGPT Desktop, mcp-remote
+npm run mcp -- --list              # the sixteen tool names
+npm run mcp -- --call k7art-read '{"includeTemplate":true}'
+```
+
+- **Claude Desktop**: in `claude_desktop_config.json`,
+  `{"mcpServers": {"k7art": {"command": "node", "args": ["<repo>/tools/LabelEditor/src/webmcp/mcp-server.ts"]}}}`,
+  then restart it. **Claude Code**: `claude mcp add k7art -- node src/webmcp/mcp-server.ts`.
+- **ChatGPT Desktop**: Settings → Connectors → Developer mode → add
+  `http://127.0.0.1:8787/mcp` while `npm run mcp -- --http 8787` runs. Whether Developer mode is
+  offered depends on the plan and the desktop build.
+- **A stdio-only client that wants the endpoint**: `npx mcp-remote http://127.0.0.1:8787/mcp`.
+
+The skill needs no separate install there: `k7art-guide` returns it as a tool result, and the
+server's `initialize` tells the client to call `k7art-read` first.
 
 `npm run skill` regenerates the skill's tool reference from `src/webmcp/tools.ts`;
 `npm run skill:check` (and `src/webmcp/skill.test.ts`) refuse a stale one, so adding a tool
