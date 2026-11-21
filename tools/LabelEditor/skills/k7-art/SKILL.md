@@ -241,7 +241,7 @@ Change one layer of the active design, on the label or the J-card: position or s
 | `fontRole` | `title`, `numeral`, `caption` |  | The text's type role. |
 | `align` | `left`, `center`, `right` |  | The text's horizontal alignment. |
 | `layerName` | `string` |  | The layer's name in the Layers panel. |
-| `testValue` | `string` |  | What a dynamic text previews in the editor and Preview. |
+| `testValue` | `string` |  | The field's test value: what every text naming that field previews in the editor and Preview. One value per field, not per layer. |
 | `locked` | `boolean` |  | Lock or unlock the layer. Other changes need it unlocked. |
 | `hidden` | `boolean` |  | Hide the layer, or show it again. A hidden layer is not drawn on the canvas, in Preview or in the App, and Export and Publish leave it out. |
 

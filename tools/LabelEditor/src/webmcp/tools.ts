@@ -493,7 +493,9 @@ export function labelEditorTools(
             enum: ["left", "center", "right"],
           }),
           layerName: str("The layer's name in the Layers panel."),
-          testValue: str("What a dynamic text previews in the editor and Preview."),
+          testValue: str(
+            "The field's test value: what every text naming that field previews in the editor and Preview. One value per field, not per layer.",
+          ),
           locked: bool("Lock or unlock the layer. Other changes need it unlocked."),
           hidden: bool(
             "Hide the layer, or show it again. A hidden layer is not drawn on the canvas, in Preview or in the App, and Export and Publish leave it out.",
@@ -570,8 +572,10 @@ export function labelEditorTools(
         if (align !== undefined) o.align = align;
         if (layerName !== undefined) o.label = layerName;
         if (testValue !== undefined) {
-          if (testValue === "") delete o.sim;
-          else o.sim = testValue;
+          /* One test value per field, shared by every text that names it: a per-layer value
+           * would let two texts on one field preview differently. */
+          if (surface === "jcard") ed.setJCardSim(o.name as never, testValue);
+          else ed.setSim(o.name, testValue);
         }
         ed.commit(false);
         ed.emit();

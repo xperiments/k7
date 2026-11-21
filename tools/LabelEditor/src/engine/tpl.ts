@@ -95,13 +95,13 @@ export const roleColorOf = (r: string, mask: Mask | null, tpl: Tpl) =>
           ? tpl.inks.band[+r.slice(5)]
           : null;
 
-/** A text's preview in the editor: its test value, else its Slot's default. */
+/**
+ * A text's preview in the editor: the fields' test values, one per field. A layer has no
+ * test value of its own - two texts naming one field could then preview differently, which
+ * is the thing a test value exists to rule out.
+ */
 export const simText = (o: Obj, tpl: Tpl) =>
-  o.static
-    ? (o.text ?? "")
-    : o.sim !== undefined && o.sim !== ""
-      ? o.sim
-      : (tpl.sim[o.name] ?? slotOf(o.name)?.sim ?? "");
+  o.static ? (o.text ?? "") : (tpl.sim[o.name] ?? slotOf(o.name)?.sim ?? "");
 
 /**
  * A document made before the font roles were set keeps the old Montserrat defaults: move

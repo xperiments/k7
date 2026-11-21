@@ -245,13 +245,11 @@ export function buildJCard(jcard: JCardDoc, tpl?: Tpl): { doc: JCardFile; errs: 
           ? (tpl?.sim as Record<string, string> | undefined)?.[field]
           : undefined;
         pr.preview =
-          o.sim !== undefined && o.sim !== ""
-            ? o.sim
-            : slotSim !== undefined && slotSim !== ""
-              ? slotSim
-              : JCARD_FIELDS.includes(field)
-                ? jcardSim(jcard, field)
-                : "";
+          slotSim !== undefined && slotSim !== ""
+            ? slotSim
+            : JCARD_FIELDS.includes(field)
+              ? jcardSim(jcard, field)
+              : "";
       }
       prims.push(pr);
       return;

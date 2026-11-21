@@ -248,12 +248,7 @@ export class Editor {
     return this.tpl.sim[id] !== undefined ? this.tpl.sim[id] : (slotOf(id)?.sim ?? "");
   }
   simText(o: Obj, surface: Surface = this.surface): string {
-    if (surface === "jcard")
-      return o.static
-        ? (o.text ?? "")
-        : o.sim !== undefined && o.sim !== ""
-          ? o.sim
-          : this.jcardSim(o.name);
+    if (surface === "jcard") return o.static ? (o.text ?? "") : this.jcardSim(o.name);
     return simText(o, this.tpl);
   }
   /** What a J-card text previews: a label Slot's test value is the label's (one field, one

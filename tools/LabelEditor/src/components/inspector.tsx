@@ -9,7 +9,6 @@ import {
   FolderPlus,
   Lock,
   LockOpen,
-  MousePointerClick,
   PanelRightClose,
   PanelRightOpen,
   Plus,
@@ -60,7 +59,6 @@ import {
   JCARD_PARTS,
   JCARD_SAFE,
   JCARD_W,
-  type JCardField,
 } from "@/engine/jcard";
 import type { JCardFocus, Obj } from "@/engine/types";
 import {
@@ -74,7 +72,6 @@ import {
   SLOTS,
   TEXT_ROLES,
   WIN,
-  slotOf,
 } from "@/engine/vocab";
 
 /** The inspector: the document when nothing is selected, the layer when one is. */
@@ -92,9 +89,11 @@ export function Inspector({ onCollapse }: { onCollapse: () => void }) {
   let body: React.ReactNode;
 
   if (ed.run) {
+    /* Preview draws the design with the fields' own test values, so the panel is the design's
+     * fields, not a per-layer box: one value per field is what the preview shows. */
     title = "Test values";
     subtitle = "What each field prints in Preview";
-    body = <PreviewFields />;
+    body = jcard ? <JCardDesignPanel /> : <DesignPanel />;
   } else if (ed.selMask && ed.mask) {
     title = "LayerMask";
     subtitle = "A rounded clip, the size of the print";
@@ -511,24 +510,6 @@ function LayerPanel({ o }: { o: Obj }) {
                       Choose a field: a dynamic text with none prints nothing.
                     </p>
                   ) : null}
-                </Field>
-                <Field className="gap-1.5">
-                  <FieldLabel className="text-xs text-muted-foreground">
-                    Test value
-                  </FieldLabel>
-                  <Input
-                    value={o.sim ?? ""}
-                    placeholder={ed.simOf(o.name)}
-                    onChange={(e) => {
-                      if (e.target.value.trim() === "") delete o.sim;
-                      else o.sim = e.target.value;
-                      ed.commit(true);
-                      ed.emit();
-                    }}
-                    disabled={locked}
-                    className="h-7 text-xs"
-                    aria-label="Test value"
-                  />
                 </Field>
               </>
             ) : (
@@ -998,22 +979,6 @@ function JCardLayerPanel({ o }: { o: Obj }) {
                   </p>
                 ) : null}
               </Field>
-              <Field className="gap-1.5">
-                <FieldLabel className="text-xs text-muted-foreground">Test value</FieldLabel>
-                <Input
-                  value={o.sim ?? ""}
-                  placeholder={ed.jcardSim(o.name as JCardField)}
-                  onChange={(e) => {
-                    if (e.target.value.trim() === "") delete o.sim;
-                    else o.sim = e.target.value;
-                    ed.commit(true);
-                    ed.emit();
-                  }}
-                  disabled={locked}
-                  className="h-7 text-xs"
-                  aria-label="Test value"
-                />
-              </Field>
             </>
           ) : (
             <Field className="gap-1.5">
@@ -1287,47 +1252,6 @@ function JCardMultiPanel() {
             </button>
           ))}
         </div>
-      </Section>
-    </SectionGroup>
-  );
-}
-
-function PreviewFields() {
-  const ed = useEditor();
-  const texts = ed.objs.filter((o) => o.type === "text" && !o.static);
-  if (!texts.length)
-    return (
-      <Empty className="m-3 border">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <MousePointerClick />
-          </EmptyMedia>
-          <EmptyTitle>No fields on the canvas</EmptyTitle>
-          <EmptyDescription>
-            Give a text a field in Design, and it appears here as a test value.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  return (
-    <SectionGroup initial="Fields">
-      <Section title="Fields">
-      <p className="text-xs text-muted-foreground">
-        The values the panel previews. Real values come from the resolver.
-      </p>
-      {texts.map((o) => (
-        <Field key={o.id} className="gap-1">
-          <FieldLabel className="text-xs text-muted-foreground">
-            {slotOf(o.name)?.label ?? o.label ?? "Text"}
-          </FieldLabel>
-          <Input
-            value={ed.eff(o).text}
-            onChange={(e) => ed.setRunValue(o.id, "text", e.target.value)}
-            className="h-8"
-            aria-label={`Test value for ${slotOf(o.name)?.label ?? o.label ?? "text"}`}
-          />
-        </Field>
-      ))}
       </Section>
     </SectionGroup>
   );
