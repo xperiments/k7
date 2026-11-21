@@ -1,0 +1,17 @@
+# The K7Art editor's sixteen tools, over MCP.
+#
+# The bridge is `src/webmcp/mcp-server.ts` in this editor; it has to be running before the
+# client connects, because it is what holds the Chrome that shows the editor:
+#
+#   cd tools/LabelEditor && npm run mcp -- --http 8787
+#
+# Starting the bridge after DSH is fine as long as the session was opened with it running;
+# `failOnStartupError: false` keeps a profile that boots without it usable.
+- insert:
+    - id: k7art-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: k7art
+        transport: streamable-http
+        url: http://127.0.0.1:8787/mcp
+        failOnStartupError: false

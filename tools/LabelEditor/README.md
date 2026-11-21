@@ -254,6 +254,9 @@ npm run mcp -- --call k7art-read '{"includeTemplate":true}'
   `http://127.0.0.1:8787/mcp` while `npm run mcp -- --http 8787` runs. Whether Developer mode is
   offered depends on the plan and the desktop build.
 - **A stdio-only client that wants the endpoint**: `npx mcp-remote http://127.0.0.1:8787/mcp`.
+- **DeepSeek Harness**: `dsh/k7art-mcp/` is a configuration-only bundle that inserts
+  `@deepseek-ai/dsh-mcp-client` against that URL. Start the bridge, add the directory in
+  **Plugins → Add plugin**, then open a new session: the tools arrive as `mcp__k7art__*`.
 
 The skill needs no separate install there: `k7art-guide` returns it as a tool result, and the
 server's `initialize` tells the client to call `k7art-read` first.
