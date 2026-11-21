@@ -517,8 +517,8 @@ export function MediaView({
     if (at >= 0) {
       setSelected(at);
     } else if (logged.current !== playingPath) {
-      /* Nothing joined. Say what the two sides actually carry, once per track: a path that
-       * differs by a prefix or a separator cannot be guessed at from the result alone. */
+      /* Nothing joined. Say what the two sides carry, once per track: a path that differs
+       * by a prefix or a separator cannot be guessed at from the result alone. */
       logged.current = playingPath;
       console.info('[shelf] the playing track joined to no row', {
         playingPath,
@@ -645,18 +645,7 @@ export function MediaView({
     if (!name) return;
     const ordered = orderAlbums(state.index?.albums ?? [], needle, next);
     const at = ordered.findIndex((entry) => entry.album === name);
-    if (at >= 0) {
-      setSelected(at);
-    } else if (logged.current !== playingPath) {
-      /* Nothing joined. Say what the two sides actually carry, once per track: a path that
-       * differs by a prefix or a separator cannot be guessed at from the result alone. */
-      logged.current = playingPath;
-      console.info('[shelf] the playing track joined to no row', {
-        playingPath,
-        title,
-        rows: albums.slice(0, 4).map((entry) => entry.rows[0]?.path),
-      });
-    }
+    if (at >= 0) setSelected(at);
   };
 
   if (readingDrive) {
