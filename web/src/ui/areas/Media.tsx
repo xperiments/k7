@@ -496,18 +496,18 @@ export function MediaView({
    * Carousel. */
   const { status } = useDeviceStatus();
   const playingPath = status?.playing?.path?.trim() || null;
-  const armed = useRef(true);
+  /* Until the reader picks a case, the shelf follows the broadcast: the album on air is the
+   * one in the middle, and it moves when the broadcast moves. Any choice - a case, an arrow,
+   * a letter, a search - spends it, and coming back to the shelf arms it again. */
+  const chosen = useRef(false);
   useEffect(() => {
     if (album !== undefined || drive !== undefined) {
-      armed.current = true;
+      chosen.current = false;
       return;
     }
-    if (!armed.current || state.loading || status === null) return;
+    if (chosen.current || state.loading || status === null) return;
     const at = albumIndexOfPath(albums, playingPath);
-    if (at >= 0) {
-      armed.current = false;
-      setSelected(at);
-    }
+    if (at >= 0) setSelected(at);
   }, [album, drive, state.loading, status, playingPath, albums]);
 
   /* The route's album is applied once, when it arrives: a search that keeps it visible must
@@ -565,18 +565,18 @@ export function MediaView({
   };
   useEffect(() => stopWalk, []);
   const selectNow = (index: number) => {
-    armed.current = false;
+    chosen.current = true;
     stopWalk();
     setSelected(index);
   };
   /* A search on the Carousel is a choice too: the shelf must not jump to the player's album
    * after the reader has narrowed it. The Drive's search is not this shelf's. */
   const chooseQuery = (next: string) => {
-    armed.current = false;
+    chosen.current = true;
     setQuery(next);
   };
   const jumpToGroup = (group: IndexGroup) => {
-    armed.current = false;
+    chosen.current = true;
     stopWalk();
     if (grouping === 'genre') {
       /* One genre at a time: a second click on the current one shows them all again. */
@@ -619,7 +619,8 @@ export function MediaView({
 
   /* Switching the order keeps the turned album turned. */
   const changeGrouping = (next: Grouping) => {
-    armed.current = false;
+    /* A new order is not a new choice: the album stays turned, and the shelf keeps following
+     * the broadcast only if the reader had not picked a case. */
     const name = active?.album;
     setGrouping(next);
     if (next === 'genre') setGenreFilter(null);
