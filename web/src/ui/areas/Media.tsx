@@ -157,24 +157,51 @@ function ViewSwitch({
   );
 }
 
-function NoAlbums({ reachable }: { reachable: boolean }) {
+function NoAlbums({
+  reachable,
+  card,
+  tracks,
+}: {
+  reachable: boolean;
+  card: boolean;
+  tracks: number;
+}) {
+  /* Three different empty pages wear one title, so the sentence has to say which one it is.
+   * A cleared browser on a full card is the case worth naming: the player is holding the
+   * tracks and answering, and what is missing is this browser's memory of them - a rescan
+   * rebuilds the player's image and cannot bring the names back. */
+  const holding = reachable && card && tracks > 0;
   return (
     <Empty className="border">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Disc3 aria-hidden="true" />
         </EmptyMedia>
-        <EmptyTitle>No albums here yet</EmptyTitle>
+        <EmptyTitle>{holding ? 'This browser has not met this card' : 'No albums here yet'}</EmptyTitle>
         <EmptyDescription>
-          {reachable
-            ? 'Measure a card in this browser and its albums appear here. The device lists the tracks; this browser remembers the names and covers.'
-            : 'The device is not answering, and this browser has not measured a card. Put the card in the computer and measure it once.'}
+          {!reachable
+            ? 'The device is not answering, and this browser has not measured a card. Put the card in the computer and measure it once.'
+            : holding
+              ? `The player lists ${tracks} ${tracks === 1 ? 'track' : 'tracks'}; the names and the covers are what this browser remembers of a card it measured, and it has none for this one. Put the card in the computer and measure it once — or open Drive to see the folders as the card holds them.`
+              : card
+                ? 'The card in the player has no tracks on its library side. Prepare a card here and its albums appear.'
+                : 'Put a card in the player, or measure one in this browser, and its albums appear here.'}
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <Button variant="solid" size="sm" onClick={() => navigate(routeHref({ name: 'prepare' }))}>
           Open Prepare
         </Button>
+        {holding ? (
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<a href={routeHref({ name: 'drive', path: '' })} />}
+          >
+            Drive
+          </Button>
+        ) : null}
       </EmptyContent>
     </Empty>
   );
@@ -244,7 +271,7 @@ function ShelfView({
       <Skeleton className="aspect-square w-40" />
     </div>
   ) : !hasAlbums ? (
-    <NoAlbums reachable={state.reachable} />
+    <NoAlbums reachable={state.reachable} card={state.card} tracks={state.deviceTracks} />
   ) : nothingMatches ? (
     <Empty className="border">
       <EmptyHeader>
