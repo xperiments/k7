@@ -11,7 +11,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button';
 import type { Album } from '../media/albums';
-import { Jcard, useJcardDesign } from '../jcard';
+import { JCARD_PARTS, JCARD_WIDTH, Jcard, useJcardDesign } from '../jcard';
 import { DEFAULT_META, hueOf, type AlbumArtData } from './album-art';
 import { CassetteFront } from './cassette';
 import { useCoverUrl } from './cover';
@@ -339,7 +339,11 @@ export function AlbumShelf({
                     </span>
                     <span className="k7-face k7-back" aria-hidden="true">
                       {album.cover ? (
-                        <CoverArt album={album} />
+                        /* The back carries the flap, not the whole sleeve: the inch of the
+                           J-card that folds onto the back, at the spine's edge. */
+                        <span className="k7-back-flap">
+                          <CaseFlapArt album={album} />
+                        </span>
                       ) : (
                         <CaseFlap album={album} />
                       )}
@@ -584,6 +588,32 @@ function CoverArt({ album }: { album: Album }) {
       aria-hidden="true"
       draggable={false}
       className="absolute inset-0 h-full w-full object-cover"
+    />
+  );
+}
+
+/**
+ * The flap panel of the sleeve: the picture's left 320 units of the J-card's 1300, scaled to
+ * the strip the flap covers. The back is that inch, not the whole picture.
+ */
+function CaseFlapArt({ album }: { album: Album }) {
+  const url = useCoverUrl(album.cover);
+  if (!url) return null;
+  const panel = JCARD_PARTS.flap;
+  return (
+    <img
+      src={url}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+      className="absolute"
+      style={{
+        top: 0,
+        height: '100%',
+        width: `${(JCARD_WIDTH / panel.w) * 100}%`,
+        left: `${(-panel.x / panel.w) * 100}%`,
+        objectFit: 'cover',
+      }}
     />
   );
 }
