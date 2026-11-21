@@ -493,8 +493,7 @@
         overflow: clip;
         /* The J-card's type sizes are a share of the face's width (cqi). */
         container-type: inline-size;
-        background: var(--primary);
-        box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.12);
+        border-radius: 8px;
     }
 
     /* .k7-front img {
@@ -517,8 +516,8 @@
         inset: 0;
         transform: rotateY(180deg) translateZ(calc(var(--cd) / 2));
         border-radius: 0.25rem;
-        background: color-mix(in srgb, var(--primary) 5%, black);
-        border: 2px solid color-mix(in srgb, var(--primary) 30%, black);
+        background: #333;
+        border: 4px solid #555;
         /* The flap's own corners are square; the case's are not. */
         overflow: clip;
     }
@@ -539,6 +538,7 @@
         width: var(--cd);
         height: var(--ch);
         left: calc((var(--cw) - var(--cd)) / 2);
+        border-radius: 5px;
     }
 
     .k7-right {
@@ -549,6 +549,7 @@
             oklch(0.4 0.06 var(--hue)),
             oklch(0.28 0.04 var(--hue))
         );
+        border-radius: 5px;
     }
 
     .k7-left {
@@ -559,6 +560,7 @@
         overflow: clip;
         transform: rotateY(-90deg) translateZ(calc(var(--cw) / 2));
         background: black;
+        border-radius: 5px;
     }
 
     .k7-spine {
@@ -575,6 +577,7 @@
         white-space: nowrap;
         color: oklch(0.93 0.012 90);
         text-overflow: ellipsis;
+        
     }
 
     /* The group is the smaller half of the spine's read: group - album. */
@@ -588,11 +591,11 @@
         position: absolute;
         inset: 0;
         pointer-events: none;
-        border: 4px solid  color-mix(in srgb, var(--primary) 20%, black);
+        border: 2px solid #222;
         border-radius: 6px;
         box-shadow:
-            inset 0 0 0 1px #A13A22,
-            0 0 5px 1px var(--primary);
+            inset 0 0 0 3px #111;
+            
     }
     .k7-sheen {
         position: absolute;

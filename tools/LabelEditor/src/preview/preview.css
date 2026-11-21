@@ -1,4 +1,14 @@
+/*
+ * The app's own case and shelf rules, scoped to the preview.
+ *
+ * This is the app's `web/src/index.css` components layer, selector for selector, with every
+ * selector nested under `.k7app-preview` so none of it can reach the editor's panels or its
+ * canvas. It is a copy on purpose: the preview draws the J-card with the app's renderer, so it
+ * must draw it with the app's stylesheet too - a change to the app's look belongs here as it
+ * stands. The only rules of the preview's own are the one at the end.
+ */
 @layer components {
+
     /*
      * The sidebar is drawn in one colour: the surface's 1px edge and every label, icon,
      * count and wordmark inside it. `--sidebar-ink` is the one knob. This is the brand's
@@ -8,7 +18,7 @@
      * `text-sidebar-*` utility, and Tailwind declares the utilities layer after this one,
      * so an ordinary rule would never reach the active, muted and icon variants.
      */
-.k7app-preview div[data-sidebar='sidebar'] {
+    .k7app-preview div[data-sidebar='sidebar'] {
         --sidebar-ink: var(--primary);
         --sidebar-foreground: var(--sidebar-ink);
         --sidebar-accent-foreground: var(--sidebar-ink);
@@ -24,8 +34,8 @@
      * reserved by the element's size, exactly as the `<img class="size-16 object-contain">`
      * did before.
      */
-    .k7-sidebar-logo,
-.k7app-preview .k7-logo {
+    .k7app-preview .k7-sidebar-logo,
+    .k7app-preview .k7-logo {
         background-color: currentColor;
         -webkit-mask: url('/icons/k7logo.svg') center / contain no-repeat;
         mask: url('/icons/k7logo.svg') center / contain no-repeat;
@@ -36,14 +46,14 @@
      * own orange. Painting it as a mask puts it in the current ink instead, so it is the
      * same one-stroke drawing as the rest of the chrome (k7-look §7, K25).
      */
-.k7app-preview .k7-cassette {
+    .k7app-preview .k7-cassette {
         aspect-ratio: 1064 / 660;
         background-color: currentColor;
         -webkit-mask: url('/assets/k7-cassette.svg') center / contain no-repeat;
         mask: url('/assets/k7-cassette.svg') center / contain no-repeat;
     }
 
-.k7app-preview .k7-shelf {
+    .k7app-preview .k7-shelf {
         --cw: 13rem;
         --ch: calc(var(--cw) * 25 / 16);
         --cd: 2.6rem;
@@ -79,7 +89,7 @@
 
     /* One case outside the shelf: the player bar's cover. The same box, smaller — the width
        is the only number given, and the height follows from it as it does on the shelf. */
-.k7app-preview .k7-mini {
+    .k7app-preview .k7-mini {
         --cw: 1.9rem;
         --ch: calc(var(--cw) * 25 / 16);
         --cd: calc(var(--cw) * 0.2);
@@ -89,7 +99,7 @@
         flex: none;
     }
 
-.k7app-preview .k7-mini .k7-case {
+    .k7app-preview .k7-mini .k7-case {
         transform: rotateY(0deg);
         transition: none;
         cursor: default;
@@ -97,7 +107,7 @@
 
     /* At forty pixels the shelf's six-pixel moulding is a fifth of the face: the bar's case
        keeps the same drawing, at the width a hairline has there. */
-.k7app-preview .k7-mini .k7-frame {
+    .k7app-preview .k7-mini .k7-frame {
         border-width: 1px;
         border-radius: 2px;
         box-shadow:
@@ -107,13 +117,13 @@
 
     /* The initial on a coverless face is sized for a shelf case; at forty pixels it would
        be taller than the case. */
-.k7app-preview .k7-mini .k7-cover-fallback {
+    .k7app-preview .k7-mini .k7-cover-fallback {
         font-size: 1rem;
     }
 
     /* One case at the shelf's own width: the Player page's cover. The face, frame and sheen
        are the carousel's; only the width is declared here, and the height follows. */
-.k7app-preview .k7-case-shelf {
+    .k7app-preview .k7-case-shelf {
         --cw: 13rem;
         --ch: calc(var(--cw) * 25 / 16);
         --cd: calc(var(--cw) * 0.2);
@@ -123,7 +133,7 @@
         flex: none;
     }
 
-.k7app-preview .k7-case-shelf .k7-case {
+    .k7app-preview .k7-case-shelf .k7-case {
         transform: rotateY(0deg);
         transition: none;
         cursor: default;
@@ -133,21 +143,21 @@
        columns carry the screen's 5:3 and the case's 16:25, so both land on one height; the
        case reads its column's width through the container its wrapper establishes. */
     @media (min-width: 64rem) {
-.k7app-preview .k7-case-player {
+        .k7app-preview .k7-case-player {
             --cw: 100cqw;
         }
     }
 
-    .k7-shelf:focus-visible {
+    .k7app-preview .k7-shelf:focus-visible {
         outline: 2px solid var(--ring);
         outline-offset: 4px;
     }
 
-    .k7-shelf:active {
+    .k7app-preview .k7-shelf:active {
         cursor: grabbing;
     }
 
-.k7app-preview .k7-shelf-row {
+    .k7app-preview .k7-shelf-row {
         position: absolute;
         inset: 0;
         transform-style: preserve-3d;
@@ -156,7 +166,7 @@
         transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
-.k7app-preview .k7-shelf-item {
+    .k7app-preview .k7-shelf-item {
         position: absolute;
         left: 50%;
         top: 50%;
@@ -168,16 +178,16 @@
 
     /* The case is the pointer's target now; a drag begins only on the central one, the
        side spines are click targets. */
-.k7app-preview .k7-case {
+    .k7app-preview .k7-case {
         cursor: pointer;
     }
 
-.k7app-preview .k7-case[data-active='true'] {
+    .k7app-preview .k7-case[data-active='true'] {
         cursor: grab;
     }
 
     /* The case itself: a spine until it is selected, then a front cover. */
-.k7app-preview .k7-case {
+    .k7app-preview .k7-case {
         position: absolute;
         left: calc(var(--cw) / -2);
         top: calc(var(--ch) / -2);
@@ -197,28 +207,36 @@
         cursor: pointer;
     }
 
-.k7app-preview .k7-case[data-active='true'] {
+    .k7app-preview .k7-case[data-active='true'] {
         transform: rotateY(0deg);
     }
 
-    .k7-case:focus-visible {
+    .k7app-preview .k7-case:focus-visible {
         outline: 2px solid var(--ring);
         outline-offset: 0.3rem;
     }
 
     /* A press darkens the face rather than moving the box: the case is already a 3D
      * transform, and a second one on press would fight the shelf's own. */
-    .k7-case:active .k7-front,
-    .k7-case:active .k7-left {
+    .k7app-preview .k7-case:active .k7-front,
+    .k7app-preview .k7-case:active .k7-left {
         filter: brightness(0.94);
     }
 
-.k7app-preview .k7-face {
+    /* The turned case is the one the eye should land on: the faces of the cases beside it
+       are halved - the front (the strip of cover a spine-out case shows at its edge) and the
+       back (the flap). The shelf turns one case; this is what makes it the one. */
+    .k7app-preview .k7-case[data-active='false'] .k7-front,
+    .k7app-preview .k7-case[data-active='false'] .k7-back {
+        filter: brightness(0.5);
+    }
+
+    .k7app-preview .k7-face {
         position: absolute;
         backface-visibility: hidden;
     }
 
-.k7app-preview .k7-front {
+    .k7app-preview .k7-front {
         inset: 0;
         display: block;
         transform: translateZ(calc(var(--cd) / 2));
@@ -226,39 +244,38 @@
         overflow: clip;
         /* The J-card's type sizes are a share of the face's width (cqi). */
         container-type: inline-size;
-        background: var(--primary);
-        box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.12);
+        border-radius: 8px;
     }
 
-.k7app-preview /* .k7-front img {
+    /* .k7-front img {
         mix-blend-mode: multiply;
     } */
 
     /* The turned case shows its own colours; only the spines blend into the case. The
        unblended copy fades over the blended one — mix-blend-mode itself cannot interpolate. */
-.k7app-preview .k7-front img.k7-front-plain {
+    .k7app-preview .k7-front img.k7-front-plain {
         mix-blend-mode: normal;
         opacity: 0;
         transition: opacity 300ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
-.k7app-preview .k7-case[data-active='true'] .k7-front img.k7-front-plain {
+    .k7app-preview .k7-case[data-active='true'] .k7-front img.k7-front-plain {
         opacity: 1;
     }
 
-.k7app-preview .k7-back {
+    .k7app-preview .k7-back {
         inset: 0;
         transform: rotateY(180deg) translateZ(calc(var(--cd) / 2));
         border-radius: 0.25rem;
-        background: color-mix(in srgb, var(--primary) 5%, black);
-        border: 2px solid color-mix(in srgb, var(--primary) 30%, black);
+        background: #333;
+        border: 4px solid #555;
         /* The flap's own corners are square; the case's are not. */
         overflow: clip;
     }
 
     /* The flap folds around the spine onto the back: the printed inch of the case's back, at
        the edge the spine turns on. The back is the rotated face, so that edge is its right. */
-.k7app-preview .k7-back-flap {
+    .k7app-preview .k7-back-flap {
         position: absolute;
         top: 0;
         bottom: 0;
@@ -267,14 +284,15 @@
         overflow: clip;
     }
 
-.k7app-preview .k7-side {
+    .k7app-preview .k7-side {
         top: 0;
         width: var(--cd);
         height: var(--ch);
         left: calc((var(--cw) - var(--cd)) / 2);
+        border-radius: 5px;
     }
 
-.k7app-preview .k7-right {
+    .k7app-preview .k7-right {
         transform: rotateY(90deg) translateZ(calc(var(--cw) / 2));
         background: linear-gradient(
             90deg,
@@ -282,9 +300,10 @@
             oklch(0.4 0.06 var(--hue)),
             oklch(0.28 0.04 var(--hue))
         );
+        border-radius: 5px;
     }
 
-.k7app-preview .k7-left {
+    .k7app-preview .k7-left {
         display: flex;
         align-items: flex-end;
         justify-content: center;
@@ -292,9 +311,10 @@
         overflow: clip;
         transform: rotateY(-90deg) translateZ(calc(var(--cw) / 2));
         background: black;
+        border-radius: 5px;
     }
 
-.k7app-preview .k7-spine {
+    .k7app-preview .k7-spine {
         max-height: calc(var(--ch) - 2.4rem);
         overflow: clip;
         padding-block: 0.4rem;
@@ -308,26 +328,27 @@
         white-space: nowrap;
         color: oklch(0.93 0.012 90);
         text-overflow: ellipsis;
+        
     }
 
     /* The group is the smaller half of the spine's read: group - album. */
-.k7app-preview .k7-spine-group {
+    .k7app-preview .k7-spine-group {
         font-size: 0.7em;
     }
 
     /* The case's moulding: a dark frame with a light inner line, and the only part of the
      * face that survives a cover that is the same colour as the case. */
-.k7app-preview .k7-frame {
+    .k7app-preview .k7-frame {
         position: absolute;
         inset: 0;
         pointer-events: none;
-        border: 4px solid  color-mix(in srgb, var(--primary) 20%, black);
+        border: 2px solid #222;
         border-radius: 6px;
         box-shadow:
-            inset 0 0 0 1px #A13A22,
-            0 0 5px 1px var(--primary);
+            inset 0 0 0 3px #111;
+            
     }
-.k7app-preview .k7-sheen {
+    .k7app-preview .k7-sheen {
         position: absolute;
         inset: 0;
         pointer-events: none;
@@ -340,7 +361,7 @@
         );
     }
 
-.k7app-preview .k7-cover-fallback {
+    .k7app-preview .k7-cover-fallback {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -359,7 +380,7 @@
 
     /* The generic cover tile (an album card, the Player's square) is the size container the
        drawn face reads its type from; the shelf's `.k7-front` is the other. */
-.k7app-preview .k7-cover-tile {
+    .k7app-preview .k7-cover-tile {
         position: relative;
         container-type: inline-size;
     }
@@ -371,7 +392,7 @@
      * The inks are the design container's, so a user pack repaints without a stylesheet
      * change.
      */
-.k7app-preview .k7-jcard {
+    .k7app-preview .k7-jcard {
         position: absolute;
         inset: 0;
         overflow: clip;
@@ -380,13 +401,13 @@
         pointer-events: none;
     }
 
-.k7app-preview .k7-jcard-sheet {
+    .k7app-preview .k7-jcard-sheet {
         position: absolute;
         display: block;
     }
 
-    .k7-jcard-rect,
-.k7app-preview .k7-jcard-text {
+    .k7app-preview .k7-jcard-rect,
+    .k7app-preview .k7-jcard-text {
         position: absolute;
         display: block;
         margin: 0;
@@ -396,7 +417,7 @@
 
     /* A text wraps to its box's width and is cropped by the sheet; the renderer's line clamp
        gives the last visible line an ellipsis. */
-.k7app-preview .k7-jcard-text {
+    .k7app-preview .k7-jcard-text {
         white-space: pre-wrap;
         overflow-wrap: break-word;
         line-height: 1.2;
@@ -410,7 +431,7 @@
        drawn faces the J-card replaces. The shelf's spine is 2.6rem wide and keeps its
        design's own type. */
     @container (max-width: 2.4rem) {
-.k7app-preview .k7-jcard-text {
+        .k7app-preview .k7-jcard-text {
             display: none;
         }
     }
@@ -419,36 +440,35 @@
         /* The row is turned by a hovered side case, separately for each side. LEFT is a
            case before the active one in the row; RIGHT is one after it. The hover comes
            from the flat hit layer (data-hover-side), never from the case's own :hover. */
-.k7app-preview .k7-shelf[data-hover-side='left'] .k7-shelf-row {
+        .k7app-preview .k7-shelf[data-hover-side='left'] .k7-shelf-row {
             /* LEFT of the active case */
             transform: translateX(0rem) translateZ(0rem) rotateY(-30deg);
         }
-.k7app-preview .k7-shelf[data-hover-side='right'] .k7-shelf-row {
+        .k7app-preview .k7-shelf[data-hover-side='right'] .k7-shelf-row {
             /* RIGHT of the active case */
             transform: translateZ(-8rem) translateX(0rem) rotateY(-30deg);
         }
-        .k7-shelf-item[data-hover='true']:not([data-active='true']) .k7-case {
+        .k7app-preview .k7-shelf-item[data-hover='true']:not([data-active='true']) .k7-case {
             transform: translateZ(10rem) rotateY(90deg) scale(0.94);
         }
-.k7app-preview .k7-shelf-item[data-hover='true'][data-active='true'] .k7-case {
+        .k7app-preview .k7-shelf-item[data-hover='true'][data-active='true'] .k7-case {
             transform: translateZ(4rem) rotateY(0deg);
         }
-        .k7-shelf-item[data-hover='true']:not([data-active='true']) .k7-left {
+        .k7app-preview .k7-shelf-item[data-hover='true']:not([data-active='true']) .k7-left {
             filter: brightness(1.18);
         }
     }
 
     @media (prefers-reduced-motion: reduce) {
-        .k7-shelf-row,
-        .k7-shelf-item,
-.k7app-preview .k7-case {
+        .k7app-preview .k7-shelf-row,
+    .k7app-preview .k7-shelf-item,
+    .k7app-preview .k7-case {
             transition: none;
         }
     }
 
-    /* The preview holds exactly two cases, so there is no row continuing past the fold for
-       the fade to promise: in a stage this narrow it only dims the spine the preview is
-       meant to show. */
+    /* The preview holds two cases and no row continuing past the fold, and its stage is
+       narrower than the media page's: the shelf's edge fade would only dim them. */
     .k7app-preview .k7-shelf {
         -webkit-mask-image: none;
         mask-image: none;

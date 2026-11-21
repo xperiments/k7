@@ -10,7 +10,6 @@ import {
 
 import { Jcard } from "../jcard/face";
 import type { JcardDesign, JcardFields } from "../jcard/model";
-import "./shelf.css";
 
 /**
  * The App's album shelf, holding this J-card: web/src/ui/album-shelf.tsx's row, drawn with
