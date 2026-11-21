@@ -106,12 +106,12 @@ function AppContent() {
 
   useEffect(() => {
     if (landed.current || !status) return;
-    // Nothing chosen yet: the address bar is empty, and this is the only moment the card
-    // state picks an area. With a card in the player the page opens on the albums, because
-    // what is playing is in the bar, not on a page of its own.
+    /* Nothing chosen yet: the address bar is empty. It is filled with the Player rather than
+     * an area the card state picks - a reload belongs where the music is, and the card the
+     * player holds is selected on its own. */
     if (window.location.hash === '') {
       landed.current = true;
-      navigate(status.card ? '#/media' : '#/prepare', { replace: true });
+      navigate('#/player', { replace: true });
     }
   }, [status]);
 
