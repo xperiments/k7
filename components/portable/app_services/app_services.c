@@ -26,7 +26,6 @@
 #include "freertos/task.h"
 #include "http_server.h"
 #include "covers_http.h"
-#include "image_http.h"
 #include "http_json.h"
 #include "json.h"
 #include "library.h"
@@ -833,11 +832,6 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
 
     e = covers_http_start();
     if (e != ESP_OK) return fail(report, e, "covers endpoint");
-
-    /* The card's image, verbatim: the App reads the album names it wrote when it measured
-     * the card, so a browser that has never met the card can still show its albums. */
-    e = image_http_start();
-    if (e != ESP_OK) return fail(report, e, "image endpoint");
 
     e = playlist_http_start(current_card_root);
     if (e != ESP_OK) return fail(report, e, "playlist endpoints");

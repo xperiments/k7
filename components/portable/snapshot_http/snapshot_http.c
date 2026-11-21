@@ -8,11 +8,14 @@
 #include <string.h>
 
 #include "app_board.h"
+#include "esp_log.h"
 #include "flash_job.h"
 #include "http_json.h"
 #include "http_server.h"
 #include "json.h"
 #include "snapshot.h"
+
+static const char *TAG = "snapshot";
 
 /* The flash write, on the writer task: an HTTP worker's stack is PSRAM, and a write disables
  * the cache the stack lives behind (flash_job.h). */
@@ -84,9 +87,44 @@ static http_result_t snapshot_route(int fd, const http_request_t *req, void *ctx
     return HTTP_HANDLED;
 }
 
+/* The image the device is answering from, served as it stands: the same `k7.db` the App
+ * wrote when it measured the card, whether it arrived over POST or on the card's first
+ * boot. A browser that has never met the card reads the names out of it (front-door.md
+ * S3), which is what makes naming a card in the player possible without the card. */
+static http_result_t snapshot_get_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)ctx;
+    if (strcmp(req->path, "/api/snapshot") != 0) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
+    size_t size = 0;
+    const char *why = NULL;
+    int state = 0;
+    const uint8_t *image = app_board_snapshot_image(&size, &why, &state);
+    if (!image || size == 0) {
+        http_send_error(fd, 404, why ? why : "no image on this device");
+        return HTTP_HANDLED;
+    }
+    const char *headers =
+        "Content-Disposition: attachment; filename=\"k7.db\"\r\n"
+        "Cache-Control: no-store\r\n";
+    http_send_timeout_ms(fd, 30000);
+    if (http_send_headers(fd, 200, "application/octet-stream", size, headers) != ESP_OK) {
+        app_board_snapshot_release();
+        return HTTP_HANDLED;
+    }
+    bool sent = http_send_all(fd, image, size);
+    app_board_snapshot_release();
+    ESP_LOGI(TAG, "GET /api/snapshot -> %u B%s", (unsigned)size, sent ? "" : " (client stopped)");
+    return HTTP_HANDLED;
+}
+
 esp_err_t snapshot_http_start(void)
 {
     esp_err_t e = http_server_register_route_method("/api/snapshot", "POST", snapshot_route, NULL);
+    if (e != ESP_OK) return e;
+    e = http_server_register_route_method("/api/snapshot", "GET", snapshot_get_route, NULL);
     if (e != ESP_OK) return e;
     return http_server_route_body_limit("/api/snapshot", "POST", HTTP_UPLOAD_MAX);
 }

@@ -1,12 +1,13 @@
 /**
- * Remember the player's card from the card itself.
+ * Remember the player's card from the device.
  *
- * A card in the player is out of this computer's reach, but it is not unknowable: the App
- * wrote the card's image (`k7.db`) when it measured it, and the image's rows carry each
- * Track's title, artist, album and genre beside its measurements (snapshot-format.md). The
- * device serves that file verbatim (`/api/k7db`), and its library arena lists the paths, so
- * the two join by path fingerprint into exactly the rows the Albums page reads — the names
- * come back without the card being put in a computer.
+ * A card in the player is out of this computer's reach, but the device is answering from an
+ * image: the `k7.db` the App wrote when it measured the card, applied to the player over
+ * POST or off the card at boot, whose rows carry each Track's title, artist, album and
+ * genre beside its measurements (snapshot-format.md). The device serves that image as it
+ * stands (`GET /api/snapshot`), and its library arena lists the paths, so the two join by
+ * path fingerprint into exactly the rows the Albums page reads - the names come back
+ * without the card being put in a computer.
  *
  * The pictures are not in the image: they are the card's cover archive, which the App
  * restores separately by hash (`restoreCoversFromDevice`, `/api/covers`).
@@ -24,7 +25,7 @@ import { putMedia, type CachedMedia } from '../storage/media';
  */
 export async function rememberCardFromPlayer(scope: string): Promise<number> {
   const [image, library] = await Promise.all([
-    localRequest('/api/k7db', { cache: 'no-store' }),
+    localRequest('/api/snapshot', { cache: 'no-store' }),
     localRequest('/api/library.bin', { cache: 'no-store' }),
   ]);
   if (image.status === 404) throw new Error('the card in the player has no image on it');

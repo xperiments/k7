@@ -38,7 +38,6 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/card_path/include \
        -I$(ROOT)/components/portable/snapshot_http/include \
        -I$(ROOT)/components/portable/covers_http/include \
-       -I$(ROOT)/components/portable/image_http/include \
        -I$(ROOT)/components/portable/http_json/include \
        -I$(ROOT)/components/portable/playlist_http/include \
        -I$(ROOT)/components/portable/audio_format/include \
@@ -145,7 +144,6 @@ PROD_SRC := \
   $(ROOT)/components/portable/card_path/card_path.c \
   $(ROOT)/components/portable/snapshot_http/snapshot_http.c \
   $(ROOT)/components/portable/covers_http/covers_http.c \
-  $(ROOT)/components/portable/image_http/image_http.c \
   $(ROOT)/components/portable/http_json/http_json.c \
   $(ROOT)/components/portable/playlist_http/playlist_http.c \
   $(SHINE_SRC)
@@ -157,7 +155,6 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/card_path \
           $(ROOT)/components/portable/snapshot_http \
           $(ROOT)/components/portable/covers_http \
-          $(ROOT)/components/portable/image_http \
           $(ROOT)/components/portable/http_json \
           $(ROOT)/components/portable/playlist_http \
           $(ROOT)/components/portable/audio_format \
@@ -194,7 +191,7 @@ BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
-SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/card_path.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/snapshot_http.o $(OBJ)/covers_http.o $(OBJ)/image_http.o $(OBJ)/app_services.o $(OBJ)/art.o $(OBJ)/label.o $(OBJ)/label_pack.o $(OBJ)/label_pool.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_file.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o $(OBJ)/setup.o $(OBJ)/setup_http.o $(OBJ)/wifi_record.o
+SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/card_path.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/snapshot_http.o $(OBJ)/covers_http.o $(OBJ)/app_services.o $(OBJ)/art.o $(OBJ)/label.o $(OBJ)/label_pack.o $(OBJ)/label_pool.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_file.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o $(OBJ)/setup.o $(OBJ)/setup_http.o $(OBJ)/wifi_record.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/http_loop.o $(OBJ)/http_backend_single.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/share.o $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $(OBJ)/board_host.o $(OBJ)/icecast_host.o $(OBJ)/art_store_host.o

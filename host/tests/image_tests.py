@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""The card's image over the front door: GET /api/k7db.
+"""The image the device answers from: GET /api/snapshot.
 
-The App wrote the image onto the card when it measured it, and the device serves it
-verbatim so a browser that has never met the card can read the names out of it. This proves
-the route: the bytes come back exactly, the type and the download name are the App's, the
-CORS reply lets the deployed origin read them, and a card with no image says so.
+The App wrote the image when it measured the card, and the device serves the one it is
+answering from so a browser that has never met the card can read the names out of it. This
+proves the route: the bytes come back exactly, the type and the download name are the App's,
+the CORS reply lets the deployed origin read them, and a device with no image says so.
 
 Usage: image_tests.py SERVER FIXTURES_DIR
 """
@@ -74,9 +74,15 @@ def request(port, method, path, headers=None):
     return status, reply, payload
 
 
-def start(card, port):
+def start(card, port, image):
+    env = dict(os.environ)
+    if image is not None:
+        env["XTAPE_SNAPSHOT"] = str(image)
+    else:
+        env.pop("XTAPE_SNAPSHOT", None)
     proc = subprocess.Popen(
         [SERVER, "--music-dir", str(card / "music"), "--port", str(port)],
+        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
@@ -100,14 +106,25 @@ def main():
         (card / "music").mkdir()
         shutil.copy(FIXTURES / "tone-44100.flac", card / "music" / "one.flac")
 
-        port = free_port()
-        proc = start(card, port)
-        try:
-            code, reply, body = request(port, "GET", "/api/k7db", {"Origin": DEPLOYED})
-            check("a card with no image is a 404", code, 404)
+        image_file = card / "image.k7db"
+        image_file.write_bytes(IMAGE)
 
-            (card / "k7.db").write_bytes(IMAGE)
-            code, reply, body = request(port, "GET", "/api/k7db", {"Origin": DEPLOYED})
+        port = free_port()
+        proc = start(card, port, None)
+        try:
+            code, reply, body = request(port, "GET", "/api/snapshot", {"Origin": DEPLOYED})
+            check("a device with no image is a 404", code, 404)
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+        port = free_port()
+        proc = start(card, port, image_file)
+        try:
+            code, reply, body = request(port, "GET", "/api/snapshot", {"Origin": DEPLOYED})
             check("the image is served", code, 200)
             check("as a download with its own name",
                   reply.get("content-disposition"), 'attachment; filename="k7.db"')
@@ -116,7 +133,7 @@ def main():
             check("the App's origin may read it",
                   reply.get("access-control-allow-origin"), DEPLOYED)
 
-            code, _, _ = request(port, "GET", "/api/k7db")
+            code, _, _ = request(port, "GET", "/api/snapshot")
             check("no origin, still served", code, 200)
         finally:
             proc.terminate()

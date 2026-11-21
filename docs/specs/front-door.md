@@ -176,13 +176,38 @@ There is no route for this: an address that has to be requested separately is on
 that can fail. The address is a lease, not a fact, so a request that fails to reach it forgets
 it and the next one goes back to the name.
 
-**S3.** `GET /api/k7db` serves the card's Snapshot image verbatim — the `k7.db` the App wrote
-when it measured the card — or `404` when the card carries none. Its rows hold each Track's
-title, artist, album and genre beside its measurements (snapshot-format.md), so a browser that
-has never met the card (a cleared store, another machine) can join them to the library arena's
-paths and rebuild its albums. That is what makes naming a card in the player possible without
-putting it in a computer; the pictures are the cover archive's, restored separately. The device
-never parses the file — it is the App's, served as it stands.
+**S3.** `GET /api/snapshot` serves the image the device is answering from, verbatim, or `404`
+with the reason when it has none — whether that image came over `POST /api/snapshot` or off the
+card at its first boot. Its rows hold each Track's title, artist, album and genre beside its
+measurements (snapshot-format.md), so a browser that has never met the card (a cleared store,
+another machine) can join them to the library arena's paths and rebuild its albums. That is what
+makes naming a card in the player possible without putting it in a computer; the pictures are
+the cover archive's, restored separately. The device never parses the file it sends.
+
+**U4.** `POST /api/play` keeps its meaning: the broadcast moves to that Track. If a Playlist is
+selected and the Track is not in it, the selection is **dropped** — the walk is over — and the
+reply's `order` and the next `/api/status` say so. This is the one implicit mode change, and it
+is the honest reading of "play this now".
+
+**S1.** `GET /api/status` reports the **Card state**, the card's mark (`mark`: the `k7.card`
+id, or `null`), the Library's count and generation, what is Playing (`title`, `path`,
+`elapsed_ms`, `duration_ms`), and the order: `order` is `"tree"` or `"list"`, and `playlist` is
+`{"id","name"}` or `null`. `rescanning` is `true` while a Library rescan is running, so the
+App's Device card can say the card is being re-read and show the new generation when it
+publishes. `listeners` is `{"used","slots"}`, the broadcast's stream slots taken and total: it
+is how the page tells a listener the station refused from one whose link dropped, and waits
+for the slot instead of reporting a dead stream. It is `no-store` and answers only on its own
+path.
+
+**S2.** Every reply carries the device's address on the network as
+`X-K7-Net: 192.168.1.42:80`, when it has one, and the CORS reply exposes it so a page can read
+it. `k7.local` is a name the browser resolves over mDNS, and the App asks the status on a timer:
+resolving it every five seconds is a heartbeat that spends its time resolving. The header rides
+on a reply the App was already receiving - the page load included - so the App learns the
+address without asking for it and sends the rest of its requests, the stream included, there.
+There is no route for this: an address that has to be requested separately is one more request
+that can fail. The address is a lease, not a fact, so a request that fails to reach it forgets
+it and the next one goes back to the name.
 
 **U4.** There is **no TLS**. No certificate is compiled in, no trust step exists, and a browser
 shows "Not secure" and no interstitial. The consequences are accepted, not hidden: no service
