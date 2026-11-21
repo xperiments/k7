@@ -12,6 +12,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import type { Album } from '../media/albums';
 import { Jcard, useJcardDesign } from '../jcard';
+import { JCARD_PARTS, JCARD_WIDTH, type JcardPart } from '../jcard';
 import { DEFAULT_META, hueOf, type AlbumArtData } from './album-art';
 import { CassetteFront } from './cassette';
 import { useCoverUrl } from './cover';
@@ -339,20 +340,23 @@ export function AlbumShelf({
                     </span>
                     <span className="k7-face k7-back" aria-hidden="true">
                       {album.cover ? (
-                        <CoverArt album={album} />
+                        /* The sheet's flap is the inch of the sleeve that folds onto the
+                           back, at the spine's edge; the rest of the back is the case. */
+                        <span className="k7-back-flap">
+                          <CoverSheet album={album} part="flap" />
+                        </span>
                       ) : (
                         <CaseFlap album={album} />
                       )}
                       <span className="k7-sheen" aria-hidden="true" />
                     </span>
                     <span className="k7-face k7-side k7-right" aria-hidden="true">
-                      <CoverArt album={album} />
                       <span className="k7-sheen" aria-hidden="true" />
                     </span>
                     <span className="k7-face k7-side k7-left" aria-hidden="true">
-                      {/* The cover runs across every face: the spine keeps its own dark read
-                          over it, 15% of the picture showing through. */}
-                      <CoverArt album={album} />
+                      {/* The sheet's spine panel, with the case's own dark spine over it at
+                          85%: 15% of the picture shows through and the byline still reads. */}
+                      <CoverSheet album={album} part="spine" />
                       {album.cover ? (
                         <span
                           className="absolute inset-0"
@@ -570,20 +574,30 @@ export function IndexRail({
 }
 
 /**
- * The album's picture, filling a face of its case. The picture is a square - a CD or an LP
- * sleeve - and the case's faces are its own proportions, so it is cropped to each, as the
- * front has always done; that is what lets one picture run across every side.
+ * The sleeve, printed on the J-card. A cover is a square - a CD or an LP - and the J-card's
+ * sheet is 1300x1280, near enough the same shape, so one picture scaled onto the sheet lands
+ * on the case in one piece: a face shows its own panel of it - the cover on the front, the
+ * flap on the back, the spine on the left (k7art.md §4, §5). The panel is the window; the
+ * picture is never cropped face by face.
  */
-function CoverArt({ album }: { album: Album }) {
+function CoverSheet({ album, part }: { album: Album; part: JcardPart }) {
   const url = useCoverUrl(album.cover);
   if (!url) return null;
+  const panel = JCARD_PARTS[part];
   return (
     <img
       src={url}
       alt=""
       aria-hidden="true"
       draggable={false}
-      className="absolute inset-0 h-full w-full object-cover"
+      className="absolute"
+      style={{
+        top: 0,
+        height: '100%',
+        width: `${(JCARD_WIDTH / panel.w) * 100}%`,
+        left: `${(-panel.x / panel.w) * 100}%`,
+        objectFit: 'cover',
+      }}
     />
   );
 }
@@ -606,9 +620,16 @@ function fieldsOf(album: Album): AlbumArtData {
 
 /** The album's face: its own art, or the drawn cover it gets when it has no picture. */
 function CaseCover({ album }: { album: Album }) {
-  return (
-    <CassetteFront cover={album.cover} initial={initialOf(album)} art={fieldsOf(album)} />
-  );
+  if (album.cover) {
+    return (
+      <>
+        <CoverSheet album={album} part="cover" />
+        <span className="k7-frame" aria-hidden="true" />
+        <span className="k7-sheen" aria-hidden="true" />
+      </>
+    );
+  }
+  return <CassetteFront cover={null} initial={initialOf(album)} art={fieldsOf(album)} />;
 }
 
 /**
