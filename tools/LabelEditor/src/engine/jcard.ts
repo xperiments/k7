@@ -241,12 +241,12 @@ export function buildJCard(jcard: JCardDoc, tpl?: Tpl): { doc: JCardFile; errs: 
         const field = o.name as JCardField;
         /* A label Slot's test value is the label's — one field, one test value — so the
          * preview for one comes from the container when the caller has it. */
-        const slotSim = JCARD_SLOT_FIELDS.includes(field)
-          ? (tpl?.sim as Record<string, string> | undefined)?.[field]
-          : undefined;
+        /* The label's test values, field for field: one set for both surfaces (k7art.md
+         * §3), with the J-card's own three falling back to the App's words. */
+        const labelSim = (tpl?.sim as Record<string, string> | undefined)?.[field];
         pr.preview =
-          slotSim !== undefined && slotSim !== ""
-            ? slotSim
+          labelSim !== undefined && labelSim !== ""
+            ? labelSim
             : JCARD_FIELDS.includes(field)
               ? jcardSim(jcard, field)
               : "";

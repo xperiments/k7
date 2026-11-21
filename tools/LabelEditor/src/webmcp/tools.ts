@@ -572,10 +572,9 @@ export function labelEditorTools(
         if (align !== undefined) o.align = align;
         if (layerName !== undefined) o.label = layerName;
         if (testValue !== undefined) {
-          /* One test value per field, shared by every text that names it: a per-layer value
-           * would let two texts on one field preview differently. */
-          if (surface === "jcard") ed.setJCardSim(o.name as never, testValue);
-          else ed.setSim(o.name, testValue);
+          /* One set of test values for both surfaces: the J-card reads the label's, so a
+           * value set here is the design's, wherever it is drawn. */
+          ed.setSim(o.name, testValue);
         }
         ed.commit(false);
         ed.emit();
@@ -957,8 +956,7 @@ export function labelEditorTools(
         const field = readField(args, surface);
         if (!field) throw new Error("field is required");
         const value = readStr(args, "value") ?? "";
-        if (surface === "jcard") ed.setJCardSim(field as JCardField, value);
-        else ed.setSim(field, value);
+        ed.setSim(field, value);
         return {
           ok: true,
           message: value

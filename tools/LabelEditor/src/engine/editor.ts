@@ -28,11 +28,9 @@ import {
 import {
   JCARD_FACES,
   JCARD_FIELDS,
-  JCARD_OWN_FIELDS,
   JCARD_H,
   JCARD_SIMS,
   JCARD_W,
-  jcardSims,
   migrateJCard,
   type JCardField,
 } from "./jcard";
@@ -251,12 +249,15 @@ export class Editor {
     if (surface === "jcard") return o.static ? (o.text ?? "") : this.jcardSim(o.name);
     return simText(o, this.tpl);
   }
-  /** What a J-card text previews: a label Slot's test value is the label's (one field, one
-   *  test value), and the J-card's own three keep the document's. */
+  /**
+   * What a J-card text previews: the label's test values, field for field. One set of test
+   * values serves both surfaces - a design printed on a case and on a label is one design,
+   * and the J-card's own three names have the App's defaults when the label cannot set them.
+   */
   jcardSim(field: JCardField): string {
-    if (!JCARD_OWN_FIELDS.includes(field)) return this.simOf(field);
-    return jcardSims(this.jcard)[field] ?? JCARD_SIMS[field] ?? "";
+    return this.simOf(field) || (JCARD_SIMS[field] ?? "");
   }
+
   outOfSpace(o: Obj): boolean {
     if (o.ap) return false;
     if (this.surface === "jcard") {
@@ -1414,20 +1415,6 @@ export class Editor {
     if (patch.ff !== undefined) cur.ff = patch.ff;
     if (patch.size !== undefined) cur.size = Math.round(patch.size);
     this.jcard = { ...this.jcard, fonts: this.jcard.fonts };
-    this.commit(true);
-    this.emit();
-  }
-  /** What a J-card field previews: the Fields panel's value, shared by every text on it. */
-  setJCardSim(field: JCardField, v: string) {
-    const sims = { ...jcardSims(this.jcard) };
-    if (v.trim() === "") sims[field] = JCARD_SIMS[field];
-    else sims[field] = v;
-    this.jcard = { ...this.jcard, sims };
-    // The field's value is the panel's; a per-layer test value would otherwise keep previewing
-    // the old one.
-    this.jcard.prims.forEach((o) => {
-      if (!o.static && o.name === field) delete o.sim;
-    });
     this.commit(true);
     this.emit();
   }

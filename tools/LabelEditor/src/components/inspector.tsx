@@ -54,7 +54,6 @@ import {
   JCARD_FACES,
   JCARD_FIELD_CHOICES,
   JCARD_FIELD_LABELS,
-  JCARD_OWN_FIELDS,
   JCARD_H,
   JCARD_PARTS,
   JCARD_SAFE,
@@ -855,26 +854,6 @@ function JCardDesignPanel() {
             </div>
           );
         })}
-      </Section>
-
-      <Section title="Fields">
-        <p className="text-xs text-muted-foreground">
-          What the App passes for each J-card field. These are the editor&apos;s test values;
-          the App supplies the album&apos;s.
-        </p>
-        {JCARD_OWN_FIELDS.map((field) => (
-          <Field key={field} className="gap-1">
-            <FieldLabel className="text-xs text-muted-foreground">
-              {JCARD_FIELD_LABELS[field]}
-            </FieldLabel>
-            <Input
-              value={ed.jcardSim(field)}
-              onChange={(e) => ed.setJCardSim(field, e.target.value)}
-              className="h-7 text-xs"
-              aria-label={`J-card ${JCARD_FIELD_LABELS[field]} test value`}
-            />
-          </Field>
-        ))}
       </Section>
 
       <Section title="Template">

@@ -219,18 +219,25 @@ test("switches to the J-card, edits it, and keeps one document history", async (
   await expect(canvas.getByLabel("Zoom")).toBeVisible();
   await expect(page.locator('aside[aria-label="Layers"]').getByText("4", { exact: true })).toBeVisible();
 
-  // The J-card's inspector is its own: Sheet, Type and Fields, not the label's Canvas and Mask.
+  // The J-card's inspector is its own: Sheet, Type and Template, not the label's Canvas and
+  // Mask. Its test values are the label's, so there is no Fields panel here.
   await expect(sectionButton(page, "Sheet")).toHaveAttribute("aria-expanded", "true");
   await expect(sectionButton(page, "Canvas")).toHaveCount(0);
   await expect(sectionButton(page, "Paper")).toHaveCount(0);
+  await expect(sectionButton(page, "Fields")).toHaveCount(0);
 
-  await sectionButton(page, "Fields").click();
-  const title = page.locator(
-    'aside[aria-label="Inspector"] input[aria-label="J-card Title test value"]',
-  );
-  await expect(title).toHaveValue("Neon Skyline");
-  await title.fill("Case Study");
+  // The label's own test values reach the J-card: one set for both surfaces.
+  await page.locator('[aria-label="Surface"]').getByText("Label").click();
+  // The Design panel is the one with no layer selected.
+  await page.keyboard.press("Escape");
+  await sectionButton(page, "Test values").click();
+  const sim = page.locator('aside[aria-label="Inspector"] input[aria-label="Test value for Song Title"]');
+  await sim.fill("Case Study");
   await expect(page.locator(".canvas-surface")).toContainText("Case Study");
+  await page.locator('[aria-label="Surface"]').getByText("J-card").click();
+  // The J-card's own three fields are not label fields: they keep the App's words, and the
+  // panel that used to set them - Fields - is gone with the rest of the per-surface values.
+  await expect(page.locator(".canvas-surface")).toContainText("Neon Skyline");
 
   // A layer added on the J-card is a J-card prim, and the same undo covers it.
   await page.getByRole("button", { name: /Text \(T\)/ }).click();

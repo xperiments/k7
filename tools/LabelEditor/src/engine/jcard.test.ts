@@ -59,16 +59,17 @@ describe("buildJCard", () => {
     expect(doc.prims[1]).toMatchObject({ preview: "Neon Skyline" });
   });
 
-  it("writes the Fields panel's value, and ignores a layer's own", () => {
+  it("writes the label's test values, and ignores a layer's own", () => {
     const jcard = starterJCard(tpl());
     delete jcard.prims[1].sim;
-    jcard.sims = { ...jcard.sims, title: "Case Study" };
-    expect(buildJCard(jcard).doc.prims[1]).toMatchObject({ preview: "Case Study" });
+    /* The label's test values are the design's: the J-card reads the same ones. */
+    const container = tpl();
+    container.sim = { ...container.sim, title: "Case Study" };
+    expect(buildJCard(jcard, container).doc.prims[1]).toMatchObject({ preview: "Case Study" });
 
-    /* A design read from an older file may still carry one; the field's value is the
-     * preview, so two texts on one field cannot disagree. */
+    /* A design read from an older file may still carry a layer's own; it is not the preview. */
     jcard.prims[1].sim = "Layer Value";
-    expect(buildJCard(jcard).doc.prims[1]).toMatchObject({ preview: "Case Study" });
+    expect(buildJCard(jcard, container).doc.prims[1]).toMatchObject({ preview: "Case Study" });
   });
 
   it("refuses a literal colour, an unknown role and a rect without one", () => {
