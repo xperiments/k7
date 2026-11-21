@@ -27,7 +27,7 @@
  * permitted.
  */
 
-import { DEVICE_ORIGIN } from '../config';
+import { deviceOrigin } from './origin';
 import { createDirectDevice } from './direct';
 import type { Device } from './transport';
 
@@ -56,7 +56,7 @@ interface LocalRequestInit extends RequestInit {
  * archive) use this instead of a bare `fetch`.
  */
 export function localRequest(input: string, init?: RequestInit): Promise<Response> {
-  const absolute = input.startsWith('http') ? input : `${DEVICE_ORIGIN}${input}`;
+  const absolute = input.startsWith('http') ? input : `${deviceOrigin()}${input}`;
   const withSpace: LocalRequestInit = { ...init, mode: 'cors', targetAddressSpace: 'local' };
   return fetch(absolute, withSpace);
 }
@@ -67,7 +67,7 @@ export function createLocalDevice(options: LocalOptions = {}): LocalDevice {
     // The direct device asks with paths; this one has to name the host, and say that it
     // knows the host is on the local network — which is what asks the browser for the
     // permission instead of blocking the request as mixed content.
-    const absolute = input.startsWith('http') ? input : `${DEVICE_ORIGIN}${input}`;
+    const absolute = input.startsWith('http') ? input : `${deviceOrigin()}${input}`;
     const withSpace: LocalRequestInit = { ...init, mode: 'cors', targetAddressSpace: 'local' };
     return pageFetch(absolute, withSpace);
   };
@@ -75,7 +75,7 @@ export function createLocalDevice(options: LocalOptions = {}): LocalDevice {
   const inner = createDirectDevice({
     fetch: localFetch,
     audio: options.audio,
-    streamSrc: `${DEVICE_ORIGIN}/stream`,
+    streamSrc: `${deviceOrigin()}/stream`,
   });
 
   return {

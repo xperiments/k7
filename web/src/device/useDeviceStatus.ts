@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { getDevice, subscribeDeviceLink, tryLocalConnect } from './device';
+import { deviceOriginIsName, forgetDeviceOrigin, resolveDeviceOrigin } from './origin';
 import type { DeviceStatus } from './status';
 
 export interface DeviceSnapshot {
@@ -65,9 +66,16 @@ async function pollOnce(): Promise<void> {
     if (status) {
       misses = 0;
       publish({ status, reachable: true });
+      /* The first answer came over `k7.local`; ask the device where it is so the next
+       * request skips the mDNS lookup. Fire and forget: a device that cannot name its
+       * address answers at the name as it always did. */
+      if (deviceOriginIsName()) void resolveDeviceOrigin();
       return;
     }
     misses += 1;
+    /* An address is a lease: a miss may be a new one. The next poll goes back to the name,
+     * which is the thing that does not change. */
+    forgetDeviceOrigin();
     publish({
       status: snapshot.status,
       reachable: misses < ABSENT_AFTER ? snapshot.reachable : false,

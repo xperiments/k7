@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { DEVICE_ORIGIN } from '../config';
+import { deviceOrigin } from '../device/origin';
 import { fetchStatus } from '../device/useDeviceStatus';
 import type { CachedCover } from '../storage/media';
 import { classifyStreamFailure } from './stream-slot';
@@ -78,7 +78,7 @@ const PlaybackContext = createContext<PlaybackApi | null>(null);
 
 /** Where the device's stream lives from this page: the device's own origin, always. */
 export function streamUrl(): string {
-  return `${DEVICE_ORIGIN}/stream`;
+  return `${deviceOrigin()}/stream`;
 }
 
 /** The browser's own refusal, said usefully: the code is the only thing it gives. */

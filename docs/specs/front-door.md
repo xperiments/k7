@@ -166,6 +166,14 @@ is how the page tells a listener the station refused from one whose link dropped
 for the slot instead of reporting a dead stream. It is `no-store` and answers only on its own
 path.
 
+**S2.** `GET /api/net` names the device's address on the network:
+`{"ip":"192.168.1.42","port":80}`, or `503` with a reason while it has none. `k7.local` is a
+name the browser resolves over mDNS, and the App asks the status on a timer: resolving it every
+five seconds is a heartbeat that spends its time resolving. The App asks this route once over
+the name and sends the rest of its requests - the stream included - to the address. The address
+is a lease, not a fact, so a request that fails to reach it forgets it and the next one goes
+back to the name.
+
 **U4.** There is **no TLS**. No certificate is compiled in, no trust step exists, and a browser
 shows "Not secure" and no interstitial. The consequences are accepted, not hidden: no service
 worker and no installable PWA, no `crypto.subtle` (a pure-JS SHA-256 replaces it), and no

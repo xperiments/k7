@@ -73,6 +73,18 @@ esp_err_t app_services_check(const app_services_cfg_t *cfg, char *err, size_t er
  * missing card is not a failure: the file surface still serves the index. */
 esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_t *report);
 
+/**
+ * The device's address on the network, for the App's direct path.
+ *
+ * `GET /api/net` answers it, and the App resolves `k7.local` once and sends every later
+ * request to the IP and port it names: an mDNS lookup on every poll is a heartbeat that
+ * spends its time resolving. The portable code cannot ask for the address, so the board
+ * supplies it here before app_services_start(); false means the device has no address yet
+ * (no record, or the join has not landed), and the route says so instead of inventing one.
+ */
+typedef bool (*app_services_ip_fn)(char *out, size_t size);
+void app_services_set_ip(app_services_ip_fn fn);
+
 /* Build and publish a new Library generation off the side. Returns ESP_OK when
  * the scan task started, ESP_ERR_INVALID_STATE when one is already running, and
  * ESP_ERR_NO_MEM when the task could not be created. The broadcast finishes its

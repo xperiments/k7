@@ -231,6 +231,10 @@ void appliance_run(void)
     /* The chosen Playlist survives a power cut in the card's k7.select. The composition
      * takes it as two callbacks so playlist_select stays portable (ADR 0051); a card
      * that has never carried a record is "no choice", not an error. */
+    /* The App resolves `k7.local` once and then asks `GET /api/net` for this address, so
+     * the board hands the portable code the one thing it cannot read itself. */
+    app_services_set_ip(app_board_local_ip);
+
     app_services_cfg_t svc = {
         .music_dir = MUSIC_DIR,
         .station_name = STATION_NAME,
