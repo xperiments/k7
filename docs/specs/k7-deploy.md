@@ -66,7 +66,7 @@ GitHub Pages cannot set response headers at all, so it cannot do D4, D5 or D6. V
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "no-referrer" },
         { "key": "Permissions-Policy", "value": "geolocation=(), microphone=(), camera=()" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https: data: blob:; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: http: https:; connect-src 'self' https: http: data: blob:; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" }
       ]
     }
   ]
@@ -101,6 +101,13 @@ entries that look odd and are not:
 - `connect-src https:` — the **Invidious Instance** is a setting and the weights come from a CDN,
   so no list can be enumerated ahead of time. A tighter list would break every self-hosted
   Instance.
+- `connect-src http:` and `media-src http:` — the K7 answers at an address the router hands it,
+  and the App stops resolving `k7.local` once the device names that address
+  ([`front-door.md`](./front-door.md) §2 S2/S3): `192.168.1.42` today, something else after the
+  next lease. CSP has no subnet syntax, so the choice is an entry per address - which the
+  router invalidates - or the scheme. The page still reaches a local server only through
+  Chrome's `local-network` permission, which is the gate that matters; the scheme is what the
+  policy can say. `media-src` needs it for the same reason: `/stream` follows the same base.
 - `img-src https:` — for the same reason, from the other side: a Video's thumbnail comes from
   the **Invidious Instance** the user chose, which is a hostname no build can know. A picture
   is not code; the policy that matters is `script-src`, and it is unchanged.
