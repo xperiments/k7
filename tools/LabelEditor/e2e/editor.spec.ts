@@ -235,12 +235,35 @@ test("migrates a retired label-template v1 into a K7Art", async ({ page }) => {
   expect(doc.jcard.prims).toHaveLength(3);
 });
 
-test("groups two selected layers from the panel header", async ({ page }) => {
+test("groups two selected layers from the panel's actions", async ({ page }) => {
   await page.goto("/");
   await page.getByText("circle 2").click();
   await page.getByText("rect 1").click({ modifiers: ["Meta"] });
   await page.getByRole("button", { name: "Group selected (⌘G)" }).click();
   await expect(page.getByText("Group 1")).toBeVisible();
+});
+
+test("puts the Layers actions at the bottom, and drag replaces Raise and Lower", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Raise" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Lower" })).toHaveCount(0);
+  const tree = page.locator('aside[aria-label="Layers"] [role="tree"]');
+  const footer = page.locator('[data-layers-actions="1"]');
+  await expect(footer).toBeVisible();
+  const f = await footer.boundingBox();
+  const t = await tree.boundingBox();
+  expect(f!.y).toBeGreaterThan(t!.y + t!.height - 1);
+
+  // A row dragged above the top row becomes the top layer.
+  await tree
+    .getByText("rect 1", { exact: true })
+    .dragTo(tree.getByText("bpm", { exact: true }), { targetPosition: { x: 20, y: 2 } });
+  const order = await page.evaluate(() =>
+    (window as unknown as {
+      __editor: { objs: Array<{ id: number }> };
+    }).__editor.objs.map((o) => o.id),
+  );
+  expect(order).toEqual([2, 3, 4, 1]);
 });
 
 test("scales a group as one from the selection's corner", async ({ page }) => {

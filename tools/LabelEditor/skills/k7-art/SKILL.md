@@ -507,8 +507,8 @@ documents' tabs across the top.
    **Field**; or *Static text*, then **Text**. **Test value** changes only the preview.
 5. **Give it its look.** **Typography** → **Font role** (title, numeral, caption) and
    **Align**; **Appearance** → **Fill** (a shape) or **Colour** (a text), any hex or swatch.
-6. **Order the layers.** The Layers panel lists the front layer first: drag a row, or use
-   **Raise** and **Lower** in its header, to put a band behind the type.
+6. **Order the layers.** The Layers panel lists the front layer first: drag a row to put
+   a band behind the type. **Group** and **Delete** sit in the bar at the bottom of the panel.
 7. **Check and export.** **Preview** (the Design/Preview switch in the app bar) draws it with
    the LVGL build the panel runs; **Export** writes the JSON, or says what stops it.
 

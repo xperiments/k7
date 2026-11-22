@@ -1,7 +1,5 @@
 import { useRef, useState } from "react";
 import {
-  ArrowDown,
-  ArrowUp,
   ChevronDown,
   ChevronRight,
   Circle,
@@ -182,24 +180,6 @@ export function LayersPanel() {
         <Badge variant="outline" className="tabnum">
           {count}
         </Badge>
-        <div className="ml-auto flex items-center gap-0.5">
-          <IconAction
-            label={ed.groupWhy() || "Group selected (⌘G)"}
-            disabled={!!ed.groupWhy()}
-            onClick={() => ed.groupSel()}
-          >
-            <FolderPlus />
-          </IconAction>
-          <IconAction label="Raise" disabled={!ed.sel} onClick={() => ed.mv(1)}>
-            <ArrowUp />
-          </IconAction>
-          <IconAction label="Lower" disabled={!ed.sel} onClick={() => ed.mv(-1)}>
-            <ArrowDown />
-          </IconAction>
-          <IconAction label="Delete (⌫)" disabled={!ed.sel} onClick={() => ed.delSel()}>
-            <Trash2 />
-          </IconAction>
-        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
@@ -382,6 +362,23 @@ export function LayersPanel() {
             );
           })}
         </div>
+      </div>
+
+      {/* The actions sit at the bottom, where a hand lands after dragging a row. */}
+      <div
+        data-layers-actions="1"
+        className="flex h-10 shrink-0 items-center justify-end gap-0.5 border-t border-border px-3"
+      >
+        <IconAction
+          label={ed.groupWhy() || "Group selected (⌘G)"}
+          disabled={!!ed.groupWhy()}
+          onClick={() => ed.groupSel()}
+        >
+          <FolderPlus />
+        </IconAction>
+        <IconAction label="Delete (⌫)" disabled={!ed.sel} onClick={() => ed.delSel()}>
+          <Trash2 />
+        </IconAction>
       </div>
     </aside>
   );
