@@ -168,7 +168,9 @@ export function App() {
   }, [ed, onProblems]);
 
   return (
-    <TooltipProvider>
+    /* A tooltip is an "alt" popover: it waits for the pointer to settle, so sweeping a row
+     * does not flash a trail of labels. The provider's delay is shared by every tooltip. */
+    <TooltipProvider delay={300}>
       <div
         className="relative flex h-full min-h-0 flex-col overflow-hidden bg-background"
         onDragEnter={(e) => {

@@ -266,6 +266,30 @@ test("puts the Layers actions at the bottom, and drag replaces Raise and Lower",
   expect(order).toEqual([2, 3, 4, 1]);
 });
 
+test("shows every row's lock without hovering", async ({ page }) => {
+  await page.goto("/");
+  const layers = page.locator('aside[aria-label="Layers"]');
+  await expect(layers.getByRole("button", { name: "Lock", exact: true })).toHaveCount(4);
+
+  await layers.getByText("circle 2").click();
+  await layers.getByText("rect 1").click({ modifiers: ["Meta"] });
+  await layers.getByRole("button", { name: "Group selected (⌘G)" }).click();
+  await expect(layers.getByRole("button", { name: "Lock the group" })).toBeVisible();
+});
+
+test("holds a tooltip until the pointer rests", async ({ page }) => {
+  await page.goto("/");
+  const lock = page
+    .locator('aside[aria-label="Layers"]')
+    .getByRole("button", { name: "Lock", exact: true })
+    .first();
+  await lock.hover();
+  const tip = page.locator('[data-slot="tooltip-content"]');
+  await expect(tip).toHaveCount(0);
+  await expect(tip).toBeVisible();
+  await expect(tip).toContainText("Lock");
+});
+
 test("scales a group as one from the selection's corner", async ({ page }) => {
   await page.goto("/");
   await page.getByText("circle 2").click();

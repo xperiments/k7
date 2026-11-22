@@ -253,7 +253,6 @@ export function LayersPanel() {
                     <span className="ml-auto text-xs text-muted-foreground tabnum">{row.count}</span>
                     <IconAction
                       label={row.hidden ? "Show the group" : "Hide the group"}
-                      reveal
                       onClick={(e) => {
                         e.stopPropagation();
                         ed.toggleHiddenGroup(row.g.id);
@@ -264,7 +263,6 @@ export function LayersPanel() {
                     </IconAction>
                     <IconAction
                       label={row.locked ? "Unlock the group" : "Lock the group"}
-                      reveal
                       onClick={(e) => {
                         e.stopPropagation();
                         ed.groupLock(row.g.id);
@@ -349,7 +347,6 @@ export function LayersPanel() {
                   </IconAction>
                   <IconAction
                     label={o.locked ? "Unlock" : "Lock"}
-                    reveal
                     onClick={(e) => {
                       e.stopPropagation();
                       ed.toggleLock(o);
@@ -447,7 +444,7 @@ function RowShell({
 }: React.ComponentProps<"div">) {
   return (
     <div
-      className={`group/row flex h-7 cursor-default select-none items-center gap-1.5 pr-1 text-foreground transition-colors hover:bg-k7-surface/60 ${className}`}
+      className={`flex h-7 cursor-default select-none items-center gap-1.5 pr-1 text-foreground transition-colors hover:bg-k7-surface/60 ${className}`}
       style={style}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
@@ -459,21 +456,18 @@ function RowShell({
 }
 
 /**
- * A small icon button. In a row it is revealed by hovering the row; in the panel header it
- * is always visible, because a control you cannot see is a control you cannot find.
+ * A small icon button, always visible: a control you cannot see is a control you cannot find.
  */
 function IconAction({
   label,
   disabled,
   onClick,
-  reveal = false,
   className = "",
   children,
 }: {
   label: string;
   disabled?: boolean;
   onClick?: (e: React.MouseEvent) => void;
-  reveal?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -485,10 +479,8 @@ function IconAction({
             variant="ghost"
             size="icon-xs"
             className={`${className} text-muted-foreground ${
-              reveal
-                ? "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
-                : "opacity-100"
-            } ${disabled ? "opacity-50 hover:bg-transparent" : "hover:text-foreground"}`}
+              disabled ? "opacity-50 hover:bg-transparent" : "hover:text-foreground"
+            }`}
             // Not the native `disabled`: a disabled button swallows the hover, and the
             // tooltip is where the reason it cannot be pressed is written.
             aria-disabled={disabled || undefined}
