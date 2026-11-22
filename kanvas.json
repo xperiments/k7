@@ -3942,7 +3942,7 @@
     {
       "id": "K7-15",
       "title": "The Card's window is always shown, black, and is not a layer",
-      "state": "review",
+      "state": "done",
       "group": "K7",
       "deps": ["K7-14"],
       "at": "2026-11-22T02:06:28Z",
@@ -3958,6 +3958,28 @@
           "at": "2026-11-22T02:12:50Z",
           "by": "deepseek",
           "text": "K7-15 is landed in e6d606e.\n\nThe Card's window is no longer a layer. It is fixed at 95,101 556×166 r83, and the editor paints it as an opaque black rounded layer on top of the print — in Design and in Preview. It cannot be selected, moved or removed; the Aperture switch and the aperture rectangle in Layers are gone. The window's facts sit under Design → Paper.\n\nThe K7Art file is unchanged: it still carries `aperture`, and the editor always writes the window; a file without one opens with it. A stored document's aperture layer is dropped. The sheet, packer, firmware and App are untouched, and the five factory designs round-trip byte for byte.\n\nVerified: typecheck, 101 unit tests, 21 browser tests (including the black window on the canvas and in the real LVGL preview), build and skill:check; the host label target's 184 sheet checks. The host's headless label-page boot skipped on a Chrome GPU failure; the browser suite boots the page. ADR 0115 records it and supersedes ADR 0114's aperture sentence.\n\nTo check: open /k7art — no aperture rect in Layers, no Aperture switch; the print shows a black window at 95,101; open a factory K7Art and Preview; Export still carries aperture."
+        }
+      ]
+    },
+    {
+      "id": "K7-16",
+      "title": "The Layers actions sit at the bottom, and drag replaces Raise and Lower",
+      "state": "review",
+      "group": "K7",
+      "deps": ["K7-15"],
+      "at": "2026-11-22T02:19:14Z",
+      "by": "deepseek",
+      "desc": "The Layers header becomes only the title and the layer count. Group and Delete move to a bar at the bottom of the panel; Raise and Lower go, because a row can be dragged where it belongs (the `k7art-move-layer` tool and the keyboard still move one). Nothing else in the panel changes.\n\nFinished means: the header has no action buttons; the bottom bar has Group and Delete; no Raise or Lower buttons anywhere; grouping, deleting, the eye and lock actions and drag-and-drop still work; a browser test checks the new bar and a dragged row's order; typecheck and build are green; the guide says the actions are at the bottom and drag is the way to reorder.\n\nCheck: open /k7art — Layers shows the title and count only; the bottom bar has Group and Delete; drag a row above and below another; a group and a delete still work; no up/down arrows.\n\nScope: tools/LabelEditor/src/components/layers-panel.tsx, tools/LabelEditor/e2e/editor.spec.ts, tools/LabelEditor/skills/k7-art/SKILL.md.",
+      "notes": [
+        {
+          "at": "2026-11-22T02:44:28Z",
+          "by": "deepseek",
+          "text": "Plan: leave Layers as its title and count; move Group and Delete to a bottom bar; drop Raise/Lower and their imports; cover the bar and drag order in the browser tests; update the editor guide."
+        },
+        {
+          "at": "2026-11-22T02:46:24Z",
+          "by": "deepseek",
+          "text": "K7-16 is landed in 39ca576.\n\nThe Layers header is just Layers and the count. Group and Delete are in a bar at the bottom of the panel; Raise and Lower are gone, since a row can be dragged. The eye, lock, rename, grouping, deleting and drag-and-drop are unchanged; the k7art-move-layer tool still moves a layer by name.\n\nVerified: typecheck, 101 unit tests, 22 browser tests (including the footer's position and a dragged row's new order), build and skill:check; the host label target's 184 sheet checks. The headless label-page boot skipped on a Chrome GPU failure; the browser suite boots the page.\n\nTo check: open /k7art — Layers is title + count; the bottom bar has Group and Delete; drag a row above or below another; a group and a delete still work."
         }
       ]
     }
