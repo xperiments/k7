@@ -3915,7 +3915,7 @@
     {
       "id": "K7-14",
       "title": "The label's paper is always there, and the LayerMask is gone",
-      "state": "review",
+      "state": "done",
       "group": "K7",
       "deps": ["K7-13"],
       "at": "2026-11-22T01:25:19Z",
@@ -3931,6 +3931,33 @@
           "at": "2026-11-22T01:45:28Z",
           "by": "deepseek",
           "text": "K7-14 is landed in 5b77f63.\n\nThe editor no longer has a LayerMask anywhere: no row in Layers, no add/remove button, no Mask inspector, no Into/Out of LayerMask, and a group no longer has to stay on one side of it. Every label always has paper, edited in Design → Paper (colour and corner radius), and every layer prints on it. The aperture still marks the Card's window.\n\nThe file is unchanged: the K7Art still carries `mask`, and the editor always writes it; a file without one opens with the default paper (#c7a867, radius 10). The sheet writer, the packer, the firmware and the App are untouched, and the five factory designs round-trip to the same text and pack to the same sheet.\n\nVerified: editor typecheck, 101 unit tests (the factory text round-trip and the label_pack.py parity among them), 20 browser tests, build and skill:check; the host tier's 87 integration checks and the label target's 184 sheet checks. The host tier's headless label-page boot skipped on a Chrome GPU-process failure; the browser suite boots the page.\n\nTo check: open /k7art — no LayerMask in Layers and Paper always in Design; add a layer or group and Export; the factory label sheet is unchanged."
+        },
+        {
+          "at": "2026-11-22T02:06:34Z",
+          "by": "deepseek",
+          "text": "Follow-up proposed as K7-15: the Card's window gets the same treatment as the paper — always there, no layer, drawn black on top — and it waits on this task."
+        }
+      ]
+    },
+    {
+      "id": "K7-15",
+      "title": "The Card's window is always shown, black, and is not a layer",
+      "state": "review",
+      "group": "K7",
+      "deps": ["K7-14"],
+      "at": "2026-11-22T02:06:28Z",
+      "by": "deepseek",
+      "desc": "The Card's window stops being a layer the designer adds and flags. It is fixed by the Card — 95,101, 556×166, radius 83 — and the editor now always draws it as an opaque black rounded layer on top of the print, in Design and in Preview, so nothing under it is seen. It cannot be selected, moved or removed; a rectangle's Aperture switch and the aperture rect in Layers go.\n\nThe K7Art file keeps the same `aperture` field and the editor always writes the window, as it now always writes `mask`; a file without one opens with it. The sheet writer, the packer, the firmware and the App are untouched, and the five factory designs round-trip to the same bytes.\n\nFinished means: no aperture layer or switch anywhere; the window is black and on top in both views; every design exports it; the editor's unit and browser tests, typecheck, build and skill:check are green; the specs and guides say the window is the Card's and fixed; ADR 0115 records it and supersedes ADR 0114's aperture sentence.\n\nCheck: open /k7art — no aperture rect in Layers and no Aperture switch; the print shows a black window at 95,101 556×166 r83; open a factory K7Art and Preview — the window is black; Export still carries aperture.\n\nScope: tools/LabelEditor/src/**, tools/LabelEditor/{README.md,docs/labels-for-the-k7.md,skills/k7-art/SKILL.md}, docs/specs/{k7art.md,label-templates.md,CONTEXT.md}, docs/adr/0115-*.",
+      "notes": [
+        {
+          "at": "2026-11-22T02:07:59Z",
+          "by": "deepseek",
+          "text": "Plan: make the Card's window fixed and implicit; remove the aperture rect and switch; draw an opaque black window on top in the canvas and LVGL preview; always write aperture; drop stored aperture layers on migration; update tests, specs, guides, skill and ADR 0115."
+        },
+        {
+          "at": "2026-11-22T02:12:50Z",
+          "by": "deepseek",
+          "text": "K7-15 is landed in e6d606e.\n\nThe Card's window is no longer a layer. It is fixed at 95,101 556×166 r83, and the editor paints it as an opaque black rounded layer on top of the print — in Design and in Preview. It cannot be selected, moved or removed; the Aperture switch and the aperture rectangle in Layers are gone. The window's facts sit under Design → Paper.\n\nThe K7Art file is unchanged: it still carries `aperture`, and the editor always writes the window; a file without one opens with it. A stored document's aperture layer is dropped. The sheet, packer, firmware and App are untouched, and the five factory designs round-trip byte for byte.\n\nVerified: typecheck, 101 unit tests, 21 browser tests (including the black window on the canvas and in the real LVGL preview), build and skill:check; the host label target's 184 sheet checks. The host's headless label-page boot skipped on a Chrome GPU failure; the browser suite boots the page. ADR 0115 records it and supersedes ADR 0114's aperture sentence.\n\nTo check: open /k7art — no aperture rect in Layers, no Aperture switch; the print shows a black window at 95,101; open a factory K7Art and Preview; Export still carries aperture."
         }
       ]
     }
