@@ -495,18 +495,18 @@ documents' tabs across the top.
    autosaves in this browser, so the canvas may open on one from last time: start a new one
    rather than editing earlier work.
 2. **Set the design.** With nothing selected the Inspector shows it: **Template** (Id, Name),
-   **Colourway** (ink, rule, the eight bands), **Paper** (colour and radius — it is the
-   LayerMask, and without it there is no background), **Type roles** (the three pairs), and
-   **Test values** (what the fields preview). The **Label | J-card** switch at the top changes
-   the surface: the J-card's stage draws the folds and the safe square, and its Inspector has
-   **Sheet**, **Type** (the three sizes) and **Fields** (title, artist, meta) instead.
+   **Paper** (the mask's colour and radius; without it there is no background), **Canvas**
+   (the cassette cycle), **Type roles** (the three pairs), and **Test values** (what the fields
+   preview). The **Label | J-card** switch at the top changes the surface: the J-card's stage
+   draws the folds and the safe square, and its Inspector has **Sheet** (background, folds,
+   focus), **Type** (the three sizes) and **Fields** (title, artist, meta) instead.
 3. **Add layers.** The rail: **Rectangle (R)**, **Square (S)**, **Circle (O)**, **Text (T)** —
    pick one, then click the print where it goes; **Select (V)** to stop adding. Fine-tune in
    **Layout**: X, Y, Width (a text's *wrap width*), Height, Radius, Rotation °.
 4. **Give a text its job.** **Content** → **Kind**: *Dynamic text (from a field)*, then
    **Field**; or *Static text*, then **Text**. **Test value** changes only the preview.
 5. **Give it its look.** **Typography** → **Font role** (title, numeral, caption) and
-   **Align**; **Appearance** → **Colour role** (ink or a band).
+   **Align**; **Appearance** → **Fill** (a shape) or **Colour** (a text), any hex or swatch.
 6. **Order the layers.** The Layers panel lists the front layer first: drag a row, or use
    **Raise** and **Lower** in its header, to put a band behind the type.
 7. **Check and export.** **Preview** (the Design/Preview switch in the app bar) draws it with

@@ -97,7 +97,7 @@ export function Inspector({ onCollapse }: { onCollapse: () => void }) {
     body = <MaskPanel />;
   } else if (jcard && many) {
     title = `${selected.length} J-card layers`;
-    subtitle = "Bulk actions and colour roles";
+    subtitle = "Bulk actions and colours";
     body = <JCardMultiPanel key={[...ids].sort().join(",")} />;
   } else if (jcard && sel) {
     title = sel.type === "text" ? "J-card text" : sel.type === "circle" ? "J-card circle" : "J-card rectangle";
@@ -114,7 +114,7 @@ export function Inspector({ onCollapse }: { onCollapse: () => void }) {
     body = <JCardDesignPanel />;
   } else if (many) {
     title = `${selected.length} layers`;
-    subtitle = "Bulk actions and colour roles";
+    subtitle = "Bulk actions and colours";
     body = <MultiPanel key={[...ids].sort().join(",")} />;
   } else if (sel) {
     title = sel.type === "text" ? "Text" : sel.type === "circle" ? "Circle" : "Rectangle";
