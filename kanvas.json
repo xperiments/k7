@@ -3781,6 +3781,11 @@
           "at": "2026-11-22T00:26:16Z",
           "by": "deepseek",
           "text": "Board evidence beyond the boot log: the editor's own writer built a v5 pack (16584 B, sheet 2835 B) from the five factory designs, and the K7 accepted it at /api/art with {installed:true, valid:true, design_count:5, sheet_crc:784437507}, which is exactly 0x2EC19103 - the v5 sheet's CRC. Reset to factory after, {installed:false, factory_count:5}. So the device reads a v5 sheet both embedded and installed; the only thing unproven is the eye check at the two-finger pose."
+        },
+        {
+          "at": "2026-11-22T00:38:04Z",
+          "by": "deepseek",
+          "text": "Visual proof, captured from the board with no finger: built the verify variant (sunton + screen-over-HTTP), flashed it, POST /api/scene?n=10 (the two-finger pose) and GET /api/screen.bmp. The frame shows the label in the design's own colours - the navy field, the pink/orange stripes, the pink B badge, and the title, artist, album, mood and key fields - which is version-5 prims painted by the panel. The capture is .scratch/k7art-v2/pose/scene10.png. Then restored the sunton build: its boot reads 'art: factory sheet: 5 designs, 6 compiled fonts' and 'label: label pool: 5 designs', and /api/screen.bmp is a 404 again. No monitor is left attached."
         }
       ]
     },
@@ -3884,6 +3889,11 @@
           "at": "2026-11-22T00:11:00Z",
           "by": "deepseek",
           "text": "Guides updated in e4f31ce (editor README, labels-for-the-k7, label-prompts) and the agent skill in 0cb6fb9. All tiers are green: make -C host check, web typecheck/980 tests/build, the editor's typecheck/100 tests/19 browser tests/build/skill:check. What is left is the board flash: another session holds the serial port, so the v2 label has not been seen at the two-finger pose, and the board's task states need the human (K7-08 is in review; the rest await it or YOLO)."
+        },
+        {
+          "at": "2026-11-22T00:38:04Z",
+          "by": "deepseek",
+          "text": "The board half is proven so the task has every fact it needs once the three reviews are marked done: the sunton flash boots with the v5 factory sheet ('art: factory sheet: 5 designs' and 'label: label pool: 5 designs'), a v5 pack installs with sheet_crc 0x2EC19103, and the two-finger pose was photographed through the verify build's /api/scene?n=10 + /api/screen.bmp (saved at .scratch/k7art-v2/pose/scene10.png): the label prints its own colours. Host, web and editor tiers are green. What remains is the board's own clicks."
         }
       ]
     }
