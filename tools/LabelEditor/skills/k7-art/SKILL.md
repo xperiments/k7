@@ -1,6 +1,6 @@
 ---
 name: k7-art
-description: Design a K7 cassette artwork — the label the K7 player prints on its two-finger screen and the J-card the webapp draws on an album with no cover — through the K7Art Editor's WebMCP tools. Read the open K7Art, lay out the label's mask, its layers' colours and type and the J-card's flap, spine and cover, bind the fields, validate, export the K7Art and publish a pack. Use when asked to make, change, review or explain a K7 cassette label or J-card.
+description: Design a K7 cassette artwork — the label the K7 player prints on its two-finger screen and the J-card the webapp draws on an album with no cover — through the K7Art Editor's WebMCP tools. Read the open K7Art, lay out the label's paper, its layers' colours and type and the J-card's flap, spine and cover, bind the fields, validate, export the K7Art and publish a pack. Use when asked to make, change, review or explain a K7 cassette label or J-card.
 ---
 
 # A K7Art for the K7
@@ -35,9 +35,9 @@ The label half:
   of x 651. All three roles fit either strip — 29 px of ink for a title, 17 for a caption,
   55 for a numeral's digits — so the discipline is only to keep the whole line inside one of
   them. Ornaments may cross the hole; they are simply not seen there.
-- The **mask** is the design's background and the clip the editor shows: a rounded rect filling
-  the print, its colour and radius set through `set-design` (`maskColor`, `maskRadius`). A new
-  document starts with `#c7a867` at radius 10; a design without one has no background.
+- The **paper** is the design's background and the clip the editor shows: a rounded rect
+  filling the print, its colour and radius set through `set-design` (`maskColor`, `maskRadius`).
+  Every design has one; a new document starts with `#c7a867` at radius 10.
 - Every layer carries **its own colour**: a shape's `color` is its fill, a text's is its type.
   There are no shared roles and no palette to declare: `k7art-add-layer { color: "#8a5d34" }`,
   and any colour goes on any element.
@@ -60,8 +60,8 @@ The J-card half:
   nothing for the rest: an album's case has the name, byline, genre and cassette line, so a
   tempo on a case prints empty — the design's test value is the canvas's, not the App's.
 - The sheet has **its own background**, `jcardBackground` on `set-design`: the colour painted
-  under its prims, independent of the label's mask. `paper` stays the label's; the two are never
-  set by the same argument.
+  under its prims, independent of the label's paper. The two are never set by the same
+  argument.
 - A text's box is **its own lines**, capped by the sheet's bottom, and `rotation` turns it about
   that box — a spine line at 90° runs up the panel rather than across it.
 - The webapp draws the cover on the case front and the album card — a centre crop, so keep the
@@ -95,10 +95,10 @@ If the tools themselves cannot be reached, every action still has a visible cont
 ## The vocabulary
 
 **Colours.** Every layer's `color` is a `#RRGGBB` value: a shape's fill, a text's type. Any
-colour may go on any element, and a text may print on any fill. The label's background is the
-**mask** (`maskColor`, `maskRadius` on `set-design`); the J-card's is its **background**
-(`jcardBackground`). A layer with no colour falls back to the ink for a text, the first swatch
-for a shape.
+colour may go on any element, and a text may print on any fill. The label's background is its
+**paper** (`maskColor`, `maskRadius` on `set-design`; the file calls the field `mask`); the
+J-card's is its **background** (`jcardBackground`). A layer with no colour falls back to the ink
+for a text, the first swatch for a shape.
 
 **Visibility.** A layer can be hidden: `k7art-update-layer { hidden: true }` or the eye in the
 Layers panel. A hidden layer stays in the document and the panel, and it is not drawn — canvas,
@@ -106,8 +106,7 @@ Preview, App — and not exported: Export and Publish carry the visible layers o
 hides or shows all its members together.
 
 **Groups.** Two or more layers of one surface can become a group: they must be a contiguous run
-of that surface's stack, and on the label they must sit on one side of the LayerMask. A group
-moves, locks and collapses as one, and copying a selected group and pasting it makes a second
+of that surface's stack. A group moves, locks and collapses as one, and copying a selected group and pasting it makes a second
 group of its own. A selected group also turns and scales as one: its rotate handle sits over the
 middle of its bounds, and its scale handle on their far corner, which moves and grows every
 member about the near corner with one factor for both axes — a text's box scales with it and its
@@ -152,11 +151,11 @@ cut at 96 characters. A design with no layer at all is refused.
 
 1. **Read** — `k7art-read`; note the window's strips, and the active design's errors.
 2. **A document** — `k7art-document { action: "new", name: "…" }` for a clean design, or
-   work in the active one. A new document is the panel's page grey (`#909090`), a paper mask
+   work in the active one. A new document is the panel's page grey (`#909090`), paper
    and no layers.
 3. **The design** — `k7art-set-design`: `templateId` (`k7.my-name`), `name`, `backgrounds` and
-   `activeBackground` (or `background` for the active one), the label's `maskColor` and
-   `maskRadius`, and the J-card's `jcardBackground`. Each layer's colour is set on
+   `activeBackground` (or `background` for the active one), the label's paper (`maskColor`,
+   `maskRadius`), and the J-card's `jcardBackground`. Each layer's colour is set on
    the layer, not here.
 4. **Layers, back to front.** A layer added now prints over the ones before it;
    `k7art-move-layer` raises, lowers, or sends one to the top or bottom. Rects make
@@ -195,7 +194,7 @@ out, because your tool list already carries the same schemas.
 <!-- generated: tools:start -->
 ### `k7art-read`
 
-Read the K7Art editor: both surfaces — the label's 748x359 print, fields, roles and compiled type pairs, and the J-card's 1300x1280 sheet, folds, safe square, three fields and sizes — the active surface and focus, the open documents, both surfaces' layers, each surface's groups, the label's mask, the selection and the export errors.
+Read the K7Art editor: both surfaces — the label's 748x359 print, fields, roles and compiled type pairs, and the J-card's 1300x1280 sheet, folds, safe square, three fields and sizes — the active surface and focus, the open documents, both surfaces' layers, each surface's groups, the label's paper, the selection and the export errors.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
@@ -280,7 +279,7 @@ Move a layer through its surface's stack: one step up or down, or straight to th
 
 ### `k7art-group-layers`
 
-Group layers into one layer group, or ungroup a group, on either surface. Grouping needs two or more layers, and on the label it keeps them on one side of the LayerMask; a group is a contiguous run, which the tool checks. Groups belong to the surface they were made on.
+Group layers into one layer group, or ungroup a group, on either surface. Grouping needs two or more layers, and a group is a contiguous run, which the tool checks. Groups belong to the surface they were made on.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
@@ -290,7 +289,7 @@ Group layers into one layer group, or ungroup a group, on either surface. Groupi
 
 ### `k7art-set-design`
 
-Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), the label's LayerMask colour and radius, the J-card sheet's background, one of the label's type roles' face and size, or one of the J-card's three type sizes. A layer's own colour is k7art-update-layer's; every colour is #RRGGBB; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.
+Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), the label's paper colour and radius (the file's `mask`), the J-card sheet's background, one of the label's type roles' face and size, or one of the J-card's three type sizes. A layer's own colour is k7art-update-layer's; every colour is #RRGGBB; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
@@ -299,9 +298,9 @@ Set the design's template id or name, its canvas background cycle (the K7 picks 
 | `background` | `string` |  | The active canvas background, as #rrggbb; it sets the editor's preview preset. |
 | `backgrounds` | array of `string` |  | The canvas background cycle, as #rrggbb strings: one to 8. The K7 picks one by the Track's cassette row. |
 | `activeBackground` | `number` |  | The index of the editor's preview preset. Minimum 0. |
-| `maskColor` | `string` |  | The label's LayerMask colour, as #rrggbb: the paper the design paints behind its layers. Adds the LayerMask if the design has none. |
-| `jcardBackground` | `string` |  | The J-card sheet's own background, as #rrggbb: the colour painted under its prims. Independent of the label's mask. |
-| `maskRadius` | `number` |  | The LayerMask's corner radius in design pixels. Minimum 0. |
+| `maskColor` | `string` |  | The label's paper colour, as #rrggbb: the colour painted behind every layer. The paper is always present. |
+| `jcardBackground` | `string` |  | The J-card sheet's own background, as #rrggbb: the colour painted under its prims. Independent of the label's paper. |
+| `maskRadius` | `number` |  | The paper's corner radius in design pixels. Minimum 0. |
 | `fonts` | object |  | The label's type roles to change: a face from Archivo Narrow 600, Barlow Condensed 700, IBM Plex Mono 500 and one of that face's sizes. |
 | `fonts.title` | object |  | The label's title role. |
 | `fonts.title.face` | `Archivo Narrow 600`, `Barlow Condensed 700`, `IBM Plex Mono 500` |  | The face name. |
@@ -495,7 +494,7 @@ documents' tabs across the top.
    autosaves in this browser, so the canvas may open on one from last time: start a new one
    rather than editing earlier work.
 2. **Set the design.** With nothing selected the Inspector shows it: **Template** (Id, Name),
-   **Paper** (the mask's colour and radius; without it there is no background), **Canvas**
+   **Paper** (the print's background colour and corner radius), **Canvas**
    (the cassette cycle), **Type roles** (the three pairs), and **Test values** (what the fields
    preview). The **Label | J-card** switch at the top changes the surface: the J-card's stage
    draws the folds and the safe square, and its Inspector has **Sheet** (background, folds,

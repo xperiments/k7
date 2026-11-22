@@ -69,12 +69,13 @@ ones the packer uses. The rest are the editor's.
 }
 ```
 
-- **`mask` is the design's paper, and it is optional.** It is the LayerMask: the print's box
+- **`mask` is the design's paper, and the editor always writes one.** It is the print's box
   (748x359) in a `#RRGGBB` colour, clipped to a corner radius `r`. It is not among the `prims`;
   both sheet writers put it in front of them as a rect
   (`x 0, y 0, w 748, h 359, r r, fill color`), so the print has a background the reader paints
-  like any other prim. A design without a mask has no paper: the print shows the panel behind
-  it. The mask's colour is its own; it is not the J-card's `background`
+  like any other prim. The packer still accepts a hand-written file without one; the editor
+  gives such a file the default paper when it opens it and writes the mask back on Export. The
+  mask's colour is its own; it is not the J-card's `background`
   ([`k7art.md`](./k7art.md) §2).
 - **`canvas` is the cassette's background at the two-finger pose, chosen by the cassette row.**
   `backgrounds` is one to eight `#RRGGBB` colours — `assets/labels/vocabulary.json`'s `canvas` is
@@ -98,7 +99,7 @@ ones the packer uses. The rest are the editor's.
   draw is a face it cannot show. A type role is a face *and* a size, not a face with a size typed
   beside it. The J-card uses the same three faces at its own sizes
   ([`k7art.md`](./k7art.md) §4); those sizes are the J-card's units, not the sheet's pairs.
-- **`prims` are painted in order**, first at the back, after the mask's rect. `still: true`
+- **`prims` are painted in order**, first at the back, after the paper's rect. `still: true`
   means nothing animates it.
 - **A `rect`** has `x, y, w, h, r?, rot?, fill`, and `fill` is a `#RRGGBB` colour.
 - **A `text`** has `x, y, w, rot?`, `font` (`title`/`numeral`/`caption`), `color`, `align`
@@ -193,9 +194,9 @@ body and the screen with it while the two-finger pose is up (§6).
 | 16 | 4 | `text_offset` | static text or Slot name; `0xFFFFFFFF` for a rect |
 | 20 | 4 | `colour` | RGB888 in the low 24 bits, always painted |
 
-A prim paints its own colour: a rect's fill, a text's colour. The mask's rect, which the writer
-puts in front of the design's prims, is a rect like any other. There is no fill index and no
-one-literal exception: a colour the design uses is a colour a prim carries.
+A prim paints its own colour: a rect's fill, a text's colour. The paper's rect, which the
+writer puts in front of the design's prims, is a rect like any other. There is no fill index
+and no one-literal exception: a colour the design uses is a colour a prim carries.
 
 ### 3.4 Slot (8 bytes)
 
@@ -350,7 +351,7 @@ by the print's own box exactly as a picture is.
   `LV_LABEL_LONG_WRAP`, `text_align` = `align`, `text_color` = `lv_color_hex(p.colour)`, and
   `text_font` = `k_label_font[]` of its type role.
 - **The print's background stays the palette's label fill**; a design's paper is the mask's
-  rect, a prim like any other, so a design without one still reads as a cassette label.
+  rect, a prim like any other, and the editor writes one for every design.
 - **The cassette's body is the label's canvas, and only at the two-finger pose.** When the
   design carries canvases, the Card's plastic, its mat and front plate, the window's rim and the
   800x480 screen behind them wear `canvas[cassette_row % count]` while the pose is up. The pose's
@@ -401,7 +402,7 @@ different moments — that is why there are two — but the facts they refuse by
 | a font role not in `vocabulary.json` | the glyphs are not compiled |
 | a design with no prims, or a text with neither a slot nor a static text | there is nothing to draw |
 | a slot whose `max` is 0 or over 96 | the resolver carries 96; the editor writes that |
-| more than 48 prims (the mask's rect included), 16 slots or 32 designs per sheet | a bounded build, a bounded repaint, a bounded sheet |
+| more than 48 prims (the paper's rect included), 16 slots or 32 designs per sheet | a bounded build, a bounded repaint, a bounded sheet |
 | the same `id` twice | selection would be ambiguous |
 | no designs at all in `assets/k7art/` | nothing to embed |
 | a file in `assets/k7art/` that is not a K7Art | it would be a design nobody wrote |

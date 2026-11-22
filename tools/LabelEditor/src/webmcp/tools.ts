@@ -181,7 +181,6 @@ function layerSummary(ed: Editor, o: Obj, surface: Surface = ed.surface) {
     rotation: Math.round(o.rot || 0),
     locked: !!o.locked,
     hidden: !!o.hidden,
-    insideMask: !!o.m,
     group: ed.groups.find((g) => g.id === o.g)?.name ?? null,
   };
 }
@@ -194,7 +193,7 @@ function designSummary(ed: Editor) {
     background: ed.bg,
     backgrounds: ed.bgs,
     backgroundIndex: ed.bgi,
-    mask: ed.mask ? { colour: ed.mask.color, radius: ed.mask.radius } : null,
+    mask: { colour: ed.mask.color, radius: ed.mask.radius },
     fonts: FROLES.map((role) => ({
       role,
       face: ed.tpl.fonts[role].ff,
@@ -222,7 +221,7 @@ function jcardSummary(ed: Editor) {
       preview: ed.jcardSim(field),
     })),
     focus: ed.focus,
-    /* The sheet's own colour: the label's mask is its own, and the two are independent. */
+    /* The sheet's own colour: the label's paper is its own, and the two are independent. */
     background: ed.jcard.background,
     typeRoles: FROLES.map((role) => ({
       role,
@@ -258,7 +257,7 @@ export function labelEditorTools(
     {
       name: "k7art-read",
       description:
-        "Read the K7Art editor: both surfaces — the label's 748x359 print, fields, roles and compiled type pairs, and the J-card's 1300x1280 sheet, folds, safe square, three fields and sizes — the active surface and focus, the open documents, both surfaces' layers, each surface's groups, the label's mask, the selection and the export errors.",
+        "Read the K7Art editor: both surfaces — the label's 748x359 print, fields, roles and compiled type pairs, and the J-card's 1300x1280 sheet, folds, safe square, three fields and sizes — the active surface and focus, the open documents, both surfaces' layers, each surface's groups, the label's paper, the selection and the export errors.",
       inputSchema: schema({
         includeTemplate: bool(
           "Also return the active design as a K7Art object.",
@@ -296,7 +295,7 @@ export function labelEditorTools(
             })),
             fields: SLOTS.map((s) => ({ id: s.id, label: s.label })),
             layers: ed.objs.map((o) => layerSummary(ed, o, "label")),
-            mask: ed.mask ? { colour: ed.mask.color, radius: ed.mask.radius } : null,
+            mask: { colour: ed.mask.color, radius: ed.mask.radius },
           },
           documents: docsSummary(ed),
           active: {
@@ -312,9 +311,7 @@ export function labelEditorTools(
             jcardLayers: ed.jcard.prims.map((o) =>
               layerSummary(ed, o as unknown as Obj, "jcard"),
             ),
-            mask: ed.mask
-              ? { colour: ed.mask.color, radius: ed.mask.radius }
-              : null,
+            mask: { colour: ed.mask.color, radius: ed.mask.radius },
             /* The active surface's groups: one list holds both surfaces', and a group is
              * only this surface's when a layer here belongs to it. */
             groups: ed.groups
@@ -670,7 +667,7 @@ export function labelEditorTools(
     {
       name: "k7art-group-layers",
       description:
-        "Group layers into one layer group, or ungroup a group, on either surface. Grouping needs two or more layers, and on the label it keeps them on one side of the LayerMask; a group is a contiguous run, which the tool checks. Groups belong to the surface they were made on.",
+        "Group layers into one layer group, or ungroup a group, on either surface. Grouping needs two or more layers, and a group is a contiguous run, which the tool checks. Groups belong to the surface they were made on.",
       inputSchema: schema(
         {
           surface: str(
@@ -714,7 +711,7 @@ export function labelEditorTools(
     {
       name: "k7art-set-design",
       description:
-        "Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), the label's LayerMask colour and radius, the J-card sheet's background, one of the label's type roles' face and size, or one of the J-card's three type sizes. A layer's own colour is k7art-update-layer's; every colour is #RRGGBB; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.",
+        "Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), the label's paper colour and radius (the file's `mask`), the J-card sheet's background, one of the label's type roles' face and size, or one of the J-card's three type sizes. A layer's own colour is k7art-update-layer's; every colour is #RRGGBB; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.",
       inputSchema: schema({
         templateId: str("The design id, like k7.my-design; it names the exported file."),
         name: str("The design's human name."),
@@ -728,12 +725,12 @@ export function labelEditorTools(
           minimum: 0,
         }),
         maskColor: str(
-          "The label's LayerMask colour, as #rrggbb: the paper the design paints behind its layers. Adds the LayerMask if the design has none.",
+          "The label's paper colour, as #rrggbb: the colour painted behind every layer. The paper is always present.",
         ),
         jcardBackground: str(
-          "The J-card sheet's own background, as #rrggbb: the colour painted under its prims. Independent of the label's mask.",
+          "The J-card sheet's own background, as #rrggbb: the colour painted under its prims. Independent of the label's paper.",
         ),
-        maskRadius: num("The LayerMask's corner radius in design pixels.", { minimum: 0 }),
+        maskRadius: num("The paper's corner radius in design pixels.", { minimum: 0 }),
         fonts: {
           type: "object",
           description:
@@ -809,13 +806,10 @@ export function labelEditorTools(
         const maskRadius = readNum(args, "maskRadius", 0);
         if (maskRadius !== undefined && ed.surface !== "label")
           throw new Error(
-            "maskRadius is the label's LayerMask; the J-card's sheet has no corner radius",
+            "maskRadius is the label's paper; the J-card's sheet has no corner radius",
           );
-        if (maskColor !== undefined || maskRadius !== undefined) {
-          if (!ed.mask) ed.addMask();
-          if (maskColor !== undefined) ed.setMaskField("color", maskColor);
-          if (maskRadius !== undefined && ed.mask) ed.mask.radius = Math.round(maskRadius);
-        }
+        if (maskColor !== undefined) ed.setMaskField("color", maskColor);
+        if (maskRadius !== undefined) ed.setMaskField("radius", Math.round(maskRadius));
         if (jcardBackground !== undefined) ed.setJCardBackground(jcardBackground);
         if (args.fonts !== undefined) {
           if (typeof args.fonts !== "object" || args.fonts === null)

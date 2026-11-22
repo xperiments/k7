@@ -43,9 +43,9 @@ digits 55, so the only rule is to keep the whole line out of the hole.
 A layer may **bleed** past the print — a band to the edge and further — and the print crops
 it, which is how a stripe runs off a sleeve.
 
-- **The mask** is the design's background and its clip: a rounded rect filling the print, its
-  colour and radius its own. A design without one has no background. The J-card has its own
-  background colour, independent of the label's mask.
+- **The paper** is the label's background and its clip: a rounded rect filling the print, its
+  colour and radius its own. Every design has one. The J-card has its own background colour,
+  independent of the label's paper.
 - **Canvas background** is the cassette's body and the screen behind it while the label is up:
   up to eight colours, cycled by the Track's cassette row (`row % count`). The whole list is
   packed; the editor's active one is only the preview. A design without one leaves the Track's
@@ -130,7 +130,7 @@ The dev server serves the same file at `http://localhost:5178/skill.md`, the pag
 `/k7art/skill.md`, and the page also answers it as a tool — `k7art-guide` — which is the road
 for a session that will not fetch a route. An agent that can drive WebMCP — ChatGPT desktop
 with the page open, Chrome with `--enable-features=WebMCP`, or any browser agent — can then
-read the design, lay out the mask, its layers' colours and type, bind the label's Slots and the
+read the design, lay out the paper, its layers' colours and type, bind the label's Slots and the
 J-card's fields, validate, and export. What to ask for is a brief, not a tool call:
 
 > Open http://localhost:5178, read /skill.md, and make a label for a synthwave track: deep

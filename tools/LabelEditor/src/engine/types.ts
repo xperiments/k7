@@ -37,8 +37,6 @@ export interface Obj {
   locked?: boolean;
   /** Hidden: not drawn and not exported, but still in the document and in the panel. */
   hidden?: boolean;
-  /** Inside the LayerMask: masked layers must be one contiguous run. */
-  m?: boolean;
   /** The group this layer belongs to. */
   g?: string;
   /** The aperture: the one window cut out of the paper (a placement aid, not a prim). */
@@ -54,10 +52,10 @@ export interface Group {
   collapsed: boolean;
 }
 
+/** The print's paper: the colour behind every layer, and the corner radius it clips to. */
 export interface Mask {
   color: string;
   radius: number;
-  collapsed: boolean;
 }
 
 /** The canvas backgrounds a design carries, and the one it shows while the tape is up. */
@@ -69,7 +67,7 @@ export interface CanvasDoc {
 /**
  * One J-card layer: the editor's object for a prim of the 1300x1280 sheet. It keeps the label
  * object's field names so a surface's selection, undo and tools can be one code path; the
- * differences are the J-card's three fields, its own type sizes and no LayerMask.
+ * differences are the J-card's three fields, its own type sizes and its own background.
  */
 export interface JObj {
   id: number;
@@ -107,7 +105,7 @@ export interface JObj {
  * carries each text's `preview`, which the panel writes through.
  */
 export interface JCardDoc {
-  /** The sheet's own colour, painted under the prims; independent of the label's mask. */
+  /** The sheet's own colour, painted under the prims; independent of the label's paper. */
   background: string;
   fonts: Record<FontRole, { ff: string; size: number }>;
   prims: JObj[];

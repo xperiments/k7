@@ -92,7 +92,7 @@ export const JCARD_BOUND = 4096;
 export interface JCardFile {
   space: { w: number; h: number; unit: number };
   parts: Record<JCardPart, { x: number; y: number; w: number; h: number }>;
-  /** The sheet's own colour, painted under the prims; independent of the label's mask. */
+  /** The sheet's own colour, painted under the prims; independent of the label's paper. */
   background: string;
   fonts: Record<FontRole, { ff: string; size: number }>;
   prims: Array<Record<string, unknown>>;

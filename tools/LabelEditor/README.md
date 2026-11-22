@@ -43,11 +43,10 @@ npm run build      # dist/
   behind.
 - **The label and the J-card.** Every layer carries its own colour: a shape's fill, a text's
   type, a J-card layer's paint. The three faces are shared by both surfaces, and the label's
-  background is the **mask** (a colour and a corner radius) while the J-card's is its own
-  **background**. The label has the canvas background presets and the active one, its three
-  compiled type pairs, its Slots and test values, groups and the LayerMask, which clips to a
-  rounded print. The J-card has its own three type sizes, its `title`/`artist`/`meta`
-  fields and its safe square.
+  background is its **paper** (a colour and a corner radius, always there) while the J-card's
+  is its own **background**. The label has the canvas background presets and the active one,
+  its three compiled type pairs, its Slots and test values, and groups. The J-card has its own
+  three type sizes, its `title`/`artist`/`meta` fields and its safe square.
 - **A selection that moves, turns and scales as one.** One layer's corner resizes its own box; a
   group — or a ⌘-click selection — turns about its bounds and scales from their far corner, every
   member following, with one factor for both axes so a circle stays a circle and a rotated layer
@@ -74,7 +73,7 @@ npm run build      # dist/
 src/engine/     the model and every operation: one Editor store, no React
 src/components/ the views: app bar, tool rail, layers, canvas, inspector, dialogs
 src/engine/tpl.ts   the template JSON: build (one view of a document) and import (its inverse)
-src/engine/editor.ts  documents, undo, selection, gestures, masks, groups, the LVGL preview
+src/engine/editor.ts  documents, undo, selection, gestures, the paper, groups, the LVGL preview
 public/lvgl.js  the emscripten build, with its wasm inlined as a data URI
 public/fonts/   the three faces the sheet compiles, from assets/fonts/
 ```
@@ -147,7 +146,7 @@ guide says which visible controls do what.
 
 | Tool | What it does |
 |---|---|
-| `k7art-read` | Both surfaces — the label's coordinate space, fields, each layer's colour and type pairs, and the J-card's sheet, parts, background, fields and sizes — the open K7Arts, the active surface, layers, mask, groups, selection and export errors. |
+| `k7art-read` | Both surfaces — the label's coordinate space, fields, each layer's colour and type pairs, and the J-card's sheet, parts, background, fields and sizes — the open K7Arts, the active surface, layers, paper, groups, selection and export errors. |
 | `k7art-guide` | The guide to designing a K7Art in one result — the print and the Card's window, the J-card sheet and its parts, the fields, the workflow, the refusals, and the visible-controls path. The same file is served at `/k7art/skill.md`; this is for a session that blocks routes. |
 | `k7art-add-layer` | Add a rect, square, circle or text on the active surface; on the J-card, a text is static unless it names `title`, `artist` or `meta`. |
 | `k7art-update-layer` | Change one layer's surface, position, size, rotation, text or field, colour, font role, alignment, name, test value or lock. |
@@ -155,7 +154,7 @@ guide says which visible controls do what.
 | `k7art-select-layer` | Select layers, so the person at the screen sees what the agent is working on. |
 | `k7art-move-layer` | Raise, lower, or send a layer to the top or bottom of the stack. |
 | `k7art-group-layers` | Group the selection, or ungroup it. |
-| `k7art-set-design` | The K7Art's id and name, the label's mask colour and radius, the label's canvas cycle and preview, a type role's face and size (the label's compiled pair, the J-card's size), and the J-card's background. |
+| `k7art-set-design` | The K7Art's id and name, the label's paper colour and radius, the label's canvas cycle and preview, a type role's face and size (the label's compiled pair, the J-card's size), and the J-card's background. |
 | `k7art-set-field-value` | Set what a Slot (the label) or a J-card field previews. |
 | `k7art-import-template` | Open a K7Art object (or JSON text) in a new document, with the packer's refusals; a `label-template v1` file is migrated. |
 | `k7art-export-template` | Return the active or a named K7Art as `k7art v1` plus the errors that would stop an export. |
@@ -238,7 +237,7 @@ and seven prompts to paste (three of them built and pictured).
 
 Give it to an agent that can drive WebMCP — Chrome with `--enable-features=WebMCP`, or any
 desktop client over the MCP bridge below — and describe the label you want. The agent reads the
-design, lays out the mask, its layers' colours and type, binds the fields, validates, and hands
+design, lays out the paper, its layers' colours and type, binds the fields, validates, and hands
 back the exported JSON.
 
 ### From a desktop client: the MCP bridge
@@ -320,8 +319,8 @@ await __k7artMcp.call("k7art-export-template", {});
 - The desktop layout targets 1280 px and up. Below `xl` the Layers panel is hidden and below
   `lg` the Inspector is too; the canvas still pans and zooms.
 - The layer tree's drag-and-drop is the builder's own run-of-the-array model, not ReUI's
-  `sortable`: a group and the LayerMask must stay one contiguous run, and a generic sortable
-  would allow a nesting the file format cannot express.
+  `sortable`: a group must stay one contiguous run, and a generic sortable would allow a
+  nesting the file format cannot express.
 - Uploaded fonts preview in the DOM but LVGL only draws a host font once it has been registered
   with the module, which happens on upload; a font the sheet does not compile cannot be
   exported (Export says so).

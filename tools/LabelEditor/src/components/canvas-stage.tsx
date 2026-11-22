@@ -111,8 +111,6 @@ export function CanvasStage() {
 
 
   const ap = ed.apOf();
-  const mask = ed.mask;
-  const maskRange = ed.maskRange();
   const sel = ed.sel;
   const members = ed.selMembers();
   const handles =
@@ -205,42 +203,26 @@ export function CanvasStage() {
     );
   };
 
-  const maskNode = (children: React.ReactNode) => (
+  /* The print always has paper: every layer is painted on it, and the clip to its rounded
+   * corners (and the aperture's window) is the same for all of them. */
+  const nodes = (
     <div
-      key="maskbox"
+      key="paperbox"
       style={{
         position: "absolute",
         left: 0,
         top: 0,
         width: PRINT_W,
         height: PRINT_H,
-        overflow: mask && !ed.outside ? "hidden" : "visible",
-        borderRadius: mask ? mask.radius : 0,
-        background: mask ? mask.color : "transparent",
-        ...(mask && ap
-          ? { clipPath: `path(evenodd, "${aperturePath(ap)}")` }
-          : {}),
+        overflow: ed.outside ? "visible" : "hidden",
+        borderRadius: ed.mask.radius,
+        background: ed.mask.color,
+        ...(ap ? { clipPath: `path(evenodd, "${aperturePath(ap)}")` } : {}),
       }}
     >
-      {children}
+      {ed.objs.map((o, i) => layerEl(o, i))}
     </div>
   );
-
-  const nodes: React.ReactNode[] = [];
-  if (maskRange) {
-    for (let i = 0; i < maskRange.lo; i++) nodes.push(layerEl(ed.objs[i], i));
-    nodes.push(
-      maskNode(
-        ed.objs
-          .slice(maskRange.lo, maskRange.hi + 1)
-          .map((o, k) => layerEl(o, maskRange.lo + k)),
-      ),
-    );
-    for (let i = maskRange.hi + 1; i < ed.objs.length; i++) nodes.push(layerEl(ed.objs[i], i));
-  } else {
-    if (mask) nodes.push(maskNode(null));
-    ed.objs.forEach((o, i) => nodes.push(layerEl(o, i)));
-  }
 
   return (
     <section className="flex min-h-0 min-w-0 flex-col bg-background h-full" aria-label="Canvas">

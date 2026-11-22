@@ -16,6 +16,7 @@ import {
   canvasOf,
   DEFAULT_CANVAS,
   DEFAULT_PAPER,
+  defaultPaper,
   defaultTpl,
   importTemplate,
   migrateDocData,
@@ -109,7 +110,7 @@ export class Editor {
   bgs: string[] = [DEFAULT_CANVAS];
   bgi = 0;
   groups: Group[] = [];
-  mask: Mask | null = null;
+  mask: Mask = defaultPaper();
   tpl: Tpl = defaultTpl();
   /** The design's J-card: the other half of the one document, and of every undo step. */
   jcard: JCardDoc = migrateJCard(undefined, defaultTpl(), null, null);
@@ -124,7 +125,6 @@ export class Editor {
   sel: Obj | null = null;
   selSet = new Set<number>();
   selGroup: string | null = null;
-  selMask = false;
   tool: Tool = "select";
   run = false;
   zoom = 1;
@@ -204,7 +204,6 @@ export class Editor {
     this.sel = null;
     this.selSet = new Set();
     this.selGroup = null;
-    this.selMask = false;
     this.emit();
   }
   setFocus(focus: JCardFocus) {
@@ -214,7 +213,6 @@ export class Editor {
       this.sel = null;
       this.selSet = new Set();
       this.selGroup = null;
-      this.selMask = false;
     }
     this.focus = focus;
     this.emit();
@@ -305,12 +303,6 @@ export class Editor {
     while (lo > 0 && list[lo - 1].g === o.g) lo--;
     while (hi < list.length - 1 && list[hi + 1].g === o.g) hi++;
     return { lo, hi };
-  }
-  maskRange(): { lo: number; hi: number } | null {
-    const idx = this.objs
-      .map((o, i) => (o.m && this.mask ? i : -1))
-      .filter((i) => i >= 0);
-    return idx.length ? { lo: idx[0], hi: idx[idx.length - 1] } : null;
   }
   private textHeight(o: Obj, surface: Surface = this.surface): number {
     return Math.round(this.pxOf(o, surface) * 1.2);
@@ -414,7 +406,7 @@ export class Editor {
         bgi: 0,
         objs: [],
         nid: 0,
-        mask: { color: "#c7a867", radius: 10, collapsed: false },
+        mask: defaultPaper(),
         tpl: defaultTpl(),
       } as DocData);
     return {
@@ -476,7 +468,7 @@ export class Editor {
               bgi: 0,
               objs: this.defaultObjs(),
               nid: 4,
-              mask: { color: "#c7a867", radius: 10, collapsed: false },
+              mask: defaultPaper(),
               tpl: defaultTpl(),
             }),
           ];
@@ -537,9 +529,7 @@ export class Editor {
     this.objs = data.objs;
     this.nid = data.nid || 0;
     this.groups = data.groups || [];
-    this.mask = data.mask || null;
-    this.selMask = false;
-    this.fixMask();
+    this.mask = data.mask ?? defaultPaper();
     this.tpl = data.tpl || defaultTpl();
     this.jcard = migrateJCard(data.jcard, this.tpl, null, this.mask);
     normaliseColours(this.objs);
@@ -679,8 +669,7 @@ export class Editor {
     this.bg = this.bgs[this.bgi] ?? DEFAULT_CANVAS;
     this.objs = d.objs;
     this.groups = d.groups || [];
-    this.mask = d.mask || null;
-    if (!this.mask) this.selMask = false;
+    this.mask = d.mask ?? defaultPaper();
     this.tpl = d.tpl || defaultTpl();
     this.jcard = migrateJCard(d.jcard, this.tpl, null, this.mask);
     const list = this.activeObjs();
@@ -716,7 +705,7 @@ export class Editor {
     this.clip = { objs: JSON.parse(JSON.stringify(mem)), group };
     this.emit();
   }
-  /** One pasted copy of a clipped layer: a fresh id, the copy's name, no group of its own. */
+  /** One pasted copy of a selected layer: a fresh id, the copy's name, no group of its own. */
   private copyOf(src: Obj): Obj {
     const jcard = this.surface === "jcard";
     const o = {
@@ -731,7 +720,6 @@ export class Editor {
     } as Obj;
     if (jcard && o.name && !o.static) delete o.text;
     if (jcard) {
-      delete o.m;
       delete o.ap;
       delete o.note;
       delete o.color;
@@ -814,7 +802,6 @@ export class Editor {
           fr: kind === "text" ? "caption" : undefined,
         };
     if (t === "circle") o.type = "circle";
-    if (!jcard && this.mask) o.m = true;
     this.insertNew(o);
     this.sel = o;
     this.selSet = new Set();
@@ -1000,83 +987,9 @@ export class Editor {
     };
   }
 
-  // ---- masks: members must stay one contiguous run ----
-  private maskContig(arr: Obj[], inM: (o: Obj) => boolean) {
-    const idx = arr.map((o, i) => (inM(o) ? i : -1)).filter((i) => i >= 0);
-    return idx.length < 2 || idx[idx.length - 1] - idx[0] === idx.length - 1;
-  }
-  fixMask() {
-    if (this.mask && !this.objs.some((o) => "m" in o)) this.objs.forEach((o) => (o.m = true));
-    if (!this.mask) this.objs.forEach((o) => delete o.m);
-  }
+  // ---- layers: one stack per surface ----
   insertNew(o: Obj) {
-    if (this.surface === "jcard") {
-      (this.jcard.prims as unknown as Obj[]).push(o);
-      return;
-    }
-    const mr = this.mask && o.m ? this.maskRange() : null;
-    if (mr) this.objs.splice(mr.hi + 1, 0, o);
-    else this.objs.push(o);
-  }
-  setMembers(list: Obj[], flag: boolean) {
-    if (!this.mask || this.surface !== "label") return;
-    const S = new Set<Obj>();
-    list.forEach((o) => {
-      S.add(o);
-      if (o.g)
-        this.objs.forEach((x) => {
-          if (x.g === o.g) S.add(x);
-        });
-    });
-    const block = this.objs.filter((o) => S.has(o));
-    if (!block.length || block.some((o) => o.locked)) return;
-    const rest = this.objs.filter((o) => !S.has(o));
-    const mi = rest.map((o, i) => (o.m ? i : -1)).filter((i) => i >= 0);
-    const ins = mi.length
-      ? mi[mi.length - 1] + 1
-      : this.objs.slice(0, this.objs.indexOf(block[block.length - 1])).filter((o) => !S.has(o)).length;
-    const next = [...rest.slice(0, ins), ...block, ...rest.slice(ins)];
-    if (!this.maskContig(next, (o) => !!(this.mask && (S.has(o) ? flag : o.m)))) return;
-    block.forEach((o) => {
-      if (flag) o.m = true;
-      else delete o.m;
-    });
-    this.objs = next;
-    this.sel = block[block.length - 1];
-    this.selSet = new Set();
-    this.commit(false);
-    this.emit();
-  }
-  toggleSelMembers() {
-    if (this.surface !== "label") return;
-    const ids = this.selIds;
-    const list = this.objs.filter((o) => ids.includes(o.id));
-    if (!list.length) return;
-    this.setMembers(list, !list.every((o) => o.m));
-  }
-  addMask() {
-    if (this.surface !== "label") return;
-    // The mask is the design's paper: a colour of its own, painted behind the layers.
-    this.mask = { color: DEFAULT_PAPER, radius: 10, collapsed: false };
-    this.objs.forEach((o) => (o.m = true));
-    this.selMask = true;
-    this.sel = null;
-    this.selSet = new Set();
-    this.commit(false);
-    this.emit();
-  }
-  removeMask() {
-    if (this.surface !== "label") return;
-    this.mask = null;
-    this.objs.forEach((o) => delete o.m);
-    this.selMask = false;
-    this.commit(false);
-    this.emit();
-  }
-  toggleMask() {
-    if (this.surface !== "label") return;
-    if (this.mask) this.removeMask();
-    else this.addMask();
+    this.activeObjs().push(o);
   }
 
   // ---- groups: a contiguous run of layers sharing g ----
@@ -1097,9 +1010,8 @@ export class Editor {
     }
     return true;
   }
-  moveBlock(a: number, b: number, insertAt: number, flag?: boolean, gid?: string | null) {
+  moveBlock(a: number, b: number, insertAt: number, gid?: string | null) {
     const arr = this.activeObjs();
-    const mask = this.surface === "label" ? this.mask : null;
     if (a < 0 || b >= arr.length || a > b) return;
     const block = arr.slice(a, b + 1);
     if (block.some((o) => o.locked)) return;
@@ -1112,17 +1024,7 @@ export class Editor {
       })
     )
       return;
-    if (insertAt >= a && insertAt <= b) {
-      if (flag === undefined || !mask) return;
-      if (!this.maskContig(arr, (o) => !!(block.includes(o) ? flag : o.m))) return;
-      block.forEach((o) => {
-        if (flag) o.m = true;
-        else delete o.m;
-      });
-      this.commit(false);
-      this.emit();
-      return;
-    }
+    if (insertAt >= a && insertAt <= b) return;
     const next = [...arr];
     next.splice(a, block.length);
     next.splice(insertAt > b ? insertAt - block.length : insertAt, 0, ...block);
@@ -1135,20 +1037,10 @@ export class Editor {
             : gid
         : o.g;
     if (!this.groupsContig(next, gOf)) return;
-    if (
-      mask &&
-      !this.maskContig(next, (o) => !!(block.includes(o) && flag !== undefined ? flag : o.m))
-    )
-      return;
     block.forEach((o) => {
       if (gid === null) delete o.g;
       else if (typeof gid === "string") o.g = gid;
     });
-    if (flag !== undefined && mask)
-      block.forEach((o) => {
-        if (flag) o.m = true;
-        else delete o.m;
-      });
     this.setActiveObjs(next);
     this.pruneGroups();
     this.sel = block[block.length - 1];
@@ -1174,13 +1066,8 @@ export class Editor {
   groupWhy(): string {
     const { mem, next } = this.groupPlan();
     if (mem.length < 2) return "Select two or more layers first (Cmd-click them in Layers).";
-    const mask = this.surface === "label" ? this.mask : null;
-    if (mask && new Set(mem.map((m) => !!m.m)).size > 1)
-      return "A group cannot mix layers inside and outside the LayerMask.";
     if (!this.groupsContig(next, (o) => o.g))
       return "Grouping these would split another group.";
-    if (mask && !this.maskContig(next, (o) => !!o.m))
-      return "Grouping these would split the LayerMask run in two.";
     return "";
   }
   groupSel() {
@@ -1244,16 +1131,15 @@ export class Editor {
       return;
     }
     const b = this.blockOf(this.sel);
-    const mr = this.maskRange();
     if (d > 0) {
       const j = b.hi + 1;
       if (j >= this.objs.length) return;
-      const nb = mr && !this.sel.m && this.objs[j].m ? mr : this.blockOf(this.objs[j]);
+      const nb = this.blockOf(this.objs[j]);
       this.moveBlock(b.lo, b.hi, nb.hi + 1);
     } else {
       const j = b.lo - 1;
       if (j < 0) return;
-      const nb = mr && !this.sel.m && this.objs[j].m ? mr : this.blockOf(this.objs[j]);
+      const nb = this.blockOf(this.objs[j]);
       this.moveBlock(b.lo, b.hi, nb.lo);
     }
   }
@@ -1319,7 +1205,6 @@ export class Editor {
       this.sel = obj;
       this.selGroup = null;
     }
-    this.selMask = false;
     this.emit();
   }
   selectGroup(id: string) {
@@ -1329,15 +1214,6 @@ export class Editor {
     this.selGroup = id;
     this.selSet = new Set(mem.map((m) => m.id));
     this.sel = mem[mem.length - 1] ?? null;
-    this.selMask = false;
-    this.emit();
-  }
-  selectMask() {
-    if (this.surface !== "label") return;
-    this.selMask = true;
-    this.sel = null;
-    this.selSet = new Set();
-    this.selGroup = null;
     this.emit();
   }
   /** Select one or more layers by id, as a Cmd-click selection would. */
@@ -1348,20 +1224,12 @@ export class Editor {
     this.selSet = new Set(mem.map((o) => o.id));
     this.sel = mem[mem.length - 1];
     this.selGroup = null;
-    this.selMask = false;
-    this.emit();
-  }
-  toggleMaskCollapsed() {
-    if (!this.mask) return;
-    this.mask.collapsed = !this.mask.collapsed;
-    this.commit(false);
     this.emit();
   }
   clearSelection() {
     this.sel = null;
     this.selSet = new Set();
     this.selGroup = null;
-    this.selMask = false;
     this.emit();
   }
 
@@ -1373,7 +1241,7 @@ export class Editor {
     this.commit(coalesce);
     this.emit();
   }
-  /** The J-card's background is the sheet's own: the label's mask does not move with it. */
+  /** The J-card's background is the sheet's own: the label's paper does not move with it. */
   setJCardBackground(c: string, coalesce = true) {
     this.jcard.background = c;
     this.commit(coalesce);
@@ -1421,8 +1289,8 @@ export class Editor {
     this.commit(true);
     this.emit();
   }
+  /** The print's paper: a colour and a corner radius, always in the design. */
   setMaskField(k: "color" | "radius", v: string | number) {
-    if (!this.mask) return;
     if (k === "radius") this.mask.radius = +v || 0;
     else this.mask.color = String(v);
     this.commit(true);
@@ -1562,7 +1430,6 @@ export class Editor {
     this.groups = [];
     this.sel = null;
     this.selSet = new Set();
-    this.selMask = false;
     this.selGroup = null;
     this.rv = {};
     if (this.doc && r.name) this.doc.name = r.name;
@@ -1580,10 +1447,10 @@ export class Editor {
         name: d.name,
         errs: buildTemplate(
           objs,
-          d.data.mask ?? null,
+          d.data.mask ?? defaultPaper(),
           tpl,
           canvasOf(d.data),
-          migrateJCard(d.data.jcard, tpl, null, d.data.mask ?? null),
+          migrateJCard(d.data.jcard, tpl, null, d.data.mask ?? defaultPaper()),
         ).errs,
       };
     });
@@ -1643,25 +1510,12 @@ export class Editor {
     lv.style.height = `${hh}px`;
     this.registerFonts();
     this.call("lvp_begin", null, ["number", "number", "number"], [w, hh, hex(this.bg)]);
+    // The print always has paper: every layer paints on it, inside its rounded clip.
+    this.call("lvp_mask", null, ["number", "number"], [this.mask.radius, hex(this.mask.color)]);
     let ti = 0;
-    let inM = false;
-    const mr = this.maskRange();
-    if (this.mask && !mr) {
-      this.call("lvp_mask", null, ["number", "number"], [this.mask.radius, hex(this.mask.color)]);
-      this.call("lvp_root", null, [], []);
-    }
     for (const o of this.objs) {
       if (o.hidden) continue;
       const e = this.eff(o);
-      if (this.mask) {
-        if (o.m && !inM) {
-          this.call("lvp_mask", null, ["number", "number"], [this.mask.radius, hex(this.mask.color)]);
-          inM = true;
-        } else if (!o.m && inM) {
-          this.call("lvp_root", null, [], []);
-          inM = false;
-        }
-      }
       if (o.ap) continue;
       if (o.type === "text") {
         this.call(
@@ -1701,7 +1555,7 @@ export class Editor {
       }
     }
     const ap = this.apOf();
-    if (this.mask && ap)
+    if (ap)
       this.call("lvp_aperture", null, ["number", "number", "number", "number", "number"], [
         ap.x,
         ap.y,

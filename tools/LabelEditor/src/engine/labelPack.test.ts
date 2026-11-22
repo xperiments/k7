@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { crc32 } from "./crc";
-import { buildTemplate, importTemplate } from "./tpl";
+import { buildTemplate, importTemplate, tplText } from "./tpl";
 import {
   buildArtPack,
   buildLabelSheet,
@@ -128,6 +128,7 @@ describe("the browser packer", () => {
       read.canvas,
       read.jcard,
     ).doc;
+    expect(tplText(doc)).toBe(text);
     expect(Buffer.from(buildLabelSheet([doc]))).toEqual(
       Buffer.from(buildLabelSheet([raw])),
     );

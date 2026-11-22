@@ -29,7 +29,7 @@ const BAND1 = "#a24e2c";
 const BAND2 = "#8a5d34";
 const RULE = "#8e7e4a";
 
-const mask: Mask = { color: "#c7a867", radius: 10, collapsed: false };
+const mask: Mask = { color: "#c7a867", radius: 10 };
 
 const objs: Obj[] = [
   { id: 1, type: "rect", name: "", x: 40, y: 30, w: 200, h: 120, r: 10, color: BAND2, rot: 15 },
@@ -194,14 +194,14 @@ describe("buildTemplate", () => {
     expect(doc.label.canvas).toEqual({ backgrounds: ["#101010", "#f5f1e6"], active: 1 });
   });
 
-  it("writes the mask's colour and radius, and no mask without one", () => {
+  it("writes the paper's colour and radius, always", () => {
     expect(buildTemplate(objs, mask, design()).doc.label.mask).toEqual({
       color: "#c7a867",
       r: 10,
     });
-    const bare = buildTemplate(objs, null, design());
+    const bare = buildTemplate(objs, { color: DEFAULT_PAPER, radius: 0 }, design());
     expect(bare.errs).toEqual([]);
-    expect(bare.doc.label).not.toHaveProperty("mask");
+    expect(bare.doc.label.mask).toEqual({ color: DEFAULT_PAPER, r: 0 });
     expect(bare.doc.jcard.background).toBe(DEFAULT_PAPER);
   });
 
@@ -290,7 +290,7 @@ describe("buildTemplate", () => {
     expect(doc.label.slots).toEqual({ song_title: { max: 96 } });
   });
 
-  it("counts the mask against the sheet's prim cap", () => {
+  it("counts the paper against the sheet's prim cap", () => {
     const many: Obj[] = Array.from({ length: 48 }, (_, i) => ({
       id: 100 + i,
       type: "rect" as const,
@@ -302,12 +302,12 @@ describe("buildTemplate", () => {
       color: "#c68b2e",
     }));
     const errs = buildTemplate([...objs, ...many], mask, design()).errs;
-    expect(errs.join("\n")).toContain("the mask's rect included");
+    expect(errs.join("\n")).toContain("the paper's rect included");
     expect(errs.join("\n")).toContain("and the sheet holds 48 per design");
   });
 
   it("refuses a design with no prims at all", () => {
-    expect(buildTemplate([], null, design()).errs.join("\n")).toContain(
+    expect(buildTemplate([], mask, design()).errs.join("\n")).toContain(
       "no layers: a design needs at least one prim",
     );
   });
@@ -504,7 +504,7 @@ describe("importTemplate", () => {
     );
   });
 
-  it("refuses an aperture with no mask to cut", () => {
+  it("gives a file without a mask the default paper", () => {
     const ap: Obj = {
       id: 9,
       type: "rect",
@@ -519,9 +519,18 @@ describe("importTemplate", () => {
     const { doc } = buildTemplate([...objs, ap], mask, design());
     const noMask = JSON.parse(tplText(doc));
     delete noMask.label.mask;
-    expect(() => importTemplate(JSON.stringify(noMask), "#c7a867")).toThrow(
-      "aperture without a mask",
-    );
+    const back = importTemplate(JSON.stringify(noMask), "#c7a867");
+    expect(back.mask).toEqual({ color: DEFAULT_PAPER, radius: 10 });
+    expect(back.objs.find((o) => o.ap)).toMatchObject({
+      x: WIN.x,
+      y: WIN.y,
+      w: WIN.w,
+      h: WIN.h,
+      r: WIN.r,
+    });
+    const again = buildTemplate(back.objs, back.mask, back.tpl, back.canvas, back.jcard);
+    expect(again.errs).toEqual([]);
+    expect(again.doc.label.mask).toEqual({ color: DEFAULT_PAPER, r: 10 });
   });
 
   it("refuses a file that is not a K7Art, and an id that is not k7.<slug>", () => {
@@ -698,7 +707,7 @@ describe("the retired label-template v1", () => {
     const old = legacy();
     old.aperture = { x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r };
     const back = importTemplate(JSON.stringify(old), "#c7a867");
-    expect(back.mask).toEqual({ color: "#c7a867", radius: 10, collapsed: false });
+    expect(back.mask).toEqual({ color: "#c7a867", radius: 10 });
     const ap = back.objs.find((o) => o.ap);
     expect(ap).toMatchObject({ x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r });
     const { doc } = buildTemplate(back.objs, back.mask, back.tpl, back.canvas, back.jcard);
@@ -727,7 +736,7 @@ describe("migrateDocData", () => {
       bgi: 0,
       objs: [],
       nid: 0,
-      mask: { color: "#c7a867", radius: 10, collapsed: false },
+      mask: { color: "#c7a867", radius: 10 },
       tpl: {
         ...defaultTpl(),
         id: "label.old",
@@ -765,12 +774,25 @@ describe("migrateDocData", () => {
     expect(tplText(once.jcard)).toBe(first);
   });
 
-  it("keeps the mask's colour, and defaults one without it", () => {
+  it("keeps the paper's colour, and defaults one without it", () => {
     const masked = migrateDocData(stored());
     expect(masked.mask!.color).toBe("#c7a867");
     const bare = stored();
     bare.mask = null;
-    expect(migrateDocData(bare).jcard!.background).toBe(DEFAULT_PAPER);
+    const out = migrateDocData(bare);
+    expect(out.mask).toEqual({ color: DEFAULT_PAPER, radius: 10 });
+    expect(out.jcard!.background).toBe(DEFAULT_PAPER);
+  });
+
+  it("drops the retired LayerMask flag and the mask's collapsed row", () => {
+    const data = stored();
+    data.objs = [
+      { id: 1, type: "rect", name: "", x: 0, y: 0, w: 10, h: 10, color: INK, m: true } as Obj,
+    ];
+    data.mask = { color: "#c7a867", radius: 10, collapsed: true } as unknown as Mask;
+    const out = migrateDocData(data);
+    expect(out.objs[0]).not.toHaveProperty("m");
+    expect(out.mask).toEqual({ color: "#c7a867", radius: 10 });
   });
 
   it("keeps a J-card that is already there", () => {

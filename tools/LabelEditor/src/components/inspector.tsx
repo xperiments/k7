@@ -12,7 +12,6 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Plus,
-  SquareDashed,
   Trash2,
 } from "lucide-react";
 
@@ -26,13 +25,6 @@ import {
   NumberFieldInput,
 } from "@/components/reui/number-field";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -82,7 +74,7 @@ export function Inspector({ onCollapse }: { onCollapse: () => void }) {
   const jcard = ed.isJCard();
 
   let title = jcard ? "J-card" : "Design";
-  let subtitle = jcard ? "One sheet · flap | spine | cover" : "Colourway, type and fields";
+  let subtitle = jcard ? "One sheet · flap | spine | cover" : "Paper, canvas and fields";
   let body: React.ReactNode;
 
   if (ed.run) {
@@ -91,10 +83,6 @@ export function Inspector({ onCollapse }: { onCollapse: () => void }) {
     title = "Test values";
     subtitle = "What each field prints in Preview";
     body = jcard ? <JCardDesignPanel /> : <DesignPanel />;
-  } else if (ed.selMask && ed.mask) {
-    title = "LayerMask";
-    subtitle = "A rounded clip, the size of the print";
-    body = <MaskPanel />;
   } else if (jcard && many) {
     title = `${selected.length} J-card layers`;
     subtitle = "Bulk actions and colours";
@@ -245,42 +233,14 @@ function DesignPanel() {
         </div>
       </Section>
 
-      <Section
-        title="Paper"
-        action={
-          ed.mask ? (
-            <Button variant="ghost" size="icon-xs" onClick={() => ed.removeMask()} aria-label="Remove the LayerMask">
-              <Trash2 />
-            </Button>
-          ) : undefined
-        }
-      >
-        {ed.mask ? (
-          <>
-            <ColourRow label="Paper" value={ed.mask.color} onChange={(v) => ed.setMaskField("color", v)} />
-            <Num label="Corner radius" value={ed.mask.radius} min={0} onChange={(v) => ed.setMaskField("radius", v)} />
-            <p className="text-xs text-muted-foreground">
-              The paper clips every layer inside the LayerMask to a rounded rectangle the
-              size of the print.
-            </p>
-          </>
-        ) : (
-          <Empty className="border p-3">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <SquareDashed />
-              </EmptyMedia>
-              <EmptyTitle>No paper</EmptyTitle>
-              <EmptyDescription>
-                A LayerMask adds the printed paper, its role colour and the mask that clips
-                the design.
-              </EmptyDescription>
-            </EmptyHeader>
-            <Button size="sm" variant="outline" onClick={() => ed.addMask()}>
-              Add LayerMask
-            </Button>
-          </Empty>
-        )}
+      <Section title="Paper">
+        <ColourRow label="Paper" value={ed.mask.color} onChange={(v) => ed.setMaskField("color", v)} />
+        <Num label="Corner radius" value={ed.mask.radius} min={0} onChange={(v) => ed.setMaskField("radius", v)} />
+        <p className="text-xs text-muted-foreground">
+          Every layer prints on the paper, clipped to its rounded corners; it is always
+          there. The aperture layer marks the Card&apos;s window ({WIN.x},{WIN.y} {WIN.w}×{WIN.h}{" "}
+          r{WIN.r}).
+        </p>
       </Section>
 
       {/* <Section title="Type roles">
@@ -682,10 +642,6 @@ function LayerPanel({ o }: { o: Obj }) {
           Locked
           <span className="text-muted-foreground">· no edits, drags or deletes</span>
         </label>
-        <Button variant="outline" size="sm" onClick={() => ed.selectMask()} disabled={!ed.mask}>
-          <SquareDashed />
-          Select the LayerMask
-        </Button>
       </Section>
     </SectionGroup>
   );
@@ -1124,52 +1080,6 @@ function JCardMultiPanel() {
   );
 }
 
-function MaskPanel() {
-  const ed = useEditor();
-  const n = ed.maskRange();
-  return (
-    <SectionGroup initial="Mask">
-      <Section title="Mask">
-        <ColourRow label="Colour" value={ed.mask?.color ?? "#ffffff"} onChange={(v) => ed.setMaskField("color", v)} />
-        <Num
-          label="Corner radius"
-          value={ed.mask?.radius ?? 0}
-          min={0}
-          onChange={(v) => ed.setMaskField("radius", v)}
-        />
-        <div className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-xs">
-          <span className="text-muted-foreground">Size</span>
-          <span className="tabnum">
-            {PRINT_W} × {PRINT_H}
-          </span>
-        </div>
-        <div className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-xs">
-          <span className="text-muted-foreground">Layers inside</span>
-          <span className="tabnum">{n ? n.hi - n.lo + 1 : 0}</span>
-        </div>
-        <SwatchStrip value={ed.mask?.color ?? ""} onPick={(c) => ed.setMaskField("color", c)} />
-        <Button variant="outline" size="sm" onClick={() => ed.removeMask()}>
-          <Trash2 />
-          Remove LayerMask
-        </Button>
-      </Section>
-      <Section title="Aperture">
-        {ed.apOf() ? (
-          <p className="text-xs text-muted-foreground">
-            The aperture cuts the Card's window, {WIN.x}, {WIN.y} {WIN.w}×{WIN.h} r{WIN.r},
-            out of the paper. It is a placement aid; the mask already cuts the window.
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            No aperture layer. Add a rectangle covering {WIN.x}, {WIN.y} {WIN.w}×{WIN.h} and
-            tick Aperture in Appearance if the design needs the Card's window marked.
-          </p>
-        )}
-      </Section>
-    </SectionGroup>
-  );
-}
-
 function MultiPanel() {
   const ed = useEditor();
   const ids = ed.selIds;
@@ -1198,15 +1108,6 @@ function MultiPanel() {
           >
             <FolderMinus />
             Ungroup
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => ed.toggleSelMembers()}
-            disabled={!ed.mask || selected.some((o) => o.locked)}
-          >
-            <SquareDashed />
-            {selected.every((o) => o.m) ? "Out of LayerMask" : "Into LayerMask"}
           </Button>
           <Button variant="destructive" size="sm" onClick={() => ed.delSel()}>
             <Trash2 />

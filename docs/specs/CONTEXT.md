@@ -479,8 +479,9 @@ _Avoid_: artwork screen, Case, portada
 The design the two-finger pose prints on the Card's print: the `label` section of a **K7Art**
 ([`k7art.md`](./k7art.md)), a 748x359 design in `assets/k7art/`, authored in the **K7Art
 Editor**. Its prims are rects and texts, each in its own `#RRGGBB` colour, its texts bound to
-**Slots** or fixed, and its **LayerMask** cut at the **Window** by the Card's own mask. A
-Track's template is a pick from the **Pool** — `ink_seed % (factory + user)` — the same seed
+**Slots** or fixed, and its paper (the label section's `mask`) cut at the **Window** by the
+Card's own mask. A Track's template is a pick from the **Pool** — `ink_seed % (factory +
+user)` — the same seed
 that picks its palette row, so shell and design always pair (ADR 0071). The layout is in
 [`label-templates.md`](./label-templates.md).
 _Avoid_: skin, theme, label design, cover, file (the **K7Art** is the file)

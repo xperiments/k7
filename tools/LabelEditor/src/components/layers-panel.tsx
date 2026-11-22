@@ -12,7 +12,6 @@ import {
   Eye,
   EyeOff,
   Square,
-  SquareDashed,
   Trash2,
   Type,
 } from "lucide-react";
@@ -30,7 +29,6 @@ import { useEditor } from "@/hooks/use-editor";
 import type { Group, Obj } from "@/engine/types";
 
 type Row =
-  | { kind: "mask"; depth: 0; count: number }
   | {
       kind: "group";
       depth: number;
@@ -54,11 +52,10 @@ interface DropTarget {
   lo: number;
   hi: number;
   gid?: string | null;
-  mask?: boolean;
   pos: "above" | "below" | "into";
 }
 
-/** The layer stack, top layer first: groups and the LayerMask are runs of the array. */
+/** The layer stack, top layer first: groups are runs of the array. */
 export function LayersPanel() {
   const ed = useEditor();
   const [drag, setDrag] = useState<DragBlock | null>(null);
@@ -68,7 +65,6 @@ export function LayersPanel() {
   );
 
   const rows = buildRows(ed);
-  const maskRange = ed.isJCard() ? null : ed.maskRange();
   const count = ed.activeObjs().length;
 
   const join = (li: { lo: number; hi: number }, blk: DragBlock, above: boolean) => {
@@ -78,12 +74,10 @@ export function LayersPanel() {
 
   const planFor = (row: Row, pos: DropTarget["pos"]): DropTarget | null => {
     if (!drag) return null;
-    if (row.kind === "mask" && pos === "into") return { lo: 0, hi: 0, mask: true, pos };
     if (row.kind === "group" && pos === "into") {
       if (drag.group) return null;
       return { lo: row.lo, hi: row.hi, gid: row.g.id, pos };
     }
-    if (row.kind === "mask") return null;
     const li =
       row.kind === "group" ? { lo: row.lo, hi: row.hi } : { lo: row.i, hi: row.i };
     const ins = join(li, drag, pos === "above");
@@ -96,30 +90,20 @@ export function LayersPanel() {
 
   const commitDrop = (target: DropTarget) => {
     if (!drag) return;
-    if (target.mask) {
-      ed.moveBlock(drag.lo, drag.hi, maskRange ? maskRange.hi + 1 : ed.objs.length, true);
-      return;
-    }
     if (target.pos === "into" && target.gid) {
-      ed.moveBlock(drag.lo, drag.hi, target.lo, undefined, target.gid);
+      ed.moveBlock(drag.lo, drag.hi, target.lo, target.gid);
       return;
     }
     const ins = target.pos === "above" ? target.hi + 1 : target.lo;
-    const flag = ed.mask ? !!ed.objs[target.lo].m : undefined;
-    ed.moveBlock(drag.lo, drag.hi, ins, flag, target.gid);
+    ed.moveBlock(drag.lo, drag.hi, ins, target.gid);
   };
 
   const rowDragProps = (row: Row) => {
-    const draggable =
-      row.kind === "mask"
-        ? false
-        : row.kind === "group"
-          ? !row.locked
-          : !row.o.locked;
+    const draggable = row.kind === "group" ? !row.locked : !row.o.locked;
     return {
       draggable,
       onDragStart: (e: React.DragEvent) => {
-        if (row.kind === "mask" || !draggable) {
+        if (!draggable) {
           e.preventDefault();
           return;
         }
@@ -176,16 +160,9 @@ export function LayersPanel() {
 
   const dropMark = (row: Row) => {
     if (!drop) return null;
-    if (row.kind === "mask") {
-      return drop.mask
-        ? drop.pos === "into"
-          ? "shadow-[inset_0_0_0_1.5px_var(--k7-accent)]"
-          : ""
-        : null;
-    }
     const same =
-      (row.kind === "group" && drop.lo === row.lo && !drop.gid && !drop.mask) ||
-      (row.kind === "layer" && drop.lo === row.i && !drop.mask);
+      (row.kind === "group" && drop.lo === row.lo && !drop.gid) ||
+      (row.kind === "layer" && drop.lo === row.i);
     if (!same) return null;
     if (drop.pos === "into")
       return "shadow-[inset_0_0_0_1.5px_var(--k7-accent)]";
@@ -213,15 +190,6 @@ export function LayersPanel() {
           >
             <FolderPlus />
           </IconAction>
-          {/* The LayerMask is the label's: the sheet has no mask to add. */}
-          {!ed.isJCard() ? (
-            <IconAction
-              label={ed.mask ? "Remove the LayerMask" : "Add a LayerMask"}
-              onClick={() => ed.toggleMask()}
-            >
-              <SquareDashed />
-            </IconAction>
-          ) : null}
           <IconAction label="Raise" disabled={!ed.sel} onClick={() => ed.mv(1)}>
             <ArrowUp />
           </IconAction>
@@ -258,37 +226,6 @@ export function LayersPanel() {
           {rows.map((row) => {
             const mark = dropMark(row);
             const pad = 8 + row.depth * 14;
-            if (row.kind === "mask") {
-              return (
-                <div key="mask" role="treeitem" aria-expanded={!ed.mask?.collapsed}>
-                  <RowShell
-                    className={`${ed.selMask ? "bg-k7-surface text-foreground" : ""} ${mark ?? ""}`}
-                    style={{ paddingLeft: pad }}
-                    onClick={() => ed.selectMask()}
-                    {...rowDragProps(row)}
-                  >
-                    <button
-                      type="button"
-                      className="grid size-4 shrink-0 place-items-center text-muted-foreground"
-                      aria-label={ed.mask?.collapsed ? "Expand the mask" : "Collapse the mask"}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        ed.toggleMaskCollapsed();
-                      }}
-                    >
-                      {ed.mask?.collapsed ? (
-                        <ChevronRight className="size-3.5" />
-                      ) : (
-                        <ChevronDown className="size-3.5" />
-                      )}
-                    </button>
-                    <SquareDashed className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="truncate text-xs font-medium">LayerMask</span>
-                    <span className="ml-auto text-xs text-muted-foreground tabnum">{row.count}</span>
-                  </RowShell>
-                </div>
-              );
-            }
             if (row.kind === "group") {
               const renaming = editing?.kind === "group" && editing.id === row.g.id;
               return (
@@ -460,29 +397,15 @@ function layerNameOf(o: Obj): string {
 
 function buildRows(ed: ReturnType<typeof useEditor>): Row[] {
   const rows: Row[] = [];
-  /* One stack per surface: the J-card's layers group like the label's, but it has no
-   * LayerMask, so the mask rows and the mask's extra depth are the label's alone. */
   const list = ed.activeObjs();
-  const mask = ed.isJCard() ? null : ed.mask;
-  const mr = ed.isJCard() ? null : ed.maskRange();
-  const maskDepth = mask ? 1 : 0;
-  if (mask && !mr)
-    rows.push({ kind: "mask", depth: 0, count: 0 });
   let i = list.length - 1;
   while (i >= 0) {
-    if (mr && i === mr.hi) {
-      rows.push({ kind: "mask", depth: 0, count: mr.hi - mr.lo + 1 });
-      if (mask?.collapsed) {
-        i = mr.lo - 1;
-        continue;
-      }
-    }
     const o = list[i];
     const g = o.g ? ed.groups.find((x) => x.id === o.g) : null;
     if (!g) {
       rows.push({
         kind: "layer",
-        depth: maskDepth,
+        depth: 0,
         o,
         i,
         locked: !!o.locked,
@@ -494,7 +417,7 @@ function buildRows(ed: ReturnType<typeof useEditor>): Row[] {
     const mem = list.slice(b.lo, b.hi + 1);
     rows.push({
       kind: "group",
-      depth: maskDepth,
+      depth: 0,
       g,
       lo: b.lo,
       hi: b.hi,
@@ -506,7 +429,7 @@ function buildRows(ed: ReturnType<typeof useEditor>): Row[] {
       for (let k = b.hi; k >= b.lo; k--)
         rows.push({
           kind: "layer",
-          depth: maskDepth + 1,
+          depth: 1,
           o: list[k],
           i: k,
           locked: !!list[k].locked,

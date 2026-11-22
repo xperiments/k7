@@ -83,7 +83,7 @@ Five parts, in this order, then the deliverable:
 
 Everything else — the coordinates, the type roles, the window — the agent takes from its guide,
 so leave them out unless you want them exact. Every prompt makes a K7Art, so its J-card is part
-of the design: the editor starts one from the mask colour and the three fields, and a line can name
+of the design: the editor starts one from the paper colour and the three fields, and a line can name
 what the cover carries. The prompts below describe the label; the pair is exported together.
 The prompts give coordinates because they are the designs that were built and checked; copy them
 when you want that label, or use them as a shape for your own.

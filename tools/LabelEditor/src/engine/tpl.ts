@@ -36,8 +36,15 @@ import type {
 /** The panel's white page at the two-finger pose (`k_col_white`): a new design starts here. */
 export const DEFAULT_CANVAS = "#909090";
 
-/** The paper a design without a LayerMask still has, because the J-card is paper either way. */
+/** The paper a new design starts with, and the one a design without a mask opens with. */
 export const DEFAULT_PAPER = "#c7a867";
+export const DEFAULT_PAPER_RADIUS = 10;
+
+/** The label's paper: every design has one, and the editor always writes it. */
+export const defaultPaper = (): Mask => ({
+  color: DEFAULT_PAPER,
+  radius: DEFAULT_PAPER_RADIUS,
+});
 
 const K7_ID = /^k7\.[a-z0-9][a-z0-9-]*$/;
 const LABEL_ID = /^label\.([a-z0-9][a-z0-9-]*)$/;
@@ -175,19 +182,23 @@ export function migrateDocData(data: DocData): DocData {
   const inks = readInks(tpl.inks, "the document");
   migrateFonts(tpl);
   tpl.id = migrateId(tpl.id);
-  const mask = data.mask ?? null;
+  const mask: Mask = data.mask ?? defaultPaper();
   if (inks) {
     (data.objs ?? []).forEach((o) => {
       if (o.ap) return;
       const legacy = o as Obj & { role?: string };
-      const c = roleColour(legacy.role, inks, mask?.color);
+      const c = roleColour(legacy.role, inks, mask.color);
       if (c) o.color = c;
       delete legacy.role;
     });
   }
   normaliseColours(data.objs ?? []);
-  if (mask && !isColour(mask.color)) mask.color = inks?.paper ?? DEFAULT_PAPER;
-  data.jcard = migrateJCard(data.jcard, tpl, inks, mask);
+  if (!isColour(mask.color)) mask.color = inks?.paper ?? DEFAULT_PAPER;
+  // A document made before the paper was the design's, not a layer, still carries the
+  // LayerMask's membership flag on its layers and its collapsed row on the mask.
+  (data.objs ?? []).forEach((o) => delete (o as Obj & { m?: boolean }).m);
+  data.mask = { color: mask.color, radius: mask.radius };
+  data.jcard = migrateJCard(data.jcard, tpl, inks, data.mask);
   delete tpl.inks;
   return data;
 }
@@ -220,8 +231,8 @@ export function aperturePath(ap: Obj): string {
 /** The label section: everything the sheet reads, minus the container's identity. */
 export interface LabelSection {
   space: { w: number; h: number };
-  /** The LayerMask: the print's paper, a colour and a corner radius. */
-  mask?: { color: string; r: number };
+  /** The print's paper: a colour and a corner radius, in the file's own key. */
+  mask: { color: string; r: number };
   aperture?: { x: number; y: number; w: number; h: number; r: number };
   canvas?: CanvasDoc;
   fonts: Record<FontRole, { ff: string; px: number }>;
@@ -264,7 +275,7 @@ export interface RetiredTemplateDoc {
  */
 export function buildTemplate(
   objs: Obj[],
-  mask: Mask | null,
+  mask: Mask,
   tpl: Tpl,
   canvas: CanvasDoc = { backgrounds: [DEFAULT_CANVAS], active: 0 },
   jcard: JCardDoc = starterJCard(tpl),
@@ -289,12 +300,9 @@ export function buildTemplate(
 
   if (!K7_ID.test(tpl.id))
     errs.push(`id "${tpl.id}" must look like k7.my-name`);
-  if (ap && !mask) errs.push("aperture: needs a LayerMask (the paper it cuts)");
-  if (mask) {
-    if (!isColour(mask.color)) errs.push(`mask.color "${mask.color}" is not #RRGGBB`);
-    if (!Number.isInteger(mask.radius) || mask.radius < 0)
-      errs.push(`mask.r ${mask.radius} is not a corner radius`);
-  }
+  if (!isColour(mask.color)) errs.push(`mask.color "${mask.color}" is not #RRGGBB`);
+  if (!Number.isInteger(mask.radius) || mask.radius < 0)
+    errs.push(`mask.r ${mask.radius} is not a corner radius`);
 
   // The aperture is the Card's window, not the design's: the mask already cuts it, so the
   // file either omits it or names exactly that window.
@@ -415,13 +423,13 @@ export function buildTemplate(
   });
 
   // The sheet's caps, so a design that is too big says so at Export instead of failing the
-  // firmware build. They are the vocabulary's, not numbers written twice. The mask is a prim
+  // firmware build. They are the vocabulary's, not numbers written twice. The paper is a prim
   // in the sheet, so it counts.
-  const sheetPrims = prims.length + (mask ? 1 : 0);
-  if (!sheetPrims) errs.push("no layers: a design needs at least one prim to print");
+  const sheetPrims = prims.length + 1;
+  if (!prims.length) errs.push("no layers: a design needs at least one prim to print");
   if (sheetPrims > LIMITS.prims)
     errs.push(
-      `${sheetPrims} layers (the mask's rect included), and the sheet holds ${LIMITS.prims} per design`,
+      `${sheetPrims} layers (the paper's rect included), and the sheet holds ${LIMITS.prims} per design`,
     );
   if (Object.keys(tpl.slots).length > LIMITS.slots)
     errs.push(
@@ -434,22 +442,18 @@ export function buildTemplate(
   errs.push(...jc.errs);
 
   // The label section's key order is the section's own: space, mask, aperture, canvas, fonts,
-  // slots, prims. The mask is a section field, not one of the prims, because with every
-  // colour literal a full-print rect could not say it was the LayerMask.
+  // slots, prims. The paper is a section field, not one of the prims, because with every
+  // colour literal a full-print rect could not say it was the paper.
   const slots: Record<string, { max: number }> = {};
   Object.keys(tpl.slots).forEach((k) => {
     slots[k] = { max: tpl.slots[k].max };
   });
   const label: LabelSection = {
     space: { w: W0, h: H0 },
-    ...(mask
-      ? {
-          mask: {
-            color: isColour(mask.color) ? mask.color : DEFAULT_PAPER,
-            r: Math.round(mask.radius || 0),
-          },
-        }
-      : {}),
+    mask: {
+      color: isColour(mask.color) ? mask.color : DEFAULT_PAPER,
+      r: Math.round(mask.radius || 0),
+    },
     // The aperture is absent when the design has none: "no key" and "exactly the window" are
     // the only two answers the packer reads.
     ...(AB
@@ -490,7 +494,7 @@ export const tplText = (d: unknown) => JSON.stringify(d, null, 2) + "\n";
 
 export interface ImportResult {
   tpl: Tpl;
-  mask: Mask | null;
+  mask: Mask;
   objs: Obj[];
   groups: Group[];
   nid: number;
@@ -513,7 +517,7 @@ function importLabelSection(
   label: Record<string, unknown>,
   tpl: Tpl,
   opts: { inks?: Inks | null; fallbackPaper: string; requireFonts: boolean },
-): { mask: Mask | null; objs: Obj[]; nid: number; canvas: CanvasDoc } {
+): { mask: Mask; objs: Obj[]; nid: number; canvas: CanvasDoc } {
   const inks = opts.inks ?? null;
   const requireFonts = opts.requireFonts;
   const fallbackPaper = opts.fallbackPaper || DEFAULT_PAPER;
@@ -607,36 +611,34 @@ function importLabelSection(
   const prims = label.prims;
   if (!Array.isArray(prims)) throw new Error("prims is missing -- there is nothing to print");
 
-  let mask: Mask | null = null;
+  let mask: Mask;
   if (inks) {
-    // v1: the full-print paper rect is the LayerMask (docs/specs/k7art.md §8).
+    // v1: the full-print paper rect is the paper (docs/specs/k7art.md §8). A v1 design
+    // without one still gets paper: every design has it now.
     const paper = prims.find(
       (p) => isObject(p) && p.t === "rect" && p.fill === "paper",
     ) as Record<string, unknown> | undefined;
-    if (paper)
-      mask = {
-        color: isColour(inks.paper) ? inks.paper : fallbackPaper,
-        radius: isNum(paper.r) ? paper.r : 0,
-        collapsed: false,
-      };
+    mask = paper
+      ? {
+          color: isColour(inks.paper) ? inks.paper : fallbackPaper,
+          radius: isNum(paper.r) ? paper.r : 0,
+        }
+      : { color: fallbackPaper, radius: DEFAULT_PAPER_RADIUS };
+  } else if (label.mask === undefined) {
+    // A hand-written v2 file may omit the paper. The editor gives it the default one, so
+    // every design it holds has paper, and writes it back on Export.
+    mask = { color: fallbackPaper, radius: DEFAULT_PAPER_RADIUS };
   } else {
     const raw = label.mask;
-    if (raw !== undefined) {
-      if (!isObject(raw)) throw new Error("mask must be an object with color and r");
-      if (!isColour(raw.color)) throw new Error(`mask.color ${JSON.stringify(raw.color)} is not #RRGGBB`);
-      const r = raw.r ?? 0;
-      if (!isNum(r) || r < 0) throw new Error(`mask.r ${JSON.stringify(r)} is not a corner radius`);
-      mask = { color: raw.color, radius: r, collapsed: false };
-    }
+    if (!isObject(raw)) throw new Error("mask must be an object with color and r");
+    if (!isColour(raw.color)) throw new Error(`mask.color ${JSON.stringify(raw.color)} is not #RRGGBB`);
+    const r = raw.r ?? 0;
+    if (!isNum(r) || r < 0) throw new Error(`mask.r ${JSON.stringify(r)} is not a corner radius`);
+    mask = { color: raw.color, radius: r };
   }
-  if (aperture !== undefined && !mask) throw new Error("aperture without a mask (the paper it cuts)");
 
   const out: Obj[] = [];
   let id = 0;
-  const mk = (o: Obj) => {
-    if (mask) o.m = true;
-    return o;
-  };
   const paperPrim = inks
     ? prims.find((p) => isObject(p) && p.t === "rect" && p.fill === "paper")
     : null;
@@ -662,7 +664,7 @@ function importLabelSection(
       if (align !== "left" && align !== "center" && align !== "right")
         throw new Error(`prim ${id + 1}: align must be left, center or right`);
       const colour = inks
-        ? roleColour(p.color as string, inks, mask?.color)
+        ? roleColour(p.color as string, inks, mask.color)
         : isColour(p.color)
           ? p.color
           : null;
@@ -683,10 +685,10 @@ function importLabelSection(
       if (isStatic) o.static = true;
       else if (p.preview !== undefined) o.sim = p.preview as string;
       if (p.rot) o.rot = p.rot;
-      out.push(mk(o));
+      out.push(o);
     } else {
       const colour = inks
-        ? roleColour(p.fill as string, inks, mask?.color)
+        ? roleColour(p.fill as string, inks, mask.color)
         : isColour(p.fill)
           ? p.fill
           : null;
@@ -704,25 +706,23 @@ function importLabelSection(
         color: colour,
       };
       if (p.rot) o.rot = p.rot;
-      out.push(mk(o));
+      out.push(o);
     }
   });
   if (aperture !== undefined) {
     const a = aperture as { x: number; y: number; w: number; h: number; r?: number };
-    out.push(
-      mk({
-        id: ++id,
-        type: "rect",
-        name: "",
-        x: a.x,
-        y: a.y,
-        w: a.w,
-        h: a.h,
-        r: a.r || 0,
-        color: "#000000",
-        ap: true,
-      }),
-    );
+    out.push({
+      id: ++id,
+      type: "rect",
+      name: "",
+      x: a.x,
+      y: a.y,
+      w: a.w,
+      h: a.h,
+      r: a.r || 0,
+      color: "#000000",
+      ap: true,
+    });
   }
   // The vocabulary is one table: a declared slot no text prints would be a field the panel
   // shows and the label never uses (docs/specs/label-templates.md §7).
@@ -800,7 +800,7 @@ function importRetired(d: Record<string, unknown>, fallbackPaper: string): Impor
     ...label,
     groups: [],
     name: tpl.name,
-    jcard: starterJCard(tpl, label.mask?.color),
+    jcard: starterJCard(tpl, label.mask.color),
   };
 }
 

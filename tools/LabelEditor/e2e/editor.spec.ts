@@ -14,6 +14,44 @@ test("boots with the Design panel and one section open", async ({ page }) => {
   await expect(sectionButton(page, "Canvas")).toHaveAttribute("aria-expanded", "false");
 });
 
+test("the print always has paper, and no LayerMask to manage", async ({ page }) => {
+  await page.goto("/");
+  const layers = page.locator('aside[aria-label="Layers"]');
+  await expect(layers).not.toContainText("LayerMask");
+  await expect(layers.getByRole("button", { name: /LayerMask/ })).toHaveCount(0);
+
+  // Paper is a design section, always there; its colour field is also named Paper, so the
+  // header is found by its text rather than by its accessible name alone.
+  const inspector = page.locator('aside[aria-label="Inspector"]');
+  const paperHeader = inspector.locator("button[aria-expanded]").filter({ hasText: "Paper" });
+  await expect(paperHeader).toHaveCount(1);
+  await paperHeader.click();
+  await expect(paperHeader).toHaveAttribute("aria-expanded", "true");
+  await expect(inspector.getByLabel("Paper")).toBeVisible();
+  await expect(inspector.getByText("Corner radius")).toBeVisible();
+
+  // A new design already has paper, and a layer added anywhere prints on it.
+  await page.getByRole("button", { name: /Rectangle \(R\)/ }).click();
+  const box = await page.locator(".canvas-surface").boundingBox();
+  await page.mouse.click(box!.x + 200, box!.y + 200);
+
+  const built = await page.evaluate(() => {
+    const ed = (window as unknown as {
+      __editor?: { buildTemplate(): { doc: unknown; errs: string[] }; objs: Array<Record<string, unknown>> };
+    }).__editor;
+    const r = ed!.buildTemplate();
+    return {
+      errs: r.errs,
+      doc: r.doc as { label: { mask: unknown; prims: Array<Record<string, unknown>> } },
+      inMask: ed!.objs.some((o) => "m" in o),
+    };
+  });
+  expect(built.errs).toEqual([]);
+  expect(built.doc.label.mask).toEqual({ color: "#c7a867", r: 10 });
+  expect(built.doc.label.prims.length).toBeGreaterThan(1);
+  expect(built.inMask).toBe(false);
+});
+
 test("opens one section at a time, and the open one cannot be closed", async ({ page }) => {
   await page.goto("/");
   // Clicking the open section keeps it open: the panel never becomes an empty list of headers.
@@ -326,7 +364,7 @@ test("switches to the J-card, edits it, and keeps one document history", async (
   await expect(page.locator('aside[aria-label="Layers"]').getByText("3", { exact: true })).toBeVisible();
 
   // The J-card's inspector is its own: Sheet, Type and Template, not the label's Canvas and
-  // Mask. Its test values are the label's, so there is no Fields panel here.
+  // Paper. Its test values are the label's, so there is no Fields panel here.
   await expect(sectionButton(page, "Sheet")).toHaveAttribute("aria-expanded", "true");
   await expect(sectionButton(page, "Canvas")).toHaveCount(0);
   await expect(sectionButton(page, "Paper")).toHaveCount(0);
