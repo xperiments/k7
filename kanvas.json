@@ -3964,7 +3964,7 @@
     {
       "id": "K7-16",
       "title": "The Layers actions sit at the bottom, and drag replaces Raise and Lower",
-      "state": "review",
+      "state": "done",
       "group": "K7",
       "deps": ["K7-15"],
       "at": "2026-11-22T02:19:14Z",
@@ -3980,6 +3980,28 @@
           "at": "2026-11-22T02:46:24Z",
           "by": "deepseek",
           "text": "K7-16 is landed in 39ca576.\n\nThe Layers header is just Layers and the count. Group and Delete are in a bar at the bottom of the panel; Raise and Lower are gone, since a row can be dragged. The eye, lock, rename, grouping, deleting and drag-and-drop are unchanged; the k7art-move-layer tool still moves a layer by name.\n\nVerified: typecheck, 101 unit tests, 22 browser tests (including the footer's position and a dragged row's new order), build and skill:check; the host label target's 184 sheet checks. The headless label-page boot skipped on a Chrome GPU failure; the browser suite boots the page.\n\nTo check: open /k7art — Layers is title + count; the bottom bar has Group and Delete; drag a row above or below another; a group and a delete still work."
+        }
+      ]
+    },
+    {
+      "id": "K7-17",
+      "title": "The lock stays visible, and every tooltip waits a beat",
+      "state": "review",
+      "group": "K7",
+      "deps": ["K7-16"],
+      "at": "2026-11-22T03:11:17Z",
+      "by": "deepseek",
+      "desc": "The Layers rows keep their lock in view: the layer and group rows no longer hide it until hover, and the group's eye joins it (the layer's eye is already always there). The actions themselves do not change.\n\nEvery tooltip — any \"alt\" popover — is debounced at the app's tooltip provider: it waits 300 ms before opening, so sweeping the pointer across a row does not flash a trail of labels. The labels, positions and content stay the same.\n\nFinished means: every layer and group row shows its lock without hover; no tooltip opens before the pause; the existing tooltips still appear with the same text; a browser test covers the visible lock and the delayed popover; typecheck and build are green.\n\nCheck: open /k7art — every row shows its lock; hover one and the tooltip appears after a pause; sweep across several rows and no trail of labels appears.\n\nScope: tools/LabelEditor/src/components/layers-panel.tsx, tools/LabelEditor/src/App.tsx, tools/LabelEditor/e2e/editor.spec.ts.",
+      "notes": [
+        {
+          "at": "2026-11-22T03:11:52Z",
+          "by": "deepseek",
+          "text": "Plan: show every row's lock (layer and group) without hover; pass a 300 ms delay to the app tooltip provider; cover the visible lock and the delayed tooltip in the browser tests."
+        },
+        {
+          "at": "2026-11-22T03:13:27Z",
+          "by": "deepseek",
+          "text": "K7-17 is landed in 6bcd6e7.\n\nEvery Layers row now shows its lock at rest — the layer and group rows, with the group's eye beside it — and every tooltip waits 300 ms before it opens, so sweeping a row no longer flashes labels. The labels and positions are unchanged.\n\nVerified: typecheck, 101 unit tests, 24 browser tests (four locks visible, the group lock, and a tooltip that is absent immediately then visible after the pause), build and skill:check; the host label target's 184 sheet checks. The headless label-page boot skipped on a Chrome GPU failure; the browser suite boots the page.\n\nTo check: open /k7art — the lock is visible on every row; hover a row and the tooltip appears after a beat; sweep across several rows and no trail appears."
         }
       ]
     }
