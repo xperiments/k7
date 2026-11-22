@@ -3772,7 +3772,7 @@
     {
       "id": "K7-10",
       "title": "The editor keeps a colour, not a role",
-      "state": "todo",
+      "state": "review",
       "group": "K7",
       "deps": ["K7-07"],
       "at": "2026-11-21T23:24:37Z",
@@ -3783,6 +3783,16 @@
           "at": "2026-11-22T00:10:59Z",
           "by": "deepseek",
           "text": "Code landed in 0cb6fb9: Obj/JObj carry color, JCardDoc has background, Tpl has no inks; buildTemplate writes v2 (label.mask, no notes), importTemplate reads v1 K7Arts and the retired label-template through their own inks, and migrateDocData resolves a stored document's roles and drops its inks. The WebMCP tools take a color (#RRGGBB) and set-design takes maskColor/maskRadius/jcardBackground. Tests: 100 unit (v2 round trip, v1 file and stored-document migration), 19 browser, typecheck and build green. The board is still todo because it depends on K7-08's review."
+        },
+        {
+          "at": "2026-11-22T00:11:56Z",
+          "by": "deepseek",
+          "text": "The work landed with the format change in 0cb6fb9; starting it to hand the code over for review."
+        },
+        {
+          "at": "2026-11-22T00:11:56Z",
+          "by": "deepseek",
+          "text": "The editor's model, files and tools are v2 (commit 0cb6fb9).\n\n- A layer carries a `#RRGGBB`: `Obj.color` and `JObj.color` replaced the roles, `JCardDoc.background` replaced `paper`, and `Tpl` has no `inks`.\n- `buildTemplate` writes v2 - the label section's `mask` as a field, no `notes`, a colour on every prim - and `importTemplate` reads a v1 K7Art through its own inks, turns the full-print paper rect into the mask, and the J-card's paper into its background. The retired `label-template v1` import resolves its inks too.\n- `migrateDocData` resolves a stored v1 document's roles and drops its inks; a migrated document exports identically to a v2 one.\n- The WebMCP tools take `color` (any `#RRGGBB`) on add/update and read it back per layer; `k7art-set-design` takes `maskColor`, `maskRadius` and `jcardBackground`; the guide's generated tool table follows.\n\nVerified: 100 unit tests (the v2 round trip, a v1 file and a stored v1 document migrating to the same colours, the section's byte order), 19 browser tests, typecheck and build; the five factory designs export byte-identical to their converted files through the same path.\n\nTo check: open a v1 K7Art (or an old document), Export it, and see the same colours in a v2 file."
         }
       ]
     },
