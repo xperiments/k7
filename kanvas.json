@@ -3878,7 +3878,7 @@
     {
       "id": "K7-13",
       "title": "Every guide and every check says K7Art v2",
-      "state": "review",
+      "state": "done",
       "group": "K7",
       "deps": ["K7-08", "K7-09", "K7-10", "K7-11", "K7-12"],
       "at": "2026-11-21T23:24:37Z",
@@ -3904,6 +3904,33 @@
           "at": "2026-11-22T01:16:07Z",
           "by": "deepseek",
           "text": "K7Art v2 is landed, guided and proven, so this closes the chain.\n\n- Guides: the editor's README, labels-for-the-k7 and label-prompts speak of the mask, a layer's colour and the J-card's background; the agent skill's prose and its generated tool reference (color, maskColor, maskRadius, jcardBackground) were rebuilt with `npm run skill`. Commit e4f31ce for the guides, 0cb6fb9 for the skill.\n- Tiers: `make -C host check` green (t32/t33/t46 and the integration suite); the editor's typecheck, 100 unit and 19 browser tests, build and `skill:check`; the App's typecheck, 980 tests and build.\n- Board: the sunton flash boots with `art: factory sheet: 5 designs, 6 compiled fonts` and `label: label pool: 5 designs`; a v5 pack built by the editor installed with sheet_crc 0x2EC19103 and was reset to factory; the two-finger pose was photographed through the verify build's /api/scene?n=10 and /api/screen.bmp, and the label prints its own colours (.scratch/k7art-v2/pose/scene10.png). The sunton build is back on the board and no monitor is left attached.\n\nTo check: open the board's K7Art group (13/13 when this is accepted) and, on the device, hold a cassette up - the label above is what it draws."
+        },
+        {
+          "at": "2026-11-22T01:25:33Z",
+          "by": "deepseek",
+          "text": "Follow-up proposed on top of this: K7-14 removes the LayerMask as a layer and makes the label's paper always present. It edits the same guides, so it waits for this task's acceptance."
+        }
+      ]
+    },
+    {
+      "id": "K7-14",
+      "title": "The label's paper is always there, and the LayerMask is gone",
+      "state": "review",
+      "group": "K7",
+      "deps": ["K7-13"],
+      "at": "2026-11-22T01:25:19Z",
+      "by": "deepseek",
+      "desc": "The editor stops offering the print's paper as a layer. The label always has paper — a colour and a corner radius in Design → Paper — painted behind every layer and clipping the print. The LayerMask row, its add/remove control, the LayerMask inspector, the Into/Out of LayerMask action and the rules that keep its members one contiguous run all go; a layer simply sits on the paper. The aperture still marks the Card's window.\n\nThe K7Art file keeps the same `mask` field and the editor now always writes it, so the five factory files, the label sheet, the packer, the firmware and the App do not change. A file without a mask opens with the default paper.\n\nFinished means: no LayerMask anywhere in the editor; every design has paper; the five factory designs export identical bytes and pack to identical sheets; the editor's unit and browser tests, typecheck and build are green; the specs, the editor README, labels-for-the-k7 and the agent skill say paper, not a LayerMask; and ADR 0114 records why the paper is not a layer.\n\nCheck: open /k7art — there is no LayerMask row or add/remove control, and Paper is always in Design with its colour and radius; add a layer anywhere, Export, and the file still carries `mask`; a factory design's sheet is unchanged.\n\nScope: tools/LabelEditor/src/**, tools/LabelEditor/{README.md,docs/labels-for-the-k7.md,skills/k7-art/SKILL.md}, docs/specs/{k7art.md,label-templates.md,CONTEXT.md}, docs/adr/0114-*. Nothing in web/, components/, main/, player/ or assets/k7art/.",
+      "notes": [
+        {
+          "at": "2026-11-22T01:35:26Z",
+          "by": "deepseek",
+          "text": "Plan: remove the LayerMask row, controls, selection and contiguous-run rules; make the editor always hold and write the paper (mask); keep design + Paper panel; import a file without a mask with the default paper; update unit/browser tests, specs, guides, skill and ADR 0114; prove factory bytes and sheets unchanged."
+        },
+        {
+          "at": "2026-11-22T01:45:28Z",
+          "by": "deepseek",
+          "text": "K7-14 is landed in 5b77f63.\n\nThe editor no longer has a LayerMask anywhere: no row in Layers, no add/remove button, no Mask inspector, no Into/Out of LayerMask, and a group no longer has to stay on one side of it. Every label always has paper, edited in Design → Paper (colour and corner radius), and every layer prints on it. The aperture still marks the Card's window.\n\nThe file is unchanged: the K7Art still carries `mask`, and the editor always writes it; a file without one opens with the default paper (#c7a867, radius 10). The sheet writer, the packer, the firmware and the App are untouched, and the five factory designs round-trip to the same text and pack to the same sheet.\n\nVerified: editor typecheck, 101 unit tests (the factory text round-trip and the label_pack.py parity among them), 20 browser tests, build and skill:check; the host tier's 87 integration checks and the label target's 184 sheet checks. The host tier's headless label-page boot skipped on a Chrome GPU-process failure; the browser suite boots the page.\n\nTo check: open /k7art — no LayerMask in Layers and Paper always in Design; add a layer or group and Export; the factory label sheet is unchanged."
         }
       ]
     }
