@@ -3755,7 +3755,7 @@
     {
       "id": "K7-09",
       "title": "The firmware paints a prim's own colour",
-      "state": "review",
+      "state": "done",
       "group": "K7",
       "deps": ["K7-07", "K7-08"],
       "at": "2026-11-21T23:24:37Z",
@@ -3819,7 +3819,7 @@
     {
       "id": "K7-11",
       "title": "Every layer chooses its own colour",
-      "state": "review",
+      "state": "done",
       "group": "K7",
       "deps": ["K7-10"],
       "at": "2026-11-21T23:24:37Z",
@@ -3846,7 +3846,7 @@
     {
       "id": "K7-12",
       "title": "The App draws v2 J-cards and turns an old pack away",
-      "state": "review",
+      "state": "done",
       "group": "K7",
       "deps": ["K7-07", "K7-08"],
       "at": "2026-11-21T23:24:37Z",
@@ -3878,7 +3878,7 @@
     {
       "id": "K7-13",
       "title": "Every guide and every check says K7Art v2",
-      "state": "todo",
+      "state": "review",
       "group": "K7",
       "deps": ["K7-08", "K7-09", "K7-10", "K7-11", "K7-12"],
       "at": "2026-11-21T23:24:37Z",
@@ -3894,6 +3894,16 @@
           "at": "2026-11-22T00:38:04Z",
           "by": "deepseek",
           "text": "The board half is proven so the task has every fact it needs once the three reviews are marked done: the sunton flash boots with the v5 factory sheet ('art: factory sheet: 5 designs' and 'label: label pool: 5 designs'), a v5 pack installs with sheet_crc 0x2EC19103, and the two-finger pose was photographed through the verify build's /api/scene?n=10 + /api/screen.bmp (saved at .scratch/k7art-v2/pose/scene10.png): the label prints its own colours. Host, web and editor tiers are green. What remains is the board's own clicks."
+        },
+        {
+          "at": "2026-11-22T01:16:06Z",
+          "by": "deepseek",
+          "text": "Everything it names is in: the guides in e4f31ce, the tiers green, the board proof in .scratch/k7art-v2/pose/. Handing it over."
+        },
+        {
+          "at": "2026-11-22T01:16:07Z",
+          "by": "deepseek",
+          "text": "K7Art v2 is landed, guided and proven, so this closes the chain.\n\n- Guides: the editor's README, labels-for-the-k7 and label-prompts speak of the mask, a layer's colour and the J-card's background; the agent skill's prose and its generated tool reference (color, maskColor, maskRadius, jcardBackground) were rebuilt with `npm run skill`. Commit e4f31ce for the guides, 0cb6fb9 for the skill.\n- Tiers: `make -C host check` green (t32/t33/t46 and the integration suite); the editor's typecheck, 100 unit and 19 browser tests, build and `skill:check`; the App's typecheck, 980 tests and build.\n- Board: the sunton flash boots with `art: factory sheet: 5 designs, 6 compiled fonts` and `label: label pool: 5 designs`; a v5 pack built by the editor installed with sheet_crc 0x2EC19103 and was reset to factory; the two-finger pose was photographed through the verify build's /api/scene?n=10 and /api/screen.bmp, and the label prints its own colours (.scratch/k7art-v2/pose/scene10.png). The sunton build is back on the board and no monitor is left attached.\n\nTo check: open the board's K7Art group (13/13 when this is accepted) and, on the device, hold a cassette up - the label above is what it draws."
         }
       ]
     }
