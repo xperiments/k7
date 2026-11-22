@@ -161,7 +161,6 @@ export function migrateFonts(tpl: Tpl): void {
  */
 export function normaliseColours(objs: Obj[]): void {
   objs.forEach((o) => {
-    if (o.ap) return;
     if (o.type === "text" && o.s && o.s !== 1) {
       o.w = Math.round(o.w * o.s);
       delete o.s;
@@ -183,16 +182,17 @@ export function migrateDocData(data: DocData): DocData {
   migrateFonts(tpl);
   tpl.id = migrateId(tpl.id);
   const mask: Mask = data.mask ?? defaultPaper();
+  // An aperture was a guide, never a prim: the Card's window is always the design's now.
+  data.objs = (data.objs ?? []).filter((o) => !(o as Obj & { ap?: boolean }).ap);
   if (inks) {
-    (data.objs ?? []).forEach((o) => {
-      if (o.ap) return;
+    data.objs.forEach((o) => {
       const legacy = o as Obj & { role?: string };
       const c = roleColour(legacy.role, inks, mask.color);
       if (c) o.color = c;
       delete legacy.role;
     });
   }
-  normaliseColours(data.objs ?? []);
+  normaliseColours(data.objs);
   if (!isColour(mask.color)) mask.color = inks?.paper ?? DEFAULT_PAPER;
   // A document made before the paper was the design's, not a layer, still carries the
   // LayerMask's membership flag on its layers and its collapsed row on the mask.
@@ -218,13 +218,10 @@ export function syncSlots(objs: Obj[], tpl: Tpl): void {
   });
 }
 
-/** The aperture's cut-out: the paper with the Card's window removed (even-odd). */
-export function aperturePath(ap: Obj): string {
-  const x = ap.x;
-  const y = ap.y;
-  const w = ap.w;
-  const h = ap.h ?? 0;
-  const r = Math.min(ap.r || 0, w / 2, h / 2);
+/** The paper's cut-out at the Card's window (even-odd): the hole the tape shows through. */
+export function aperturePath(): string {
+  const { x, y, w, h } = WIN;
+  const r = Math.min(WIN.r, w / 2, h / 2);
   return `M0 0H${PRINT_W}V${PRINT_H}H0Z M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
 }
 
@@ -233,7 +230,8 @@ export interface LabelSection {
   space: { w: number; h: number };
   /** The print's paper: a colour and a corner radius, in the file's own key. */
   mask: { color: string; r: number };
-  aperture?: { x: number; y: number; w: number; h: number; r: number };
+  /** The Card's window, always written: a placement aid, not a prim. */
+  aperture: { x: number; y: number; w: number; h: number; r: number };
   canvas?: CanvasDoc;
   fonts: Record<FontRole, { ff: string; px: number }>;
   slots: Record<string, { max: number }>;
@@ -285,7 +283,6 @@ export function buildTemplate(
   const errs: string[] = [];
   const W0 = PRINT_W;
   const H0 = PRINT_H;
-  const ap = objs.find((o) => o.ap && o.type === "rect") || null;
   const prims: Array<Record<string, unknown>> = [];
   const seen: Record<string, 1> = {};
 
@@ -303,28 +300,6 @@ export function buildTemplate(
   if (!isColour(mask.color)) errs.push(`mask.color "${mask.color}" is not #RRGGBB`);
   if (!Number.isInteger(mask.radius) || mask.radius < 0)
     errs.push(`mask.r ${mask.radius} is not a corner radius`);
-
-  // The aperture is the Card's window, not the design's: the mask already cuts it, so the
-  // file either omits it or names exactly that window.
-  const AB = ap
-    ? {
-        x: Math.round(ap.x),
-        y: Math.round(ap.y),
-        w: Math.round(ap.w),
-        h: Math.round(ap.h || 0),
-      }
-    : null;
-  if (
-    AB &&
-    (AB.x !== WIN.x ||
-      AB.y !== WIN.y ||
-      AB.w !== WIN.w ||
-      AB.h !== WIN.h ||
-      Math.round(ap!.r || 0) !== WIN.r)
-  )
-    errs.push(
-      `aperture: the Card's window is ${WIN.x},${WIN.y} ${WIN.w}x${WIN.h} r${WIN.r}, not ${AB.x},${AB.y} ${AB.w}x${AB.h} r${Math.round(ap!.r || 0)}`,
-    );
 
   // The canvas presets are the editor's; the active colour is what the sheet carries. Check
   // both here, so a design that cannot be packed says so at Export rather than at the build.
@@ -353,7 +328,7 @@ export function buildTemplate(
   });
 
   objs.forEach((o) => {
-    if (o.ap || o.hidden) return;
+    if (o.hidden) return;
     const tag = tagOf(o);
     const X = Math.round(o.x);
     const Y = Math.round(o.y);
@@ -406,14 +381,6 @@ export function buildTemplate(
       pr.still = true;
       // A rect may bleed past the print: the print crops it. Only a record the sheet cannot
       // hold is refused, and that is the packer's check.
-      if (
-        AB &&
-        X <= AB.x &&
-        Y <= AB.y &&
-        X + Wd >= AB.x + AB.w &&
-        Y + Ht >= AB.y + AB.h
-      )
-        errs.push(`${tag}: its box covers the whole aperture`);
       prims.push(pr);
     }
   });
@@ -443,7 +410,8 @@ export function buildTemplate(
 
   // The label section's key order is the section's own: space, mask, aperture, canvas, fonts,
   // slots, prims. The paper is a section field, not one of the prims, because with every
-  // colour literal a full-print rect could not say it was the paper.
+  // colour literal a full-print rect could not say it was the paper. The aperture is the
+  // Card's window: every design writes it, and it is a placement aid the sheet never paints.
   const slots: Record<string, { max: number }> = {};
   Object.keys(tpl.slots).forEach((k) => {
     slots[k] = { max: tpl.slots[k].max };
@@ -454,11 +422,7 @@ export function buildTemplate(
       color: isColour(mask.color) ? mask.color : DEFAULT_PAPER,
       r: Math.round(mask.radius || 0),
     },
-    // The aperture is absent when the design has none: "no key" and "exactly the window" are
-    // the only two answers the packer reads.
-    ...(AB
-      ? { aperture: { x: AB.x, y: AB.y, w: AB.w, h: AB.h, r: Math.round(ap!.r || 0) } }
-      : {}),
+    aperture: { x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r },
     // The canvas travels with the design: the active preset is what the sheet carries, the
     // rest are the editor's. A design without one leaves the panel's page alone.
     canvas: {
@@ -709,21 +673,6 @@ function importLabelSection(
       out.push(o);
     }
   });
-  if (aperture !== undefined) {
-    const a = aperture as { x: number; y: number; w: number; h: number; r?: number };
-    out.push({
-      id: ++id,
-      type: "rect",
-      name: "",
-      x: a.x,
-      y: a.y,
-      w: a.w,
-      h: a.h,
-      r: a.r || 0,
-      color: "#000000",
-      ap: true,
-    });
-  }
   // The vocabulary is one table: a declared slot no text prints would be a field the panel
   // shows and the label never uses (docs/specs/label-templates.md §7).
   const used = new Set(

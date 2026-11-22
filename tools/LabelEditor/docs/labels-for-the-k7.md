@@ -26,8 +26,9 @@ palette and the faces cannot drift between the two.
 - **The print is 748 × 359 design pixels**, origin top-left. The panel's screen is 800 × 480
   and the print sits at (25,19) on it. There is no other size and no zoom to design around.
 - **The Card's window is a hole in it** — (95,101) 556 × 166, radius 83. The cassette's tape
-  shows through, so nothing drawn there is seen on the player. The editor draws the design
-  whole; the window is worth keeping in mind while you place type.
+  shows through, so nothing drawn there is seen on the player. The editor always shows it
+  black, on top of the print; it is not a layer, and nothing under it prints. The window is
+  worth keeping in mind while you place type.
 
 | Zone | Where | What goes there |
 |---|---|---|

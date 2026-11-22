@@ -75,6 +75,7 @@ const design = (): Tpl => {
 const expectedLabel = {
   space: { w: 748, h: 359 },
   mask: { color: "#c7a867", r: 10 },
+  aperture: { x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r },
   canvas: { backgrounds: [DEFAULT_CANVAS], active: 0 },
   fonts: {
     title: { ff: "Archivo Narrow 600", px: 32 },
@@ -120,6 +121,7 @@ describe("buildTemplate", () => {
     expect(doc).not.toHaveProperty("inks");
     expect(doc.label.space).toEqual({ w: 748, h: 359 });
     expect(doc.label.mask).toEqual({ color: "#c7a867", r: 10 });
+    expect(doc.label.aperture).toEqual({ x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r });
     expect(doc.label.fonts.title).toEqual({ ff: "Archivo Narrow 600", px: 32 });
     expect(doc.label.prims).toHaveLength(3);
     expect(doc.label.prims[0]).toMatchObject({ t: "rect", fill: BAND2, rot: 15 });
@@ -135,6 +137,7 @@ describe("buildTemplate", () => {
     expect(Object.keys(doc.label)).toEqual([
       "space",
       "mask",
+      "aperture",
       "canvas",
       "fonts",
       "slots",
@@ -158,19 +161,8 @@ describe("buildTemplate", () => {
     expect(tplText(doc.label)).toBe(tplText(expectedLabel));
   });
 
-  it("puts the aperture between the mask and the canvas, in the section's order", () => {
-    const ap: Obj = {
-      id: 9,
-      type: "rect",
-      name: "",
-      x: WIN.x,
-      y: WIN.y,
-      w: WIN.w,
-      h: WIN.h,
-      r: WIN.r,
-      ap: true,
-    };
-    const { doc, errs } = buildTemplate([...objs, ap], mask, design());
+  it("writes the Card's window between the paper and the canvas, always", () => {
+    const { doc, errs } = buildTemplate(objs, mask, design());
     expect(errs).toEqual([]);
     expect(Object.keys(doc.label)).toEqual([
       "space",
@@ -240,20 +232,12 @@ describe("buildTemplate", () => {
     );
   });
 
-  it("refuses the Card's window drawn at another size", () => {
-    const ap: Obj = {
-      id: 9,
-      type: "rect",
-      name: "",
-      x: 0,
-      y: 0,
-      w: WIN.w,
-      h: WIN.h,
-      r: WIN.r,
-      ap: true,
-    };
-    expect(buildTemplate([...objs, ap], mask, design()).errs.join("\n")).toContain(
-      "aperture: the Card's window",
+  it("refuses a file whose aperture is not the Card's window", () => {
+    const { doc } = buildTemplate(objs, mask, design());
+    const bad = JSON.parse(tplText(doc));
+    bad.label.aperture = { x: 0, y: 0, w: WIN.w, h: WIN.h, r: WIN.r };
+    expect(() => importTemplate(JSON.stringify(bad), "#c7a867")).toThrow(
+      "is not the Card's window",
     );
   });
 
@@ -504,33 +488,24 @@ describe("importTemplate", () => {
     );
   });
 
-  it("gives a file without a mask the default paper", () => {
-    const ap: Obj = {
-      id: 9,
-      type: "rect",
-      name: "",
-      x: WIN.x,
-      y: WIN.y,
-      w: WIN.w,
-      h: WIN.h,
-      r: WIN.r,
-      ap: true,
-    };
-    const { doc } = buildTemplate([...objs, ap], mask, design());
-    const noMask = JSON.parse(tplText(doc));
-    delete noMask.label.mask;
-    const back = importTemplate(JSON.stringify(noMask), "#c7a867");
+  it("fills a file's missing mask and aperture with the defaults", () => {
+    const { doc } = buildTemplate(objs, mask, design());
+    const bare = JSON.parse(tplText(doc));
+    delete bare.label.mask;
+    delete bare.label.aperture;
+    const back = importTemplate(JSON.stringify(bare), "#c7a867");
     expect(back.mask).toEqual({ color: DEFAULT_PAPER, radius: 10 });
-    expect(back.objs.find((o) => o.ap)).toMatchObject({
+    expect(back.objs.some((o) => "ap" in o)).toBe(false);
+    const again = buildTemplate(back.objs, back.mask, back.tpl, back.canvas, back.jcard);
+    expect(again.errs).toEqual([]);
+    expect(again.doc.label.mask).toEqual({ color: DEFAULT_PAPER, r: 10 });
+    expect(again.doc.label.aperture).toEqual({
       x: WIN.x,
       y: WIN.y,
       w: WIN.w,
       h: WIN.h,
       r: WIN.r,
     });
-    const again = buildTemplate(back.objs, back.mask, back.tpl, back.canvas, back.jcard);
-    expect(again.errs).toEqual([]);
-    expect(again.doc.label.mask).toEqual({ color: DEFAULT_PAPER, r: 10 });
   });
 
   it("refuses a file that is not a K7Art, and an id that is not k7.<slug>", () => {
@@ -703,26 +678,16 @@ describe("the retired label-template v1", () => {
     expect(doc.jcard.prims).toHaveLength(3);
   });
 
-  it("keeps an aperture and its mask, and the label section's bytes", () => {
+  it("keeps the window and the paper, and the label section's bytes", () => {
     const old = legacy();
     old.aperture = { x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r };
     const back = importTemplate(JSON.stringify(old), "#c7a867");
     expect(back.mask).toEqual({ color: "#c7a867", radius: 10 });
-    const ap = back.objs.find((o) => o.ap);
-    expect(ap).toMatchObject({ x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r });
+    expect(back.objs.some((o) => "ap" in o)).toBe(false);
     const { doc } = buildTemplate(back.objs, back.mask, back.tpl, back.canvas, back.jcard);
     expect(doc.label.mask).toEqual({ color: "#c7a867", r: 10 });
-    expect(tplText(doc.label)).toBe(
-      tplText({
-        space: expectedLabel.space,
-        mask: { color: "#c7a867", r: 10 },
-        aperture: { x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r },
-        canvas: expectedLabel.canvas,
-        fonts: expectedLabel.fonts,
-        slots: expectedLabel.slots,
-        prims: expectedLabel.prims,
-      }),
-    );
+    expect(doc.label.aperture).toEqual({ x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r });
+    expect(tplText(doc.label)).toBe(tplText(expectedLabel));
   });
 });
 
@@ -784,13 +749,26 @@ describe("migrateDocData", () => {
     expect(out.jcard!.background).toBe(DEFAULT_PAPER);
   });
 
-  it("drops the retired LayerMask flag and the mask's collapsed row", () => {
+  it("drops the retired LayerMask flag, the mask's collapsed row and the aperture layer", () => {
     const data = stored();
     data.objs = [
       { id: 1, type: "rect", name: "", x: 0, y: 0, w: 10, h: 10, color: INK, m: true } as Obj,
+      {
+        id: 2,
+        type: "rect",
+        name: "",
+        x: WIN.x,
+        y: WIN.y,
+        w: WIN.w,
+        h: WIN.h,
+        r: WIN.r,
+        color: "#000000",
+        ap: true,
+      } as unknown as Obj,
     ];
     data.mask = { color: "#c7a867", radius: 10, collapsed: true } as unknown as Mask;
     const out = migrateDocData(data);
+    expect(out.objs.map((o) => o.id)).toEqual([1]);
     expect(out.objs[0]).not.toHaveProperty("m");
     expect(out.mask).toEqual({ color: "#c7a867", radius: 10 });
   });

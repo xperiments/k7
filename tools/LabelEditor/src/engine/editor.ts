@@ -7,6 +7,7 @@ import {
   PRINT_H,
   PRINT_W,
   SZ,
+  WIN,
   sheetSizes,
   slotOf,
 } from "./vocab";
@@ -246,9 +247,6 @@ export class Editor {
     const f = this.frOf(o, surface);
     return f ? ("px" in f ? f.px : f.size) : (o.font ?? 20);
   }
-  apOf(): Obj | null {
-    return this.objs.find((o) => o.ap && o.type === "rect") || null;
-  }
   simOf(id: string): string {
     return this.tpl.sim[id] !== undefined ? this.tpl.sim[id] : (slotOf(id)?.sim ?? "");
   }
@@ -266,7 +264,6 @@ export class Editor {
   }
 
   outOfSpace(o: Obj): boolean {
-    if (o.ap) return false;
     if (this.surface === "jcard") {
       const h = o.type === "text" ? Math.round(this.pxOf(o) * 1.2) : (o.h || 0);
       return o.x < 0 || o.y < 0 || o.x + o.w > JCARD_W || o.y + h > JCARD_H;
@@ -720,7 +717,6 @@ export class Editor {
     } as Obj;
     if (jcard && o.name && !o.static) delete o.text;
     if (jcard) {
-      delete o.ap;
       delete o.note;
       delete o.color;
       delete o.tc;
@@ -1516,7 +1512,6 @@ export class Editor {
     for (const o of this.objs) {
       if (o.hidden) continue;
       const e = this.eff(o);
-      if (o.ap) continue;
       if (o.type === "text") {
         this.call(
           "lvp_label",
@@ -1554,15 +1549,13 @@ export class Editor {
         );
       }
     }
-    const ap = this.apOf();
-    if (ap)
-      this.call("lvp_aperture", null, ["number", "number", "number", "number", "number"], [
-        ap.x,
-        ap.y,
-        ap.w,
-        ap.h,
-        ap.r || 0,
-      ]);
+    // The Card's window is always shown, black and on top: nothing under it is seen.
+    this.call(
+      "lvp_box",
+      null,
+      ["number", "number", "number", "number", "number", "number", "number"],
+      [WIN.x, WIN.y, WIN.w, WIN.h, 0x000000, WIN.r, 0],
+    );
     this.call("lvp_end", null, [], []);
     const p = this.call("lvp_framebuffer", "number", [], []);
     const px = M.HEAPU8.subarray(p, p + w * hh * 4);

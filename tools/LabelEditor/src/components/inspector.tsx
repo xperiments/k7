@@ -238,8 +238,8 @@ function DesignPanel() {
         <Num label="Corner radius" value={ed.mask.radius} min={0} onChange={(v) => ed.setMaskField("radius", v)} />
         <p className="text-xs text-muted-foreground">
           Every layer prints on the paper, clipped to its rounded corners; it is always
-          there. The aperture layer marks the Card&apos;s window ({WIN.x},{WIN.y} {WIN.w}×{WIN.h}{" "}
-          r{WIN.r}).
+          there. The Card&apos;s window ({WIN.x},{WIN.y} {WIN.w}×{WIN.h} r{WIN.r}) is always
+          shown black, on top, and nothing drawn under it is seen.
         </p>
       </Section>
 
@@ -574,24 +574,6 @@ function LayerPanel({ o }: { o: Obj }) {
             disabled={locked}
           />
           <SwatchStrip value={o.color ?? ""} onPick={(c) => ed.setObjField(o, "color", c)} />
-          {o.type === "rect" ? (
-            <label className="flex items-center gap-2 text-xs">
-              <Switch
-                checked={!!o.ap}
-                onCheckedChange={(checked) => {
-                  ed.objs.forEach((x) => {
-                    if (x !== o) delete x.ap;
-                  });
-                  if (checked) o.ap = true;
-                  else delete o.ap;
-                  ed.commit(false);
-                  ed.emit();
-                }}
-                disabled={locked}
-              />
-              Aperture <span className="text-muted-foreground">(the Card's window)</span>
-            </label>
-          ) : null}
         </Section>
       )}
 
@@ -1086,7 +1068,7 @@ function MultiPanel() {
   const selected = ed.objs.filter((o) => ids.includes(o.id));
   const bulkColour = (v: string) => {
     ed.objs.forEach((o) => {
-      if (!ids.includes(o.id) || o.locked || o.ap) return;
+      if (!ids.includes(o.id) || o.locked) return;
       o.color = v;
     });
     ed.commit(false);

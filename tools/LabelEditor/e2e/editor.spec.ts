@@ -14,7 +14,7 @@ test("boots with the Design panel and one section open", async ({ page }) => {
   await expect(sectionButton(page, "Canvas")).toHaveAttribute("aria-expanded", "false");
 });
 
-test("the print always has paper, and no LayerMask to manage", async ({ page }) => {
+test("the print always has paper and its window, and no layer for either", async ({ page }) => {
   await page.goto("/");
   const layers = page.locator('aside[aria-label="Layers"]');
   await expect(layers).not.toContainText("LayerMask");
@@ -34,6 +34,32 @@ test("the print always has paper, and no LayerMask to manage", async ({ page }) 
   await page.getByRole("button", { name: /Rectangle \(R\)/ }).click();
   const box = await page.locator(".canvas-surface").boundingBox();
   await page.mouse.click(box!.x + 200, box!.y + 200);
+  await expect(page.getByText("Aperture", { exact: false })).toHaveCount(0);
+
+  // The Card's window is fixed and black, on top of the print: nothing under it is seen.
+  const window = page.locator('[data-window="1"]');
+  await expect(window).toBeVisible();
+  const win = await window.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return {
+      left: s.left,
+      top: s.top,
+      width: s.width,
+      height: s.height,
+      radius: s.borderRadius,
+      background: s.backgroundColor,
+      pointerEvents: s.pointerEvents,
+    };
+  });
+  expect(win).toEqual({
+    left: "95px",
+    top: "101px",
+    width: "556px",
+    height: "166px",
+    radius: "83px",
+    background: "rgb(0, 0, 0)",
+    pointerEvents: "none",
+  });
 
   const built = await page.evaluate(() => {
     const ed = (window as unknown as {
@@ -42,14 +68,52 @@ test("the print always has paper, and no LayerMask to manage", async ({ page }) 
     const r = ed!.buildTemplate();
     return {
       errs: r.errs,
-      doc: r.doc as { label: { mask: unknown; prims: Array<Record<string, unknown>> } },
+      doc: r.doc as {
+        label: {
+          mask: unknown;
+          aperture: unknown;
+          prims: Array<Record<string, unknown>>;
+        };
+      },
       inMask: ed!.objs.some((o) => "m" in o),
+      apertureLayer: ed!.objs.some((o) => "ap" in o),
     };
   });
   expect(built.errs).toEqual([]);
   expect(built.doc.label.mask).toEqual({ color: "#c7a867", r: 10 });
+  expect(built.doc.label.aperture).toEqual({ x: 95, y: 101, w: 556, h: 166, r: 83 });
   expect(built.doc.label.prims.length).toBeGreaterThan(1);
   expect(built.inMask).toBe(false);
+  expect(built.apertureLayer).toBe(false);
+});
+
+test("the Card's window is black in the real preview", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    (window as unknown as { __editor: { setRun(v: boolean): void } }).__editor.setRun(true);
+  });
+  await page.waitForFunction(
+    () => {
+      const ed = (window as unknown as {
+        __editor?: { lvgl?: { module?: unknown; canvas?: unknown } };
+      }).__editor;
+      return !!ed?.lvgl?.module && !!ed?.lvgl?.canvas;
+    },
+    undefined,
+    { timeout: 15_000 },
+  );
+  const px = await page.evaluate(() => {
+    const ed = (window as unknown as {
+      __editor: { lvBuild(): void; lvgl: { canvas: HTMLCanvasElement } };
+    }).__editor;
+    ed.lvBuild();
+    const ctx = ed.lvgl.canvas.getContext("2d")!;
+    const at = (x: number, y: number) => [...ctx.getImageData(x, y, 1, 1).data];
+    // The window's centre is (95 + 556/2, 101 + 166/2); the paper at (10,10) is not it.
+    return { window: at(373, 184), paper: at(10, 10) };
+  });
+  expect(px.window).toEqual([0, 0, 0, 255]);
+  expect(px.paper).not.toEqual([0, 0, 0, 255]);
 });
 
 test("opens one section at a time, and the open one cannot be closed", async ({ page }) => {
@@ -102,7 +166,7 @@ test("imports a factory K7Art", async ({ page }) => {
   );
   await page.locator('input[type="file"][accept*=".json"]').setInputFiles(k7art);
   await expect(page.getByRole("tab", { name: /neon/ })).toBeVisible();
-  await expect(page.getByRole("banner").getByText("13 layers")).toBeVisible();
+  await expect(page.getByRole("banner").getByText("12 layers")).toBeVisible();
 
   // The open document is the K7Art it was read from: one container, both sections.
   const exported = await page.evaluate(() => {

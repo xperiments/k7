@@ -30,7 +30,9 @@ The label half:
 - A layer may **bleed** outside that box — a band to the edge and past it — and the print
   crops it. Only the record's bounds refuse (x and y are int16, w and h uint16).
 - The **Card's window** is (95,101) **556 × 166, radius 83**. It is a hole in the design: the
-  cassette's tape shows through it, so nothing drawn there is seen. What is left for type is
+  cassette's tape shows through it, so nothing drawn there is seen. The editor always shows it
+  black and on top; it is not a layer, and there is no switch to add or move it. What is left
+  for type is
   the strip above y 101, the strip below y 267, and the narrow margins left of x 95 and right
   of x 651. All three roles fit either strip — 29 px of ink for a title, 17 for a caption,
   55 for a numeral's digits — so the discipline is only to keep the whole line inside one of
@@ -471,11 +473,10 @@ A refusal is a sentence naming the design and the layer, so read it rather than 
 - `field "…" is not one of …` — the eleven above are the whole list.
 - `give text for a static text or field for a dynamic one, not both`, `text must not be
   empty`, `a text's height follows its type; set width (the wrap width)`.
-- `aperture: the Card's window is 95,101 556x166 r83` — the window is the Card's, not the
-  design's; the editor can mark it, but no export moves it.
+- `aperture … is not the Card's window 95,101 556x166 r83` — the window is the Card's, not
+  the design's; the editor writes it for every design.
 - `… is not on the list of fields`, `static text is empty`, `dynamic text needs a slot name` —
   a design has a text it cannot print.
-- `its box covers the whole aperture` — a rect over the entire window hides it.
 - `48 layers, and the sheet holds 48 per design` — the caps are the sheet's.
 - `… does not carry N px; it carries …` — only the three face-and-size pairs above exist.
 

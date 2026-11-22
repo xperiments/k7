@@ -30,11 +30,13 @@ radius 83** in these coordinates.
   with a grey dashed outline, and its row grey in the layer list, so the bleed is visible while
   it is drawn. The only positional refusals are the record's: `x` and `y` are int16, `w` and `h`
   uint16 (ADR 0072).
-- **The aperture is the Card's window, not the label's.** The editor's `aperture` must be
-  absent, or exactly `(95, 101, 556, 166, r 83)`; the packer refuses anything else, and so does
-  the editor at Export and at Open - the window is the Card's, and an aperture object is only a
-  placement aid. It is not stored in the sheet: the Card's mask already cuts the window, in both
-  layouts, and a second cut would be a second source of truth.
+- **The Card's window is fixed, and the editor always marks it.** It is
+  `(95, 101, 556, 166, r 83)`; the label section's `aperture` always names it, and the editor
+  writes it for every design, giving one to a file that omits it. The packer refuses anything
+  else. It is not stored in the sheet: the Card's mask already cuts the window, in both
+  layouts, and a second cut would be a second source of truth. The editor draws it as an
+  opaque black layer on top of the print, in Design and in Preview; that black is the editor's
+  guide, not a prim.
 - **Rotation is honoured**: `rot10` is tenths of a degree about the object's own centre
   (`transform_pivot` = width/2, height/2). A rotated object costs a layer per paint.
 - **The cassette's background is the label's own, at the two-finger pose.** A label may carry a

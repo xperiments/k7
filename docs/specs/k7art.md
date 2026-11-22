@@ -111,19 +111,25 @@ sheet. The sheet's binary, its version, its vocabulary, its Slots and every refu
 [`label-templates.md`](./label-templates.md)'s; this section only says what moved.
 
 - **The identity is the container's.** The section has no `v`, `id` or `name`; it has the
-  `space`, the `mask` and optional `aperture`, the optional `canvas`, the `fonts`, the `slots`
-  and the `prims`. The packer takes the id and the name from the container and validates the
+  `space`, the `mask` and `aperture`, the optional `canvas`, the `fonts`, the `slots` and the
+  `prims`. The packer takes the id and the name from the container and validates the
   section by the rules the label spec states.
-- **`space` is 748x359**, `mask` is the paper (§2) and is always written, `aperture` is
-  absent or exactly the Card's window, `canvas` is the optional list of up to eight cassette
-  backgrounds, `fonts` is the three compiled pairs, `slots` is the eleven fields the design
-  uses (each `max: 96`), and `prims` is the print. There is no `notes`: with every colour
-  literal there is nothing for it to explain.
+- **`space` is 748x359**, `mask` is the paper (§2) and `aperture` is the Card's window; both
+  are always written. `canvas` is the optional list of up to eight cassette backgrounds,
+  `fonts` is the three compiled pairs, `slots` is the eleven fields the design uses (each
+  `max: 96`), and `prims` is the print. There is no `notes`: with every colour literal there
+  is nothing for it to explain.
 - **The paper is not a prim in the file, and is one in the sheet.** Both sheet writers
   synthesise it as `{ t: "rect", x: 0, y: 0, w: 748, h: 359, r: mask.r, fill: mask.color }` at
   the front of the prims, so the print's paper is a rect the reader paints like any other. The
   editor always writes it, so the sheet's prim count is the file's plus one, and the 48-prim
   cap is the sheet's.
+- **The window is fixed, and it is not a prim.** The section's `aperture` is always the
+  Card's window: (95,101) 556x166, radius 83. The editor draws it as an opaque black layer on
+  top of the print, in Design and in Preview, so nothing drawn under it is seen; it cannot be
+  selected, moved or removed. It is a placement aid, not a prim, and the sheet never paints
+  it: the Card's mask cuts the window on the device. A file may omit it; the editor supplies
+  it and writes it on Export.
 - **It is one design per Track**, chosen by `ink_seed` (ADR 0071). The J-card is the same
   design on paper; the pair is the K7Art.
 - **The sheet is the factory's**, packed at build from every `assets/k7art/*.json`. A user's
@@ -210,7 +216,7 @@ The **K7Art Editor** edits one K7Art as one document with two surfaces.
 
 - **The label surface is today's editor**: the 748x359 stage, the Card's window, the layers
   and their colours, the type roles, the Slots and test values, the Design panel's paper, the
-  aperture layer, the Canvas backgrounds, the LVGL preview and the label's export errors.
+  fixed black window, the Canvas backgrounds, the LVGL preview and the label's export errors.
 - **The J-card surface is the one sheet**: 1300x1280, the fold guides at 320 and 480, a focus
   for the sheet and for each of the flap, spine and cover, the sheet's background and its
   layers' colours, the Type panel's three J-card sizes, and the Fields panel's three test
@@ -223,8 +229,8 @@ The **K7Art Editor** edits one K7Art as one document with two surfaces.
   wheel and arrow keys are not part of it.
 - **One document, one history, one export.** Switching surfaces does not clear the undo; the
   document autosaves both sections; Export writes the K7Art; Publish writes a pack
-  ([`art-packs.md`](./art-packs.md) §3). The label's Canvas, Paper and Aperture controls are
-  the label's only; the J-card's Sheet, Type and Fields are the J-card's.
+  ([`art-packs.md`](./art-packs.md) §3). The label's Canvas and Paper controls, and the
+  window, are the label's only; the J-card's Sheet, Type and Fields are the J-card's.
 - **The WebMCP tools name the surface.** `k7art-read` returns both sections and the active
   surface; `k7art-add-layer`, `k7art-update-layer` and the rest take the surface, a colour
   (`#RRGGBB`) and, for a J-card text, a J-card field; the guide is `k7art-guide` /
@@ -266,9 +272,9 @@ at whatever size its surface has. The label section's refusals are the label spe
   colour (`paper` is the mask's, `ink`/`rule`/`band.N` are themselves), the full-print
   `fill: "paper"` rect becomes the label's `mask`, the J-card's `paper` becomes `background`,
   and a J-card full-sheet paper rect is dropped because the background paints it. A design
-  or document without a full-print paper rect gets the default paper, because the editor has
-  no paperless design. The editor writes v2; the packer, the firmware and the App never read
-  v1.
+  or document without a full-print paper rect gets the default paper, and an aperture layer
+  is dropped: the window is the Card's, not a layer. The editor writes v2; the packer, the
+  firmware and the App never read v1.
 - **The editor's documents** (`label-editor.docs.v3`) migrate the same way on load and the
   store's key becomes `v4`. A document without a `jcard` gets the starter, from its own paper
   and faces. The retired `label-template v1` import resolves its `inks` too.
@@ -285,9 +291,10 @@ at whatever size its surface has. The label section's refusals are the label spe
 ## 9. Tests
 
 - **The editor**: the container's build/import round-trips byte for byte (v2), a v1 K7Art and a
-  v1 stored document migrate to the same colours, a document or file without a mask opens with
-  the default paper and exports it, and a J-card's geometry, fields, sizes and refusals hold;
-  the two surfaces' undo and autosave; the `/k7art` base.
+  v1 stored document migrate to the same colours, a document or file without a mask or an
+  aperture opens with the defaults and exports them, a stored aperture layer is dropped, and a
+  J-card's geometry, fields, sizes and refusals hold; the two surfaces' undo and autosave; the
+  `/k7art` base.
 - **The packer**: every `assets/k7art/*.json` packs to the sheet bytes the editor's own writer
   makes for it; a K7Art with a bad J-card still fails the build naming it (the editor refuses
   it first).

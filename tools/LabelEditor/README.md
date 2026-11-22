@@ -60,7 +60,8 @@ npm run build      # dist/
 
   ![An empty static text: the field says what it prints, and a line says why nothing does](docs/empty-text.png)
 - **Real preview for the label, the DOM for the paper.** The label is drawn by LVGL 9.6 compiled
-  to WebAssembly (`public/lvgl.js`), the same build the panel runs, with the aperture. The J-card
+  to WebAssembly (`public/lvgl.js`), the same build the panel runs, with the Card's
+  window shown black. The J-card
   is drawn in the DOM at its own units, with the safe square, because the webapp draws it and
   there is no firmware rendering of a J-card.
 - **Export and Publish.** Export writes one **K7Art** file for `assets/k7art/`; Publish writes a
@@ -99,7 +100,7 @@ design coordinates inside a stage scaled by the zoom, which is also why the poin
   ones `assets/fonts/` compiles. There is no second copy of the editor to drift from.
 - **The label section's bytes are unchanged; the file is a K7Art.** The label section's
   `tplBuild`/`tplImport` compare byte for byte with the one-page builder's output for a default
-  design and for a complex design with an aperture, a rotated rect, a static text and two slots;
+  design and for a complex design with a rotated rect, a static text and two slots;
   the container adds the J-card, and the J-card's writer is checked against the webapp's renderer.
 
 ## Browser tests and connecting

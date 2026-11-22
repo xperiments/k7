@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useEditor } from "@/hooks/use-editor";
 import { alignOf, aperturePath } from "@/engine/tpl";
-import { PRINT_H, PRINT_W, PRINT_X, PRINT_Y, SCREEN_H, SCREEN_W } from "@/engine/vocab";
+import { PRINT_H, PRINT_W, PRINT_X, PRINT_Y, SCREEN_H, SCREEN_W, WIN } from "@/engine/vocab";
 import type { Obj } from "@/engine/types";
 
 const PASTEBOARD = 48;
@@ -110,7 +110,6 @@ export function CanvasStage() {
   };
 
 
-  const ap = ed.apOf();
   const sel = ed.sel;
   const members = ed.selMembers();
   const handles =
@@ -193,7 +192,7 @@ export function CanvasStage() {
               }
             : {
                 height: o.h,
-                background: o.ap ? "transparent" : colour,
+                background: colour,
                 borderRadius: o.type === "circle" ? "50%" : (o.r ?? 0),
               }),
         }}
@@ -204,7 +203,7 @@ export function CanvasStage() {
   };
 
   /* The print always has paper: every layer is painted on it, and the clip to its rounded
-   * corners (and the aperture's window) is the same for all of them. */
+   * corners and the Card's window cut are the same for all of them. */
   const nodes = (
     <div
       key="paperbox"
@@ -217,11 +216,31 @@ export function CanvasStage() {
         overflow: ed.outside ? "visible" : "hidden",
         borderRadius: ed.mask.radius,
         background: ed.mask.color,
-        ...(ap ? { clipPath: `path(evenodd, "${aperturePath(ap)}")` } : {}),
+        clipPath: `path(evenodd, "${aperturePath()}")`,
       }}
     >
       {ed.objs.map((o, i) => layerEl(o, i))}
     </div>
+  );
+
+  /* The Card's window is fixed and always shown: an opaque black layer on top of the print,
+   * so nothing drawn under it is seen, and it is not a layer to select or move. */
+  const windowLayer = (
+    <div
+      data-window="1"
+      aria-hidden
+      style={{
+        position: "absolute",
+        left: WIN.x,
+        top: WIN.y,
+        width: WIN.w,
+        height: WIN.h,
+        background: "#000000",
+        borderRadius: WIN.r,
+        pointerEvents: "none",
+        zIndex: ed.objs.length + 1,
+      }}
+    />
   );
 
   return (
@@ -387,6 +406,7 @@ export function CanvasStage() {
                   }}
                 >
                   {nodes}
+                  {windowLayer}
                   {handles && sel && !handles.mem.some((o) => o.locked) ? (
                     <>
                       <div

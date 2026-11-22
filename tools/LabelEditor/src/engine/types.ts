@@ -39,8 +39,6 @@ export interface Obj {
   hidden?: boolean;
   /** The group this layer belongs to. */
   g?: string;
-  /** The aperture: the one window cut out of the paper (a placement aid, not a prim). */
-  ap?: boolean;
   /** Per-layer LVGL preview overrides, edited in Preview. */
   ex?: Record<string, boolean>;
   note?: string;
