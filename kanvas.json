@@ -3728,7 +3728,7 @@
     {
       "id": "K7-08",
       "title": "The packer writes the v2 sheet, and the factory designs are converted",
-      "state": "doing",
+      "state": "review",
       "group": "K7",
       "deps": ["K7-07"],
       "at": "2026-11-21T23:24:37Z",
@@ -3744,6 +3744,11 @@
           "at": "2026-11-21T23:55:05Z",
           "by": "deepseek",
           "text": "Plan: land the v2 factory designs and vocabulary, apply the validated v5 packer fork (Python and TypeScript), then the firmware reader in the same run so make -C host label stays green; the sheet is pinned to 2835 B / crc 0x2EC19103."
+        },
+        {
+          "at": "2026-11-22T00:10:51Z",
+          "by": "deepseek",
+          "text": "K7Art v2 is in: the packer, the factory designs and the sheet's reader/painter all moved to version 5 (commit 0cb6fb9).\n\nWhat changed:\n- The five `assets/k7art/` designs are v2: every prim's `fill`/`color` is the colour its role used to name, the label's paper is `label.mask`, and the J-card's is `jcard.background`. `inks` is gone.\n- The vocabulary is v2 (no `bands`), and both generated copies follow.\n- `tools/label_pack.py` and the editor's TypeScript sheet writer build version-5 sheets: 16-byte templates, a colour on every 24-byte prim, the mask synthesised as the first rect. They refuse a v1 design by name, a role where a colour belongs, a mask without a colour, and an aperture without a mask.\n- The firmware reader and screen came with it, as the note above proposed: `label.h`/`label.c` accept version 5, and `cassette_label.c` paints `lv_color_hex(p.colour)`. That is K7-09's code; K7-09 stays for proving it on the board.\n- The factory sheet packs to **2835 B, crc 0x2EC19103** - exactly 48 x 5 less than version 4 - with the canvas rows, slot records and string pool byte-identical to the old sheet and every prim's colour equal to the old ink its role named.\n\nVerified: `make -C host check` green (t32, t46, integration, and t33's 184 checks over the new sheet); the Python and TypeScript writers agree byte for byte; the editor's 100 unit and 19 browser tests and its build pass.\n\nTo check: `make -C host label` prints the 2835 B sheet and `t33` opens it. What is not proven yet is the board: another session holds `/dev/cu.usbserial-8344440`, so no flash this session - the label must be seen at the two-finger pose on the K7."
         }
       ]
     },
@@ -3755,7 +3760,14 @@
       "deps": ["K7-07", "K7-08"],
       "at": "2026-11-21T23:24:37Z",
       "by": "deepseek",
-      "desc": "The label reader takes sheet version 5: a prim's colour replaces the fill enum and the one literal, label_inks_t and label_inks() go, and the screen paints each prim with lv_color_hex(p.colour) instead of resolving a role. The generated vocabulary loses the band count.\n\nFinished means make -C host check passes, the sheet's host test covers a v2 sheet, and a flash shows a factory label at the two-finger pose in its own colours.\n\nCheck: the board's label after the flash — no colour shifts from a palette the design no longer has."
+      "desc": "The label reader takes sheet version 5: a prim's colour replaces the fill enum and the one literal, label_inks_t and label_inks() go, and the screen paints each prim with lv_color_hex(p.colour) instead of resolving a role. The generated vocabulary loses the band count.\n\nFinished means make -C host check passes, the sheet's host test covers a v2 sheet, and a flash shows a factory label at the two-finger pose in its own colours.\n\nCheck: the board's label after the flash — no colour shifts from a palette the design no longer has.",
+      "notes": [
+        {
+          "at": "2026-11-22T00:10:59Z",
+          "by": "deepseek",
+          "text": "Code landed with K7-08 in 0cb6fb9, as the note on K7-08 proposed: label.h/label.c accept version 5 (16-byte template, reserved byte, colour at offset 20), label_inks_t/label_inks()/the fill enum are gone, and cassette_label.c paints lv_color_hex(p.colour). Evidence: make -C host check green (t32 and t46 migrated, t33 184 checks over the 2835 B sheet); cassette_label.c syntax-checked with the firmware toolchain. Missing: the board proof - a flash and the label at the two-finger pose - because another session holds /dev/cu.usbserial-8344440. Kept todo for that one step; it can be marked done once the flash happens."
+        }
+      ]
     },
     {
       "id": "K7-10",
@@ -3765,7 +3777,14 @@
       "deps": ["K7-07"],
       "at": "2026-11-21T23:24:37Z",
       "by": "deepseek",
-      "desc": "The editor's model, files and tools stop naming roles: a layer carries a #RRGGBB colour (a text's colour, a rect's fill), a J-card layer the same, the J-card's sheet a background instead of paper, and buildTemplate/importTemplate write and read v2. A v1 stored document or imported file migrates through its own inks, so an old design opens in the same colours. The WebMCP tools take a colour, and the agent skill's role vocabulary goes.\n\nFinished means the editor's unit tests cover the v2 round trip and the v1 migration, every factory design exports byte-identical to its file, and k7art-read shows a colour per layer.\n\nCheck: open a v1 document and Export it — same colours, v2 file."
+      "desc": "The editor's model, files and tools stop naming roles: a layer carries a #RRGGBB colour (a text's colour, a rect's fill), a J-card layer the same, the J-card's sheet a background instead of paper, and buildTemplate/importTemplate write and read v2. A v1 stored document or imported file migrates through its own inks, so an old design opens in the same colours. The WebMCP tools take a colour, and the agent skill's role vocabulary goes.\n\nFinished means the editor's unit tests cover the v2 round trip and the v1 migration, every factory design exports byte-identical to its file, and k7art-read shows a colour per layer.\n\nCheck: open a v1 document and Export it — same colours, v2 file.",
+      "notes": [
+        {
+          "at": "2026-11-22T00:10:59Z",
+          "by": "deepseek",
+          "text": "Code landed in 0cb6fb9: Obj/JObj carry color, JCardDoc has background, Tpl has no inks; buildTemplate writes v2 (label.mask, no notes), importTemplate reads v1 K7Arts and the retired label-template through their own inks, and migrateDocData resolves a stored document's roles and drops its inks. The WebMCP tools take a color (#RRGGBB) and set-design takes maskColor/maskRadius/jcardBackground. Tests: 100 unit (v2 round trip, v1 file and stored-document migration), 19 browser, typecheck and build green. The board is still todo because it depends on K7-08's review."
+        }
+      ]
     },
     {
       "id": "K7-11",
@@ -3775,7 +3794,14 @@
       "deps": ["K7-10"],
       "at": "2026-11-21T23:24:37Z",
       "by": "deepseek",
-      "desc": "The Colours panel — the design's eleven inks — is gone. Instead the inspector gives each layer its own colour picker: a rect's fill, a text's colour, a J-card layer's colour; the LayerMask keeps its colour, the J-card's sheet keeps its background, and the Canvas keeps its background list. New layers start from the swatch row, and any colour can be picked or typed.\n\nFinished means a browser test sets two layers to colours no swatch carries and Export carries them, the editor draws both at once, and no panel offers a role.\n\nCheck: make a label with three arbitrary colours and preview it."
+      "desc": "The Colours panel — the design's eleven inks — is gone. Instead the inspector gives each layer its own colour picker: a rect's fill, a text's colour, a J-card layer's colour; the LayerMask keeps its colour, the J-card's sheet keeps its background, and the Canvas keeps its background list. New layers start from the swatch row, and any colour can be picked or typed.\n\nFinished means a browser test sets two layers to colours no swatch carries and Export carries them, the editor draws both at once, and no panel offers a role.\n\nCheck: make a label with three arbitrary colours and preview it.",
+      "notes": [
+        {
+          "at": "2026-11-22T00:10:59Z",
+          "by": "deepseek",
+          "text": "Code landed in 0cb6fb9: the Colours panel (the eleven inks) is gone; every layer's Appearance has a colour picker and swatch row (a shape's fill, a text's colour, a J-card layer's), the LayerMask keeps its colour and radius, the J-card design panel has its background, and the multi-selection sets one colour. Browser tests drive the tools and the inspector; 19 green. The board is todo because it depends on K7-10."
+        }
+      ]
     },
     {
       "id": "K7-12",
@@ -3791,6 +3817,11 @@
           "at": "2026-11-21T23:33:34Z",
           "by": "deepseek",
           "text": "Found while preparing: this task reads the factory designs from assets/k7art/, and they are converted to v2 in K7-08, so the App's v2 reader has nothing to draw until that lands. Add K7-08 as a dependency (or convert the factory set in this task too). Same reason as the note on K7-08: the format is one contract across the packer, the firmware, the editor and the App."
+        },
+        {
+          "at": "2026-11-22T00:11:00Z",
+          "by": "deepseek",
+          "text": "Code landed in 0cb6fb9: web/src/jcard reads v2 (literal colours, required background, v === 2, no inks), the renderer paints each prim, factory.ts imports only id/name/jcard, and pack.ts checks the v5 sheet (16-byte templates, the prim's reserved byte and colour) and refuses a version-4 pack with 'an older editor (version 4); publish the designs again from /k7art'. Tests: 980 pass, typecheck and build green. The board is todo because it depends on K7-08."
         }
       ]
     },
@@ -3802,7 +3833,14 @@
       "deps": ["K7-08", "K7-09", "K7-10", "K7-11", "K7-12"],
       "at": "2026-11-21T23:24:37Z",
       "by": "deepseek",
-      "desc": "The editor's README, its agent skill and labels-for-the-k7 speak of a layer's colour, not a design's roles; the root documents that name the inks are updated. Every tier runs: make -C host check, web's typecheck/tests/build, the editor's typecheck/tests/build/browser tests, label_pack.py's checks, and the firmware flashed for the board's label. A republished pack is installed on the device, and its label and J-card are seen.\n\nFinished means a full green run, the firmware believes v2 on the board, and no guide teaches a role.\n\nCheck: a search of the guides finds no design-facing ink/paper/band role; flash, install a fresh pack, look at both surfaces."
+      "desc": "The editor's README, its agent skill and labels-for-the-k7 speak of a layer's colour, not a design's roles; the root documents that name the inks are updated. Every tier runs: make -C host check, web's typecheck/tests/build, the editor's typecheck/tests/build/browser tests, label_pack.py's checks, and the firmware flashed for the board's label. A republished pack is installed on the device, and its label and J-card are seen.\n\nFinished means a full green run, the firmware believes v2 on the board, and no guide teaches a role.\n\nCheck: a search of the guides finds no design-facing ink/paper/band role; flash, install a fresh pack, look at both surfaces.",
+      "notes": [
+        {
+          "at": "2026-11-22T00:11:00Z",
+          "by": "deepseek",
+          "text": "Guides updated in e4f31ce (editor README, labels-for-the-k7, label-prompts) and the agent skill in 0cb6fb9. All tiers are green: make -C host check, web typecheck/980 tests/build, the editor's typecheck/100 tests/19 browser tests/build/skill:check. What is left is the board flash: another session holds the serial port, so the v2 label has not been seen at the two-finger pose, and the board's task states need the human (K7-08 is in review; the rest await it or YOLO)."
+        }
+      ]
     }
   ]
 }
